@@ -597,6 +597,24 @@ function applyVariables(spec: ApplySpec, changes: PlannedChange[], errors: strin
           rowId: existing,
           data: toVariableUpdate(wanted, 'local'),
         })
+        // The editor's own edit path resets a variable to `local` when its type
+        // becomes a function block (a table edit of the type). Here the spec
+        // names the class too, so a block taken on an in-out pin
+        // (`NODE : BEEBUS_NODE`) would otherwise turn into a plain VAR on every
+        // re-apply. A class-only update keeps the class asked for.
+        const wantedClass = wanted.class ?? 'local'
+        const after = openPLCStoreBase
+          .getState()
+          .project.data.pous.find((entry) => entry.name === pou.name)
+          ?.interface?.variables?.find((entry) => entry.name === wanted.name)
+        if (after && after.class !== wantedClass) {
+          openPLCStoreBase.getState().projectActions.updateVariable({
+            scope: 'local',
+            associatedPou: pou.name,
+            rowId: existing,
+            data: { class: wantedClass } as Partial<PLCVariable>,
+          })
+        }
         changes.push({ kind: 'variable', action: 'update', name: `${pou.name}.${wanted.name}` })
         continue
       }

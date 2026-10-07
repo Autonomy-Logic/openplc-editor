@@ -133,11 +133,17 @@ export function stlibToSystemLibrary(archive: StlibArchiveDTO): SystemLibrary {
 
   for (const fb of m.functionBlocks) {
     const variables: SystemLibraryVariable[] = [
-      ...fb.inputs.map((v) => ({
-        name: v.name,
-        class: 'input' as const,
-        type: typeRef(v.type),
-      })),
+      ...fb.inputs.map((v) => {
+        // An input's declared default (STruC++ writes it into the manifest the
+        // way it does for function parameters): the pin may be left unwired.
+        const initialValue = (v as { initialValue?: string }).initialValue
+        return {
+          name: v.name,
+          class: 'input' as const,
+          type: typeRef(v.type),
+          ...(initialValue !== undefined ? { initialValue } : {}),
+        }
+      }),
       ...fb.outputs.map((v) => ({
         name: v.name,
         class: 'output' as const,

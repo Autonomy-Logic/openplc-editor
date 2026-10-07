@@ -54,3 +54,39 @@ describe('re-applying a variable without its flag or initial value', () => {
     expect(runReq()?.initialValue).toBe('TRUE')
   })
 })
+
+describe('re-applying a function-block-typed in-out pin', () => {
+  // The editor's table resets a variable to `local` when its type becomes a
+  // function block. Re-applying a library whose blocks take each other on
+  // in-out pins (`NODE : BEEBUS_NODE`) used to turn every such pin into a VAR.
+  const spec = {
+    pous: [
+      {
+        name: 'FB_NODE',
+        kind: 'function-block' as const,
+        language: 'st' as const,
+        variables: [{ name: 'ready', class: 'output' as const, type: BOOL }],
+        body: { text: '' },
+      },
+      {
+        name: 'FB_USER',
+        kind: 'function-block' as const,
+        language: 'st' as const,
+        variables: [{ name: 'NODE', class: 'inOut' as const, type: { definition: 'derived' as const, value: 'FB_NODE' } }],
+        body: { text: '' },
+      },
+    ],
+  }
+  const node = () =>
+    openPLCStoreBase
+      .getState()
+      .project.data.pous.find((pou) => pou.name === 'FB_USER')
+      ?.interface?.variables.find((variable) => variable.name === 'NODE')
+
+  it('keeps the inOut class on every apply', async () => {
+    expect((await apply(spec as Partial<ApplySpec>)).errors).toEqual([])
+    expect(node()?.class).toBe('inOut')
+    expect((await apply(spec as Partial<ApplySpec>)).errors).toEqual([])
+    expect(node()?.class).toBe('inOut')
+  })
+})

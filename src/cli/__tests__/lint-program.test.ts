@@ -415,3 +415,52 @@ ${instances}
     expect(found[0].severity).toBe('warning')
   })
 })
+
+describe('a first input with a declared default', () => {
+  // `GSM_MODEM.CONNECT : BOOL := TRUE` is meant to be left unwired; TON.IN,
+  // which has no default, is the EN/ENO trap the rule is for.
+  const MODEM: SystemLibrary = {
+    name: 'modbee-gsm',
+    version: '0.0.1',
+    pous: [
+      {
+        name: 'GSM_MODEM',
+        type: 'function-block',
+        variables: [
+          { name: 'CONNECT', class: 'input', type: { definition: 'base-type', value: 'BOOL' }, initialValue: 'TRUE' },
+          { name: 'APN', class: 'input', type: { definition: 'base-type', value: 'STRING' } },
+          { name: 'READY', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
+        ],
+      },
+    ],
+  } as unknown as SystemLibrary
+
+  const modemPou = pou('Main', [
+    { name: 'modem', class: 'local', type: { definition: 'derived', value: 'GSM_MODEM' } },
+    { name: 'Up', class: 'local', type: { definition: 'base-type', value: 'BOOL' } },
+  ])
+
+  it('says nothing when it is left unwired', () => {
+    const findings = lintProgram({
+      st: `PROGRAM Main
+  VAR modem : GSM_MODEM; Up : BOOL; END_VAR
+  modem(APN := 'internet');
+  Up := modem.READY;
+END_PROGRAM`,
+      pous: [modemPou],
+      systemLibraries: [MODEM],
+      globals: [],
+    })
+    expect(findings.map((finding) => finding.rule)).not.toContain('block-primary-input-unassigned')
+  })
+
+  it('still reports a first input without one', () => {
+    expect(
+      rules(`PROGRAM Main
+  VAR holdOff : TON; END_VAR
+  holdOff(PT := HoldTime);
+  Settled := holdOff.Q;
+END_PROGRAM`),
+    ).toContain('block-primary-input-unassigned')
+  })
+})

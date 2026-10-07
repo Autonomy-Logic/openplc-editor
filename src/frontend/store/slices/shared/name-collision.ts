@@ -13,6 +13,7 @@
  * shares a namespace with, and against nothing else.
  */
 
+import { isLibraryProject } from '../../../../middleware/shared/ports/types'
 import type { LibraryPouType } from '../../../../middleware/shared/ports/library-types'
 import { globalVariableListTypeName } from '../../../utils/PLC/global-variable-list-serializer'
 import type { LibrarySlice } from '../library'
@@ -128,6 +129,24 @@ const sharesNamespace = (a: NamedElementKind, b: NamedElementKind): boolean =>
   (COMPILER_SYMBOL[a] && COMPILER_SYMBOL[b]) || (WORKSPACE_ELEMENT[a] && WORKSPACE_ELEMENT[b])
 
 /**
+ * The library a library project builds into, from its `library.json` (or the
+ * project name). Null for a plain project.
+ */
+function ownLibraryName(state: NameCollisionState): string | null {
+  if (!isLibraryProject(state.project.meta)) return null
+  const raw = state.project.data.libraryManifest
+  if (raw) {
+    try {
+      const declared = (JSON.parse(raw) as { name?: unknown }).name
+      if (typeof declared === 'string' && declared.length > 0) return declared
+    } catch {
+      // An unreadable library.json: fall back to the project name.
+    }
+  }
+  return state.project.meta.name || null
+}
+
+/**
  * The library symbol, if any, that already owns `name`.
  *
  * Library functions and function blocks are declared in the same generated
@@ -138,7 +157,11 @@ const sharesNamespace = (a: NamedElementKind, b: NamedElementKind): boolean =>
  * compiles into one that does not.
  */
 function librarySymbolOwning(state: NameCollisionState, name: string): { library: string; kind: string } | null {
+  const own = ownLibraryName(state)
   for (const library of state.libraries.system) {
+    // A library project's own earlier build, installed to test it: its blocks
+    // are this project's blocks, not names someone else owns.
+    if (own !== null && nameMatches(library.name, own)) continue
     const symbol = library.pous.find((pou) => nameMatches(pou.name, name))
     if (symbol) return { library: library.name, kind: LIBRARY_SYMBOL_KIND[symbol.type] }
   }

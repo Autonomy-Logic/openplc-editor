@@ -142,6 +142,27 @@ describe('elementNameCollision beyond the project elements', () => {
     expect(gate('Scale', 'remote-device')).toBeNull()
   })
 
+  it("lets a library project use the names of its own installed build", () => {
+    // Editing a library whose earlier build is installed (to test it): its own
+    // blocks are not someone else's names. Another library's still are.
+    const owner = useOpenPLCStore
+      .getState()
+      .libraries.system.find((library) => library.pous.some((pou) => pou.name.toLowerCase() === 'scale'))
+    expect(owner).toBeDefined()
+    const state = useOpenPLCStore.getState()
+    useOpenPLCStore.getState().projectActions.setProject({
+      meta: { name: 'whatever', type: 'plc-library', path: '' },
+      data: { ...state.project.data, libraryManifest: JSON.stringify({ name: owner!.name }) },
+    } as never)
+    expect(gate('Scale', 'pou')).toBeNull()
+
+    useOpenPLCStore.getState().projectActions.setProject({
+      meta: { name: 'whatever', type: 'plc-library', path: '' },
+      data: { ...state.project.data, libraryManifest: JSON.stringify({ name: 'another-library' }) },
+    } as never)
+    expect(gate('Scale', 'pou')).toMatch(/is a function in the .* library$/)
+  })
+
   it("refuses an unreadable .dt file's name for workspace kinds only", () => {
     useOpenPLCStore
       .getState()

@@ -118,13 +118,21 @@ function pinsOf(
   blockType: string,
   systemLibraries: readonly SystemLibrary[],
   pous: readonly PLCPou[],
-): { inputs: string[]; outputs: string[] } | null {
+): { inputs: string[]; outputs: string[]; defaulted: Set<string> } | null {
+  // An input declared with a default (`CONNECT : BOOL := TRUE`) may be left
+  // unwired on purpose, so it is collected to be told apart.
+  const hasDefault = (initialValue: unknown) =>
+    initialValue !== undefined && initialValue !== null && String(initialValue).trim() !== ''
+
   const own = pous.find((pou) => pou.name.toLowerCase() === blockType.toLowerCase())
   if (own) {
     const variables = own.interface?.variables ?? []
     return {
       inputs: variables.filter((v) => v.class === 'input').map((v) => v.name),
       outputs: variables.filter((v) => v.class === 'output').map((v) => v.name),
+      defaulted: new Set(
+        variables.filter((v) => v.class === 'input' && hasDefault(v.initialValue)).map((v) => v.name.toUpperCase()),
+      ),
     }
   }
 
@@ -134,6 +142,11 @@ function pinsOf(
     return {
       inputs: block.variables.filter((v) => v.class === 'input').map((v) => v.name),
       outputs: block.variables.filter((v) => v.class === 'output').map((v) => v.name),
+      defaulted: new Set(
+        block.variables
+          .filter((v) => v.class === 'input' && hasDefault(v.initialValue))
+          .map((v) => v.name.toUpperCase()),
+      ),
     }
   }
   return null
@@ -264,7 +277,10 @@ export function lintProgram(input: LintInput): LintFinding[] {
         new RegExp(`\\b${escapeForRegex(instance.name)}\\s*\\.\\s*${escapeForRegex(primary)}\\s*:=`, 'i').test(
           body.statements,
         )
-      if (primary && !assigned.has(primary.toUpperCase()) && !memberAssigned) {
+      // A first input with a declared default is meant to work unwired
+      // (`ENABLE := TRUE`, `CONNECT := TRUE`); only one with none is the trap.
+      const primaryDefaulted = primary !== undefined && pins.defaulted.has(primary.toUpperCase())
+      if (primary && !assigned.has(primary.toUpperCase()) && !memberAssigned && !primaryDefaulted) {
         const gated = assigned.has('EN') ? ' The rung is wired to EN/ENO, which only gates the call.' : ''
         findings.push({
           severity: 'error',
