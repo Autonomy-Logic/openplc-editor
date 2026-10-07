@@ -2843,6 +2843,20 @@ describe('createProjectSlice', () => {
       expect(points[0].iecLocation).toBe('%QX0.0')
     })
 
+    it('stores set-to-zero on a read group', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', { ...makeIOGroup('g1', '4', 1), errorHandling: 'set-to-zero' })
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.errorHandling).toBe('set-to-zero')
+    })
+
+    it('stores a write group with keep-last-value even when set-to-zero is passed', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', { ...makeIOGroup('g1', '5', 1), errorHandling: 'set-to-zero' })
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.errorHandling).toBe('keep-last-value')
+    })
+
     it('generates word output addresses for function code 6', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       const group = makeIOGroup('g1', '6', 1)
@@ -3168,6 +3182,31 @@ describe('createProjectSlice', () => {
       const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
       expect(group.length).toBe(1)
       expect(group.ioPoints!.map((p) => p.iecLocation)).toEqual(['%QX0.0'])
+    })
+
+    it('keeps set-to-zero on a read group', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { errorHandling: 'set-to-zero' })
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.errorHandling).toBe('set-to-zero')
+    })
+
+    it('resets error handling when a read group becomes a write group', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', { ...makeIOGroup('g1', '3', 2), errorHandling: 'set-to-zero' })
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { functionCode: '16' })
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.errorHandling).toBe('keep-last-value')
+    })
+
+    it('normalizes a legacy write group saved with set-to-zero on its next edit', () => {
+      const device = makeRemoteDevice('Dev1')
+      device.modbusTcpConfig!.ioGroups.push({ ...makeIOGroup('g1', '15', 2), errorHandling: 'set-to-zero' })
+      seedRemoteDevice(store, device)
+      store.getState().projectActions.updateIOGroup('Dev1', 'g1', { name: 'renamed' })
+      const group = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0]
+      expect(group.errorHandling).toBe('keep-last-value')
     })
   })
 
