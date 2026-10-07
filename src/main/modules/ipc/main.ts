@@ -1158,11 +1158,12 @@ class MainProcessBridge implements MainIpcModule {
       this.stopSimulatorAndNotify()
       const result = await this.projectService.readRawProjectFiles(projectPath)
       if (result.success) {
-        this.currentProjectPath = projectPath
         // A retrieval lives in scratch and is pruned behind the user, so it must not appear under Recent as if it were a real project.
         if (!isRetrievedProjectPath(projectPath)) {
           await this.projectService.updateProjectHistory(projectPath)
         }
+        // Set last, so a failed open leaves the root on the project still open.
+        this.currentProjectPath = projectPath
       }
       return result
     } catch (_error) {
@@ -1170,6 +1171,9 @@ class MainProcessBridge implements MainIpcModule {
         success: false,
         error: { title: 'Error reading project', description: 'Failed to read project files' },
       }
+    } finally {
+      // The native Recent submenu is built from the history this open just changed.
+      this.handleWindowRebuildMenu()
     }
   }
 
@@ -2272,6 +2276,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleWindowProjectOpen = (_event: IpcMainEvent, open: unknown) => {
     if (typeof open !== 'boolean') return
+    if (!open) this.currentProjectPath = null
     void this.menuBuilder.setProjectOpen(open).catch((error) => {
       logger.error('Error rebuilding application menu:', error)
     })
@@ -3466,7 +3471,8 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   handleFileWatchStop = (_event: IpcMainInvokeEvent, filePath: string): { success: boolean; error?: string } => {
-    if (!this.validateFilePath(filePath)) {
+    // A registered watcher passed validation when it started; the root may have moved to another project since.
+    if (!this.fileWatchers.has(filePath) && !this.validateFilePath(filePath)) {
       return { success: false, error: 'Path is outside the project directory' }
     }
     if (this.fileWatchers.has(filePath)) {

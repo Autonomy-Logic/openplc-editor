@@ -122,9 +122,9 @@ export default class MenuBuilder {
     return response
   }
 
-  async handleOpenProjectByPath(projectPath: string) {
-    const response = await this.projectService.openProjectByPath(projectPath)
-    this.mainWindow.webContents.send('project:open-recent-accelerator', response)
+  // The renderer opens it through project:read-files, which sets the file-access root.
+  handleOpenProjectByPath(projectPath: string) {
+    this.mainWindow.webContents.send('project:open-recent-accelerator', projectPath)
   }
 
   handleCloseTab() {
@@ -498,7 +498,7 @@ export default class MenuBuilder {
         return {
           label: `${projectName} (${projectPath})`,
           click: () => {
-            void this.handleOpenProjectByPath(projectEntry.path)
+            this.handleOpenProjectByPath(projectEntry.path)
           },
         }
       }),
@@ -850,7 +850,7 @@ export default class MenuBuilder {
           return {
             label: `${projectName} (${projectPath})`,
             click: () => {
-              void this.handleOpenProjectByPath(projectEntry.path)
+              this.handleOpenProjectByPath(projectEntry.path)
             },
           }
         }),
