@@ -173,6 +173,15 @@ test('Error Handling is offered on read IO groups only', async () => {
     // A group saved before the fix with set-to-zero on a write function code.
     await page.getByLabel('Edit WRITES').click({ timeout: 15000 })
     await expect(modal.getByText('Edit IO Group')).toBeVisible()
+    await modal.getByRole('combobox').first().click()
+    await page.getByRole('option', { name: 'Read Holding Registers (FC 3)' }).click()
+    await expect(errorHandling).toBeVisible()
+    await expect(modal.getByText('Keep last value', { exact: true })).toBeVisible()
+    await expect(modal.getByText('Set to zero', { exact: true })).toHaveCount(0)
+    await modal.getByRole('button', { name: 'Cancel' }).click()
+
+    await page.getByLabel('Edit WRITES').click({ timeout: 15000 })
+    await expect(modal.getByText('Edit IO Group')).toBeVisible()
     await expect(errorHandling).toHaveCount(0)
     await modal.getByRole('button', { name: 'Save' }).click()
     await save(app)

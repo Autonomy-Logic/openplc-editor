@@ -14,7 +14,6 @@ import {
   isReadFunctionCode,
   isSingleElementFunctionCode,
   MAX_IO_GROUP_LENGTH_BY_FC,
-  resolveIOGroupErrorHandling,
   validateIOGroupLength,
 } from '../../../../../../utils/modbus/io-group'
 import { GenericComboboxCell } from '../../../../../_atoms/generic-table-inputs/generic-combobox-cell'
@@ -208,6 +207,12 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
     }
   }, [functionCode, isSingleElementOperation])
 
+  const handleFunctionCodeChange = (next: typeof functionCode) => {
+    // Error handling hidden on a write group must not resurface when it becomes a read group.
+    if (!isReadFunctionCode(functionCode) && isReadFunctionCode(next)) setErrorHandling('keep-last-value')
+    setFunctionCode(next)
+  }
+
   const handleSubmit = () => {
     if (!name.trim() || !lengthValidation.ok) return
     onSubmit({
@@ -216,7 +221,7 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
       cycleTime: parseInt(cycleTime, 10) || 100,
       offset,
       length: lengthValidation.length,
-      errorHandling: resolveIOGroupErrorHandling(functionCode, errorHandling),
+      errorHandling,
     })
     setName('')
     setFunctionCode('3')
@@ -248,7 +253,7 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
           </div>
           <div className='flex items-center gap-2'>
             <Label className='w-28 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Function Code</Label>
-            <Select value={functionCode} onValueChange={(v) => setFunctionCode(v as typeof functionCode)}>
+            <Select value={functionCode} onValueChange={(v) => handleFunctionCodeChange(v as typeof functionCode)}>
               <SelectTrigger
                 withIndicator
                 placeholder='Select function code'
