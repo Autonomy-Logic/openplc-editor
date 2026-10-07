@@ -131,11 +131,6 @@ function collectBlockSignatures(project: TranspileProject): Map<string, BlockInf
 
 // GetVariableType + GetBlockType ports (PLCGenerator.py:786-817, PLCControler.py:1288-1335)
 function buildTypeContext(pou: TranspilePou, project: TranspileProject): TypeContext {
-  const interfaceTypes = new Map<string, string>()
-  for (const v of pou.interface?.variables ?? []) {
-    interfaceTypes.set(v.name, getTypeAsText(v))
-  }
-
   const normalizeReturnType = (rt: string): string => (PLC_BASE_TYPES.has(rt.toUpperCase()) ? rt.toUpperCase() : rt)
 
   const projectBlockInfos = (typeName: string): BlockInfos | null => {
@@ -176,41 +171,93 @@ function buildTypeContext(pou: TranspilePou, project: TranspileProject): TypeCon
 
   const memberBlockInfos = resolveBlock
 
+  const same = (a: string, b: string): boolean => a.toUpperCase() === b.toUpperCase()
+  const findDataType = (name: string) => project.dataTypes.find((d) => same(d.name, name))
+
+  const PARTIAL_ACCESS: Record<string, string> = { X: 'BOOL', B: 'BYTE', W: 'WORD', D: 'DWORD' }
+
+  // The member `name` of a block or structure type, or a bit/part (`.3`, `.%B1`).
+  const memberType = (typeName: string, name: string): string | null => {
+    if (/^\d+$/.test(name)) return 'BOOL'
+    const part = /^%([XBWD])\d+$/i.exec(name)
+    if (part !== null) return PARTIAL_ACCESS[part[1].toUpperCase()]
+    const block = memberBlockInfos(typeName)
+    if (block !== null) {
+      const io = [...block.inputs, ...block.outputs].find((m) => same(m.name, name))
+      return io?.type ?? null
+    }
+    const dt = findDataType(typeName)
+    if (dt === undefined || dt.derivation !== 'structure') return null
+    const el = dt.variable.find((m) => same(m.name, name))
+    return el === undefined ? null : getTypeAsText(el)
+  }
+
+  // The element of an array type (inline `ARRAY [..] OF T` or a named array
+  // type) reached through `indices` subscripts, one per dimension.
+  const elementType = (typeName: string, indices: number): string | null => {
+    let dims: number
+    let base: string
+    const inline = /^ARRAY\s*\[(.*)\]\s*OF\s+(.+)$/i.exec(typeName.trim())
+    if (inline !== null) {
+      dims = inline[1].split(',').length
+      base = inline[2].trim()
+    } else {
+      const dt = findDataType(typeName)
+      if (dt === undefined || dt.derivation !== 'array') return null
+      dims = dt.dimensions.length
+      base = typeof dt.baseType === 'string' ? dt.baseType : dt.baseType.value
+    }
+    if (indices === dims) return PLC_BASE_TYPES.has(base.toUpperCase()) ? base.toUpperCase() : base
+    if (indices > dims) return elementType(base, indices - dims)
+    return null
+  }
+
+  // `name`, then `.field` and `[i, j]` steps; null when `expression` is not a
+  // variable access (a literal, an expression).
+  const parseAccess = (expression: string): { name: string; steps: (string | number)[] } | null => {
+    const head = /^\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(expression)
+    if (head === null) return null
+    const steps: (string | number)[] = []
+    let i = head[0].length
+    while (i < expression.length) {
+      const rest = expression.slice(i)
+      const field = /^\s*\.\s*(%?[A-Za-z0-9_]+)/.exec(rest)
+      if (field !== null) {
+        steps.push(field[1])
+        i += field[0].length
+        continue
+      }
+      const open = /^\s*\[/.exec(rest)
+      if (open === null) return /^\s*$/.test(rest) ? { name: head[1], steps } : null
+      i += open[0].length
+      let depth = 1
+      let indices = 1
+      while (i < expression.length && depth > 0) {
+        const ch = expression[i]
+        if (ch === '[' || ch === '(') depth++
+        else if (ch === ']' || ch === ')') depth--
+        else if (ch === ',' && depth === 1) indices++
+        i++
+      }
+      if (depth !== 0) return null
+      steps.push(indices)
+    }
+    return { name: head[1], steps }
+  }
+
   const variableType: TypeContext['variableType'] = (expression) => {
-    const parts = expression.split('.')
-    let name = parts.shift() ?? ''
+    const access = parseAccess(expression)
+    if (access === null) return null
     let current: string | null = null
-    if (pou.pouType === 'function' && name === pou.name && pou.interface.returnType !== undefined) {
+    if (pou.pouType === 'function' && same(access.name, pou.name) && pou.interface.returnType !== undefined) {
       current = normalizeReturnType(pou.interface.returnType)
     } else {
-      current = interfaceTypes.get(name) ?? null
+      const v = (pou.interface?.variables ?? []).find((x) => same(x.name, access.name))
+      current = v === undefined ? null : getTypeAsText(v)
     }
-    while (current !== null && parts.length > 0) {
-      const block = memberBlockInfos(current)
-      if (block !== null) {
-        name = parts.shift() ?? ''
-        current = null
-        for (const io of [...block.inputs, ...block.outputs]) {
-          if (io.name === name) {
-            current = io.type
-            break
-          }
-        }
-      } else {
-        const dt = project.dataTypes.find((d) => d.name === current)
-        if (dt !== undefined && dt.derivation === 'structure') {
-          name = parts.shift() ?? ''
-          current = null
-          for (const el of dt.variable) {
-            if (el.name === name) {
-              current = getTypeAsText(el)
-              break
-            }
-          }
-        } else {
-          break
-        }
-      }
+    for (const step of access.steps) {
+      if (current === null) break
+      current = typeof step === 'number' ? elementType(current, step) : memberType(current, step)
     }
     return current
   }

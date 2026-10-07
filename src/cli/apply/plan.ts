@@ -589,7 +589,11 @@ function applyVariables(spec: ApplySpec, changes: PlannedChange[], errors: strin
       const target = state.project.data.pous.find((entry) => entry.name === pou.name)
       if (!target) continue
 
-      const existing = (target.interface?.variables ?? []).findIndex((entry) => entry.name === wanted.name)
+      // IEC names are case-insensitive: `za` and `zA` are one variable, so a
+      // case-only change renames it in place rather than adding a second.
+      const existing = (target.interface?.variables ?? []).findIndex(
+        (entry) => entry.name.toUpperCase() === wanted.name.toUpperCase(),
+      )
       if (existing >= 0) {
         state.projectActions.updateVariable({
           scope: 'local',
@@ -606,7 +610,7 @@ function applyVariables(spec: ApplySpec, changes: PlannedChange[], errors: strin
         const after = openPLCStoreBase
           .getState()
           .project.data.pous.find((entry) => entry.name === pou.name)
-          ?.interface?.variables?.find((entry) => entry.name === wanted.name)
+          ?.interface?.variables?.find((entry) => entry.name.toUpperCase() === wanted.name.toUpperCase())
         if (after && after.class !== wantedClass) {
           openPLCStoreBase.getState().projectActions.updateVariable({
             scope: 'local',
@@ -637,7 +641,8 @@ function applyGlobalVariables(spec: ApplySpec, changes: PlannedChange[], errors:
   for (const wanted of spec.globalVariables ?? []) {
     const state: Store = openPLCStoreBase.getState()
     const globals = state.project.data.configurations.resource.globalVariables ?? []
-    const existing = globals.findIndex((entry) => entry.name === wanted.name)
+    // Case-insensitive, as IEC names are: a case-only change renames in place.
+    const existing = globals.findIndex((entry) => entry.name.toUpperCase() === wanted.name.toUpperCase())
 
     if (existing >= 0) {
       state.projectActions.updateVariable({ scope: 'global', rowId: existing, data: toVariableUpdate(wanted, 'global') })

@@ -90,3 +90,43 @@ describe('re-applying a function-block-typed in-out pin', () => {
     expect(node()?.class).toBe('inOut')
   })
 })
+
+describe('re-applying a variable whose name changed only in case', () => {
+  // IEC names are case-insensitive, so `za` → `zA` is the same variable. The
+  // store refused a second one ("renamed it to zA0"); apply must rename in place.
+  const pouSpec = (name: string) => ({
+    pous: [
+      {
+        name: 'FB_CASE',
+        kind: 'function-block' as const,
+        language: 'st' as const,
+        variables: [{ name, class: 'local' as const, type: BOOL, initialValue: 'TRUE' }],
+        body: { text: '' },
+      },
+    ],
+  })
+  const names = () =>
+    openPLCStoreBase
+      .getState()
+      .project.data.pous.find((pou) => pou.name === 'FB_CASE')
+      ?.interface?.variables.map((variable) => variable.name)
+
+  it('renames a POU variable in place', async () => {
+    expect((await apply(pouSpec('za') as Partial<ApplySpec>)).errors).toEqual([])
+    expect(names()).toEqual(['za'])
+    const result = await apply(pouSpec('zA') as Partial<ApplySpec>)
+    expect(result.errors).toEqual([])
+    expect(names()).toEqual(['zA'])
+    expect(result.changes).toContainEqual({ kind: 'variable', action: 'update', name: 'FB_CASE.zA' })
+  })
+
+  it('renames a global variable in place', async () => {
+    const globalSpec = (name: string) => ({ globalVariables: [{ name, class: 'global' as const, type: BOOL }] })
+    const globals = () =>
+      openPLCStoreBase.getState().project.data.configurations.resource.globalVariables.map((variable) => variable.name)
+    expect((await apply(globalSpec('gLamp') as Partial<ApplySpec>)).errors).toEqual([])
+    const result = await apply(globalSpec('GLAMP') as Partial<ApplySpec>)
+    expect(result.errors).toEqual([])
+    expect(globals()).toEqual(['GLAMP'])
+  })
+})
