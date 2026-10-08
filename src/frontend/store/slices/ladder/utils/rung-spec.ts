@@ -48,6 +48,9 @@ export type RungSpec = {
   truncated?: boolean
 }
 
+// Stricter than `getLiteralType`: the pin text is emitted verbatim into ST, so an unescaped quote would end the string early.
+const IEC_STRING_LITERAL = /^'(?:[^'$\r\n]|\$(?:[$'LNPRTlnprt]|[0-9A-Fa-f]{2}))*'$/
+
 const findVariable = (variables: PLCVariable[], name: string): PLCVariable | undefined =>
   variables.find((v) => v.name.toLowerCase() === name.toLowerCase())
 
@@ -124,6 +127,12 @@ function resolvePinBindings(
     const literalTypes = getLiteralType(variable)
     if (!literalTypes) {
       errors.push(`Element ${elementNumber}: variable "${variable}" not found for pin "${pin}"`)
+      continue
+    }
+    if (variable.startsWith("'") && !IEC_STRING_LITERAL.test(variable)) {
+      errors.push(
+        `Element ${elementNumber}: "${variable}" is not a valid string literal for pin "${pin}" — escape a quote inside it as $'`,
+      )
       continue
     }
     if (type === 'output') {

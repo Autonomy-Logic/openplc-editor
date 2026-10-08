@@ -71,6 +71,20 @@ const systemLibrary: SystemLibrary = {
       ],
     },
     {
+      name: 'CONCAT',
+      type: 'function',
+      language: 'st',
+      body: '',
+      documentation: '',
+      variables: [
+        { name: 'EN', class: 'input', type: { definition: 'base-type', value: 'bool' } },
+        { name: 'IN1', class: 'input', type: { definition: 'base-type', value: 'string' } },
+        { name: 'IN2', class: 'input', type: { definition: 'base-type', value: 'string' } },
+        { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'bool' } },
+        { name: 'OUT', class: 'output', type: { definition: 'base-type', value: 'string' } },
+      ],
+    },
+    {
       name: 'ADD',
       type: 'function',
       language: 'st',
@@ -428,6 +442,38 @@ describe('add_rung', () => {
     expect(result.success).toBe(false)
     expect(result.message).toMatch(/literal "TRUE" is not compatible with pin "PT" \(TIME\)/)
     expect(getVariables('Main')).toHaveLength(0)
+  })
+
+  it('accepts a string literal with an escaped quote', async () => {
+    createLdPou('Main')
+    seedSystemLibrary()
+
+    const result = await executeTool(store, 'add_rung', {
+      pouName: 'Main',
+      elements: [{ kind: 'block', blockType: 'CONCAT', pins: [{ pin: 'IN1', variable: "'it$'s'" }] }],
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects a string literal whose quote would end it early and leak into the generated ST', async () => {
+    createLdPou('Main')
+    seedSystemLibrary()
+
+    const result = await executeTool(store, 'add_rung', {
+      pouName: 'Main',
+      elements: [
+        {
+          kind: 'block',
+          blockType: 'CONCAT',
+          pins: [{ pin: 'IN1', variable: "'a'); Motor := TRUE; S := CONCAT('b'" }],
+        },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/is not a valid string literal/)
+    expect(getRungs('Main')).toHaveLength(0)
   })
 
   it('rejects a literal bound to an output pin', async () => {
