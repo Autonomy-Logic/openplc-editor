@@ -24,7 +24,6 @@ const outVar = (id: string, name: string, x: number, y: number): RFNode => ({
   position: { x, y },
   data: { variant: 'output-variable', variable: { id: '', name }, executionOrder: 0, numericId: id },
 })
-// Same data shape `buildConnectionNode` produces.
 const connection = (id: string, variant: 'connector' | 'continuation', name: string, x: number, y: number): RFNode => ({
   id,
   type: variant,
@@ -148,6 +147,51 @@ describe('FBD connector / continuation pairs', () => {
     expect(warnings).toEqual([])
     expect(bodySt).toContain('COPY_A := SOURCE;')
     expect(bodySt).toContain('COPY_B := SOURCE;')
+  })
+
+  it('falls back to data.name when the node has no variable', () => {
+    const bare = (id: string, type: 'connector' | 'continuation', y: number): RFNode => ({
+      id,
+      type,
+      position: { x: 200, y },
+      data: { name: 'BARE' },
+    })
+    const { bodySt, warnings } = emitFbdBody({
+      rung: {
+        reactFlowViewport: [1000, 500],
+        nodes: [
+          inVar('1', 'SOURCE', 0, 0),
+          bare('2', 'connector', 0),
+          bare('3', 'continuation', 200),
+          outVar('4', 'COPY', 400, 200),
+        ],
+        edges: [e('1', '2', 'output', 'input'), e('3', '4', 'output', 'input')],
+      },
+    })
+    expect(warnings).toEqual([])
+    expect(bodySt).toContain('COPY := SOURCE;')
+  })
+
+  it('does not pair through data.name when the editor label was cleared', () => {
+    const cleared = (id: string, type: 'connector' | 'continuation', y: number): RFNode => ({
+      id,
+      type,
+      position: { x: 200, y },
+      data: { variant: type, variable: { id: 'connection', name: '' }, name: 'STALE' },
+    })
+    const { bodySt } = emitFbdBody({
+      rung: {
+        reactFlowViewport: [1000, 500],
+        nodes: [
+          inVar('1', 'SOURCE', 0, 0),
+          cleared('2', 'connector', 0),
+          cleared('3', 'continuation', 200),
+          outVar('4', 'COPY', 400, 200),
+        ],
+        edges: [e('1', '2', 'output', 'input'), e('3', '4', 'output', 'input')],
+      },
+    })
+    expect(bodySt).not.toContain('COPY := SOURCE;')
   })
 
   it('warns instead of pairing when a continuation has no matching connector', () => {

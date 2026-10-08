@@ -158,12 +158,10 @@ export function asVariableData(data: Record<string, unknown>): VariableData | nu
   return out
 }
 
-/** Connector / continuation label.  The editor stores it in
- *  `data.variable.name` (`buildConnectionNode`); a top-level
- *  `data.name` is accepted as a fallback for non-editor bodies.
- *  An empty label pairs with nothing, so it reads as no name. */
+/** Editor stores the label in data.variable.name; data.name is a fallback. */
 function readConnectionName(data: Record<string, unknown>): string | null {
-  const name = readVariableName(data['variable']) || asString(data['name'])
+  const variable = data['variable']
+  const name = (isObject(variable) ? asString(variable['name']) : null) ?? asString(data['name'])
   return name ? name : null
 }
 
