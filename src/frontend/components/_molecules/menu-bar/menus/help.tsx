@@ -39,7 +39,6 @@ export const HelpMenu = () => {
         <MenuPrimitive.Content sideOffset={16} className={CONTENT}>
           <MenuPrimitive.Item className={ITEM} onClick={handleOpenCommunitySupport}>
             <span>{i18n.t('menu:help.submenu.communitySupport')}</span>
-            <span className={ACCELERATOR}>{'F1'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} onClick={handleOpenDocumentation}>
             <span>{i18n.t('menu:help.submenu.documentation')}</span>
@@ -47,6 +46,7 @@ export const HelpMenu = () => {
           {capabilities.hasAboutDialog && (
             <MenuPrimitive.Item className={ITEM} onClick={handleOpenAboutModal}>
               <span>{i18n.t('menu:help.submenu.about')}</span>
+              <span className={ACCELERATOR}>{'F1'}</span>
             </MenuPrimitive.Item>
           )}
         </MenuPrimitive.Content>

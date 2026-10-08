@@ -150,7 +150,6 @@ export const FileMenu = () => {
           <MenuPrimitive.Separator className={SEPARATOR} />
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:file.submenu.updates')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + U'}</span>
           </MenuPrimitive.Item>
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>
