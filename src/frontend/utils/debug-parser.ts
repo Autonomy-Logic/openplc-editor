@@ -19,6 +19,18 @@ export interface DebugMapLeaf {
   path: string
   type: string
   size: number
+  /** An IEC CONSTANT, or a function-block in-out view: never forced or written. */
+  readOnly?: true
+  /** Retained across a power cycle. */
+  retain?: true
+  /**
+   * A leaf inside a function block's VAR_IN_OUT: a live, read-only view of the
+   * caller's variable, which each call binds (IEC 61131-3 §3.48). See
+   * `inout-force.ts`.
+   */
+  indirect?: true
+  /** For an `indirect` leaf, the path of the variable it shows, when known. */
+  target?: string
 }
 
 export interface DebugMap {

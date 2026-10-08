@@ -822,8 +822,13 @@ function emitFunctionCall(state: WalkerState, node: RFNode, data: BlockData): vo
 
   const info: Location = [state.tagName, 'block', locId(node)]
   const wiredInputs = data.inputs.filter((name) => firstIncomingForHandle(state, node.id, name) !== undefined)
-  // python only ever sees wired pins for extensible blocks (DIV-18)
-  const allInputConnected = data.extensible || wiredInputs.length === data.inputs.length
+  // Positional only when every pin is wired. An extensible block used to count
+  // as fully wired whatever it had (the Python generator only ever listed its
+  // wired pins, DIV-18), so an unwired middle pin dropped out of a positional
+  // call and every later wire moved down one: `MUX(k, a, c)` selected `c` for
+  // K = 1. Named, the gap stays a gap — harmless on ADD, an error STruC++
+  // reports on MUX, which `check --lint` explains.
+  const allInputConnected = wiredInputs.length === data.inputs.length
   const useNamedArgs = data.outputs.length > 1 || !allInputConnected
 
   const recurseOrdered = data.executionOrder > 0
@@ -878,34 +883,12 @@ function buildInputArgs(
 ): ProgramChunk[][] {
   const parts: ProgramChunk[][] = []
   for (const inputName of data.inputs) {
-    if (data.extensible) {
-      // Extensible inputs: the editor's XML serializer (`fbd-xml.ts`:67)
-      // emits one `<variable formalParameter="<name>">` per edge that
-      // targets this handle.  The python oracle then puts the
-      // serialized list through a dict keyed on the formal parameter
-      // (`PLCGenerator.py`:1498) — duplicates overwrite, so all
-      // occurrences of the same name resolve to the LAST connected
-      // edge's upstream.  Mimic that here: emit one arg per edge, all
-      // using the shared "last edge" upstream's expression.
-      const edges = edgesForBlockInput(state, node.id, inputName)
-      if (edges.length === 0) continue
-      const lastEdge = edges[edges.length - 1]
-      const lastUpstream = state.byId.get(lastEdge.source)
-      if (lastUpstream === undefined) continue
-      const sharedPath = visitUpstream(state, lastUpstream, lastEdge, order)
-      if (sharedPath === undefined) continue
-      const sharedExpr = pathsToChunks([sharedPath])
-      for (let i = 0; i < edges.length; i++) {
-        if (useNamedArgs) {
-          const chunk: ProgramChunk[] = [[`${inputName} := `, []]]
-          for (const c of sharedExpr) chunk.push(c)
-          parts.push(chunk)
-        } else {
-          parts.push([...sharedExpr])
-        }
-      }
-      continue
-    }
+    // One argument per pin, whatever the block. Several wires into one pin are
+    // one input: their paths are OR-ed, exactly as for a contact network. An
+    // extensible pin used to get one `IN1 := …` per wire — a copy of the old
+    // Python generator, whose dict of formal parameters let the last one win —
+    // which counted the input twice (ADD added it twice) and which STruC++ now
+    // rejects: "given input 'IN1' twice".
     const upstreamPaths = pathsForBlockInput(state, node.id, inputName, order)
     if (upstreamPaths.length === 0) continue
     const inputExpr = pathsToChunks(upstreamPaths)
@@ -918,11 +901,6 @@ function buildInputArgs(
     }
   }
   return parts
-}
-
-function edgesForBlockInput(state: WalkerState, blockId: string, inputName: string): RFEdge[] {
-  const incoming = state.incoming.get(blockId) ?? []
-  return incoming.filter((e) => e.targetHandle === inputName)
 }
 
 function pathsForBlockInput(state: WalkerState, blockId: string, inputName: string, order: boolean): PathNode[] {

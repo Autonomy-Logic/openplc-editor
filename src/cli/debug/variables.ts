@@ -21,6 +21,7 @@ import { join } from 'node:path'
 import { openPLCStoreBase } from '@root/frontend/store'
 import {
   buildLeafInfoMap,
+  buildLeafPathMap,
   type DebugLeafInfo,
   type DebugMap,
   packDebugAddr,
@@ -44,6 +45,15 @@ export interface ResolvedVariable extends DebugLeafInfo {
   name: string
   /** Packed (arr << 16 | elem) — the flat index the transports carry. */
   index: number
+  /** Never forced or written: an IEC CONSTANT, or a function-block in-out. */
+  readOnly?: true
+  /**
+   * A function block's VAR_IN_OUT: a live view of the caller's variable, which
+   * each call binds (IEC 61131-3 §3.48). Forcing it forces `target`, the
+   * variable it is bound to, when that is known.
+   */
+  inOut?: true
+  target?: string
 }
 
 export interface DebugVariableIndex {
@@ -136,6 +146,17 @@ export function indexDebugMap(map: DebugMap): DebugVariableIndex {
   )
   const nameToIndex = deriveVariableIndexMap(treeMap, map)
 
+  // Read-only and in-out leaves, by packed address (see debug-parser.ts).
+  const access = new Map<number, Pick<ResolvedVariable, 'readOnly' | 'inOut' | 'target'>>()
+  for (const leaf of map.leaves) {
+    if (!leaf.readOnly && !leaf.indirect) continue
+    access.set(packDebugAddr(leaf), {
+      readOnly: true,
+      ...(leaf.indirect ? { inOut: true as const } : {}),
+      ...(leaf.target !== undefined ? { target: leaf.target } : {}),
+    })
+  }
+
   const all: ResolvedVariable[] = []
   const byName = new Map<string, ResolvedVariable>()
   const byIndex = new Map<number, ResolvedVariable>()
@@ -144,12 +165,22 @@ export function indexDebugMap(map: DebugMap): DebugVariableIndex {
     const info = byPackedIndex.get(index)
     /* istanbul ignore if -- every index in the map came from a leaf */
     if (!info) continue
-    const resolved: ResolvedVariable = { ...info, name, index }
+    const resolved: ResolvedVariable = { ...info, name, index, ...access.get(index) }
     all.push(resolved)
     if (!byName.has(name.toUpperCase())) byName.set(name.toUpperCase(), resolved)
     // First name wins for decoding: a shared global appears under several
     // composite keys at one address, and a reply carries the address only.
     if (!byIndex.has(index)) byIndex.set(index, resolved)
+  }
+
+  // An in-out's target is a raw debug path; name it the way everything else
+  // here is named, so `force` lands on — and reports — the composite key.
+  const pathToIndex = buildLeafPathMap(map)
+  for (const variable of all) {
+    if (variable.target === undefined) continue
+    const targetIndex = pathToIndex.get(variable.target.toUpperCase())
+    const named = targetIndex !== undefined ? byIndex.get(targetIndex) : undefined
+    if (named) variable.target = named.name
   }
 
   return { md5: map.md5, all, byName, byIndex, warnings }

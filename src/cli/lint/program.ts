@@ -248,6 +248,51 @@ function lintProgramInstances(st: string): LintFinding[] {
   return findings
 }
 
+/** Every argument list of a call to `name`, in order — not just the first. */
+function allCallArguments(statements: string, name: string): string[] {
+  const lists: string[] = []
+  let rest = statements
+  for (;;) {
+    const opener = new RegExp(`\\b${escapeForRegex(name)}\\s*\\(`, 'i').exec(rest)
+    if (!opener) return lists
+    const list = callArguments(rest.slice(opener.index), name)
+    if (list === null) return lists
+    lists.push(list)
+    rest = rest.slice(opener.index + opener[0].length)
+  }
+}
+
+/**
+ * A MUX with an input missing below its last wired one.
+ *
+ * MUX picks by position — K = 1 takes IN1 — so unlike ADD or OR, every input up
+ * to the last must be wired. A ladder or FBD MUX with a middle pin left open is
+ * emitted with that pin missing, and STruC++ stops at "Function 'MUX' is missing
+ * input IN1"; this says which pins and why, before the compile does.
+ */
+function lintMuxGaps(body: PouBody): LintFinding[] {
+  const findings: LintFinding[] = []
+  for (const list of allCallArguments(body.statements, 'MUX')) {
+    const indices = [...list.matchAll(/\bIN(\d+)\s*:=/gi)].map((match) => Number(match[1]))
+    if (indices.length === 0) continue
+    const wired = new Set(indices)
+    const last = Math.max(...indices)
+    const missing: string[] = []
+    for (let index = 0; index < last; index += 1) if (!wired.has(index)) missing.push(`IN${index}`)
+    if (missing.length === 0) continue
+    findings.push({
+      severity: 'error',
+      pou: body.name,
+      rule: 'mux-input-unwired',
+      message:
+        `A MUX has IN${last} wired but not ${missing.join(', ')}. MUX selects its input by position ` +
+        `(K = 1 takes IN1), so every input up to the last one must be wired — wire ${missing.join(', ')}, ` +
+        'or remove the inputs after the last one you need.',
+    })
+  }
+  return findings
+}
+
 export function lintProgram(input: LintInput): LintFinding[] {
   const findings: LintFinding[] = [...lintProgramInstances(input.st)]
   const bodies = splitPous(stripComments(input.st))
@@ -309,6 +354,8 @@ export function lintProgram(input: LintInput): LintFinding[] {
         })
       }
     }
+
+    findings.push(...lintMuxGaps(body))
 
     for (const [name, count] of unconditionalAssignments(body.statements)) {
       if (count < 2) continue

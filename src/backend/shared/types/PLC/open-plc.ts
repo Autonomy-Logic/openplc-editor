@@ -154,6 +154,8 @@ const PLCVariableSchema = z.object({
   location: z.string(),
   initialValue: z.string().or(z.null()).optional(),
   documentation: z.string(),
+  /** The comment on its own lines above the declaration; see `PLCVariable` in the ports. */
+  leadingComment: z.string().optional(),
   debug: z.boolean().optional(),
   /**
    * IEC block qualifier — the variables table's **Flags** column.

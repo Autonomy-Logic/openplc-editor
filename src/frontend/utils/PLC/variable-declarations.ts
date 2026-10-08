@@ -36,6 +36,7 @@ import { parse } from 'strucpp'
 import { baseTypeSchema } from '../../../middleware/shared/ports/plc-schemas'
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
 import { DEBUG_STRING_CAP } from '../variable-sizes'
+import { escapeCommentText, unescapeCommentText } from './comment-text'
 
 /** Half-open character range `[start, end)` into the parsed source. */
 export interface Span {
@@ -52,6 +53,12 @@ export interface ParsedDeclaration {
   span: Span
   /** Whole source lines the declaration occupies, including its trailing newline. */
   lineSpan: Span
+  /**
+   * Whole lines of the comment directly above the declaration, when it has one
+   * (see `leadingComment`). It belongs to the variable: it goes when the
+   * declaration is deleted and moves when the declaration is reordered.
+   */
+  leadingCommentSpan?: Span
   /** 1-indexed line of the declaration's first character. */
   line: number
   fields: {
@@ -355,6 +362,101 @@ export function trailingComment(
   }
 
   return undefined
+}
+
+/**
+ * The comment written on its own lines directly above a declaration — the
+ * variable's leading comment.
+ *
+ * Only comments count, and only a run that touches the declaration: a blank
+ * line between a comment and the declaration (or between two comments) ends the
+ * run, so a section heading separated by a blank line stays free text. `from`
+ * is where the search may start — the end of the previous declaration's lines,
+ * or of the block header — so a trailing comment is never taken for the next
+ * declaration's leading one.
+ *
+ * `span` is whole lines, from the first comment's line to the declaration's, so
+ * deleting it with the declaration leaves no blank line behind. `text` is the
+ * comment's content without delimiters: a block comment's continuation lines
+ * lose the indentation up to the column its first line's text starts at, and
+ * the escaping `escapeCommentText` applies is undone — it reads back exactly as
+ * `renderLeadingComment` wrote it.
+ */
+export function leadingComment(
+  source: string,
+  from: number,
+  lineStart: number,
+): { span: Span; text: string } | undefined {
+  type Found = { outer: Span; inner: Span; kind: CommentKind }
+  let run: Found[] = []
+  let index = from
+  while (index < lineStart) {
+    const char = source[index]
+    if (char === ' ' || char === '\t' || char === '\r' || char === '\n') {
+      index += 1
+      continue
+    }
+    if (source.startsWith('(*', index)) {
+      const close = blockCommentEnd(source, index)
+      if (close === -1 || close > lineStart) return undefined
+      run.push({ outer: { start: index, end: close }, inner: { start: index + 2, end: close - 2 }, kind: 'block' })
+      index = close
+      continue
+    }
+    if (source.startsWith('//', index)) {
+      const newline = source.indexOf('\n', index)
+      const end = newline === -1 || newline > lineStart ? lineStart : newline
+      const lineEnd = source[end - 1] === '\r' ? end - 1 : end
+      run.push({ outer: { start: index, end: lineEnd }, inner: { start: index + 2, end: lineEnd }, kind: 'line' })
+      index = end
+      continue
+    }
+    // Anything else (a block keyword, a pragma) is not part of a comment run.
+    run = []
+    index += 1
+  }
+  if (run.length === 0) return undefined
+
+  // Keep the run that touches the declaration: walk back while each gap holds
+  // at most one line break.
+  const touching = (start: number, end: number) => (source.slice(start, end).match(/\n/g) ?? []).length <= 1
+  if (!touching(run[run.length - 1].outer.end, lineStart)) return undefined
+  let first = run.length - 1
+  while (first > 0 && touching(run[first - 1].outer.end, run[first].outer.start)) first -= 1
+  const kept = run.slice(first)
+
+  // The first comment must open its own line — not sit after code on it.
+  const firstLineStart = source.lastIndexOf('\n', kept[0].outer.start - 1) + 1
+  if (source.slice(firstLineStart, kept[0].outer.start).trim() !== '') return undefined
+
+  const text = kept
+    .map((comment) => {
+      const column = comment.inner.start - (source.lastIndexOf('\n', comment.inner.start - 1) + 1)
+      const lines = source.slice(comment.inner.start, comment.inner.end).split(/\r?\n/)
+      const textColumn = column + (lines[0].length - lines[0].trimStart().length)
+      return lines
+        .map((line, lineIndex) => {
+          if (lineIndex === 0) return line.trim()
+          const indent = line.length - line.trimStart().length
+          return line.slice(Math.min(indent, textColumn)).trimEnd()
+        })
+        .join('\n')
+        .trim()
+    })
+    .join('\n')
+
+  return { span: { start: firstLineStart, end: lineStart }, text: unescapeCommentText(text) }
+}
+
+/**
+ * A leading comment as `leadingComment` reads it back: one block comment at
+ * `indent`, continuation lines aligned under its first line's text, ending in
+ * `newline`. Escaped, so no text can close it early or open a nested one.
+ */
+export function renderLeadingComment(text: string, indent: string, newline: string): string {
+  const lines = escapeCommentText(text.trim()).split(/\r?\n/)
+  const body = lines.map((line, index) => (index === 0 ? line : line === '' ? '' : `${indent}   ${line}`))
+  return `${indent}(* ${body.join(newline)} *)${newline}`
 }
 
 // ---------------------------------------------------------------------------
@@ -761,6 +863,11 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
       const lineSpan = { start: lineStart, end: Math.max(lineEnd, declFull.end) }
       const line = declaration.sourceSpan.startLine - wrapperLines
 
+      // The comment on the lines above, searched for from where the previous
+      // declaration's lines end (or the header's), never into them.
+      const previous = declarations[declarations.length - 1]
+      const above = leadingComment(source, previous ? previous.lineSpan.end : headerEnd, lineStart)
+
       // One variable per declared name. `a, b : INT;` is two variables that
       // happen to share a line; the model has no way to say otherwise, and the
       // text is normalised to match.
@@ -777,12 +884,15 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
           documentation,
           debug: false,
           ...(flag !== undefined ? { flag } : {}),
+          // The first name of `a, b : INT;` owns the comment above the line.
+          ...(above && index === 0 ? { leadingComment: above.text } : {}),
         }
 
         declarations.push({
           variable,
           span: declSpan,
           lineSpan,
+          ...(above && index === 0 ? { leadingCommentSpan: above.span } : {}),
           line,
           fields: {
             name: nameSpan,

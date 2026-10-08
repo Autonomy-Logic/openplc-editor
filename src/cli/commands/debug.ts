@@ -577,8 +577,19 @@ export function renderOk(response: OkResponse): string {
       return data.variables.length === 0
         ? '(no variables match)'
         : renderTable(
-            ['NAME', 'TYPE', 'BYTES'],
-            data.variables.map((variable) => [variable.name, variable.type, String(variable.size)]),
+            ['NAME', 'TYPE', 'BYTES', 'NOTE'],
+            data.variables.map((variable) => [
+              variable.name,
+              variable.type,
+              String(variable.size),
+              variable.inOut
+                ? variable.target !== undefined
+                  ? `in-out of ${variable.target} (forces it)`
+                  : 'in-out (read-only)'
+                : variable.readOnly
+                  ? 'read-only'
+                  : '',
+            ]),
           )
     case 'read':
       return formatVariableList(data.values)

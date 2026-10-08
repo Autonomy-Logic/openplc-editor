@@ -1,9 +1,20 @@
 import type { PLCPou, PLCVariable, PouType } from '../../../middleware/shared/ports/types'
 import { parseIecStringToVariables } from '../generate-iec-string-to-variables'
+import { unescapeCommentText } from './comment-text'
 import { getLanguageFromExtension } from './pou-file-extensions'
 
 /**
- * Helper function to extract documentation from leading comments
+ * A POU file's documentation: its leading comment, with the escaping the
+ * serializer applies to `(*` and `*)` undone, so any text round-trips.
+ * Every POU reader goes through this rather than `extractDocumentation`.
+ */
+export const readPouDocumentation = (content: string): { documentation: string; remainingContent: string } => {
+  const { documentation, remainingContent } = extractDocumentation(content)
+  return { documentation: unescapeCommentText(documentation), remainingContent }
+}
+
+/**
+ * Helper function to extract the raw text of leading comments (still escaped — see `readPouDocumentation`)
  * @param content - The content to extract documentation from
  * @returns Object with documentation and remaining content
  */
@@ -189,7 +200,7 @@ export const extractVariablesSection = (
 
 export const parseTextualPouFromString = (content: string, language: string, type: string): PLCPou => {
   try {
-    const { documentation, remainingContent } = extractDocumentation(content)
+    const { documentation, remainingContent } = readPouDocumentation(content)
 
     const typeKeyword = POU_TYPE_KEYWORDS[type]
     if (!typeKeyword) {
@@ -270,7 +281,7 @@ export const parseTextualPouFromString = (content: string, language: string, typ
  */
 export const parseHybridPouFromString = (content: string, language: string, type: string): PLCPou => {
   try {
-    const { documentation, remainingContent } = extractDocumentation(content)
+    const { documentation, remainingContent } = readPouDocumentation(content)
 
     const typeKeyword = POU_TYPE_KEYWORDS[type]
     if (!typeKeyword) {
@@ -351,7 +362,7 @@ export const parseHybridPouFromString = (content: string, language: string, type
  */
 export const parseGraphicalPouFromString = (content: string, language: string, type: string): PLCPou => {
   try {
-    const { documentation, remainingContent } = extractDocumentation(content)
+    const { documentation, remainingContent } = readPouDocumentation(content)
 
     const typeKeyword = POU_TYPE_KEYWORDS[type]
     if (!typeKeyword) {

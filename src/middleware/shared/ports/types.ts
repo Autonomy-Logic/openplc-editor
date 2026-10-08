@@ -39,6 +39,12 @@ export interface PLCVariable {
   location: string
   initialValue?: string | null
   documentation: string
+  /**
+   * The comment on its own lines directly above the declaration — free text
+   * that is not the trailing `documentation`. Absent when there is none; on an
+   * update, absent leaves the comment alone and `''` removes it.
+   */
+  leadingComment?: string
   debug?: boolean
   /** IEC block qualifier; absent = plain `VAR`. See {@link VariableFlag}. */
   flag?: VariableFlag

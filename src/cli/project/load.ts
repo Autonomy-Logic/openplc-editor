@@ -47,6 +47,11 @@ export interface LoadedProject {
   canEdit: boolean
   isEphemeral: boolean
   /**
+   * A `plc-library` project. Its save writes `library.json` and no `devices/`
+   * folder, so a writing command must not accept device settings for it.
+   */
+  isLibrary: boolean
+  /**
    * Server / remote-device files on disk that failed to load.  Their configs
    * are absent from `data`, so `describe` under-reports the project and an
    * `apply` naming the same server would overwrite a file it never read.
@@ -177,6 +182,7 @@ export async function loadProject(projectPath: string): Promise<LoadProjectResul
       warnings: [...libraryWarnings, ...(parsed.warnings ?? [])],
       canEdit: state.workspace.canEdit,
       isEphemeral: state.workspace.isEphemeralProject,
+      isLibrary: state.project.meta.type === 'plc-library',
       unreadableProtocolFiles: parsed.unreadableProtocolFiles ?? [],
     },
   }

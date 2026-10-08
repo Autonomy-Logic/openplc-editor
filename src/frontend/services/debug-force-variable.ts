@@ -1,6 +1,7 @@
 import type { DebuggerPort } from '../../middleware/shared/ports/debugger-port'
 import { useOpenPLCStore } from '../store'
 import { applySwapToVariableBytes } from '../utils/endian'
+import { forcedKeyFor, resolveForceIndex } from '../utils/inout-force'
 
 /**
  * Force a variable to a specific value via the debug protocol, then update
@@ -24,6 +25,12 @@ export async function forceDebugVariable(
   forcedMapValue: boolean,
   typeName?: string,
 ): Promise<boolean> {
+  if (debugIndex === undefined) return false
+  // A function-block in-out forces the variable it is bound to; a CONSTANT, or
+  // an in-out whose variable cannot be named, is not forced at all. The force
+  // is recorded at the variable it lands on.
+  compositeKey = forcedKeyFor(compositeKey, debugIndex)
+  debugIndex = resolveForceIndex(debugIndex)
   if (debugIndex === undefined) return false
 
   // Editor's internal codec produces LE bytes; swap to target-native
@@ -59,6 +66,9 @@ export async function releaseDebugVariable(
   compositeKey: string,
   debugIndex: number | undefined,
 ): Promise<boolean> {
+  if (debugIndex === undefined) return false
+  compositeKey = forcedKeyFor(compositeKey, debugIndex)
+  debugIndex = resolveForceIndex(debugIndex)
   if (debugIndex === undefined) return false
 
   const result = await debuggerPort.setVariable(debugIndex, false)

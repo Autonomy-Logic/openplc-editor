@@ -8,7 +8,9 @@ import { forceDebugVariable, releaseDebugVariable } from '../../../../services/d
 import { isExpressionValidForType } from '../../../../services/graphical-scope'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
+import { canForceDebugLeaf } from '../../../../utils/inout-force'
 import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
+import { DebugInOutNote } from '../../debug-inout-note'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { VariablesBlockAutoComplete } from './autocomplete'
 import { CustomHandle } from './handle'
@@ -300,25 +302,30 @@ const Coil = (block: CoilProps) => {
                     }}
                     onOpenAutoFocus={(e) => e.preventDefault()}
                   >
-                    <div
-                      className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      onClick={(e) => void handleForceTrue(e)}
-                    >
-                      <p>Force True</p>
-                    </div>
-                    <div
-                      className='flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                      onClick={(e) => void handleForceFalse(e)}
-                    >
-                      <p>Force False</p>
-                    </div>
-                    {isForced && (
-                      <div
-                        className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                        onClick={(e) => void handleReleaseForce(e)}
-                      >
-                        <p>Release Force</p>
-                      </div>
+                    <DebugInOutNote debugIndex={debugIndex} />
+                    {canForceDebugLeaf(debugIndex) && (
+                      <>
+                        <div
+                          className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                          onClick={(e) => void handleForceTrue(e)}
+                        >
+                          <p>Force True</p>
+                        </div>
+                        <div
+                          className='flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                          onClick={(e) => void handleForceFalse(e)}
+                        >
+                          <p>Force False</p>
+                        </div>
+                        {isForced && (
+                          <div
+                            className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                            onClick={(e) => void handleReleaseForce(e)}
+                          >
+                            <p>Release Force</p>
+                          </div>
+                        )}
+                      </>
                     )}
                   </Popover.Content>
                 </Popover.Portal>

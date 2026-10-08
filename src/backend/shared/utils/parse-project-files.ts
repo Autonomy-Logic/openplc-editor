@@ -6,7 +6,6 @@
 import { parseDataTypeFromText } from '../../../frontend/utils/PLC/data-type-declarations'
 import {
   detectLanguageFromExtension,
-  extractDocumentation,
   extractVariablesSection,
   isGraphicalBodyShape,
   matchPouHeader,
@@ -14,6 +13,7 @@ import {
   parseHybridPouFromString,
   parseTextualPouFromString,
   POU_END_KEYWORDS,
+  readPouDocumentation,
 } from '../../../frontend/utils/PLC/pou-text-parser'
 import type { RawProjectFile } from '../../../middleware/shared/ports/project-port'
 import type {
@@ -185,7 +185,7 @@ function createFallbackPou(content: string, language: string, pouType: string, p
   //    already drifted: this copy sliced the declarations from the `VAR`
   //    keyword rather than from the start of its line, so a POU that failed to
   //    parse came back re-indented on the next save while the others did not.
-  const { documentation, remainingContent } = extractDocumentation(content)
+  const { documentation, remainingContent } = readPouDocumentation(content)
 
   const header = matchPouHeader(remainingContent, pouType)
   const section = extractVariablesSection(remainingContent, header ? header.text.length : 0, {

@@ -50,6 +50,16 @@ const variableSchema = z
     location: z.string().optional(),
     initialValue: z.string().nullable().optional(),
     documentation: z.string().optional(),
+    /**
+     * The comment on its own lines directly above the declaration, without its
+     * `(* *)`. `documentation` is the trailing comment on the declaration's own
+     * line; this is the one above it, often several lines long. It is deleted
+     * with the variable and moves with it.
+     *
+     * Absent leaves the comment as it is — a spec written before this field
+     * existed must not strip every comment it does not mention. `""` removes it.
+     */
+    leadingComment: z.string().optional(),
     debug: z.boolean().optional(),
     /**
      * The IEC block qualifier — the variables table's **Flags** column.

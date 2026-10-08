@@ -155,6 +155,9 @@ export class SessionCore {
           name: variable.name,
           type: variable.type,
           size: variable.size,
+          ...(variable.readOnly ? { readOnly: true } : {}),
+          ...(variable.inOut ? { inOut: true } : {}),
+          ...(variable.target !== undefined ? { target: variable.target } : {}),
         }))
         return { id: request.id, ok: true, data: { kind: 'list-vars', variables } }
       }
@@ -294,10 +297,13 @@ export class SessionCore {
   }
 
   private async applyForce(id: number, name: string, input: string): Promise<Response> {
-    const variable = findVariable(this.options.index, name)
-    if (!variable) {
+    const named = findVariable(this.options.index, name)
+    if (!named) {
       return this.fail(id, ErrorCode.VariableNotFound, `No variable "${name}" in this program's debug map`)
     }
+    const forceable = this.forceTargetOf(named)
+    if ('error' in forceable) return this.fail(id, ErrorCode.ValueInvalid, forceable.error)
+    const variable = forceable.variable
     const encoded = encodeValue(variable, input)
     if (!encoded.success) return this.fail(id, ErrorCode.ValueInvalid, encoded.error)
 
@@ -396,10 +402,13 @@ export class SessionCore {
   }
 
   private async applyUnforce(id: number, name: string): Promise<Response> {
-    const variable = findVariable(this.options.index, name)
-    if (!variable) {
+    const named = findVariable(this.options.index, name)
+    if (!named) {
       return this.fail(id, ErrorCode.VariableNotFound, `No variable "${name}" in this program's debug map`)
     }
+    const forceable = this.forceTargetOf(named)
+    if ('error' in forceable) return this.fail(id, ErrorCode.ValueInvalid, forceable.error)
+    const variable = forceable.variable
     // force=false with no payload is the unforce PDU — see `buildSetVariableRequest`.
     const result = await this.options.channel.setVariable(variable.index, false)
     if (!result.success) {
@@ -413,6 +422,26 @@ export class SessionCore {
     if ('error' in readBack) return this.fail(id, ErrorCode.NotConnected, readBack.error)
     const value = readBack.values[0] ?? { name: variable.name, type: variable.type, value: null, forced: false }
     return { id, ok: true, data: { kind: 'unforce', value } }
+  }
+
+  /**
+   * The variable a force of `variable` lands on. A function block's VAR_IN_OUT
+   * is the caller's variable (IEC 61131-3 §3.48) — a read-only view here — so
+   * forcing it forces the variable it is bound to, at that variable's own name,
+   * when the debug map can name it. A CONSTANT is never forced.
+   */
+  private forceTargetOf(variable: ResolvedVariable): { variable: ResolvedVariable } | { error: string } {
+    if (!variable.readOnly) return { variable }
+    if (variable.inOut) {
+      const target = variable.target !== undefined ? findVariable(this.options.index, variable.target) : undefined
+      if (target) return { variable: target }
+      return {
+        error:
+          `"${variable.name}" is a function block's in-out: a read-only view of the variable passed to it. ` +
+          `Force that variable instead.`,
+      }
+    }
+    return { error: `"${variable.name}" is read-only (CONSTANT) and cannot be forced` }
   }
 
   private startWatching(variables: ResolvedVariable[], intervalMs: number | undefined): void {

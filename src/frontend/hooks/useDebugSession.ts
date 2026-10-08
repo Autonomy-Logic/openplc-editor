@@ -22,6 +22,7 @@ import {
   debugMapToEntries,
   deriveVariableIndexMap,
 } from '../utils/debugger-session'
+import { clearDebugLeafAccess, registerDebugLeafAccess } from '../utils/inout-force'
 import { encodeForceValue } from '../utils/variable-sizes'
 
 export interface UseDebugSessionReturn {
@@ -142,6 +143,10 @@ export function useDebugSession(): UseDebugSessionReturn {
       // Derive the composite-key → packed-address map from the tree leaves.
       const indexMap = deriveVariableIndexMap(treeMap, debugMap)
 
+      // CONSTANTs and function-block in-outs are read-only leaves; an in-out
+      // forces the variable it is bound to, when that variable is known.
+      registerDebugLeafAccess(debugMap, indexMap)
+
       // Build FB instance map
       const fbDebugInstancesMap = buildFbInstanceMap(debugPous, instances)
 
@@ -209,6 +214,7 @@ export function useDebugSession(): UseDebugSessionReturn {
    */
   const stopSession = useCallback(async () => {
     await debuggerPort.disconnect()
+    clearDebugLeafAccess()
 
     workspaceActions.clearDebugState()
     debugTreesRef.current = {}

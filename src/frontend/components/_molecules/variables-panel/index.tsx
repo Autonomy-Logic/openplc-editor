@@ -5,6 +5,7 @@ import type { DebugTreeNode } from '../../../../middleware/shared/ports/types'
 import ViewIcon from '../../../assets/icons/interface/View'
 import ZapIcon from '../../../assets/icons/interface/Zap'
 import { cn } from '../../../utils/cn'
+import { canForceDebugLeaf } from '../../../utils/inout-force'
 import { encodeForceValue, isForcedValueHigh } from '../../../utils/variable-sizes'
 import { TreeNode } from '../../_atoms/debug-tree-node'
 import { Label } from '../../_atoms/label'
@@ -175,6 +176,11 @@ const VariablesPanel = ({
   const canForceVariable = useCallback(
     (node: DebugTreeNode) => {
       if (!isDebuggerVisible || node.isComplex) return false
+      // A CONSTANT, or a function-block in-out whose variable cannot be named,
+      // is watched but never forced (inout-force.ts).
+      const leafIndex =
+        node.debugIndex ?? debugVariableIndexes?.get(node.fullPath) ?? debugVariableIndexes?.get(node.compositeKey)
+      if (!canForceDebugLeaf(leafIndex)) return false
       if (node.debugIndex !== undefined) return true
       return (
         (debugVariableIndexes?.has(node.fullPath) ?? false) || (debugVariableIndexes?.has(node.compositeKey) ?? false)

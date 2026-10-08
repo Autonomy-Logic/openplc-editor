@@ -4,6 +4,7 @@ import type { DebugTreeNode } from '../../../../middleware/shared/ports/types'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import ViewIcon from '../../../assets/icons/interface/View'
 import { cn } from '../../../utils/cn'
+import { describeInOutLeaf } from '../../../utils/inout-force'
 
 type TreeNodeProps = ComponentPropsWithoutRef<'div'> & {
   node: DebugTreeNode
@@ -41,6 +42,8 @@ const TreeNode = ({
   // This shows full path for nested FB instances (e.g., "main.IRRIGATION_MAIN_CONTROLLER0.TON0")
   // while keeping short names for children (e.g., "Q", "ET", "ENO")
   const isRoot = level === 0
+  // A function-block in-out: a read-only view of the variable bound to it.
+  const inOutNote = describeInOutLeaf(node.debugIndex)
   let displayLabel = node.name
   if (isRoot) {
     const [pouName, path] = node.compositeKey.split(':')
@@ -118,6 +121,11 @@ const TreeNode = ({
             >
               {displayLabel}
             </p>
+            {inOutNote !== undefined && (
+              <span className='shrink-0 text-neutral-400 dark:text-neutral-600' title={inOutNote}>
+                in-out
+              </span>
+            )}
           </div>
           <p className='uppercase text-neutral-400 dark:text-neutral-700'>{node.type}</p>
           <p

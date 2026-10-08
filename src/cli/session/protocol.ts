@@ -181,7 +181,19 @@ const ResponseDataSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('status'), status: SessionStatusSchema }),
   z.object({
     kind: z.literal('list-vars'),
-    variables: z.array(z.object({ name: z.string(), type: z.string(), size: z.number() })),
+    variables: z.array(
+      z.object({
+        name: z.string(),
+        type: z.string(),
+        size: z.number(),
+        /** Never forced: a CONSTANT, or a function block's in-out. */
+        readOnly: z.boolean().optional(),
+        /** A function block's VAR_IN_OUT: a view of the caller's variable. */
+        inOut: z.boolean().optional(),
+        /** The variable an in-out is bound to; forcing the in-out forces it. */
+        target: z.string().optional(),
+      }),
+    ),
   }),
   z.object({ kind: z.literal('read'), values: z.array(VariableValueSchema) }),
   z.object({ kind: z.literal('force'), value: VariableValueSchema }),

@@ -107,6 +107,10 @@ export async function runDescribe(args: ParsedArgs, reporter: Reporter): Promise
     spec.remoteDevices = protocols.remoteDevices
     protocolAddresses = protocols.protocolAddresses
   }
+  // A library has no device: its save writes no devices/ folder, and `apply`
+  // refuses a device section for one. Emitting the store's default board would
+  // make describe -> apply fail on its own output.
+  if (loaded.project.isLibrary) delete spec.device
 
   const payload: Record<string, unknown> = {
     ok: true,
@@ -168,6 +172,7 @@ function describeVariable(variable: PLCVariable): Record<string, unknown> {
   if (variable.location) out.location = variable.location
   if (variable.initialValue !== undefined && variable.initialValue !== null) out.initialValue = variable.initialValue
   if (variable.documentation) out.documentation = variable.documentation
+  if (variable.leadingComment) out.leadingComment = variable.leadingComment
   return out
 }
 

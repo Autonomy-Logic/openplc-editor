@@ -464,3 +464,31 @@ END_PROGRAM`),
     ).toContain('block-primary-input-unassigned')
   })
 })
+
+describe('a MUX with an input left unwired', () => {
+  // MUX selects by position, so a gap below the last wired input is an error
+  // STruC++ stops on ("missing input IN1"); the lint names the pins first.
+  const program = (call: string) =>
+    `PROGRAM Main\nVAR\n  x : INT;\nEND_VAR\n  _TMP_MUX7001_OUT := ${call};\n  x := _TMP_MUX7001_OUT;\nEND_PROGRAM\n`
+  const muxFindings = (call: string) =>
+    lintProgram({ st: program(call), pous: [], systemLibraries: [], globals: [] }).filter(
+      (finding) => finding.rule === 'mux-input-unwired',
+    )
+
+  it('names the missing middle input', () => {
+    const findings = muxFindings('MUX(K := k, IN0 := a, IN2 := c)')
+    expect(findings).toHaveLength(1)
+    expect(findings[0].severity).toBe('error')
+    expect(findings[0].pou).toBe('Main')
+    expect(findings[0].message).toContain('IN2 wired but not IN1')
+  })
+
+  it('names every gap, including IN0', () => {
+    expect(muxFindings('MUX(K := k, IN3 := d, IN1 := b)')[0].message).toContain('not IN0, IN2')
+  })
+
+  it('is quiet for a fully wired MUX, named or positional', () => {
+    expect(muxFindings('MUX(K := k, IN0 := a, IN1 := b)')).toEqual([])
+    expect(muxFindings('MUX(k, a, b, c)')).toEqual([])
+  })
+})

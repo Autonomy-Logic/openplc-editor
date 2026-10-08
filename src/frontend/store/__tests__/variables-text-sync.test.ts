@@ -104,7 +104,8 @@ describe('every writer keeps the text in step with the model', () => {
     })
 
     expect(varsOf('Reordered').map((v) => v.name)).toEqual(['b', 'a'])
-    expect(textOf('Reordered')).toBe('VAR\n  (* mine *)\n  b : BOOL;\n  a : INT;\nEND_VAR')
+    // The comment directly above `a` is `a`'s leading comment, so it moves with it.
+    expect(textOf('Reordered')).toBe('VAR\n  b : BOOL;\n  (* mine *)\n  a : INT;\nEND_VAR')
   })
 
   it('a data type rename reaches the text', () => {

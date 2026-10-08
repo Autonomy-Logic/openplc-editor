@@ -1,5 +1,5 @@
 import type { PLCVariable } from '../../middleware/shared/ports/types'
-import { parseVariableDeclarations } from './PLC/variable-declarations'
+import { parseVariableDeclarations, renderLeadingComment } from './PLC/variable-declarations'
 
 const classToVarBlock: Record<string, string> = {
   local: 'VAR',
@@ -61,6 +61,9 @@ export const generateIecVariablesToString = (variables: PLCVariable[]): string =
         textualDeclaration += `${VAR_BLOCK_INDENT}${blockHeader}${qualifier}\n`
 
         groupedVariables[groupKey].forEach((v) => {
+          if (v.leadingComment?.trim()) {
+            textualDeclaration += renderLeadingComment(v.leadingComment, VAR_DECL_INDENT, '\n')
+          }
           let line = `${VAR_DECL_INDENT}${v.name} : ${v.type.value}`
 
           if (v.location) {

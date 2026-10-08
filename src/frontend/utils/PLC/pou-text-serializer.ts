@@ -1,13 +1,16 @@
 import type { PLCPou } from '../../../middleware/shared/ports/types'
 import { generateIecVariablesToString } from '../generate-iec-variables-to-string'
+import { escapeCommentText } from './comment-text'
 import { getEndKeyword, getStartKeyword } from './pou-file-extensions'
 
 /** PLCPou extended with optional variablesText from code-mode editing */
 type SerializablePou = PLCPou & { variablesText?: string }
 
+// Escaped, or a `*)` in the text ends the comment early and the rest lands in
+// front of the POU header, where the loader can no longer find it.
 const formatDocumentation = (documentation: string | undefined): string => {
   if (documentation && documentation.trim()) {
-    return `(* ${documentation.trim()} *)\n\n`
+    return `(* ${escapeCommentText(documentation.trim())} *)\n\n`
   }
   return ''
 }

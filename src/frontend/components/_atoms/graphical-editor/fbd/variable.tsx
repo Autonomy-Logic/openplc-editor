@@ -9,11 +9,13 @@ import { forceDebugVariable, releaseDebugVariable } from '../../../../services/d
 import { resolveScopeExpressionType } from '../../../../services/graphical-scope'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
+import { canForceDebugLeaf } from '../../../../utils/inout-force'
 import { resolveArrayVariableByName } from '../../../../utils/PLC/array-variable-utils'
 import { encodeForceValue, isForcedValueHigh } from '../../../../utils/variable-sizes'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { Modal, ModalContent, ModalTitle } from '../../../_molecules/modal'
+import { DebugInOutNote } from '../../debug-inout-note'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { Label } from '../../label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../tooltip'
@@ -571,44 +573,49 @@ const VariableElement = (block: VariableProps) => {
                       }}
                       onOpenAutoFocus={(e) => e.preventDefault()}
                     >
-                      {isBoolVariable ? (
+                      <DebugInOutNote debugIndex={debugIndex} />
+                      {canForceDebugLeaf(debugIndex) && (
                         <>
-                          <div
-                            className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                            onClick={(e) => void handleForceTrue(e)}
-                          >
-                            <p>Force True</p>
-                          </div>
-                          <div
-                            className='flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                            onClick={(e) => void handleForceFalse(e)}
-                          >
-                            <p>Force False</p>
-                          </div>
-                          {isForced && (
-                            <div
-                              className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                              onClick={(e) => void handleReleaseForce(e)}
-                            >
-                              <p>Release Force</p>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <div
-                            className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                            onClick={handleForceValue}
-                          >
-                            <p>Force Value</p>
-                          </div>
-                          {isForced && (
-                            <div
-                              className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
-                              onClick={(e) => void handleReleaseForce(e)}
-                            >
-                              <p>Release Force</p>
-                            </div>
+                          {isBoolVariable ? (
+                            <>
+                              <div
+                                className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                                onClick={(e) => void handleForceTrue(e)}
+                              >
+                                <p>Force True</p>
+                              </div>
+                              <div
+                                className='flex w-full cursor-pointer items-center gap-2 px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                                onClick={(e) => void handleForceFalse(e)}
+                              >
+                                <p>Force False</p>
+                              </div>
+                              {isForced && (
+                                <div
+                                  className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                                  onClick={(e) => void handleReleaseForce(e)}
+                                >
+                                  <p>Release Force</p>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <div
+                                className='flex w-full cursor-pointer items-center gap-2 rounded-t-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                                onClick={handleForceValue}
+                              >
+                                <p>Force Value</p>
+                              </div>
+                              {isForced && (
+                                <div
+                                  className='flex w-full cursor-pointer items-center gap-2 rounded-b-lg px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                                  onClick={(e) => void handleReleaseForce(e)}
+                                >
+                                  <p>Release Force</p>
+                                </div>
+                              )}
+                            </>
                           )}
                         </>
                       )}

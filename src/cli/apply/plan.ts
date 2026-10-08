@@ -510,6 +510,7 @@ function toVariable(spec: SpecVariable, fallbackClass: 'local' | 'global'): PLCV
     type: toVariableType(spec.type),
     location: spec.location ?? '',
     documentation: spec.documentation ?? '',
+    ...(spec.leadingComment !== undefined ? { leadingComment: spec.leadingComment } : {}),
     ...(spec.initialValue !== undefined ? { initialValue: spec.initialValue } : {}),
     ...(spec.debug !== undefined ? { debug: spec.debug } : {}),
     ...(spec.flag !== undefined ? { flag: spec.flag } : {}),

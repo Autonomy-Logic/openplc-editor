@@ -23,6 +23,11 @@ The build target. Not part of the project data proper — it is a separate file 
 but it decides what the project compiles for, so set it rather than inheriting
 whatever `create` chose.
 
+A library project (`plc-library`) has no device: its save writes no `devices/`
+folder, so `apply` refuses a `device` section (and any `servers` or
+`remoteDevices`) for one. A library's target is a core, set in `library.json` as
+`"build": { "verify": "arduino", "core": "esp32:esp32" }`.
+
 | Field               | Notes                                                                                                                                                                                                                                                                                                                       |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `board`             | Exactly as the editor names it, e.g. `OpenPLC Runtime v4` or `OpenPLC Simulator`. `describe` reports the one a project already uses; the editor's board picker has the full list. A name nothing recognises is NOT rejected — `check` and `compile` accept it and resolve whatever the scaffold chose, so a typo is silent. |
@@ -135,6 +140,7 @@ one (`--prune` removes a POU the document stops mentioning).
 | `type`                          | `{ "definition": ..., "value": ... }`                                                                                                                                                               |
 | `location`                      | An alias name or a literal IEC address (`%IX0.0`).                                                                                                                                                  |
 | `initialValue`, `documentation` | Optional.                                                                                                                                                                                           |
+| `leadingComment`                | Optional. The comment on its own lines directly above the declaration (`documentation` is the one after it on the same line). Deleted with the variable, moved with it. Absent leaves it alone; `""` removes it. |
 | `debug`                         | Optional. Ticks the variable into the EDITOR's debugger chart. `debug read` does not need it — the CLI reads anything in the debug map.                                                             |
 | `flag`                          | `constant` \| `retain`. The variables table's **Flags** column. Absent is a plain `VAR` (IEC `NON_RETAIN`). Mutually exclusive, hence one field. `retain` needs `device.persistentStorage.enabled`. |
 

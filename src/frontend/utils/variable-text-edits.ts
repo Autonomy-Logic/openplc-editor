@@ -22,7 +22,12 @@
 import type { PLCVariable } from '../../middleware/shared/ports/types'
 import { generateIecVariablesToString } from './generate-iec-variables-to-string'
 import type { ParsedBlock, ParsedDeclaration, ParseResult, Span, TypeContext } from './PLC/variable-declarations'
-import { lineEndingOf, normalizeOneVariablePerLine, parseVariableDeclarations } from './PLC/variable-declarations'
+import {
+  lineEndingOf,
+  normalizeOneVariablePerLine,
+  parseVariableDeclarations,
+  renderLeadingComment,
+} from './PLC/variable-declarations'
 
 interface TextEdit {
   span: Span
@@ -145,6 +150,29 @@ function indentOf(text: string, declaration: ParsedDeclaration): string {
   // indent an inserted sibling with the string `VAR_INPUT `.
   const indent = text.slice(declaration.lineSpan.start, declaration.span.start)
   return /^[ \t]*$/.test(indent) ? indent : '    '
+}
+
+/**
+ * The declaration's lines including the comment above it — the unit that is
+ * deleted with the variable and moved when it is reordered.
+ */
+const unitSpan = (declaration: ParsedDeclaration): Span => ({
+  start: declaration.leadingCommentSpan?.start ?? declaration.lineSpan.start,
+  end: declaration.lineSpan.end,
+})
+
+/** Comparable form of a leading comment: line endings and trailing blanks do not count. */
+const normalizeLeadingComment = (text: string | undefined): string =>
+  (text ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trim()
+
+/** The comment lines above a new declaration, or nothing. */
+function renderLeadingFor(variable: PLCVariable, indent: string, newline: string): string {
+  const text = normalizeLeadingComment(variable.leadingComment)
+  return text === '' ? '' : renderLeadingComment(text, indent, newline)
 }
 
 /** Render a declaration for a variable that has no line of its own yet. */
@@ -316,6 +344,21 @@ function editsForDeclaration(text: string, declaration: ParsedDeclaration, varia
     })
   }
 
+  // The comment above the declaration. Absent means "leave it": a table edit
+  // or a spec written before the field existed must not strip comments.
+  // Compared normalised, so an unchanged comment keeps the user's own layout.
+  if (variable.leadingComment !== undefined) {
+    const next = normalizeLeadingComment(variable.leadingComment)
+    if (normalizeLeadingComment(current.leadingComment) !== next) {
+      const span = declaration.leadingCommentSpan ?? {
+        start: declaration.lineSpan.start,
+        end: declaration.lineSpan.start,
+      }
+      const rendered = next === '' ? '' : renderLeadingComment(next, indentOf(text, declaration), lineEndingOf(text))
+      edits.push({ span, replacement: rendered })
+    }
+  }
+
   return edits
 }
 
@@ -390,10 +433,11 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
   })
 
   // 2. Declarations with no variable left: take the whole line, so no blank
-  //    line is left where the declaration was.
+  //    line is left where the declaration was — and the comment above it,
+  //    which described a variable that no longer exists.
   for (const declaration of declarations) {
     if (!matchedDeclarations.has(declaration)) {
-      edits.push({ span: declaration.lineSpan, replacement: '' })
+      edits.push({ span: unitSpan(declaration), replacement: '' })
     }
   }
 
@@ -429,7 +473,12 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
         // unparseable result was saved.
         const sharesLine = beforeEndVar.trim() !== ''
         const at = sharesLine ? block.endVarSpan.start : endVarLineStart
-        const rendered = variables.map((variable) => `${renderDeclaration(variable, indent)}${newline}`).join('')
+        const rendered = variables
+          .map(
+            (variable) =>
+              `${renderLeadingFor(variable, indent, newline)}${renderDeclaration(variable, indent)}${newline}`,
+          )
+          .join('')
         edits.push({ span: { start: at, end: at }, replacement: sharesLine ? `${newline}${rendered}` : rendered })
       } else {
         // No block of this class yet. Serialising just these variables gives a
@@ -452,18 +501,19 @@ export function applyVariablesToText(text: string, nextVariables: PLCVariable[],
   if (edits.length === 0) return reorderDeclarations(patched, nextVariables, context, scanned)
 
   // 4. Order. Handled after the field edits, by moving whole declaration lines
-  //    between the slots they already occupy, so comments sitting on their own
-  //    lines stay where the user put them rather than following a variable
-  //    around.
+  //    — each with the comment directly above it — between the slots they
+  //    already occupy. A comment set apart by a blank line is not a variable's
+  //    and stays where the user put it.
   return reorderDeclarations(patched, nextVariables, context)
 }
 
 /**
  * Put the declaration lines back in the model's order.
  *
- * Only lines that hold a declaration move; anything between them — a comment,
- * a blank line — is left alone. A no-op when the order already matches, which
- * is the overwhelmingly common case.
+ * Only a declaration's lines and its leading comment move; anything else
+ * between them — a heading set apart by a blank line, the blank line itself —
+ * is left alone. A no-op when the order already matches, which is the
+ * overwhelmingly common case.
  *
  * Ordering is resolved per block, against the variables of that same class and
  * flag, rather than against the flattened model: two blocks may legitimately be
@@ -511,13 +561,16 @@ function reorderDeclarations(
     const target = [...current].sort((a, b) => wanted.indexOf(a) - wanted.indexOf(b))
     if (current.every((name, index) => name === target[index])) continue
 
-    const lines = block.declarations.map((declaration) =>
-      text.slice(declaration.lineSpan.start, declaration.lineSpan.end),
-    )
+    // Each declaration moves with the comment above it; a comment that is not
+    // directly above a declaration (a heading after a blank line) stays put.
+    const units = block.declarations.map((declaration) => {
+      const span = unitSpan(declaration)
+      return text.slice(span.start, span.end)
+    })
     target.forEach((name, index) => {
       const from = current.indexOf(name)
       if (from === index) return
-      edits.push({ span: block.declarations[index].lineSpan, replacement: lines[from] })
+      edits.push({ span: unitSpan(block.declarations[index]), replacement: units[from] })
     })
   }
 
