@@ -583,6 +583,22 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
+    setTargetDevice: (target): void => {
+      const current = getState().deviceDefinitions.configuration.targetDevice
+      const unchanged = target
+        ? current?.orchestratorId === target.orchestratorId &&
+          current.deviceId === target.deviceId &&
+          current.deviceName === target.deviceName
+        : current === undefined
+      if (unchanged) return
+      setState(
+        produce((draft: DeviceSlice) => {
+          if (target) draft.deviceDefinitions.configuration.targetDevice = { ...target }
+          else delete draft.deviceDefinitions.configuration.targetDevice
+          draft.deviceUpdated.updated = true
+        }),
+      )
+    },
     setStoredCredentials: (credentials): void => {
       setState(
         produce(({ runtimeConnection }: DeviceSlice) => {
@@ -881,6 +897,8 @@ function mergeDeviceConfigWithDefaults(
     // board.tsx's drift detection sees a blank slate instead of the real
     // prior pin, so a project with a VPP board always opens as if unpinned.
     vppPackagePinsByBoard: provided.vppPackagePinsByBoard ?? defaults.vppPackagePinsByBoard,
+    // Copied: a fresh object per load is what tells the restore hook a project was (re)opened.
+    ...(provided.targetDevice ? { targetDevice: { ...provided.targetDevice } } : {}),
   }
 }
 

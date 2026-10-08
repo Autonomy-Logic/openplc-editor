@@ -10,6 +10,7 @@ import type {
   DevicePin,
   PersistentStorageSettings,
   PlcStatus,
+  ProjectTargetDevice,
   TimingStats,
 } from '../../../../middleware/shared/ports/types'
 import type { DeviceVpp } from '../../../../middleware/shared/ports/vpp-types'
@@ -270,6 +271,11 @@ export type DeviceActions = {
   /** Set the mode-switch position (null clears it, e.g. on disconnect). */
   setPlcSwitchPosition: (position: 'run' | 'stop' | null) => void
   setSelectedDevice: (device: SelectedDevice | null) => void
+  /**
+   * Record the vPLC this project targets (null clears it). A project property:
+   * a change marks the device configuration for saving; an unchanged value is a no-op.
+   */
+  setTargetDevice: (target: ProjectTargetDevice | null) => void
   setStoredCredentials: (credentials: StoredCredentials | null) => void
   setTimingStats: (stats: TimingStats | null) => void
   setIncludeTimingStatsInPolling: (include: boolean) => void
