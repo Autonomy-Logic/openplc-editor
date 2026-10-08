@@ -63,6 +63,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     updateMessageContent,
     clearConversation,
     setAgenticLoopRunning,
+    setPendingAIChanges,
     setAILoading,
     setAIError,
     setUsage,
@@ -569,6 +570,13 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
   }, [clearConversation])
 
   const hasMutatingSuccess = toolStatuses.some((s) => s.status === 'success' && isMutatingTool(s.toolName))
+
+  useEffect(() => {
+    setPendingAIChanges(hasMutatingSuccess)
+  }, [hasMutatingSuccess, setPendingAIChanges])
+
+  // The Keep/Undo bar goes with the panel, so the gate must not outlive it.
+  useEffect(() => () => setPendingAIChanges(false), [setPendingAIChanges])
   // Non-diff mutations have no per-hunk controls; only the bar can keep/revert them.
   const hasNonDiffMutation = toolStatuses.some((s) => s.status === 'success' && isNonDiffMutatingTool(s.toolName))
 

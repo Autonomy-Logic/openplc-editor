@@ -254,6 +254,19 @@ describe('createAISlice', () => {
     })
   })
 
+  describe('setPendingAIChanges', () => {
+    it('starts with no pending AI changes', () => {
+      expect(store.getState().ai.hasPendingAIChanges).toBe(false)
+    })
+
+    it('sets and clears the pending flag', () => {
+      store.getState().aiActions.setPendingAIChanges(true)
+      expect(store.getState().ai.hasPendingAIChanges).toBe(true)
+      store.getState().aiActions.setPendingAIChanges(false)
+      expect(store.getState().ai.hasPendingAIChanges).toBe(false)
+    })
+  })
+
   // ---------------------------------------------------------------------------
   // Message management (project-scoped)
   // ---------------------------------------------------------------------------

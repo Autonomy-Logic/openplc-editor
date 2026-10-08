@@ -39,6 +39,9 @@ import { SearchButton } from '../../_molecules/workspace-activity-bar/default/se
 import { ZoomButton } from '../../_molecules/workspace-activity-bar/default/zoom'
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
 
+const AI_PENDING_CHANGES_REFUSAL =
+  'The AI assistant has changes waiting for review. Keep or undo them in the AI chat before building.'
+
 const disabledButtonClass = 'cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent'
 
 /**
@@ -289,6 +292,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           addLog({ level: 'error', message: gate.reason })
           return
         }
+      }
+
+      // Unreviewed AI edits must not be saved by the pre-build save or reach the target.
+      if (store.getState().ai.hasPendingAIChanges) {
+        addLog({ level: 'error', message: AI_PENDING_CHANGES_REFUSAL })
+        return
       }
 
       // Always save the full project before building. The compile
@@ -1017,6 +1026,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             setIsDebuggerProcessing(false)
             return
           }
+        }
+
+        if (store.getState().ai.hasPendingAIChanges) {
+          consoleActions.addLog({ level: 'error', message: AI_PENDING_CHANGES_REFUSAL })
+          setIsDebuggerProcessing(false)
+          return
         }
 
         const response = await showDeviceDialog(

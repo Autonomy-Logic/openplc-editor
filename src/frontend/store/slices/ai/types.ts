@@ -103,6 +103,8 @@ export type AIState = {
     messages: ChatMessage[]
     activeEditorPou: string | null
     isAgenticLoopRunning: boolean
+    /** AI edits are in the project but the user has not kept or undone them yet; Build refuses while set. */
+    hasPendingAIChanges: boolean
     isChatOpen: boolean
     error: string | null
     /** Pending diff review entries, keyed by POU name. */
@@ -160,6 +162,7 @@ export type AIActions = {
   setAIError: (error: string | null) => void
   setActiveEditorPou: (pouName: string | null) => void
   setAgenticLoopRunning: (running: boolean) => void
+  setPendingAIChanges: (pending: boolean) => void
   addMessage: (message: ChatMessage) => void
   updateMessageContent: (messageId: string, content: string | AIChatContentBlock[]) => void
   rateMessage: (messageId: string, rating: 'up' | 'down' | undefined) => void
