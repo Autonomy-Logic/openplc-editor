@@ -41,6 +41,13 @@ interface RuntimeSdoConfig {
   bit_length: number
   name: string
   comment: string
+  /** DOPE-704 E3 / RTOP-319 R2: send the SDO with CoE Complete Access. */
+  complete_access?: boolean
+  /**
+   * DOPE-704 E3 / RTOP-319 R2: byte-string payload. When present, EtherDOG uses this
+   * instead of `value` and ignores `data_type` for the wire bytes.
+   */
+  value_bytes?: string
 }
 
 interface RuntimeSlaveConfig {
@@ -272,6 +279,80 @@ function buildSdoConfigurations(entries: SDOConfigurationEntry[] | undefined): R
 }
 
 /**
+ * DOPE-704 E3: emit the PDO-assignment startup SDOs the slave needs to boot in the
+ * configured mapping. The sequence matches CODESYS 3.5.22.10 verbatim (verified from the
+ * decompiled configurator sources on the Delta ASDA-A2-E case):
+ *
+ *   for each sync manager n where the slave advertises `PdoAssign` AND the user assigned
+ *   at least one PDO:
+ *     1. 0x1C1n:0 = 0            (clear the current count)
+ *     2. for each assigned PDO in index-sort order:
+ *        0x1C1n:k = <pdo index>  (slot k = 1..count)
+ *     3. 0x1C1n:0 = count        (publish the new count)
+ *
+ * Sync manager 2 carries RxPDOs (`0x1C12`), sync manager 3 carries TxPDOs (`0x1C13`).
+ * A slave whose ESI declares no `PdoAssign` gets no writes regardless of what the user
+ * ticked in Expert view, matching BR06 in the Requirements Gathering.
+ *
+ * The emission order inside the full SDO list is: user startup SDOs first (what
+ * {@link buildSdoConfigurations} returned), then the PDO-assignment block. The user's
+ * writes may initialise mode-of-operation or similar state the drive uses to interpret
+ * the subsequent assignment, so they must land first.
+ */
+function buildPdoAssignmentSdos(device: ConfiguredEtherCATDevice): RuntimeSdoConfig[] {
+  const coeFlags = device.config?.coeFlags
+  if (coeFlags === undefined || !coeFlags.pdoAssign) return []
+
+  const emit = (sm: number, pdos: PersistedPdo[] | undefined, label: 'Rx' | 'Tx'): RuntimeSdoConfig[] => {
+    if (pdos === undefined || pdos.length === 0) return []
+    // Assigned = present in config, not explicitly unassigned. Projects saved under the
+    // DOPE-657 schema (assigned === undefined) are treated as every PDO assigned.
+    const assigned = pdos.filter((p) => p.assigned !== false)
+    if (assigned.length === 0) return []
+    const sortedByIndex = [...assigned].sort((a, b) => a.index.localeCompare(b.index))
+    const base = `0x1C1${sm.toString(16).toUpperCase()}`
+    const out: RuntimeSdoConfig[] = []
+    // Step 1: clear
+    out.push({
+      index: base,
+      subindex: 0,
+      value: 0,
+      data_type: 'USINT',
+      bit_length: 8,
+      name: `${label}PDO assignment: clear`,
+      comment: `${label}PDO assignment (${base}:0 = 0) — clear the current count`,
+    })
+    // Step 2: list each assigned PDO
+    for (let i = 0; i < sortedByIndex.length; i++) {
+      const pdo = sortedByIndex[i]
+      if (pdo === undefined) continue
+      out.push({
+        index: base,
+        subindex: i + 1,
+        value: parseNumericValue(pdo.index),
+        data_type: 'UINT',
+        bit_length: 16,
+        name: `${label}PDO assignment: slot ${i + 1}`,
+        comment: `${label}PDO assignment (${base}:${i + 1} = ${pdo.index}) — ${pdo.name}`,
+      })
+    }
+    // Step 3: publish the count
+    out.push({
+      index: base,
+      subindex: 0,
+      value: sortedByIndex.length,
+      data_type: 'USINT',
+      bit_length: 8,
+      name: `${label}PDO assignment: count`,
+      comment: `${label}PDO assignment (${base}:0 = ${sortedByIndex.length}) — publish the count`,
+    })
+    return out
+  }
+
+  return [...emit(2, device.rxPdos, 'Rx'), ...emit(3, device.txPdos, 'Tx')]
+}
+
+/**
  * Builds a runtime slave from a configured device.
  */
 function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSlave {
@@ -325,7 +406,7 @@ function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSla
       },
     },
     channels,
-    sdo_configurations: buildSdoConfigurations(device.sdoConfigurations),
+    sdo_configurations: [...buildSdoConfigurations(device.sdoConfigurations), ...buildPdoAssignmentSdos(device)],
     rx_pdos: rxPdos,
     tx_pdos: txPdos,
   }
