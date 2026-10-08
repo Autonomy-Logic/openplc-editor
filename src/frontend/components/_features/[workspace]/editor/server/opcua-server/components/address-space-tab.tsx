@@ -65,6 +65,17 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
   // Get existing node IDs for validation
   const existingNodeIds = useMemo(() => config.addressSpace.nodes.map((n) => n.nodeId), [config.addressSpace.nodes])
 
+  // Nodes whose variable was deleted or renamed: the build drops them with a warning
+  const missingNodeIds = useMemo(
+    () =>
+      new Set(
+        config.addressSpace.nodes
+          .filter((n) => !findTreeNodeById(projectVariables, treeIdForNode(n, projectVariables)))
+          .map((n) => n.id),
+      ),
+    [config.addressSpace.nodes, projectVariables],
+  )
+
   // Handle namespace URI change
   const handleNamespaceChange = useCallback(
     (namespaceUri: string) => {
@@ -276,6 +287,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
           <div className='flex-1 overflow-y-auto p-2'>
             <SelectedVariablesList
               nodes={config.addressSpace.nodes}
+              missingNodeIds={missingNodeIds}
               onEdit={handleEditNode}
               onRemove={handleRemoveNode}
             />
