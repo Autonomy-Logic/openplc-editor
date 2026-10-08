@@ -698,6 +698,50 @@ export interface ConfiguredEtherCATDevice {
   sdoConfigurations?: SDOConfigurationEntry[]
   /** CiA 402 SoftMotion axis configuration (present when recognized as a drive) */
   cia402?: Cia402AxisConfig
+  /**
+   * DOPE-704 E4: modules plugged into this coupler, in slot order. Present only when the
+   * underlying ESI device declares a `<Slots>` block (i.e. the ESI is a modular coupler).
+   * The project tree renders the modules one indentation level below the coupler, the
+   * generator renumbers each module's PDO and object indices by its slot, and the address
+   * pool walks the modules to claim channel addresses.
+   */
+  modules?: ConfiguredEtherCATModule[]
+}
+
+/**
+ * DOPE-704 E4: one I/O module plugged into a modular coupler. The module is a first-class
+ * element in the project model with its own tab, its own channel mappings and its own
+ * startup SDOs; it is NOT an EtherCAT slave of its own (ETG.5001 moves process data
+ * through the coupler's single slave position).
+ */
+export interface ConfiguredEtherCATModule {
+  /** Stable identifier within the coupler (used in project tree keys and address-pool refs). */
+  id: string
+  /** 1-based slot the module occupies on the coupler's backplane. */
+  slot: number
+  /** User-editable display name (defaults to the module's ESI name). */
+  name: string
+  /** Module ident, hex (e.g. "0x1A0F"). Matches ESIModule.ident and the coupler's 0xF030. */
+  ident: string
+  /**
+   * Reference to the module's ESI definition. For a module defined inline in the coupler's
+   * ESI, this points at the coupler's repository item and names the module ident. For an
+   * external module ESI file, it points at the module file.
+   */
+  esiModuleRef: {
+    repositoryItemId: string
+    moduleIdent: string
+  }
+  /** Module channel mappings (slot-local channelId → IEC address). */
+  channelMappings: EtherCATChannelMapping[]
+  /** Enriched channel metadata, mirror of ConfiguredEtherCATDevice.channelInfo. */
+  channelInfo?: PersistedChannelInfo[]
+  /** Module RxPDOs persisted for the generator. */
+  rxPdos?: PersistedPdo[]
+  /** Module TxPDOs persisted for the generator. */
+  txPdos?: PersistedPdo[]
+  /** Module startup SDOs (byte-string InitCmd writes carried through to EtherDOG). */
+  sdoConfigurations?: SDOConfigurationEntry[]
 }
 
 /**

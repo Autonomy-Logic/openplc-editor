@@ -729,6 +729,18 @@ const EtherCATSlaveConfigSchema = z.object({
   timeouts: EtherCATTimeoutsSchema,
   watchdog: EtherCATWatchdogSchema,
   distributedClocks: EtherCATDistributedClocksSchema,
+  /**
+   * DOPE-704 E2: CoE flags defaulted from the ESI, overridable in the Expert view.
+   * Optional for backward compatibility; the project loader runs the one-pass migration
+   * helper to fill them in from the ESI on projects saved under the pre-E2 schema.
+   */
+  coeFlags: z
+    .object({
+      pdoAssign: z.boolean(),
+      pdoConfig: z.boolean(),
+      completeAccess: z.boolean(),
+    })
+    .optional(),
 })
 
 const PersistedPdoEntrySchema = z.object({
@@ -744,6 +756,11 @@ const PersistedPdoSchema = z.object({
   name: z.string(),
   entries: z.array(PersistedPdoEntrySchema),
   assigned: z.boolean().optional(),
+  /** DOPE-704 E2: ESI defaults carried forward on first import. */
+  fixed: z.boolean().optional(),
+  mandatory: z.boolean().optional(),
+  sm: z.number().int().optional(),
+  exclude: z.array(z.string()).optional(),
 })
 
 const PersistedChannelInfoSchema = z.object({
@@ -784,6 +801,27 @@ const Cia402AxisConfigSchema = z.object({
   scaleFactor: z.number(),
 })
 
+/**
+ * DOPE-704 E4: one I/O module plugged into a modular coupler (ETG.5001). Mirror of
+ * {@link ConfiguredEtherCATModule} in esi-types.ts; the Zod schema is what the project
+ * loader validates against.
+ */
+const ConfiguredEtherCATModuleSchema = z.object({
+  id: z.string(),
+  slot: z.number().int().min(1),
+  name: z.string(),
+  ident: z.string(),
+  esiModuleRef: z.object({
+    repositoryItemId: z.string(),
+    moduleIdent: z.string(),
+  }),
+  channelMappings: z.array(EtherCATChannelMappingSchema),
+  channelInfo: z.array(PersistedChannelInfoSchema).optional(),
+  rxPdos: z.array(PersistedPdoSchema).optional(),
+  txPdos: z.array(PersistedPdoSchema).optional(),
+  sdoConfigurations: z.array(SDOConfigurationEntrySchema).optional(),
+})
+
 const ConfiguredEtherCATDeviceSchema = z.object({
   id: z.string(),
   position: z.number().optional(),
@@ -802,6 +840,11 @@ const ConfiguredEtherCATDeviceSchema = z.object({
   sdoConfigurations: z.array(SDOConfigurationEntrySchema).optional(),
   /** Present when this drive is a CiA 402 SoftMotion axis (see schema above). */
   cia402: Cia402AxisConfigSchema.optional(),
+  /**
+   * DOPE-704 E4: modules plugged into this coupler, in slot order. Present only when the
+   * underlying ESI declares a `<Slots>` block (ETG.5001 modular coupler).
+   */
+  modules: z.array(ConfiguredEtherCATModuleSchema).optional(),
 })
 
 const EtherCATMasterConfigSchema = z.object({
