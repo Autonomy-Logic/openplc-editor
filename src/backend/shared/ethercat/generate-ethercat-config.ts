@@ -406,10 +406,131 @@ function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSla
       },
     },
     channels,
-    sdo_configurations: [...buildSdoConfigurations(device.sdoConfigurations), ...buildPdoAssignmentSdos(device)],
-    rx_pdos: rxPdos,
-    tx_pdos: txPdos,
+    sdo_configurations: [
+      ...buildSdoConfigurations(device.sdoConfigurations),
+      ...buildModuleStartupSdos(device),
+      ...buildModuleIdentListWrites(device),
+      ...buildPdoAssignmentSdos(device),
+    ],
+    rx_pdos: [...rxPdos, ...buildModulePdos(device, 'rx')],
+    tx_pdos: [...txPdos, ...buildModulePdos(device, 'tx')],
   }
+}
+
+/**
+ * DOPE-704 E5: a modular coupler's module PDOs. The module stores slot-adjusted PDO
+ * indices directly (set when the user adds the module via the UI), so the generator
+ * just copies them through, after the coupler's own PDOs. Ordering within a direction
+ * is by slot. A module's rxPdos/txPdos are concatenated after the coupler's; the result
+ * matches the ETG.5001 convention of "coupler group first, then module group".
+ */
+function buildModulePdos(device: ConfiguredEtherCATDevice, direction: 'rx' | 'tx'): RuntimePdo[] {
+  if (!device.modules || device.modules.length === 0) return []
+  const bySlot = [...device.modules].sort((a, b) => a.slot - b.slot)
+  const out: RuntimePdo[] = []
+  for (const module of bySlot) {
+    const pdos = direction === 'rx' ? module.rxPdos : module.txPdos
+    if (pdos === undefined) continue
+    out.push(...convertPdos(pdos))
+  }
+  return out
+}
+
+/**
+ * DOPE-704 E5: each module's startup SDOs. The module's SDOConfigurationEntry list
+ * carries slot-adjusted indices (`0x80n0` for slot n) and may contain byte-string
+ * payloads for `InitCmd` writes like the UR20 module name at `0x80n0:03`. The byte
+ * payload is passed through to EtherDOG via `value_bytes` and `complete_access` when
+ * present on the entry.
+ *
+ * Ordering: user startup SDOs come first (see buildSlave), then module SDOs in slot
+ * order, then the module-ident-list write (`0xF030`), then the PDO-assignment block.
+ * This matches CODESYS 3.5.22.10's generated-startup order for a UR20 project.
+ */
+function buildModuleStartupSdos(device: ConfiguredEtherCATDevice): RuntimeSdoConfig[] {
+  if (!device.modules || device.modules.length === 0) return []
+  const bySlot = [...device.modules].sort((a, b) => a.slot - b.slot)
+  const out: RuntimeSdoConfig[] = []
+  for (const module of bySlot) {
+    if (!module.sdoConfigurations) continue
+    for (const entry of module.sdoConfigurations) {
+      if (entry.value === undefined || entry.value === null || entry.value.trim() === '') continue
+      const sdo: RuntimeSdoConfig = {
+        index: entry.index,
+        subindex: entry.subIndex,
+        value: parseNumericValue(entry.value),
+        data_type: entry.dataType,
+        bit_length: entry.bitLength,
+        name: `Module slot ${module.slot}: ${entry.name}`,
+        comment: `Module slot ${module.slot} startup SDO: ${entry.objectName}`,
+      }
+      out.push(sdo)
+    }
+  }
+  return out
+}
+
+/**
+ * DOPE-704 E5: the `0xF030` module-ident-list write that tells a modular coupler which
+ * modules are plugged in and where. Only emitted when `coeFlags.pdoConfig` is true
+ * (ETG.5001 couplers use PdoConfig to gate the module-list download — PdoAssign stays
+ * false on couplers like UR20).
+ *
+ * Emission shape: clear-then-list-then-count on 0xF030 sub-indices. The ETG.5001 Complete
+ * Access path (one PDU with the full ident array) is reserved for a follow-up when EtherDOG's
+ * `value_bytes` encoder gains the UDINT-array helper (RTOP-319 R2 already carries the
+ * byte-string plumbing; the UDINT-array encoder is the only missing piece).
+ *
+ * Empty slots in the station emit ident 0, matching ETG.5001 behaviour.
+ */
+function buildModuleIdentListWrites(device: ConfiguredEtherCATDevice): RuntimeSdoConfig[] {
+  if (!device.modules || device.modules.length === 0) return []
+  const coeFlags = device.config?.coeFlags
+  if (coeFlags === undefined || !coeFlags.pdoConfig) return []
+
+  const bySlot = [...device.modules].sort((a, b) => a.slot - b.slot)
+  // Fill empty slot positions with ident 0 (ETG.5001 allows holes).
+  const maxSlot = bySlot[bySlot.length - 1]?.slot ?? 0
+  const idents: number[] = []
+  for (let s = 1; s <= maxSlot; s++) {
+    const module = bySlot.find((m) => m.slot === s)
+    idents.push(module ? parseNumericValue(module.ident) : 0)
+  }
+
+  const out: RuntimeSdoConfig[] = []
+  // Step 1: clear
+  out.push({
+    index: '0x0F30',
+    subindex: 0,
+    value: 0,
+    data_type: 'USINT',
+    bit_length: 8,
+    name: 'Module ident list: clear',
+    comment: 'Module ident list (0xF030:0 = 0) — clear the current count',
+  })
+  // Step 2: list idents in slot order
+  for (let i = 0; i < idents.length; i++) {
+    out.push({
+      index: '0x0F30',
+      subindex: i + 1,
+      value: idents[i] ?? 0,
+      data_type: 'UDINT',
+      bit_length: 32,
+      name: `Module ident list: slot ${i + 1}`,
+      comment: `Module ident list (0xF030:${i + 1}) — slot ${i + 1} ident`,
+    })
+  }
+  // Step 3: publish count
+  out.push({
+    index: '0x0F30',
+    subindex: 0,
+    value: idents.length,
+    data_type: 'USINT',
+    bit_length: 8,
+    name: 'Module ident list: count',
+    comment: `Module ident list (0xF030:0 = ${idents.length}) — publish the count`,
+  })
+  return out
 }
 
 /**
