@@ -101,6 +101,19 @@ export interface ESIPdo {
   smIndex?: number
   /** List of entries in this PDO */
   entries: ESIPdoEntry[]
+  /**
+   * DOPE-704 E1: Indices of other PDOs this one excludes. When assigned, each excluded
+   * PDO becomes unassignable in the Simple view with the tooltip "excluded by <index>".
+   * Normalised to the same `0x1A00` form the editor uses elsewhere.
+   */
+  exclude?: string[]
+  /**
+   * DOPE-704 E1: Object Strand Max (ESI `OSMax`). Zero or absent means no object strand
+   * expansion. The generator expands PDO entries into `osMax` copies with each copy's
+   * entry index incremented by `osIndexInc`. Used by multi-channel modules.
+   */
+  osMax?: number
+  osIndexInc?: number
 }
 
 // ===================== COE (CANopen over EtherCAT) =====================
@@ -194,6 +207,138 @@ export type EnrichDeviceData = {
 // ===================== DEVICE =====================
 
 /**
+ * DOPE-704 E1: ESI `InitCmd` as the master emits it at startup.
+ *
+ * The ESI's `<InitCmds>` block declares SDO writes the master must send during the state
+ * transition named by `transition` (e.g. "PS" for PRE-OP → SAFE-OP). A module's own
+ * `InitCmd`s are stamped by its slot: the generator renumbers `index` by
+ * (slot - 1) × `SlotIndexIncrement` before emitting.
+ *
+ * Byte-string payloads (e.g. a module's name written to 0x80n0:03) are kept in
+ * `dataAscii` and emitted through EtherDOG's `value_bytes` field; the hex form in
+ * `data` is preferred when both are present. Numeric payloads use `value` + `dataType`.
+ */
+export interface ESIInitCmd {
+  /** Transition name: "IP" (INIT→PRE-OP), "PS" (PRE-OP→SAFE-OP), "SO" (SAFE-OP→OP) etc. */
+  transition: string
+  /** Command class, usually "SDO" for CoE writes. */
+  ccs?: string
+  /** Object index. */
+  index: string
+  /** Object sub-index (0 by default). */
+  subIndex: number
+  /** Hex-encoded payload bytes (e.g. "0xDEADBEEF"). */
+  data?: string
+  /** Byte-string payload (e.g. a module's name). */
+  dataAscii?: string
+  /** Numeric payload (when the entry declares a specific type). */
+  value?: number
+  /** Data type the payload decodes to, when the entry declares one. */
+  dataType?: ESIDataType
+  /** CoE Complete Access when true. */
+  completeAccess?: boolean
+  /** Human-readable comment. */
+  comment?: string
+}
+
+/**
+ * DOPE-704 E1: TwinCAT `AlternativeSmMapping` preset. A pre-canned PDO assignment set
+ * the ESI offers under a short name (e.g. "CSP mode" on a servo). The editor surfaces
+ * these as a dropdown in the Simple view; selecting one assigns exactly the listed PDOs
+ * on the named sync manager.
+ */
+export interface ESIAlternativeSmMapping {
+  /** Preset name shown in the UI (e.g. "Position mode"). */
+  name: string
+  /** Sync manager this preset applies to. */
+  syncManager: number
+  /** PDO indices to assign (in order). */
+  pdoIndices: string[]
+}
+
+/**
+ * DOPE-704 E1: a single `<Slot>` on an ETG.5001 modular coupler. The slot is where a
+ * module physically plugs in; `moduleClass` and `moduleIdents` filter which modules the
+ * coupler accepts in this slot.
+ */
+export interface ESISlot {
+  /** Short name for the slot (e.g. "I/O slot"). */
+  name?: string
+  /** Minimum number of module instances (0 by default; the UR20 bus side slot defaults to 1). */
+  minInstances: number
+  /** Maximum number of module instances. */
+  maxInstances: number
+  /** Allowed module classes (free-form vendor strings). */
+  moduleClass?: string
+  /** Allowed module idents (hex) when the ESI gates by ident rather than class. */
+  moduleIdents?: string[]
+  /** Default module ident to pre-populate the slot with. */
+  defaultModuleIdent?: string
+}
+
+/**
+ * DOPE-704 E1: the `<Slots>` block from a modular coupler ESI. Presence of this field on
+ * an {@link ESIDevice} is what `isModularCoupler` reflects.
+ */
+export interface ESISlotsSpec {
+  slots: ESISlot[]
+  /** Per-slot index increment applied to module objects (e.g. 16 for UR20: slot 2's
+   *  parameters land at `0x8010`, slot 3's at `0x8020`). */
+  slotIndexIncrement: number
+  /** Per-slot PDO index increment applied to module PDOs. */
+  slotPdoIncrement: number
+  /** When true, the generator emits `0xF030` listing the configured module idents. */
+  downloadModuleIdentList: boolean
+  /** Transition at which to emit the `0xF030` write (e.g. "IP"). */
+  downloadModuleListTransition?: string
+  /** `IdentifyModuleBy` attribute (usually "ModuleIdent"). */
+  identifyModuleBy?: string
+  /** Maximum slot count declared by the ESI (informational). */
+  maxSlotCount?: number
+}
+
+/**
+ * DOPE-704 E1: PDO group definition for modular couplers. ETG.5001 orders PDOs in the
+ * generated bus config by `ModulePdoGroup` first, then by slot.
+ */
+export interface ESIModulePdoGroup {
+  /** Group index (0 for coupler PDOs, 1+ for module PDOs). */
+  group: number
+  /** Sync manager assignment. */
+  sm?: number
+  /** Default RxPDO index template for this group (ETG.5001 names). */
+  rxPdoIndex?: string
+  /** Default TxPDO index template for this group. */
+  txPdoIndex?: string
+}
+
+/**
+ * DOPE-704 E1: an ETG.5001 I/O module. Parsed from the module ESI by
+ * {@link parseESIModuleFull}. The module's RxPDOs, TxPDOs, CoE objects and `InitCmd`s
+ * are generated with slot-adjusted indices by the generator.
+ */
+export interface ESIModule {
+  /** Module ident (hex, e.g. "0x14081A0F"). Primary key for matching against `0xF050`. */
+  ident: string
+  /** Module name shown in the UI. */
+  name: string
+  /** Module class (free-form vendor string; matched against `ESISlot.moduleClass`). */
+  moduleClass?: string
+  /** Module description. */
+  description?: string
+  /** PDO group ID that governs this module's PDO ordering. */
+  modulePdoGroup?: number
+  /** Module RxPDOs (slot-adjusted at emit time). */
+  rxPdo: ESIPdo[]
+  /** Module TxPDOs (slot-adjusted at emit time). */
+  txPdo: ESIPdo[]
+  /** Module CoE objects (slot-adjusted at emit time). */
+  coeObjects?: ESICoEObject[]
+  /** Module `InitCmd`s (slot-adjusted at emit time). */
+  initCmds: ESIInitCmd[]
+}
+
+/**
  * Complete ESI Device representation
  */
 export interface ESIDevice {
@@ -219,6 +364,39 @@ export interface ESIDevice {
   imageUrl?: string
   /** Additional description */
   description?: string
+  /**
+   * DOPE-704 E1: CoE flags from `<Mailbox><CoE />`. Defaulted to the ESI values on
+   * device import; the user can override in the Expert view. The generator uses these
+   * to decide whether to emit `0x1C1n` assignment writes and complete-access SDO writes.
+   */
+  coeFlags?: {
+    pdoAssign: boolean
+    pdoConfig: boolean
+    completeAccess: boolean
+  }
+  /** DOPE-704 E1: ESI startup commands at slave scope. */
+  initCmds?: ESIInitCmd[]
+  /** DOPE-704 E1: TwinCAT `AlternativeSmMapping` presets, when the ESI declares them. */
+  alternativeSmMappings?: ESIAlternativeSmMapping[]
+  /**
+   * DOPE-704 E1: `<Slots>` block present when the device is a modular coupler (ETG.5001).
+   * Non-null for UR20-class couplers; undefined for plain slaves and multi-mode drives.
+   */
+  slots?: ESISlotsSpec
+  /** DOPE-704 E1: PDO group definitions on a modular coupler. */
+  modulePdoGroups?: ESIModulePdoGroup[]
+  /**
+   * DOPE-704 E1: Modules defined inline in the device ESI (vs. referenced through an
+   * external module ESI file). The coupler's catalogue combines these with external
+   * modules looked up by `parseESIModuleFull`.
+   */
+  modules?: ESIModule[]
+  /**
+   * DOPE-704 E1: true when the device declares `<Slots>` and is to be treated as a
+   * modular coupler. Mirrors the summary flag; present on the full device for consumers
+   * that pass {@link ESIDevice} around without the summary.
+   */
+  isModularCoupler?: boolean
 }
 
 // ===================== GROUP =====================
@@ -412,6 +590,12 @@ export interface ESIDeviceSummary {
   totalOutputBytes: number
   /** Additional description */
   description?: string
+  /**
+   * DOPE-704 E1: true when the device declares a `<Slots>` block (ETG.5001 modular
+   * coupler). Used by the ESI browser to indicate modular couplers in the list and by
+   * the project tree to decide whether a Scan modules button appears on the coupler.
+   */
+  isModularCoupler?: boolean
 }
 
 // ===================== REPOSITORY =====================

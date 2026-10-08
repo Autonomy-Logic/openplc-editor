@@ -8,6 +8,7 @@
  */
 
 import type {
+  ESIAlternativeSmMapping,
   ESICoEObject,
   ESICoESubItem,
   ESIDevice,
@@ -15,8 +16,12 @@ import type {
   ESIDeviceType,
   ESIFMMU,
   ESIGroup,
+  ESIInitCmd,
+  ESIModule,
+  ESIModulePdoGroup,
   ESIPdo,
   ESIPdoEntry,
+  ESISlot,
   ESISyncManager,
   ESIVendor,
 } from '@root/middleware/shared/ports/esi-types'
@@ -77,7 +82,25 @@ function createParser(): XMLParser {
     trimValues: true,
     isArray: (tagName: string) => {
       // Tags that can appear multiple times and should always be arrays
-      const arrayTags = ['Device', 'Group', 'RxPdo', 'TxPdo', 'Entry', 'Fmmu', 'Sm', 'Object', 'SubItem', 'DataType']
+      const arrayTags = [
+        'Device',
+        'Group',
+        'RxPdo',
+        'TxPdo',
+        'Entry',
+        'Fmmu',
+        'Sm',
+        'Object',
+        'SubItem',
+        'DataType',
+        // DOPE-704 E1: PDO assignment + modular device elements
+        'Exclude',
+        'InitCmd',
+        'AlternativeSmMapping',
+        'Slot',
+        'Module',
+        'ModulePdoGroup',
+      ]
       return arrayTags.includes(tagName)
     },
   })
@@ -202,6 +225,9 @@ function parseDeviceSummary(deviceEl: Record<string, unknown>, groupsMap: Map<st
   const { channelCount: inputChannelCount, totalBits: inputBits } = countPdoEntries(txPdos)
   const { channelCount: outputChannelCount, totalBits: outputBits } = countPdoEntries(rxPdos)
 
+  // DOPE-704 E1: a device is a modular coupler when it declares a <Slots> block.
+  const isModularCoupler = deviceEl['Slots'] !== undefined && deviceEl['Slots'] !== null
+
   return {
     type,
     name: getTextValue(deviceEl['Name']) || 'Unknown Device',
@@ -212,6 +238,7 @@ function parseDeviceSummary(deviceEl: Record<string, unknown>, groupsMap: Map<st
     totalInputBytes: Math.ceil(inputBits / 8),
     totalOutputBytes: Math.ceil(outputBits / 8),
     description: getTextValue(deviceEl['Comment']) || undefined,
+    isModularCoupler,
   }
 }
 
@@ -593,6 +620,28 @@ function parseFullDevice(deviceEl: Record<string, unknown>, groups: ESIGroup[]):
   // Parse CoE Object Dictionary
   const coeObjects = parseCoEDictionary(deviceEl)
 
+  // DOPE-704 E1: CoE flags from <Mailbox><CoE />.
+  const coeFlags = parseCoEFlags(deviceEl)
+
+  // DOPE-704 E1: ESI startup commands at slave scope.
+  const initCmds = parseInitCmds(deviceEl)
+
+  // DOPE-704 E1: AlternativeSmMapping presets per PDO. ETG.5003 attaches these as
+  // children of RxPdo/TxPdo elements; collect them into a single device-level list.
+  const alternativeSmMappings = parseAlternativeSmMappings(deviceEl)
+
+  // DOPE-704 E1: <Slots> block for modular couplers (ETG.5001).
+  const slots = parseSlotsSpec(deviceEl)
+
+  // DOPE-704 E1: <ModulePdoGroup> definitions.
+  const modulePdoGroups = parseModulePdoGroups(deviceEl)
+
+  // DOPE-704 E1: inline <Modules> block for modular couplers (external module ESIs
+  // are parsed on demand via parseESIModuleFull).
+  const modules = parseInlineModules(deviceEl)
+
+  const isModularCoupler = slots !== undefined
+
   return {
     type,
     name: getTextValue(deviceEl['Name']) || 'Unknown Device',
@@ -604,6 +653,267 @@ function parseFullDevice(deviceEl: Record<string, unknown>, groups: ESIGroup[]):
     txPdo,
     coeObjects,
     description: getTextValue(deviceEl['Comment']) || undefined,
+    coeFlags,
+    initCmds: initCmds.length > 0 ? initCmds : undefined,
+    alternativeSmMappings: alternativeSmMappings.length > 0 ? alternativeSmMappings : undefined,
+    slots,
+    modulePdoGroups: modulePdoGroups.length > 0 ? modulePdoGroups : undefined,
+    modules: modules.length > 0 ? modules : undefined,
+    isModularCoupler,
+  }
+}
+
+// ===================== DOPE-704 E1 helpers =====================
+
+function parseBoolAttr(v: unknown, dflt = false): boolean {
+  const s = getTextValue(v).toLowerCase()
+  if (s === '') return dflt
+  if (s === '1' || s === 'true') return true
+  return false
+}
+
+function parseCoEFlags(deviceEl: Record<string, unknown>): ESIDevice['coeFlags'] {
+  const mailbox = deviceEl['Mailbox'] as Record<string, unknown> | undefined
+  if (!mailbox) return undefined
+  const coe = mailbox['CoE'] as Record<string, unknown> | undefined
+  if (!coe) return undefined
+  return {
+    pdoAssign: parseBoolAttr(coe['@_PdoAssign'], false),
+    pdoConfig: parseBoolAttr(coe['@_PdoConfig'], false),
+    completeAccess: parseBoolAttr(coe['@_CompleteAccess'], false),
+  }
+}
+
+function parseInitCmd(cmd: Record<string, unknown>): ESIInitCmd | null {
+  const transition = getTextValue(cmd['Transition'])
+  if (!transition) return null
+  const index = parseHexValue((cmd['Index'] as string | number | undefined) ?? '0')
+  const subIndex = parseInt(getTextValue(cmd['SubIndex']) || '0', 10) || 0
+  const data = getTextValue(cmd['Data']) || undefined
+  const dataAscii = getTextValue(cmd['DataAscii']) || undefined
+  const valueStr = getTextValue(cmd['Value'])
+  const value = valueStr ? parseFloat(valueStr) : undefined
+  const dataType = getTextValue(cmd['DataType']) || undefined
+  const completeAccess = parseBoolAttr(cmd['@_CompleteAccess'] ?? cmd['CompleteAccess'])
+  const comment = getTextValue(cmd['Comment']) || undefined
+  const ccs = getTextValue(cmd['Ccs']) || undefined
+  return {
+    transition,
+    ccs,
+    index,
+    subIndex,
+    data,
+    dataAscii,
+    value: Number.isFinite(value) ? (value as number) : undefined,
+    dataType,
+    completeAccess,
+    comment,
+  }
+}
+
+function parseInitCmds(deviceEl: Record<string, unknown>): ESIInitCmd[] {
+  const out: ESIInitCmd[] = []
+  const seen = new Set<Record<string, unknown>>()
+  const walk = (node: unknown): void => {
+    if (node === null || node === undefined) return
+    if (Array.isArray(node)) {
+      for (const n of node) walk(n)
+      return
+    }
+    if (typeof node !== 'object') return
+    const obj = node as Record<string, unknown>
+    if (seen.has(obj)) return
+    seen.add(obj)
+    const initCmdsEl = obj['InitCmds'] as Record<string, unknown> | undefined
+    if (initCmdsEl) {
+      const list = ensureArray(initCmdsEl['InitCmd'] as Record<string, unknown> | Record<string, unknown>[])
+      for (const cmd of list) {
+        const parsed = parseInitCmd(cmd)
+        if (parsed) out.push(parsed)
+      }
+    }
+    // Walk into Mailbox and CoE to find nested InitCmds, bounded to those names so
+    // we don't descend into every PDO entry's attributes.
+    walk(obj['Mailbox'])
+    walk(obj['CoE'])
+  }
+  walk(deviceEl)
+  return out
+}
+
+function parseAlternativeSmMappings(deviceEl: Record<string, unknown>): ESIAlternativeSmMapping[] {
+  const out: ESIAlternativeSmMapping[] = []
+  const walkPdos = (pdos: Record<string, unknown>[]) => {
+    for (const pdo of pdos) {
+      const presets = ensureArray(pdo['AlternativeSmMapping'] as Record<string, unknown> | Record<string, unknown>[])
+      for (const preset of presets) {
+        const name = getTextValue(preset['@_Name'] ?? preset['Name']) || 'Preset'
+        const smAttr = getTextValue(preset['@_Sm'] ?? preset['Sm'])
+        const syncManager = smAttr ? parseInt(smAttr, 10) || 0 : 0
+        const pdoIndices = ensureArray(preset['Pdo'] as Record<string, unknown> | Record<string, unknown>[])
+          .map((p) => parseHexValue(getTextValue(p['#text'] ?? p['@_Index'] ?? p)))
+          .filter(Boolean)
+        if (pdoIndices.length > 0) {
+          out.push({ name, syncManager, pdoIndices })
+        }
+      }
+    }
+  }
+  walkPdos(ensureArray(deviceEl['RxPdo'] as Record<string, unknown> | Record<string, unknown>[]))
+  walkPdos(ensureArray(deviceEl['TxPdo'] as Record<string, unknown> | Record<string, unknown>[]))
+  return out
+}
+
+function parseSlotsSpec(deviceEl: Record<string, unknown>): ESIDevice['slots'] {
+  const slotsEl = deviceEl['Slots'] as Record<string, unknown> | undefined
+  if (!slotsEl) return undefined
+
+  const slotIndexIncrement = parseInt(getTextValue(slotsEl['@_SlotIndexIncrement']) || '0', 10) || 0
+  const slotPdoIncrement = parseInt(getTextValue(slotsEl['@_SlotPdoIncrement']) || '0', 10) || 0
+  const downloadModuleIdentList = parseBoolAttr(slotsEl['@_DownloadModuleIdentList'])
+  const downloadModuleListTransition = getTextValue(slotsEl['@_DownloadModuleListTransition']) || undefined
+  const identifyModuleBy = getTextValue(slotsEl['@_IdentifyModuleBy']) || undefined
+  const maxSlotCountStr = getTextValue(slotsEl['@_MaxSlotCount'])
+  const maxSlotCount = maxSlotCountStr ? parseInt(maxSlotCountStr, 10) || undefined : undefined
+
+  const slotElements = ensureArray(slotsEl['Slot'] as Record<string, unknown> | Record<string, unknown>[])
+  const slots = slotElements.map((s): ESISlot => {
+    const name = getTextValue(s['Name']) || undefined
+    const minInstances = parseInt(getTextValue(s['@_MinInstances']) || '0', 10) || 0
+    const maxInstances = parseInt(getTextValue(s['@_MaxInstances']) || '1', 10) || 1
+    const moduleClass = getTextValue(s['ModuleClass'] ?? s['@_ModuleClass']) || undefined
+    const moduleIdents = ensureArray(
+      s['ModuleIdent'] as (string | Record<string, unknown>) | (string | Record<string, unknown>)[],
+    )
+      .map((m) => parseHexValue(typeof m === 'string' ? m : getTextValue(m['#text'] ?? m)))
+      .filter(Boolean)
+    const defaultModuleIdent = getTextValue(s['DefaultModuleIdent']) || undefined
+    return {
+      name,
+      minInstances,
+      maxInstances,
+      moduleClass,
+      moduleIdents: moduleIdents.length > 0 ? moduleIdents : undefined,
+      defaultModuleIdent: defaultModuleIdent ? parseHexValue(defaultModuleIdent) : undefined,
+    }
+  })
+
+  return {
+    slots,
+    slotIndexIncrement,
+    slotPdoIncrement,
+    downloadModuleIdentList,
+    downloadModuleListTransition,
+    identifyModuleBy,
+    maxSlotCount,
+  }
+}
+
+function parseModulePdoGroups(deviceEl: Record<string, unknown>): ESIModulePdoGroup[] {
+  const groupsEl =
+    (deviceEl['ModulePdoGroup'] as Record<string, unknown> | Record<string, unknown>[] | undefined) ??
+    ((deviceEl['Slots'] as Record<string, unknown> | undefined)?.['ModulePdoGroup'] as
+      | Record<string, unknown>
+      | Record<string, unknown>[]
+      | undefined)
+  const groups = ensureArray(groupsEl)
+  return groups.map((g): ESIModulePdoGroup => {
+    const group = parseInt(getTextValue(g['@_Group'] ?? g['Group']) || '0', 10) || 0
+    const smAttr = getTextValue(g['@_Sm'] ?? g['Sm'])
+    const sm = smAttr ? parseInt(smAttr, 10) || undefined : undefined
+    const rxPdoIndex = getTextValue(g['@_RxPdo'] ?? g['RxPdo']) || undefined
+    const txPdoIndex = getTextValue(g['@_TxPdo'] ?? g['TxPdo']) || undefined
+    return {
+      group,
+      sm,
+      rxPdoIndex: rxPdoIndex ? parseHexValue(rxPdoIndex) : undefined,
+      txPdoIndex: txPdoIndex ? parseHexValue(txPdoIndex) : undefined,
+    }
+  })
+}
+
+function parseInlineModules(deviceEl: Record<string, unknown>): ESIModule[] {
+  const modulesEl = deviceEl['Modules'] as Record<string, unknown> | undefined
+  if (!modulesEl) return []
+  const list = ensureArray(modulesEl['Module'] as Record<string, unknown> | Record<string, unknown>[])
+  return list.map((m) => parseFullModule(m)).filter((m): m is ESIModule => m !== null)
+}
+
+function parseFullModule(moduleEl: Record<string, unknown>): ESIModule | null {
+  const identStr = getTextValue(
+    moduleEl['Type']?.['@_ModuleIdent' as never] ?? moduleEl['@_ModuleIdent'] ?? moduleEl['ModuleIdent'],
+  )
+  if (!identStr) return null
+  const ident = parseHexValue(identStr)
+  const name = getTextValue(moduleEl['Name']) || `Module ${ident}`
+  const moduleClass = getTextValue(moduleEl['ModuleClass']) || undefined
+  const description = getTextValue(moduleEl['Comment']) || undefined
+  const modulePdoGroupStr = getTextValue(moduleEl['@_ModulePdoGroup'])
+  const modulePdoGroup = modulePdoGroupStr ? parseInt(modulePdoGroupStr, 10) || undefined : undefined
+
+  const rxPdo = ensureArray(moduleEl['RxPdo'] as Record<string, unknown> | Record<string, unknown>[]).map(parseFullPdo)
+  const txPdo = ensureArray(moduleEl['TxPdo'] as Record<string, unknown> | Record<string, unknown>[]).map(parseFullPdo)
+  const coeObjects = parseCoEDictionary(moduleEl)
+  const initCmds = parseInitCmds(moduleEl)
+  return {
+    ident,
+    name,
+    moduleClass,
+    description,
+    modulePdoGroup,
+    rxPdo,
+    txPdo,
+    coeObjects,
+    initCmds,
+  }
+}
+
+// ===================== MODULE PARSING (DOPE-704 E1) =====================
+
+export interface ESIModuleFullResult {
+  success: boolean
+  modules?: ESIModule[]
+  error?: string
+}
+
+/**
+ * Parse the modules defined in an external ESI module file. ETG.5001 lets a coupler
+ * reference its modules by `<InfoReference>` to a separate XML; this function parses
+ * every `<Module>` inside the referenced file.
+ *
+ * The result is the full module list; the caller matches by ident when it needs one.
+ */
+export function parseESIModuleFull(xmlString: string): ESIModuleFullResult {
+  try {
+    const parser = createParser()
+    const parsed = parser.parse(xmlString) as Record<string, unknown>
+    const root = parsed['EtherCATInfo'] as Record<string, unknown> | undefined
+    if (!root) {
+      return { success: false, error: 'Invalid ESI file: missing EtherCATInfo root element' }
+    }
+    const descriptions = root['Descriptions'] as Record<string, unknown> | undefined
+    const modulesEl =
+      (descriptions?.['Modules'] as Record<string, unknown> | undefined) ??
+      (root['Modules'] as Record<string, unknown> | undefined)
+    if (!modulesEl) {
+      // Some module files pack the modules into a Devices block with each module as a
+      // Device element; walk that too so UR20-style files parse.
+      const devicesEl = descriptions?.['Devices'] as Record<string, unknown> | undefined
+      if (devicesEl) {
+        const deviceElements = ensureArray(devicesEl['Device'] as Record<string, unknown> | Record<string, unknown>[])
+        const modules = deviceElements.map((d) => parseFullModule(d)).filter((m): m is ESIModule => m !== null)
+        return { success: true, modules }
+      }
+      return { success: false, error: 'No Modules or Devices element found in module file' }
+    }
+    const list = ensureArray(modulesEl['Module'] as Record<string, unknown> | Record<string, unknown>[])
+    const modules = list.map((m) => parseFullModule(m)).filter((m): m is ESIModule => m !== null)
+    return { success: true, modules }
+  } catch (error) {
+    return {
+      success: false,
+      error: `Failed to parse module file: ${error instanceof Error ? error.message : String(error)}`,
+    }
   }
 }
 
@@ -621,6 +931,21 @@ function parseFullPdo(pdoEl: Record<string, unknown>): ESIPdo {
     }
   }
 
+  // DOPE-704 E1: <Exclude> children — PDO indices this one excludes.
+  const excludeElements = ensureArray(
+    pdoEl['Exclude'] as (Record<string, unknown> | string) | (Record<string, unknown> | string)[],
+  )
+  const exclude: string[] = excludeElements
+    .map((e) => (typeof e === 'string' ? e : getTextValue(e['#text'] ?? e)))
+    .filter((s): s is string => Boolean(s))
+    .map(parseHexValue)
+
+  // DOPE-704 E1: OSMax / OSIndexInc attributes for object strand expansion.
+  const osMaxAttr = getTextValue(pdoEl['@_OSMax'])
+  const osIndexIncAttr = getTextValue(pdoEl['@_OSIndexInc'])
+  const osMax = osMaxAttr ? parseInt(osMaxAttr, 10) : undefined
+  const osIndexInc = osIndexIncAttr ? parseInt(osIndexIncAttr, 10) : undefined
+
   return {
     index: parseHexValue(pdoEl['Index'] as string | undefined),
     name: getTextValue(pdoEl['Name']) || 'Unnamed PDO',
@@ -628,6 +953,9 @@ function parseFullPdo(pdoEl: Record<string, unknown>): ESIPdo {
     mandatory: getTextValue(pdoEl['@_Mandatory']).toLowerCase() === 'true',
     smIndex: pdoEl['@_Sm'] !== undefined ? parseInt(getTextValue(pdoEl['@_Sm']) || '0', 10) : undefined,
     entries,
+    exclude: exclude.length > 0 ? exclude : undefined,
+    osMax: osMax && osMax > 0 ? osMax : undefined,
+    osIndexInc: osIndexInc && osIndexInc > 0 ? osIndexInc : undefined,
   }
 }
 
