@@ -733,7 +733,7 @@ function resolveBlockVariant(
 function validateElements(
   elements: LadderElementSpec[],
   variables: PLCVariable[],
-  pouName: string,
+  pou: PLCPou,
   libraries: { system: SystemLibrary[]; user: UserLibrary[] },
   pous: PLCPou[],
 ): string[] {
@@ -747,7 +747,7 @@ function validateElements(
       const variable = findVariableCaseInsensitive(variables, element.variable)
       if (!variable) {
         errors.push(
-          `Element ${n}: variable "${element.variable}" does not exist in POU "${pouName}" — create it with create_variable first`,
+          `Element ${n}: variable "${element.variable}" does not exist in POU "${pou.name}" — create it with create_variable first`,
         )
         return
       }
@@ -764,6 +764,13 @@ function validateElements(
     }
 
     if (blockVariant.type !== 'function-block') return
+
+    if (pou.pouType === 'function') {
+      errors.push(
+        `Element ${n}: "${element.blockType}" is a function block and cannot be used inside FUNCTION "${pou.name}" — use a function, or move this logic to a PROGRAM or FUNCTION_BLOCK`,
+      )
+      return
+    }
 
     if (!element.instanceName) {
       errors.push(`Element ${n}: block type "${element.blockType}" is a function block and requires "instanceName"`)
@@ -803,6 +810,7 @@ function validateElements(
 /** Function-block instance variables the spec names that the POU does not have yet. */
 function planInstanceVariables(
   pou: PLCPou,
+  globals: PLCVariable[],
   elements: LadderElementSpec[],
   libraries: { system: SystemLibrary[]; user: UserLibrary[] },
   pous: PLCPou[],
@@ -814,7 +822,7 @@ function planInstanceVariables(
     const blockVariant = resolveBlockVariant(element.blockType, libraries, pous)
     if (!blockVariant || blockVariant.type !== 'function-block') continue
 
-    const known = [...(pou.interface?.variables ?? []), ...planned]
+    const known = [...collectPouVariables(pou, globals), ...planned]
     if (findVariableCaseInsensitive(known, element.instanceName)) continue
 
     planned.push({
@@ -865,7 +873,7 @@ function buildAndPlaceRung(
 ): ToolResult {
   const state = store.getState()
   const globals = state.project.data.configurations.resource.globalVariables
-  const planned = planInstanceVariables(pou, spec.elements, state.libraries, state.project.data.pous)
+  const planned = planInstanceVariables(pou, globals, spec.elements, state.libraries, state.project.data.pous)
 
   const dryRun = buildRungFromSpec({
     rungId,
@@ -931,7 +939,7 @@ function executeReadLadderDiagram(store: OpenPLCStore, input: ReadLadderDiagramI
   const lines = rungs.map((rung, index) => {
     const spec = rungToSpec(rung)
     const note = spec.truncated
-      ? ' (truncated — contains a parallel or block-pin branch these tools cannot read yet)'
+      ? ' (truncated — contains a parallel or block-pin branch these tools cannot read yet; update_rung will refuse it)'
       : ''
     const comment = spec.comment ? ` — ${spec.comment}` : ''
     return `Rung ${index + 1} [id=${rung.id}]${comment}${note}:\n${JSON.stringify(spec.elements)}`
@@ -963,7 +971,7 @@ function executeAddRung(store: OpenPLCStore, input: AddRungInput): ToolResult {
   const validationErrors = validateElements(
     input.elements,
     baseVariables,
-    input.pouName,
+    pou,
     state.libraries,
     state.project.data.pous,
   )
@@ -1004,11 +1012,19 @@ function executeUpdateRung(store: OpenPLCStore, input: UpdateRungInput): ToolRes
     }
   }
 
+  // Rebuilding from a spec would drop the branches the spec cannot express.
+  if (rungToSpec(existingRungs[targetIndex]).truncated) {
+    return {
+      success: false,
+      message: `Rung "${input.rungId}" contains parallel or block-pin branches these tools cannot represent yet, so it cannot be updated without losing logic. Ask the user to edit it in the editor, or add a new rung instead.`,
+    }
+  }
+
   const baseVariables = collectPouVariables(pou, state.project.data.configurations.resource.globalVariables)
   const validationErrors = validateElements(
     input.elements,
     baseVariables,
-    input.pouName,
+    pou,
     state.libraries,
     state.project.data.pous,
   )

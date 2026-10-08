@@ -635,7 +635,8 @@ const reconcileVariablesText = (
   // started carrying the user's formatting — so every table edit paid for a
   // parse it did not need. The serialisation is still compared for a POU that
   // has no text yet.
-  if (code === pou?.variablesText) return ok()
+  // Unparsed text must still reach the parser below, or a batch of creates fails halfway.
+  if (code === pou?.variablesText && pou?.variablesTextUnparsed !== true) return ok()
   if (code === generateIecVariablesToString(currentVariables)) return ok()
 
   try {

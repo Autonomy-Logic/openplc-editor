@@ -320,7 +320,11 @@ const ladderElementsSchema = {
                   description:
                     'Pin name (e.g. "PT", "ET"). Cannot be the block\'s first input or first output — those are wired to the rail automatically.',
                 },
-                variable: { type: 'string', description: 'Name of an existing variable of a compatible type.' },
+                variable: {
+                  type: 'string',
+                  description:
+                    'Name of an existing variable of a compatible type, or, for an input pin, an IEC literal of the pin\'s type (e.g. "T#5s" for PT, "100" for PV).',
+                },
               },
               required: ['pin', 'variable'],
             },

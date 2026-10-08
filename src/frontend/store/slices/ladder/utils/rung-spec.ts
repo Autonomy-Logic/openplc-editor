@@ -13,6 +13,7 @@ import type {
 } from '../../../../components/_atoms/graphical-editor/ladder/utils/types'
 import { connectNodes } from '../../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/edges'
 import { updateDiagramElementsPosition } from '../../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
+import { getLiteralType } from '../../../../utils/keywords'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
 import { RungLadderState } from '../types'
 
@@ -29,6 +30,7 @@ export type LadderCoilVariant = LadderContactVariant | 'set' | 'reset'
 
 export type ContactElementSpec = { kind: 'contact'; variable: string; variant?: LadderContactVariant }
 export type CoilElementSpec = { kind: 'coil'; variable: string; variant?: LadderCoilVariant }
+/** `variable` is a variable name or, on an input pin, an IEC literal such as `T#5s`. */
 export type BlockPinBinding = { pin: string; variable: string }
 export type BlockElementSpec = {
   kind: 'block'
@@ -113,16 +115,30 @@ function resolvePinBindings(
       errors.push(`Element ${elementNumber}: pin "${pin}" is the block's rail connector and cannot be bound directly`)
       continue
     }
+    const type = bindableInputIds.has(pin) ? 'input' : 'output'
     const resolved = findVariable(variables, variable)
-    if (!resolved) {
+    if (resolved) {
+      connectedVariables.push({ handleId: pin, type, variable: resolved })
+      continue
+    }
+    const literalTypes = getLiteralType(variable)
+    if (!literalTypes) {
       errors.push(`Element ${elementNumber}: variable "${variable}" not found for pin "${pin}"`)
       continue
     }
-    connectedVariables.push({
-      handleId: pin,
-      type: bindableInputIds.has(pin) ? 'input' : 'output',
-      variable: resolved,
-    })
+    if (type === 'output') {
+      errors.push(
+        `Element ${elementNumber}: pin "${pin}" is an output and cannot be bound to the literal "${variable}"`,
+      )
+      continue
+    }
+    const pinType = variantVar.type.value.toUpperCase()
+    if (!literalTypes.includes(pinType)) {
+      errors.push(`Element ${elementNumber}: literal "${variable}" is not compatible with pin "${pin}" (${pinType})`)
+      continue
+    }
+    // Same shape the UI stores for a literal typed into a pin (variable.tsx).
+    connectedVariables.push({ handleId: pin, type, variable: { name: variable } })
   }
   return connectedVariables
 }
@@ -320,9 +336,9 @@ export function rungToSpec(rung: RungLadderState): RungSpec {
       elements.push({ kind: 'coil', variable: data.variable.name, variant: data.variant ?? 'default' })
     } else if (node.type === 'block') {
       const data = node.data as BlockNodeData<BlockVariant>
-      const pins: BlockPinBinding[] = (data.connectedVariables ?? [])
-        .filter((cv): cv is typeof cv & { variable: PLCVariable } => cv.variable !== undefined)
-        .map((cv) => ({ pin: cv.handleId, variable: cv.variable.name }))
+      const pins: BlockPinBinding[] = (data.connectedVariables ?? []).flatMap((cv) =>
+        cv.variable?.name ? [{ pin: cv.handleId, variable: cv.variable.name }] : [],
+      )
       elements.push({
         kind: 'block',
         blockType: data.variant.name,

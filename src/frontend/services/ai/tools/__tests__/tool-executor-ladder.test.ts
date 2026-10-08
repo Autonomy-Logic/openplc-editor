@@ -97,6 +97,12 @@ function getVariables(pouName: string): PLCVariable[] {
   return store.getState().project.data.pous.find((p) => p.name === pouName)?.interface?.variables ?? []
 }
 
+function getBlockPins(pouName: string) {
+  const block = getRungs(pouName)[0]?.nodes.find((n) => n.type === 'block')
+  return (block?.data as { connectedVariables?: { handleId: string; variable?: { name: string } }[] })
+    ?.connectedVariables
+}
+
 beforeEach(() => {
   store = createTestStore()
 })
@@ -396,6 +402,124 @@ describe('add_rung', () => {
     expect(getRungs('Main')).toHaveLength(0)
   })
 
+  it('binds an input pin to a literal of the pin type', async () => {
+    createLdPou('Main')
+    seedSystemLibrary()
+
+    const result = await executeTool(store, 'add_rung', {
+      pouName: 'Main',
+      elements: [{ kind: 'block', blockType: 'TON', instanceName: 'Timer1', pins: [{ pin: 'PT', variable: 'T#5s' }] }],
+    })
+
+    expect(result.success).toBe(true)
+    expect(getBlockPins('Main')).toEqual([expect.objectContaining({ handleId: 'PT', variable: { name: 'T#5s' } })])
+    expect(getVariables('Main').some((v) => v.name === 'T#5s')).toBe(false)
+  })
+
+  it('rejects a literal that does not match the pin type', async () => {
+    createLdPou('Main')
+    seedSystemLibrary()
+
+    const result = await executeTool(store, 'add_rung', {
+      pouName: 'Main',
+      elements: [{ kind: 'block', blockType: 'TON', instanceName: 'Timer1', pins: [{ pin: 'PT', variable: 'TRUE' }] }],
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/literal "TRUE" is not compatible with pin "PT" \(TIME\)/)
+    expect(getVariables('Main')).toHaveLength(0)
+  })
+
+  it('rejects a literal bound to an output pin', async () => {
+    createLdPou('Main')
+    seedSystemLibrary()
+
+    const result = await executeTool(store, 'add_rung', {
+      pouName: 'Main',
+      elements: [{ kind: 'block', blockType: 'TON', instanceName: 'Timer1', pins: [{ pin: 'ET', variable: 'T#5s' }] }],
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/pin "ET" is an output/)
+  })
+
+  it('rejects a function block inside a FUNCTION POU', async () => {
+    store.getState().pouActions.create({ type: 'function', name: 'Fn', language: 'ld' })
+    seedSystemLibrary()
+
+    const result = await executeTool(store, 'add_rung', {
+      pouName: 'Fn',
+      elements: [{ kind: 'block', blockType: 'TON', instanceName: 'Timer1' }],
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/cannot be used inside FUNCTION "Fn"/)
+    expect(getVariables('Fn').some((v) => v.name === 'Timer1')).toBe(false)
+  })
+
+  it('still accepts a function inside a FUNCTION POU', async () => {
+    store.getState().pouActions.create({ type: 'function', name: 'Fn', language: 'ld' })
+    seedSystemLibrary()
+
+    const result = await executeTool(store, 'add_rung', {
+      pouName: 'Fn',
+      elements: [{ kind: 'block', blockType: 'ADD' }],
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  it('binds to a matching global instance instead of shadowing it with a local', async () => {
+    createLdPou('Main')
+    seedSystemLibrary()
+    const created = store.getState().projectActions.createVariable({
+      scope: 'global',
+      data: {
+        name: 'Timer1',
+        class: 'global',
+        type: { definition: 'derived', value: 'TON' },
+        location: '',
+        initialValue: null,
+        documentation: '',
+        debug: false,
+      },
+    })
+    expect(created.ok).toBe(true)
+
+    const result = await executeTool(store, 'add_rung', {
+      pouName: 'Main',
+      elements: [{ kind: 'block', blockType: 'TON', instanceName: 'Timer1' }],
+    })
+
+    expect(result.success).toBe(true)
+    expect(getVariables('Main').some((v) => v.name.toLowerCase() === 'timer1')).toBe(false)
+    const block = getRungs('Main')[0].nodes.find((n) => n.type === 'block')
+    expect((block?.data as { variable?: PLCVariable }).variable?.class).toBe('global')
+  })
+
+  it('creates no instance when the declaration text in the code view does not parse', async () => {
+    createLdPou('Main')
+    seedSystemLibrary()
+    const invalidText = 'VAR\n  a : INT;\n  a : DINT;\nEND_VAR'
+    store.getState().projectActions.setPouVariablesText('Main', invalidText, true)
+    store.getState().editorActions.updateModelVariablesForName('Main', { display: 'code', code: invalidText })
+
+    const result = await executeTool(store, 'add_rung', {
+      pouName: 'Main',
+      elements: [
+        { kind: 'block', blockType: 'TON', instanceName: 'Timer1' },
+        { kind: 'block', blockType: 'TOF', instanceName: 'Timer2' },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+    expect(getVariables('Main')).toHaveLength(0)
+    const pou = store.getState().project.data.pous.find((p) => p.name === 'Main')
+    expect(pou?.variablesText).toBe(invalidText)
+    expect(pou?.variablesTextUnparsed).toBe(true)
+    expect(getRungs('Main')).toHaveLength(0)
+  })
+
   it('creates one instance variable when two blocks share an instance name', async () => {
     createLdPou('Main')
     seedSystemLibrary()
@@ -565,6 +689,71 @@ describe('update_rung', () => {
 
     expect(result.success).toBe(true)
     expect(getRungs('Main')[0].nodes.some((n) => n.type === 'block')).toBe(true)
+  })
+
+  it('refuses to rebuild a rung that carries a branch the spec cannot express', async () => {
+    createLdPou('Main')
+    createVariable('Main', 'Start')
+    createVariable('Main', 'Motor')
+    await executeTool(store, 'add_rung', {
+      pouName: 'Main',
+      elements: [
+        { kind: 'contact', variable: 'Start' },
+        { kind: 'coil', variable: 'Motor' },
+      ],
+    })
+    const [rung] = getRungs('Main')
+    const contact = rung.nodes.find((n) => n.type === 'contact')
+    if (!contact) throw new Error('expected a contact on the rung')
+    const branchNode = {
+      ...contact,
+      id: 'branch-contact',
+      data: { ...contact.data, branchContext: { blockId: 'b1', handleId: 'PT', direction: 'input' } },
+    }
+    const rungWithBranch: RungLadderState = { ...rung, nodes: [...rung.nodes, branchNode] }
+    store.getState().ladderFlowActions.setRungs({ editorName: 'Main', rungs: [rungWithBranch] })
+
+    const result = await executeTool(store, 'update_rung', {
+      pouName: 'Main',
+      rungId: rung.id,
+      elements: [
+        { kind: 'contact', variable: 'Start' },
+        { kind: 'coil', variable: 'Motor' },
+      ],
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/cannot be updated without losing logic/)
+    expect(getRungs('Main')[0].nodes.some((n) => n.id === 'branch-contact')).toBe(true)
+  })
+
+  it('round-trips a block whose pins hold a literal and a cleared binding', async () => {
+    createLdPou('Main')
+    seedSystemLibrary()
+    await executeTool(store, 'add_rung', {
+      pouName: 'Main',
+      elements: [{ kind: 'block', blockType: 'TON', instanceName: 'Timer1', pins: [{ pin: 'PT', variable: 'T#5s' }] }],
+    })
+    const [rung] = getRungs('Main')
+    const nodes = rung.nodes.map((node) => {
+      if (node.type !== 'block') return node
+      const data = node.data as {
+        connectedVariables: { handleId: string; type: string; variable?: { name: string } }[]
+      }
+      const cleared = { handleId: 'ET', type: 'output', variable: { id: '', name: '' } }
+      return { ...node, data: { ...node.data, connectedVariables: [...data.connectedVariables, cleared] } }
+    })
+    store.getState().ladderFlowActions.setRungs({ editorName: 'Main', rungs: [{ ...rung, nodes }] })
+
+    const read = await executeTool(store, 'read_ladder_diagram', { pouName: 'Main' })
+    const spec = JSON.parse(read.message.split('\n').slice(1).join('\n')) as unknown[]
+    expect(spec).toEqual([
+      { kind: 'block', blockType: 'TON', instanceName: 'Timer1', pins: [{ pin: 'PT', variable: 'T#5s' }] },
+    ])
+
+    const result = await executeTool(store, 'update_rung', { pouName: 'Main', rungId: rung.id, elements: spec })
+    expect(result.success).toBe(true)
+    expect(getBlockPins('Main')).toEqual([expect.objectContaining({ handleId: 'PT', variable: { name: 'T#5s' } })])
   })
 
   it('surfaces buildRungFromSpec errors as a tool failure', async () => {
