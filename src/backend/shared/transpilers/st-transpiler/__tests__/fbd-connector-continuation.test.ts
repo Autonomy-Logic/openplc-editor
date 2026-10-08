@@ -73,6 +73,11 @@ const srBlock = (id: string, instance: string, nid: string, x: number, y: number
   },
 })
 
+const ordered = (node: RFNode, executionOrder: number): RFNode => ({
+  ...node,
+  data: { ...node.data, executionOrder },
+})
+
 describe('FBD connector / continuation pairs', () => {
   it('feeds the connector expression into a function input (forum report: SR.Q1 -> FAULT -> OR.IN2)', () => {
     const { bodySt, warnings } = emitFbdBody({
@@ -204,5 +209,64 @@ describe('FBD connector / continuation pairs', () => {
     })
     expect(warnings).toContain('continuation "MISSING" has no matching connector')
     expect(bodySt).not.toContain('OUT_VAR :=')
+  })
+
+  it('keeps explicit execution order across a pair, as a direct wire does', () => {
+    // producer OR is ordered after its consumer, so the consumer reads last scan's value
+    const producer = ordered(orBlock('P', '300', 200, 0), 2)
+    const consumer = ordered(orBlock('C', '400', 200, 300), 1)
+    const common = [inVar('1', 'A', 0, 0), inVar('2', 'B', 0, 60), inVar('3', 'D', 0, 360), outVar('4', 'Y', 400, 300)]
+    const viaPair = emitFbdBody({
+      rung: {
+        reactFlowViewport: [1000, 500],
+        nodes: [
+          ...common,
+          producer,
+          consumer,
+          connection('5', 'connector', 'MID', 400, 0),
+          connection('6', 'continuation', 'MID', 0, 300),
+        ],
+        edges: [
+          e('1', 'P', 'output', 'IN1'),
+          e('2', 'P', 'output', 'IN2'),
+          e('P', '5', 'OUT', 'input'),
+          e('6', 'C', 'output', 'IN1'),
+          e('3', 'C', 'output', 'IN2'),
+          e('C', '4', 'OUT', 'input'),
+        ],
+      },
+    })
+    const viaWire = emitFbdBody({
+      rung: {
+        reactFlowViewport: [1000, 500],
+        nodes: [...common, producer, consumer],
+        edges: [
+          e('1', 'P', 'output', 'IN1'),
+          e('2', 'P', 'output', 'IN2'),
+          e('P', 'C', 'OUT', 'IN1'),
+          e('3', 'C', 'output', 'IN2'),
+          e('C', '4', 'OUT', 'input'),
+        ],
+      },
+    })
+    expect(viaPair.warnings).toEqual([])
+    expect(viaPair.bodySt).toBe(viaWire.bodySt)
+    expect(viaPair.bodySt.indexOf('OR(_TMP_OR300_OUT, D)')).toBeLessThan(viaPair.bodySt.indexOf('OR(A, B)'))
+  })
+
+  it('rejects a loop of pairs with no block in it', () => {
+    const body = {
+      rung: {
+        reactFlowViewport: [1000, 500],
+        nodes: [
+          connection('1', 'continuation', 'LOOP', 0, 0),
+          connection('2', 'connector', 'LOOP', 200, 0),
+          connection('3', 'continuation', 'LOOP', 0, 200),
+          outVar('4', 'Z', 200, 200),
+        ],
+        edges: [e('1', '2', 'output', 'input'), e('3', '4', 'output', 'input')],
+      },
+    }
+    expect(() => emitFbdBody(body)).toThrow('connector "LOOP" is fed by its own continuation')
   })
 })
