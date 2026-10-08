@@ -1,32 +1,6 @@
-/*
- * macOS Local Network permission on packaged Electron apps.
- *
- * electron-builder copies Electron's prebuilt binary verbatim, so our main
- * executable's Mach-O LC_UUID collides with every other app built against the
- * same Electron release. macOS keys its Local Network TCC decision on that
- * UUID (Apple TN3179), so it silently resolves our bundle id to
- * `com.github.Electron` through the shared UUID and reuses that decision.
- * No prompt fires and the app never shows up under Privacy & Security.
- *
- * electron-builder tracks this as issue #9158 but closed it "not planned".
- * Until there is first-class support, we work around it in an afterPack hook,
- * which runs after copy and before signing so codesign seals our changes.
- *
- * The hook does two things on darwin builds:
- *
- *   1. Rewrites the main executable's LC_UUID to a deterministic UUID v5
- *      derived from the bundle id. Deterministic so the user's TCC grant
- *      survives version upgrades; the UUID only changes if the bundle id does.
- *
- *   2. Mirrors NSLocalNetworkUsageDescription from mac.extendInfo into the
- *      Electron Framework and every helper .app under Contents/Frameworks.
- *      macOS checks the Info.plist of whichever bundle actually opens the
- *      socket (the main Helper, for Electron's network subprocess), not just
- *      the host app's.
- *
- * The electron-builder config emits a separate single-arch bundle for arm64
- * and x64, so we only ever see thin 64-bit Mach-O here. Fat binaries are
- * rejected rather than silently misparsed.
+/* afterPack hook, darwin only: stamp a deterministic LC_UUID (UUID v5 of appId)
+ * on the main executable and mirror NSLocalNetworkUsageDescription into Electron
+ * Framework and the helper apps. Runs before codesign. Thin 64-bit Mach-O only.
  */
 
 const { execFileSync } = require('child_process')
@@ -38,9 +12,15 @@ const MH_MAGIC_64 = 0xfeedfacf // thin 64-bit, host endian
 const MH_CIGAM_64 = 0xcffaedfe // thin 64-bit, swapped
 const LC_UUID = 0x1b
 
-/** DNS namespace from RFC 4122, used so repeated hashes of the same bundle id yield the same UUID. */
 const UUID_NAMESPACE_DNS = Buffer.from('6ba7b8109dad11d180b400c04fd430c8', 'hex')
 
+/**
+ * Deterministic UUID v5 (RFC 4122) derived from a bundle id in the DNS namespace.
+ * Same bundle id always yields the same UUID so the TCC grant survives upgrades.
+ *
+ * @param {string} bundleId
+ * @returns {Buffer} 16-byte UUID
+ */
 function uuidFromBundleId(bundleId) {
   const hash = crypto.createHash('sha1').update(UUID_NAMESPACE_DNS).update(bundleId).digest()
   const uuid = Buffer.from(hash.subarray(0, 16))
@@ -49,6 +29,15 @@ function uuidFromBundleId(bundleId) {
   return uuid
 }
 
+/**
+ * Overwrites the LC_UUID load command payload of a thin 64-bit Mach-O with the
+ * UUID v5 derived from bundleId. Throws when the file is not a thin 64-bit
+ * Mach-O or carries no LC_UUID.
+ *
+ * @param {string} filePath
+ * @param {string} bundleId
+ * @returns {string} hex of the stamped UUID
+ */
 function stampMainExecutableUuid(filePath, bundleId) {
   const buf = fs.readFileSync(filePath)
   const magic = buf.readUInt32LE(0)
@@ -57,7 +46,7 @@ function stampMainExecutableUuid(filePath, bundleId) {
   if (!littleEndian && !bigEndian) {
     throw new Error(
       `${filePath}: expected a thin 64-bit Mach-O (magic 0xfeedfacf), got 0x${magic.toString(16)}. ` +
-        `Universal (fat) binaries are not supported here; electron-builder is configured to emit single-arch bundles.`,
+        `Universal (fat) binaries are not supported; electron-builder is configured to emit single-arch bundles.`,
     )
   }
   const readU32 = (off) => (littleEndian ? buf.readUInt32LE(off) : buf.readUInt32BE(off))
@@ -86,7 +75,16 @@ function writeUsageDescription(plistPath, value) {
   }
 }
 
-exports.default = async function patchMacosLocalNetworkPermission(context) {
+/**
+ * electron-builder afterPack hook. On darwin, stamps a unique LC_UUID on the
+ * main executable and mirrors NSLocalNetworkUsageDescription into the Electron
+ * Framework and every helper .app under Contents/Frameworks. No-op on other
+ * platforms. Throws when any required input or expected file is missing so the
+ * build fails loudly instead of shipping without the fix.
+ *
+ * @param {{ electronPlatformName: string, appOutDir: string, packager: any }} context
+ */
+async function patchMacosLocalNetworkPermission(context) {
   const { electronPlatformName, appOutDir, packager } = context
   if (electronPlatformName !== 'darwin') {
     return
@@ -106,14 +104,9 @@ exports.default = async function patchMacosLocalNetworkPermission(context) {
   const mainExecutable = path.join(appPath, 'Contents', 'MacOS', appName)
   const frameworksDir = path.join(appPath, 'Contents', 'Frameworks')
 
-  // 1. Give the main executable its own LC_UUID so TCC can tell this app apart
-  //    from every other Electron app built against the same prebuilt binary.
   const stamped = stampMainExecutableUuid(mainExecutable, bundleId)
   console.log(`mac-inject: stamped LC_UUID ${stamped} on ${mainExecutable}`)
 
-  // 2. Mirror the usage description into every nested bundle macOS might
-  //    attribute the network call to.
-  const targets = []
   const frameworkPlist = path.join(
     frameworksDir,
     'Electron Framework.framework',
@@ -122,15 +115,28 @@ exports.default = async function patchMacosLocalNetworkPermission(context) {
     'Resources',
     'Info.plist',
   )
-  if (fs.existsSync(frameworkPlist)) targets.push(frameworkPlist)
+  if (!fs.existsSync(frameworkPlist)) {
+    throw new Error(`mac-inject: Electron Framework Info.plist not found at ${frameworkPlist}`)
+  }
+  writeUsageDescription(frameworkPlist, usageDescription)
+  console.log(`mac-inject: wrote NSLocalNetworkUsageDescription into ${frameworkPlist}`)
+
+  let helpersPatched = 0
   for (const entry of fs.readdirSync(frameworksDir, { withFileTypes: true })) {
     if (entry.isDirectory() && entry.name.endsWith('.app')) {
       const helperPlist = path.join(frameworksDir, entry.name, 'Contents', 'Info.plist')
-      if (fs.existsSync(helperPlist)) targets.push(helperPlist)
+      if (fs.existsSync(helperPlist)) {
+        writeUsageDescription(helperPlist, usageDescription)
+        console.log(`mac-inject: wrote NSLocalNetworkUsageDescription into ${helperPlist}`)
+        helpersPatched++
+      }
     }
   }
-  for (const plistPath of targets) {
-    writeUsageDescription(plistPath, usageDescription)
-    console.log(`mac-inject: wrote NSLocalNetworkUsageDescription into ${plistPath}`)
+  if (helpersPatched === 0) {
+    throw new Error(`mac-inject: no helper .app with an Info.plist found under ${frameworksDir}`)
   }
 }
+
+exports.default = patchMacosLocalNetworkPermission
+exports.uuidFromBundleId = uuidFromBundleId
+exports.stampMainExecutableUuid = stampMainExecutableUuid
