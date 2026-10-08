@@ -511,6 +511,19 @@ export interface PersistedPdo {
    * saved before it was recorded, which are treated as every PDO assigned.
    */
   assigned?: boolean
+  /**
+   * DOPE-704 E2: ESI defaults carried forward on first import.
+   */
+  fixed?: boolean
+  mandatory?: boolean
+  /** Default sync manager this PDO is assigned to in the ESI. */
+  sm?: number
+  /**
+   * DOPE-704 E2: PDO indices this one excludes (from the ESI `<Exclude>` children). The
+   * Process Data view greys an excluded PDO when its excluder is assigned, with the
+   * excluding PDO named in the tooltip.
+   */
+  exclude?: string[]
 }
 
 /**
@@ -789,6 +802,19 @@ export interface EtherCATSlaveConfig {
   watchdog: EtherCATWatchdog
   /** Distributed Clocks (DC) settings */
   distributedClocks: EtherCATDistributedClocks
+  /**
+   * DOPE-704 E2: CoE flags defaulted from the ESI's `<Mailbox><CoE />` attributes on first
+   * device import and overridable in the Expert view. The generator uses these to decide
+   * whether to emit `0x1C1n` PDO assignment writes and Complete Access SDO writes.
+   *
+   * Optional for backward compatibility with projects saved before this field existed; the
+   * migration helper {@link migrateSlaveToE2Schema} fills them in from the ESI on open.
+   */
+  coeFlags?: {
+    pdoAssign: boolean
+    pdoConfig: boolean
+    completeAccess: boolean
+  }
 }
 
 // ===================== DEVICE MATCHING =====================

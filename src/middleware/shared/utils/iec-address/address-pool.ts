@@ -240,6 +240,11 @@ export function buildAddressPool(
   }
 
   // 4. EtherCAT channel mappings.
+  //
+  // Ref format (DOPE-704 E2 convention): "<devRef>:<slaveRef>:<channelId>" for a plain
+  // slave channel, "<devRef>:<slaveRef>:<moduleId>:<channelId>" for a module channel on
+  // an ETG.5001 modular coupler. The module loop lands in E4; today the slave loop
+  // produces the three-segment form and nothing produces the four-segment form.
   if (caps.ethercat && inputs.remoteDevices && ignore !== 'ethercat') {
     for (const dev of inputs.remoteDevices) {
       const devRef = dev.deviceName || dev.name || 'unknown-device'
