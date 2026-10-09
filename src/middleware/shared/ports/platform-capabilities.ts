@@ -30,7 +30,7 @@ export interface PlatformCapabilities {
   /** True if the app supports a local filesystem project structure (directories, files). */
   hasLocalFilesystem: boolean
 
-  /** True if the app supports exporting projects as XML files (Codesys, old-editor formats). */
+  /** True if the app supports exporting a project as a PLCopen XML file. */
   hasProjectExport: boolean
 
   /** True if the app supports importing a project from a PLCopen XML file. */

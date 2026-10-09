@@ -20,10 +20,14 @@ jest.mock('electron', () => ({
 
 jest.mock('@root/frontend/locales/i18n', () => ({ i18n: { t: (key: string) => key } }))
 
+const mockHistory: { name: string; path: string }[] = []
+const mockOpenProjectByPath = jest.fn()
+
 jest.mock('../../backend/editor/services', () => ({
   ProjectService: jest.fn(() => ({
     getHistoryProjectsFilePath: jest.fn(() => '/history.json'),
-    readProjectHistory: jest.fn(() => Promise.resolve([])),
+    readProjectHistory: jest.fn(() => Promise.resolve(mockHistory)),
+    openProjectByPath: mockOpenProjectByPath,
   })),
 }))
 
@@ -36,7 +40,6 @@ const PROJECT_ONLY = [
   'menu:file.submenu.closeTab',
   'menu:file.submenu.closeProject',
   'menu:file.submenu.exportToPLCOpenXml',
-  'menu:file.submenu.exportToCodesysXml',
   'menu:file.submenu.pageSetup',
   'menu:file.submenu.preview',
   'menu:file.submenu.print',
@@ -190,6 +193,35 @@ describe('darwin text editing', () => {
   })
 })
 
+describe('darwin app menu', () => {
+  beforeEach(() => setPlatform('darwin'))
+
+  it('labels the app items with the product name instead of the package name', async () => {
+    await newBuilder().buildMenu()
+
+    const menu = lastMenu()
+    expect(menu.get('OpenPLC Editor')?.role).toBeUndefined()
+    expect(menu.get('About OpenPLC Editor')?.role).toBe('about')
+    expect(menu.get('Hide OpenPLC Editor')?.role).toBe('hide')
+    expect(menu.get('Quit OpenPLC Editor')?.role).toBe('quit')
+  })
+
+  it('keeps the remaining native app menu roles', async () => {
+    await newBuilder().buildMenu()
+
+    const appMenu = lastMenu().get('OpenPLC Editor')?.submenu
+    if (!Array.isArray(appMenu)) throw new Error('app menu has no submenu')
+    expect(appMenu.map((entry) => entry.role).filter(Boolean)).toEqual([
+      'about',
+      'services',
+      'hide',
+      'hideOthers',
+      'unhide',
+      'quit',
+    ])
+  })
+})
+
 describe('setProjectOpen', () => {
   it('does not rebuild the menu when the state has not changed', async () => {
     const builder = newBuilder()
@@ -200,5 +232,26 @@ describe('setProjectOpen', () => {
     await builder.setProjectOpen(true)
     await builder.setProjectOpen(true)
     expect(Menu.setApplicationMenu).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe.each(['darwin', 'win32', 'linux'] as const)('%s Recent', (platform) => {
+  beforeEach(() => {
+    setPlatform(platform)
+    mockHistory.splice(0, mockHistory.length, { name: 'demo', path: '/projects/demo' })
+  })
+
+  afterEach(() => mockHistory.splice(0, mockHistory.length))
+
+  it('sends the project path to the renderer without reading the project itself', async () => {
+    await newBuilder().buildMenu()
+
+    const entry = lastMenu().get('demo (/projects/demo)')
+    if (typeof entry?.click !== 'function') throw new Error('no Recent entry for demo')
+    // @ts-expect-error: the menu handler ignores the item, window and event Electron passes
+    entry.click()
+
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('project:open-recent-accelerator', '/projects/demo')
+    expect(mockOpenProjectByPath).not.toHaveBeenCalled()
   })
 })

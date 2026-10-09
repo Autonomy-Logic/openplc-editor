@@ -6,10 +6,10 @@
  *
  *   1. `prepareXmlForLibraryBuild(project, manifest)` — synthesizes
  *      a stub main program / task / instance into a transient
- *      PLCProject (the on-disk project remains untouched) and runs
- *      the canonical XmlGenerator on it.  A library project declares
- *      no program of its own, and strucpp's verification path assumes
- *      one, so the stub is mandatory.  Its body is non-empty for
+ *      PLCProject (the on-disk project remains untouched) for the ST
+ *      transpiler.  A library project declares no program of its own,
+ *      and strucpp's verification path assumes one, so the stub is
+ *      mandatory.  Its body is non-empty for
  *      readability only — the transpiler stopped refusing empty POUs
  *      in DOPE-650.
  *
@@ -127,8 +127,8 @@ function parseLibraryManifest(json: string): ManifestParseResult {
 /**
  * Names of the synthetic program / task / instance the library
  * pipeline injects.  The program is literally named `main` because
- * `XmlGenerator` hard-requires a `type === 'program'` POU named
- * `main` and bails otherwise.  Library projects forbid the user from
+ * the transpiler's "requires a main POU" guard looks for a
+ * `type === 'program'` POU of that name.  Library projects forbid the user from
  * creating program POUs (see `projectCapabilities.hasPrograms`), so
  * the stub can never collide with a real `main` program.  Task and
  * instance names are unambiguous strings — they never leave memory.

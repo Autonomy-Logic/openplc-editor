@@ -10,6 +10,16 @@ on:
         description: 'Version number (e.g., 4.1.2)'
         required: false
         default: ''
+      platforms:
+        description: 'Which platforms to build (ignored on tag pushes, which always build all)'
+        required: false
+        type: choice
+        default: 'all'
+        options:
+          - all
+          - macos
+          - windows
+          - linux
 
 env:
   NODE_VERSION: '22.x'
@@ -20,6 +30,7 @@ jobs:
   # =============================================================================
   build-macos:
     runs-on: macos-latest
+    if: ${{ github.event_name == 'push' || inputs.platforms == 'all' || inputs.platforms == 'macos' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -131,6 +142,7 @@ jobs:
     # future runner rotation.  Pinning both today is cheaper than
     # debugging the same class of failure again in a few months.
     runs-on: windows-2022
+    if: ${{ github.event_name == 'push' || inputs.platforms == 'all' || inputs.platforms == 'windows' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -213,6 +225,7 @@ jobs:
     # When node-gyp / electron-builder ship a fix we can revert to
     # `windows-latest`.
     runs-on: windows-2022
+    if: ${{ github.event_name == 'push' || inputs.platforms == 'all' || inputs.platforms == 'windows' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -290,6 +303,7 @@ jobs:
   # =============================================================================
   build-linux-x64:
     runs-on: ubuntu-22.04
+    if: ${{ github.event_name == 'push' || inputs.platforms == 'all' || inputs.platforms == 'linux' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -348,6 +362,7 @@ jobs:
   # =============================================================================
   build-linux-arm64:
     runs-on: ubuntu-24.04-arm
+    if: ${{ github.event_name == 'push' || inputs.platforms == 'all' || inputs.platforms == 'linux' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

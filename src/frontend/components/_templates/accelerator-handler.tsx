@@ -1,14 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect } from 'react'
 
-import {
-  useAccelerator,
-  useCapabilities,
-  useCompiler,
-  useProject,
-  useTheme,
-  useWindow,
-} from '../../../middleware/shared/providers'
+import { useAccelerator, useCapabilities, useProject, useTheme, useWindow } from '../../../middleware/shared/providers'
+import { executeExportPlcopen } from '../../services/export-actions'
 import { requestAppRefresh } from '../../services/refresh-app'
+import { restoreOpenProjectRoot } from '../../services/restore-open-project-root'
 import { executeSaveActiveFile, executeSaveProject } from '../../services/save-actions'
 import { executeSaveProjectAs } from '../../services/save-project-as'
 import { type OpenPLCStore, useOpenPLCStore, useOpenPLCStoreApi } from '../../store'
@@ -31,15 +26,11 @@ const hasOpenProject = (store: OpenPLCStore) => store.getState().project.meta.pa
 
 const AcceleratorHandler = () => {
   const accelerator = useAccelerator()
-  const compilerPort = useCompiler()
   const projectPort = useProject()
   const windowPort = useWindow()
   const themePort = useTheme()
   const capabilities = useCapabilities()
   const store = useOpenPLCStoreApi()
-
-  const [requestFlag, setRequestFlag] = useState(false)
-  const [parseTo, setParseTo] = useState<'old-editor' | 'codesys' | null>(null)
 
   const {
     project,
@@ -55,7 +46,6 @@ const AcceleratorHandler = () => {
   } = useOpenPLCStore()
   const isMonacoFocused: boolean = useOpenPLCStore((state) => state.isMonacoFocused)
   const selectedProjectTreeLeaf = useOpenPLCStore((state) => state.workspace.selectedProjectTreeLeaf)
-  const pendingRecentProjectRef = useRef<unknown>(null)
 
   const executeSave = useCallback(
     () => executeSaveProject(store, projectPort, capabilities),
@@ -63,36 +53,17 @@ const AcceleratorHandler = () => {
   )
 
   /**
-   * Export project accelerator
+   * Export to PLCopen XML from the native File menu: same action the React menubar runs.
    */
   useEffect(() => {
     if (!capabilities.hasProjectExport) return
 
     const unsub = accelerator.onExportProject(() => {
       if (!hasOpenProject(store)) return
-      setRequestFlag(true)
-      setParseTo('old-editor')
+      void executeExportPlcopen(store, projectPort)
     })
-
-    if (requestFlag && parseTo) {
-      compilerPort
-        .exportProjectXml({
-          projectPath: project.meta.path,
-          projectData: project.data,
-          format: parseTo,
-        })
-        .then(() => {
-          setRequestFlag(false)
-          setParseTo(null)
-        })
-        .catch(() => {
-          setRequestFlag(false)
-          setParseTo(null)
-        })
-    }
-
     return unsub
-  }, [store, requestFlag, parseTo, accelerator, compilerPort, capabilities.hasProjectExport, project])
+  }, [store, accelerator, projectPort, capabilities.hasProjectExport])
 
   /**
    * Create project
@@ -127,10 +98,19 @@ const AcceleratorHandler = () => {
         case 'saved':
         case 'initial-state':
           void (async () => {
-            const result = await projectPort.openProject()
-            if (result.success && result.data) {
+            const openPath = store.getState().project.meta.path
+            const result = await projectPort.openProject().catch(() => null)
+            if (result?.success && result.data) {
               handleOpenProjectResponse(result.data)
+              return
             }
+            if (result) return
+            restoreOpenProjectRoot(projectPort, openPath)
+            toast({
+              title: 'Cannot open the project.',
+              description: 'The selected project could not be loaded.',
+              variant: 'fail',
+            })
           })()
           break
         case 'unsaved':
@@ -150,33 +130,50 @@ const AcceleratorHandler = () => {
       }
     })
     return unsub
-  }, [editingState, accelerator, openModal, projectPort, handleOpenProjectResponse])
+  }, [store, editingState, accelerator, openModal, projectPort, handleOpenProjectResponse])
 
   /**
-   * Open recent project (editor-specific — data passed via IPC accelerator)
+   * Open recent project (editor-specific — the native Recent menu sends the project path)
    */
+  const openRecentProject = useCallback(
+    async (projectPath: string, changesConfirmed: boolean) => {
+      const openPath = store.getState().project.meta.path
+      const result = await projectPort.openProjectByPath(projectPath).catch(() => null)
+      if (result?.success && result.data) {
+        const data = result.data
+        // An edit made while the read was pending has not been through the save prompt yet.
+        if (!changesConfirmed && store.getState().workspace.editingState === 'unsaved') {
+          openModal('save-changes-project', {
+            validationContext: 'open-recent-project',
+            onAfterAction: () => handleOpenProjectResponse(data),
+            onActionAborted: () => restoreOpenProjectRoot(projectPort, openPath),
+          })
+          return
+        }
+        handleOpenProjectResponse(data)
+        return
+      }
+      if (!result) restoreOpenProjectRoot(projectPort, openPath)
+      toast({
+        title: 'Cannot open the project.',
+        description: result?.error?.description ?? `The path ${projectPath} does not exist on this computer.`,
+        variant: 'fail',
+      })
+    },
+    [store, projectPort, openModal, handleOpenProjectResponse],
+  )
+
   useEffect(() => {
-    const unsub = accelerator.onOpenRecent((projectData?: unknown) => {
+    const unsub = accelerator.onOpenRecent((projectPath: string) => {
       switch (editingState) {
         case 'saved':
         case 'initial-state':
-          // Process immediately — data comes from the main process IPC event
-          if (projectData) {
-            handleOpenProjectResponse(projectData as Parameters<typeof handleOpenProjectResponse>[0])
-          }
+          void openRecentProject(projectPath, false)
           break
         case 'unsaved':
-          // Store pending data and show save modal with callback
-          pendingRecentProjectRef.current = projectData ?? null
           openModal('save-changes-project', {
             validationContext: 'open-recent-project',
-            onAfterAction: () => {
-              const data = pendingRecentProjectRef.current
-              pendingRecentProjectRef.current = null
-              if (data) {
-                handleOpenProjectResponse(data as Parameters<typeof handleOpenProjectResponse>[0])
-              }
-            },
+            onAfterAction: () => void openRecentProject(projectPath, true),
           })
           break
         case 'save-request':
@@ -191,7 +188,7 @@ const AcceleratorHandler = () => {
       }
     })
     return unsub
-  }, [editingState, accelerator, openModal, handleOpenProjectResponse])
+  }, [editingState, accelerator, openModal, openRecentProject])
 
   /**
    * Close project

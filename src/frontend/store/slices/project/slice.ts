@@ -47,7 +47,7 @@ import { buildTypeContext, parseIecStringToVariables } from '../../../utils/gene
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
-import { clampIOGroupLength } from '../../../utils/modbus/io-group'
+import { clampIOGroupLength, resolveIOGroupErrorHandling } from '../../../utils/modbus/io-group'
 import { parseDataTypeFromText } from '../../../utils/PLC/data-type-declarations'
 import { serializeDataTypeToText } from '../../../utils/PLC/data-type-serializer'
 import { renameGlobalVariableListInPou } from '../../../utils/PLC/global-variable-list-references'
@@ -2484,8 +2484,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           // because a zero-point group emits a malformed runtime config
           // (`len` is shipped verbatim by generate-modbus-master-config).
           const length = clampIOGroupLength(group.functionCode, group.length)
+          const errorHandling = resolveIOGroupErrorHandling(group.functionCode, group.errorHandling)
           const ioPoints = generateIOPoints(group.functionCode, length, group.name, pool, pending)
-          device.modbusTcpConfig.ioGroups.push({ ...group, length, ioPoints })
+          device.modbusTcpConfig.ioGroups.push({ ...group, length, errorHandling, ioPoints })
         }),
       )
       // Central recalculation is the authority for final addresses: it
@@ -2521,6 +2522,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           // a group to FC 5/6 forces 1 even if the caller forgets, and a bad
           // length loaded from an old project file self-heals on first edit.
           group.length = clampIOGroupLength(group.functionCode, group.length)
+          group.errorHandling = resolveIOGroupErrorHandling(group.functionCode, group.errorHandling)
           const pending = new Set<string>()
           group.ioPoints = generateIOPoints(group.functionCode, group.length, group.name, pool, pending, existingPoints)
         }),

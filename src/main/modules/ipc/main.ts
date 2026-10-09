@@ -937,19 +937,9 @@ class MainProcessBridge implements MainIpcModule {
     // this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
 
     // ===================== COMPILER SERVICE =====================
-    // TODO: This handle should be refactored to use MessagePortMain for better performance.
-    this.registerHandle('compiler:export-project-xml', this.handleCompilerExportProjectXml)
     this.ipcMain.on('compiler:run-compile-program', this.handleRunCompileProgram)
     this.ipcMain.on('compiler:run-debug-compilation', this.handleRunDebugCompilation)
     this.ipcMain.on('compiler:run-compile-library', this.handleRunCompileLibrary)
-
-    // +++ !! Deprecated: These handlers are outdated and should be removed. +++
-
-    // this.ipcMain.on('compiler:setup-environment', this.handleCompilerSetupEnvironment)
-    // this.ipcMain.handle('compiler:create-build-directory', this.handleCompilerCreateBuildDirectory)
-    // this.ipcMain.handle('compiler:build-xml-file', this.handleCompilerBuildXmlFile)
-    // this.ipcMain.on('compiler:build-st-program', this.handleCompilerBuildStProgram)
-    // this.ipcMain.on('compiler:generate-c-files', this.handleCompilerGenerateCFiles)
 
     // ===================== WINDOW CONTROLS =====================
     this.ipcMain.on('window-controls:close', this.handleWindowControlsClose)
@@ -1158,11 +1148,12 @@ class MainProcessBridge implements MainIpcModule {
       this.stopSimulatorAndNotify()
       const result = await this.projectService.readRawProjectFiles(projectPath)
       if (result.success) {
-        this.currentProjectPath = projectPath
         // A retrieval lives in scratch and is pruned behind the user, so it must not appear under Recent as if it were a real project.
         if (!isRetrievedProjectPath(projectPath)) {
           await this.projectService.updateProjectHistory(projectPath)
         }
+        // Set last, so a failed open leaves the root on the project still open.
+        this.currentProjectPath = projectPath
       }
       return result
     } catch (_error) {
@@ -1170,6 +1161,9 @@ class MainProcessBridge implements MainIpcModule {
         success: false,
         error: { title: 'Error reading project', description: 'Failed to read project files' },
       }
+    } finally {
+      // The native Recent submenu is built from the history this open just changed.
+      this.handleWindowRebuildMenu()
     }
   }
 
@@ -2172,14 +2166,6 @@ class MainProcessBridge implements MainIpcModule {
   handleAppQuit = () => this.quitCoordinator.confirmQuit()
 
   // Compiler service handlers
-  // TODO: This handle should be refactored to use a new approach on module implementation.
-  handleCompilerExportProjectXml = (
-    _ev: IpcMainInvokeEvent,
-    pathToUserProject: string,
-    dataToCreateXml: PLCProjectData,
-    xmlFormatTarget: 'old-editor' | 'codesys',
-  ) => this.compilerModule.createXmlFile(pathToUserProject, dataToCreateXml, xmlFormatTarget)
-
   handleRunCompileProgram = (event: IpcMainEvent, args: CompileProgramIpcArgs) => {
     const mainProcessPort = event.ports[0]
     void this.compilerModule.compileProgram(args, mainProcessPort, this).catch((error) => {
@@ -2210,34 +2196,6 @@ class MainProcessBridge implements MainIpcModule {
   loadEnabledArchives = (enabledNames: string[]): { archives: unknown[]; missing: string[] } =>
     this.libraryManagerModule.loadEnabledArchives(enabledNames)
 
-  // TODO: These handlers are outdated and should be removed.
-  // handleCompilerSetupEnvironment = (event: IpcMainEvent) => {
-  //   const replyPort = Array.isArray(event.ports) && event.ports.length > 0 ? event.ports[0] : undefined
-  //   if (replyPort) {
-  //     void this.compilerService.setupEnvironment(replyPort)
-  //   }
-  // }
-  // handleCompilerCreateBuildDirectory = (_ev: IpcMainInvokeEvent, pathToUserProject: string) =>
-  //   this.compilerService.createBuildDirectoryIfNotExist(pathToUserProject)
-  // handleCompilerBuildXmlFile = (
-  //   _ev: IpcMainInvokeEvent,
-  //   pathToUserProject: string,
-  //   dataToCreateXml: PLCProjectData,
-  // ) => this.compilerService.buildXmlFile(pathToUserProject, dataToCreateXml)
-  // handleCompilerBuildStProgram = (event: IpcMainEvent, pathToXMLFile: string) => {
-  //   const replyPort = Array.isArray(event.ports) && event.ports.length > 0 ? event.ports[0] : undefined
-  //   if (replyPort) {
-  //     this.compilerService.compileSTProgram(pathToXMLFile, replyPort)
-  //   }
-  // }
-  // handleCompilerGenerateCFiles = (event: IpcMainEvent, pathToStProgram: string) => {
-  //   const replyPort = Array.isArray(event.ports) && event.ports.length > 0 ? event.ports[0] : undefined
-  //   if (replyPort) {
-  //     this.compilerService.generateCFiles(pathToStProgram, replyPort)
-  //   }
-  // }
-
-  // Window controls handlers
   handleWindowControlsClose = () => this.mainWindow?.close()
   handleWindowControlsClosed = () => this.mainWindow?.destroy()
   handleWindowControlsHide = () => this.mainWindow?.hide()
@@ -2272,6 +2230,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleWindowProjectOpen = (_event: IpcMainEvent, open: unknown) => {
     if (typeof open !== 'boolean') return
+    if (!open) this.currentProjectPath = null
     void this.menuBuilder.setProjectOpen(open).catch((error) => {
       logger.error('Error rebuilding application menu:', error)
     })
@@ -3466,7 +3425,8 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   handleFileWatchStop = (_event: IpcMainInvokeEvent, filePath: string): { success: boolean; error?: string } => {
-    if (!this.validateFilePath(filePath)) {
+    // A registered watcher passed validation when it started; the root may have moved to another project since.
+    if (!this.fileWatchers.has(filePath) && !this.validateFilePath(filePath)) {
       return { success: false, error: 'Path is outside the project directory' }
     }
     if (this.fileWatchers.has(filePath)) {

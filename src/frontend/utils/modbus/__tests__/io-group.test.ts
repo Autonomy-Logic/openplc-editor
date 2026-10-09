@@ -2,8 +2,10 @@ import type { ModbusIOPoint } from '../../../../middleware/shared/ports/types'
 import {
   clampIOGroupLength,
   formatIOGroupAddressRange,
+  isReadFunctionCode,
   isSingleElementFunctionCode,
   MAX_IO_GROUP_LENGTH_BY_FC,
+  resolveIOGroupErrorHandling,
   validateIOGroupLength,
 } from '../io-group'
 
@@ -20,6 +22,32 @@ describe('isSingleElementFunctionCode', () => {
     expect(isSingleElementFunctionCode('6')).toBe(true)
     for (const fc of ['1', '2', '3', '4', '15', '16'] as const) {
       expect(isSingleElementFunctionCode(fc)).toBe(false)
+    }
+  })
+})
+
+describe('isReadFunctionCode', () => {
+  it('is true only for FC 1 to FC 4', () => {
+    for (const fc of ['1', '2', '3', '4'] as const) {
+      expect(isReadFunctionCode(fc)).toBe(true)
+    }
+    for (const fc of ['5', '6', '15', '16'] as const) {
+      expect(isReadFunctionCode(fc)).toBe(false)
+    }
+  })
+})
+
+describe('resolveIOGroupErrorHandling', () => {
+  it('keeps the chosen mode on read function codes', () => {
+    for (const fc of ['1', '2', '3', '4'] as const) {
+      expect(resolveIOGroupErrorHandling(fc, 'set-to-zero')).toBe('set-to-zero')
+      expect(resolveIOGroupErrorHandling(fc, 'keep-last-value')).toBe('keep-last-value')
+    }
+  })
+
+  it('forces keep-last-value on write function codes', () => {
+    for (const fc of ['5', '6', '15', '16'] as const) {
+      expect(resolveIOGroupErrorHandling(fc, 'set-to-zero')).toBe('keep-last-value')
     }
   })
 })
