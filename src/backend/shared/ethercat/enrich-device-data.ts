@@ -145,6 +145,18 @@ export function enrichDeviceData(
   sdoConfigurations?: SDOConfigurationEntry[]
   channelMappings: EtherCATChannelMapping[]
   cia402?: Cia402AxisConfig
+  /**
+   * DOPE-704 E1: default CoE flags lifted from the ESI's `<Mailbox><CoE />`. Spread
+   * onto the slave's `config` by the composer, so a freshly added slave carries the
+   * same flags E2's migration would derive and E3/E5 generators gate on.
+   */
+  coeFlags: NonNullable<EtherCATSlaveConfig['coeFlags']>
+  /**
+   * DOPE-704 E1: true when the ESI device declares a `<Slots>` block, so the UI can
+   * render the "Add module to slot N" affordance before any module is attached and
+   * the project tree can switch to the three-level nesting.
+   */
+  isModularCoupler: boolean
 } {
   return {
     channelInfo: buildChannelInfo(device),
@@ -156,6 +168,8 @@ export function enrichDeviceData(
     // A CiA 402 servo is auto-recognized as a SoftMotion axis; the user can
     // disable/tune it in the device's Axis configuration.
     cia402: isCia402Drive(device) ? { ...DEFAULT_CIA402_AXIS_CONFIG } : undefined,
+    coeFlags: deriveCoEFlags(device),
+    isModularCoupler: device.isModularCoupler === true,
   }
 }
 

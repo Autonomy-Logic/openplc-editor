@@ -1,6 +1,7 @@
 import { cn } from '@root/frontend/utils/cn'
 import type { ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import { useEsi } from '@root/middleware/shared/providers/platform-context'
+import { type ESIImportFile, importESIZip } from '@root/middleware/shared/utils/ethercat/esi-zip-import'
 import { useCallback, useRef, useState } from 'react'
 
 import { ESIParseProgress } from './esi-parse-progress'
@@ -38,23 +39,61 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
 
   const processFiles = useCallback(
     async (files: FileList) => {
-      const xmlFiles = Array.from(files).filter((file) => file.name.toLowerCase().endsWith('.xml'))
+      const allInput = Array.from(files)
+      const xmlInputs = allInput.filter((f) => f.name.toLowerCase().endsWith('.xml'))
+      const zipInputs = allInput.filter((f) => f.name.toLowerCase().endsWith('.zip'))
 
-      if (xmlFiles.length === 0) {
-        onFilesLoaded(repository, [{ filename: '', error: 'No XML files found. Please upload .xml ESI files.' }])
+      const errors: Array<{ filename: string; error: string }> = []
+
+      // DOPE-704 E1: a ZIP is expanded into its component ESIs before the save loop so
+      // the operator sees per-file progress for every XML the ZIP contained. A ZIP that
+      // contained nothing recognisable surfaces as an explicit error on that ZIP's name.
+      const zipExpanded: Array<{ sourceZip: string; file: ESIImportFile }> = []
+      for (const zipFile of zipInputs) {
+        try {
+          const buf = await zipFile.arrayBuffer()
+          const report = await importESIZip(buf)
+          for (const file of report.imported) {
+            zipExpanded.push({ sourceZip: zipFile.name, file })
+          }
+          for (const droppedName of report.dropped) {
+            errors.push({
+              filename: `${zipFile.name} → ${droppedName}`,
+              error: 'Not a recognisable ESI XML; dropped from the ZIP.',
+            })
+          }
+          if (report.imported.length === 0 && report.dropped.length === 0) {
+            errors.push({ filename: zipFile.name, error: 'ZIP contained no .xml entries.' })
+          }
+        } catch (err) {
+          errors.push({
+            filename: zipFile.name,
+            error: `Could not open ZIP: ${err instanceof Error ? err.message : String(err)}`,
+          })
+        }
+      }
+
+      const totalWork = xmlInputs.length + zipExpanded.length
+
+      if (totalWork === 0) {
+        onFilesLoaded(
+          repository,
+          errors.length > 0
+            ? errors
+            : [{ filename: '', error: 'No ESI files found. Upload .xml ESI files or a .zip containing them.' }],
+        )
         return
       }
 
       setParseProgress({
         active: true,
-        currentFile: xmlFiles[0].name,
+        currentFile: xmlInputs[0]?.name ?? zipExpanded[0]?.file.filename,
         currentFileIndex: 0,
-        totalFiles: xmlFiles.length,
+        totalFiles: totalWork,
         percentage: 0,
       })
 
       const newItems: ESIRepositoryItemLight[] = []
-      const errors: Array<{ filename: string; error: string }> = []
       // A dedup-after-retry result means the file was persisted on the backend
       // but its row was missing from the upload response (and the adapter's own
       // recovery lookup also failed). Honor the EsiPort contract by re-listing
@@ -64,45 +103,48 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
 
       const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
 
-      // Process files one at a time to avoid memory issues
-      for (let i = 0; i < xmlFiles.length; i++) {
-        const file = xmlFiles[i]
+      type WorkItem = { filename: string; getXml: () => Promise<string>; size?: number }
+      const work: WorkItem[] = [
+        ...xmlInputs.map((f): WorkItem => ({ filename: f.name, getXml: () => f.text(), size: f.size })),
+        ...zipExpanded.map(
+          ({ file }): WorkItem => ({ filename: file.filename, getXml: () => Promise.resolve(file.xml) }),
+        ),
+      ]
+
+      for (let i = 0; i < work.length; i++) {
+        const item = work[i]
 
         setParseProgress({
           active: true,
-          currentFile: file.name,
+          currentFile: item.filename,
           currentFileIndex: i,
-          totalFiles: xmlFiles.length,
-          percentage: Math.round((i / xmlFiles.length) * 100),
+          totalFiles: work.length,
+          percentage: Math.round((i / work.length) * 100),
         })
 
-        if (file.size > MAX_FILE_SIZE) {
+        if (item.size !== undefined && item.size > MAX_FILE_SIZE) {
           errors.push({
-            filename: file.name,
-            error: `File too large (${Math.round(file.size / 1024 / 1024)}MB). Maximum is 100MB.`,
+            filename: item.filename,
+            error: `File too large (${Math.round(item.size / 1024 / 1024)}MB). Maximum is 100MB.`,
           })
           continue
         }
 
         try {
-          const text = await file.text()
-          const result = await esi!.parseAndSaveFile(file.name, text)
+          const text = await item.getXml()
+          const result = await esi!.parseAndSaveFile(item.filename, text)
 
           if (result.success && result.item) {
             newItems.push(result.item)
           } else if (result.success && result.dedupAfterRetry) {
-            // Uploaded but absent from the response: a transient-failure retry
-            // hit the backend dedup and the adapter couldn't recover the row.
-            // Flag a repository refresh so the file surfaces after the batch.
             needsRepositoryRefresh = true
           } else if (result.success) {
             // Real duplicate — content already in the repository. Skip silently.
-            // See EsiPort.parseAndSaveFile for the duplicate-handling contract.
           } else {
-            errors.push({ filename: file.name, error: result.error ?? 'Parse failed' })
+            errors.push({ filename: item.filename, error: result.error ?? 'Parse failed' })
           }
         } catch (err) {
-          errors.push({ filename: file.name, error: err instanceof Error ? err.message : String(err) })
+          errors.push({ filename: item.filename, error: err instanceof Error ? err.message : String(err) })
         }
       }
 
@@ -210,7 +252,14 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
           isProcessing && 'pointer-events-none opacity-50',
         )}
       >
-        <input ref={fileInputRef} type='file' accept='.xml' multiple onChange={handleFileSelect} className='hidden' />
+        <input
+          ref={fileInputRef}
+          type='file'
+          accept='.xml,.zip,application/zip,application/xml,text/xml'
+          multiple
+          onChange={handleFileSelect}
+          className='hidden'
+        />
 
         {parseProgress.active ? (
           <div className='w-full max-w-sm'>
@@ -237,10 +286,10 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
               />
             </svg>
             <span className='text-sm text-neutral-600 dark:text-neutral-400'>
-              Drop ESI files here or <span className='text-brand'>browse</span>
+              Drop ESI files or ZIPs here or <span className='text-brand'>browse</span>
             </span>
             <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-              Supports multiple .xml ESI files (ETG.2000)
+              Supports multiple .xml ESI files and .zip archives (ETG.2000)
             </span>
             {repository.length > 0 && (
               <span className='mt-1 text-xs text-neutral-500 dark:text-neutral-400'>

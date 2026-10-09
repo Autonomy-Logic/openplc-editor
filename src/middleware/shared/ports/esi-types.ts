@@ -202,6 +202,10 @@ export type EnrichDeviceData = {
   txPdos?: PersistedPdo[]
   slaveType?: string
   sdoConfigurations?: SDOConfigurationEntry[]
+  /** DOPE-704 E1: CoE flags lifted from the ESI's `<Mailbox><CoE />`. */
+  coeFlags?: EtherCATSlaveConfig['coeFlags']
+  /** DOPE-704 E1: true when the ESI declares a `<Slots>` block. */
+  isModularCoupler?: boolean
 }
 
 // ===================== DEVICE =====================
@@ -706,6 +710,13 @@ export interface ConfiguredEtherCATDevice {
    * pool walks the modules to claim channel addresses.
    */
   modules?: ConfiguredEtherCATModule[]
+  /**
+   * DOPE-704 E1: true when the underlying ESI device declares a `<Slots>` block. Set once
+   * at import time from the parsed ESI so the UI can render the "Add module to slot N"
+   * flow (E4/E5 UI) without re-loading the ESI, and the project tree can render the
+   * three-level nesting (bus → coupler → modules) even when `modules` is still empty.
+   */
+  isModularCoupler?: boolean
 }
 
 /**

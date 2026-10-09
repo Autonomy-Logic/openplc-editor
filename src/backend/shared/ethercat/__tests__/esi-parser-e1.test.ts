@@ -10,7 +10,7 @@
 import JSZip from 'jszip'
 
 import { parseESIDeviceFull, parseESILight, parseESIModuleFull } from '../esi-parser-main'
-import { importESIZip, looksLikeESI } from '../esi-zip-import'
+import { importESIZip, looksLikeESI } from '@root/middleware/shared/utils/ethercat/esi-zip-import'
 
 const PLAIN_SLAVE_ESI = `<?xml version="1.0" encoding="UTF-8"?>
 <EtherCATInfo>

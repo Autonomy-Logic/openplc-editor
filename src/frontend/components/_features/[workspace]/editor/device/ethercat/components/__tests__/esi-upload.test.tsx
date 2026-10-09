@@ -17,7 +17,11 @@ function stubPort<T extends object>(overrides: Partial<T> = {}): T {
   })
 }
 
-// The two EsiPort methods the upload flow touches.
+// The two EsiPort methods the upload flow touches. ZIP expansion is a pure
+// shared-utility call (`importESIZip` from middleware/shared/utils/ethercat),
+// not a port method — jszip works identically in both runtimes so the port
+// surface stays minimal and the adapters only carry what architecturally
+// differs between web and desktop.
 const mockEsi = {
   parseAndSaveFile: vi.fn(),
   loadRepositoryLight: vi.fn(),
@@ -137,5 +141,107 @@ describe('ESIUpload — dedupAfterRetry handling', () => {
     await waitFor(() => expect(onFilesLoaded).toHaveBeenCalled())
     expect(onFilesLoaded).toHaveBeenCalledWith([], undefined)
     expect(mockEsi.loadRepositoryLight).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * DOPE-704 E1 UI: ZIP import.
+ *
+ * The upload component accepts a .zip file alongside .xml files. For a ZIP it calls
+ * the pure `importESIZip` helper from middleware/shared/utils/ethercat (works in
+ * Node and browser identically — no port needed), then feeds each imported XML
+ * through the same `parseAndSaveFile` loop a plain .xml upload uses. Dropped
+ * entries land in the error report with the "<zipname> → <entry>" prefix the user
+ * needs to find them.
+ *
+ * Tests drive real ZIP bytes through the real importESIZip, which keeps the UI
+ * contract honest end-to-end instead of mocking around the pure helper.
+ */
+import JSZip from 'jszip'
+
+async function makeZipFile(name: string, entries: Array<{ path: string; content: string }>): Promise<File> {
+  const zip = new JSZip()
+  for (const entry of entries) zip.file(entry.path, entry.content)
+  const buf = await zip.generateAsync({ type: 'uint8array' })
+  const file = new File([buf], name, { type: 'application/zip' })
+  Object.defineProperty(file, 'arrayBuffer', { value: () => Promise.resolve(buf.buffer) })
+  return file
+}
+
+describe('ESIUpload — ZIP import (DOPE-704 E1)', () => {
+  beforeEach(() => {
+    mockEsi.parseAndSaveFile.mockReset()
+    mockEsi.loadRepositoryLight.mockReset()
+  })
+
+  it('expands a ZIP and saves every imported ESI through parseAndSaveFile', async () => {
+    const zip = await makeZipFile('ur20.zip', [
+      { path: 'ur20-coupler.xml', content: '<EtherCATInfo />' },
+      { path: 'modules/ur20-slot.xml', content: '<EtherCATInfo />' },
+    ])
+    mockEsi.parseAndSaveFile.mockResolvedValueOnce({ success: true, item: SAMPLE_ITEM })
+    mockEsi.parseAndSaveFile.mockResolvedValueOnce({
+      success: true,
+      item: { ...SAMPLE_ITEM, id: 'item-2', filename: 'ur20-slot.xml' },
+    })
+
+    const onFilesLoaded = vi.fn()
+    const { container } = renderUpload(onFilesLoaded, [])
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [zip] } })
+
+    await waitFor(() => expect(mockEsi.parseAndSaveFile).toHaveBeenCalledTimes(2))
+    const calls = mockEsi.parseAndSaveFile.mock.calls.map((c) => c[0] as string).sort()
+    expect(calls).toEqual(['ur20-coupler.xml', 'ur20-slot.xml'])
+  })
+
+  it('reports dropped ZIP entries with a <zipname> → <entry> prefix', async () => {
+    const zip = await makeZipFile('weidmueller.zip', [
+      { path: 'ur20-coupler.xml', content: '<EtherCATInfo />' },
+      { path: 'readme.txt', content: 'hello' },
+    ])
+    mockEsi.parseAndSaveFile.mockResolvedValueOnce({ success: true, item: SAMPLE_ITEM })
+
+    const onFilesLoaded = vi.fn()
+    const { container } = renderUpload(onFilesLoaded, [])
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [zip] } })
+
+    await waitFor(() => expect(onFilesLoaded).toHaveBeenCalled())
+    const errors = onFilesLoaded.mock.calls[0]?.[1] as Array<{ filename: string; error: string }> | undefined
+    expect(errors?.some((e) => e.filename === 'weidmueller.zip → readme.txt')).toBe(true)
+  })
+
+  it('reports a ZIP containing no .xml entries as an explicit error', async () => {
+    const zip = await makeZipFile('empty.zip', [])
+
+    const onFilesLoaded = vi.fn()
+    const { container } = renderUpload(onFilesLoaded, [])
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [zip] } })
+
+    await waitFor(() => expect(onFilesLoaded).toHaveBeenCalled())
+    const errors = onFilesLoaded.mock.calls[0]?.[1] as Array<{ filename: string; error: string }> | undefined
+    expect(errors?.some((e) => e.filename === 'empty.zip' && e.error.includes('no .xml'))).toBe(true)
+    expect(mockEsi.parseAndSaveFile).not.toHaveBeenCalled()
+  })
+
+  it('mixes XML files and ZIP contents in a single upload', async () => {
+    const zip = await makeZipFile('ur20.zip', [{ path: 'inside.xml', content: '<EtherCATInfo />' }])
+    mockEsi.parseAndSaveFile.mockResolvedValueOnce({ success: true, item: SAMPLE_ITEM })
+    mockEsi.parseAndSaveFile.mockResolvedValueOnce({
+      success: true,
+      item: { ...SAMPLE_ITEM, id: 'item-zip', filename: 'inside.xml' },
+    })
+
+    const onFilesLoaded = vi.fn()
+    const { container } = renderUpload(onFilesLoaded, [])
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [xmlFile(), zip] } })
+
+    await waitFor(() => expect(mockEsi.parseAndSaveFile).toHaveBeenCalledTimes(2))
+    // XML inputs are processed first in the work queue, then ZIP-expanded entries.
+    expect(mockEsi.parseAndSaveFile).toHaveBeenNthCalledWith(1, 'Beckhoff.xml', '<xml />')
+    expect(mockEsi.parseAndSaveFile).toHaveBeenNthCalledWith(2, 'inside.xml', '<EtherCATInfo />')
   })
 })

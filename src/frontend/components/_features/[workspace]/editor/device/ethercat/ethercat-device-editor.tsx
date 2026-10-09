@@ -189,7 +189,16 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
 
   const handleEnrichDevice = useCallback(
     (data: EnrichDeviceData) => {
-      syncDevicesToStore(configuredDevices.map((d) => (d.id === deviceId ? { ...d, ...data } : d)))
+      // DOPE-704 E1: `coeFlags` from the enrichment belongs inside `config`, not at
+      // the top of the device. Everything else spreads into the device as-is.
+      syncDevicesToStore(
+        configuredDevices.map((d) => {
+          if (d.id !== deviceId) return d
+          const { coeFlags, ...rest } = data
+          const nextConfig = coeFlags !== undefined ? { ...d.config, coeFlags } : d.config
+          return { ...d, ...rest, config: nextConfig }
+        }),
+      )
     },
     [configuredDevices, deviceId, syncDevicesToStore],
   )

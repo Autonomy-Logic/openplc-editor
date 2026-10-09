@@ -845,6 +845,11 @@ const ConfiguredEtherCATDeviceSchema = z.object({
    * underlying ESI declares a `<Slots>` block (ETG.5001 modular coupler).
    */
   modules: z.array(ConfiguredEtherCATModuleSchema).optional(),
+  /**
+   * DOPE-704 E1: true when the ESI declares a `<Slots>` block. Set once at import time so
+   * the UI can offer the "Add module to slot N" affordance before any module is attached.
+   */
+  isModularCoupler: z.boolean().optional(),
 })
 
 const EtherCATMasterConfigSchema = z.object({

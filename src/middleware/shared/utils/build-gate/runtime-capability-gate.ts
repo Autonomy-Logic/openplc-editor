@@ -23,7 +23,36 @@
  * common case regardless of what the runtime advertises.
  */
 
-import type { PLCRemoteDevice } from '@root/backend/shared/types/PLC/open-plc'
+/**
+ * Structural shape of the remote-device slice the gate reads from. Defined locally so
+ * the gate sits on the shared `utils` layer without pulling in `backend/shared/types` —
+ * the arch rules forbid utils → backend-shared, and the gate only needs a few fields to
+ * walk the EtherCAT devices.
+ */
+export interface RemoteDeviceInput {
+  protocol: string
+  ethercatConfig?: {
+    devices?: ReadonlyArray<{
+      modules?: ReadonlyArray<{
+        sdoConfigurations?: ReadonlyArray<SdoEntryInput>
+      }>
+      sdoConfigurations?: ReadonlyArray<SdoEntryInput>
+    }>
+  }
+}
+
+/**
+ * Structural shape of a startup-SDO entry as the detector sees it. Carries the
+ * identity fields a real `SDOConfigurationEntry` always has (so the structural check
+ * does not warn about disjoint shapes) plus the forward-looking flags the detector
+ * reads before the real type gains them in E5 extras.
+ */
+interface SdoEntryInput {
+  index?: string
+  subIndex?: number
+  valueBytes?: string
+  completeAccess?: boolean
+}
 
 /**
  * The named features EtherDOG advertises. The source of truth is RTOP-319's hello
@@ -75,7 +104,7 @@ export type RuntimeCapabilityVerdict = { kind: 'allow' } | { kind: 'refuse'; rea
  *     structural point: the field does not yet exist on the model, the detector is
  *     ready for it.
  */
-export function requiredRuntimeFeatures(remoteDevices: readonly PLCRemoteDevice[] | undefined): RuntimeFeature[] {
+export function requiredRuntimeFeatures(remoteDevices: readonly RemoteDeviceInput[] | undefined): RuntimeFeature[] {
   if (!remoteDevices || remoteDevices.length === 0) return []
   const required = new Set<RuntimeFeature>()
 
@@ -164,7 +193,7 @@ export function evaluateRuntimeCapabilityGate(state: RuntimeCapabilityState): Ru
  * through this helper keeps the call site readable.
  */
 export function runtimeCapabilityStateFor(args: {
-  remoteDevices: readonly PLCRemoteDevice[] | undefined
+  remoteDevices: readonly RemoteDeviceInput[] | undefined
   advertisement: RuntimeCapabilityAdvertisement
 }): RuntimeCapabilityState {
   return {

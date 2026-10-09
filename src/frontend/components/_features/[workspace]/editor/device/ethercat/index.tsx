@@ -473,7 +473,9 @@ const EtherCATEditor = () => {
       for (const [index, { match, bestMatch, repoItem }] of toLoad.entries()) {
         setAddProgress({ current: index + 1, total: toLoad.length })
 
-        let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
+        let enriched: Partial<ConfiguredEtherCATDevice> & {
+          coeFlags?: NonNullable<ReturnType<typeof enrichDeviceData>>['coeFlags']
+        } = { channelMappings: [] }
         const result = await esi!.loadDeviceFull(bestMatch.repositoryItemId, bestMatch.deviceIndex)
         if (result.success && result.device) {
           enriched = enrichDeviceData(result.device, usedAddresses)
@@ -488,6 +490,9 @@ const EtherCATEditor = () => {
         const uniqueName = generateUniqueSlaveName(baseName, nameTaken)
         batch.add(uniqueName)
 
+        // DOPE-704 E1: lift the CoE flags off `enriched` so they land on `config` —
+        // spreading `enriched` after `config` would otherwise drop them at the top level.
+        const { coeFlags: enrichedCoeFlags, ...enrichedRest } = enriched
         newDevices.push({
           id: uuidv4(),
           position: match.device.position,
@@ -500,9 +505,9 @@ const EtherCATEditor = () => {
           productCode: bestMatch.esiDevice.type.productCode,
           revisionNo: bestMatch.esiDevice.type.revisionNo,
           addedFrom: 'scan',
-          config: createDefaultSlaveConfig(),
+          config: { ...createDefaultSlaveConfig(), ...(enrichedCoeFlags && { coeFlags: enrichedCoeFlags }) },
           channelMappings: [],
-          ...enriched,
+          ...enrichedRest,
         })
       }
 
@@ -551,7 +556,9 @@ const EtherCATEditor = () => {
       setAddProgress({ current: 1, total: 1 })
 
       try {
-        let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
+        let enriched: Partial<ConfiguredEtherCATDevice> & {
+          coeFlags?: NonNullable<ReturnType<typeof enrichDeviceData>>['coeFlags']
+        } = { channelMappings: [] }
         const result = await esi!.loadDeviceFull(ref.repositoryItemId, ref.deviceIndex)
         if (result.success && result.device) {
           enriched = enrichDeviceData(result.device, buildClaimedAddressSet(store))
@@ -569,6 +576,9 @@ const EtherCATEditor = () => {
           (name) => elementNameCollision(store.getState(), name, 'ethercat-slave') !== null,
         )
 
+        // DOPE-704 E1: lift the CoE flags off `enriched` so they land on `config` —
+        // spreading `enriched` after `config` would otherwise drop them at the top level.
+        const { coeFlags: enrichedCoeFlags, ...enrichedRest } = enriched
         const newDevice: ConfiguredEtherCATDevice = {
           id: uuidv4(),
           position: nextPosition,
@@ -578,9 +588,9 @@ const EtherCATEditor = () => {
           productCode: device.type.productCode,
           revisionNo: device.type.revisionNo,
           addedFrom: 'repository',
-          config: createDefaultSlaveConfig(),
+          config: { ...createDefaultSlaveConfig(), ...(enrichedCoeFlags && { coeFlags: enrichedCoeFlags }) },
           channelMappings: [],
-          ...enriched,
+          ...enrichedRest,
         }
 
         syncDevicesToStore([...currentDevices, newDevice])
