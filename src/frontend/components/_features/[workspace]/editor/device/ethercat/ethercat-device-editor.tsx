@@ -372,8 +372,8 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
         return (
           <div className='mb-4 shrink-0 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-200'>
             <strong>Runtime feature requirement:</strong> this project uses{' '}
-            <code className='font-mono'>{required.join(', ')}</code> on EtherDOG. The build will refuse if the
-            connected runtime does not advertise these.
+            <code className='font-mono'>{required.join(', ')}</code> on EtherDOG. The build will refuse if the connected
+            runtime does not advertise these.
           </div>
         )
       })()}
