@@ -40,7 +40,6 @@ const PROJECT_ONLY = [
   'menu:file.submenu.closeTab',
   'menu:file.submenu.closeProject',
   'menu:file.submenu.exportToPLCOpenXml',
-  'menu:file.submenu.exportToCodesysXml',
   'menu:file.submenu.pageSetup',
   'menu:file.submenu.preview',
   'menu:file.submenu.print',

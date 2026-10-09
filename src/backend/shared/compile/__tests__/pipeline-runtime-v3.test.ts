@@ -22,7 +22,6 @@ import type {
   PlatformDeviceContext,
 } from '../../../../middleware/shared/ports/compiler-platform-port'
 
-jest.mock('../../utils/PLC/xml-generator', () => ({ XmlGenerator: jest.fn() }))
 jest.mock('../../library/program-build-pipeline', () => ({ runProgramBuildPipeline: jest.fn() }))
 jest.mock('../../library/program-build-helpers', () => ({
   buildKnownPous: jest.fn(() => []),
