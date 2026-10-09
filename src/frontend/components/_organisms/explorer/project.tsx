@@ -607,9 +607,10 @@ const Project = () => {
                                         name: `${child.name}/${module.name}`,
                                         path: `/devices/remote/${device.name}/devices/${child.id}/modules/${module.id}`,
                                         elementType: {
-                                          type: 'ethercat-device',
+                                          type: 'ethercat-module',
                                           busName: device.name,
                                           deviceId: child.id,
+                                          moduleId: module.id,
                                         },
                                       })
                                     }

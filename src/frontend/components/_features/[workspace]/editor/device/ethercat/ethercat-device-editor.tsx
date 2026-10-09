@@ -461,7 +461,12 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
         >
           <div className='flex-1 overflow-auto p-4'>
-            <ProcessDataTab device={device} onUpdatePdoAssigned={handleUpdatePdoAssigned} />
+            <ProcessDataTab
+              rxPdos={device.rxPdos ?? []}
+              txPdos={device.txPdos ?? []}
+              pdoAssignAvailable={device.config.coeFlags?.pdoAssign === true}
+              onUpdatePdoAssigned={handleUpdatePdoAssigned}
+            />
           </div>
         </Tabs.Content>
 

@@ -792,4 +792,5 @@ const EtherCATEditor = () => {
 }
 
 export { EtherCATDeviceEditor } from './ethercat-device-editor'
+export { EtherCATModuleEditor } from './ethercat-module-editor'
 export { EtherCATEditor }

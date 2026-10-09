@@ -12,11 +12,13 @@ import { PencilIcon } from '@root/frontend/assets/icons/interface/Pencil'
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { cn } from '@root/frontend/utils/cn'
-import type { ConfiguredEtherCATDevice, PersistedPdo } from '@root/middleware/shared/ports/esi-types'
+import type { PersistedPdo } from '@root/middleware/shared/ports/esi-types'
 import { useMemo, useState } from 'react'
 
 type ProcessDataTabProps = {
-  device: ConfiguredEtherCATDevice
+  rxPdos: PersistedPdo[]
+  txPdos: PersistedPdo[]
+  pdoAssignAvailable: boolean
   onUpdatePdoAssigned: (direction: 'rx' | 'tx', pdoIndex: string, assigned: boolean) => void
 }
 
@@ -176,8 +178,7 @@ const Section = ({
   )
 }
 
-export const ProcessDataTab = ({ device, onUpdatePdoAssigned }: ProcessDataTabProps) => {
-  const pdoAssignAvailable = device.config.coeFlags?.pdoAssign === true
+export const ProcessDataTab = ({ rxPdos, txPdos, pdoAssignAvailable, onUpdatePdoAssigned }: ProcessDataTabProps) => {
   const [editable, setEditable] = useState(false)
   const [confirmingUnlock, setConfirmingUnlock] = useState(false)
 
@@ -198,7 +199,7 @@ export const ProcessDataTab = ({ device, onUpdatePdoAssigned }: ProcessDataTabPr
     <div className='flex flex-col gap-4'>
       <Section
         title='RxPDOs'
-        pdos={device.rxPdos ?? []}
+        pdos={rxPdos}
         direction='rx'
         editable={editable}
         pdoAssignAvailable={pdoAssignAvailable}
@@ -207,7 +208,7 @@ export const ProcessDataTab = ({ device, onUpdatePdoAssigned }: ProcessDataTabPr
       />
       <Section
         title='TxPDOs'
-        pdos={device.txPdos ?? []}
+        pdos={txPdos}
         direction='tx'
         editable={editable}
         pdoAssignAvailable={pdoAssignAvailable}

@@ -325,7 +325,7 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
   const addSelectedDisabled = selectedScannedSlots.size === 0
 
   return (
-    <div className='flex flex-1 flex-col gap-4 overflow-hidden'>
+    <div className='flex flex-col gap-4'>
       {/* Scan controls */}
       <div className='flex flex-wrap items-end gap-4'>
         <button
@@ -355,9 +355,9 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
       )}
 
       {/* Side-by-side panels */}
-      <div className='flex min-h-0 flex-1 gap-4'>
+      <div className='flex min-h-[480px] gap-4'>
         {/* Scanned Modules — left */}
-        <div className='flex min-w-0 flex-1 flex-col overflow-hidden'>
+        <div className='flex min-w-0 flex-1 flex-col'>
           <div className='mb-2 flex h-[28px] items-center justify-between'>
             <h3 className='text-sm font-medium text-neutral-950 dark:text-neutral-100'>Scanned Modules</h3>
             <button
@@ -382,7 +382,7 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
         </div>
 
         {/* Configured Modules — right */}
-        <div className='flex min-w-0 flex-1 flex-col overflow-hidden'>
+        <div className='flex min-w-0 flex-1 flex-col'>
           <div className='mb-2 flex h-[28px] items-center justify-between'>
             <h3 className='text-sm font-medium text-neutral-950 dark:text-neutral-100'>
               Configured Modules

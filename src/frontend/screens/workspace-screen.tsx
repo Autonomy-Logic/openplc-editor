@@ -19,7 +19,11 @@ import { BranchMergeView } from '../components/_features/[workspace]/branches/br
 import { CommitHistoryView } from '../components/_features/[workspace]/commit-history'
 import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
-import { EtherCATDeviceEditor, EtherCATEditor } from '../components/_features/[workspace]/editor/device/ethercat'
+import {
+  EtherCATDeviceEditor,
+  EtherCATEditor,
+  EtherCATModuleEditor,
+} from '../components/_features/[workspace]/editor/device/ethercat'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
 import { DiffViewerEditor } from '../components/_features/[workspace]/editor/diff-viewer'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
@@ -632,6 +636,25 @@ const WorkspaceScreen = () => {
                             return (
                               <div key={model.meta.deviceId} className={cn('h-full w-full', !isActive && 'hidden')}>
                                 <EtherCATDeviceEditor busName={model.meta.busName} deviceId={model.meta.deviceId} />
+                              </div>
+                            )
+                          })}
+
+                        {editors
+                          .filter((m) => m.type === 'plc-ethercat-module')
+                          .map((model) => {
+                            const isActive =
+                              editor.type === 'plc-ethercat-module' && editor.meta.moduleId === model.meta.moduleId
+                            return (
+                              <div
+                                key={`${model.meta.deviceId}:${model.meta.moduleId}`}
+                                className={cn('h-full w-full', !isActive && 'hidden')}
+                              >
+                                <EtherCATModuleEditor
+                                  busName={model.meta.busName}
+                                  deviceId={model.meta.deviceId}
+                                  moduleId={model.meta.moduleId}
+                                />
                               </div>
                             )
                           })}

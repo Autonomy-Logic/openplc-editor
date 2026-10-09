@@ -104,6 +104,16 @@ const CreateEtherCATDeviceEditor = (name: string, busName: string, deviceId: str
   meta: { name, busName, deviceId },
 })
 
+const CreateEtherCATModuleEditor = (
+  name: string,
+  busName: string,
+  deviceId: string,
+  moduleId: string,
+): EditorModel => ({
+  type: 'plc-ethercat-module',
+  meta: { name, busName, deviceId, moduleId },
+})
+
 const CreateServerEditor = (
   name: string,
   protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua',
@@ -198,6 +208,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateRemoteDeviceEditor(name, elementType.protocol)
     case 'ethercat-device':
       return CreateEtherCATDeviceEditor(name, elementType.busName, elementType.deviceId)
+    case 'ethercat-module':
+      return CreateEtherCATModuleEditor(name, elementType.busName, elementType.deviceId, elementType.moduleId)
     case 'server':
       return CreateServerEditor(name, elementType.protocol)
     case 'vendor-screen':
@@ -223,6 +235,7 @@ export {
   CreateEditorModelObject,
   CreateEditorObjectFromTab,
   CreateEtherCATDeviceEditor,
+  CreateEtherCATModuleEditor,
   CreateGlobalVariableListEditor,
   CreateLibraryManagerEditor,
   CreateLibraryManifestEditor,
