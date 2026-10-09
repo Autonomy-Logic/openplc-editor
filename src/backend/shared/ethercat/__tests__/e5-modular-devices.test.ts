@@ -251,6 +251,63 @@ describe('DOPE-704 E5: modular-devices generator', () => {
     expect(moduleSdos[1]!.name).toContain('slot 2')
   })
 
+  test('E5 extras: 0xF030 emitted via Complete Access when coupler advertises CompleteAccess', () => {
+    const device = coupler({
+      config: {
+        ...createDefaultSlaveConfig(),
+        coeFlags: { pdoAssign: false, pdoConfig: true, completeAccess: true },
+      },
+      modules: [
+        module_({ slot: 1, ident: '0x1A0F' }),
+        module_({ slot: 2, ident: '0x1A10' }),
+      ],
+    })
+    const slave = firstSlave([device])
+    const identWrites = slave.sdo_configurations.filter((e) => e.index === '0x0F30')
+    // Complete Access path: single SDO carries the whole ident array.
+    expect(identWrites.length).toBe(1)
+    expect(identWrites[0]).toMatchObject({ index: '0x0F30', subindex: 0, complete_access: true })
+    // Byte layout: 1 count byte + 4 bytes per slot (UDINT LE) = 9 bytes for 2 slots.
+    expect(identWrites[0]!.value_bytes).toBe(
+      // count=02, slot1=0x1A0F → 0F 1A 00 00, slot2=0x1A10 → 10 1A 00 00
+      '020F1A0000101A0000',
+    )
+  })
+
+  test('E5 extras: module SDO byte-string payload (valueBytes) rides through to runtime', () => {
+    const device = coupler({
+      modules: [
+        {
+          id: 'slot-1',
+          slot: 1,
+          name: 'UR20-4DI-P',
+          ident: '0x1A0F',
+          esiModuleRef: { repositoryItemId: 'w', moduleIdent: '0x1A0F' },
+          channelMappings: [],
+          sdoConfigurations: [
+            {
+              index: '0x8010',
+              subIndex: 3,
+              value: '',
+              valueBytes: '55523230', // "UR20" in ASCII
+              completeAccess: true,
+              defaultValue: 'UR20',
+              dataType: 'OCTET_STRING',
+              bitLength: 32,
+              name: 'Module name',
+              objectName: 'Module slot 1 InitCmd',
+            },
+          ],
+        },
+      ],
+    })
+    const slave = firstSlave([device])
+    const moduleBytes = slave.sdo_configurations.find((e) => e.index === '0x8010' && e.subindex === 3)
+    expect(moduleBytes).toBeDefined()
+    expect(moduleBytes!.value_bytes).toBe('55523230')
+    expect(moduleBytes!.complete_access).toBe(true)
+  })
+
   test('full emission order: user startup SDOs → module SDOs → 0xF030 ident list → 0x1C1n', () => {
     const device = coupler({
       config: {

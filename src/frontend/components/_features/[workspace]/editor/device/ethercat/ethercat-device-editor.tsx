@@ -23,9 +23,17 @@ import {
   DeviceConfigurationForm,
   SdoParametersSection,
 } from './components/device-configuration-form'
+import { ModulesTab } from './components/modules-tab'
 import { ProcessDataTab } from './components/process-data-tab'
 
-type DeviceDetailTab = 'info' | 'configuration' | 'startup-params' | 'channel-mappings' | 'axis' | 'process-data'
+type DeviceDetailTab =
+  | 'info'
+  | 'configuration'
+  | 'startup-params'
+  | 'channel-mappings'
+  | 'axis'
+  | 'process-data'
+  | 'modules'
 
 const TabItem = ({ value, label, isActive }: { value: string; label: string; isActive: boolean }) => (
   <Tabs.Trigger
@@ -214,6 +222,19 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
   // DOPE-704 E3 UI: Expert-mode PDO reassignment. The handler mutates only the
   // `assigned` flag on the named PDO; the exclude lists stay as the ESI declared
   // them and the generator's PdoAssign gate still fires in buildPdoAssignmentSdos.
+  // DOPE-704 E5 UI: Add / remove modules on a modular coupler. The persisted shape
+  // produced by ModulesTab's buildModuleForSlot is spread onto `device.modules`.
+  const handleUpdateModules = useCallback(
+    (modules: Parameters<typeof ModulesTab>[0]['onUpdateModules'] extends (m: infer M) => unknown ? M : never) => {
+      syncDevicesToStore(
+        configuredDevices.map((d) =>
+          d.id === deviceId ? { ...d, modules: modules.length > 0 ? modules : undefined } : d,
+        ),
+      )
+    },
+    [configuredDevices, deviceId, syncDevicesToStore],
+  )
+
   const handleUpdatePdoAssigned = useCallback(
     (direction: 'rx' | 'tx', pdoIndex: string, assigned: boolean) => {
       syncDevicesToStore(
@@ -350,6 +371,9 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           <TabItem value='info' label='Device Info' isActive={activeTab === 'info'} />
           <TabItem value='configuration' label='Configuration' isActive={activeTab === 'configuration'} />
           <TabItem value='process-data' label='Process Data' isActive={activeTab === 'process-data'} />
+          {device.isModularCoupler === true && (
+            <TabItem value='modules' label='Modules' isActive={activeTab === 'modules'} />
+          )}
           <TabItem value='startup-params' label='Startup Parameters' isActive={activeTab === 'startup-params'} />
         </Tabs.List>
 
@@ -435,6 +459,18 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
             <ProcessDataTab device={device} onUpdatePdoAssigned={handleUpdatePdoAssigned} />
           </div>
         </Tabs.Content>
+
+        {/* DOPE-704 E5 UI: Modules (modular coupler only) */}
+        {device.isModularCoupler === true && (
+          <Tabs.Content
+            value='modules'
+            className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
+          >
+            <div className='flex-1 overflow-auto p-4'>
+              <ModulesTab device={device} onUpdateModules={handleUpdateModules} />
+            </div>
+          </Tabs.Content>
+        )}
 
         {/* Startup Parameters Tab */}
         <Tabs.Content

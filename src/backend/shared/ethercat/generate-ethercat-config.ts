@@ -454,15 +454,21 @@ function buildModuleStartupSdos(device: ConfiguredEtherCATDevice): RuntimeSdoCon
   for (const module of bySlot) {
     if (!module.sdoConfigurations) continue
     for (const entry of module.sdoConfigurations) {
-      if (entry.value === undefined || entry.value === null || entry.value.trim() === '') continue
+      // DOPE-704 E5 extras: a byte-string entry is kept even when `value` is empty —
+      // its payload lives in `valueBytes` and the generator routes it through
+      // EtherDOG's `value_bytes` field.
+      const hasBytes = entry.valueBytes !== undefined && entry.valueBytes.length > 0
+      if (!hasBytes && (entry.value === undefined || entry.value === null || entry.value.trim() === '')) continue
       const sdo: RuntimeSdoConfig = {
         index: entry.index,
         subindex: entry.subIndex,
-        value: parseNumericValue(entry.value),
+        value: hasBytes ? 0 : parseNumericValue(entry.value),
         data_type: entry.dataType,
         bit_length: entry.bitLength,
         name: `Module slot ${module.slot}: ${entry.name}`,
         comment: `Module slot ${module.slot} startup SDO: ${entry.objectName}`,
+        ...(hasBytes && { value_bytes: entry.valueBytes }),
+        ...(entry.completeAccess === true && { complete_access: true }),
       }
       out.push(sdo)
     }
@@ -476,12 +482,16 @@ function buildModuleStartupSdos(device: ConfiguredEtherCATDevice): RuntimeSdoCon
  * (ETG.5001 couplers use PdoConfig to gate the module-list download — PdoAssign stays
  * false on couplers like UR20).
  *
- * Emission shape: clear-then-list-then-count on 0xF030 sub-indices. The ETG.5001 Complete
- * Access path (one PDU with the full ident array) is reserved for a follow-up when EtherDOG's
- * `value_bytes` encoder gains the UDINT-array helper (RTOP-319 R2 already carries the
- * byte-string plumbing; the UDINT-array encoder is the only missing piece).
+ * Emission shape:
+ *   - **Complete Access** (`coeFlags.completeAccess === true`): one SDO with CA flag set
+ *     whose `value_bytes` carries the ETG.5001 ident-list payload (one USINT count byte,
+ *     then one UDINT per slot in little-endian). This is the ETG.5001 preferred form
+ *     and the fastest on-wire path. Added in E5 extras.
+ *   - **Clear-list-count** (default): three writes against the 0xF030 sub-indices —
+ *     clear (0), one UDINT per slot, publish count. Compatible with couplers that don't
+ *     advertise CompleteAccess.
  *
- * Empty slots in the station emit ident 0, matching ETG.5001 behaviour.
+ * Empty slots in the station emit ident 0 in both forms, matching ETG.5001 behaviour.
  */
 function buildModuleIdentListWrites(device: ConfiguredEtherCATDevice): RuntimeSdoConfig[] {
   if (!device.modules || device.modules.length === 0) return []
@@ -495,6 +505,29 @@ function buildModuleIdentListWrites(device: ConfiguredEtherCATDevice): RuntimeSd
   for (let s = 1; s <= maxSlot; s++) {
     const module = bySlot.find((m) => m.slot === s)
     idents.push(module ? parseNumericValue(module.ident) : 0)
+  }
+
+  // DOPE-704 E5 extras: Complete Access path.
+  if (coeFlags.completeAccess) {
+    // Payload: 1 byte (count) + 4 bytes per slot (UDINT little-endian).
+    const bytes: number[] = [idents.length]
+    for (const ident of idents) {
+      bytes.push(ident & 0xff, (ident >>> 8) & 0xff, (ident >>> 16) & 0xff, (ident >>> 24) & 0xff)
+    }
+    const hex = bytes.map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join('')
+    return [
+      {
+        index: '0x0F30',
+        subindex: 0,
+        value: 0,
+        data_type: 'OCTET_STRING',
+        bit_length: bytes.length * 8,
+        name: 'Module ident list (CA)',
+        comment: `Module ident list (0xF030) via CoE Complete Access — ${idents.length} slot(s)`,
+        complete_access: true,
+        value_bytes: hex,
+      },
+    ]
   }
 
   const out: RuntimeSdoConfig[] = []

@@ -784,6 +784,10 @@ const SDOConfigurationEntrySchema = z.object({
   bitLength: z.number(),
   name: z.string(),
   objectName: z.string(),
+  /** DOPE-704 E5 extras: byte-string payload (hex-encoded) sent via EtherDOG's value_bytes. */
+  valueBytes: z.string().optional(),
+  /** DOPE-704 E5 extras: send with CoE Complete Access. */
+  completeAccess: z.boolean().optional(),
 })
 
 /**

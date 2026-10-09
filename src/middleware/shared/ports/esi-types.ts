@@ -187,6 +187,18 @@ export interface SDOConfigurationEntry {
   name: string
   /** Parent object name */
   objectName: string
+  /**
+   * DOPE-704 E5 extras: hex-encoded byte-string payload. When present, the generator
+   * sends this through EtherDOG's `value_bytes` plumbing (RTOP-319 R2) and ignores
+   * `value` / `dataType` for the wire bytes. Used by module `InitCmd` writes like a
+   * module name at `0x80n0:03`.
+   */
+  valueBytes?: string
+  /**
+   * DOPE-704 E5 extras: send this SDO with CoE Complete Access. Set to `true` on
+   * module-ident-list writes to `0xF030` when the coupler advertises CompleteAccess.
+   */
+  completeAccess?: boolean
 }
 
 // ===================== DEVICE ENRICHMENT =====================
