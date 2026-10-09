@@ -1,5 +1,6 @@
 import { useOpenPLCStore } from '@root/frontend/store'
-import { GLOBAL_SCOPE_POU } from '@root/frontend/utils/opcua/resolve-indices'
+import { findInstanceName } from '@root/frontend/utils/debug-variable-finder'
+import { GLOBAL_SCOPE_POU, isGlobalScopePou } from '@root/frontend/utils/opcua/resolve-indices'
 import type { OpcUaNodeConfig, OpcUaServerConfig } from '@root/middleware/shared/ports/types'
 import { useCallback, useMemo, useState } from 'react'
 
@@ -51,6 +52,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
 
   // Get all project variables for the tree
   const projectVariables = useProjectVariables()
+  const instances = useOpenPLCStore((state) => state.project.data.configurations.resource.instances)
 
   // Local state
   const [filter, setFilter] = useState('')
@@ -64,6 +66,22 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
 
   // Get existing node IDs for validation
   const existingNodeIds = useMemo(() => config.addressSpace.nodes.map((n) => n.nodeId), [config.addressSpace.nodes])
+
+  // Nodes the build drops with a warning, by the build resolver's rule: a program-scoped node needs
+  // its program instantiated in Resources before the variable is looked up, globals included.
+  const missingNodeIds = useMemo(
+    () =>
+      new Set(
+        config.addressSpace.nodes
+          .filter(
+            (n) =>
+              (!isGlobalScopePou(n.pouName) && findInstanceName(n.pouName, instances) === null) ||
+              !findTreeNodeById(projectVariables, treeIdForNode(n, projectVariables)),
+          )
+          .map((n) => n.id),
+      ),
+    [config.addressSpace.nodes, projectVariables, instances],
+  )
 
   // Handle namespace URI change
   const handleNamespaceChange = useCallback(
@@ -276,6 +294,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
           <div className='flex-1 overflow-y-auto p-2'>
             <SelectedVariablesList
               nodes={config.addressSpace.nodes}
+              missingNodeIds={missingNodeIds}
               onEdit={handleEditNode}
               onRemove={handleRemoveNode}
             />

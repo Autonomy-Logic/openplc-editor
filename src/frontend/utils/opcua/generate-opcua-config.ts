@@ -347,8 +347,18 @@ const resolveArray = (
   }
 }
 
+/** A configured node left out of the build because its variable no longer resolves. */
+interface DroppedNode {
+  node: OpcUaNodeConfig
+  reason: string
+}
+
 /**
- * Build the complete address space configuration
+ * Build the complete address space configuration.
+ *
+ * A node whose variable does not resolve (deleted or renamed, or its
+ * program no longer instantiated) is left out and recorded in
+ * `droppedNodes` instead of failing the build.
  */
 const buildAddressSpace = (
   config: OpcUaServerConfig,
@@ -356,21 +366,16 @@ const buildAddressSpace = (
   instances: PLCInstanceInfo[],
   droppedPaths: string[],
   fallbackWarnings: string[],
+  droppedNodes: DroppedNode[],
 ): RuntimeAddressSpace => {
   const variables: RuntimeVariable[] = []
   const structures: RuntimeStructure[] = []
   const arrays: RuntimeArray[] = []
-  const errors: OpcUaConfigError[] = []
 
   for (const node of config.addressSpace.nodes) {
     try {
       switch (node.nodeType) {
         case 'variable':
-          // Top-level variables that don't resolve are still hard
-          // errors — that means the variable was renamed/deleted in
-          // the program. The user has to fix the OPC-UA config.
-          // (Field-level mismatches are handled gracefully by
-          // resolveStructureAddresses via droppedPaths.)
           variables.push(resolveVariable(node, pathToAddr, instances, fallbackWarnings))
           break
         case 'structure': {
@@ -403,21 +408,11 @@ const buildAddressSpace = (
       }
     } catch (error) {
       if (error instanceof OpcUaConfigError) {
-        errors.push(error)
+        droppedNodes.push({ node, reason: error.message })
       } else {
         throw error
       }
     }
-  }
-
-  // If there are resolution errors, throw them all together
-  if (errors.length > 0) {
-    const errorMessages = errors.map((e) => e.message).join('\n\n')
-    throw new OpcUaConfigError(
-      'multiple',
-      'multiple',
-      `Failed to resolve ${errors.length} OPC-UA variable(s):\n\n${errorMessages}`,
-    )
   }
 
   return {
@@ -448,11 +443,10 @@ const parseDebugMapToInfoMap = (content: string): Map<string, DebugLeafInfo> => 
  * Converts camelCase properties to snake_case expected by the plugin.
  * Resolves variable addresses from STruC++'s debug-map.json.
  *
- * Field paths that don't resolve (e.g. stale library-FB internals
- * left over from before the pou-helpers filter) are silently dropped
- * and reported via `onWarn` rather than aborting the build, so the
- * user sees a heads-up instead of a hard failure they have to fix
- * by hand-editing JSON.
+ * Nodes and field paths that don't resolve (a deleted or renamed
+ * variable, a program no longer instantiated, stale library-FB
+ * internals) are dropped and reported via `onWarn` rather than
+ * aborting the build. Only an empty debug map still throws.
  *
  * @param servers - Array of configured PLC servers
  * @param debugMapContent - Content of the generated debug-map.json file
@@ -498,9 +492,17 @@ export const buildOpcUaRuntimeConfig = (
   //    later if they care.
   const droppedPaths: string[] = []
   const fallbackWarnings: string[] = []
-  const addressSpace = buildAddressSpace(config, pathToAddr, instances, droppedPaths, fallbackWarnings)
+  const droppedNodes: DroppedNode[] = []
+  const addressSpace = buildAddressSpace(config, pathToAddr, instances, droppedPaths, fallbackWarnings, droppedNodes)
   if (onWarn) {
     for (const message of fallbackWarnings) onWarn(message)
+    for (const { node, reason } of droppedNodes) {
+      onWarn(
+        `OPC-UA: tag "${node.displayName}" (${node.pouName}:${node.variablePath}) was left out of the build ` +
+          `because its variable no longer resolves. Remove it from the server's address space or re-pick ` +
+          `the variable.\n${reason}`,
+      )
+    }
   }
   if (onWarn && droppedPaths.length > 0) {
     onWarn(
