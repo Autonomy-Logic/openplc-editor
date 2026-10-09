@@ -42,10 +42,22 @@ const seedProgram = (variables: PLCVariable[]) => {
 /** A Modbus server exposing `mwCount` memory words. Memory needs a producer
  *  like every other area, so a `%MW` case needs one of these to be backed. */
 const seedMemoryServer = (mwCount: number) => {
+  // Server exposure is capability-scoped, and the capabilities are resolved
+  // from `availableBoards.get(board)` rather than from the board name. With an
+  // empty map the target runs no Modbus server, the exposure is discarded and
+  // the area comes back absent, so both have to be seeded.
+  getState().deviceActions.setAvailableOptions({
+    availableBoards: new Map([['TestBoard', { compiler: 'arduino-cli' } as never]]),
+  })
+  getState().deviceActions.setDeviceBoard('TestBoard')
   if ((getState().project.data.servers ?? []).length === 0) {
     getState().projectActions.createServer({ data: { name: 'mb', protocol: 'modbus-tcp' } })
   }
-  getState().projectActions.updateServerConfig('mb', { bufferMapping: { holdingRegisters: { mwCount } } })
+  // `enabled` matters: a server created through the action starts disabled.
+  getState().projectActions.updateServerConfig('mb', {
+    enabled: true,
+    bufferMapping: { holdingRegisters: { mwCount } },
+  })
 }
 
 describe('DiagnosticsEditor', () => {

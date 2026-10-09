@@ -2,7 +2,7 @@
 import { computeIoImage, IMAGE_AREAS_BAREMETAL } from '../steps/compute-io-image'
 
 const ALL = { pinMapping: true, vppIo: true, modbusTcpRemote: true, ethercat: true }
-const SERVERS = { modbusTcpServer: false, opcuaServer: false, s7Server: false }
+const SERVERS = { modbusTcpServer: true, opcuaServer: false, s7Server: false }
 
 it('X5 — projeto minimo (8 DI, 8 DO, 4 %MW)', () => {
   const pins = [
@@ -35,6 +35,19 @@ it('X5 — projeto minimo (8 DI, 8 DO, 4 %MW)', () => {
       ],
       globalVariableLists: [],
       dataTypes: [],
+      // Memory needs a producer like every other area, so the four words are
+      // stated by a server rather than by the declarations that sit on them.
+      servers: [
+        {
+          name: 'mb',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: {
+            enabled: true,
+            transports: ['tcp'],
+            bufferMapping: { holdingRegisters: { mwCount: 4 } },
+          },
+        },
+      ],
       configuration: { resource: { globalVariables: [], tasks: [], instances: [] } },
     } as never,
     devicePinMapping: pins as never,

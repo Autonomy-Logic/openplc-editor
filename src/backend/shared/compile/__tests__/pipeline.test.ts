@@ -377,6 +377,22 @@ describe('runCompilePipeline — I/O image gate', () => {
   const withPou = (location: string) =>
     ({ ...projectDataFixture, pous: [pouLocating(location)] }) as unknown as PLCProjectData
 
+  /** Same, plus a Modbus server stating the memory area the declaration sits
+   *  in. Memory needs a producer like every other area, so a case that is
+   *  about something else entirely has to say where the area comes from. */
+  const withBackedPou = (location: string, bufferMapping: Record<string, Record<string, number>>) =>
+    ({
+      ...projectDataFixture,
+      pous: [pouLocating(location)],
+      servers: [
+        {
+          name: 'mb',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: { enabled: true, transports: ['tcp'], bufferMapping },
+        },
+      ],
+    }) as unknown as PLCProjectData
+
   /** A real arduino-cli target. The default fixture is the SIMULATOR, which is
    *  exempt from the gate, so a case about the gate has to say so. */
   const arduinoArgs = (overrides: Partial<RunCompilePipelineArgs> = {}) =>
@@ -450,8 +466,7 @@ describe('runCompilePipeline — I/O image gate', () => {
     // The gate sits before Step 1, so nothing downstream ran.
     expect(port.transpileToSt).not.toHaveBeenCalled()
     const validateError = events.find((e) => e.stage === 'validate' && e.level === 'error')
-    expect(validateError?.message).toContain('"valve"')
-    expect(validateError?.message).toContain('%QW3859')
+    expect(validateError?.message).toContain('valve at %QW3859')
     expect(events.some((e) => e.message === 'Stopping compilation process.')).toBe(true)
   })
 
@@ -473,11 +488,15 @@ describe('runCompilePipeline — I/O image gate', () => {
 
     const result = await runCompilePipeline(
       makeArgs({
-        projectData: withPou('%MX0.1'),
+        projectData: withBackedPou('%MX0.1', { coils: { mxBits: 8 } }),
         isSimulator: false,
         isRuntimeV4: true,
         boardRuntime: 'openplc-compiler',
         boardTarget: 'OpenPLC Runtime v4 (RPi)',
+        // Server exposure is capability-scoped, and the capabilities come from
+        // `boardEntry`, not from `boardRuntime`. Without it the target runs no
+        // Modbus server, the exposure is ignored and the declaration is unbacked.
+        boardEntry: { compiler: 'openplc-compiler' } as RunCompilePipelineArgs['boardEntry'],
         compileOnly: true,
       }),
       port,
@@ -509,11 +528,15 @@ describe('runCompilePipeline — I/O image gate', () => {
 
     await runCompilePipeline(
       makeArgs({
-        projectData: withPou('%MW7'),
+        projectData: withBackedPou('%MW7', { holdingRegisters: { mwCount: 8 } }),
         isSimulator: false,
         isRuntimeV4: true,
         boardRuntime: 'openplc-compiler',
         boardTarget: 'OpenPLC Runtime v4 (RPi)',
+        // Server exposure is capability-scoped, and the capabilities come from
+        // `boardEntry`, not from `boardRuntime`. Without it the target runs no
+        // Modbus server, the exposure is ignored and the declaration is unbacked.
+        boardEntry: { compiler: 'openplc-compiler' } as RunCompilePipelineArgs['boardEntry'],
         compileOnly: true,
       }),
       port,

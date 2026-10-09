@@ -1064,23 +1064,29 @@ describe('computeIoImage — an array whose lower bound is negative', () => {
   // sizer disagreed about the same declaration: eleven words reserved in the
   // editor, one word sized in the image, and eleven written into it.
 
-  /** A project whose one POU declares `array`. */
-  const withArray = (array: PLCVariable) => compute(makeProject({ pous: [{ name: 'main', variables: [array] }] }))
+  /** How many slots the sizer thinks `array` claims.
+   *
+   *  Read off the UNBACKED entry rather than off `sizes`: a declaration no
+   *  longer sizes its own area, so with no producer the area is absent and the
+   *  slot count survives only here. Backing it with a server instead would
+   *  make `sizes` the server's number and measure nothing about the array. */
+  const slotsOf = (array: PLCVariable) => {
+    const image = compute(makeProject({ pous: [{ name: 'main', variables: [array] }] }))
+    return image.unbacked[0]?.slotCount
+  }
 
   it('counts every element of ARRAY [-5..5]', () => {
-    expect(withArray(arrayVar('v', '%MW0', -5, 5)).sizes).toEqual({ '%MW': 11 })
+    expect(slotsOf(arrayVar('v', '%MW0', -5, 5))).toBe(11)
   })
 
   it('counts an array that is entirely negative', () => {
-    expect(withArray(arrayVar('v', '%MW0', -10, -1)).sizes).toEqual({ '%MW': 10 })
+    expect(slotsOf(arrayVar('v', '%MW0', -10, -1))).toBe(10)
   })
 
   it('agrees with the editor about how many slots it claims', () => {
     // The two answers that used to differ, asserted against each other: the
-    // editor reserved eleven and this sized one.
-    expect(withArray(arrayVar('v', '%MW0', -5, 5)).sizes['%MW']).toBe(
-      getArrayTotalElements(arrayVar('v', '%MW0', -5, 5)),
-    )
+    // editor reserved eleven and this counted one.
+    expect(slotsOf(arrayVar('v', '%MW0', -5, 5))).toBe(getArrayTotalElements(arrayVar('v', '%MW0', -5, 5)))
   })
 
   it('checks the whole extent against the producers on an output', () => {
@@ -1105,8 +1111,9 @@ describe('computeIoImage — array extents that cannot be read', () => {
   const oneSlot = (malformedType: unknown) => {
     const v = variable('a', '%MW10', malformedType as PLCVariable['type'])
     const project = makeProject({ pous: [{ name: 'main', variables: [v] }] })
-    // A single slot at %MW10 means the area stops at 11.
-    expect(compute(project).sizes).toEqual({ '%MW': 11 })
+    // Read off the unbacked entry: a declaration does not size its own area,
+    // so one slot is visible as `slotCount` and not as a size of 11.
+    expect(compute(project).unbacked[0]?.slotCount).toBe(1)
   }
 
   it('falls back to one slot for a missing type', () => oneSlot(undefined))

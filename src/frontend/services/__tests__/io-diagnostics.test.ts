@@ -227,7 +227,20 @@ describe('servers', () => {
 describe('located declarations', () => {
   it('counts the slots an array claims, not one per declaration', () => {
     const result = snapshot({
-      projectData: makeProject({ globals: [arrayVar('block', '%MW60', 0, 66)] }),
+      projectData: makeProject({
+        globals: [arrayVar('block', '%MW60', 0, 66)],
+        servers: [
+          {
+            name: 'mb',
+            protocol: 'modbus-tcp',
+            modbusSlaveConfig: {
+              enabled: true,
+              transports: ['tcp'],
+              bufferMapping: { holdingRegisters: { mwCount: 127 } },
+            },
+          },
+        ],
+      }),
     })
 
     expect(result.located).toEqual([
@@ -241,7 +254,10 @@ describe('located declarations', () => {
     })
 
     expect(result.located[0]).toMatchObject({ name: 'orphan', issue: 'unbacked' })
-    expect(result.issues.unbacked).toHaveLength(1)
+    // One paragraph for the area plus the single remedy line, not one entry
+    // per variable: the report groups by area.
+    expect(result.issues.unbacked).toHaveLength(2)
+    expect(result.issues.unbacked[0]).toContain('Nothing produces %QX on this target')
   })
 
   it('flags an area the target does not have', () => {
@@ -310,7 +326,20 @@ describe('producer claims', () => {
 
 describe('artifacts', () => {
   it('emits the image.conf the build would write', () => {
-    const projectData = makeProject({ globals: [variable('w', '%MW2', { definition: 'base-type', value: 'INT' })] })
+    const projectData = makeProject({
+      globals: [variable('w', '%MW2', { definition: 'base-type', value: 'INT' })],
+      servers: [
+        {
+          name: 'mb',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: {
+            enabled: true,
+            transports: ['tcp'],
+            bufferMapping: { holdingRegisters: { mwCount: 3 } },
+          },
+        },
+      ],
+    })
     const result = snapshot({ projectData })
     const image = computeIoImage({
       projectData: toSizerProjectData(projectData),
