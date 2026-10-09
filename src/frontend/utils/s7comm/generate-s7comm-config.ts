@@ -77,7 +77,12 @@ export const generateS7CommConfig = (servers: PLCServer[] | undefined): string |
     return null
   }
 
-  const s7commServer = servers.find((server) => server.protocol === 's7comm' && server.s7commSlaveConfig)
+  // Skips a server that is switched off, which is what the docstring above
+  // already promised and what the bare-metal header does. Shipping the file
+  // for a disabled server declared data blocks the image no longer sizes.
+  const s7commServer = servers.find(
+    (server) => server.protocol === 's7comm' && server.s7commSlaveConfig?.server?.enabled !== false,
+  )
 
   if (!s7commServer || !s7commServer.s7commSlaveConfig) {
     return null

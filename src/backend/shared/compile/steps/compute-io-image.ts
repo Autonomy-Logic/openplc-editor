@@ -371,20 +371,14 @@ function producerClaims(input: ComputeIoImageInput, backed: Map<string, Set<numb
  * also what FR16 asks of the server: publish the range actually sized, not a
  * limit of its own.
  *
- * THE SCREEN DOES NOT COOPERATE YET, and this comment used to claim it did.
- * `updateServerConfig` (`store/slices/project/slice.ts`) spreads all four
- * groups over `DEFAULT_BUFFER_MAPPING` whenever any one field is edited, so
- * touching a single count persists the whole of 1024/8192 — and every one of
- * those reads here as a deliberate request. A freshly created server is safe
- * (`initializeServerProtocolConfig` seeds no `bufferMapping` at all), but any
- * project whose Modbus screen was ever opened and edited is sized back to the
- * constant this change exists to remove.
- *
- * Fixing that is a store change, and it collides with the Modbus screen
- * rewrite in DOPE-442; it is tracked there rather than papered over here.
- * Projects already on disk carry the materialised defaults either way, so the
- * reducer fix alone does not rescue them — telling a deliberate 1024 from a
- * materialised one needs a per-segment marker or a migration.
+ * PROJECTS ALREADY ON DISK CARRY MATERIALISED DEFAULTS. The reducer no longer
+ * writes them — `updateServerConfig` once spread all four groups over
+ * `DEFAULT_BUFFER_MAPPING` on any edit, so touching one count persisted the
+ * whole of 1024/8192, and every one of those reads here as a deliberate
+ * request. New edits are safe, but a project whose Modbus screen was edited
+ * before that fix still carries the constant this change exists to remove, and
+ * nothing migrates it: telling a deliberate 1024 from a materialised one needs
+ * a per-segment marker the format does not have.
  *
  * What this module can honestly say is the rule it applies: a persisted count
  * sizes an area, an absent one does not.
@@ -436,12 +430,20 @@ function serverExposure(
   // the addresses it covers, so `AT %QX0.0 : BOOL` would pass the BR14 gate on
   // a target where nothing whatsoever produces it -- "inside the image" and
   // "has a producer" both answered by a file the target never receives.
+  // A SERVER THAT IS SWITCHED OFF CONTRIBUTES NOTHING -- it is skipped here
+  // rather than sized and left unbacked. Sizing storage for a server the
+  // runtime will not serve reserves memory nothing reaches, which is the fixed
+  // image this work exists to remove wearing another hat.
+  //
+  // `!== false` rather than truthy: an absent flag is an older project, not a
+  // deliberate "off", and refusing its build is worse than sizing an area it
+  // may not use. That is also how `selectModbusServer` reads it.
   const list = servers ?? []
   const modbus = serverCapabilities.modbusTcpServer
-    ? list.find((server) => server.protocol === 'modbus-tcp' && server.modbusSlaveConfig)
+    ? list.find((server) => server.protocol === 'modbus-tcp' && server.modbusSlaveConfig?.enabled !== false)
     : undefined
   const s7comm = serverCapabilities.s7Server
-    ? list.find((server) => server.protocol === 's7comm' && server.s7commSlaveConfig)
+    ? list.find((server) => server.protocol === 's7comm' && server.s7commSlaveConfig?.server?.enabled !== false)
     : undefined
 
   if (modbus?.modbusSlaveConfig) modbusExposure(modbus.modbusSlaveConfig.bufferMapping, tally, backed)
@@ -538,23 +540,6 @@ function s7commExposure(
       .map((area) => ({ mapping: area.mapping, sizeBytes: area.sizeBytes })),
   ]
 
-  /* A DISABLED SERVER SIZES BUT DOES NOT BACK.
-   *
-   * Backing is the claim that something external gives the address meaning,
-   * and a server the runtime will not serve gives nothing meaning. With inputs
-   * backed (see above), skipping this check would let `AT %IW7 : INT` compile
-   * clean against a server that is switched off -- genuinely nothing producing
-   * it, which is the declaration BR14 exists to refuse.
-   *
-   * It still SIZES, deliberately, because `generateS7commConfig` ships the
-   * config regardless of `enabled` -- so the storage the file describes has to
-   * exist. That the emitter ignores `enabled` looks like a defect of its own,
-   * and the Modbus emitter has the same shape; settling it is what would let
-   * a disabled server stop sizing too. Until then, sizing follows the file
-   * that ships and backing follows what will actually run.
-   */
-  const serving = config.server?.enabled !== false
-
   for (const block of blocks) {
     // A system area may be enabled with no mapping yet, which publishes
     // nothing and sizes nothing.
@@ -581,7 +566,7 @@ function s7commExposure(
     // always start at IEC index 0. S7comm blocks do not, which is what
     // startBuffer is for.
     claim(tally, table.prefix, end, 's7comm-server')
-    if (serving) markBacked(backed, table.prefix, start, end - start)
+    markBacked(backed, table.prefix, start, end - start)
   }
 }
 

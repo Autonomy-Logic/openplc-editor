@@ -238,13 +238,14 @@ function describeServers(
   serverCapabilities: ServerCapabilities,
 ): IoDiagnosticsServer[] {
   const list = servers ?? []
-  // Mirrors `serverExposure`: first of each protocol carrying a config.
+  // Mirrors `serverExposure`: first ENABLED server of each protocol carrying a
+  // config. A disabled one contributes nothing, so it must not show as sizing.
   const sizing = new Set<unknown>()
   const modbus = serverCapabilities.modbusTcpServer
-    ? list.find((server) => server.protocol === 'modbus-tcp' && server.modbusSlaveConfig)
+    ? list.find((server) => server.protocol === 'modbus-tcp' && server.modbusSlaveConfig?.enabled !== false)
     : undefined
   const s7comm = serverCapabilities.s7Server
-    ? list.find((server) => server.protocol === 's7comm' && server.s7commSlaveConfig)
+    ? list.find((server) => server.protocol === 's7comm' && server.s7commSlaveConfig?.server?.enabled !== false)
     : undefined
   if (modbus) sizing.add(modbus)
   if (s7comm) sizing.add(s7comm)

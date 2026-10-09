@@ -708,10 +708,9 @@ describe('computeIoImage — S7comm exposure', () => {
     expect(image.sizes['%IW']).toBe(104)
   })
 
-  it('does NOT back when the server is switched off', () => {
-    // A server the runtime will not serve gives no address meaning. It still
-    // sizes, because generateS7commConfig ships the config regardless of
-    // `enabled`, so the storage that file describes has to exist.
+  it('contributes nothing when the server is switched off', () => {
+    // Neither sizes nor backs: `generateS7CommConfig` now skips a disabled
+    // server too, so there is no file describing storage that has to exist.
     const servers = [
       {
         name: 's7',
@@ -721,7 +720,7 @@ describe('computeIoImage — S7comm exposure', () => {
     ]
     const image = compute(makeProject({ pous: [{ name: 'main', variables: [variable('v', '%IW2')] }], servers }))
     expect(image.unbacked).toHaveLength(1)
-    expect(image.sizes['%IW']).toBe(8)
+    expect(image.sizes['%IW']).toBeUndefined()
   })
 
   it('backs an address the block does cover', () => {
@@ -816,6 +815,96 @@ describe('computeIoImage — S7comm exposure', () => {
     const servers = [...s7Server([block('int_output', 0, 8)]), ...s7Server([block('int_output', 0, 800)])]
     const image = compute(makeProject({ servers }))
     expect(image.sizes).toEqual({ '%QW': 4 })
+  })
+})
+
+describe('computeIoImage — a Modbus server that is switched off', () => {
+  /** The exposure the emitters would ship, on a server marked disabled. */
+  const disabled = (bufferMapping: unknown) => [
+    {
+      name: 'mb',
+      protocol: 'modbus-tcp',
+      modbusSlaveConfig: { enabled: false, transports: ['tcp'], bufferMapping },
+    },
+  ]
+
+  it('sizes nothing at all', () => {
+    // Reserving storage for a server the runtime will not serve is the fixed
+    // image this work removes, wearing another hat.
+    const image = compute(makeProject({ servers: disabled({ holdingRegisters: { qwCount: 10 } }) }))
+    expect(image.sizes).toEqual({})
+  })
+
+  it('leaves a declaration against it unbacked, so the gate refuses the build', () => {
+    const image = compute(
+      makeProject({
+        pous: [{ name: 'main', variables: [variable('valve', '%QW0')] }],
+        servers: disabled({ holdingRegisters: { qwCount: 10 } }),
+      }),
+    )
+    expect(image.sizes['%QW']).toBeUndefined()
+    expect(image.unbacked).toHaveLength(1)
+    expect(image.unbacked[0]).toMatchObject({ variableName: 'valve', location: '%QW0' })
+  })
+
+  it('reaches the enabled server behind it, the way the emitters do', () => {
+    const image = compute(
+      makeProject({
+        pous: [{ name: 'main', variables: [variable('valve', '%QW0')] }],
+        servers: [
+          ...disabled({ holdingRegisters: { qwCount: 99 } }),
+          {
+            name: 'mb2',
+            protocol: 'modbus-tcp',
+            modbusSlaveConfig: {
+              enabled: true,
+              transports: ['tcp'],
+              bufferMapping: { holdingRegisters: { qwCount: 4 } },
+            },
+          },
+        ],
+      }),
+    )
+    expect(image.sizes).toEqual({ '%QW': 4 })
+    expect(image.unbacked).toEqual([])
+  })
+
+  it('backs normally when the server is enabled', () => {
+    const image = compute(
+      makeProject({
+        pous: [{ name: 'main', variables: [variable('valve', '%QW0')] }],
+        servers: [
+          {
+            name: 'mb',
+            protocol: 'modbus-tcp',
+            modbusSlaveConfig: {
+              enabled: true,
+              transports: ['tcp'],
+              bufferMapping: { holdingRegisters: { qwCount: 10 } },
+            },
+          },
+        ],
+      }),
+    )
+    expect(image.unbacked).toEqual([])
+  })
+
+  it('treats an absent `enabled` as serving, the way selectModbusServer does', () => {
+    // An absent flag is an older project, not a deliberate "off", and refusing
+    // its build is worse than sizing an area it may not use.
+    const image = compute(
+      makeProject({
+        pous: [{ name: 'main', variables: [variable('valve', '%QW0')] }],
+        servers: [
+          {
+            name: 'mb',
+            protocol: 'modbus-tcp',
+            modbusSlaveConfig: { transports: ['tcp'], bufferMapping: { holdingRegisters: { qwCount: 10 } } },
+          },
+        ],
+      }),
+    )
+    expect(image.unbacked).toEqual([])
   })
 })
 

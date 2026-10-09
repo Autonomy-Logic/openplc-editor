@@ -190,12 +190,12 @@ describe('servers', () => {
     expect(areaFor(result, '%QX')).toMatchObject({ size: 52, origin: 'modbus-server' })
   })
 
-  it('shows a disabled server still sizing the image, which is what the sizer does', () => {
+  it('shows a disabled server contributing nothing, which is what the sizer does', () => {
     const disabled = { ...modbus, modbusSlaveConfig: { ...modbus.modbusSlaveConfig, enabled: false } }
     const result = snapshot({ projectData: makeProject({ servers: [disabled] }) })
 
-    expect(result.servers[0]).toMatchObject({ enabled: false, sizes: true })
-    expect(areaFor(result, '%QX')?.size).toBe(52)
+    expect(result.servers[0]).toMatchObject({ enabled: false, sizes: false })
+    expect(areaFor(result, '%QX')?.size).toBe(0)
   })
 
   it('marks the protocols the sizer never dispatches, which nothing says today', () => {
