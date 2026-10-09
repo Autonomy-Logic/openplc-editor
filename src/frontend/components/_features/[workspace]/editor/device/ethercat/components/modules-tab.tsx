@@ -28,11 +28,18 @@ import type {
   PersistedPdoEntry,
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
-import { useEsi } from '@root/middleware/shared/providers/platform-context'
+import { useEsi, useEtherCATScan } from '@root/middleware/shared/providers/platform-context'
+import {
+  applyScanReconciliation,
+  reconcileScannedModules,
+  type ReconciliationItem,
+  type ReconciliationResult,
+} from '@root/middleware/shared/utils/ethercat/scan-reconcile'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 type ModulesTabProps = {
   device: ConfiguredEtherCATDevice
+  busName: string
   onUpdateModules: (modules: ConfiguredEtherCATModule[]) => void
 }
 
@@ -222,12 +229,18 @@ const AddModuleDialog = ({
   )
 }
 
-export const ModulesTab = ({ device, onUpdateModules }: ModulesTabProps) => {
+export const ModulesTab = ({ device, busName, onUpdateModules }: ModulesTabProps) => {
   const esi = useEsi()
+  const scanPort = useEtherCATScan()
   const [esiDevice, setEsiDevice] = useState<ESIDevice | null>(null)
   const [loadingEsi, setLoadingEsi] = useState(false)
   const [esiError, setEsiError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  // DOPE-704 E6 UI: scan state. `scanning` = request in flight; `reconciliation` = diff
+  // ready for the operator to accept; `scanError` = the port returned a reason to show.
+  const [scanning, setScanning] = useState(false)
+  const [reconciliation, setReconciliation] = useState<ReconciliationResult | null>(null)
+  const [scanError, setScanError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -266,6 +279,54 @@ export const ModulesTab = ({ device, onUpdateModules }: ModulesTabProps) => {
     [modules, onUpdateModules],
   )
 
+  const handleScan = useCallback(async () => {
+    if (scanPort === undefined) {
+      setScanError('Scan is not available on this platform.')
+      return
+    }
+    setScanning(true)
+    setScanError(null)
+    try {
+      const r = await scanPort.scanModules({ busName, slavePosition: device.position ?? 1 })
+      if (!r.success) {
+        setScanError(r.error ?? 'Scan failed.')
+        return
+      }
+      // Compute the reconciliation against the current project modules.
+      setReconciliation(reconcileScannedModules(r.scan, device.modules))
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setScanning(false)
+    }
+  }, [scanPort, busName, device.position, device.modules])
+
+  const handleApplyReconciliation = useCallback(() => {
+    if (reconciliation === null) return
+    // DOPE-704 E6: when applying, re-use `buildModuleForSlot` for `add` / `replace` items
+    // whose ident matches a module in the coupler's ESI, so the resulting modules carry
+    // their PDOs / SDOs. Items with no matching ESI module fall through to the base
+    // stub `applyScanReconciliation` produces.
+    const slotIndexIncrement = esiDevice?.slots?.slotIndexIncrement ?? 16
+    const slotPdoIncrement = esiDevice?.slots?.slotPdoIncrement ?? 1
+    const applied = applyScanReconciliation(device, reconciliation)
+    const enriched = (applied.modules ?? []).map((m) => {
+      const stub = m.name.startsWith('(pending')
+      if (!stub || esiDevice === null) return m
+      const esiModule = esiDevice.modules?.find((em) => em.ident.toLowerCase() === m.ident.toLowerCase())
+      if (esiModule === undefined) return m
+      return buildModuleForSlot(
+        m.slot,
+        esiModule,
+        slotIndexIncrement,
+        slotPdoIncrement,
+        device.esiDeviceRef.repositoryItemId,
+      )
+    })
+    onUpdateModules(enriched)
+    setReconciliation(null)
+  }, [reconciliation, device, esiDevice, onUpdateModules])
+
   return (
     <div className='flex flex-col gap-4'>
       <div className='flex items-center justify-between'>
@@ -276,19 +337,43 @@ export const ModulesTab = ({ device, onUpdateModules }: ModulesTabProps) => {
             <code className='font-mono'>SlotPdoIncrement</code> / <code className='font-mono'>SlotIndexIncrement</code>.
           </p>
         </div>
-        <button
-          type='button'
-          onClick={() => setAdding(true)}
-          disabled={esiDevice === null || (esiDevice.modules ?? []).length === 0}
-          className={cn(
-            'rounded-md bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand-medium-dark',
-            (esiDevice === null || (esiDevice.modules ?? []).length === 0) &&
-              'cursor-not-allowed bg-neutral-400 hover:bg-neutral-400',
-          )}
-        >
-          Add module
-        </button>
+        <div className='flex items-center gap-2'>
+          <button
+            type='button'
+            onClick={() => void handleScan()}
+            disabled={scanning || scanPort === undefined}
+            className={cn(
+              'hover:bg-brand/10 rounded-md border border-brand px-3 py-1 text-xs font-medium text-brand',
+              (scanning || scanPort === undefined) && 'cursor-not-allowed opacity-60',
+            )}
+            title={
+              scanPort === undefined
+                ? 'Scan is not available on this platform.'
+                : 'Scan the coupler for its plugged modules via 0xF050.'
+            }
+          >
+            {scanning ? 'Scanning…' : 'Scan modules'}
+          </button>
+          <button
+            type='button'
+            onClick={() => setAdding(true)}
+            disabled={esiDevice === null || (esiDevice.modules ?? []).length === 0}
+            className={cn(
+              'rounded-md bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand-medium-dark',
+              (esiDevice === null || (esiDevice.modules ?? []).length === 0) &&
+                'cursor-not-allowed bg-neutral-400 hover:bg-neutral-400',
+            )}
+          >
+            Add module
+          </button>
+        </div>
       </div>
+
+      {scanError !== null && (
+        <div className='rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-200'>
+          Scan: {scanError}
+        </div>
+      )}
 
       {loadingEsi && <p className='text-xs text-neutral-500 dark:text-neutral-400'>Loading ESI&hellip;</p>}
       {esiError !== null && <p className='text-xs text-red-600 dark:text-red-400'>{esiError}</p>}
@@ -356,6 +441,94 @@ export const ModulesTab = ({ device, onUpdateModules }: ModulesTabProps) => {
           onCancel={() => setAdding(false)}
         />
       )}
+
+      {reconciliation !== null && (
+        <ReconciliationDialog
+          reconciliation={reconciliation}
+          onApply={handleApplyReconciliation}
+          onCancel={() => setReconciliation(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+const ReconciliationDialog = ({
+  reconciliation,
+  onApply,
+  onCancel,
+}: {
+  reconciliation: ReconciliationResult
+  onApply: () => void
+  onCancel: () => void
+}) => {
+  const describe = (item: ReconciliationItem): string => {
+    switch (item.kind) {
+      case 'add':
+        return `Slot ${item.slot}: add module ${item.ident}`
+      case 'remove':
+        return `Slot ${item.slot}: remove ${item.existingIdent} (${item.existingModuleId})`
+      case 'keep':
+        return `Slot ${item.slot}: keep ${item.ident}`
+      case 'replace':
+        return `Slot ${item.slot}: replace ${item.existingIdent} → ${item.scannedIdent}`
+    }
+  }
+  const tone = (kind: ReconciliationItem['kind']): string =>
+    kind === 'add'
+      ? 'text-green-700 dark:text-green-300'
+      : kind === 'remove'
+        ? 'text-red-700 dark:text-red-300'
+        : kind === 'replace'
+          ? 'text-amber-700 dark:text-amber-300'
+          : 'text-neutral-600 dark:text-neutral-400'
+
+  return (
+    <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/50'>
+      <div className='w-full max-w-lg rounded-lg border border-neutral-200 bg-white p-5 shadow-xl dark:border-neutral-800 dark:bg-neutral-900'>
+        <h3 className='mb-3 text-sm font-semibold text-neutral-800 dark:text-neutral-200'>Scan result</h3>
+
+        {reconciliation.identical ? (
+          <p className='mb-3 text-xs text-neutral-600 dark:text-neutral-400'>
+            The project matches the bus. No changes.
+          </p>
+        ) : (
+          <>
+            <p className='mb-3 text-xs text-neutral-600 dark:text-neutral-400'>
+              Applying the scan rewrites the project&rsquo;s module list to match what the coupler reports.
+              <span className='mt-1 block text-neutral-500'>
+                Keep slots retain their channel mappings. Replace / Add slots lose any manual edits.
+              </span>
+            </p>
+            <ul className='mb-3 max-h-56 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-2 text-xs dark:border-neutral-800 dark:bg-neutral-900'>
+              {reconciliation.items.map((item, i) => (
+                <li key={`${item.slot}-${i}`} className={cn('font-mono', tone(item.kind))}>
+                  {describe(item)}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        <div className='flex items-center justify-end gap-2'>
+          <button
+            type='button'
+            onClick={onCancel}
+            className='rounded-md border border-neutral-300 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
+          >
+            {reconciliation.identical ? 'Close' : 'Cancel'}
+          </button>
+          {!reconciliation.identical && (
+            <button
+              type='button'
+              onClick={onApply}
+              className='rounded-md bg-brand px-3 py-1 text-xs font-medium text-white hover:bg-brand-medium-dark'
+            >
+              Apply
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

@@ -12,6 +12,7 @@ import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
 import { editorEdgeAccountPort } from './adapters/editor/edge-account-adapter'
 import { editorEditSessionPort } from './adapters/editor/edit-session-adapter'
 import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
+import { createEditorEtherCATScanAdapter } from './adapters/editor/ethercat-scan-adapter'
 import { createEditorLibraryAdapter } from './adapters/editor/library-adapter'
 import { createEditorNavigationAdapter } from './adapters/editor/navigation-adapter'
 import { openFetchedProject } from './adapters/editor/open-fetched-project'
@@ -79,6 +80,7 @@ export function createEditorPorts(store: OpenPLCStore): PlatformPorts {
     theme: createEditorThemeAdapter(),
     packages: editorPackages,
     esi: createEditorEsiAdapter(() => _projectPath),
+    ethercatScan: createEditorEtherCATScanAdapter(),
     versionControl: createEditorVersionControlAdapter(),
     navigation: createEditorNavigationAdapter(store),
     library: createEditorLibraryAdapter(),

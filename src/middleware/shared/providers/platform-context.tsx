@@ -118,6 +118,10 @@ export function useEsi() {
   return usePlatform().esi
 }
 
+export function useEtherCATScan() {
+  return usePlatform().ethercatScan
+}
+
 /**
  * The Edge account port, or undefined on a platform that has no Edge account.
  *

@@ -18,6 +18,7 @@ import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Cia402AxisTab } from './components/cia402-axis-tab'
+import { CouplerDiagnosticsTab } from './components/coupler-diagnostics-tab'
 import {
   ChannelMappingsSection,
   DeviceConfigurationForm,
@@ -34,6 +35,7 @@ type DeviceDetailTab =
   | 'axis'
   | 'process-data'
   | 'modules'
+  | 'diagnostics'
 
 const TabItem = ({ value, label, isActive }: { value: string; label: string; isActive: boolean }) => (
   <Tabs.Trigger
@@ -374,6 +376,9 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           {device.isModularCoupler === true && (
             <TabItem value='modules' label='Modules' isActive={activeTab === 'modules'} />
           )}
+          {device.isModularCoupler === true && (
+            <TabItem value='diagnostics' label='Diagnostics' isActive={activeTab === 'diagnostics'} />
+          )}
           <TabItem value='startup-params' label='Startup Parameters' isActive={activeTab === 'startup-params'} />
         </Tabs.List>
 
@@ -467,7 +472,19 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
             className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
           >
             <div className='flex-1 overflow-auto p-4'>
-              <ModulesTab device={device} onUpdateModules={handleUpdateModules} />
+              <ModulesTab device={device} busName={busName} onUpdateModules={handleUpdateModules} />
+            </div>
+          </Tabs.Content>
+        )}
+
+        {/* DOPE-704 E6 UI: Diagnostics (modular coupler only) */}
+        {device.isModularCoupler === true && (
+          <Tabs.Content
+            value='diagnostics'
+            className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
+          >
+            <div className='flex-1 overflow-auto p-4'>
+              <CouplerDiagnosticsTab device={device} />
             </div>
           </Tabs.Content>
         )}
