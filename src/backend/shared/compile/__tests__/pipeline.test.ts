@@ -165,7 +165,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('runCompilePipeline — simulator path', () => {
-  it('runs preprocess → XML → ST → strucpp → arduino-compile and returns the firmware binary', async () => {
+  it('runs preprocess → ST → strucpp → arduino-compile and returns the firmware binary', async () => {
     const port = makePort()
     const { events, emit } = captureEvents()
 
@@ -336,7 +336,7 @@ describe('runCompilePipeline — blank FBD variable guard', () => {
     },
   }
 
-  it('bails at the validate stage before XML generation when an FBD variable is unnamed', async () => {
+  it('bails at the validate stage before the ST transpile when an FBD variable is unnamed', async () => {
     const port = makePort()
     const { events, emit } = captureEvents()
 

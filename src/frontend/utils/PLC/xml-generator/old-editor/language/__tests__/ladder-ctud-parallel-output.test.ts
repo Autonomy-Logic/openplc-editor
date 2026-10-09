@@ -9,7 +9,7 @@ import ctudRung from './fixtures/ctud-parallel-output-rung.json'
  * The fixture is the real CTUD_DINT rung from the "PWM Control Example"
  * production project: coils wired to BOTH the QU and QD outputs, each through a
  * parallel chain. The old-editor serializer (the one the compile pipeline runs
- * via XmlGenerator(..., 'old-editor')) used to map every parallel-chain coil's
+ * via PlcopenXmlGenerator) used to map every parallel-chain coil's
  * connectionPointIn to the block's PRIMARY output (QU), so QD coils came out as
  * QU — and at runtime every coil followed QU. The fix resolves the formal
  * parameter from the edge that actually leaves the block into the parallel
