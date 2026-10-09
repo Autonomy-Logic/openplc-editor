@@ -225,7 +225,7 @@ const DeviceBrowserModal = ({ isOpen, onClose, onSelectDevice, repository }: Dev
                                 )}
                                 {/* DOPE-704 E4: mark modular couplers so the operator spots them. */}
                                 {device.isModularCoupler === true && (
-                                  <span className='flex-shrink-0 rounded bg-brand/10 px-1.5 py-0.5 text-xs font-medium text-brand dark:bg-brand/20'>
+                                  <span className='bg-brand/10 dark:bg-brand/20 flex-shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-brand'>
                                     Modular coupler
                                   </span>
                                 )}
