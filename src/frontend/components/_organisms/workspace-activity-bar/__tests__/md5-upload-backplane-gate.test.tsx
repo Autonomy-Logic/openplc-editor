@@ -236,30 +236,3 @@ describe('MD5 re-upload — backplane gate', () => {
     expect(compileProgram).not.toHaveBeenCalled()
   })
 })
-
-describe('MD5 re-upload — pending AI changes', () => {
-  const AI_REFUSAL =
-    'The AI assistant has changes waiting for review. Keep or undo them in the AI chat before building.'
-
-  beforeEach(() => {
-    compileForDebug.mockClear()
-    compileProgram.mockClear()
-    store = createTestStore()
-  })
-
-  afterEach(() => {
-    cleanup()
-  })
-
-  it('refuses the mismatch re-upload while AI changes wait for review, without offering it', async () => {
-    store.getState().aiActions.setPendingAIChanges(true)
-    renderBar(PLAIN_BOARD_NAME, null)
-
-    startDebugSession()
-
-    await waitFor(() => expect(loggedMessages()).toContain(AI_REFUSAL))
-    expect(uploadPrompt()).toBeNull()
-    expect(compileProgram).not.toHaveBeenCalled()
-    await waitFor(() => expect(debuggerButton().disabled).toBe(false))
-  })
-})

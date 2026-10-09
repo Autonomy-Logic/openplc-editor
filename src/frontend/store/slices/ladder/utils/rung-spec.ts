@@ -15,6 +15,7 @@ import { connectNodes } from '../../../../components/_molecules/graphical-editor
 import { updateDiagramElementsPosition } from '../../../../components/_molecules/graphical-editor/ladder/rung/ladder-utils/elements/diagram'
 import { getLiteralType } from '../../../../utils/keywords'
 import { newGraphicalEditorNodeID } from '../../../../utils/new-graphical-editor-node-id'
+import { validateVariableType } from '../../../../utils/PLC/validate-variable-type'
 import { RungLadderState } from '../types'
 
 /** Re-exported so `adapters` code (the AI tool executor) can reference the block-resolution
@@ -142,7 +143,7 @@ function resolvePinBindings(
       continue
     }
     const pinType = variantVar.type.value.toUpperCase()
-    if (!literalTypes.includes(pinType)) {
+    if (!literalTypes.some((literalType) => validateVariableType(literalType, pinType).isValid)) {
       errors.push(`Element ${elementNumber}: literal "${variable}" is not compatible with pin "${pin}" (${pinType})`)
       continue
     }

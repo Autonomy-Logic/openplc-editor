@@ -85,6 +85,20 @@ const systemLibrary: SystemLibrary = {
       ],
     },
     {
+      name: 'SHL',
+      type: 'function',
+      language: 'st',
+      body: '',
+      documentation: '',
+      variables: [
+        { name: 'EN', class: 'input', type: { definition: 'base-type', value: 'BOOL' } },
+        { name: 'IN', class: 'input', type: { definition: 'generic-type', value: 'ANY_BIT' } },
+        { name: 'N', class: 'input', type: { definition: 'generic-type', value: 'ANY_INT' } },
+        { name: 'ENO', class: 'output', type: { definition: 'base-type', value: 'BOOL' } },
+        { name: 'OUT', class: 'output', type: { definition: 'generic-type', value: 'ANY_BIT' } },
+      ],
+    },
+    {
       name: 'ADD',
       type: 'function',
       language: 'st',
@@ -474,6 +488,31 @@ describe('add_rung', () => {
     expect(result.success).toBe(false)
     expect(result.message).toMatch(/is not a valid string literal/)
     expect(getRungs('Main')).toHaveLength(0)
+  })
+
+  it('accepts a literal on a generic pin whose family includes its type', async () => {
+    createLdPou('Main')
+    seedSystemLibrary()
+
+    const result = await executeTool(store, 'add_rung', {
+      pouName: 'Main',
+      elements: [{ kind: 'block', blockType: 'SHL', pins: [{ pin: 'N', variable: '3' }] }],
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects a literal on a generic pin whose family excludes its type', async () => {
+    createLdPou('Main')
+    seedSystemLibrary()
+
+    const result = await executeTool(store, 'add_rung', {
+      pouName: 'Main',
+      elements: [{ kind: 'block', blockType: 'SHL', pins: [{ pin: 'N', variable: 'T#5s' }] }],
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.message).toMatch(/literal "T#5s" is not compatible with pin "N" \(ANY_INT\)/)
   })
 
   it('rejects a literal bound to an output pin', async () => {

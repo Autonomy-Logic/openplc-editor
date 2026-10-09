@@ -6,8 +6,35 @@ import type {
   SubscriptionStatus,
 } from '../../../../middleware/shared/ports/types'
 import type { DiffHunk } from '../../../utils/ai-diff-review'
+import type { EditorSlice } from '../editor'
+import type { FBDFlowSlice } from '../fbd'
+import type { FileSlice } from '../file'
+import type { LadderFlowSlice } from '../ladder'
+import type { LibrarySlice } from '../library'
+import type { ProjectSlice } from '../project'
+import type { TabsSlice } from '../tabs'
 
 export type { AIChatContentBlock, BillingErrorPayload, ChatMessage, ChatMessageRole, SubscriptionStatus }
+
+/** Every POU-dependent slice must be captured, or Undo leaves orphaned tabs/editors/flows. */
+export type AIReviewCheckpoint = {
+  projectData: ProjectSlice['project']['data']
+  tabs: TabsSlice['tabs']
+  selectedTab: TabsSlice['selectedTab']
+  editors: EditorSlice['editors']
+  editor: EditorSlice['editor']
+  ladderFlows: LadderFlowSlice['ladderFlows']
+  fbdFlows: FBDFlowSlice['fbdFlows']
+  libraries: LibrarySlice['libraries']
+  files: FileSlice['files']
+}
+
+export type AIPendingReview = {
+  /** The project as it was before the first unreviewed AI edit; Undo restores it. */
+  checkpoint: AIReviewCheckpoint
+  /** Some edit has no per-hunk diff, so only Keep or Undo can resolve the review. */
+  hasNonDiffMutation: boolean
+}
 
 // ---------------------------------------------------------------------------
 // Conversation summary (returned by GET /ai/conversations)
@@ -103,8 +130,8 @@ export type AIState = {
     messages: ChatMessage[]
     activeEditorPou: string | null
     isAgenticLoopRunning: boolean
-    /** AI edits are in the project but the user has not kept or undone them yet; Build refuses while set. */
-    hasPendingAIChanges: boolean
+    /** AI edits are in the project but not yet kept or undone; Build refuses while set. */
+    pendingReview: AIPendingReview | null
     isChatOpen: boolean
     error: string | null
     /** Pending diff review entries, keyed by POU name. */
@@ -162,7 +189,9 @@ export type AIActions = {
   setAIError: (error: string | null) => void
   setActiveEditorPou: (pouName: string | null) => void
   setAgenticLoopRunning: (running: boolean) => void
-  setPendingAIChanges: (pending: boolean) => void
+  /** Keeps the first checkpoint when a review is already open, so Undo reverts every turn since. */
+  openAIReview: (review: AIPendingReview) => void
+  closeAIReview: () => void
   addMessage: (message: ChatMessage) => void
   updateMessageContent: (messageId: string, content: string | AIChatContentBlock[]) => void
   rateMessage: (messageId: string, rating: 'up' | 'down' | undefined) => void

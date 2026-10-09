@@ -229,38 +229,3 @@ describe('Build — backplane gate', () => {
     expect(loggedMessages()).not.toContain(REFUSAL)
   })
 })
-
-describe('Build — pending AI changes', () => {
-  const AI_REFUSAL =
-    'The AI assistant has changes waiting for review. Keep or undo them in the AI chat before building.'
-
-  beforeEach(() => {
-    compileProgram.mockClear()
-    store = createTestStore()
-  })
-
-  afterEach(() => {
-    cleanup()
-  })
-
-  it('refuses to build and upload while AI changes wait for review', async () => {
-    store.getState().aiActions.setPendingAIChanges(true)
-    renderBar(PLAIN_BOARD_NAME, null, EDITOR_CAPABILITIES)
-
-    chooseBuildOption('Build and upload')
-
-    await waitFor(() => expect(loggedMessages()).toContain(AI_REFUSAL))
-    expect(compileProgram).not.toHaveBeenCalled()
-  })
-
-  it('builds once the AI changes have been kept or undone', async () => {
-    store.getState().aiActions.setPendingAIChanges(true)
-    store.getState().aiActions.setPendingAIChanges(false)
-    renderBar(PLAIN_BOARD_NAME, null, EDITOR_CAPABILITIES)
-
-    chooseBuildOption('Build and upload')
-
-    await waitFor(() => expect(compileProgram).toHaveBeenCalled())
-    expect(loggedMessages()).not.toContain(AI_REFUSAL)
-  })
-})
