@@ -1,0 +1,14 @@
+{
+  "displayName": "migration-example",
+  "rootDir": ".",
+  "roots": ["<rootDir>/src_migration/example"],
+  "testEnvironment": "jsdom",
+  "testMatch": ["<rootDir>/src_migration/example/**/*.test.(ts|tsx)"],
+  "moduleFileExtensions": ["js", "json", "jsx", "ts", "tsx"],
+  "moduleNameMapper": {
+    "\\.css$": "identity-obj-proxy"
+  },
+  "transform": {
+    "\\.(ts|tsx)$": ["ts-jest", { "tsconfig": "tsconfig.example.json" }]
+  }
+}

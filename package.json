@@ -34,6 +34,12 @@
     "test:watch": "jest --watch --no-coverage",
     "test:e2e": "npm run build && npx playwright test",
     "validate:arch": "npx tsx src/__architecture__/validate.ts",
+    "example:typecheck": "tsc -p tsconfig.example.json",
+    "example:lint": "cross-env NODE_ENV=development eslint \"src_migration/example/**/*.{ts,tsx}\"",
+    "example:format": "prettier --check \"src_migration/example/**/*.{ts,tsx,css}\" \"*.example.json\"",
+    "example:test": "jest --config jest.example.config.json",
+    "example:arch": "jest --config jest.example.config.json src_migration/example/__architecture__",
+    "example:check": "npm run example:typecheck && npm run example:lint && npm run example:format && npm run example:test",
     "prepare": "husky"
   },
   "browserslist": [],
