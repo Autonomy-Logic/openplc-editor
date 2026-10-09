@@ -393,6 +393,10 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   'frontend/store/slices/ladder/utils/index.ts': ['components'],
   // Ladder slice — needs nodesBuilder + defaultCustomNodesStyles for rung creation
   'frontend/store/slices/ladder/slice.ts': ['components'],
+  // AI rung-spec builder — needs nodesBuilder, connectNodes and
+  // updateDiagramElementsPosition to turn a logical rung spec into a real
+  // xyflow graph, same as the interactive editor does
+  'frontend/store/slices/ladder/utils/rung-spec.ts': ['components'],
   // Device CONNECT flow (D72) — resolves RTU params from the board debug spec
   // via the shared `resolveDebugConnection` resolver, same as the activity bar's
   // debugger/post-flash paths.
