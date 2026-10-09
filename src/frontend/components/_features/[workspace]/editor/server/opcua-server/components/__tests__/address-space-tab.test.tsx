@@ -6,9 +6,9 @@ import { AddressSpaceTab } from '../address-space-tab'
 
 const permissions: OpcUaNodeConfig['permissions'] = { viewer: 'r', operator: 'rw', engineer: 'rw' }
 
-const makeNode = (id: string, variablePath: string): OpcUaNodeConfig => ({
+const makeNode = (id: string, variablePath: string, pouName = 'main'): OpcUaNodeConfig => ({
   id,
-  pouName: 'main',
+  pouName,
   variablePath,
   variableType: 'INT',
   nodeId: `ns=1;s=${variablePath}`,
@@ -41,7 +41,24 @@ const makeConfig = (nodes: OpcUaNodeConfig[]): OpcUaServerConfig => ({
   addressSpace: { namespaceUri: 'urn:test:ns', nodes },
 })
 
-const renderTab = (nodes: OpcUaNodeConfig[]) => {
+const variable = (name: string) => ({
+  name,
+  class: 'local' as const,
+  type: { definition: 'base-type' as const, value: 'int' as const },
+  location: '',
+  documentation: '',
+  debug: false,
+})
+
+const mainInstance = { name: 'instance0', task: 'task0', program: 'main' }
+
+const renderTab = (
+  nodes: OpcUaNodeConfig[],
+  {
+    instances = [mainInstance],
+    globalVariables = [],
+  }: { instances?: (typeof mainInstance)[]; globalVariables?: ReturnType<typeof variable>[] } = {},
+) => {
   const store = createTestStore()
   const config = makeConfig(nodes)
   store.getState().projectActions.setProject({
@@ -53,16 +70,7 @@ const renderTab = (nodes: OpcUaNodeConfig[]) => {
           name: 'main',
           pouType: 'program',
           interface: {
-            variables: [
-              {
-                name: 'X',
-                class: 'local',
-                type: { definition: 'base-type', value: 'int' },
-                location: '',
-                documentation: '',
-                debug: false,
-              },
-            ],
+            variables: [variable('X')],
           },
           body: { language: 'st', value: '' },
           documentation: '',
@@ -71,7 +79,13 @@ const renderTab = (nodes: OpcUaNodeConfig[]) => {
       globalVariableLists: [],
       servers: [{ name: 'opcua', protocol: 'opcua', opcuaServerConfig: config }],
       remoteDevices: [],
-      configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+      configurations: {
+        resource: {
+          tasks: [{ name: 'task0', triggering: 'Cyclic', interval: 'T#20ms', priority: 1 }],
+          instances,
+          globalVariables: globalVariables.map((v) => ({ ...v, class: 'global' as const })),
+        },
+      },
     },
   })
   render(<AddressSpaceTab config={config} serverName='opcua' onConfigChange={() => {}} />, {
@@ -99,6 +113,24 @@ describe('AddressSpaceTab orphaned tags', () => {
     expect(kept.dataset.missing).toBeUndefined()
     expect(within(kept).queryByRole('alert')).toBeNull()
     expect(within(kept).getByRole('button', { name: 'Edit' })).toBeTruthy()
+  })
+
+  it('flags a tag whose program is no longer instantiated in Resources, as the build drops it', () => {
+    renderTab([makeNode('kept', 'X')], { instances: [] })
+
+    expect(cardOf('X tag').dataset.missing).toBe('true')
+  })
+
+  it('flags a tag of a deleted program even when a global has the same name', () => {
+    renderTab([makeNode('stale', 'G', 'old_prog')], { globalVariables: [variable('G')] })
+
+    expect(cardOf('G tag').dataset.missing).toBe('true')
+  })
+
+  it('keeps a global-scope tag unflagged without any program instance', () => {
+    renderTab([makeNode('global', 'G', 'GVL')], { instances: [], globalVariables: [variable('G')] })
+
+    expect(cardOf('G tag').dataset.missing).toBeUndefined()
   })
 
   it('removes an orphaned tag from the store when Remove is clicked', () => {
