@@ -1,7 +1,9 @@
 import { createStore, StoreApi } from 'zustand/vanilla'
 
 import { createAISlice, createAISliceFactory } from '../slices/ai/slice'
+import type { OpenPLCStore } from '../index'
 import type { AISlice, ChatMessage } from '../slices/ai/types'
+import { createTestStore } from '../testing'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -251,6 +253,65 @@ describe('createAISlice', () => {
       store.getState().aiActions.setAgenticLoopRunning(true)
       store.getState().aiActions.setAgenticLoopRunning(false)
       expect(store.getState().ai.isAgenticLoopRunning).toBe(false)
+    })
+  })
+
+  describe('AI review', () => {
+    // Needs the whole store: the checkpoint spans other slices, and closing a project clears it.
+    let full: OpenPLCStore
+
+    beforeEach(() => {
+      full = createTestStore()
+    })
+
+    const checkpointOf = (pouCount: number) => {
+      const state = full.getState()
+      return {
+        projectData: { ...structuredClone(state.project.data), pous: state.project.data.pous.slice(0, pouCount) },
+        tabs: state.tabs,
+        selectedTab: state.selectedTab,
+        editors: state.editors,
+        editor: state.editor,
+        ladderFlows: state.ladderFlows,
+        fbdFlows: state.fbdFlows,
+        libraries: state.libraries,
+        files: state.files,
+      }
+    }
+
+    it('starts with no review open', () => {
+      expect(full.getState().ai.pendingReview).toBeNull()
+    })
+
+    it('keeps the first checkpoint when a later turn opens it again', () => {
+      const first = checkpointOf(0)
+      full.getState().aiActions.openAIReview({ checkpoint: first, hasNonDiffMutation: false })
+      full.getState().aiActions.openAIReview({ checkpoint: checkpointOf(1), hasNonDiffMutation: false })
+
+      expect(full.getState().ai.pendingReview?.checkpoint).toEqual(first)
+    })
+
+    it('remembers a non-diff edit from any turn', () => {
+      full.getState().aiActions.openAIReview({ checkpoint: checkpointOf(0), hasNonDiffMutation: true })
+      full.getState().aiActions.openAIReview({ checkpoint: checkpointOf(0), hasNonDiffMutation: false })
+      expect(full.getState().ai.pendingReview?.hasNonDiffMutation).toBe(true)
+
+      full.getState().aiActions.closeAIReview()
+      full.getState().aiActions.openAIReview({ checkpoint: checkpointOf(0), hasNonDiffMutation: false })
+      full.getState().aiActions.openAIReview({ checkpoint: checkpointOf(0), hasNonDiffMutation: true })
+      expect(full.getState().ai.pendingReview?.hasNonDiffMutation).toBe(true)
+    })
+
+    it('closes the review', () => {
+      full.getState().aiActions.openAIReview({ checkpoint: checkpointOf(0), hasNonDiffMutation: true })
+      full.getState().aiActions.closeAIReview()
+      expect(full.getState().ai.pendingReview).toBeNull()
+    })
+
+    it('drops the review when the project closes, so Undo cannot restore it into the next one', () => {
+      full.getState().aiActions.openAIReview({ checkpoint: checkpointOf(0), hasNonDiffMutation: true })
+      full.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+      expect(full.getState().ai.pendingReview).toBeNull()
     })
   })
 

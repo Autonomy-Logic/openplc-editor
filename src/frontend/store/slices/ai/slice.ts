@@ -23,6 +23,7 @@ const DEFAULT_AI_STATE: AISlice['ai'] = {
   messages: [],
   activeEditorPou: null,
   isAgenticLoopRunning: false,
+  pendingReview: null,
   isChatOpen: false,
   error: null,
   pendingDiffs: {},
@@ -144,6 +145,24 @@ export function createAISliceFactory(config?: AIFeatureConfig): StateCreator<AIS
         setState(
           produce(({ ai }: AISlice) => {
             ai.isAgenticLoopRunning = running
+          }),
+        )
+      },
+      openAIReview: (review) => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            if (!ai.pendingReview) {
+              ai.pendingReview = review
+            } else if (review.hasNonDiffMutation) {
+              ai.pendingReview.hasNonDiffMutation = true
+            }
+          }),
+        )
+      },
+      closeAIReview: () => {
+        setState(
+          produce(({ ai }: AISlice) => {
+            ai.pendingReview = null
           }),
         )
       },

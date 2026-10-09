@@ -18,7 +18,7 @@ import type { PLCProjectData } from '@root/middleware/shared/ports/open-plc-type
  * no platform specifics. It therefore lives on the shared surface and is
  * identical across the desktop and web builds.
  *
- * Output shape feeds xmlbuilder2 (see XmlGenerator); it is inserted as
+ * Output shape feeds xmlbuilder2 (see PlcopenXmlGenerator); it is inserted as
  * `<project>/<addData>` after `<instances>`.
  */
 

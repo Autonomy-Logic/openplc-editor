@@ -24,13 +24,7 @@ import { AI_TOOLS, isMutatingTool, isNonDiffMutatingTool } from '../../../../ser
 import type { AIChatMessage, AIChatRequest } from '../../../../services/ai/types'
 import { executeSaveProject } from '../../../../services/save-actions'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
-import type { EditorSlice } from '../../../../store/slices/editor'
-import type { FBDFlowSlice } from '../../../../store/slices/fbd'
-import type { FileSlice } from '../../../../store/slices/file'
-import type { LadderFlowSlice } from '../../../../store/slices/ladder'
-import type { LibrarySlice } from '../../../../store/slices/library'
-import type { ProjectSlice } from '../../../../store/slices/project'
-import type { TabsSlice } from '../../../../store/slices/tabs'
+import type { AIReviewCheckpoint } from '../../../../store/slices/ai/types'
 import { EdgeSignInModal } from '../../../_organisms/edge-sign-in-modal'
 import { AIChatInput } from './ai-chat-input'
 import { AIChatTurn } from './ai-chat-message'
@@ -63,6 +57,8 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     updateMessageContent,
     clearConversation,
     setAgenticLoopRunning,
+    openAIReview,
+    closeAIReview,
     setAILoading,
     setAIError,
     setUsage,
@@ -104,19 +100,8 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     }
   }, [pendingDiffCount, hadDiffsThisTurn])
 
-  // Every POU-dependent slice must be captured, or Undo leaves orphaned tabs/editors/flows.
-  type AICheckpoint = {
-    projectData: ProjectSlice['project']['data']
-    tabs: TabsSlice['tabs']
-    selectedTab: TabsSlice['selectedTab']
-    editors: EditorSlice['editors']
-    editor: EditorSlice['editor']
-    ladderFlows: LadderFlowSlice['ladderFlows']
-    fbdFlows: FBDFlowSlice['fbdFlows']
-    libraries: LibrarySlice['libraries']
-    files: FileSlice['files']
-  }
-  const projectCheckpointRef = useRef<AICheckpoint | null>(null)
+  // The turn's starting point; it becomes the review's checkpoint once the turn changes the project.
+  const projectCheckpointRef = useRef<AIReviewCheckpoint | null>(null)
 
   const pouName = editor.type === 'plc-textual' || editor.type === 'plc-graphical' ? editor.meta.name : null
   const language = editor.type === 'plc-textual' ? editor.meta.language : undefined
@@ -204,6 +189,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
 
   const handleKeepChanges = useCallback(() => {
     projectCheckpointRef.current = null
+    closeAIReview()
     setToolStatuses([])
     setHadDiffsThisTurn(false)
     if (pouName) {
@@ -212,10 +198,10 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     // The event only reaches the active editor; other POUs may hold pending diffs too.
     clearAllPendingDiffs()
     void executeSaveProject(store, projectPort, capabilities)
-  }, [store, pouName, projectPort, capabilities, clearAllPendingDiffs])
+  }, [store, pouName, projectPort, capabilities, clearAllPendingDiffs, closeAIReview])
 
   const handleUndoAIChanges = useCallback(() => {
-    const cp = projectCheckpointRef.current
+    const cp = store.getState().ai.pendingReview?.checkpoint ?? projectCheckpointRef.current
     if (!cp) return
     if (pouName) {
       window.dispatchEvent(new CustomEvent('ai-reject-all-hunks', { detail: { pouName } }))
@@ -249,6 +235,7 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     }
 
     projectCheckpointRef.current = null
+    closeAIReview()
     clearAllPendingDiffs()
     setHadDiffsThisTurn(false)
     setAgenticLoopRunning(false)
@@ -265,7 +252,15 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       updateMessageContent(lastMsg.id, `${existingText}\n\n_Changes reverted._`)
     }
     setToolStatuses([])
-  }, [store, pouName, aiState.messages, updateMessageContent, setAgenticLoopRunning, clearAllPendingDiffs])
+  }, [
+    store,
+    pouName,
+    aiState.messages,
+    updateMessageContent,
+    setAgenticLoopRunning,
+    clearAllPendingDiffs,
+    closeAIReview,
+  ])
 
   const handleSend = useCallback(
     async (userMessage: string) => {
@@ -281,7 +276,8 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
       followTail()
 
       const snapshotState = store.getState()
-      projectCheckpointRef.current = {
+      // An open review keeps its checkpoint, so Undo still reaches back past this turn.
+      projectCheckpointRef.current = snapshotState.ai.pendingReview?.checkpoint ?? {
         projectData: structuredClone(snapshotState.project.data),
         tabs: structuredClone(snapshotState.tabs),
         selectedTab: snapshotState.selectedTab,
@@ -568,9 +564,18 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     clearConversation()
   }, [clearConversation])
 
-  const hasMutatingSuccess = toolStatuses.some((s) => s.status === 'success' && isMutatingTool(s.toolName))
+  const turnMutated = toolStatuses.some((s) => s.status === 'success' && isMutatingTool(s.toolName))
   // Non-diff mutations have no per-hunk controls; only the bar can keep/revert them.
-  const hasNonDiffMutation = toolStatuses.some((s) => s.status === 'success' && isNonDiffMutatingTool(s.toolName))
+  const turnHasNonDiffMutation = toolStatuses.some((s) => s.status === 'success' && isNonDiffMutatingTool(s.toolName))
+
+  // The review lives in the store so it outlives the panel and the turn; Build refuses while it is open.
+  useEffect(() => {
+    const checkpoint = projectCheckpointRef.current
+    if (turnMutated && checkpoint) openAIReview({ checkpoint, hasNonDiffMutation: turnHasNonDiffMutation })
+  }, [turnMutated, turnHasNonDiffMutation, openAIReview])
+
+  const hasMutatingSuccess = turnMutated || aiState.pendingReview !== null
+  const hasNonDiffMutation = turnHasNonDiffMutation || (aiState.pendingReview?.hasNonDiffMutation ?? false)
 
   // Hides once a diff-only turn has every hunk resolved individually.
   const showKeepUndoBar =
@@ -590,10 +595,12 @@ export const AIChatPanel = ({ transpileProject }: AIChatPanelProps = {}) => {
     ) {
       setHadDiffsThisTurn(false)
       projectCheckpointRef.current = null
+      closeAIReview()
       setToolStatuses([])
       void executeSaveProject(store, projectPort, capabilities)
     }
   }, [
+    closeAIReview,
     aiState.isAgenticLoopRunning,
     hadDiffsThisTurn,
     pendingDiffCount,
