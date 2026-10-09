@@ -648,6 +648,19 @@ export interface ESIRepositoryItem {
 }
 
 /**
+ * DOPE-704 E6 UI: a light summary of an ETG.5001 module from an ESI, used to populate
+ * the module browser modal and reconcile scanned module idents against the repository.
+ */
+export interface ESIModuleSummary {
+  /** Module ident (hex, e.g. "0x1A0F"). Primary key for 0xF050 scan matching. */
+  ident: string
+  /** Display name from the ESI's `<Module><Name>`. */
+  name: string
+  /** Vendor-defined module class (free-form), when the ESI declares one. */
+  moduleClass?: string
+}
+
+/**
  * Lightweight repository item with device summaries instead of full ESIDevice objects.
  * Used for UI display and matching without loading full PDO data.
  */
@@ -660,6 +673,13 @@ export interface ESIRepositoryItemLight {
   vendor: ESIVendor
   /** Lightweight device summaries */
   devices: ESIDeviceSummary[]
+  /**
+   * DOPE-704 E6 UI: light summaries of all modules this ESI declares, both inline modules
+   * on a device (modular coupler ESI) and standalone modules in a `<Modules>` top-level
+   * block (external module file). The module browser modal lists these; the scan
+   * reconciliation uses them to decide if a scanned ident can be added.
+   */
+  modules?: ESIModuleSummary[]
   /** ISO 8601 UTC timestamp when this file was loaded */
   loadedAt: string
   /** Parsing warnings (non-fatal issues) */

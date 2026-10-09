@@ -19,6 +19,7 @@ import type {
   ESIInitCmd,
   ESIModule,
   ESIModulePdoGroup,
+  ESIModuleSummary,
   ESIPdo,
   ESIPdoEntry,
   ESISlot,
@@ -112,6 +113,7 @@ interface ESILightResult {
   success: boolean
   vendor?: ESIVendor
   devices?: ESIDeviceSummary[]
+  modules?: ESIModuleSummary[]
   warnings?: string[]
   error?: string
 }
@@ -176,7 +178,36 @@ export function parseESILight(xmlString: string, filename?: string): ESILightRes
       }
     }
 
-    if (devices.length === 0) {
+    // DOPE-704 E6 UI: lift module summaries from both inline <Device><Modules> blocks
+    // (modular coupler ESIs) and standalone <Descriptions><Modules> blocks (external
+    // module files). The module browser modal and the scan reconciliation both need
+    // them; collecting here keeps the walk to a single pass.
+    const modules: ESIModuleSummary[] = []
+    if (descriptions) {
+      const devicesObj = descriptions['Devices'] as Record<string, unknown> | undefined
+      if (devicesObj) {
+        for (const deviceEl of ensureArray(
+          devicesObj['Device'] as Record<string, unknown> | Record<string, unknown>[],
+        )) {
+          const inlineModules = (deviceEl['Modules'] as Record<string, unknown> | undefined)?.['Module']
+          for (const m of ensureArray(inlineModules as Record<string, unknown> | Record<string, unknown>[])) {
+            const ident = parseHexValue(m['@_ModuleIdent'] as string | number | undefined)
+            const name = getTextValue(m['Name']) || ident
+            const moduleClass = getTextValue(m['ModuleClass']) || undefined
+            if (ident !== '0x00000000') modules.push({ ident, name, moduleClass })
+          }
+        }
+      }
+      const topModules = (descriptions['Modules'] as Record<string, unknown> | undefined)?.['Module']
+      for (const m of ensureArray(topModules as Record<string, unknown> | Record<string, unknown>[])) {
+        const ident = parseHexValue(m['@_ModuleIdent'] as string | number | undefined)
+        const name = getTextValue(m['Name']) || ident
+        const moduleClass = getTextValue(m['ModuleClass']) || undefined
+        if (ident !== '0x00000000') modules.push({ ident, name, moduleClass })
+      }
+    }
+
+    if (devices.length === 0 && modules.length === 0) {
       warnings.push(`No devices found in ESI file${filename ? ` (${filename})` : ''}`)
     }
 
@@ -184,6 +215,7 @@ export function parseESILight(xmlString: string, filename?: string): ESILightRes
       success: true,
       vendor,
       devices,
+      ...(modules.length > 0 && { modules }),
       warnings: warnings.length > 0 ? warnings : undefined,
     }
   } catch (error) {
