@@ -194,6 +194,35 @@ describe('darwin text editing', () => {
   })
 })
 
+describe('darwin app menu', () => {
+  beforeEach(() => setPlatform('darwin'))
+
+  it('labels the app items with the product name instead of the package name', async () => {
+    await newBuilder().buildMenu()
+
+    const menu = lastMenu()
+    expect(menu.get('OpenPLC Editor')?.role).toBeUndefined()
+    expect(menu.get('About OpenPLC Editor')?.role).toBe('about')
+    expect(menu.get('Hide OpenPLC Editor')?.role).toBe('hide')
+    expect(menu.get('Quit OpenPLC Editor')?.role).toBe('quit')
+  })
+
+  it('keeps the remaining native app menu roles', async () => {
+    await newBuilder().buildMenu()
+
+    const appMenu = lastMenu().get('OpenPLC Editor')?.submenu
+    if (!Array.isArray(appMenu)) throw new Error('app menu has no submenu')
+    expect(appMenu.map((entry) => entry.role).filter(Boolean)).toEqual([
+      'about',
+      'services',
+      'hide',
+      'hideOthers',
+      'unhide',
+      'quit',
+    ])
+  })
+})
+
 describe('setProjectOpen', () => {
   it('does not rebuild the menu when the state has not changed', async () => {
     const builder = newBuilder()
