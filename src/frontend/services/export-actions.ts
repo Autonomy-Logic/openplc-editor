@@ -118,6 +118,9 @@ export async function executeExportPlcopen(
     const fileName = `${state.project.meta.name}.xml`
     const exportResult = await projectPort.exportPlcopenFile(fileName, xmlResult.data)
 
+    // Dismissing the save dialog is an ordinary outcome and says nothing to the user.
+    if (exportResult.canceled) return { success: false }
+
     if (!exportResult.success) {
       toast({
         title: 'Error exporting PLCopen XML',

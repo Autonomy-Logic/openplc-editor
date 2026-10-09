@@ -135,6 +135,18 @@ describe('executeExportPlcopen', () => {
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'default' }))
   })
 
+  it('stays silent and returns success:false when the save dialog is dismissed', async () => {
+    mockXmlGenerator.mockReturnValue({ ok: true, message: 'ok', data: '<project/>' })
+    const projectPort = makeProjectPort({
+      exportPlcopenFile: vi.fn().mockResolvedValue({ success: false, canceled: true }),
+    })
+
+    const result = await executeExportPlcopen(store, projectPort)
+
+    expect(result).toEqual({ success: false })
+    expect(mockToast).not.toHaveBeenCalled()
+  })
+
   it('toasts a failure and returns success:false when PlcopenXmlGenerator fails', async () => {
     mockXmlGenerator.mockReturnValue({ ok: false, message: 'Main POU not found.' })
     const projectPort = makeProjectPort()

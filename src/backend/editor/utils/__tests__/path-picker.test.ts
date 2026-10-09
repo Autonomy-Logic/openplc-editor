@@ -107,15 +107,12 @@ describe('getPlcopenExportSavePath', () => {
     expect(readFileSync(filePath, 'utf-8')).toBe('<project/>')
   })
 
-  it('returns a canceled error when the user dismisses the dialog', async () => {
+  it('reports a cancel, not an error, when the user dismisses the dialog', async () => {
     showSaveDialogMock.mockResolvedValue({ canceled: true, filePath: undefined })
 
     const result = await getPlcopenExportSavePath({} as never, 'exported.xml', '<project/>')
 
-    expect(result).toEqual({
-      success: false,
-      error: { title: 'Operation canceled', description: 'Operation canceled by the user.' },
-    })
+    expect(result).toEqual({ success: false, canceled: true })
   })
 
   it('returns a write error when the target path cannot be written', async () => {

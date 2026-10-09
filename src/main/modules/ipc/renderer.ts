@@ -147,7 +147,7 @@ const rendererProcessBridge = {
   exportPlcopenFile: (
     defaultFileName: string,
     xml: string,
-  ): Promise<{ success: boolean; error?: { title: string; description: string } }> =>
+  ): Promise<{ success: boolean; canceled?: boolean; error?: { title: string; description: string } }> =>
     ipcRenderer.invoke('project:export-plcopen-file', defaultFileName, xml),
   exportPdfFile: (
     defaultFileName: string,

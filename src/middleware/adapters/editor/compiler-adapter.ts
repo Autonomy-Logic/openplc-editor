@@ -2,8 +2,8 @@
  * Editor CompilerPort adapter — delegates to Electron IPC bridge.
  *
  * Communicates with the main process CompilerModule via MessageChannel IPC.
- * The main process handles the full pipeline: XML generation, ST transpilation,
- * C code generation, and binary compilation.
+ * The main process handles the full pipeline: ST transpilation, strucpp
+ * compilation and the binary build.
  *
  * Type mapping:
  *   - Port POUs use flat format: { name, pouType, ... }
