@@ -90,6 +90,14 @@ export type RuntimeConnection = {
    *  get-users-info / the X-OpenPLC-Runtime-Version header), or null
    *  when unknown. Gates version-dependent UI like User Management. */
   runtimeVersion: string | null
+  /**
+   * DOPE-704 E7: features the connected runtime advertises in its hello
+   * response (RTOP-319 R4), e.g. `["ethercat.dynamic_alloc"]`. `null` when
+   * the runtime did not advertise a `features` array (pre-R4). The pre-build
+   * capability gate reads this to decide whether the project can be built
+   * against the connected runtime.
+   */
+  runtimeFeatures: readonly string[] | null
   selectedDevice: SelectedDevice | null
   storedCredentials: StoredCredentials | null
   timingStats: TimingStats | null

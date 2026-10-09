@@ -17,6 +17,8 @@ import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { requiredRuntimeFeatures } from '@root/middleware/shared/utils/build-gate/runtime-capability-gate'
+
 import { Cia402AxisTab } from './components/cia402-axis-tab'
 import { CouplerDiagnosticsTab } from './components/coupler-diagnostics-tab'
 import {
@@ -358,6 +360,23 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           <p className='mt-0.5 text-xs text-neutral-500 dark:text-neutral-400'>{esiDevice.name}</p>
         )}
       </div>
+
+      {/* DOPE-704 E7: capability banner. Visible when the project uses EtherCAT
+          features the connected runtime may not advertise (dynamic_alloc,
+          sdo_byte_string, sdo_complete_access). It is informational on the
+          editor (no runtime hello wiring yet) and refuses the build in
+          `handleBuild` when the connected runtime actually lacks a feature. */}
+      {(() => {
+        const required = requiredRuntimeFeatures(project.data.remoteDevices)
+        if (required.length === 0) return null
+        return (
+          <div className='mb-4 shrink-0 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-200'>
+            <strong>Runtime feature requirement:</strong> this project uses{' '}
+            <code className='font-mono'>{required.join(', ')}</code> on EtherDOG. The build will refuse if the
+            connected runtime does not advertise these.
+          </div>
+        )
+      })()}
 
       {/* Tabs */}
       <Tabs.Root

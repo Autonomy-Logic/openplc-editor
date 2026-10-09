@@ -108,6 +108,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     ipAddress: null,
     runtimeUpdateInProgress: false,
     runtimeVersion: null,
+    runtimeFeatures: null,
     selectedDevice: null,
     storedCredentials: null,
     timingStats: null,

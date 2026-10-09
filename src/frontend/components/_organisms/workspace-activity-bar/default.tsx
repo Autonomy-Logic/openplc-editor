@@ -1,4 +1,9 @@
+import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { evaluatePreBuildPlcGate } from '@root/middleware/shared/utils/build-gate/pre-build-plc-gate'
+import {
+  evaluateRuntimeCapabilityGate,
+  runtimeCapabilityStateFor,
+} from '@root/middleware/shared/utils/build-gate/runtime-capability-gate'
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { composeLibraryDebugHarness } from '@root/middleware/shared/utils/library-debug/compose-library-debug-harness'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
@@ -372,6 +377,45 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           }
           store.getState().deviceActions.setPlcRuntimeStatus('STOPPED')
           addLog({ level: 'info', message: 'PLC stopped before build.' })
+        }
+      }
+
+      // DOPE-704 E7: target-capability gate. Refuses the build when the project
+      // uses EtherCAT features the connected runtime does not advertise
+      // (RTOP-319 R4). On the editor there is no runtime hello today, so the
+      // gate's advertisement is `undefined`: a project with no required features
+      // (plain-slave projects, BR24) still builds; a modular-coupler project
+      // refuses with an upgrade-EtherDOG message. The web adapter will populate
+      // advertisement from a live hello in a follow-up.
+      {
+        const state = store.getState()
+        const rc = state.runtimeConnection
+        const runtimeFeatures = rc?.runtimeFeatures
+        const runtimeVersion = rc?.runtimeVersion
+        const gate = evaluateRuntimeCapabilityGate(
+          runtimeCapabilityStateFor({
+            remoteDevices: state.project.data.remoteDevices,
+            advertisement: {
+              advertisedFeatures:
+                runtimeFeatures === null || runtimeFeatures === undefined
+                  ? undefined
+                  : // Narrow readonly string[] → readonly RuntimeFeature[]: the gate
+                    // ignores unknown entries, and tagging each here would require a
+                    // shared enum the editor does not have today.
+                    (runtimeFeatures as unknown as import('@root/middleware/shared/utils/build-gate/runtime-capability-gate').RuntimeFeature[]),
+              runtimeVersion: runtimeVersion ?? undefined,
+            },
+          }),
+        )
+        if (gate.kind === 'refuse') {
+          addLog({ level: 'error', message: `Build refused: ${gate.reason}` })
+          toast({
+            title: 'Build refused',
+            description: gate.reason,
+            variant: 'fail',
+          })
+          setIsCompiling(false)
+          return
         }
       }
 
