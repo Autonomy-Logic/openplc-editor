@@ -1,6 +1,8 @@
 import {
   enrichDeviceData,
+  lacksE2Schema,
   lacksPdoAssignment,
+  migrateSlaveToE2Schema,
   recordPdoAssignment,
 } from '@root/backend/shared/ethercat/enrich-device-data'
 import { generateDefaultChannelMappings, pdoToChannels } from '@root/backend/shared/ethercat/esi-parser'
@@ -95,6 +97,24 @@ export function useDeviceConfiguration({
           if (!device.channelInfo || !device.rxPdos || !device.txPdos) {
             const { sdoConfigurations, ...rest } = enrichDeviceData(result.device, externalAddresses)
             onEnrichDeviceRef.current(device.sdoConfigurations !== undefined ? rest : { ...rest, sdoConfigurations })
+          } else if (lacksE2Schema(device)) {
+            // DOPE-704 E2 extras: a slave saved under the pre-DOPE-704 schema (no
+            // coeFlags, no fixed/mandatory/sm/exclude on PDOs) gets migrated here.
+            // The migrated slave carries the ESI's CoE flags and the per-PDO defaults
+            // merged in; the user's assignment choices stay verbatim. Idempotent, so
+            // reopening the device later is a no-op.
+            const migrated = migrateSlaveToE2Schema(device, result.device)
+            onEnrichDeviceRef.current({
+              rxPdos: migrated.rxPdos,
+              txPdos: migrated.txPdos,
+              coeFlags: migrated.config.coeFlags,
+            })
+            toast({
+              title: 'Project updated',
+              description:
+                'This EtherCAT slave was saved under the previous schema. Its CoE flags and PDO defaults have been filled in from the ESI.',
+              variant: 'default',
+            })
           } else if (lacksPdoAssignment(device)) {
             onEnrichDeviceRef.current(recordPdoAssignment(device, result.device))
           } else if (device.sdoConfigurations === undefined && result.device.coeObjects?.length) {

@@ -178,6 +178,57 @@ const DeviceConfigurationForm = ({ config, updateConfig }: DeviceConfigurationFo
       </div>
     </div>
 
+    {/* DOPE-704 E2: CoE flags from the ESI's <Mailbox><CoE>. These gate the
+         PDO-assignment startup block (0x1C12/0x1C13 on PdoAssign), the module
+         ident-list write (0xF030 on PdoConfig) and the Complete Access form
+         of long SDO writes (0xF030/CompleteAccess=true). The checkboxes let
+         the user override the ESI defaults when a slave advertises something
+         different from what it actually accepts. */}
+    <div>
+      <h6 className='mb-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>CoE Flags</h6>
+      <div className='flex flex-wrap gap-x-6 gap-y-2'>
+        <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
+          <Checkbox
+            checked={config.coeFlags?.pdoAssign ?? false}
+            onCheckedChange={(checked) =>
+              updateConfig('coeFlags', {
+                pdoAssign: checked === true,
+                pdoConfig: config.coeFlags?.pdoConfig ?? false,
+                completeAccess: config.coeFlags?.completeAccess ?? false,
+              })
+            }
+          />
+          PdoAssign (0x1C12 / 0x1C13 writes)
+        </label>
+        <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
+          <Checkbox
+            checked={config.coeFlags?.pdoConfig ?? false}
+            onCheckedChange={(checked) =>
+              updateConfig('coeFlags', {
+                pdoAssign: config.coeFlags?.pdoAssign ?? false,
+                pdoConfig: checked === true,
+                completeAccess: config.coeFlags?.completeAccess ?? false,
+              })
+            }
+          />
+          PdoConfig (0xF030 module ident list)
+        </label>
+        <label className='flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300'>
+          <Checkbox
+            checked={config.coeFlags?.completeAccess ?? false}
+            onCheckedChange={(checked) =>
+              updateConfig('coeFlags', {
+                pdoAssign: config.coeFlags?.pdoAssign ?? false,
+                pdoConfig: config.coeFlags?.pdoConfig ?? false,
+                completeAccess: checked === true,
+              })
+            }
+          />
+          CompleteAccess (multi-sub-index SDO writes)
+        </label>
+      </div>
+    </div>
+
     {/* Distributed Clocks (DC) */}
     <div>
       <h6 className='mb-2 text-xs font-medium text-neutral-700 dark:text-neutral-300'>Distributed Clocks (DC)</h6>
