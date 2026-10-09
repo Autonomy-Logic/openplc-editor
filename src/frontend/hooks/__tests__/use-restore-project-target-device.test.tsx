@@ -75,7 +75,7 @@ describe('useRestoreProjectTargetDevice', () => {
     expect(store.getState().runtimeConnection.connectionStatus).toBe('disconnected')
   })
 
-  it('selects nothing when the recorded vPLC is no longer listed', async () => {
+  it('falls back to the simulator when the recorded vPLC is no longer listed', async () => {
     const store = createTestStore()
     loadProjectWithTarget(store)
     const list = jest.fn(() => Promise.resolve([]))
@@ -84,9 +84,75 @@ describe('useRestoreProjectTargetDevice', () => {
       wrapper: createStoreWrapper(store, makePorts(list, WEB_CAPABILITIES)),
     })
 
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
-    await act(async () => {})
+    await waitFor(() => expect(store.getState().deviceDefinitions.configuration.deviceBoard).toBe('OpenPLC Simulator'))
     expect(store.getState().runtimeConnection.selectedDevice).toBeNull()
+  })
+
+  it('falls back to the simulator when the recorded vPLC is inactive', async () => {
+    const store = createTestStore()
+    loadProjectWithTarget(store)
+    const inactive = [{ ...listing[0], devices: [{ ...listing[0].devices[0], active: false }] }] as OrchestratorInfo[]
+    const list = jest.fn(() => Promise.resolve(inactive))
+
+    renderHook(() => useRestoreProjectTargetDevice(), {
+      wrapper: createStoreWrapper(store, makePorts(list, WEB_CAPABILITIES)),
+    })
+
+    await waitFor(() => expect(store.getState().deviceDefinitions.configuration.deviceBoard).toBe('OpenPLC Simulator'))
+    expect(store.getState().runtimeConnection.selectedDevice).toBeNull()
+  })
+
+  it('changes nothing when the listing fails, since availability is unknown', async () => {
+    const store = createTestStore()
+    loadProjectWithTarget(store)
+    const list = jest.fn(() => Promise.reject(new Error('edge unreachable')))
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      renderHook(() => useRestoreProjectTargetDevice(), {
+        wrapper: createStoreWrapper(store, makePorts(list, WEB_CAPABILITIES)),
+      })
+      await waitFor(() => expect(consoleError).toHaveBeenCalled())
+
+      expect(store.getState().deviceDefinitions.configuration.deviceBoard).toBe('OpenPLC Runtime v4')
+      expect(store.getState().runtimeConnection.selectedDevice).toBeNull()
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('discards a pending restore once the selection changed while the listing was in flight', async () => {
+    const store = createTestStore()
+    loadProjectWithTarget(store)
+    let resolveListing: (value: OrchestratorInfo[]) => void = () => {}
+    const list = jest.fn(
+      () =>
+        new Promise<OrchestratorInfo[]>((resolve) => {
+          resolveListing = resolve
+        }),
+    )
+
+    renderHook(() => useRestoreProjectTargetDevice(), {
+      wrapper: createStoreWrapper(store, makePorts(list, WEB_CAPABILITIES)),
+    })
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+
+    // The same recorded vPLC picked by hand, then a disconnect, before the listing lands.
+    act(() => {
+      store.getState().deviceActions.setSelectedDevice({
+        orchestratorId: 'edge-1',
+        orchestratorAgentId: 'agent-1',
+        deviceId: 'vplc-1',
+        deviceName: 'mixer',
+      })
+      store.getState().deviceActions.clearRuntimeConnection()
+    })
+    await act(async () => {
+      resolveListing(listing)
+    })
+
+    expect(store.getState().runtimeConnection.selectedDevice).toBeNull()
+    expect(store.getState().deviceDefinitions.configuration.deviceBoard).toBe('OpenPLC Runtime v4')
   })
 
   it('does not undo a disconnect: clearing the selection does not trigger a second restore', async () => {
