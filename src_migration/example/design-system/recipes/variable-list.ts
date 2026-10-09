@@ -2,7 +2,7 @@ import styles from './variable-list.module.css'
 
 /**
  * Recipe: the layout and appearance of a composed pattern (the variable list), kept in the design system
- * so the view in `frontend` holds structure only. Named keys make a missing class a compile error.
+ * so the view in `frontend` holds structure only. Views use these named keys, never the stylesheet directly.
  */
 export const variableListRecipe = {
   panel: styles.panel,

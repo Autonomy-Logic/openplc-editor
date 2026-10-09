@@ -2,7 +2,7 @@
 
 export type Unsubscribe = () => void
 
-/** Mirrors the domain's variable types; the application maps between them, so neither side imports the other. */
+/** Structurally identical to the domain's types, so the application passes values across; the compiler flags drift. */
 export type VariableTypeName = 'BOOL' | 'INT' | 'REAL'
 
 /** A variable as callers see it. Read-only data, not the domain entity. */

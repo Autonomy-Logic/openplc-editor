@@ -1,6 +1,6 @@
 // Single source of truth for the example's dependency rules. `check-boundaries.ts` only enforces them.
 
-/** A top-level folder of the example; a file's layer is the first matching path prefix. */
+/** A folder of the example that forms a layer; a file belongs to the layer whose path prefixes it. */
 export type Layer =
   | 'contracts/application'
   | 'contracts/presentation'
@@ -19,7 +19,6 @@ export type Layer =
 /** A public entry another layer may import: the layer root, or the output ports of `application`. */
 export type Entry = Exclude<Layer, '__architecture__'> | 'application/ports'
 
-// Order matters: `contracts/application` must be tried before `application`.
 export const LAYERS: readonly Layer[] = [
   'contracts/application',
   'contracts/presentation',
