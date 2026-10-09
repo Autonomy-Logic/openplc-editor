@@ -240,8 +240,21 @@ export default class MenuBuilder {
   async buildDarwinTemplate(): Promise<MenuItemConstructorOptions[]> {
     const recent = await this.handleGetRecent()
     const homeDir = process.env.HOME || ''
+    // Not `role: 'appMenu'`: its labels use `app.name`, which is the package name, not the product name.
+    const appName = 'OpenPLC Editor'
     const defaultDarwinMenu: MenuItemConstructorOptions = {
-      role: 'appMenu',
+      label: appName,
+      submenu: [
+        { role: 'about', label: `About ${appName}` },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide', label: `Hide ${appName}` },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit', label: `Quit ${appName}` },
+      ],
     }
 
     const subMenuFile: DarwinMenuItemConstructorOptions = {
