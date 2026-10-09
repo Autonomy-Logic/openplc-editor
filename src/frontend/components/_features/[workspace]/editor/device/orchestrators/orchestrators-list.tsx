@@ -9,6 +9,7 @@ import { useOrchestrator, usePlatform, useRuntime } from '../../../../../../../m
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
+import { toProjectTargetDevice, toSelectedDevice } from '../../../../../../services/project-target-device'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import type { SelectedDevice } from '../../../../../../store/slices/device'
 import { cn } from '../../../../../../utils/cn'
@@ -205,25 +206,25 @@ const OrchestratorsList = () => {
     void fetchOrchestrators()
   }, [fetchOrchestrators])
 
-  // Sync selectedDevice with runtimeConnection.selectedDevice on mount and when connection changes
-  // This ensures the UI shows the connected device when reopening the Edge Devices screen
+  // Adopt the app-wide selection on mount and whenever it changes, connected or not: a
+  // selection restored from the project, or made before leaving this screen, shows here.
   useEffect(() => {
-    if (runtimeConnection.connectionStatus === 'connected' && runtimeConnection.selectedDevice) {
+    if (runtimeConnection.selectedDevice) {
       // Copied whole: a hand-listed field copy is what dropped `backplaneAccess` here.
       setSelectedDevice(runtimeConnection.selectedDevice)
     }
-  }, [runtimeConnection.connectionStatus, runtimeConnection.selectedDevice])
+  }, [runtimeConnection.selectedDevice])
 
-  // Auto-expand orchestrator containing the connected device
+  // Auto-expand the orchestrator containing the selected device
   useEffect(() => {
-    if (runtimeConnection.connectionStatus === 'connected' && runtimeConnection.selectedDevice) {
+    if (runtimeConnection.selectedDevice) {
       setExpandedOrchestrators((prev) => {
         const newSet = new Set(prev)
         newSet.add(runtimeConnection.selectedDevice!.orchestratorId)
         return newSet
       })
     }
-  }, [runtimeConnection.connectionStatus, runtimeConnection.selectedDevice])
+  }, [runtimeConnection.selectedDevice])
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
@@ -250,16 +251,7 @@ const OrchestratorsList = () => {
         return
       }
 
-      const selection: SelectedDevice = {
-        orchestratorId,
-        orchestratorAgentId,
-        deviceId: device.id,
-        deviceName: device.name,
-        // Absent stays absent: a host that predates the field must not read as one that said no.
-        ...(typeof device.backplaneAccess === 'boolean' ? { backplaneAccess: device.backplaneAccess } : {}),
-        // `null` is a real answer — "runs no vendor package" — and absent is not.
-        ...(device.vpp !== undefined ? { vpp: device.vpp } : {}),
-      }
+      const selection = toSelectedDevice(orchestratorId, orchestratorAgentId, device)
 
       // If already connected to a different device, show confirmation modal
       if (
@@ -287,6 +279,7 @@ const OrchestratorsList = () => {
       // `selection`, not a reduced copy: it carries backplaneAccess and the
       // vendor-package binding, which is what the package layer follows.
       deviceActions.setSelectedDevice(selection)
+      deviceActions.setTargetDevice(toProjectTargetDevice(selection))
       setConnectionError(null)
     },
     [runtimeConnection.connectionStatus, runtimeConnection.selectedDevice, deviceActions],
@@ -382,6 +375,7 @@ const OrchestratorsList = () => {
       void handleDisconnect().then(() => {
         setSelectedDevice(null)
         deviceActions.setSelectedDevice(null)
+        deviceActions.setTargetDevice(null)
         deviceActions.setDeviceBoard(SIMULATOR_BOARD_NAME)
       })
       return
@@ -391,6 +385,7 @@ const OrchestratorsList = () => {
     // The simulator is a target, not a device: clear the published choice so
     // nothing downstream still believes a device is selected.
     deviceActions.setSelectedDevice(null)
+    deviceActions.setTargetDevice(null)
     setConnectionError(null)
     deviceActions.setDeviceBoard(SIMULATOR_BOARD_NAME)
   }, [runtimeConnection.connectionStatus, runtimeConnection.selectedDevice, deviceActions, handleDisconnect])
@@ -423,6 +418,7 @@ const OrchestratorsList = () => {
     // rather than "confirmed false" and let a build through it should have blocked.
     setSelectedDevice(pendingDeviceSwitch)
     deviceActions.setSelectedDevice(pendingDeviceSwitch)
+    deviceActions.setTargetDevice(toProjectTargetDevice(pendingDeviceSwitch))
     setPendingDeviceSwitch(null)
     setConnectionError(null)
   }, [pendingDeviceSwitch, handleDisconnect, deviceActions])
