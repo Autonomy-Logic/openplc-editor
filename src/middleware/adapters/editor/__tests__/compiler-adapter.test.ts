@@ -98,7 +98,6 @@ beforeEach(() => {
       libraryCallback = cb
     }),
     loadAllLibraries: jest.fn().mockResolvedValue([]),
-    exportProjectXml: jest.fn().mockResolvedValue({ success: true, message: 'Exported successfully' }),
   } as unknown as typeof window.bridge
 })
 
@@ -502,41 +501,6 @@ describe('createEditorCompilerAdapter', () => {
       // Only the 'done' event should be recorded, not the irrelevant one
       expect(progressEvents).toHaveLength(1)
       expect(progressEvents[0].stage).toBe('done')
-    })
-  })
-
-  describe('exportProjectXml', () => {
-    it('calls bridge exportProjectXml and returns success', async () => {
-      const result = await adapter.exportProjectXml({
-        projectData: mockProjectData,
-        projectPath: '/path/to/project',
-        format: 'old-editor',
-      })
-
-      expect(window.bridge.exportProjectXml).toHaveBeenCalledWith(
-        '/path/to/project',
-        expect.objectContaining({
-          dataTypes: [],
-          configuration: mockProjectData.configurations,
-        }),
-        'old-editor',
-      )
-      expect(result).toEqual({ success: true, message: 'Exported successfully' })
-    })
-
-    it('returns error when export fails', async () => {
-      ;(window.bridge.exportProjectXml as jest.Mock).mockResolvedValue({
-        success: false,
-        message: 'Export failed: disk full',
-      })
-
-      const result = await adapter.exportProjectXml({
-        projectData: mockProjectData,
-        projectPath: '/path',
-        format: 'codesys',
-      })
-
-      expect(result).toEqual({ success: false, error: 'Export failed: disk full' })
     })
   })
 

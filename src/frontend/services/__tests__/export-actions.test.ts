@@ -2,7 +2,7 @@
  * export-actions.ts test file
  *
  * `executeExportPlcopen` reads the store it is given, converts the
- * flat store project shape into `XmlGenerator`'s schema shape, and calls
+ * flat store project shape into `PlcopenXmlGenerator`'s schema shape, and calls
  * `projectPort.exportPlcopenFile`. The generator and toast are mocked and the
  * store is a real one seeded per test, so the test exercises only the
  * conversion + orchestration logic in this file.
@@ -12,8 +12,8 @@ import type { ProjectPort } from '../../../middleware/shared/ports/project-port'
 import type { PLCProjectData } from '../../../middleware/shared/ports/types'
 
 const mockXmlGenerator = vi.fn()
-vi.mock('../../../backend/shared/utils/PLC/xml-generator', () => ({
-  XmlGenerator: (...args: unknown[]) => mockXmlGenerator(...args),
+vi.mock('../../../backend/shared/utils/PLC/plcopen-xml-generator', () => ({
+  PlcopenXmlGenerator: (...args: unknown[]) => mockXmlGenerator(...args),
 }))
 
 const mockToast = vi.fn()
@@ -68,7 +68,7 @@ beforeEach(() => {
 })
 
 describe('executeExportPlcopen', () => {
-  it('converts the flat project data into schema shape and passes it to XmlGenerator', async () => {
+  it('converts the flat project data into schema shape and passes it to PlcopenXmlGenerator', async () => {
     mockXmlGenerator.mockReturnValue({ ok: true, message: 'ok', data: '<project/>' })
     const projectPort = makeProjectPort()
 
@@ -76,8 +76,7 @@ describe('executeExportPlcopen', () => {
 
     expect(result).toEqual({ success: true })
     expect(mockXmlGenerator).toHaveBeenCalledTimes(1)
-    const [schemaData, dialect] = mockXmlGenerator.mock.calls[0]
-    expect(dialect).toBe('old-editor')
+    const [schemaData] = mockXmlGenerator.mock.calls[0]
     expect(schemaData.pous).toEqual([
       {
         type: 'program',
@@ -136,7 +135,19 @@ describe('executeExportPlcopen', () => {
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'default' }))
   })
 
-  it('toasts a failure and returns success:false when XmlGenerator fails', async () => {
+  it('stays silent and returns success:false when the save dialog is dismissed', async () => {
+    mockXmlGenerator.mockReturnValue({ ok: true, message: 'ok', data: '<project/>' })
+    const projectPort = makeProjectPort({
+      exportPlcopenFile: vi.fn().mockResolvedValue({ success: false, canceled: true }),
+    })
+
+    const result = await executeExportPlcopen(store, projectPort)
+
+    expect(result).toEqual({ success: false })
+    expect(mockToast).not.toHaveBeenCalled()
+  })
+
+  it('toasts a failure and returns success:false when PlcopenXmlGenerator fails', async () => {
     mockXmlGenerator.mockReturnValue({ ok: false, message: 'Main POU not found.' })
     const projectPort = makeProjectPort()
 

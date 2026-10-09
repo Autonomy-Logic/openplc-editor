@@ -756,6 +756,14 @@ describe('createEditorProjectAdapter', () => {
 
       expect(result).toEqual({ success: false, error: undefined })
     })
+
+    it('passes a dismissed save dialog through as canceled', async () => {
+      ;(window.bridge.exportPlcopenFile as jest.Mock).mockResolvedValue({ success: false, canceled: true })
+
+      const result = await adapter.exportPlcopenFile('my-project.xml', '<project/>')
+
+      expect(result).toEqual({ success: false, canceled: true })
+    })
   })
 
   describe('exportPdfFile', () => {
