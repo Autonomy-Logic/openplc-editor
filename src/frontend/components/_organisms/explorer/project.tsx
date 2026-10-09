@@ -568,24 +568,75 @@ const Project = () => {
                         })
                       }
                     >
-                      {device.ethercatConfig?.devices?.map((child) => (
-                        <ProjectTreeLeaf
-                          key={child.id}
-                          leafLang={child.cia402?.enabled ? 'softMotionDrive' : 'ethercatDevice'}
-                          leafType='ethercat-device'
-                          busName={device.name}
-                          deviceId={child.id}
-                          label={child.name}
-                          highlightQuery={searchQuery}
-                          onClick={() =>
-                            handleCreateTab({
-                              name: child.name,
-                              path: `/devices/remote/${device.name}/devices/${child.id}`,
-                              elementType: { type: 'ethercat-device', busName: device.name, deviceId: child.id },
-                            })
-                          }
-                        />
-                      ))}
+                      {device.ethercatConfig?.devices?.map((child) => {
+                        // DOPE-704 E4: a modular coupler expands to show its slot modules.
+                        // isModularCoupler is set at import time from the ESI's <Slots>
+                        // block; existing modules make the coupler expandable even when
+                        // the flag is missing (projects saved pre-E4).
+                        const isModular = child.isModularCoupler === true || (child.modules?.length ?? 0) > 0
+                        if (isModular) {
+                          return (
+                            <ProjectTreeExpandableLeaf
+                              key={child.id}
+                              leafLang='ethercatDevice'
+                              leafType='ethercat-device'
+                              label={child.name}
+                              highlightQuery={searchQuery}
+                              onClick={() =>
+                                handleCreateTab({
+                                  name: child.name,
+                                  path: `/devices/remote/${device.name}/devices/${child.id}`,
+                                  elementType: { type: 'ethercat-device', busName: device.name, deviceId: child.id },
+                                })
+                              }
+                            >
+                              {(child.modules ?? [])
+                                .slice()
+                                .sort((a, b) => a.slot - b.slot)
+                                .map((module) => (
+                                  <ProjectTreeLeaf
+                                    key={module.id}
+                                    leafLang='ethercatDevice'
+                                    leafType='ethercat-device'
+                                    busName={device.name}
+                                    deviceId={child.id}
+                                    label={`Slot ${module.slot} — ${module.name}`}
+                                    highlightQuery={searchQuery}
+                                    onClick={() =>
+                                      handleCreateTab({
+                                        name: `${child.name}/${module.name}`,
+                                        path: `/devices/remote/${device.name}/devices/${child.id}/modules/${module.id}`,
+                                        elementType: {
+                                          type: 'ethercat-device',
+                                          busName: device.name,
+                                          deviceId: child.id,
+                                        },
+                                      })
+                                    }
+                                  />
+                                ))}
+                            </ProjectTreeExpandableLeaf>
+                          )
+                        }
+                        return (
+                          <ProjectTreeLeaf
+                            key={child.id}
+                            leafLang={child.cia402?.enabled ? 'softMotionDrive' : 'ethercatDevice'}
+                            leafType='ethercat-device'
+                            busName={device.name}
+                            deviceId={child.id}
+                            label={child.name}
+                            highlightQuery={searchQuery}
+                            onClick={() =>
+                              handleCreateTab({
+                                name: child.name,
+                                path: `/devices/remote/${device.name}/devices/${child.id}`,
+                                elementType: { type: 'ethercat-device', busName: device.name, deviceId: child.id },
+                              })
+                            }
+                          />
+                        )
+                      })}
                     </ProjectTreeExpandableLeaf>
                   ) : (
                     <ProjectTreeLeaf
