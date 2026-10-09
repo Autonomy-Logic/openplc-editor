@@ -12,8 +12,24 @@ const makeModbusServer = (overrides?: Partial<PLCServer>): PLCServer => ({
   ...overrides,
 })
 
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+
+/** `JSON.parse` answers `unknown`, so narrow to the counts before reading them. */
+const bufferMappingOf = (json: string | null): Record<string, Record<string, number>> => {
+  const value: unknown = JSON.parse(json ?? '{}')
+  if (!isRecord(value) || !isRecord(value.buffer_mapping)) throw new Error('emitted config carries no buffer_mapping')
+  const groups: Record<string, Record<string, number>> = {}
+  for (const [group, counts] of Object.entries(value.buffer_mapping)) {
+    if (!isRecord(counts)) continue
+    const numbers: Record<string, number> = {}
+    for (const [key, count] of Object.entries(counts)) if (typeof count === 'number') numbers[key] = count
+    groups[group] = numbers
+  }
+  return groups
+}
+
 describe('generateModbusSlaveConfig — unconfigured segments follow the image', () => {
-  // DOPE-615. DEFAULT_BUFFER_MAPPING is 1024 registers and 8192 bits, which is
+  // DEFAULT_BUFFER_MAPPING is 1024 registers and 8192 bits, which is
   // exactly the fixed image the runtime used to allocate — right only for as
   // long as every image was that size. With the image now following the
   // project, falling back to those defaults would ship a modbus.json declaring
@@ -21,37 +37,36 @@ describe('generateModbusSlaveConfig — unconfigured segments follow the image',
   const sizes = { '%QW': 4, '%MW': 2, '%QX': 16, '%IX': 8, '%IW': 3 }
 
   it('takes the counts from the image when the user configured nothing', () => {
-    const parsed = JSON.parse(generateModbusSlaveConfig([makeModbusServer()], sizes) ?? '{}')
-    expect(parsed.buffer_mapping.holding_registers.qw_count).toBe(4)
-    expect(parsed.buffer_mapping.holding_registers.mw_count).toBe(2)
-    expect(parsed.buffer_mapping.coils.qx_bits).toBe(16)
-    expect(parsed.buffer_mapping.discrete_inputs.ix_bits).toBe(8)
-    expect(parsed.buffer_mapping.input_registers.iw_count).toBe(3)
+    const mapping = bufferMappingOf(generateModbusSlaveConfig([makeModbusServer()], sizes))
+    expect(mapping.holding_registers.qw_count).toBe(4)
+    expect(mapping.holding_registers.mw_count).toBe(2)
+    expect(mapping.coils.qx_bits).toBe(16)
+    expect(mapping.discrete_inputs.ix_bits).toBe(8)
+    expect(mapping.input_registers.iw_count).toBe(3)
   })
 
   it('reads an area the image does not have as zero, not as the old default', () => {
     // %MD and %ML are absent from `sizes`, and absent means zero.
-    const parsed = JSON.parse(generateModbusSlaveConfig([makeModbusServer()], sizes) ?? '{}')
-    expect(parsed.buffer_mapping.holding_registers.md_count).toBe(0)
-    expect(parsed.buffer_mapping.holding_registers.ml_count).toBe(0)
+    const mapping = bufferMappingOf(generateModbusSlaveConfig([makeModbusServer()], sizes))
+    expect(mapping.holding_registers.md_count).toBe(0)
+    expect(mapping.holding_registers.ml_count).toBe(0)
   })
 
   it('still honours a count the user did configure', () => {
     // An explicit count is a deliberate request, and it is also what sized the
     // image in the first place — so the two agree without this having to win.
     const server = makeModbusServer()
-    server.modbusSlaveConfig = {
-      ...server.modbusSlaveConfig,
-      bufferMapping: { holdingRegisters: { qwCount: 99 } },
-    } as typeof server.modbusSlaveConfig
-    const parsed = JSON.parse(generateModbusSlaveConfig([server], sizes) ?? '{}')
-    expect(parsed.buffer_mapping.holding_registers.qw_count).toBe(99)
+    const base = server.modbusSlaveConfig
+    if (!base) throw new Error('fixture carries no modbusSlaveConfig')
+    server.modbusSlaveConfig = { ...base, bufferMapping: { holdingRegisters: { qwCount: 99 } } }
+    const mapping = bufferMappingOf(generateModbusSlaveConfig([server], sizes))
+    expect(mapping.holding_registers.qw_count).toBe(99)
   })
 
   it('falls back to the old defaults when no image is supplied', () => {
     // Callers outside the compile pipeline have no image to offer.
-    const parsed = JSON.parse(generateModbusSlaveConfig([makeModbusServer()]) ?? '{}')
-    expect(parsed.buffer_mapping.holding_registers.qw_count).toBe(DEFAULT_BUFFER_MAPPING.holdingRegisters.qwCount)
+    const mapping = bufferMappingOf(generateModbusSlaveConfig([makeModbusServer()]))
+    expect(mapping.holding_registers.qw_count).toBe(DEFAULT_BUFFER_MAPPING.holdingRegisters.qwCount)
   })
 })
 

@@ -121,18 +121,12 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
   // when the project has no config of that type.  Master also forwards
   // non-fatal skip diagnostics (e.g. an RTU device missing a serial
   // port) through `log` so they reach the build console.
-  // Type assertions match the editor's call sites — the generators
-  // accept a narrower shape than `PLCServer[]` / `PLCRemoteDevice[]`
-  // but the runtime values are compatible.
   // `imageSizes` supplies the counts for any segment the user did not
   // configure, so this file cannot declare addresses `image.conf` says do not
   // exist. Without it the two disagreed for the commonest project of all: one
   // with a Modbus server nobody customised (DOPE-615, FR16).
-  const modbusSlave = generateModbusSlaveConfig(servers as Parameters<typeof generateModbusSlaveConfig>[0], imageSizes)
-  const modbusMaster = generateModbusMasterConfig(
-    remoteDevices as Parameters<typeof generateModbusMasterConfig>[0],
-    (msg) => log(msg, 'warning'),
-  )
+  const modbusSlave = generateModbusSlaveConfig(servers, imageSizes)
+  const modbusMaster = generateModbusMasterConfig(remoteDevices, (msg) => log(msg, 'warning'))
   const s7Comm = generateS7CommConfig(servers)
 
   // OPC-UA: throws `OpcUaConfigError` on invalid project state.

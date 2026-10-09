@@ -210,6 +210,26 @@ describe('resolveAddressProducerCapabilities', () => {
     expect(resolveAddressProducerCapabilities({ compiler: 'something-else' })).toEqual(ALL_ADDRESS_PRODUCERS_ACTIVE)
   })
 
+  it('is permissive for a capability block that names no producer', () => {
+    // A block declaring only a server has not spoken about producers. Reading
+    // it as authoritative resolved all four to false, which is the all-false
+    // block this resolver exists to avoid.
+    expect(resolveAddressProducerCapabilities({ capabilities: { opcuaServer: true } })).toEqual(
+      ALL_ADDRESS_PRODUCERS_ACTIVE,
+    )
+  })
+
+  it('lets the compiler answer when the block names no producer', () => {
+    const caps = resolveAddressProducerCapabilities({ compiler: 'simulator', capabilities: { opcuaServer: true } })
+    expect(caps.pinMapping).toBe(false)
+    expect(caps.modbusTcpRemote).toBe(true)
+  })
+
+  it('treats a producer declared false as an answer, not as silence', () => {
+    const caps = resolveAddressProducerCapabilities({ capabilities: { pinMapping: false } })
+    expect(caps.pinMapping).toBe(false)
+  })
+
   it('honours a target that answered, including when it answers all-false', () => {
     // The difference that matters: a resolved board declaring `pinMapping:
     // false` must really deactivate pins, so their space frees up and the

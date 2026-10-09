@@ -177,20 +177,27 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
   return merged
 }
 
+/** The four fields that say a producer is active. A block naming none of them
+ *  has not spoken about producers, whatever else it declares. */
+const ADDRESS_PRODUCER_KEYS = ['pinMapping', 'vppIo', 'modbusTcpRemote', 'ethercat'] as const
+
 /**
  * True when nothing in the board info says which producers are active.
  *
- * Derived from `inferFromCompiler` rather than by listing the compilers again:
- * that function already owns which strings it recognises, and it answers
- * `EMPTY_CAPABILITIES` — the very object, so reference equality holds — for the
- * ones it does not. A second copy of the list would rot the moment a compiler
- * is added to the switch and not here, and the failure would be silent in the
- * dangerous direction: an unrecognised target would be read as "says nothing"
- * and get every producer active.
+ * A capability block counts only when it names a producer. One carrying just
+ * `opcuaServer` says nothing here, and reading it as authoritative resolved
+ * every producer to false — which is the all-false block this resolver exists
+ * to avoid, not a declaration.
+ *
+ * The compiler path is derived from `inferFromCompiler` rather than by listing
+ * the compilers again: that function already owns which strings it recognises
+ * and answers `EMPTY_CAPABILITIES` — the very object, so reference equality
+ * holds — for the ones it does not.
  */
 function saysNothingAboutProducers(boardInfo: BoardInfoLike | undefined): boolean {
   if (!boardInfo) return true
-  if (boardInfo.capabilities) return false
+  const declared = boardInfo.capabilities
+  if (declared && ADDRESS_PRODUCER_KEYS.some((key) => declared[key] !== undefined)) return false
   return inferFromCompiler(boardInfo) === EMPTY_CAPABILITIES
 }
 
