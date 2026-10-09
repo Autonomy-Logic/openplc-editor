@@ -23,8 +23,9 @@ import {
   DeviceConfigurationForm,
   SdoParametersSection,
 } from './components/device-configuration-form'
+import { ProcessDataTab } from './components/process-data-tab'
 
-type DeviceDetailTab = 'info' | 'configuration' | 'startup-params' | 'channel-mappings' | 'axis'
+type DeviceDetailTab = 'info' | 'configuration' | 'startup-params' | 'channel-mappings' | 'axis' | 'process-data'
 
 const TabItem = ({ value, label, isActive }: { value: string; label: string; isActive: boolean }) => (
   <Tabs.Trigger
@@ -210,6 +211,25 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
     [configuredDevices, deviceId, syncDevicesToStore],
   )
 
+  // DOPE-704 E3 UI: Expert-mode PDO reassignment. The handler mutates only the
+  // `assigned` flag on the named PDO; the exclude lists stay as the ESI declared
+  // them and the generator's PdoAssign gate still fires in buildPdoAssignmentSdos.
+  const handleUpdatePdoAssigned = useCallback(
+    (direction: 'rx' | 'tx', pdoIndex: string, assigned: boolean) => {
+      syncDevicesToStore(
+        configuredDevices.map((d) => {
+          if (d.id !== deviceId) return d
+          const list = (direction === 'rx' ? d.rxPdos : d.txPdos) ?? []
+          const next = list.map((pdo) =>
+            pdo.index.toLowerCase() === pdoIndex.toLowerCase() ? { ...pdo, assigned } : pdo,
+          )
+          return direction === 'rx' ? { ...d, rxPdos: next } : { ...d, txPdos: next }
+        }),
+      )
+    },
+    [configuredDevices, deviceId, syncDevicesToStore],
+  )
+
   const handleUpdateCia402 = useCallback(
     (patch: Partial<Cia402AxisConfig>) => {
       syncDevicesToStore(
@@ -329,6 +349,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           {device.cia402 && <TabItem value='axis' label='SoftMotion Axis' isActive={activeTab === 'axis'} />}
           <TabItem value='info' label='Device Info' isActive={activeTab === 'info'} />
           <TabItem value='configuration' label='Configuration' isActive={activeTab === 'configuration'} />
+          <TabItem value='process-data' label='Process Data' isActive={activeTab === 'process-data'} />
           <TabItem value='startup-params' label='Startup Parameters' isActive={activeTab === 'startup-params'} />
         </Tabs.List>
 
@@ -402,6 +423,16 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
             <div className='flex flex-col gap-5'>
               <DeviceConfigurationForm config={device.config} updateConfig={updateConfig} />
             </div>
+          </div>
+        </Tabs.Content>
+
+        {/* DOPE-704 E3 UI: Process Data (Simple / Expert) */}
+        <Tabs.Content
+          value='process-data'
+          className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
+        >
+          <div className='flex-1 overflow-auto p-4'>
+            <ProcessDataTab device={device} onUpdatePdoAssigned={handleUpdatePdoAssigned} />
           </div>
         </Tabs.Content>
 
