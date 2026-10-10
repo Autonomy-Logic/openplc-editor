@@ -1034,6 +1034,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('ethercat:get-interfaces', this.handleEtherCATGetInterfaces)
     this.registerHandle('ethercat:get-status', this.handleEtherCATGetStatus)
     this.registerHandle('ethercat:scan', this.handleEtherCATScan)
+    this.registerHandle('ethercat:scan-modules', this.handleEtherCATScanModules)
     this.registerHandle('ethercat:test', this.handleEtherCATTest)
     this.registerHandle('ethercat:validate', this.handleEtherCATValidate)
     this.registerHandle('ethercat:get-runtime-status', this.handleEtherCATGetRuntimeStatus)
@@ -3212,6 +3213,42 @@ class MainProcessBridge implements MainIpcModule {
             interface: scanRequest.interface,
           } as EtherCATScanResponse
         },
+        scanTimeout,
+      )
+
+      if (result.success) {
+        return { success: true, data: result.data }
+      }
+      return { success: false, error: result.error }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  /**
+   * DOPE-704 E6 / RTOP-319 R3: `POST /api/discovery/ethercat/scan-modules`.
+   * Returns the modular coupler's `0xF050` module list as the Python runtime
+   * forwards it. Keeps parsing responsibilities on the renderer — the handler
+   * just hands back the parsed JSON body so the shared protocol helpers can
+   * decide what counts as a usable row.
+   */
+  handleEtherCATScanModules = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    scanRequest: { busName: string; slavePosition: number; timeout_ms?: number },
+  ): Promise<{ success: boolean; data?: unknown; error?: string }> => {
+    try {
+      const postData = JSON.stringify({
+        bus_name: scanRequest.busName,
+        slave_position: scanRequest.slavePosition,
+      })
+      const scanTimeout = (scanRequest.timeout_ms || 5000) + 10000
+
+      const result = await this.makeRuntimeApiPostRequest(
+        ipAddress,
+        '/api/discovery/ethercat/scan-modules',
+        postData,
+        (data: string) => JSON.parse(data) as Record<string, unknown>,
         scanTimeout,
       )
 

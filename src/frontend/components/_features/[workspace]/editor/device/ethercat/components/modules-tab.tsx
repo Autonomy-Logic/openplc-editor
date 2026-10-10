@@ -27,6 +27,7 @@ import type {
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
 import { useEsi, useEtherCATScan } from '@root/middleware/shared/providers/platform-context'
+import { canonicaliseIdent } from '@root/middleware/shared/utils/ethercat/scan-modules-protocol'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { DiscoveredModuleTable, type ScannedModuleMatch } from './discovered-module-table'
@@ -152,9 +153,9 @@ function matchScannedModules(
   repository: ESIRepositoryItemLight[],
 ): ScannedModuleMatch[] {
   return scan.map((s) => {
-    const identLower = s.ident.toLowerCase()
+    const identCanon = canonicaliseIdent(s.ident)
     for (const repoItem of repository) {
-      const found = repoItem.modules?.find((m) => m.ident.toLowerCase() === identLower)
+      const found = repoItem.modules?.find((m) => canonicaliseIdent(m.ident) === identCanon)
       if (found !== undefined) return { slot: s.slot, ident: s.ident, match: { repoItem, module: found } }
     }
     return { slot: s.slot, ident: s.ident, match: null }

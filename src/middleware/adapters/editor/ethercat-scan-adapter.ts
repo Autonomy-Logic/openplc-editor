@@ -1,22 +1,42 @@
 /**
- * Editor EtherCATScanPort adapter — DOPE-704 E6.
+ * Editor EtherCATScanPort adapter — DOPE-704 E6 / RTOP-319 R3.
  *
- * The Electron editor has no network path to EtherDOG's `scan-modules` endpoint today
- * (the local runtime bridge does not forward it). The adapter is deliberately a stub so
- * the UI can still render the Scan Modules button and surface a clear reason the action
- * is disabled; when the Electron bridge gains the forwarding the stub is a one-line
- * replace with the real bridge call.
+ * Transport-only. Routes the modular-scan RPC through the Electron IPC bridge
+ * (`window.bridge.etherCATScanModules`) to the main process, which POSTs
+ * `/api/discovery/ethercat/scan-modules` on the configured runtime IP with the
+ * JWT the renderer already holds. Response parsing happens via the shared
+ * protocol helper so both the editor and web adapters interpret the runtime
+ * reply the same way.
  */
 
 import type { EtherCATScanPort } from '../../shared/ports/ethercat-scan-port'
+import { parseScanModulesResponseBody } from '../../shared/utils/ethercat/scan-modules-protocol'
 
-export function createEditorEtherCATScanAdapter(): EtherCATScanPort {
+export interface EditorEtherCATScanAdapterOptions {
+  getRuntimeIp: () => string
+}
+
+export function createEditorEtherCATScanAdapter(options: EditorEtherCATScanAdapterOptions): EtherCATScanPort {
   return {
-    async scanModules() {
-      return {
-        success: false,
-        error:
-          'Scan Modules is not available in the desktop editor yet. Connect through openplc-web (or wait for the Electron bridge to forward the EtherDOG scan command) to use this feature.',
+    async scanModules(req) {
+      try {
+        const ip = options.getRuntimeIp()
+        if (!ip) {
+          return { success: false, error: 'No runtime IP configured. Connect to a runtime before scanning modules.' }
+        }
+
+        const result = await window.bridge.etherCATScanModules(ip, {
+          busName: req.busName,
+          slavePosition: req.slavePosition,
+        })
+
+        if (!result.success) {
+          return { success: false, error: result.error ?? 'The runtime did not answer the scan-modules request.' }
+        }
+
+        return parseScanModulesResponseBody(result.data, { slavePosition: req.slavePosition })
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : String(err) }
       }
     },
   }

@@ -80,7 +80,7 @@ export function createEditorPorts(store: OpenPLCStore): PlatformPorts {
     theme: createEditorThemeAdapter(),
     packages: editorPackages,
     esi: createEditorEsiAdapter(() => _projectPath),
-    ethercatScan: createEditorEtherCATScanAdapter(),
+    ethercatScan: createEditorEtherCATScanAdapter({ getRuntimeIp: () => _runtimeIpAddress }),
     versionControl: createEditorVersionControlAdapter(),
     navigation: createEditorNavigationAdapter(store),
     library: createEditorLibraryAdapter(),
