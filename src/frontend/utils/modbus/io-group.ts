@@ -98,3 +98,33 @@ export const formatIOGroupAddressRange = (points: ModbusIOPoint[]): string => {
   if (points.length === 1) return first
   return `${first} – ${points[points.length - 1].iecLocation}`
 }
+
+/**
+ * The options offered by the New / Edit IO Group form. Shared with the
+ * import/export module so a file and the form always speak the same
+ * vocabulary — adding a function code here makes it importable too.
+ */
+export const IO_GROUP_FUNCTION_CODE_OPTIONS: ReadonlyArray<{ value: ModbusFunctionCode; label: string }> = [
+  { value: '1', label: 'Read Coils (FC 1)' },
+  { value: '2', label: 'Read Discrete Inputs (FC 2)' },
+  { value: '3', label: 'Read Holding Registers (FC 3)' },
+  { value: '4', label: 'Read Input Registers (FC 4)' },
+  { value: '5', label: 'Write Single Coil (FC 5)' },
+  { value: '6', label: 'Write Single Register (FC 6)' },
+  { value: '15', label: 'Write Multiple Coils (FC 15)' },
+  { value: '16', label: 'Write Multiple Registers (FC 16)' },
+]
+
+export const IO_GROUP_ERROR_HANDLING_OPTIONS: ReadonlyArray<{ value: ModbusErrorHandling; label: string }> = [
+  { value: 'keep-last-value', label: 'Keep last value' },
+  { value: 'set-to-zero', label: 'Set to zero' },
+]
+
+/** The values the New IO Group form starts with (name excepted). */
+export const IO_GROUP_FORM_DEFAULTS = {
+  functionCode: '3' as ModbusFunctionCode,
+  cycleTime: 100,
+  offset: '0',
+  length: 1,
+  errorHandling: 'keep-last-value' as ModbusErrorHandling,
+}

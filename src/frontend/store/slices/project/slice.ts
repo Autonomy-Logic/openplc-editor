@@ -402,11 +402,12 @@ function activeKindsForAllocation(live: ProjectSliceRoot): Set<string> | undefin
  * seeded against a target the allocator won't manage afterwards.
  *
  * `clearGroup` drops one group's own points from the pool so a resize can
- * reuse the addresses it is about to give up.
+ * reuse the addresses it is about to give up. Without a `groupId` it drops
+ * every group of that device (a replacing bulk import).
  */
 function buildModbusProducerPool(
   live: ProjectSliceRoot,
-  clearGroup?: { deviceName: string; groupId: string },
+  clearGroup?: { deviceName: string; groupId?: string },
 ): AddressPool {
   const board = live.deviceDefinitions.configuration.deviceBoard
   const remoteDevices = clearGroup
@@ -418,7 +419,7 @@ function buildModbusProducerPool(
               modbusTcpConfig: {
                 ...d.modbusTcpConfig,
                 ioGroups: d.modbusTcpConfig.ioGroups.map((g) =>
-                  g.id === clearGroup.groupId ? { ...g, ioPoints: [] } : g,
+                  clearGroup.groupId === undefined || g.id === clearGroup.groupId ? { ...g, ioPoints: [] } : g,
                 ),
               },
             },
@@ -2541,6 +2542,53 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // Recompact so the groups that followed reclaim the freed addresses.
       getState().projectActions.recalculateIecAddresses()
       return ok()
+    },
+    importIOGroups: (deviceName, groups, options) => {
+      const replace = options?.replace ?? false
+      const live = getState()
+      const target = live.project.data.remoteDevices?.find((d) => d.name === deviceName)
+      if (!target?.modbusTcpConfig) {
+        return { ok: false, title: 'Import failed', message: `Remote device "${deviceName}" was not found.` }
+      }
+
+      // The UI validates and blocks; the store GUARANTEES the invariant.
+      // Point ids are `<groupName>_<index>`, so a duplicate group name on one
+      // device would produce colliding point ids (and alias keys). IEC
+      // identifiers are case-insensitive, hence the case-folded comparison.
+      const names = [...(replace ? [] : target.modbusTcpConfig.ioGroups), ...groups].map((g) => g.name.toLowerCase())
+      const duplicate = names.find((name, index) => names.indexOf(name) !== index)
+      if (duplicate !== undefined) {
+        return {
+          ok: false,
+          title: 'Import failed',
+          message: `More than one IO group would be named "${duplicate}". IO group names must be unique per device.`,
+        }
+      }
+
+      // One pool for the whole batch; the shared `pending` set lets each new
+      // group see the addresses the previous ones in the batch just claimed.
+      // On replace, the device's current groups no longer hold any address.
+      const pool = buildModbusProducerPool(live, replace ? { deviceName } : undefined)
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          const device = slice.project.data.remoteDevices?.find((d) => d.name === deviceName)
+          if (!device?.modbusTcpConfig) return
+          if (replace) device.modbusTcpConfig.ioGroups = []
+
+          const pending = new Set<string>()
+          for (const group of groups) {
+            const length = clampIOGroupLength(group.functionCode, group.length)
+            const errorHandling = resolveIOGroupErrorHandling(group.functionCode, group.errorHandling)
+            const ioPoints = generateIOPoints(group.functionCode, length, group.name, pool, pending)
+            device.modbusTcpConfig.ioGroups.push({ ...group, length, errorHandling, ioPoints })
+          }
+        }),
+      )
+      // A single project-wide recompaction for the whole batch, instead of one
+      // per group as N separate addIOGroup calls would trigger.
+      getState().projectActions.recalculateIecAddresses()
+      return ok({ imported: groups.length })
     },
     updateIOPointAlias: (deviceName, groupId, pointId, alias) => {
       // Phase 1 — write-time alias-uniqueness gate (global, across
