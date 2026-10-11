@@ -35,9 +35,11 @@ import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import TableActions from '../../../../../_atoms/table-actions'
+import { TooltipProvider } from '../../../../../_atoms/tooltip'
+import { TruncatedText } from '../../../../../_atoms/truncated-text'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
 import { toast } from '../../../../[app]/toast/use-toast'
-import { ImportIOGroupsModal,type IOGroupImportMode, type IOGroupImportPreview } from './import-io-groups-modal'
+import { ImportIOGroupsModal, type IOGroupImportMode, type IOGroupImportPreview } from './import-io-groups-modal'
 
 const FUNCTION_CODE_OPTIONS = IO_GROUP_FUNCTION_CODE_OPTIONS
 const ERROR_HANDLING_OPTIONS = IO_GROUP_ERROR_HANDLING_OPTIONS
@@ -432,13 +434,19 @@ const IOGroupRow = ({ ioGroup, isExpanded, onToggleExpand, onEdit, onDelete, onU
             />
           </button>
         </td>
-        <td className='px-2 py-2 text-sm font-medium text-neutral-950 dark:text-neutral-100'>{ioGroup.name}</td>
-        <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>{groupType}</td>
-        <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>{groupAddress}</td>
+        <td className='px-2 py-2 text-sm font-medium text-neutral-950 dark:text-neutral-100'>
+          <TruncatedText text={ioGroup.name} />
+        </td>
+        <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>
+          <TruncatedText text={groupType} />
+        </td>
+        <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>
+          <TruncatedText text={groupAddress} />
+        </td>
         <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>{groupOffset}</td>
         <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>{ioGroup.length}</td>
         <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>
-          {getFunctionCodeLabel(ioGroup.functionCode)}
+          <TruncatedText text={getFunctionCodeLabel(ioGroup.functionCode)} />
         </td>
         <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>-</td>
         <td className='px-2 py-2'>
@@ -495,9 +503,15 @@ const IOPointRow = ({ ioPoint, offset, onUpdateAlias }: IOPointRowProps) => {
   return (
     <tr className='border-b border-neutral-100 bg-neutral-50 dark:border-neutral-900 dark:bg-neutral-900/50'>
       <td className='px-2 py-1'></td>
-      <td className='px-2 py-1 pl-6 text-xs text-neutral-600 dark:text-neutral-400'>{ioPoint.name}</td>
-      <td className='px-2 py-1 text-xs text-neutral-600 dark:text-neutral-400'>{ioPoint.type}</td>
-      <td className='px-2 py-1 text-xs text-neutral-600 dark:text-neutral-400'>{ioPoint.iecLocation}</td>
+      <td className='px-2 py-1 pl-6 text-xs text-neutral-600 dark:text-neutral-400'>
+        <TruncatedText text={ioPoint.name} />
+      </td>
+      <td className='px-2 py-1 text-xs text-neutral-600 dark:text-neutral-400'>
+        <TruncatedText text={ioPoint.type} />
+      </td>
+      <td className='px-2 py-1 text-xs text-neutral-600 dark:text-neutral-400'>
+        <TruncatedText text={ioPoint.iecLocation} />
+      </td>
       <td className='px-2 py-1 text-xs text-neutral-600 dark:text-neutral-400'>{offset}</td>
       {/* A single point has no length of its own — keeps the columns aligned. */}
       <td className='px-2 py-1'></td>
@@ -1141,58 +1155,60 @@ const RemoteDeviceEditor = () => {
         </div>
 
         <div className='flex-1 overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-800'>
-          <table className='w-full table-fixed'>
-            <thead className='sticky top-0 bg-neutral-100 dark:bg-neutral-900'>
-              <tr>
-                <th className='w-8 px-2 py-2'></th>
-                <th className='w-[14%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                  Name
-                </th>
-                <th className='w-[18%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                  Type
-                </th>
-                <th className='w-[15%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                  Address
-                </th>
-                <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                  Offset
-                </th>
-                <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                  Length
-                </th>
-                <th className='w-[17%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                  Function Code
-                </th>
-                <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                  Alias
-                </th>
-                <th className='w-20 px-2 py-2 text-right text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {ioGroups.length === 0 ? (
+          <TooltipProvider>
+            <table className='w-full table-fixed'>
+              <thead className='sticky top-0 bg-neutral-100 dark:bg-neutral-900'>
                 <tr>
-                  <td colSpan={9} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
-                    No IO groups configured. Click the + button to add one, or Import a CSV / JSON file.
-                  </td>
+                  <th className='w-8 px-2 py-2'></th>
+                  <th className='w-[14%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Name
+                  </th>
+                  <th className='w-[18%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Type
+                  </th>
+                  <th className='w-[15%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Address
+                  </th>
+                  <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Offset
+                  </th>
+                  <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Length
+                  </th>
+                  <th className='w-[17%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Function Code
+                  </th>
+                  <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Alias
+                  </th>
+                  <th className='w-20 px-2 py-2 text-right text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Actions
+                  </th>
                 </tr>
-              ) : (
-                ioGroups.map((ioGroup: ModbusIOGroup) => (
-                  <IOGroupRow
-                    key={ioGroup.id}
-                    ioGroup={ioGroup}
-                    isExpanded={expandedGroups.has(ioGroup.id)}
-                    onToggleExpand={() => handleToggleExpand(ioGroup.id)}
-                    onEdit={() => handleOpenEditModal(ioGroup.id)}
-                    onDelete={() => handleDeleteIOGroup(ioGroup.id)}
-                    onUpdateAlias={(ioPointId, alias) => handleUpdateAlias(ioGroup.id, ioPointId, alias)}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {ioGroups.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
+                      No IO groups configured. Click the + button to add one, or Import a CSV / JSON file.
+                    </td>
+                  </tr>
+                ) : (
+                  ioGroups.map((ioGroup: ModbusIOGroup) => (
+                    <IOGroupRow
+                      key={ioGroup.id}
+                      ioGroup={ioGroup}
+                      isExpanded={expandedGroups.has(ioGroup.id)}
+                      onToggleExpand={() => handleToggleExpand(ioGroup.id)}
+                      onEdit={() => handleOpenEditModal(ioGroup.id)}
+                      onDelete={() => handleDeleteIOGroup(ioGroup.id)}
+                      onUpdateAlias={(ioPointId, alias) => handleUpdateAlias(ioGroup.id, ioPointId, alias)}
+                    />
+                  ))
+                )}
+              </tbody>
+            </table>
+          </TooltipProvider>
         </div>
       </div>
 
