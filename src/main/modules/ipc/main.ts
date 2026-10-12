@@ -69,7 +69,7 @@ import type {
   DeviceModbusTransport,
   PlcControlResult,
 } from '@root/backend/shared/debug/types'
-import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
+import { parseESIDeviceFull, parseESIModuleFull } from '@root/backend/shared/ethercat/esi-parser-main'
 import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/library/public-catalog-client'
 import type { SnapshotMetadata } from '@root/backend/shared/project/project-snapshot-archive'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
@@ -395,6 +395,33 @@ class MainProcessBridge implements MainIpcModule {
   // The port and the two timeouts live on `RuntimeApiClient`, not here.
 
   handleRuntimeGetUsersInfo = (_event: IpcMainInvokeEvent, ipAddress: string) => this.runtimeApi.getUsersInfo(ipAddress)
+
+  handleRuntimeGetCapabilities = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+  ): Promise<{ features: readonly string[] | null; runtimeVersion?: string; error?: string }> => {
+    const result = await this.makeRuntimeApiRequest<{
+      available?: boolean
+      features?: unknown
+      version?: unknown
+      message?: unknown
+    }>(ipAddress, '/api/discovery/ethercat/capabilities', (data: string) => {
+      const parsed: unknown = JSON.parse(data)
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('capabilities response was not an object')
+      }
+      return parsed as { available?: boolean; features?: unknown; version?: unknown; message?: unknown }
+    })
+    if (!result.success) {
+      return { features: null, error: result.error }
+    }
+    const body = result.data ?? {}
+    const features = Array.isArray(body.features)
+      ? (body.features.filter((f): f is string => typeof f === 'string') as readonly string[])
+      : []
+    const runtimeVersion = typeof body.version === 'string' ? body.version : undefined
+    return { features, runtimeVersion }
+  }
 
   handleRuntimeCreateUser = (
     _event: IpcMainInvokeEvent,
@@ -1001,6 +1028,7 @@ class MainProcessBridge implements MainIpcModule {
 
     // ===================== RUNTIME API =====================
     this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
+    this.registerHandle('runtime:get-capabilities', this.handleRuntimeGetCapabilities)
     this.registerHandle('runtime:create-user', this.handleRuntimeCreateUser)
     this.registerHandle('runtime:list-users', this.handleRuntimeListUsers)
     this.registerHandle('runtime:whoami', this.handleRuntimeWhoAmI)
@@ -1035,6 +1063,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('ethercat:get-status', this.handleEtherCATGetStatus)
     this.registerHandle('ethercat:scan', this.handleEtherCATScan)
     this.registerHandle('ethercat:scan-modules', this.handleEtherCATScanModules)
+    this.registerHandle('ethercat:diagnostics', this.handleEtherCATDiagnostics)
     this.registerHandle('ethercat:test', this.handleEtherCATTest)
     this.registerHandle('ethercat:validate', this.handleEtherCATValidate)
     this.registerHandle('ethercat:get-runtime-status', this.handleEtherCATGetRuntimeStatus)
@@ -1047,6 +1076,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('esi:parse-and-save-file', this.handleESIParseAndSaveFile)
     this.registerHandle('esi:clear-repository', this.handleESIClearRepository)
     this.registerHandle('esi:load-device-full', this.handleESILoadDeviceFull)
+    this.registerHandle('esi:load-module-full', this.handleESILoadModuleFull)
     this.registerHandle('esi:load-repository-light', this.handleESILoadRepositoryLight)
     this.registerHandle('esi:migrate-repository', this.handleESIMigrateRepository)
 
@@ -3261,6 +3291,35 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  handleEtherCATDiagnostics = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    request: { busName: string; slavePosition: number; timeout_ms?: number },
+  ): Promise<{ success: boolean; data?: unknown; error?: string }> => {
+    try {
+      const postData = JSON.stringify({
+        bus_name: request.busName,
+        slave_position: request.slavePosition,
+      })
+      const timeout = (request.timeout_ms || 3000) + 10000
+
+      const result = await this.makeRuntimeApiPostRequest(
+        ipAddress,
+        '/api/discovery/ethercat/diagnostics',
+        postData,
+        (data: string) => JSON.parse(data) as Record<string, unknown>,
+        timeout,
+      )
+
+      if (result.success) {
+        return { success: true, data: result.data }
+      }
+      return { success: false, error: result.error }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
   handleEtherCATTest = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
@@ -3380,6 +3439,30 @@ class MainProcessBridge implements MainIpcModule {
         return { success: false as const, error: xmlResult.error || 'XML file not found' }
       }
       return parseESIDeviceFull(xmlResult.content, deviceIndex)
+    })
+
+  /** Load one module by ident from a standalone-module ESI file. */
+  handleESILoadModuleFull = async (
+    _event: IpcMainInvokeEvent,
+    projectPath: string,
+    itemId: string,
+    ident: string,
+  ) =>
+    this.wrapServiceCall(async () => {
+      const xmlResult = await this.esiService.loadXmlFile(projectPath, itemId)
+      if (!xmlResult.success || !xmlResult.content) {
+        return { success: false as const, error: xmlResult.error || 'XML file not found' }
+      }
+      const parsed = parseESIModuleFull(xmlResult.content)
+      if (!parsed.success || parsed.modules === undefined) {
+        return { success: false as const, error: parsed.error ?? 'Failed to parse module ESI' }
+      }
+      const want = ident.toLowerCase()
+      const matched = parsed.modules.find((m) => m.ident.toLowerCase() === want)
+      if (matched === undefined) {
+        return { success: false as const, error: `Module ident ${ident} not found in ESI item ${itemId}` }
+      }
+      return { success: true as const, module: matched }
     })
 
   handleESILoadRepositoryLight = async (_event: IpcMainInvokeEvent, projectPath: string) =>

@@ -67,8 +67,11 @@ export type RuntimeFeature =
 
 /** Advertisement side of the gate — what the runtime says it can do. */
 export interface RuntimeCapabilityAdvertisement {
-  /** Hello response's `features` array, or `undefined` for pre-R4 EtherDOG. */
-  advertisedFeatures: readonly RuntimeFeature[] | undefined
+  /** Hello response's `features` array, or `undefined` for pre-R4 EtherDOG.
+   *  Typed as `readonly string[]` so a runtime that advertises a feature the
+   *  editor does not know is simply ignored by the gate — strings outside the
+   *  {@link RuntimeFeature} union pass through as unmatched. */
+  advertisedFeatures: readonly string[] | undefined
   /** EtherDOG version string, used in the refusal message. `undefined` is pre-R4. */
   runtimeVersion?: string
 }

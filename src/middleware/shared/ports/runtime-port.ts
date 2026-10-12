@@ -82,6 +82,21 @@ export interface UsersInfoResult {
   error?: string
 }
 
+/**
+ * Result of a {@link RuntimePort.getRuntimeCapabilities} call.
+ *
+ * `features` carries the EtherDOG hello features array when the runtime
+ * publishes one. A runtime that does not publish features (older EtherDOG,
+ * non-EtherCAT runtimes) returns an empty array; `null` is reserved for
+ * "could not reach the runtime at all" so a caller can tell "no features"
+ * from "no answer".
+ */
+export interface RuntimeCapabilitiesResult {
+  features: readonly string[] | null
+  runtimeVersion?: string
+  error?: string
+}
+
 /** A user account as reported by the runtime. */
 export interface RuntimeUser {
   id: number
@@ -349,6 +364,15 @@ export interface RuntimePort {
 
   /** Check if the runtime has users and get its version. */
   getUsersInfo(): Promise<UsersInfoResult>
+
+  /**
+   * Fetch the EtherDOG features the connected runtime advertises.
+   * Called after a successful connect so the pre-build capability gate can
+   * refuse a project that uses features the runtime does not support.
+   * `features: []` means "no EtherCAT features advertised"; `features: null`
+   * means the runtime could not be reached at all.
+   */
+  getRuntimeCapabilities(): Promise<RuntimeCapabilitiesResult>
 
   /** List all user accounts on the runtime (requires authentication). */
   listUsers(): Promise<ListUsersResult>

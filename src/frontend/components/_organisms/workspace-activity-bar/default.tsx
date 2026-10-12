@@ -380,13 +380,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
       }
 
-      // DOPE-704 E7: target-capability gate. Refuses the build when the project
-      // uses EtherCAT features the connected runtime does not advertise
-      // (RTOP-319 R4). On the editor there is no runtime hello today, so the
-      // gate's advertisement is `undefined`: a project with no required features
-      // (plain-slave projects, BR24) still builds; a modular-coupler project
-      // refuses with an upgrade-EtherDOG message. The web adapter will populate
-      // advertisement from a live hello in a follow-up.
+      // Target-capability gate. Refuses the build when the project uses
+      // EtherCAT features the connected runtime does not advertise.
+      // `runtimeFeatures` is populated on connect from the
+      // `/api/discovery/ethercat/capabilities` endpoint, which reads the hello
+      // features EtherDOG publishes. `null` means the runtime did not answer or
+      // is pre-features: the gate then refuses only when the project actually
+      // needs a feature, so plain-slave projects still build.
       {
         const state = store.getState()
         const rc = state.runtimeConnection
@@ -396,13 +396,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           runtimeCapabilityStateFor({
             remoteDevices: state.project.data.remoteDevices,
             advertisement: {
-              advertisedFeatures:
-                runtimeFeatures === null || runtimeFeatures === undefined
-                  ? undefined
-                  : // Narrow readonly string[] → readonly RuntimeFeature[]: the gate
-                    // ignores unknown entries, and tagging each here would require a
-                    // shared enum the editor does not have today.
-                    (runtimeFeatures as unknown as import('@root/middleware/shared/utils/build-gate/runtime-capability-gate').RuntimeFeature[]),
+              advertisedFeatures: runtimeFeatures ?? undefined,
               runtimeVersion: runtimeVersion ?? undefined,
             },
           }),

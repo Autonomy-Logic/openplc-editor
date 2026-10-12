@@ -189,6 +189,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           runtimeConnection.plcStatus = null
           runtimeConnection.ipAddress = null
           runtimeConnection.runtimeVersion = null
+          runtimeConnection.runtimeFeatures = null
           runtimeConnection.selectedDevice = null
           runtimeConnection.storedCredentials = null
           runtimeConnection.timingStats = null
@@ -563,6 +564,13 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
+    setRuntimeFeatures: (features): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.runtimeFeatures = features
+        }),
+      )
+    },
     setPlcRuntimeStatus: (status): void => {
       setState(
         produce(({ runtimeConnection }: DeviceSlice) => {
@@ -641,6 +649,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           runtimeConnection.plcStatus = null
           runtimeConnection.ipAddress = null
           runtimeConnection.runtimeVersion = null
+          runtimeConnection.runtimeFeatures = null
           runtimeConnection.selectedDevice = null
           runtimeConnection.storedCredentials = null
           runtimeConnection.timingStats = null

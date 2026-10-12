@@ -274,6 +274,10 @@ export type DeviceActions = {
   setRuntimeJwtToken: (token: string | null) => void
   setRuntimeConnectionStatus: (status: ConnectionStatus) => void
   setRuntimeVersion: (version: string | null) => void
+  /** Record the EtherDOG features the runtime advertises.
+   *  Pass `null` to clear (e.g. on disconnect), `[]` when the runtime
+   *  does not publish a `features` array. */
+  setRuntimeFeatures: (features: readonly string[] | null) => void
   setPlcRuntimeStatus: (status: PlcStatus | null) => void
   /** Set the mode-switch position (null clears it, e.g. on disconnect). */
   setPlcSwitchPosition: (position: 'run' | 'stop' | null) => void
