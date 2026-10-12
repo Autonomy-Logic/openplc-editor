@@ -1,6 +1,6 @@
 /**
  * Size the I/O image from the project, and refuse located declarations that
- * nothing produces (DOPE-615).
+ * nothing produces.
  *
  * The image used to be a constant: sixteen `MAX_*` macros in
  * `resources/sources/arduino/openplc.h` on bare metal, `BUFFER_SIZE 1024` on
@@ -387,12 +387,11 @@ function producerClaims(input: ComputeIoImageInput, backed: Map<string, Set<numb
  * server publishes has something reading it, which is exactly what BR14 asks
  * of an output.
  *
- * WHICH server is deliberately the one `generateModbusSlaveConfig` picks: the
- * first `modbus-tcp` entry carrying a config, `enabled` not consulted. That is
- * not an endorsement of either choice — it is the config file that actually
- * ships, and sizing for exposure the device never receives (or missing
- * exposure it does) is the drift worth avoiding. If that selection changes,
- * this has to change with it.
+ * WHICH server is the one the emitters pick: the first `modbus-tcp` entry
+ * whose config is enabled, matching `generateModbusSlaveConfig` and
+ * `selectModbusServer`. Sizing for exposure the device never receives, or
+ * missing exposure it does, is the drift worth avoiding. If that selection
+ * changes, this has to change with it.
  */
 function serverExposure(
   servers: PLCServer[] | undefined,

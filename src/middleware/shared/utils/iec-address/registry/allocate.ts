@@ -10,7 +10,7 @@
  * Besides the assignments, the result carries `slotCounts`: how many slots
  * each prefix space ended up needing. It is the same reservation data the
  * two passes already build, so exposing it costs nothing, and it is what
- * sizes the runtime's I/O image (DOPE-615).
+ * sizes the runtime's I/O image.
  *
  * Order is stable (consumer `order` then `id`, channels in declaration
  * order) so the output is reproducible across sessions — re-opening a

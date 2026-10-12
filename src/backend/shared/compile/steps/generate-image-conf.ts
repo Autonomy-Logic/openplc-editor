@@ -1,5 +1,5 @@
 /**
- * Author the `image.conf` a runtime-v4 upload carries (DOPE-615).
+ * Author the `image.conf` a runtime-v4 upload carries.
  *
  * The image size is a PROJECT property. It is derived at compile time from
  * what the project contains (`compute-io-image.ts`), travels to the device

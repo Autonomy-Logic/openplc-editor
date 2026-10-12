@@ -448,7 +448,7 @@ async function runCompilePipelineInner(
 
   // ---------------------------------------------------------------------
   // Step 0a: Size the I/O image from the project, and refuse a located
-  // declaration the target cannot honour (DOPE-615).
+  // declaration the target cannot honour.
   //
   // Here rather than inside either branch: the figure feeds the runtime-v4
   // bundle AND the arduino-cli defines, and computing it once is what keeps

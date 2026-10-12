@@ -1,5 +1,5 @@
 /**
- * Tests for the project-driven I/O image sizer (DOPE-615).
+ * Tests for the project-driven I/O image sizer.
  *
  * One rule, pinned across every area: a declaration is VALIDATED against what
  * the producers claim and never grows the image on its own. `%M` used to be the

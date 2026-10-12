@@ -359,7 +359,7 @@ describe('runCompilePipeline — blank FBD variable guard', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Step 0a: the I/O image gate (DOPE-615)
+// Step 0a: the I/O image gate
 // ---------------------------------------------------------------------------
 
 describe('runCompilePipeline — I/O image gate', () => {

@@ -1,5 +1,5 @@
 /**
- * Tests for the `image.conf` a runtime-v4 upload carries (DOPE-615).
+ * Tests for the `image.conf` a runtime-v4 upload carries.
  *
  * The case that most needs pinning is the unit, and in format 2 it is pinned
  * twice: the value carries its unit as a word, and the three BOOL tables stay

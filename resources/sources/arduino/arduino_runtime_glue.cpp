@@ -565,7 +565,7 @@ static_assert(OPLC_RETAIN_BLOB_SIZE <= RETAIN_BUFFER_MAX,
 // console on a microcontroller -- so the check happens at build time or not at
 // all, exactly as with OPLC_RETAIN_BLOB_SIZE above.
 //
-// The editor already rounds these up when it emits them (DOPE-615), which is
+// The editor already rounds these up when it emits them, which is
 // why this should never fire. That is the point: it is here so that the day it
 // stops rounding, the failure is a compiler error naming the cause rather than
 // I/O that quietly stops at the wrong index.
@@ -624,7 +624,8 @@ static bool     retain_available  = false;
 //
 // This comment used to say defines.h "must reach a translation unit through
 // exactly one path (modbus_config.h), which this file is deliberately not on".
-// That stopped being true with DOPE-615: openplc.h now includes defines.h from
+// That stopped being true once the image became project-sized: openplc.h now
+// includes defines.h from
 // inside its own guard, so every TU that sees openplc.h sees defines.h,
 // including this one. Re-inclusion is safe — defines.h holds nothing but
 // object-like macros, and redefining a macro to an identical token sequence is

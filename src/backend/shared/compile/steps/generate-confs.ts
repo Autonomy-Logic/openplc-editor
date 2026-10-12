@@ -124,7 +124,7 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
   // `imageSizes` supplies the counts for any segment the user did not
   // configure, so this file cannot declare addresses `image.conf` says do not
   // exist. Without it the two disagreed for the commonest project of all: one
-  // with a Modbus server nobody customised (DOPE-615, FR16).
+  // with a Modbus server nobody customised.
   const modbusSlave = generateModbusSlaveConfig(servers, imageSizes)
   const modbusMaster = generateModbusMasterConfig(remoteDevices, (msg) => log(msg, 'warning'))
   const s7Comm = generateS7CommConfig(servers)

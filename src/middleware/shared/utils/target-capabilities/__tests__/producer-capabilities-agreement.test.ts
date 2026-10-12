@@ -1,6 +1,5 @@
 /**
- * Whatever builds an address pool must scope it with the PRODUCER resolver
- * (DOPE-615, C1).
+ * Whatever builds an address pool must scope it with the PRODUCER resolver.
  *
  * Nine places built a pool through `resolveTargetCapabilities` while the
  * store's allocation used `resolveAddressProducerCapabilities`. The two

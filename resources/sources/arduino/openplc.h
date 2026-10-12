@@ -53,9 +53,9 @@ typedef double   IEC_LREAL;
  * PROJECT actually contains -- the addresses its producers claim and its
  * located declarations name -- so a board with a 15-slot expansion
  * backplane gets an image big enough to address it instead of the
- * one-size-fits-all numbers here (openplc-editor#296), and a project
- * using a handful of points gets a small one and keeps the rest of the
- * memory for the program (DOPE-615).
+ * one-size-fits-all numbers here, and a project using a handful of
+ * points gets a small one and keeps the rest of the memory for the
+ * program.
  *
  * The bit sizes are in BITS, because the arrays below divide by 8. They
  * are always emitted as a multiple of 8 for that reason, and
