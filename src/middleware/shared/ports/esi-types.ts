@@ -214,9 +214,11 @@ export type EnrichDeviceData = {
   txPdos?: PersistedPdo[]
   slaveType?: string
   sdoConfigurations?: SDOConfigurationEntry[]
-  /** DOPE-704 E1: CoE flags lifted from the ESI's `<Mailbox><CoE />`. */
+  /** ESI-declared startup writes extracted from `<InitCmds>` at slave scope. */
+  esiInitCmdSdos?: SDOConfigurationEntry[]
+  /** CoE flags lifted from the ESI's `<Mailbox><CoE />`. */
   coeFlags?: EtherCATSlaveConfig['coeFlags']
-  /** DOPE-704 E1: true when the ESI declares a `<Slots>` block. */
+  /** True when the ESI declares a `<Slots>` block. */
   isModularCoupler?: boolean
 }
 
@@ -732,6 +734,13 @@ export interface ConfiguredEtherCATDevice {
   slaveType?: string
   /** SDO startup parameters extracted from CoE Object Dictionary */
   sdoConfigurations?: SDOConfigurationEntry[]
+  /**
+   * ESI-declared startup writes (`<InitCmds>` at slave scope). Emitted by the generator
+   * before any user startup SDO and before the PDO-assignment block, so multi-mode
+   * drives can set internal state the mapping switch depends on. Populated at enrich
+   * time from the ESI; the operator does not edit this list.
+   */
+  esiInitCmdSdos?: SDOConfigurationEntry[]
   /** CiA 402 SoftMotion axis configuration (present when recognized as a drive) */
   cia402?: Cia402AxisConfig
   /**
@@ -749,6 +758,11 @@ export interface ConfiguredEtherCATDevice {
    * three-level nesting (bus → coupler → modules) even when `modules` is still empty.
    */
   isModularCoupler?: boolean
+  /**
+   * Full `<Slots>` spec persisted at enrich time. The compile-time validator uses it to
+   * enforce MinInstances / MaxInstances per slot without reloading the ESI.
+   */
+  slotsSpec?: ESISlotsSpec
 }
 
 /**

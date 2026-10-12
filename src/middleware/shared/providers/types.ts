@@ -6,6 +6,7 @@ import type { DevicePort } from '../ports/device-port'
 import type { EdgeAccountPort } from '../ports/edge-account-port'
 import type { EditSessionPort } from '../ports/edit-session-port'
 import type { EsiPort } from '../ports/esi-port'
+import type { EtherCATDiagnosticsPort } from '../ports/ethercat-diagnostics-port'
 import type { EtherCATScanPort } from '../ports/ethercat-scan-port'
 import type { LibraryPort } from '../ports/library-port'
 import type { NavigationPort } from '../ports/navigation-port'
@@ -41,6 +42,8 @@ export interface PlatformPorts {
   esi?: EsiPort
   /** DOPE-704 E6: scan modules on a modular coupler via EtherDOG's 0xF050 path. */
   ethercatScan?: EtherCATScanPort
+  /** Poll modular-coupler diagnostics (status word + per-module status byte). */
+  ethercatDiagnostics?: EtherCATDiagnosticsPort
   ai?: AIPort
   // Gate on `capabilities.hasEdgeAccount`, not on presence: autonomy-node has no Edge account API.
   edgeAccount?: EdgeAccountPort

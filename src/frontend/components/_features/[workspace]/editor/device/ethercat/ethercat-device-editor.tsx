@@ -10,9 +10,11 @@ import type {
   ESIRepositoryItemLight,
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
+  PersistedPdoEntry,
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
 import { useEsi } from '@root/middleware/shared/providers/platform-context'
+import { reconcilePdoChannels } from '@root/middleware/shared/utils/ethercat'
 import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -253,6 +255,56 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
     [configuredDevices, deviceId, syncDevicesToStore],
   )
 
+  // When the user edits a PDO's entry list through the
+  // Expert view, the on-wire mapping changes AND the IOMAPPING binding to those entries
+  // must follow — otherwise added entries ride the bus with no PLC-side variable and
+  // removed entries leave orphan bindings pointing at bytes the slave no longer sends.
+  // reconcilePdoChannels rebuilds channelInfo + channelMappings from the resulting
+  // rxPdos/txPdos, preserving alias + IEC location on untouched channels and allocating
+  // a fresh, non-colliding address for new ones.
+  const handleUpdatePdoEntries = useCallback(
+    (direction: 'rx' | 'tx', pdoIndex: string, entries: PersistedPdoEntry[]) => {
+      syncDevicesToStore(
+        configuredDevices.map((d) => {
+          if (d.id !== deviceId) return d
+          const list = (direction === 'rx' ? d.rxPdos : d.txPdos) ?? []
+          const nextList = list.map((pdo) =>
+            pdo.index.toLowerCase() === pdoIndex.toLowerCase() ? { ...pdo, entries } : pdo,
+          )
+          const nextRx = direction === 'rx' ? nextList : (d.rxPdos ?? [])
+          const nextTx = direction === 'tx' ? nextList : (d.txPdos ?? [])
+          const reconciled = reconcilePdoChannels({
+            rxPdos: nextRx,
+            txPdos: nextTx,
+            previousChannelInfo: d.channelInfo,
+            previousMappings: d.channelMappings,
+            externalUsedAddresses: externalAddresses,
+          })
+          return {
+            ...d,
+            rxPdos: nextRx,
+            txPdos: nextTx,
+            channelInfo: reconciled.channelInfo,
+            channelMappings: reconciled.channelMappings,
+          }
+        }),
+      )
+    },
+    [configuredDevices, deviceId, externalAddresses, syncDevicesToStore],
+  )
+
+  const handleUpdateCoeFlags = useCallback(
+    (next: NonNullable<EtherCATSlaveConfig['coeFlags']>) => {
+      syncDevicesToStore(
+        configuredDevices.map((d) => {
+          if (d.id !== deviceId) return d
+          return { ...d, config: { ...d.config, coeFlags: next } }
+        }),
+      )
+    },
+    [configuredDevices, deviceId, syncDevicesToStore],
+  )
+
   const handleUpdateCia402 = useCallback(
     (patch: Partial<Cia402AxisConfig>) => {
       syncDevicesToStore(
@@ -324,8 +376,15 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
   }, [repository, device])
 
   // Use the device configuration hook for channels, CoE objects, etc.
-  const { channels, coeObjects, isLoadingChannels, channelLoadError, handleAliasChange, updateConfig } =
-    useDeviceConfiguration({
+  const {
+    channels,
+    coeObjects,
+    alternativeSmMappings,
+    isLoadingChannels,
+    channelLoadError,
+    handleAliasChange,
+    updateConfig,
+  } = useDeviceConfiguration({
       device: device as ConfiguredEtherCATDevice,
       projectPath,
       externalAddresses,
@@ -465,7 +524,11 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
               rxPdos={device.rxPdos ?? []}
               txPdos={device.txPdos ?? []}
               pdoAssignAvailable={device.config.coeFlags?.pdoAssign === true}
+              coeFlags={device.config.coeFlags}
+              alternativeSmMappings={alternativeSmMappings}
               onUpdatePdoAssigned={handleUpdatePdoAssigned}
+              onUpdatePdoEntries={handleUpdatePdoEntries}
+              onUpdateCoeFlags={handleUpdateCoeFlags}
             />
           </div>
         </Tabs.Content>
@@ -494,7 +557,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
             className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
           >
             <div className='flex-1 overflow-auto p-4'>
-              <CouplerDiagnosticsTab device={device} />
+              <CouplerDiagnosticsTab device={device} busName={busName} />
             </div>
           </Tabs.Content>
         )}

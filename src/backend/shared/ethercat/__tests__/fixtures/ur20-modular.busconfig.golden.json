@@ -1,0 +1,165 @@
+[
+  {
+    "name": "bus_a",
+    "protocol": "ETHERCAT",
+    "config": {
+      "master": {
+        "interface": "eth0",
+        "cycle_time_us": 1000,
+        "watchdog_timeout_cycles": 3,
+        "task_priority": 90
+      },
+      "slaves": [
+        {
+          "position": 1,
+          "name": "UR20_Coupler",
+          "type": "coupler",
+          "vendor_id": "0x00000230",
+          "product_code": "0x04A41A86",
+          "revision": "0x00060101",
+          "config": {
+            "startup_checks": {
+              "check_vendor_id": true,
+              "check_product_code": true
+            },
+            "addressing": {
+              "ethercat_address": 0
+            },
+            "timeouts": {
+              "sdo_timeout_ms": 1000,
+              "init_to_preop_timeout_ms": 3000,
+              "safeop_to_op_timeout_ms": 10000
+            },
+            "watchdog": {
+              "sm_watchdog_enabled": true,
+              "sm_watchdog_ms": 100,
+              "pdi_watchdog_enabled": false,
+              "pdi_watchdog_ms": 100
+            },
+            "distributed_clocks": {
+              "enabled": false,
+              "sync_unit_cycle_us": 0,
+              "sync0_enabled": false,
+              "sync0_cycle_us": 0,
+              "sync0_shift_us": 0,
+              "sync1_enabled": false,
+              "sync1_cycle_us": 0,
+              "sync1_shift_us": 0
+            }
+          },
+          "channels": [
+            {
+              "index": 0,
+              "name": "DI 1",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1A00",
+              "pdo_entry_index": "0x6000",
+              "pdo_entry_subindex": 1
+            },
+            {
+              "index": 1,
+              "name": "DI 2",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1A00",
+              "pdo_entry_index": "0x6000",
+              "pdo_entry_subindex": 2
+            },
+            {
+              "index": 0,
+              "name": "DO 1",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x1601",
+              "pdo_entry_index": "0x7000",
+              "pdo_entry_subindex": 1
+            }
+          ],
+          "sdo_configurations": [
+            {
+              "index": "0x0F30",
+              "subindex": 0,
+              "value": 0,
+              "data_type": "USINT",
+              "bit_length": 8,
+              "name": "Module ident list: clear",
+              "comment": "Module ident list (0xF030:0 = 0) — clear the current count"
+            },
+            {
+              "index": "0x0F30",
+              "subindex": 1,
+              "value": 6671,
+              "data_type": "UDINT",
+              "bit_length": 32,
+              "name": "Module ident list: slot 1",
+              "comment": "Module ident list (0xF030:1) — slot 1 ident"
+            },
+            {
+              "index": "0x0F30",
+              "subindex": 2,
+              "value": 6672,
+              "data_type": "UDINT",
+              "bit_length": 32,
+              "name": "Module ident list: slot 2",
+              "comment": "Module ident list (0xF030:2) — slot 2 ident"
+            },
+            {
+              "index": "0x0F30",
+              "subindex": 0,
+              "value": 2,
+              "data_type": "USINT",
+              "bit_length": 8,
+              "name": "Module ident list: count",
+              "comment": "Module ident list (0xF030:0 = 2) — publish the count"
+            }
+          ],
+          "rx_pdos": [
+            {
+              "index": "0x1601",
+              "name": "Slot 2 RxPDO",
+              "entries": [
+                {
+                  "index": "0x7000",
+                  "subindex": 1,
+                  "bit_length": 1,
+                  "name": "DO 1",
+                  "data_type": "BOOL"
+                }
+              ]
+            }
+          ],
+          "tx_pdos": [
+            {
+              "index": "0x1A00",
+              "name": "Slot 1 TxPDO",
+              "entries": [
+                {
+                  "index": "0x6000",
+                  "subindex": 1,
+                  "bit_length": 1,
+                  "name": "DI 1",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0x6000",
+                  "subindex": 2,
+                  "bit_length": 1,
+                  "name": "DI 2",
+                  "data_type": "BOOL"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": {
+        "log_connections": true,
+        "log_data_access": false,
+        "log_errors": true,
+        "max_log_entries": 10000,
+        "status_update_interval_ms": 500
+      }
+    }
+  }
+]

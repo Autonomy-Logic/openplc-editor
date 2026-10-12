@@ -12,6 +12,7 @@ import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
 import { editorEdgeAccountPort } from './adapters/editor/edge-account-adapter'
 import { editorEditSessionPort } from './adapters/editor/edit-session-adapter'
 import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
+import { createEditorEtherCATDiagnosticsAdapter } from './adapters/editor/ethercat-diagnostics-adapter'
 import { createEditorEtherCATScanAdapter } from './adapters/editor/ethercat-scan-adapter'
 import { createEditorLibraryAdapter } from './adapters/editor/library-adapter'
 import { createEditorNavigationAdapter } from './adapters/editor/navigation-adapter'
@@ -81,6 +82,7 @@ export function createEditorPorts(store: OpenPLCStore): PlatformPorts {
     packages: editorPackages,
     esi: createEditorEsiAdapter(() => _projectPath),
     ethercatScan: createEditorEtherCATScanAdapter({ getRuntimeIp: () => _runtimeIpAddress }),
+    ethercatDiagnostics: createEditorEtherCATDiagnosticsAdapter({ getRuntimeIp: () => _runtimeIpAddress }),
     versionControl: createEditorVersionControlAdapter(),
     navigation: createEditorNavigationAdapter(store),
     library: createEditorLibraryAdapter(),

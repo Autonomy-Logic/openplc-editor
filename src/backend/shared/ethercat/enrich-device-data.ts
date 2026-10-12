@@ -9,6 +9,7 @@ import type {
   ConfiguredEtherCATDevice,
   EnrichDeviceData,
   ESIDevice,
+  ESIInitCmd,
   ESIPdo,
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
@@ -37,6 +38,37 @@ export function deriveCoEFlags(device: ESIDevice): NonNullable<EtherCATSlaveConf
     pdoConfig: device.coeFlags?.pdoConfig ?? false,
     completeAccess: device.coeFlags?.completeAccess ?? false,
   }
+}
+
+/**
+ * Convert the ESI `<InitCmds>` block at slave scope into persistable startup SDOs.
+ * Byte-string payloads (a module name or similar) are kept in `valueBytes` as hex and
+ * emitted through EtherDOG's `value_bytes` plumbing. Numeric payloads use `value`.
+ */
+export function esiInitCmdsToSdoEntries(cmds: ESIInitCmd[] | undefined): SDOConfigurationEntry[] | undefined {
+  if (cmds === undefined || cmds.length === 0) return undefined
+  const asciiToHex = (ascii: string): string =>
+    Array.from(ascii)
+      .map((ch) => ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase())
+      .join('')
+  const entries = cmds.map((cmd): SDOConfigurationEntry => {
+    const bytesHex = cmd.dataAscii !== undefined ? asciiToHex(cmd.dataAscii) : undefined
+    const byteLen = bytesHex !== undefined ? bytesHex.length / 2 : 0
+    const numericValue = cmd.value !== undefined ? String(cmd.value) : (cmd.data ?? '')
+    return {
+      index: cmd.index,
+      subIndex: cmd.subIndex,
+      value: bytesHex !== undefined ? '' : numericValue,
+      valueBytes: bytesHex,
+      completeAccess: cmd.completeAccess,
+      defaultValue: numericValue,
+      dataType: bytesHex !== undefined ? 'OCTET_STRING' : (cmd.dataType ?? 'UDINT'),
+      bitLength: bytesHex !== undefined ? byteLen * 8 : 32,
+      name: cmd.comment ?? cmd.index,
+      objectName: 'ESI InitCmd',
+    }
+  })
+  return entries
 }
 
 /**
@@ -143,20 +175,12 @@ export function enrichDeviceData(
   txPdos: PersistedPdo[]
   slaveType: string
   sdoConfigurations?: SDOConfigurationEntry[]
+  esiInitCmdSdos?: SDOConfigurationEntry[]
   channelMappings: EtherCATChannelMapping[]
   cia402?: Cia402AxisConfig
-  /**
-   * DOPE-704 E1: default CoE flags lifted from the ESI's `<Mailbox><CoE />`. Spread
-   * onto the slave's `config` by the composer, so a freshly added slave carries the
-   * same flags E2's migration would derive and E3/E5 generators gate on.
-   */
   coeFlags: NonNullable<EtherCATSlaveConfig['coeFlags']>
-  /**
-   * DOPE-704 E1: true when the ESI device declares a `<Slots>` block, so the UI can
-   * render the "Add module to slot N" affordance before any module is attached and
-   * the project tree can switch to the three-level nesting.
-   */
   isModularCoupler: boolean
+  slotsSpec?: ConfiguredEtherCATDevice['slotsSpec']
 } {
   return {
     channelInfo: buildChannelInfo(device),
@@ -164,12 +188,14 @@ export function enrichDeviceData(
     txPdos: persistPdos(device.txPdo),
     slaveType: deriveSlaveType(device),
     sdoConfigurations: device.coeObjects?.length ? extractDefaultSdoConfigurations(device.coeObjects) : undefined,
+    esiInitCmdSdos: esiInitCmdsToSdoEntries(device.initCmds),
     channelMappings: generateDefaultChannelMappings(pdoToChannels(device), usedAddresses),
     // A CiA 402 servo is auto-recognized as a SoftMotion axis; the user can
     // disable/tune it in the device's Axis configuration.
     cia402: isCia402Drive(device) ? { ...DEFAULT_CIA402_AXIS_CONFIG } : undefined,
     coeFlags: deriveCoEFlags(device),
     isModularCoupler: device.isModularCoupler === true,
+    slotsSpec: device.slots,
   }
 }
 
@@ -248,6 +274,8 @@ export function migrateSlaveToE2Schema(
   const nextRx = mergePdos(device.rxPdos, esiDevice.rxPdo)
   const nextTx = mergePdos(device.txPdos, esiDevice.txPdo)
   const nextCoeFlags = device.config?.coeFlags ?? deriveCoEFlags(esiDevice)
+  const nextInitCmdSdos = device.esiInitCmdSdos ?? esiInitCmdsToSdoEntries(esiDevice.initCmds)
+  const nextSlotsSpec = device.slotsSpec ?? esiDevice.slots
 
   return {
     ...device,
@@ -257,5 +285,7 @@ export function migrateSlaveToE2Schema(
     },
     rxPdos: nextRx,
     txPdos: nextTx,
+    esiInitCmdSdos: nextInitCmdSdos,
+    slotsSpec: nextSlotsSpec,
   }
 }

@@ -22,6 +22,7 @@ import type {
   ESIModule,
   ESIModuleSummary,
   ESIRepositoryItemLight,
+  PersistedChannelInfo,
   PersistedPdo,
   PersistedPdoEntry,
   SDOConfigurationEntry,
@@ -111,6 +112,10 @@ function buildModuleForSlot(
     }
   })
 
+  const rxPdos = persistPdo(esiModule.rxPdo)
+  const txPdos = persistPdo(esiModule.txPdo)
+  const channelInfo = buildModuleChannelInfo(rxPdos, txPdos)
+
   return {
     id: `slot-${slot}`,
     slot,
@@ -118,10 +123,45 @@ function buildModuleForSlot(
     ident: esiModule.ident,
     esiModuleRef: { repositoryItemId: esiRepositoryItemId, moduleIdent: esiModule.ident },
     channelMappings: [],
-    rxPdos: persistPdo(esiModule.rxPdo),
-    txPdos: persistPdo(esiModule.txPdo),
+    channelInfo: channelInfo.length > 0 ? channelInfo : undefined,
+    rxPdos,
+    txPdos,
     sdoConfigurations: sdoFromInitCmds.length > 0 ? sdoFromInitCmds : undefined,
   }
+}
+
+/**
+ * Derive a module's channel info from its persisted PDOs. Mirrors the device enrich flow
+ * so the module editor can list channels for alias / address editing, and the generator
+ * can route the module's channels into the iomapping.
+ */
+function buildModuleChannelInfo(
+  rxPdos: PersistedPdo[],
+  txPdos: PersistedPdo[],
+): PersistedChannelInfo[] {
+  const out: PersistedChannelInfo[] = []
+  const walk = (pdos: PersistedPdo[], direction: 'input' | 'output') => {
+    for (const pdo of pdos) {
+      if (pdo.assigned === false) continue
+      for (const entry of pdo.entries) {
+        if (entry.index === '0x0000') continue
+        out.push({
+          channelId: `${pdo.index}-${entry.index}-${entry.subIndex}`,
+          name: entry.name,
+          direction,
+          pdoIndex: pdo.index,
+          entryIndex: entry.index,
+          entrySubIndex: entry.subIndex,
+          dataType: entry.dataType,
+          bitLen: entry.bitLen,
+          iecType: entry.dataType,
+        })
+      }
+    }
+  }
+  walk(txPdos, 'input')
+  walk(rxPdos, 'output')
+  return out
 }
 
 /**
@@ -181,8 +221,9 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
   // Load the coupler's full ESI once so we can read slotIndexIncrement / slotPdoIncrement
   // and resolve inline modules whose matches live on the coupler itself.
   useEffect(() => {
+    if (esi === undefined) return
     let cancelled = false
-    void esi!.loadDeviceFull(device.esiDeviceRef.repositoryItemId, device.esiDeviceRef.deviceIndex).then((r) => {
+    void esi.loadDeviceFull(device.esiDeviceRef.repositoryItemId, device.esiDeviceRef.deviceIndex).then((r) => {
       if (cancelled) return
       if (r.success && r.device) setEsiDevice(r.device)
     })
@@ -246,6 +287,8 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
   const handleAddSelectedFromScan = useCallback(async () => {
     const selected = moduleMatches.filter((m) => selectedScannedSlots.has(m.slot))
     if (selected.length === 0) return
+    if (esi === undefined) return
+    const esiPort = esi
     const unmatched = selected.filter((m) => m.match === null)
     const matched = selected.filter((m) => m.match !== null)
 
@@ -256,16 +299,14 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
     for (const m of matched) {
       if (!m.match) continue
       if (loadedFull.has(m.match.repoItem.id)) continue
-      // Try each device in the repoItem - the ESI browser picks the first device.
-      // For a standalone module file, there are no devices but modules live at the
-      // top; we fall back to the stub.
+      // Walk the repo item's devices first (modules carried inline on a coupler).
       const esiModules: ESIModule[] = []
       for (let i = 0; i < m.match.repoItem.devices.length; i++) {
         try {
-          const r = await esi!.loadDeviceFull(m.match.repoItem.id, i)
+          const r = await esiPort.loadDeviceFull(m.match.repoItem.id, i)
           if (r.success && r.device?.modules) esiModules.push(...r.device.modules)
         } catch {
-          // ignore, fall back to stub
+          // ignore and try the next device
         }
       }
       loadedFull.set(m.match.repoItem.id, esiModules.length > 0 ? esiModules : null)
@@ -274,7 +315,16 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
     for (const m of matched) {
       if (!m.match) continue
       const esiModules = loadedFull.get(m.match.repoItem.id)
-      const esiModule = esiModules?.find((em) => em.ident.toLowerCase() === m.ident.toLowerCase())
+      let esiModule = esiModules?.find((em) => em.ident.toLowerCase() === m.ident.toLowerCase())
+      // Standalone module file (no <Device>): fall through to loadModuleFull.
+      if (esiModule === undefined) {
+        try {
+          const r = await esiPort.loadModuleFull(m.match.repoItem.id, m.ident)
+          if (r.success) esiModule = r.module
+        } catch {
+          // leave esiModule undefined and fall back to the stub
+        }
+      }
       const built =
         esiModule !== undefined
           ? buildModuleForSlot(m.slot, esiModule, slotIndexIncrement, slotPdoIncrement, m.match.repoItem.id)
@@ -289,12 +339,14 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
 
   const handleAddModuleFromBrowser = useCallback(
     async (modSummary: ESIModuleSummary, repoItem: ESIRepositoryItemLight) => {
+      if (esi === undefined) return
+      const esiPort = esi
       let built: ConfiguredEtherCATModule
-      // Try to load the full ESI module so the new row carries PDOs + SDOs.
       let esiModule: ESIModule | undefined
+      // Walk the repo item's devices first (inline modules on a coupler ESI).
       for (let i = 0; i < repoItem.devices.length; i++) {
         try {
-          const r = await esi!.loadDeviceFull(repoItem.id, i)
+          const r = await esiPort.loadDeviceFull(repoItem.id, i)
           const m = r.success
             ? r.device?.modules?.find((em) => em.ident.toLowerCase() === modSummary.ident.toLowerCase())
             : undefined
@@ -304,6 +356,15 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
           }
         } catch {
           // continue
+        }
+      }
+      // Standalone module ESI: no `<Device>`, module list lives at the top.
+      if (esiModule === undefined) {
+        try {
+          const r = await esiPort.loadModuleFull(repoItem.id, modSummary.ident)
+          if (r.success) esiModule = r.module
+        } catch {
+          // leave undefined, fall back to the stub below
         }
       }
       if (esiModule !== undefined) {

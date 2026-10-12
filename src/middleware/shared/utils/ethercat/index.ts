@@ -18,3 +18,9 @@ export {
   serializeSoftMotionAxisGlobalsToST,
   softMotionAxisNames,
 } from './softmotion-axis-naming'
+export {
+  reconcilePdoChannels,
+  type ReconcileChannelsInput,
+  type ReconcileChannelsResult,
+} from './reconcile-pdo-channels'
+export { validateEthercatProject } from './validate-ethercat-project'

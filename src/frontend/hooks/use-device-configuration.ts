@@ -12,6 +12,7 @@ import { useOpenPLCStoreApi } from '@root/frontend/store'
 import type {
   ConfiguredEtherCATDevice,
   EnrichDeviceData,
+  ESIAlternativeSmMapping,
   ESIChannel,
   ESICoEObject,
   EtherCATChannelMapping,
@@ -40,6 +41,7 @@ type UseDeviceConfigurationParams = {
 type UseDeviceConfigurationResult = {
   channels: ESIChannel[]
   coeObjects: ESICoEObject[] | undefined
+  alternativeSmMappings: ESIAlternativeSmMapping[] | undefined
   isLoadingChannels: boolean
   channelLoadError: string | null
   handleAliasChange: (channelId: string, alias: string) => void
@@ -59,6 +61,7 @@ export function useDeviceConfiguration({
   const esiPort = useEsi()
   const [channels, setChannels] = useState<ESIChannel[]>([])
   const [coeObjects, setCoeObjects] = useState<ESICoEObject[] | undefined>(undefined)
+  const [alternativeSmMappings, setAlternativeSmMappings] = useState<ESIAlternativeSmMapping[] | undefined>(undefined)
   const [isLoadingChannels, setIsLoadingChannels] = useState(false)
   const [channelLoadError, setChannelLoadError] = useState<string | null>(null)
   const fullDeviceLoadedRef = useRef(false)
@@ -88,6 +91,7 @@ export function useDeviceConfiguration({
           const deviceChannels = pdoToChannels(result.device)
           setChannels(deviceChannels)
           setCoeObjects(result.device.coeObjects)
+          setAlternativeSmMappings(result.device.alternativeSmMappings)
           fullDeviceLoadedRef.current = true
 
           if (device.channelMappings.length === 0 && deviceChannels.length > 0) {
@@ -214,6 +218,7 @@ export function useDeviceConfiguration({
   return {
     channels,
     coeObjects,
+    alternativeSmMappings,
     isLoadingChannels,
     channelLoadError,
     handleAliasChange,

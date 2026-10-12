@@ -44,6 +44,7 @@ import { validateEthercatConfig } from '../../ethercat/validate-ethercat-config'
 import { isEtherdogCapableRuntime } from '../../firmware/runtime-version-gate'
 import type { PLCRemoteDevice, PLCServer } from '../../types/PLC/open-plc'
 import { generateModbusMasterConfig } from '../../utils/modbus/generate-modbus-master-config'
+import { validateEthercatProject } from '@root/middleware/shared/utils/ethercat'
 
 /**
  * Tagged shape for the program instances OPC-UA needs to resolve
@@ -155,15 +156,16 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
   let ethercatBusconfig: string | null = null
   let ethercatIomapping: string | null = null
   let ethercatErrors: string[]
+  const projectErrors = validateEthercatProject(remoteDevices)
   if (isEtherdogCapableRuntime(input.runtimeVersion)) {
     const configs = generateEtherdogConfigs(remoteDevices)
     ethercatBusconfig = configs?.busconfig ?? null
     ethercatIomapping = configs?.iomapping ?? null
-    ethercatErrors = validateEthercatConfig(ethercatBusconfig, ethercatIomapping)
+    ethercatErrors = [...projectErrors, ...validateEthercatConfig(ethercatBusconfig, ethercatIomapping)]
   } else {
     const legacy = generateEthercatConfig(remoteDevices)
     ethercat = legacy ?? ''
-    ethercatErrors = validateEthercatConfig(legacy)
+    ethercatErrors = [...projectErrors, ...validateEthercatConfig(legacy)]
   }
   if (ethercatErrors.length > 0) {
     throw new Error(`EtherCAT configuration is invalid: ${ethercatErrors.join('; ')}`)

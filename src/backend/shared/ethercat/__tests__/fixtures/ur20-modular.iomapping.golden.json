@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "masters": [
+    {
+      "name": "bus_a",
+      "entries": [
+        {
+          "slave": 1,
+          "index": "0x6000",
+          "subindex": 1,
+          "iec_location": "%IX8.0"
+        },
+        {
+          "slave": 1,
+          "index": "0x6000",
+          "subindex": 2,
+          "iec_location": "%IX8.1"
+        },
+        {
+          "slave": 1,
+          "index": "0x7000",
+          "subindex": 1,
+          "iec_location": "%QX0.0"
+        }
+      ]
+    }
+  ]
+}
