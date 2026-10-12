@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ISO15745Profile xmlns="http://www.profibus.com/GSDML/2003/11/DeviceProfile" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.profibus.com/GSDML/2003/11/DeviceProfile ..\XSD\GSDML-DeviceProfile-v2.42.xsd">
+  <ProfileHeader>
+    <ProfileIdentification>PROFINET Device Profile</ProfileIdentification>
+    <ProfileRevision>1.00</ProfileRevision>
+    <ProfileName>Device Profile for PROFINET Devices</ProfileName>
+    <ProfileSource>PROFIBUS Nutzerorganisation e. V. (PNO)</ProfileSource>
+    <ProfileClassID>Device</ProfileClassID>
+  </ProfileHeader>
+  <ProfileBody>
+    <DeviceIdentity VendorID="0x002A" DeviceID="0x0313" VendorName="Siemens">
+      <InfoText TextId="TOK_InfoText_Device"/>
+    </DeviceIdentity>
+    <DeviceFunction>
+      <Family MainFamily="I/O" ProductFamily="ET200SP"/>
+    </DeviceFunction>
+    <ApplicationProcess>
+      <DeviceAccessPointList>
+        <DeviceAccessPointItem ID="IDM_IM155_6PN_ST" PNIO_Version="V2.3" PhysicalSlots="0..64" ModuleIdentNumber="0x000B4700" MinDeviceInterval="32" DNS_CompatibleName="et200sp" FixedInSlots="0" ObjectUUID_LocalIndex="1" RequiredSchemaVersion="V2.3">
+          <ModuleInfo>
+            <Name TextId="TOK_DAP_Name"/>
+            <InfoText TextId="TOK_DAP_InfoText"/>
+            <OrderNumber Value="6ES7 155-6AU01-0BN0"/>
+            <HardwareRelease Value="1"/>
+            <SoftwareRelease Value="V4.2"/>
+          </ModuleInfo>
+          <SlotLayout>
+            <Slot SlotNumber="0" FixedInSubslotModuleIdentNumber="0x000B4700"/>
+            <Slot SlotNumber="1"/>
+            <Slot SlotNumber="2"/>
+          </SlotLayout>
+          <UseableModules>
+            <ModuleItemRef ModuleItemTarget="IDM_DI_8x24VDC_ST" AllowedInSlots="1..64"/>
+            <ModuleItemRef ModuleItemTarget="IDM_DQ_8x24VDC_ST" AllowedInSlots="1..64"/>
+          </UseableModules>
+          <VirtualSubmoduleList>
+            <VirtualSubmoduleItem ID="IDSM_IM_Interface" SubmoduleIdentNumber="0x00000001">
+              <ModuleInfo>
+                <Name TextId="TOK_SubIntf_Name"/>
+                <InfoText TextId="TOK_SubIntf_InfoText"/>
+              </ModuleInfo>
+              <IOData/>
+            </VirtualSubmoduleItem>
+          </VirtualSubmoduleList>
+        </DeviceAccessPointItem>
+      </DeviceAccessPointList>
+      <ModuleList>
+        <ModuleItem ID="IDM_DI_8x24VDC_ST" ModuleIdentNumber="0x00004D4D">
+          <ModuleInfo>
+            <Name TextId="TOK_DI_Name"/>
+            <InfoText TextId="TOK_DI_InfoText"/>
+            <OrderNumber Value="6ES7 131-6BF00-0BA0"/>
+            <HardwareRelease Value="1"/>
+            <SoftwareRelease Value="V2.0"/>
+          </ModuleInfo>
+          <VirtualSubmoduleList>
+            <VirtualSubmoduleItem ID="IDSM_DI_8x24VDC_ST" SubmoduleIdentNumber="0x00000001">
+              <ModuleInfo>
+                <Name TextId="TOK_DI_Sub_Name"/>
+                <InfoText TextId="TOK_DI_Sub_InfoText"/>
+              </ModuleInfo>
+              <IOData>
+                <Input>
+                  <DataItem DataType="Unsigned8" UseAsBits="true" Length="8" TextId="TOK_DI_Input_Text">
+                    <BitDataItem BitOffset="0" TextId="TOK_DI_Ch0"/>
+                    <BitDataItem BitOffset="1" TextId="TOK_DI_Ch1"/>
+                    <BitDataItem BitOffset="2" TextId="TOK_DI_Ch2"/>
+                    <BitDataItem BitOffset="3" TextId="TOK_DI_Ch3"/>
+                    <BitDataItem BitOffset="4" TextId="TOK_DI_Ch4"/>
+                    <BitDataItem BitOffset="5" TextId="TOK_DI_Ch5"/>
+                    <BitDataItem BitOffset="6" TextId="TOK_DI_Ch6"/>
+                    <BitDataItem BitOffset="7" TextId="TOK_DI_Ch7"/>
+                  </DataItem>
+                </Input>
+              </IOData>
+              <RecordDataList>
+                <ParameterRecordDataItem Index="0x0001" Length="2" TransferSequence="Startup">
+                  <Name TextId="TOK_DI_Param_Name"/>
+                  <Ref ValueItemTarget="VI_InputFilter" DataType="Unsigned8" ByteOffset="0" DefaultValue="1" TextId="TOK_DI_Param_Filter_Text" Name="InputDelay"/>
+                  <Ref DataType="Bit" ByteOffset="1" BitOffset="0" DefaultValue="0" TextId="TOK_DI_Param_Invert_Text" Name="Invert"/>
+                </ParameterRecordDataItem>
+              </RecordDataList>
+            </VirtualSubmoduleItem>
+          </VirtualSubmoduleList>
+        </ModuleItem>
+        <ModuleItem ID="IDM_DQ_8x24VDC_ST" ModuleIdentNumber="0x00004D93">
+          <ModuleInfo>
+            <Name TextId="TOK_DQ_Name"/>
+            <InfoText TextId="TOK_DQ_InfoText"/>
+            <OrderNumber Value="6ES7 132-6BF00-0BA0"/>
+          </ModuleInfo>
+          <VirtualSubmoduleList>
+            <VirtualSubmoduleItem ID="IDSM_DQ_8x24VDC_ST" SubmoduleIdentNumber="0x00000001">
+              <ModuleInfo>
+                <Name TextId="TOK_DQ_Sub_Name"/>
+                <InfoText TextId="TOK_DQ_Sub_InfoText"/>
+              </ModuleInfo>
+              <IOData>
+                <Output>
+                  <DataItem DataType="Unsigned8" UseAsBits="true" Length="8" TextId="TOK_DQ_Output_Text">
+                    <BitDataItem BitOffset="0" TextId="TOK_DQ_Ch0"/>
+                    <BitDataItem BitOffset="1" TextId="TOK_DQ_Ch1"/>
+                  </DataItem>
+                </Output>
+              </IOData>
+            </VirtualSubmoduleItem>
+          </VirtualSubmoduleList>
+        </ModuleItem>
+      </ModuleList>
+      <SubmoduleList>
+        <SubmoduleItem ID="IDSM_Port_1" SubmoduleIdentNumber="0x00008001">
+          <ModuleInfo>
+            <Name TextId="TOK_Port_Name"/>
+            <InfoText TextId="TOK_Port_InfoText"/>
+          </ModuleInfo>
+          <IOData/>
+        </SubmoduleItem>
+      </SubmoduleList>
+      <ValueList>
+        <ValueItem ID="VI_InputFilter">
+          <Assignments>
+            <Assign Content="0" TextId="TOK_Filter_0"/>
+            <Assign Content="1" TextId="TOK_Filter_1"/>
+            <Assign Content="2" TextId="TOK_Filter_2"/>
+          </Assignments>
+        </ValueItem>
+      </ValueList>
+      <ExternalTextList>
+        <PrimaryLanguage>
+          <Text TextId="TOK_InfoText_Device" Value="ET 200SP IM 155-6PN ST V4.2"/>
+          <Text TextId="TOK_DAP_Name" Value="IM 155-6PN ST V4.2"/>
+          <Text TextId="TOK_DAP_InfoText" Value="PROFINET interface module V4.2"/>
+          <Text TextId="TOK_SubIntf_Name" Value="PN-IO"/>
+          <Text TextId="TOK_SubIntf_InfoText" Value="Interface submodule"/>
+          <Text TextId="TOK_DI_Name" Value="DI 8x24VDC ST"/>
+          <Text TextId="TOK_DI_InfoText" Value="8-channel 24VDC digital input, standard"/>
+          <Text TextId="TOK_DI_Sub_Name" Value="DI 8x24VDC ST"/>
+          <Text TextId="TOK_DI_Sub_InfoText" Value="Submodule DI 8x24VDC ST"/>
+          <Text TextId="TOK_DI_Input_Text" Value="Input byte"/>
+          <Text TextId="TOK_DI_Ch0" Value="Channel 0"/>
+          <Text TextId="TOK_DI_Ch1" Value="Channel 1"/>
+          <Text TextId="TOK_DI_Ch2" Value="Channel 2"/>
+          <Text TextId="TOK_DI_Ch3" Value="Channel 3"/>
+          <Text TextId="TOK_DI_Ch4" Value="Channel 4"/>
+          <Text TextId="TOK_DI_Ch5" Value="Channel 5"/>
+          <Text TextId="TOK_DI_Ch6" Value="Channel 6"/>
+          <Text TextId="TOK_DI_Ch7" Value="Channel 7"/>
+          <Text TextId="TOK_DI_Param_Name" Value="Parameter record"/>
+          <Text TextId="TOK_DI_Param_Filter_Text" Value="Input delay"/>
+          <Text TextId="TOK_DI_Param_Invert_Text" Value="Invert input"/>
+          <Text TextId="TOK_DQ_Name" Value="DQ 8x24VDC/0.5A ST"/>
+          <Text TextId="TOK_DQ_InfoText" Value="8-channel 24VDC digital output, standard"/>
+          <Text TextId="TOK_DQ_Sub_Name" Value="DQ 8x24VDC ST"/>
+          <Text TextId="TOK_DQ_Sub_InfoText" Value="Submodule DQ 8x24VDC ST"/>
+          <Text TextId="TOK_DQ_Output_Text" Value="Output byte"/>
+          <Text TextId="TOK_DQ_Ch0" Value="Channel 0"/>
+          <Text TextId="TOK_DQ_Ch1" Value="Channel 1"/>
+          <Text TextId="TOK_Port_Name" Value="Port 1"/>
+          <Text TextId="TOK_Port_InfoText" Value="Standard port submodule"/>
+          <Text TextId="TOK_Filter_0" Value="0.1 ms"/>
+          <Text TextId="TOK_Filter_1" Value="0.5 ms"/>
+          <Text TextId="TOK_Filter_2" Value="3 ms"/>
+        </PrimaryLanguage>
+      </ExternalTextList>
+    </ApplicationProcess>
+  </ProfileBody>
+</ISO15745Profile>

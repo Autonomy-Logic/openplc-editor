@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ISO15745Profile xmlns="http://www.profibus.com/GSDML/2003/11/DeviceProfile" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.profibus.com/GSDML/2003/11/DeviceProfile ..\XSD\GSDML-DeviceProfile-v2.99.xsd" FutureAttribute="ignored">
+  <ProfileHeader>
+    <ProfileIdentification>PROFINET Device Profile</ProfileIdentification>
+    <FutureHeaderExtension something="whatever"/>
+  </ProfileHeader>
+  <ProfileBody>
+    <DeviceIdentity VendorID="0x1234" DeviceID="0x0001" VendorName="FutureVendor">
+      <InfoText TextId="TOK_Device_Info"/>
+      <FutureIdentityHint>Not a thing we recognise</FutureIdentityHint>
+    </DeviceIdentity>
+    <DeviceFunction>
+      <Family MainFamily="I/O" ProductFamily="Future"/>
+    </DeviceFunction>
+    <ApplicationProcess>
+      <FutureTopLevelThing>should not break parsing</FutureTopLevelThing>
+      <DeviceAccessPointList>
+        <DeviceAccessPointItem ID="IDM_Future" PNIO_Version="V3.0" ModuleIdentNumber="0xDEADBEEF" FutureDapAttribute="novel">
+          <ModuleInfo>
+            <Name TextId="TOK_Dap_Name"/>
+            <InfoText TextId="TOK_Dap_Info"/>
+          </ModuleInfo>
+          <FutureNestedBlock payload="42"/>
+          <UseableModules>
+            <ModuleItemRef ModuleItemTarget="IDM_Future_Mod"/>
+          </UseableModules>
+          <VirtualSubmoduleList>
+            <VirtualSubmoduleItem ID="IDSM_Future_Sub" SubmoduleIdentNumber="0x00000001" FutureSubAttr="x">
+              <ModuleInfo>
+                <Name TextId="TOK_Sub_Name"/>
+              </ModuleInfo>
+              <IOData/>
+              <FutureInnerBlock/>
+            </VirtualSubmoduleItem>
+          </VirtualSubmoduleList>
+        </DeviceAccessPointItem>
+      </DeviceAccessPointList>
+      <ModuleList>
+        <ModuleItem ID="IDM_Future_Mod" ModuleIdentNumber="0x00000100">
+          <ModuleInfo>
+            <Name TextId="TOK_Mod_Name"/>
+          </ModuleInfo>
+          <FutureModuleExtension/>
+          <VirtualSubmoduleList>
+            <VirtualSubmoduleItem ID="IDSM_Future_Virtual" SubmoduleIdentNumber="0x00000001">
+              <ModuleInfo>
+                <Name TextId="TOK_Virtual_Name"/>
+              </ModuleInfo>
+              <IOData/>
+            </VirtualSubmoduleItem>
+          </VirtualSubmoduleList>
+        </ModuleItem>
+      </ModuleList>
+      <ExternalTextList>
+        <PrimaryLanguage>
+          <Text TextId="TOK_Device_Info" Value="Future device"/>
+          <Text TextId="TOK_Dap_Name" Value="Future DAP"/>
+          <Text TextId="TOK_Dap_Info" Value="Future interface module"/>
+          <Text TextId="TOK_Sub_Name" Value="Future interface submodule"/>
+          <Text TextId="TOK_Mod_Name" Value="Future module"/>
+          <Text TextId="TOK_Virtual_Name" Value="Future submodule"/>
+        </PrimaryLanguage>
+      </ExternalTextList>
+    </ApplicationProcess>
+  </ProfileBody>
+</ISO15745Profile>
