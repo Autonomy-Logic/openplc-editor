@@ -1,6 +1,6 @@
 /**
  * What the compile pipeline would size this project's I/O image to, without
- * compiling it (DOPE-615).
+ * compiling it.
  *
  * Calls the pipeline's own functions rather than restating their rules, so a
  * snapshot that disagrees with a build is a bug in one of them and not a third

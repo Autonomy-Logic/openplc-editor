@@ -553,6 +553,132 @@ describe('runCompilePipeline — I/O image gate', () => {
     expect(events.some((e) => e.message.includes('Generated image.conf'))).toBe(true)
   })
 
+  it('refuses a Runtime v4 build with two enabled Modbus servers, naming them', async () => {
+    // v4 does not compile the macros, but `generateModbusSlaveConfig` writes
+    // ONE conf/modbus_slave.json and the sizer sizes for that one. A second
+    // enabled server is dropped as silently there as it would be in firmware.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    const twoServers = {
+      ...projectDataFixture,
+      pous: [pouLocating('%QW0')],
+      servers: [
+        {
+          name: 'mb_a',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: {
+            enabled: true,
+            transports: ['tcp'],
+            bufferMapping: { holdingRegisters: { qwCount: 4 } },
+          },
+        },
+        {
+          name: 'mb_b',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: {
+            enabled: true,
+            transports: ['tcp'],
+            bufferMapping: { holdingRegisters: { qwCount: 8 } },
+          },
+        },
+      ],
+    } as unknown as PLCProjectData
+
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: twoServers,
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'OpenPLC Runtime v4 (RPi)',
+        boardEntry: { compiler: 'openplc-compiler', platform: 'openplc:runtime:v4' },
+        compileOnly: true,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    const error = events.find((e) => e.stage === 'validate' && e.level === 'error')
+    expect(error?.message).toContain('mb_a')
+    expect(error?.message).toContain('mb_b')
+    expect(port.transpileToSt).not.toHaveBeenCalled()
+  })
+
+  it('lets the simulator carry two enabled Modbus servers', async () => {
+    // The simulator serves none, so a project passing through it is not asked
+    // to turn one off.
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    const twoServers = {
+      ...projectDataFixture,
+      pous: [pouLocating('%QW0')],
+      servers: [
+        {
+          name: 'mb_a',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: {
+            enabled: true,
+            transports: ['tcp'],
+            bufferMapping: { holdingRegisters: { qwCount: 4 } },
+          },
+        },
+        {
+          name: 'mb_b',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: {
+            enabled: true,
+            transports: ['tcp'],
+            bufferMapping: { holdingRegisters: { qwCount: 8 } },
+          },
+        },
+      ],
+    } as unknown as PLCProjectData
+
+    const result = await runCompilePipeline(makeArgs({ projectData: twoServers, compileOnly: true }), port, emit)
+
+    expect(result.success).toBe(true)
+  })
+
+  it('composes a byte-identical bundle when the same project is compiled twice', async () => {
+    // AC01 asks for the BUNDLE, not for each step. Every emitter being
+    // deterministic on its own does not add up to a reproducible build: one
+    // timestamp, or one map iterated in insertion order, is enough to break it,
+    // and nothing else here compares two whole runs.
+    const compose = async () => {
+      const port = makePort()
+      const { emit } = captureEvents()
+      await runCompilePipeline(
+        makeArgs({
+          projectData: withBackedPou('%MW7', { holdingRegisters: { mwCount: 8 } }),
+          isSimulator: false,
+          isRuntimeV4: true,
+          boardRuntime: 'openplc-compiler',
+          boardTarget: 'OpenPLC Runtime v4 (RPi)',
+          // `platform` is required by the type and unused on the v4 path; the
+          // field that matters is `compiler`, which scopes server exposure.
+          boardEntry: { compiler: 'openplc-compiler', platform: 'openplc:runtime:v4' },
+          compileOnly: true,
+        }),
+        port,
+        emit,
+      )
+      const materialize = port.materializeRuntimeV4Bundle
+      if (!materialize) throw new Error('the test port must provide materializeRuntimeV4Bundle')
+      return jest.mocked(materialize).mock.calls[0][0].bundle
+    }
+
+    const first = await compose()
+    const second = await compose()
+
+    // Stringified rather than compared with toEqual: key order is part of the
+    // bytes, and a reordered bundle is a different file set to anything that
+    // hashes or diffs it.
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first))
+  })
+
   it('emits the sizes into defines.h on the arduino-cli path', async () => {
     const port = makePort()
     const { emit } = captureEvents()

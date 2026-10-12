@@ -291,23 +291,40 @@ type PLCConfiguration = z.infer<typeof PLCConfigurationSchema>
 const PLCServerProtocolSchema = z.enum(['modbus-tcp', 's7comm', 'ethernet-ip', 'opcua'])
 type PLCServerProtocol = z.infer<typeof PLCServerProtocolSchema>
 
+/**
+ * Every segment and every count is OPTIONAL, and absent is not zero.
+ *
+ * Absent means "publish whatever the image turns out to be"; a number is a
+ * request that sizes the area. The screen persists only what was edited, so a
+ * server with one count set is the ordinary shape on disk -- requiring all
+ * seven here dropped the whole server at parse time, and the build then
+ * reported that nothing produced the addresses it serves.
+ */
 const ModbusSlaveBufferMappingSchema = z.object({
-  holdingRegisters: z.object({
-    qwCount: z.number(),
-    mwCount: z.number(),
-    mdCount: z.number(),
-    mlCount: z.number(),
-  }),
-  coils: z.object({
-    qxBits: z.number(),
-    mxBits: z.number(),
-  }),
-  discreteInputs: z.object({
-    ixBits: z.number(),
-  }),
-  inputRegisters: z.object({
-    iwCount: z.number(),
-  }),
+  holdingRegisters: z
+    .object({
+      qwCount: z.number().optional(),
+      mwCount: z.number().optional(),
+      mdCount: z.number().optional(),
+      mlCount: z.number().optional(),
+    })
+    .optional(),
+  coils: z
+    .object({
+      qxBits: z.number().optional(),
+      mxBits: z.number().optional(),
+    })
+    .optional(),
+  discreteInputs: z
+    .object({
+      ixBits: z.number().optional(),
+    })
+    .optional(),
+  inputRegisters: z
+    .object({
+      iwCount: z.number().optional(),
+    })
+    .optional(),
 })
 type ModbusSlaveBufferMapping = z.infer<typeof ModbusSlaveBufferMappingSchema>
 
