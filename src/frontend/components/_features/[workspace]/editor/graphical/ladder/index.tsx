@@ -36,6 +36,7 @@ import { useBoundPou } from '../active-context'
 import BlockElement from '../elements/ladder/block'
 import CoilElement from '../elements/ladder/coil'
 import ContactElement from '../elements/ladder/contact'
+import { useGraphicalPlacement } from '../placement/placement-context'
 
 const EMPTY_DIVERGENCES: string[] = []
 
@@ -59,6 +60,7 @@ export default function LadderEditor() {
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
   const { captureAndPush } = usePouSnapshot()
+  const placement = useGraphicalPlacement()
 
   const updateModelLadder = ladderSelectors.useUpdateModelLadder()
 
@@ -243,7 +245,12 @@ export default function LadderEditor() {
   }
 
   return (
-    <div className='h-full w-full overflow-y-auto' ref={scrollableRef} style={{ scrollbarGutter: 'stable' }}>
+    <div
+      className='h-full w-full overflow-y-auto'
+      ref={scrollableRef}
+      style={{ scrollbarGutter: 'stable' }}
+      onContextMenu={placement?.handleContextMenu}
+    >
       <div className='flex flex-1 flex-col gap-4 px-2'>
         <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
           <div

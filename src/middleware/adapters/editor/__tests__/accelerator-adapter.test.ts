@@ -59,6 +59,7 @@ beforeEach(() => {
     handleUndoRequest: register('undo'),
     handleRedoRequest: register('redo'),
     switchPerspective: register('switchPerspective'),
+    toggleRadialMenuAccelerator: register('toggleRadialMenu'),
     aboutModalAccelerator: register('about'),
     quitAppRequest: register('quitApp'),
     refreshRequest: register('refresh'),
@@ -120,6 +121,7 @@ testAccelerator('onFindInProject', 'findInProject', 'findInProjectAccelerator')
 testAccelerator('onUndo', 'undo', 'handleUndoRequest')
 testAccelerator('onRedo', 'redo', 'handleRedoRequest')
 testAccelerator('onSwitchPerspective', 'switchPerspective', 'switchPerspective')
+testAccelerator('onToggleRadialMenu', 'toggleRadialMenu', 'toggleRadialMenuAccelerator')
 testAccelerator('onAbout', 'about', 'aboutModalAccelerator')
 testAccelerator('onQuitApp', 'quitApp', 'quitAppRequest')
 testAccelerator('onRefresh', 'refresh', 'refreshRequest')

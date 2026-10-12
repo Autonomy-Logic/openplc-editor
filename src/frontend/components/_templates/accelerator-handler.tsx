@@ -351,6 +351,24 @@ const AcceleratorHandler = () => {
   }, [store, accelerator, toggleCollapse])
 
   /**
+   * Toggle the graphical editors' radial menu (native Display menu)
+   */
+  useEffect(() => {
+    const unsub = accelerator.onToggleRadialMenu(() => {
+      if (!hasOpenProject(store)) return
+      const enabled = store.getState().uiPreferencesActions.toggleRadialMenu()
+      toast({
+        title: enabled ? 'Radial menu enabled' : 'Radial menu disabled',
+        description: enabled
+          ? 'Right-click the LD or FBD programming area to open it.'
+          : 'Re-enable it from Display > Radial Menu.',
+        variant: 'default',
+      })
+    })
+    return unsub
+  }, [store, accelerator])
+
+  /**
    * Undo / Redo
    */
   // An invalid graphical body blocks history changes outright, so say so rather

@@ -69,7 +69,8 @@
       "fullScreen": "Full Screen",
       "resetPerspective": "Reset Perspective",
       "sortAlpha": "Sort Alpha",
-      "theme": "Change Theme"
+      "theme": "Change Theme",
+      "radialMenu": "Radial Menu"
     }
   },
   "help": {
