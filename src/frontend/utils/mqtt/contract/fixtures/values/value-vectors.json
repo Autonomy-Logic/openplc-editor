@@ -1,0 +1,1000 @@
+{
+  "contract": "openplc-mqtt-value-vectors",
+  "version": 1,
+  "raw": "bytes written by debug_read(arr, elem, dest), little-endian; STRING/WSTRING are the full debug window",
+  "metric": "Payload.Metric with name 'v'; timestamp omitted; deterministic protobuf serialization",
+  "vectors": [
+    {
+      "id": "bool-false",
+      "iecType": "BOOL",
+      "raw": "00",
+      "generic": "{\"value\":false}",
+      "sparkplug": {
+        "datatype": 11,
+        "datatypeName": "Boolean",
+        "isNull": false,
+        "properties": {
+          "iecType": "BOOL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200b4a290a07696563547970650a08656e636f64696e671208080c4204424f4f4c120a080c42066e61746976657000",
+        "dataMetric": "0a0176200b7000"
+      }
+    },
+    {
+      "id": "bool-true",
+      "iecType": "BOOL",
+      "raw": "01",
+      "generic": "{\"value\":true}",
+      "sparkplug": {
+        "datatype": 11,
+        "datatypeName": "Boolean",
+        "isNull": false,
+        "properties": {
+          "iecType": "BOOL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200b4a290a07696563547970650a08656e636f64696e671208080c4204424f4f4c120a080c42066e61746976657001",
+        "dataMetric": "0a0176200b7001"
+      }
+    },
+    {
+      "id": "bool-invalid-byte-null",
+      "iecType": "BOOL",
+      "raw": "02",
+      "generic": "{\"value\":null}",
+      "sparkplug": {
+        "datatype": 11,
+        "datatypeName": "Boolean",
+        "isNull": true,
+        "properties": {
+          "iecType": "BOOL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200b38014a290a07696563547970650a08656e636f64696e671208080c4204424f4f4c120a080c42066e6174697665",
+        "dataMetric": "0a0176200b3801"
+      }
+    },
+    {
+      "id": "sint-min",
+      "iecType": "SINT",
+      "raw": "80",
+      "generic": "{\"value\":-128}",
+      "sparkplug": {
+        "datatype": 1,
+        "datatypeName": "Int8",
+        "isNull": false,
+        "properties": {
+          "iecType": "SINT",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620014a290a07696563547970650a08656e636f64696e671208080c420453494e54120a080c42066e61746976655080ffffff0f",
+        "dataMetric": "0a017620015080ffffff0f"
+      }
+    },
+    {
+      "id": "sint-max",
+      "iecType": "SINT",
+      "raw": "7f",
+      "generic": "{\"value\":127}",
+      "sparkplug": {
+        "datatype": 1,
+        "datatypeName": "Int8",
+        "isNull": false,
+        "properties": {
+          "iecType": "SINT",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620014a290a07696563547970650a08656e636f64696e671208080c420453494e54120a080c42066e6174697665507f",
+        "dataMetric": "0a01762001507f"
+      }
+    },
+    {
+      "id": "int-min",
+      "iecType": "INT",
+      "raw": "0080",
+      "generic": "{\"value\":-32768}",
+      "sparkplug": {
+        "datatype": 2,
+        "datatypeName": "Int16",
+        "isNull": false,
+        "properties": {
+          "iecType": "INT",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620024a280a07696563547970650a08656e636f64696e671207080c4203494e54120a080c42066e6174697665508080feff0f",
+        "dataMetric": "0a01762002508080feff0f"
+      }
+    },
+    {
+      "id": "int-max",
+      "iecType": "INT",
+      "raw": "ff7f",
+      "generic": "{\"value\":32767}",
+      "sparkplug": {
+        "datatype": 2,
+        "datatypeName": "Int16",
+        "isNull": false,
+        "properties": {
+          "iecType": "INT",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620024a280a07696563547970650a08656e636f64696e671207080c4203494e54120a080c42066e617469766550ffff01",
+        "dataMetric": "0a0176200250ffff01"
+      }
+    },
+    {
+      "id": "dint-min",
+      "iecType": "DINT",
+      "raw": "00000080",
+      "generic": "{\"value\":-2147483648}",
+      "sparkplug": {
+        "datatype": 3,
+        "datatypeName": "Int32",
+        "isNull": false,
+        "properties": {
+          "iecType": "DINT",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620034a290a07696563547970650a08656e636f64696e671208080c420444494e54120a080c42066e6174697665508080808008",
+        "dataMetric": "0a01762003508080808008"
+      }
+    },
+    {
+      "id": "dint-max",
+      "iecType": "DINT",
+      "raw": "ffffff7f",
+      "generic": "{\"value\":2147483647}",
+      "sparkplug": {
+        "datatype": 3,
+        "datatypeName": "Int32",
+        "isNull": false,
+        "properties": {
+          "iecType": "DINT",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620034a290a07696563547970650a08656e636f64696e671208080c420444494e54120a080c42066e617469766550ffffffff07",
+        "dataMetric": "0a0176200350ffffffff07"
+      }
+    },
+    {
+      "id": "lint-min",
+      "iecType": "LINT",
+      "raw": "0000000000000080",
+      "generic": "{\"value\":\"-9223372036854775808\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "LINT",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620044a290a07696563547970650a08656e636f64696e671208080c42044c494e54120a080c42066e61746976655880808080808080808001",
+        "dataMetric": "0a017620045880808080808080808001"
+      }
+    },
+    {
+      "id": "lint-max",
+      "iecType": "LINT",
+      "raw": "ffffffffffffff7f",
+      "generic": "{\"value\":\"9223372036854775807\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "LINT",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620044a290a07696563547970650a08656e636f64696e671208080c42044c494e54120a080c42066e617469766558ffffffffffffffff7f",
+        "dataMetric": "0a0176200458ffffffffffffffff7f"
+      }
+    },
+    {
+      "id": "lint-above-safe-integer",
+      "iecType": "LINT",
+      "raw": "0100000000002000",
+      "generic": "{\"value\":\"9007199254740993\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "LINT",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620044a290a07696563547970650a08656e636f64696e671208080c42044c494e54120a080c42066e6174697665588180808080808010",
+        "dataMetric": "0a01762004588180808080808010"
+      }
+    },
+    {
+      "id": "usint-max",
+      "iecType": "USINT",
+      "raw": "ff",
+      "generic": "{\"value\":255}",
+      "sparkplug": {
+        "datatype": 5,
+        "datatypeName": "UInt8",
+        "isNull": false,
+        "properties": {
+          "iecType": "USINT",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620054a2a0a07696563547970650a08656e636f64696e671209080c42055553494e54120a080c42066e617469766550ff01",
+        "dataMetric": "0a0176200550ff01"
+      }
+    },
+    {
+      "id": "uint-max",
+      "iecType": "UINT",
+      "raw": "ffff",
+      "generic": "{\"value\":65535}",
+      "sparkplug": {
+        "datatype": 6,
+        "datatypeName": "UInt16",
+        "isNull": false,
+        "properties": {
+          "iecType": "UINT",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620064a290a07696563547970650a08656e636f64696e671208080c420455494e54120a080c42066e617469766550ffff03",
+        "dataMetric": "0a0176200650ffff03"
+      }
+    },
+    {
+      "id": "udint-max",
+      "iecType": "UDINT",
+      "raw": "ffffffff",
+      "generic": "{\"value\":4294967295}",
+      "sparkplug": {
+        "datatype": 7,
+        "datatypeName": "UInt32",
+        "isNull": false,
+        "properties": {
+          "iecType": "UDINT",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620074a2a0a07696563547970650a08656e636f64696e671209080c42055544494e54120a080c42066e617469766550ffffffff0f",
+        "dataMetric": "0a0176200750ffffffff0f"
+      }
+    },
+    {
+      "id": "ulint-max",
+      "iecType": "ULINT",
+      "raw": "ffffffffffffffff",
+      "generic": "{\"value\":\"18446744073709551615\"}",
+      "sparkplug": {
+        "datatype": 8,
+        "datatypeName": "UInt64",
+        "isNull": false,
+        "properties": {
+          "iecType": "ULINT",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620084a2a0a07696563547970650a08656e636f64696e671209080c4205554c494e54120a080c42066e617469766558ffffffffffffffffff01",
+        "dataMetric": "0a0176200858ffffffffffffffffff01"
+      }
+    },
+    {
+      "id": "byte-bits",
+      "iecType": "BYTE",
+      "raw": "a5",
+      "generic": "{\"value\":165}",
+      "sparkplug": {
+        "datatype": 5,
+        "datatypeName": "UInt8",
+        "isNull": false,
+        "properties": {
+          "iecType": "BYTE",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620054a290a07696563547970650a08656e636f64696e671208080c420442595445120a080c42066e617469766550a501",
+        "dataMetric": "0a0176200550a501"
+      }
+    },
+    {
+      "id": "word-bits",
+      "iecType": "WORD",
+      "raw": "efbe",
+      "generic": "{\"value\":48879}",
+      "sparkplug": {
+        "datatype": 6,
+        "datatypeName": "UInt16",
+        "isNull": false,
+        "properties": {
+          "iecType": "WORD",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620064a290a07696563547970650a08656e636f64696e671208080c4204574f5244120a080c42066e617469766550effd02",
+        "dataMetric": "0a0176200650effd02"
+      }
+    },
+    {
+      "id": "dword-bits",
+      "iecType": "DWORD",
+      "raw": "efbeadde",
+      "generic": "{\"value\":3735928559}",
+      "sparkplug": {
+        "datatype": 7,
+        "datatypeName": "UInt32",
+        "isNull": false,
+        "properties": {
+          "iecType": "DWORD",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620074a2a0a07696563547970650a08656e636f64696e671209080c420544574f5244120a080c42066e617469766550effdb6f50d",
+        "dataMetric": "0a0176200750effdb6f50d"
+      }
+    },
+    {
+      "id": "lword-max",
+      "iecType": "LWORD",
+      "raw": "ffffffffffffffff",
+      "generic": "{\"value\":\"18446744073709551615\"}",
+      "sparkplug": {
+        "datatype": 8,
+        "datatypeName": "UInt64",
+        "isNull": false,
+        "properties": {
+          "iecType": "LWORD",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620084a2a0a07696563547970650a08656e636f64696e671209080c42054c574f5244120a080c42066e617469766558ffffffffffffffffff01",
+        "dataMetric": "0a0176200858ffffffffffffffffff01"
+      }
+    },
+    {
+      "id": "lword-high-bit",
+      "iecType": "LWORD",
+      "raw": "0000000000000080",
+      "generic": "{\"value\":\"9223372036854775808\"}",
+      "sparkplug": {
+        "datatype": 8,
+        "datatypeName": "UInt64",
+        "isNull": false,
+        "properties": {
+          "iecType": "LWORD",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620084a2a0a07696563547970650a08656e636f64696e671209080c42054c574f5244120a080c42066e61746976655880808080808080808001",
+        "dataMetric": "0a017620085880808080808080808001"
+      }
+    },
+    {
+      "id": "real-tenth",
+      "iecType": "REAL",
+      "raw": "cdcccc3d",
+      "generic": "{\"value\":0.1}",
+      "sparkplug": {
+        "datatype": 9,
+        "datatypeName": "Float",
+        "isNull": false,
+        "properties": {
+          "iecType": "REAL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620094a290a07696563547970650a08656e636f64696e671208080c42045245414c120a080c42066e617469766565cdcccc3d",
+        "dataMetric": "0a0176200965cdcccc3d"
+      }
+    },
+    {
+      "id": "real-negative-zero",
+      "iecType": "REAL",
+      "raw": "00000080",
+      "generic": "{\"value\":-0.0}",
+      "sparkplug": {
+        "datatype": 9,
+        "datatypeName": "Float",
+        "isNull": false,
+        "properties": {
+          "iecType": "REAL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620094a290a07696563547970650a08656e636f64696e671208080c42045245414c120a080c42066e61746976656500000080",
+        "dataMetric": "0a017620096500000080"
+      }
+    },
+    {
+      "id": "real-integral",
+      "iecType": "REAL",
+      "raw": "0000c842",
+      "generic": "{\"value\":100.0}",
+      "sparkplug": {
+        "datatype": 9,
+        "datatypeName": "Float",
+        "isNull": false,
+        "properties": {
+          "iecType": "REAL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620094a290a07696563547970650a08656e636f64696e671208080c42045245414c120a080c42066e6174697665650000c842",
+        "dataMetric": "0a01762009650000c842"
+      }
+    },
+    {
+      "id": "real-max",
+      "iecType": "REAL",
+      "raw": "ffff7f7f",
+      "generic": "{\"value\":3.4028235e+38}",
+      "sparkplug": {
+        "datatype": 9,
+        "datatypeName": "Float",
+        "isNull": false,
+        "properties": {
+          "iecType": "REAL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620094a290a07696563547970650a08656e636f64696e671208080c42045245414c120a080c42066e617469766565ffff7f7f",
+        "dataMetric": "0a0176200965ffff7f7f"
+      }
+    },
+    {
+      "id": "real-min-subnormal",
+      "iecType": "REAL",
+      "raw": "01000000",
+      "generic": "{\"value\":1e-45}",
+      "sparkplug": {
+        "datatype": 9,
+        "datatypeName": "Float",
+        "isNull": false,
+        "properties": {
+          "iecType": "REAL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a017620094a290a07696563547970650a08656e636f64696e671208080c42045245414c120a080c42066e61746976656501000000",
+        "dataMetric": "0a017620096501000000"
+      }
+    },
+    {
+      "id": "real-nan-null",
+      "iecType": "REAL",
+      "raw": "0000c07f",
+      "generic": "{\"value\":null}",
+      "sparkplug": {
+        "datatype": 9,
+        "datatypeName": "Float",
+        "isNull": true,
+        "properties": {
+          "iecType": "REAL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200938014a290a07696563547970650a08656e636f64696e671208080c42045245414c120a080c42066e6174697665",
+        "dataMetric": "0a017620093801"
+      }
+    },
+    {
+      "id": "real-inf-null",
+      "iecType": "REAL",
+      "raw": "0000807f",
+      "generic": "{\"value\":null}",
+      "sparkplug": {
+        "datatype": 9,
+        "datatypeName": "Float",
+        "isNull": true,
+        "properties": {
+          "iecType": "REAL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200938014a290a07696563547970650a08656e636f64696e671208080c42045245414c120a080c42066e6174697665",
+        "dataMetric": "0a017620093801"
+      }
+    },
+    {
+      "id": "lreal-tenth",
+      "iecType": "LREAL",
+      "raw": "9a9999999999b93f",
+      "generic": "{\"value\":0.1}",
+      "sparkplug": {
+        "datatype": 10,
+        "datatypeName": "Double",
+        "isNull": false,
+        "properties": {
+          "iecType": "LREAL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200a4a2a0a07696563547970650a08656e636f64696e671209080c42054c5245414c120a080c42066e6174697665699a9999999999b93f",
+        "dataMetric": "0a0176200a699a9999999999b93f"
+      }
+    },
+    {
+      "id": "lreal-negative-zero",
+      "iecType": "LREAL",
+      "raw": "0000000000000080",
+      "generic": "{\"value\":-0.0}",
+      "sparkplug": {
+        "datatype": 10,
+        "datatypeName": "Double",
+        "isNull": false,
+        "properties": {
+          "iecType": "LREAL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200a4a2a0a07696563547970650a08656e636f64696e671209080c42054c5245414c120a080c42066e6174697665690000000000000080",
+        "dataMetric": "0a0176200a690000000000000080"
+      }
+    },
+    {
+      "id": "lreal-large",
+      "iecType": "LREAL",
+      "raw": "a0c8eb85f3cce17f",
+      "generic": "{\"value\":1e+308}",
+      "sparkplug": {
+        "datatype": 10,
+        "datatypeName": "Double",
+        "isNull": false,
+        "properties": {
+          "iecType": "LREAL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200a4a2a0a07696563547970650a08656e636f64696e671209080c42054c5245414c120a080c42066e617469766569a0c8eb85f3cce17f",
+        "dataMetric": "0a0176200a69a0c8eb85f3cce17f"
+      }
+    },
+    {
+      "id": "lreal-min-subnormal",
+      "iecType": "LREAL",
+      "raw": "0100000000000000",
+      "generic": "{\"value\":5e-324}",
+      "sparkplug": {
+        "datatype": 10,
+        "datatypeName": "Double",
+        "isNull": false,
+        "properties": {
+          "iecType": "LREAL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200a4a2a0a07696563547970650a08656e636f64696e671209080c42054c5245414c120a080c42066e6174697665690100000000000000",
+        "dataMetric": "0a0176200a690100000000000000"
+      }
+    },
+    {
+      "id": "lreal-neg-inf-null",
+      "iecType": "LREAL",
+      "raw": "000000000000f0ff",
+      "generic": "{\"value\":null}",
+      "sparkplug": {
+        "datatype": 10,
+        "datatypeName": "Double",
+        "isNull": true,
+        "properties": {
+          "iecType": "LREAL",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200a38014a2a0a07696563547970650a08656e636f64696e671209080c42054c5245414c120a080c42066e6174697665",
+        "dataMetric": "0a0176200a3801"
+      }
+    },
+    {
+      "id": "string-empty",
+      "iecType": "STRING",
+      "raw": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "generic": "{\"value\":\"\"}",
+      "sparkplug": {
+        "datatype": 12,
+        "datatypeName": "String",
+        "isNull": false,
+        "properties": {
+          "iecType": "STRING",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200c4a2b0a07696563547970650a08656e636f64696e67120a080c4206535452494e47120a080c42066e61746976657a00",
+        "dataMetric": "0a0176200c7a00"
+      }
+    },
+    {
+      "id": "string-escaping",
+      "iecType": "STRING",
+      "raw": "0b4f6cc3a1202278220a5c0100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "generic": "{\"value\":\"Ol\u00e1 \\\"x\\\"\\n\\\\\\u0001\"}",
+      "sparkplug": {
+        "datatype": 12,
+        "datatypeName": "String",
+        "isNull": false,
+        "properties": {
+          "iecType": "STRING",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200c4a2b0a07696563547970650a08656e636f64696e67120a080c4206535452494e47120a080c42066e61746976657a0b4f6cc3a1202278220a5c01",
+        "dataMetric": "0a0176200c7a0b4f6cc3a1202278220a5c01"
+      }
+    },
+    {
+      "id": "string-max-window",
+      "iecType": "STRING",
+      "raw": "7e616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161",
+      "generic": "{\"value\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+      "sparkplug": {
+        "datatype": 12,
+        "datatypeName": "String",
+        "isNull": false,
+        "properties": {
+          "iecType": "STRING",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200c4a2b0a07696563547970650a08656e636f64696e67120a080c4206535452494e47120a080c42066e61746976657a7e616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161",
+        "dataMetric": "0a0176200c7a7e616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"
+      }
+    },
+    {
+      "id": "string-invalid-utf8-null",
+      "iecType": "STRING",
+      "raw": "01ff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "generic": "{\"value\":null}",
+      "sparkplug": {
+        "datatype": 12,
+        "datatypeName": "String",
+        "isNull": true,
+        "properties": {
+          "iecType": "STRING",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200c38014a2b0a07696563547970650a08656e636f64696e67120a080c4206535452494e47120a080c42066e6174697665",
+        "dataMetric": "0a0176200c3801"
+      }
+    },
+    {
+      "id": "string-count-over-cap-null",
+      "iecType": "STRING",
+      "raw": "7f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "generic": "{\"value\":null}",
+      "sparkplug": {
+        "datatype": 12,
+        "datatypeName": "String",
+        "isNull": true,
+        "properties": {
+          "iecType": "STRING",
+          "encoding": "native"
+        },
+        "birthMetric": "0a0176200c38014a2b0a07696563547970650a08656e636f64696e67120a080c4206535452494e47120a080c42066e6174697665",
+        "dataMetric": "0a0176200c3801"
+      }
+    },
+    {
+      "id": "wstring-empty",
+      "iecType": "WSTRING",
+      "raw": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "generic": "{\"value\":\"\"}",
+      "sparkplug": {
+        "datatype": 17,
+        "datatypeName": "Bytes",
+        "isNull": false,
+        "properties": {
+          "iecType": "WSTRING",
+          "encoding": "utf16le"
+        },
+        "birthMetric": "0a017620114a2d0a07696563547970650a08656e636f64696e67120b080c420757535452494e47120b080c420775746631366c65820100",
+        "dataMetric": "0a01762011820100"
+      }
+    },
+    {
+      "id": "wstring-surrogate-pair",
+      "iecType": "WSTRING",
+      "raw": "0341003dd800de000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "generic": "{\"value\":\"QQA92ADe\"}",
+      "sparkplug": {
+        "datatype": 17,
+        "datatypeName": "Bytes",
+        "isNull": false,
+        "properties": {
+          "iecType": "WSTRING",
+          "encoding": "utf16le"
+        },
+        "birthMetric": "0a017620114a2d0a07696563547970650a08656e636f64696e67120b080c420757535452494e47120b080c420775746631366c6582010641003dd800de",
+        "dataMetric": "0a0176201182010641003dd800de"
+      }
+    },
+    {
+      "id": "wstring-unpaired-high",
+      "iecType": "WSTRING",
+      "raw": "0100d800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "generic": "{\"value\":\"ANg=\"}",
+      "sparkplug": {
+        "datatype": 17,
+        "datatypeName": "Bytes",
+        "isNull": false,
+        "properties": {
+          "iecType": "WSTRING",
+          "encoding": "utf16le"
+        },
+        "birthMetric": "0a017620114a2d0a07696563547970650a08656e636f64696e67120b080c420757535452494e47120b080c420775746631366c6582010200d8",
+        "dataMetric": "0a0176201182010200d8"
+      }
+    },
+    {
+      "id": "wstring-unpaired-low",
+      "iecType": "WSTRING",
+      "raw": "03610000dc6200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "generic": "{\"value\":\"YQAA3GIA\"}",
+      "sparkplug": {
+        "datatype": 17,
+        "datatypeName": "Bytes",
+        "isNull": false,
+        "properties": {
+          "iecType": "WSTRING",
+          "encoding": "utf16le"
+        },
+        "birthMetric": "0a017620114a2d0a07696563547970650a08656e636f64696e67120b080c420757535452494e47120b080c420775746631366c65820106610000dc6200",
+        "dataMetric": "0a01762011820106610000dc6200"
+      }
+    },
+    {
+      "id": "time-one-ns",
+      "iecType": "TIME",
+      "raw": "0100000000000000",
+      "generic": "{\"value\":\"1\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "TIME",
+          "encoding": "int64-ns-duration",
+          "unit": "ns"
+        },
+        "birthMetric": "0a017620044a420a07696563547970650a08656e636f64696e670a04756e69741208080c420454494d451215080c4211696e7436342d6e732d6475726174696f6e1206080c42026e735801",
+        "dataMetric": "0a017620045801"
+      }
+    },
+    {
+      "id": "time-negative",
+      "iecType": "TIME",
+      "raw": "ffd097a6ffffffff",
+      "generic": "{\"value\":\"-1500000001\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "TIME",
+          "encoding": "int64-ns-duration",
+          "unit": "ns"
+        },
+        "birthMetric": "0a017620044a420a07696563547970650a08656e636f64696e670a04756e69741208080c420454494d451215080c4211696e7436342d6e732d6475726174696f6e1206080c42026e7358ffa1dfb4faffffffff01",
+        "dataMetric": "0a0176200458ffa1dfb4faffffffff01"
+      }
+    },
+    {
+      "id": "time-max",
+      "iecType": "TIME",
+      "raw": "ffffffffffffff7f",
+      "generic": "{\"value\":\"9223372036854775807\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "TIME",
+          "encoding": "int64-ns-duration",
+          "unit": "ns"
+        },
+        "birthMetric": "0a017620044a420a07696563547970650a08656e636f64696e670a04756e69741208080c420454494d451215080c4211696e7436342d6e732d6475726174696f6e1206080c42026e7358ffffffffffffffff7f",
+        "dataMetric": "0a0176200458ffffffffffffffff7f"
+      }
+    },
+    {
+      "id": "tod-midnight",
+      "iecType": "TOD",
+      "raw": "0000000000000000",
+      "generic": "{\"value\":\"00:00:00.000000000\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "TOD",
+          "encoding": "int64-ns-since-midnight",
+          "unit": "ns"
+        },
+        "birthMetric": "0a017620044a470a07696563547970650a08656e636f64696e670a04756e69741207080c4203544f44121b080c4217696e7436342d6e732d73696e63652d6d69646e696768741206080c42026e735800",
+        "dataMetric": "0a017620045800"
+      }
+    },
+    {
+      "id": "tod-last-ns",
+      "iecType": "TOD",
+      "raw": "ffff4e91944e0000",
+      "generic": "{\"value\":\"23:59:59.999999999\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "TOD",
+          "encoding": "int64-ns-since-midnight",
+          "unit": "ns"
+        },
+        "birthMetric": "0a017620044a470a07696563547970650a08656e636f64696e670a04756e69741207080c4203544f44121b080c4217696e7436342d6e732d73696e63652d6d69646e696768741206080c42026e7358ffffbb8ac9d213",
+        "dataMetric": "0a0176200458ffffbb8ac9d213"
+      }
+    },
+    {
+      "id": "tod-out-of-range-null",
+      "iecType": "TOD",
+      "raw": "00004f91944e0000",
+      "generic": "{\"value\":null}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": true,
+        "properties": {
+          "iecType": "TOD",
+          "encoding": "int64-ns-since-midnight",
+          "unit": "ns"
+        },
+        "birthMetric": "0a0176200438014a470a07696563547970650a08656e636f64696e670a04756e69741207080c4203544f44121b080c4217696e7436342d6e732d73696e63652d6d69646e696768741206080c42026e73",
+        "dataMetric": "0a017620043801"
+      }
+    },
+    {
+      "id": "tod-negative-null",
+      "iecType": "TOD",
+      "raw": "ffffffffffffffff",
+      "generic": "{\"value\":null}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": true,
+        "properties": {
+          "iecType": "TOD",
+          "encoding": "int64-ns-since-midnight",
+          "unit": "ns"
+        },
+        "birthMetric": "0a0176200438014a470a07696563547970650a08656e636f64696e670a04756e69741207080c4203544f44121b080c4217696e7436342d6e732d73696e63652d6d69646e696768741206080c42026e73",
+        "dataMetric": "0a017620043801"
+      }
+    },
+    {
+      "id": "date-epoch",
+      "iecType": "DATE",
+      "raw": "0000000000000000",
+      "generic": "{\"value\":\"1970-01-01\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "DATE",
+          "encoding": "int64-ns-since-unix-epoch-utc-midnight",
+          "unit": "ns",
+          "epoch": "unix"
+        },
+        "birthMetric": "0a017620044a680a07696563547970650a08656e636f64696e670a04756e69740a0565706f63681208080c420444415445122a080c4226696e7436342d6e732d73696e63652d756e69782d65706f63682d7574632d6d69646e696768741206080c42026e731208080c4204756e69785800",
+        "dataMetric": "0a017620045800"
+      }
+    },
+    {
+      "id": "date-before-epoch",
+      "iecType": "DATE",
+      "raw": "ffffffffffffffff",
+      "generic": "{\"value\":\"1969-12-31\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "DATE",
+          "encoding": "int64-ns-since-unix-epoch-utc-midnight",
+          "unit": "ns",
+          "epoch": "unix"
+        },
+        "birthMetric": "0a017620044a680a07696563547970650a08656e636f64696e670a04756e69740a0565706f63681208080c420444415445122a080c4226696e7436342d6e732d73696e63652d756e69782d65706f63682d7574632d6d69646e696768741206080c42026e731208080c4204756e6978588080c4f5b6adecffff01",
+        "dataMetric": "0a01762004588080c4f5b6adecffff01"
+      }
+    },
+    {
+      "id": "date-2026-10-09",
+      "iecType": "DATE",
+      "raw": "ff50000000000000",
+      "generic": "{\"value\":\"2026-10-09\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "DATE",
+          "encoding": "int64-ns-since-unix-epoch-utc-midnight",
+          "unit": "ns",
+          "epoch": "unix"
+        },
+        "birthMetric": "0a017620044a680a07696563547970650a08656e636f64696e670a04756e69740a0565706f63681208080c420444415445122a080c4226696e7436342d6e732d73696e63652d756e69782d65706f63682d7574632d6d69646e696768741206080c42026e731208080c4204756e6978588080c4edd6ecacee18",
+        "dataMetric": "0a01762004588080c4edd6ecacee18"
+      }
+    },
+    {
+      "id": "date-beyond-ns-range-null",
+      "iecType": "DATE",
+      "raw": "00a1010000000000",
+      "generic": "{\"value\":null}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": true,
+        "properties": {
+          "iecType": "DATE",
+          "encoding": "int64-ns-since-unix-epoch-utc-midnight",
+          "unit": "ns",
+          "epoch": "unix"
+        },
+        "birthMetric": "0a0176200438014a680a07696563547970650a08656e636f64696e670a04756e69740a0565706f63681208080c420444415445122a080c4226696e7436342d6e732d73696e63652d756e69782d65706f63682d7574632d6d69646e696768741206080c42026e731208080c4204756e6978",
+        "dataMetric": "0a017620043801"
+      }
+    },
+    {
+      "id": "dt-epoch",
+      "iecType": "DT",
+      "raw": "0000000000000000",
+      "generic": "{\"value\":\"1970-01-01T00:00:00.000000000Z\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "DT",
+          "encoding": "int64-ns-since-unix-epoch",
+          "unit": "ns",
+          "epoch": "unix"
+        },
+        "birthMetric": "0a017620044a590a07696563547970650a08656e636f64696e670a04756e69740a0565706f63681206080c42024454121d080c4219696e7436342d6e732d73696e63652d756e69782d65706f63681206080c42026e731208080c4204756e69785800",
+        "dataMetric": "0a017620045800"
+      }
+    },
+    {
+      "id": "dt-one-ns-before-epoch",
+      "iecType": "DT",
+      "raw": "ffffffffffffffff",
+      "generic": "{\"value\":\"1969-12-31T23:59:59.999999999Z\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "DT",
+          "encoding": "int64-ns-since-unix-epoch",
+          "unit": "ns",
+          "epoch": "unix"
+        },
+        "birthMetric": "0a017620044a590a07696563547970650a08656e636f64696e670a04756e69740a0565706f63681206080c42024454121d080c4219696e7436342d6e732d73696e63652d756e69782d65706f63681206080c42026e731208080c4204756e697858ffffffffffffffffff01",
+        "dataMetric": "0a0176200458ffffffffffffffffff01"
+      }
+    },
+    {
+      "id": "dt-nanoseconds",
+      "iecType": "DT",
+      "raw": "152d0ac197dcdc18",
+      "generic": "{\"value\":\"2026-10-09T12:34:56.123456789Z\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "DT",
+          "encoding": "int64-ns-since-unix-epoch",
+          "unit": "ns",
+          "epoch": "unix"
+        },
+        "birthMetric": "0a017620044a590a07696563547970650a08656e636f64696e670a04756e69740a0565706f63681206080c42024454121d080c4219696e7436342d6e732d73696e63652d756e69782d65706f63681206080c42026e731208080c4204756e69785895daa888fc92b7ee18",
+        "dataMetric": "0a017620045895daa888fc92b7ee18"
+      }
+    },
+    {
+      "id": "dt-int64-min",
+      "iecType": "DT",
+      "raw": "0000000000000080",
+      "generic": "{\"value\":\"1677-09-21T00:12:43.145224192Z\"}",
+      "sparkplug": {
+        "datatype": 4,
+        "datatypeName": "Int64",
+        "isNull": false,
+        "properties": {
+          "iecType": "DT",
+          "encoding": "int64-ns-since-unix-epoch",
+          "unit": "ns",
+          "epoch": "unix"
+        },
+        "birthMetric": "0a017620044a590a07696563547970650a08656e636f64696e670a04756e69740a0565706f63681206080c42024454121d080c4219696e7436342d6e732d73696e63652d756e69782d65706f63681206080c42026e731208080c4204756e69785880808080808080808001",
+        "dataMetric": "0a017620045880808080808080808001"
+      }
+    }
+  ]
+}

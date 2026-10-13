@@ -1,0 +1,27 @@
+{
+  "contract": "openplc-mqtt-runtime-config",
+  "format_version": 1,
+  "enabled": true,
+  "mode": "generic",
+  "program": {
+    "md5": "3f2c9d0e8b7a6f5e4d3c2b1a09f8e7d6"
+  },
+  "connection": {
+    "host": "broker.example.net",
+    "port": 1883,
+    "client_id": "plc-linha1",
+    "tls": {
+      "enabled": false
+    }
+  },
+  "auth": {
+    "method": "anonymous"
+  },
+  "generic": {
+    "publish_mode": "on_change",
+    "sample_interval_ms": 100,
+    "qos": 0,
+    "retain": false
+  },
+  "leaves": []
+}

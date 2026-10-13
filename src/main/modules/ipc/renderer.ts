@@ -37,6 +37,12 @@ import type {
   NetworkInterface,
 } from '@root/middleware/shared/ports/ethercat-types'
 import type {
+  MqttCredentialBinding,
+  MqttCredentialPersistence,
+  MqttCredentialScope,
+  MqttCredentialSecret,
+} from '@root/middleware/shared/ports/mqtt-credential-port'
+import type {
   CloudFoldersResult,
   CloudProjectsResult,
   RawProjectFiles,
@@ -49,6 +55,10 @@ import type {
   ListPublicLibrariesResponse,
   PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
+import type {
+  RuntimeIdentityPin,
+  RuntimeIdentityWriteResult,
+} from '@root/middleware/shared/ports/runtime-identity-port'
 import type {
   ListUsersResult,
   RuntimeUserRole,
@@ -72,6 +82,11 @@ import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-serv
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
 
+import type {
+  MqttCredentialPresenceReply,
+  MqttCredentialPutReply,
+  MqttCredentialRemoveReply,
+} from '../../../backend/editor/mqtt-credentials/ipc-input'
 import type {
   BootloaderApiResult,
   BootloaderCapabilities,
@@ -244,6 +259,28 @@ const rendererProcessBridge = {
     subscribe('edge-account:signed-in', () => {
       callback()
     }),
+  // MQTT broker credentials: the secret only travels renderer -> main; replies carry presence, never the secret.
+  mqttCredentialsGetPersistence: (): Promise<MqttCredentialPersistence> =>
+    ipcRenderer.invoke('mqtt-credentials:persistence'),
+  mqttCredentialsGetPresence: (scope: MqttCredentialScope): Promise<MqttCredentialPresenceReply> =>
+    ipcRenderer.invoke('mqtt-credentials:get-presence', scope),
+  mqttCredentialsPut: (
+    scope: MqttCredentialScope,
+    secret: MqttCredentialSecret,
+    binding: MqttCredentialBinding,
+  ): Promise<MqttCredentialPutReply> => ipcRenderer.invoke('mqtt-credentials:put', scope, secret, binding),
+  mqttCredentialsRemove: (scope: MqttCredentialScope): Promise<MqttCredentialRemoveReply> =>
+    ipcRenderer.invoke('mqtt-credentials:remove', scope),
+  // Trusted runtime certificate per target: set from a fingerprint the user typed, never from a connection.
+  runtimeIdentityGet: (targetKey: string): Promise<RuntimeIdentityPin | null> =>
+    ipcRenderer.invoke('runtime-identity:get', targetKey),
+  runtimeIdentitySet: (targetKey: string, fingerprint: string): Promise<RuntimeIdentityWriteResult> =>
+    ipcRenderer.invoke('runtime-identity:set', targetKey, fingerprint),
+  runtimeIdentityRemove: (targetKey: string): Promise<void> => ipcRenderer.invoke('runtime-identity:remove', targetKey),
+  runtimeGetMqttStatus: (ipAddress: string): Promise<{ success: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-mqtt-status', ipAddress),
+  runtimeGetMqttCredentials: (ipAddress: string): Promise<{ success: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-mqtt-credentials', ipAddress),
   edgeProjectsListRecent: (limit: number): Promise<CloudProjectsResult> =>
     ipcRenderer.invoke('edge-projects:list-recent', limit),
   edgeProjectsListInFolder: (folderId: string): Promise<CloudProjectsResult> =>

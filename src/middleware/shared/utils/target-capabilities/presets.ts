@@ -96,6 +96,8 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
+  // The in-process simulator runs no MQTT client.
+  mqttClient: false,
   // RTU over the emulated virtual serial port the in-process simulator
   // exposes — not Modbus TCP.
   debuggerTransports: ['modbus-serial'],
@@ -122,6 +124,7 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   modbusRtuServer: false,
   opcuaServer: false,
   s7Server: false,
+  mqttClient: false,
   debuggerTransports: ['modbus-tcp'],
   pythonFunctionBlocks: true,
   arduinoApiCompletions: false,
@@ -155,6 +158,7 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
+  mqttClient: true,
   debuggerTransports: ['websocket'],
   pythonFunctionBlocks: true,
   arduinoApiCompletions: false,
@@ -187,6 +191,7 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   modbusRtuServer: true,
   opcuaServer: false,
   s7Server: false,
+  mqttClient: false,
   // Arduino targets speak RTU over USB always; some also speak TCP
   // via an ethernet shield. Both flagged available — the actual
   // user-facing protocol selector picks between them at debug time.

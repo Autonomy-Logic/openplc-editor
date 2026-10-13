@@ -1,0 +1,76 @@
+{
+  "contract": "openplc-mqtt-api-cases",
+  "version": 1,
+  "cases": [
+    {
+      "file": "capabilities.json",
+      "def": "capabilities",
+      "valid": true
+    },
+    {
+      "file": "status-disabled.json",
+      "def": "status",
+      "valid": true
+    },
+    {
+      "file": "status-connected-sparkplug.json",
+      "def": "status",
+      "valid": true
+    },
+    {
+      "file": "status-retry-certificate-error.json",
+      "def": "status",
+      "valid": true
+    },
+    {
+      "file": "credentials-active-and-staged.json",
+      "def": "credentials",
+      "valid": true
+    },
+    {
+      "file": "staging-receipt.json",
+      "def": "stagingStatus",
+      "valid": true
+    },
+    {
+      "file": "staging-request-password.json",
+      "def": "stagingRequest",
+      "valid": true
+    },
+    {
+      "file": "staging-request-certificate.json",
+      "def": "stagingRequest",
+      "valid": true
+    },
+    {
+      "file": "error-staging-binding-mismatch.json",
+      "def": "error",
+      "valid": true
+    },
+    {
+      "file": "invalid-credentials-with-password.json",
+      "def": "credentials",
+      "valid": false
+    },
+    {
+      "file": "invalid-staging-receipt-with-ciphertext.json",
+      "def": "stagingStatus",
+      "valid": false
+    },
+    {
+      "file": "invalid-staging-request-password-without-username.json",
+      "def": "stagingRequest",
+      "valid": false
+    },
+    {
+      "file": "invalid-staging-request-certificate-plaintext.json",
+      "def": "stagingRequest",
+      "valid": false
+    },
+    {
+      "file": "invalid-status-unknown-state.json",
+      "def": "status",
+      "valid": false
+    }
+  ]
+}

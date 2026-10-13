@@ -486,6 +486,14 @@ export interface RuntimePort {
   /** Get EtherCAT runtime status (plugin state, slave status, cycle metrics). */
   getEthercatRuntimeStatus?(): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }>
 
+  // --- MQTT client (runtime-side state; bodies are checked by the shared parsers) ---
+
+  /** Raw body of `GET /api/mqtt/status`; read it with `parseMqttRuntimeStatus`. */
+  getMqttStatus?(): Promise<{ success: boolean; data?: unknown; error?: string }>
+
+  /** Raw body of `GET /api/mqtt/credentials` (presence only); read it with `parseMqttRuntimeCredentials`. */
+  getMqttCredentials?(): Promise<{ success: boolean; data?: unknown; error?: string }>
+
   // --- stored source project ---
 
   /** Username of the live runtime session, for attributing a stored project to

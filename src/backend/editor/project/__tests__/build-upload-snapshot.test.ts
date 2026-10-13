@@ -187,3 +187,66 @@ describe('buildUploadSnapshot', () => {
     expect(metadata.projectName).toBe(projectPath.split(/[\\/]/).pop())
   })
 })
+
+describe('MQTT secrets in the stored project', () => {
+  const E5_PASSWORD = 'MARKER-PW-e5-export-8d1f'
+  const E5_KEY = 'MARKER-KEY-e5-export-3a7c'
+  const e5Integration = {
+    formatVersion: 1,
+    enabled: true,
+    mode: 'generic',
+    connection: {
+      host: 'broker.example.net',
+      port: 8883,
+      clientId: 'plc-1',
+      tls: { enabled: true, trust: { source: 'system' } },
+    },
+    authMethod: 'username_password',
+    generic: { publishMode: 'on_change', sampleIntervalMs: 100, publishIntervalMs: 1000, qos: 0, retain: false },
+    sparkplug: { groupId: 'openplc', edgeNodeId: 'plc-1', sampleIntervalMs: 100 },
+    selections: [],
+  }
+  const e5SecretServer = JSON.stringify({
+    name: 'broker',
+    protocol: 'mqtt',
+    password: E5_PASSWORD,
+    mqttConfig: { ...e5Integration, password: E5_PASSWORD, privateKeyPem: E5_KEY },
+  })
+  const E5_SECRET_FILES: Record<string, string> = {
+    'project.json': JSON.stringify({
+      meta: { name: 'Line' },
+      data: {
+        servers: [{ name: 'legacy', protocol: 'mqtt', mqttConfig: { ...e5Integration, password: E5_PASSWORD } }],
+      },
+    }),
+    'devices/servers/broker.json': e5SecretServer,
+    'devices/servers/old-copy.json': e5SecretServer,
+    'devices/servers/future.json': JSON.stringify({
+      name: 'future',
+      protocol: 'mqtt',
+      mqttConfig: { formatVersion: 2, key: E5_KEY },
+    }),
+    'pous/programs/MAIN.st': 'PROGRAM MAIN END_PROGRAM',
+  }
+  const e5HasMarker = (text: string): boolean => text.includes(E5_PASSWORD) || text.includes(E5_KEY)
+
+  it('reduces every MQTT server document to the model and leaves out what cannot be read', async () => {
+    for (const [path, content] of Object.entries(E5_SECRET_FILES)) write(path, content)
+
+    const snapshot = await buildUploadSnapshot({ projectPath, editorVersion: '4.3.0', uploadedBy: 'op' })
+
+    expect(snapshot.excludedFiles).toEqual(['devices/servers/future.json'])
+    expect(e5HasMarker(snapshot.archive.toString('latin1'))).toBe(false)
+    const parsed = await parseProjectSnapshot(new Uint8Array(snapshot.archive))
+    expect([...parsed.files.keys()].sort()).toEqual([
+      'devices/servers/broker.json',
+      'devices/servers/old-copy.json',
+      'pous/programs/MAIN.st',
+      'project.json',
+    ])
+    for (const content of parsed.files.values()) expect(e5HasMarker(content)).toBe(false)
+    const server = JSON.parse(parsed.files.get('devices/servers/broker.json') ?? '{}') as { mqttConfig: unknown }
+    expect(server.mqttConfig).toEqual(e5Integration)
+    expect(e5HasMarker(snapshot.metadata)).toBe(false)
+  })
+})

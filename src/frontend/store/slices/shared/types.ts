@@ -128,7 +128,10 @@ export type DatatypeActions = {
 }
 
 export type ServerActions = {
-  create: (args: { name: string; protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua' }) => SharedResponse
+  create: (args: {
+    name: string
+    protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua' | 'mqtt'
+  }) => SharedResponse
   deleteRequest: (name: string) => void
   delete: (name: string) => SharedResponse
   rename: (oldName: string, newName: string) => SharedResponse

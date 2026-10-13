@@ -66,6 +66,7 @@ jest.mock('../steps/generate-confs', () => ({
     ethercat: '',
     ethercatBusconfig: null,
     ethercatIomapping: null,
+    mqtt: null,
   })),
 }))
 
@@ -1302,6 +1303,7 @@ describe('runCompilePipeline — side effects', () => {
         ethercat: '',
         ethercatBusconfig: null,
         ethercatIomapping: null,
+        mqtt: null,
       }
     })
     const port = makePort()
@@ -1504,5 +1506,94 @@ describe('runCompilePipeline — two enabled Modbus servers', () => {
     const { emit } = captureEvents()
     const result = await runCompilePipeline(makeArgs({ projectData: withServers() }), makePort(), emit)
     expect(result.success).toBe(true)
+  })
+})
+
+describe('runCompilePipeline — MQTT', () => {
+  const runtimeV4Entry = {
+    compiler: 'openplc-compiler',
+    capabilities: { mqttClient: true },
+  } as unknown as RunCompilePipelineArgs['boardEntry']
+  const withMqtt = (enabled: boolean) =>
+    ({
+      ...projectDataFixture,
+      configuration: {
+        resource: { tasks: [], instances: [{ name: 'i0', task: 't0', program: 'Main' }], globalVariables: [] },
+      },
+      servers: [{ name: 'broker', protocol: 'mqtt', mqttConfig: { enabled } }],
+    }) as unknown as PLCProjectData
+
+  it('stops a non-v4 build with an enabled integration before transpiling', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(makeArgs({ projectData: withMqtt(true) }), port, emit)
+    expect(result.success).toBe(false)
+    expect(port.transpileToSt).not.toHaveBeenCalled()
+    expect(events.find((e) => e.stage === 'validate')?.message).toContain(
+      'MQTT integration broker only runs on OpenPLC Runtime v4',
+    )
+  })
+
+  it('lets a non-v4 build through when the integration is disabled', async () => {
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(makeArgs({ projectData: withMqtt(false) }), makePort(), emit)
+    expect(result.success).toBe(true)
+  })
+
+  it('hands the target capabilities and declarations to the confs step and uploads conf/mqtt.json', async () => {
+    mockedConfs.mockReturnValueOnce({
+      modbusSlave: null,
+      modbusMaster: null,
+      s7Comm: null,
+      opcUa: null,
+      ethercat: null,
+      ethercatBusconfig: null,
+      ethercatIomapping: null,
+      mqtt: '{"enabled":true}\n',
+    })
+    const port = makePort()
+    const { emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: withMqtt(true),
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        boardEntry: runtimeV4Entry,
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+    expect(result.success).toBe(true)
+    const confsInput = mockedConfs.mock.calls[0][0]
+    expect(confsInput.mqtt?.target.mqttClient).toBe(true)
+    expect(confsInput.mqtt?.sourceModel?.instances).toEqual([{ name: 'i0', program: 'Main' }])
+    const [uploadArgs] = port.uploadRuntimeV4.mock.calls[0]
+    expect(uploadArgs.bundle['conf/mqtt.json']).toBe('{"enabled":true}\n')
+  })
+
+  it('does not upload when MQTT generation fails', async () => {
+    mockedConfs.mockImplementationOnce(() => {
+      throw new Error('MQTT "broker": Selection does not match a variable')
+    })
+    const port = makePort()
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: withMqtt(true),
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        boardEntry: runtimeV4Entry,
+        deviceContext: deviceContextFixture,
+      }),
+      port,
+      emit,
+    )
+    expect(result.success).toBe(false)
+    expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
+    expect(port.materializeRuntimeV4Bundle).not.toHaveBeenCalled()
+    expect(events.some((e) => e.message.includes('Error generating Runtime v4 configs: MQTT "broker"'))).toBe(true)
   })
 })

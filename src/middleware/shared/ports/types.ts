@@ -1,4 +1,5 @@
 import type { VppPackagePin } from '../../../backend/shared/types/PLC/devices/configuration'
+import type { MqttProjectIntegrationV1 } from '../../../frontend/utils/mqtt/contract/contract'
 import type { ConfiguredEtherCATDevice } from './esi-types'
 
 /** Default `T` is `unknown`, not `void`: TS 5.5+ collapses `{ success: true } & void` to `never`. */
@@ -168,7 +169,7 @@ export interface PLCGlobalVariable extends Omit<PLCVariable, 'class'> {
   class: 'global'
 }
 
-export type ServerProtocol = 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua'
+export type ServerProtocol = 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua' | 'mqtt'
 export type RemoteDeviceProtocol = 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet'
 
 // Modbus
@@ -426,6 +427,7 @@ export interface PLCServer {
   modbusSlaveConfig?: ModbusSlaveConfig
   s7commSlaveConfig?: S7CommSlaveConfig
   opcuaServerConfig?: OpcUaServerConfig
+  mqttConfig?: MqttProjectIntegrationV1
 }
 
 export interface EtherCATMasterConfig {

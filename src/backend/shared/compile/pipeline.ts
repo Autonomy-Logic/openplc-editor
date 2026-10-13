@@ -20,6 +20,8 @@
  * `emit` callback (progress events).  No disk I/O, no globals.
  */
 
+import { mqttSourceModelFromCompileProject } from '../../../frontend/utils/mqtt/project/source-model'
+import { validateMqttServers } from '../../../frontend/utils/mqtt/project/validate'
 import { buildOpcUaRuntimeConfig, generateOpcUaHeaderContent } from '../../../frontend/utils/opcua'
 import type { S7CommSlaveConfigLike } from '../../../frontend/utils/s7comm'
 import { generateS7CommHeaderContent } from '../../../frontend/utils/s7comm'
@@ -54,8 +56,9 @@ import type { DevicePin } from '../types/PLC/devices'
 // in the architectural plan.
 import type { PLCProjectData } from '../types/PLC/open-plc'
 import { materialiseOpcUaCredentials } from './opcua-credentials'
+import { bindMqttCredential } from './steps/bind-mqtt-credential'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
-import { generateRuntimeConfs } from './steps/generate-confs'
+import { describeGeneratedMqttConfig, generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
 import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
@@ -545,6 +548,19 @@ async function runCompilePipelineInner(
         }
       })
 
+  // Any other target would drop an enabled MQTT integration without a trace.
+  if (!isRuntimeV4) {
+    const mqttIssues = validateMqttServers(processedData.servers, { mqttClient: false })
+    if (mqttIssues.length > 0) {
+      const names = [...new Set(mqttIssues.map((issue) => issue.server))].join(', ')
+      return bailError(
+        emit,
+        'validate',
+        `Compilation aborted: the MQTT integration ${names} only runs on OpenPLC Runtime v4. Disable it or choose a Runtime v4 target.`,
+      )
+    }
+  }
+
   // ---------------------------------------------------------------------
   // Step 1: Transpile the project IR straight to Structured Text via
   // the platform port.  Both adapters (editor + web) route through
@@ -644,6 +660,10 @@ async function runCompilePipelineInner(
       )
     }
 
+    const mqttSourceModel = mqttSourceModelFromCompileProject(processedData)
+    const mqttInstances = processedData.configuration.resource.instances.map(
+      (inst: { name: string; program: string }) => ({ name: inst.name, program: inst.program }),
+    )
     let confs
     try {
       emit({ stage: 'confs', message: 'Generating Runtime v4 conf files...', level: 'info' })
@@ -674,6 +694,12 @@ async function runCompilePipelineInner(
         debugMapContent: debugMapJson,
         log: (message, level) => emit({ stage: 'confs', message, level }),
         runtimeVersion: versionCheck?.version ?? null,
+        mqtt: {
+          target: targetCapabilities,
+          sourceModel: mqttSourceModel,
+          // A password/certificate integration binds the runtime credential right before the upload.
+          credentialRef: 'deferred',
+        },
       })
     } catch (error) {
       return bailError(
@@ -701,6 +727,7 @@ async function runCompilePipelineInner(
         ethercat: confs.ethercat,
         ethercatBusconfig: confs.ethercatBusconfig,
         ethercatIomapping: confs.ethercatIomapping,
+        mqtt: confs.mqtt,
       },
     })
     emit({
@@ -772,6 +799,15 @@ async function runCompilePipelineInner(
       emit({
         stage: 'runtime-v4-bundle',
         message: `Wrote ${materialized.written} build artifact(s) to the project build folder`,
+        level: 'info',
+      })
+    }
+
+    const mqttDeferred = confs.mqttDeferred
+    if (mqttDeferred && (compileOnly || !deviceContext || !versionCheck)) {
+      emit({
+        stage: 'confs',
+        message: `conf/mqtt.json for "${mqttDeferred.server}" was not written: it carries the runtime credential reference, prepared only when uploading.`,
         level: 'info',
       })
     }
@@ -860,6 +896,41 @@ async function runCompilePipelineInner(
       })
     }
 
+    // Last step before the upload, so a secret is staged only for a bundle that is about to be sent.
+    let releaseMqttStaging: (() => Promise<void>) | null = null
+    if (mqttDeferred) {
+      emit({ stage: 'upload', message: 'Preparing the MQTT broker credential on the runtime...', level: 'info' })
+      const bound = await bindMqttCredential({
+        plan: mqttDeferred,
+        generatorInput: {
+          servers: processedData.servers,
+          target: targetCapabilities,
+          debugMapContent: debugMapJson,
+          instances: mqttInstances,
+          sourceModel: mqttSourceModel,
+        },
+        context: deviceContext,
+        port,
+        log: makePlatformLog(emit, 'confs'),
+      })
+      if (!bound.ok) {
+        return bailError(emit, 'confs', 'Error generating Runtime v4 configs: the MQTT credential could not be bound.')
+      }
+      releaseMqttStaging = bound.release
+      bundle['conf/mqtt.json'] = bound.generated.content
+      emit({ stage: 'confs', message: describeGeneratedMqttConfig(bound.generated), level: 'info' })
+      if (port.materializeRuntimeV4Bundle) {
+        const written = await port.materializeRuntimeV4Bundle(
+          { bundle: { 'conf/mqtt.json': bound.generated.content } },
+          makePlatformLog(emit, 'runtime-v4-bundle'),
+        )
+        if (written.errors && written.errors.length > 0) {
+          await bound.release()
+          return bailError(emit, 'runtime-v4-bundle', 'Could not write the Runtime v4 build artifacts.', written.errors)
+        }
+      }
+    }
+
     emit({ stage: 'upload', message: 'Uploading Runtime v4 bundle...', level: 'info' })
     const uploadResult = await port.uploadRuntimeV4(
       {
@@ -873,6 +944,8 @@ async function runCompilePipelineInner(
       makePlatformLog(emit, 'upload'),
     )
     if (!uploadResult.ok) {
+      // The runtime already discards a staging it rejected or failed to build; this covers a failed transfer.
+      await releaseMqttStaging?.()
       return bailError(emit, 'upload', 'Failed to upload to runtime.', uploadResult.errors)
     }
     emit({ stage: 'done', message: 'Upload complete.', level: 'info' })

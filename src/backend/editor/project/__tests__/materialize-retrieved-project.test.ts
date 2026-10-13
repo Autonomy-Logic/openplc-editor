@@ -241,3 +241,66 @@ describe('pruneRetrievedProjects', () => {
     rm.mockRestore()
   })
 })
+
+describe('retrieving a project stored with MQTT secrets', () => {
+  const E5_PASSWORD = 'MARKER-PW-e5-export-8d1f'
+  const E5_KEY = 'MARKER-KEY-e5-export-3a7c'
+  const e5Integration = {
+    formatVersion: 1,
+    enabled: true,
+    mode: 'generic',
+    connection: {
+      host: 'broker.example.net',
+      port: 8883,
+      clientId: 'plc-1',
+      tls: { enabled: true, trust: { source: 'system' } },
+    },
+    authMethod: 'username_password',
+    generic: { publishMode: 'on_change', sampleIntervalMs: 100, publishIntervalMs: 1000, qos: 0, retain: false },
+    sparkplug: { groupId: 'openplc', edgeNodeId: 'plc-1', sampleIntervalMs: 100 },
+    selections: [],
+  }
+  const e5SecretServer = JSON.stringify({
+    name: 'broker',
+    protocol: 'mqtt',
+    password: E5_PASSWORD,
+    mqttConfig: { ...e5Integration, password: E5_PASSWORD, privateKeyPem: E5_KEY },
+  })
+  const E5_SECRET_FILES: Record<string, string> = {
+    'project.json': JSON.stringify({
+      meta: { name: 'Line' },
+      data: {
+        servers: [{ name: 'legacy', protocol: 'mqtt', mqttConfig: { ...e5Integration, password: E5_PASSWORD } }],
+      },
+    }),
+    'devices/servers/broker.json': e5SecretServer,
+    'devices/servers/old-copy.json': e5SecretServer,
+    'devices/servers/future.json': JSON.stringify({
+      name: 'future',
+      protocol: 'mqtt',
+      mqttConfig: { formatVersion: 2, key: E5_KEY },
+    }),
+    'pous/programs/MAIN.st': 'PROGRAM MAIN END_PROGRAM',
+  }
+  const e5HasMarker = (text: string): boolean => text.includes(E5_PASSWORD) || text.includes(E5_KEY)
+
+  it('never writes the secrets to disk, and reports what it left out', async () => {
+    const result = await materializeRetrievedProject(await makeArchive(E5_SECRET_FILES, 'Line'), {
+      scratchRoot,
+      folderName: 'line',
+    })
+    expect(result.excludedFiles).toEqual(['devices/servers/future.json'])
+    expect(existsSync(join(result.projectPath, 'devices/servers/future.json'))).toBe(false)
+    const written = [
+      'project.json',
+      'devices/servers/broker.json',
+      'devices/servers/old-copy.json',
+      'pous/programs/MAIN.st',
+    ]
+    for (const file of written) expect(e5HasMarker(readFileSync(join(result.projectPath, file), 'utf-8'))).toBe(false)
+    const legacy = JSON.parse(readFileSync(join(result.projectPath, 'project.json'), 'utf-8')) as {
+      data: { servers: Array<{ mqttConfig: unknown }> }
+    }
+    expect(legacy.data.servers[0].mqttConfig).toEqual(e5Integration)
+  })
+})

@@ -35,12 +35,17 @@ import {
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
+import {
+  describeRuntimeMqttConfigError,
+  readRuntimeUploadRejection,
+} from '@root/frontend/utils/mqtt/runtime/upload-response'
 import type {
   CheckRuntimeVersionArgs,
   CheckRuntimeVersionResult,
   CompileArduinoArgs,
   CompileArduinoResult,
   CompilerPlatformPort,
+  DiscardMqttCredentialStagingArgs,
   InstallArduinoCoreArgs,
   InstallArduinoLibArgs,
   MaterializeRuntimeV4BundleArgs,
@@ -49,6 +54,8 @@ import type {
   PackageVppPluginResult,
   PlatformDeviceContext,
   PlatformLog,
+  StageMqttCredentialArgs,
+  StageMqttCredentialResult,
   TranspileToStArgs,
   TranspileToStResult,
   UploadArduinoBoardArgs,
@@ -60,6 +67,7 @@ import { createHash } from 'crypto'
 import { promises as fs } from 'fs'
 import { dirname, join } from 'path'
 
+import type { MqttCredentialDeployer } from '../mqtt-deploy/credential-deployer'
 import type { CompilerModule } from './compiler-module'
 
 /**
@@ -136,6 +144,7 @@ export interface EditorCompilerPlatformPortContext {
     archive: Buffer
     metadata: string
     missingLibraries: string[]
+    excludedFiles?: string[]
   } | null>
   /**
    * `package.minRuntimeVersion` of the VPP providing a given board, or
@@ -153,6 +162,11 @@ export interface EditorCompilerPlatformPortContext {
    * floor known", which the pipeline treats as no constraint.
    */
   getVppRuntimeFloor?: (boardTarget: string) => string | null
+  /** Absent: a password/certificate MQTT integration is refused before the upload. */
+  mqttCredentials?: {
+    projectKey: string
+    deployer: Pick<MqttCredentialDeployer, 'stage' | 'discard'>
+  }
   /** Timeout for the post-upload compile-status poll. */
   pollTimeoutMs: number
   /** Interval for the post-upload compile-status poll. */
@@ -385,7 +399,12 @@ export function createEditorCompilerPlatformPort(
         // can be retrieved later. Never fatal: the device runs the new program
         // either way, and failing an upload over the optional half of it would
         // be a worse outcome than losing retrievability.
-        let snapshot: { archive: Buffer; metadata: string; missingLibraries: string[] } | null = null
+        let snapshot: {
+          archive: Buffer
+          metadata: string
+          missingLibraries: string[]
+          excludedFiles?: string[]
+        } | null = null
         if (!args.supportsProjectSnapshot) {
           // Asked and answered by the pre-upload capability check. Building one
           // anyway would spend the user's time compressing a project this
@@ -398,6 +417,12 @@ export function createEditorCompilerPlatformPort(
         } else {
           try {
             snapshot = (await context.buildUploadSnapshot?.()) ?? null
+            if (snapshot?.excludedFiles && snapshot.excludedFiles.length > 0) {
+              log(
+                `Stored project leaves out these files, whose MQTT configuration could not be read: ${snapshot.excludedFiles.join(', ')}`,
+                'warning',
+              )
+            }
             if (snapshot && snapshot.missingLibraries.length > 0) {
               log(
                 `Stored project will not include these libraries, which are not installed here: ${snapshot.missingLibraries.join(', ')}`,
@@ -413,8 +438,8 @@ export function createEditorCompilerPlatformPort(
         }
 
         const deployOutcome = await deployRuntimeProgram({
-          uploadProgram: () =>
-            context.mainProcessBridge.makeRuntimeApiUpload({
+          uploadProgram: async () => {
+            const sent = await context.mainProcessBridge.makeRuntimeApiUpload({
               ipAddress: deviceContext.ip,
               filename: 'program.zip',
               contentType: 'application/zip',
@@ -423,6 +448,8 @@ export function createEditorCompilerPlatformPort(
               snapshotBuffer: snapshot?.archive,
               snapshotMetadata: snapshot?.metadata,
               onUploadAccepted: (responseBody) => {
+                // A refusal arrives as HTTP 200 with a reason; the wrapper below turns it into a failed upload.
+                if (readRuntimeUploadRejection(responseBody) !== null) return
                 // The device may have accepted the program and refused the
                 // project beside it. Saying so here is the difference between
                 // "not retrievable" being found out now and being found out by
@@ -436,7 +463,13 @@ export function createEditorCompilerPlatformPort(
                   log('Could not parse runtime response', 'warning')
                 }
               },
-            }),
+            })
+            if (!sent.success) return sent
+            const rejection = readRuntimeUploadRejection(sent.data)
+            if (rejection === null) return sent
+            if (rejection.mqtt !== null) log(describeRuntimeMqttConfigError(rejection.mqtt), 'error')
+            return { success: false, error: rejection.reason }
+          },
           fetchCompilationStatus: async () => {
             const result = await context.mainProcessBridge.makeRuntimeApiRequest<{
               status: string
@@ -610,6 +643,27 @@ export function createEditorCompilerPlatformPort(
      * `probeRuntimeVersion` helper so editor and web give the gate
      * an equivalent answer against the same runtime container.
      */
+    ...(context.mqttCredentials
+      ? {
+          async stageMqttCredential(args: StageMqttCredentialArgs): Promise<StageMqttCredentialResult> {
+            const deviceContext = assertEditorHttpsContext(args.context)
+            const mqtt = context.mqttCredentials
+            if (!mqtt) return { ok: false, code: 'internal_error', message: 'MQTT credential deploy is unavailable.' }
+            return mqtt.deployer.stage({
+              address: deviceContext.ip,
+              projectKey: mqtt.projectKey,
+              serverName: args.serverName,
+              integration: args.integration,
+              programMd5: args.programMd5,
+            })
+          },
+          async discardMqttCredentialStaging(args: DiscardMqttCredentialStagingArgs): Promise<void> {
+            const deviceContext = assertEditorHttpsContext(args.context)
+            await context.mqttCredentials?.deployer.discard(deviceContext.ip, args.stagingId)
+          },
+        }
+      : {}),
+
     async checkRuntimeVersion(args: CheckRuntimeVersionArgs, log: PlatformLog): Promise<CheckRuntimeVersionResult> {
       const deviceContext = assertEditorHttpsContext(args.context)
       const getJson = async (endpoint: string) => {

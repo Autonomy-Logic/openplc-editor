@@ -1,0 +1,636 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openplc-mqtt-api.v1",
+  "title": "Runtime MQTT REST API v1 bodies (new contract, JWT-protected, under /api/mqtt)",
+  "description": "No body here carries a password, private key or reusable ciphertext. Requests in multipart carry secrets only in the staging request parts defined by stagingRequest.",
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "method": {
+      "enum": [
+        "username_password",
+        "client_certificate"
+      ]
+    },
+    "category": {
+      "enum": [
+        "configuration",
+        "network",
+        "authentication",
+        "certificate",
+        "read_conversion",
+        "credential",
+        "limit",
+        "authorization",
+        "internal"
+      ]
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "port",
+        "tls_enabled",
+        "client_id",
+        "method"
+      ],
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "tls_enabled": {
+          "type": "boolean"
+        },
+        "client_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"
+        },
+        "method": {
+          "$ref": "#/$defs/method"
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "category",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{2,63}$"
+            },
+            "category": {
+              "$ref": "#/$defs/category"
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 512
+            },
+            "pointer": {
+              "type": "string",
+              "maxLength": 256
+            }
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "version",
+        "runtimeConfig",
+        "modes",
+        "credentials",
+        "limits"
+      ],
+      "properties": {
+        "contract": {
+          "const": "openplc-mqtt-capabilities"
+        },
+        "version": {
+          "const": 1
+        },
+        "runtimeConfig": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "contract",
+            "formatVersions"
+          ],
+          "properties": {
+            "contract": {
+              "const": "openplc-mqtt-runtime-config"
+            },
+            "formatVersions": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        },
+        "modes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "generic",
+              "sparkplug_b"
+            ]
+          }
+        },
+        "credentials": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "api",
+            "methods",
+            "stagingTtlSeconds",
+            "maxStaged"
+          ],
+          "properties": {
+            "api": {
+              "const": 1
+            },
+            "methods": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/method"
+              }
+            },
+            "stagingTtlSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxStaged": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "maxLeaves",
+            "maxNameBytes",
+            "maxPayloadBytes",
+            "maxConfigBytes"
+          ],
+          "properties": {
+            "maxLeaves": {
+              "const": 1000
+            },
+            "maxNameBytes": {
+              "const": 512
+            },
+            "maxPayloadBytes": {
+              "const": 262144
+            },
+            "maxConfigBytes": {
+              "const": 4194304
+            }
+          }
+        }
+      }
+    },
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "version",
+        "configured",
+        "state",
+        "since",
+        "error"
+      ],
+      "properties": {
+        "contract": {
+          "const": "openplc-mqtt-status"
+        },
+        "version": {
+          "const": 1
+        },
+        "configured": {
+          "type": "boolean"
+        },
+        "mode": {
+          "enum": [
+            "generic",
+            "sparkplug_b"
+          ]
+        },
+        "state": {
+          "enum": [
+            "disabled",
+            "plc_stopped",
+            "connecting",
+            "connected",
+            "retry_wait",
+            "config_error",
+            "credential_error"
+          ]
+        },
+        "since": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "programMd5": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "broker": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host",
+            "port",
+            "tls"
+          ],
+          "properties": {
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer"
+            },
+            "tls": {
+              "type": "boolean"
+            }
+          }
+        },
+        "error": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "category",
+                "code",
+                "message",
+                "since",
+                "count"
+              ],
+              "properties": {
+                "category": {
+                  "$ref": "#/$defs/category"
+                },
+                "code": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{2,63}$"
+                },
+                "message": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "since": {
+                  "$ref": "#/$defs/timestamp"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          ]
+        },
+        "reconnect": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "attempt",
+            "nextRetryInMs"
+          ],
+          "properties": {
+            "attempt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "nextRetryInMs": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "stats": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "leaves",
+            "lastSampleAt",
+            "lastForwardedAt",
+            "published",
+            "dropped",
+            "readErrors"
+          ],
+          "properties": {
+            "leaves": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "lastSampleAt": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/timestamp"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lastForwardedAt": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/timestamp"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "published": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dropped": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "readErrors": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "sparkplug": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bdSeq",
+            "seq",
+            "lastBirthAt"
+          ],
+          "properties": {
+            "bdSeq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "lastBirthAt": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/timestamp"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "credentialStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "revision",
+        "method",
+        "binding",
+        "updatedAt",
+        "updatedBy"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "method": {
+          "$ref": "#/$defs/method"
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "usernameSet": {
+          "type": "boolean"
+        },
+        "clientCertificate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256",
+            "subject",
+            "notAfter"
+          ],
+          "properties": {
+            "sha256": {
+              "$ref": "#/$defs/sha256"
+            },
+            "subject": {
+              "type": "string",
+              "maxLength": 512
+            },
+            "notAfter": {
+              "$ref": "#/$defs/timestamp"
+            }
+          }
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "updatedBy": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "stagingStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stagingId",
+        "credentialRef",
+        "method",
+        "binding",
+        "programMd5",
+        "expiresAt",
+        "createdBy"
+      ],
+      "properties": {
+        "stagingId": {
+          "$ref": "#/$defs/uuid"
+        },
+        "credentialRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "revision",
+            "staging_id"
+          ],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/uuid"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "staging_id": {
+              "$ref": "#/$defs/uuid"
+            }
+          }
+        },
+        "method": {
+          "$ref": "#/$defs/method"
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "programMd5": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "createdBy": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "clientCertificate": {
+          "$ref": "#/$defs/credentialStatus/properties/clientCertificate"
+        }
+      }
+    },
+    "credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active",
+        "staged"
+      ],
+      "properties": {
+        "active": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/credentialStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "staged": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/stagingStatus"
+          }
+        }
+      }
+    },
+    "stagingRequest": {
+      "description": "multipart/form-data part 'request' (application/json). Secrets travel only in parts 'password', 'client_certificate', 'client_key', 'client_key_passphrase'.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "binding",
+        "programMd5"
+      ],
+      "properties": {
+        "method": {
+          "$ref": "#/$defs/method"
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "programMd5": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "username": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "username_password"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "username"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "username"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "client_certificate"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "binding": {
+                "properties": {
+                  "tls_enabled": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

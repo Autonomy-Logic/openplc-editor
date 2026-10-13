@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "credential_binding_mismatch",
+    "category": "credential",
+    "message": "Configuration broker does not match the staged credential binding",
+    "pointer": "/connection/host"
+  }
+}

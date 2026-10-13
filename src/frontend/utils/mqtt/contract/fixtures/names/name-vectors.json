@@ -1,0 +1,733 @@
+{
+  "contract": "openplc-mqtt-name-vectors",
+  "version": 1,
+  "nameSegments": [
+    {
+      "token": "Valor",
+      "segment": "Valor"
+    },
+    {
+      "token": "MAIN",
+      "segment": "MAIN"
+    },
+    {
+      "token": "_x1",
+      "segment": "_x1"
+    },
+    {
+      "token": "3abc",
+      "segment": "%33abc"
+    },
+    {
+      "token": "a.b",
+      "segment": "a%2Eb"
+    },
+    {
+      "token": "a/b",
+      "segment": "a%2Fb"
+    },
+    {
+      "token": "50%",
+      "segment": "%350%25"
+    },
+    {
+      "token": "-1",
+      "segment": "%2D1"
+    },
+    {
+      "token": "x,y",
+      "segment": "x%2Cy"
+    },
+    {
+      "token": "a+b#",
+      "segment": "a%2Bb%23"
+    },
+    {
+      "token": "\u00e7\u00e3o",
+      "segment": "%C3%A7%C3%A3o"
+    },
+    {
+      "token": "\ud83d\ude00x",
+      "segment": "%F0%9F%98%80x"
+    },
+    {
+      "token": "$SYS",
+      "segment": "%24SYS"
+    }
+  ],
+  "invalidNameTokens": [
+    {
+      "token": "",
+      "error": "token_empty"
+    },
+    {
+      "token": "a\ud800",
+      "error": "token_invalid_unicode"
+    }
+  ],
+  "indexSegments": [
+    {
+      "indices": [
+        3
+      ],
+      "segment": "3"
+    },
+    {
+      "indices": [
+        0
+      ],
+      "segment": "0"
+    },
+    {
+      "indices": [
+        -2
+      ],
+      "segment": "-2"
+    },
+    {
+      "indices": [
+        1,
+        -5,
+        10
+      ],
+      "segment": "1,-5,10"
+    },
+    {
+      "indices": [
+        -32768,
+        32767
+      ],
+      "segment": "-32768,32767"
+    }
+  ],
+  "invalidSegments": [
+    "",
+    "-0",
+    "1,-0",
+    "01",
+    "1,",
+    ",1",
+    "%2e",
+    "%41",
+    "a b",
+    "%C3",
+    "%E0%80%80",
+    "%ED%A0%80",
+    "a%2",
+    "a%ZZ",
+    "%",
+    "\u00e9",
+    "%80",
+    "%C0%AF",
+    "%F5%80%80%80"
+  ],
+  "defaults": [
+    {
+      "clientId": "plc-linha1",
+      "tokens": [
+        {
+          "role": "instance",
+          "name": "Instancia"
+        },
+        {
+          "role": "program",
+          "name": "MAIN"
+        },
+        {
+          "role": "variable",
+          "name": "Sensores"
+        },
+        {
+          "role": "index",
+          "indices": [
+            3
+          ]
+        },
+        {
+          "role": "field",
+          "name": "Valor"
+        }
+      ],
+      "topic": "openplc/plc-linha1/Instancia/MAIN/Sensores/3/Valor",
+      "metric": "Instancia.MAIN.Sensores[3].Valor"
+    },
+    {
+      "clientId": "c1",
+      "tokens": [
+        {
+          "role": "instance",
+          "name": "Inst0"
+        },
+        {
+          "role": "variable",
+          "name": "Temps"
+        },
+        {
+          "role": "index",
+          "indices": [
+            -2
+          ]
+        }
+      ],
+      "topic": "openplc/c1/Inst0/Temps/-2",
+      "metric": "Inst0.Temps[-2]"
+    },
+    {
+      "clientId": "c1",
+      "tokens": [
+        {
+          "role": "instance",
+          "name": "Inst0"
+        },
+        {
+          "role": "variable",
+          "name": "M"
+        },
+        {
+          "role": "index",
+          "indices": [
+            1,
+            2
+          ]
+        },
+        {
+          "role": "field",
+          "name": "V"
+        }
+      ],
+      "topic": "openplc/c1/Inst0/M/1,2/V",
+      "metric": "Inst0.M[1,2].V"
+    },
+    {
+      "clientId": "c1",
+      "tokens": [
+        {
+          "role": "instance",
+          "name": "Inst0"
+        },
+        {
+          "role": "variable",
+          "name": "M"
+        },
+        {
+          "role": "index",
+          "indices": [
+            1
+          ]
+        },
+        {
+          "role": "index",
+          "indices": [
+            2
+          ]
+        },
+        {
+          "role": "field",
+          "name": "V"
+        }
+      ],
+      "topic": "openplc/c1/Inst0/M/1/2/V",
+      "metric": "Inst0.M[1][2].V"
+    },
+    {
+      "clientId": "c1",
+      "tokens": [
+        {
+          "role": "instance",
+          "name": "Inst0"
+        },
+        {
+          "role": "variable",
+          "name": "FB1"
+        },
+        {
+          "role": "field",
+          "name": "Q"
+        }
+      ],
+      "topic": "openplc/c1/Inst0/FB1/Q",
+      "metric": "Inst0.FB1.Q"
+    }
+  ],
+  "invalidSources": [
+    {
+      "tokens": [],
+      "error": "source_invalid"
+    },
+    {
+      "tokens": [
+        {
+          "role": "index",
+          "indices": [
+            1
+          ]
+        },
+        {
+          "role": "variable",
+          "name": "A"
+        }
+      ],
+      "error": "source_invalid"
+    },
+    {
+      "tokens": [
+        {
+          "role": "instance",
+          "name": "I"
+        },
+        {
+          "role": "index",
+          "indices": []
+        }
+      ],
+      "error": "index_empty"
+    }
+  ],
+  "topics": [
+    {
+      "value": "openplc/c1/a",
+      "error": null
+    },
+    {
+      "value": "a",
+      "error": null
+    },
+    {
+      "value": "a/b c/\u00e7",
+      "error": null
+    },
+    {
+      "value": "",
+      "error": "topic_empty"
+    },
+    {
+      "value": "a/\u0000",
+      "error": "topic_invalid_char"
+    },
+    {
+      "value": "a/\u001f",
+      "error": "topic_invalid_char"
+    },
+    {
+      "value": "a/\u0085",
+      "error": "topic_invalid_char"
+    },
+    {
+      "value": "a/+",
+      "error": "topic_invalid_char"
+    },
+    {
+      "value": "a/#",
+      "error": "topic_invalid_char"
+    },
+    {
+      "value": "a/+/b",
+      "error": "topic_invalid_char"
+    },
+    {
+      "value": "$SYS/a",
+      "error": "topic_reserved_prefix"
+    },
+    {
+      "value": "/a",
+      "error": "topic_empty_segment"
+    },
+    {
+      "value": "a/",
+      "error": "topic_empty_segment"
+    },
+    {
+      "value": "a//b",
+      "error": "topic_empty_segment"
+    },
+    {
+      "value": "a/\udc00",
+      "error": "topic_invalid_unicode"
+    },
+    {
+      "value": {
+        "repeat": "a",
+        "count": 512
+      },
+      "error": null
+    },
+    {
+      "value": {
+        "repeat": "a",
+        "count": 513
+      },
+      "error": "topic_too_long"
+    },
+    {
+      "value": {
+        "repeat": "\u00e9",
+        "count": 256
+      },
+      "error": null
+    },
+    {
+      "value": {
+        "repeat": "\u00e9",
+        "count": 257
+      },
+      "error": "topic_too_long"
+    },
+    {
+      "value": {
+        "repeat": "\ud83d\ude00",
+        "count": 128
+      },
+      "error": null
+    },
+    {
+      "value": {
+        "repeat": "\ud83d\ude00",
+        "count": 129
+      },
+      "error": "topic_too_long"
+    }
+  ],
+  "metrics": [
+    {
+      "value": "Instancia.MAIN.Sensores[3].Valor",
+      "error": null
+    },
+    {
+      "value": "Folder/Tag name with spaces",
+      "error": null
+    },
+    {
+      "value": "",
+      "error": "metric_empty"
+    },
+    {
+      "value": "a\u0007b",
+      "error": "metric_invalid_char"
+    },
+    {
+      "value": "a\u007fb",
+      "error": "metric_invalid_char"
+    },
+    {
+      "value": "a\ud83d",
+      "error": "metric_invalid_unicode"
+    },
+    {
+      "value": "bdSeq",
+      "error": "metric_reserved"
+    },
+    {
+      "value": "BDSEQ",
+      "error": "metric_reserved"
+    },
+    {
+      "value": "\uff42dSeq",
+      "error": "metric_reserved"
+    },
+    {
+      "value": "bdSeq2",
+      "error": null
+    },
+    {
+      "value": "Node Control/Rebirth",
+      "error": "metric_reserved"
+    },
+    {
+      "value": "node control/Anything",
+      "error": "metric_reserved"
+    },
+    {
+      "value": "Node Control",
+      "error": null
+    },
+    {
+      "value": "Node Controls/x",
+      "error": null
+    },
+    {
+      "value": {
+        "repeat": "m",
+        "count": 512
+      },
+      "error": null
+    },
+    {
+      "value": {
+        "repeat": "m",
+        "count": 513
+      },
+      "error": "metric_too_long"
+    }
+  ],
+  "nodeIds": [
+    {
+      "value": "Plant1",
+      "error": null
+    },
+    {
+      "value": "Linha 1",
+      "error": null
+    },
+    {
+      "value": "Edge-\u00e7",
+      "error": null
+    },
+    {
+      "value": "",
+      "error": "node_id_empty"
+    },
+    {
+      "value": "a/b",
+      "error": "node_id_invalid_char"
+    },
+    {
+      "value": "a+b",
+      "error": "node_id_invalid_char"
+    },
+    {
+      "value": "a#b",
+      "error": "node_id_invalid_char"
+    },
+    {
+      "value": "a\tb",
+      "error": "node_id_invalid_char"
+    },
+    {
+      "value": " a",
+      "error": "node_id_outer_whitespace"
+    },
+    {
+      "value": "a ",
+      "error": "node_id_outer_whitespace"
+    },
+    {
+      "value": "\u00a0a",
+      "error": "node_id_outer_whitespace"
+    },
+    {
+      "value": "a\u3000",
+      "error": "node_id_outer_whitespace"
+    },
+    {
+      "value": "\ufeffa",
+      "error": "node_id_outer_whitespace"
+    },
+    {
+      "value": "a\u200a",
+      "error": "node_id_outer_whitespace"
+    },
+    {
+      "value": "a\u200b",
+      "error": null
+    },
+    {
+      "value": "a\udfff",
+      "error": "node_id_invalid_unicode"
+    },
+    {
+      "value": {
+        "repeat": "n",
+        "count": 128
+      },
+      "error": null
+    },
+    {
+      "value": {
+        "repeat": "n",
+        "count": 129
+      },
+      "error": "node_id_too_long"
+    },
+    {
+      "value": {
+        "repeat": "\u00e7",
+        "count": 64
+      },
+      "error": null
+    },
+    {
+      "value": {
+        "repeat": "\u00e7",
+        "count": 65
+      },
+      "error": "node_id_too_long"
+    }
+  ],
+  "clientIds": [
+    {
+      "value": "plc-linha1",
+      "error": null
+    },
+    {
+      "value": "A",
+      "error": null
+    },
+    {
+      "value": "a.b_c-d",
+      "error": null
+    },
+    {
+      "value": {
+        "repeat": "c",
+        "count": 64
+      },
+      "error": null
+    },
+    {
+      "value": {
+        "repeat": "c",
+        "count": 65
+      },
+      "error": "client_id_invalid"
+    },
+    {
+      "value": "",
+      "error": "client_id_invalid"
+    },
+    {
+      "value": "-a",
+      "error": "client_id_invalid"
+    },
+    {
+      "value": "a b",
+      "error": "client_id_invalid"
+    },
+    {
+      "value": "a/b",
+      "error": "client_id_invalid"
+    },
+    {
+      "value": "\u00e7",
+      "error": "client_id_invalid"
+    },
+    {
+      "value": "a\n",
+      "error": "client_id_invalid"
+    }
+  ],
+  "collisionKeys": [
+    {
+      "value": "Valor",
+      "key": "VALOR"
+    },
+    {
+      "value": "valor",
+      "key": "VALOR"
+    },
+    {
+      "value": "Stra\u00dfe",
+      "key": "STRASSE"
+    },
+    {
+      "value": "\ufb01le",
+      "key": "FILE"
+    },
+    {
+      "value": "\uff21\uff22",
+      "key": "AB"
+    },
+    {
+      "value": "\u212a",
+      "key": "K"
+    },
+    {
+      "value": "\u212b",
+      "key": "\u00c5"
+    },
+    {
+      "value": "A\u030a",
+      "key": "\u00c5"
+    },
+    {
+      "value": "e\u0301",
+      "key": "\u00c9"
+    },
+    {
+      "value": "\u00e9",
+      "key": "\u00c9"
+    },
+    {
+      "value": "\u0131",
+      "key": "I"
+    },
+    {
+      "value": "\u03c3\u03c2",
+      "key": "\u03a3\u03a3"
+    },
+    {
+      "value": "\u017f",
+      "key": "S"
+    },
+    {
+      "value": "\u2460",
+      "key": "1"
+    },
+    {
+      "value": "x\u00b2",
+      "key": "X2"
+    }
+  ],
+  "conflicts": [
+    {
+      "mode": "generic",
+      "destinations": [
+        "a/b",
+        "a/B",
+        "a/b",
+        "a/b/c"
+      ],
+      "conflicts": [
+        {
+          "code": "topic_duplicate",
+          "first": 0,
+          "second": 2
+        }
+      ]
+    },
+    {
+      "mode": "generic",
+      "destinations": [
+        "a/\u00e9",
+        "a/e\u0301"
+      ],
+      "conflicts": []
+    },
+    {
+      "mode": "sparkplug_b",
+      "destinations": [
+        "Temp",
+        "TEMP",
+        "Stra\u00dfe",
+        "STRASSE",
+        "\u212bngstrom",
+        "\u00c5NGSTROM",
+        "Other"
+      ],
+      "conflicts": [
+        {
+          "code": "metric_collision",
+          "first": 0,
+          "second": 1
+        },
+        {
+          "code": "metric_collision",
+          "first": 2,
+          "second": 3
+        },
+        {
+          "code": "metric_collision",
+          "first": 4,
+          "second": 5
+        }
+      ]
+    },
+    {
+      "mode": "sparkplug_b",
+      "destinations": [
+        "A.B[1]",
+        "A.B[01]"
+      ],
+      "conflicts": []
+    }
+  ]
+}

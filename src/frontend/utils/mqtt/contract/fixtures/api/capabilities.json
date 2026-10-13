@@ -1,0 +1,29 @@
+{
+  "contract": "openplc-mqtt-capabilities",
+  "version": 1,
+  "runtimeConfig": {
+    "contract": "openplc-mqtt-runtime-config",
+    "formatVersions": [
+      1
+    ]
+  },
+  "modes": [
+    "generic",
+    "sparkplug_b"
+  ],
+  "credentials": {
+    "api": 1,
+    "methods": [
+      "username_password",
+      "client_certificate"
+    ],
+    "stagingTtlSeconds": 600,
+    "maxStaged": 4
+  },
+  "limits": {
+    "maxLeaves": 1000,
+    "maxNameBytes": 512,
+    "maxPayloadBytes": 262144,
+    "maxConfigBytes": 4194304
+  }
+}

@@ -30,6 +30,7 @@ import { PackageManagerEditor } from '../components/_features/[workspace]/editor
 import { PersistentStorageEditor } from '../components/_features/[workspace]/editor/persistent-storage'
 import { ResourcesEditor } from '../components/_features/[workspace]/editor/resource-editor'
 import { ModbusServerEditor } from '../components/_features/[workspace]/editor/server/modbus-server'
+import { MqttClientEditor } from '../components/_features/[workspace]/editor/server/mqtt-client'
 import { OpcUaServerEditor } from '../components/_features/[workspace]/editor/server/opcua-server'
 import { S7CommServerEditor } from '../components/_features/[workspace]/editor/server/s7comm-server'
 import { UserManagementEditor } from '../components/_features/[workspace]/editor/user-management'
@@ -615,6 +616,7 @@ const WorkspaceScreen = () => {
                         )}
                         {editor['type'] === 'plc-server' && editor.meta.protocol === 's7comm' && <S7CommServerEditor />}
                         {editor['type'] === 'plc-server' && editor.meta.protocol === 'opcua' && <OpcUaServerEditor />}
+                        {editor['type'] === 'plc-server' && editor.meta.protocol === 'mqtt' && <MqttClientEditor />}
                         {editor['type'] === 'plc-vendor-screen' && <VendorScreenEditor />}
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}

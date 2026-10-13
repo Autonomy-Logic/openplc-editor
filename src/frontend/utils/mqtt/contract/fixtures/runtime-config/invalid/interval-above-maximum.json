@@ -1,0 +1,193 @@
+{
+  "contract": "openplc-mqtt-runtime-config",
+  "format_version": 1,
+  "enabled": true,
+  "mode": "generic",
+  "program": {
+    "md5": "3f2c9d0e8b7a6f5e4d3c2b1a09f8e7d6"
+  },
+  "connection": {
+    "host": "broker.example.net",
+    "port": 8883,
+    "client_id": "plc-linha1",
+    "tls": {
+      "enabled": true,
+      "trust": {
+        "source": "pem",
+        "ca_pem": "-----BEGIN CERTIFICATE-----\nMIIBfixtureONLYnotAvalidCertificateButShapedLikeOneForSchemaTests\n-----END CERTIFICATE-----\n"
+      }
+    }
+  },
+  "auth": {
+    "method": "username_password",
+    "credential_ref": {
+      "id": "6f1c2a4e-8d3b-4c5a-9e7f-0a1b2c3d4e5f",
+      "revision": 3,
+      "staging_id": null
+    }
+  },
+  "generic": {
+    "publish_mode": "periodic",
+    "publish_interval_ms": 60001,
+    "qos": 1,
+    "retain": true
+  },
+  "leaves": [
+    {
+      "source": {
+        "tokens": [
+          {
+            "role": "instance",
+            "name": "Inst0"
+          },
+          {
+            "role": "variable",
+            "name": "Motor1"
+          },
+          {
+            "role": "field",
+            "name": "Speed"
+          }
+        ],
+        "debug_path": "INST0.MOTOR1.SPEED"
+      },
+      "address": {
+        "arr": 0,
+        "elem": 21
+      },
+      "iec_type": "REAL",
+      "size": 4,
+      "destination": "openplc/plc-linha1/Inst0/Motor1/Speed"
+    },
+    {
+      "source": {
+        "tokens": [
+          {
+            "role": "instance",
+            "name": "Inst0"
+          },
+          {
+            "role": "variable",
+            "name": "Motor2"
+          },
+          {
+            "role": "field",
+            "name": "Speed"
+          }
+        ],
+        "debug_path": "INST0.MOTOR2.SPEED"
+      },
+      "address": {
+        "arr": 0,
+        "elem": 23
+      },
+      "iec_type": "REAL",
+      "size": 4,
+      "destination": "openplc/plc-linha1/Inst0/Motor2/Speed"
+    },
+    {
+      "source": {
+        "tokens": [
+          {
+            "role": "instance",
+            "name": "Inst0"
+          },
+          {
+            "role": "variable",
+            "name": "Temps"
+          },
+          {
+            "role": "index",
+            "indices": [
+              -2
+            ]
+          }
+        ],
+        "debug_path": "INST0.TEMPS[-2]"
+      },
+      "address": {
+        "arr": 0,
+        "elem": 24
+      },
+      "iec_type": "INT",
+      "size": 2,
+      "destination": "openplc/plc-linha1/Inst0/Temps/-2"
+    },
+    {
+      "source": {
+        "tokens": [
+          {
+            "role": "instance",
+            "name": "Inst0"
+          },
+          {
+            "role": "variable",
+            "name": "Temps"
+          },
+          {
+            "role": "index",
+            "indices": [
+              0
+            ]
+          }
+        ],
+        "debug_path": "INST0.TEMPS[0]"
+      },
+      "address": {
+        "arr": 0,
+        "elem": 26
+      },
+      "iec_type": "INT",
+      "size": 2,
+      "destination": "openplc/plc-linha1/Inst0/Temps/0"
+    },
+    {
+      "source": {
+        "tokens": [
+          {
+            "role": "instance",
+            "name": "Inst0"
+          },
+          {
+            "role": "variable",
+            "name": "Timer1"
+          },
+          {
+            "role": "field",
+            "name": "ET"
+          }
+        ],
+        "debug_path": "INST0.TIMER1.ET"
+      },
+      "address": {
+        "arr": 0,
+        "elem": 27
+      },
+      "iec_type": "TIME",
+      "size": 8,
+      "destination": "openplc/plc-linha1/Inst0/Timer1/ET"
+    },
+    {
+      "source": {
+        "tokens": [
+          {
+            "role": "instance",
+            "name": "Inst0"
+          },
+          {
+            "role": "variable",
+            "name": "V_LINT"
+          }
+        ],
+        "debug_path": "INST0.V_LINT"
+      },
+      "address": {
+        "arr": 0,
+        "elem": 7
+      },
+      "iec_type": "LINT",
+      "size": 8,
+      "destination": "openplc/plc-linha1/Inst0/V_LINT"
+    }
+  ]
+}

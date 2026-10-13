@@ -1,0 +1,300 @@
+{
+  "contract": "openplc-mqtt-runtime-config-cases",
+  "version": 1,
+  "context": {
+    "debugMap": "debug-map.json",
+    "programMd5": "3f2c9d0e8b7a6f5e4d3c2b1a09f8e7d6"
+  },
+  "valid": [
+    "valid/generic-on-change-anonymous-plaintext.json",
+    "valid/generic-periodic-password-private-ca.json",
+    "valid/sparkplug-client-certificate-all-types.json"
+  ],
+  "invalid": [
+    {
+      "file": "invalid/duplicate-key.json",
+      "layer": "parse",
+      "code": "config_duplicate_key",
+      "pointer": "/enabled"
+    },
+    {
+      "file": "invalid/unknown-contract.json",
+      "layer": "schema",
+      "code": "config_unknown_contract",
+      "pointer": "/contract"
+    },
+    {
+      "file": "invalid/unknown-version.json",
+      "layer": "schema",
+      "code": "config_unknown_version",
+      "pointer": "/format_version"
+    },
+    {
+      "file": "invalid/enabled-false.json",
+      "layer": "schema",
+      "code": "config_schema",
+      "pointer": "/enabled"
+    },
+    {
+      "file": "invalid/unknown-field.json",
+      "layer": "schema",
+      "code": "config_schema",
+      "pointer": "/extra"
+    },
+    {
+      "file": "invalid/mode-section-mismatch.json",
+      "layer": "schema",
+      "code": "config_schema",
+      "pointer": "/mode"
+    },
+    {
+      "file": "invalid/both-sections.json",
+      "layer": "schema",
+      "code": "config_schema",
+      "pointer": "/sparkplug"
+    },
+    {
+      "file": "invalid/client-certificate-without-tls.json",
+      "layer": "schema",
+      "code": "config_tls_required",
+      "pointer": "/connection/tls/enabled"
+    },
+    {
+      "file": "invalid/trust-on-plaintext.json",
+      "layer": "schema",
+      "code": "config_schema",
+      "pointer": "/connection/tls/trust"
+    },
+    {
+      "file": "invalid/tls-without-trust.json",
+      "layer": "schema",
+      "code": "config_schema",
+      "pointer": "/connection/tls"
+    },
+    {
+      "file": "invalid/interval-below-minimum.json",
+      "layer": "schema",
+      "code": "config_schema",
+      "pointer": "/generic/sample_interval_ms"
+    },
+    {
+      "file": "invalid/interval-above-maximum.json",
+      "layer": "schema",
+      "code": "config_schema",
+      "pointer": "/generic/publish_interval_ms"
+    },
+    {
+      "file": "invalid/qos-2.json",
+      "layer": "schema",
+      "code": "config_schema",
+      "pointer": "/generic/qos"
+    },
+    {
+      "file": "invalid/no-leaves.json",
+      "layer": "schema",
+      "code": "config_no_leaves",
+      "pointer": "/leaves"
+    },
+    {
+      "file": "invalid/size-mismatch.json",
+      "layer": "schema",
+      "code": "config_size_mismatch",
+      "pointer": "/leaves/0/size"
+    },
+    {
+      "file": "invalid/unsupported-type.json",
+      "layer": "schema",
+      "code": "config_type_unsupported",
+      "pointer": "/leaves/0/iec_type"
+    },
+    {
+      "file": "invalid/credential-ref-missing.json",
+      "layer": "schema",
+      "code": "config_schema",
+      "pointer": "/auth"
+    },
+    {
+      "file": "invalid/arr-out-of-range.json",
+      "layer": "schema",
+      "code": "config_schema",
+      "pointer": "/leaves/0/address/arr"
+    },
+    {
+      "file": "invalid/client-id-invalid.json",
+      "layer": "schema",
+      "code": "config_schema",
+      "pointer": "/connection/client_id"
+    },
+    {
+      "file": "invalid/topic-duplicate.json",
+      "layer": "names",
+      "code": "config_destination_conflict",
+      "pointer": "/leaves/1/destination",
+      "detail": "topic_duplicate"
+    },
+    {
+      "file": "invalid/topic-wildcard.json",
+      "layer": "names",
+      "code": "config_destination_invalid",
+      "pointer": "/leaves/0/destination",
+      "detail": "topic_invalid_char"
+    },
+    {
+      "file": "invalid/topic-dollar.json",
+      "layer": "names",
+      "code": "config_destination_invalid",
+      "pointer": "/leaves/0/destination",
+      "detail": "topic_reserved_prefix"
+    },
+    {
+      "file": "invalid/topic-empty-segment.json",
+      "layer": "names",
+      "code": "config_destination_invalid",
+      "pointer": "/leaves/0/destination",
+      "detail": "topic_empty_segment"
+    },
+    {
+      "file": "invalid/topic-too-long.json",
+      "layer": "names",
+      "code": "config_destination_invalid",
+      "pointer": "/leaves/0/destination",
+      "detail": "topic_too_long"
+    },
+    {
+      "file": "invalid/metric-case-collision.json",
+      "layer": "names",
+      "code": "config_destination_conflict",
+      "pointer": "/leaves/1/destination",
+      "detail": "metric_collision"
+    },
+    {
+      "file": "invalid/metric-unicode-collision.json",
+      "layer": "names",
+      "code": "config_destination_conflict",
+      "pointer": "/leaves/1/destination",
+      "detail": "metric_collision"
+    },
+    {
+      "file": "invalid/metric-reserved-bdseq.json",
+      "layer": "names",
+      "code": "config_destination_invalid",
+      "pointer": "/leaves/0/destination",
+      "detail": "metric_reserved"
+    },
+    {
+      "file": "invalid/metric-reserved-node-control.json",
+      "layer": "names",
+      "code": "config_destination_invalid",
+      "pointer": "/leaves/0/destination",
+      "detail": "metric_reserved"
+    },
+    {
+      "file": "invalid/metric-control-char.json",
+      "layer": "names",
+      "code": "config_destination_invalid",
+      "pointer": "/leaves/0/destination",
+      "detail": "metric_invalid_char"
+    },
+    {
+      "file": "invalid/group-id-slash.json",
+      "layer": "names",
+      "code": "config_sparkplug_id_invalid",
+      "pointer": "/sparkplug/group_id",
+      "detail": "node_id_invalid_char"
+    },
+    {
+      "file": "invalid/edge-node-outer-space.json",
+      "layer": "names",
+      "code": "config_sparkplug_id_invalid",
+      "pointer": "/sparkplug/edge_node_id",
+      "detail": "node_id_outer_whitespace"
+    },
+    {
+      "file": "invalid/program-mismatch.json",
+      "layer": "semantic",
+      "code": "config_program_mismatch",
+      "pointer": "/program/md5"
+    },
+    {
+      "file": "invalid/address-not-in-program.json",
+      "layer": "semantic",
+      "code": "config_address_invalid",
+      "pointer": "/leaves/0/address"
+    },
+    {
+      "file": "invalid/debug-path-mismatch.json",
+      "layer": "semantic",
+      "code": "config_address_invalid",
+      "pointer": "/leaves/0/source/debug_path"
+    },
+    {
+      "file": "invalid/type-differs-from-program.json",
+      "layer": "semantic",
+      "code": "config_address_invalid",
+      "pointer": "/leaves/0/iec_type"
+    },
+    {
+      "file": "invalid/duplicate-address.json",
+      "layer": "semantic",
+      "code": "config_leaf_duplicate",
+      "pointer": "/leaves/1/address"
+    }
+  ],
+  "generated": [
+    {
+      "id": "leaves-1000",
+      "base": "valid/generic-on-change-anonymous-plaintext.json",
+      "op": "big-leaves",
+      "count": 1000,
+      "expect": "valid"
+    },
+    {
+      "id": "leaves-1001",
+      "base": "valid/generic-on-change-anonymous-plaintext.json",
+      "op": "big-leaves",
+      "count": 1001,
+      "expect": {
+        "layer": "schema",
+        "code": "config_too_many_leaves",
+        "pointer": "/leaves"
+      }
+    },
+    {
+      "id": "birth-over-limit",
+      "base": "valid/sparkplug-client-certificate-all-types.json",
+      "op": "big-leaves-long-metric-names",
+      "count": 1000,
+      "expect": {
+        "layer": "semantic",
+        "code": "config_payload_too_large",
+        "pointer": "/leaves"
+      }
+    },
+    {
+      "id": "file-over-limit",
+      "op": "pad-to-bytes",
+      "bytes": 4194305,
+      "expect": {
+        "layer": "parse",
+        "code": "config_too_large",
+        "pointer": ""
+      }
+    },
+    {
+      "id": "nesting-too-deep",
+      "op": "nest-arrays",
+      "depth": 64,
+      "expect": {
+        "layer": "parse",
+        "code": "config_too_deep",
+        "pointer": ""
+      }
+    }
+  ],
+  "ops": {
+    "big-leaves": "leaves := for i in 0..count-1: tokens [instance Inst0, variable Big, index [i]], debug_path INST0.BIG[i], address {arr:1, elem:i}, DINT size 4, destination 'openplc/plc-linha1/Inst0/Big/' + i",
+    "big-leaves-long-metric-names": "as big-leaves, destination = zero-padded 4-digit i followed by 'n' repeated to exactly 512 UTF-8 bytes",
+    "pad-to-bytes": "valid generic fixture with leaves[0].source.debug_path unchanged and a JSON whitespace tail so the file is exactly 'bytes' long",
+    "nest-arrays": "'[' * depth + ']' * depth"
+  }
+}

@@ -9,6 +9,7 @@ import path from 'node:path'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 
 import { LibraryManagerModule } from '@root/backend/editor/library-manager/library-manager-module'
+import type { MqttCredentialDeployer } from '@root/backend/editor/mqtt-deploy/credential-deployer'
 import { buildUploadSnapshot } from '@root/backend/editor/project/build-upload-snapshot'
 import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-workspace'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
@@ -2305,6 +2306,8 @@ class CompilerModule {
        * the caller can abort with a clear error before strucpp runs.
        */
       loadEnabledArchives: (enabledNames: string[]) => { archives: unknown[]; missing: string[] }
+      /** Stages MQTT broker credentials on the runtime from the main-process vault; absent in the CLI. */
+      mqttCredentialDeployer?: Pick<MqttCredentialDeployer, 'stage' | 'discard'>
     },
   ): Promise<void> {
     _mainProcessPort.start()
@@ -2706,6 +2709,9 @@ class CompilerModule {
         // have changed since the last compile (a package installed or
         // removed mid-session).
         getVppRuntimeFloor: (board: string) => new PackageManagerModule().getRuntimeFloorForBoard(board),
+        ...(mainProcessBridge.mqttCredentialDeployer
+          ? { mqttCredentials: { projectKey: projectPath, deployer: mainProcessBridge.mqttCredentialDeployer } }
+          : {}),
         pollTimeoutMs: CompilerModule.COMPILATION_STATUS_TIMEOUT_MS,
         pollIntervalMs: CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS,
         startTimeoutMs: POST_BUILD_START_TIMEOUT_MS,

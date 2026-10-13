@@ -1,0 +1,8 @@
+{
+  "contract": "openplc-mqtt-status",
+  "version": 1,
+  "configured": true,
+  "state": "publishing",
+  "since": "2026-10-09T12:00:00.000Z",
+  "error": null
+}

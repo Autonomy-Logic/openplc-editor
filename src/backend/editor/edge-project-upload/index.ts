@@ -3,6 +3,7 @@ import JSZip from 'jszip'
 import path from 'path'
 import { z } from 'zod'
 
+import { sanitizeProjectFileContent } from '../../shared/project/sanitize-project-secrets'
 import { edgeAuthedRequest } from '../edge-account/edge-account-service'
 import { parseJsonBodyAs } from '../edge-account/edge-http'
 
@@ -278,15 +279,20 @@ export async function buildProjectArchive(
 
   const zip = new JSZip()
 
+  let fileCount = 0
   for (const file of collected) {
-    zip.file(file.relativePath, file.contents)
+    // MQTT credentials are stripped by content, so a hand-edited or renamed server file cannot carry one out.
+    const outcome = sanitizeProjectFileContent(file.contents.toString('utf-8'))
+    if (outcome.kind === 'excluded') continue
+    zip.file(file.relativePath, outcome.kind === 'sanitized' ? outcome.content : file.contents)
+    fileCount += 1
   }
 
   return {
     ok: true,
     // The 100MB ceiling is enforced on the uncompressed bytes, so a DEFLATE archive is always within it.
     zip: await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }),
-    fileCount: collected.length,
+    fileCount,
   }
 }
 

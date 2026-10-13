@@ -221,6 +221,68 @@ describe('building the archive', () => {
   })
 })
 
+describe('MQTT secrets in the cloud archive', () => {
+  const E5_PASSWORD = 'MARKER-PW-e5-export-8d1f'
+  const E5_KEY = 'MARKER-KEY-e5-export-3a7c'
+  const e5Integration = {
+    formatVersion: 1,
+    enabled: true,
+    mode: 'generic',
+    connection: {
+      host: 'broker.example.net',
+      port: 8883,
+      clientId: 'plc-1',
+      tls: { enabled: true, trust: { source: 'system' } },
+    },
+    authMethod: 'username_password',
+    generic: { publishMode: 'on_change', sampleIntervalMs: 100, publishIntervalMs: 1000, qos: 0, retain: false },
+    sparkplug: { groupId: 'openplc', edgeNodeId: 'plc-1', sampleIntervalMs: 100 },
+    selections: [],
+  }
+  const e5SecretServer = JSON.stringify({
+    name: 'broker',
+    protocol: 'mqtt',
+    password: E5_PASSWORD,
+    mqttConfig: { ...e5Integration, password: E5_PASSWORD, privateKeyPem: E5_KEY },
+  })
+  const E5_SECRET_FILES: Record<string, string> = {
+    'project.json': JSON.stringify({
+      meta: { name: 'Line' },
+      data: {
+        servers: [{ name: 'legacy', protocol: 'mqtt', mqttConfig: { ...e5Integration, password: E5_PASSWORD } }],
+      },
+    }),
+    'devices/servers/broker.json': e5SecretServer,
+    'devices/servers/old-copy.json': e5SecretServer,
+    'devices/servers/future.json': JSON.stringify({
+      name: 'future',
+      protocol: 'mqtt',
+      mqttConfig: { formatVersion: 2, key: E5_KEY },
+    }),
+    'pous/programs/MAIN.st': 'PROGRAM MAIN END_PROGRAM',
+  }
+  const e5HasMarker = (text: string): boolean => text.includes(E5_PASSWORD) || text.includes(E5_KEY)
+
+  it('uploads MQTT server files reduced to the model and leaves out unreadable ones', async () => {
+    await writeProject(E5_SECRET_FILES)
+
+    const result = await buildProjectArchive(projectDir)
+
+    if (!result.ok) throw new Error('archive failed')
+    expect(await entriesOf(result.zip)).toEqual([
+      'devices/servers/broker.json',
+      'devices/servers/old-copy.json',
+      'pous/programs/MAIN.st',
+      'project.json',
+    ])
+    expect(result.fileCount).toBe(4)
+    const loaded = await JSZip.loadAsync(result.zip)
+    for (const name of await entriesOf(result.zip)) {
+      expect(e5HasMarker(await loaded.files[name].async('string'))).toBe(false)
+    }
+  })
+})
+
 describe('uploading', () => {
   beforeEach(async () => {
     await writeProject({ 'project.json': '{"meta":{"name":"Irrigation"}}', 'pous/programs/main.st': 'x;' })

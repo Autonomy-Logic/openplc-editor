@@ -7,11 +7,13 @@ import type { EdgeAccountPort } from '../ports/edge-account-port'
 import type { EditSessionPort } from '../ports/edit-session-port'
 import type { EsiPort } from '../ports/esi-port'
 import type { LibraryPort } from '../ports/library-port'
+import type { MqttCredentialStorePort } from '../ports/mqtt-credential-port'
 import type { NavigationPort } from '../ports/navigation-port'
 import type { OrchestratorPort } from '../ports/orchestrator-port'
 import type { PackagePort } from '../ports/package-port'
 import type { PlatformCapabilities } from '../ports/platform-capabilities'
 import type { ProjectPort } from '../ports/project-port'
+import type { RuntimeIdentityPort } from '../ports/runtime-identity-port'
 import type { RuntimePort } from '../ports/runtime-port'
 import type { SimulatorPort } from '../ports/simulator-port'
 import type { StlibSourcePort } from '../ports/stlib-source-port'
@@ -44,4 +46,8 @@ export interface PlatformPorts {
   editSession?: EditSessionPort
   // Required when `capabilities.hasStLSP` is true.
   stlibSource?: StlibSourcePort
+  // Absent means the session-only store: credentials stay in memory and are re-entered after closing.
+  mqttCredentials?: MqttCredentialStorePort
+  // Present where the producer reaches the runtime directly and must pin its certificate before sending a secret.
+  runtimeIdentity?: RuntimeIdentityPort
 }

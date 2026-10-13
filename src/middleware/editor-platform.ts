@@ -13,6 +13,7 @@ import { editorEdgeAccountPort } from './adapters/editor/edge-account-adapter'
 import { editorEditSessionPort } from './adapters/editor/edit-session-adapter'
 import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
 import { createEditorLibraryAdapter } from './adapters/editor/library-adapter'
+import { createEditorMqttCredentialAdapter } from './adapters/editor/mqtt-credential-adapter'
 import { createEditorNavigationAdapter } from './adapters/editor/navigation-adapter'
 import { openFetchedProject } from './adapters/editor/open-fetched-project'
 import { createEditorOrchestratorAdapter } from './adapters/editor/orchestrator-adapter'
@@ -20,6 +21,7 @@ import { createEditorPackageAdapter } from './adapters/editor/package-adapter'
 import { createPackageUpdateNotifier } from './adapters/editor/package-update-notice'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
 import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
+import { createEditorRuntimeIdentityAdapter } from './adapters/editor/runtime-identity-adapter'
 import { createEditorSimulatorAdapter } from './adapters/editor/simulator-adapter'
 import { createEditorStlibSourceAdapter } from './adapters/editor/stlib-source-adapter'
 import { createEditorSystemAdapter } from './adapters/editor/system-adapter'
@@ -86,6 +88,8 @@ export function createEditorPorts(store: OpenPLCStore): PlatformPorts {
     // Paired with `requiresEdgeAccount: false` in EDITOR_CAPABILITIES, so signing in stays optional here.
     edgeAccount: editorEdgeAccountPort,
     editSession: editorEditSessionPort,
+    mqttCredentials: createEditorMqttCredentialAdapter(),
+    runtimeIdentity: createEditorRuntimeIdentityAdapter(),
     // Wired unconditionally; visibility is gated by capabilities/consent/sign-in, not by the port's absence.
     ai: createEditorAIAdapter({
       // No build-time kill switch: the main process is the only route to AI endpoints, so an absent proxy already fails closed.

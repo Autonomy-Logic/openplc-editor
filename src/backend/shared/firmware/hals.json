@@ -42,6 +42,7 @@
       "modbusTcpServer": true,
       "opcuaServer": true,
       "s7Server": true,
+      "mqttClient": false,
       "debuggerTransports": [
         "modbus-serial"
       ],
@@ -76,6 +77,7 @@
       "modbusTcpServer": false,
       "opcuaServer": false,
       "s7Server": false,
+      "mqttClient": false,
       "debuggerTransports": [
         "modbus-tcp"
       ],
@@ -118,6 +120,7 @@
       "modbusTcpServer": true,
       "opcuaServer": true,
       "s7Server": true,
+      "mqttClient": true,
       "debuggerTransports": [
         "websocket"
       ],

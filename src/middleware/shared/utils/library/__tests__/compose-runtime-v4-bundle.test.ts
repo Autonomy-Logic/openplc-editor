@@ -27,6 +27,7 @@ function baseInput(overrides: Partial<ComposeRuntimeV4BundleInput> = {}): Compos
       ethercat: null,
       ethercatBusconfig: null,
       ethercatIomapping: null,
+      mqtt: null,
     },
     ...overrides,
   }
@@ -88,6 +89,16 @@ describe('composeRuntimeV4Bundle', () => {
     expect('conf/ethercat.json' in files).toBe(false)
     expect('conf/ethercat_busconfig.json' in files).toBe(false)
     expect('conf/ethercat_iomapping.json' in files).toBe(false)
+    expect('conf/mqtt.json' in files).toBe(false)
+  })
+
+  it('writes conf/mqtt.json only when MQTT generation produced it', () => {
+    const confs = { ...baseInput().confs }
+    expect(composeRuntimeV4Bundle(baseInput({ confs: { ...confs, mqtt: '{"enabled":true}\n' } }))).toMatchObject({
+      'conf/mqtt.json': '{"enabled":true}\n',
+    })
+    const { mqtt: _omitted, ...withoutMqtt } = confs
+    expect('conf/mqtt.json' in composeRuntimeV4Bundle(baseInput({ confs: withoutMqtt }))).toBe(false)
   })
 
   it('writes each conf/*.json that is provided', () => {
