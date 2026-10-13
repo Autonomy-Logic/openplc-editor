@@ -333,7 +333,7 @@ function emitSink(state: WalkerState, node: RFNode): void {
     return
   }
   if (node.type === 'block') return emitStandaloneBlock(state, node)
-  if (node.type === 'connector') return emitConnectorNode(state, node)
+  if (node.type === 'connector') emitConnectorNode(state, node)
 }
 
 /**
@@ -540,27 +540,31 @@ function emitInOutVariableNode(state: WalkerState, node: RFNode, data: VariableD
 }
 
 /**
- * Connector emission: walk the connector's single incoming edge,
- * cache the resulting expression chunks under the connector's name
- * for later continuation lookups.  No bytes emitted into
- * `state.program` — the continuation is what surfaces the cached
+ * Connector emission: walk the connector's single incoming edge and
+ * return the resulting expression chunks, caching unordered results
+ * under the connector's name for later continuation lookups.  No bytes
+ * emitted into `state.program` — the continuation is what surfaces the
  * expression at its consumer's call site.
  */
-function emitConnectorNode(state: WalkerState, node: RFNode, order = false): void {
+function emitConnectorNode(state: WalkerState, node: RFNode, order = false): ProgramChunk[] | undefined {
   const data = asConnectorData(node.data)
   if (data === null) {
     state.warnings.push(`connector node "${node.id}" has unrecognised data shape`)
-    return
+    return undefined
   }
-  if (state.connectorExprs.has(data.name)) return
+  const cached = state.connectorExprs.get(data.name)
+  if (cached !== undefined) return cached
   if (state.resolvingConnectors.has(data.name)) {
     throw new Error(`connector "${data.name}" is fed by its own continuation`)
   }
   state.resolvingConnectors.add(data.name)
   const paths = pathsFromIncoming(state, node.id, order)
   state.resolvingConnectors.delete(data.name)
-  if (paths.length === 0) return
-  state.connectorExprs.set(data.name, pathsToChunks(paths))
+  if (paths.length === 0) return undefined
+  const expr = pathsToChunks(paths)
+  // An ordered walk leaves ordered producers unemitted; caching it would let an unordered consumer skip them.
+  if (!order) state.connectorExprs.set(data.name, expr)
+  return expr
 }
 
 /* ─────────────────────────── standalone block ───────────────────────────── */
@@ -738,8 +742,7 @@ function visitContinuation(state: WalkerState, node: RFNode, order: boolean): Pa
   const connector = findConnectorByName(state, data.name)
   if (connector !== undefined) {
     // `order` passes through so an ordered consumer does not pull an ordered producer ahead of its turn.
-    emitConnectorNode(state, connector, order)
-    const resolved = state.connectorExprs.get(data.name)
+    const resolved = emitConnectorNode(state, connector, order)
     if (resolved !== undefined) return leafNode([...resolved])
   }
   state.warnings.push(`continuation "${data.name}" has no matching connector`)

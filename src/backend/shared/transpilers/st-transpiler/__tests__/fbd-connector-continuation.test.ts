@@ -254,6 +254,55 @@ describe('FBD connector / continuation pairs', () => {
     expect(viaPair.bodySt.indexOf('OR(_TMP_OR300_OUT, D)')).toBeLessThan(viaPair.bodySt.indexOf('OR(A, B)'))
   })
 
+  it('emits the producer before an unordered consumer that shares the pair with an ordered one', () => {
+    // the ordered consumer resolves the pair first; the unordered one sits above the producer
+    const producer = orBlock('P', '300', 200, 200)
+    const orderedConsumer = ordered(orBlock('O', '400', 600, 400), 1)
+    const unorderedConsumer = orBlock('U', '500', 600, 0)
+    const common = [
+      inVar('1', 'A', 0, 200),
+      inVar('2', 'B', 0, 260),
+      inVar('3', 'D', 400, 460),
+      inVar('7', 'E', 400, 60),
+      outVar('4', 'Y', 800, 400),
+      outVar('8', 'Z', 800, 0),
+    ]
+    const tail = [
+      e('1', 'P', 'output', 'IN1'),
+      e('2', 'P', 'output', 'IN2'),
+      e('3', 'O', 'output', 'IN2'),
+      e('O', '4', 'OUT', 'input'),
+      e('7', 'U', 'output', 'IN2'),
+      e('U', '8', 'OUT', 'input'),
+    ]
+    const viaPair = emitFbdBody({
+      rung: {
+        reactFlowViewport: [1000, 600],
+        nodes: [
+          ...common,
+          producer,
+          orderedConsumer,
+          unorderedConsumer,
+          connection('5', 'connector', 'MID', 400, 200),
+          connection('6', 'continuation', 'MID', 400, 400),
+          connection('9', 'continuation', 'MID', 400, 0),
+        ],
+        edges: [...tail, e('P', '5', 'OUT', 'input'), e('6', 'O', 'output', 'IN1'), e('9', 'U', 'output', 'IN1')],
+      },
+    })
+    const viaWire = emitFbdBody({
+      rung: {
+        reactFlowViewport: [1000, 600],
+        nodes: [...common, producer, orderedConsumer, unorderedConsumer],
+        edges: [...tail, e('P', 'O', 'OUT', 'IN1'), e('P', 'U', 'OUT', 'IN1')],
+      },
+    })
+    expect(viaPair.warnings).toEqual([])
+    expect(viaPair.bodySt).toBe(viaWire.bodySt)
+    expect(viaPair.bodySt.split('OR(A, B)')).toHaveLength(2)
+    expect(viaPair.bodySt.indexOf('OR(A, B)')).toBeLessThan(viaPair.bodySt.indexOf('OR(_TMP_OR300_OUT, E)'))
+  })
+
   it('rejects a loop of pairs with no block in it', () => {
     const body = {
       rung: {
