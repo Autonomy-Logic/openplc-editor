@@ -247,6 +247,7 @@ describe.each(['darwin', 'win32', 'linux'] as const)('%s updates', (platform) =>
       getStatus: jest.fn(() => ({ state: 'none' as const })),
       onStatusChange: jest.fn(() => () => undefined),
       downloadAndOpen: jest.fn(() => Promise.resolve()),
+      dismiss: jest.fn(),
     }
   }
 

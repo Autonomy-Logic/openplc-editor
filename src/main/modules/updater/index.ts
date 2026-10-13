@@ -69,11 +69,35 @@ async function fetchLatestRelease(includePrereleases: boolean): Promise<Release 
   return newest
 }
 
-/** Saves the asset in Downloads, hashing it on the way; a partial file never keeps the final name. */
-async function download(asset: ReleaseAsset, progress: (fraction: number) => void): Promise<DownloadedFile> {
-  // The name comes from the network: it must stay a file name inside Downloads.
+/**
+ * The Downloads folder, under the release's file name. On Linux the user picks
+ * where the new AppImage goes, since that is where they will run it from.
+ */
+async function chooseDestination(asset: ReleaseAsset, window: BrowserWindow | null): Promise<string | null> {
+  // The name comes from the network: it must stay a file name.
   if (basename(asset.name) !== asset.name) throw new Error(`unexpected asset name ${asset.name}`)
-  const path = join(app.getPath('downloads'), asset.name)
+  const suggested = join(app.getPath('downloads'), asset.name)
+  if (process.platform !== 'linux') return suggested
+
+  const options = {
+    title: 'Save the new OpenPLC Editor',
+    defaultPath: suggested,
+    buttonLabel: 'Save',
+    filters: [{ name: 'AppImage', extensions: ['AppImage'] }],
+  }
+  const result =
+    window && !window.isDestroyed()
+      ? await dialog.showSaveDialog(window, options)
+      : await dialog.showSaveDialog(options)
+  return result.canceled || !result.filePath ? null : result.filePath
+}
+
+/** Saves the asset at `path`, hashing it on the way; a partial file never keeps the final name. */
+async function download(
+  asset: ReleaseAsset,
+  path: string,
+  progress: (fraction: number) => void,
+): Promise<DownloadedFile> {
   const partial = `${path}.part`
   const response = await net.fetch(asset.url)
   if (!response.ok || !response.body) throw new Error(`download answered ${response.status}`)
@@ -115,13 +139,15 @@ async function openInstaller(path: string): Promise<void> {
 }
 
 /**
- * The status bar's side of the service: `app-update:get-status` answers what a
+ * The banner's side of the service: `app-update:get-status` answers what a
  * renderer that just loaded should show, `app-update:status` pushes changes to
- * the window, and `app-update:download` is the "Update" button.
+ * the window, `app-update:download` is the Update button and
+ * `app-update:dismiss` its X.
  */
 function registerUpdateIpc(service: UpdateService, getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('app-update:get-status', () => service.getStatus())
   ipcMain.on('app-update:download', () => void service.downloadAndOpen())
+  ipcMain.on('app-update:dismiss', () => service.dismiss())
   service.onStatusChange((status) => {
     const window = getWindow()
     if (window && !window.isDestroyed()) window.webContents.send('app-update:status', status)
@@ -142,6 +168,7 @@ export function createElectronUpdateService({
     archs: installerArchs(process.platform, process.arch, app.runningUnderARM64Translation),
     currentVersion: app.getVersion(),
     fetchLatestRelease,
+    chooseDestination: (asset) => chooseDestination(asset, getWindow()),
     download,
     discard: (path) => {
       void rm(path, { force: true }).catch((error: unknown) =>

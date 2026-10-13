@@ -9,6 +9,7 @@ beforeEach(() => {
   window.bridge = {
     appUpdateGetStatus: jest.fn().mockResolvedValue({ state: 'available', version: '4.3.3' }),
     appUpdateDownload: jest.fn(),
+    appUpdateDismiss: jest.fn(),
     onAppUpdateStatus: jest.fn().mockImplementation((callback: (status: unknown) => void) => {
       pushStatus = callback
       return unsubscribe
@@ -44,5 +45,10 @@ describe('editor app update adapter', () => {
   it('the Update button asks main to download and open the installer', () => {
     createEditorAppUpdateAdapter().downloadAndOpen()
     expect(window.bridge.appUpdateDownload).toHaveBeenCalledTimes(1)
+  })
+
+  it('the X asks main to hide the banner', () => {
+    createEditorAppUpdateAdapter().dismiss()
+    expect(window.bridge.appUpdateDismiss).toHaveBeenCalledTimes(1)
   })
 })

@@ -15,18 +15,36 @@ and `index.ts` wires Electron and the GitHub API in.
 | Situation                     | What happens                                                                                                                                                                                                                                                                                          |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Start-up                      | One check about 60 s after launch, none after that while the editor stays open. None when "Check for Updates Automatically" (File menu) is off. Never in a development build.                                                                                                                         |
-| Newer version found           | A blue **Update to X** button appears at the right of the status bar, on the start screen and in the workspace. No dialog.                                                                                                                                                                            |
-| Button clicked                | The installer for this OS and architecture is downloaded to the Downloads folder, its sha256 is checked against the release, and it is opened. The button shows the progress, then **Install X** to open it again.                                                                                    |
+| Newer version found           | A thin blue banner across the top of the window, under the title bar, says "A new version of OpenPLC Editor is available: X", with **Update** and an **X**. No dialog.                                                                                                                                |
+| X clicked                     | The banner hides until the editor is opened again, or until the user checks from the menu.                                                                                                                                                                                                            |
+| Update clicked                | Windows and macOS: the installer is downloaded to the Downloads folder. Linux: a save dialog asks where to put the new AppImage. Its sha256 is checked against the release and it is opened. The banner shows the progress, then **Open Installer** to open it again.                                 |
 | After opening                 | Windows: the installer runs; macOS: the disk image opens; Linux: the new AppImage is shown in its folder (running it now would only meet this editor's single-instance lock). A dialog says what is left to do, with **Quit Now** (the ordinary quit, unsaved-project prompt included) and **Later**. |
 | Manual "Check for Updates"    | Always answers with a dialog: up to date, a newer version with **Download / Later**, or an error with the download page.                                                                                                                                                                              |
 | Offline, proxy, GitHub down   | Nothing is shown; the error goes to the log.                                                                                                                                                                                                                                                          |
 | sha256 mismatch, or no digest | The file is deleted (or not downloaded) and the user is sent to the releases page.                                                                                                                                                                                                                    |
 
-The status bar lives in the shared renderer
-(`frontend/components/_organisms/status-bar`, byte-identical on openplc-web) and
-reads `AppUpdatePort` (`middleware/shared/ports/app-update-port.ts`). The editor
-adapter talks to `index.ts` over `app-update:get-status`, `app-update:status`
-and `app-update:download`; the web has no adapter, so it never shows the button.
+The banner lives in the shared renderer
+(`frontend/components/_organisms/update-banner`, mounted by `AppLayout`,
+byte-identical on openplc-web) and reads `AppUpdatePort`
+(`middleware/shared/ports/app-update-port.ts`). The editor adapter talks to
+`index.ts` over `app-update:get-status`, `app-update:status`,
+`app-update:download` and `app-update:dismiss`; the web has no adapter, so it
+never shows the banner.
+
+## The Windows installer
+
+The Windows `.exe` used to be a one-click installer: it installed and launched
+the editor with no window at all, which broke when the editor was already open
+and made some users think it was the editor itself. It is now an ordinary
+installer (`nsis` in `electron-builder.json`, `assets/installer.nsh`):
+
+- a welcome page, the licence (`LICENSE`, GPLv3), the progress and a finish
+  page that can launch the editor;
+- installed per user, as before, so it replaces the existing installation; no
+  folder choice;
+- when the editor is open, it asks the user to save their work and close it,
+  with Retry and Cancel. It never closes the editor itself (electron-builder's
+  default would kill it and lose unsaved work).
 
 ## Where the version comes from
 

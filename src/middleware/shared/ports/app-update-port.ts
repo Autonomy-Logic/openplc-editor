@@ -1,6 +1,6 @@
 /**
  * AppUpdatePort — the desktop editor's notice that a newer version is out, as
- * the status bar sees it (DOPE-486).
+ * the update banner sees it (DOPE-486).
  *
  * Editor adapter: the main-process update service over IPC. It checks once per
  *                 launch and, on request, downloads the installer for this
@@ -25,6 +25,9 @@ export interface AppUpdatePort {
 
   /** Download the installer for the new version, or reuse the one downloaded, and open it. */
   downloadAndOpen(): void
+
+  /** Hide the banner until the editor is opened again (or the user checks from the menu). */
+  dismiss(): void
 }
 
 /** Validates a status received from outside the renderer; anything unreadable shows nothing. */

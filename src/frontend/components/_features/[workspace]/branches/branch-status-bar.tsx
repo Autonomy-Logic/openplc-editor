@@ -6,7 +6,6 @@ import { useCapabilities, useNavigation, useVersionControl } from '../../../../.
 import { useActiveBranch } from '../../../../hooks/use-active-branch'
 import { useOpenPLCStore } from '../../../../store'
 import { toast } from '../../../../utils/toast'
-import { StatusBar } from '../../../_organisms/status-bar'
 import { BranchSwitcherPopover } from './branch-switcher-popover'
 import { DeleteBranchModal } from './delete-branch-modal'
 import type { CarryCheckState } from './unsaved-changes-warning-modal'
@@ -211,7 +210,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
 
   return (
     <>
-      <StatusBar>
+      <div className='flex h-6 w-full shrink-0 items-center bg-brand-dark px-2 dark:bg-neutral-950'>
         <button
           ref={branchButtonRef}
           onClick={() => setShowSwitcher(true)}
@@ -223,7 +222,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
           </svg>
           <span className='max-w-[200px] truncate font-mono text-xs'>{activeBranchName}</span>
         </button>
-      </StatusBar>
+      </div>
 
       <BranchSwitcherPopover
         isOpen={showSwitcher}

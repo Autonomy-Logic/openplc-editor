@@ -5,7 +5,8 @@
  * IPC channels used:
  *   - app-update:get-status (invoke) — the status now
  *   - app-update:status     (on)     — each change
- *   - app-update:download   (send)   — the status bar's "Update" button
+ *   - app-update:download   (send)   — the banner's "Update" button
+ *   - app-update:dismiss    (send)   — the banner's X
  */
 
 import { type AppUpdatePort, toAppUpdateStatus } from '../../shared/ports/app-update-port'
@@ -22,6 +23,10 @@ export function createEditorAppUpdateAdapter(): AppUpdatePort {
 
     downloadAndOpen() {
       window.bridge.appUpdateDownload()
+    },
+
+    dismiss() {
+      window.bridge.appUpdateDismiss()
     },
   }
 }

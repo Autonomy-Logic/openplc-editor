@@ -37,8 +37,13 @@ export interface UpdateServiceDeps {
   currentVersion: string
   /** The newest release this build should hear about; null when there is none. */
   fetchLatestRelease(includePrereleases: boolean): Promise<Release | null>
-  /** Saves the asset in the user's Downloads folder. `progress` goes from 0 to 1. */
-  download(asset: ReleaseAsset, progress: (fraction: number) => void): Promise<DownloadedFile>
+  /**
+   * Where to save the installer: the Downloads folder, or on Linux wherever the
+   * user picks for the new AppImage. Null when the user cancelled.
+   */
+  chooseDestination(asset: ReleaseAsset): Promise<string | null>
+  /** Saves the asset at `path`. `progress` goes from 0 to 1. */
+  download(asset: ReleaseAsset, path: string, progress: (fraction: number) => void): Promise<DownloadedFile>
   discard(path: string): void
   /** Opens the installer (Windows, macOS) or shows the new AppImage in its folder (Linux). */
   openInstaller(path: string): Promise<void>
@@ -62,7 +67,7 @@ export const RELEASES_URL = 'https://github.com/Autonomy-Logic/openplc-editor/re
  */
 export const FIRST_CHECK_DELAY_MS = 60_000
 
-/** What the status bar shows. */
+/** What the update banner shows. */
 export type UpdateStatus =
   | { state: 'none' }
   | { state: 'available'; version: string }
@@ -78,8 +83,10 @@ export interface UpdateService {
   getStatus(): UpdateStatus
   /** The returned function unsubscribes. */
   onStatusChange(listener: (status: UpdateStatus) => void): () => void
-  /** The status bar's button: download the installer (once) and open it. */
+  /** The banner's Update button: download the installer (once) and open it. */
   downloadAndOpen(): Promise<void>
+  /** The banner's X: hidden until the editor is opened again, or the user checks from the menu. */
+  dismiss(): void
 }
 
 export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
@@ -89,10 +96,19 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
   let checking = false
   const listeners = new Set<(status: UpdateStatus) => void>()
 
-  const setStatus = (next: UpdateStatus) => {
-    if (JSON.stringify(next) === JSON.stringify(status)) return
-    status = next
+  let dismissed = false
+  let shown: UpdateStatus = { state: 'none' }
+
+  const publish = () => {
+    const next: UpdateStatus = dismissed ? { state: 'none' } : status
+    if (JSON.stringify(next) === JSON.stringify(shown)) return
+    shown = next
     for (const listener of listeners) listener(next)
+  }
+
+  const setStatus = (next: UpdateStatus) => {
+    status = next
+    publish()
   }
 
   const isPrerelease = () => deps.currentVersion.includes('-')
@@ -225,7 +241,13 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
       setStatus({ state: 'downloading', version, percent: 0 })
       let file: DownloadedFile
       try {
-        file = await deps.download(installer, (fraction) =>
+        const destination = await deps.chooseDestination(installer)
+        if (!destination) {
+          // The user closed the save dialog: nothing to report.
+          setStatus({ state: 'available', version })
+          return
+        }
+        file = await deps.download(installer, destination, (fraction) =>
           setStatus({ state: 'downloading', version, percent: Math.min(100, Math.floor(fraction * 100)) }),
         )
       } catch (error: unknown) {
@@ -280,6 +302,9 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
         })
         return
       }
+      // Asking from the menu brings back a banner the user closed.
+      dismissed = false
+      publish()
       await check(true)
     },
 
@@ -291,7 +316,12 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
       deps.writeAutoCheck(enabled)
     },
 
-    getStatus: () => status,
+    getStatus: () => shown,
+
+    dismiss() {
+      dismissed = true
+      publish()
+    },
 
     onStatusChange(listener) {
       listeners.add(listener)

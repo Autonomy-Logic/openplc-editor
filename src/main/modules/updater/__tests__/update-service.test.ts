@@ -1,6 +1,6 @@
 /**
  * The update notice (DOPE-486), driven through fakes: when the check runs, what
- * the status bar shows, and how the installer is downloaded, verified and opened.
+ * the banner shows, and how the installer is downloaded, verified and opened.
  */
 import type { Release, ReleaseAsset } from '../release-assets'
 import {
@@ -45,6 +45,7 @@ interface Harness {
   timers: { ms: number; callback: () => void }[]
   runTimers: () => void
   fetchLatestRelease: jest.Mock<Promise<Release | null>, [boolean]>
+  chooseDestination: jest.Mock
   download: jest.Mock
   openInstaller: jest.Mock
   discard: jest.Mock
@@ -76,10 +77,13 @@ function setup({
   const fetchLatestRelease = jest.fn<Promise<Release | null>, [boolean]>(() =>
     latest instanceof Error ? Promise.reject(latest) : Promise.resolve(latest),
   )
-  const download = jest.fn((file: ReleaseAsset, progress: (fraction: number) => void) => {
+  const chooseDestination = jest.fn((file: ReleaseAsset) =>
+    Promise.resolve<string | null>(`/home/user/Downloads/${file.name}`),
+  )
+  const download = jest.fn((_file: ReleaseAsset, path: string, progress: (fraction: number) => void) => {
     progress(0.5)
     progress(1)
-    return Promise.resolve({ path: `/home/user/Downloads/${file.name}`, sha256 })
+    return Promise.resolve({ path, sha256 })
   })
   const openInstaller = jest.fn(() => Promise.resolve())
   const discard = jest.fn()
@@ -92,6 +96,7 @@ function setup({
     archs,
     currentVersion,
     fetchLatestRelease,
+    chooseDestination,
     download,
     discard,
     openInstaller,
@@ -124,6 +129,7 @@ function setup({
       for (const timer of timers.splice(0)) timer.callback()
     },
     fetchLatestRelease,
+    chooseDestination,
     download,
     openInstaller,
     discard,
@@ -399,9 +405,9 @@ describe('download and open', () => {
     const h = await available()
     let finish: () => void = () => undefined
     h.download.mockImplementationOnce(
-      (file: ReleaseAsset) =>
+      (_file: ReleaseAsset, path: string) =>
         new Promise((resolve) => {
-          finish = () => resolve({ path: `/home/user/Downloads/${file.name}`, sha256: SHA })
+          finish = () => resolve({ path, sha256: SHA })
         }),
     )
     const first = h.service.downloadAndOpen()
@@ -419,6 +425,23 @@ describe('download and open', () => {
     expect(messages(h)).toEqual(['OpenPLC Editor 4.3.3 is being downloaded'])
   })
 
+  it('saves where the user chose (the Linux save dialog)', async () => {
+    const h = await available()
+    h.chooseDestination.mockResolvedValueOnce('/opt/apps/OpenPLC-Editor.AppImage')
+    await h.service.downloadAndOpen()
+    expect(h.download.mock.calls[0][1]).toBe('/opt/apps/OpenPLC-Editor.AppImage')
+    expect(h.openInstaller).toHaveBeenCalledWith('/opt/apps/OpenPLC-Editor.AppImage')
+  })
+
+  it('a cancelled save dialog downloads nothing and says nothing', async () => {
+    const h = await available()
+    h.chooseDestination.mockResolvedValueOnce(null)
+    await h.service.downloadAndOpen()
+    expect(h.download).not.toHaveBeenCalled()
+    expect(h.dialogs).toHaveLength(0)
+    expect(h.service.getStatus()).toEqual({ state: 'available', version: '4.3.3' })
+  })
+
   it('does nothing before a newer version is known', async () => {
     const h = setup()
     await h.service.downloadAndOpen()
@@ -431,5 +454,43 @@ describe('download and open', () => {
     h.service.onStatusChange(listener)()
     await h.service.downloadAndOpen()
     expect(listener).not.toHaveBeenCalled()
+  })
+})
+
+describe('banner dismissal', () => {
+  async function shown() {
+    const h = setup()
+    h.service.start()
+    h.runTimers()
+    await settle()
+    return h
+  }
+
+  it('the X hides the banner', async () => {
+    const h = await shown()
+    h.service.dismiss()
+    expect(h.service.getStatus()).toEqual({ state: 'none' })
+    expect(h.statuses.at(-1)).toEqual({ state: 'none' })
+  })
+
+  it('stays hidden for the rest of the session, even as a download progresses', async () => {
+    const h = await shown()
+    h.service.dismiss()
+    await h.service.downloadAndOpen()
+    expect(h.statuses.at(-1)).toEqual({ state: 'none' })
+  })
+
+  it('a manual check brings it back', async () => {
+    const h = await shown()
+    h.service.dismiss()
+    await h.service.checkNow()
+    expect(h.service.getStatus()).toEqual({ state: 'available', version: '4.3.3' })
+  })
+
+  it('a new service (the next launch) shows it again', async () => {
+    const first = await shown()
+    first.service.dismiss()
+    const next = await shown()
+    expect(next.service.getStatus()).toEqual({ state: 'available', version: '4.3.3' })
   })
 })
