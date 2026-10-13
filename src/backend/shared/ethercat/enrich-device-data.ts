@@ -18,11 +18,7 @@ import type {
   PersistedPdoEntry,
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
-import {
-  type Cia402AxisConfig,
-  DEFAULT_CIA402_AXIS_CONFIG,
-  isCia402Drive,
-} from '@root/middleware/shared/utils/ethercat'
+import { type Cia402AxisConfig, DEFAULT_CIA402_AXIS_CONFIG, isCia402Drive } from '@root/middleware/shared/utils/ethercat'
 
 import { assignedPdos, esiTypeToIecType, generateDefaultChannelMappings, pdoToChannels } from './esi-parser'
 import { extractDefaultSdoConfigurations } from './sdo-config-defaults'
@@ -107,6 +103,10 @@ export function persistPdos(pdos: ESIPdo[]): PersistedPdo[] {
  */
 export function buildChannelInfo(device: ESIDevice): PersistedChannelInfo[] {
   const channels = pdoToChannels(device)
+  // Channels honour the ESI as declared: a BYTE entry stays a BYTE channel at
+  // `%IB/%QB`, a USINT counter stays a value, a WORD stays a WORD. Bit-level
+  // access on a byte PDO is a PLC-program concern (`%IX{byte}.{bit}`) and no
+  // longer a UI auto-split — vendor intent can't be inferred from the type.
   return channels.map(
     (ch): PersistedChannelInfo => ({
       channelId: ch.id,

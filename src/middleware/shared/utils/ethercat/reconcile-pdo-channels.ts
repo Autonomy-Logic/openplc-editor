@@ -8,8 +8,11 @@
  * added entry would ride on the wire with no PLC-side binding, a removed one would
  * leave an orphan mapping pointing at a byte the slave no longer sends.
  *
- * Padding entries (`index === '0x0000'` AND `name === 'Padding'`) stay out of
- * channelInfo, matching the ESI parser's own rule.
+ * Padding entries (any entry at `index === '0x0000'`) stay out of channelInfo.
+ * EtherCAT uses `0x0000` as the universal "no object, just padding bits" index,
+ * and vendors label it inconsistently (Beckhoff says "Padding", WAGO says "Gap").
+ * Name-based matching misses the vendor-specific labels, so index alone is the
+ * reliable gate.
  *
  * Alias / IEC-location preservation: a channel whose channelId still exists and whose
  * iecType hasn't changed keeps its mapping.  A retyped entry gets a fresh IEC location
@@ -44,7 +47,7 @@ export interface ReconcileChannelsResult {
 }
 
 function isPaddingEntry(entry: PersistedPdoEntry): boolean {
-  return entry.index === '0x0000' && entry.name === 'Padding'
+  return entry.index === '0x0000'
 }
 
 // Mirror of `esiTypeToIecType` in `backend/shared/ethercat/esi-parser.ts`.  Lives here

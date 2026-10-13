@@ -29,6 +29,7 @@ import {
   type IecAddressRegistry,
   migrateToRegistry,
   modbusConsumerId,
+  moduleRegistryChannelId,
   recalculate as recalculateRegistry,
   restoreAliasesFromMemory,
   unpinAllocatableChannels,
@@ -560,6 +561,17 @@ function applyEthercatAddresses(
         if (!info) continue
         if (info.address) mapping.iecLocation = info.address
         mapping.alias = info.alias
+      }
+      // Module channels live under the same slave consumer, keyed by the
+      // prefixed registry channel id — mirror the migrate side so the
+      // recomputed address + alias flow back onto the on-disk mapping.
+      for (const module of slave.modules ?? []) {
+        for (const mapping of module.channelMappings ?? []) {
+          const info = index.get(channelKey(consumerId, moduleRegistryChannelId(module.id, mapping.channelId)))
+          if (!info) continue
+          if (info.address) mapping.iecLocation = info.address
+          mapping.alias = info.alias
+        }
       }
     }
   }

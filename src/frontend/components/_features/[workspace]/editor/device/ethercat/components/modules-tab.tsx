@@ -12,6 +12,7 @@
 import { ArrowIcon } from '@root/frontend/assets/icons/interface/Arrow'
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
+import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import TableActions from '@root/frontend/components/_atoms/table-actions'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { cn } from '@root/frontend/utils/cn'
@@ -22,12 +23,13 @@ import type {
   ESIModule,
   ESIModuleSummary,
   ESIRepositoryItemLight,
-  PersistedChannelInfo,
   PersistedPdo,
   PersistedPdoEntry,
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
 import { useEsi, useEtherCATScan } from '@root/middleware/shared/providers/platform-context'
+import type { CouplerCompatibility } from '@root/middleware/shared/utils/ethercat'
+import { isModuleCompatibleWithCoupler, reconcilePdoChannels } from '@root/middleware/shared/utils/ethercat'
 import { canonicaliseIdent } from '@root/middleware/shared/utils/ethercat/scan-modules-protocol'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
@@ -39,6 +41,13 @@ type ModulesTabProps = {
   busName: string
   repository: ESIRepositoryItemLight[]
   onUpdateModules: (modules: ConfiguredEtherCATModule[]) => void
+  /**
+   * IEC addresses claimed by every other producer in the project (pin mapping,
+   * VPP I/O, Modbus TCP remote, other EtherCAT slaves). Fresh module channels
+   * allocate around this set so they never collide with addresses already in
+   * use elsewhere.
+   */
+  externalUsedAddresses: Set<string>
 }
 
 /**
@@ -57,7 +66,9 @@ function hexAdd(hexIndex: string, delta: number): string {
 
 /**
  * Build a persisted module from a full ESIModule. Shared by both the manual add
- * (module browser) and the scan apply paths.
+ * (module browser) and the scan apply paths. `usedAddresses` carries the IEC
+ * addresses already claimed elsewhere in the project plus any addresses this
+ * add batch has just allocated, so each new module picks fresh ones.
  */
 function buildModuleForSlot(
   slot: number,
@@ -65,6 +76,7 @@ function buildModuleForSlot(
   slotIndexIncrement: number,
   slotPdoIncrement: number,
   esiRepositoryItemId: string,
+  usedAddresses: Set<string>,
 ): ConfiguredEtherCATModule {
   const slotOffset = slot - 1
   const indexDelta = slotOffset * slotIndexIncrement
@@ -114,7 +126,16 @@ function buildModuleForSlot(
 
   const rxPdos = persistPdo(esiModule.rxPdo)
   const txPdos = persistPdo(esiModule.txPdo)
-  const channelInfo = buildModuleChannelInfo(rxPdos, txPdos)
+  // Same allocator the device-level enrich flow uses, so module channels receive
+  // non-conflicting IEC addresses from the start and the Channel Mappings view
+  // never shows an empty Address column.
+  const { channelInfo, channelMappings } = reconcilePdoChannels({
+    rxPdos,
+    txPdos,
+    previousMappings: [],
+    externalUsedAddresses: usedAddresses,
+  })
+  for (const m of channelMappings) usedAddresses.add(m.iecLocation)
 
   return {
     id: `slot-${slot}`,
@@ -122,7 +143,7 @@ function buildModuleForSlot(
     name: esiModule.name,
     ident: esiModule.ident,
     esiModuleRef: { repositoryItemId: esiRepositoryItemId, moduleIdent: esiModule.ident },
-    channelMappings: [],
+    channelMappings,
     channelInfo: channelInfo.length > 0 ? channelInfo : undefined,
     rxPdos,
     txPdos,
@@ -131,78 +152,36 @@ function buildModuleForSlot(
 }
 
 /**
- * Derive a module's channel info from its persisted PDOs. Mirrors the device enrich flow
- * so the module editor can list channels for alias / address editing, and the generator
- * can route the module's channels into the iomapping.
- */
-function buildModuleChannelInfo(
-  rxPdos: PersistedPdo[],
-  txPdos: PersistedPdo[],
-): PersistedChannelInfo[] {
-  const out: PersistedChannelInfo[] = []
-  const walk = (pdos: PersistedPdo[], direction: 'input' | 'output') => {
-    for (const pdo of pdos) {
-      if (pdo.assigned === false) continue
-      for (const entry of pdo.entries) {
-        if (entry.index === '0x0000') continue
-        out.push({
-          channelId: `${pdo.index}-${entry.index}-${entry.subIndex}`,
-          name: entry.name,
-          direction,
-          pdoIndex: pdo.index,
-          entryIndex: entry.index,
-          entrySubIndex: entry.subIndex,
-          dataType: entry.dataType,
-          bitLen: entry.bitLen,
-          iecType: entry.dataType,
-        })
-      }
-    }
-  }
-  walk(txPdos, 'input')
-  walk(rxPdos, 'output')
-  return out
-}
-
-/**
- * Fallback for when the full ESIModule isn't available (external module file not loaded
- * yet). Produces the same shape without PDOs / SDOs; the operator finishes the module
- * through the Add Module from Repository flow after loading the ESI.
- */
-function buildStubModuleForSlot(
-  slot: number,
-  ident: string,
-  name: string,
-  repoItemId: string,
-): ConfiguredEtherCATModule {
-  return {
-    id: `slot-${slot}`,
-    slot,
-    name,
-    ident,
-    esiModuleRef: { repositoryItemId: repoItemId, moduleIdent: ident },
-    channelMappings: [],
-  }
-}
-
-/**
  * Look up each scanned ident in the repository's module summaries. First-match wins.
+ * A match that fails the coupler's vendor / Slots gate is reported as unmatched —
+ * the same screen row the user would see for an ident with no XML, kept
+ * consistent so an incompatible scan response can never slip through the apply
+ * step.
  */
 function matchScannedModules(
   scan: { slot: number; ident: string }[],
   repository: ESIRepositoryItemLight[],
+  coupler: CouplerCompatibility,
 ): ScannedModuleMatch[] {
   return scan.map((s) => {
     const identCanon = canonicaliseIdent(s.ident)
     for (const repoItem of repository) {
       const found = repoItem.modules?.find((m) => canonicaliseIdent(m.ident) === identCanon)
-      if (found !== undefined) return { slot: s.slot, ident: s.ident, match: { repoItem, module: found } }
+      if (found !== undefined && isModuleCompatibleWithCoupler(repoItem, found, coupler)) {
+        return { slot: s.slot, ident: s.ident, match: { repoItem, module: found } }
+      }
     }
     return { slot: s.slot, ident: s.ident, match: null }
   })
 }
 
-export const ModulesTab = ({ device, busName, repository, onUpdateModules }: ModulesTabProps) => {
+export const ModulesTab = ({
+  device,
+  busName,
+  repository,
+  onUpdateModules,
+  externalUsedAddresses,
+}: ModulesTabProps) => {
   const esi = useEsi()
   const scanPort = useEtherCATScan()
   const [esiDevice, setEsiDevice] = useState<ESIDevice | null>(null)
@@ -238,7 +217,30 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
   const slotIndexIncrement = esiDevice?.slots?.slotIndexIncrement ?? 16
   const slotPdoIncrement = esiDevice?.slots?.slotPdoIncrement ?? 1
 
-  const moduleMatches = useMemo(() => matchScannedModules(scannedModules, repository), [scannedModules, repository])
+  // Vendor-only compatibility is enough in practice: a coupler's own scan won't
+  // report modules it does not support, and the vendor gate stops an operator
+  // from manually adding across vendors. ETG.5001 slot restrictions are not
+  // consulted here — see the note in isModuleCompatibleWithCoupler.
+  const couplerCompatibility = useMemo<CouplerCompatibility>(
+    () => ({ vendorId: device.vendorId }),
+    [device.vendorId],
+  )
+
+  const moduleMatches = useMemo(
+    () => matchScannedModules(scannedModules, repository, couplerCompatibility),
+    [scannedModules, repository, couplerCompatibility],
+  )
+
+  // Seed address allocation with everything claimed outside this slave plus the
+  // addresses already used by this slave's existing modules. A new module adds
+  // its own channels on top so later modules in the same batch don't collide.
+  const buildUsedAddressSeed = useCallback((): Set<string> => {
+    const seed = new Set(externalUsedAddresses)
+    for (const existing of modules) {
+      for (const m of existing.channelMappings) seed.add(m.iecLocation)
+    }
+    return seed
+  }, [externalUsedAddresses, modules])
 
   const nextFreeSlot = useMemo(() => {
     const taken = new Set(modules.map((m) => m.slot))
@@ -293,6 +295,7 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
     const matched = selected.filter((m) => m.match !== null)
 
     const existingBySlot = new Map(modules.map((m) => [m.slot, m]))
+    const usedAddresses = buildUsedAddressSeed()
 
     // Load full ESIs for each repo item we need, so we can produce PDOs / SDOs.
     const loadedFull = new Map<string, ESIModule[] | null>()
@@ -312,6 +315,13 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
       loadedFull.set(m.match.repoItem.id, esiModules.length > 0 ? esiModules : null)
     }
 
+    // Modules the repository matched by ident but whose full ESI (RxPdo/TxPdo/
+    // InitCmds) could not be loaded. Same refusal reason as unmatched: without
+    // the ESI the module has no channel structure to feed the generator or the
+    // Channel Mappings view, and silently adding a stub leaves the operator
+    // with an unusable row they can't tell apart from a real add.
+    const unresolved: typeof matched = []
+
     for (const m of matched) {
       if (!m.match) continue
       const esiModules = loadedFull.get(m.match.repoItem.id)
@@ -322,20 +332,43 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
           const r = await esiPort.loadModuleFull(m.match.repoItem.id, m.ident)
           if (r.success) esiModule = r.module
         } catch {
-          // leave esiModule undefined and fall back to the stub
+          // leave esiModule undefined and refuse below
         }
       }
-      const built =
-        esiModule !== undefined
-          ? buildModuleForSlot(m.slot, esiModule, slotIndexIncrement, slotPdoIncrement, m.match.repoItem.id)
-          : buildStubModuleForSlot(m.slot, m.ident, m.match.module.name, m.match.repoItem.id)
-      existingBySlot.set(m.slot, built)
+      if (esiModule === undefined) {
+        unresolved.push(m)
+        continue
+      }
+      existingBySlot.set(
+        m.slot,
+        buildModuleForSlot(m.slot, esiModule, slotIndexIncrement, slotPdoIncrement, m.match.repoItem.id, usedAddresses),
+      )
+    }
+
+    if (unresolved.length > 0) {
+      const names = unresolved
+        .map((u) => (u.match ? u.match.module.name : u.ident))
+        .join(', ')
+      toast({
+        title: 'Modules not added',
+        description: `No ESI details available for: ${names}. Load each module's ESI file into the repository and scan again.`,
+        variant: 'fail',
+      })
     }
 
     onUpdateModules([...existingBySlot.values()])
     setSelectedScannedSlots(new Set())
     if (unmatched.length > 0) setUnmatchedWarning(unmatched)
-  }, [moduleMatches, selectedScannedSlots, modules, esi, slotIndexIncrement, slotPdoIncrement, onUpdateModules])
+  }, [
+    moduleMatches,
+    selectedScannedSlots,
+    modules,
+    esi,
+    slotIndexIncrement,
+    slotPdoIncrement,
+    onUpdateModules,
+    buildUsedAddressSeed,
+  ])
 
   const handleAddModuleFromBrowser = useCallback(
     async (modSummary: ESIModuleSummary, repoItem: ESIRepositoryItemLight) => {
@@ -364,17 +397,32 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
           const r = await esiPort.loadModuleFull(repoItem.id, modSummary.ident)
           if (r.success) esiModule = r.module
         } catch {
-          // leave undefined, fall back to the stub below
+          // leave undefined and refuse below
         }
       }
-      if (esiModule !== undefined) {
-        built = buildModuleForSlot(nextFreeSlot, esiModule, slotIndexIncrement, slotPdoIncrement, repoItem.id)
-      } else {
-        built = buildStubModuleForSlot(nextFreeSlot, modSummary.ident, modSummary.name, repoItem.id)
+      if (esiModule === undefined) {
+        // Refuse rather than stage a stub without PDOs. A stub has no channels
+        // to render in the Channel Mappings view and no PDOs to feed the
+        // generator; the operator would be left with a row that looks real
+        // but produces nothing on the wire.
+        toast({
+          title: 'Module not added',
+          description: `No ESI details available for ${modSummary.name}. Load the module's ESI file into the repository and try again.`,
+          variant: 'fail',
+        })
+        return
       }
+      built = buildModuleForSlot(
+        nextFreeSlot,
+        esiModule,
+        slotIndexIncrement,
+        slotPdoIncrement,
+        repoItem.id,
+        buildUsedAddressSeed(),
+      )
       onUpdateModules([...modules, built])
     },
-    [esi, modules, nextFreeSlot, onUpdateModules, slotIndexIncrement, slotPdoIncrement],
+    [esi, modules, nextFreeSlot, onUpdateModules, slotIndexIncrement, slotPdoIncrement, buildUsedAddressSeed],
   )
 
   const handleRemoveSelected = useCallback(() => {
@@ -387,7 +435,7 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
   const addSelectedDisabled = selectedScannedSlots.size === 0
 
   return (
-    <div className='flex flex-col gap-4'>
+    <div className='flex min-h-0 flex-1 flex-col gap-4'>
       {/* Scan controls */}
       <div className='flex flex-wrap items-end gap-4'>
         <button
@@ -416,8 +464,9 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
         </div>
       )}
 
-      {/* Side-by-side panels */}
-      <div className='flex min-h-[480px] gap-4'>
+      {/* Side-by-side panels — flex-1 so the panels fill the available Modules
+          tab space and both sub-tables keep their own internal scrollbars. */}
+      <div className='flex min-h-0 flex-1 gap-4'>
         {/* Scanned Modules — left */}
         <div className='flex min-w-0 flex-1 flex-col'>
           <div className='mb-2 flex h-[28px] items-center justify-between'>
@@ -530,12 +579,15 @@ export const ModulesTab = ({ device, busName, repository, onUpdateModules }: Mod
         </div>
       </div>
 
-      {/* Module browser */}
+      {/* Module browser — filtered to this coupler. Vendor is always a hard
+          gate; when the coupler's `<Slots>` block names specific module idents
+          or classes we tighten the gate to just those. */}
       <ModuleBrowserModal
         isOpen={isModuleBrowserOpen}
         onClose={() => setIsModuleBrowserOpen(false)}
         onSelectModule={(mod, repoItem) => void handleAddModuleFromBrowser(mod, repoItem)}
         repository={repository}
+        coupler={{ ...couplerCompatibility, name: device.name }}
       />
 
       {/* Unmatched-scanned-module warning (same shape as the bus-screen warning) */}

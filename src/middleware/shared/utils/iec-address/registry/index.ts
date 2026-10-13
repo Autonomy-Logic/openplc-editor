@@ -11,9 +11,12 @@ export { allocateAddresses, channelKey } from './allocate'
 export {
   ethercatConsumerId,
   ethercatMemoryKey,
+  ethercatModuleMemoryKey,
   migrateToRegistry,
   modbusConsumerId,
   modbusMemoryKey,
+  moduleRegistryChannelId,
+  parseModuleRegistryChannelId,
   recalculateFromLegacy,
   unpinAllocatableChannels,
   vppMemoryKey,

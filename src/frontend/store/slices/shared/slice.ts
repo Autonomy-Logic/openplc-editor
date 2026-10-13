@@ -749,6 +749,44 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   },
 
   ethercatDeviceActions: {
+    deleteModule: (busName, deviceId, moduleId) => {
+      const state = getState()
+      const remoteDevice = state.project.data.remoteDevices?.find((d) => d.name === busName)
+      if (!remoteDevice) return { ok: false, message: 'Bus not found' }
+
+      const device = remoteDevice.ethercatConfig?.devices?.find((d) => d.id === deviceId)
+      if (!device) return { ok: false, message: 'EtherCAT device not found' }
+
+      const module = device.modules?.find((m) => m.id === moduleId)
+      if (!module) return { ok: false, message: 'Module not found' }
+      const moduleName = module.name
+
+      const nextModules = (device.modules ?? []).filter((m) => m.id !== moduleId)
+      state.projectActions.updateEthercatConfig(busName, {
+        masterConfig: remoteDevice.ethercatConfig?.masterConfig ?? {
+          networkInterface: 'eth0',
+          cycleTimeUs: 1000,
+          watchdogTimeoutCycles: 3,
+        },
+        devices: (remoteDevice.ethercatConfig?.devices ?? []).map((d) =>
+          d.id === deviceId ? { ...d, modules: nextModules.length > 0 ? nextModules : undefined } : d,
+        ),
+      })
+
+      // The module's own editor tab (if open) now points at a module that no
+      // longer exists; close it so the user doesn't see a stale pane. The
+      // parent coupler stays open.
+      state.editorActions.removeModel(moduleName)
+      state.tabsActions.removeTab(moduleName)
+      state.fileActions.removeFile({ name: moduleName })
+      const currentEditor = state.editor
+      if (currentEditor.type !== 'available' && currentEditor.meta.name === moduleName) {
+        state.editorActions.clearEditor()
+      }
+
+      return { ok: true }
+    },
+
     delete: (busName, deviceId) => {
       const state = getState()
       const remoteDevice = state.project.data.remoteDevices?.find((d) => d.name === busName)

@@ -35,9 +35,18 @@ import { XMLParser } from 'fast-xml-parser'
  */
 function parseHexValue(value: string | number | undefined | null): string {
   if (value === undefined || value === null) return '0x0'
-  const str = String(value)
-  const cleaned = str.replace(/#x/gi, '0x')
-  return cleaned.startsWith('0x') ? cleaned : `0x${cleaned}`
+  const str = String(value).trim()
+  if (!str) return '0x0'
+  // ETG convention: `#xHEX` and `0xHEX` are hex, plain digit strings are DECIMAL.
+  // Collapsing a decimal input to `0x<same digits>` (as the previous
+  // implementation did) breaks Vendor-id comparisons when the same vendor
+  // emits one file as `#x00000230` and a sibling file as `560` (= 0x230).
+  if (/^#x/i.test(str)) return '0x' + str.slice(2)
+  if (/^0x/i.test(str)) return '0x' + str.slice(2)
+  if (/^-?\d+$/.test(str)) return '0x' + Math.abs(parseInt(str, 10)).toString(16).toUpperCase()
+  // Anything else (bare hex digits without a prefix, say `1A00`): treat as hex
+  // so historical ESIs keep working.
+  return '0x' + str
 }
 
 /**
@@ -129,9 +138,17 @@ export function parseESILight(xmlString: string, filename?: string): ESILightRes
     const parser = createParser()
     const parsed = parser.parse(xmlString) as Record<string, unknown>
 
-    const root = parsed['EtherCATInfo'] as Record<string, unknown> | undefined
+    // Accept both ETG roots: `EtherCATInfo` for coupler / device ESIs and
+    // `EtherCATModule` for module-only ESIs (Weidmueller's UR20-IO file is one;
+    // several vendors ship a module library this way).
+    const root =
+      (parsed['EtherCATInfo'] as Record<string, unknown> | undefined) ??
+      (parsed['EtherCATModule'] as Record<string, unknown> | undefined)
     if (!root) {
-      return { success: false, error: 'Invalid ESI file: Missing EtherCATInfo root element' }
+      return {
+        success: false,
+        error: 'Invalid ESI file: Missing EtherCATInfo / EtherCATModule root element',
+      }
     }
 
     // Parse Vendor
@@ -178,10 +195,33 @@ export function parseESILight(xmlString: string, filename?: string): ESILightRes
       }
     }
 
-    // DOPE-704 E6 UI: lift module summaries from both inline <Device><Modules> blocks
-    // (modular coupler ESIs) and standalone <Descriptions><Modules> blocks (external
-    // module files). The module browser modal and the scan reconciliation both need
-    // them; collecting here keeps the walk to a single pass.
+    // Lift module summaries from every layout ETG allows:
+    //   - inline `<Device><Modules><Module>` (modular couplers that carry their
+    //     module library in the device element — our thin ETG.5001 example),
+    //   - sibling `<Descriptions><Modules><Module>` (Weidmueller UR20_FBC ships
+    //     the FSoE module here, plus every vendor who collects modules at the
+    //     Descriptions level),
+    //   - top-level `<Modules><Module>` under `EtherCATModule`-rooted module
+    //     libraries (Weidmueller UR20-IO file, several other vendors ship a
+    //     separate module-only ESI this way).
+    //
+    // ModuleIdent and ModuleClass may sit on the inner `<Type>` element rather
+    // than on `<Module>` itself (Weidmueller does this). Try `<Type>`'s
+    // attributes first because the standalone form is the official one and
+    // doesn't collide with the inline form, which uses `@_ModuleIdent` on the
+    // `<Module>` element.
+    const readModuleSummary = (m: Record<string, unknown>): ESIModuleSummary | null => {
+      const typeEl = m['Type'] as Record<string, unknown> | undefined
+      const ident = parseHexValue(
+        (typeEl?.['@_ModuleIdent'] as string | number | undefined) ??
+          (m['@_ModuleIdent'] as string | number | undefined),
+      )
+      if (ident === '0x00000000') return null
+      const name = getTextValue(m['Name']) || getTextValue(typeEl) || ident
+      const moduleClass =
+        getTextValue(typeEl?.['@_ModuleClass']) || getTextValue(m['ModuleClass']) || undefined
+      return { ident, name, moduleClass }
+    }
     const modules: ESIModuleSummary[] = []
     if (descriptions) {
       const devicesObj = descriptions['Devices'] as Record<string, unknown> | undefined
@@ -191,20 +231,21 @@ export function parseESILight(xmlString: string, filename?: string): ESILightRes
         )) {
           const inlineModules = (deviceEl['Modules'] as Record<string, unknown> | undefined)?.['Module']
           for (const m of ensureArray(inlineModules as Record<string, unknown> | Record<string, unknown>[])) {
-            const ident = parseHexValue(m['@_ModuleIdent'] as string | number | undefined)
-            const name = getTextValue(m['Name']) || ident
-            const moduleClass = getTextValue(m['ModuleClass']) || undefined
-            if (ident !== '0x00000000') modules.push({ ident, name, moduleClass })
+            const s = readModuleSummary(m)
+            if (s) modules.push(s)
           }
         }
       }
-      const topModules = (descriptions['Modules'] as Record<string, unknown> | undefined)?.['Module']
-      for (const m of ensureArray(topModules as Record<string, unknown> | Record<string, unknown>[])) {
-        const ident = parseHexValue(m['@_ModuleIdent'] as string | number | undefined)
-        const name = getTextValue(m['Name']) || ident
-        const moduleClass = getTextValue(m['ModuleClass']) || undefined
-        if (ident !== '0x00000000') modules.push({ ident, name, moduleClass })
+      const descModules = (descriptions['Modules'] as Record<string, unknown> | undefined)?.['Module']
+      for (const m of ensureArray(descModules as Record<string, unknown> | Record<string, unknown>[])) {
+        const s = readModuleSummary(m)
+        if (s) modules.push(s)
       }
+    }
+    const rootModules = (root['Modules'] as Record<string, unknown> | undefined)?.['Module']
+    for (const m of ensureArray(rootModules as Record<string, unknown> | Record<string, unknown>[])) {
+      const s = readModuleSummary(m)
+      if (s) modules.push(s)
     }
 
     if (devices.length === 0 && modules.length === 0) {
@@ -321,9 +362,19 @@ export function parseESIDeviceFull(xmlString: string, deviceIndex: number): ESID
     const parser = createParser()
     const parsed = parser.parse(xmlString) as Record<string, unknown>
 
-    const root = parsed['EtherCATInfo'] as Record<string, unknown> | undefined
+    // Accept both roots: a device file naturally sits under `EtherCATInfo`,
+    // but a few vendors (Weidmueller UR20-IO, etc.) land here with
+    // `EtherCATModule`-rooted modules. We can still fulfill a parseFull
+    // request on a module-only file by digging the device out of its
+    // Descriptions tree the same way.
+    const root =
+      (parsed['EtherCATInfo'] as Record<string, unknown> | undefined) ??
+      (parsed['EtherCATModule'] as Record<string, unknown> | undefined)
     if (!root) {
-      return { success: false, error: 'Invalid ESI file: Missing EtherCATInfo root element' }
+      return {
+        success: false,
+        error: 'Invalid ESI file: Missing EtherCATInfo / EtherCATModule root element',
+      }
     }
 
     const descriptions = root['Descriptions'] as Record<string, unknown> | undefined
@@ -919,9 +970,15 @@ export function parseESIModuleFull(xmlString: string): ESIModuleFullResult {
   try {
     const parser = createParser()
     const parsed = parser.parse(xmlString) as Record<string, unknown>
-    const root = parsed['EtherCATInfo'] as Record<string, unknown> | undefined
+    // ETG lets a vendor ship module-only ESIs under the `EtherCATModule` root
+    // instead of `EtherCATInfo`; Weidmueller's UR20-IO-Modules file does. Both
+    // shapes carry a top-level `<Modules>` block the same way, so we accept
+    // either root and read Modules from Descriptions or directly off root.
+    const root =
+      (parsed['EtherCATInfo'] as Record<string, unknown> | undefined) ??
+      (parsed['EtherCATModule'] as Record<string, unknown> | undefined)
     if (!root) {
-      return { success: false, error: 'Invalid ESI file: missing EtherCATInfo root element' }
+      return { success: false, error: 'Invalid ESI file: missing EtherCATInfo / EtherCATModule root element' }
     }
     const descriptions = root['Descriptions'] as Record<string, unknown> | undefined
     const modulesEl =
@@ -979,7 +1036,11 @@ function parseFullPdo(pdoEl: Record<string, unknown>): ESIPdo {
   const osIndexInc = osIndexIncAttr ? parseInt(osIndexIncAttr, 10) : undefined
 
   return {
-    index: parseHexValue(pdoEl['Index'] as string | undefined),
+    // `<Index>` sometimes carries attributes (e.g. WAGO's `<Index DependOnSlot="1">#x1600</Index>`),
+    // in which case fast-xml-parser hands us {#text, @_DependOnSlot} rather than a plain string.
+    // getTextValue normalises both shapes; the raw cast would otherwise stringify the object to
+    // "[object Object]" and poison every downstream channel id.
+    index: parseHexValue(getTextValue(pdoEl['Index'])),
     name: getTextValue(pdoEl['Name']) || 'Unnamed PDO',
     fixed: getTextValue(pdoEl['@_Fixed']).toLowerCase() === 'true',
     mandatory: getTextValue(pdoEl['@_Mandatory']).toLowerCase() === 'true',

@@ -11,12 +11,14 @@ import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast
 import { useOpenPLCStoreApi } from '@root/frontend/store'
 import type {
   ConfiguredEtherCATDevice,
+  ConfiguredEtherCATModule,
   EnrichDeviceData,
   ESIAlternativeSmMapping,
   ESIChannel,
   ESICoEObject,
   EtherCATChannelMapping,
   EtherCATSlaveConfig,
+  PersistedChannelInfo,
 } from '@root/middleware/shared/ports/esi-types'
 import { useEsi } from '@root/middleware/shared/providers/platform-context'
 import {
@@ -26,7 +28,7 @@ import {
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type UseDeviceConfigurationParams = {
   device: ConfiguredEtherCATDevice
@@ -35,11 +37,16 @@ type UseDeviceConfigurationParams = {
   onUpdateDevice: (config: EtherCATSlaveConfig) => void
   onUpdateChannelMappings: (mappings: EtherCATChannelMapping[]) => void
   onEnrichDevice: (data: EnrichDeviceData) => void
+  /** Called when an alias edit targets a channel that belongs to a module slotted
+   *  into a modular coupler. The hook rebuilds the module's channelMappings and
+   *  hands the whole module back; callers persist it via the project store. */
+  onUpdateModule?: (moduleId: string, module: ConfiguredEtherCATModule) => void
   enabled?: boolean
 }
 
 type UseDeviceConfigurationResult = {
   channels: ESIChannel[]
+  channelMappings: EtherCATChannelMapping[]
   coeObjects: ESICoEObject[] | undefined
   alternativeSmMappings: ESIAlternativeSmMapping[] | undefined
   isLoadingChannels: boolean
@@ -48,6 +55,30 @@ type UseDeviceConfigurationResult = {
   updateConfig: <K extends keyof EtherCATSlaveConfig>(section: K, updates: Partial<EtherCATSlaveConfig[K]>) => void
 }
 
+/** Build ESIChannel rows the shared ChannelMappingTable expects, from persisted
+ *  channelInfo. Fields the table does not read (pdoName, bitOffset, byteOffset)
+ *  are filled with safe defaults. Mirrored from the standalone module editor. */
+function synthesizeChannels(channelInfo: PersistedChannelInfo[] | undefined): ESIChannel[] {
+  return (channelInfo ?? []).map((ci) => ({
+    id: ci.channelId,
+    direction: ci.direction,
+    pdoIndex: ci.pdoIndex,
+    pdoName: '',
+    entryIndex: ci.entryIndex,
+    entrySubIndex: ci.entrySubIndex,
+    name: ci.name,
+    dataType: ci.dataType,
+    bitLen: ci.bitLen,
+    bitOffset: 0,
+    byteOffset: 0,
+    iecType: ci.iecType,
+  }))
+}
+
+type ChannelOwner =
+  | { kind: 'device' }
+  | { kind: 'module'; moduleId: string; module: ConfiguredEtherCATModule }
+
 export function useDeviceConfiguration({
   device,
   projectPath,
@@ -55,6 +86,7 @@ export function useDeviceConfiguration({
   onUpdateDevice,
   onUpdateChannelMappings,
   onEnrichDevice,
+  onUpdateModule,
   enabled = true,
 }: UseDeviceConfigurationParams): UseDeviceConfigurationResult {
   const store = useOpenPLCStoreApi()
@@ -73,6 +105,8 @@ export function useDeviceConfiguration({
   onUpdateChannelMappingsRef.current = onUpdateChannelMappings
   const onEnrichDeviceRef = useRef(onEnrichDevice)
   onEnrichDeviceRef.current = onEnrichDevice
+  const onUpdateModuleRef = useRef(onUpdateModule)
+  onUpdateModuleRef.current = onUpdateModule
 
   useEffect(() => {
     if (!enabled || !device || fullDeviceLoadedRef.current) return
@@ -143,27 +177,65 @@ export function useDeviceConfiguration({
     void loadFullDevice()
   }, [enabled, projectPath, device?.esiDeviceRef?.repositoryItemId, device?.esiDeviceRef?.deviceIndex])
 
+  // For a modular coupler, the Channel Mappings view aggregates channels and
+  // mappings across the coupler itself and each plugged-in module. The owner
+  // map lets the alias-edit handler route a write back to the right source
+  // (coupler-level mappings vs. a specific module's mappings).
+  const { aggregatedChannels, aggregatedMappings, ownerByChannelId } = useMemo(() => {
+    const own = new Map<string, ChannelOwner>()
+    if (!device?.isModularCoupler) {
+      return {
+        aggregatedChannels: channels,
+        aggregatedMappings: device?.channelMappings ?? [],
+        ownerByChannelId: own,
+      }
+    }
+    const chs: ESIChannel[] = []
+    const maps: EtherCATChannelMapping[] = []
+    const couplerChs = synthesizeChannels(device.channelInfo)
+    chs.push(...couplerChs)
+    for (const c of couplerChs) own.set(c.id, { kind: 'device' })
+    maps.push(...device.channelMappings)
+    const sortedModules = [...(device.modules ?? [])].sort((a, b) => a.slot - b.slot)
+    for (const m of sortedModules) {
+      const modChs = synthesizeChannels(m.channelInfo)
+      chs.push(...modChs)
+      for (const c of modChs) own.set(c.id, { kind: 'module', moduleId: m.id, module: m })
+      maps.push(...m.channelMappings)
+    }
+    return { aggregatedChannels: chs, aggregatedMappings: maps, ownerByChannelId: own }
+  }, [channels, device])
+
   const handleAliasChange = useCallback(
     (channelId: string, alias: string) => {
       if (!device) return
 
+      const owner = ownerByChannelId.get(channelId) ?? { kind: 'device' as const }
+
       // Resolve the bus owning this slave so we can construct a
       // `SourceRef` whose `ref` matches the format used by the
-      // address pool (`${busName}:${slaveName}:${channelId}` — see
-      // `address-pool.ts:243`).  Without this, `validateAliasEdit`'s
-      // "ignoring" comparison wouldn't recognise a no-op self-rename
-      // and would spuriously reject it.
+      // address pool (`${busName}:${slaveName}:${channelId}` for a
+      // coupler-level channel, with an extra `${moduleId}:` segment
+      // for a module-level channel — see address-pool.ts). Without
+      // this, validateAliasEdit's self-rename check would spuriously
+      // reject the no-op.
       const state = store.getState()
       const owningBus = state.project.data.remoteDevices?.find((d) =>
         d.ethercatConfig?.devices?.some((s) => s.name === device.name),
       )
       const busName = owningBus?.name ?? ''
-      const sourceRef = { kind: 'ethercat' as const, ref: `${busName}:${device.name}:${channelId}` }
+      const sourceRef =
+        owner.kind === 'module'
+          ? {
+              kind: 'ethercat' as const,
+              ref: `${busName}:${device.name}:${owner.moduleId}:${channelId}`,
+            }
+          : { kind: 'ethercat' as const, ref: `${busName}:${device.name}:${channelId}` }
 
-      // Phase 1 — write-time uniqueness gate (global across all
-      // producers).  Build a fresh registry from the live state and
-      // reject the edit on collision.  See
-      // `module-slots-layout.tsx::handleAliasChange` for the longer
+      // Phase 1 — write-time uniqueness gate (global across every
+      // producer). Build a fresh registry from the live state and
+      // reject the edit on collision. See
+      // module-slots-layout.tsx::handleAliasChange for the longer
       // rationale.
       const board = state.deviceDefinitions.configuration.deviceBoard ?? ''
       const boardInfo = state.deviceAvailableOptions.availableBoards.get(board)
@@ -189,6 +261,20 @@ export function useDeviceConfiguration({
         return
       }
 
+      if (owner.kind === 'module') {
+        const module = owner.module
+        const oldAlias = module.channelMappings.find((m) => m.channelId === channelId)?.alias ?? ''
+        if (oldAlias) {
+          store.getState().projectActions.renameAlias(oldAlias, alias)
+        }
+        const existing = module.channelMappings.some((m) => m.channelId === channelId)
+        const nextMappings = existing
+          ? module.channelMappings.map((m) => (m.channelId === channelId ? { ...m, alias } : m))
+          : [...module.channelMappings, { channelId, iecLocation: '', alias }]
+        onUpdateModuleRef.current?.(module.id, { ...module, channelMappings: nextMappings })
+        return
+      }
+
       // Phase 2 — cascade rename onto bound variables BEFORE
       // writing the new alias so the downstream sync sees variables
       // pointing at the new name and refreshes locations rather
@@ -201,7 +287,7 @@ export function useDeviceConfiguration({
       const updated = device.channelMappings.map((m) => (m.channelId === channelId ? { ...m, alias } : m))
       onUpdateChannelMappingsRef.current(updated)
     },
-    [store, device?.channelMappings, device?.name],
+    [store, device, ownerByChannelId],
   )
 
   const updateConfig = useCallback(
@@ -216,7 +302,8 @@ export function useDeviceConfiguration({
   )
 
   return {
-    channels,
+    channels: aggregatedChannels,
+    channelMappings: aggregatedMappings,
     coeObjects,
     alternativeSmMappings,
     isLoadingChannels,

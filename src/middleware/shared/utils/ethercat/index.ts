@@ -23,4 +23,5 @@ export {
   type ReconcileChannelsInput,
   type ReconcileChannelsResult,
 } from './reconcile-pdo-channels'
+export { type CouplerCompatibility, isModuleCompatibleWithCoupler } from './module-compatibility'
 export { validateEthercatProject } from './validate-ethercat-project'

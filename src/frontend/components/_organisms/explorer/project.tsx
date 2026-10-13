@@ -49,7 +49,7 @@ const Project = () => {
     },
     projectActions: { updateMetaName },
     tabsActions: { updateTabs },
-    editorActions: { setEditor, addModel, getEditorFromEditors },
+    editorActions: { setEditor, addModel, getEditorFromEditors, removeModel },
     workspaceActions: { setSelectedProjectTreeLeaf },
     searchQuery,
   } = useOpenPLCStore()
@@ -110,15 +110,24 @@ const Project = () => {
     const tabToBeCreated = { name, path, elementType, configuration: tabConfig }
     updateTabs(tabToBeCreated)
 
-    const editor = getEditorFromEditors(tabToBeCreated.name)
-    if (!editor) {
-      const model = CreateEditorObjectFromTab(tabToBeCreated)
-      addModel(model)
-      setEditor(model)
-      return
-    }
-    addModel(editor)
-    setEditor(editor)
+    const existing = getEditorFromEditors(tabToBeCreated.name)
+    const fresh = CreateEditorObjectFromTab(tabToBeCreated)
+    // The editor cache is keyed by display name alone, which is ambiguous when
+    // an underlying element gets rebuilt with new identity (e.g. a coupler's
+    // slot module removed and re-added at a different slot: the display name
+    // stays "<coupler>/<module>" but moduleId flips from slot-0 to slot-1).
+    // Treat the cache entry as stale and replace it when any identity-forming
+    // meta field disagrees with the fresh model.
+    const stale =
+      existing !== null &&
+      (existing.type !== fresh.type ||
+        (Object.keys(fresh.meta) as (keyof typeof fresh.meta)[]).some(
+          (k) => (existing.meta as Record<string, unknown>)[k] !== (fresh.meta as Record<string, unknown>)[k],
+        ))
+    if (stale) removeModel(tabToBeCreated.name)
+    const model = existing !== null && !stale ? existing : fresh
+    addModel(model)
+    setEditor(model)
   }
 
   const [isEditing, setIsEditing] = useState(false)
@@ -597,9 +606,14 @@ const Project = () => {
                                   <ProjectTreeLeaf
                                     key={module.id}
                                     leafLang='ethercatDevice'
-                                    leafType='ethercat-device'
+                                    // Must be 'ethercat-module', not 'ethercat-device' —
+                                    // the tree's Delete action keys off leafType to
+                                    // choose between `deleteModule` (one slot) and
+                                    // `delete` (the whole coupler).
+                                    leafType='ethercat-module'
                                     busName={device.name}
                                     deviceId={child.id}
+                                    moduleId={module.id}
                                     label={`Slot ${module.slot} — ${module.name}`}
                                     highlightQuery={searchQuery}
                                     onClick={() =>

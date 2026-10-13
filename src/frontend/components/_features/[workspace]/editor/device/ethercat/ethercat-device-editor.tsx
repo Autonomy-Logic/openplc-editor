@@ -129,6 +129,19 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
     if (isSoftMotion && activeTab === 'channel-mappings') setActiveTab('axis')
   }, [isSoftMotion, activeTab])
 
+  // On a modular coupler, Modules leads. Switch away from the default
+  // Channel Mappings tab the first time the device becomes available so
+  // the operator lands on Modules; later clicks (including picking Channel
+  // Mappings explicitly) are left alone.
+  const landedOnModulesRef = useRef(false)
+  useEffect(() => {
+    if (landedOnModulesRef.current || !device) return
+    landedOnModulesRef.current = true
+    if (device.isModularCoupler === true && activeTab === 'channel-mappings') {
+      setActiveTab('modules')
+    }
+  }, [device, activeTab])
+
   // Pool of every claim from producers active on the current target.
   // EtherCAT is sharing the image table with VPP and Modbus TCP on
   // Runtime v4, so all three feed into the pool — but capability
@@ -226,14 +239,30 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
   // DOPE-704 E3 UI: Expert-mode PDO reassignment. The handler mutates only the
   // `assigned` flag on the named PDO; the exclude lists stay as the ESI declared
   // them and the generator's PdoAssign gate still fires in buildPdoAssignmentSdos.
-  // DOPE-704 E5 UI: Add / remove modules on a modular coupler. The persisted shape
-  // produced by ModulesTab's buildModuleForSlot is spread onto `device.modules`.
+  // Add / remove modules on a modular coupler. The persisted shape produced by
+  // ModulesTab's buildModuleForSlot is spread onto `device.modules`.
   const handleUpdateModules = useCallback(
     (modules: Parameters<typeof ModulesTab>[0]['onUpdateModules'] extends (m: infer M) => unknown ? M : never) => {
       syncDevicesToStore(
         configuredDevices.map((d) =>
           d.id === deviceId ? { ...d, modules: modules.length > 0 ? modules : undefined } : d,
         ),
+      )
+    },
+    [configuredDevices, deviceId, syncDevicesToStore],
+  )
+
+  // Alias / mapping edits for a channel belonging to one of a coupler's
+  // modules route through here: the hook rebuilds the specific module and
+  // we persist it by swapping that module in the slave's modules array.
+  const handleUpdateModule = useCallback(
+    (moduleId: string, module: Parameters<typeof handleUpdateModules>[0][number]) => {
+      syncDevicesToStore(
+        configuredDevices.map((d) => {
+          if (d.id !== deviceId) return d
+          const nextModules = (d.modules ?? []).map((m) => (m.id === moduleId ? module : m))
+          return { ...d, modules: nextModules.length > 0 ? nextModules : undefined }
+        }),
       )
     },
     [configuredDevices, deviceId, syncDevicesToStore],
@@ -378,6 +407,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
   // Use the device configuration hook for channels, CoE objects, etc.
   const {
     channels,
+    channelMappings,
     coeObjects,
     alternativeSmMappings,
     isLoadingChannels,
@@ -391,6 +421,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
       onUpdateDevice: handleUpdateDevice,
       onUpdateChannelMappings: handleUpdateChannelMappings,
       onEnrichDevice: handleEnrichDevice,
+      onUpdateModule: handleUpdateModule,
       enabled: device !== null,
     })
 
@@ -425,6 +456,13 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
         className='flex min-h-0 flex-1 flex-col overflow-hidden'
       >
         <Tabs.List className='flex shrink-0 border-b border-neutral-200 dark:border-neutral-700'>
+          {/* On a modular coupler, Modules leads: it drives everything else
+              on the device, so operators start there and Channel Mappings
+              follows (now showing the aggregate across all configured
+              modules). */}
+          {device.isModularCoupler === true && (
+            <TabItem value='modules' label='Modules' isActive={activeTab === 'modules'} />
+          )}
           {!isSoftMotion && (
             <TabItem value='channel-mappings' label='Channel Mappings' isActive={activeTab === 'channel-mappings'} />
           )}
@@ -432,9 +470,6 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           <TabItem value='info' label='Device Info' isActive={activeTab === 'info'} />
           <TabItem value='configuration' label='Configuration' isActive={activeTab === 'configuration'} />
           <TabItem value='process-data' label='Process Data' isActive={activeTab === 'process-data'} />
-          {device.isModularCoupler === true && (
-            <TabItem value='modules' label='Modules' isActive={activeTab === 'modules'} />
-          )}
           {device.isModularCoupler === true && (
             <TabItem value='diagnostics' label='Diagnostics' isActive={activeTab === 'diagnostics'} />
           )}
@@ -533,18 +568,22 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           </div>
         </Tabs.Content>
 
-        {/* DOPE-704 E5 UI: Modules (modular coupler only) */}
+        {/* Modules (modular coupler only). ModulesTab owns its own inner
+            scrolls (left scanned-modules table + right configured-modules
+            table), so the outer wrapper is a flex container that lets the
+            tab fill the available height instead of fixing it at 480px. */}
         {device.isModularCoupler === true && (
           <Tabs.Content
             value='modules'
             className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
           >
-            <div className='flex-1 overflow-auto p-4'>
+            <div className='flex min-h-0 flex-1 flex-col overflow-hidden p-4'>
               <ModulesTab
                 device={device}
                 busName={busName}
                 repository={repository}
                 onUpdateModules={handleUpdateModules}
+                externalUsedAddresses={externalAddresses}
               />
             </div>
           </Tabs.Content>
@@ -590,7 +629,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
                 isLoading={isLoadingChannels}
                 loadError={channelLoadError}
                 channels={channels}
-                mappings={device.channelMappings}
+                mappings={channelMappings}
                 onAliasChange={handleAliasChange}
               />
             </div>

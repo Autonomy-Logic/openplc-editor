@@ -1,6 +1,7 @@
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { cn } from '@root/frontend/utils/cn'
 import type { ESIModuleSummary, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
+import { isModuleCompatibleWithCoupler } from '@root/middleware/shared/utils/ethercat'
 import { useCallback, useMemo, useState } from 'react'
 
 type ModuleBrowserModalProps = {
@@ -12,14 +13,33 @@ type ModuleBrowserModalProps = {
    */
   onSelectModule: (module: ESIModuleSummary, repoItem: ESIRepositoryItemLight) => void
   repository: ESIRepositoryItemLight[]
+  /**
+   * The coupler's vendor id in hex (e.g. `0x00000230` for Weidmueller). When
+   * present, modules from other vendors are hidden so a UR20 coupler can't be
+   * handed WAGO or Phoenix Contact modules it has no way of talking to.
+   * Omit to disable the filter (keep every module the repository knows about).
+   */
+  coupler?: {
+    vendorId: string
+    /** Human-readable coupler name — surfaced in the empty-state message. */
+    name?: string
+  }
 }
 
 /**
- * DOPE-704 E6 UI: module-side counterpart of DeviceBrowserModal. Lists all modules the
- * repository knows about (inline modules on modular coupler ESIs, plus standalone
- * module ESIs), grouped by vendor.
+ * Lists the modules the repository knows about (inline modules on modular coupler
+ * ESIs, plus standalone module ESIs), grouped by vendor. When a `coupler` is
+ * supplied, only modules compatible with that coupler are shown — same vendor id,
+ * and (when the coupler's Slots block declares it) matching ModuleIdent or
+ * ModuleClass.
  */
-const ModuleBrowserModal = ({ isOpen, onClose, onSelectModule, repository }: ModuleBrowserModalProps) => {
+const ModuleBrowserModal = ({
+  isOpen,
+  onClose,
+  onSelectModule,
+  repository,
+  coupler,
+}: ModuleBrowserModalProps) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedKey, setSelectedKey] = useState<{ repoItemId: string; ident: string } | null>(null)
   const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set())
@@ -40,15 +60,12 @@ const ModuleBrowserModal = ({ isOpen, onClose, onSelectModule, repository }: Mod
     for (const repoItem of repository) {
       if (!repoItem.modules || repoItem.modules.length === 0) continue
       const vendorKey = repoItem.vendor.id
-      if (!groups.has(vendorKey)) {
-        groups.set(vendorKey, {
-          vendorId: repoItem.vendor.id,
-          vendorName: repoItem.vendor.name,
-          modules: [],
-        })
-      }
 
       for (const module of repoItem.modules) {
+        // Vendor + Slots-block gate. Centralised in isModuleCompatibleWithCoupler
+        // so the scan-apply path and this browser dialog agree on which modules
+        // a given coupler accepts.
+        if (coupler !== undefined && !isModuleCompatibleWithCoupler(repoItem, module, coupler)) continue
         if (searchTerm) {
           const search = searchTerm.toLowerCase()
           const matches =
@@ -57,16 +74,17 @@ const ModuleBrowserModal = ({ isOpen, onClose, onSelectModule, repository }: Mod
             repoItem.vendor.name.toLowerCase().includes(search)
           if (!matches) continue
         }
-        groups.get(vendorKey)!.modules.push({ repoItem, module })
+        let group = groups.get(vendorKey)
+        if (group === undefined) {
+          group = { vendorId: repoItem.vendor.id, vendorName: repoItem.vendor.name, modules: [] }
+          groups.set(vendorKey, group)
+        }
+        group.modules.push({ repoItem, module })
       }
     }
 
-    for (const [key, group] of groups) {
-      if (group.modules.length === 0) groups.delete(key)
-    }
-
     return Array.from(groups.values())
-  }, [repository, searchTerm])
+  }, [repository, searchTerm, coupler])
 
   const handleToggleVendor = useCallback((vendorId: string) => {
     setExpandedVendors((prev) => {
