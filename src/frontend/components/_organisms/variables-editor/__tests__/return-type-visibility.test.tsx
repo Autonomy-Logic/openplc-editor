@@ -1,11 +1,13 @@
-import { render, screen } from '@testing-library/react'
+import { render as rtlRender, screen } from '@testing-library/react'
+import type { ReactElement } from 'react'
 
 // The variables code editor pulls in Monaco, which cannot run in jsdom.
 vi.mock('@root/frontend/components/_organisms/variables-code-editor', () => ({
   VariablesCodeEditor: () => <div data-testid='variables-code-editor' />,
 }))
 
-import { useOpenPLCStore } from '../../../../store'
+import type { OpenPLCStore } from '../../../../store'
+import { createStoreWrapper, createTestStore } from '../../../../store/testing'
 import { VariablesEditor } from '../index'
 
 const createPou = (
@@ -13,12 +15,20 @@ const createPou = (
   type: 'program' | 'function' | 'function-block',
   language: 'st' | 'fbd' | 'ld' | 'sfc',
 ) => {
-  const result = useOpenPLCStore.getState().pouActions.create({ type, name, language })
+  const result = store.getState().pouActions.create({ type, name, language })
   expect(result.ok).toBe(true)
 }
 
+let store: OpenPLCStore
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: createStoreWrapper(store) })
+
 // https://github.com/Autonomy-Logic/openplc-editor/issues/696
 describe('VariablesEditor return type selector', () => {
+  beforeEach(() => {
+    store = createTestStore()
+  })
+
   it('shows the return type selector for a function written in FBD', () => {
     createPou('FbdFunction', 'function', 'fbd')
     render(<VariablesEditor name='FbdFunction' />)

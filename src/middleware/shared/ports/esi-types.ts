@@ -184,6 +184,7 @@ export interface SDOConfigurationEntry {
  */
 export type EnrichDeviceData = {
   channelInfo?: PersistedChannelInfo[]
+  channelMappings?: EtherCATChannelMapping[]
   rxPdos?: PersistedPdo[]
   txPdos?: PersistedPdo[]
   slaveType?: string
@@ -327,6 +328,11 @@ export interface PersistedPdo {
   name: string
   /** PDO entries including padding */
   entries: PersistedPdoEntry[]
+  /**
+   * Whether the PDO is in the slave's assignment (ESI `Sm` or `Mandatory`). Absent in projects
+   * saved before it was recorded, which are treated as every PDO assigned.
+   */
+  assigned?: boolean
 }
 
 /**

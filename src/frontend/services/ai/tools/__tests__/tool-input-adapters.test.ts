@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from '@jest/globals'
 
 import type { PLCPou } from '../../../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../../../store'
+import type { OpenPLCStore } from '../../../../store'
+import { createTestStore } from '../../../../store/testing'
 import {
   adaptCreatePou,
   adaptCreateVariable,
@@ -15,12 +16,15 @@ function makePou(name: string, language: PLCPou['body']['language'], value: unkn
   return { name, pouType: 'program', interface: { variables: [] }, body: { language, value }, documentation: '' }
 }
 
+let store: OpenPLCStore
+
 function seedPous(pous: PLCPou[]): void {
-  const current = openPLCStoreBase.getState().project
-  openPLCStoreBase.getState().projectActions.setProject({ ...current, data: { ...current.data, pous } })
+  const current = store.getState().project
+  store.getState().projectActions.setProject({ ...current, data: { ...current.data, pous } })
 }
 
 beforeEach(() => {
+  store = createTestStore()
   seedPous([])
 })
 
@@ -60,14 +64,14 @@ describe('adaptUpdatePouBody', () => {
   it('carries the POU’s own language forward so an update cannot retype it', () => {
     seedPous([makePou('Script', 'python', 'print(1)')])
 
-    expect(adaptUpdatePouBody({ pouName: 'Script', code: 'print(2)' })).toEqual({
+    expect(adaptUpdatePouBody(store, { pouName: 'Script', code: 'print(2)' })).toEqual({
       name: 'Script',
       content: { language: 'python', value: 'print(2)' },
     })
   })
 
   it('answers null for a POU that does not exist so the caller can refuse', () => {
-    expect(adaptUpdatePouBody({ pouName: 'Ghost', code: 'x := 1;' })).toBeNull()
+    expect(adaptUpdatePouBody(store, { pouName: 'Ghost', code: 'x := 1;' })).toBeNull()
   })
 })
 

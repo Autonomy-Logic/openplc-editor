@@ -4,13 +4,12 @@
 
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
 
 import { EDITOR_CAPABILITIES } from '../../../../../middleware/shared/ports/platform-capabilities'
 import type { WindowPort } from '../../../../../middleware/shared/ports/window-port'
-import { PlatformProvider } from '../../../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../../../middleware/shared/providers/types'
-import { openPLCStoreBase } from '../../../../store'
+import type { OpenPLCStore } from '../../../../store'
+import { createStoreWrapper, createTestStore } from '../../../../store/testing'
 import { SaveChangesModal } from '../save-changes-modal'
 
 function stubPort<T extends object>(overrides: Partial<T> = {}): T {
@@ -49,19 +48,17 @@ function makePorts(): PlatformPorts {
   }
 }
 
-function Wrapper({ children }: { children: ReactNode }) {
-  return <PlatformProvider ports={makePorts()}>{children}</PlatformProvider>
-}
-
-const initialState = openPLCStoreBase.getState()
+let store: OpenPLCStore
 
 function renderRefreshPrompt() {
-  render(<SaveChangesModal isOpen validationContext='refresh-app' />, { wrapper: Wrapper })
+  render(<SaveChangesModal isOpen validationContext='refresh-app' />, {
+    wrapper: createStoreWrapper(store, makePorts()),
+  })
 }
 
 beforeEach(() => {
-  openPLCStoreBase.setState(initialState, true)
-  openPLCStoreBase.getState().workspaceActions.setEditingState('unsaved')
+  store = createTestStore()
+  store.getState().workspaceActions.setEditingState('unsaved')
   reloads = 0
 })
 
@@ -79,7 +76,7 @@ describe('save-changes prompt before a refresh', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /close without saving/i }))
 
-    expect(openPLCStoreBase.getState().workspace.editingState).not.toBe('unsaved')
+    expect(store.getState().workspace.editingState).not.toBe('unsaved')
   })
 
   it('does not reload on Cancel', async () => {
@@ -88,11 +85,11 @@ describe('save-changes prompt before a refresh', () => {
     await userEvent.click(screen.getByRole('button', { name: /^cancel$/i }))
 
     expect(reloads).toBe(0)
-    expect(openPLCStoreBase.getState().workspace.editingState).toBe('unsaved')
+    expect(store.getState().workspace.editingState).toBe('unsaved')
   })
 
   it('does not reload when the save fails', async () => {
-    openPLCStoreBase.setState((s) => ({ ...s, workspace: { ...s.workspace, canEdit: false } }))
+    store.setState((s) => ({ ...s, workspace: { ...s.workspace, canEdit: false } }))
     renderRefreshPrompt()
 
     await userEvent.click(screen.getByRole('button', { name: /save and close/i }))

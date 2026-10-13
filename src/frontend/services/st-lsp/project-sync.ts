@@ -33,7 +33,7 @@ import type {
   PLCVariable,
 } from '../../../middleware/shared/ports/types'
 import { serializeSoftMotionAxisGlobalsToST } from '../../../middleware/shared/utils/ethercat'
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
 import { serializeDataTypesToST } from '../../utils/PLC/data-type-serializer'
 import {
   globalVariableListIsReferencedIn,
@@ -103,7 +103,7 @@ export function getSyncedDocumentText(uri: string): string | undefined {
   return syncedTextReader?.(uri)
 }
 
-export function attachProjectSync(service: StLspService): ProjectSyncHandle {
+export function attachProjectSync(store: OpenPLCStore, service: StLspService): ProjectSyncHandle {
   const snapshot = emptySnapshot()
   const readSyncedText = (uri: string) => snapshot.contentByUri.get(uri)
   syncedTextReader = readSyncedText
@@ -116,7 +116,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   // the compiler does (`getCompileReadyProjectData`); only the projection is
   // resolved, the store keeps the alias names for display. The store memoizes
   // this on producer-state identity, so calling it per reconcile is cheap.
-  const aliasIndex = (): ReadonlyMap<string, string> => openPLCStoreBase.getState().projectActions.getAliasIndex()
+  const aliasIndex = (): ReadonlyMap<string, string> => store.getState().projectActions.getAliasIndex()
 
   // Reconcile a single fixed-URI synthesized document (data types, resource
   // globals, softmotion axes …) against the worker: open on first non-empty
@@ -199,7 +199,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
     const declared = (lists ?? []).filter((list) => list.variables.length > 0)
     if (declared.length === 0) return
 
-    for (const pou of openPLCStoreBase.getState().project.data.pous) {
+    for (const pou of store.getState().project.data.pous) {
       const searchText = referenceSearchText(pou)
       if (!declared.some((list) => globalVariableListIsReferencedIn(list.name, searchText))) continue
       const uri = snapshot.uriByName.get(pou.name)
@@ -285,7 +285,7 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   // project-level open/close also reconciles.  Equality compares
   // by reference; the project slice uses Immer so pous array
   // references update on every mutation.
-  const unsubscribePous = openPLCStoreBase.subscribe(
+  const unsubscribePous = store.subscribe(
     (state) => state.project.data.pous,
     (pous) => reconcile(pous),
   )
@@ -293,27 +293,27 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   // POUs (a user can add an enum without touching any POU body).
   // Subscribe separately so a type-only mutation refreshes the LSP
   // without waiting on a POU edit.
-  const unsubscribeDataTypes = openPLCStoreBase.subscribe(
+  const unsubscribeDataTypes = store.subscribe(
     (state) => state.project.data.dataTypes,
     (dataTypes) => reconcileDataTypes(dataTypes),
   )
   // Resource globals live under the configuration and change independently of
   // POUs, so a POU's VAR_EXTERNAL resolves without waiting on a POU edit.
-  const unsubscribeResourceGlobals = openPLCStoreBase.subscribe(
+  const unsubscribeResourceGlobals = store.subscribe(
     (state) => state.project.data.configurations.resource.globalVariables,
     (globals) => reconcileResourceGlobals(globals),
   )
   // SoftMotion axis globals derive from the EtherCAT remote devices — adding,
   // renaming, or enabling a CiA 402 drive must refresh the synthesized globals
   // doc so editor code resolves the new axis without a POU edit.
-  const unsubscribeRemoteDevices = openPLCStoreBase.subscribe(
+  const unsubscribeRemoteDevices = store.subscribe(
     (state) => state.project.data.remoteDevices,
     (remoteDevices) => reconcileSoftMotionGlobals(remoteDevices),
   )
   // Global Variable Lists change on their own too — creating one, renaming it, or editing a
   // member has to refresh the synthesized document, or the editor keeps completing against
   // the list as it was.
-  const unsubscribeGlobalVariableLists = openPLCStoreBase.subscribe(
+  const unsubscribeGlobalVariableLists = store.subscribe(
     (state) => state.project.data.globalVariableLists,
     (lists) => {
       // A documentation-only edit moves the store without moving the document — nothing to
@@ -330,10 +330,10 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   // `%addr`.  Selecting the index itself is the exact trigger: the store
   // memoizes it on producer-state identity, so this selector is a handful of
   // `===` checks and the listener fires only when the index really moved.
-  const unsubscribeAliasIndex = openPLCStoreBase.subscribe(
+  const unsubscribeAliasIndex = store.subscribe(
     (state) => state.projectActions.getAliasIndex(),
     () => {
-      const live = openPLCStoreBase.getState()
+      const live = store.getState()
       reconcileResourceGlobals(live.project.data.configurations.resource.globalVariables)
       reconcile(live.project.data.pous)
     },
@@ -342,20 +342,20 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
   // Initial reconcile against whatever is already in the store.  The
   // synthesized globals/types load first so any POU that references
   // them resolves on the first didOpen, not on a follow-up didChange.
-  reconcileDataTypes(openPLCStoreBase.getState().project.data.dataTypes)
-  reconcileResourceGlobals(openPLCStoreBase.getState().project.data.configurations.resource.globalVariables)
-  reconcileSoftMotionGlobals(openPLCStoreBase.getState().project.data.remoteDevices)
-  reconcileGlobalVariableLists(openPLCStoreBase.getState().project.data.globalVariableLists)
-  reconcile(openPLCStoreBase.getState().project.data.pous)
+  reconcileDataTypes(store.getState().project.data.dataTypes)
+  reconcileResourceGlobals(store.getState().project.data.configurations.resource.globalVariables)
+  reconcileSoftMotionGlobals(store.getState().project.data.remoteDevices)
+  reconcileGlobalVariableLists(store.getState().project.data.globalVariableLists)
+  reconcile(store.getState().project.data.pous)
 
   return {
     resync() {
       if (disposed) return
-      reconcileDataTypes(openPLCStoreBase.getState().project.data.dataTypes)
-      reconcileResourceGlobals(openPLCStoreBase.getState().project.data.configurations.resource.globalVariables)
-      reconcileSoftMotionGlobals(openPLCStoreBase.getState().project.data.remoteDevices)
-      reconcileGlobalVariableLists(openPLCStoreBase.getState().project.data.globalVariableLists)
-      reconcile(openPLCStoreBase.getState().project.data.pous)
+      reconcileDataTypes(store.getState().project.data.dataTypes)
+      reconcileResourceGlobals(store.getState().project.data.configurations.resource.globalVariables)
+      reconcileSoftMotionGlobals(store.getState().project.data.remoteDevices)
+      reconcileGlobalVariableLists(store.getState().project.data.globalVariableLists)
+      reconcile(store.getState().project.data.pous)
     },
     forceResync() {
       if (disposed) return
@@ -401,8 +401,8 @@ export function attachProjectSync(service: StLspService): ProjectSyncHandle {
  * the worker re-runs analysis against the new stlib cache; without
  * it, open documents would keep stale `analysisResult`s.
  */
-export function attachLibrarySync(service: StLspService, onAfterRefresh?: () => void): () => void {
-  return openPLCStoreBase.subscribe(
+export function attachLibrarySync(store: OpenPLCStore, service: StLspService, onAfterRefresh?: () => void): () => void {
+  return store.subscribe(
     (state) => state.libraries.user.map((l) => l.name).join('|'),
     () => {
       void service.refreshStlibs().then(() => {
@@ -427,8 +427,12 @@ export function attachLibrarySync(service: StLspService, onAfterRefresh?: () => 
  * it to `forceResync` so open documents are re-analysed against the
  * new library cache.
  */
-export function attachEnabledLibrariesSync(service: StLspService, onAfterRefresh?: () => void): () => void {
-  return openPLCStoreBase.subscribe(
+export function attachEnabledLibrariesSync(
+  store: OpenPLCStore,
+  service: StLspService,
+  onAfterRefresh?: () => void,
+): () => void {
+  return store.subscribe(
     (state) => state.enabledLibraries.slice().sort().join('|'),
     () => {
       void service.refreshStlibs().then(() => {
@@ -451,8 +455,12 @@ export function attachEnabledLibrariesSync(service: StLspService, onAfterRefresh
  * (or later toggle), the cache is repushed and open documents are
  * re-analysed.
  */
-export function attachBundledLibrariesSync(service: StLspService, onAfterRefresh?: () => void): () => void {
-  return openPLCStoreBase.subscribe(
+export function attachBundledLibrariesSync(
+  store: OpenPLCStore,
+  service: StLspService,
+  onAfterRefresh?: () => void,
+): () => void {
+  return store.subscribe(
     (state) => state.bundledLibraryNames.slice().sort().join('|'),
     () => {
       void service.refreshStlibs().then(() => {

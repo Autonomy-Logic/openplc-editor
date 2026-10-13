@@ -68,7 +68,16 @@ export function esiTypeToIecType(esiType: ESIDataType, bitLen: number): string {
 }
 
 /**
- * Convert PDO entries to channels for UI
+ * The PDOs a slave has assigned by default: those the ESI places in a sync manager (`Sm`) or
+ * marks `Mandatory`. When an ESI marks none, every PDO is taken as assigned.
+ */
+export function assignedPdos(pdos: ESIPdo[]): ESIPdo[] {
+  const assigned = pdos.filter((pdo) => pdo.smIndex !== undefined || pdo.mandatory)
+  return assigned.length > 0 ? assigned : pdos
+}
+
+/**
+ * Convert the entries of the assigned PDOs to channels for UI
  */
 export function pdoToChannels(device: ESIDevice): ESIChannel[] {
   const channels: ESIChannel[] = []
@@ -76,7 +85,7 @@ export function pdoToChannels(device: ESIDevice): ESIChannel[] {
   let outputBitOffset = 0
 
   // Process TxPDOs (inputs - slave to master)
-  for (const pdo of device.txPdo) {
+  for (const pdo of assignedPdos(device.txPdo)) {
     for (const entry of pdo.entries) {
       // Skip padding entries for channel list
       if (entry.name === 'Padding' && entry.index === '0x0000') {
@@ -105,7 +114,7 @@ export function pdoToChannels(device: ESIDevice): ESIChannel[] {
   }
 
   // Process RxPDOs (outputs - master to slave)
-  for (const pdo of device.rxPdo) {
+  for (const pdo of assignedPdos(device.rxPdo)) {
     for (const entry of pdo.entries) {
       // Skip padding entries for channel list
       if (entry.name === 'Padding' && entry.index === '0x0000') {

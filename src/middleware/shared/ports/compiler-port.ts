@@ -10,12 +10,6 @@
  * ## Editor IPC methods replaced:
  *   - window.bridge.runCompileProgram()
  *   - window.bridge.runDebugCompilation()
- *   - window.bridge.exportProjectXml()
- *   - window.bridge.createBuildDirectory()
- *   - window.bridge.createXmlFileToBuild()
- *   - window.bridge.compileRequest()
- *   - window.bridge.generateCFilesRequest()
- *   - window.bridge.setupCompilerEnvironment()
  *
  * ## Web service methods replaced:
  *   - callGenerateSt()
@@ -31,7 +25,6 @@ import type {
   CompileResult,
   DebugCompileResult,
   PLCProjectData,
-  Result,
   Unsubscribe,
 } from './types'
 
@@ -60,12 +53,6 @@ export interface DebugCompileArgs {
   projectPath: string
 }
 
-export interface ExportXmlArgs {
-  projectData: PLCProjectData
-  projectPath: string
-  format: 'old-editor' | 'codesys'
-}
-
 /**
  * Inputs for a library build.  The backend reads `library.json` from
  * the project root fresh on each invocation (the manifest tab's
@@ -81,7 +68,7 @@ export interface CompileLibraryArgs {
 
 export interface CompilerPort {
   /**
-   * Run the full compilation pipeline (XML -> ST -> C -> binary).
+   * Run the full compilation pipeline (project IR -> ST -> strucpp -> binary).
    * Emits progress events for UI feedback.
    */
   compileProgram(args: CompileProgramArgs, onProgress: (event: CompileProgressEvent) => void): Promise<CompileResult>
@@ -94,13 +81,6 @@ export interface CompilerPort {
     args: DebugCompileArgs,
     onProgress: (event: CompileProgressEvent) => void,
   ): Promise<DebugCompileResult>
-
-  /**
-   * Export the project as IEC 61131-3 XML.
-   * Editor: writes XML file to disk.
-   * Web: returns XML string (or triggers download).
-   */
-  exportProjectXml(args: ExportXmlArgs): Promise<Result<{ message: string }>>
 
   /**
    * Build a `.stlib` archive from a Library Project on disk.

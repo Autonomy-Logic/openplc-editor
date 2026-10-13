@@ -113,13 +113,7 @@ const getPlcopenExportSavePath = async (serviceManager: GetProjectPathProps, def
     filters: [{ name: 'PLCopen XML', extensions: ['xml'] }],
   })
   if (canceled || !filePath) {
-    return {
-      success: false,
-      error: {
-        title: 'Operation canceled',
-        description: 'Operation canceled by the user.',
-      },
-    }
+    return { success: false, canceled: true }
   }
 
   try {

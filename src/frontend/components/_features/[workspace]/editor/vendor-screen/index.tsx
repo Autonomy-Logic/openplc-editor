@@ -1,4 +1,4 @@
-import { useOpenPLCStore } from '@root/frontend/store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { collectScreenPersistenceKeys } from '@root/frontend/utils/vpp/persistence-keys'
 import { useEffect, useMemo } from 'react'
 
@@ -22,6 +22,7 @@ function serializeOwnedSlice(vendorScreenData: Record<string, unknown> | undefin
 }
 
 const VendorScreenEditor = () => {
+  const store = useOpenPLCStoreApi()
   const editor = useOpenPLCStore((s) => s.editor)
   const screenName = editor.type === 'plc-vendor-screen' ? editor.meta.screenName : ''
   const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
@@ -49,7 +50,7 @@ const VendorScreenEditor = () => {
     // seed their field defaults in their own mount effects, which run before
     // this one, and those defaults are not an edit. Snapshotting the render's
     // pre-seed value made the screen dirty the moment it opened.
-    const { vendorScreenData: seededData } = useOpenPLCStore.getState().deviceDefinitions.configuration
+    const { vendorScreenData: seededData } = store.getState().deviceDefinitions.configuration
     addFile({
       name: screenName,
       type: 'vendor-screen',
@@ -69,16 +70,13 @@ const VendorScreenEditor = () => {
     if (!file || file.type !== 'vendor-screen') return
     // From the store for the same reason as the snapshot above: in the commit
     // where a layout seeds its defaults, this render's value predates them.
-    const current = serializeOwnedSlice(
-      useOpenPLCStore.getState().deviceDefinitions.configuration.vendorScreenData,
-      ownedKeys,
-    )
+    const current = serializeOwnedSlice(store.getState().deviceDefinitions.configuration.vendorScreenData, ownedKeys)
     const clean = typeof file.cleanState === 'string' ? file.cleanState : current
     const isClean = current === clean
     if (file.saved !== isClean) {
       updateFile({ name: screenName, saved: isClean })
     }
-  }, [screenName, ownedKeys, vendorScreenData, getFile, updateFile])
+  }, [store, screenName, ownedKeys, vendorScreenData, getFile, updateFile])
 
   if (!screenDefinition) {
     return (

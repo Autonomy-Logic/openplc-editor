@@ -5,7 +5,8 @@ import type * as monaco from 'monaco-editor'
 import type { Diagnostic } from 'vscode-languageserver-protocol'
 
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../../store'
+import type { OpenPLCStore } from '../../../store'
+import { createTestStore } from '../../../store/testing'
 import { __clearBodyLineOffsetsForTests, getBodyLineOffset, setBodyLineOffset } from '../../lsp-shared/body-offsets'
 import type { NavTarget } from '../../lsp-shared/definition-redirect'
 import type { StartLanguageServiceOptions } from '../../lsp-shared/start-language-service'
@@ -113,10 +114,12 @@ function makeMonacoStub() {
   return { api, setModelMarkers, mount }
 }
 
+let store: OpenPLCStore
 let services: Array<{ dispose(): void }> = []
 
 function start(api?: typeof monaco) {
   const service = startStLsp({
+    store,
     stlibSource: makeStlibSource(),
     workerUrlOverride: 'blob:test',
     ...(api ? { monaco: api } : {}),
@@ -124,6 +127,10 @@ function start(api?: typeof monaco) {
   services.push(service)
   return service
 }
+
+beforeEach(() => {
+  store = createTestStore()
+})
 
 afterEach(() => {
   for (const service of services) service.dispose()
@@ -169,7 +176,7 @@ describe('pouvars view sync', () => {
     mockRefreshSemanticTokens.mockReset()
     mockGetSyncedDocumentText.mockReset()
     mockCapturedOptions = undefined
-    openPLCStoreBase.setState((s) => ({
+    store.setState((s) => ({
       project: { ...s.project, data: { ...s.project.data, pous: [makeStPou('main')] } },
     }))
     setBodyLineOffset(pouUri('main'), 5)
@@ -204,7 +211,7 @@ describe('pouvars view sync', () => {
   })
 
   it('mirrors a stub:// publish onto the variables view of a graphical POU', () => {
-    openPLCStoreBase.setState((s) => ({
+    store.setState((s) => ({
       project: {
         ...s.project,
         data: { ...s.project.data, pous: [{ ...makeStPou('main'), body: { language: 'ld', value: '' } } as PLCPou] },
@@ -274,7 +281,7 @@ describe('pouvars view sync', () => {
     const { api, mount } = makeMonacoStub()
     start(api)
     const updateMain = (change: (pou: PLCPou) => PLCPou) =>
-      openPLCStoreBase.setState((s) => ({
+      store.setState((s) => ({
         project: {
           ...s.project,
           data: { ...s.project.data, pous: s.project.data.pous.map((p) => (p.name === 'main' ? change(p) : p)) },
@@ -300,7 +307,7 @@ describe('definition navigation', () => {
     mockMirror.delete.mockReset()
     mockCapturedOptions = undefined
     mockCapturedNavigate = undefined
-    openPLCStoreBase.setState((s) => ({
+    store.setState((s) => ({
       project: { ...s.project, data: { ...s.project.data, pous: [makeStPou('main')] } },
     }))
   })
@@ -330,7 +337,7 @@ describe('definition navigation', () => {
     start(makeMonacoStub().api)
 
     expect(mockCapturedNavigate?.({ uri: pouUri('main'), lineLsp: 0, characterLsp: 0 })).toBe(true)
-    expect(openPLCStoreBase.getState().tabs.some((t) => t.name === 'main')).toBe(true)
+    expect(store.getState().tabs.some((t) => t.name === 'main')).toBe(true)
     expect(mockCapturedNavigate?.({ uri: 'file:///elsewhere.py', lineLsp: 3, characterLsp: 0 })).toBe(false)
   })
 

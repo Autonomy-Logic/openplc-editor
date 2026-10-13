@@ -57,7 +57,7 @@ if (typeof (globalThis as any).structuredClone !== 'function') {
 import { readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 
-import { openPLCStoreBase } from './frontend/store'
+import { setTestStoreSeed } from './frontend/store/testing'
 import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
 
 // Bundled stlibs live inside the strucpp npm package — see
@@ -67,11 +67,13 @@ import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-librar
 // the editor renders.
 const stlibsDir = join(process.cwd(), 'node_modules', 'strucpp', 'libs')
 try {
-  const archives = readdirSync(stlibsDir)
-    .filter((f) => f.endsWith('.stlib'))
-    .sort()
-    .map((f) => JSON.parse(readFileSync(join(stlibsDir, f), 'utf-8')))
-  openPLCStoreBase.getState().libraryActions.setSystemLibraries(stlibsToSystemLibraries(archives))
+  const systemLibraries = stlibsToSystemLibraries(
+    readdirSync(stlibsDir)
+      .filter((f) => f.endsWith('.stlib'))
+      .sort()
+      .map((f) => JSON.parse(readFileSync(join(stlibsDir, f), 'utf-8'))),
+  )
+  setTestStoreSeed((store) => store.getState().libraryActions.setSystemLibraries(systemLibraries))
 } catch (err) {
   console.warn(`[jest-setup] could not pre-load bundled .stlibs from ${stlibsDir}:`, err)
 }

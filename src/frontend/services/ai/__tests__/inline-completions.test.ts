@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from '@jest/globals'
 import type * as monaco from 'monaco-editor'
 
 import type { AIPort } from '../../../../middleware/shared/ports/ai-port'
+import { createTestStore } from '../../../store/testing'
 import { isImeComposing, setImeComposing } from '../ime-state'
 import {
   __resetInlineCompletionsForTests,
@@ -80,7 +81,7 @@ describe('registerAIInlineCompletions', () => {
       },
     } as unknown as typeof monaco
 
-    const registration = registerAIInlineCompletions(port, {
+    const registration = registerAIInlineCompletions(createTestStore(), port, {
       monacoInstance: fakeMonaco,
       modelUri: modelUri('/Main.st'),
       pouName: 'Main',
@@ -107,7 +108,7 @@ describe('registerAIInlineCompletions', () => {
     expect(registrationDisposed).toBe(1)
 
     // Second registration: neither latch fires again.
-    const second = registerAIInlineCompletions(port, {
+    const second = registerAIInlineCompletions(createTestStore(), port, {
       monacoInstance: fakeMonaco,
       modelUri: modelUri('/Other.st'),
       pouName: 'Other',
@@ -127,7 +128,7 @@ describe('registerAIInlineCompletions', () => {
       editor: { getEditors: () => [], onDidCreateEditor: () => undefined },
     } as unknown as typeof monaco
 
-    const registration = registerAIInlineCompletions(port, {
+    const registration = registerAIInlineCompletions(createTestStore(), port, {
       monacoInstance: fakeMonaco,
       modelUri: modelUri('/Main.st'),
       pouName: 'Main',
@@ -150,13 +151,13 @@ describe('registerAIInlineCompletions', () => {
     }
     const port = makePort(() => undefined)
 
-    const main = registerAIInlineCompletions(port, {
+    const main = registerAIInlineCompletions(createTestStore(), port, {
       monacoInstance: fakeMonaco,
       modelUri: modelUri('/Main.st'),
       pouName: 'Main',
       language: 'st',
     })
-    const other = registerAIInlineCompletions(port, {
+    const other = registerAIInlineCompletions(createTestStore(), port, {
       monacoInstance: fakeMonaco,
       modelUri: modelUri('/Other.st'),
       pouName: 'Other',

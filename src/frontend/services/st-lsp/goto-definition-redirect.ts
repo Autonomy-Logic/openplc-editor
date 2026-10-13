@@ -21,10 +21,10 @@
  *
  * What it delegates to `lsp-shared/definition-redirect`:
  *
- *   - `routeToPou(name)` — open the POU's tab.
- *   - `routeToPouPreamble(name, line, col)` — open + switch
+ *   - `routeToPou(store, name)` — open the POU's tab.
+ *   - `routeToPouPreamble(store, name, line, col)` — open + switch
  *     variables panel to code mode + place the cursor.
- *   - `routeToPouBody(name, line, col)` — open + place body
+ *   - `routeToPouBody(store, name, line, col)` — open + place body
  *     cursor.
  *
  * Returns `true` when navigation was handled here (caller cancels
@@ -37,7 +37,7 @@ import type { Location, LocationLink } from 'vscode-languageserver-protocol'
 
 import type { PLCDataType, PLCGlobalVariableList } from '../../../middleware/shared/ports/types'
 import { sanitizeAxisName, softMotionAxisNames } from '../../../middleware/shared/utils/ethercat'
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
 import { CreateEditorObjectFromTab } from '../../store/slices/tabs/utils'
 import { dataTypeLineSpans } from '../../utils/PLC/data-type-serializer'
 import { serializeGlobalVariableListsToTypes } from '../../utils/PLC/global-variable-list-serializer'
@@ -93,7 +93,7 @@ function findDataTypeAtLine(
  * because Python has no datatype concept and the shape (`type:
  * 'data-type'` tab + `derivation`) is ST-specific.
  */
-function openDataTypeEditor(dataType: PLCDataType): boolean {
+function openDataTypeEditor(store: OpenPLCStore, dataType: PLCDataType): boolean {
   const tabProps: Parameters<typeof CreateEditorObjectFromTab>[0] = {
     name: dataType.name,
     path: '',
@@ -102,7 +102,7 @@ function openDataTypeEditor(dataType: PLCDataType): boolean {
   const {
     editorActions: { setEditor, addModel, getEditorFromEditors },
     tabsActions: { updateTabs, setSelectedTab },
-  } = openPLCStoreBase.getState()
+  } = store.getState()
   updateTabs(tabProps)
   const existing = getEditorFromEditors(dataType.name)
   if (existing) {
@@ -121,11 +121,16 @@ function openDataTypeEditor(dataType: PLCDataType): boolean {
  * Open the type's tab in code mode at a Monaco position in its `.dt`
  * view.
  */
-function routeToDataTypeCodeView(dataType: PLCDataType, monacoLine: number, monacoColumn: number): boolean {
-  if (!openDataTypeEditor(dataType)) return false
+function routeToDataTypeCodeView(
+  store: OpenPLCStore,
+  dataType: PLCDataType,
+  monacoLine: number,
+  monacoColumn: number,
+): boolean {
+  if (!openDataTypeEditor(store, dataType)) return false
   const {
     editorActions: { setEditorCursor, updateModelStructureForName },
-  } = openPLCStoreBase.getState()
+  } = store.getState()
   updateModelStructureForName(dataType.name, { display: 'code' })
   setEditorCursor(dataType.name, {
     lineNumber: monacoLine,
@@ -141,7 +146,7 @@ function routeToDataTypeCodeView(dataType: PLCDataType, monacoLine: number, mona
  * the project-tree click path. Used to redirect go-to-definition on a SoftMotion
  * axis to its drive configuration screen instead of the synthesised globals doc.
  */
-function openDeviceEditor(name: string, busName: string, deviceId: string): boolean {
+function openDeviceEditor(store: OpenPLCStore, name: string, busName: string, deviceId: string): boolean {
   const tabProps: Parameters<typeof CreateEditorObjectFromTab>[0] = {
     name,
     path: `/devices/remote/${busName}/devices/${deviceId}`,
@@ -150,7 +155,7 @@ function openDeviceEditor(name: string, busName: string, deviceId: string): bool
   const {
     editorActions: { setEditor, addModel, getEditorFromEditors },
     tabsActions: { updateTabs, setSelectedTab },
-  } = openPLCStoreBase.getState()
+  } = store.getState()
   updateTabs(tabProps)
   const existing = getEditorFromEditors(name)
   if (existing) {
@@ -172,16 +177,16 @@ function openDeviceEditor(name: string, busName: string, deviceId: string): bool
  * as `softMotionAxisNames`. Returns false when the line doesn't map to an axis
  * or no drive matches (caller falls back to Monaco's default).
  */
-function redirectSoftMotionAxis(lspLine: number): boolean {
+function redirectSoftMotionAxis(store: OpenPLCStore, lspLine: number): boolean {
   if (lspLine < 1) return false
-  const data = openPLCStoreBase.getState().project.data
+  const data = store.getState().project.data
   const axisName = softMotionAxisNames(data)[lspLine - 1]
   if (!axisName) return false
   for (const rd of data.remoteDevices ?? []) {
     if (rd.protocol !== 'ethercat') continue
     for (const dev of rd.ethercatConfig?.devices ?? []) {
       if (sanitizeAxisName(dev.name) === axisName) {
-        return openDeviceEditor(dev.name, rd.name, dev.id)
+        return openDeviceEditor(store, dev.name, rd.name, dev.id)
       }
     }
   }
@@ -193,7 +198,7 @@ function redirectSoftMotionAxis(lspLine: number): boolean {
  * mirroring the project-tree click path. Used to redirect go-to-definition on a
  * user global to the globals table instead of the synthesised globals doc.
  */
-function openResourceEditor(): boolean {
+function openResourceEditor(store: OpenPLCStore): boolean {
   const tabProps: Parameters<typeof CreateEditorObjectFromTab>[0] = {
     name: 'Resource',
     path: '/data/configuration/resource',
@@ -202,7 +207,7 @@ function openResourceEditor(): boolean {
   const {
     editorActions: { setEditor, addModel, getEditorFromEditors },
     tabsActions: { updateTabs, setSelectedTab },
-  } = openPLCStoreBase.getState()
+  } = store.getState()
   updateTabs(tabProps)
   const existing = getEditorFromEditors('Resource')
   if (existing) {
@@ -220,7 +225,7 @@ function openResourceEditor(): boolean {
 /**
  * Open a Global Variable List's editor, mirroring the project-tree click path.
  */
-function openGlobalVariableListEditor(name: string): boolean {
+function openGlobalVariableListEditor(store: OpenPLCStore, name: string): boolean {
   const tabProps: Parameters<typeof CreateEditorObjectFromTab>[0] = {
     name,
     path: `/data/global-variables/${name}`,
@@ -229,7 +234,7 @@ function openGlobalVariableListEditor(name: string): boolean {
   const {
     editorActions: { setEditor, addModel, getEditorFromEditors },
     tabsActions: { updateTabs, setSelectedTab },
-  } = openPLCStoreBase.getState()
+  } = store.getState()
   updateTabs(tabProps)
   const existing = getEditorFromEditors(name)
   if (existing) {
@@ -285,34 +290,34 @@ function globalVariableListLineOwners(lists: PLCGlobalVariableList[]): (string |
  * Monaco has no editor host for that URI, so without this the redirect dead-ends silently —
  * the same trap the data-types branch documents.
  */
-function redirectGlobalVariableList(lineLsp: number): boolean {
-  const lists = openPLCStoreBase.getState().project.data.globalVariableLists ?? []
+function redirectGlobalVariableList(store: OpenPLCStore, lineLsp: number): boolean {
+  const lists = store.getState().project.data.globalVariableLists ?? []
   const name = globalVariableListLineOwners(lists)[lineLsp]
   if (!name) return false
-  return openGlobalVariableListEditor(name)
+  return openGlobalVariableListEditor(store, name)
 }
 
-export function redirectDefinitionToStore(loc: Location | LocationLink): boolean {
-  return redirectNavTargetToStore(normaliseLocation(loc))
+export function redirectDefinitionToStore(store: OpenPLCStore, loc: Location | LocationLink): boolean {
+  return redirectNavTargetToStore(store, normaliseLocation(loc))
 }
 
 /** Route a target in LSP coordinates through the store; false when nothing here owns its URI. */
-export function redirectNavTargetToStore(target: NavTarget): boolean {
+export function redirectNavTargetToStore(store: OpenPLCStore, target: NavTarget): boolean {
   // Resource-globals doc → open the Resource editor (globals table) rather than
   // the synthesised (non-editable) CONFIGURATION declaration.
   if (target.uri === RESOURCE_GLOBALS_URI) {
-    return openResourceEditor()
+    return openResourceEditor(store)
   }
 
   // SoftMotion axis globals doc → open the owning drive's config screen rather
   // than the synthesised (non-editable) global declaration.
   if (target.uri === SOFTMOTION_GLOBALS_URI) {
-    return redirectSoftMotionAxis(target.lineLsp)
+    return redirectSoftMotionAxis(store, target.lineLsp)
   }
 
   // Global-Variable-Lists doc → open the list's editor.
   if (target.uri === GLOBAL_VARIABLE_LISTS_URI) {
-    return redirectGlobalVariableList(target.lineLsp)
+    return redirectGlobalVariableList(store, target.lineLsp)
   }
 
   // Datatypes URI → open the matching data-type editor tab.  The LSP
@@ -321,12 +326,13 @@ export function redirectNavTargetToStore(target: NavTarget): boolean {
   // types).  Monaco has no editor host for that URI, so without this
   // branch the redirect would dead-end silently.
   if (target.uri === DATA_TYPES_URI) {
-    const dataTypes = openPLCStoreBase.getState().project.data.dataTypes
+    const dataTypes = store.getState().project.data.dataTypes
     const hit = findDataTypeAtLine(target.lineLsp, dataTypes)
     if (!hit) return false
     // Entry-relative line → `.dt` view line (its own `TYPE` frame sits
     // above the entry) → Monaco's 1-indexed frame.
     return routeToDataTypeCodeView(
+      store,
       hit.dataType,
       hit.lineInEntry + DT_VIEW_FRAME_LINE_COUNT + 1,
       target.characterLsp + 1,
@@ -348,7 +354,7 @@ export function redirectNavTargetToStore(target: NavTarget): boolean {
   // VariablesEditor state initialises from an empty `tableData`.
   // Open the tab and let the editor settle into its natural default
   // (variables in table mode, cursor at body line 1).
-  if (target.lineLsp === 0) return routeToPou(parsed.name)
+  if (target.lineLsp === 0) return routeToPou(store, parsed.name)
 
   if (target.lineLsp < bodyOffset) {
     // Preamble target.  The variables-code-editor renders only the
@@ -357,10 +363,10 @@ export function redirectNavTargetToStore(target: NavTarget): boolean {
     // translate LSP 0-indexed line → variables editor LSP frame,
     // then +1 to get Monaco's 1-indexed line.  Net: lspLine - 1 + 1
     // = lspLine.
-    return routeToPouPreamble(parsed.name, target.lineLsp, target.characterLsp + 1)
+    return routeToPouPreamble(store, parsed.name, target.lineLsp, target.characterLsp + 1)
   }
 
   // Body target — shift the LSP line into Monaco's body-relative
   // frame.
-  return routeToPouBody(parsed.name, target.lineLsp - bodyOffset + 1, target.characterLsp + 1)
+  return routeToPouBody(store, parsed.name, target.lineLsp - bodyOffset + 1, target.characterLsp + 1)
 }

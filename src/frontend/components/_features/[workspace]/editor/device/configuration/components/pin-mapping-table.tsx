@@ -1,7 +1,7 @@
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
-import { pinSelectors } from '@root/frontend/hooks/use-store-selectors'
-import { useOpenPLCStore } from '@root/frontend/store'
-import type { DevicePin } from '@root/middleware/shared/ports/types'
+import { boardSelectors, pinSelectors } from '@root/frontend/hooks/use-store-selectors'
+import { useOpenPLCStoreApi } from '@root/frontend/store'
+import type { DevicePin, PinPullSpec } from '@root/middleware/shared/ports/types'
 import {
   buildAddressPool,
   buildAliasRegistry,
@@ -10,15 +10,17 @@ import {
 } from '@root/middleware/shared/utils/iec-address'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { createColumnHelper } from '@tanstack/react-table'
+import { useMemo } from 'react'
 
 import { GenericTable } from '../../../../../../_atoms/generic-table'
 import { PinComboboxInputCell } from '../../../../../../_molecules/pin-mapping-table/combobox-input'
+import { PinPullInputCell } from '../../../../../../_molecules/pin-mapping-table/pull-input'
 import { PinSelectInputCell } from '../../../../../../_molecules/pin-mapping-table/select-input'
 import { PinTextInputCell } from '../../../../../../_molecules/pin-mapping-table/text-input'
 
 const columnHelper = createColumnHelper<DevicePin>()
 
-const columns = [
+const baseColumns = [
   columnHelper.accessor('pin', {
     header: 'Pin',
     cell: PinComboboxInputCell,
@@ -37,6 +39,12 @@ const columns = [
   }),
 ]
 
+const buildPullColumn = (pullSpec: PinPullSpec) =>
+  columnHelper.accessor('pull', {
+    header: 'Pull',
+    cell: (props) => <PinPullInputCell {...props} pullSpec={pullSpec} />,
+  })
+
 type PinMappingTableProps = {
   pins: DevicePin[]
   selectedRowId: number
@@ -44,7 +52,13 @@ type PinMappingTableProps = {
 }
 
 const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTableProps) => {
+  const store = useOpenPLCStoreApi()
   const updatePin = pinSelectors.useUpdatePin()
+  const deviceBoard = boardSelectors.useDeviceBoard()
+  const availableBoards = boardSelectors.useAvailableBoards()
+  const pullSpec = availableBoards.get(deviceBoard)?.pins?.pull
+
+  const columns = useMemo(() => (pullSpec ? [...baseColumns, buildPullColumn(pullSpec)] : baseColumns), [pullSpec])
 
   const handleUpdateDataRequest = (_rowIndex: number, columnId: string, value: unknown) => {
     // Phase 1 — write-time alias-uniqueness gate (global, across all
@@ -54,7 +68,7 @@ const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTabl
     // producer case where a pin alias collides with a VPP channel
     // alias, a Modbus point alias, or an EtherCAT channel alias.
     if (columnId === 'alias' && typeof value === 'string') {
-      const state = useOpenPLCStore.getState()
+      const state = store.getState()
       const board = state.deviceDefinitions.configuration.deviceBoard
       const currentPins = state.deviceDefinitions.pinMapping.pinsByBoard[board] ?? []
       const currentPin = currentPins[state.deviceDefinitions.pinMapping.currentSelectedPinTableRow]
@@ -88,7 +102,7 @@ const PinMappingTable = ({ pins, selectedRowId, handleRowClick }: PinMappingTabl
       // orphaning.
       const oldAlias = currentPin?.alias ?? ''
       if (oldAlias) {
-        useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, value)
+        store.getState().projectActions.renameAlias(oldAlias, value)
       }
     }
 

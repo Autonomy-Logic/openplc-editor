@@ -5,6 +5,7 @@
   "asarUnpack": "**\\*.{node,dll}",
   "generateUpdatesFilesForAllChannels": true,
   "files": ["dist", "node_modules", "package.json"],
+  "afterPack": "scripts/mac-inject-local-network-usage.js",
   "afterSign": "scripts/notarize.js",
   "directories": {
     "app": "release/app",
@@ -39,7 +40,8 @@
     },
     "extendInfo": {
       "CFBundleDisplayName": "OpenPLC Editor",
-      "CFBundleName": "OpenPLC Editor"
+      "CFBundleName": "OpenPLC Editor",
+      "NSLocalNetworkUsageDescription": "OpenPLC Editor needs local network access to discover and connect to PLCs on your network."
     },
     "type": "distribution",
     "hardenedRuntime": true,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals'
 
+import type { RootState } from '../../../store'
 import { collectProjectContext } from '../context-collector'
 
 function makeState(overrides: {
@@ -24,7 +25,7 @@ function makeState(overrides: {
         },
       },
     },
-  } as unknown as ReturnType<typeof import('../../../store').openPLCStoreBase.getState>
+  } as unknown as RootState
 }
 
 describe('collectProjectContext', () => {

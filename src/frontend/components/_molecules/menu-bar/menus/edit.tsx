@@ -41,7 +41,7 @@ export const EditMenu = () => {
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:edit.submenu.redo')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + Y'}</span>
+            <span className={ACCELERATOR}>{'Ctrl + Shift + Z'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Separator className={SEPARATOR} />
           <MenuPrimitive.Item className={ITEM} disabled>
@@ -59,15 +59,12 @@ export const EditMenu = () => {
           <MenuPrimitive.Separator className={SEPARATOR} />
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:edit.submenu.find')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + F'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:edit.submenu.findNext')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + K'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:edit.submenu.findPrevious')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + Shift + K'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Separator className={SEPARATOR} />
           <MenuPrimitive.Item className={ITEM} onClick={handleFindInProject}>
@@ -84,7 +81,7 @@ export const EditMenu = () => {
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} onClick={handleConfirmDeleteElement}>
             <span>{i18n.t('menu:edit.submenu.deletePou')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + Backspace'}</span>
+            <span className={ACCELERATOR}>{'Ctrl + Shift + Delete'}</span>
           </MenuPrimitive.Item>
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>

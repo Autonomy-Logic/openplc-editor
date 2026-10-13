@@ -1,35 +1,17 @@
+import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
+import type { DevicePort } from '@root/middleware/shared/ports/device-port'
+import type { RuntimePort } from '@root/middleware/shared/ports/runtime-port'
+import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import { renderHook } from '@testing-library/react'
 
-// `mock*`-prefixed refs are hoisted into the jest.mock factories below.
-const mockOpenModal = jest.fn()
-const mockSetRuntimeConnectionStatus = jest.fn((status: string) => {
-  ;(mockState.runtimeConnection as { connectionStatus: string }).connectionStatus = status
-})
-const mockSetRuntimeJwtToken = jest.fn()
-const mockClearDeviceLicense = jest.fn()
-const mockSetRuntimeVersion = jest.fn()
+jest.mock('../../utils/device', () => ({
+  validateRuntimeVersion: (...args: unknown[]) => mockValidateRuntimeVersion(...args),
+}))
 
-/** The status the store ended up in — what the Connect button actually reads. */
-const currentStatus = (): string => (mockState.runtimeConnection as { connectionStatus: string }).connectionStatus
-
-type SelectedDevice = { orchestratorAgentId: string; deviceId: string } | null
-
-const mockState: Record<string, unknown> = {
-  deviceDefinitions: { configuration: { deviceBoard: 'OpenPLC Runtime v4', runtimeIpAddress: '192.168.0.2' } },
-  runtimeConnection: { connectionStatus: 'disconnected', selectedDevice: null as SelectedDevice },
-  modalActions: { openModal: mockOpenModal },
-  deviceActions: {
-    setRuntimeConnectionStatus: mockSetRuntimeConnectionStatus,
-    setRuntimeJwtToken: mockSetRuntimeJwtToken,
-    clearDeviceLicense: mockClearDeviceLicense,
-    setRuntimeVersion: mockSetRuntimeVersion,
-  },
-}
-
-type Selector<T> = (s: typeof mockState) => T
-const mockUseOpenPLCStore = ((selector?: Selector<unknown>) =>
-  selector ? selector(mockState) : mockState) as unknown as jest.Mock & { getState: () => typeof mockState }
-mockUseOpenPLCStore.getState = () => mockState
+import type { OpenPLCStore } from '../../store'
+import type { SelectedDevice } from '../../store/slices/device/types'
+import { createStoreWrapper, createTestStore } from '../../store/testing'
+import { useRuntimeConnect } from '../use-runtime-connect'
 
 const mockGetUsersInfo = jest.fn()
 const mockClearCredentials = jest.fn().mockResolvedValue(undefined)
@@ -37,29 +19,83 @@ const mockSetDeviceContext = jest.fn()
 const mockCloseRuntimeSession = jest.fn().mockResolvedValue(undefined)
 const mockValidateRuntimeVersion = jest.fn()
 
-jest.mock('../../store', () => ({ useOpenPLCStore: mockUseOpenPLCStore }))
-jest.mock('@root/middleware/shared/providers/platform-context', () => ({
-  useRuntime: () => ({
-    getUsersInfo: mockGetUsersInfo,
-    clearCredentials: mockClearCredentials,
-    setDeviceContext: mockSetDeviceContext,
-  }),
-  useDevice: () => ({ closeRuntimeSession: mockCloseRuntimeSession }),
-}))
-jest.mock('../../utils/device', () => ({
-  validateRuntimeVersion: (...args: unknown[]) => mockValidateRuntimeVersion(...args),
-}))
+function stubPort<T extends object>(overrides: Partial<T> = {}): T {
+  return new Proxy(overrides as T, {
+    get(target, prop, receiver) {
+      if (prop in target) return Reflect.get(target, prop, receiver)
+      return typeof prop === 'string' ? () => undefined : undefined
+    },
+  })
+}
 
-import { useRuntimeConnect } from '../use-runtime-connect'
+function buildPorts(): PlatformPorts {
+  return {
+    compiler: stubPort(),
+    runtime: stubPort<RuntimePort>({
+      getUsersInfo: mockGetUsersInfo,
+      clearCredentials: mockClearCredentials,
+      setDeviceContext: mockSetDeviceContext,
+    }),
+    debugger: stubPort(),
+    simulator: stubPort(),
+    project: stubPort(),
+    device: stubPort<DevicePort>({ closeRuntimeSession: mockCloseRuntimeSession }),
+    orchestrator: stubPort(),
+    system: stubPort(),
+    window: stubPort(),
+    accelerator: stubPort(),
+    theme: stubPort(),
+    versionControl: stubPort(),
+    navigation: stubPort(),
+    library: stubPort(),
+    capabilities: WEB_CAPABILITIES,
+  }
+}
 
-const setup = () => renderHook(() => useRuntimeConnect()).result.current
+const SELECTED: SelectedDevice = {
+  orchestratorId: 'orch-1',
+  orchestratorAgentId: 'agent-1',
+  deviceId: 'dev-9',
+  deviceName: 'Line A',
+}
+
+let store: OpenPLCStore
+
+/** Immer freezes the action namespaces, so spies go in as a swapped, write-through copy. */
+function installActionSpies() {
+  const { modalActions, deviceActions } = store.getState()
+  const spies = {
+    openModal: jest.fn(modalActions.openModal),
+    setRuntimeJwtToken: jest.fn(deviceActions.setRuntimeJwtToken),
+    clearDeviceLicense: jest.fn(deviceActions.clearDeviceLicense),
+    setRuntimeVersion: jest.fn(deviceActions.setRuntimeVersion),
+  }
+  store.setState({
+    modalActions: { ...modalActions, openModal: spies.openModal },
+    deviceActions: {
+      ...deviceActions,
+      setRuntimeJwtToken: spies.setRuntimeJwtToken,
+      clearDeviceLicense: spies.clearDeviceLicense,
+      setRuntimeVersion: spies.setRuntimeVersion,
+    },
+  })
+  return spies
+}
+
+let spies: ReturnType<typeof installActionSpies>
+
+/** The status the store ended up in — what the Connect button actually reads. */
+const currentStatus = (): string => store.getState().runtimeConnection.connectionStatus
+
+const setup = () =>
+  renderHook(() => useRuntimeConnect(), { wrapper: createStoreWrapper(store, buildPorts()) }).result.current
 
 beforeEach(() => {
   jest.clearAllMocks()
-  mockState.deviceDefinitions = {
-    configuration: { deviceBoard: 'OpenPLC Runtime v4', runtimeIpAddress: '192.168.0.2' },
-  }
-  mockState.runtimeConnection = { connectionStatus: 'disconnected', selectedDevice: null }
+  store = createTestStore()
+  store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
+  store.getState().deviceActions.setRuntimeIpAddress('192.168.0.2')
+  spies = installActionSpies()
   mockGetUsersInfo.mockResolvedValue({ hasUsers: true, runtimeVersion: '4.2.0' })
   mockValidateRuntimeVersion.mockReturnValue({ status: 'ok' })
 })
@@ -68,25 +104,25 @@ describe('useRuntimeConnect — connecting', () => {
   it('raises the login modal when the runtime already has users', async () => {
     await setup().connect()
     expect(currentStatus()).toBe('connecting')
-    expect(mockOpenModal).toHaveBeenCalledWith('runtime-login', null)
+    expect(spies.openModal).toHaveBeenCalledWith('runtime-login', null)
   })
 
   it('raises the first-user modal when the runtime has none', async () => {
     mockGetUsersInfo.mockResolvedValue({ hasUsers: false, runtimeVersion: '4.2.0' })
     await setup().connect()
-    expect(mockOpenModal).toHaveBeenCalledWith('runtime-create-user', null)
+    expect(spies.openModal).toHaveBeenCalledWith('runtime-create-user', null)
   })
 
   it('remembers the runtime version for version-gated UI', async () => {
     await setup().connect()
-    expect(mockSetRuntimeVersion).toHaveBeenCalledWith('4.2.0')
+    expect(spies.setRuntimeVersion).toHaveBeenCalledWith('4.2.0')
   })
 
   it('reports an error instead of a modal when getUsersInfo fails', async () => {
     mockGetUsersInfo.mockResolvedValue({ error: 'unreachable' })
     await setup().connect()
     expect(currentStatus()).toBe('error')
-    expect(mockOpenModal).not.toHaveBeenCalled()
+    expect(spies.openModal).not.toHaveBeenCalled()
   })
 
   it('reports an error when the call throws', async () => {
@@ -96,7 +132,7 @@ describe('useRuntimeConnect — connecting', () => {
   })
 
   it('is a no-op when already connected', async () => {
-    ;(mockState.runtimeConnection as { connectionStatus: string }).connectionStatus = 'connected'
+    store.getState().deviceActions.setRuntimeConnectionStatus('connected')
     await setup().connect()
     expect(mockGetUsersInfo).not.toHaveBeenCalled()
   })
@@ -108,10 +144,7 @@ describe('useRuntimeConnect — connecting', () => {
 // login modal ever appeared.
 describe('useRuntimeConnect — device context', () => {
   it('addresses the selected device before asking the runtime anything', async () => {
-    mockState.runtimeConnection = {
-      connectionStatus: 'disconnected',
-      selectedDevice: { orchestratorAgentId: 'agent-1', deviceId: 'dev-9' },
-    }
+    store.getState().deviceActions.setSelectedDevice(SELECTED)
     await setup().connect()
     expect(mockSetDeviceContext).toHaveBeenCalledWith({ agentId: 'agent-1', deviceId: 'dev-9' })
     expect(mockSetDeviceContext.mock.invocationCallOrder[0]).toBeLessThan(mockGetUsersInfo.mock.invocationCallOrder[0])
@@ -124,17 +157,14 @@ describe('useRuntimeConnect — device context', () => {
   })
 
   it('connects with no IP when a device is selected — web carries no runtimeIpAddress', async () => {
-    mockState.deviceDefinitions = { configuration: { deviceBoard: 'OpenPLC Runtime v4', runtimeIpAddress: '' } }
-    mockState.runtimeConnection = {
-      connectionStatus: 'disconnected',
-      selectedDevice: { orchestratorAgentId: 'agent-1', deviceId: 'dev-9' },
-    }
+    store.getState().deviceActions.setRuntimeIpAddress('')
+    store.getState().deviceActions.setSelectedDevice(SELECTED)
     await setup().connect()
     expect(mockGetUsersInfo).toHaveBeenCalled()
   })
 
   it('stops when there is neither an IP nor a selected device', async () => {
-    mockState.deviceDefinitions = { configuration: { deviceBoard: 'OpenPLC Runtime v4', runtimeIpAddress: '' } }
+    store.getState().deviceActions.setRuntimeIpAddress('')
     await setup().connect()
     expect(mockGetUsersInfo).not.toHaveBeenCalled()
     expect(currentStatus()).toBe('disconnected')
@@ -146,32 +176,35 @@ describe('useRuntimeConnect — version validation', () => {
     mockValidateRuntimeVersion.mockReturnValue({ status: 'mismatch', message: 'v3 runtime, v4 target' })
     await setup().connect()
     expect(currentStatus()).toBe('error')
-    expect(mockOpenModal).toHaveBeenCalledWith(
+    expect(spies.openModal).toHaveBeenCalledWith(
       'debugger-message',
       expect.objectContaining({ type: 'error', title: 'Runtime Version Mismatch' }),
     )
-    expect(mockOpenModal).not.toHaveBeenCalledWith('runtime-login', null)
+    expect(spies.openModal).not.toHaveBeenCalledWith('runtime-login', null)
   })
 
   it('offers to continue past an undetectable version, and logs in on "Continue Anyway"', async () => {
     mockValidateRuntimeVersion.mockReturnValue({ status: 'missing', message: 'no version header' })
     await setup().connect()
 
-    const [, payload] = mockOpenModal.mock.calls[0] as [string, { buttons: string[]; onResponse: (i: number) => void }]
+    const [, payload] = spies.openModal.mock.calls[0] as [
+      string,
+      { buttons: string[]; onResponse: (i: number) => void },
+    ]
     expect(payload.buttons).toEqual(['Continue Anyway', 'Cancel'])
 
     payload.onResponse(0)
-    expect(mockOpenModal).toHaveBeenCalledWith('runtime-login', null)
+    expect(spies.openModal).toHaveBeenCalledWith('runtime-login', null)
   })
 
   it('stays disconnected when that offer is declined', async () => {
     mockValidateRuntimeVersion.mockReturnValue({ status: 'missing' })
     await setup().connect()
 
-    const [, payload] = mockOpenModal.mock.calls[0] as [string, { onResponse: (i: number) => void }]
+    const [, payload] = spies.openModal.mock.calls[0] as [string, { onResponse: (i: number) => void }]
     payload.onResponse(1)
     expect(currentStatus()).toBe('disconnected')
-    expect(mockOpenModal).not.toHaveBeenCalledWith('runtime-login', null)
+    expect(spies.openModal).not.toHaveBeenCalledWith('runtime-login', null)
   })
 })
 
@@ -180,16 +213,16 @@ describe('useRuntimeConnect — version validation', () => {
 // assert possession of hardware nothing is talking to.
 describe('useRuntimeConnect — toggle off', () => {
   beforeEach(() => {
-    ;(mockState.runtimeConnection as { connectionStatus: string }).connectionStatus = 'connected'
+    store.getState().deviceActions.setRuntimeConnectionStatus('connected')
   })
 
   it('drops the token, the credentials, the session and the licence', async () => {
     await setup().toggle()
-    expect(mockSetRuntimeJwtToken).toHaveBeenCalledWith(null)
+    expect(spies.setRuntimeJwtToken).toHaveBeenCalledWith(null)
     expect(currentStatus()).toBe('disconnected')
     expect(mockClearCredentials).toHaveBeenCalled()
     expect(mockCloseRuntimeSession).toHaveBeenCalled()
-    expect(mockClearDeviceLicense).toHaveBeenCalled()
+    expect(spies.clearDeviceLicense).toHaveBeenCalled()
     expect(mockGetUsersInfo).not.toHaveBeenCalled()
   })
 })

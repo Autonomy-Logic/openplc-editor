@@ -1,8 +1,8 @@
-import { openPLCStoreBase } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
 import type { SelectedDevice } from '@root/frontend/store/slices/device/types'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
-import { PlatformProvider } from '@root/middleware/shared/providers'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
@@ -52,8 +52,10 @@ const compileForDebug = vi.fn(() => Promise.resolve({ success: true }))
 // ends the handler instead of recursing into a second MD5 round.
 const compileProgram = vi.fn(() => Promise.resolve({ success: false, error: 'upload not exercised' }))
 
+let store: OpenPLCStore
+
 function renderBar(board: string, selectedDevice: SelectedDevice | null) {
-  const { deviceActions, workspaceActions, consoleActions } = openPLCStoreBase.getState()
+  const { deviceActions, workspaceActions, consoleActions } = store.getState()
   deviceActions.setAvailableOptions({
     availableBoards: new Map([
       [PLAIN_BOARD_NAME, PLAIN_BOARD],
@@ -92,11 +94,7 @@ function renderBar(board: string, selectedDevice: SelectedDevice | null) {
     library: stubPort(),
     capabilities: WEB_CAPABILITIES,
   }
-  render(
-    <PlatformProvider ports={ports}>
-      <DefaultWorkspaceActivityBar />
-    </PlatformProvider>,
-  )
+  render(<DefaultWorkspaceActivityBar />, { wrapper: createStoreWrapper(store, ports) })
 }
 
 function debuggerButton(): HTMLButtonElement {
@@ -110,7 +108,7 @@ function startDebugSession() {
 }
 
 function loggedMessages() {
-  return openPLCStoreBase.getState().logs.map((entry) => entry.message)
+  return store.getState().logs.map((entry) => entry.message)
 }
 
 /**
@@ -119,7 +117,7 @@ function loggedMessages() {
  * narrows it rather than asserting a shape onto it.
  */
 function uploadPrompt(): ((buttonIndex: number) => void) | null {
-  const { open, data } = openPLCStoreBase.getState().modalActions.getModalState('debugger-message')
+  const { open, data } = store.getState().modalActions.getModalState('debugger-message')
   if (!open || typeof data !== 'object' || data === null || !('onResponse' in data)) return null
   const { onResponse } = data
   if (typeof onResponse !== 'function') return null
@@ -132,17 +130,11 @@ describe('MD5 re-upload — backplane gate', () => {
   beforeEach(() => {
     compileForDebug.mockClear()
     compileProgram.mockClear()
-    openPLCStoreBase.getState().deviceActions.clearRuntimeConnection()
-    openPLCStoreBase.getState().deviceActions.clearDeviceConnection()
-    openPLCStoreBase.getState().modalActions.closeModal()
+    store = createTestStore()
   })
 
   afterEach(() => {
     cleanup()
-    openPLCStoreBase.getState().deviceActions.clearRuntimeConnection()
-    openPLCStoreBase.getState().deviceActions.clearDeviceConnection()
-    openPLCStoreBase.getState().modalActions.closeModal()
-    openPLCStoreBase.getState().workspaceActions.setCanEdit(true)
   })
 
   it('refuses the mismatch re-upload of a vendor-package board to a vPLC without backplane access', async () => {

@@ -47,6 +47,7 @@ beforeEach(() => {
     saveProjectAccelerator: register('saveProject'),
     saveProjectAsAccelerator: register('saveProjectAs'),
     retrieveProjectAccelerator: register('retrieveProject'),
+    importPlcopenAccelerator: register('importPlcopen'),
     saveFileAccelerator: register('saveFile'),
     closeProjectAccelerator: register('closeProject'),
     exportProjectRequest: register('exportProject'),
@@ -107,6 +108,7 @@ testAccelerator('onOpenProject', 'openProject', 'handleOpenProjectRequest')
 testAccelerator('onSaveProject', 'saveProject', 'saveProjectAccelerator')
 testAccelerator('onSaveProjectAs', 'saveProjectAs', 'saveProjectAsAccelerator')
 testAccelerator('onRetrieveProject', 'retrieveProject', 'retrieveProjectAccelerator')
+testAccelerator('onImportPlcopen', 'importPlcopen', 'importPlcopenAccelerator')
 testAccelerator('onSaveFile', 'saveFile', 'saveFileAccelerator')
 testAccelerator('onCloseProject', 'closeProject', 'closeProjectAccelerator')
 testAccelerator('onExportProject', 'exportProject', 'exportProjectRequest')
@@ -123,17 +125,30 @@ testAccelerator('onQuitApp', 'quitApp', 'quitAppRequest')
 testAccelerator('onRefresh', 'refresh', 'refreshRequest')
 
 describe('onOpenRecent', () => {
-  it('registers a bridge listener and passes response data to the callback', () => {
+  it('registers a bridge listener and passes the project path to the callback', () => {
     const cb = jest.fn()
     adapter.onOpenRecent(cb)
 
     expect(window.bridge.openRecentAccelerator).toHaveBeenCalledTimes(1)
 
-    const mockEvent = {}
-    const mockResponse = { projectPath: '/some/path' }
-    fire('openRecent', mockEvent, mockResponse)
+    fire('openRecent', {}, '/some/path')
 
-    expect(cb).toHaveBeenCalledWith(mockResponse)
+    expect(cb).toHaveBeenCalledWith('/some/path')
+  })
+
+  it.each([
+    undefined,
+    null,
+    { success: true, data: { meta: { path: '/some/path' } } },
+    { projectPath: '/some/path' },
+    1,
+  ])('drops a payload that is not a path (%p)', (payload) => {
+    const cb = jest.fn()
+    adapter.onOpenRecent(cb)
+
+    fire('openRecent', {}, payload)
+
+    expect(cb).not.toHaveBeenCalled()
   })
 
   it('returns an unsubscribe function that deactivates the callback', () => {
@@ -141,7 +156,7 @@ describe('onOpenRecent', () => {
     const unsub = adapter.onOpenRecent(cb)
 
     unsub()
-    fireIfRegistered('openRecent', {}, { projectPath: '/x' })
+    fireIfRegistered('openRecent', {}, '/x')
 
     expect(cb).not.toHaveBeenCalled()
   })

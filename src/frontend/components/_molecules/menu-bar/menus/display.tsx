@@ -71,11 +71,9 @@ export const DisplayMenu = () => {
           <MenuPrimitive.Separator className={SEPARATOR} />
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:display.submenu.zoomIn')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + +'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:display.submenu.zoomOut')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + -'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} onClick={switchPerspective}>
             <span>{i18n.t('menu:display.submenu.switchPerspective')}</span>
@@ -84,7 +82,6 @@ export const DisplayMenu = () => {
           <MenuPrimitive.Separator className={SEPARATOR} />
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:display.submenu.resetPerspective')}</span>
-            <span className={ACCELERATOR}>{'Shift + F12'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Item
             className={ITEM}
@@ -104,7 +101,6 @@ export const DisplayMenu = () => {
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:display.submenu.sortAlpha')}</span>
-            <span className={ACCELERATOR}>{'F10'}</span>
           </MenuPrimitive.Item>
           <div onClick={cycleTheme}>
             <MenuPrimitive.Item className={ITEM}>

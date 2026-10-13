@@ -2,29 +2,20 @@
  * print-actions.ts test file
  *
  * Mirrors export-actions.test.ts's shape: every collaborator this module
- * talks to (the store, flow-writeback, toast, the ST print-tokens API, and
- * Monaco's static tokenizer) is mocked so the tests exercise only this
- * file's own assembly/branching logic.
+ * talks to (flow-writeback, toast, the ST print-tokens API, and Monaco's
+ * static tokenizer) is mocked, and the store is a real one seeded per test,
+ * so the tests exercise only this file's own assembly/branching logic.
  */
 
 import type { ProjectPort } from '../../../middleware/shared/ports/project-port'
 import type { PLCPou, PLCVariable } from '../../../middleware/shared/ports/types'
+import type { OpenPLCStore } from '../../store'
 import type { PagePolicy, PageSetup, PrintRenderMode } from '../../store/slices/print'
+import { createTestStore } from '../../store/testing'
 
 const mockTokenize = vi.fn()
 vi.mock('monaco-editor', () => ({
   editor: { tokenize: (...args: unknown[]) => mockTokenize(...args) },
-}))
-
-const mockGetState = vi.fn()
-// `@root/...` (not a relative path) — under the editor's Jest, `vi.mock()`
-// resolves a relative specifier against the setup file that defines the
-// `vi = jest` alias (`jest-vi-shim.ts`), not against this file, since Jest
-// binds `jest.mock`'s relative resolution to whichever module the `jest`
-// object was handed to. An absolute-style alias sidesteps that entirely,
-// and resolves the same way under Vitest too.
-vi.mock('@root/frontend/store', () => ({
-  openPLCStoreBase: { getState: () => mockGetState() },
 }))
 
 const mockFlushFlowWriteBacks = vi.fn()
@@ -58,7 +49,9 @@ function makePou(overrides: Partial<PLCPou> & { name: string; body: PLCPou['body
   }
 }
 
-function makeState(overrides?: {
+let store: OpenPLCStore
+
+function seedState(overrides?: {
   pous?: PLCPou[]
   projectName?: string
   selectedPouNames?: string[]
@@ -66,18 +59,20 @@ function makeState(overrides?: {
   pagePolicy?: PagePolicy
   pageSetup?: PageSetup
 }) {
-  return {
+  const { project, print } = store.getState()
+  store.setState({
     project: {
-      meta: { name: overrides?.projectName ?? 'MyProject', type: 'plc-project' as const, path: 'proj-1' },
-      data: { pous: overrides?.pous ?? [] },
+      meta: { name: overrides?.projectName ?? 'MyProject', type: 'plc-project', path: 'proj-1' },
+      data: { ...project.data, pous: overrides?.pous ?? [] },
     },
     print: {
+      ...print,
       selectedPouNames: overrides?.selectedPouNames ?? [],
       renderMode: overrides?.renderMode ?? 'normal',
       pagePolicy: overrides?.pagePolicy ?? 'new-page-per-pou',
       pageSetup: overrides?.pageSetup ?? DEFAULT_PAGE_SETUP,
     },
-  }
+  })
 }
 
 function makeProjectPort(overrides?: Partial<ProjectPort>): ProjectPort {
@@ -90,7 +85,8 @@ function makeProjectPort(overrides?: Partial<ProjectPort>): ProjectPort {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockGetState.mockReturnValue(makeState())
+  store = createTestStore()
+  seedState()
   mockFlushFlowWriteBacks.mockReturnValue([])
   mockGetPrintSemanticTokensApi.mockReturnValue(null)
   // One token spanning the whole (non-empty) line — enough to prove
@@ -103,17 +99,17 @@ beforeEach(() => {
 
 describe('collectSelectedPous', () => {
   it('returns an empty array for an empty selection', async () => {
-    mockGetState.mockReturnValue(makeState({ pous: [makePou({ name: 'main', body: { language: 'st', value: '' } })] }))
-    expect(await collectSelectedPous([])).toEqual([])
+    seedState({ pous: [makePou({ name: 'main', body: { language: 'st', value: '' } })] })
+    expect(await collectSelectedPous(store, [])).toEqual([])
   })
 
   it('filters to the selection and preserves project.data.pous array order, not selection order', async () => {
     const pouC = makePou({ name: 'C', body: { language: 'il', value: 'X' } })
     const pouA = makePou({ name: 'A', body: { language: 'il', value: 'Y' } })
     const pouB = makePou({ name: 'B', body: { language: 'il', value: 'Z' } })
-    mockGetState.mockReturnValue(makeState({ pous: [pouC, pouA, pouB] }))
+    seedState({ pous: [pouC, pouA, pouB] })
 
-    const result = await collectSelectedPous(['B', 'A'])
+    const result = await collectSelectedPous(store, ['B', 'A'])
 
     expect(result.map((p) => p.name)).toEqual(['A', 'B'])
   })
@@ -140,9 +136,9 @@ describe('collectSelectedPous', () => {
       body: { language: 'il', value: 'X' },
       interface: { variables: [fullVar, minimalVar] },
     })
-    mockGetState.mockReturnValue(makeState({ pous: [pou] }))
+    seedState({ pous: [pou] })
 
-    const [result] = await collectSelectedPous(['MyIl'])
+    const [result] = await collectSelectedPous(store, ['MyIl'])
 
     expect(result?.variables).toEqual([
       {
@@ -178,9 +174,9 @@ describe('collectSelectedPous', () => {
       body: { language: 'ld', value: { name: 'MyLadder', rungs } },
       interface: { variables: [] },
     })
-    mockGetState.mockReturnValue(makeState({ pous: [pou] }))
+    seedState({ pous: [pou] })
 
-    const [result] = await collectSelectedPous(['MyLadder'])
+    const [result] = await collectSelectedPous(store, ['MyLadder'])
 
     expect(result).toEqual({ name: 'MyLadder', kind: 'ld', rungs, variables: [] })
   })
@@ -192,34 +188,34 @@ describe('collectSelectedPous', () => {
       body: { language: 'fbd', value: { name: 'MyFbd', rung } },
       interface: { variables: [] },
     })
-    mockGetState.mockReturnValue(makeState({ pous: [pou] }))
+    seedState({ pous: [pou] })
 
-    const [result] = await collectSelectedPous(['MyFbd'])
+    const [result] = await collectSelectedPous(store, ['MyFbd'])
 
     expect(result).toEqual({ name: 'MyFbd', kind: 'fbd', rung, variables: [] })
   })
 
   it('silently excludes a "ld" POU whose body.value has no rungs array', async () => {
     const pou = makePou({ name: 'BadLd', body: { language: 'ld', value: { name: 'BadLd' } } })
-    mockGetState.mockReturnValue(makeState({ pous: [pou] }))
+    seedState({ pous: [pou] })
 
-    expect(await collectSelectedPous(['BadLd'])).toEqual([])
+    expect(await collectSelectedPous(store, ['BadLd'])).toEqual([])
   })
 
   it('silently excludes a "fbd" POU whose body.value is not an object', async () => {
     const pou = makePou({ name: 'BadFbd', body: { language: 'fbd', value: 'not-an-object' } })
-    mockGetState.mockReturnValue(makeState({ pous: [pou] }))
+    seedState({ pous: [pou] })
 
-    expect(await collectSelectedPous(['BadFbd'])).toEqual([])
+    expect(await collectSelectedPous(store, ['BadFbd'])).toEqual([])
   })
 
   it.each(['il', 'cpp', 'python'] as const)(
     'builds a "%s" PrintPou with colored lines from Monaco tokenize',
     async (language) => {
       const pou = makePou({ name: 'MyText', body: { language, value: 'LINE_ONE\nLINE_TWO' } })
-      mockGetState.mockReturnValue(makeState({ pous: [pou] }))
+      seedState({ pous: [pou] })
 
-      const [result] = await collectSelectedPous(['MyText'])
+      const [result] = await collectSelectedPous(store, ['MyText'])
 
       expect(result?.kind).toBe(language)
       if (result?.kind !== 'ld' && result?.kind !== 'fbd') {
@@ -236,9 +232,9 @@ describe('collectSelectedPous', () => {
     })
     mockGetPrintSemanticTokensApi.mockReturnValue({ requestBodySemanticTokens })
     const pou = makePou({ name: 'MyST', body: { language: 'st', value: 'A := B;' } })
-    mockGetState.mockReturnValue(makeState({ pous: [pou] }))
+    seedState({ pous: [pou] })
 
-    const [result] = await collectSelectedPous(['MyST'])
+    const [result] = await collectSelectedPous(store, ['MyST'])
 
     expect(requestBodySemanticTokens).toHaveBeenCalledWith('MyST')
     expect(result?.kind).toBe('st')
@@ -257,9 +253,9 @@ describe('collectSelectedPous', () => {
   it('falls back to one uncolored run per line when the ST print-tokens API is unavailable', async () => {
     mockGetPrintSemanticTokensApi.mockReturnValue(null)
     const pou = makePou({ name: 'MyST', body: { language: 'st', value: 'A := B;\nC := D;' } })
-    mockGetState.mockReturnValue(makeState({ pous: [pou] }))
+    seedState({ pous: [pou] })
 
-    const [result] = await collectSelectedPous(['MyST'])
+    const [result] = await collectSelectedPous(store, ['MyST'])
 
     if (result?.kind !== 'ld' && result?.kind !== 'fbd') {
       expect(result?.lines).toEqual([
@@ -271,29 +267,27 @@ describe('collectSelectedPous', () => {
 
   it('silently excludes an "sfc" POU — no PrintPou renderer exists for it', async () => {
     const pou = makePou({ name: 'MySfc', body: { language: 'sfc', value: '' } })
-    mockGetState.mockReturnValue(makeState({ pous: [pou] }))
+    seedState({ pous: [pou] })
 
-    expect(await collectSelectedPous(['MySfc'])).toEqual([])
+    expect(await collectSelectedPous(store, ['MySfc'])).toEqual([])
   })
 })
 
 describe('renderPrintPdf', () => {
   it('flushes write-backs, builds a PrintRequest from the print slice, and renders it', async () => {
     const pou = makePou({ name: 'MyIl', body: { language: 'il', value: 'X' } })
-    mockGetState.mockReturnValue(
-      makeState({
-        pous: [pou],
-        projectName: 'Widgets',
-        selectedPouNames: ['MyIl'],
-        renderMode: 'scale-to-fit',
-        pagePolicy: 'may-share-page',
-        pageSetup: { size: 'letter', orientation: 'landscape', margins: { top: 1, right: 2, bottom: 3, left: 4 } },
-      }),
-    )
+    seedState({
+      pous: [pou],
+      projectName: 'Widgets',
+      selectedPouNames: ['MyIl'],
+      renderMode: 'scale-to-fit',
+      pagePolicy: 'may-share-page',
+      pageSetup: { size: 'letter', orientation: 'landscape', margins: { top: 1, right: 2, bottom: 3, left: 4 } },
+    })
     const bytes = new Uint8Array([9, 9, 9])
     const projectPort = makeProjectPort({ renderPdf: vi.fn().mockResolvedValue(bytes) })
 
-    const result = await renderPrintPdf(projectPort)
+    const result = await renderPrintPdf(store, projectPort)
 
     expect(result).toEqual({ ok: true, bytes })
     expect(mockFlushFlowWriteBacks).toHaveBeenCalledTimes(1)
@@ -310,7 +304,7 @@ describe('renderPrintPdf', () => {
     mockFlushFlowWriteBacks.mockReturnValue(['Stale1', 'Stale2'])
     const projectPort = makeProjectPort()
 
-    const result = await renderPrintPdf(projectPort)
+    const result = await renderPrintPdf(store, projectPort)
 
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error).toContain('Stale1, Stale2')
@@ -319,10 +313,10 @@ describe('renderPrintPdf', () => {
 
   it('returns ok:false when the selection resolves to zero printable POUs', async () => {
     const pou = makePou({ name: 'MySfc', body: { language: 'sfc', value: '' } })
-    mockGetState.mockReturnValue(makeState({ pous: [pou], selectedPouNames: ['MySfc'] }))
+    seedState({ pous: [pou], selectedPouNames: ['MySfc'] })
     const projectPort = makeProjectPort()
 
-    const result = await renderPrintPdf(projectPort)
+    const result = await renderPrintPdf(store, projectPort)
 
     expect(result).toEqual({ ok: false, error: 'No printable POUs are selected.' })
     expect(projectPort.renderPdf).not.toHaveBeenCalled()
@@ -330,10 +324,10 @@ describe('renderPrintPdf', () => {
 
   it('catches a rejected renderPdf and returns its message', async () => {
     const pou = makePou({ name: 'MyIl', body: { language: 'il', value: 'X' } })
-    mockGetState.mockReturnValue(makeState({ pous: [pou], selectedPouNames: ['MyIl'] }))
+    seedState({ pous: [pou], selectedPouNames: ['MyIl'] })
     const projectPort = makeProjectPort({ renderPdf: vi.fn().mockRejectedValue(new Error('worker crashed')) })
 
-    const result = await renderPrintPdf(projectPort)
+    const result = await renderPrintPdf(store, projectPort)
 
     expect(result).toEqual({ ok: false, error: 'worker crashed' })
   })
@@ -341,12 +335,12 @@ describe('renderPrintPdf', () => {
 
 describe('executeExportPdf', () => {
   it('saves the bytes, toasts success, and returns success:true', async () => {
-    mockGetState.mockReturnValue(makeState({ projectName: 'Widgets' }))
+    seedState({ projectName: 'Widgets' })
     const bytes = new Uint8Array([1, 2, 3])
     const exportPdfFile = vi.fn().mockResolvedValue({ success: true })
     const projectPort = makeProjectPort({ exportPdfFile })
 
-    const result = await executeExportPdf(projectPort, bytes)
+    const result = await executeExportPdf(store, projectPort, bytes)
 
     expect(result).toEqual({ success: true })
     expect(exportPdfFile).toHaveBeenCalledWith('Widgets.pdf', bytes)
@@ -357,7 +351,7 @@ describe('executeExportPdf', () => {
     const exportPdfFile = vi.fn().mockResolvedValue({ success: false, canceled: true })
     const projectPort = makeProjectPort({ exportPdfFile })
 
-    const result = await executeExportPdf(projectPort, new Uint8Array())
+    const result = await executeExportPdf(store, projectPort, new Uint8Array())
 
     expect(result).toEqual({ success: false })
     expect(mockToast).not.toHaveBeenCalled()
@@ -367,7 +361,7 @@ describe('executeExportPdf', () => {
     const exportPdfFile = vi.fn().mockResolvedValue({ success: false, error: 'disk full' })
     const projectPort = makeProjectPort({ exportPdfFile })
 
-    const result = await executeExportPdf(projectPort, new Uint8Array())
+    const result = await executeExportPdf(store, projectPort, new Uint8Array())
 
     expect(result).toEqual({ success: false })
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'fail', description: 'disk full' }))
@@ -377,7 +371,7 @@ describe('executeExportPdf', () => {
     const exportPdfFile = vi.fn().mockRejectedValue(new Error('boom'))
     const projectPort = makeProjectPort({ exportPdfFile })
 
-    const result = await executeExportPdf(projectPort, new Uint8Array())
+    const result = await executeExportPdf(store, projectPort, new Uint8Array())
 
     expect(result).toEqual({ success: false })
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'fail', description: 'boom' }))

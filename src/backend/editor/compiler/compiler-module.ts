@@ -170,13 +170,12 @@ import {
   type CppPouData as CppPouDataHeader,
   generateCBlocksHeader,
 } from '@root/backend/shared/utils/cpp/generateCBlocksHeader'
-import { XmlGenerator } from '@root/backend/shared/utils/PLC/xml-generator'
 import { buildVppPluginFiles } from '@root/backend/shared/utils/vpp/build-vpp-plugin-files'
 import { buildModuleConfigEntries } from '@root/backend/shared/utils/vpp/generate-vendor-plugin-config'
 import type { VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
 import { APP_VERSION } from '@root/frontend/data/constants/app-version'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
-import { app as electronApp, dialog } from 'electron'
+import { app as electronApp } from 'electron'
 import JSZip from 'jszip'
 
 import type { ThirdPartyLibraryRequest } from '../../../middleware/shared/ports/compiler-platform-port'
@@ -185,7 +184,6 @@ import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { persistentStorageSchema } from '../../shared/types/PLC/devices/configuration'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
-import { CreateXMLFile } from '../utils'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
 import type { ArduinoCoreControl, CompileProgressChannel, HalsFile } from './types'
@@ -1742,48 +1740,6 @@ class CompilerModule {
 
   // Runtime upload moved to MainProcessBridge.makeRuntimeApiUpload so it shares
   // the single token authority (transparent refresh + retry on an expired JWT).
-
-  // !! Deprecated: This method is a outdated implementation and should be removed.
-  async createXmlFile(
-    pathToUserProject: string,
-    dataToCreateXml: PLCProjectData,
-    parseTo: 'old-editor' | 'codesys',
-  ): Promise<{ success: boolean; message: string }> {
-    const { filePath } = await dialog.showSaveDialog({
-      title: 'Export Project',
-      defaultPath: join(pathToUserProject, 'plc.xml'),
-      buttonLabel: 'Save',
-      filters: [{ name: 'XML Files', extensions: ['xml'] }],
-    })
-
-    if (!filePath) {
-      return { success: false, message: 'User canceled the save dialog' }
-    }
-
-    const { data: projectDataAsString, message } = XmlGenerator(
-      dataToCreateXml as Parameters<typeof XmlGenerator>[0],
-      parseTo,
-    ) as {
-      data: string | undefined
-      message: string
-    }
-    if (!projectDataAsString) {
-      return { success: false, message: message }
-    }
-
-    const result = CreateXMLFile(filePath, projectDataAsString, 'plc')
-    try {
-      await writeFile(filePath, projectDataAsString)
-      console.log('File written to:', filePath)
-    } catch (err) {
-      console.error('Error writing file:', err)
-    }
-
-    return {
-      success: result.success,
-      message: result.success ? ` XML file created at ${filePath}` : 'Failed to create XML file',
-    }
-  }
 
   // ++ ========================= Compiler builder ============================ ++
 

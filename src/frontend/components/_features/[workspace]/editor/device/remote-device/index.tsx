@@ -11,6 +11,7 @@ import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
 import {
   formatIOGroupAddressRange,
+  isReadFunctionCode,
   isSingleElementFunctionCode,
   MAX_IO_GROUP_LENGTH_BY_FC,
   validateIOGroupLength,
@@ -206,6 +207,12 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
     }
   }, [functionCode, isSingleElementOperation])
 
+  const handleFunctionCodeChange = (next: typeof functionCode) => {
+    // Error handling hidden on a write group must not resurface when it becomes a read group.
+    if (!isReadFunctionCode(functionCode) && isReadFunctionCode(next)) setErrorHandling('keep-last-value')
+    setFunctionCode(next)
+  }
+
   const handleSubmit = () => {
     if (!name.trim() || !lengthValidation.ok) return
     onSubmit({
@@ -246,7 +253,7 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
           </div>
           <div className='flex items-center gap-2'>
             <Label className='w-28 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Function Code</Label>
-            <Select value={functionCode} onValueChange={(v) => setFunctionCode(v as typeof functionCode)}>
+            <Select value={functionCode} onValueChange={(v) => handleFunctionCodeChange(v as typeof functionCode)}>
               <SelectTrigger
                 withIndicator
                 placeholder='Select function code'
@@ -328,32 +335,34 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
               </p>
             )}
           </div>
-          <div className='flex items-center gap-2'>
-            <Label className='w-28 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Error Handling</Label>
-            <Select value={errorHandling} onValueChange={(v) => setErrorHandling(v as typeof errorHandling)}>
-              <SelectTrigger
-                withIndicator
-                placeholder='Select error handling'
-                className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-              />
-              <SelectContent className='h-fit w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
-                {ERROR_HANDLING_OPTIONS.map((option) => (
-                  <SelectItem
-                    key={option.value}
-                    value={option.value}
-                    className={cn(
-                      'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                      'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
-                    )}
-                  >
-                    <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                      {option.label}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {isReadFunctionCode(functionCode) && (
+            <div className='flex items-center gap-2'>
+              <Label className='w-28 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Error Handling</Label>
+              <Select value={errorHandling} onValueChange={(v) => setErrorHandling(v as typeof errorHandling)}>
+                <SelectTrigger
+                  withIndicator
+                  placeholder='Select error handling'
+                  className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                />
+                <SelectContent className='h-fit w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
+                  {ERROR_HANDLING_OPTIONS.map((option) => (
+                    <SelectItem
+                      key={option.value}
+                      value={option.value}
+                      className={cn(
+                        'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                        'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                      )}
+                    >
+                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                        {option.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
         <ModalFooter className='flex justify-end gap-2 pt-2'>
           <button

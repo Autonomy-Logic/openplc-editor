@@ -2,7 +2,7 @@
 import type * as monaco from 'monaco-editor'
 
 import type { AICompletionLanguage } from '../../../middleware/shared/ports/ai-port'
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
 import { collectProjectContext, formatIecVariables, formatPythonVariables } from './context-collector'
 
 const MAX_PREFIX_CHARS = 3000
@@ -38,8 +38,8 @@ let contextCache: {
 } | null = null
 
 // Builds a synthetic POU header prepended to the FIM prefix, since the editor only shows the body.
-function buildSyntheticHeader(pouName: string, language: string): string {
-  const state = openPLCStoreBase.getState()
+function buildSyntheticHeader(store: OpenPLCStore, pouName: string, language: string): string {
+  const state = store.getState()
   const pou = state.project.data.pous.find((p) => p.name === pouName)
   if (!pou) return ''
 
@@ -67,6 +67,7 @@ function buildSyntheticHeader(pouName: string, language: string): string {
 }
 
 export function buildFIMContext(
+  store: OpenPLCStore,
   model: monaco.editor.ITextModel,
   position: monaco.Position,
   pouName: string,
@@ -76,7 +77,7 @@ export function buildFIMContext(
   const offset = model.getOffsetAt(position)
 
   // Synthetic header takes priority in the prefix budget — a typical header is 100-300 chars
-  const header = buildSyntheticHeader(pouName, language)
+  const header = buildSyntheticHeader(store, pouName, language)
   const maxCodePrefix = MAX_PREFIX_CHARS - header.length
   const prefix = header + fullText.substring(Math.max(0, offset - maxCodePrefix), offset)
   let suffix = fullText.substring(offset, Math.min(fullText.length, offset + MAX_SUFFIX_CHARS))
@@ -85,7 +86,7 @@ export function buildFIMContext(
   // span as already-closed and returns an empty completion.
   if (suffix.trim().length === 0) {
     if (language === 'st' || language === 'il') {
-      const state = openPLCStoreBase.getState()
+      const state = store.getState()
       const pou = state.project.data.pous.find((p) => p.name === pouName)
       const endKeyword = pou ? POU_END_KEYWORDS[pou.pouType] : undefined
       if (endKeyword) {
@@ -98,14 +99,14 @@ export function buildFIMContext(
     }
   }
 
-  const projectContext = getCachedProjectContext(pouName, language)
+  const projectContext = getCachedProjectContext(store, pouName, language)
 
   return { prefix, suffix, projectContext, language }
 }
 
 // Single-entry cache, invalidated on a POU/language change or a Zustand state reference change.
-function getCachedProjectContext(pouName: string, language: AICompletionLanguage): string {
-  const state = openPLCStoreBase.getState()
+function getCachedProjectContext(store: OpenPLCStore, pouName: string, language: AICompletionLanguage): string {
+  const state = store.getState()
   const pousRef = state.project.data.pous
   const dataTypesRef = state.project.data.dataTypes
   const globalVarsRef = state.project.data.configurations.resource.globalVariables

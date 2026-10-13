@@ -2,9 +2,9 @@ import { useOpenPLCStore } from '../../../../store'
 import { ActivityBarButton } from '../../../_atoms/buttons/activity-bar'
 
 export const ChatButton = () => {
-  const { isChatOpen, isEnabled, hasConsented } = useOpenPLCStore.useAi()
-  const { toggleChat } = useOpenPLCStore.useAiActions()
-  const { openModal } = useOpenPLCStore.useModalActions()
+  const { isChatOpen, isEnabled, hasConsented } = useOpenPLCStore((s) => s.ai)
+  const { toggleChat } = useOpenPLCStore((s) => s.aiActions)
+  const { openModal } = useOpenPLCStore((s) => s.modalActions)
 
   if (!isEnabled) return null
 

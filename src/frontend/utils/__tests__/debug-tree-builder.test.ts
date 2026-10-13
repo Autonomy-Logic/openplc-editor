@@ -2,10 +2,10 @@ import type { PLCDataType, PLCPou, PLCVariable } from '../../../middleware/share
 import type { DebugVariableEntry } from '../debug-parser'
 import { buildDebugTree, buildVariableBasePath } from '../debug-tree-builder'
 
-import { openPLCStoreBase } from '../../store'
+import { createTestStore } from '../../store/testing'
 
 /** System libraries pre-loaded into the store by `jest-vi-shim.ts`. */
-const SYSTEM_LIBS = openPLCStoreBase.getState().libraries.system
+const SYSTEM_LIBS = createTestStore().getState().libraries.system
 
 // ---------------------------------------------------------------------------
 // Helpers

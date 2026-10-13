@@ -1,7 +1,7 @@
 import type { AICompletionLanguage } from '../../../middleware/shared/ports/ai-port'
-import type { openPLCStoreBase } from '../../store'
+import type { RootState } from '../../store'
 
-type StoreState = ReturnType<typeof openPLCStoreBase.getState>
+type StoreState = RootState
 
 export type CollectFullProjectContextOptions = {
   language?: AICompletionLanguage

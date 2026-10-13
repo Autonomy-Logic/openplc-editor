@@ -39,7 +39,7 @@ export interface AcceleratorPort {
   // --- Project actions ---
   onCreateProject(callback: () => void): Unsubscribe
   onOpenProject(callback: () => void): Unsubscribe
-  onOpenRecent(callback: (projectData?: unknown) => void): Unsubscribe
+  onOpenRecent(callback: (projectPath: string) => void): Unsubscribe
   onSaveProject(callback: () => void): Unsubscribe
   /** Save As. Desktop only in practice; web's adapter returns a no-op
    *  unsubscribe like its other accelerators. */
@@ -49,6 +49,8 @@ export interface AcceleratorPort {
    *  the same modal from its own File menu, which it always renders, so its
    *  adapter returns a no-op unsubscribe like the other accelerators. */
   onRetrieveProject(callback: () => void): Unsubscribe
+  /** Import PLCopen XML from the native macOS/Linux File menu; web renders its own File menu. */
+  onImportPlcopen(callback: () => void): Unsubscribe
   onCloseProject(callback: () => void): Unsubscribe
   onExportProject(callback: () => void): Unsubscribe
   /** File > Print / Ctrl+P (Cmd+P). Preview is an alias into the same

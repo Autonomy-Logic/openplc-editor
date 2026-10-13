@@ -430,6 +430,10 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
                 return
               }
 
+              case 'pull':
+                currentPin.pull = updatedData.pull
+                return
+
               default:
                 break
             }

@@ -141,7 +141,7 @@ export {
 } from './plc-schemas'
 
 // --- Port parameter/result types ---
-export type { CompileProgramArgs, DebugCompileArgs, ExportXmlArgs } from './compiler-port'
+export type { CompileProgramArgs, DebugCompileArgs } from './compiler-port'
 export type { OrchestratorDevice, OrchestratorInfo } from './orchestrator-port'
 export type {
   CreatePouParams,

@@ -123,7 +123,7 @@ export async function runLibraryBuildPipeline(
   }
 
   // -------------------------------------------------------------------------
-  // Stage 1: manifest validation + XML generation
+  // Stage 1: manifest validation + stub program for the transpiler
   // -------------------------------------------------------------------------
   const project: PLCProject = {
     meta: { name: '', type: 'plc-library' },

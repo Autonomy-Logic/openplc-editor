@@ -2,8 +2,10 @@ import { ComponentPropsWithoutRef } from 'react'
 
 import { useCapabilities, useNavigation, useProject, useWindow } from '../../../../middleware/shared/providers'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
+import { restoreOpenProjectRoot } from '../../../services/restore-open-project-root'
 import { executeSaveProject } from '../../../services/save-actions'
-import { useOpenPLCStore } from '../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
+import { toast } from '../../_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 import type { SaveChangesAbortReason, ValidationContext } from './save-changes-modal-data'
 
@@ -38,6 +40,7 @@ const SaveChangesModal = ({
   onActionAborted,
   ...rest
 }: SaveChangeModalProps) => {
+  const store = useOpenPLCStoreApi()
   const {
     workspaceActions: { setEditingState },
     modalActions: { closeModal, onOpenChange, openModal },
@@ -61,7 +64,7 @@ const SaveChangesModal = ({
     closeModal()
 
     if (operation === 'save') {
-      const result = await executeSaveProject(projectPort, capabilities)
+      const result = await executeSaveProject(store, projectPort, capabilities)
       if (!result.success) {
         // The save already said why. This says what it cost: whatever was
         // waiting on it is not going to happen, and the caller is the only one
@@ -77,10 +80,19 @@ const SaveChangesModal = ({
         openModal('create-project', null)
         return
       case 'open-project': {
-        const result = await projectPort.openProject()
-        if (result.success && result.data) {
+        const openPath = store.getState().project.meta.path
+        const result = await projectPort.openProject().catch(() => null)
+        if (result?.success && result.data) {
           handleOpenProjectResponse(result.data)
+          return
         }
+        if (result) return
+        restoreOpenProjectRoot(projectPort, openPath)
+        toast({
+          title: 'Cannot open the project.',
+          description: 'The selected project could not be loaded.',
+          variant: 'fail',
+        })
         return
       }
       // 'retrieve-project' belongs with these rather than with 'close-project':

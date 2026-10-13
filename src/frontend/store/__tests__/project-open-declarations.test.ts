@@ -10,9 +10,16 @@
  * every defect they cover lived in the seam between the two.
  */
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
-import { openPLCStoreBase } from '../index'
+import type { OpenPLCStore } from '../index'
+import { createTestStore } from '../testing'
 
-const editorFor = (name: string) => openPLCStoreBase.getState().editorActions.getEditorFromEditors(name)
+let store: OpenPLCStore
+
+beforeEach(() => {
+  store = createTestStore()
+})
+
+const editorFor = (name: string) => store.getState().editorActions.getEditorFromEditors(name)
 
 const PROJECT_JSON = JSON.stringify({
   meta: { name: 'P', type: 'plc-project' },
@@ -20,7 +27,7 @@ const PROJECT_JSON = JSON.stringify({
 })
 
 const openWith = (declarations: string) => {
-  openPLCStoreBase.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+  store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
   const parsed = parseProjectFiles(
     '/p',
     PROJECT_JSON,
@@ -30,8 +37,8 @@ const openWith = (declarations: string) => {
     [],
     [],
   )
-  openPLCStoreBase.getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
-  const pou = openPLCStoreBase.getState().project.data.pous.find((candidate) => candidate.name === 'main')
+  store.getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
+  const pou = store.getState().project.data.pous.find((candidate) => candidate.name === 'main')
   if (!pou) throw new Error('main was not loaded')
   return pou
 }
@@ -89,7 +96,7 @@ describe('opening a project', () => {
     // declarations do not parse and its variable list is empty — which is
     // exactly why a cascade over the model found nothing to cascade. The
     // producer took its new name and the declaration kept the old one.
-    openPLCStoreBase.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
     const parsed = parseProjectFiles(
       '/p',
       PROJECT_JSON,
@@ -104,9 +111,9 @@ describe('opening a project', () => {
       [],
       [],
     )
-    openPLCStoreBase.getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
+    store.getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
 
-    const state = openPLCStoreBase.getState()
+    const state = store.getState()
     const pou = state.project.data.pous.find((candidate) => candidate.name === 'main')
     expect((state.deviceDefinitions.pinMapping.pinsByBoard['TestBoard'] ?? []).map((pin) => pin.alias)).toEqual([
       'Motor_Start',
@@ -131,7 +138,7 @@ describe('opening a project', () => {
     const pou = openWith('VAR\n  a : BOOL AT Motor_Start;\n  b : BOOL AT Motor_Start;\nEND_VAR')
 
     expect(pou.variablesTextUnparsed).toBe(true)
-    const reported = openPLCStoreBase
+    const reported = store
       .getState()
       .logs.map((log) => log.message)
       .join('\n')

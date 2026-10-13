@@ -9,7 +9,7 @@ import { useOrchestrator, usePlatform, useRuntime } from '../../../../../../../m
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
-import { openPLCStoreBase, useOpenPLCStore } from '../../../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import type { SelectedDevice } from '../../../../../../store/slices/device'
 import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
@@ -100,6 +100,7 @@ export function refreshSelection(
 }
 
 const OrchestratorsList = () => {
+  const store = useOpenPLCStoreApi()
   const orchestratorPort = useOrchestrator()
   const runtimePort = useRuntime()
   const packages = usePlatform().packages
@@ -185,7 +186,7 @@ const OrchestratorsList = () => {
     try {
       const result = await orchestratorPort.listOrchestrators()
       setOrchestrators(result)
-      const state = openPLCStoreBase.getState()
+      const state = store.getState()
       const current = state.runtimeConnection.selectedDevice
       const refreshed = refreshSelection(current, result)
       if (refreshed !== current) state.deviceActions.setSelectedDevice(refreshed)
@@ -198,7 +199,7 @@ const OrchestratorsList = () => {
     } finally {
       setLoading(false)
     }
-  }, [orchestratorPort])
+  }, [store, orchestratorPort])
 
   useEffect(() => {
     void fetchOrchestrators()
