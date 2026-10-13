@@ -11,6 +11,7 @@ import type {
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
 import { useEsi } from '@root/middleware/shared/providers/platform-context'
+import { resolveEsiModule } from '@root/middleware/shared/utils/ethercat'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { ChannelMappingsSection, SdoParametersSection } from './components/device-configuration-form'
@@ -123,19 +124,17 @@ const EtherCATModuleEditor = ({ busName, deviceId, moduleId }: EtherCATModuleEdi
     ],
   )
 
-  // Resolve the ESI module. For an inline module (declared in the coupler's
-  // own ESI) we read the coupler's full ESI and scan its `.modules`. For a
-  // standalone module file, iterate the repo item's devices to find the one
-  // carrying this ident.
+  const moduleIdent = module?.esiModuleRef.moduleIdent
+  const moduleRepoId = module?.esiModuleRef.repositoryItemId
+
+  // Inline modules come from the coupler ESI; module-only ESIs are parsed on demand.
   useEffect(() => {
-    if (!esi || !module) return
+    if (!esi || moduleIdent === undefined || moduleRepoId === undefined) return
     let cancelled = false
     setIsLoadingEsi(true)
     setEsiError(null)
     void (async () => {
       try {
-        const target = module.esiModuleRef.moduleIdent.toLowerCase()
-        const repoId = module.esiModuleRef.repositoryItemId
         const summary = await esi.loadRepositoryLight()
         if (cancelled) return
         if (!summary.success) {
@@ -143,25 +142,16 @@ const EtherCATModuleEditor = ({ busName, deviceId, moduleId }: EtherCATModuleEdi
           setIsLoadingEsi(false)
           return
         }
-        const repoItem = summary.items.find((it) => it.id === repoId)
+        const repoItem = summary.items.find((it) => it.id === moduleRepoId)
         if (!repoItem) {
           setEsiError('ESI file for this module is not in the repository.')
           setIsLoadingEsi(false)
           return
         }
-        const deviceCount = repoItem.devices?.length ?? 0
-        for (let i = 0; i < Math.max(deviceCount, 1); i++) {
-          const r = await esi.loadDeviceFull(repoId, i)
-          if (cancelled) return
-          if (!r.success || !r.device) continue
-          const match = r.device.modules?.find((m) => m.ident.toLowerCase() === target)
-          if (match) {
-            setEsiModule(match)
-            setIsLoadingEsi(false)
-            return
-          }
-        }
-        setEsiError('Module definition not found in its ESI file.')
+        const resolved = await resolveEsiModule(esi, repoItem, moduleIdent)
+        if (cancelled) return
+        if (resolved === undefined) setEsiError('Module definition not found in its ESI file.')
+        else setEsiModule(resolved)
         setIsLoadingEsi(false)
       } catch (e) {
         if (cancelled) return
@@ -172,7 +162,7 @@ const EtherCATModuleEditor = ({ busName, deviceId, moduleId }: EtherCATModuleEdi
     return () => {
       cancelled = true
     }
-  }, [esi, module])
+  }, [esi, moduleIdent, moduleRepoId])
 
   const handleUpdateChannelMappings = useCallback(
     (channelMappings: EtherCATChannelMapping[]) => {

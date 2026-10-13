@@ -60,10 +60,13 @@ const SAMPLE_ITEM: ESIRepositoryItemLight = {
   loadedAt: '2026-01-01T00:00:00.000Z',
 }
 
-/** Build an XML File whose `.text()` resolves regardless of jsdom version. */
+/** Build an XML File whose `.text()` and `.arrayBuffer()` resolve regardless of jsdom version. */
 function xmlFile(name = 'Beckhoff.xml', content = '<xml />'): File {
   const file = new File([content], name, { type: 'text/xml' })
   Object.defineProperty(file, 'text', { value: () => Promise.resolve(content) })
+  Object.defineProperty(file, 'arrayBuffer', {
+    value: () => Promise.resolve(new TextEncoder().encode(content).buffer),
+  })
   return file
 }
 
@@ -195,7 +198,7 @@ describe('ESIUpload — ZIP import (DOPE-704 E1)', () => {
     expect(calls).toEqual(['ur20-coupler.xml', 'ur20-slot.xml'])
   })
 
-  it('reports dropped ZIP entries with a <zipname> → <entry> prefix', async () => {
+  it('reports dropped ZIP entries under the ZIP name with the reason', async () => {
     const zip = await makeZipFile('weidmueller.zip', [
       { path: 'ur20-coupler.xml', content: '<EtherCATInfo />' },
       { path: 'readme.txt', content: 'hello' },
@@ -209,7 +212,11 @@ describe('ESIUpload — ZIP import (DOPE-704 E1)', () => {
 
     await waitFor(() => expect(onFilesLoaded).toHaveBeenCalled())
     const errors = onFilesLoaded.mock.calls[0]?.[1] as Array<{ filename: string; error: string }> | undefined
-    expect(errors?.some((e) => e.filename === 'weidmueller.zip → readme.txt')).toBe(true)
+    expect(
+      errors?.some(
+        (e) => e.filename === 'weidmueller.zip' && e.error === 'Dropped from the ZIP: readme.txt (not an XML file)',
+      ),
+    ).toBe(true)
   })
 
   it('reports a ZIP containing no .xml entries as an explicit error', async () => {

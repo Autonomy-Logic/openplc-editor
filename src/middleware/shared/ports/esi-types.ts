@@ -83,6 +83,8 @@ export interface ESIPdoEntry {
   dataType: ESIDataType
   /** Optional: Comment/description */
   comment?: string
+  /** Index shifts with the module's slot (ESI `DependOnSlot` / `DependOnSlotGroup`). */
+  dependOnSlot?: boolean
 }
 
 /**
@@ -101,6 +103,8 @@ export interface ESIPdo {
   smIndex?: number
   /** List of entries in this PDO */
   entries: ESIPdoEntry[]
+  /** PDO index shifts with the module's slot (ESI `DependOnSlot` / `DependOnSlotGroup`). */
+  dependOnSlot?: boolean
   /**
    * DOPE-704 E1: Indices of other PDOs this one excludes. When assigned, each excluded
    * PDO becomes unassignable in the Simple view with the tooltip "excluded by <index>".
@@ -199,6 +203,8 @@ export interface SDOConfigurationEntry {
    * module-ident-list writes to `0xF030` when the coupler advertises CompleteAccess.
    */
   completeAccess?: boolean
+  /** Object index shifts with the owning module's slot. */
+  dependOnSlot?: boolean
 }
 
 // ===================== DEVICE ENRICHMENT =====================
@@ -245,7 +251,7 @@ export interface ESIInitCmd {
   index: string
   /** Object sub-index (0 by default). */
   subIndex: number
-  /** Hex-encoded payload bytes (e.g. "0xDEADBEEF"). */
+  /** Payload bytes as `0x`-prefixed hex, in wire order (e.g. "0x841F0900"). */
   data?: string
   /** Byte-string payload (e.g. a module's name). */
   dataAscii?: string
@@ -257,6 +263,8 @@ export interface ESIInitCmd {
   completeAccess?: boolean
   /** Human-readable comment. */
   comment?: string
+  /** Object index shifts with the module's slot (ESI `DependOnSlot` / `DependOnSlotGroup`). */
+  dependOnSlot?: boolean
 }
 
 /**
@@ -286,8 +294,8 @@ export interface ESISlot {
   minInstances: number
   /** Maximum number of module instances. */
   maxInstances: number
-  /** Allowed module classes (free-form vendor strings). */
-  moduleClass?: string
+  /** Module classes this slot accepts (the `<Class>` of each `<ModuleClass>`). */
+  moduleClasses?: string[]
   /** Allowed module idents (hex) when the ESI gates by ident rather than class. */
   moduleIdents?: string[]
   /** Default module ident to pre-populate the slot with. */
@@ -324,6 +332,8 @@ export interface ESIModulePdoGroup {
   group: number
   /** Sync manager assignment. */
   sm?: number
+  /** Byte alignment the coupler applies to this group's process data (ESI `Alignment`). */
+  alignment?: number
   /** Default RxPDO index template for this group (ETG.5001 names). */
   rxPdoIndex?: string
   /** Default TxPDO index template for this group. */
@@ -512,6 +522,8 @@ export interface PersistedPdoEntry {
   name: string
   /** Data type (e.g., "BOOL", "INT16", "BIT" for padding) */
   dataType: string
+  /** Index shifts with the owning module's slot. */
+  dependOnSlot?: boolean
 }
 
 /**
@@ -524,6 +536,8 @@ export interface PersistedPdo {
   name: string
   /** PDO entries including padding */
   entries: PersistedPdoEntry[]
+  /** PDO index shifts with the owning module's slot. */
+  dependOnSlot?: boolean
   /**
    * Whether the PDO is in the slave's assignment (ESI `Sm` or `Mandatory`). Absent in projects
    * saved before it was recorded, which are treated as every PDO assigned.

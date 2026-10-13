@@ -80,6 +80,40 @@ function getTextValue(value: unknown): string {
   return typeof value === 'object' ? JSON.stringify(value) : String(value as string)
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+/** Numeric value of an ETG number (`#x…`, `0x…` or decimal); NaN when unparseable. */
+function etgNumber(value: unknown): number {
+  const text = getTextValue(value)
+  if (!text) return Number.NaN
+  return Number(parseHexValue(text))
+}
+
+/** True when an element carries `DependOnSlot` or `DependOnSlotGroup` set to true. */
+function dependsOnSlot(el: unknown): boolean {
+  if (!isRecord(el)) return false
+  return parseBoolAttr(el['@_DependOnSlot']) || parseBoolAttr(el['@_DependOnSlotGroup'])
+}
+
+/** `<Data>` hex payload as `0x`-prefixed upper-case hex, or undefined when not valid hex bytes. */
+function normaliseDataHex(raw: string): string | undefined {
+  const compact = raw.replace(/^(0x|#x)/i, '').replace(/\s+/g, '')
+  if (compact.length === 0 || compact.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(compact)) return undefined
+  return `0x${compact.toUpperCase()}`
+}
+
+/** Class names from `<ModuleClass>` children: plain text or a `<Class>` sub-element. */
+function readModuleClasses(value: unknown): string[] {
+  return ensureArray(value)
+    .map((mc) => {
+      if (isRecord(mc)) return 'Class' in mc ? getTextValue(mc['Class']) : '#text' in mc ? getTextValue(mc) : ''
+      return getTextValue(mc)
+    })
+    .filter((c) => c.length > 0)
+}
+
 /**
  * Create a configured XMLParser instance
  */
@@ -89,6 +123,8 @@ function createParser(): XMLParser {
     attributeNamePrefix: '@_',
     textNodeName: '#text',
     parseAttributeValue: false,
+    // Keep text nodes as written: `<Data>00100100</Data>` must not lose its leading zeros.
+    parseTagValue: false,
     trimValues: true,
     isArray: (tagName: string) => {
       // Tags that can appear multiple times and should always be arrays
@@ -216,10 +252,9 @@ export function parseESILight(xmlString: string, filename?: string): ESILightRes
         (typeEl?.['@_ModuleIdent'] as string | number | undefined) ??
           (m['@_ModuleIdent'] as string | number | undefined),
       )
-      if (ident === '0x00000000') return null
+      if (!(etgNumber(ident) > 0)) return null
       const name = getTextValue(m['Name']) || getTextValue(typeEl) || ident
-      const moduleClass =
-        getTextValue(typeEl?.['@_ModuleClass']) || getTextValue(m['ModuleClass']) || undefined
+      const moduleClass = getTextValue(typeEl?.['@_ModuleClass']) || readModuleClasses(m['ModuleClass'])[0] || undefined
       return { ident, name, moduleClass }
     }
     const modules: ESIModuleSummary[] = []
@@ -770,9 +805,13 @@ function parseCoEFlags(deviceEl: Record<string, unknown>): ESIDevice['coeFlags']
 function parseInitCmd(cmd: Record<string, unknown>): ESIInitCmd | null {
   const transition = getTextValue(cmd['Transition'])
   if (!transition) return null
-  const index = parseHexValue((cmd['Index'] as string | number | undefined) ?? '0')
-  const subIndex = parseInt(getTextValue(cmd['SubIndex']) || '0', 10) || 0
-  const data = getTextValue(cmd['Data']) || undefined
+  const indexText = getTextValue(cmd['Index'])
+  if (!indexText) return null
+  const index = parseHexValue(indexText)
+  const subIndexNum = etgNumber(cmd['SubIndex'])
+  const subIndex = Number.isFinite(subIndexNum) ? subIndexNum : 0
+  const dataText = getTextValue(cmd['Data'])
+  const data = dataText ? normaliseDataHex(dataText) : undefined
   const dataAscii = getTextValue(cmd['DataAscii']) || undefined
   const valueStr = getTextValue(cmd['Value'])
   const value = valueStr ? parseFloat(valueStr) : undefined
@@ -791,16 +830,17 @@ function parseInitCmd(cmd: Record<string, unknown>): ESIInitCmd | null {
     dataType,
     completeAccess,
     comment,
+    dependOnSlot: dependsOnSlot(cmd['Index']) || undefined,
   }
 }
 
 function parseInitCmds(deviceEl: Record<string, unknown>): ESIInitCmd[] {
   const out: ESIInitCmd[] = []
   const seen = new Set<Record<string, unknown>>()
-  const walk = (node: unknown): void => {
+  const walk = (node: unknown, inCoE: boolean): void => {
     if (node === null || node === undefined) return
     if (Array.isArray(node)) {
-      for (const n of node) walk(n)
+      for (const n of node) walk(n, inCoE)
       return
     }
     if (typeof node !== 'object') return
@@ -808,19 +848,20 @@ function parseInitCmds(deviceEl: Record<string, unknown>): ESIInitCmd[] {
     if (seen.has(obj)) return
     seen.add(obj)
     const initCmdsEl = obj['InitCmds'] as Record<string, unknown> | undefined
-    if (initCmdsEl) {
-      const list = ensureArray(initCmdsEl['InitCmd'] as Record<string, unknown> | Record<string, unknown>[])
-      for (const cmd of list) {
-        const parsed = parseInitCmd(cmd)
-        if (parsed) out.push(parsed)
-      }
+    const wrapped = initCmdsEl
+      ? ensureArray(initCmdsEl['InitCmd'] as Record<string, unknown> | Record<string, unknown>[])
+      : []
+    // ESIs place CoE startup commands directly under <CoE>; a bare <InitCmd> elsewhere is
+    // an ESC register command with a different shape and is not read here.
+    const direct = inCoE ? ensureArray(obj['InitCmd'] as Record<string, unknown> | Record<string, unknown>[]) : []
+    for (const cmd of [...wrapped, ...direct]) {
+      const parsed = parseInitCmd(cmd)
+      if (parsed) out.push(parsed)
     }
-    // Walk into Mailbox and CoE to find nested InitCmds, bounded to those names so
-    // we don't descend into every PDO entry's attributes.
-    walk(obj['Mailbox'])
-    walk(obj['CoE'])
+    walk(obj['Mailbox'], false)
+    walk(obj['CoE'], true)
   }
-  walk(deviceEl)
+  walk(deviceEl, false)
   return out
 }
 
@@ -864,18 +905,21 @@ function parseSlotsSpec(deviceEl: Record<string, unknown>): ESIDevice['slots'] {
     const name = getTextValue(s['Name']) || undefined
     const minInstances = parseInt(getTextValue(s['@_MinInstances']) || '0', 10) || 0
     const maxInstances = parseInt(getTextValue(s['@_MaxInstances']) || '1', 10) || 1
-    const moduleClass = getTextValue(s['ModuleClass'] ?? s['@_ModuleClass']) || undefined
-    const moduleIdents = ensureArray(
-      s['ModuleIdent'] as (string | Record<string, unknown>) | (string | Record<string, unknown>)[],
+    const moduleClasses = [...readModuleClasses(s['ModuleClass']), getTextValue(s['@_ModuleClass'])].filter(
+      (c) => c.length > 0,
     )
-      .map((m) => parseHexValue(typeof m === 'string' ? m : getTextValue(m['#text'] ?? m)))
-      .filter(Boolean)
-    const defaultModuleIdent = getTextValue(s['DefaultModuleIdent']) || undefined
+    const identEls = ensureArray(s['ModuleIdent'])
+    const moduleIdents = identEls
+      .map((m) => getTextValue(m))
+      .filter((t) => t.length > 0)
+      .map(parseHexValue)
+    const defaultEl = identEls.find((m) => isRecord(m) && parseBoolAttr(m['@_Default']))
+    const defaultModuleIdent = getTextValue(s['DefaultModuleIdent']) || (defaultEl ? getTextValue(defaultEl) : '')
     return {
       name,
       minInstances,
       maxInstances,
-      moduleClass,
+      moduleClasses: moduleClasses.length > 0 ? moduleClasses : undefined,
       moduleIdents: moduleIdents.length > 0 ? moduleIdents : undefined,
       defaultModuleIdent: defaultModuleIdent ? parseHexValue(defaultModuleIdent) : undefined,
     }
@@ -900,17 +944,19 @@ function parseModulePdoGroups(deviceEl: Record<string, unknown>): ESIModulePdoGr
       | Record<string, unknown>[]
       | undefined)
   const groups = ensureArray(groupsEl)
-  return groups.map((g): ESIModulePdoGroup => {
-    const group = parseInt(getTextValue(g['@_Group'] ?? g['Group']) || '0', 10) || 0
+  // A group's number is its position in the list; `#x0` means the group has no PDO.
+  const pdoIndexOf = (v: unknown): string | undefined => (etgNumber(v) > 0 ? parseHexValue(getTextValue(v)) : undefined)
+  return groups.map((g, position): ESIModulePdoGroup => {
+    const explicit = etgNumber(g['@_Group'] ?? g['Group'])
     const smAttr = getTextValue(g['@_Sm'] ?? g['Sm'])
     const sm = smAttr ? parseInt(smAttr, 10) || undefined : undefined
-    const rxPdoIndex = getTextValue(g['@_RxPdo'] ?? g['RxPdo']) || undefined
-    const txPdoIndex = getTextValue(g['@_TxPdo'] ?? g['TxPdo']) || undefined
+    const alignment = etgNumber(g['@_Alignment'])
     return {
-      group,
+      group: Number.isFinite(explicit) ? explicit : position,
       sm,
-      rxPdoIndex: rxPdoIndex ? parseHexValue(rxPdoIndex) : undefined,
-      txPdoIndex: txPdoIndex ? parseHexValue(txPdoIndex) : undefined,
+      alignment: Number.isFinite(alignment) ? alignment : undefined,
+      rxPdoIndex: pdoIndexOf(g['@_RxPdo'] ?? g['RxPdo']),
+      txPdoIndex: pdoIndexOf(g['@_TxPdo'] ?? g['TxPdo']),
     }
   })
 }
@@ -928,10 +974,12 @@ function parseFullModule(moduleEl: Record<string, unknown>): ESIModule | null {
   )
   if (!identStr) return null
   const ident = parseHexValue(identStr)
+  const typeEl = moduleEl['Type'] as Record<string, unknown> | undefined
   const name = getTextValue(moduleEl['Name']) || `Module ${ident}`
-  const moduleClass = getTextValue(moduleEl['ModuleClass']) || undefined
+  const moduleClass =
+    getTextValue(typeEl?.['@_ModuleClass']) || readModuleClasses(moduleEl['ModuleClass'])[0] || undefined
   const description = getTextValue(moduleEl['Comment']) || undefined
-  const modulePdoGroupStr = getTextValue(moduleEl['@_ModulePdoGroup'])
+  const modulePdoGroupStr = getTextValue(typeEl?.['@_ModulePdoGroup'] ?? moduleEl['@_ModulePdoGroup'])
   const modulePdoGroup = modulePdoGroupStr ? parseInt(modulePdoGroupStr, 10) || undefined : undefined
 
   const rxPdo = ensureArray(moduleEl['RxPdo'] as Record<string, unknown> | Record<string, unknown>[]).map(parseFullPdo)
@@ -1042,8 +1090,9 @@ function parseFullPdo(pdoEl: Record<string, unknown>): ESIPdo {
     // "[object Object]" and poison every downstream channel id.
     index: parseHexValue(getTextValue(pdoEl['Index'])),
     name: getTextValue(pdoEl['Name']) || 'Unnamed PDO',
-    fixed: getTextValue(pdoEl['@_Fixed']).toLowerCase() === 'true',
-    mandatory: getTextValue(pdoEl['@_Mandatory']).toLowerCase() === 'true',
+    fixed: parseBoolAttr(pdoEl['@_Fixed']),
+    mandatory: parseBoolAttr(pdoEl['@_Mandatory']),
+    dependOnSlot: dependsOnSlot(pdoEl['Index']) || undefined,
     smIndex: pdoEl['@_Sm'] !== undefined ? parseInt(getTextValue(pdoEl['@_Sm']) || '0', 10) : undefined,
     entries,
     exclude: exclude.length > 0 ? exclude : undefined,
@@ -1061,13 +1110,13 @@ function parseFullPdoEntry(entryEl: Record<string, unknown>): ESIPdoEntry | null
 
   const indexStr = getTextValue(indexValue)
 
-  // Padding entry (no index but has bit length)
-  if (!indexStr && bitLen > 0) {
+  // Padding: no index, or an index of numeric zero (`#x0`, `#x0000`) whatever the name.
+  if ((!indexStr || etgNumber(indexStr) === 0) && bitLen > 0) {
     return {
       index: '0x0000',
       subIndex: '0x00',
       bitLen,
-      name: 'Padding',
+      name: getTextValue(entryEl['Name']) || 'Padding',
       dataType: 'BIT',
     }
   }
@@ -1076,10 +1125,11 @@ function parseFullPdoEntry(entryEl: Record<string, unknown>): ESIPdoEntry | null
 
   return {
     index: parseHexValue(indexStr),
-    subIndex: parseHexValue(getTextValue(entryEl['SubIndex'])),
+    subIndex: parseHexValue(getTextValue(entryEl['SubIndex']) || '0'),
     bitLen,
     name: getTextValue(entryEl['Name']) || 'Unnamed',
     dataType: getTextValue(entryEl['DataType']) || 'BYTE',
     comment: getTextValue(entryEl['Comment']) || undefined,
+    dependOnSlot: dependsOnSlot(indexValue) || undefined,
   }
 }

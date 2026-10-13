@@ -108,6 +108,7 @@ import type {
 import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import type { VersionControlResult } from '@root/middleware/shared/ports/version-control-port'
+import { findModuleByIdent } from '@root/middleware/shared/utils/ethercat/esi-module-resolve'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
@@ -3396,12 +3397,7 @@ class MainProcessBridge implements MainIpcModule {
     })
 
   /** Load one module by ident from a standalone-module ESI file. */
-  handleESILoadModuleFull = async (
-    _event: IpcMainInvokeEvent,
-    projectPath: string,
-    itemId: string,
-    ident: string,
-  ) =>
+  handleESILoadModuleFull = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string, ident: string) =>
     this.wrapServiceCall(async () => {
       const xmlResult = await this.esiService.loadXmlFile(projectPath, itemId)
       if (!xmlResult.success || !xmlResult.content) {
@@ -3411,8 +3407,7 @@ class MainProcessBridge implements MainIpcModule {
       if (!parsed.success || parsed.modules === undefined) {
         return { success: false as const, error: parsed.error ?? 'Failed to parse module ESI' }
       }
-      const want = ident.toLowerCase()
-      const matched = parsed.modules.find((m) => m.ident.toLowerCase() === want)
+      const matched = findModuleByIdent(parsed.modules, ident)
       if (matched === undefined) {
         return { success: false as const, error: `Module ident ${ident} not found in ESI item ${itemId}` }
       }

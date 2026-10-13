@@ -176,7 +176,7 @@ describe('DOPE-704 E1: parseESIDeviceFull PDO assignment fields', () => {
       // Fast-xml-parser normalises bare numeric <Data> payloads to numbers; the editor
       // emits byte-string payloads through DataAscii or multi-byte Data so this edge
       // doesn't bite in practice. Byte-string path covered by the modular device fixture.
-      data: '8',
+      data: '0x08',
       comment: 'Mode of operation = CSP',
     })
   })
@@ -196,7 +196,7 @@ describe('DOPE-704 E1: parseESIDeviceFull modular device fields', () => {
     expect(slots?.slots.length).toBe(1)
     expect(slots?.slots[0]?.name).toBe('I/O slot')
     expect(slots?.slots[0]?.maxInstances).toBe(64)
-    expect(slots?.slots[0]?.moduleClass).toBe('UR20-IO')
+    expect(slots?.slots[0]?.moduleClasses).toEqual(['UR20-IO'])
   })
 
   test('reads inline <Modules> block and preserves module InitCmd byte-string payload', () => {
@@ -245,7 +245,7 @@ describe('DOPE-704 E1: ZIP import', () => {
     const r = await importESIZip(buf)
     expect(r.imported.length).toBe(2)
     expect(r.imported.map((f) => f.filename).sort()).toEqual(['coupler.xml', 'modules.xml'])
-    expect(r.dropped.sort()).toEqual(['junk.xml', 'notes.txt'])
+    expect(r.dropped.sort()).toEqual(['junk.xml (not an ESI file)', 'notes.txt (not an XML file)'])
   })
 
   test('drops macOS __MACOSX metadata and dotfiles', async () => {

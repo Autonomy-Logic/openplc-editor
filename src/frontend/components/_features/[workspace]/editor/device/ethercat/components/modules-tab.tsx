@@ -12,24 +12,24 @@
 import { ArrowIcon } from '@root/frontend/assets/icons/interface/Arrow'
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
-import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import TableActions from '@root/frontend/components/_atoms/table-actions'
+import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { cn } from '@root/frontend/utils/cn'
 import type {
   ConfiguredEtherCATDevice,
   ConfiguredEtherCATModule,
   ESIDevice,
-  ESIModule,
   ESIModuleSummary,
   ESIRepositoryItemLight,
-  PersistedPdo,
-  PersistedPdoEntry,
-  SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
 import { useEsi, useEtherCATScan } from '@root/middleware/shared/providers/platform-context'
 import type { CouplerCompatibility } from '@root/middleware/shared/utils/ethercat'
-import { isModuleCompatibleWithCoupler, reconcilePdoChannels } from '@root/middleware/shared/utils/ethercat'
+import {
+  buildModuleForSlot,
+  isModuleCompatibleWithCoupler,
+  resolveEsiModule,
+} from '@root/middleware/shared/utils/ethercat'
 import { canonicaliseIdent } from '@root/middleware/shared/utils/ethercat/scan-modules-protocol'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
@@ -48,107 +48,6 @@ type ModulesTabProps = {
    * use elsewhere.
    */
   externalUsedAddresses: Set<string>
-}
-
-/**
- * Slot-renumbered hex-add used when building a module from its ESI. Preserves the
- * leading-zero padding so indices stay readable in the project file.
- */
-function hexAdd(hexIndex: string, delta: number): string {
-  const match = hexIndex.match(/^(0[xX])?([0-9a-fA-F]+)$/)
-  if (match === null) return hexIndex
-  const prefix = match[1] ?? '0x'
-  const digits = match[2]
-  const value = parseInt(digits, 16) + delta
-  const padded = value.toString(16).toUpperCase().padStart(digits.length, '0')
-  return `${prefix}${padded}`
-}
-
-/**
- * Build a persisted module from a full ESIModule. Shared by both the manual add
- * (module browser) and the scan apply paths. `usedAddresses` carries the IEC
- * addresses already claimed elsewhere in the project plus any addresses this
- * add batch has just allocated, so each new module picks fresh ones.
- */
-function buildModuleForSlot(
-  slot: number,
-  esiModule: ESIModule,
-  slotIndexIncrement: number,
-  slotPdoIncrement: number,
-  esiRepositoryItemId: string,
-  usedAddresses: Set<string>,
-): ConfiguredEtherCATModule {
-  const slotOffset = slot - 1
-  const indexDelta = slotOffset * slotIndexIncrement
-  const pdoDelta = slotOffset * slotPdoIncrement
-
-  const persistPdo = (pdos: ESIModule['rxPdo']): PersistedPdo[] =>
-    pdos.map((pdo) => ({
-      index: hexAdd(pdo.index, pdoDelta),
-      name: pdo.name,
-      assigned: true,
-      fixed: pdo.fixed || undefined,
-      mandatory: pdo.mandatory || undefined,
-      sm: pdo.smIndex,
-      entries: pdo.entries.map(
-        (entry): PersistedPdoEntry => ({
-          index: hexAdd(entry.index, indexDelta),
-          subIndex: entry.subIndex,
-          bitLen: entry.bitLen,
-          name: entry.name,
-          dataType: entry.dataType,
-        }),
-      ),
-    }))
-
-  const asciiToHex = (ascii: string): string =>
-    Array.from(ascii)
-      .map((ch) => ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase())
-      .join('')
-
-  const sdoFromInitCmds: SDOConfigurationEntry[] = esiModule.initCmds.map((cmd) => {
-    const bytesHex = cmd.dataAscii !== undefined ? asciiToHex(cmd.dataAscii) : undefined
-    const byteLen = bytesHex !== undefined ? bytesHex.length / 2 : 0
-    const numericValue = cmd.value !== undefined ? String(cmd.value) : (cmd.data ?? '')
-    return {
-      index: hexAdd(cmd.index, indexDelta),
-      subIndex: cmd.subIndex,
-      value: bytesHex !== undefined ? '' : numericValue,
-      valueBytes: bytesHex,
-      completeAccess: cmd.completeAccess,
-      defaultValue: numericValue,
-      dataType: bytesHex !== undefined ? 'OCTET_STRING' : (cmd.dataType ?? 'UDINT'),
-      bitLength: bytesHex !== undefined ? byteLen * 8 : 32,
-      name: cmd.comment ?? cmd.index,
-      objectName: `Module slot ${slot} InitCmd`,
-    }
-  })
-
-  const rxPdos = persistPdo(esiModule.rxPdo)
-  const txPdos = persistPdo(esiModule.txPdo)
-  // Same allocator the device-level enrich flow uses, so module channels receive
-  // non-conflicting IEC addresses from the start and the Channel Mappings view
-  // never shows an empty Address column.
-  const { channelInfo, channelMappings } = reconcilePdoChannels({
-    rxPdos,
-    txPdos,
-    previousMappings: [],
-    externalUsedAddresses: usedAddresses,
-  })
-  for (const m of channelMappings) usedAddresses.add(m.iecLocation)
-
-  return {
-    id: `slot-${slot}`,
-    slot,
-    name: esiModule.name,
-    ident: esiModule.ident,
-    esiModuleRef: { repositoryItemId: esiRepositoryItemId, moduleIdent: esiModule.ident },
-    channelMappings,
-    channelInfo: channelInfo.length > 0 ? channelInfo : undefined,
-    rxPdos,
-    txPdos,
-    sdoConfigurations: sdoFromInitCmds.length > 0 ? sdoFromInitCmds : undefined,
-  }
 }
 
 /**
@@ -221,10 +120,7 @@ export const ModulesTab = ({
   // report modules it does not support, and the vendor gate stops an operator
   // from manually adding across vendors. ETG.5001 slot restrictions are not
   // consulted here — see the note in isModuleCompatibleWithCoupler.
-  const couplerCompatibility = useMemo<CouplerCompatibility>(
-    () => ({ vendorId: device.vendorId }),
-    [device.vendorId],
-  )
+  const couplerCompatibility = useMemo<CouplerCompatibility>(() => ({ vendorId: device.vendorId }), [device.vendorId])
 
   const moduleMatches = useMemo(
     () => matchScannedModules(scannedModules, repository, couplerCompatibility),
@@ -297,58 +193,32 @@ export const ModulesTab = ({
     const existingBySlot = new Map(modules.map((m) => [m.slot, m]))
     const usedAddresses = buildUsedAddressSeed()
 
-    // Load full ESIs for each repo item we need, so we can produce PDOs / SDOs.
-    const loadedFull = new Map<string, ESIModule[] | null>()
-    for (const m of matched) {
-      if (!m.match) continue
-      if (loadedFull.has(m.match.repoItem.id)) continue
-      // Walk the repo item's devices first (modules carried inline on a coupler).
-      const esiModules: ESIModule[] = []
-      for (let i = 0; i < m.match.repoItem.devices.length; i++) {
-        try {
-          const r = await esiPort.loadDeviceFull(m.match.repoItem.id, i)
-          if (r.success && r.device?.modules) esiModules.push(...r.device.modules)
-        } catch {
-          // ignore and try the next device
-        }
-      }
-      loadedFull.set(m.match.repoItem.id, esiModules.length > 0 ? esiModules : null)
-    }
-
-    // Modules the repository matched by ident but whose full ESI (RxPdo/TxPdo/
-    // InitCmds) could not be loaded. Same refusal reason as unmatched: without
-    // the ESI the module has no channel structure to feed the generator or the
-    // Channel Mappings view, and silently adding a stub leaves the operator
-    // with an unusable row they can't tell apart from a real add.
+    // A module matched by ident whose full ESI can't be loaded is refused rather than
+    // staged as a stub: without PDOs it would map nothing on the wire.
     const unresolved: typeof matched = []
 
     for (const m of matched) {
       if (!m.match) continue
-      const esiModules = loadedFull.get(m.match.repoItem.id)
-      let esiModule = esiModules?.find((em) => em.ident.toLowerCase() === m.ident.toLowerCase())
-      // Standalone module file (no <Device>): fall through to loadModuleFull.
-      if (esiModule === undefined) {
-        try {
-          const r = await esiPort.loadModuleFull(m.match.repoItem.id, m.ident)
-          if (r.success) esiModule = r.module
-        } catch {
-          // leave esiModule undefined and refuse below
-        }
-      }
+      const esiModule = await resolveEsiModule(esiPort, m.match.repoItem, m.ident)
       if (esiModule === undefined) {
         unresolved.push(m)
         continue
       }
       existingBySlot.set(
         m.slot,
-        buildModuleForSlot(m.slot, esiModule, slotIndexIncrement, slotPdoIncrement, m.match.repoItem.id, usedAddresses),
+        buildModuleForSlot({
+          id: `slot-${m.slot}`,
+          slot: m.slot,
+          esiModule,
+          increments: { slotIndexIncrement, slotPdoIncrement },
+          repositoryItemId: m.match.repoItem.id,
+          usedAddresses,
+        }),
       )
     }
 
     if (unresolved.length > 0) {
-      const names = unresolved
-        .map((u) => (u.match ? u.match.module.name : u.ident))
-        .join(', ')
+      const names = unresolved.map((u) => (u.match ? u.match.module.name : u.ident)).join(', ')
       toast({
         title: 'Modules not added',
         description: `No ESI details available for: ${names}. Load each module's ESI file into the repository and scan again.`,
@@ -374,32 +244,7 @@ export const ModulesTab = ({
     async (modSummary: ESIModuleSummary, repoItem: ESIRepositoryItemLight) => {
       if (esi === undefined) return
       const esiPort = esi
-      let built: ConfiguredEtherCATModule
-      let esiModule: ESIModule | undefined
-      // Walk the repo item's devices first (inline modules on a coupler ESI).
-      for (let i = 0; i < repoItem.devices.length; i++) {
-        try {
-          const r = await esiPort.loadDeviceFull(repoItem.id, i)
-          const m = r.success
-            ? r.device?.modules?.find((em) => em.ident.toLowerCase() === modSummary.ident.toLowerCase())
-            : undefined
-          if (m !== undefined) {
-            esiModule = m
-            break
-          }
-        } catch {
-          // continue
-        }
-      }
-      // Standalone module ESI: no `<Device>`, module list lives at the top.
-      if (esiModule === undefined) {
-        try {
-          const r = await esiPort.loadModuleFull(repoItem.id, modSummary.ident)
-          if (r.success) esiModule = r.module
-        } catch {
-          // leave undefined and refuse below
-        }
-      }
+      const esiModule = await resolveEsiModule(esiPort, repoItem, modSummary.ident)
       if (esiModule === undefined) {
         // Refuse rather than stage a stub without PDOs. A stub has no channels
         // to render in the Channel Mappings view and no PDOs to feed the
@@ -412,14 +257,14 @@ export const ModulesTab = ({
         })
         return
       }
-      built = buildModuleForSlot(
-        nextFreeSlot,
+      const built = buildModuleForSlot({
+        id: `slot-${nextFreeSlot}`,
+        slot: nextFreeSlot,
         esiModule,
-        slotIndexIncrement,
-        slotPdoIncrement,
-        repoItem.id,
-        buildUsedAddressSeed(),
-      )
+        increments: { slotIndexIncrement, slotPdoIncrement },
+        repositoryItemId: repoItem.id,
+        usedAddresses: buildUsedAddressSeed(),
+      })
       onUpdateModules([...modules, built])
     },
     [esi, modules, nextFreeSlot, onUpdateModules, slotIndexIncrement, slotPdoIncrement, buildUsedAddressSeed],

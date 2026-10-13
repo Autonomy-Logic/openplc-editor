@@ -1,7 +1,7 @@
 import { cn } from '@root/frontend/utils/cn'
 import type { ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import { useEsi } from '@root/middleware/shared/providers/platform-context'
-import { type ESIImportFile, importESIZip } from '@root/middleware/shared/utils/ethercat/esi-zip-import'
+import { decodeXmlBytes, type ESIImportFile, importESIZip } from '@root/middleware/shared/utils/ethercat/esi-zip-import'
 import { useCallback, useRef, useState } from 'react'
 
 import { ESIParseProgress } from './esi-parse-progress'
@@ -56,11 +56,8 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
           for (const file of report.imported) {
             zipExpanded.push({ sourceZip: zipFile.name, file })
           }
-          for (const droppedName of report.dropped) {
-            errors.push({
-              filename: `${zipFile.name} → ${droppedName}`,
-              error: 'Not a recognisable ESI XML; dropped from the ZIP.',
-            })
+          for (const droppedEntry of report.dropped) {
+            errors.push({ filename: zipFile.name, error: `Dropped from the ZIP: ${droppedEntry}` })
           }
           if (report.imported.length === 0 && report.dropped.length === 0) {
             errors.push({ filename: zipFile.name, error: 'ZIP contained no .xml entries.' })
@@ -105,7 +102,13 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
 
       type WorkItem = { filename: string; getXml: () => Promise<string>; size?: number }
       const work: WorkItem[] = [
-        ...xmlInputs.map((f): WorkItem => ({ filename: f.name, getXml: () => f.text(), size: f.size })),
+        ...xmlInputs.map(
+          (f): WorkItem => ({
+            filename: f.name,
+            getXml: async () => decodeXmlBytes(new Uint8Array(await f.arrayBuffer())),
+            size: f.size,
+          }),
+        ),
         ...zipExpanded.map(
           ({ file }): WorkItem => ({ filename: file.filename, getXml: () => Promise.resolve(file.xml) }),
         ),

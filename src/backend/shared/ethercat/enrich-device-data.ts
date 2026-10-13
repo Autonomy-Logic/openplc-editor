@@ -18,7 +18,12 @@ import type {
   PersistedPdoEntry,
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
-import { type Cia402AxisConfig, DEFAULT_CIA402_AXIS_CONFIG, isCia402Drive } from '@root/middleware/shared/utils/ethercat'
+import {
+  type Cia402AxisConfig,
+  DEFAULT_CIA402_AXIS_CONFIG,
+  initCmdsToSdoEntries,
+  isCia402Drive,
+} from '@root/middleware/shared/utils/ethercat'
 
 import { assignedPdos, esiTypeToIecType, generateDefaultChannelMappings, pdoToChannels } from './esi-parser'
 import { extractDefaultSdoConfigurations } from './sdo-config-defaults'
@@ -36,35 +41,10 @@ export function deriveCoEFlags(device: ESIDevice): NonNullable<EtherCATSlaveConf
   }
 }
 
-/**
- * Convert the ESI `<InitCmds>` block at slave scope into persistable startup SDOs.
- * Byte-string payloads (a module name or similar) are kept in `valueBytes` as hex and
- * emitted through EtherDOG's `value_bytes` plumbing. Numeric payloads use `value`.
- */
+/** Slave-scope ESI CoE `<InitCmd>`s as startup SDO entries, or undefined when there are none. */
 export function esiInitCmdsToSdoEntries(cmds: ESIInitCmd[] | undefined): SDOConfigurationEntry[] | undefined {
-  if (cmds === undefined || cmds.length === 0) return undefined
-  const asciiToHex = (ascii: string): string =>
-    Array.from(ascii)
-      .map((ch) => ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase())
-      .join('')
-  const entries = cmds.map((cmd): SDOConfigurationEntry => {
-    const bytesHex = cmd.dataAscii !== undefined ? asciiToHex(cmd.dataAscii) : undefined
-    const byteLen = bytesHex !== undefined ? bytesHex.length / 2 : 0
-    const numericValue = cmd.value !== undefined ? String(cmd.value) : (cmd.data ?? '')
-    return {
-      index: cmd.index,
-      subIndex: cmd.subIndex,
-      value: bytesHex !== undefined ? '' : numericValue,
-      valueBytes: bytesHex,
-      completeAccess: cmd.completeAccess,
-      defaultValue: numericValue,
-      dataType: bytesHex !== undefined ? 'OCTET_STRING' : (cmd.dataType ?? 'UDINT'),
-      bitLength: bytesHex !== undefined ? byteLen * 8 : 32,
-      name: cmd.comment ?? cmd.index,
-      objectName: 'ESI InitCmd',
-    }
-  })
-  return entries
+  const entries = initCmdsToSdoEntries(cmds, 'ESI InitCmd')
+  return entries.length > 0 ? entries : undefined
 }
 
 /**

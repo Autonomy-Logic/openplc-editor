@@ -8,6 +8,15 @@ export {
   resolveCia402Objects,
   type ResolvedCia402Object,
 } from './cia402'
+export { findModuleByIdent, identsEqual, resolveEsiModule } from './esi-module-resolve'
+export { hexByteLength, initCmdsToSdoEntries, initCmdToSdoEntry, textToHexBytes } from './init-cmd-sdo'
+export { buildModuleForSlot, type BuildModuleInput, hexAdd, slotDeltas, type SlotIncrements } from './module-build'
+export { type CouplerCompatibility, isModuleCompatibleWithCoupler } from './module-compatibility'
+export {
+  type ReconcileChannelsInput,
+  type ReconcileChannelsResult,
+  reconcilePdoChannels,
+} from './reconcile-pdo-channels'
 export {
   type AxisPlan,
   collectAxes,
@@ -18,10 +27,4 @@ export {
   serializeSoftMotionAxisGlobalsToST,
   softMotionAxisNames,
 } from './softmotion-axis-naming'
-export {
-  reconcilePdoChannels,
-  type ReconcileChannelsInput,
-  type ReconcileChannelsResult,
-} from './reconcile-pdo-channels'
-export { type CouplerCompatibility, isModuleCompatibleWithCoupler } from './module-compatibility'
 export { validateEthercatProject } from './validate-ethercat-project'
