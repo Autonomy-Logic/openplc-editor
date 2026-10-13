@@ -37,10 +37,9 @@ export interface PlcopenParseResult {
 }
 
 // Parses PLCopen TC6-0201 XML into the same project-data shape
-// `XmlGenerator` consumes — the inverse of that pipeline
-// (xml-generator/old-editor/*.ts). Only the `old-editor` dialect shape is
-// handled today: SFC bodies and anything the codesys dialect emits surface
-// as non-fatal warnings rather than being parsed.
+// `PlcopenXmlGenerator` consumes — the inverse of that pipeline
+// (xml-generator/old-editor/*.ts). SFC bodies and other unsupported
+// elements surface as non-fatal warnings rather than being parsed.
 export interface PlcopenParseOptions {
   // Ladder blocks are drawn from their signature, which a foreign XML does not carry for library blocks.
   systemLibraries?: SystemLibrary[]

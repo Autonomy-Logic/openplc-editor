@@ -374,9 +374,6 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   ],
   'frontend/components/_features/[workspace]/editor/device/ethercat/index.tsx': ['backend-shared'],
   'frontend/hooks/use-device-configuration.ts': ['backend-shared', 'components'],
-  'frontend/utils/PLC/xml-generator/codesys/language/fbd-xml.ts': ['components', 'store'],
-  'frontend/utils/PLC/xml-generator/codesys/language/ladder-xml.ts': ['components', 'store'],
-  'frontend/utils/PLC/xml-generator/codesys/pou-xml.ts': ['store'],
   'frontend/utils/PLC/xml-generator/old-editor/language/fbd-xml.ts': ['components', 'store'],
   'frontend/utils/PLC/xml-generator/old-editor/language/ladder-xml.ts': ['components', 'store'],
   'frontend/utils/PLC/xml-generator/old-editor/pou-xml.ts': ['store'],
@@ -396,6 +393,10 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   'frontend/store/slices/ladder/utils/index.ts': ['components'],
   // Ladder slice — needs nodesBuilder + defaultCustomNodesStyles for rung creation
   'frontend/store/slices/ladder/slice.ts': ['components'],
+  // AI rung-spec builder — needs nodesBuilder, connectNodes and
+  // updateDiagramElementsPosition to turn a logical rung spec into a real
+  // xyflow graph, same as the interactive editor does
+  'frontend/store/slices/ladder/utils/rung-spec.ts': ['components'],
   // Device CONNECT flow (D72) — resolves RTU params from the board debug spec
   // via the shared `resolveDebugConnection` resolver, same as the activity bar's
   // debugger/post-flash paths.
@@ -450,8 +451,8 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   // Type-only: BoardInfo carries the pin of the package a VPP board came from.
   'middleware/shared/ports/types.ts': ['backend-shared'],
 
-  // PLCopen export — needs the shared XmlGenerator composing function
-  // (backend/shared/utils/PLC/xml-generator.ts) to turn the converted
+  // PLCopen export — needs the shared PlcopenXmlGenerator composing function
+  // (backend/shared/utils/PLC/plcopen-xml-generator.ts) to turn the converted
   // project data into XML before handing it to the platform port. No
   // frontend-reachable layer re-exports this function today; the
   // conversion logic itself stays local (mirrors compiler-adapter.ts's

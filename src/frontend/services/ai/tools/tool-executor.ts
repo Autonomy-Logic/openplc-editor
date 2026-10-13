@@ -1,13 +1,26 @@
+import { zodLadderFlowSchema } from '../../../../middleware/shared/ports/flow-schemas'
+import type { SystemLibrary, UserLibrary } from '../../../../middleware/shared/ports/library-types'
 import type { PLCBody } from '../../../../middleware/shared/ports/open-plc-types'
-import type { PLCDataType, PLCStructureVariable } from '../../../../middleware/shared/ports/types'
+import type { PLCDataType, PLCPou, PLCStructureVariable, PLCVariable } from '../../../../middleware/shared/ports/types'
 import type { OpenPLCStore } from '../../../store'
+import type { RungLadderState } from '../../../store/slices/ladder/types'
+import {
+  type BlockVariant,
+  buildRungFromSpec,
+  type LadderElementSpec,
+  rungToSpec,
+} from '../../../store/slices/ladder/utils/rung-spec'
+import { scheduleFlowWriteBack } from '../../../store/slices/shared/flow-writeback'
 import { computeHunks } from '../../../utils/ai-diff-review'
+import { isLegalIdentifier } from '../../../utils/keywords'
+import { getVariableRestrictionType, validateVariableType } from '../../../utils/PLC/validate-variable-type'
 import { isGraphicalLanguage } from '../context-collector'
 import { extractPouST, invalidateSTCache, type ProjectStTranspiler, transpileProjectToST } from '../graphical-context'
 import {
   adaptCreatePou,
   adaptCreateVariable,
   adaptUpdatePouBody,
+  type AddRungInput,
   BASE_TYPES,
   buildDatatypeFromCreateInput,
   type CreateDatatypeInput,
@@ -15,11 +28,15 @@ import {
   type CreateVariableInput,
   type DeleteDatatypeInput,
   type DeletePouInput,
+  type DeleteRungInput,
   type DeleteVariableInput,
+  type ReadLadderDiagramInput,
   resolveVariableType,
   type UpdateDatatypeInput,
   type UpdatePouBodyInput,
+  type UpdateRungInput,
   type UpdateVariableInput,
+  uuidv4,
 } from './tool-input-adapters'
 
 /** Claude sometimes emits VAR blocks and POU wrapper keywords despite instructions not to. */
@@ -57,6 +74,9 @@ const PROJECT_MUTATING_TOOLS = new Set([
   'create_datatype',
   'update_datatype',
   'delete_datatype',
+  'add_rung',
+  'update_rung',
+  'delete_rung',
 ])
 
 /**
@@ -111,6 +131,14 @@ function dispatchTool(
       return executeReadProjectState(store)
     case 'read_pou_body':
       return executeReadPouBody(store, toolInput as ReadPouBodyInput, options)
+    case 'read_ladder_diagram':
+      return executeReadLadderDiagram(store, toolInput as ReadLadderDiagramInput)
+    case 'add_rung':
+      return executeAddRung(store, toolInput as AddRungInput)
+    case 'update_rung':
+      return executeUpdateRung(store, toolInput as UpdateRungInput)
+    case 'delete_rung':
+      return executeDeleteRung(store, toolInput as DeleteRungInput)
     default:
       return { success: false, message: `Unknown tool: ${toolName}` }
   }
@@ -121,7 +149,7 @@ function executeCreatePou(store: OpenPLCStore, input: CreatePouInput): ToolResul
     return { success: false, message: 'Missing required fields: name, type, language' }
   }
 
-  const validLanguages = ['st', 'il', 'python', 'cpp']
+  const validLanguages = ['st', 'il', 'python', 'cpp', 'ld']
   if (!validLanguages.includes(input.language)) {
     return {
       success: false,
@@ -135,7 +163,12 @@ function executeCreatePou(store: OpenPLCStore, input: CreatePouInput): ToolResul
   }
 
   const { createProps, body: rawBody } = adaptCreatePou(input)
-  const body = rawBody ? sanitizePouBody(rawBody) : undefined
+  // A Ladder Diagram body is an xyflow graph ({ name, rungs }), not text — applying a raw
+  // string here would corrupt pou.body.value and break save/transpile (see
+  // AI_LADDER_GENERATION_PLAN.md). Ignore it rather than writing it through; add_rung builds
+  // the diagram instead.
+  const bodyIgnoredForLd = createProps.language === 'ld' && !!rawBody
+  const body = createProps.language !== 'ld' && rawBody ? sanitizePouBody(rawBody) : undefined
 
   const state = store.getState()
 
@@ -201,7 +234,7 @@ function executeCreatePou(store: OpenPLCStore, input: CreatePouInput): ToolResul
 
   return {
     success: true,
-    message: `Created ${createProps.type} "${createProps.name}" (${createProps.language})${body ? ' with initial code' : ''}`,
+    message: `Created ${createProps.type} "${createProps.name}" (${createProps.language})${body ? ' with initial code' : ''}${bodyIgnoredForLd ? ' — "body" is ignored for Ladder Diagram POUs; use add_rung to build it' : ''}`,
   }
 }
 
@@ -613,6 +646,420 @@ function executeReadProjectState(store: OpenPLCStore): ToolResult {
   }
 
   return { success: true, message: lines.join('\n') }
+}
+
+// ---------------------------------------------------------------------------
+// Ladder Diagram tools
+// ---------------------------------------------------------------------------
+
+const findVariableCaseInsensitive = (variables: PLCVariable[], name: string): PLCVariable | undefined =>
+  variables.find((v) => v.name.toLowerCase() === name.toLowerCase())
+
+function collectPouVariables(pou: PLCPou, globalVariables: PLCVariable[]): PLCVariable[] {
+  return [...(pou.interface?.variables ?? []), ...globalVariables]
+}
+
+function requireLadderPou(store: OpenPLCStore, pouName: string): { pou: PLCPou } | { error: string } {
+  const state = store.getState()
+  const pou = state.project.data.pous.find((p) => p.name === pouName)
+  if (!pou) return { error: `POU "${pouName}" not found.` }
+  if (pou.body.language !== 'ld') {
+    return { error: `POU "${pouName}" is not a Ladder Diagram (language "${pou.body.language}").` }
+  }
+  return { pou }
+}
+
+/**
+ * Resolve a `blockType` name to the `BlockVariant` shape `buildRungFromSpec` needs — mirrors
+ * the resolution order of `resolveLibraryBlock` (`_atoms/graphical-editor/ladder/block.tsx`):
+ * a project POU registered under `libraries.user` wins over a system-library POU of the same
+ * name. Rebuilt as a fresh object rather than reusing the component-layer helper directly —
+ * `adapters` cannot import `components` (see `rung-spec.ts`'s `BlockVariant` re-export).
+ */
+function resolveBlockVariant(
+  blockType: string,
+  libraries: { system: SystemLibrary[]; user: UserLibrary[] },
+  pous: PLCPou[],
+): BlockVariant | undefined {
+  const userLibrary = libraries.user.find((lib) => lib.name.toLowerCase() === blockType.toLowerCase())
+  const userPou = userLibrary
+    ? pous.find((pou) => pou.name.toLowerCase() === userLibrary.name.toLowerCase())
+    : undefined
+
+  if (userPou) {
+    const variables: BlockVariant['variables'] = (userPou.interface?.variables ?? []).map((variable) => ({
+      name: variable.name,
+      class: variable.class ?? 'local',
+      type: { definition: variable.type.definition, value: variable.type.value.toUpperCase() },
+    }))
+    if (userPou.pouType === 'function') {
+      const returnType = userPou.interface?.returnType ?? ''
+      const restriction = getVariableRestrictionType(returnType)
+      variables.push({
+        name: 'OUT',
+        class: 'output',
+        type: { definition: restriction.definition ?? 'derived', value: returnType.toUpperCase() },
+      })
+    }
+    return {
+      name: userPou.name,
+      type: userPou.pouType,
+      variables,
+      documentation: userPou.documentation ?? '',
+      extensible: false,
+    }
+  }
+
+  const systemPou = libraries.system
+    .flatMap((lib) => lib.pous)
+    .find((pou) => pou.name.toLowerCase() === blockType.toLowerCase())
+  if (!systemPou) return undefined
+
+  return {
+    name: systemPou.name,
+    type: systemPou.type,
+    variables: systemPou.variables.map((v) => ({ name: v.name, class: v.class, type: v.type })),
+    documentation: systemPou.documentation,
+    extensible: systemPou.extensible ?? false,
+  }
+}
+
+/**
+ * Pre-mutation validation for `add_rung`/`update_rung`. Checks everything `buildRungFromSpec`
+ * does NOT (contact/coil BOOL-ness, function-block instance-name legality and type
+ * compatibility) so a bad spec is rejected with one rich message before anything is created —
+ * pin-binding errors (rail connectors, inOut, unknown pins) are `buildRungFromSpec`'s own job.
+ */
+function validateElements(
+  elements: LadderElementSpec[],
+  variables: PLCVariable[],
+  pou: PLCPou,
+  libraries: { system: SystemLibrary[]; user: UserLibrary[] },
+  pous: PLCPou[],
+): string[] {
+  const errors: string[] = []
+  const seenInstances = new Map<string, string>()
+
+  elements.forEach((element, index) => {
+    const n = index + 1
+
+    if (element.kind === 'contact' || element.kind === 'coil') {
+      const variable = findVariableCaseInsensitive(variables, element.variable)
+      if (!variable) {
+        errors.push(
+          `Element ${n}: variable "${element.variable}" does not exist in POU "${pou.name}" — create it with create_variable first`,
+        )
+        return
+      }
+      if (!validateVariableType('BOOL', variable.type.value).isValid) {
+        errors.push(`Element ${n}: variable "${variable.name}" is not BOOL (required for contacts/coils)`)
+      }
+      return
+    }
+
+    const blockVariant = resolveBlockVariant(element.blockType, libraries, pous)
+    if (!blockVariant) {
+      errors.push(`Element ${n}: block type "${element.blockType}" not found`)
+      return
+    }
+
+    if (blockVariant.type !== 'function-block') return
+
+    if (pou.pouType === 'function') {
+      errors.push(
+        `Element ${n}: "${element.blockType}" is a function block and cannot be used inside FUNCTION "${pou.name}" — use a function, or move this logic to a PROGRAM or FUNCTION_BLOCK`,
+      )
+      return
+    }
+
+    if (!element.instanceName) {
+      errors.push(`Element ${n}: block type "${element.blockType}" is a function block and requires "instanceName"`)
+      return
+    }
+
+    const [isLegal, reason] = isLegalIdentifier(element.instanceName)
+    if (!isLegal) {
+      errors.push(`Element ${n}: instance name "${element.instanceName}" ${reason}`)
+      return
+    }
+
+    const key = element.instanceName.toLowerCase()
+    const seenType = seenInstances.get(key)
+    if (seenType && seenType !== blockVariant.name.toLowerCase()) {
+      errors.push(
+        `Element ${n}: instance name "${element.instanceName}" was already used for block type "${seenType}" earlier in this call`,
+      )
+      return
+    }
+    seenInstances.set(key, blockVariant.name.toLowerCase())
+
+    const existing = findVariableCaseInsensitive(variables, element.instanceName)
+    if (
+      existing &&
+      !(existing.type.definition === 'derived' && existing.type.value.toLowerCase() === blockVariant.name.toLowerCase())
+    ) {
+      errors.push(
+        `Element ${n}: variable "${element.instanceName}" already exists with a different type — choose a different instance name`,
+      )
+    }
+  })
+
+  return errors
+}
+
+/** Function-block instance variables the spec names that the POU does not have yet. */
+function planInstanceVariables(
+  pou: PLCPou,
+  globals: PLCVariable[],
+  elements: LadderElementSpec[],
+  libraries: { system: SystemLibrary[]; user: UserLibrary[] },
+  pous: PLCPou[],
+): PLCVariable[] {
+  const planned: PLCVariable[] = []
+  for (const element of elements) {
+    if (element.kind !== 'block' || !element.instanceName) continue
+
+    const blockVariant = resolveBlockVariant(element.blockType, libraries, pous)
+    if (!blockVariant || blockVariant.type !== 'function-block') continue
+
+    const known = [...collectPouVariables(pou, globals), ...planned]
+    if (findVariableCaseInsensitive(known, element.instanceName)) continue
+
+    planned.push({
+      name: element.instanceName,
+      class: 'local',
+      type: { definition: 'derived', value: blockVariant.name },
+      location: '',
+      initialValue: null,
+      documentation: '',
+      debug: false,
+    })
+  }
+  return planned
+}
+
+function createInstanceVariables(
+  store: OpenPLCStore,
+  pouName: string,
+  planned: PLCVariable[],
+): { ok: true } | { ok: false; error: string } {
+  for (const variable of planned) {
+    const result = store.getState().projectActions.createVariable({
+      scope: 'local',
+      associatedPou: pouName,
+      data: { ...variable, id: uuidv4() },
+    })
+    /* istanbul ignore next -- defensive: validateElements already confirmed a legal, non-colliding name */
+    if (!result.ok) {
+      return { ok: false, error: result.message ?? `Failed to create instance variable "${variable.name}".` }
+    }
+  }
+  return { ok: true }
+}
+
+function flowValidationError(pouName: string, rungs: RungLadderState[]): string | undefined {
+  const parsed = zodLadderFlowSchema.safeParse({ name: pouName, rungs })
+  if (parsed.success) return undefined
+  return `Resulting diagram failed validation: ${parsed.error.issues.map((issue) => issue.message).join('; ')}`
+}
+
+/** Builds the rung against the planned instance variables first, so a rejected spec leaves the project untouched. */
+function buildAndPlaceRung(
+  store: OpenPLCStore,
+  pou: PLCPou,
+  rungId: string,
+  spec: { comment: string; elements: LadderElementSpec[] },
+  place: (rung: RungLadderState) => RungLadderState[],
+): ToolResult {
+  const state = store.getState()
+  const globals = state.project.data.configurations.resource.globalVariables
+  const planned = planInstanceVariables(pou, globals, spec.elements, state.libraries, state.project.data.pous)
+
+  const dryRun = buildRungFromSpec({
+    rungId,
+    spec,
+    variables: [...collectPouVariables(pou, globals), ...planned],
+    resolveBlock: (blockType) => resolveBlockVariant(blockType, state.libraries, state.project.data.pous),
+  })
+  if (!dryRun.ok) return { success: false, message: dryRun.errors.join('; ') }
+  const dryRunError = flowValidationError(pou.name, place(dryRun.rung))
+  if (dryRunError) return { success: false, message: dryRunError }
+
+  const created = createInstanceVariables(store, pou.name, planned)
+  /* istanbul ignore next -- defensive: createInstanceVariables only fails on the store-level backstops above */
+  if (!created.ok) return { success: false, message: created.error }
+
+  const freshState = store.getState()
+  const freshPou = freshState.project.data.pous.find((p) => p.name === pou.name)
+  /* istanbul ignore next -- defensive: the POU was just found above; nothing in between removes it */
+  if (!freshPou) return { success: false, message: `POU "${pou.name}" not found.` }
+
+  const built = buildRungFromSpec({
+    rungId,
+    spec,
+    variables: collectPouVariables(freshPou, freshState.project.data.configurations.resource.globalVariables),
+    resolveBlock: (blockType) => resolveBlockVariant(blockType, freshState.libraries, freshState.project.data.pous),
+  })
+  /* istanbul ignore next -- defensive: the dry run above already built this spec */
+  if (!built.ok) return { success: false, message: built.errors.join('; ') }
+
+  return writeRungs(store, pou.name, place(built.rung))
+}
+
+/** Validate the candidate flow BEFORE writing it — never lets a broken diagram reach the
+ *  store, unlike `runWriteBack`'s post-hoc (and silent) `safeParse` check. */
+function writeRungs(store: OpenPLCStore, pouName: string, rungs: RungLadderState[]): ToolResult {
+  const validationError = flowValidationError(pouName, rungs)
+  if (validationError) return { success: false, message: validationError }
+
+  const state = store.getState()
+  if (!state.ladderFlows.find((f) => f.name === pouName)) {
+    state.ladderFlowActions.addLadderFlow({ name: pouName, updated: false, rungs: [] })
+  }
+  state.ladderFlowActions.setRungs({ editorName: pouName, rungs })
+  scheduleFlowWriteBack(store.getState, pouName, 'ld')
+  store.getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(pouName)
+
+  return { success: true, message: `Updated ladder diagram for "${pouName}" (${rungs.length} rung(s)).` }
+}
+
+function executeReadLadderDiagram(store: OpenPLCStore, input: ReadLadderDiagramInput): ToolResult {
+  if (!input.pouName) {
+    return { success: false, message: 'Missing required field: pouName' }
+  }
+  const resolved = requireLadderPou(store, input.pouName)
+  if ('error' in resolved) return { success: false, message: resolved.error }
+
+  const flow = store.getState().ladderFlows.find((f) => f.name === input.pouName)
+  const rungs = flow?.rungs ?? []
+  if (rungs.length === 0) {
+    return { success: true, message: `POU "${input.pouName}" has no rungs yet.` }
+  }
+
+  const lines = rungs.map((rung, index) => {
+    const spec = rungToSpec(rung)
+    const note = spec.truncated
+      ? ' (truncated — contains a parallel or block-pin branch these tools cannot read yet; update_rung will refuse it)'
+      : ''
+    const comment = spec.comment ? ` — ${spec.comment}` : ''
+    return `Rung ${index + 1} [id=${rung.id}]${comment}${note}:\n${JSON.stringify(spec.elements)}`
+  })
+
+  return { success: true, message: lines.join('\n\n') }
+}
+
+function executeAddRung(store: OpenPLCStore, input: AddRungInput): ToolResult {
+  if (!input.pouName || !Array.isArray(input.elements)) {
+    return { success: false, message: 'Missing required fields: pouName, elements' }
+  }
+
+  const resolved = requireLadderPou(store, input.pouName)
+  if ('error' in resolved) return { success: false, message: resolved.error }
+  const { pou } = resolved
+
+  const state = store.getState()
+  const existingRungs = state.ladderFlows.find((f) => f.name === input.pouName)?.rungs ?? []
+  if (input.afterRungId && !existingRungs.some((r) => r.id === input.afterRungId)) {
+    const available = existingRungs.map((r) => r.id).join(', ') || '(none)'
+    return {
+      success: false,
+      message: `Rung "${input.afterRungId}" not found in "${input.pouName}". Available rungs: ${available}`,
+    }
+  }
+
+  const baseVariables = collectPouVariables(pou, state.project.data.configurations.resource.globalVariables)
+  const validationErrors = validateElements(
+    input.elements,
+    baseVariables,
+    pou,
+    state.libraries,
+    state.project.data.pous,
+  )
+  if (validationErrors.length > 0) {
+    return { success: false, message: validationErrors.join('; ') }
+  }
+
+  const insertIndex = input.afterRungId
+    ? existingRungs.findIndex((r) => r.id === input.afterRungId) + 1
+    : existingRungs.length
+
+  return buildAndPlaceRung(
+    store,
+    pou,
+    `rung_${input.pouName}_${uuidv4()}`,
+    { comment: input.comment ?? '', elements: input.elements },
+    (rung) => [...existingRungs.slice(0, insertIndex), rung, ...existingRungs.slice(insertIndex)],
+  )
+}
+
+function executeUpdateRung(store: OpenPLCStore, input: UpdateRungInput): ToolResult {
+  if (!input.pouName || !input.rungId || !Array.isArray(input.elements)) {
+    return { success: false, message: 'Missing required fields: pouName, rungId, elements' }
+  }
+
+  const resolved = requireLadderPou(store, input.pouName)
+  if ('error' in resolved) return { success: false, message: resolved.error }
+  const { pou } = resolved
+
+  const state = store.getState()
+  const existingRungs = state.ladderFlows.find((f) => f.name === input.pouName)?.rungs ?? []
+  const targetIndex = existingRungs.findIndex((r) => r.id === input.rungId)
+  if (targetIndex === -1) {
+    const available = existingRungs.map((r) => r.id).join(', ') || '(none)'
+    return {
+      success: false,
+      message: `Rung "${input.rungId}" not found in "${input.pouName}". Available rungs: ${available}`,
+    }
+  }
+
+  // Rebuilding from a spec would drop the branches the spec cannot express.
+  if (rungToSpec(existingRungs[targetIndex]).truncated) {
+    return {
+      success: false,
+      message: `Rung "${input.rungId}" contains parallel or block-pin branches these tools cannot represent yet, so it cannot be updated without losing logic. Ask the user to edit it in the editor, or add a new rung instead.`,
+    }
+  }
+
+  const baseVariables = collectPouVariables(pou, state.project.data.configurations.resource.globalVariables)
+  const validationErrors = validateElements(
+    input.elements,
+    baseVariables,
+    pou,
+    state.libraries,
+    state.project.data.pous,
+  )
+  if (validationErrors.length > 0) {
+    return { success: false, message: validationErrors.join('; ') }
+  }
+
+  return buildAndPlaceRung(
+    store,
+    pou,
+    input.rungId,
+    { comment: input.comment ?? existingRungs[targetIndex].comment, elements: input.elements },
+    (rung) => [...existingRungs.slice(0, targetIndex), rung, ...existingRungs.slice(targetIndex + 1)],
+  )
+}
+
+function executeDeleteRung(store: OpenPLCStore, input: DeleteRungInput): ToolResult {
+  if (!input.pouName || !input.rungId) {
+    return { success: false, message: 'Missing required fields: pouName, rungId' }
+  }
+
+  const resolved = requireLadderPou(store, input.pouName)
+  if ('error' in resolved) return { success: false, message: resolved.error }
+
+  const existingRungs = store.getState().ladderFlows.find((f) => f.name === input.pouName)?.rungs ?? []
+  if (!existingRungs.some((r) => r.id === input.rungId)) {
+    const available = existingRungs.map((r) => r.id).join(', ') || '(none)'
+    return {
+      success: false,
+      message: `Rung "${input.rungId}" not found in "${input.pouName}". Available rungs: ${available}`,
+    }
+  }
+
+  const newRungs = existingRungs.filter((r) => r.id !== input.rungId)
+  return writeRungs(store, input.pouName, newRungs)
 }
 
 export type ReadPouBodyInput = { name?: string }

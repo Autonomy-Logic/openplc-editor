@@ -604,8 +604,14 @@ export function createEditorProjectAdapter(
       return { success: true, content: response.content }
     },
 
-    async exportPlcopenFile(defaultFileName: string, xml: string): Promise<{ success: boolean; error?: string }> {
+    async exportPlcopenFile(
+      defaultFileName: string,
+      xml: string,
+    ): Promise<{ success: boolean; canceled?: boolean; error?: string }> {
       const response = await window.bridge.exportPlcopenFile(defaultFileName, xml)
+      if (response.canceled) {
+        return { success: false, canceled: true }
+      }
       if (!response.success) {
         return { success: false, error: response.error?.description }
       }

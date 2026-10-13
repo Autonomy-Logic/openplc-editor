@@ -3,10 +3,9 @@ import { PLCProjectData } from '../../types/PLC/open-plc'
 /**
  * An FBD variable block (input or output) whose name is blank.
  *
- * Such a block serialises to an empty `<expression/>` in the PLCopen
- * XML, which would make the compiler abort the whole compile with the opaque
- * `'NoneType' object has no attribute 'split'` error.  We catch it
- * before XML generation and report it in terms the user can act on:
+ * Such a block has no expression to transpile, which would make the
+ * compiler abort the whole compile with an opaque error.  We catch it
+ * before the ST transpile and report it in terms the user can act on:
  * what the block is wired to, falling back to its canvas position when
  * it is wired to nothing.
  */

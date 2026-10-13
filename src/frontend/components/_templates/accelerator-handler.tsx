@@ -1,13 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect } from 'react'
 
-import {
-  useAccelerator,
-  useCapabilities,
-  useCompiler,
-  useProject,
-  useTheme,
-  useWindow,
-} from '../../../middleware/shared/providers'
+import { useAccelerator, useCapabilities, useProject, useTheme, useWindow } from '../../../middleware/shared/providers'
+import { executeExportPlcopen } from '../../services/export-actions'
 import { requestAppRefresh } from '../../services/refresh-app'
 import { restoreOpenProjectRoot } from '../../services/restore-open-project-root'
 import { executeSaveActiveFile, executeSaveProject } from '../../services/save-actions'
@@ -32,15 +26,11 @@ const hasOpenProject = (store: OpenPLCStore) => store.getState().project.meta.pa
 
 const AcceleratorHandler = () => {
   const accelerator = useAccelerator()
-  const compilerPort = useCompiler()
   const projectPort = useProject()
   const windowPort = useWindow()
   const themePort = useTheme()
   const capabilities = useCapabilities()
   const store = useOpenPLCStoreApi()
-
-  const [requestFlag, setRequestFlag] = useState(false)
-  const [parseTo, setParseTo] = useState<'old-editor' | 'codesys' | null>(null)
 
   const {
     project,
@@ -63,36 +53,17 @@ const AcceleratorHandler = () => {
   )
 
   /**
-   * Export project accelerator
+   * Export to PLCopen XML from the native File menu: same action the React menubar runs.
    */
   useEffect(() => {
     if (!capabilities.hasProjectExport) return
 
     const unsub = accelerator.onExportProject(() => {
       if (!hasOpenProject(store)) return
-      setRequestFlag(true)
-      setParseTo('old-editor')
+      void executeExportPlcopen(store, projectPort)
     })
-
-    if (requestFlag && parseTo) {
-      compilerPort
-        .exportProjectXml({
-          projectPath: project.meta.path,
-          projectData: project.data,
-          format: parseTo,
-        })
-        .then(() => {
-          setRequestFlag(false)
-          setParseTo(null)
-        })
-        .catch(() => {
-          setRequestFlag(false)
-          setParseTo(null)
-        })
-    }
-
     return unsub
-  }, [store, requestFlag, parseTo, accelerator, compilerPort, capabilities.hasProjectExport, project])
+  }, [store, accelerator, projectPort, capabilities.hasProjectExport])
 
   /**
    * Create project

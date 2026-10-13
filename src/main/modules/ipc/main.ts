@@ -937,19 +937,9 @@ class MainProcessBridge implements MainIpcModule {
     // this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
 
     // ===================== COMPILER SERVICE =====================
-    // TODO: This handle should be refactored to use MessagePortMain for better performance.
-    this.registerHandle('compiler:export-project-xml', this.handleCompilerExportProjectXml)
     this.ipcMain.on('compiler:run-compile-program', this.handleRunCompileProgram)
     this.ipcMain.on('compiler:run-debug-compilation', this.handleRunDebugCompilation)
     this.ipcMain.on('compiler:run-compile-library', this.handleRunCompileLibrary)
-
-    // +++ !! Deprecated: These handlers are outdated and should be removed. +++
-
-    // this.ipcMain.on('compiler:setup-environment', this.handleCompilerSetupEnvironment)
-    // this.ipcMain.handle('compiler:create-build-directory', this.handleCompilerCreateBuildDirectory)
-    // this.ipcMain.handle('compiler:build-xml-file', this.handleCompilerBuildXmlFile)
-    // this.ipcMain.on('compiler:build-st-program', this.handleCompilerBuildStProgram)
-    // this.ipcMain.on('compiler:generate-c-files', this.handleCompilerGenerateCFiles)
 
     // ===================== WINDOW CONTROLS =====================
     this.ipcMain.on('window-controls:close', this.handleWindowControlsClose)
@@ -2176,14 +2166,6 @@ class MainProcessBridge implements MainIpcModule {
   handleAppQuit = () => this.quitCoordinator.confirmQuit()
 
   // Compiler service handlers
-  // TODO: This handle should be refactored to use a new approach on module implementation.
-  handleCompilerExportProjectXml = (
-    _ev: IpcMainInvokeEvent,
-    pathToUserProject: string,
-    dataToCreateXml: PLCProjectData,
-    xmlFormatTarget: 'old-editor' | 'codesys',
-  ) => this.compilerModule.createXmlFile(pathToUserProject, dataToCreateXml, xmlFormatTarget)
-
   handleRunCompileProgram = (event: IpcMainEvent, args: CompileProgramIpcArgs) => {
     const mainProcessPort = event.ports[0]
     void this.compilerModule.compileProgram(args, mainProcessPort, this).catch((error) => {
@@ -2214,34 +2196,6 @@ class MainProcessBridge implements MainIpcModule {
   loadEnabledArchives = (enabledNames: string[]): { archives: unknown[]; missing: string[] } =>
     this.libraryManagerModule.loadEnabledArchives(enabledNames)
 
-  // TODO: These handlers are outdated and should be removed.
-  // handleCompilerSetupEnvironment = (event: IpcMainEvent) => {
-  //   const replyPort = Array.isArray(event.ports) && event.ports.length > 0 ? event.ports[0] : undefined
-  //   if (replyPort) {
-  //     void this.compilerService.setupEnvironment(replyPort)
-  //   }
-  // }
-  // handleCompilerCreateBuildDirectory = (_ev: IpcMainInvokeEvent, pathToUserProject: string) =>
-  //   this.compilerService.createBuildDirectoryIfNotExist(pathToUserProject)
-  // handleCompilerBuildXmlFile = (
-  //   _ev: IpcMainInvokeEvent,
-  //   pathToUserProject: string,
-  //   dataToCreateXml: PLCProjectData,
-  // ) => this.compilerService.buildXmlFile(pathToUserProject, dataToCreateXml)
-  // handleCompilerBuildStProgram = (event: IpcMainEvent, pathToXMLFile: string) => {
-  //   const replyPort = Array.isArray(event.ports) && event.ports.length > 0 ? event.ports[0] : undefined
-  //   if (replyPort) {
-  //     this.compilerService.compileSTProgram(pathToXMLFile, replyPort)
-  //   }
-  // }
-  // handleCompilerGenerateCFiles = (event: IpcMainEvent, pathToStProgram: string) => {
-  //   const replyPort = Array.isArray(event.ports) && event.ports.length > 0 ? event.ports[0] : undefined
-  //   if (replyPort) {
-  //     this.compilerService.generateCFiles(pathToStProgram, replyPort)
-  //   }
-  // }
-
-  // Window controls handlers
   handleWindowControlsClose = () => this.mainWindow?.close()
   handleWindowControlsClosed = () => this.mainWindow?.destroy()
   handleWindowControlsHide = () => this.mainWindow?.hide()
