@@ -210,3 +210,114 @@ describe('VppScreenActions', () => {
     expect(container.textContent).toBe('')
   })
 })
+
+describe('VppScreenActions module detection', () => {
+  afterEach(cleanup)
+
+  const DETECT = {
+    id: 'detect_modules',
+    label: 'Auto-Detect Modules',
+    type: 'command',
+    command: 'discover_modules',
+    requiresConnection: true,
+    resultMapping: { path: 'modules', slotField: 'slot', moduleIdField: 'hwId' },
+  }
+
+  function renderDetect(
+    send: ((...args: unknown[]) => Promise<PluginCommandOutcome>) | undefined,
+    props: Partial<React.ComponentProps<typeof VppScreenActions>>,
+  ) {
+    return render(
+      <PlatformProvider
+        ports={{ runtime: stubPort({ sendPluginCommand: send }), capabilities: stubPort() } as unknown as PlatformPorts}
+      >
+        <VppScreenActions actions={[DETECT]} defaultPlugin='synergy' {...props} />
+      </PlatformProvider>,
+    )
+  }
+
+  it('is not offered while no device is connected', () => {
+    const send = recorder(() => Promise.resolve<PluginCommandOutcome>({ ok: true, data: {} }))
+    renderDetect(send, { connected: false, discoverySupported: true, onMappedResult: () => null })
+
+    expect(screen.queryByRole('button', { name: 'Auto-Detect Modules' })).toBeNull()
+    expect(send.calls).toHaveLength(0)
+  })
+
+  it('is not offered when the device does not support discovery', () => {
+    renderDetect(undefined, { connected: true, discoverySupported: false, onMappedResult: () => null })
+
+    expect(screen.queryByRole('button', { name: 'Auto-Detect Modules' })).toBeNull()
+  })
+
+  it('is not offered when nothing can apply the answer', () => {
+    renderDetect(undefined, { connected: true, discoverySupported: true })
+
+    expect(screen.queryByRole('button', { name: 'Auto-Detect Modules' })).toBeNull()
+  })
+
+  it('sends nothing until the user clicks', () => {
+    const send = recorder(() => Promise.resolve<PluginCommandOutcome>({ ok: true, data: { modules: [] } }))
+    renderDetect(send, { connected: true, discoverySupported: true, onMappedResult: () => null })
+
+    expect(screen.getByRole('button', { name: 'Auto-Detect Modules' })).toBeTruthy()
+    expect(send.calls).toHaveLength(0)
+  })
+
+  it('hands a successful answer to the layout instead of dumping it', async () => {
+    const data = { modules: [{ slot: 1, hwId: '0x34A055EB' }], count: 1 }
+    const send = recorder(() => Promise.resolve<PluginCommandOutcome>({ ok: true, data }))
+    const received: unknown[] = []
+    renderDetect(send, {
+      connected: true,
+      discoverySupported: true,
+      onMappedResult: (_action, answer) => {
+        received.push(answer)
+        return null
+      },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-Detect Modules' }))
+
+    await waitFor(() => expect(received).toEqual([data]))
+    expect(send.calls).toEqual([[{ plugin: 'synergy', command: 'discover_modules', params: {} }]])
+    expect(screen.queryByTestId('vpp-action-result-detect_modules')).toBeNull()
+  })
+
+  it('shows the error the layout returns', async () => {
+    const send = recorder(() => Promise.resolve<PluginCommandOutcome>({ ok: true, data: { modules: [] } }))
+    renderDetect(send, {
+      connected: true,
+      discoverySupported: true,
+      onMappedResult: () => 'The device reported modules this package does not recognise: slot 2 (0xDEADBEEF).',
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-Detect Modules' }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('vpp-action-result-detect_modules').textContent).toContain('slot 2 (0xDEADBEEF)'),
+    )
+  })
+
+  it('shows the device refusal and never reaches the layout', async () => {
+    const send = recorder(() =>
+      Promise.resolve<PluginCommandOutcome>({ ok: false, error: 'Stop the PLC before detecting modules.' }),
+    )
+    let reached = false
+    renderDetect(send, {
+      connected: true,
+      discoverySupported: true,
+      onMappedResult: () => {
+        reached = true
+        return null
+      },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-Detect Modules' }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('vpp-action-result-detect_modules').textContent).toContain('Stop the PLC'),
+    )
+    expect(reached).toBe(false)
+  })
+})

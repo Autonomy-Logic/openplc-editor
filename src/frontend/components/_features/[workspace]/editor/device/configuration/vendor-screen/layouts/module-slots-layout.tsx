@@ -12,6 +12,13 @@ import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_mole
 import { boardSelectors } from '@root/frontend/hooks/use-store-selectors'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
+import {
+  type DiscoveredModule,
+  mergeDiscoveredModules,
+  type MergeDiscoveredModulesResult,
+  parseDiscoveredModules,
+  type SlotChange,
+} from '@root/frontend/utils/vpp/merge-discovered-modules'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry } from '@root/middleware/shared/ports/types'
@@ -28,7 +35,7 @@ import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleDefinition, ModuleSystem, ScreenSection } from '../index'
-import { VppScreenActions } from '../screen-actions'
+import { VppScreenActions, type VppScreenActionsProps } from '../screen-actions'
 
 // Same help glyph the HAL Settings form-layout uses, so per-field
 // explanations live in a tooltip instead of cluttering the row.
@@ -262,6 +269,23 @@ const ModuleSlotPicker = ({
   )
 }
 
+function describeSlotChange(change: SlotChange): string {
+  switch (change.kind) {
+    case 'keep':
+      return `${change.to?.name ?? ''}, unchanged (settings kept)`
+    case 'replace':
+      return `${change.from?.name ?? ''} replaced by ${change.to?.name ?? ''} (default settings)`
+    case 'add':
+      return `${change.to?.name ?? ''} added (default settings)`
+    case 'remove':
+      return `${change.from?.name ?? ''} removed`
+    default: {
+      const exhaustive: never = change.kind
+      return exhaustive
+    }
+  }
+}
+
 function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   const store = useOpenPLCStoreApi()
   const maxSlots = section.maxSlots || moduleSystem?.maxSlots || 8
@@ -361,6 +385,12 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
 
   const [removeModalOpen, setRemoveModalOpen] = useState(false)
   const [clearAllModalOpen, setClearAllModalOpen] = useState(false)
+  // Detected modules awaiting the user's answer; null when no dialog is open.
+  const [discovery, setDiscovery] = useState<{
+    detected: DiscoveredModule[]
+    plan: Extract<MergeDiscoveredModulesResult, { ok: true }>
+    prompt: string | undefined
+  } | null>(null)
 
   const findModule = useCallback(
     (id: string | null | undefined): ModuleDefinition | undefined =>
@@ -382,6 +412,10 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   const connectedDeviceKey = `${deviceBoard}:${selectedDevice?.orchestratorId ?? ''}:${selectedDevice?.deviceId ?? ''}`
   const availableBoards = boardSelectors.useAvailableBoards()
   const packagePath = availableBoards.get(deviceBoard)?.vpp?.packagePath
+  // Plugin commands go to the plugin the device's config template registers.
+  const pluginName = availableBoards.get(deviceBoard)?.vpp?.pluginName
+  const runtimeConnected = useOpenPLCStore((s) => s.runtimeConnection.connectionStatus === 'connected')
+  const discoverySupported = moduleSystem?.discoverySupported === true
   const devicePort = useDevice()
   const [moduleImage, setModuleImage] = useState<string | null>(null)
 
@@ -544,6 +578,50 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       if (slotsConfig['1']) clearedConfig['1'] = slotsConfig['1']
     }
     writeModuleConfig({ ...moduleConfig, slots: cleared, slotsConfig: clearedConfig })
+  }
+
+  /* Plan from the store's current slots, not this render's, so a dialog
+   * confirmed later still merges onto what the project holds then. */
+  const planDiscovery = (detected: DiscoveredModule[]): MergeDiscoveredModulesResult => {
+    const vsd = store.getState().deviceDefinitions.configuration.vendorScreenData
+    const live = (vsd?.[persistenceKey] as ModuleConfigState | undefined) ?? {}
+    const stored = live.slots ?? []
+    const liveSlots =
+      stored.length >= maxSlots
+        ? stored.slice(0, maxSlots)
+        : [...stored, ...Array<string | null>(maxSlots - stored.length).fill(null)]
+    return mergeDiscoveredModules({
+      slots: liveSlots,
+      slotsConfig: live.slotsConfig ?? {},
+      modules: availableModules,
+      detected,
+      maxSlots,
+      lockedSlotIndex: fixedModule !== null && liveSlots[0] === fixedModule.id ? 0 : null,
+    })
+  }
+
+  const handleDiscoveryResult: NonNullable<VppScreenActionsProps['onMappedResult']> = (action, data) => {
+    if (!action.resultMapping) return 'This action does not describe modules.'
+    const parsedModules = parseDiscoveredModules(data, action.resultMapping)
+    if (!parsedModules.ok) return parsedModules.error
+    const plan = planDiscovery(parsedModules.modules)
+    if (!plan.ok) return plan.error
+    setDiscovery({ detected: parsedModules.modules, plan, prompt: action.confirm })
+    return null
+  }
+
+  const applyDiscovery = () => {
+    if (!discovery) return
+    const plan = planDiscovery(discovery.detected)
+    setDiscovery(null)
+    if (!plan.ok) {
+      toast({ title: 'Modules not applied', description: plan.error, variant: 'fail' })
+      return
+    }
+    const vsd = store.getState().deviceDefinitions.configuration.vendorScreenData
+    const live = (vsd?.[persistenceKey] as ModuleConfigState | undefined) ?? {}
+    writeModuleConfig({ ...live, slots: plan.slots, slotsConfig: plan.slotsConfig })
+    setSelectedSlot(0)
   }
 
   /* Stackable: append the first available module to the tail of the
@@ -809,8 +887,11 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
           runtime's existing plugin-command route. */}
       <VppScreenActions
         actions={section.actions}
-        defaultPlugin={section.moduleSource}
+        defaultPlugin={pluginName}
         deviceKey={connectedDeviceKey}
+        connected={runtimeConnected}
+        discoverySupported={discoverySupported}
+        onMappedResult={handleDiscoveryResult}
         renderLocalAction={(action) =>
           action.action === 'clear-module-slots' ? (
             <button
@@ -1205,6 +1286,56 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
           </ModalContent>
         </Modal>
       )}
+
+      {/* Detected-modules confirmation. Nothing is written unless the user
+       *  confirms here; closing or cancelling leaves the project as it was. */}
+      <Modal open={discovery !== null} onOpenChange={(open) => !open && setDiscovery(null)}>
+        <ModalContent className='flex w-[480px] select-none flex-col items-center justify-evenly gap-5 rounded-lg p-6'>
+          <ModalTitle className='text-center font-caption text-base font-semibold text-neutral-950 dark:text-white'>
+            {discovery?.plan.changed ? 'Replace the backplane configuration?' : 'Backplane already matches'}
+          </ModalTitle>
+          <p className='text-center text-sm text-neutral-600 dark:text-neutral-300'>
+            {discovery?.plan.changed
+              ? (discovery.prompt ??
+                'The current backplane configuration will be replaced by the modules found on the device.')
+              : 'The modules found on the device match the current configuration. Nothing needs to change.'}
+          </p>
+          {discovery && (
+            <ul
+              data-testid='vpp-discovery-changes'
+              className='flex max-h-60 w-full flex-col gap-1 overflow-y-auto rounded-md border border-neutral-200 p-2 text-xs text-neutral-700 dark:border-neutral-700 dark:text-neutral-300'
+            >
+              {discovery.plan.changes.length === 0 ? (
+                <li className='italic'>No modules were found on the device.</li>
+              ) : (
+                discovery.plan.changes.map((change) => (
+                  <li key={change.slot}>
+                    <span className='font-semibold'>Slot {change.slot}:</span> {describeSlotChange(change)}
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+          <div className='flex w-full flex-col gap-2'>
+            {discovery?.plan.changed && (
+              <button
+                type='button'
+                onClick={applyDiscovery}
+                className='w-full rounded-lg bg-red-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-red-700'
+              >
+                Replace configuration
+              </button>
+            )}
+            <button
+              type='button'
+              onClick={() => setDiscovery(null)}
+              className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'
+            >
+              {discovery?.plan.changed ? 'Cancel' : 'Close'}
+            </button>
+          </div>
+        </ModalContent>
+      </Modal>
 
       {/* Clear-all confirmation. Driven by the action's `confirm` field
        *  in the screen JSON — when present, the local button routes

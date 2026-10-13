@@ -38,11 +38,34 @@ export interface VppScreenActionsProps {
   renderLocalAction?: (action: Extract<VppScreenAction, { kind: 'local' }>) => React.ReactNode
   /** Identity of the device the results belong to; a change clears them. */
   deviceKey?: string
+  /** Whether a device is connected; actions declaring `requiresConnection` render only when true. */
+  connected?: boolean
+  /**
+   * Takes over the successful answer of an action that declares a `resultMapping`.
+   * Returns an error message to show, or null when it handled the answer. Without
+   * it, such actions are not rendered.
+   */
+  onMappedResult?: (action: VppPluginCommandAction, data: Record<string, unknown>) => string | null
+  /** Actions with a `resultMapping` render only when true (the device can report its modules). */
+  discoverySupported?: boolean
 }
 
-function VppScreenActions({ actions, defaultPlugin, renderLocalAction, deviceKey }: VppScreenActionsProps) {
+function VppScreenActions({
+  actions,
+  defaultPlugin,
+  renderLocalAction,
+  deviceKey,
+  connected = false,
+  onMappedResult,
+  discoverySupported = false,
+}: VppScreenActionsProps) {
   const runtime = useRuntime()
-  const parsed = parseScreenActions(actions, defaultPlugin)
+  const parsed = parseScreenActions(actions, defaultPlugin).filter((action) => {
+    if (action.kind !== 'plugin-command') return true
+    if (action.requiresConnection && !connected) return false
+    if (action.resultMapping && (!discoverySupported || !onMappedResult)) return false
+    return true
+  })
   const [state, setState] = useState<Record<string, ActionState>>({})
   // Monotonic ticket per action; only the newest run may publish a result.
   const tickets = useRef<Record<string, number>>({})
@@ -80,9 +103,17 @@ function VppScreenActions({ actions, defaultPlugin, renderLocalAction, deviceKey
       })
 
       if (tickets.current[action.id] !== ticket) return
+      if (outcome.ok && action.resultMapping && onMappedResult) {
+        const error = onMappedResult(action, outcome.data)
+        setState((current) => ({
+          ...current,
+          [action.id]: error === null ? { status: 'idle' } : { status: 'done', outcome: { ok: false, error } },
+        }))
+        return
+      }
       setState((current) => ({ ...current, [action.id]: { status: 'done', outcome } }))
     },
-    [runtime, state],
+    [runtime, state, onMappedResult],
   )
 
   if (parsed.length === 0) return null
