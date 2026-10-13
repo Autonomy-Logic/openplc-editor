@@ -1,6 +1,8 @@
 import {
   enrichDeviceData,
+  esiStartupData,
   lacksE2Schema,
+  lacksEsiStartupData,
   lacksPdoAssignment,
   migrateSlaveToE2Schema,
   recordPdoAssignment,
@@ -75,9 +77,7 @@ function synthesizeChannels(channelInfo: PersistedChannelInfo[] | undefined): ES
   }))
 }
 
-type ChannelOwner =
-  | { kind: 'device' }
-  | { kind: 'module'; moduleId: string; module: ConfiguredEtherCATModule }
+type ChannelOwner = { kind: 'device' } | { kind: 'module'; moduleId: string; module: ConfiguredEtherCATModule }
 
 export function useDeviceConfiguration({
   device,
@@ -153,6 +153,8 @@ export function useDeviceConfiguration({
                 'This EtherCAT slave was saved under the previous schema. Its CoE flags and PDO defaults have been filled in from the ESI.',
               variant: 'default',
             })
+          } else if (lacksEsiStartupData(device, result.device)) {
+            onEnrichDeviceRef.current(esiStartupData(result.device))
           } else if (lacksPdoAssignment(device)) {
             onEnrichDeviceRef.current(recordPdoAssignment(device, result.device))
           } else if (device.sdoConfigurations === undefined && result.device.coeObjects?.length) {

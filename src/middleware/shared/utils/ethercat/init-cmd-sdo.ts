@@ -50,6 +50,7 @@ export function initCmdToSdoEntry(cmd: ESIInitCmd, objectName: string): SDOConfi
       objectName,
       completeAccess: cmd.completeAccess,
       dependOnSlot: cmd.dependOnSlot,
+      transition: cmd.transition,
     }
   }
   if (cmd.value === undefined) return undefined
@@ -65,7 +66,19 @@ export function initCmdToSdoEntry(cmd: ESIInitCmd, objectName: string): SDOConfi
     objectName,
     completeAccess: cmd.completeAccess,
     dependOnSlot: cmd.dependOnSlot,
+    transition: cmd.transition,
   }
+}
+
+/** Transitions whose writes EtherDOG performs: all its startup SDOs go out in PRE-OP. */
+export const PREOP_TRANSITIONS: readonly string[] = ['IP', 'PS']
+
+/** The transitions of an InitCmd-derived entry, upper case; empty for a user startup SDO. */
+export function sdoTransitions(entry: Pick<SDOConfigurationEntry, 'transition'>): string[] {
+  return (entry.transition ?? '')
+    .split(',')
+    .map((t) => t.trim().toUpperCase())
+    .filter((t) => t !== '')
 }
 
 /** Convert a list of ESI CoE `<InitCmd>`s, dropping commands without a payload. */

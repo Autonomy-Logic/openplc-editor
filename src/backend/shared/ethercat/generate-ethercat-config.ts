@@ -2,11 +2,13 @@ import type { PLCRemoteDevice } from '@root/backend/shared/types/PLC/open-plc'
 import type {
   ConfiguredEtherCATDevice,
   ConfiguredEtherCATModule,
+  ESIModulePdoGroup,
   PersistedChannelInfo,
   PersistedPdo,
   PersistedPdoEntry,
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
+import { sdoTransitions } from '@root/middleware/shared/utils/ethercat/init-cmd-sdo'
 
 // Runtime JSON interfaces (snake_case for plugin consumption)
 
@@ -43,12 +45,9 @@ interface RuntimeSdoConfig {
   bit_length: number
   name: string
   comment: string
-  /** DOPE-704 E3 / RTOP-319 R2: send the SDO with CoE Complete Access. */
+  /** Send the SDO with CoE Complete Access. */
   complete_access?: boolean
-  /**
-   * DOPE-704 E3 / RTOP-319 R2: byte-string payload. When present, EtherDOG uses this
-   * instead of `value` and ignores `data_type` for the wire bytes.
-   */
+  /** Byte-string payload, `0x` hex. When present EtherDOG sends these bytes instead of `value`. */
   value_bytes?: string
 }
 
@@ -207,31 +206,26 @@ function deriveChannelType(direction: 'input' | 'output', bitLen: number): strin
   return bitLen === 1 ? 'digital_output' : 'analog_output'
 }
 
-/**
- * Converts persisted PDOs to runtime PDO format.
- * Entries with index "0x0000" are treated as padding.
- */
-function convertPdos(pdos: PersistedPdo[]): RuntimePdo[] {
-  return pdos
-    .filter((pdo) => pdo.assigned !== false)
-    .map((pdo) => ({
-      index: pdo.index,
-      name: pdo.name,
-      entries: pdo.entries.map(
-        (entry): RuntimePdoEntry => ({
-          index: entry.index,
-          subindex: hexToInt(entry.subIndex),
-          bit_length: entry.bitLen,
-          name: entry.name,
-          data_type: entry.index === '0x0000' ? 'PAD' : entry.dataType,
-        }),
-      ),
-    }))
+/** Runtime shape of one persisted PDO. Entries with index "0x0000" are padding. */
+function convertPdo(pdo: PersistedPdo): RuntimePdo {
+  return {
+    index: pdo.index,
+    name: pdo.name,
+    entries: pdo.entries.map(
+      (entry): RuntimePdoEntry => ({
+        index: entry.index,
+        subindex: hexToInt(entry.subIndex),
+        bit_length: entry.bitLen,
+        name: entry.name,
+        data_type: entry.index === '0x0000' ? 'PAD' : entry.dataType,
+      }),
+    ),
+  }
 }
 
 /**
  * Builds runtime channels by joining channelInfo with channelMappings, leaving out the channels
- * of PDOs recorded as unassigned.
+ * of PDOs recorded as unassigned. `index` is renumbered per slave by the caller.
  */
 function buildChannels(
   channelInfo: PersistedChannelInfo[],
@@ -242,8 +236,8 @@ function buildChannels(
 
   return channelInfo
     .filter((ch) => !unassignedPdos.has(ch.pdoIndex.toLowerCase()))
-    .map((ch, index) => ({
-      index,
+    .map((ch) => ({
+      index: 0,
       name: ch.name,
       type: deriveChannelType(ch.direction, ch.bitLen),
       bit_length: ch.bitLen,
@@ -254,63 +248,86 @@ function buildChannels(
     }))
 }
 
-/**
- * Converts SDOConfigurationEntry[] to RuntimeSdoConfig[] for the runtime plugin.
- *
- * Entries the operator left blank (empty value) are dropped: the ESI may
- * declare an RW SDO without a vendor default expecting the operator to
- * supply one.  If they did not, we must not silently send 0 -- the slave's
- * own internal default applies instead.
- *
- * Byte-string entries (`valueBytes` set) are kept even when `value` is empty — their
- * payload travels through EtherDOG's `value_bytes` field.
- */
-function buildSdoConfigurations(entries: SDOConfigurationEntry[] | undefined): RuntimeSdoConfig[] {
-  if (!entries || entries.length === 0) return []
-
-  return entries
-    .filter((entry) => {
-      const hasBytes = entry.valueBytes !== undefined && entry.valueBytes.length > 0
-      if (hasBytes) return true
-      return entry.value !== undefined && entry.value !== null && entry.value.trim() !== ''
-    })
-    .map((entry): RuntimeSdoConfig => {
-      const hasBytes = entry.valueBytes !== undefined && entry.valueBytes.length > 0
-      return {
-        index: entry.index,
-        subindex: entry.subIndex,
-        value: hasBytes ? 0 : parseNumericValue(entry.value),
-        data_type: entry.dataType,
-        bit_length: entry.bitLength,
-        name: entry.name,
-        comment: `Startup SDO: ${entry.objectName}`,
-        ...(hasBytes && { value_bytes: entry.valueBytes }),
-        ...(entry.completeAccess === true && { complete_access: true }),
-      }
-    })
+function hasBytePayload(entry: SDOConfigurationEntry): boolean {
+  return entry.valueBytes !== undefined && entry.valueBytes.length > 0
 }
 
 /**
- * Slave-level `<InitCmds>` writes extracted from the ESI at enrich time, routed through
- * the same SDO conversion as the user startup list but tagged separately so the generator
- * can place them first in the startup order.
+ * Entries without a value are dropped so the slave keeps its own default instead of receiving 0.
+ * Byte-string entries (`valueBytes`) are kept even when `value` is empty.
  */
-function buildEsiInitCmdSdos(device: ConfiguredEtherCATDevice): RuntimeSdoConfig[] {
-  if (!device.esiInitCmdSdos || device.esiInitCmdSdos.length === 0) return []
-  return device.esiInitCmdSdos.map((entry): RuntimeSdoConfig => {
-    const hasBytes = entry.valueBytes !== undefined && entry.valueBytes.length > 0
-    return {
-      index: entry.index,
-      subindex: entry.subIndex,
-      value: hasBytes ? 0 : parseNumericValue(entry.value),
-      data_type: entry.dataType,
-      bit_length: entry.bitLength,
-      name: entry.name,
-      comment: `ESI InitCmd: ${entry.objectName}`,
-      ...(hasBytes && { value_bytes: entry.valueBytes }),
-      ...(entry.completeAccess === true && { complete_access: true }),
+function hasSdoValue(entry: SDOConfigurationEntry): boolean {
+  if (hasBytePayload(entry)) return true
+  return entry.value !== undefined && entry.value !== null && entry.value.trim() !== ''
+}
+
+function toRuntimeSdo(entry: SDOConfigurationEntry, name: string, comment: string): RuntimeSdoConfig {
+  const bytes = hasBytePayload(entry)
+  return {
+    index: entry.index,
+    subindex: entry.subIndex,
+    value: bytes ? 0 : parseNumericValue(entry.value),
+    data_type: entry.dataType,
+    bit_length: entry.bitLength,
+    name,
+    comment,
+    ...(bytes && { value_bytes: entry.valueBytes }),
+    ...(entry.completeAccess === true && { complete_access: true }),
+  }
+}
+
+/** The user's startup SDOs. */
+function buildSdoConfigurations(entries: SDOConfigurationEntry[] | undefined): RuntimeSdoConfig[] {
+  return (entries ?? [])
+    .filter(hasSdoValue)
+    .map((entry) => toRuntimeSdo(entry, entry.name, `Startup SDO: ${entry.objectName}`))
+}
+
+type Phase = 'init' | 'preop'
+
+/** InitCmds listing the IP transition go out before everything written for PS. */
+function inPhase(entry: SDOConfigurationEntry, phase: Phase): boolean {
+  return sdoTransitions(entry).includes('IP') === (phase === 'init')
+}
+
+/** Slave-scope ESI `<InitCmds>`, extracted at enrich time. */
+function buildEsiInitCmdSdos(device: ConfiguredEtherCATDevice, phase: Phase): RuntimeSdoConfig[] {
+  return (device.esiInitCmdSdos ?? [])
+    .filter((entry) => hasSdoValue(entry) && inPhase(entry, phase))
+    .map((entry) => toRuntimeSdo(entry, entry.name, `ESI InitCmd: ${entry.objectName}`))
+}
+
+/** Each module's startup SDOs in slot order, indices already slot-adjusted. */
+function buildModuleStartupSdos(device: ConfiguredEtherCATDevice, phase: Phase): RuntimeSdoConfig[] {
+  const out: RuntimeSdoConfig[] = []
+  for (const module of modulesBySlot(device)) {
+    for (const entry of (module.sdoConfigurations ?? []).filter((e) => hasSdoValue(e) && inPhase(e, phase))) {
+      out.push(
+        toRuntimeSdo(
+          entry,
+          `Module slot ${module.slot}: ${entry.name}`,
+          `Module slot ${module.slot} startup SDO: ${entry.objectName}`,
+        ),
+      )
     }
-  })
+  }
+  return out
+}
+
+function modulesBySlot(device: ConfiguredEtherCATDevice): ConfiguredEtherCATModule[] {
+  return [...(device.modules ?? [])].sort((a, b) => a.slot - b.slot)
+}
+
+/**
+ * Payload of a CoE Complete Access write starting at sub-index 0: the count as one byte padded
+ * to 16 bits (ETG.1000.6), then each item little-endian. Returned as `0x` hex for `value_bytes`.
+ */
+export function completeAccessPayload(items: readonly number[], itemBytes: 2 | 4): string {
+  const bytes: number[] = [items.length & 0xff, 0]
+  for (const item of items) {
+    for (let b = 0; b < itemBytes; b++) bytes.push((item >>> (8 * b)) & 0xff)
+  }
+  return `0x${bytes.map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join('')}`
 }
 
 /**
@@ -326,185 +343,268 @@ function packPdoMappingEntry(entry: PersistedPdoEntry): number {
   return ((idx << 16) | (sub << 8) | len) >>> 0
 }
 
-/**
- * Rewrite the mapping of each assigned non-Fixed PDO so the slave boots with the
- * entries the user has in the project. When the slave advertises CompleteAccess the
- * mapping is sent as a single CA write per PDO; otherwise the ETG.1000 three-step is
- * emitted (clear-count → entries → publish-count). Gated by `coeFlags.pdoConfig`.
- *
- * Order inside the SDO block is RxPDOs then TxPDOs, each in index-sort order.
- */
-function buildPdoMappingRewrites(device: ConfiguredEtherCATDevice): RuntimeSdoConfig[] {
-  const coeFlags = device.config?.coeFlags
-  if (coeFlags === undefined || !coeFlags.pdoConfig) return []
+type CoeFlags = NonNullable<ConfiguredEtherCATDevice['config']['coeFlags']>
 
-  const emit = (pdos: PersistedPdo[] | undefined, label: 'Rx' | 'Tx'): RuntimeSdoConfig[] => {
-    if (pdos === undefined || pdos.length === 0) return []
-    const eligible = pdos.filter(
-      (pdo) =>
-        pdo.assigned !== false && pdo.fixed !== true && Array.isArray(pdo.entries) && pdo.entries.length > 0,
-    )
-    const sorted = [...eligible].sort((a, b) => a.index.localeCompare(b.index))
-    const out: RuntimeSdoConfig[] = []
-    for (const pdo of sorted) {
-      if (coeFlags.completeAccess) {
-        // Payload: 1-byte count + N × UDINT little-endian.
-        const bytes: number[] = [pdo.entries.length]
-        for (const e of pdo.entries) {
-          const u = packPdoMappingEntry(e)
-          bytes.push(u & 0xff, (u >>> 8) & 0xff, (u >>> 16) & 0xff, (u >>> 24) & 0xff)
-        }
-        const hex = bytes.map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join('')
-        out.push({
-          index: pdo.index,
-          subindex: 0,
-          value: 0,
-          data_type: 'OCTET_STRING',
-          bit_length: bytes.length * 8,
-          name: `${label}PDO mapping (CA): ${pdo.name}`,
-          comment: `PDO mapping ${pdo.index} via CoE Complete Access — ${pdo.entries.length} entry(ies)`,
-          complete_access: true,
-          value_bytes: hex,
-        })
-        continue
-      }
-      // Step 1: clear.
-      out.push({
+function usint(index: string, subindex: number, value: number, name: string, comment: string): RuntimeSdoConfig {
+  return { index, subindex, value, data_type: 'USINT', bit_length: 8, name, comment }
+}
+
+/** Mapping rewrite of one PDO: one Complete Access write, or clear, each entry, count. */
+function pdoMappingRewrite(pdo: PersistedPdo, label: 'Rx' | 'Tx', completeAccess: boolean): RuntimeSdoConfig[] {
+  const packed = pdo.entries.map(packPdoMappingEntry)
+  if (completeAccess) {
+    return [
+      {
         index: pdo.index,
         subindex: 0,
         value: 0,
-        data_type: 'USINT',
-        bit_length: 8,
-        name: `${label}PDO mapping: clear ${pdo.name}`,
-        comment: `PDO mapping (${pdo.index}:0 = 0) — clear the current count`,
-      })
-      // Step 2: entries.
-      for (let i = 0; i < pdo.entries.length; i++) {
-        const e = pdo.entries[i]!
-        out.push({
-          index: pdo.index,
-          subindex: i + 1,
-          value: packPdoMappingEntry(e),
-          data_type: 'UDINT',
-          bit_length: 32,
-          name: `${label}PDO mapping: ${pdo.name} slot ${i + 1}`,
-          comment: `PDO mapping (${pdo.index}:${i + 1}) — ${e.name}`,
-        })
-      }
-      // Step 3: publish count.
-      out.push({
-        index: pdo.index,
-        subindex: 0,
-        value: pdo.entries.length,
-        data_type: 'USINT',
-        bit_length: 8,
-        name: `${label}PDO mapping: count ${pdo.name}`,
-        comment: `PDO mapping (${pdo.index}:0 = ${pdo.entries.length}) — publish the count`,
-      })
-    }
-    return out
+        data_type: 'OCTET_STRING',
+        bit_length: (2 + packed.length * 4) * 8,
+        name: `${label}PDO mapping (CA): ${pdo.name}`,
+        comment: `PDO mapping ${pdo.index} via CoE Complete Access, ${packed.length} entry(ies)`,
+        complete_access: true,
+        value_bytes: completeAccessPayload(packed, 4),
+      },
+    ]
   }
-
-  return [...emit(device.rxPdos, 'Rx'), ...emit(device.txPdos, 'Tx')]
+  const out = [usint(pdo.index, 0, 0, `${label}PDO mapping: clear ${pdo.name}`, `PDO mapping (${pdo.index}:0 = 0)`)]
+  pdo.entries.forEach((entry, i) => {
+    out.push({
+      index: pdo.index,
+      subindex: i + 1,
+      value: packed[i] ?? 0,
+      data_type: 'UDINT',
+      bit_length: 32,
+      name: `${label}PDO mapping: ${pdo.name} entry ${i + 1}`,
+      comment: `PDO mapping (${pdo.index}:${i + 1}): ${entry.name}`,
+    })
+  })
+  out.push(
+    usint(
+      pdo.index,
+      0,
+      pdo.entries.length,
+      `${label}PDO mapping: count ${pdo.name}`,
+      `PDO mapping (${pdo.index}:0 = ${pdo.entries.length})`,
+    ),
+  )
+  return out
 }
 
 /**
- * DOPE-704 E3: emit the PDO-assignment startup SDOs the slave needs to boot in the
- * configured mapping. The sequence matches CODESYS 3.5.22.10 verbatim (verified from the
- * decompiled configurator sources on the Delta ASDA-A2-E case):
- *
- *   for each sync manager n where the slave advertises `PdoAssign` AND the user assigned
- *   at least one PDO:
- *     1. 0x1C1n:0 = 0            (clear the current count)
- *     2. for each assigned PDO in index-sort order:
- *        0x1C1n:k = <pdo index>  (slot k = 1..count)
- *     3. 0x1C1n:0 = count        (publish the new count)
- *
- * Sync manager 2 carries RxPDOs (`0x1C12`), sync manager 3 carries TxPDOs (`0x1C13`).
- * A slave whose ESI declares no `PdoAssign` gets no writes regardless of what the user
- * ticked in Expert view, matching BR06 in the Requirements Gathering.
- *
- * The emission order inside the full SDO list is: user startup SDOs first (what
- * {@link buildSdoConfigurations} returned), then the PDO-assignment block. The user's
- * writes may initialise mode-of-operation or similar state the drive uses to interpret
- * the subsequent assignment, so they must land first.
+ * Process-data block of one sync manager, in the order: `0x1C1n:0 = 0`; per assigned PDO in
+ * assignment order, the mapping rewrite (not Fixed, `PdoConfig`) then `0x1C1n:k = index`
+ * (`PdoAssign`); finally `0x1C1n:0 = count`, or the whole list in one Complete Access write.
+ * Without `PdoAssign` no `0x1C1n` object is written.
  */
-function buildPdoAssignmentSdos(device: ConfiguredEtherCATDevice): RuntimeSdoConfig[] {
-  const coeFlags = device.config?.coeFlags
-  if (coeFlags === undefined || !coeFlags.pdoAssign) return []
-
-  const emit = (sm: number, pdos: PersistedPdo[] | undefined, label: 'Rx' | 'Tx'): RuntimeSdoConfig[] => {
-    if (pdos === undefined || pdos.length === 0) return []
-    // Assigned = present in config, not explicitly unassigned. Projects saved under the
-    // DOPE-657 schema (assigned === undefined) are treated as every PDO assigned.
-    const assigned = pdos.filter((p) => p.assigned !== false)
-    if (assigned.length === 0) return []
-    const sortedByIndex = [...assigned].sort((a, b) => a.index.localeCompare(b.index))
-    const base = `0x1C1${sm.toString(16).toUpperCase()}`
-    const out: RuntimeSdoConfig[] = []
-    // Step 1: clear
-    out.push({
-      index: base,
-      subindex: 0,
-      value: 0,
-      data_type: 'USINT',
-      bit_length: 8,
-      name: `${label}PDO assignment: clear`,
-      comment: `${label}PDO assignment (${base}:0 = 0) — clear the current count`,
-    })
-    // Step 2: list each assigned PDO
-    for (let i = 0; i < sortedByIndex.length; i++) {
-      const pdo = sortedByIndex[i]
-      if (pdo === undefined) continue
+function syncManagerBlock(
+  sm: 2 | 3,
+  pdos: PersistedPdo[] | undefined,
+  label: 'Rx' | 'Tx',
+  flags: CoeFlags,
+): RuntimeSdoConfig[] {
+  if (pdos === undefined || pdos.length === 0) return []
+  const assigned = pdos.filter((p) => p.assigned !== false)
+  const base = `0x1C1${sm}`
+  const out: RuntimeSdoConfig[] = []
+  if (flags.pdoAssign) {
+    out.push(usint(base, 0, 0, `${label}PDO assignment: clear`, `${label}PDO assignment (${base}:0 = 0)`))
+  }
+  assigned.forEach((pdo, i) => {
+    if (flags.pdoConfig && pdo.fixed !== true && pdo.entries.length > 0) {
+      out.push(...pdoMappingRewrite(pdo, label, flags.completeAccess))
+    }
+    if (flags.pdoAssign && !flags.completeAccess) {
       out.push({
         index: base,
         subindex: i + 1,
         value: parseNumericValue(pdo.index),
         data_type: 'UINT',
         bit_length: 16,
-        name: `${label}PDO assignment: slot ${i + 1}`,
-        comment: `${label}PDO assignment (${base}:${i + 1} = ${pdo.index}) — ${pdo.name}`,
+        name: `${label}PDO assignment: entry ${i + 1}`,
+        comment: `${label}PDO assignment (${base}:${i + 1} = ${pdo.index}): ${pdo.name}`,
       })
     }
-    // Step 3: publish the count
-    out.push({
-      index: base,
-      subindex: 0,
-      value: sortedByIndex.length,
-      data_type: 'USINT',
-      bit_length: 8,
-      name: `${label}PDO assignment: count`,
-      comment: `${label}PDO assignment (${base}:0 = ${sortedByIndex.length}) — publish the count`,
-    })
-    return out
+  })
+  if (flags.pdoAssign) {
+    if (flags.completeAccess) {
+      const indices = assigned.map((p) => parseNumericValue(p.index))
+      out.push({
+        index: base,
+        subindex: 0,
+        value: 0,
+        data_type: 'OCTET_STRING',
+        bit_length: (2 + indices.length * 2) * 8,
+        name: `${label}PDO assignment (CA)`,
+        comment: `${label}PDO assignment ${base} via CoE Complete Access, ${indices.length} PDO(s)`,
+        complete_access: true,
+        value_bytes: completeAccessPayload(indices, 2),
+      })
+    } else {
+      out.push(
+        usint(
+          base,
+          0,
+          assigned.length,
+          `${label}PDO assignment: count`,
+          `${label}PDO assignment (${base}:0 = ${assigned.length})`,
+        ),
+      )
+    }
   }
+  return out
+}
 
-  return [...emit(2, device.rxPdos, 'Rx'), ...emit(3, device.txPdos, 'Tx')]
+/** The slave's process-data block: SM2 (RxPDOs) then SM3 (TxPDOs). Nothing without `PdoAssign` or `PdoConfig`. */
+function buildProcessDataSdos(device: ConfiguredEtherCATDevice): RuntimeSdoConfig[] {
+  const flags = device.config?.coeFlags
+  if (flags === undefined || (!flags.pdoAssign && !flags.pdoConfig)) return []
+  return [...syncManagerBlock(2, device.rxPdos, 'Rx', flags), ...syncManagerBlock(3, device.txPdos, 'Tx', flags)]
+}
+
+function moduleListTransition(device: ConfiguredEtherCATDevice): string {
+  return (device.slotsSpec?.downloadModuleListTransition ?? 'PS').toUpperCase()
 }
 
 /**
- * Walk a module's rxPdos / txPdos and emit the channels those PDOs expose, each tagged
- * with the module's slot. Supports modules saved with or without an enriched
- * `channelInfo` — when it's missing (older save or stub module) the generator derives it
- * on the fly from the PDO entries so the iomapping still carries the module channels.
+ * The `0xF030` module ident list, written when the coupler's `<Slots>` declares
+ * `DownloadModuleIdentList`. Empty slots carry ident 0. Complete Access when the coupler
+ * supports it, otherwise clear, one UDINT per slot, count.
  */
-function buildModuleChannels(device: ConfiguredEtherCATDevice, unassignedPdos: ReadonlySet<string>): RuntimeChannel[] {
-  if (!device.modules || device.modules.length === 0) return []
-  const bySlot = [...device.modules].sort((a, b) => a.slot - b.slot)
-  const out: RuntimeChannel[] = []
-  for (const module of bySlot) {
-    const info = module.channelInfo ?? deriveModuleChannelInfo(module)
-    if (info.length === 0) continue
-    const mapped = buildChannels(info, module.channelMappings, unassignedPdos)
-    out.push(...mapped)
+function buildModuleIdentListWrites(device: ConfiguredEtherCATDevice): RuntimeSdoConfig[] {
+  if (device.slotsSpec?.downloadModuleIdentList !== true) return []
+  const modules = modulesBySlot(device)
+  const maxSlot = modules[modules.length - 1]?.slot ?? 0
+  if (maxSlot === 0) return []
+  const idents: number[] = []
+  for (let s = 1; s <= maxSlot; s++) {
+    const module = modules.find((m) => m.slot === s)
+    idents.push(module ? parseNumericValue(module.ident) >>> 0 : 0)
+  }
+
+  if (device.config?.coeFlags?.completeAccess === true) {
+    return [
+      {
+        index: '0xF030',
+        subindex: 0,
+        value: 0,
+        data_type: 'OCTET_STRING',
+        bit_length: (2 + idents.length * 4) * 8,
+        name: 'Module ident list (CA)',
+        comment: `Module ident list (0xF030) via CoE Complete Access, ${idents.length} slot(s)`,
+        complete_access: true,
+        value_bytes: completeAccessPayload(idents, 4),
+      },
+    ]
+  }
+
+  const out = [usint('0xF030', 0, 0, 'Module ident list: clear', 'Module ident list (0xF030:0 = 0)')]
+  idents.forEach((ident, i) => {
+    out.push({
+      index: '0xF030',
+      subindex: i + 1,
+      value: ident,
+      data_type: 'UDINT',
+      bit_length: 32,
+      name: `Module ident list: slot ${i + 1}`,
+      comment: `Module ident list (0xF030:${i + 1}): slot ${i + 1}`,
+    })
+  })
+  out.push(
+    usint('0xF030', 0, idents.length, 'Module ident list: count', `Module ident list (0xF030:0 = ${idents.length})`),
+  )
+  return out
+}
+
+/**
+ * Startup SDO order. Writes for the IP transition first: `0xF030`, ESI InitCmds, module
+ * InitCmds. Then ESI InitCmds; user startup SDOs; module InitCmds in slot order; `0xF030`;
+ * the process-data block per sync manager. EtherDOG sends the whole list in PRE-OP.
+ */
+function buildStartupSdos(device: ConfiguredEtherCATDevice): RuntimeSdoConfig[] {
+  const identList = buildModuleIdentListWrites(device)
+  const identAtInit = moduleListTransition(device) === 'IP'
+  return [
+    ...(identAtInit ? identList : []),
+    ...buildEsiInitCmdSdos(device, 'init'),
+    ...buildModuleStartupSdos(device, 'init'),
+    ...buildEsiInitCmdSdos(device, 'preop'),
+    ...buildSdoConfigurations(device.sdoConfigurations),
+    ...buildModuleStartupSdos(device, 'preop'),
+    ...(identAtInit ? [] : identList),
+    ...buildProcessDataSdos(device),
+  ]
+}
+
+function sameIndex(a: string | undefined, b: string): boolean {
+  if (a === undefined) return false
+  const x = parseNumericValue(a)
+  return x !== 0 && x === parseNumericValue(b)
+}
+
+/**
+ * Assigned PDOs of one direction as the bus configuration lists them: the coupler's own PDOs in
+ * assignment order, merged with module PDOs, ordered by `ModulePdoGroup` and then by slot. A
+ * coupler PDO that a group names sorts first in that group; one no group names sorts before all
+ * groups. A PDO of a group with `Alignment` n starts on an n-byte boundary, padded at the end of
+ * the previous PDO.
+ */
+function buildBusPdos(device: ConfiguredEtherCATDevice, direction: 'rx' | 'tx'): RuntimePdo[] {
+  const groups = device.modulePdoGroups ?? []
+  const groupIndex = (g: ESIModulePdoGroup): string | undefined => (direction === 'rx' ? g.rxPdoIndex : g.txPdoIndex)
+  const items: Array<{ group: number; slot: number; alignment: number; pdo: PersistedPdo }> = []
+  for (const pdo of (direction === 'rx' ? device.rxPdos : device.txPdos) ?? []) {
+    const group = groups.find((g) => sameIndex(groupIndex(g), pdo.index))
+    items.push({ group: group?.group ?? -1, slot: 0, alignment: group?.alignment ?? 0, pdo })
+  }
+  for (const module of device.modules ?? []) {
+    const group = groups.find((g) => g.group === module.modulePdoGroup)
+    for (const pdo of (direction === 'rx' ? module.rxPdos : module.txPdos) ?? []) {
+      items.push({
+        group: module.modulePdoGroup ?? Number.MAX_SAFE_INTEGER,
+        slot: module.slot,
+        alignment: group?.alignment ?? 0,
+        pdo,
+      })
+    }
+  }
+  const ordered = items
+    .map((item, order) => ({ ...item, order }))
+    .filter((item) => item.pdo.assigned !== false)
+    .sort((a, b) => a.group - b.group || a.slot - b.slot || a.order - b.order)
+
+  const out: RuntimePdo[] = []
+  let bits = 0
+  for (const item of ordered) {
+    const boundary = item.alignment * 8
+    const previous = out[out.length - 1]
+    const pad = boundary > 0 ? (boundary - (bits % boundary)) % boundary : 0
+    if (pad > 0 && previous !== undefined) {
+      previous.entries.push({ index: '0x0000', subindex: 0, bit_length: pad, name: 'Alignment', data_type: 'PAD' })
+      bits += pad
+    }
+    const pdo = convertPdo(item.pdo)
+    bits += pdo.entries.reduce((sum, e) => sum + e.bit_length, 0)
+    out.push(pdo)
   }
   return out
 }
 
 /**
- * Fallback channel-info derivation for a module saved without one. Walks the module's
- * persisted PDOs and emits one channel per non-padding entry, in the order the UI expects.
+ * Walk a module's rxPdos / txPdos and emit the channels those PDOs expose. Modules saved
+ * without `channelInfo` get it derived from their PDO entries.
  */
+function buildModuleChannels(device: ConfiguredEtherCATDevice, unassignedPdos: ReadonlySet<string>): RuntimeChannel[] {
+  const out: RuntimeChannel[] = []
+  for (const module of modulesBySlot(device)) {
+    const info = module.channelInfo ?? deriveModuleChannelInfo(module)
+    if (info.length === 0) continue
+    out.push(...buildChannels(info, module.channelMappings, unassignedPdos))
+  }
+  return out
+}
+
+/** One channel per non-padding entry of a module's assigned PDOs. */
 function deriveModuleChannelInfo(module: ConfiguredEtherCATModule): PersistedChannelInfo[] {
   const out: PersistedChannelInfo[] = []
   const walk = (pdos: PersistedPdo[] | undefined, direction: 'input' | 'output') => {
@@ -546,10 +646,10 @@ function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSla
   const slaveChannels = device.channelInfo
     ? buildChannels(device.channelInfo, device.channelMappings, unassignedPdos)
     : []
-  const moduleChannels = buildModuleChannels(device, unassignedPdos)
-  const channels = [...slaveChannels, ...moduleChannels]
-  const rxPdos = device.rxPdos ? convertPdos(device.rxPdos) : []
-  const txPdos = device.txPdos ? convertPdos(device.txPdos) : []
+  const channels = [...slaveChannels, ...buildModuleChannels(device, unassignedPdos)].map((ch, i) => ({
+    ...ch,
+    index: i,
+  }))
 
   const cfg = device.config
 
@@ -591,166 +691,10 @@ function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSla
       },
     },
     channels,
-    sdo_configurations: [
-      ...buildEsiInitCmdSdos(device),
-      ...buildSdoConfigurations(device.sdoConfigurations),
-      ...buildModuleStartupSdos(device),
-      ...buildModuleIdentListWrites(device),
-      ...buildPdoMappingRewrites(device),
-      ...buildPdoAssignmentSdos(device),
-    ],
-    rx_pdos: [...rxPdos, ...buildModulePdos(device, 'rx')],
-    tx_pdos: [...txPdos, ...buildModulePdos(device, 'tx')],
+    sdo_configurations: buildStartupSdos(device),
+    rx_pdos: buildBusPdos(device, 'rx'),
+    tx_pdos: buildBusPdos(device, 'tx'),
   }
-}
-
-/**
- * DOPE-704 E5: a modular coupler's module PDOs. The module stores slot-adjusted PDO
- * indices directly (set when the user adds the module via the UI), so the generator
- * just copies them through, after the coupler's own PDOs. Ordering within a direction
- * is by slot. A module's rxPdos/txPdos are concatenated after the coupler's; the result
- * matches the ETG.5001 convention of "coupler group first, then module group".
- */
-function buildModulePdos(device: ConfiguredEtherCATDevice, direction: 'rx' | 'tx'): RuntimePdo[] {
-  if (!device.modules || device.modules.length === 0) return []
-  const bySlot = [...device.modules].sort((a, b) => a.slot - b.slot)
-  const out: RuntimePdo[] = []
-  for (const module of bySlot) {
-    const pdos = direction === 'rx' ? module.rxPdos : module.txPdos
-    if (pdos === undefined) continue
-    out.push(...convertPdos(pdos))
-  }
-  return out
-}
-
-/**
- * DOPE-704 E5: each module's startup SDOs. The module's SDOConfigurationEntry list
- * carries slot-adjusted indices (`0x80n0` for slot n) and may contain byte-string
- * payloads for `InitCmd` writes like the UR20 module name at `0x80n0:03`. The byte
- * payload is passed through to EtherDOG via `value_bytes` and `complete_access` when
- * present on the entry.
- *
- * Ordering: user startup SDOs come first (see buildSlave), then module SDOs in slot
- * order, then the module-ident-list write (`0xF030`), then the PDO-assignment block.
- * This matches CODESYS 3.5.22.10's generated-startup order for a UR20 project.
- */
-function buildModuleStartupSdos(device: ConfiguredEtherCATDevice): RuntimeSdoConfig[] {
-  if (!device.modules || device.modules.length === 0) return []
-  const bySlot = [...device.modules].sort((a, b) => a.slot - b.slot)
-  const out: RuntimeSdoConfig[] = []
-  for (const module of bySlot) {
-    if (!module.sdoConfigurations) continue
-    for (const entry of module.sdoConfigurations) {
-      // DOPE-704 E5 extras: a byte-string entry is kept even when `value` is empty —
-      // its payload lives in `valueBytes` and the generator routes it through
-      // EtherDOG's `value_bytes` field.
-      const hasBytes = entry.valueBytes !== undefined && entry.valueBytes.length > 0
-      if (!hasBytes && (entry.value === undefined || entry.value === null || entry.value.trim() === '')) continue
-      const sdo: RuntimeSdoConfig = {
-        index: entry.index,
-        subindex: entry.subIndex,
-        value: hasBytes ? 0 : parseNumericValue(entry.value),
-        data_type: entry.dataType,
-        bit_length: entry.bitLength,
-        name: `Module slot ${module.slot}: ${entry.name}`,
-        comment: `Module slot ${module.slot} startup SDO: ${entry.objectName}`,
-        ...(hasBytes && { value_bytes: entry.valueBytes }),
-        ...(entry.completeAccess === true && { complete_access: true }),
-      }
-      out.push(sdo)
-    }
-  }
-  return out
-}
-
-/**
- * DOPE-704 E5: the `0xF030` module-ident-list write that tells a modular coupler which
- * modules are plugged in and where. Only emitted when `coeFlags.pdoConfig` is true
- * (ETG.5001 couplers use PdoConfig to gate the module-list download — PdoAssign stays
- * false on couplers like UR20).
- *
- * Emission shape:
- *   - **Complete Access** (`coeFlags.completeAccess === true`): one SDO with CA flag set
- *     whose `value_bytes` carries the ETG.5001 ident-list payload (one USINT count byte,
- *     then one UDINT per slot in little-endian). This is the ETG.5001 preferred form
- *     and the fastest on-wire path. Added in E5 extras.
- *   - **Clear-list-count** (default): three writes against the 0xF030 sub-indices —
- *     clear (0), one UDINT per slot, publish count. Compatible with couplers that don't
- *     advertise CompleteAccess.
- *
- * Empty slots in the station emit ident 0 in both forms, matching ETG.5001 behaviour.
- */
-function buildModuleIdentListWrites(device: ConfiguredEtherCATDevice): RuntimeSdoConfig[] {
-  if (!device.modules || device.modules.length === 0) return []
-  const coeFlags = device.config?.coeFlags
-  if (coeFlags === undefined || !coeFlags.pdoConfig) return []
-
-  const bySlot = [...device.modules].sort((a, b) => a.slot - b.slot)
-  // Fill empty slot positions with ident 0 (ETG.5001 allows holes).
-  const maxSlot = bySlot[bySlot.length - 1]?.slot ?? 0
-  const idents: number[] = []
-  for (let s = 1; s <= maxSlot; s++) {
-    const module = bySlot.find((m) => m.slot === s)
-    idents.push(module ? parseNumericValue(module.ident) : 0)
-  }
-
-  // DOPE-704 E5 extras: Complete Access path.
-  if (coeFlags.completeAccess) {
-    // Payload: 1 byte (count) + 4 bytes per slot (UDINT little-endian).
-    const bytes: number[] = [idents.length]
-    for (const ident of idents) {
-      bytes.push(ident & 0xff, (ident >>> 8) & 0xff, (ident >>> 16) & 0xff, (ident >>> 24) & 0xff)
-    }
-    const hex = bytes.map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join('')
-    return [
-      {
-        index: '0x0F30',
-        subindex: 0,
-        value: 0,
-        data_type: 'OCTET_STRING',
-        bit_length: bytes.length * 8,
-        name: 'Module ident list (CA)',
-        comment: `Module ident list (0xF030) via CoE Complete Access — ${idents.length} slot(s)`,
-        complete_access: true,
-        value_bytes: hex,
-      },
-    ]
-  }
-
-  const out: RuntimeSdoConfig[] = []
-  // Step 1: clear
-  out.push({
-    index: '0x0F30',
-    subindex: 0,
-    value: 0,
-    data_type: 'USINT',
-    bit_length: 8,
-    name: 'Module ident list: clear',
-    comment: 'Module ident list (0xF030:0 = 0) — clear the current count',
-  })
-  // Step 2: list idents in slot order
-  for (let i = 0; i < idents.length; i++) {
-    out.push({
-      index: '0x0F30',
-      subindex: i + 1,
-      value: idents[i] ?? 0,
-      data_type: 'UDINT',
-      bit_length: 32,
-      name: `Module ident list: slot ${i + 1}`,
-      comment: `Module ident list (0xF030:${i + 1}) — slot ${i + 1} ident`,
-    })
-  }
-  // Step 3: publish count
-  out.push({
-    index: '0x0F30',
-    subindex: 0,
-    value: idents.length,
-    data_type: 'USINT',
-    bit_length: 8,
-    name: 'Module ident list: count',
-    comment: `Module ident list (0xF030:0 = ${idents.length}) — publish the count`,
-  })
-  return out
 }
 
 /**

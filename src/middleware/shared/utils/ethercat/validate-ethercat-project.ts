@@ -5,19 +5,29 @@
  * the ESI-declared invariants fails the compile with a specific message instead of
  * shipping a bus configuration the slave or EtherDOG rejects at startup.
  *
- * Four invariants:
- *   1. A PDO flagged `mandatory` must be assigned.
- *   2. A PDO flagged `fixed` cannot be deselected (its mapping is locked in silicon).
- *   3. Exclusion must be resolved: when a PDO is assigned, none of the PDOs it excludes
- *      may also be assigned.
- *   4. A modular coupler must have at least `minInstances` modules in each slot.
- *
- * MaxInstances is not checked here because the UI prevents adding more than the slot
- * allows; a validator pass that trips a MaxInstances error means project data was
- * hand-edited, which is out of scope for this gate.
+ * Invariants, on the slave's own PDOs and on every module's PDOs:
+ *   - A PDO flagged `mandatory` must be assigned. `fixed` only locks a PDO's entries.
+ *   - Exclusion must be resolved: an assigned PDO excludes no other assigned PDO.
+ *   - No two assigned PDOs of one slave share an index.
+ * And on a modular coupler:
+ *   - One module per slot, slots numbered from 1.
+ *   - Modules fill the `<Slot>` definitions in order, each within its MinInstances and
+ *     MaxInstances and of a class or ident the definition accepts.
+ *   - The `0xF030` download transition is one EtherDOG performs (IP or PS).
+ * And on every ESI InitCmd, slave or module: its transitions are IP or PS, since EtherDOG
+ * sends all startup SDOs in PRE-OP.
  */
 
-import type { ConfiguredEtherCATDevice, PersistedPdo } from '@root/middleware/shared/ports/esi-types'
+import type {
+  ConfiguredEtherCATDevice,
+  ConfiguredEtherCATModule,
+  ESISlot,
+  PersistedPdo,
+  SDOConfigurationEntry,
+} from '@root/middleware/shared/ports/esi-types'
+
+import { identsEqual } from './esi-module-resolve'
+import { PREOP_TRANSITIONS, sdoTransitions } from './init-cmd-sdo'
 
 /** Minimal structural shape the validator reads from a project's remoteDevices list.  The
  *  full `PLCRemoteDevice` definition lives in the backend-shared types module; redefining
@@ -38,6 +48,10 @@ function slaveWhere(busName: string, slave: ConfiguredEtherCATDevice): string {
   return `EtherCAT bus '${busName}', slave ${position} ('${name}')`
 }
 
+function moduleWhere(slaveAt: string, module: ConfiguredEtherCATModule): string {
+  return `${slaveAt}, module '${module.name}' in slot ${module.slot}`
+}
+
 function validateMandatoryAssigned(where: string, direction: Direction, pdos: PersistedPdo[] | undefined): string[] {
   if (!pdos) return []
   const errors: string[] = []
@@ -45,19 +59,6 @@ function validateMandatoryAssigned(where: string, direction: Direction, pdos: Pe
     if (pdo.mandatory === true && pdo.assigned === false) {
       errors.push(
         `${where} ${direction}: PDO ${pdo.index} ('${pdo.name}') is marked Mandatory in the ESI but is unassigned`,
-      )
-    }
-  }
-  return errors
-}
-
-function validateFixedAssigned(where: string, direction: Direction, pdos: PersistedPdo[] | undefined): string[] {
-  if (!pdos) return []
-  const errors: string[] = []
-  for (const pdo of pdos) {
-    if (pdo.fixed === true && pdo.assigned === false) {
-      errors.push(
-        `${where} ${direction}: PDO ${pdo.index} ('${pdo.name}') has a Fixed mapping and cannot be deselected`,
       )
     }
   }
@@ -74,33 +75,146 @@ function validateExclusion(where: string, direction: Direction, pdos: PersistedP
     if (!excluded || excluded.length === 0) continue
     for (const other of excluded) {
       if (assignedIndices.has(other.toLowerCase())) {
-        errors.push(
-          `${where} ${direction}: PDO ${pdo.index} ('${pdo.name}') excludes ${other}, which is also assigned`,
-        )
+        errors.push(`${where} ${direction}: PDO ${pdo.index} ('${pdo.name}') excludes ${other}, which is also assigned`)
       }
     }
   }
   return errors
 }
 
-function validateMinInstances(where: string, slave: ConfiguredEtherCATDevice): string[] {
-  const spec = slave.slotsSpec
-  if (!spec || !Array.isArray(spec.slots) || spec.slots.length === 0) return []
+function validatePdoSet(where: string, rx: PersistedPdo[] | undefined, tx: PersistedPdo[] | undefined): string[] {
+  return [
+    ...validateMandatoryAssigned(where, 'RxPDOs', rx),
+    ...validateMandatoryAssigned(where, 'TxPDOs', tx),
+    ...validateExclusion(where, 'RxPDOs', rx),
+    ...validateExclusion(where, 'TxPDOs', tx),
+  ]
+}
+
+function validateUniquePdoIndices(where: string, slave: ConfiguredEtherCATDevice): string[] {
+  const owners = new Map<number, string>()
   const errors: string[] = []
-  // One ESI slot definition can expand to a run of physical slots: we interpret
-  // slot[i] as spec for the i+1-th slot and count the modules sitting there.
-  const occupancyBySlot = new Map<number, number>()
-  for (const module of slave.modules ?? []) {
-    occupancyBySlot.set(module.slot, (occupancyBySlot.get(module.slot) ?? 0) + 1)
+  const visit = (pdos: PersistedPdo[] | undefined, owner: string) => {
+    for (const pdo of pdos ?? []) {
+      if (pdo.assigned === false) continue
+      const key = Number.parseInt(pdo.index, 16)
+      const first = owners.get(key)
+      if (first === undefined) owners.set(key, owner)
+      else errors.push(`${where}: PDO ${pdo.index} of ${owner} has the same index as a PDO of ${first}`)
+    }
   }
-  for (let i = 0; i < spec.slots.length; i++) {
-    const slotSpec = spec.slots[i]!
-    const slotNumber = i + 1
-    const count = occupancyBySlot.get(slotNumber) ?? 0
-    if (count < slotSpec.minInstances) {
-      const label = slotSpec.name ? ` ('${slotSpec.name}')` : ''
+  visit(slave.rxPdos, 'the slave')
+  visit(slave.txPdos, 'the slave')
+  for (const module of slave.modules ?? []) {
+    const owner = `module '${module.name}' (slot ${module.slot})`
+    visit(module.rxPdos, owner)
+    visit(module.txPdos, owner)
+  }
+  return errors
+}
+
+function slotAccepts(spec: ESISlot, module: ConfiguredEtherCATModule): boolean {
+  const idents = spec.moduleIdents ?? []
+  const classes = spec.moduleClasses ?? []
+  if (idents.length === 0 && classes.length === 0) return true
+  if (idents.some((ident) => identsEqual(ident, module.ident))) return true
+  return module.moduleClass !== undefined && classes.includes(module.moduleClass)
+}
+
+function slotLabel(spec: ESISlot, i: number): string {
+  return spec.name ? `slot definition ${i + 1} ('${spec.name}')` : `slot definition ${i + 1}`
+}
+
+/**
+ * Walk physical slots 1..N in order and fill the ESI `<Slot>` definitions in sequence: a
+ * definition takes slots until it reaches MaxInstances or the next module is one it does not
+ * accept (once its MinInstances is met). An empty slot counts towards the current definition.
+ */
+function validateSlots(where: string, slave: ConfiguredEtherCATDevice): string[] {
+  const modules = slave.modules ?? []
+  const spec = slave.slotsSpec
+  const errors: string[] = []
+
+  const bySlot = new Map<number, ConfiguredEtherCATModule>()
+  for (const module of modules) {
+    if (!Number.isInteger(module.slot) || module.slot < 1) {
+      errors.push(`${moduleWhere(where, module)}: slot numbers start at 1`)
+      continue
+    }
+    const other = bySlot.get(module.slot)
+    if (other !== undefined) {
+      errors.push(`${where}: slot ${module.slot} holds both '${other.name}' and '${module.name}'`)
+      continue
+    }
+    bySlot.set(module.slot, module)
+  }
+
+  if (spec === undefined || spec.slots.length === 0) {
+    if (modules.length > 0) errors.push(`${where}: the slave has modules but its ESI declares no <Slots>`)
+    return errors
+  }
+
+  if (modules.length > 0 && spec.downloadModuleIdentList) {
+    const transition = (spec.downloadModuleListTransition ?? 'PS').toUpperCase()
+    if (!PREOP_TRANSITIONS.includes(transition)) {
       errors.push(
-        `${where}: slot ${slotNumber}${label} requires at least ${slotSpec.minInstances} module(s); the project has ${count}`,
+        `${where}: the ESI downloads the module list at transition '${transition}'; only IP and PS are supported`,
+      )
+    }
+  }
+
+  const lastSlot = Math.max(0, ...bySlot.keys())
+  let current = 0
+  let count = 0
+  for (let slot = 1; slot <= lastSlot; slot++) {
+    const module = bySlot.get(slot)
+    let def = spec.slots[current]
+    while (
+      def !== undefined &&
+      (count >= def.maxInstances || (module !== undefined && !slotAccepts(def, module) && count >= def.minInstances))
+    ) {
+      current += 1
+      count = 0
+      def = spec.slots[current]
+    }
+    if (def === undefined) {
+      errors.push(
+        module !== undefined
+          ? `${moduleWhere(where, module)}: no slot definition of the coupler accepts it at this position`
+          : `${where}: slot ${slot} is past the last slot the coupler's ESI allows`,
+      )
+      break
+    }
+    if (module !== undefined && !slotAccepts(def, module)) {
+      const cls = module.moduleClass === undefined ? 'unknown class' : `class '${module.moduleClass}'`
+      errors.push(
+        `${moduleWhere(where, module)}: ${slotLabel(def, current)} does not accept module ${module.ident} (${cls})`,
+      )
+    }
+    count += 1
+  }
+
+  for (let i = current; i < spec.slots.length; i++) {
+    const def = spec.slots[i]
+    if (def === undefined) continue
+    const have = i === current ? count : 0
+    if (have < def.minInstances) {
+      errors.push(
+        `${where}: ${slotLabel(def, i)} requires at least ${def.minInstances} module(s); the project has ${have}`,
+      )
+    }
+  }
+  return errors
+}
+
+function validateInitCmdTransitions(where: string, entries: SDOConfigurationEntry[] | undefined): string[] {
+  const errors: string[] = []
+  for (const entry of entries ?? []) {
+    const unsupported = sdoTransitions(entry).filter((t) => !PREOP_TRANSITIONS.includes(t))
+    if (unsupported.length > 0) {
+      errors.push(
+        `${where}: InitCmd ${entry.index}:${entry.subIndex} runs at transition ${unsupported.join(', ')}; ` +
+          'EtherDOG writes startup SDOs only in PRE-OP (IP, PS)',
       )
     }
   }
@@ -109,14 +223,14 @@ function validateMinInstances(where: string, slave: ConfiguredEtherCATDevice): s
 
 function validateSlave(busName: string, slave: ConfiguredEtherCATDevice): string[] {
   const where = slaveWhere(busName, slave)
-  const errors: string[] = []
-  errors.push(...validateMandatoryAssigned(where, 'RxPDOs', slave.rxPdos))
-  errors.push(...validateMandatoryAssigned(where, 'TxPDOs', slave.txPdos))
-  errors.push(...validateFixedAssigned(where, 'RxPDOs', slave.rxPdos))
-  errors.push(...validateFixedAssigned(where, 'TxPDOs', slave.txPdos))
-  errors.push(...validateExclusion(where, 'RxPDOs', slave.rxPdos))
-  errors.push(...validateExclusion(where, 'TxPDOs', slave.txPdos))
-  errors.push(...validateMinInstances(where, slave))
+  const errors = validatePdoSet(where, slave.rxPdos, slave.txPdos)
+  errors.push(...validateInitCmdTransitions(where, slave.esiInitCmdSdos))
+  for (const module of slave.modules ?? []) {
+    errors.push(...validatePdoSet(moduleWhere(where, module), module.rxPdos, module.txPdos))
+    errors.push(...validateInitCmdTransitions(moduleWhere(where, module), module.sdoConfigurations))
+  }
+  errors.push(...validateUniquePdoIndices(where, slave))
+  if (slave.isModularCoupler === true || (slave.modules ?? []).length > 0) errors.push(...validateSlots(where, slave))
   return errors
 }
 

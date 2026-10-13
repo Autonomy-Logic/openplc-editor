@@ -95,5 +95,7 @@ export function buildModuleForSlot(input: BuildModuleInput): ConfiguredEtherCATM
     rxPdos,
     txPdos,
     sdoConfigurations: sdos.length > 0 ? sdos : undefined,
+    moduleClass: input.esiModule.moduleClass,
+    modulePdoGroup: input.esiModule.modulePdoGroup,
   }
 }

@@ -52,10 +52,12 @@ const bus = (devices: ConfiguredEtherCATDevice[]): PLCRemoteDevice[] =>
   ] as unknown as PLCRemoteDevice[]
 
 /** Pull the sdo_configurations rows of the first slave from the first master's config. */
-const firstBusConfig = (devices: ConfiguredEtherCATDevice[]): { sdo_configurations: IoEntry[] }[] => {
+type BusSlave = { sdo_configurations: IoEntry[]; rx_pdos: { index: string }[] }
+
+const firstBusConfig = (devices: ConfiguredEtherCATDevice[]): BusSlave[] => {
   const result = generateEtherdogConfigs(bus(devices))
   if (result === null) throw new Error('generator returned null')
-  const bc = JSON.parse(result.busconfig) as { config: { slaves: { sdo_configurations: IoEntry[] }[] } }[]
+  const bc = JSON.parse(result.busconfig) as { config: { slaves: BusSlave[] } }[]
   return bc[0]!.config.slaves
 }
 
@@ -99,16 +101,18 @@ describe('DOPE-704 E3: PDO-assignment SDO block', () => {
     expect(rxWrites[2]).toMatchObject({ index: '0x1C12', subindex: 0, value: 1 })
   })
 
-  test('multiple assigned PDOs: slots fill in index-sort order', () => {
+  test('multiple assigned PDOs: entries follow assignment order, as the bus configuration lists them', () => {
     const slave = configuredSlave({
       rxPdos: [pdo('0x1601'), pdo('0x1603'), pdo('0x1600')],
     })
     const [first] = firstBusConfig([slave])
     const rxWrites = first!.sdo_configurations.filter((e: IoEntry) => e.index === '0x1C12')
     expect(rxWrites.length).toBe(5) // clear + 3 + count
-    expect(rxWrites[1]).toMatchObject({ subindex: 1, value: 0x1600 })
-    expect(rxWrites[2]).toMatchObject({ subindex: 2, value: 0x1601 })
-    expect(rxWrites[3]).toMatchObject({ subindex: 3, value: 0x1603 })
+    expect(rxWrites[1]).toMatchObject({ subindex: 1, value: 0x1601 })
+    expect(rxWrites[2]).toMatchObject({ subindex: 2, value: 0x1603 })
+    expect(rxWrites[3]).toMatchObject({ subindex: 3, value: 0x1600 })
+    const busRx = first!.rx_pdos.map((p) => p.index)
+    expect(busRx).toEqual(['0x1601', '0x1603', '0x1600'])
     expect(rxWrites[4]).toMatchObject({ subindex: 0, value: 3 })
   })
 
@@ -164,14 +168,17 @@ describe('DOPE-704 E3: PDO-assignment SDO block', () => {
     expect(rxWrites[rxWrites.length - 1]).toMatchObject({ subindex: 0, value: 2 })
   })
 
-  test('every PDO unassigned on a given direction emits nothing on that direction', () => {
+  test('every PDO unassigned on a direction empties that sync manager', () => {
     const slave = configuredSlave({
       rxPdos: [pdo('0x1600', false), pdo('0x1601', false)],
       txPdos: [pdo('0x1A00')],
     })
     const [first] = firstBusConfig([slave])
-    const indices = first!.sdo_configurations.map((e: IoEntry) => e.index)
-    expect(indices.includes('0x1C12')).toBe(false)
-    expect(indices.includes('0x1C13')).toBe(true)
+    const rx = first!.sdo_configurations.filter((e: IoEntry) => e.index === '0x1C12')
+    expect(rx.map((e: IoEntry) => [e.subindex, e.value])).toEqual([
+      [0, 0],
+      [0, 0],
+    ])
+    expect(first!.sdo_configurations.some((e: IoEntry) => e.index === '0x1C13')).toBe(true)
   })
 })

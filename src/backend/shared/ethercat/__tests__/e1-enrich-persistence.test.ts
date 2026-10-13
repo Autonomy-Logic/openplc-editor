@@ -9,10 +9,10 @@
  * on `device.config.coeFlags`; this file verifies the pure helper.
  */
 
-import type { ESIDevice } from '@root/middleware/shared/ports/esi-types'
+import type { ConfiguredEtherCATDevice, ESIDevice } from '@root/middleware/shared/ports/esi-types'
 
 import { createDefaultSlaveConfig } from '../device-config-defaults'
-import { enrichDeviceData, lacksE2Schema } from '../enrich-device-data'
+import { enrichDeviceData, esiStartupData, lacksE2Schema, lacksEsiStartupData } from '../enrich-device-data'
 import { parseESIDeviceFull } from '../esi-parser-main'
 
 const MODULAR_COUPLER_ESI = `<?xml version="1.0" encoding="UTF-8"?>
@@ -88,5 +88,43 @@ describe('DOPE-704 E1 extras: freshly added device no longer looks like pre-E2',
       txPdos: enriched.txPdos,
     }
     expect(lacksE2Schema(device)).toBe(false)
+  })
+})
+
+describe('a slave saved without the ESI startup data gets it back on open', () => {
+  const device = (over: Partial<ConfiguredEtherCATDevice> = {}): ConfiguredEtherCATDevice => ({
+    id: 'c',
+    name: 'c',
+    esiDeviceRef: { repositoryItemId: 'r', deviceIndex: 0 },
+    vendorId: '0x230',
+    productCode: '0x1',
+    revisionNo: '0x1',
+    addedFrom: 'repository',
+    config: createDefaultSlaveConfig(),
+    channelMappings: [],
+    ...over,
+  })
+
+  test('a modular coupler without slotsSpec needs it; one with it does not', () => {
+    const esi = esiFrom(MODULAR_COUPLER_ESI)
+    expect(lacksEsiStartupData(device(), esi)).toBe(true)
+    const refill = esiStartupData(esi)
+    expect(refill.slotsSpec?.slots[0]?.maxInstances).toBe(64)
+    expect(lacksEsiStartupData(device(refill), esi)).toBe(false)
+  })
+
+  test('a plain slave without InitCmds needs nothing', () => {
+    expect(lacksEsiStartupData(device(), esiFrom(PLAIN_DRIVE_ESI))).toBe(false)
+  })
+
+  test('InitCmds listing several transitions keep all of them', () => {
+    const xml = PLAIN_DRIVE_ESI.replace(
+      '<Mailbox><CoE PdoAssign="1" PdoConfig="1" CompleteAccess="0"/></Mailbox>',
+      `<Mailbox><CoE PdoAssign="1" PdoConfig="1" CompleteAccess="0"><InitCmd><Transition>IP</Transition><Transition>PS</Transition><Index>#x6060</Index><SubIndex>0</SubIndex><Data>08</Data></InitCmd></CoE></Mailbox>`,
+    )
+    const esi = esiFrom(xml)
+    expect(esi.initCmds?.[0]?.transition).toBe('IP,PS')
+    expect(lacksEsiStartupData(device(), esi)).toBe(true)
+    expect(esiStartupData(esi).esiInitCmdSdos?.[0]).toMatchObject({ transition: 'IP,PS', valueBytes: '0x08' })
   })
 })

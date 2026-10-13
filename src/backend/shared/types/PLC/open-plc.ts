@@ -749,12 +749,14 @@ const PersistedPdoEntrySchema = z.object({
   bitLen: z.number(),
   name: z.string(),
   dataType: z.string(),
+  dependOnSlot: z.boolean().optional(),
 })
 
 const PersistedPdoSchema = z.object({
   index: z.string(),
   name: z.string(),
   entries: z.array(PersistedPdoEntrySchema),
+  dependOnSlot: z.boolean().optional(),
   assigned: z.boolean().optional(),
   /** DOPE-704 E2: ESI defaults carried forward on first import. */
   fixed: z.boolean().optional(),
@@ -788,6 +790,35 @@ const SDOConfigurationEntrySchema = z.object({
   valueBytes: z.string().optional(),
   /** DOPE-704 E5 extras: send with CoE Complete Access. */
   completeAccess: z.boolean().optional(),
+  dependOnSlot: z.boolean().optional(),
+  transition: z.string().optional(),
+})
+
+const ESISlotSchema = z.object({
+  name: z.string().optional(),
+  minInstances: z.number().int().min(0),
+  maxInstances: z.number().int().min(0),
+  moduleClasses: z.array(z.string()).optional(),
+  moduleIdents: z.array(z.string()).optional(),
+  defaultModuleIdent: z.string().optional(),
+})
+
+const ESISlotsSpecSchema = z.object({
+  slots: z.array(ESISlotSchema),
+  slotIndexIncrement: z.number().int(),
+  slotPdoIncrement: z.number().int(),
+  downloadModuleIdentList: z.boolean(),
+  downloadModuleListTransition: z.string().optional(),
+  identifyModuleBy: z.string().optional(),
+  maxSlotCount: z.number().int().optional(),
+})
+
+const ESIModulePdoGroupSchema = z.object({
+  group: z.number().int(),
+  sm: z.number().int().optional(),
+  alignment: z.number().int().optional(),
+  rxPdoIndex: z.string().optional(),
+  txPdoIndex: z.string().optional(),
 })
 
 /**
@@ -824,6 +855,8 @@ const ConfiguredEtherCATModuleSchema = z.object({
   rxPdos: z.array(PersistedPdoSchema).optional(),
   txPdos: z.array(PersistedPdoSchema).optional(),
   sdoConfigurations: z.array(SDOConfigurationEntrySchema).optional(),
+  moduleClass: z.string().optional(),
+  modulePdoGroup: z.number().int().optional(),
 })
 
 const ConfiguredEtherCATDeviceSchema = z.object({
@@ -854,6 +887,9 @@ const ConfiguredEtherCATDeviceSchema = z.object({
    * the UI can offer the "Add module to slot N" affordance before any module is attached.
    */
   isModularCoupler: z.boolean().optional(),
+  esiInitCmdSdos: z.array(SDOConfigurationEntrySchema).optional(),
+  slotsSpec: ESISlotsSpecSchema.optional(),
+  modulePdoGroups: z.array(ESIModulePdoGroupSchema).optional(),
 })
 
 const EtherCATMasterConfigSchema = z.object({

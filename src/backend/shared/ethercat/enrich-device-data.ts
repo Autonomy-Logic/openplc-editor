@@ -161,6 +161,7 @@ export function enrichDeviceData(
   coeFlags: NonNullable<EtherCATSlaveConfig['coeFlags']>
   isModularCoupler: boolean
   slotsSpec?: ConfiguredEtherCATDevice['slotsSpec']
+  modulePdoGroups?: ConfiguredEtherCATDevice['modulePdoGroups']
 } {
   return {
     channelInfo: buildChannelInfo(device),
@@ -176,6 +177,25 @@ export function enrichDeviceData(
     coeFlags: deriveCoEFlags(device),
     isModularCoupler: device.isModularCoupler === true,
     slotsSpec: device.slots,
+    modulePdoGroups: device.modulePdoGroups,
+  }
+}
+
+/** A modular coupler, or a slave with ESI InitCmds, saved without the ESI data the generator needs. */
+export function lacksEsiStartupData(device: ConfiguredEtherCATDevice, esiDevice: ESIDevice): boolean {
+  if (device.esiInitCmdSdos === undefined && (esiDevice.initCmds ?? []).length > 0) return true
+  if (esiDevice.slots === undefined) return false
+  return (
+    device.slotsSpec === undefined || (device.modulePdoGroups === undefined && esiDevice.modulePdoGroups !== undefined)
+  )
+}
+
+/** The ESI data {@link lacksEsiStartupData} looks for, read from the ESI. */
+export function esiStartupData(esiDevice: ESIDevice): EnrichDeviceData {
+  return {
+    esiInitCmdSdos: esiInitCmdsToSdoEntries(esiDevice.initCmds),
+    slotsSpec: esiDevice.slots,
+    modulePdoGroups: esiDevice.modulePdoGroups,
   }
 }
 
@@ -256,6 +276,7 @@ export function migrateSlaveToE2Schema(
   const nextCoeFlags = device.config?.coeFlags ?? deriveCoEFlags(esiDevice)
   const nextInitCmdSdos = device.esiInitCmdSdos ?? esiInitCmdsToSdoEntries(esiDevice.initCmds)
   const nextSlotsSpec = device.slotsSpec ?? esiDevice.slots
+  const nextModulePdoGroups = device.modulePdoGroups ?? esiDevice.modulePdoGroups
 
   return {
     ...device,
@@ -267,5 +288,6 @@ export function migrateSlaveToE2Schema(
     txPdos: nextTx,
     esiInitCmdSdos: nextInitCmdSdos,
     slotsSpec: nextSlotsSpec,
+    modulePdoGroups: nextModulePdoGroups,
   }
 }

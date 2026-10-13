@@ -205,6 +205,8 @@ export interface SDOConfigurationEntry {
   completeAccess?: boolean
   /** Object index shifts with the owning module's slot. */
   dependOnSlot?: boolean
+  /** ESI InitCmd transitions, comma-separated (e.g. "PS"). Absent on user startup SDOs. */
+  transition?: string
 }
 
 // ===================== DEVICE ENRICHMENT =====================
@@ -226,6 +228,10 @@ export type EnrichDeviceData = {
   coeFlags?: EtherCATSlaveConfig['coeFlags']
   /** True when the ESI declares a `<Slots>` block. */
   isModularCoupler?: boolean
+  /** The ESI's `<Slots>` block. */
+  slotsSpec?: ESISlotsSpec
+  /** The ESI's `<ModulePdoGroup>` list. */
+  modulePdoGroups?: ESIModulePdoGroup[]
 }
 
 // ===================== DEVICE =====================
@@ -243,7 +249,7 @@ export type EnrichDeviceData = {
  * `data` is preferred when both are present. Numeric payloads use `value` + `dataType`.
  */
 export interface ESIInitCmd {
-  /** Transition name: "IP" (INIT→PRE-OP), "PS" (PRE-OP→SAFE-OP), "SO" (SAFE-OP→OP) etc. */
+  /** Transition names, comma-separated when the ESI lists several: "IP", "PS", "SO", ... */
   transition: string
   /** Command class, usually "SDO" for CoE writes. */
   ccs?: string
@@ -777,6 +783,8 @@ export interface ConfiguredEtherCATDevice {
    * enforce MinInstances / MaxInstances per slot without reloading the ESI.
    */
   slotsSpec?: ESISlotsSpec
+  /** `<ModulePdoGroup>` list persisted at enrich time; orders module PDOs in the bus configuration. */
+  modulePdoGroups?: ESIModulePdoGroup[]
 }
 
 /**
@@ -813,6 +821,10 @@ export interface ConfiguredEtherCATModule {
   txPdos?: PersistedPdo[]
   /** Module startup SDOs (byte-string InitCmd writes carried through to EtherDOG). */
   sdoConfigurations?: SDOConfigurationEntry[]
+  /** ESI module class, checked against the slot's accepted classes. */
+  moduleClass?: string
+  /** ESI `ModulePdoGroup` the module's PDOs belong to. */
+  modulePdoGroup?: number
 }
 
 /**

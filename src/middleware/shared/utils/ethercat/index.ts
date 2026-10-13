@@ -9,7 +9,14 @@ export {
   type ResolvedCia402Object,
 } from './cia402'
 export { findModuleByIdent, identsEqual, resolveEsiModule } from './esi-module-resolve'
-export { hexByteLength, initCmdsToSdoEntries, initCmdToSdoEntry, textToHexBytes } from './init-cmd-sdo'
+export {
+  hexByteLength,
+  initCmdsToSdoEntries,
+  initCmdToSdoEntry,
+  PREOP_TRANSITIONS,
+  sdoTransitions,
+  textToHexBytes,
+} from './init-cmd-sdo'
 export { buildModuleForSlot, type BuildModuleInput, hexAdd, slotDeltas, type SlotIncrements } from './module-build'
 export { type CouplerCompatibility, isModuleCompatibleWithCoupler } from './module-compatibility'
 export {

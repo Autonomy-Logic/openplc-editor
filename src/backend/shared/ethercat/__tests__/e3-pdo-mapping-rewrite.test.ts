@@ -84,9 +84,7 @@ const firstSlave = (devices: ConfiguredEtherCATDevice[]): { sdo_configurations: 
 describe('PDO mapping-rewrite SDO block', () => {
   test('three-step form: clear → entry UDINTs → publish count for an assigned non-Fixed PDO', () => {
     const slave = configuredSlave({
-      rxPdos: [
-        pdoWithEntries('0x1600', [entry('0x6060', '0x00', 8, 'Mode'), entry('0x6071', '0x00', 16, 'Target')]),
-      ],
+      rxPdos: [pdoWithEntries('0x1600', [entry('0x6060', '0x00', 8, 'Mode'), entry('0x6071', '0x00', 16, 'Target')])],
     })
     const mapping = firstSlave([slave]).sdo_configurations.filter((e) => e.index === '0x1600')
     expect(mapping.length).toBe(4) // clear + 2 entries + count
@@ -97,7 +95,7 @@ describe('PDO mapping-rewrite SDO block', () => {
     expect(mapping[3]).toMatchObject({ subindex: 0, value: 2, data_type: 'USINT' })
   })
 
-  test('Complete-Access form: one write per PDO carrying 1 count byte + N UDINTs little-endian', () => {
+  test('Complete-Access form: one write per PDO, count padded to 16 bits, then UDINTs little-endian', () => {
     const slave = configuredSlave({
       config: {
         ...createDefaultSlaveConfig(),
@@ -113,9 +111,9 @@ describe('PDO mapping-rewrite SDO block', () => {
       complete_access: true,
       data_type: 'OCTET_STRING',
     })
-    // Payload: [count=01, uint32((0x6060<<16)|(0<<8)|8) little-endian = 08 00 60 60]
-    expect(mapping[0]?.value_bytes).toBe('0108006060')
-    expect(mapping[0]?.bit_length).toBe(5 * 8)
+    // Payload: count 01, pad 00, uint32((0x6060<<16)|(0<<8)|8) little-endian = 08 00 60 60
+    expect(mapping[0]?.value_bytes).toBe('0x010008006060')
+    expect(mapping[0]?.bit_length).toBe(6 * 8)
   })
 
   test('a Fixed PDO is excluded from the rewrite block', () => {
@@ -155,18 +153,23 @@ describe('PDO mapping-rewrite SDO block', () => {
     expect(indices).toContain('0x1C12')
   })
 
-  test('mapping block precedes the PDO-assignment block in the startup order', () => {
+  test('per sync manager: clear 0x1C12, then per PDO its mapping and its assignment, then the count', () => {
     const slave = configuredSlave({
-      rxPdos: [pdoWithEntries('0x1600', [entry('0x6060', '0x00', 8)])],
+      rxPdos: [pdoWithEntries('0x1600', [entry('0x6060', '0x00', 8)]), pdoWithEntries('0x1601', [])],
     })
-    const seq = firstSlave([slave]).sdo_configurations
-    const firstMappingIdx = seq.findIndex((e) => e.index === '0x1600')
-    const firstAssignIdx = seq.findIndex((e) => e.index === '0x1C12')
-    expect(firstMappingIdx).toBeGreaterThan(-1)
-    expect(firstAssignIdx).toBeGreaterThan(firstMappingIdx)
+    const seq = firstSlave([slave]).sdo_configurations.map((e) => `${e.index}:${e.subindex}=${e.value}`)
+    expect(seq).toEqual([
+      '0x1C12:0=0',
+      '0x1600:0=0',
+      `0x1600:1=${(0x6060 << 16) | 8}`,
+      '0x1600:0=1',
+      `0x1C12:1=${0x1600}`,
+      `0x1C12:2=${0x1601}`,
+      '0x1C12:0=2',
+    ])
   })
 
-  test('TxPDOs land in the block after RxPDOs, each in index-sort order', () => {
+  test('TxPDOs land in the block after RxPDOs, each in assignment order', () => {
     const slave = configuredSlave({
       rxPdos: [pdoWithEntries('0x1601', [entry('0x6071', '0x00', 16)])],
       txPdos: [
@@ -179,7 +182,7 @@ describe('PDO mapping-rewrite SDO block', () => {
     const tx00Idx = indices.indexOf('0x1A00')
     const tx01Idx = indices.indexOf('0x1A01')
     expect(rxIdx).toBeGreaterThan(-1)
-    expect(tx00Idx).toBeGreaterThan(rxIdx)
-    expect(tx01Idx).toBeGreaterThan(tx00Idx)
+    expect(tx01Idx).toBeGreaterThan(rxIdx)
+    expect(tx00Idx).toBeGreaterThan(tx01Idx)
   })
 })

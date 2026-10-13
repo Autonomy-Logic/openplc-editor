@@ -803,7 +803,11 @@ function parseCoEFlags(deviceEl: Record<string, unknown>): ESIDevice['coeFlags']
 }
 
 function parseInitCmd(cmd: Record<string, unknown>): ESIInitCmd | null {
-  const transition = getTextValue(cmd['Transition'])
+  const transitions = Array.isArray(cmd['Transition']) ? cmd['Transition'] : [cmd['Transition']]
+  const transition = transitions
+    .map(getTextValue)
+    .filter((t) => t !== '')
+    .join(',')
   if (!transition) return null
   const indexText = getTextValue(cmd['Index'])
   if (!indexText) return null
