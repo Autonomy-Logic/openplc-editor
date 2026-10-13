@@ -131,13 +131,14 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
   )
   const s7Comm = generateS7CommConfig(servers)
 
-  // OPC-UA: throws `OpcUaConfigError` on invalid project state.
+  // OPC-UA: unresolvable nodes are dropped with a warning; throws
+  // `OpcUaConfigError` only when the debug map is unusable.
   // Editor logs the error message with a specific prefix BEFORE
   // rethrowing so the user sees the diagnostic in the compile log
   // even if the outer pipeline catches and short-circuits.
   let opcUa: string | null = null
   try {
-    opcUa = generateOpcUaConfig(servers, debugMapContent, instances, (msg) => log(msg, 'info'))
+    opcUa = generateOpcUaConfig(servers, debugMapContent, instances, (msg) => log(msg, 'warning'))
   } catch (error) {
     if (error instanceof OpcUaConfigError) {
       log(`OPC-UA Configuration Error:\n${error.message}`, 'error')
