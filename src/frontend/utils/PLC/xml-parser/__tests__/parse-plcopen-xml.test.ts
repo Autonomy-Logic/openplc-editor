@@ -1,11 +1,11 @@
-import { XmlGenerator } from '../../../../../backend/shared/utils/PLC/xml-generator'
+import { PlcopenXmlGenerator } from '../../../../../backend/shared/utils/PLC/plcopen-xml-generator'
 import type { PLCProjectData } from '../../../../../middleware/shared/ports/open-plc-types'
 import { parsePlcopenXml } from '../index'
 
 // ---------------------------------------------------------------------------
 // Round-trip fixture: one program per language (ST, IL, LD, FBD), one data
 // type per derivation, plus a task/instance/global-variable configuration.
-// Built directly against the nested `PLCPou` shape `XmlGenerator` consumes
+// Built directly against the nested `PLCPou` shape `PlcopenXmlGenerator` consumes
 // (middleware/shared/ports/open-plc-types.ts) — the flat shape produced by
 // `parsePlcopenXml` is a different (newer) representation, so equivalence is
 // asserted field-by-field below rather than via a single deep-equal.
@@ -353,9 +353,9 @@ function makeFixture(): PLCProjectData {
   } as unknown as PLCProjectData
 }
 
-describe('parsePlcopenXml — round trip against XmlGenerator (old-editor)', () => {
+describe('parsePlcopenXml — round trip against PlcopenXmlGenerator', () => {
   const fixture = makeFixture()
-  const generated = XmlGenerator(fixture, 'old-editor')
+  const generated = PlcopenXmlGenerator(fixture)
   const result = parsePlcopenXml(generated.data as string)
 
   it('generates successfully and produces no parse warnings', () => {

@@ -202,8 +202,8 @@ describe('create_pou', () => {
   })
 
   it('refuses a graphical language and explains which ones are supported', async () => {
-    // LD/FBD bodies are flow graphs the model cannot author; the tool must refuse rather than create an empty diagram.
-    const result = await executeTool(store, 'create_pou', { name: 'Rungs', type: 'program', language: 'ld' })
+    // FBD bodies are flow graphs the model cannot author; the tool must refuse rather than create an empty diagram.
+    const result = await executeTool(store, 'create_pou', { name: 'Blocks', type: 'program', language: 'fbd' })
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('is not supported')

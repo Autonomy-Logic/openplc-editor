@@ -28,7 +28,7 @@ import { useDebugPolling } from '../../../hooks/useDebugPolling'
 import { useDebugSession } from '../../../hooks/useDebugSession'
 import { buildDeviceResolverContext, showDeviceDialog, showDeviceInput } from '../../../services/device-link-resolution'
 import { executeSaveProject } from '../../../services/save-actions'
-import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
+import { type OpenPLCStore, useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
@@ -43,6 +43,15 @@ import { PlayButton } from '../../_molecules/workspace-activity-bar/default/play
 import { SearchButton } from '../../_molecules/workspace-activity-bar/default/search'
 import { ZoomButton } from '../../_molecules/workspace-activity-bar/default/zoom'
 import { TooltipSidebarWrapperButton } from '../../_molecules/workspace-activity-bar/tooltip-button'
+
+const AI_PENDING_CHANGES_REFUSAL =
+  'The AI assistant has changes waiting for review. Keep or undo them in the AI chat before building.'
+
+// A running turn can still change the project, so it blocks as well as an open review.
+const aiChangesUnreviewed = (store: OpenPLCStore): boolean => {
+  const { ai } = store.getState()
+  return ai.pendingReview !== null || ai.isAgenticLoopRunning
+}
 
 const disabledButtonClass = 'cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent'
 
@@ -296,6 +305,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
       }
 
+      // Unreviewed AI edits must not be saved by the pre-build save or reach the target.
+      if (aiChangesUnreviewed(store)) {
+        addLog({ level: 'error', message: AI_PENDING_CHANGES_REFUSAL })
+        return
+      }
+
       // Always save the full project before building. The compile
       // pipeline reads source from disk (project.json, devices/*.json,
       // pous/**, ...) so any in-memory edit that hasn't been flushed
@@ -361,6 +376,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             setIsCompiling(false)
             return
           }
+          if (aiChangesUnreviewed(store)) {
+            addLog({ level: 'error', message: AI_PENDING_CHANGES_REFUSAL })
+            setIsCompiling(false)
+            return
+          }
           // Same unified control path as the Start/Stop button: the session routes
           // it, so this works for a runtime and a device alike.
           const stopResult = (await debuggerPort.setPlcState?.('STOPPED')) ?? {
@@ -378,6 +398,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           store.getState().deviceActions.setPlcRuntimeStatus('STOPPED')
           addLog({ level: 'info', message: 'PLC stopped before build.' })
         }
+      }
+
+      // The save and the stop-PLC dialog above await, and the AI may have edited the project meanwhile.
+      if (aiChangesUnreviewed(store)) {
+        addLog({ level: 'error', message: AI_PENDING_CHANGES_REFUSAL })
+        setIsCompiling(false)
+        return
       }
 
       // Target-capability gate. Refuses the build when the project uses
@@ -1057,6 +1084,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           }
         }
 
+        if (aiChangesUnreviewed(store)) {
+          consoleActions.addLog({ level: 'error', message: AI_PENDING_CHANGES_REFUSAL })
+          setIsDebuggerProcessing(false)
+          return
+        }
+
         const response = await showDeviceDialog(
           store,
           'warning',
@@ -1065,6 +1098,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           ['Yes', 'No'],
         )
         if (response === 0) {
+          if (aiChangesUnreviewed(store)) {
+            consoleActions.addLog({ level: 'error', message: AI_PENDING_CHANGES_REFUSAL })
+            setIsDebuggerProcessing(false)
+            return
+          }
           const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress || null
           const runtimeJwtToken = store.getState().runtimeConnection.jwtToken || null
           // See the handleBuild call above — compile-time alias resolution.
@@ -1132,6 +1170,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     }
 
     if (isDebuggerProcessing) return
+
+    // The debug start saves the project to disk below, which would persist unreviewed AI edits.
+    if (aiChangesUnreviewed(store)) {
+      consoleActions.addLog({ level: 'error', message: AI_PENDING_CHANGES_REFUSAL })
+      return
+    }
 
     setIsDebuggerProcessing(true)
 

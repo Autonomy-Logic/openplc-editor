@@ -6,7 +6,7 @@
  * function through a `CompilerPlatformPort`; the platform port
  * abstracts the three places where platform truly differs (ST transpiler
  * transport, arduino-cli transport, runtime upload transport).
- * Everything else — preprocessing, XML generation, strucpp compile,
+ * Everything else — preprocessing, ST transpile, strucpp compile,
  * conf authoring, defines authoring, bundle composition, ordering,
  * error formatting, log messages — is shared.
  *
@@ -77,7 +77,6 @@ export interface PipelineProgressEvent {
   stage:
     | 'preprocess'
     | 'validate'
-    | 'xml'
     | 'st'
     | 'strucpp'
     | 'confs'
@@ -361,15 +360,15 @@ function bailError(
  * `isRuntimeV4` / `isRuntimeV3` / `isSimulator` to drive the four
  * editor-canonical paths:
  *
- *   - Runtime v4 (openplc-compiler runtime): preprocess → XML → ST →
+ *   - Runtime v4 (openplc-compiler runtime): preprocess → ST →
  *     strucpp → confs → composeRuntimeV4Bundle → version check →
  *     uploadRuntimeV4.
- *   - Simulator (avr8js):                   preprocess → XML → ST →
+ *   - Simulator (avr8js):                   preprocess → ST →
  *     strucpp → defines → composeFirmwareBundle → installCore/Lib
  *     (no-op on web) → compileArduino → return hex.
  *   - Arduino direct (physical board):     same as simulator, then
  *     uploadArduinoBoard.
- *   - Runtime v3 (legacy):                  preprocess → XML → ST →
+ *   - Runtime v3 (legacy):                  preprocess → ST →
  *     strucpp → embed c-blocks → uploadRuntimeV3.
  *
  * Each branch returns the canonical `RunCompilePipelineResult`
@@ -455,7 +454,7 @@ async function runCompilePipelineInner(
   const originalCppPous = processedData.originalCppPous ?? []
 
   // ---------------------------------------------------------------------
-  // Step 0b: Reject blank FBD variable blocks before XML generation.
+  // Step 0b: Reject blank FBD variable blocks before the ST transpile.
   //
   // An unnamed FBD in/out variable has no expression for the ST
   // transpiler to emit, producing invalid code downstream.  Catch it

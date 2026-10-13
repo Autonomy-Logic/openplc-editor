@@ -350,7 +350,11 @@ export interface ProjectPort {
 
   pickPlcopenImportFile(): Promise<{ success: boolean; content?: string; error?: string }>
 
-  exportPlcopenFile(defaultFileName: string, xml: string): Promise<{ success: boolean; error?: string }>
+  /** `canceled` distinguishes a dismissed save dialog from a write failure. */
+  exportPlcopenFile(
+    defaultFileName: string,
+    xml: string,
+  ): Promise<{ success: boolean; canceled?: boolean; error?: string }>
 
   /** `canceled` distinguishes a dismissed save dialog from a write failure. */
   exportPdfFile(
