@@ -230,6 +230,9 @@ Main and renderer processes communicate through typed IPC bridges:
 - **Renderer bridge:** `src/main/modules/ipc/renderer.ts` — async wrappers calling `ipcRenderer.invoke()`
 - **Preload:** `src/main/modules/preload/preload.ts` — exposes `window.bridge` via `contextBridge`
 
+Vendor package documents (an embedded configurator, for example) are served to a sandboxed iframe under
+the `vpp-doc://` scheme, never with `allow-same-origin`; see `docs/vendor-document-serving.md`.
+
 ### State Management (Zustand)
 
 Single store composed of the slices in `RootState` (`src/frontend/store/index.ts`), accessed via auto-generated selector hooks:

@@ -189,6 +189,14 @@ export interface DevicePort {
   getPreviewImage(imageName: string, packagePath?: string): Promise<string>
 
   /**
+   * URL the sandboxed vendor configurator iframe loads `relPath` of an installed package from,
+   * or `null` when this host cannot serve package files or the id or path is invalid.
+   * Editor: `vpp-doc://<packageId>/<relPath>`, served by the main process.
+   * Web: `null` (no package-file route yet).
+   */
+  getVendorDocumentUrl(packageId: string, relPath: string): string | null
+
+  /**
    * Open and HOLD the connection to a baremetal device (D72).
    *
    * `candidates` is the ordered list of ways to reach it, resolved from the
