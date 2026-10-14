@@ -1924,6 +1924,7 @@ describe('runCompilePipeline — two enabled Modbus servers', () => {
         projectData: withServers(),
         boardTarget: 'ESP32',
         boardRuntime: 'arduino-cli',
+        boardEntry: { platform: 'esp32:esp32:esp32', core: 'esp32:esp32', define: [], compiler: 'arduino-cli' },
         isSimulator: false,
       }),
       makePort(),
@@ -1944,5 +1945,32 @@ describe('runCompilePipeline — two enabled Modbus servers', () => {
     const { emit } = captureEvents()
     const result = await runCompilePipeline(makeArgs({ projectData: withServers() }), makePort(), emit)
     expect(result.success).toBe(true)
+  })
+
+  it('lets a target that serves no Modbus slave build with several configured', async () => {
+    // Runtime v3 receives neither `conf/modbus_slave.json` nor a Modbus macro,
+    // and the build already says the server configurations will be ignored.
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: withServers(),
+        boardTarget: 'OpenPLC Runtime v3',
+        boardRuntime: 'openplc-compiler',
+        boardEntry: {
+          platform: 'openplc:runtime',
+          core: 'openplc:runtime',
+          define: [],
+          compiler: 'openplc-compiler',
+          capabilities: { modbusTcpServer: false, modbusRtuServer: false },
+        },
+        isSimulator: false,
+        isRuntimeV3: true,
+      }),
+      makePort(),
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    expect(events.find((event) => event.message.includes('one Modbus server'))).toBeUndefined()
   })
 })

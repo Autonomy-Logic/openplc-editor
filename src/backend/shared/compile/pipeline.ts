@@ -593,13 +593,11 @@ async function runCompilePipelineInner(
   // and the openplc-compiler runtimes do not, so narrowing their transports
   // would warn about a macro nothing reads.
   const targetServesOneSlave = !isRuntimeV4 && !isSimulator && boardRuntime !== 'openplc-compiler'
-  // Whether exactly one server reaches the device, by whichever route. Runtime
-  // v4 reads `conf/modbus_slave.json` rather than the macros, and the emitter
-  // writes ONE -- so a second enabled server is dropped there just as silently,
-  // and the image is sized for the one that won. The simulator is the only
-  // target that genuinely serves none, and a project merely passing through it
-  // must not be blocked.
-  const oneSlaveConfigShips = !isSimulator
+  // Whether exactly one slave configuration reaches the device, by whichever
+  // route: Runtime v4 ships `conf/modbus_slave.json`, bare metal ships macros.
+  // A target that serves no slave has nothing to be in conflict about, and the
+  // simulator's flags are UX rather than a slave it runs.
+  const oneSlaveConfigShips = !isSimulator && (targetCapabilities.modbusTcpServer || targetCapabilities.modbusRtuServer)
   if (oneSlaveConfigShips && modbusSelection.conflict) {
     return bailError(
       emit,
