@@ -39,6 +39,7 @@ import { getErrorMessage } from '../../../../frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '../../../../frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '../../../../frontend/utils/opcua'
 import { generateS7CommConfig } from '../../../../frontend/utils/s7comm'
+import type { S7TargetProfile } from '../../../../middleware/shared/utils/target-capabilities/types'
 import { generateEthercatConfig, generateEtherdogConfigs } from '../../ethercat/generate-ethercat-config'
 import { validateEthercatConfig } from '../../ethercat/validate-ethercat-config'
 import { isEtherdogCapableRuntime } from '../../firmware/runtime-version-gate'
@@ -85,6 +86,10 @@ export interface GenerateConfsInput {
    *  only, no device).  Picks the EtherCAT file format; see
    *  `isEtherdogCapableRuntime`. */
   runtimeVersion: string | null
+  /** The target's S7 profile, which decides how many data blocks reach the
+   *  device and which buffers it can address. The image is sized from the same
+   *  answer, so a block this drops is a block nothing sizes. */
+  s7Profile: S7TargetProfile
 }
 
 /**
@@ -132,7 +137,7 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
   // with a Modbus server nobody customised.
   const modbusSlave = generateModbusSlaveConfig(servers, imageSizes)
   const modbusMaster = generateModbusMasterConfig(remoteDevices, (msg) => log(msg, 'warning'))
-  const s7Comm = generateS7CommConfig(servers)
+  const s7Comm = generateS7CommConfig(servers, input.s7Profile, (message) => log(message, 'warning'))
 
   // OPC-UA: unresolvable nodes are dropped with a warning; throws
   // `OpcUaConfigError` only when the debug map is unusable.

@@ -35,6 +35,7 @@ import type { StructuredCompileError } from '../../../middleware/shared/ports/ty
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
 import { resolveModbusServerProfile } from '../../../middleware/shared/utils/modbus-server-profile'
 import {
+  DEFAULT_S7_PROFILE,
   resolveAddressProducerCapabilities,
   resolveTargetCapabilities,
 } from '../../../middleware/shared/utils/target-capabilities'
@@ -771,6 +772,9 @@ async function runCompilePipelineInner(
 
       confs = generateRuntimeConfs({
         imageSizes: ioImage.sizes,
+        // The same profile the sizer read, so the file that ships and the image
+        // that holds it are selected by one answer.
+        s7Profile: targetCapabilities.s7 ?? DEFAULT_S7_PROFILE,
         // generateRuntimeConfs declares a stricter inline server shape than
         // PLCServer (bufferMapping required, etc.); the cast bridges that
         // cross-module difference, not the credentials type which is now

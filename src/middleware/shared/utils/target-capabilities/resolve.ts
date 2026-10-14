@@ -146,9 +146,16 @@ function resolveOpcUaProfile(declared: Partial<OpcUaTargetProfile> | undefined):
  * only what it raises. A flat merge suffices: unlike OPC-UA there is no nested
  * `hw` block, because classic S7 has no crypto to accelerate.
  */
-function resolveS7Profile(declared: Partial<S7TargetProfile> | undefined): S7TargetProfile {
-  if (!declared) return DEFAULT_S7_PROFILE
-  return { ...DEFAULT_S7_PROFILE, ...declared }
+/** The preset's own profile is the floor, not the microcontroller's: Runtime v4
+ *  holds 64 areas and addresses every buffer, and answering it with the
+ *  bare-metal eight sized a v4 project short of what its plugin serves. */
+function resolveS7Profile(
+  declared: Partial<S7TargetProfile> | undefined,
+  base: S7TargetProfile | undefined,
+): S7TargetProfile {
+  const floor = base ?? DEFAULT_S7_PROFILE
+  if (!declared) return floor
+  return { ...floor, ...declared }
 }
 
 export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined): TargetCapabilities {
@@ -171,7 +178,7 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
   }
 
   if (merged.s7Server) {
-    merged.s7 = resolveS7Profile(declared?.s7)
+    merged.s7 = resolveS7Profile(declared?.s7, base.s7)
   }
 
   return merged

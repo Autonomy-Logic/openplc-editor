@@ -42,6 +42,7 @@
  */
 
 import { parseDimensionRange } from '../../../../frontend/utils/PLC/dimension-range'
+import { selectS7Areas } from '../../../../frontend/utils/s7comm/select-s7-areas'
 import type { DevicePin, ModbusBufferMapping, PLCServer } from '../../../../middleware/shared/ports/types'
 import type { PoolVppIoInput } from '../../../../middleware/shared/utils/iec-address'
 import type { AddressClass, ParsedAddress } from '../../../../middleware/shared/utils/iec-address/registry'
@@ -63,8 +64,10 @@ import {
 } from '../../../../middleware/shared/utils/io-image/tables'
 import type {
   AddressProducerCapabilities,
+  S7TargetProfile,
   ServerCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
+import { DEFAULT_S7_PROFILE } from '../../../../middleware/shared/utils/target-capabilities'
 import type { PLCProjectData, PLCVariable } from '../../types/PLC/open-plc'
 
 /**
@@ -144,13 +147,6 @@ export interface UnsupportedArea {
   variableName: string
   location: string
   prefix: string
-}
-
-/** The slice of an S7comm mapping this step reads. Structural rather than
- *  imported so the sizer stays free of the server schema's exact shape. */
-interface S7CommMappingLike {
-  type: string
-  startBuffer: number
 }
 
 /**
@@ -446,7 +442,12 @@ function serverExposure(
     : undefined
 
   if (modbus?.modbusSlaveConfig) modbusExposure(modbus.modbusSlaveConfig.bufferMapping, tally, backed)
-  if (s7comm?.s7commSlaveConfig) s7commExposure(s7comm.s7commSlaveConfig, tally, backed)
+  // The target's own profile, the one the emitters receive. A capability block
+  // that enables the server without stating its limits resolves to the
+  // bare-metal defaults, which is the conservative answer.
+  if (s7comm?.s7commSlaveConfig) {
+    s7commExposure(s7comm.s7commSlaveConfig, serverCapabilities.s7 ?? DEFAULT_S7_PROFILE, tally, backed)
+  }
 }
 
 /**
@@ -529,24 +530,22 @@ function modbusExposure(
  */
 function s7commExposure(
   config: NonNullable<PLCServer['s7commSlaveConfig']>,
+  profile: S7TargetProfile,
   tally: SizeTally,
   backed: Map<string, Set<number>>,
 ): void {
-  const blocks: Array<{ mapping?: S7CommMappingLike; sizeBytes: number }> = [
-    ...(config.dataBlocks ?? []),
-    ...[config.systemAreas?.peArea, config.systemAreas?.paArea, config.systemAreas?.mkArea]
-      .filter((area): area is NonNullable<typeof area> => Boolean(area?.enabled))
-      .map((area) => ({ mapping: area.mapping, sizeBytes: area.sizeBytes })),
-  ]
-
-  for (const block of blocks) {
-    // A system area may be enabled with no mapping yet, which publishes
-    // nothing and sizes nothing.
-    if (!block.mapping) continue
+  // ONLY WHAT THE TARGET SERVES. The emitters drop a duplicate DB number, stop
+  // at the target's ceiling and skip a buffer it cannot address; sizing every
+  // block regardless produced an image for areas no device would answer, and
+  // vouched for addresses the emitted file never covers. The selection is
+  // shared with both emitters so the three cannot drift apart again.
+  //
+  // Warnings are the emitters' to raise: this runs before them and would
+  // double every message.
+  for (const block of selectS7Areas(config, profile)) {
     const table = tableForKey(block.mapping.type)
-    /* istanbul ignore next -- the schema admits only table names, so a block
-       naming something else cannot reach here today. Sizing nothing for it is
-       the safe reading if that ever changes. */
+    /* istanbul ignore next -- the selection already dropped every type this
+       target has no buffer for, so a table miss cannot be reached today. */
     if (!table) continue
 
     const { start, end } = extentForDataBlock(table, block.mapping.startBuffer, block.sizeBytes)

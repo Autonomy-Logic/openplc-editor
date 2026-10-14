@@ -139,6 +139,11 @@ export interface S7TargetProfile {
    *  with no authentication, often the right default on a plant network. The
    *  refusal is a proper S7 error, not a dropped connection. */
   writeEnabled: boolean
+
+  /** Mapping types this target's S7 server can address. Bare metal declares an
+   *  array for seven of the fourteen; v4's plugin accepts all. A block naming
+   *  anything else is dropped before the build, not on the device. */
+  buffers: readonly string[]
 }
 
 export interface TargetCapabilities {
@@ -314,4 +319,4 @@ export type AddressProducerCapabilities = Pick<
  * project.json — it is only hidden in the UI — so without this the `MAX_*`
  * macros are sized from a slave config that board will never run.
  */
-export type ServerCapabilities = Pick<TargetCapabilities, 'modbusTcpServer' | 'opcuaServer' | 's7Server'>
+export type ServerCapabilities = Pick<TargetCapabilities, 'modbusTcpServer' | 'opcuaServer' | 's7Server' | 's7'>

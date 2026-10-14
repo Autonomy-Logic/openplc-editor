@@ -15,6 +15,9 @@
 
 import type { S7TargetProfile } from '@root/middleware/shared/utils/target-capabilities/types'
 
+import type { S7CommDataBlockLike, S7CommSystemAreaLike } from './select-s7-areas'
+import { selectS7Areas } from './select-s7-areas'
+
 /** Buffer selector values, matching `S7COMM_BUF_*` in `s7comm_types.h`. */
 const BUFFER_CODE: Record<string, string> = {
   bool_input: 'S7COMM_BUF_BOOL_INPUT',
@@ -24,23 +27,6 @@ const BUFFER_CODE: Record<string, string> = {
   int_memory: 'S7COMM_BUF_INT_MEMORY',
   dint_memory: 'S7COMM_BUF_DINT_MEMORY',
   lint_memory: 'S7COMM_BUF_LINT_MEMORY',
-}
-
-/**
- * Buffers the editor accepts that an arduino-cli build has no array for.
- *
- * Runtime v3/v4 define all of these; `openplc.h` on a baremetal target defines
- * none. Naming them here gives the user "this target has no bool_memory buffer"
- * instead of "unknown mapping".
- */
-const UNSUPPORTED_ON_BAREMETAL: Record<string, string> = {
-  bool_memory: 'bool_memory (%MX)',
-  byte_input: 'byte_input (%IB)',
-  byte_output: 'byte_output (%QB)',
-  dint_input: 'dint_input (%ID as DINT)',
-  dint_output: 'dint_output (%QD as DINT)',
-  lint_input: 'lint_input',
-  lint_output: 'lint_output',
 }
 
 /** One area, already validated and ready to become an `S7COMM_AREAS[]` row. */
@@ -55,24 +41,7 @@ interface EmittedArea {
   label: string
 }
 
-export interface S7CommBufferMappingLike {
-  type: string
-  startBuffer: number
-  bitAddressing?: boolean
-}
-
-export interface S7CommDataBlockLike {
-  dbNumber: number
-  description: string
-  sizeBytes: number
-  mapping: S7CommBufferMappingLike
-}
-
-export interface S7CommSystemAreaLike {
-  enabled: boolean
-  sizeBytes: number
-  mapping?: S7CommBufferMappingLike
-}
+export type { S7CommBufferMappingLike, S7CommDataBlockLike, S7CommSystemAreaLike } from './select-s7-areas'
 
 export interface S7CommServerSettingsLike {
   enabled: boolean
@@ -135,102 +104,41 @@ const cString = (value: string): string =>
  *  parse), so a newline in it would otherwise inject arbitrary C. */
 const cComment = (value: string): string => value.replace(/[\r\n]+/g, ' ').replace(/\*\//g, '* /')
 
-/** Resolve one mapping to a `S7COMM_BUF_*` name, or explain why not. */
-const resolveBuffer = (
-  mapping: S7CommBufferMappingLike | undefined,
-  label: string,
-  warn: (message: string) => void,
-): string | null => {
-  if (!mapping) {
-    warn(`S7Comm: ${label} has no buffer mapping and was skipped.`)
-    return null
-  }
-  const code = BUFFER_CODE[mapping.type]
-  if (code) return code
-
-  const friendly = UNSUPPORTED_ON_BAREMETAL[mapping.type]
-  if (friendly) {
-    warn(
-      `S7Comm: ${label} maps to ${friendly}, which this target has no buffer for — ` +
-        `it exists on Runtime v3/v4 only. The area was skipped.`,
-    )
-  } else {
-    warn(`S7Comm: ${label} maps to an unknown buffer type "${mapping.type}" and was skipped.`)
-  }
-  return null
+/** One area, already validated and ready to become an `S7COMM_AREAS[]` row. */
+interface EmittedArea {
+  area: string
+  dbNumber: number
+  sizeBytes: number
+  buffer: string
+  startIndex: number
+  writable: boolean
+  label: string
 }
 
 /**
- * Collect the areas that survive validation. Everything refused here is refused
- * at build time with a message naming the block, rather than shipping a device
- * that answers some addresses and not others.
+ * The areas this header emits, as `S7COMM_AREAS[]` rows.
+ *
+ * Which areas survive is `selectS7Areas`' answer, shared with the Runtime v4
+ * config file and the image sizer so the three cannot disagree about what the
+ * device serves. All that is added here is the `S7COMM_BUF_*` name, which is
+ * the firmware's own and belongs to this file.
  */
 export function collectS7Areas(
-  config: S7CommSlaveConfigLike,
+  config: Parameters<typeof selectS7Areas>[0],
   profile: S7TargetProfile,
   warn: (message: string) => void,
 ): EmittedArea[] {
-  const areas: EmittedArea[] = []
-
-  // System areas first, so they read in protocol order (PE, PA, MK) ahead of the
-  // data blocks.
-  const system: Array<[string, S7CommSystemAreaLike | undefined, string]> = [
-    ['S7COMM_AREA_PE', config.systemAreas?.peArea, 'the process-input area (PE)'],
-    ['S7COMM_AREA_PA', config.systemAreas?.paArea, 'the process-output area (PA)'],
-    ['S7COMM_AREA_MK', config.systemAreas?.mkArea, 'the merker area (MK)'],
-  ]
-
-  for (const [areaCode, spec, label] of system) {
-    if (!spec || !spec.enabled) continue
-    const buffer = resolveBuffer(spec.mapping, label, warn)
-    if (!buffer) continue
-    areas.push({
-      area: areaCode,
-      dbNumber: 0,
-      sizeBytes: spec.sizeBytes,
-      buffer,
-      startIndex: spec.mapping?.startBuffer ?? 0,
-      // The process-input area is what the field wires drive. A client that
-      // writes it is writing a value the next input refresh overwrites, which
-      // looks like the write was lost.
-      writable: areaCode !== 'S7COMM_AREA_PE',
-      label,
-    })
-  }
-
-  const seenDb = new Set<number>()
-  for (const db of config.dataBlocks) {
-    const label = `DB${db.dbNumber}${db.description ? ` (${db.description})` : ''}`
-
-    if (seenDb.has(db.dbNumber)) {
-      warn(`S7Comm: ${label} repeats a DB number already defined; the later one was skipped.`)
-      continue
-    }
-
-    if (areas.filter((a) => a.area === 'S7COMM_AREA_DB').length >= profile.maxDataBlocks) {
-      warn(
-        `S7Comm: this target allows ${profile.maxDataBlocks} data blocks and the project has more; ` +
-          `${label} and any after it were skipped.`,
-      )
-      break
-    }
-
-    const buffer = resolveBuffer(db.mapping, label, warn)
-    if (!buffer) continue
-
-    seenDb.add(db.dbNumber)
-    areas.push({
-      area: 'S7COMM_AREA_DB',
-      dbNumber: db.dbNumber,
-      sizeBytes: db.sizeBytes,
-      buffer,
-      startIndex: db.mapping.startBuffer,
-      writable: true,
-      label,
-    })
-  }
-
-  return areas
+  return selectS7Areas(config, profile, warn).map((area) => ({
+    area: area.area,
+    dbNumber: area.dbNumber,
+    sizeBytes: area.sizeBytes,
+    /* istanbul ignore next -- the selection already dropped every type this
+       target has no code for, so the fallback cannot be reached today. */
+    buffer: BUFFER_CODE[area.mapping.type] ?? 'S7COMM_BUF_NONE',
+    startIndex: area.mapping.startBuffer,
+    writable: area.writable,
+    label: area.label,
+  }))
 }
 
 /**

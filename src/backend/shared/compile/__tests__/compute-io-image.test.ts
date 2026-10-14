@@ -7,6 +7,7 @@
  * memory address needs a producer exactly as `%I` and `%Q` do.
  */
 
+import { DEFAULT_S7_PROFILE, RUNTIME_V4_S7_PROFILE } from '@root/middleware/shared/utils/target-capabilities'
 import type { DevicePin } from '@root/middleware/shared/ports/types'
 import type { AddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 
@@ -120,7 +121,10 @@ const modbusMaster = (...addresses: string[]) => [
 /** Runtime v4's area set unless a case says otherwise: it is the wider of the
  *  two, so a case about sizing is not accidentally also a case about areas. */
 /** A target that runs every server, which is what the exposure cases assume. */
-const ALL_SERVERS = { modbusTcpServer: true, opcuaServer: true, s7Server: true }
+// The suite's default target is Runtime v4 (`areas: IMAGE_AREAS_RUNTIME_V4`),
+// so it carries v4's S7 profile: 64 areas and every buffer type. A bare-metal
+// case states its own.
+const ALL_SERVERS = { modbusTcpServer: true, opcuaServer: true, s7Server: true, s7: RUNTIME_V4_S7_PROFILE }
 /** A target that runs none — bare metal, and what a retargeted project meets. */
 const NO_SERVERS = { modbusTcpServer: false, opcuaServer: false, s7Server: false }
 
@@ -584,8 +588,11 @@ describe('computeIoImage — S7comm exposure', () => {
     },
   ]
 
-  const block = (type: string, startBuffer: number, sizeBytes: number) => ({
-    dbNumber: 1,
+  // Each block gets its own DB number by default: two blocks sharing one is a
+  // duplicate, which the selection drops before it ever reaches the sizer.
+  let nextDb = 0
+  const block = (type: string, startBuffer: number, sizeBytes: number, dbNumber = ++nextDb) => ({
+    dbNumber,
     description: '',
     sizeBytes,
     mapping: { type, startBuffer, bitAddressing: false },
@@ -629,6 +636,84 @@ describe('computeIoImage — S7comm exposure', () => {
   it('takes the largest extent when blocks overlap a table', () => {
     const image = compute(makeProject({ servers: s7Server([block('int_output', 0, 8), block('int_output', 50, 8)]) }))
     expect(image.sizes).toEqual({ '%QW': 54 })
+  })
+
+  // --- what the device actually serves -------------------------------------
+  //
+  // The emitters drop a duplicate DB number, stop at the target's ceiling and
+  // skip a buffer the target cannot address. Sizing every block regardless
+  // built an image for areas no device would answer, and vouched for addresses
+  // the emitted file never covers.
+
+  /** Ten blocks of one word each, ten elements apart: 0, 10, ... 90. */
+  const tenSpacedBlocks = () => Array.from({ length: 10 }, (_, i) => block('int_memory', i * 10, 2, i + 1))
+
+  const baremetal = (maxDataBlocks: number) => ({
+    ...ALL_SERVERS,
+    s7: { ...DEFAULT_S7_PROFILE, maxDataBlocks },
+  })
+
+  it('stops at the ceiling the target states, as the emitted file does', () => {
+    const project = makeProject({ servers: s7Server(tenSpacedBlocks()) })
+
+    // Eight blocks reach element 70 and cover one word, so the area is 71.
+    expect(compute(project, { serverCapabilities: baremetal(8) }).sizes).toEqual({ '%MW': 71 })
+    // The tenth would have reached 91, which is what sizing them all produced.
+    expect(compute(project, { serverCapabilities: baremetal(64) }).sizes).toEqual({ '%MW': 91 })
+  })
+
+  it('backs only the blocks that fit under the ceiling', () => {
+    const project = makeProject({
+      servers: s7Server(tenSpacedBlocks()),
+      pous: [{ name: 'main', variables: [variable('late', '%MW90')] }],
+    })
+
+    // %MW90 is covered by the tenth block, which the target never receives.
+    expect(compute(project, { serverCapabilities: baremetal(8) }).unbacked).toEqual([
+      { scope: 'main', variableName: 'late', location: '%MW90', prefix: '%MW', slot: 90, slotCount: 1 },
+    ])
+    expect(compute(project, { serverCapabilities: baremetal(64) }).unbacked).toEqual([])
+  })
+
+  it('honours a ceiling a package manifest lowered', () => {
+    const project = makeProject({ servers: s7Server(tenSpacedBlocks()) })
+    // Four blocks reach element 30 and cover one word.
+    expect(compute(project, { serverCapabilities: baremetal(4) }).sizes).toEqual({ '%MW': 31 })
+  })
+
+  it('sizes nothing for a DB number already defined', () => {
+    const project = makeProject({
+      servers: s7Server([block('int_memory', 0, 2, 1), block('int_memory', 50, 2, 1)]),
+    })
+    // The second repeats DB 1, so it never reaches the device and never sizes.
+    expect(compute(project, { serverCapabilities: baremetal(8) }).sizes).toEqual({ '%MW': 1 })
+  })
+
+  it('sizes nothing for a buffer the target cannot address', () => {
+    const project = makeProject({
+      servers: s7Server([block('dint_input', 0, 8, 1)]),
+      pous: [{ name: 'main', variables: [variable('reading', '%ID0')] }],
+    })
+    const image = compute(project, { serverCapabilities: baremetal(8), areas: IMAGE_AREAS_BAREMETAL })
+
+    // Bare metal declares no S7 buffer for dint_input, so the header drops the
+    // block. Sizing it anyway let `AT %ID0` pass the producer gate and read
+    // zero forever on the machine.
+    expect(image.sizes['%ID']).toBeUndefined()
+    expect(image.unbacked).toEqual([
+      { scope: 'main', variableName: 'reading', location: '%ID0', prefix: '%ID', slot: 0, slotCount: 1 },
+    ])
+  })
+
+  it('still serves that buffer on a target that has it', () => {
+    const project = makeProject({
+      servers: s7Server([block('dint_input', 0, 8, 1)]),
+      pous: [{ name: 'main', variables: [variable('reading', '%ID0')] }],
+    })
+    const image = compute(project)
+
+    expect(image.sizes['%ID']).toBe(2)
+    expect(image.unbacked).toEqual([])
   })
 
   it('sizes and backs NOTHING when the target does not run an S7 server', () => {
