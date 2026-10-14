@@ -876,12 +876,40 @@ function migrateVendorScreenData(
   return { vendorScreenData: undefined, vendorScreenDataByBoard: undefined }
 }
 
+/**
+ * Resolve the persistent-storage settings of a freshly-loaded project into the
+ * flat-view + per-board-archive pair, mirroring `migrateVendorScreenData`.
+ * Absent stays absent: no settings is what makes `generateRetainConf` emit no file.
+ */
+function migratePersistentStorage(
+  provided: Partial<DeviceConfiguration>,
+  deviceBoard: string,
+): Pick<DeviceConfiguration, 'persistentStorage' | 'persistentStorageByBoard'> {
+  const flat = provided.persistentStorage
+  const archive = provided.persistentStorageByBoard
+
+  if (archive && Object.keys(archive).length > 0) {
+    const active = archive[deviceBoard] ?? flat
+    return {
+      persistentStorage: active ? { ...active } : undefined,
+      persistentStorageByBoard: active ? { ...archive, [deviceBoard]: { ...active } } : { ...archive },
+    }
+  }
+
+  if (flat) {
+    return { persistentStorage: { ...flat }, persistentStorageByBoard: { [deviceBoard]: { ...flat } } }
+  }
+
+  return { persistentStorage: undefined, persistentStorageByBoard: undefined }
+}
+
 function mergeDeviceConfigWithDefaults(
   provided: Partial<DeviceConfiguration>,
   defaults: DeviceConfiguration,
 ): DeviceConfiguration {
   const deviceBoard = provided.deviceBoard || defaults.deviceBoard
   const { vendorScreenData, vendorScreenDataByBoard } = migrateVendorScreenData(provided, deviceBoard)
+  const { persistentStorage, persistentStorageByBoard } = migratePersistentStorage(provided, deviceBoard)
   return {
     deviceBoard,
     communicationPort: provided.communicationPort ?? defaults.communicationPort,
@@ -897,6 +925,10 @@ function mergeDeviceConfigWithDefaults(
     // board.tsx's drift detection sees a blank slate instead of the real
     // prior pin, so a project with a VPP board always opens as if unpinned.
     vppPackagePinsByBoard: provided.vppPackagePinsByBoard ?? defaults.vppPackagePinsByBoard,
+    // Must merge — otherwise opening a project drops its RETAIN settings, and the
+    // pre-build auto-save writes them off disk before retain.conf is generated.
+    ...(persistentStorage ? { persistentStorage } : {}),
+    ...(persistentStorageByBoard ? { persistentStorageByBoard } : {}),
     // Copied: a fresh object per load is what tells the restore hook a project was (re)opened.
     ...(provided.targetDevice ? { targetDevice: { ...provided.targetDevice } } : {}),
   }

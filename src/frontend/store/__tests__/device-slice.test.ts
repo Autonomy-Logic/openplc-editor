@@ -609,6 +609,70 @@ describe('createDeviceSlice', () => {
       expect(cfg.runtimeIpAddress).toBe(defaultDeviceConfiguration.runtimeIpAddress)
     })
 
+    it("keeps the project's persistent storage settings and archive on load", () => {
+      const store = makeStore()
+      const settings = { enabled: true, path: '/var/lib/openplc/retain', flushSeconds: 5 }
+      const other = { enabled: false, path: '/data/esp.bin', flushSeconds: 10 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'OpenPLC Runtime v4',
+          persistentStorage: settings,
+          persistentStorageByBoard: { 'OpenPLC Runtime v4': settings, 'ESP8266 NodeMCU': other },
+        },
+      })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg.persistentStorage).toEqual(settings)
+      expect(cfg.persistentStorageByBoard).toEqual({ 'OpenPLC Runtime v4': settings, 'ESP8266 NodeMCU': other })
+    })
+
+    it('attributes legacy flat persistent storage to the saved board', () => {
+      const store = makeStore()
+      const settings = { enabled: true, path: '', flushSeconds: 5 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: { deviceBoard: 'OpenPLC Runtime v4', persistentStorage: settings },
+      })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg.persistentStorage).toEqual(settings)
+      expect(cfg.persistentStorageByBoard).toEqual({ 'OpenPLC Runtime v4': settings })
+    })
+
+    it('restores the active board bucket when the flat view is absent', () => {
+      const store = makeStore()
+      const settings = { enabled: true, path: '/x', flushSeconds: 5 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'OpenPLC Runtime v4',
+          persistentStorageByBoard: { 'OpenPLC Runtime v4': settings },
+        },
+      })
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage).toEqual(settings)
+    })
+
+    it("switching board after load restores the other board's loaded settings", () => {
+      const store = makeStore()
+      const v4 = { enabled: true, path: '/v4', flushSeconds: 5 }
+      const esp = { enabled: false, path: '/esp', flushSeconds: 9 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'OpenPLC Runtime v4',
+          persistentStorage: v4,
+          persistentStorageByBoard: { 'OpenPLC Runtime v4': v4, 'ESP8266 NodeMCU': esp },
+        },
+      })
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage).toEqual(esp)
+      store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage).toEqual(v4)
+    })
+
+    it('leaves persistent storage absent for a project that never configured it', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({ configuration: { deviceBoard: 'OpenPLC Runtime v4' } })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg).not.toHaveProperty('persistentStorage')
+      expect(cfg).not.toHaveProperty('persistentStorageByBoard')
+    })
+
     it('sets pinMapping', () => {
       const store = makeStore()
       const pins: DevicePin[] = [makePin({ pin: 'A0', pinType: 'analogInput', address: '%IW0', alias: 'sensor' })]
