@@ -35,6 +35,7 @@
  * server-side, but the pipeline never knows.
  */
 
+import type { MqttCredentialRef, MqttProjectIntegrationV1 } from '../../../frontend/utils/mqtt/contract/contract'
 import type { PLCProjectData, StructuredCompileError } from './types'
 
 /**
@@ -443,6 +444,34 @@ export interface CompilerPlatformPort {
     args: MaterializeRuntimeV4BundleArgs,
     log: PlatformLog,
   ): Promise<MaterializeRuntimeV4BundleResult>
+
+  /** Optional: without it a password/certificate MQTT integration is refused with config_credential_missing. */
+  stageMqttCredential?(args: StageMqttCredentialArgs, log: PlatformLog): Promise<StageMqttCredentialResult>
+
+  /** Cancel a staged credential this build did not get activated. Never throws. */
+  discardMqttCredentialStaging?(args: DiscardMqttCredentialStagingArgs, log: PlatformLog): Promise<void>
+}
+
+export interface StageMqttCredentialArgs {
+  context: PlatformDeviceContext
+  serverName: string
+  integration: MqttProjectIntegrationV1
+  /** `md5` of the debug map of the program being uploaded; the staging is bound to it. */
+  programMd5: string
+}
+
+export type StageMqttCredentialResult =
+  | {
+      ok: true
+      credentialRef: MqttCredentialRef
+      /** Set when a new staging was created; null when the runtime's active credential is reused. */
+      stagingId: string | null
+    }
+  | { ok: false; code: string; message: string }
+
+export interface DiscardMqttCredentialStagingArgs {
+  context: PlatformDeviceContext
+  stagingId: string
 }
 
 export interface MaterializeRuntimeV4BundleArgs {

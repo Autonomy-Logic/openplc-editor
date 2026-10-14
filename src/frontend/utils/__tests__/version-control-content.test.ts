@@ -42,3 +42,50 @@ describe('pickContentForSave and project.json libraries', () => {
     expect(picked).toBe('raw bytes')
   })
 })
+
+describe('pickContentForSave and MQTT server files', () => {
+  const path = 'devices/servers/Broker.json'
+  const fresh = JSON.stringify({ name: 'Broker', protocol: 'mqtt', mqttConfig: { formatVersion: 1 } })
+  const raw = JSON.stringify({
+    name: 'Broker',
+    protocol: 'mqtt',
+    mqttConfig: { formatVersion: 1, password: 'MARKER-SECRET-vc' },
+  })
+
+  it('writes the fresh serialization even when the server looks unchanged since open', () => {
+    const picked = pickContentForSave(path, fresh, {
+      loadedSerialized: { [path]: fresh },
+      rawLoadedContent: { [path]: raw },
+    })
+
+    expect(picked).toBe(fresh)
+    expect(picked).not.toContain('MARKER-SECRET-vc')
+  })
+
+  it('keeps echoing the raw bytes of other server files and of unparseable text', () => {
+    const modbus = JSON.stringify({ name: 'S', protocol: 'modbus-tcp' })
+    const modbusRaw = `${modbus}\n`
+    const otherPath = 'devices/servers/S.json'
+    expect(
+      pickContentForSave(otherPath, modbus, {
+        loadedSerialized: { [otherPath]: modbus },
+        rawLoadedContent: { [otherPath]: modbusRaw },
+      }),
+    ).toBe(modbusRaw)
+    expect(
+      pickContentForSave(otherPath, modbus, {
+        loadedSerialized: { [otherPath]: modbus },
+        rawLoadedContent: { [otherPath]: '{not json' },
+      }),
+    ).toBe('{not json')
+  })
+
+  it('only applies to server files', () => {
+    const picked = pickContentForSave('devices/remote/Broker.json', fresh, {
+      loadedSerialized: { 'devices/remote/Broker.json': fresh },
+      rawLoadedContent: { 'devices/remote/Broker.json': raw },
+    })
+
+    expect(picked).toBe(raw)
+  })
+})

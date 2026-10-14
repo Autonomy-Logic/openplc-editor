@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "openplc-mqtt-runtime-config.v1",
+  "title": "conf/mqtt.json, MQTT runtime configuration, format_version 1",
+  "description": "Absent file means MQTT disabled. Name rules (destinations, ids) and semantic checks (conflicts, addresses, program, birth size) are not expressible here; see cases.json layer=names|semantic.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "format_version", "enabled", "mode", "program", "connection", "auth", "leaves"],
+  "properties": {
+    "contract": { "const": "openplc-mqtt-runtime-config" },
+    "format_version": { "const": 1 },
+    "enabled": { "const": true },
+    "mode": { "enum": ["generic", "sparkplug_b"] },
+    "program": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["md5"],
+      "properties": { "md5": { "type": "string", "pattern": "^[0-9a-f]{32}$" } }
+    },
+    "connection": { "$ref": "#/$defs/connection" },
+    "auth": { "$ref": "#/$defs/auth" },
+    "generic": { "$ref": "#/$defs/generic" },
+    "sparkplug": { "$ref": "#/$defs/sparkplug" },
+    "leaves": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": { "$ref": "#/$defs/leaf" }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "mode": { "const": "generic" } } },
+      "then": { "required": ["generic"], "not": { "required": ["sparkplug"] } }
+    },
+    {
+      "if": { "properties": { "mode": { "const": "sparkplug_b" } } },
+      "then": { "required": ["sparkplug"], "not": { "required": ["generic"] } }
+    },
+    {
+      "if": { "properties": { "auth": { "properties": { "method": { "const": "client_certificate" } } } } },
+      "then": { "properties": { "connection": { "properties": { "tls": { "properties": { "enabled": { "const": true } } } } } } }
+    }
+  ],
+  "$defs": {
+    "uuid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" },
+    "connection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "port", "client_id", "tls"],
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*|[0-9]{1,3}(\\.[0-9]{1,3}){3}|\\[[0-9A-Fa-f:.]+\\])$"
+        },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "client_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$" },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "trust": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["source"],
+                  "properties": { "source": { "const": "system" } }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["source", "ca_pem"],
+                  "properties": {
+                    "source": { "const": "pem" },
+                    "ca_pem": { "type": "string", "minLength": 1, "maxLength": 65536, "pattern": "^-----BEGIN CERTIFICATE-----" }
+                  }
+                }
+              ]
+            }
+          },
+          "if": { "properties": { "enabled": { "const": true } } },
+          "then": { "required": ["trust"] },
+          "else": { "not": { "required": ["trust"] } }
+        }
+      }
+    },
+    "credentialRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision", "staging_id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "revision": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "staging_id": { "oneOf": [{ "$ref": "#/$defs/uuid" }, { "type": "null" }] }
+      }
+    },
+    "auth": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["method"],
+          "properties": { "method": { "const": "anonymous" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["method", "credential_ref"],
+          "properties": {
+            "method": { "enum": ["username_password", "client_certificate"] },
+            "credential_ref": { "$ref": "#/$defs/credentialRef" }
+          }
+        }
+      ]
+    },
+    "interval": { "type": "integer", "minimum": 100, "maximum": 60000 },
+    "generic": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["publish_mode", "sample_interval_ms", "qos", "retain"],
+          "properties": {
+            "publish_mode": { "const": "on_change" },
+            "sample_interval_ms": { "$ref": "#/$defs/interval" },
+            "qos": { "enum": [0, 1] },
+            "retain": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["publish_mode", "publish_interval_ms", "qos", "retain"],
+          "properties": {
+            "publish_mode": { "const": "periodic" },
+            "publish_interval_ms": { "$ref": "#/$defs/interval" },
+            "qos": { "enum": [0, 1] },
+            "retain": { "type": "boolean" }
+          }
+        }
+      ]
+    },
+    "sparkplug": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["group_id", "edge_node_id", "sample_interval_ms"],
+      "properties": {
+        "group_id": { "type": "string", "minLength": 1 },
+        "edge_node_id": { "type": "string", "minLength": 1 },
+        "sample_interval_ms": { "$ref": "#/$defs/interval" }
+      }
+    },
+    "token": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["role", "name"],
+          "properties": {
+            "role": { "enum": ["instance", "program", "variable", "field"] },
+            "name": { "type": "string", "minLength": 1, "maxLength": 256 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["role", "indices"],
+          "properties": {
+            "role": { "const": "index" },
+            "indices": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 }
+            }
+          }
+        }
+      ]
+    },
+    "leaf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "address", "iec_type", "size", "destination"],
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tokens", "debug_path"],
+          "properties": {
+            "tokens": { "type": "array", "minItems": 2, "maxItems": 64, "items": { "$ref": "#/$defs/token" } },
+            "debug_path": { "type": "string", "minLength": 1, "maxLength": 1024 }
+          }
+        },
+        "address": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["arr", "elem"],
+          "properties": {
+            "arr": { "type": "integer", "minimum": 0, "maximum": 255 },
+            "elem": { "type": "integer", "minimum": 0, "maximum": 65535 }
+          }
+        },
+        "iec_type": {
+          "enum": [
+            "BOOL", "SINT", "INT", "DINT", "LINT", "USINT", "UINT", "UDINT", "ULINT",
+            "BYTE", "WORD", "DWORD", "LWORD", "REAL", "LREAL", "STRING", "WSTRING",
+            "TIME", "DATE", "TOD", "DT"
+          ]
+        },
+        "size": { "type": "integer", "minimum": 1, "maximum": 253 },
+        "destination": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        { "if": { "properties": { "iec_type": { "enum": ["BOOL", "SINT", "USINT", "BYTE"] } } }, "then": { "properties": { "size": { "const": 1 } } } },
+        { "if": { "properties": { "iec_type": { "enum": ["INT", "UINT", "WORD"] } } }, "then": { "properties": { "size": { "const": 2 } } } },
+        { "if": { "properties": { "iec_type": { "enum": ["DINT", "UDINT", "DWORD", "REAL"] } } }, "then": { "properties": { "size": { "const": 4 } } } },
+        { "if": { "properties": { "iec_type": { "enum": ["LINT", "ULINT", "LWORD", "LREAL", "TIME", "DATE", "TOD", "DT"] } } }, "then": { "properties": { "size": { "const": 8 } } } },
+        { "if": { "properties": { "iec_type": { "const": "STRING" } } }, "then": { "properties": { "size": { "const": 127 } } } },
+        { "if": { "properties": { "iec_type": { "const": "WSTRING" } } }, "then": { "properties": { "size": { "const": 253 } } } }
+      ]
+    }
+  }
+}

@@ -353,6 +353,24 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
       }
     },
 
+    // --- MQTT client (raw bodies; the shared parsers validate them) ---
+
+    async getMqttStatus() {
+      try {
+        return await window.bridge.runtimeGetMqttStatus(requireIp())
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async getMqttCredentials() {
+      try {
+        return await window.bridge.runtimeGetMqttCredentials(requireIp())
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
     // --- LAN discovery ---
 
     async discoverDevices(opts?: DiscoverDevicesOptions): Promise<DiscoverDevicesResult> {

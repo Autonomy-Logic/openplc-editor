@@ -21,6 +21,7 @@ import {
   hashLibraryArchive,
   type SnapshotLibrary,
 } from '../../shared/project/project-snapshot-archive'
+import { sanitizeProjectFiles } from '../../shared/project/sanitize-project-secrets'
 
 /**
  * Directories and files never worth storing.
@@ -55,6 +56,8 @@ export interface UploadSnapshot {
    *  than fatal: a project missing a library is still worth storing, and the
    *  alternative is refusing to store anything at all. */
   missingLibraries: string[]
+  /** Files left out because their MQTT content could not be reduced to the project model. */
+  excludedFiles: string[]
 }
 
 /**
@@ -113,7 +116,8 @@ export function referencedLibraryNames(projectJson: string): string[] {
  * and the opening client warns about what is missing.
  */
 export async function buildUploadSnapshot(options: BuildUploadSnapshotOptions): Promise<UploadSnapshot> {
-  const files = await readProjectDirectory(options.projectPath)
+  // The snapshot is retrievable by any administrator of the device: MQTT secrets are stripped by content.
+  const { files, excluded } = sanitizeProjectFiles(await readProjectDirectory(options.projectPath))
 
   const projectJson = files.get('project.json') ?? ''
   const projectName = readProjectName(projectJson, options.projectPath)
@@ -150,6 +154,7 @@ export async function buildUploadSnapshot(options: BuildUploadSnapshotOptions): 
     archive: Buffer.from(built.archive),
     metadata: JSON.stringify(built.metadata),
     missingLibraries,
+    excludedFiles: excluded,
   }
 }
 

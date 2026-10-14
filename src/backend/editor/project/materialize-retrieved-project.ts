@@ -36,6 +36,7 @@ import {
   type SnapshotLibrary,
   type SnapshotMetadata,
 } from '../../shared/project/project-snapshot-archive'
+import { sanitizeProjectFiles } from '../../shared/project/sanitize-project-secrets'
 
 export interface MaterializedProject {
   /** Scratch directory holding the project tree. */
@@ -44,6 +45,8 @@ export interface MaterializedProject {
   metadata: SnapshotMetadata
   /** Bundled `.stlib` archives, for the caller to offer to install. */
   libraries: SnapshotLibrary[]
+  /** Files left out because their MQTT content could not be reduced to the project model. */
+  excludedFiles: string[]
 }
 
 export interface MaterializeOptions {
@@ -102,7 +105,9 @@ export async function materializeRetrievedProject(
   // what the destination actually is.
   const destinationRoot = resolve(projectPath)
   const writes: Array<{ absolute: string; content: string }> = []
-  for (const [relativePath, content] of parsed.files) {
+  // An archive from an older producer may still carry MQTT credentials in a raw file; they never reach disk.
+  const sanitized = sanitizeProjectFiles(parsed.files)
+  for (const [relativePath, content] of sanitized.files) {
     const absolute = resolve(destinationRoot, relativePath)
     if (absolute !== destinationRoot && !absolute.startsWith(destinationRoot + sep)) {
       throw new SnapshotArchiveError(
@@ -123,6 +128,7 @@ export async function materializeRetrievedProject(
     projectName,
     metadata: parsed.metadata,
     libraries: parsed.libraries,
+    excludedFiles: sanitized.excluded,
   }
 }
 

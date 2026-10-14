@@ -28,6 +28,7 @@ import type {
   S7CommServerSettings,
   S7CommSystemArea,
 } from '../../../../middleware/shared/ports/types'
+import type { MqttProjectIntegrationV1 } from '../../../utils/mqtt/contract/contract'
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -373,6 +374,10 @@ export type ProjectActions = {
   addOpcUaNode: (name: string, node: OpcUaNodeConfig) => ProjectResponse
   updateOpcUaNode: (name: string, nodeId: string, updates: Partial<OpcUaNodeConfig>) => ProjectResponse
   removeOpcUaNode: (name: string, nodeId: string) => ProjectResponse
+
+  // MQTT
+  /** Replaces the integration with its persisted form; enabling is refused while another MQTT server is enabled. */
+  updateMqttServerConfig: (name: string, config: MqttProjectIntegrationV1) => ProjectResponse
 
   // Remote devices
   createRemoteDevice: (dto: RemoteDeviceDTO) => ProjectResponse

@@ -188,6 +188,8 @@ export interface TargetCapabilities {
 
   opcuaServer: boolean
   s7Server: boolean
+  /** MQTT / Sparkplug B client publishing to an external broker (Runtime v4 on Linux). */
+  mqttClient: boolean
 
   /** Baremetal OPC-UA server dimensions. Meaningful only where `opcuaServer` is
    *  true and the target compiles the baremetal runtime. Optional so a VPP

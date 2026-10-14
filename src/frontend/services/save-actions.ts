@@ -14,6 +14,7 @@ import { buildTypeContext, parseIecStringToVariables } from '../utils/generate-i
 import { generateIecVariablesToString } from '../utils/generate-iec-variables-to-string'
 import { syncNodesWithVariables, syncNodesWithVariablesFBD } from '../utils/graphical/sync-nodes-with-variables'
 import { librariesUsedByProject } from '../utils/library-usage'
+import { toPersistedServer } from '../utils/mqtt/project/model'
 import { notifyNoWritePermission } from '../utils/notify-no-write-permission'
 import { parseDataTypeFromText } from '../utils/PLC/data-type-declarations'
 import { serializeDataTypeToText } from '../utils/PLC/data-type-serializer'
@@ -130,7 +131,7 @@ function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
     for (const s of project.data.servers ?? []) {
       yield {
         path: `devices/servers/${s.name}.json`,
-        content: JSON.stringify(s, null, 2),
+        content: JSON.stringify(toPersistedServer(s), null, 2),
         category: 'server',
       }
     }
@@ -203,7 +204,13 @@ function serializeProjectFile(
   if (file.type === 'server') {
     const server = project.data.servers?.find((s) => s.name === fileName)
     if (!server) return []
-    return [{ path: `devices/servers/${fileName}.json`, content: JSON.stringify(server, null, 2), category: 'server' }]
+    return [
+      {
+        path: `devices/servers/${fileName}.json`,
+        content: JSON.stringify(toPersistedServer(server), null, 2),
+        category: 'server',
+      },
+    ]
   }
 
   if (file.type === 'remote-device') {

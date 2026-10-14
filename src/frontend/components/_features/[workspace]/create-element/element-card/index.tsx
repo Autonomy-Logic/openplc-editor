@@ -44,7 +44,7 @@ type CreateGlobalVariableListFormProps = {
 
 type CreateServerFormProps = {
   name: string
-  protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua'
+  protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua' | 'mqtt'
 }
 
 type CreateRemoteDeviceFormProps = {
@@ -56,8 +56,12 @@ const ServerProtocolSources = [
   { value: 'modbus-tcp', label: 'Modbus/TCP', disabled: false },
   { value: 's7comm', label: 'Siemens S7comm', disabled: false },
   { value: 'opcua', label: 'OPC-UA', disabled: false },
+  { value: 'mqtt', label: 'MQTT client', disabled: false },
   { value: 'ethernet-ip', label: 'EtherNet/IP', disabled: true },
 ] as const
+
+const MQTT_PROTOCOL_DESCRIPTION =
+  'The runtime connects as a client to an external MQTT broker you provide and publishes the PLC values you select. No broker runs on the PLC.'
 
 const RemoteDeviceProtocolSources = [
   { value: 'modbus-tcp', label: 'Modbus', disabled: false },
@@ -124,6 +128,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     register: serverRegister,
     handleSubmit: handleSubmitServer,
     setError: serverSetError,
+    watch: watchServer,
     formState: { errors: serverErrors },
   } = useForm<CreateServerFormProps>()
 
@@ -167,9 +172,11 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     const unsupported =
       (protocol.value === 'modbus-tcp' && !targetServesModbus) ||
       (protocol.value === 's7comm' && !targetCaps.s7Server) ||
-      (protocol.value === 'opcua' && !targetCaps.opcuaServer)
+      (protocol.value === 'opcua' && !targetCaps.opcuaServer) ||
+      (protocol.value === 'mqtt' && !targetCaps.mqttClient)
     return unsupported ? { ...protocol, disabled: true } : protocol
   })
+  const selectedServerProtocol = watchServer('protocol')
 
   const handleCreatePou: SubmitHandler<CreatePouFormProps> = (data) => {
     const pouWasCreated = create(data)
@@ -605,6 +612,14 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                           }}
                         />
                       </div>
+                      {selectedServerProtocol === 'mqtt' && (
+                        <p
+                          id='server-protocol-description'
+                          className='font-caption text-cp-xs font-normal text-neutral-1000 opacity-65 dark:text-neutral-300'
+                        >
+                          {MQTT_PROTOCOL_DESCRIPTION}
+                        </p>
+                      )}
                       <div id='form-button-container' className='flex w-full justify-between'>
                         <Popover.Close asChild>
                           <button

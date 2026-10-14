@@ -48,6 +48,11 @@ import { generateIecVariablesToString } from '../../../utils/generate-iec-variab
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
 import { clampIOGroupLength, resolveIOGroupErrorHandling } from '../../../utils/modbus/io-group'
+import {
+  createDefaultMqttIntegration,
+  suggestMqttClientId,
+  toPersistedMqttIntegration,
+} from '../../../utils/mqtt/project/model'
 import { parseDataTypeFromText } from '../../../utils/PLC/data-type-declarations'
 import { serializeDataTypeToText } from '../../../utils/PLC/data-type-serializer'
 import { renameGlobalVariableListInPou } from '../../../utils/PLC/global-variable-list-references'
@@ -173,6 +178,14 @@ function initializeServerProtocolConfig(serverData: PLCServer, transports: ('rtu
     return {
       ...serverData,
       opcuaServerConfig: { ...DEFAULT_OPCUA_SERVER_CONFIG },
+    }
+  }
+  if (serverData.protocol === 'mqtt') {
+    return {
+      ...serverData,
+      mqttConfig: serverData.mqttConfig
+        ? toPersistedMqttIntegration(serverData.mqttConfig)
+        : createDefaultMqttIntegration(suggestMqttClientId(serverData.name)),
     }
   }
   return serverData
@@ -1929,7 +1942,13 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       setState(
         produce((slice: ProjectSlice) => {
           if (!slice.project.data.servers) slice.project.data.servers = []
-          slice.project.data.servers.push(initializeServerProtocolConfig(dto.data, seedTransports(getState())))
+          const initialized = initializeServerProtocolConfig(dto.data, seedTransports(getState()))
+          const mqttAlreadyEnabled = servers.some((s) => s.protocol === 'mqtt' && s.mqttConfig?.enabled)
+          // A copy of an enabled integration must not become a second enabled one.
+          if (initialized.protocol === 'mqtt' && initialized.mqttConfig?.enabled && mqttAlreadyEnabled) {
+            initialized.mqttConfig.enabled = false
+          }
+          slice.project.data.servers.push(initialized)
         }),
       )
       return ok()
@@ -2232,6 +2251,27 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           server.opcuaServerConfig.addressSpace.nodes = server.opcuaServerConfig.addressSpace.nodes.filter(
             (n) => n.id !== nodeId,
           )
+        }),
+      )
+      return ok()
+    },
+
+    // -----------------------------------------------------------------------
+    // MQTT
+    // -----------------------------------------------------------------------
+    updateMqttServerConfig: (name, config) => {
+      const servers = getState().project.data.servers ?? []
+      const target = servers.find((s) => s.name === name)
+      if (target?.protocol !== 'mqtt') return fail('MQTT server not found')
+      const otherEnabled = servers.find((s) => s.name !== name && s.protocol === 'mqtt' && s.mqttConfig?.enabled)
+      if (config.enabled && otherEnabled) {
+        return fail(`Only one MQTT integration can be enabled per runtime; "${otherEnabled.name}" is already enabled.`)
+      }
+      const persisted = toPersistedMqttIntegration(config)
+      setState(
+        produce((slice: ProjectSlice) => {
+          const server = slice.project.data.servers?.find((s) => s.name === name)
+          if (server) server.mqttConfig = persisted
         }),
       )
       return ok()

@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useContext } from 'react'
 
+import { sessionMqttCredentialStore } from '../../../frontend/utils/mqtt/credentials/session-store'
 import type { PlatformPorts } from './types'
 
 /**
@@ -139,4 +140,14 @@ export function useLibrary() {
 
 export function useStlibSource() {
   return usePlatform().stlibSource
+}
+
+/** The platform's MQTT credential store, or the session-only store when the platform has none. */
+export function useMqttCredentialStore() {
+  return usePlatform().mqttCredentials ?? sessionMqttCredentialStore
+}
+
+/** Where the user pins the runtime certificate; undefined on platforms whose transport verifies the runtime. */
+export function useRuntimeIdentity() {
+  return usePlatform().runtimeIdentity
 }

@@ -53,6 +53,23 @@ import {
 } from '@root/backend/editor/edge-version-control'
 import { ESIService } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
+import { createElectronMqttCredentialVault } from '@root/backend/editor/mqtt-credentials/electron-vault'
+import {
+  MQTT_CREDENTIAL_BAD_REQUEST,
+  MQTT_CREDENTIAL_STORE_FAILURE,
+  type MqttCredentialPresenceReply,
+  type MqttCredentialPutReply,
+  type MqttCredentialRemoveReply,
+  parseMqttCredentialBindingInput,
+  parseMqttCredentialScopeInput,
+  parseMqttCredentialSecretInput,
+} from '@root/backend/editor/mqtt-credentials/ipc-input'
+import type { MqttCredentialVault } from '@root/backend/editor/mqtt-credentials/vault'
+import {
+  createMqttCredentialDeployer,
+  MQTT_DEPLOY_MAX_RESPONSE_BYTES,
+  type MqttCredentialDeployer,
+} from '@root/backend/editor/mqtt-deploy/credential-deployer'
 import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-workspace'
 import { describeRetrievedLibraries } from '@root/backend/editor/project/describe-retrieved-libraries'
 import {
@@ -60,6 +77,9 @@ import {
   pruneRetrievedProjects,
   RETAINED_RETRIEVALS,
 } from '@root/backend/editor/project/materialize-retrieved-project'
+import { createElectronRuntimeIdentityStore } from '@root/backend/editor/runtime/electron-runtime-identity'
+import { pinnedRuntimeRequest } from '@root/backend/editor/runtime/pinned-runtime-request'
+import type { RuntimeIdentityStore } from '@root/backend/editor/runtime/runtime-identity-store'
 import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
 import type {
   DebugAnchorResult,
@@ -105,6 +125,10 @@ import type {
   ListPublicLibrariesResponse,
   PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
+import type {
+  RuntimeIdentityPin,
+  RuntimeIdentityWriteResult,
+} from '@root/middleware/shared/ports/runtime-identity-port'
 import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import type { VersionControlResult } from '@root/middleware/shared/ports/version-control-port'
@@ -145,7 +169,7 @@ import {
 } from '../../../backend/editor/license/license-flow'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { BootloaderApiClient } from '../../../backend/editor/runtime/bootloader-api-client'
-import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
+import { RUNTIME_API_PORT, RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
 import { logger } from '../../../backend/editor/services'
 import {
   getOpenProjectPath,
@@ -313,6 +337,10 @@ class MainProcessBridge implements MainIpcModule {
   private catalogTransport = createDesktopCatalogTransport()
   // ESI repository service for EtherCAT device descriptions
   private esiService = new ESIService()
+  // Created on first use: `safeStorage` and the userData path are only meaningful once the app is ready.
+  private mqttCredentialVault: MqttCredentialVault | null = null
+  private runtimeIdentityStore: RuntimeIdentityStore | null = null
+  private mqttDeployer: MqttCredentialDeployer | null = null
 
   constructor({
     ipcMain,
@@ -783,6 +811,11 @@ class MainProcessBridge implements MainIpcModule {
       const materialized = await materializeRetrievedProject(new Uint8Array(fetched.archive), {
         scratchRoot,
       })
+      if (materialized.excludedFiles.length > 0) {
+        logger.warn(
+          `Retrieved project: left out ${materialized.excludedFiles.length} file(s) with unreadable MQTT content`,
+        )
+      }
       // Same for the in-memory copy: this map holds the full text of every
       // library each retrieval carried, and it only ever grew.
       this.forgetRetrievedLibrariesExcept(materialized.projectPath)
@@ -879,6 +912,17 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('edge-account:sign-in', this.handleEdgeSignIn)
     this.registerHandle('edge-account:sign-out', this.handleEdgeSignOut)
     this.registerHandle('edge-account:is-session-persistent', this.handleEdgeIsSessionPersistent)
+    // Write-only by design: no channel returns a stored secret, and none takes a file path.
+    this.registerHandle('mqtt-credentials:persistence', this.handleMqttCredentialsPersistence)
+    this.registerHandle('mqtt-credentials:get-presence', this.handleMqttCredentialsGetPresence)
+    this.registerHandle('mqtt-credentials:put', this.handleMqttCredentialsPut)
+    this.registerHandle('mqtt-credentials:remove', this.handleMqttCredentialsRemove)
+    // The pin is only ever set from a fingerprint the user typed; no channel learns it from a connection.
+    this.registerHandle('runtime-identity:get', this.handleRuntimeIdentityGet)
+    this.registerHandle('runtime-identity:set', this.handleRuntimeIdentitySet)
+    this.registerHandle('runtime-identity:remove', this.handleRuntimeIdentityRemove)
+    this.registerHandle('runtime:get-mqtt-status', this.handleRuntimeGetMqttStatus)
+    this.registerHandle('runtime:get-mqtt-credentials', this.handleRuntimeGetMqttCredentials)
     this.registerHandle('edge-projects:list-recent', this.handleEdgeProjectsListRecent)
     this.registerHandle('edge-projects:list-in-folder', this.handleEdgeProjectsListInFolder)
     this.registerHandle('edge-projects:read', this.handleEdgeProjectsRead)
@@ -1367,6 +1411,147 @@ class MainProcessBridge implements MainIpcModule {
 
   handleEdgeIsSessionPersistent = (_event: IpcMainInvokeEvent): Promise<boolean> =>
     Promise.resolve(isEncryptionAvailable())
+
+  // ===================== MQTT CREDENTIALS =====================
+
+  /** The vault main-process deploy code reads secrets from; the renderer only ever sees presence. */
+  get mqttCredentials(): MqttCredentialVault {
+    this.mqttCredentialVault ??= createElectronMqttCredentialVault()
+    return this.mqttCredentialVault
+  }
+
+  handleMqttCredentialsPersistence = (_event: IpcMainInvokeEvent) => Promise.resolve(this.mqttCredentials.persistence())
+
+  get runtimeIdentity(): RuntimeIdentityStore {
+    this.runtimeIdentityStore ??= createElectronRuntimeIdentityStore()
+    return this.runtimeIdentityStore
+  }
+
+  /** Moves broker credentials from the vault to the runtime over a pinned connection; used by the compile. */
+  get mqttCredentialDeployer(): MqttCredentialDeployer {
+    this.mqttDeployer ??= createMqttCredentialDeployer({
+      vault: this.mqttCredentials,
+      identity: this.runtimeIdentity,
+      sessionAddress: () => (this.runtimeApi.tokens.hasToken() ? this.runtimeApi.getAddress() : null),
+      request: (address, sha256, call) =>
+        this.runtimeApi.tokens.withAuth(
+          (token) =>
+            pinnedRuntimeRequest({
+              host: address,
+              port: RUNTIME_API_PORT,
+              sha256,
+              method: call.method,
+              path: call.path,
+              headers: { ...call.headers, Authorization: `Bearer ${token}` },
+              body: call.body,
+              timeoutMs: 15_000,
+              maxResponseBytes: MQTT_DEPLOY_MAX_RESPONSE_BYTES,
+            }),
+          (response) => response.statusCode === 401,
+        ),
+      log: (level, line) => {
+        if (level === 'info') logger.info(line)
+        else logger.warn(line)
+      },
+    })
+    return this.mqttDeployer
+  }
+
+  handleRuntimeIdentityGet = async (
+    _event: IpcMainInvokeEvent,
+    targetKey: unknown,
+  ): Promise<RuntimeIdentityPin | null> => (typeof targetKey === 'string' ? this.runtimeIdentity.get(targetKey) : null)
+
+  handleRuntimeIdentitySet = async (
+    _event: IpcMainInvokeEvent,
+    targetKey: unknown,
+    fingerprint: unknown,
+  ): Promise<RuntimeIdentityWriteResult> => {
+    if (typeof targetKey !== 'string' || typeof fingerprint !== 'string' || fingerprint.length > 256) {
+      return { ok: false, code: 'runtime_identity_invalid', message: 'The fingerprint could not be read.' }
+    }
+    return this.runtimeIdentity.set(targetKey, fingerprint)
+  }
+
+  handleRuntimeIdentityRemove = async (_event: IpcMainInvokeEvent, targetKey: unknown): Promise<void> => {
+    if (typeof targetKey === 'string') await this.runtimeIdentity.remove(targetKey)
+  }
+
+  private getMqttRuntimeBody = async (
+    ipAddress: unknown,
+    endpoint: '/api/mqtt/status' | '/api/mqtt/credentials',
+  ): Promise<{ success: boolean; data?: unknown; error?: string }> => {
+    if (typeof ipAddress !== 'string' || ipAddress === '') return { success: false, error: 'No runtime address' }
+    const result = await this.runtimeApi.makeRuntimeApiRequest<unknown>(
+      ipAddress,
+      endpoint,
+      (data) => JSON.parse(data) as unknown,
+      MQTT_DEPLOY_MAX_RESPONSE_BYTES,
+    )
+    if (result.success) return { success: true, data: result.data }
+    return {
+      success: false,
+      error: result.statusCode ? `HTTP ${result.statusCode}` : 'The runtime could not be reached',
+    }
+  }
+
+  handleRuntimeGetMqttStatus = (_event: IpcMainInvokeEvent, ipAddress: unknown) =>
+    this.getMqttRuntimeBody(ipAddress, '/api/mqtt/status')
+
+  handleRuntimeGetMqttCredentials = (_event: IpcMainInvokeEvent, ipAddress: unknown) =>
+    this.getMqttRuntimeBody(ipAddress, '/api/mqtt/credentials')
+
+  handleMqttCredentialsGetPresence = async (
+    _event: IpcMainInvokeEvent,
+    scope: unknown,
+  ): Promise<MqttCredentialPresenceReply> => {
+    const parsedScope = parseMqttCredentialScopeInput(scope)
+    if (!parsedScope) return MQTT_CREDENTIAL_BAD_REQUEST
+    try {
+      const presence = await this.mqttCredentials.getPresence(parsedScope)
+      return { ok: true, persistence: this.mqttCredentials.persistence(), presence }
+    } catch {
+      logger.warn('MQTT credential store: event=presence result=failed')
+      return MQTT_CREDENTIAL_STORE_FAILURE
+    }
+  }
+
+  handleMqttCredentialsPut = async (
+    _event: IpcMainInvokeEvent,
+    scope: unknown,
+    secret: unknown,
+    binding: unknown,
+  ): Promise<MqttCredentialPutReply> => {
+    const parsedScope = parseMqttCredentialScopeInput(scope)
+    const parsedSecret = parseMqttCredentialSecretInput(secret)
+    const parsedBinding = parseMqttCredentialBindingInput(binding)
+    if (!parsedScope || !parsedSecret || !parsedBinding) {
+      logger.warn('MQTT credential store: event=put result=malformed_request')
+      return MQTT_CREDENTIAL_BAD_REQUEST
+    }
+    try {
+      const result = await this.mqttCredentials.put(parsedScope, parsedSecret, parsedBinding)
+      return { ...result, persistence: this.mqttCredentials.persistence() }
+    } catch {
+      logger.warn('MQTT credential store: event=put result=failed')
+      return MQTT_CREDENTIAL_STORE_FAILURE
+    }
+  }
+
+  handleMqttCredentialsRemove = async (
+    _event: IpcMainInvokeEvent,
+    scope: unknown,
+  ): Promise<MqttCredentialRemoveReply> => {
+    const parsedScope = parseMqttCredentialScopeInput(scope)
+    if (!parsedScope) return MQTT_CREDENTIAL_BAD_REQUEST
+    try {
+      await this.mqttCredentials.remove(parsedScope)
+      return { ok: true, persistence: this.mqttCredentials.persistence() }
+    } catch {
+      logger.warn('MQTT credential store: event=remove result=failed')
+      return MQTT_CREDENTIAL_STORE_FAILURE
+    }
+  }
 
   // The cloud round trip. Reads and writes go through the same session the account
   // handlers use, so a revoked token is renewed once rather than per call site.
@@ -2144,10 +2329,20 @@ class MainProcessBridge implements MainIpcModule {
   /** Recursively deletes a project directory and drops it from the recent list; the destructive `fs.rm` is gated by `deleteProject`'s own `project.json` check. */
   handleDeleteProject = async (_event: unknown, projectPath: string) => {
     try {
-      return await this.projectService.deleteProject(projectPath)
+      const result = await this.projectService.deleteProject(projectPath)
+      if (result.success) await this.forgetMqttCredentialsOf(projectPath)
+      return result
     } catch (error) {
       logger.error('Error deleting project: ' + getErrorMessage(error))
       return { success: false, error: getErrorMessage(error) }
+    }
+  }
+  /** A deleted project's credentials have no owner left; a cleanup failure must not fail the delete. */
+  private forgetMqttCredentialsOf = async (projectPath: string): Promise<void> => {
+    try {
+      await this.mqttCredentials.forgetProject(projectPath)
+    } catch {
+      logger.warn('MQTT credential store: event=forget_project result=failed')
     }
   }
   handleAppRequestQuit = () => this.quitCoordinator.requestQuit()

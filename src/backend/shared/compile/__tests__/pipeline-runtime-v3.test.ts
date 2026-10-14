@@ -43,6 +43,7 @@ jest.mock('../steps/generate-confs', () => ({
     ethercat: '',
     ethercatBusconfig: null,
     ethercatIomapping: null,
+    mqtt: null,
   })),
 }))
 

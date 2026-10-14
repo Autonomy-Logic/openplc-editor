@@ -1,6 +1,6 @@
 /**
  * Author the runtime v4 conf/* JSON strings (Modbus slave + master,
- * S7Comm, OPC-UA, EtherCAT) from a project's `servers`,
+ * S7Comm, OPC-UA, EtherCAT, MQTT) from a project's `servers`,
  * `remoteDevices`, program metadata, and the target runtime version.
  *
  * Editor-canonical behaviour — every output string is byte-identical
@@ -37,6 +37,15 @@
 // → frontend`) but functional, see the build-pipeline refactor plan.
 import { getErrorMessage } from '../../../../frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '../../../../frontend/utils/modbus/generate-modbus-slave-config'
+import type { MqttCredentialRef } from '../../../../frontend/utils/mqtt/contract/contract'
+import type { MqttSourceModel } from '../../../../frontend/utils/mqtt/project/source-model'
+import {
+  generateMqttRuntimeConfig,
+  MqttConfigGenerationError,
+  type MqttRuntimeConfigPlan,
+  type MqttRuntimeConfigResult,
+  planMqttRuntimeConfig,
+} from '../../../../frontend/utils/mqtt/runtime/generate'
 import { generateOpcUaConfig, OpcUaConfigError } from '../../../../frontend/utils/opcua'
 import { generateS7CommConfig } from '../../../../frontend/utils/s7comm'
 import { generateEthercatConfig, generateEtherdogConfigs } from '../../ethercat/generate-ethercat-config'
@@ -54,6 +63,14 @@ export interface OpcUaInstance {
   name: string
   task: string
   program: string
+}
+
+/** What MQTT generation needs beyond the project: the target's capability, declarations and credential. */
+export interface GenerateConfsMqttInput {
+  target: { mqttClient: boolean }
+  sourceModel?: MqttSourceModel
+  /** 'deferred': secret-bearing integrations are validated here and written by the deploy after staging. */
+  credentialRef?: MqttCredentialRef | null | 'deferred'
 }
 
 export interface GenerateConfsInput {
@@ -80,6 +97,8 @@ export interface GenerateConfsInput {
    *  only, no device).  Picks the EtherCAT file format; see
    *  `isEtherdogCapableRuntime`. */
   runtimeVersion: string | null
+  /** Absent means the caller cannot vouch for the target, so an enabled MQTT integration is refused. */
+  mqtt?: GenerateConfsMqttInput
 }
 
 /**
@@ -97,6 +116,15 @@ export interface GenerateConfsOutput {
   ethercat: string | null
   ethercatBusconfig: string | null
   ethercatIomapping: string | null
+  /** `conf/mqtt.json`; null when no MQTT integration is enabled, so the runtime removes its copy. */
+  mqtt: string | null
+  /** Present when `conf/mqtt.json` waits for the runtime credential (see `GenerateConfsMqttInput.credentialRef`). */
+  mqttDeferred?: MqttRuntimeConfigPlan
+}
+
+export const describeGeneratedMqttConfig = (generated: MqttRuntimeConfigResult): string => {
+  const birth = generated.birthUpperBoundBytes === null ? '' : `, NBIRTH up to ${generated.birthUpperBoundBytes} bytes`
+  return `Generated conf/mqtt.json for "${generated.server}": ${generated.leafCount} leaves, mode ${generated.config.mode}${birth}`
 }
 
 /**
@@ -170,5 +198,53 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
     throw new Error(`EtherCAT configuration is invalid: ${ethercatErrors.join('; ')}`)
   }
 
-  return { modbusSlave, modbusMaster, s7Comm, opcUa, ethercat, ethercatBusconfig, ethercatIomapping }
+  let mqtt: string | null = null
+  let mqttDeferred: MqttRuntimeConfigPlan | null = null
+  try {
+    const mqttInput = {
+      servers,
+      target: input.mqtt?.target ?? { mqttClient: false },
+      debugMapContent,
+      instances,
+      sourceModel: input.mqtt?.sourceModel,
+    }
+    const credentialRef = input.mqtt?.credentialRef
+    const plan = credentialRef === 'deferred' ? planMqttRuntimeConfig(mqttInput) : null
+    if (plan?.credentialRequired) {
+      mqttDeferred = plan
+      log(
+        `Validated MQTT configuration for "${plan.server}": ${plan.leafCount} leaves, mode ${plan.integration.mode}; ` +
+          'conf/mqtt.json is written when uploading, after the runtime credential is prepared',
+        'info',
+      )
+    } else {
+      const generated = generateMqttRuntimeConfig({
+        ...mqttInput,
+        credentialRef: credentialRef === 'deferred' ? null : credentialRef,
+      })
+      if (generated !== null) {
+        mqtt = generated.content
+        log(describeGeneratedMqttConfig(generated), 'info')
+      }
+    }
+  } catch (error) {
+    if (error instanceof MqttConfigGenerationError) {
+      log(`MQTT Configuration Error:\n${error.message}`, 'error')
+    } else {
+      log(`Failed to generate MQTT config: ${getErrorMessage(error)}`, 'error')
+    }
+    throw error
+  }
+
+  return {
+    modbusSlave,
+    modbusMaster,
+    s7Comm,
+    opcUa,
+    ethercat,
+    ethercatBusconfig,
+    ethercatIomapping,
+    mqtt,
+    ...(mqttDeferred === null ? {} : { mqttDeferred }),
+  }
 }

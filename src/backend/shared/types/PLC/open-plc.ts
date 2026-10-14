@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { MqttProjectIntegrationSchema } from '../../../../frontend/utils/mqtt/project/schema'
 import { zodFBDFlowSchema, zodLadderFlowSchema } from '../../../../middleware/shared/ports/flow-schemas'
 // One source of truth for the IEC base-type list: the canonical
 // schema lives in `middleware/shared/ports/plc-schemas` and is
@@ -286,7 +287,7 @@ const PLCConfigurationSchema = z.object({
 })
 type PLCConfiguration = z.infer<typeof PLCConfigurationSchema>
 
-const PLCServerProtocolSchema = z.enum(['modbus-tcp', 's7comm', 'ethernet-ip', 'opcua'])
+const PLCServerProtocolSchema = z.enum(['modbus-tcp', 's7comm', 'ethernet-ip', 'opcua', 'mqtt'])
 type PLCServerProtocol = z.infer<typeof PLCServerProtocolSchema>
 
 const ModbusSlaveBufferMappingSchema = z.object({
@@ -620,6 +621,7 @@ const PLCServerSchema = z.object({
   modbusSlaveConfig: ModbusSlaveConfigSchema.optional(),
   s7commSlaveConfig: S7CommSlaveConfigSchema.optional(),
   opcuaServerConfig: OpcUaServerConfigSchema.optional(),
+  mqttConfig: MqttProjectIntegrationSchema.optional(),
 })
 type PLCServer = z.infer<typeof PLCServerSchema>
 

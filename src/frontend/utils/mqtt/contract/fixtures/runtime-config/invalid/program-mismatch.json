@@ -1,0 +1,184 @@
+{
+  "contract": "openplc-mqtt-runtime-config",
+  "format_version": 1,
+  "enabled": true,
+  "mode": "generic",
+  "program": {
+    "md5": "00000000000000000000000000000000"
+  },
+  "connection": {
+    "host": "broker.example.net",
+    "port": 1883,
+    "client_id": "plc-linha1",
+    "tls": {
+      "enabled": false
+    }
+  },
+  "auth": {
+    "method": "anonymous"
+  },
+  "generic": {
+    "publish_mode": "on_change",
+    "sample_interval_ms": 100,
+    "qos": 0,
+    "retain": false
+  },
+  "leaves": [
+    {
+      "source": {
+        "tokens": [
+          {
+            "role": "instance",
+            "name": "Inst0"
+          },
+          {
+            "role": "variable",
+            "name": "Motor1"
+          },
+          {
+            "role": "field",
+            "name": "Speed"
+          }
+        ],
+        "debug_path": "INST0.MOTOR1.SPEED"
+      },
+      "address": {
+        "arr": 0,
+        "elem": 21
+      },
+      "iec_type": "REAL",
+      "size": 4,
+      "destination": "openplc/plc-linha1/Inst0/Motor1/Speed"
+    },
+    {
+      "source": {
+        "tokens": [
+          {
+            "role": "instance",
+            "name": "Inst0"
+          },
+          {
+            "role": "variable",
+            "name": "Motor2"
+          },
+          {
+            "role": "field",
+            "name": "Speed"
+          }
+        ],
+        "debug_path": "INST0.MOTOR2.SPEED"
+      },
+      "address": {
+        "arr": 0,
+        "elem": 23
+      },
+      "iec_type": "REAL",
+      "size": 4,
+      "destination": "openplc/plc-linha1/Inst0/Motor2/Speed"
+    },
+    {
+      "source": {
+        "tokens": [
+          {
+            "role": "instance",
+            "name": "Inst0"
+          },
+          {
+            "role": "variable",
+            "name": "Temps"
+          },
+          {
+            "role": "index",
+            "indices": [
+              -2
+            ]
+          }
+        ],
+        "debug_path": "INST0.TEMPS[-2]"
+      },
+      "address": {
+        "arr": 0,
+        "elem": 24
+      },
+      "iec_type": "INT",
+      "size": 2,
+      "destination": "openplc/plc-linha1/Inst0/Temps/-2"
+    },
+    {
+      "source": {
+        "tokens": [
+          {
+            "role": "instance",
+            "name": "Inst0"
+          },
+          {
+            "role": "variable",
+            "name": "Temps"
+          },
+          {
+            "role": "index",
+            "indices": [
+              0
+            ]
+          }
+        ],
+        "debug_path": "INST0.TEMPS[0]"
+      },
+      "address": {
+        "arr": 0,
+        "elem": 26
+      },
+      "iec_type": "INT",
+      "size": 2,
+      "destination": "openplc/plc-linha1/Inst0/Temps/0"
+    },
+    {
+      "source": {
+        "tokens": [
+          {
+            "role": "instance",
+            "name": "Inst0"
+          },
+          {
+            "role": "variable",
+            "name": "Timer1"
+          },
+          {
+            "role": "field",
+            "name": "ET"
+          }
+        ],
+        "debug_path": "INST0.TIMER1.ET"
+      },
+      "address": {
+        "arr": 0,
+        "elem": 27
+      },
+      "iec_type": "TIME",
+      "size": 8,
+      "destination": "openplc/plc-linha1/Inst0/Timer1/ET"
+    },
+    {
+      "source": {
+        "tokens": [
+          {
+            "role": "instance",
+            "name": "Inst0"
+          },
+          {
+            "role": "variable",
+            "name": "V_LINT"
+          }
+        ],
+        "debug_path": "INST0.V_LINT"
+      },
+      "address": {
+        "arr": 0,
+        "elem": 7
+      },
+      "iec_type": "LINT",
+      "size": 8,
+      "destination": "openplc/plc-linha1/Inst0/V_LINT"
+    }
+  ]
+}

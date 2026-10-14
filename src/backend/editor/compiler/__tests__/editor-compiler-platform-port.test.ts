@@ -568,4 +568,136 @@ describe('createEditorCompilerPlatformPort', () => {
       expect(log).toHaveBeenCalledWith(expect.stringContaining('Could not prepare the project'), 'warning')
     })
   })
+
+  // ---- uploadRuntimeV4: refusals the runtime answers with HTTP 200 ----------
+
+  describe('uploadRuntimeV4 — runtime refusal', () => {
+    const deviceContext = { kind: 'editor-https' as const, ip: '10.0.0.1', jwt: 'token' }
+
+    it('fails the upload on a non-empty UploadFileFail and shows the MQTT error, without polling a build', async () => {
+      const body = JSON.stringify({
+        UploadFileFail: "MQTT configuration rejected: staging_expired at '/auth/credential_ref/staging_id': expired",
+        CompilationStatus: 'FAILED',
+        MqttConfigError: {
+          code: 'staging_expired',
+          category: 'credential',
+          message: 'the staged credential expired',
+          pointer: '/auth/credential_ref/staging_id',
+        },
+      })
+      const makeRuntimeApiRequest = jest.fn()
+      const makeRuntimeApiUpload = jest.fn(async (opts: { onUploadAccepted?: (body: string) => void }) => {
+        opts.onUploadAccepted?.(body)
+        return { success: true as const, data: body }
+      })
+      const port = createEditorCompilerPlatformPort(
+        makeHandlers(),
+        makeContext({
+          compressSourceFolder: jest.fn().mockResolvedValue(Buffer.from('program')),
+          mainProcessBridge: { makeRuntimeApiRequest, makeRuntimeApiUpload },
+        }),
+      )
+      const log = jest.fn()
+
+      const result = await port.uploadRuntimeV4(
+        { bundle: {}, context: deviceContext, supportsProjectSnapshot: false },
+        log,
+      )
+
+      expect(result.ok).toBe(false)
+      expect(makeRuntimeApiRequest).not.toHaveBeenCalled()
+      expect(log).toHaveBeenCalledWith(
+        'MQTT Configuration Error (runtime, credential): the staged credential expired [staging_expired at /auth/credential_ref/staging_id]',
+        'error',
+      )
+      expect(log).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to upload program to runtime: MQTT configuration rejected'),
+        'error',
+      )
+      expect(log).not.toHaveBeenCalledWith(expect.stringContaining('Runtime compilation started'), 'info')
+      expect(log).not.toHaveBeenCalledWith('Program uploaded successfully to runtime.', 'info')
+    })
+
+    it('fails the upload on any other refusal too, and keeps an accepted upload going', async () => {
+      const refused = createEditorCompilerPlatformPort(
+        makeHandlers(),
+        makeContext({
+          compressSourceFolder: jest.fn().mockResolvedValue(Buffer.from('program')),
+          mainProcessBridge: {
+            makeRuntimeApiRequest: jest.fn(),
+            makeRuntimeApiUpload: jest.fn().mockResolvedValue({
+              success: true,
+              data: '{"UploadFileFail":"Another upload is in progress, please wait"}',
+            }),
+          },
+        }),
+      )
+      const log = jest.fn()
+      expect(
+        (await refused.uploadRuntimeV4({ bundle: {}, context: deviceContext, supportsProjectSnapshot: false }, log)).ok,
+      ).toBe(false)
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('Another upload is in progress'), 'error')
+
+      const accepted = createEditorCompilerPlatformPort(
+        makeHandlers(),
+        makeContext({
+          compressSourceFolder: jest.fn().mockResolvedValue(Buffer.from('program')),
+          pollTimeoutMs: 50,
+          pollIntervalMs: 10,
+          mainProcessBridge: {
+            makeRuntimeApiRequest: jest.fn().mockResolvedValue({ success: false, error: 'offline' }),
+            makeRuntimeApiUpload: jest
+              .fn()
+              .mockResolvedValue({ success: true, data: '{"UploadFileFail":"","CompilationStatus":"COMPILING"}' }),
+          },
+        }),
+      )
+      const acceptedLog = jest.fn()
+      await accepted.uploadRuntimeV4(
+        { bundle: {}, context: deviceContext, supportsProjectSnapshot: false },
+        acceptedLog,
+      )
+      expect(acceptedLog).toHaveBeenCalledWith('Program uploaded successfully to runtime.', 'info')
+    })
+  })
+
+  // ---- MQTT credential staging: delegated to the main-process deployer -------
+
+  describe('MQTT credential staging', () => {
+    const deviceContext = { kind: 'editor-https' as const, ip: '10.0.0.1', jwt: 'token' }
+    const integration = { authMethod: 'username_password' } as never
+
+    it('is absent without a deployer, so the pipeline refuses secret-bearing integrations', () => {
+      const port = createEditorCompilerPlatformPort(makeHandlers(), makeContext())
+      expect(port.stageMqttCredential).toBeUndefined()
+      expect(port.discardMqttCredentialStaging).toBeUndefined()
+    })
+
+    it('stages for the device address and the project key, and discards on the same address', async () => {
+      const deployer = {
+        stage: jest
+          .fn()
+          .mockResolvedValue({ ok: true, credentialRef: { id: 'a', revision: 1, staging_id: 's' }, stagingId: 's' }),
+        discard: jest.fn().mockResolvedValue(undefined),
+      }
+      const port = createEditorCompilerPlatformPort(
+        makeHandlers(),
+        makeContext({ mqttCredentials: { projectKey: '/projects/line-1/project.json', deployer } }),
+      )
+      const result = await port.stageMqttCredential?.(
+        { context: deviceContext, serverName: 'broker', integration, programMd5: 'm' },
+        () => undefined,
+      )
+      expect(result).toMatchObject({ ok: true, stagingId: 's' })
+      expect(deployer.stage).toHaveBeenCalledWith({
+        address: '10.0.0.1',
+        projectKey: '/projects/line-1/project.json',
+        serverName: 'broker',
+        integration,
+        programMd5: 'm',
+      })
+      await port.discardMqttCredentialStaging?.({ context: deviceContext, stagingId: 's' }, () => undefined)
+      expect(deployer.discard).toHaveBeenCalledWith('10.0.0.1', 's')
+    })
+  })
 })

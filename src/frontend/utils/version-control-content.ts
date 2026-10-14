@@ -21,7 +21,7 @@ export type VersionControlSyncState = {
 export function pickContentForSave(path: string, freshSerialized: string, syncState: VersionControlSyncState): string {
   const loadedSer = syncState.loadedSerialized[path]
   const raw = syncState.rawLoadedContent[path]
-  if (loadedSer !== undefined && freshSerialized === loadedSer && raw !== undefined) {
+  if (loadedSer !== undefined && freshSerialized === loadedSer && raw !== undefined && !isMqttServerFile(path, raw)) {
     // The snapshot taken on open already carries the libraries the save derives from
     // usage, so "unchanged since open" is true even when the file on disk never declared
     // them. Echoing the raw text would then drop the one thing the save exists to add.
@@ -54,4 +54,15 @@ function declaresLibrariesRawLacks(fresh: string, raw: string): boolean {
   const rawNames = names(raw)
   if (!freshNames || !rawNames) return false
   return [...freshNames].some((name) => !rawNames.has(name))
+}
+
+/** Raw MQTT server text may carry members the model strips, so it is never echoed back. */
+function isMqttServerFile(path: string, raw: string): boolean {
+  if (!path.startsWith('devices/servers/')) return false
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return typeof parsed === 'object' && parsed !== null && 'protocol' in parsed && parsed.protocol === 'mqtt'
+  } catch {
+    return false
+  }
 }
