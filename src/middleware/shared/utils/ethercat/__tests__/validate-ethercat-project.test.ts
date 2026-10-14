@@ -252,7 +252,7 @@ describe('validateEthercatProject (BR21)', () => {
     const errors = validateEthercatProject(bus([s]))
     expect(errors).toEqual([
       expect.stringMatching(/module 'M0' in slot 0: slot numbers start at 1/),
-      expect.stringMatching(/slot 1 holds both 'M1' and 'other'/),
+      expect.stringMatching(/module 'other' in slot 1: slot 1 already holds 'M1'/),
     ])
   })
 

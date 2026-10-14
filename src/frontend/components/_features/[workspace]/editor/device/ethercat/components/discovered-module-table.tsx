@@ -3,8 +3,9 @@ import { cn } from '@root/frontend/utils/cn'
 import type { ESIModuleSummary, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 
 /**
- * DOPE-704 E6 UI: one scanned module slot with its best match in the repository.
- * Mirrors ScannedDeviceMatch for the device-side table.
+ * One scanned module slot with its best match in the repository. Mirrors ScannedDeviceMatch
+ * for the device-side table. Without a match, `unmatched` says whether no ESI carries the
+ * ident or the coupler does not accept the module.
  */
 export type ScannedModuleMatch = {
   slot: number
@@ -13,6 +14,9 @@ export type ScannedModuleMatch = {
     repoItem: ESIRepositoryItemLight
     module: ESIModuleSummary
   } | null
+  unmatched?: 'no-esi' | 'not-accepted'
+  /** Name of the repository module the coupler does not accept. */
+  candidateName?: string
 }
 
 type DiscoveredModuleTableProps = {
@@ -62,8 +66,9 @@ const DiscoveredModuleTable = ({
           ) : (
             moduleMatches.map((m) => {
               const isSelected = selectedSlots.has(m.slot)
-              const name = m.match?.module.name ?? '—'
-              const hasNoXml = m.match === null
+              const name = m.match?.module.name ?? m.candidateName ?? '—'
+              const hasNoXml = m.match === null && m.unmatched !== 'not-accepted'
+              const notAccepted = m.match === null && m.unmatched === 'not-accepted'
               return (
                 <tr
                   key={m.slot}
@@ -92,6 +97,14 @@ const DiscoveredModuleTable = ({
                           title='ESI XML not in repository — import it from the Repository tab before adding.'
                         >
                           No XML
+                        </span>
+                      )}
+                      {notAccepted && (
+                        <span
+                          className='rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-700 dark:bg-neutral-700/60 dark:text-neutral-300'
+                          title='The coupler ESI does not accept this module in any slot.'
+                        >
+                          Not supported
                         </span>
                       )}
                     </span>

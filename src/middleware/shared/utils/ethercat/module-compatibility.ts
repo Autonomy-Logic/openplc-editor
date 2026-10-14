@@ -1,34 +1,36 @@
 /**
- * Single predicate that decides whether a module from the ESI repository can be
- * plugged into a given modular coupler. Reused by:
- *   - the "Add Module" browser dialog (filters the list the user sees)
- *   - the scan-apply path (treats incompatible scanned idents as unmatched)
- *
- * Current gate: vendor id. A Weidmueller UR20 never accepts a WAGO or Phoenix
- * module. In practice the coupler's own `0xF050` scan will not return modules
- * it does not support — the vendor gate is a belt-and-braces check against a
- * misbehaving stub or an operator picking the wrong file from the repository.
- *
- * ETG.5001 also defines a `<Slots>` block whose entries can further restrict
- * which module idents or classes a given slot accepts, but the vendor-specific
- * encodings of that block vary (plain text in some ESIs, nested `<Class>`
- * sub-elements in WAGO's) and the parser doesn't yet normalise them. Until it
- * does, the Slots-block refinement is intentionally not consulted here so a
- * valid same-vendor module never gets excluded by a parse artefact.
+ * Whether a module from the ESI repository can be plugged into a given modular coupler: same
+ * vendor, and accepted by one of the coupler's `<Slot>` definitions (by ident or class). Used by
+ * the module browser (filters the list) and by the scan-apply path (an incompatible scanned
+ * ident is shown as unmatched).
  */
 
-import type { ESIModuleSummary, ESIRepositoryItemLight } from '../../ports/esi-types'
+import type { ESIModuleSummary, ESIRepositoryItemLight, ESISlotsSpec } from '../../ports/esi-types'
+import { couplerAcceptsModule } from './module-station'
 
 export interface CouplerCompatibility {
   vendorId: string
+  /** The coupler's `<Slots>` block; without it only the vendor is checked. */
+  slots?: ESISlotsSpec
 }
 
-const normaliseHex = (v: string): string => v.toLowerCase().replace(/^0x0*/, '')
+/**
+ * A vendor id as `0x` + 8 upper-case hex digits, whatever notation it came in (`#x230`,
+ * `0x00000230`, decimal `560`). Unparseable input is returned trimmed.
+ */
+export function canonicalVendorId(raw: string): string {
+  const text = raw.trim()
+  const hex = /^(?:0x|#x)([0-9a-f]+)$/i.exec(text)?.[1]
+  const value = hex !== undefined ? Number.parseInt(hex, 16) : /^\d+$/.test(text) ? Number(text) : Number.NaN
+  if (!Number.isSafeInteger(value)) return text
+  return `0x${value.toString(16).toUpperCase().padStart(8, '0')}`
+}
 
 export function isModuleCompatibleWithCoupler(
   repoItem: Pick<ESIRepositoryItemLight, 'vendor'>,
-  _module: Pick<ESIModuleSummary, 'ident' | 'moduleClass'>,
+  module: Pick<ESIModuleSummary, 'ident' | 'moduleClass'>,
   coupler: CouplerCompatibility,
 ): boolean {
-  return normaliseHex(repoItem.vendor.id) === normaliseHex(coupler.vendorId)
+  if (canonicalVendorId(repoItem.vendor.id) !== canonicalVendorId(coupler.vendorId)) return false
+  return couplerAcceptsModule(coupler.slots, module)
 }

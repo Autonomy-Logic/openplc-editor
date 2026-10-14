@@ -7,7 +7,7 @@
 import type { DiagnosticsRequest, DiagnosticsSnapshot } from '../../ports/ethercat-diagnostics-port'
 import type { Result } from '../../ports/types'
 
-export interface DiagnosticsRequestBody {
+export type DiagnosticsRequestBody = {
   bus_name: string
   slave_position: number
 }
@@ -31,28 +31,35 @@ export function buildDiagnosticsRequestBody(req: DiagnosticsRequest): Diagnostic
   return { bus_name: req.busName, slave_position: req.slavePosition }
 }
 
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+const text = (v: unknown): string | undefined => (typeof v === 'string' && v !== '' ? v : undefined)
+
 export function parseDiagnosticsResponseBody(
   body: unknown,
   fallback: { slavePosition: number },
 ): Result<{ snapshot: DiagnosticsSnapshot }> {
-  if (!body || typeof body !== 'object') {
+  if (!isRecord(body)) {
     return { success: false, error: 'diagnostics response was empty' }
   }
-  const typed = body as DiagnosticsResponseBody
-  if (typed.coupler === undefined || typeof typed.coupler.status_word !== 'number') {
-    const explicit = typed.error ?? typed.message
+  const coupler = body['coupler']
+  const statusWord = isRecord(coupler) ? coupler['status_word'] : undefined
+  if (!isRecord(coupler) || typeof statusWord !== 'number') {
+    const explicit = text(body['error']) ?? text(body['message'])
     return { success: false, error: explicit ?? 'diagnostics response did not include coupler.status_word' }
   }
-  const modulesRaw = Array.isArray(typed.modules) ? typed.modules : []
-  const modules = modulesRaw
-    .filter((m): m is { slot: number; status_byte: number } =>
-      typeof m?.slot === 'number' && typeof m?.status_byte === 'number',
-    )
-    .map((m) => ({ slot: m.slot, statusByte: m.status_byte }))
-    .sort((a, b) => a.slot - b.slot)
-  const pollAt = typeof typed.coupler.poll_at_ms === 'number' ? typed.coupler.poll_at_ms : Date.now()
+  const list = body['modules']
+  const modules: DiagnosticsSnapshot['modules'] = []
+  for (const m of Array.isArray(list) ? list : []) {
+    if (!isRecord(m)) continue
+    const slot = m['slot']
+    const statusByte = m['status_byte']
+    if (typeof slot === 'number' && typeof statusByte === 'number') modules.push({ slot, statusByte })
+  }
+  modules.sort((a, b) => a.slot - b.slot)
+  const pollAtMs = coupler['poll_at_ms']
   const snapshot: DiagnosticsSnapshot = {
-    coupler: { statusWord: typed.coupler.status_word, pollAt },
+    coupler: { statusWord, pollAt: typeof pollAtMs === 'number' ? pollAtMs : Date.now() },
     modules,
   }
   // slavePosition fallback kept so adapters can report the response consistently.
@@ -65,8 +72,12 @@ export function parseDiagnosticsHttpResponse(
   fallback: { slavePosition: number },
 ): Result<{ snapshot: DiagnosticsSnapshot }> {
   if (http.status_code !== 200) {
-    const body = (http.body ?? {}) as { error?: string; message?: string; msg?: string }
-    const reason = body.error ?? body.message ?? body.msg ?? `diagnostics returned HTTP ${http.status_code}`
+    const body = isRecord(http.body) ? http.body : {}
+    const reason =
+      text(body['error']) ??
+      text(body['message']) ??
+      text(body['msg']) ??
+      `diagnostics returned HTTP ${http.status_code}`
     return { success: false, error: reason }
   }
   return parseDiagnosticsResponseBody(http.body, fallback)

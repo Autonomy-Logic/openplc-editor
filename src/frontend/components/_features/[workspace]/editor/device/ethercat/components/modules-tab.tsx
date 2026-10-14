@@ -1,21 +1,21 @@
 /**
- * DOPE-704 E5 / E6 UI — Modules tab for a modular coupler.
+ * Modules tab for a modular coupler.
  *
- * Mirrors the EtherCAT bus-editor Bus tab structure one-for-one: Scan button + two
- * side-by-side panels (Scanned Modules on the left, Configured Modules on the right),
- * +/- actions on Configured Modules, and a module-browser modal reached from the +
- * button. Scanned modules whose idents have no matching module in the repository are
- * labelled "No XML" and are not addable, exactly like unmatched scanned devices on the
- * bus screen.
+ * Mirrors the EtherCAT bus-editor Bus tab: Scan button and two side-by-side panels (Scanned
+ * Modules on the left, Configured Modules on the right), add/remove/move actions on Configured
+ * Modules, and a module-browser modal reached from the + button. Slots are 1-based; every change
+ * is checked against the coupler's `<Slots>` block before it is applied.
  */
 
 import { ArrowIcon } from '@root/frontend/assets/icons/interface/Arrow'
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
+import { StickArrowIcon } from '@root/frontend/assets/icons/interface/StickArrow'
 import TableActions from '@root/frontend/components/_atoms/table-actions'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { cn } from '@root/frontend/utils/cn'
+import { generateUniqueSlaveName } from '@root/frontend/utils/unique-slave-name'
 import type {
   ConfiguredEtherCATDevice,
   ConfiguredEtherCATModule,
@@ -24,14 +24,19 @@ import type {
   ESIRepositoryItemLight,
 } from '@root/middleware/shared/ports/esi-types'
 import { useEsi, useEtherCATScan } from '@root/middleware/shared/providers/platform-context'
-import type { CouplerCompatibility } from '@root/middleware/shared/utils/ethercat'
+import type { CouplerCompatibility, SlotIncrements } from '@root/middleware/shared/utils/ethercat'
 import {
   buildModuleForSlot,
+  canonicalVendorId,
+  checkStation,
+  identsEqual,
   isModuleCompatibleWithCoupler,
+  removeModuleAndCompact,
   resolveEsiModule,
+  shiftModule,
 } from '@root/middleware/shared/utils/ethercat'
-import { canonicaliseIdent } from '@root/middleware/shared/utils/ethercat/scan-modules-protocol'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
 
 import { DiscoveredModuleTable, type ScannedModuleMatch } from './discovered-module-table'
 import { ModuleBrowserModal } from './module-browser-modal'
@@ -51,11 +56,9 @@ type ModulesTabProps = {
 }
 
 /**
- * Look up each scanned ident in the repository's module summaries. First-match wins.
- * A match that fails the coupler's vendor / Slots gate is reported as unmatched —
- * the same screen row the user would see for an ident with no XML, kept
- * consistent so an incompatible scan response can never slip through the apply
- * step.
+ * Look up each scanned ident in the repository's module summaries. A module of the coupler's
+ * vendor that no `<Slot>` definition accepts is reported as not accepted; an ident no ESI
+ * carries, as missing.
  */
 function matchScannedModules(
   scan: { slot: number; ident: string }[],
@@ -63,16 +66,26 @@ function matchScannedModules(
   coupler: CouplerCompatibility,
 ): ScannedModuleMatch[] {
   return scan.map((s) => {
-    const identCanon = canonicaliseIdent(s.ident)
+    let rejected: ESIModuleSummary | undefined
     for (const repoItem of repository) {
-      const found = repoItem.modules?.find((m) => canonicaliseIdent(m.ident) === identCanon)
-      if (found !== undefined && isModuleCompatibleWithCoupler(repoItem, found, coupler)) {
-        return { slot: s.slot, ident: s.ident, match: { repoItem, module: found } }
+      if (canonicalVendorId(repoItem.vendor.id) !== canonicalVendorId(coupler.vendorId)) continue
+      for (const found of repoItem.modules ?? []) {
+        if (!identsEqual(found.ident, s.ident)) continue
+        if (isModuleCompatibleWithCoupler(repoItem, found, coupler)) {
+          return { slot: s.slot, ident: s.ident, match: { repoItem, module: found } }
+        }
+        rejected ??= found
       }
     }
-    return { slot: s.slot, ident: s.ident, match: null }
+    return rejected === undefined
+      ? { slot: s.slot, ident: s.ident, match: null, unmatched: 'no-esi' }
+      : { slot: s.slot, ident: s.ident, match: null, unmatched: 'not-accepted', candidateName: rejected.name }
   })
 }
+
+/** A module name no other module on the coupler has; module tabs are keyed by it. */
+const uniqueModuleName = (base: string, others: readonly ConfiguredEtherCATModule[]): string =>
+  generateUniqueSlaveName(base, (name) => others.some((m) => m.name === name))
 
 export const ModulesTab = ({
   device,
@@ -84,6 +97,7 @@ export const ModulesTab = ({
   const esi = useEsi()
   const scanPort = useEtherCATScan()
   const [esiDevice, setEsiDevice] = useState<ESIDevice | null>(null)
+  const [esiLoadError, setEsiLoadError] = useState<string | null>(null)
 
   // Scan state
   const [isScanning, setIsScanning] = useState(false)
@@ -96,15 +110,23 @@ export const ModulesTab = ({
   const [isModuleBrowserOpen, setIsModuleBrowserOpen] = useState(false)
   const [unmatchedWarning, setUnmatchedWarning] = useState<ScannedModuleMatch[]>([])
 
-  // Load the coupler's full ESI once so we can read slotIndexIncrement / slotPdoIncrement
-  // and resolve inline modules whose matches live on the coupler itself.
+  // The coupler's full ESI gives the slot increments and the `<Slots>` rules; nothing is added
+  // until it has loaded.
   useEffect(() => {
     if (esi === undefined) return
     let cancelled = false
-    void esi.loadDeviceFull(device.esiDeviceRef.repositoryItemId, device.esiDeviceRef.deviceIndex).then((r) => {
-      if (cancelled) return
-      if (r.success && r.device) setEsiDevice(r.device)
-    })
+    setEsiDevice(null)
+    setEsiLoadError(null)
+    esi
+      .loadDeviceFull(device.esiDeviceRef.repositoryItemId, device.esiDeviceRef.deviceIndex)
+      .then((r) => {
+        if (cancelled) return
+        if (r.success) setEsiDevice(r.device)
+        else setEsiLoadError(r.error)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setEsiLoadError(err instanceof Error ? err.message : String(err))
+      })
     return () => {
       cancelled = true
     }
@@ -113,14 +135,20 @@ export const ModulesTab = ({
   const modules = useMemo(() => device.modules ?? [], [device.modules])
   const sortedConfigured = useMemo(() => [...modules].sort((a, b) => a.slot - b.slot), [modules])
 
-  const slotIndexIncrement = esiDevice?.slots?.slotIndexIncrement ?? 16
-  const slotPdoIncrement = esiDevice?.slots?.slotPdoIncrement ?? 1
+  const slotsSpec = esiDevice?.slots ?? device.slotsSpec
+  const increments = useMemo<SlotIncrements | null>(
+    () =>
+      slotsSpec === undefined
+        ? null
+        : { slotIndexIncrement: slotsSpec.slotIndexIncrement, slotPdoIncrement: slotsSpec.slotPdoIncrement },
+    [slotsSpec],
+  )
+  const ready = esiDevice !== null && increments !== null
 
-  // Vendor-only compatibility is enough in practice: a coupler's own scan won't
-  // report modules it does not support, and the vendor gate stops an operator
-  // from manually adding across vendors. ETG.5001 slot restrictions are not
-  // consulted here — see the note in isModuleCompatibleWithCoupler.
-  const couplerCompatibility = useMemo<CouplerCompatibility>(() => ({ vendorId: device.vendorId }), [device.vendorId])
+  const couplerCompatibility = useMemo<CouplerCompatibility>(
+    () => ({ vendorId: device.vendorId, slots: slotsSpec }),
+    [device.vendorId, slotsSpec],
+  )
 
   const moduleMatches = useMemo(
     () => matchScannedModules(scannedModules, repository, couplerCompatibility),
@@ -138,10 +166,20 @@ export const ModulesTab = ({
     return seed
   }, [externalUsedAddresses, modules])
 
+  /** Placement problems the station would have that concern `module`. */
+  const placementProblems = useCallback(
+    (station: readonly ConfiguredEtherCATModule[], module: ConfiguredEtherCATModule): string[] =>
+      checkStation(slotsSpec, station)
+        .filter((issue) => issue.kind === 'placement' && issue.module?.id === module.id)
+        .map((issue) => issue.text),
+    [slotsSpec],
+  )
+
   const nextFreeSlot = useMemo(() => {
     const taken = new Set(modules.map((m) => m.slot))
-    for (let s = 1; s <= 64; s++) if (!taken.has(s)) return s
-    return modules.length + 1
+    let slot = 1
+    while (taken.has(slot)) slot += 1
+    return slot
   }, [modules])
 
   const handleScan = useCallback(async () => {
@@ -183,50 +221,45 @@ export const ModulesTab = ({
   )
 
   const handleAddSelectedFromScan = useCallback(async () => {
-    const selected = moduleMatches.filter((m) => selectedScannedSlots.has(m.slot))
-    if (selected.length === 0) return
-    if (esi === undefined) return
+    const selected = moduleMatches.filter((m) => selectedScannedSlots.has(m.slot)).sort((a, b) => a.slot - b.slot)
+    if (selected.length === 0 || esi === undefined || increments === null) return
     const esiPort = esi
     const unmatched = selected.filter((m) => m.match === null)
-    const matched = selected.filter((m) => m.match !== null)
-
-    const existingBySlot = new Map(modules.map((m) => [m.slot, m]))
     const usedAddresses = buildUsedAddressSeed()
+    let station = [...modules]
+    const refused: string[] = []
 
-    // A module matched by ident whose full ESI can't be loaded is refused rather than
-    // staged as a stub: without PDOs it would map nothing on the wire.
-    const unresolved: typeof matched = []
-
-    for (const m of matched) {
-      if (!m.match) continue
+    for (const m of selected) {
+      if (m.match === null) continue
       const esiModule = await resolveEsiModule(esiPort, m.match.repoItem, m.ident)
       if (esiModule === undefined) {
-        unresolved.push(m)
+        refused.push(`${m.match.module.name}: its ESI details could not be loaded`)
         continue
       }
-      existingBySlot.set(
-        m.slot,
-        buildModuleForSlot({
-          id: `slot-${m.slot}`,
-          slot: m.slot,
-          esiModule,
-          increments: { slotIndexIncrement, slotPdoIncrement },
-          repositoryItemId: m.match.repoItem.id,
-          usedAddresses,
-        }),
-      )
-    }
-
-    if (unresolved.length > 0) {
-      const names = unresolved.map((u) => (u.match ? u.match.module.name : u.ident)).join(', ')
-      toast({
-        title: 'Modules not added',
-        description: `No ESI details available for: ${names}. Load each module's ESI file into the repository and scan again.`,
-        variant: 'fail',
+      const replaced = station.find((x) => x.slot === m.slot)
+      const others = station.filter((x) => x.slot !== m.slot)
+      const fresh = buildModuleForSlot({
+        id: replaced?.id ?? uuidv4(),
+        slot: m.slot,
+        esiModule,
+        increments,
+        repositoryItemId: m.match.repoItem.id,
+        usedAddresses,
       })
+      const built = { ...fresh, name: uniqueModuleName(fresh.name, others) }
+      const candidate = [...others, built]
+      const problems = placementProblems(candidate, built)
+      if (problems.length > 0) {
+        refused.push(`${built.name} (slot ${m.slot}): ${problems.join('; ')}`)
+        continue
+      }
+      station = candidate
     }
 
-    onUpdateModules([...existingBySlot.values()])
+    if (refused.length > 0) {
+      toast({ title: 'Some modules were not added', description: refused.join('\n'), variant: 'fail' })
+    }
+    onUpdateModules(station)
     setSelectedScannedSlots(new Set())
     if (unmatched.length > 0) setUnmatchedWarning(unmatched)
   }, [
@@ -234,22 +267,18 @@ export const ModulesTab = ({
     selectedScannedSlots,
     modules,
     esi,
-    slotIndexIncrement,
-    slotPdoIncrement,
+    increments,
     onUpdateModules,
     buildUsedAddressSeed,
+    placementProblems,
   ])
 
   const handleAddModuleFromBrowser = useCallback(
     async (modSummary: ESIModuleSummary, repoItem: ESIRepositoryItemLight) => {
-      if (esi === undefined) return
-      const esiPort = esi
-      const esiModule = await resolveEsiModule(esiPort, repoItem, modSummary.ident)
+      if (esi === undefined || increments === null) return
+      const esiModule = await resolveEsiModule(esi, repoItem, modSummary.ident)
       if (esiModule === undefined) {
-        // Refuse rather than stage a stub without PDOs. A stub has no channels
-        // to render in the Channel Mappings view and no PDOs to feed the
-        // generator; the operator would be left with a row that looks real
-        // but produces nothing on the wire.
+        // A module without its full ESI has no PDOs: it would map nothing on the wire.
         toast({
           title: 'Module not added',
           description: `No ESI details available for ${modSummary.name}. Load the module's ESI file into the repository and try again.`,
@@ -257,27 +286,49 @@ export const ModulesTab = ({
         })
         return
       }
-      const built = buildModuleForSlot({
-        id: `slot-${nextFreeSlot}`,
+      const fresh = buildModuleForSlot({
+        id: uuidv4(),
         slot: nextFreeSlot,
         esiModule,
-        increments: { slotIndexIncrement, slotPdoIncrement },
+        increments,
         repositoryItemId: repoItem.id,
         usedAddresses: buildUsedAddressSeed(),
       })
-      onUpdateModules([...modules, built])
+      const built = { ...fresh, name: uniqueModuleName(fresh.name, modules) }
+      const candidate = [...modules, built]
+      const problems = placementProblems(candidate, built)
+      if (problems.length > 0) {
+        toast({ title: 'Module not added', description: `${built.name}: ${problems.join('; ')}`, variant: 'fail' })
+        return
+      }
+      onUpdateModules(candidate)
     },
-    [esi, modules, nextFreeSlot, onUpdateModules, slotIndexIncrement, slotPdoIncrement, buildUsedAddressSeed],
+    [esi, modules, nextFreeSlot, onUpdateModules, increments, buildUsedAddressSeed, placementProblems],
   )
 
   const handleRemoveSelected = useCallback(() => {
-    if (!selectedConfiguredId) return
-    onUpdateModules(modules.filter((m) => m.id !== selectedConfiguredId))
+    if (!selectedConfiguredId || increments === null) return
+    onUpdateModules(removeModuleAndCompact(modules, selectedConfiguredId, increments))
     setSelectedConfiguredId(null)
-  }, [selectedConfiguredId, modules, onUpdateModules])
+  }, [selectedConfiguredId, modules, onUpdateModules, increments])
 
+  const handleMove = useCallback(
+    (direction: -1 | 1) => {
+      if (!selectedConfiguredId || increments === null) return
+      const next = shiftModule(modules, selectedConfiguredId, direction, increments)
+      const problems = next.flatMap((m) => placementProblems(next, m))
+      if (problems.length > 0) {
+        toast({ title: 'Module not moved', description: problems.join('\n'), variant: 'fail' })
+        return
+      }
+      onUpdateModules(next)
+    },
+    [selectedConfiguredId, modules, increments, onUpdateModules, placementProblems],
+  )
+
+  const selectedModule = modules.find((m) => m.id === selectedConfiguredId)
   const scanDisabled = isScanning || scanPort === undefined
-  const addSelectedDisabled = selectedScannedSlots.size === 0
+  const addSelectedDisabled = selectedScannedSlots.size === 0 || !ready
 
   return (
     <div className='flex min-h-0 flex-1 flex-col gap-4'>
@@ -302,6 +353,14 @@ export const ModulesTab = ({
           )}
         </button>
       </div>
+
+      {esiLoadError !== null && (
+        <div className='rounded-md border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800 dark:bg-red-900/20'>
+          <p className='text-sm text-red-700 dark:text-red-300'>
+            {`The coupler ESI could not be loaded, so modules cannot be added: ${esiLoadError}`}
+          </p>
+        </div>
+      )}
 
       {scanError && (
         <div className='rounded-md border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800 dark:bg-red-900/20'>
@@ -351,15 +410,30 @@ export const ModulesTab = ({
                 {
                   ariaLabel: 'Add Module',
                   onClick: () => setIsModuleBrowserOpen(true),
+                  disabled: !ready,
                   icon: <PlusIcon className='h-4 w-4 stroke-brand' />,
                   id: 'add-ethercat-module-button',
                 },
                 {
                   ariaLabel: 'Remove Module',
                   onClick: handleRemoveSelected,
-                  disabled: selectedConfiguredId === null,
+                  disabled: selectedModule === undefined || !ready,
                   icon: <MinusIcon className='h-4 w-4 stroke-brand' />,
                   id: 'remove-ethercat-module-button',
+                },
+                {
+                  ariaLabel: 'Move Module Up',
+                  onClick: () => handleMove(-1),
+                  disabled: selectedModule === undefined || selectedModule.slot <= 1 || !ready,
+                  icon: <StickArrowIcon direction='up' className='stroke-brand' />,
+                  id: 'move-up-ethercat-module-button',
+                },
+                {
+                  ariaLabel: 'Move Module Down',
+                  onClick: () => handleMove(1),
+                  disabled: selectedModule === undefined || !ready,
+                  icon: <StickArrowIcon direction='down' className='stroke-brand' />,
+                  id: 'move-down-ethercat-module-button',
                 },
               ]}
               buttonProps={{

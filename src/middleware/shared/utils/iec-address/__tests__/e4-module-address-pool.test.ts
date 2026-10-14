@@ -1,5 +1,5 @@
 /**
- * DOPE-704 E4 address-pool tests.
+ * Address-pool tests.
  *
  * The modular coupler data model carries channel mappings per module. The address pool
  * must claim module channels under a four-segment ethercat ref so a module channel and a
@@ -32,7 +32,7 @@ const bus = (slaves: DeviceInput) => [
 
 const sourceRef = (pool: AddressPool, address: string): string | undefined => pool.byAddress.get(address)?.source.ref
 
-describe('DOPE-704 E4: address pool walks module channel mappings', () => {
+describe('address pool walks module channel mappings', () => {
   test('a plain slave channel claims the three-segment ref', () => {
     const pool = buildAddressPool(
       { remoteDevices: bus([{ name: 'coupler', channelMappings: [{ channelId: 'ch1', iecLocation: '%IX0.0' }] }]) },

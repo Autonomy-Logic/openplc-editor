@@ -1,15 +1,15 @@
 /**
- * DOPE-704 E2 schema tests.
+ * Schema tests.
  *
  * Exercise the PDO assignment + CoE flags data model and the one-pass migration from
- * the pre-E2 (DOPE-657) schema. The fixtures are synthetic — real-hardware fixtures live
+ * the earlier schema, without CoE flags or per-PDO flags. The fixtures are synthetic — real-hardware fixtures live
  * under __tests__/fixtures and are already exercised by the existing suites.
  */
 
 import type { ConfiguredEtherCATDevice, ESIDevice, ESIPdo, PersistedPdo } from '@root/middleware/shared/ports/esi-types'
 
 import { createDefaultSlaveConfig } from '../device-config-defaults'
-import { deriveCoEFlags, lacksE2Schema, migrateSlaveToE2Schema, persistPdos } from '../enrich-device-data'
+import { deriveCoEFlags, lacksPdoFlags, migrateSlavePdoFlags, persistPdos } from '../enrich-device-data'
 
 const esiPdo = (over: Partial<ESIPdo> & { index: string }): ESIPdo => ({
   name: over.index,
@@ -42,7 +42,7 @@ const configuredDevice = (over: Partial<ConfiguredEtherCATDevice> = {}): Configu
   ...over,
 })
 
-describe('DOPE-704 E2: persistPdos carries ESI defaults forward', () => {
+describe('persistPdos carries ESI defaults forward', () => {
   test('fixed / mandatory / sm / exclude land on persisted PDOs when the ESI declares them', () => {
     const pdos = persistPdos([
       esiPdo({ index: '0x1600', fixed: true, mandatory: true, smIndex: 2, exclude: ['0x1601', '0x1602'] }),
@@ -70,7 +70,7 @@ describe('DOPE-704 E2: persistPdos carries ESI defaults forward', () => {
   })
 })
 
-describe('DOPE-704 E2: deriveCoEFlags defaults from the ESI', () => {
+describe('deriveCoEFlags defaults from the ESI', () => {
   test('reads the device coeFlags when present', () => {
     const device = esiDevice({ coeFlags: { pdoAssign: true, pdoConfig: true, completeAccess: false } })
     expect(deriveCoEFlags(device)).toEqual({ pdoAssign: true, pdoConfig: true, completeAccess: false })
@@ -81,12 +81,12 @@ describe('DOPE-704 E2: deriveCoEFlags defaults from the ESI', () => {
   })
 })
 
-describe('DOPE-704 E2: lacksE2Schema detects pre-E2 projects', () => {
-  test('fresh ConfiguredEtherCATDevice (DOPE-657 era) lacks the schema', () => {
+describe('lacksPdoFlags detects older saves', () => {
+  test('fresh ConfiguredEtherCATDevice lacks the schema', () => {
     const dev = configuredDevice({
       rxPdos: [{ index: '0x1600', name: 'r', entries: [], assigned: true }],
     })
-    expect(lacksE2Schema(dev)).toBe(true)
+    expect(lacksPdoFlags(dev)).toBe(true)
   })
 
   test('a device with coeFlags populated is up to date', () => {
@@ -96,7 +96,7 @@ describe('DOPE-704 E2: lacksE2Schema detects pre-E2 projects', () => {
         coeFlags: { pdoAssign: true, pdoConfig: true, completeAccess: false },
       },
     })
-    expect(lacksE2Schema(dev)).toBe(false)
+    expect(lacksPdoFlags(dev)).toBe(false)
   })
 
   test('a device whose PDOs carry fixed/mandatory/exclude is up to date', () => {
@@ -107,11 +107,11 @@ describe('DOPE-704 E2: lacksE2Schema detects pre-E2 projects', () => {
       },
       rxPdos: [{ index: '0x1600', name: 'r', entries: [], assigned: true, fixed: true }],
     })
-    expect(lacksE2Schema(dev)).toBe(false)
+    expect(lacksPdoFlags(dev)).toBe(false)
   })
 })
 
-describe('DOPE-704 E2: migrateSlaveToE2Schema', () => {
+describe('migrateSlavePdoFlags', () => {
   test('fills coeFlags from the ESI and preserves the user data', () => {
     const dev = configuredDevice({
       rxPdos: [{ index: '0x1600', name: 'r', entries: [], assigned: true }],
@@ -122,7 +122,7 @@ describe('DOPE-704 E2: migrateSlaveToE2Schema', () => {
       rxPdo: [esiPdo({ index: '0x1600', fixed: true, mandatory: true, smIndex: 2 })],
     })
 
-    const migrated = migrateSlaveToE2Schema(dev, esi)
+    const migrated = migrateSlavePdoFlags(dev, esi)
 
     expect(migrated.config.coeFlags).toEqual({ pdoAssign: true, pdoConfig: true, completeAccess: false })
     expect(migrated.rxPdos?.[0]).toMatchObject({
@@ -143,7 +143,7 @@ describe('DOPE-704 E2: migrateSlaveToE2Schema', () => {
     const esi = esiDevice({
       rxPdo: [esiPdo({ index: '0x1600', exclude: ['0x1601'] })],
     })
-    expect(migrateSlaveToE2Schema(dev, esi).rxPdos?.[0]?.exclude).toEqual(['0x1601'])
+    expect(migrateSlavePdoFlags(dev, esi).rxPdos?.[0]?.exclude).toEqual(['0x1601'])
   })
 
   test('is idempotent: second migration leaves the slave unchanged', () => {
@@ -154,8 +154,8 @@ describe('DOPE-704 E2: migrateSlaveToE2Schema', () => {
     const dev = configuredDevice({
       rxPdos: [{ index: '0x1600', name: 'r', entries: [], assigned: true }],
     })
-    const once = migrateSlaveToE2Schema(dev, esi)
-    const twice = migrateSlaveToE2Schema(once, esi)
+    const once = migrateSlavePdoFlags(dev, esi)
+    const twice = migrateSlavePdoFlags(once, esi)
     expect(twice).toEqual(once)
   })
 
@@ -167,7 +167,7 @@ describe('DOPE-704 E2: migrateSlaveToE2Schema', () => {
       },
     })
     const esi = esiDevice({ coeFlags: { pdoAssign: true, pdoConfig: true, completeAccess: true } })
-    const migrated = migrateSlaveToE2Schema(dev, esi)
+    const migrated = migrateSlavePdoFlags(dev, esi)
     expect(migrated.config.coeFlags).toEqual({ pdoAssign: false, pdoConfig: false, completeAccess: false })
   })
 
@@ -176,7 +176,7 @@ describe('DOPE-704 E2: migrateSlaveToE2Schema', () => {
       rxPdos: [{ index: '0x1600', name: 'r', entries: [], assigned: true }],
     })
     const esi = esiDevice({ rxPdo: [] })
-    const migrated = migrateSlaveToE2Schema(dev, esi)
+    const migrated = migrateSlavePdoFlags(dev, esi)
     expect(migrated.rxPdos?.[0]).toEqual({ index: '0x1600', name: 'r', entries: [], assigned: true })
   })
 })

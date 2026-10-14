@@ -1,6 +1,5 @@
 /**
- * DOPE-704 E6 / RTOP-319 R3 — shared protocol helpers for the modular-coupler
- * scan RPC.
+ * Shared protocol helpers for the modular-coupler scan RPC.
  *
  * Lives on the shared surface because the body shapes going between editor /
  * web and `openplc-runtime` → EtherDOG are identical regardless of transport.
@@ -14,7 +13,7 @@ import type { ScanRequest, ScanResponse } from '../../ports/ethercat-scan-port'
 import type { Result } from '../../ports/types'
 
 /** Shape POSTed to `/api/discovery/ethercat/scan-modules`. */
-export interface ScanModulesRequestBody {
+export type ScanModulesRequestBody = {
   bus_name: string
   slave_position: number
 }
@@ -54,37 +53,54 @@ export function buildScanModulesRequestBody(req: ScanRequest): ScanModulesReques
 export function canonicaliseIdent(raw: string): string {
   const match = /^0x([0-9a-fA-F]+)$/.exec(raw)
   if (!match) return raw
-  const hex = match[1].toLowerCase()
+  const hex = (match[1] ?? '').toLowerCase()
   if (hex.length > 8) return `0x${hex}`
   return `0x${hex.padStart(8, '0')}`
 }
 
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
+
+const text = (v: unknown): string | undefined => (typeof v === 'string' && v !== '' ? v : undefined)
+
 /**
- * Turn a parsed runtime body into the typed `ScanResponse`. Rejects anything
- * missing the `modules` array because the caller cannot usefully reconcile
- * against undefined. `slavePosition` falls back to the request value so a
- * runtime that forgets to echo it still produces a usable response.
+ * Turn a parsed runtime body into the typed `ScanResponse`. Rejects anything missing the
+ * `modules` array, and a reply numbering slots from 0: slots are 1-based end to end, and a
+ * runtime that sends slot 0 predates that contract. `slavePosition` falls back to the request
+ * value so a runtime that forgets to echo it still produces a usable response.
  */
 export function parseScanModulesResponseBody(
   body: unknown,
   fallback: { slavePosition: number },
 ): Result<{ scan: ScanResponse }> {
-  if (!body || typeof body !== 'object') {
+  if (!isRecord(body)) {
     return { success: false, error: 'scan-modules response was empty' }
   }
-  const typed = body as ScanModulesResponseBody
-  if (!Array.isArray(typed.modules)) {
-    const explicit = typed.error ?? typed.message
+  const list = body['modules']
+  if (!Array.isArray(list)) {
+    const explicit = text(body['error']) ?? text(body['message'])
     return { success: false, error: explicit ?? 'scan-modules response did not include a modules list' }
   }
-  const modules = typed.modules
-    .filter((m): m is { slot: number; ident: string } => typeof m?.slot === 'number' && typeof m?.ident === 'string')
-    .map((m) => ({ slot: m.slot, ident: canonicaliseIdent(m.ident) }))
-  const scan: ScanResponse = {
-    slavePosition: typeof typed.slave_position === 'number' ? typed.slave_position : fallback.slavePosition,
-    modules,
+  const modules: ScanResponse['modules'] = []
+  for (const item of list) {
+    if (!isRecord(item)) continue
+    const slot = item['slot']
+    const ident = item['ident']
+    if (typeof slot !== 'number' || typeof ident !== 'string') continue
+    if (!Number.isInteger(slot) || slot < 1) {
+      return {
+        success: false,
+        error: `The runtime reported module slot ${slot}; slots start at 1. Update the runtime and scan again.`,
+      }
+    }
+    // Ident 0 marks an empty slot: nothing to match or add.
+    if (/^0x0+$/i.test(canonicaliseIdent(ident))) continue
+    modules.push({ slot, ident: canonicaliseIdent(ident) })
   }
-  return { success: true, scan }
+  const position = body['slave_position']
+  return {
+    success: true,
+    scan: { slavePosition: typeof position === 'number' ? position : fallback.slavePosition, modules },
+  }
 }
 
 /**
@@ -97,8 +113,12 @@ export function parseScanModulesHttpResponse(
   fallback: { slavePosition: number },
 ): Result<{ scan: ScanResponse }> {
   if (http.status_code !== 200) {
-    const body = (http.body ?? {}) as { error?: string; message?: string; msg?: string }
-    const reason = body.error ?? body.message ?? body.msg ?? `scan-modules returned HTTP ${http.status_code}`
+    const body = isRecord(http.body) ? http.body : {}
+    const reason =
+      text(body['error']) ??
+      text(body['message']) ??
+      text(body['msg']) ??
+      `scan-modules returned HTTP ${http.status_code}`
     return { success: false, error: reason }
   }
   return parseScanModulesResponseBody(http.body, fallback)

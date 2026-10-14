@@ -189,7 +189,7 @@ describe('Device slice types', () => {
           switchPosition: null,
           ipAddress: null,
           runtimeVersion: null,
-        runtimeFeatures: null,
+          runtimeFeatures: null,
           selectedDevice: null,
           storedCredentials: null,
           timingStats: null,

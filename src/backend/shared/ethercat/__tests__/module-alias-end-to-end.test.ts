@@ -18,10 +18,7 @@
 
 import type { PLCRemoteDevice } from '@root/backend/shared/types/PLC/open-plc'
 import type { ConfiguredEtherCATDevice, ConfiguredEtherCATModule } from '@root/middleware/shared/ports/esi-types'
-import {
-  buildAliasIndex,
-  migrateToRegistry,
-} from '@root/middleware/shared/utils/iec-address/registry'
+import { buildAliasIndex, migrateToRegistry } from '@root/middleware/shared/utils/iec-address/registry'
 import { resolveProjectAliases } from '@root/middleware/shared/utils/iec-address/resolve-project-aliases'
 
 import { createDefaultSlaveConfig } from '../device-config-defaults'
@@ -40,10 +37,50 @@ const ur20_4do_p = (): ConfiguredEtherCATModule => ({
   ident: '0x01012FA0',
   esiModuleRef: { repositoryItemId: 'weidm', moduleIdent: '0x01012FA0' },
   channelInfo: [
-    { channelId: '0x1600-0x7000-0x1', name: 'DO 1', direction: 'output', pdoIndex: '0x1600', entryIndex: '0x7000', entrySubIndex: '0x1', dataType: 'BOOL', bitLen: 1, iecType: 'BOOL' },
-    { channelId: '0x1600-0x7000-0x2', name: 'DO 2', direction: 'output', pdoIndex: '0x1600', entryIndex: '0x7000', entrySubIndex: '0x2', dataType: 'BOOL', bitLen: 1, iecType: 'BOOL' },
-    { channelId: '0x1600-0x7000-0x3', name: 'DO 3', direction: 'output', pdoIndex: '0x1600', entryIndex: '0x7000', entrySubIndex: '0x3', dataType: 'BOOL', bitLen: 1, iecType: 'BOOL' },
-    { channelId: '0x1600-0x7000-0x4', name: 'DO 4', direction: 'output', pdoIndex: '0x1600', entryIndex: '0x7000', entrySubIndex: '0x4', dataType: 'BOOL', bitLen: 1, iecType: 'BOOL' },
+    {
+      channelId: '0x1600-0x7000-0x1',
+      name: 'DO 1',
+      direction: 'output',
+      pdoIndex: '0x1600',
+      entryIndex: '0x7000',
+      entrySubIndex: '0x1',
+      dataType: 'BOOL',
+      bitLen: 1,
+      iecType: 'BOOL',
+    },
+    {
+      channelId: '0x1600-0x7000-0x2',
+      name: 'DO 2',
+      direction: 'output',
+      pdoIndex: '0x1600',
+      entryIndex: '0x7000',
+      entrySubIndex: '0x2',
+      dataType: 'BOOL',
+      bitLen: 1,
+      iecType: 'BOOL',
+    },
+    {
+      channelId: '0x1600-0x7000-0x3',
+      name: 'DO 3',
+      direction: 'output',
+      pdoIndex: '0x1600',
+      entryIndex: '0x7000',
+      entrySubIndex: '0x3',
+      dataType: 'BOOL',
+      bitLen: 1,
+      iecType: 'BOOL',
+    },
+    {
+      channelId: '0x1600-0x7000-0x4',
+      name: 'DO 4',
+      direction: 'output',
+      pdoIndex: '0x1600',
+      entryIndex: '0x7000',
+      entrySubIndex: '0x4',
+      dataType: 'BOOL',
+      bitLen: 1,
+      iecType: 'BOOL',
+    },
   ],
   channelMappings: [
     { channelId: '0x1600-0x7000-0x1', iecLocation: '%QX2.0', alias: '' },
@@ -53,12 +90,17 @@ const ur20_4do_p = (): ConfiguredEtherCATModule => ({
     { channelId: '0x1600-0x7000-0x4', iecLocation: '%QX2.3', alias: '' },
   ],
   rxPdos: [
-    { index: '0x1600', name: 'DO PDO', assigned: true, entries: [
-      { index: '0x7000', subIndex: '0x1', bitLen: 1, name: 'DO 1', dataType: 'BOOL' },
-      { index: '0x7000', subIndex: '0x2', bitLen: 1, name: 'DO 2', dataType: 'BOOL' },
-      { index: '0x7000', subIndex: '0x3', bitLen: 1, name: 'DO 3', dataType: 'BOOL' },
-      { index: '0x7000', subIndex: '0x4', bitLen: 1, name: 'DO 4', dataType: 'BOOL' },
-    ] },
+    {
+      index: '0x1600',
+      name: 'DO PDO',
+      assigned: true,
+      entries: [
+        { index: '0x7000', subIndex: '0x1', bitLen: 1, name: 'DO 1', dataType: 'BOOL' },
+        { index: '0x7000', subIndex: '0x2', bitLen: 1, name: 'DO 2', dataType: 'BOOL' },
+        { index: '0x7000', subIndex: '0x3', bitLen: 1, name: 'DO 3', dataType: 'BOOL' },
+        { index: '0x7000', subIndex: '0x4', bitLen: 1, name: 'DO 4', dataType: 'BOOL' },
+      ],
+    },
   ],
 })
 
@@ -107,7 +149,12 @@ describe('UR20 module alias → compile-ready → iomapping → ST (full chain)'
             variables: [
               // Location holds the ALIAS NAME, not a literal %addr — this is the
               // alias binding the editor persists on a program variable.
-              { name: 'Valve_2_var', type: { definition: 'base-type', value: 'BOOL' }, class: 'local', location: 'Valve_2' },
+              {
+                name: 'Valve_2_var',
+                type: { definition: 'base-type', value: 'BOOL' },
+                class: 'local',
+                location: 'Valve_2',
+              },
             ],
           },
         },
@@ -148,7 +195,12 @@ describe('UR20 module alias → compile-ready → iomapping → ST (full chain)'
           pouType: 'program',
           interface: {
             variables: [
-              { name: 'Valve_2_var', type: { definition: 'base-type', value: 'BOOL' }, class: 'local', location: 'Valve_2' },
+              {
+                name: 'Valve_2_var',
+                type: { definition: 'base-type', value: 'BOOL' },
+                class: 'local',
+                location: 'Valve_2',
+              },
             ],
           },
           body: { language: 'st', value: 'Valve_2_var := TRUE;' },

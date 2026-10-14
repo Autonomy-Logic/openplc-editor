@@ -8,6 +8,7 @@
  * Renamed, never dropped: a variable bound to a deleted alias resolves to
  * unlocated at compile time, which is a silent wrong answer.
  */
+import { createDefaultSlaveConfig } from '../../../backend/shared/ethercat/device-config-defaults'
 import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
 import type { OpenPLCStore } from '../index'
 import { createTestStore } from '../testing'
@@ -156,6 +157,63 @@ describe('normalizeProjectAliases', () => {
  * `AT Motor Start`. On the next open there is nothing left to repair from: the
  * binding is simply orphaned.
  */
+describe('normalizeProjectAliases on EtherCAT module channels', () => {
+  beforeEach(() => {
+    getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+  })
+
+  it('repairs an illegal module channel alias and moves the bound variable with it', () => {
+    getState().remoteDeviceActions.create({ name: 'Bus', protocol: 'ethercat' })
+    const { project } = getState()
+    getState().projectActions.setProject({
+      ...project,
+      data: {
+        ...project.data,
+        remoteDevices: (project.data.remoteDevices ?? []).map((d) =>
+          d.name === 'Bus'
+            ? {
+                ...d,
+                ethercatConfig: {
+                  devices: [
+                    {
+                      id: 'c',
+                      name: 'Coupler',
+                      esiDeviceRef: { repositoryItemId: 'r', deviceIndex: 0 },
+                      vendorId: '0x230',
+                      productCode: '0x1',
+                      revisionNo: '0x1',
+                      addedFrom: 'repository' as const,
+                      config: createDefaultSlaveConfig(),
+                      channelMappings: [],
+                      modules: [
+                        {
+                          id: 'm1',
+                          slot: 1,
+                          name: 'UR20-4DI-P',
+                          ident: '0x91F84',
+                          esiModuleRef: { repositoryItemId: 'r', moduleIdent: '0x91F84' },
+                          channelMappings: [{ channelId: 'ch', iecLocation: '%IX0.0', alias: 'Door Open' }],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              }
+            : d,
+        ),
+      },
+    })
+    seedPouWithLocation('main', 'Door Open')
+
+    expect(getState().projectActions.normalizeProjectAliases().repairs).toEqual([
+      expect.objectContaining({ from: 'Door Open', to: 'Door_Open' }),
+    ])
+    const module = getState().project.data.remoteDevices?.[0]?.ethercatConfig?.devices[0]?.modules?.[0]
+    expect(module?.channelMappings[0]?.alias).toBe('Door_Open')
+    expect(locationOf('main')).toBe('Door_Open')
+  })
+})
+
 describe('a repaired project is marked unsaved', () => {
   const PROJECT_JSON = JSON.stringify({
     meta: { name: 'P', type: 'plc-project' },

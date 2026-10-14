@@ -178,7 +178,7 @@ const DeviceConfigurationForm = ({ config, updateConfig }: DeviceConfigurationFo
       </div>
     </div>
 
-    {/* DOPE-704 E2: CoE flags from the ESI's <Mailbox><CoE>. These gate the
+    {/* CoE flags from the ESI's <Mailbox><CoE>. These gate the
          PDO-assignment startup block (0x1C12/0x1C13 on PdoAssign), the module
          ident-list write (0xF030 on PdoConfig) and the Complete Access form
          of long SDO writes (0xF030/CompleteAccess=true). The checkboxes let

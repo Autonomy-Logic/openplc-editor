@@ -1,4 +1,5 @@
 import * as Tabs from '@radix-ui/react-tabs'
+import { useEthercatAliasEdit } from '@root/frontend/hooks/use-ethercat-alias-edit'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import type {
@@ -17,7 +18,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChannelMappingsSection, SdoParametersSection } from './components/device-configuration-form'
 import { ProcessDataTab } from './components/process-data-tab'
 
-type ModuleDetailTab = 'channel-mappings' | 'info' | 'process-data' | 'startup-params'
+const MODULE_DETAIL_TABS = ['channel-mappings', 'info', 'process-data', 'startup-params'] as const
+type ModuleDetailTab = (typeof MODULE_DETAIL_TABS)[number]
+const isModuleDetailTab = (v: string): v is ModuleDetailTab => MODULE_DETAIL_TABS.some((t) => t === v)
 
 const TabItem = ({ value, label, isActive }: { value: string; label: string; isActive: boolean }) => (
   <Tabs.Trigger
@@ -67,6 +70,7 @@ const synthesizeChannels = (channelInfo: PersistedChannelInfo[] | undefined): ES
  */
 const EtherCATModuleEditor = ({ busName, deviceId, moduleId }: EtherCATModuleEditorProps) => {
   const store = useOpenPLCStoreApi()
+  const commitAliasEdit = useEthercatAliasEdit()
   const { project, projectActions, workspaceActions } = useOpenPLCStore()
   const esi = useEsi()
 
@@ -176,13 +180,15 @@ const EtherCATModuleEditor = ({ busName, deviceId, moduleId }: EtherCATModuleEdi
     (channelId: string, alias: string) => {
       if (!module) return
       const existing = module.channelMappings.find((m) => m.channelId === channelId)
+      const target = { busName, slaveName: deviceName, moduleId: module.id, channelId }
+      if (!commitAliasEdit(target, existing?.alias ?? '', alias)) return
       const next: EtherCATChannelMapping[] =
         existing !== undefined
           ? module.channelMappings.map((m) => (m.channelId === channelId ? { ...m, alias } : m))
           : [...module.channelMappings, { channelId, iecLocation: '', alias }]
       handleUpdateChannelMappings(next)
     },
-    [module, handleUpdateChannelMappings],
+    [module, busName, deviceName, commitAliasEdit, handleUpdateChannelMappings],
   )
 
   const handleUpdateSdoConfigurations = useCallback(
@@ -206,7 +212,7 @@ const EtherCATModuleEditor = ({ busName, deviceId, moduleId }: EtherCATModuleEdi
   const channels = useMemo(() => synthesizeChannels(module?.channelInfo), [module?.channelInfo])
   const coeObjects: ESICoEObject[] | undefined = esiModule?.coeObjects
 
-  // DOPE-704 E4: PdoAssign availability on a module tracks the containing slave's
+  // PdoAssign availability on a module tracks the containing slave's
   // CoE flag — the coupler's `0x1C1n` write is what reassigns module PDOs.
   const pdoAssignAvailable = device?.config.coeFlags?.pdoAssign === true
 
@@ -232,7 +238,9 @@ const EtherCATModuleEditor = ({ busName, deviceId, moduleId }: EtherCATModuleEdi
 
       <Tabs.Root
         value={activeTab}
-        onValueChange={(v) => setActiveTab(v as ModuleDetailTab)}
+        onValueChange={(v) => {
+          if (isModuleDetailTab(v)) setActiveTab(v)
+        }}
         className='flex min-h-0 flex-1 flex-col overflow-hidden'
       >
         <Tabs.List className='flex shrink-0 border-b border-neutral-200 dark:border-neutral-700'>

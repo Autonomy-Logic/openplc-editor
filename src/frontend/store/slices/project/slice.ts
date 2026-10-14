@@ -2358,9 +2358,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           ...(device.modbusTcpConfig?.ioGroups ?? []).flatMap((group) =>
             (group.ioPoints ?? []).map((point) => point.alias ?? ''),
           ),
-          ...(device.ethercatConfig?.devices ?? []).flatMap((slave) =>
-            (slave.channelMappings ?? []).map((channel) => channel.alias ?? ''),
-          ),
+          ...(device.ethercatConfig?.devices ?? []).flatMap((slave) => [
+            ...(slave.channelMappings ?? []).map((channel) => channel.alias ?? ''),
+            ...(slave.modules ?? []).flatMap((module) => module.channelMappings.map((channel) => channel.alias ?? '')),
+          ]),
         ]),
       ].filter((alias) => alias.trim() !== '')
 
@@ -2398,6 +2399,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
             }
             for (const slave of device.ethercatConfig?.devices ?? []) {
               for (const channel of slave.channelMappings ?? []) channel.alias = remap(channel.alias)
+              for (const module of slave.modules ?? []) {
+                for (const channel of module.channelMappings) channel.alias = remap(channel.alias)
+              }
             }
           }
         }),

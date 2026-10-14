@@ -1,7 +1,8 @@
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { cn } from '@root/frontend/utils/cn'
 import type { ESIModuleSummary, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
-import { isModuleCompatibleWithCoupler } from '@root/middleware/shared/utils/ethercat'
+import type { CouplerCompatibility } from '@root/middleware/shared/utils/ethercat'
+import { canonicalVendorId, isModuleCompatibleWithCoupler } from '@root/middleware/shared/utils/ethercat'
 import { useCallback, useMemo, useState } from 'react'
 
 type ModuleBrowserModalProps = {
@@ -14,14 +15,11 @@ type ModuleBrowserModalProps = {
   onSelectModule: (module: ESIModuleSummary, repoItem: ESIRepositoryItemLight) => void
   repository: ESIRepositoryItemLight[]
   /**
-   * The coupler's vendor id in hex (e.g. `0x00000230` for Weidmueller). When
-   * present, modules from other vendors are hidden so a UR20 coupler can't be
-   * handed WAGO or Phoenix Contact modules it has no way of talking to.
-   * Omit to disable the filter (keep every module the repository knows about).
+   * The coupler the module is for. When present, only modules of its vendor that one of its
+   * `<Slot>` definitions accepts are listed. Omit to list every module the repository knows.
    */
-  coupler?: {
-    vendorId: string
-    /** Human-readable coupler name — surfaced in the empty-state message. */
+  coupler?: CouplerCompatibility & {
+    /** Human-readable coupler name, surfaced in the empty-state message. */
     name?: string
   }
 }
@@ -33,13 +31,7 @@ type ModuleBrowserModalProps = {
  * and (when the coupler's Slots block declares it) matching ModuleIdent or
  * ModuleClass.
  */
-const ModuleBrowserModal = ({
-  isOpen,
-  onClose,
-  onSelectModule,
-  repository,
-  coupler,
-}: ModuleBrowserModalProps) => {
+const ModuleBrowserModal = ({ isOpen, onClose, onSelectModule, repository, coupler }: ModuleBrowserModalProps) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedKey, setSelectedKey] = useState<{ repoItemId: string; ident: string } | null>(null)
   const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set())
@@ -59,12 +51,10 @@ const ModuleBrowserModal = ({
 
     for (const repoItem of repository) {
       if (!repoItem.modules || repoItem.modules.length === 0) continue
-      const vendorKey = repoItem.vendor.id
+      const vendorKey = canonicalVendorId(repoItem.vendor.id)
 
       for (const module of repoItem.modules) {
-        // Vendor + Slots-block gate. Centralised in isModuleCompatibleWithCoupler
-        // so the scan-apply path and this browser dialog agree on which modules
-        // a given coupler accepts.
+        // Same predicate as the scan-apply path, so both agree on what the coupler accepts.
         if (coupler !== undefined && !isModuleCompatibleWithCoupler(repoItem, module, coupler)) continue
         if (searchTerm) {
           const search = searchTerm.toLowerCase()
@@ -76,7 +66,7 @@ const ModuleBrowserModal = ({
         }
         let group = groups.get(vendorKey)
         if (group === undefined) {
-          group = { vendorId: repoItem.vendor.id, vendorName: repoItem.vendor.name, modules: [] }
+          group = { vendorId: vendorKey, vendorName: repoItem.vendor.name, modules: [] }
           groups.set(vendorKey, group)
         }
         group.modules.push({ repoItem, module })

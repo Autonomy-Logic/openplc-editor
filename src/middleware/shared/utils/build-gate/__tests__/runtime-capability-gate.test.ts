@@ -1,275 +1,137 @@
-/**
- * DOPE-704 E7 target-capability gate tests.
- *
- * The gate asks whether EtherDOG as it is advertised can run what the editor is about
- * to build. A plain-slave project needs no new features and must build against every
- * EtherDOG, including pre-R4 that does not advertise anything. A modular-coupler
- * project needs `dynamic_alloc` and `sdo_byte_string`; a byte-string / complete-access
- * SDO (fields reserved on the detector; not yet persisted on the model) will light up
- * the matching feature when the type gains the field.
- *
- * Backward compatibility (BR24) is the one case that gets its own test — the plain
- * project against the pre-R4 silent runtime, which must stay allowed.
- */
-
-import type { PLCRemoteDevice } from '@root/backend/shared/types/PLC/open-plc'
-
 import {
   evaluateRuntimeCapabilityGate,
+  MIN_ETHERDOG_VERSION,
+  type RemoteDeviceInput,
   requiredRuntimeFeatures,
   runtimeCapabilityStateFor,
-  type RuntimeFeature,
 } from '../runtime-capability-gate'
 
-const bus = (
-  overrides: Partial<NonNullable<PLCRemoteDevice['ethercatConfig']>['devices'][number]> = {},
-): PLCRemoteDevice[] =>
-  [
-    {
-      name: 'bus_a',
-      protocol: 'ethercat',
-      ethercatConfig: {
-        masterConfig: { enabled: true, networkInterface: 'eth0', cycleTimeUs: 1000 },
-        devices: [
-          {
-            id: 'd',
-            position: 1,
-            name: 'd',
-            esiDeviceRef: { repositoryItemId: 'r', deviceIndex: 0 },
-            vendorId: '0x1',
-            productCode: '0x1',
-            revisionNo: '0x1',
-            addedFrom: 'repository',
-            channelMappings: [],
-            ...overrides,
-          },
-        ],
-      },
-    },
-  ] as unknown as PLCRemoteDevice[]
+type Slave = NonNullable<NonNullable<RemoteDeviceInput['ethercatConfig']>['devices']>[number]
 
-describe('DOPE-704 E7: requiredRuntimeFeatures', () => {
-  test('no remote devices → empty', () => {
+const bus = (...devices: Slave[]): RemoteDeviceInput[] => [{ protocol: 'ethercat', ethercatConfig: { devices } }]
+
+const flags = (completeAccess: boolean, pdoAssign = false, pdoConfig = false) => ({
+  config: { coeFlags: { pdoAssign, pdoConfig, completeAccess } },
+})
+
+const pdo = (over: { assigned?: boolean; fixed?: boolean; entries?: unknown[] } = {}) => ({
+  entries: over.entries ?? [{}],
+  ...over,
+})
+
+describe('requiredRuntimeFeatures', () => {
+  test('nothing for no devices, other protocols, or a plain slave without new features', () => {
     expect(requiredRuntimeFeatures(undefined)).toEqual([])
-    expect(requiredRuntimeFeatures([])).toEqual([])
+    expect(requiredRuntimeFeatures([{ protocol: 'modbus-tcp' }])).toEqual([])
+    expect(requiredRuntimeFeatures(bus({ ...flags(false, true, true), rxPdos: [pdo()] }))).toEqual([])
   })
 
-  test('a plain EtherCAT slave with no modules and no SDOs → empty', () => {
-    expect(requiredRuntimeFeatures(bus())).toEqual([])
+  test('a modular coupler needs dynamic allocation', () => {
+    expect(requiredRuntimeFeatures(bus({ modules: [{}] }))).toEqual(['ethercat.dynamic_alloc'])
   })
 
-  test('a Modbus TCP remote device never contributes features', () => {
-    const remote = [{ name: 'mb', protocol: 'modbus-tcp' as const }] as unknown as PLCRemoteDevice[]
-    expect(requiredRuntimeFeatures(remote)).toEqual([])
+  test('a byte payload anywhere (user SDO, ESI InitCmd, module InitCmd) needs byte strings', () => {
+    for (const device of [
+      { sdoConfigurations: [{ valueBytes: '0x01' }] },
+      { esiInitCmdSdos: [{ valueBytes: '0x08' }] },
+      { modules: [{ sdoConfigurations: [{ valueBytes: '0x4142' }] }] },
+    ]) {
+      expect(requiredRuntimeFeatures(bus(device))).toContain('ethercat.sdo_byte_string')
+    }
+    expect(requiredRuntimeFeatures(bus({ sdoConfigurations: [{ valueBytes: '' }] }))).toEqual([])
   })
 
-  test('a modular coupler (modules present) requires dynamic_alloc and sdo_byte_string', () => {
-    const devices = bus({
-      modules: [
-        {
-          id: 'slot-1',
-          slot: 1,
-          name: 'module',
-          ident: '0x1',
-          esiModuleRef: { repositoryItemId: 'r', moduleIdent: '0x1' },
-          channelMappings: [],
-        },
-      ],
-    })
-    expect(requiredRuntimeFeatures(devices)).toEqual(['ethercat.dynamic_alloc', 'ethercat.sdo_byte_string'])
+  test('an SDO flagged Complete Access needs Complete Access', () => {
+    expect(requiredRuntimeFeatures(bus({ sdoConfigurations: [{ completeAccess: true }] }))).toEqual([
+      'ethercat.sdo_complete_access',
+    ])
   })
 
-  test('an SDO entry with valueBytes marks sdo_byte_string', () => {
-    const devices = bus({
-      // valueBytes field is forward-looking; cast through unknown to simulate what
-      // the detector will see when the SDOConfigurationEntry type gains the field.
-      sdoConfigurations: [
-        {
-          index: '0x8000',
-          subIndex: 1,
-          value: '',
-          valueBytes: '0A0B0C',
-          defaultValue: '',
-          dataType: 'STRING',
-          bitLength: 24,
-          name: 'ModuleName',
-          objectName: 'DeviceId',
-        },
-      ] as unknown as NonNullable<Parameters<typeof bus>[0]>['sdoConfigurations'],
-    })
-    expect(requiredRuntimeFeatures(devices)).toEqual(['ethercat.sdo_byte_string'])
+  test('with CompleteAccess the generated assignment, mapping rewrite and module list are CA byte writes', () => {
+    const ca = ['ethercat.sdo_byte_string', 'ethercat.sdo_complete_access']
+    expect(requiredRuntimeFeatures(bus({ ...flags(true, true), txPdos: [pdo({ fixed: true })] }))).toEqual(ca)
+    expect(requiredRuntimeFeatures(bus({ ...flags(true, false, true), rxPdos: [pdo()] }))).toEqual(ca)
+    expect(
+      requiredRuntimeFeatures(bus({ ...flags(true), modules: [{}], slotsSpec: { downloadModuleIdentList: true } })),
+    ).toEqual(['ethercat.dynamic_alloc', ...ca])
   })
 
-  test('an SDO entry with completeAccess marks sdo_complete_access', () => {
-    const devices = bus({
-      sdoConfigurations: [
-        {
-          index: '0x8000',
-          subIndex: 0,
-          value: '0',
-          completeAccess: true,
-          defaultValue: '',
-          dataType: 'RECORD',
-          bitLength: 128,
-          name: 'Record',
-          objectName: 'Group',
-        },
-      ] as unknown as NonNullable<Parameters<typeof bus>[0]>['sdoConfigurations'],
-    })
-    expect(requiredRuntimeFeatures(devices)).toEqual(['ethercat.sdo_complete_access'])
-  })
-
-  test('a module SDO entry contributes just like a slave SDO entry', () => {
-    const devices = bus({
-      modules: [
-        {
-          id: 'slot-1',
-          slot: 1,
-          name: 'module',
-          ident: '0x1',
-          esiModuleRef: { repositoryItemId: 'r', moduleIdent: '0x1' },
-          channelMappings: [],
-          sdoConfigurations: [
-            {
-              index: '0x8010',
-              subIndex: 3,
-              value: '',
-              valueBytes: '55523230',
-              defaultValue: '',
-              dataType: 'STRING',
-              bitLength: 32,
-              name: 'ModuleName',
-              objectName: 'DeviceId',
-            },
-          ],
-        },
-      ] as unknown as NonNullable<Parameters<typeof bus>[0]>['modules'],
-    })
-    // dynamic_alloc + sdo_byte_string from the module's presence AND its byte-string
-    // SDO. The dedupe keeps the list minimal.
-    expect(requiredRuntimeFeatures(devices)).toEqual(['ethercat.dynamic_alloc', 'ethercat.sdo_byte_string'])
-  })
-
-  test('returns a stable, sorted list', () => {
-    const devices = bus({
-      modules: [
-        {
-          id: 's',
-          slot: 1,
-          name: 's',
-          ident: '0x1',
-          esiModuleRef: { repositoryItemId: 'r', moduleIdent: '0x1' },
-          channelMappings: [],
-          sdoConfigurations: [
-            {
-              index: '0x8000',
-              subIndex: 0,
-              value: '0',
-              completeAccess: true,
-              defaultValue: '',
-              dataType: 'RECORD',
-              bitLength: 128,
-              name: 'r',
-              objectName: 'g',
-            },
-          ],
-        },
-      ] as unknown as NonNullable<Parameters<typeof bus>[0]>['modules'],
-    })
-    const features = requiredRuntimeFeatures(devices)
-    expect(features).toEqual([...features].sort())
+  test('CompleteAccess alone writes nothing: fixed, unassigned or empty PDOs and no module list', () => {
+    expect(
+      requiredRuntimeFeatures(
+        bus({
+          ...flags(true, false, true),
+          rxPdos: [pdo({ fixed: true }), pdo({ assigned: false }), pdo({ entries: [] })],
+        }),
+      ),
+    ).toEqual([])
+    expect(requiredRuntimeFeatures(bus({ ...flags(true), modules: [{}] }))).toEqual(['ethercat.dynamic_alloc'])
   })
 })
 
-describe('DOPE-704 E7: evaluateRuntimeCapabilityGate', () => {
-  const alloc = (advertisedFeatures: RuntimeFeature[] | undefined, runtimeVersion?: string) => ({
-    advertisement: { advertisedFeatures, runtimeVersion },
-  })
+describe('evaluateRuntimeCapabilityGate', () => {
+  const required = ['ethercat.dynamic_alloc', 'ethercat.sdo_byte_string'] as const
 
-  test('empty requirements → allow regardless of advertisement', () => {
-    expect(evaluateRuntimeCapabilityGate({ requiredFeatures: [], ...alloc(undefined) })).toEqual({ kind: 'allow' })
+  test('a project needing nothing builds against any runtime', () => {
     expect(
       evaluateRuntimeCapabilityGate({
         requiredFeatures: [],
-        ...alloc(['ethercat.dynamic_alloc', 'ethercat.sdo_byte_string', 'ethercat.sdo_complete_access']),
+        advertisement: { connected: true, advertisedFeatures: undefined },
       }),
     ).toEqual({ kind: 'allow' })
   })
 
-  test('BR24: plain-slave project (no required features) builds against a pre-R4 silent runtime', () => {
-    expect(evaluateRuntimeCapabilityGate({ requiredFeatures: [], ...alloc(undefined) })).toEqual({ kind: 'allow' })
+  test('offline build is allowed with a warning naming the EtherDOG version', () => {
+    const verdict = evaluateRuntimeCapabilityGate({
+      requiredFeatures: required,
+      advertisement: { connected: false, advertisedFeatures: undefined },
+    })
+    expect(verdict).toEqual({
+      kind: 'allow',
+      warning: expect.stringContaining(`requires EtherDOG ${MIN_ETHERDOG_VERSION} or newer`),
+    })
   })
 
-  test('required features present on the runtime → allow', () => {
+  test('a connected runtime advertising every feature allows', () => {
     expect(
       evaluateRuntimeCapabilityGate({
-        requiredFeatures: ['ethercat.dynamic_alloc', 'ethercat.sdo_byte_string'],
-        ...alloc(['ethercat.dynamic_alloc', 'ethercat.sdo_byte_string', 'ethercat.scan_modules']),
+        requiredFeatures: required,
+        advertisement: { connected: true, advertisedFeatures: [...required, 'ethercat.future_thing'] },
       }),
     ).toEqual({ kind: 'allow' })
   })
 
-  test('pre-R4 runtime refuses a modular-coupler project with the version-upgrade message', () => {
+  test('a runtime without the features array refuses with every required feature', () => {
     const verdict = evaluateRuntimeCapabilityGate({
-      requiredFeatures: ['ethercat.dynamic_alloc', 'ethercat.sdo_byte_string'],
-      ...alloc(undefined, '4.2.11'),
+      requiredFeatures: required,
+      advertisement: { connected: true, advertisedFeatures: undefined },
     })
-    expect(verdict.kind).toBe('refuse')
-    if (verdict.kind !== 'refuse') return
-    expect(verdict.missing).toEqual(['ethercat.dynamic_alloc', 'ethercat.sdo_byte_string'])
-    expect(verdict.reason).toContain('ethercat.dynamic_alloc')
-    expect(verdict.reason).toContain('ethercat.sdo_byte_string')
-    expect(verdict.reason).toContain('4.2.11')
-    expect(verdict.reason).toContain('Upgrade EtherDOG')
+    expect(verdict).toEqual({
+      kind: 'refuse',
+      reason: expect.stringContaining('1.0.0 or newer'),
+      missing: [...required],
+    })
   })
 
-  test('runtime missing one of two features: refuse naming only the missing one', () => {
+  test('a runtime missing one feature is refused naming only that one', () => {
     const verdict = evaluateRuntimeCapabilityGate({
-      requiredFeatures: ['ethercat.dynamic_alloc', 'ethercat.sdo_byte_string'],
-      ...alloc(['ethercat.dynamic_alloc'], '0.1.0'),
+      requiredFeatures: required,
+      advertisement: { connected: true, advertisedFeatures: ['ethercat.dynamic_alloc'] },
     })
     expect(verdict.kind).toBe('refuse')
     if (verdict.kind !== 'refuse') return
     expect(verdict.missing).toEqual(['ethercat.sdo_byte_string'])
-    expect(verdict.reason).toContain('ethercat.sdo_byte_string')
-    expect(verdict.reason).not.toContain('ethercat.dynamic_alloc,')
-  })
-
-  test('refusal without runtime version falls back to the reconnect phrasing', () => {
-    const verdict = evaluateRuntimeCapabilityGate({
-      requiredFeatures: ['ethercat.dynamic_alloc'],
-      ...alloc([]),
-    })
-    expect(verdict.kind).toBe('refuse')
-    if (verdict.kind !== 'refuse') return
-    expect(verdict.reason).toContain('reconnect')
-    expect(verdict.reason).not.toContain('(current:')
+    expect(verdict.reason).toMatch(/byte-string startup SDOs/)
+    expect(verdict.reason).not.toMatch(/modular couplers/)
   })
 })
 
-describe('DOPE-704 E7: runtimeCapabilityStateFor', () => {
-  test('composes requiredFeatures from the project and advertisement from the hello', () => {
-    const state = runtimeCapabilityStateFor({
-      remoteDevices: bus({
-        modules: [
-          {
-            id: 's',
-            slot: 1,
-            name: 's',
-            ident: '0x1',
-            esiModuleRef: { repositoryItemId: 'r', moduleIdent: '0x1' },
-            channelMappings: [],
-          },
-        ] as unknown as NonNullable<Parameters<typeof bus>[0]>['modules'],
-      }),
-      advertisement: { advertisedFeatures: ['ethercat.dynamic_alloc'], runtimeVersion: '0.1.0' },
+describe('runtimeCapabilityStateFor', () => {
+  test('pairs the project requirements with the advertisement', () => {
+    const advertisement = { connected: true, advertisedFeatures: ['ethercat.dynamic_alloc'] }
+    expect(runtimeCapabilityStateFor({ remoteDevices: bus({ modules: [{}] }), advertisement })).toEqual({
+      requiredFeatures: ['ethercat.dynamic_alloc'],
+      advertisement,
     })
-    expect(state.requiredFeatures).toEqual(['ethercat.dynamic_alloc', 'ethercat.sdo_byte_string'])
-    expect(state.advertisement.advertisedFeatures).toEqual(['ethercat.dynamic_alloc'])
-    // One refusal, named, so the compile step can bubble it unchanged.
-    const verdict = evaluateRuntimeCapabilityGate(state)
-    expect(verdict.kind).toBe('refuse')
-    if (verdict.kind !== 'refuse') return
-    expect(verdict.missing).toEqual(['ethercat.sdo_byte_string'])
   })
 })

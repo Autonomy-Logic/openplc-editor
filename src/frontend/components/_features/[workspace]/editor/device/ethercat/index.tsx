@@ -490,7 +490,7 @@ const EtherCATEditor = () => {
         const uniqueName = generateUniqueSlaveName(baseName, nameTaken)
         batch.add(uniqueName)
 
-        // DOPE-704 E1: lift the CoE flags off `enriched` so they land on `config` —
+        // Lift the CoE flags off `enriched` so they land on `config` —
         // spreading `enriched` after `config` would otherwise drop them at the top level.
         const { coeFlags: enrichedCoeFlags, ...enrichedRest } = enriched
         newDevices.push({
@@ -576,7 +576,7 @@ const EtherCATEditor = () => {
           (name) => elementNameCollision(store.getState(), name, 'ethercat-slave') !== null,
         )
 
-        // DOPE-704 E1: lift the CoE flags off `enriched` so they land on `config` —
+        // Lift the CoE flags off `enriched` so they land on `config` —
         // spreading `enriched` after `config` would otherwise drop them at the top level.
         const { coeFlags: enrichedCoeFlags, ...enrichedRest } = enriched
         const newDevice: ConfiguredEtherCATDevice = {

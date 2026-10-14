@@ -21,13 +21,12 @@
 import type {
   ConfiguredEtherCATDevice,
   ConfiguredEtherCATModule,
-  ESISlot,
   PersistedPdo,
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
 
-import { identsEqual } from './esi-module-resolve'
 import { PREOP_TRANSITIONS, sdoTransitions } from './init-cmd-sdo'
+import { checkStation } from './module-station'
 
 /** Minimal structural shape the validator reads from a project's remoteDevices list.  The
  *  full `PLCRemoteDevice` definition lives in the backend-shared types module; redefining
@@ -48,7 +47,7 @@ function slaveWhere(busName: string, slave: ConfiguredEtherCATDevice): string {
   return `EtherCAT bus '${busName}', slave ${position} ('${name}')`
 }
 
-function moduleWhere(slaveAt: string, module: ConfiguredEtherCATModule): string {
+function moduleWhere(slaveAt: string, module: Pick<ConfiguredEtherCATModule, 'name' | 'slot'>): string {
   return `${slaveAt}, module '${module.name}' in slot ${module.slot}`
 }
 
@@ -113,48 +112,12 @@ function validateUniquePdoIndices(where: string, slave: ConfiguredEtherCATDevice
   return errors
 }
 
-function slotAccepts(spec: ESISlot, module: ConfiguredEtherCATModule): boolean {
-  const idents = spec.moduleIdents ?? []
-  const classes = spec.moduleClasses ?? []
-  if (idents.length === 0 && classes.length === 0) return true
-  if (idents.some((ident) => identsEqual(ident, module.ident))) return true
-  return module.moduleClass !== undefined && classes.includes(module.moduleClass)
-}
-
-function slotLabel(spec: ESISlot, i: number): string {
-  return spec.name ? `slot definition ${i + 1} ('${spec.name}')` : `slot definition ${i + 1}`
-}
-
-/**
- * Walk physical slots 1..N in order and fill the ESI `<Slot>` definitions in sequence: a
- * definition takes slots until it reaches MaxInstances or the next module is one it does not
- * accept (once its MinInstances is met). An empty slot counts towards the current definition.
- */
+/** Station rules shared with the Modules tab, plus the `0xF030` download transition. */
 function validateSlots(where: string, slave: ConfiguredEtherCATDevice): string[] {
   const modules = slave.modules ?? []
   const spec = slave.slotsSpec
   const errors: string[] = []
-
-  const bySlot = new Map<number, ConfiguredEtherCATModule>()
-  for (const module of modules) {
-    if (!Number.isInteger(module.slot) || module.slot < 1) {
-      errors.push(`${moduleWhere(where, module)}: slot numbers start at 1`)
-      continue
-    }
-    const other = bySlot.get(module.slot)
-    if (other !== undefined) {
-      errors.push(`${where}: slot ${module.slot} holds both '${other.name}' and '${module.name}'`)
-      continue
-    }
-    bySlot.set(module.slot, module)
-  }
-
-  if (spec === undefined || spec.slots.length === 0) {
-    if (modules.length > 0) errors.push(`${where}: the slave has modules but its ESI declares no <Slots>`)
-    return errors
-  }
-
-  if (modules.length > 0 && spec.downloadModuleIdentList) {
+  if (spec !== undefined && modules.length > 0 && spec.downloadModuleIdentList) {
     const transition = (spec.downloadModuleListTransition ?? 'PS').toUpperCase()
     if (!PREOP_TRANSITIONS.includes(transition)) {
       errors.push(
@@ -162,47 +125,9 @@ function validateSlots(where: string, slave: ConfiguredEtherCATDevice): string[]
       )
     }
   }
-
-  const lastSlot = Math.max(0, ...bySlot.keys())
-  let current = 0
-  let count = 0
-  for (let slot = 1; slot <= lastSlot; slot++) {
-    const module = bySlot.get(slot)
-    let def = spec.slots[current]
-    while (
-      def !== undefined &&
-      (count >= def.maxInstances || (module !== undefined && !slotAccepts(def, module) && count >= def.minInstances))
-    ) {
-      current += 1
-      count = 0
-      def = spec.slots[current]
-    }
-    if (def === undefined) {
-      errors.push(
-        module !== undefined
-          ? `${moduleWhere(where, module)}: no slot definition of the coupler accepts it at this position`
-          : `${where}: slot ${slot} is past the last slot the coupler's ESI allows`,
-      )
-      break
-    }
-    if (module !== undefined && !slotAccepts(def, module)) {
-      const cls = module.moduleClass === undefined ? 'unknown class' : `class '${module.moduleClass}'`
-      errors.push(
-        `${moduleWhere(where, module)}: ${slotLabel(def, current)} does not accept module ${module.ident} (${cls})`,
-      )
-    }
-    count += 1
-  }
-
-  for (let i = current; i < spec.slots.length; i++) {
-    const def = spec.slots[i]
-    if (def === undefined) continue
-    const have = i === current ? count : 0
-    if (have < def.minInstances) {
-      errors.push(
-        `${where}: ${slotLabel(def, i)} requires at least ${def.minInstances} module(s); the project has ${have}`,
-      )
-    }
+  for (const issue of checkStation(spec, modules)) {
+    const at = issue.module === undefined ? where : moduleWhere(where, issue.module)
+    errors.push(`${at}: ${issue.text}`)
   }
   return errors
 }

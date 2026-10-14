@@ -148,7 +148,7 @@ describe('ESIUpload — dedupAfterRetry handling', () => {
 })
 
 /**
- * DOPE-704 E1 UI: ZIP import.
+ * ZIP import.
  *
  * The upload component accepts a .zip file alongside .xml files. For a ZIP it calls
  * the pure `importESIZip` helper from middleware/shared/utils/ethercat (works in
@@ -171,7 +171,7 @@ async function makeZipFile(name: string, entries: Array<{ path: string; content:
   return file
 }
 
-describe('ESIUpload — ZIP import (DOPE-704 E1)', () => {
+describe('ESIUpload — ZIP import', () => {
   beforeEach(() => {
     mockEsi.parseAndSaveFile.mockReset()
     mockEsi.loadRepositoryLight.mockReset()

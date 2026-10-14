@@ -1,5 +1,5 @@
 /**
- * Editor EtherCATScanPort adapter — DOPE-704 E6 / RTOP-319 R3.
+ * Editor EtherCATScanPort adapter.
  *
  * Transport-only. Routes the modular-scan RPC through the Electron IPC bridge
  * (`window.bridge.etherCATScanModules`) to the main process, which POSTs

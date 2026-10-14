@@ -18,7 +18,17 @@ export {
   textToHexBytes,
 } from './init-cmd-sdo'
 export { buildModuleForSlot, type BuildModuleInput, hexAdd, slotDeltas, type SlotIncrements } from './module-build'
-export { type CouplerCompatibility, isModuleCompatibleWithCoupler } from './module-compatibility'
+export { canonicalVendorId, type CouplerCompatibility, isModuleCompatibleWithCoupler } from './module-compatibility'
+export {
+  checkStation,
+  couplerAcceptsModule,
+  moveModuleToSlot,
+  removeModuleAndCompact,
+  shiftModule,
+  slotAccepts,
+  type StationIssue,
+  type StationModule,
+} from './module-station'
 export {
   type ReconcileChannelsInput,
   type ReconcileChannelsResult,

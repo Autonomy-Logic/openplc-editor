@@ -407,24 +407,18 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         return
       }
 
-      // Target-capability gate. Refuses the build when the project uses
-      // EtherCAT features the connected runtime does not advertise.
-      // `runtimeFeatures` is populated on connect from the
-      // `/api/discovery/ethercat/capabilities` endpoint, which reads the hello
-      // features EtherDOG publishes. `null` means the runtime did not answer or
-      // is pre-features: the gate then refuses only when the project actually
-      // needs a feature, so plain-slave projects still build.
+      // Target-capability gate: refuses a project that needs EtherCAT features the connected
+      // runtime does not advertise (fetched on connect). Without a connected runtime the build
+      // goes ahead with a warning naming the EtherDOG version the target needs.
       {
         const state = store.getState()
         const rc = state.runtimeConnection
-        const runtimeFeatures = rc?.runtimeFeatures
-        const runtimeVersion = rc?.runtimeVersion
         const gate = evaluateRuntimeCapabilityGate(
           runtimeCapabilityStateFor({
             remoteDevices: state.project.data.remoteDevices,
             advertisement: {
-              advertisedFeatures: runtimeFeatures ?? undefined,
-              runtimeVersion: runtimeVersion ?? undefined,
+              connected: rc.connectionStatus === 'connected',
+              advertisedFeatures: rc.runtimeFeatures ?? undefined,
             },
           }),
         )
@@ -438,6 +432,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           setIsCompiling(false)
           return
         }
+        if (gate.warning !== undefined) addLog({ level: 'warning', message: gate.warning })
       }
 
       addLog({ level: 'info', message: 'Build process started' })

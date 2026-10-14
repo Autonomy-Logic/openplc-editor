@@ -40,7 +40,7 @@ export interface PlatformPorts {
   capabilities: PlatformCapabilities
   packages?: PackagePort
   esi?: EsiPort
-  /** DOPE-704 E6: scan modules on a modular coupler via EtherDOG's 0xF050 path. */
+  /** Scan modules on a modular coupler via EtherDOG's 0xF050 path. */
   ethercatScan?: EtherCATScanPort
   /** Poll modular-coupler diagnostics (status word + per-module status byte). */
   ethercatDiagnostics?: EtherCATDiagnosticsPort

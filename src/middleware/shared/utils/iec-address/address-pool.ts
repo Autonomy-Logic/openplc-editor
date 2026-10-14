@@ -130,7 +130,7 @@ export interface PoolRemoteDeviceInput {
         alias?: string
       }>
       /**
-       * DOPE-704 E4: modules plugged into a modular coupler (ETG.5001). Each module
+       * Modules plugged into a modular coupler (ETG.5001). Each module
        * carries its own channel mappings claimed under
        * "<devRef>:<slaveRef>:<moduleId>:<channelId>".
        */
@@ -255,7 +255,7 @@ export function buildAddressPool(
 
   // 4. EtherCAT channel mappings.
   //
-  // Ref format (DOPE-704 E2/E4 convention): "<devRef>:<slaveRef>:<channelId>" for a plain
+  // Ref format: "<devRef>:<slaveRef>:<channelId>" for a plain
   // slave channel, "<devRef>:<slaveRef>:<moduleId>:<channelId>" for a module channel on
   // an ETG.5001 modular coupler.
   if (caps.ethercat && inputs.remoteDevices && ignore !== 'ethercat') {
@@ -270,7 +270,7 @@ export function buildAddressPool(
             mapping.alias,
           )
         }
-        // DOPE-704 E4: modules plugged into a modular coupler. Their channel addresses
+        // Modules plugged into a modular coupler. Their channel addresses
         // live in the same address pool as the coupler's own channels; the ref format
         // carries a fourth segment so the editor can tell them apart.
         for (const module of slave.modules ?? []) {

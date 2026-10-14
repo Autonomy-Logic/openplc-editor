@@ -215,7 +215,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
 
   const handleEnrichDevice = useCallback(
     (data: EnrichDeviceData) => {
-      // DOPE-704 E1: `coeFlags` from the enrichment belongs inside `config`, not at
+      // `coeFlags` from the enrichment belongs inside `config`, not at
       // the top of the device. Everything else spreads into the device as-is.
       syncDevicesToStore(
         configuredDevices.map((d) => {
@@ -236,9 +236,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
     [configuredDevices, deviceId, syncDevicesToStore],
   )
 
-  // DOPE-704 E3 UI: Expert-mode PDO reassignment. The handler mutates only the
-  // `assigned` flag on the named PDO; the exclude lists stay as the ESI declared
-  // them and the generator's PdoAssign gate still fires in buildPdoAssignmentSdos.
+  // Expert-mode PDO reassignment: only the `assigned` flag of the named PDO changes.
   // Add / remove modules on a modular coupler. The persisted shape produced by
   // ModulesTab's buildModuleForSlot is spread onto `device.modules`.
   const handleUpdateModules = useCallback(
@@ -284,13 +282,8 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
     [configuredDevices, deviceId, syncDevicesToStore],
   )
 
-  // When the user edits a PDO's entry list through the
-  // Expert view, the on-wire mapping changes AND the IOMAPPING binding to those entries
-  // must follow — otherwise added entries ride the bus with no PLC-side variable and
-  // removed entries leave orphan bindings pointing at bytes the slave no longer sends.
-  // reconcilePdoChannels rebuilds channelInfo + channelMappings from the resulting
-  // rxPdos/txPdos, preserving alias + IEC location on untouched channels and allocating
-  // a fresh, non-colliding address for new ones.
+  // An entry-list edit rebuilds channelInfo and channelMappings from the PDOs: untouched
+  // channels keep alias and IEC location, new ones get a free address, removed ones go.
   const handleUpdatePdoEntries = useCallback(
     (direction: 'rx' | 'tx', pdoIndex: string, entries: PersistedPdoEntry[]) => {
       syncDevicesToStore(
@@ -415,15 +408,15 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
     handleAliasChange,
     updateConfig,
   } = useDeviceConfiguration({
-      device: device as ConfiguredEtherCATDevice,
-      projectPath,
-      externalAddresses,
-      onUpdateDevice: handleUpdateDevice,
-      onUpdateChannelMappings: handleUpdateChannelMappings,
-      onEnrichDevice: handleEnrichDevice,
-      onUpdateModule: handleUpdateModule,
-      enabled: device !== null,
-    })
+    device,
+    projectPath,
+    externalAddresses,
+    onUpdateDevice: handleUpdateDevice,
+    onUpdateChannelMappings: handleUpdateChannelMappings,
+    onEnrichDevice: handleEnrichDevice,
+    onUpdateModule: handleUpdateModule,
+    enabled: device !== null,
+  })
 
   // Fallback when device is not found
   if (!device) {
@@ -549,7 +542,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           </div>
         </Tabs.Content>
 
-        {/* DOPE-704 E3 UI: Process Data (Simple / Expert) */}
+        {/* Process Data (Simple / Expert) */}
         <Tabs.Content
           value='process-data'
           className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
@@ -589,7 +582,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           </Tabs.Content>
         )}
 
-        {/* DOPE-704 E6 UI: Diagnostics (modular coupler only) */}
+        {/* Diagnostics (modular coupler only) */}
         {device.isModularCoupler === true && (
           <Tabs.Content
             value='diagnostics'

@@ -1,24 +1,10 @@
 /**
- * EtherCATScanPort — DOPE-704 E6.
- *
- * Scans a bus's modular couplers to list the modules the coupler reports via `0xF050`
- * (ETG.5001). The response is parsed into a {@link ScanResponse} the editor hands to the
- * E6 reconciliation helpers (`reconcileScannedModules`, `applyScanReconciliation`).
- *
- * The port is minimal and focused because the scan path is architecturally different per
- * runtime:
- *   - **Editor adapter** has no network path to EtherDOG (the Electron editor talks to a
- *     local runtime over IPC but EtherDOG's scan isn't exposed yet). It returns a
- *     not-available error so the UI can still render the button and give the operator a
- *     clear reason the action is disabled.
- *   - **Web adapter** forwards through the orchestrator / fake orchestrator to EtherDOG's
- *     `scan-modules` command (RTOP-319 R3). In the dev-local build it returns a fixture
- *     from the dev store so the UI flow is testable without a bus.
- *
- * The parse-and-reconcile logic lives on the shared surface
- * (`middleware/shared/utils/ethercat/scan-reconcile.ts`), so the UI calls:
- *   const r = await scan.scanModules(bus, slave)
- *   if (!r.success) toast(r.error); else apply(reconcileScannedModules(r.scan, device.modules))
+ * EtherCATScanPort: lists the modules a modular coupler reports through `0xF050` (ETG.5001),
+ * slot by slot from 1. The editor adapter goes through the main process to the connected
+ * runtime; the web adapter goes through the orchestrator. Both build the request and read the
+ * reply with `middleware/shared/utils/ethercat/scan-modules-protocol.ts`. The Modules tab
+ * matches the idents against the repository and checks each placement against the coupler's
+ * `<Slots>` block before adding anything.
  */
 
 import type { Result } from './types'

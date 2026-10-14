@@ -35,6 +35,8 @@
 // DOM dependencies).  Same legacy-tree path the editor's compiler-
 // module.ts uses; flagged as an organisational smell (`backend-shared
 // → frontend`) but functional, see the build-pipeline refactor plan.
+import { validateEthercatProject } from '@root/middleware/shared/utils/ethercat'
+
 import { getErrorMessage } from '../../../../frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '../../../../frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '../../../../frontend/utils/opcua'
@@ -44,7 +46,6 @@ import { validateEthercatConfig } from '../../ethercat/validate-ethercat-config'
 import { isEtherdogCapableRuntime } from '../../firmware/runtime-version-gate'
 import type { PLCRemoteDevice, PLCServer } from '../../types/PLC/open-plc'
 import { generateModbusMasterConfig } from '../../utils/modbus/generate-modbus-master-config'
-import { validateEthercatProject } from '@root/middleware/shared/utils/ethercat'
 
 /**
  * Tagged shape for the program instances OPC-UA needs to resolve

@@ -1,10 +1,10 @@
 import {
   enrichDeviceData,
   esiStartupData,
-  lacksE2Schema,
+  lacksPdoFlags,
   lacksEsiStartupData,
   lacksPdoAssignment,
-  migrateSlaveToE2Schema,
+  migrateSlavePdoFlags,
   recordPdoAssignment,
 } from '@root/backend/shared/ethercat/enrich-device-data'
 import { generateDefaultChannelMappings, pdoToChannels } from '@root/backend/shared/ethercat/esi-parser'
@@ -23,17 +23,12 @@ import type {
   PersistedChannelInfo,
 } from '@root/middleware/shared/ports/esi-types'
 import { useEsi } from '@root/middleware/shared/providers/platform-context'
-import {
-  buildAddressPool,
-  buildAliasRegistry,
-  describeAliasRejection,
-  validateAliasEdit,
-} from '@root/middleware/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useEthercatAliasEdit } from './use-ethercat-alias-edit'
+
 type UseDeviceConfigurationParams = {
-  device: ConfiguredEtherCATDevice
+  device: ConfiguredEtherCATDevice | null
   projectPath: string
   externalAddresses: Set<string>
   onUpdateDevice: (config: EtherCATSlaveConfig) => void
@@ -90,6 +85,7 @@ export function useDeviceConfiguration({
   enabled = true,
 }: UseDeviceConfigurationParams): UseDeviceConfigurationResult {
   const store = useOpenPLCStoreApi()
+  const commitAliasEdit = useEthercatAliasEdit()
   const esiPort = useEsi()
   const [channels, setChannels] = useState<ESIChannel[]>([])
   const [coeObjects, setCoeObjects] = useState<ESICoEObject[] | undefined>(undefined)
@@ -135,13 +131,10 @@ export function useDeviceConfiguration({
           if (!device.channelInfo || !device.rxPdos || !device.txPdos) {
             const { sdoConfigurations, ...rest } = enrichDeviceData(result.device, externalAddresses)
             onEnrichDeviceRef.current(device.sdoConfigurations !== undefined ? rest : { ...rest, sdoConfigurations })
-          } else if (lacksE2Schema(device)) {
-            // DOPE-704 E2 extras: a slave saved under the pre-DOPE-704 schema (no
-            // coeFlags, no fixed/mandatory/sm/exclude on PDOs) gets migrated here.
-            // The migrated slave carries the ESI's CoE flags and the per-PDO defaults
-            // merged in; the user's assignment choices stay verbatim. Idempotent, so
-            // reopening the device later is a no-op.
-            const migrated = migrateSlaveToE2Schema(device, result.device)
+          } else if (lacksPdoFlags(device)) {
+            // A slave saved without CoE flags or per-PDO flags gets them from the ESI; its
+            // PDO assignment is kept. Idempotent.
+            const migrated = migrateSlavePdoFlags(device, result.device)
             onEnrichDeviceRef.current({
               rxPdos: migrated.rxPdos,
               txPdos: migrated.txPdos,
@@ -179,10 +172,8 @@ export function useDeviceConfiguration({
     void loadFullDevice()
   }, [enabled, projectPath, device?.esiDeviceRef?.repositoryItemId, device?.esiDeviceRef?.deviceIndex])
 
-  // For a modular coupler, the Channel Mappings view aggregates channels and
-  // mappings across the coupler itself and each plugged-in module. The owner
-  // map lets the alias-edit handler route a write back to the right source
-  // (coupler-level mappings vs. a specific module's mappings).
+  // On a modular coupler the view lists the coupler's and every module's channels; the owner
+  // map routes an alias edit back to the coupler or to the module that owns the channel.
   const { aggregatedChannels, aggregatedMappings, ownerByChannelId } = useMemo(() => {
     const own = new Map<string, ChannelOwner>()
     if (!device?.isModularCoupler) {
@@ -211,64 +202,18 @@ export function useDeviceConfiguration({
   const handleAliasChange = useCallback(
     (channelId: string, alias: string) => {
       if (!device) return
-
       const owner = ownerByChannelId.get(channelId) ?? { kind: 'device' as const }
-
-      // Resolve the bus owning this slave so we can construct a
-      // `SourceRef` whose `ref` matches the format used by the
-      // address pool (`${busName}:${slaveName}:${channelId}` for a
-      // coupler-level channel, with an extra `${moduleId}:` segment
-      // for a module-level channel — see address-pool.ts). Without
-      // this, validateAliasEdit's self-rename check would spuriously
-      // reject the no-op.
-      const state = store.getState()
-      const owningBus = state.project.data.remoteDevices?.find((d) =>
-        d.ethercatConfig?.devices?.some((s) => s.name === device.name),
-      )
-      const busName = owningBus?.name ?? ''
-      const sourceRef =
-        owner.kind === 'module'
-          ? {
-              kind: 'ethercat' as const,
-              ref: `${busName}:${device.name}:${owner.moduleId}:${channelId}`,
-            }
-          : { kind: 'ethercat' as const, ref: `${busName}:${device.name}:${channelId}` }
-
-      // Phase 1 — write-time uniqueness gate (global across every
-      // producer). Build a fresh registry from the live state and
-      // reject the edit on collision. See
-      // module-slots-layout.tsx::handleAliasChange for the longer
-      // rationale.
-      const board = state.deviceDefinitions.configuration.deviceBoard ?? ''
-      const boardInfo = state.deviceAvailableOptions.availableBoards.get(board)
-      const ioMapping =
-        (
-          state.deviceDefinitions.configuration.vendorScreenData?.['io-mapping'] as
-            | { entries?: Array<{ iecAddress: string; alias?: string; slot: number; channelName: string }> }
-            | undefined
-        )?.entries ?? []
-      const pool = buildAddressPool(
-        {
-          pinMapping: { pins: state.deviceDefinitions.pinMapping.pinsByBoard[board] ?? [] },
-          vendorIoMapping: { entries: ioMapping },
-          remoteDevices: state.project.data.remoteDevices,
-        },
-        resolveTargetCapabilities(boardInfo),
-      )
-      const registry = buildAliasRegistry(pool)
-      const validation = validateAliasEdit(registry, alias, sourceRef)
-      if (!validation.ok) {
-        const rejection = describeAliasRejection(validation, alias)
-        toast({ title: rejection.title, description: rejection.description, variant: 'fail' })
-        return
-      }
+      const busName =
+        store
+          .getState()
+          .project.data.remoteDevices?.find((d) => d.ethercatConfig?.devices?.some((s) => s.name === device.name))
+          ?.name ?? ''
 
       if (owner.kind === 'module') {
         const module = owner.module
         const oldAlias = module.channelMappings.find((m) => m.channelId === channelId)?.alias ?? ''
-        if (oldAlias) {
-          store.getState().projectActions.renameAlias(oldAlias, alias)
-        }
+        const target = { busName, slaveName: device.name, moduleId: module.id, channelId }
+        if (!commitAliasEdit(target, oldAlias, alias)) return
         const existing = module.channelMappings.some((m) => m.channelId === channelId)
         const nextMappings = existing
           ? module.channelMappings.map((m) => (m.channelId === channelId ? { ...m, alias } : m))
@@ -277,19 +222,12 @@ export function useDeviceConfiguration({
         return
       }
 
-      // Phase 2 — cascade rename onto bound variables BEFORE
-      // writing the new alias so the downstream sync sees variables
-      // pointing at the new name and refreshes locations rather
-      // than orphaning them.
       const oldAlias = device.channelMappings.find((m) => m.channelId === channelId)?.alias ?? ''
-      if (oldAlias) {
-        store.getState().projectActions.renameAlias(oldAlias, alias)
-      }
-
+      if (!commitAliasEdit({ busName, slaveName: device.name, channelId }, oldAlias, alias)) return
       const updated = device.channelMappings.map((m) => (m.channelId === channelId ? { ...m, alias } : m))
       onUpdateChannelMappingsRef.current(updated)
     },
-    [store, device, ownerByChannelId],
+    [store, device, ownerByChannelId, commitAliasEdit],
   )
 
   const updateConfig = useCallback(

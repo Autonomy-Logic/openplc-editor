@@ -1,9 +1,8 @@
 import type { ConfiguredEtherCATDevice } from '@root/middleware/shared/ports/esi-types'
+import type { DiagnosticsSnapshot } from '@root/middleware/shared/ports/ethercat-diagnostics-port'
 import { useEtherCATDiagnostics } from '@root/middleware/shared/providers/platform-context'
 import { decodeCouplerStatus, decodeModuleStatus } from '@root/middleware/shared/utils/ethercat/diagnostics-decode'
 import { useCallback, useEffect, useState } from 'react'
-
-import type { DiagnosticsSnapshot } from '@root/middleware/shared/ports/ethercat-diagnostics-port'
 
 type CouplerDiagnosticsTabProps = {
   device: ConfiguredEtherCATDevice
@@ -48,9 +47,7 @@ export const CouplerDiagnosticsTab = ({ device, busName }: CouplerDiagnosticsTab
   }, [poll])
 
   const coupler = snapshot !== null ? decodeCouplerStatus(snapshot.coupler.statusWord) : null
-  const moduleStatusBySlot = new Map<number, number>(
-    (snapshot?.modules ?? []).map((m) => [m.slot, m.statusByte]),
-  )
+  const moduleStatusBySlot = new Map<number, number>((snapshot?.modules ?? []).map((m) => [m.slot, m.statusByte]))
 
   return (
     <div className='flex flex-col gap-3'>

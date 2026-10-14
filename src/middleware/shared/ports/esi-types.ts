@@ -106,13 +106,13 @@ export interface ESIPdo {
   /** PDO index shifts with the module's slot (ESI `DependOnSlot` / `DependOnSlotGroup`). */
   dependOnSlot?: boolean
   /**
-   * DOPE-704 E1: Indices of other PDOs this one excludes. When assigned, each excluded
+   * Indices of other PDOs this one excludes. When assigned, each excluded
    * PDO becomes unassignable in the Simple view with the tooltip "excluded by <index>".
    * Normalised to the same `0x1A00` form the editor uses elsewhere.
    */
   exclude?: string[]
   /**
-   * DOPE-704 E1: Object Strand Max (ESI `OSMax`). Zero or absent means no object strand
+   * Object Strand Max (ESI `OSMax`). Zero or absent means no object strand
    * expansion. The generator expands PDO entries into `osMax` copies with each copy's
    * entry index incremented by `osIndexInc`. Used by multi-channel modules.
    */
@@ -192,14 +192,14 @@ export interface SDOConfigurationEntry {
   /** Parent object name */
   objectName: string
   /**
-   * DOPE-704 E5 extras: hex-encoded byte-string payload. When present, the generator
-   * sends this through EtherDOG's `value_bytes` plumbing (RTOP-319 R2) and ignores
+   * Hex-encoded byte-string payload. When present, the generator
+   * sends this through EtherDOG's `value_bytes` plumbing and ignores
    * `value` / `dataType` for the wire bytes. Used by module `InitCmd` writes like a
    * module name at `0x80n0:03`.
    */
   valueBytes?: string
   /**
-   * DOPE-704 E5 extras: send this SDO with CoE Complete Access. Set to `true` on
+   * Send this SDO with CoE Complete Access. Set to `true` on
    * module-ident-list writes to `0xF030` when the coupler advertises CompleteAccess.
    */
   completeAccess?: boolean
@@ -237,7 +237,7 @@ export type EnrichDeviceData = {
 // ===================== DEVICE =====================
 
 /**
- * DOPE-704 E1: ESI `InitCmd` as the master emits it at startup.
+ * ESI `InitCmd` as the master emits it at startup.
  *
  * The ESI's `<InitCmds>` block declares SDO writes the master must send during the state
  * transition named by `transition` (e.g. "PS" for PRE-OP → SAFE-OP). A module's own
@@ -274,7 +274,7 @@ export interface ESIInitCmd {
 }
 
 /**
- * DOPE-704 E1: TwinCAT `AlternativeSmMapping` preset. A pre-canned PDO assignment set
+ * TwinCAT `AlternativeSmMapping` preset. A pre-canned PDO assignment set
  * the ESI offers under a short name (e.g. "CSP mode" on a servo). The editor surfaces
  * these as a dropdown in the Simple view; selecting one assigns exactly the listed PDOs
  * on the named sync manager.
@@ -289,7 +289,7 @@ export interface ESIAlternativeSmMapping {
 }
 
 /**
- * DOPE-704 E1: a single `<Slot>` on an ETG.5001 modular coupler. The slot is where a
+ * A single `<Slot>` on an ETG.5001 modular coupler. The slot is where a
  * module physically plugs in; `moduleClass` and `moduleIdents` filter which modules the
  * coupler accepts in this slot.
  */
@@ -309,7 +309,7 @@ export interface ESISlot {
 }
 
 /**
- * DOPE-704 E1: the `<Slots>` block from a modular coupler ESI. Presence of this field on
+ * The `<Slots>` block from a modular coupler ESI. Presence of this field on
  * an {@link ESIDevice} is what `isModularCoupler` reflects.
  */
 export interface ESISlotsSpec {
@@ -330,7 +330,7 @@ export interface ESISlotsSpec {
 }
 
 /**
- * DOPE-704 E1: PDO group definition for modular couplers. ETG.5001 orders PDOs in the
+ * PDO group definition for modular couplers. ETG.5001 orders PDOs in the
  * generated bus config by `ModulePdoGroup` first, then by slot.
  */
 export interface ESIModulePdoGroup {
@@ -347,7 +347,7 @@ export interface ESIModulePdoGroup {
 }
 
 /**
- * DOPE-704 E1: an ETG.5001 I/O module. Parsed from the module ESI by
+ * An ETG.5001 I/O module. Parsed from the module ESI by
  * {@link parseESIModuleFull}. The module's RxPDOs, TxPDOs, CoE objects and `InitCmd`s
  * are generated with slot-adjusted indices by the generator.
  */
@@ -399,7 +399,7 @@ export interface ESIDevice {
   /** Additional description */
   description?: string
   /**
-   * DOPE-704 E1: CoE flags from `<Mailbox><CoE />`. Defaulted to the ESI values on
+   * CoE flags from `<Mailbox><CoE />`. Defaulted to the ESI values on
    * device import; the user can override in the Expert view. The generator uses these
    * to decide whether to emit `0x1C1n` assignment writes and complete-access SDO writes.
    */
@@ -408,25 +408,25 @@ export interface ESIDevice {
     pdoConfig: boolean
     completeAccess: boolean
   }
-  /** DOPE-704 E1: ESI startup commands at slave scope. */
+  /** ESI startup commands at slave scope. */
   initCmds?: ESIInitCmd[]
-  /** DOPE-704 E1: TwinCAT `AlternativeSmMapping` presets, when the ESI declares them. */
+  /** TwinCAT `AlternativeSmMapping` presets, when the ESI declares them. */
   alternativeSmMappings?: ESIAlternativeSmMapping[]
   /**
-   * DOPE-704 E1: `<Slots>` block present when the device is a modular coupler (ETG.5001).
+   * `<Slots>` block present when the device is a modular coupler (ETG.5001).
    * Non-null for UR20-class couplers; undefined for plain slaves and multi-mode drives.
    */
   slots?: ESISlotsSpec
-  /** DOPE-704 E1: PDO group definitions on a modular coupler. */
+  /** PDO group definitions on a modular coupler. */
   modulePdoGroups?: ESIModulePdoGroup[]
   /**
-   * DOPE-704 E1: Modules defined inline in the device ESI (vs. referenced through an
+   * Modules defined inline in the device ESI (vs. referenced through an
    * external module ESI file). The coupler's catalogue combines these with external
    * modules looked up by `parseESIModuleFull`.
    */
   modules?: ESIModule[]
   /**
-   * DOPE-704 E1: true when the device declares `<Slots>` and is to be treated as a
+   * True when the device declares `<Slots>` and is to be treated as a
    * modular coupler. Mirrors the summary flag; present on the full device for consumers
    * that pass {@link ESIDevice} around without the summary.
    */
@@ -550,14 +550,14 @@ export interface PersistedPdo {
    */
   assigned?: boolean
   /**
-   * DOPE-704 E2: ESI defaults carried forward on first import.
+   * ESI defaults carried forward on first import.
    */
   fixed?: boolean
   mandatory?: boolean
   /** Default sync manager this PDO is assigned to in the ESI. */
   sm?: number
   /**
-   * DOPE-704 E2: PDO indices this one excludes (from the ESI `<Exclude>` children). The
+   * PDO indices this one excludes (from the ESI `<Exclude>` children). The
    * Process Data view greys an excluded PDO when its excluder is assigned, with the
    * excluding PDO named in the tooltip.
    */
@@ -642,7 +642,7 @@ export interface ESIDeviceSummary {
   /** Additional description */
   description?: string
   /**
-   * DOPE-704 E1: true when the device declares a `<Slots>` block (ETG.5001 modular
+   * True when the device declares a `<Slots>` block (ETG.5001 modular
    * coupler). Used by the ESI browser to indicate modular couplers in the list and by
    * the project tree to decide whether a Scan modules button appears on the coupler.
    */
@@ -670,7 +670,7 @@ export interface ESIRepositoryItem {
 }
 
 /**
- * DOPE-704 E6 UI: a light summary of an ETG.5001 module from an ESI, used to populate
+ * A light summary of an ETG.5001 module from an ESI, used to populate
  * the module browser modal and reconcile scanned module idents against the repository.
  */
 export interface ESIModuleSummary {
@@ -696,7 +696,7 @@ export interface ESIRepositoryItemLight {
   /** Lightweight device summaries */
   devices: ESIDeviceSummary[]
   /**
-   * DOPE-704 E6 UI: light summaries of all modules this ESI declares, both inline modules
+   * Light summaries of all modules this ESI declares, both inline modules
    * on a device (modular coupler ESI) and standalone modules in a `<Modules>` top-level
    * block (external module file). The module browser modal lists these; the scan
    * reconciliation uses them to decide if a scanned ident can be added.
@@ -764,7 +764,7 @@ export interface ConfiguredEtherCATDevice {
   /** CiA 402 SoftMotion axis configuration (present when recognized as a drive) */
   cia402?: Cia402AxisConfig
   /**
-   * DOPE-704 E4: modules plugged into this coupler, in slot order. Present only when the
+   * Modules plugged into this coupler, in slot order. Present only when the
    * underlying ESI device declares a `<Slots>` block (i.e. the ESI is a modular coupler).
    * The project tree renders the modules one indentation level below the coupler, the
    * generator renumbers each module's PDO and object indices by its slot, and the address
@@ -772,9 +772,9 @@ export interface ConfiguredEtherCATDevice {
    */
   modules?: ConfiguredEtherCATModule[]
   /**
-   * DOPE-704 E1: true when the underlying ESI device declares a `<Slots>` block. Set once
+   * True when the underlying ESI device declares a `<Slots>` block. Set once
    * at import time from the parsed ESI so the UI can render the "Add module to slot N"
-   * flow (E4/E5 UI) without re-loading the ESI, and the project tree can render the
+   * flow without re-loading the ESI, and the project tree can render the
    * three-level nesting (bus → coupler → modules) even when `modules` is still empty.
    */
   isModularCoupler?: boolean
@@ -788,7 +788,7 @@ export interface ConfiguredEtherCATDevice {
 }
 
 /**
- * DOPE-704 E4: one I/O module plugged into a modular coupler. The module is a first-class
+ * One I/O module plugged into a modular coupler. The module is a first-class
  * element in the project model with its own tab, its own channel mappings and its own
  * startup SDOs; it is NOT an EtherCAT slave of its own (ETG.5001 moves process data
  * through the coupler's single slave position).
@@ -930,12 +930,12 @@ export interface EtherCATSlaveConfig {
   /** Distributed Clocks (DC) settings */
   distributedClocks: EtherCATDistributedClocks
   /**
-   * DOPE-704 E2: CoE flags defaulted from the ESI's `<Mailbox><CoE />` attributes on first
+   * CoE flags defaulted from the ESI's `<Mailbox><CoE />` attributes on first
    * device import and overridable in the Expert view. The generator uses these to decide
    * whether to emit `0x1C1n` PDO assignment writes and Complete Access SDO writes.
    *
    * Optional for backward compatibility with projects saved before this field existed; the
-   * migration helper {@link migrateSlaveToE2Schema} fills them in from the ESI on open.
+   * migration helper {@link migrateSlavePdoFlags} fills them in from the ESI on open.
    */
   coeFlags?: {
     pdoAssign: boolean

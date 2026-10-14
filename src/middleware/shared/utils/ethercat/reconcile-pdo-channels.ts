@@ -166,10 +166,7 @@ function locationFor(direction: 'input' | 'output', iecType: string, bitOffset: 
   }
 }
 
-function buildChannelInfoFromPdos(
-  rxPdos: PersistedPdo[],
-  txPdos: PersistedPdo[],
-): PersistedChannelInfo[] {
+function buildChannelInfoFromPdos(rxPdos: PersistedPdo[], txPdos: PersistedPdo[]): PersistedChannelInfo[] {
   const out: PersistedChannelInfo[] = []
   const walk = (pdos: PersistedPdo[], direction: 'input' | 'output') => {
     for (const pdo of pdos) {
@@ -216,9 +213,7 @@ export function reconcilePdoChannels(input: ReconcileChannelsInput): ReconcileCh
     const prevInfo = previousInfoById.get(info.channelId)
     const prevMapping = previousMappingById.get(info.channelId)
     const sameShape =
-      prevInfo !== undefined &&
-      prevInfo.iecType === info.iecType &&
-      prevInfo.direction === info.direction
+      prevInfo !== undefined && prevInfo.iecType === info.iecType && prevInfo.direction === info.direction
     if (sameShape && prevMapping !== undefined) {
       retainedMappings.push(prevMapping)
     } else {
@@ -227,6 +222,7 @@ export function reconcilePdoChannels(input: ReconcileChannelsInput): ReconcileCh
   }
 
   const usedRanges: IecBitRange[] = []
+  const overlapsAny = (range: IecBitRange): boolean => usedRanges.some((used) => rangesOverlap(range, used))
   if (input.externalUsedAddresses !== undefined) {
     for (const addr of input.externalUsedAddresses) {
       const r = parseIecLocation(addr)
@@ -249,7 +245,7 @@ export function reconcilePdoChannels(input: ReconcileChannelsInput): ReconcileCh
       if (size > 1 && bitOffset % 8 !== 0) bitOffset = Math.ceil(bitOffset / 8) * 8
       let candidate = locationFor(direction, info.iecType, bitOffset)
       let range = parseIecLocation(candidate)
-      while (range !== null && usedRanges.some((u) => rangesOverlap(range as IecBitRange, u))) {
+      while (range !== null && overlapsAny(range)) {
         bitOffset += size
         if (size > 1 && bitOffset % 8 !== 0) bitOffset = Math.ceil(bitOffset / 8) * 8
         candidate = locationFor(direction, info.iecType, bitOffset)

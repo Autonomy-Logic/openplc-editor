@@ -114,9 +114,7 @@ describe('Module channels appear in busconfig channels and iomapping', () => {
           index: '0x1A00',
           name: 'DI PDO',
           assigned: true,
-          entries: [
-            { index: '0x6000', subIndex: '0x01', bitLen: 1, name: 'Input 1', dataType: 'BOOL' },
-          ],
+          entries: [{ index: '0x6000', subIndex: '0x01', bitLen: 1, name: 'Input 1', dataType: 'BOOL' }],
         },
       ],
     }
@@ -151,7 +149,7 @@ describe('Module channels appear in busconfig channels and iomapping', () => {
     expect(iomapping.masters[0]!.entries.length).toBe(1)
   })
 
-  test('module channels follow the slave\'s own channels', () => {
+  test("module channels follow the slave's own channels", () => {
     const module: ConfiguredEtherCATModule = {
       id: 'slot-1',
       slot: 1,

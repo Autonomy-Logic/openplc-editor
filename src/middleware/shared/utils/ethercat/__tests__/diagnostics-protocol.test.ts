@@ -80,10 +80,7 @@ describe('parseDiagnosticsResponseBody', () => {
 
   test('falls back to Date.now when poll_at_ms is missing', () => {
     const before = Date.now()
-    const result = parseDiagnosticsResponseBody(
-      { coupler: { status_word: 0 }, modules: [] },
-      { slavePosition: 1 },
-    )
+    const result = parseDiagnosticsResponseBody({ coupler: { status_word: 0 }, modules: [] }, { slavePosition: 1 })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.snapshot.coupler.pollAt).toBeGreaterThanOrEqual(before)
@@ -94,10 +91,7 @@ describe('parseDiagnosticsResponseBody', () => {
 describe('parseDiagnosticsHttpResponse', () => {
   test('non-200 surfaces body.error', () => {
     expect(
-      parseDiagnosticsHttpResponse(
-        { status_code: 403, body: { error: 'forbidden' } },
-        { slavePosition: 1 },
-      ),
+      parseDiagnosticsHttpResponse({ status_code: 403, body: { error: 'forbidden' } }, { slavePosition: 1 }),
     ).toEqual({ success: false, error: 'forbidden' })
   })
 
@@ -111,9 +105,10 @@ describe('parseDiagnosticsHttpResponse', () => {
   })
 
   test('non-200 with no error names the status code', () => {
-    expect(
-      parseDiagnosticsHttpResponse({ status_code: 503, body: {} }, { slavePosition: 1 }),
-    ).toEqual({ success: false, error: 'diagnostics returned HTTP 503' })
+    expect(parseDiagnosticsHttpResponse({ status_code: 503, body: {} }, { slavePosition: 1 })).toEqual({
+      success: false,
+      error: 'diagnostics returned HTTP 503',
+    })
   })
 
   test('200 delegates to the body parser', () => {

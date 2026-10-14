@@ -141,4 +141,22 @@ describe('scan-modules-protocol', () => {
       })
     })
   })
+
+  test('a reply that numbers slots from 0 is refused', () => {
+    const r = parseScanModulesResponseBody({ modules: [{ slot: 0, ident: '0x1' }] }, { slavePosition: 1 })
+    expect(r).toEqual({ success: false, error: expect.stringMatching(/module slot 0; slots start at 1/) })
+  })
+
+  test('an empty slot (ident 0) is left out', () => {
+    const r = parseScanModulesResponseBody(
+      {
+        modules: [
+          { slot: 1, ident: '0x00000000' },
+          { slot: 2, ident: '0x00091F84' },
+        ],
+      },
+      { slavePosition: 1 },
+    )
+    expect(r).toEqual({ success: true, scan: { slavePosition: 1, modules: [{ slot: 2, ident: '0x00091f84' }] } })
+  })
 })

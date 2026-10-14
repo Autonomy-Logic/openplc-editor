@@ -1,5 +1,5 @@
 /**
- * DOPE-704 E1 parser tests.
+ * Parser tests.
  *
  * Synthetic ESI XML fixtures exercise the new fields (Exclude, OSMax/OSIndexInc, CoE
  * flags, InitCmds, AlternativeSmMapping, Slots, Modules) and the new parseESIModuleFull
@@ -134,7 +134,7 @@ const MODULE_ESI_FILE = `<?xml version="1.0" encoding="UTF-8"?>
   </Descriptions>
 </EtherCATInfo>`
 
-describe('DOPE-704 E1: parseESILight isModularCoupler flag', () => {
+describe('parseESILight isModularCoupler flag', () => {
   test('plain slave: isModularCoupler is false', () => {
     const r = parseESILight(PLAIN_SLAVE_ESI)
     expect(r.success).toBe(true)
@@ -148,7 +148,7 @@ describe('DOPE-704 E1: parseESILight isModularCoupler flag', () => {
   })
 })
 
-describe('DOPE-704 E1: parseESIDeviceFull PDO assignment fields', () => {
+describe('parseESIDeviceFull PDO assignment fields', () => {
   test('reads <Exclude> children into pdo.exclude', () => {
     const r = parseESIDeviceFull(MULTI_MODE_DRIVE_ESI, 0)
     expect(r.success).toBe(true)
@@ -182,7 +182,7 @@ describe('DOPE-704 E1: parseESIDeviceFull PDO assignment fields', () => {
   })
 })
 
-describe('DOPE-704 E1: parseESIDeviceFull modular device fields', () => {
+describe('parseESIDeviceFull modular device fields', () => {
   test('reads <Slots> block into slots and marks isModularCoupler', () => {
     const r = parseESIDeviceFull(MODULAR_COUPLER_ESI, 0)
     expect(r.device?.isModularCoupler).toBe(true)
@@ -214,7 +214,7 @@ describe('DOPE-704 E1: parseESIDeviceFull modular device fields', () => {
   })
 })
 
-describe('DOPE-704 E1: parseESIModuleFull', () => {
+describe('parseESIModuleFull', () => {
   test('parses an external module file', () => {
     const r = parseESIModuleFull(MODULE_ESI_FILE)
     expect(r.success).toBe(true)
@@ -226,7 +226,7 @@ describe('DOPE-704 E1: parseESIModuleFull', () => {
   })
 })
 
-describe('DOPE-704 E1: ZIP import', () => {
+describe('ZIP import', () => {
   async function makeZip(entries: Record<string, string>): Promise<Buffer> {
     const zip = new JSZip()
     for (const [name, body] of Object.entries(entries)) {

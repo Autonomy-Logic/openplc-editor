@@ -237,7 +237,7 @@ export type EditorModel = EditorModelBase &
         }
       }
     | {
-        /** DOPE-704 E4: one I/O module on a modular EtherCAT coupler. Opened from the
+        /** One I/O module on a modular EtherCAT coupler. Opened from the
          *  project tree as a leaf under its coupler; renders only the module's own
          *  view (channel mappings, process data, startup parameters, device info). */
         type: 'plc-ethercat-module'

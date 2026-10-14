@@ -39,15 +39,16 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
 
   const processFiles = useCallback(
     async (files: FileList) => {
+      if (esi === undefined) return
+      const esiPort = esi
       const allInput = Array.from(files)
       const xmlInputs = allInput.filter((f) => f.name.toLowerCase().endsWith('.xml'))
       const zipInputs = allInput.filter((f) => f.name.toLowerCase().endsWith('.zip'))
 
       const errors: Array<{ filename: string; error: string }> = []
 
-      // DOPE-704 E1: a ZIP is expanded into its component ESIs before the save loop so
-      // the operator sees per-file progress for every XML the ZIP contained. A ZIP that
-      // contained nothing recognisable surfaces as an explicit error on that ZIP's name.
+      // A ZIP is expanded into its ESIs before the save loop so each XML gets its own
+      // progress step; a ZIP with nothing recognisable is an error on the ZIP's name.
       const zipExpanded: Array<{ sourceZip: string; file: ESIImportFile }> = []
       for (const zipFile of zipInputs) {
         try {
@@ -135,7 +136,7 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
 
         try {
           const text = await item.getXml()
-          const result = await esi!.parseAndSaveFile(item.filename, text)
+          const result = await esiPort.parseAndSaveFile(item.filename, text)
 
           if (result.success && result.item) {
             newItems.push(result.item)
@@ -162,7 +163,7 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
       // missing from `newItems`. Re-list the repository so it shows up; fall
       // back to the locally accumulated list if the refresh itself fails.
       if (needsRepositoryRefresh) {
-        const refreshed = await esi!.loadRepositoryLight()
+        const refreshed = await esiPort.loadRepositoryLight()
         if (refreshed.success && refreshed.items) {
           onFilesLoaded(refreshed.items, errors.length > 0 ? errors : undefined)
           return

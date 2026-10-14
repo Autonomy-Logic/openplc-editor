@@ -2,7 +2,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
-import { isValidIecIdentifier } from '../../../../middleware/shared/utils/ethercat'
+import { isValidIecIdentifier, removeModuleAndCompact } from '../../../../middleware/shared/utils/ethercat'
 import { describeAliasRename } from '../../../../middleware/shared/utils/iec-address/normalize-aliases'
 import { findAllReferencesToDataType } from '../../../utils/data-type-references'
 import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
@@ -148,6 +148,15 @@ function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, slaveNameTaken: 
             ...mapping,
             iecLocation: '',
             alias: undefined,
+          })),
+          modules: slave.modules?.map((module) => ({
+            ...module,
+            id: newUuid(),
+            channelMappings: module.channelMappings.map((mapping) => ({
+              ...mapping,
+              iecLocation: '',
+              alias: undefined,
+            })),
           })),
         }
       }),
@@ -761,7 +770,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       if (!module) return { ok: false, message: 'Module not found' }
       const moduleName = module.name
 
-      const nextModules = (device.modules ?? []).filter((m) => m.id !== moduleId)
+      // The modules after the removed one move up a slot, as in the Modules tab.
+      const spec = device.slotsSpec
+      const nextModules =
+        spec === undefined
+          ? (device.modules ?? []).filter((m) => m.id !== moduleId)
+          : removeModuleAndCompact(device.modules ?? [], moduleId, spec)
       state.projectActions.updateEthercatConfig(busName, {
         masterConfig: remoteDevice.ethercatConfig?.masterConfig ?? {
           networkInterface: 'eth0',
@@ -776,11 +790,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // The module's own editor tab (if open) now points at a module that no
       // longer exists; close it so the user doesn't see a stale pane. The
       // parent coupler stays open.
-      state.editorActions.removeModel(moduleName)
-      state.tabsActions.removeTab(moduleName)
-      state.fileActions.removeFile({ name: moduleName })
+      const tabName = `${device.name}/${moduleName}`
+      state.editorActions.removeModel(tabName)
+      state.tabsActions.removeTab(tabName)
       const currentEditor = state.editor
-      if (currentEditor.type !== 'available' && currentEditor.meta.name === moduleName) {
+      if (currentEditor.type !== 'available' && currentEditor.meta.name === tabName) {
         state.editorActions.clearEditor()
       }
 

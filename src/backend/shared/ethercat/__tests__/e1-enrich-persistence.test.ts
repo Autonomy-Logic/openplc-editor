@@ -1,9 +1,9 @@
 /**
- * DOPE-704 E1 enrichment tests.
+ * Enrichment tests.
  *
  * Covers the data the enrichment path lifts from a parsed ESIDevice into the shape the
  * composer puts on the project: CoE flags (so a fresh device starts with the correct
- * E2 flags and does not look like a pre-E2 project) and the `isModularCoupler` marker
+ * CoE flags and does not look like an older save) and the `isModularCoupler` marker
  * (so the UI can offer the "Add module to slot N" affordance before any module is
  * attached). The composer tests at the UI level verify that `coeFlags` actually lands
  * on `device.config.coeFlags`; this file verifies the pure helper.
@@ -12,7 +12,7 @@
 import type { ConfiguredEtherCATDevice, ESIDevice } from '@root/middleware/shared/ports/esi-types'
 
 import { createDefaultSlaveConfig } from '../device-config-defaults'
-import { enrichDeviceData, esiStartupData, lacksE2Schema, lacksEsiStartupData } from '../enrich-device-data'
+import { enrichDeviceData, esiStartupData, lacksPdoFlags, lacksEsiStartupData } from '../enrich-device-data'
 import { parseESIDeviceFull } from '../esi-parser-main'
 
 const MODULAR_COUPLER_ESI = `<?xml version="1.0" encoding="UTF-8"?>
@@ -52,7 +52,7 @@ const esiFrom = (xml: string): ESIDevice => {
   return r.device
 }
 
-describe('DOPE-704 E1 extras: enrichDeviceData returns the ESI extensions', () => {
+describe('enrichDeviceData returns the ESI extensions', () => {
   test('coeFlags are lifted from the ESI mailbox and included on the enrichment', () => {
     const enriched = enrichDeviceData(esiFrom(PLAIN_DRIVE_ESI))
     expect(enriched.coeFlags).toEqual({ pdoAssign: true, pdoConfig: true, completeAccess: false })
@@ -70,8 +70,8 @@ describe('DOPE-704 E1 extras: enrichDeviceData returns the ESI extensions', () =
   })
 })
 
-describe('DOPE-704 E1 extras: freshly added device no longer looks like pre-E2', () => {
-  test('a device whose config carries the enriched coeFlags does not satisfy lacksE2Schema', () => {
+describe('freshly added device does not look like an older save', () => {
+  test('a device whose config carries the enriched coeFlags does not satisfy lacksPdoFlags', () => {
     const enriched = enrichDeviceData(esiFrom(PLAIN_DRIVE_ESI))
     // What the composer builds: default config + coeFlags from enrichment.
     const device = {
@@ -87,7 +87,7 @@ describe('DOPE-704 E1 extras: freshly added device no longer looks like pre-E2',
       rxPdos: enriched.rxPdos,
       txPdos: enriched.txPdos,
     }
-    expect(lacksE2Schema(device)).toBe(false)
+    expect(lacksPdoFlags(device)).toBe(false)
   })
 })
 

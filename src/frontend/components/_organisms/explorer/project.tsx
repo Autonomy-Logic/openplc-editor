@@ -112,18 +112,13 @@ const Project = () => {
 
     const existing = getEditorFromEditors(tabToBeCreated.name)
     const fresh = CreateEditorObjectFromTab(tabToBeCreated)
-    // The editor cache is keyed by display name alone, which is ambiguous when
-    // an underlying element gets rebuilt with new identity (e.g. a coupler's
-    // slot module removed and re-added at a different slot: the display name
-    // stays "<coupler>/<module>" but moduleId flips from slot-0 to slot-1).
-    // Treat the cache entry as stale and replace it when any identity-forming
-    // meta field disagrees with the fresh model.
+    // The editor cache is keyed by display name alone, so an element rebuilt under the same
+    // name (a module removed and added again) would reopen the old model. Any identity field
+    // that disagrees with the fresh model marks the cached one stale.
+    const existingMeta = existing === null ? null : new Map<string, unknown>(Object.entries(existing.meta))
     const stale =
       existing !== null &&
-      (existing.type !== fresh.type ||
-        (Object.keys(fresh.meta) as (keyof typeof fresh.meta)[]).some(
-          (k) => (existing.meta as Record<string, unknown>)[k] !== (fresh.meta as Record<string, unknown>)[k],
-        ))
+      (existing.type !== fresh.type || Object.entries(fresh.meta).some(([k, v]) => existingMeta?.get(k) !== v))
     if (stale) removeModel(tabToBeCreated.name)
     const model = existing !== null && !stale ? existing : fresh
     addModel(model)
@@ -578,10 +573,10 @@ const Project = () => {
                       }
                     >
                       {device.ethercatConfig?.devices?.map((child) => {
-                        // DOPE-704 E4: a modular coupler expands to show its slot modules.
+                        // A modular coupler expands to show its slot modules.
                         // isModularCoupler is set at import time from the ESI's <Slots>
                         // block; existing modules make the coupler expandable even when
-                        // the flag is missing (projects saved pre-E4).
+                        // the flag is missing (older projects).
                         const isModular = child.isModularCoupler === true || (child.modules?.length ?? 0) > 0
                         if (isModular) {
                           return (

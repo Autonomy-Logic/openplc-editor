@@ -64,7 +64,9 @@ export const ethercatModuleMemoryKey = (
 export const MODULE_REGISTRY_CHANNEL_PREFIX = '#'
 export const moduleRegistryChannelId = (moduleId: string, channelId: string): string =>
   `${moduleId}${MODULE_REGISTRY_CHANNEL_PREFIX}${channelId}`
-export function parseModuleRegistryChannelId(registryChannelId: string): { moduleId: string; channelId: string } | null {
+export function parseModuleRegistryChannelId(
+  registryChannelId: string,
+): { moduleId: string; channelId: string } | null {
   const idx = registryChannelId.indexOf(MODULE_REGISTRY_CHANNEL_PREFIX)
   if (idx <= 0 || idx === registryChannelId.length - 1) return null
   return { moduleId: registryChannelId.slice(0, idx), channelId: registryChannelId.slice(idx + 1) }
@@ -160,12 +162,8 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
     }
   }
 
-  // 4. EtherCAT — one consumer per slave device. Modules plugged into a
-  // modular coupler contribute their own channels to the slave's consumer,
-  // so an alias set on a module channel resolves at compile time the same
-  // way a coupler-level alias does. Registry channel ids are prefixed with
-  // the module id to keep them distinct from any coupler channel sharing
-  // the same PDO identifier; the write-back path strips the prefix.
+  // 4. EtherCAT: one consumer per slave, including its modules' channels. A module channel's
+  // registry id is prefixed with the module id; the write-back path strips the prefix.
   for (const device of inputs.remoteDevices ?? []) {
     const deviceName = device.deviceName || device.name || 'device'
     for (const slave of device.ethercatConfig?.devices ?? []) {

@@ -6,7 +6,9 @@ import type {
 } from '@root/middleware/shared/ports/esi-types'
 import { reconcilePdoChannels } from '@root/middleware/shared/utils/ethercat'
 
-const entry = (patch: Partial<PersistedPdoEntry> & Pick<PersistedPdoEntry, 'index' | 'subIndex'>): PersistedPdoEntry => ({
+const entry = (
+  patch: Partial<PersistedPdoEntry> & Pick<PersistedPdoEntry, 'index' | 'subIndex'>,
+): PersistedPdoEntry => ({
   bitLen: 16,
   name: 'StatusWord',
   dataType: 'UINT',
@@ -21,7 +23,9 @@ const pdo = (index: string, entries: PersistedPdoEntry[], extra: Partial<Persist
   ...extra,
 })
 
-const info = (patch: Partial<PersistedChannelInfo> & Pick<PersistedChannelInfo, 'channelId'>): PersistedChannelInfo => ({
+const info = (
+  patch: Partial<PersistedChannelInfo> & Pick<PersistedChannelInfo, 'channelId'>,
+): PersistedChannelInfo => ({
   name: 'StatusWord',
   direction: 'input',
   pdoIndex: '0x1A00',
@@ -124,10 +128,7 @@ describe('reconcilePdoChannels', () => {
     ]
     const result = reconcilePdoChannels({ txPdos, previousMappings: [] })
 
-    expect(result.channelInfo.map((c) => c.channelId)).toEqual([
-      '0x1A00-0x6041-0x00',
-      '0x1A00-0x6064-0x00',
-    ])
+    expect(result.channelInfo.map((c) => c.channelId)).toEqual(['0x1A00-0x6041-0x00', '0x1A00-0x6064-0x00'])
   })
 
   test('avoids addresses claimed outside the slave (externalUsedAddresses)', () => {
@@ -159,14 +160,8 @@ describe('reconcilePdoChannels', () => {
 
     const result = reconcilePdoChannels({ txPdos, previousChannelInfo, previousMappings })
 
-    expect(result.channelInfo.map((c) => c.channelId)).toEqual([
-      '0x1A00-0x6041-0x00',
-      '0x1A00-0x6064-0x00',
-    ])
-    expect(result.channelMappings.map((m) => m.channelId)).toEqual([
-      '0x1A00-0x6041-0x00',
-      '0x1A00-0x6064-0x00',
-    ])
+    expect(result.channelInfo.map((c) => c.channelId)).toEqual(['0x1A00-0x6041-0x00', '0x1A00-0x6064-0x00'])
+    expect(result.channelMappings.map((m) => m.channelId)).toEqual(['0x1A00-0x6041-0x00', '0x1A00-0x6064-0x00'])
   })
 
   test('rxPdos are treated as outputs and txPdos as inputs', () => {

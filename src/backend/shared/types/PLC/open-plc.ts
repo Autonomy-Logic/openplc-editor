@@ -730,9 +730,9 @@ const EtherCATSlaveConfigSchema = z.object({
   watchdog: EtherCATWatchdogSchema,
   distributedClocks: EtherCATDistributedClocksSchema,
   /**
-   * DOPE-704 E2: CoE flags defaulted from the ESI, overridable in the Expert view.
+   * CoE flags defaulted from the ESI, overridable in the Expert view.
    * Optional for backward compatibility; the project loader runs the one-pass migration
-   * helper to fill them in from the ESI on projects saved under the pre-E2 schema.
+   * helper to fill them in from the ESI on projects saved under the earlier schema, without CoE flags or per-PDO flags.
    */
   coeFlags: z
     .object({
@@ -758,7 +758,7 @@ const PersistedPdoSchema = z.object({
   entries: z.array(PersistedPdoEntrySchema),
   dependOnSlot: z.boolean().optional(),
   assigned: z.boolean().optional(),
-  /** DOPE-704 E2: ESI defaults carried forward on first import. */
+  /** ESI defaults carried forward on first import. */
   fixed: z.boolean().optional(),
   mandatory: z.boolean().optional(),
   sm: z.number().int().optional(),
@@ -786,9 +786,9 @@ const SDOConfigurationEntrySchema = z.object({
   bitLength: z.number(),
   name: z.string(),
   objectName: z.string(),
-  /** DOPE-704 E5 extras: byte-string payload (hex-encoded) sent via EtherDOG's value_bytes. */
+  /** Byte-string payload (hex-encoded) sent via EtherDOG's value_bytes. */
   valueBytes: z.string().optional(),
-  /** DOPE-704 E5 extras: send with CoE Complete Access. */
+  /** Send with CoE Complete Access. */
   completeAccess: z.boolean().optional(),
   dependOnSlot: z.boolean().optional(),
   transition: z.string().optional(),
@@ -837,7 +837,7 @@ const Cia402AxisConfigSchema = z.object({
 })
 
 /**
- * DOPE-704 E4: one I/O module plugged into a modular coupler (ETG.5001). Mirror of
+ * One I/O module plugged into a modular coupler (ETG.5001). Mirror of
  * {@link ConfiguredEtherCATModule} in esi-types.ts; the Zod schema is what the project
  * loader validates against.
  */
@@ -878,12 +878,12 @@ const ConfiguredEtherCATDeviceSchema = z.object({
   /** Present when this drive is a CiA 402 SoftMotion axis (see schema above). */
   cia402: Cia402AxisConfigSchema.optional(),
   /**
-   * DOPE-704 E4: modules plugged into this coupler, in slot order. Present only when the
+   * Modules plugged into this coupler, in slot order. Present only when the
    * underlying ESI declares a `<Slots>` block (ETG.5001 modular coupler).
    */
   modules: z.array(ConfiguredEtherCATModuleSchema).optional(),
   /**
-   * DOPE-704 E1: true when the ESI declares a `<Slots>` block. Set once at import time so
+   * True when the ESI declares a `<Slots>` block. Set once at import time so
    * the UI can offer the "Add module to slot N" affordance before any module is attached.
    */
   isModularCoupler: z.boolean().optional(),

@@ -29,9 +29,9 @@ import { assignedPdos, esiTypeToIecType, generateDefaultChannelMappings, pdoToCh
 import { extractDefaultSdoConfigurations } from './sdo-config-defaults'
 
 /**
- * DOPE-704 E2: derive the default CoE flags for a slave config from the ESI. Called on
+ * Derive the default CoE flags for a slave config from the ESI. Called on
  * first device import by {@link enrichDeviceData} and on project open by
- * {@link migrateSlaveToE2Schema} when the saved slave lacks the field.
+ * {@link migrateSlavePdoFlags} when the saved slave lacks the field.
  */
 export function deriveCoEFlags(device: ESIDevice): NonNullable<EtherCATSlaveConfig['coeFlags']> {
   return {
@@ -58,7 +58,7 @@ export function persistPdos(pdos: ESIPdo[]): PersistedPdo[] {
       index: pdo.index,
       name: pdo.name,
       assigned: assigned.has(pdo),
-      // DOPE-704 E2: carry the ESI defaults forward so the UI can grey Fixed PDO entries
+      // Carry the ESI defaults forward so the UI can grey Fixed PDO entries
       // and reject assignment changes on Mandatory PDOs without opening the ESI again.
       fixed: pdo.fixed || undefined,
       mandatory: pdo.mandatory || undefined,
@@ -83,10 +83,8 @@ export function persistPdos(pdos: ESIPdo[]): PersistedPdo[] {
  */
 export function buildChannelInfo(device: ESIDevice): PersistedChannelInfo[] {
   const channels = pdoToChannels(device)
-  // Channels honour the ESI as declared: a BYTE entry stays a BYTE channel at
-  // `%IB/%QB`, a USINT counter stays a value, a WORD stays a WORD. Bit-level
-  // access on a byte PDO is a PLC-program concern (`%IX{byte}.{bit}`) and no
-  // longer a UI auto-split — vendor intent can't be inferred from the type.
+  // One channel per ESI entry, with the declared type: a BYTE entry is a BYTE channel at
+  // `%IB/%QB`. Bit access to it is `%IX{byte}.{bit}` in the program.
   return channels.map(
     (ch): PersistedChannelInfo => ({
       channelId: ch.id,
@@ -221,16 +219,16 @@ export function recordPdoAssignment(device: ConfiguredEtherCATDevice, esiDevice:
 }
 
 /**
- * DOPE-704 E2: has this slave been saved under the pre-E2 schema? True when the slave
+ * Has this slave been saved without CoE flags or per-PDO flags? True when the slave
  * config is missing `coeFlags` or any of its persisted PDOs is missing the `fixed` /
  * `mandatory` / `exclude` surface. Used by the project loader to decide whether to run
  * the one-time migration + notice.
  */
-export function lacksE2Schema(device: ConfiguredEtherCATDevice): boolean {
+export function lacksPdoFlags(device: ConfiguredEtherCATDevice): boolean {
   if (device.config?.coeFlags === undefined) return true
   const anyPdo = [...(device.rxPdos ?? []), ...(device.txPdos ?? [])][0]
   if (anyPdo === undefined) return false
-  // A PDO saved under the E2 schema at least carries the shape; an older PDO has none of
+  // A PDO saved with per-PDO flags at least carries the shape; an older PDO has none of
   // the three fields.
   return (
     anyPdo.fixed === undefined &&
@@ -241,7 +239,7 @@ export function lacksE2Schema(device: ConfiguredEtherCATDevice): boolean {
 }
 
 /**
- * DOPE-704 E2: brings a slave saved under the pre-E2 schema (or DOPE-657) to the current
+ * Brings a slave saved without CoE flags or per-PDO flags to the current
  * schema in one pass. Preserves user data verbatim and only fills in fields the ESI knows:
  *
  * - `config.coeFlags` is defaulted from the ESI's `<Mailbox><CoE />`
@@ -251,10 +249,7 @@ export function lacksE2Schema(device: ConfiguredEtherCATDevice): boolean {
  *
  * Returns the migrated slave. Idempotent: calling on an already-migrated slave is a no-op.
  */
-export function migrateSlaveToE2Schema(
-  device: ConfiguredEtherCATDevice,
-  esiDevice: ESIDevice,
-): ConfiguredEtherCATDevice {
+export function migrateSlavePdoFlags(device: ConfiguredEtherCATDevice, esiDevice: ESIDevice): ConfiguredEtherCATDevice {
   const mergePdos = (persisted: PersistedPdo[] | undefined, esi: ESIPdo[]): PersistedPdo[] | undefined => {
     if (persisted === undefined || persisted.length === 0) return persisted
     const esiByIndex = new Map(esi.map((p) => [p.index.toLowerCase(), p]))

@@ -1,5 +1,5 @@
 /**
- * DOPE-704 E3 generator tests.
+ * Generator tests.
  *
  * Verifies the PDO-assignment startup SDO block (0x1C12 / 0x1C13 writes in CODESYS order)
  * that the generator emits when a slave advertises PdoAssign. The on-wire sequence is
@@ -61,7 +61,7 @@ const firstBusConfig = (devices: ConfiguredEtherCATDevice[]): BusSlave[] => {
   return bc[0]!.config.slaves
 }
 
-describe('DOPE-704 E3: PDO-assignment SDO block', () => {
+describe('PDO-assignment SDO block', () => {
   test('a slave without PdoAssign emits no 0x1C1n writes', () => {
     const slave = configuredSlave({
       config: {
@@ -78,7 +78,7 @@ describe('DOPE-704 E3: PDO-assignment SDO block', () => {
     expect(assignmentWrites).toEqual([])
   })
 
-  test('a slave without coeFlags (pre-E2 schema) emits no 0x1C1n writes', () => {
+  test('a slave without coeFlags (earlier schema) emits no 0x1C1n writes', () => {
     const slave = configuredSlave({
       config: createDefaultSlaveConfig(), // no coeFlags
       rxPdos: [pdo('0x1600')],
@@ -158,7 +158,7 @@ describe('DOPE-704 E3: PDO-assignment SDO block', () => {
     expect(seq[1]).toMatchObject({ index: '0x1C12', subindex: 0, value: 0 })
   })
 
-  test('DOPE-657 project: assigned === undefined behaves as every PDO assigned', () => {
+  test('a save without assignment: assigned === undefined behaves as every PDO assigned', () => {
     const slave = configuredSlave({
       rxPdos: [pdo('0x1600', undefined), pdo('0x1601', undefined)],
     })

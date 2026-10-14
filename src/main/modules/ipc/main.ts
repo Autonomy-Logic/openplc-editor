@@ -408,10 +408,17 @@ class MainProcessBridge implements MainIpcModule {
       message?: unknown
     }>(ipAddress, '/api/discovery/ethercat/capabilities', (data: string) => {
       const parsed: unknown = JSON.parse(data)
-      if (!parsed || typeof parsed !== 'object') {
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         throw new Error('capabilities response was not an object')
       }
-      return parsed as { available?: boolean; features?: unknown; version?: unknown; message?: unknown }
+      const field = (key: string): unknown => (key in parsed ? Reflect.get(parsed, key) : undefined)
+      const available = field('available')
+      return {
+        available: typeof available === 'boolean' ? available : undefined,
+        features: field('features'),
+        version: field('version'),
+        message: field('message'),
+      }
     })
     if (!result.success) {
       return { features: null, error: result.error }
@@ -3211,7 +3218,7 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /**
-   * DOPE-704 E6 / RTOP-319 R3: `POST /api/discovery/ethercat/scan-modules`.
+   * `POST /api/discovery/ethercat/scan-modules`.
    * Returns the modular coupler's `0xF050` module list as the Python runtime
    * forwards it. Keeps parsing responsibilities on the renderer — the handler
    * just hands back the parsed JSON body so the shared protocol helpers can

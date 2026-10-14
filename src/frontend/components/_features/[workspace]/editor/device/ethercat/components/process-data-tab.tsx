@@ -113,10 +113,8 @@ const SimpleSection = ({
   onToggleEdit: () => void
   onTogglePdo: (pdoIndex: string, next: boolean) => void
 }) => {
-  // A PDO is "locked by exclusion" only when it is currently unassigned AND some other
-  // assigned PDO lists it in its exclude set.  Marking a currently assigned PDO as locked
-  // would trap mutually-excluded pairs where both start as assigned (common in ESIs with
-  // bidirectional exclude): the user needs to be able to uncheck one to resolve the conflict.
+  // A PDO is locked by exclusion only while unassigned and excluded by an assigned PDO, so of
+  // two assigned PDOs excluding each other either can still be unticked.
   const excludeMap = useMemo(() => {
     const m = new Map<string, string>()
     const assignedList = pdos.filter((p) => p.assigned !== false)
@@ -223,10 +221,7 @@ const EntryEditor = ({
   }
   const removeEntry = (i: number) => onChange(entries.filter((_, idx) => idx !== i))
   const addEntry = () =>
-    onChange([
-      ...entries,
-      { index: '0x0000', subIndex: '0x00', bitLen: 8, name: '', dataType: 'USINT' },
-    ])
+    onChange([...entries, { index: '0x0000', subIndex: '0x00', bitLen: 8, name: '', dataType: 'USINT' }])
 
   return (
     <div className='overflow-hidden rounded border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/50'>
@@ -250,7 +245,10 @@ const EntryEditor = ({
             </tr>
           ) : (
             entries.map((entry, i) => (
-              <tr key={`${entry.index}-${entry.subIndex}-${i}`} className='border-t border-neutral-200 dark:border-neutral-800'>
+              <tr
+                key={`${entry.index}-${entry.subIndex}-${i}`}
+                className='border-t border-neutral-200 dark:border-neutral-800'
+              >
                 <td className='px-2 py-1'>
                   <input
                     type='text'
@@ -385,10 +383,7 @@ const ExpertSection = ({
                 <div className='h-4 w-4'>
                   <ArrowIcon
                     direction='right'
-                    className={cn(
-                      'h-4 w-4 stroke-brand-light transition-all',
-                      isOpen && 'rotate-270 stroke-brand',
-                    )}
+                    className={cn('h-4 w-4 stroke-brand-light transition-all', isOpen && 'rotate-270 stroke-brand')}
                   />
                 </div>
                 <span className='flex flex-1 items-center gap-2'>
@@ -426,13 +421,7 @@ const ExpertSection = ({
   )
 }
 
-const CoeFlagsPanel = ({
-  flags,
-  onChange,
-}: {
-  flags: CoeFlags
-  onChange: (next: CoeFlags) => void
-}) => {
+const CoeFlagsPanel = ({ flags, onChange }: { flags: CoeFlags; onChange: (next: CoeFlags) => void }) => {
   const Row = ({
     label,
     value,
@@ -464,7 +453,7 @@ const CoeFlagsPanel = ({
       <Row
         label='PdoConfig'
         value={flags.pdoConfig}
-        help='Rewrite each PDO&apos;s own mapping (0x1600 / 0x1A00 clear → entries → count).'
+        help="Rewrite each PDO's own mapping (0x1600 / 0x1A00 clear → entries → count)."
         on={(next) => onChange({ ...flags, pdoConfig: next })}
       />
       <Row
