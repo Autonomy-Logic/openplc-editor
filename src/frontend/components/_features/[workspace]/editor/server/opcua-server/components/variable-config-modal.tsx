@@ -364,7 +364,7 @@ export const VariableConfigModal = ({
 
   return (
     <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <ModalContent className={cn('h-auto max-h-[90vh]', isComplex ? 'w-[650px]' : 'w-[550px]')} onClose={onClose}>
+      <ModalContent className={cn('max-h-[90vh]', isComplex ? 'w-[650px]' : 'w-[550px]')} onClose={onClose}>
         <ModalHeader>
           <ModalTitle>{existingConfig ? 'Edit' : 'Configure'} OPC-UA Node</ModalTitle>
         </ModalHeader>
