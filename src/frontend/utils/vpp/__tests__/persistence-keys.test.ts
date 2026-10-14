@@ -9,7 +9,7 @@
  * closes without prompting.
  */
 
-import { collectScreenPersistenceKeys, getSectionPersistenceKey } from '../persistence-keys'
+import { collectConfiguratorKeys, collectScreenPersistenceKeys, getSectionPersistenceKey } from '../persistence-keys'
 
 describe('getSectionPersistenceKey', () => {
   it('returns explicit persistence when declared', () => {
@@ -24,6 +24,11 @@ describe('getSectionPersistenceKey', () => {
     expect(getSectionPersistenceKey({})).toBeNull()
     expect(getSectionPersistenceKey(null)).toBeNull()
     expect(getSectionPersistenceKey(undefined)).toBeNull()
+  })
+
+  it('defaults a vendor-document section to the configurator key', () => {
+    expect(getSectionPersistenceKey({ id: 'editor', layout: 'vendor-document' })).toBe('configurator')
+    expect(getSectionPersistenceKey({ id: 'editor', layout: 'vendor-document', persistence: 'cfg' })).toBe('cfg')
   })
 
   it('ignores non-string / empty values for persistence and id', () => {
@@ -93,5 +98,23 @@ describe('collectScreenPersistenceKeys', () => {
     const keys = collectScreenPersistenceKeys(screen)
     expect(keys).toContain('hal-config')
     expect(keys).toContain('module-configuration')
+  })
+})
+
+describe('vendor-document ownership', () => {
+  const screen = {
+    sections: [
+      { id: 'editor', layout: 'vendor-document' },
+      { id: 'mapping', persistence: 'io-mapping', layout: 'datapoint-io-table' },
+    ],
+  }
+
+  it('owns the device setup and the I/O mapping it writes alongside the archive', () => {
+    expect(collectScreenPersistenceKeys(screen)).toEqual(['configurator', 'device-setup', 'io-mapping'])
+  })
+
+  it('lists only configurator sections as archive keys', () => {
+    expect(collectConfiguratorKeys(screen)).toEqual(['configurator'])
+    expect(collectConfiguratorKeys({ sections: [{ id: 'hal', layout: 'form' }] })).toEqual([])
   })
 })

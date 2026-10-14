@@ -41,3 +41,35 @@ DOM, storage, cookies or `window.bridge`, and its requests carry no host credent
 document served from a package could reach the editor's preload bridge and everything behind it.
 The host talks to the document only through the postMessage relay in
 `src/middleware/shared/vendor-document/` and never touches `iframe.contentWindow` globals.
+
+## The `vendor-document` screen section
+
+A VPP screen embeds the document with a section of layout `vendor-document`
+(`vendor-screen/layouts/configurator-screen.tsx`):
+
+```json
+{
+  "id": "configurator",
+  "layout": "vendor-document",
+  "document": "configurator/index.html",
+  "bundleVersion": "3.5.22",
+  "controllers": { "<device board name>": "<controller type id>" }
+}
+```
+
+- All three fields are required; a section missing one renders nothing. A board not listed in
+  `controllers` gets a refusal that names the supported boards.
+- `persistence` defaults to `configurator`. The section also owns `device-setup` and `io-mapping`, so
+  dirty tracking, save and "Don't save" cover all three (`collectScreenPersistenceKeys`).
+- Boot (`src/frontend/utils/vpp/configurator-session.ts`): `ready` → `setController` → `show` →
+  `load(stored archive)` → compare the loaded module guids with the stored `device-setup`. A mismatch
+  or a rejected load fails the screen and writes nothing, so the stored archive is kept. An empty
+  archive is never loaded.
+- The guest fires `modified` twice for `show` and once per `setProject`; those are counted off. Any
+  other `modified` is a user change, snapshotted once events settle, and written by
+  `applyConfiguratorSnapshot` in one store update: `configurator` `{archive, controller, bundleVersion}`
+  (archive byte-for-byte), `device-setup`, and `io-mapping` derived from the datapoints with aliases
+  carried over by `datapointId`.
+- The dirty compare hashes the archive (`src/frontend/utils/vpp/owned-slice.ts`); `cleanState` keeps it
+  whole for the revert.
+- Switching tabs unmounts the iframe; reopening replays the boot from the stored data.

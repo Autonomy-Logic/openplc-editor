@@ -17,6 +17,12 @@ type ScreenSection = {
   fields?: unknown[]
   actions?: unknown[]
   persistence?: string
+  /** vendor-document: page inside the package that hosts the configurator. */
+  document?: unknown
+  /** vendor-document: device board name → controller type id passed to the configurator. */
+  controllers?: unknown
+  /** vendor-document: configurator bundle version, stored next to its archive. */
+  bundleVersion?: unknown
 }
 
 type ScreenDefinition = {

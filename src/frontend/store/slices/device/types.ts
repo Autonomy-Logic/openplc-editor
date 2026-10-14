@@ -8,12 +8,14 @@ import type {
   DeviceConfiguration,
   DeviceLinkTransport,
   DevicePin,
+  IoMappingEntry,
   PersistentStorageSettings,
   PlcStatus,
   ProjectTargetDevice,
   TimingStats,
 } from '../../../../middleware/shared/ports/types'
 import type { DeviceVpp } from '../../../../middleware/shared/ports/vpp-types'
+import type { DeviceSetupRecord } from '../../../utils/vpp/datapoints-to-io-mapping'
 
 // ---------------------------------------------------------------------------
 // Device available options
@@ -231,6 +233,19 @@ export type PinUpdateResponse = {
 // Device actions
 // ---------------------------------------------------------------------------
 
+/** What an embedded configurator persists: its archive is opaque and kept byte-for-byte. */
+export type ConfiguratorRecord = {
+  archive: string
+  controller: string
+  bundleVersion: string
+}
+
+export type ConfiguratorSnapshotRecord = {
+  configurator: ConfiguratorRecord
+  deviceSetup: DeviceSetupRecord
+  ioMapping: { entries: IoMappingEntry[] }
+}
+
 export type DeviceActions = {
   setAvailableOptions: (options: {
     availableBoards?: Map<string, BoardInfo>
@@ -328,6 +343,8 @@ export type DeviceActions = {
   /** Record (or clear, with `null`) the VPP package a board was authored against. */
   setVppPackagePin: (board: string, pin: VppPackagePin | null) => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
+  /** Write an embedded configurator's archive, device setup and derived I/O mapping as one store update. */
+  setConfiguratorSnapshot: (configuratorKey: string, snapshot: ConfiguratorSnapshotRecord) => void
   /** Restore `vendorScreenData[k]` for every k in `ownedKeys`: from
    *  `snapshot[k]` when present, else by deleting the key.  Used by
    *  the vendor-screen tab's "Don't save" revert. */
