@@ -876,11 +876,7 @@ function migrateVendorScreenData(
   return { vendorScreenData: undefined, vendorScreenDataByBoard: undefined }
 }
 
-/**
- * Resolve the persistent-storage settings of a freshly-loaded project into the
- * flat-view + per-board-archive pair, mirroring `migrateVendorScreenData`.
- * Absent stays absent: no settings is what makes `generateRetainConf` emit no file.
- */
+/** Like `migrateVendorScreenData`; absent stays absent so no retain.conf is emitted. */
 function migratePersistentStorage(
   provided: Partial<DeviceConfiguration>,
   deviceBoard: string,
@@ -925,8 +921,7 @@ function mergeDeviceConfigWithDefaults(
     // board.tsx's drift detection sees a blank slate instead of the real
     // prior pin, so a project with a VPP board always opens as if unpinned.
     vppPackagePinsByBoard: provided.vppPackagePinsByBoard ?? defaults.vppPackagePinsByBoard,
-    // Must merge — otherwise opening a project drops its RETAIN settings, and the
-    // pre-build auto-save writes them off disk before retain.conf is generated.
+    // Must merge — otherwise the next save (auto-save on build included) drops the RETAIN settings.
     ...(persistentStorage ? { persistentStorage } : {}),
     ...(persistentStorageByBoard ? { persistentStorageByBoard } : {}),
     // Copied: a fresh object per load is what tells the restore hook a project was (re)opened.

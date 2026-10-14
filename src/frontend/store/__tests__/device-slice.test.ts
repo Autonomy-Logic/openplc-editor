@@ -665,6 +665,17 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceDefinitions.configuration.persistentStorage).toEqual(v4)
     })
 
+    it('leaves the active board without settings when only another board has a bucket', () => {
+      const store = makeStore()
+      const esp = { enabled: true, path: '/esp', flushSeconds: 9 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: { deviceBoard: 'OpenPLC Runtime v4', persistentStorageByBoard: { 'ESP8266 NodeMCU': esp } },
+      })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg.persistentStorage).toBeUndefined()
+      expect(cfg.persistentStorageByBoard).toEqual({ 'ESP8266 NodeMCU': esp })
+    })
+
     it('leaves persistent storage absent for a project that never configured it', () => {
       const store = makeStore()
       store.getState().deviceActions.setDeviceDefinitions({ configuration: { deviceBoard: 'OpenPLC Runtime v4' } })
