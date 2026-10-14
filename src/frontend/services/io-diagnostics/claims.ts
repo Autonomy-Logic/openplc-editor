@@ -2,7 +2,7 @@
  * Every address a producer took, and which producer took it.
  *
  * Separate from the rest of the snapshot because a file that builds an address
- * pool must resolve capabilities the PRODUCER way or not at all (DOPE-615, C1),
+ * pool must resolve capabilities the PRODUCER way or not at all,
  * and the snapshot also needs the strict resolver for servers. Keeping the pool
  * here, receiving its capabilities like `compute-io-image.ts` does, means the
  * two resolvers can never be confused for one another.

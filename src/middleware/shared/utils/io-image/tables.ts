@@ -1,5 +1,5 @@
 /**
- * The I/O image tables, written down once (DOPE-615).
+ * The I/O image tables, written down once.
  *
  * "Which tables exist, which IEC prefix each one stores, in which unit, and on
  * which runtime" was stated in five places in this repository, and a sixth was
@@ -81,7 +81,7 @@ export const IMAGE_AREAS_RUNTIME_V4: ReadonlySet<string> = new Set(IMAGE_TABLES.
  *
  * Fewer than v4's: no byte-addressed buffer and no bit-addressed memory area,
  * which is why `%MX` on bare metal is reported as unsupported rather than
- * silently dropped as it is today (DOPE-605).
+ * silently dropped as it is today.
  */
 export const IMAGE_AREAS_BAREMETAL: ReadonlySet<string> = new Set(
   IMAGE_TABLES.filter((table) => table.macro).map((table) => table.prefix),
@@ -116,7 +116,7 @@ const ADDRESSES_PER_ELEMENT: Record<ImageUnit, number> = {
  * in that table's ADDRESS unit — which is what the image is sized in.
  *
  * Two conversions meet here and they pull in opposite directions, which is
- * why it is written down once with a test from both sides (DOPE-615, B3):
+ * why it is written down once with a test from both sides:
  *
  *   - `sizeBytes` is a size on the WIRE and has to become elements. 128 bytes
  *     of `int_output` is 64 words, not 128. A partial element is dropped:

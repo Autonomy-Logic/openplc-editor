@@ -1,5 +1,5 @@
 /**
- * The edit-time duplicate-output scan (DOPE-615, B6).
+ * The edit-time duplicate-output scan.
  *
  * Two declarations of one output address are refused at compile time; this is
  * the same fact answered while the user is still typing. It carries SCOPE as

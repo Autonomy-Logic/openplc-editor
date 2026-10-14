@@ -211,7 +211,7 @@ function saysNothingAboutProducers(boardInfo: BoardInfoLike | undefined): boolea
  * cannot back. Here that same answer is actively harmful: an all-false block
  * is indistinguishable from "this target supports no producers", so every
  * consumer drops out. In the store that froze addresses in place and reported
- * success (DOPE-440); in the compile-time image sizer it would size every area
+ * success; in the compile-time image sizer it would size every area
  * to zero and then refuse the build for want of a producer.
  *
  * So silence answers `ALL_ADDRESS_PRODUCERS_ACTIVE` instead. Permissive is the

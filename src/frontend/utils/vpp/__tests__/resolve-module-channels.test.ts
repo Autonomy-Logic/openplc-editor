@@ -166,7 +166,7 @@ describe('resolveModuleChannels', () => {
   })
 })
 
-describe('manifest address prefixes (DOPE-615, B7)', () => {
+describe('manifest address prefixes', () => {
   const withChannels = (channels: unknown[]) =>
     resolveModuleChannels({ addressMapping: { channels } } as never, undefined)
 

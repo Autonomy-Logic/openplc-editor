@@ -167,7 +167,7 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
     return {
       transports,
       segments: BAREMETAL_SEGMENTS,
-      // CONFIGURABLE ON BARE METAL TOO, as of DOPE-615.
+      // CONFIGURABLE ON BARE METAL TOO.
       //
       // This read `false` while the MCU's `MAX_*` constants in `openplc.h` were
       // fixed at compile time: the firmware dimensioned the IEC pointer arrays

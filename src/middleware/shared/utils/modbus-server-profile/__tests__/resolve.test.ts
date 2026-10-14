@@ -95,7 +95,7 @@ describe('resolveModbusServerProfile', () => {
     })
 
     it('keeps the bind address out of the user hands, but not the port or the buffers', () => {
-      // BUFFERS ARE THE USER'S ON BARE METAL NOW (DOPE-615). They were not
+      // BUFFERS ARE THE USER'S ON BARE METAL NOW. They were not
       // while `openplc.h` fixed the MAX_* constants at compile time: a number
       // typed here could only disagree with the firmware. The macros are now
       // emitted from what the project contains, so what the server is asked to

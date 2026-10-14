@@ -58,7 +58,7 @@ export function useAliasRegistry(): AliasRegistry {
   // project came from another machine, or the catalogue has not loaded yet.
   // That answer is right for gating a UI element and wrong for scoping a
   // pool: an empty pool makes every claimed address look free, so the alias
-  // registry stops seeing the conflicts it exists to report (DOPE-615, C1).
+  // registry stops seeing the conflicts it exists to report.
   //
   // Cached on the BOARD INFO rather than on the resolved block, because the
   // resolver spreads a board's own capability object and so returns a fresh

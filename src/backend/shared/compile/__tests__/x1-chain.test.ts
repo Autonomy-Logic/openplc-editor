@@ -1,9 +1,10 @@
 /**
- * X1 (metade do editor) — o image.conf que o editor emite bate com o projeto.
+ * X1 (the editor's half) — the image.conf it emits matches the project.
  *
- * Monta os produtores pelo STORE, que e o caminho do usuario, e emite o
- * arquivo pelo mesmo gerador do pipeline. O outro lado da cadeia -- o core
- * alocando e os plugins logando -- roda no runtime em container.
+ * Builds the producers through the STORE, which is the user's own path, and
+ * emits the file with the pipeline's own generator. The other half of the
+ * chain -- the core allocating and the plugins logging -- runs on the
+ * containerised runtime.
  */
 import { writeFileSync } from 'fs'
 import { createStore } from 'zustand/vanilla'
@@ -64,7 +65,7 @@ const group = (id: string, length: number): ModbusIOGroup => ({
   ioPoints: [],
 })
 
-it('X1 — image.conf reflete os produtores montados pelo store', () => {
+it('X1 — image.conf reflects the producers built through the store', () => {
   const s = makeStore()
   s.getState().deviceActions.setAvailableOptions({
     availableBoards: new Map<string, BoardInfo>([['OpenPLC Runtime v4', RUNTIME_V4]]),
@@ -93,9 +94,9 @@ it('X1 — image.conf reflete os produtores montados pelo store', () => {
   })
   const conf = generateImageConf(img.sizes)
   writeFileSync('/tmp/claude-1000/x1-image.conf', conf)
-  const naoZero = conf.split('\n').filter((l) => /=\s*[1-9]/.test(l))
+  const nonZero = conf.split('\n').filter((l) => /=\s*[1-9]/.test(l))
   // eslint-disable-next-line no-console
-  console.log(`[X1] editor: ${JSON.stringify(img.sizes)} | image.conf: ${naoZero.join(', ')}`)
+  console.log(`[X1] editor: ${JSON.stringify(img.sizes)} | image.conf: ${nonZero.join(', ')}`)
   expect(img.sizes['%IW']).toBe(6)
   expect(conf).toContain('int_input=6 words')
 })

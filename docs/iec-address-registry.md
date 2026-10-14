@@ -118,8 +118,8 @@ so the allocator knows exactly how far into each space the producers reach.
 `slotCounts` publishes that: prefix (`%IX`, `%QW`, …) → highest claimed
 linear index **plus one**, i.e. how many slots that space needs.
 
-It is the number the compile pipeline sizes the runtime's I/O image from
-(DOPE-615), instead of the fixed per-platform `MAX_*` / `BUFFER_SIZE`. Three
+It is the number the compile pipeline sizes the runtime's I/O image
+from, instead of the fixed per-platform `MAX_*` / `BUFFER_SIZE`. Three
 properties of it are load-bearing:
 
 - **A prefix nobody claimed is absent, not zero-valued.** Absent and `0` mean

@@ -1,6 +1,6 @@
 /**
  * The S7comm data block's start buffer is bounded by the ABI, not by a
- * runtime constant (DOPE-615, A6).
+ * runtime constant.
  *
  * It used to stop at 1023, which was the runtime's fixed `BUFFER_SIZE`
  * transcribed into a protocol schema as if it were a fact about S7comm. Once

@@ -1,18 +1,17 @@
 /**
- * O placeholder de 1024 nao pode virar projeto.
+ * The 1024 placeholder must not become the project.
  *
- * Marcone, testando com o painel de diagnostico: criar um servidor Modbus
- * mostrava 1024 em todos os campos, mas "esses valores nao estao de fato
- * setados". Duas coisas conspiravam, e as duas estao aqui:
+ * Creating a Modbus server showed 1024 in every field with none of it stored.
+ * Two things conspired, and both are pinned here:
  *
- *  1. a tela exibia DEFAULT_BUFFER_MAPPING como se fosse do projeto;
- *  2. e editar UM campo persistia os OITO, porque o reducer mesclava sobre
- *     esses defaults -- devolvendo ao projeto a imagem fixa de 8192 bits e
- *     1024 registradores que esta demanda existe para remover.
+ *  1. the screen rendered DEFAULT_BUFFER_MAPPING as if the project held it;
+ *  2. and editing ONE field persisted all EIGHT, because the reducer merged
+ *     over those defaults -- handing the project back the fixed image of 8192
+ *     bits and 1024 registers this work exists to remove.
  *
- * `compute-io-image` le contagem persistida como PEDIDO e ausencia como
- * "exponha o que a imagem der", entao a diferenca entre gravado e exibido
- * decide o tamanho da imagem.
+ * `compute-io-image` reads a persisted count as a REQUEST and an absent one as
+ * "expose whatever the image turns out to be", so the difference between
+ * stored and displayed decides the size of the image.
  */
 import { createStore } from 'zustand/vanilla'
 
@@ -46,28 +45,28 @@ const seedServer = (s: ReturnType<typeof makeStore>) => {
 const mappingOf = (s: ReturnType<typeof makeStore>) =>
   s.getState().project.data.servers![0].modbusSlaveConfig!.bufferMapping
 
-describe('contagens do Modbus: gravado x exibido', () => {
-  it('um servidor novo nao carrega contagem nenhuma', () => {
+describe('Modbus counts: stored versus displayed', () => {
+  it('carries no count at all on a new server', () => {
     const s = makeStore()
     seedServer(s)
     expect(mappingOf(s)).toBeUndefined()
   })
 
-  it('editar UM campo grava so aquele', () => {
+  it('stores only the field that was edited', () => {
     const s = makeStore()
     seedServer(s)
     s.getState().projectActions.updateServerConfig('mb', { bufferMapping: { holdingRegisters: { qwCount: 16 } } })
 
     const m = mappingOf(s)!
     expect(m.holdingRegisters?.qwCount).toBe(16)
-    // e NADA alem disso
+    // and NOTHING besides it
     expect(m.holdingRegisters?.mwCount).toBeUndefined()
     expect(m.coils).toBeUndefined()
     expect(m.discreteInputs).toBeUndefined()
     expect(m.inputRegisters).toBeUndefined()
   })
 
-  it('um segundo campo nao apaga o primeiro nem materializa o resto', () => {
+  it('a second field erases neither the first nor materialises the rest', () => {
     const s = makeStore()
     seedServer(s)
     s.getState().projectActions.updateServerConfig('mb', { bufferMapping: { holdingRegisters: { qwCount: 16 } } })
@@ -80,11 +79,11 @@ describe('contagens do Modbus: gravado x exibido', () => {
     expect(m.inputRegisters).toBeUndefined()
   })
 
-  it('nenhum 1024 aparece por conta propria', () => {
+  it('no 1024 appears on its own', () => {
     const s = makeStore()
     seedServer(s)
     s.getState().projectActions.updateServerConfig('mb', { bufferMapping: { coils: { qxBits: 8 } } })
-    // O sintoma exato: 1024 registradores e 8192 bits que ninguem pediu.
+    // The exact symptom: 1024 registers and 8192 bits nobody asked for.
     expect(JSON.stringify(mappingOf(s))).not.toContain('1024')
     expect(JSON.stringify(mappingOf(s))).not.toContain('8192')
   })

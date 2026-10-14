@@ -1043,7 +1043,7 @@ describe('computeIoImage — BR14, an address with no producer', () => {
 
 describe('computeIoImage — areas the target does not have', () => {
   it('reports %MX on bare metal instead of dropping it in silence', () => {
-    // DOPE-605: openplc.h declares no bool_memory, so today the address is
+    // openplc.h declares no bool_memory, so today the address is
     // simply lost. Reported as unsupported and not as unbacked: the area is
     // absent, which is a different failure from an area with no producer.
     const image = compute(withLocal('%MX0.1', 'flag'), { areas: IMAGE_AREAS_BAREMETAL })

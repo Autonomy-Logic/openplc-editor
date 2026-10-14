@@ -1,6 +1,5 @@
 /**
- * Literal output addresses declared more than once in the project
- * (DOPE-615, B6).
+ * Literal output addresses declared more than once in the project.
  *
  * IEC located addresses are GLOBAL. The variables table's own duplicate check
  * reads one variable list at a time, so two POUs can each declare `AT %QX0.0`

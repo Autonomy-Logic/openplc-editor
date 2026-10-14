@@ -199,7 +199,7 @@ describe('preset shapes', () => {
 
 describe('resolveAddressProducerCapabilities', () => {
   it('is permissive when there is no board info at all', () => {
-    // The DOPE-440 rule: an all-false block reads as "this target supports no
+    // The rule it encodes: an all-false block reads as "this target supports no
     // producers", which froze every address in the store and would size every
     // area to zero in the compile-time image sizer.
     expect(resolveAddressProducerCapabilities(undefined)).toEqual(ALL_ADDRESS_PRODUCERS_ACTIVE)

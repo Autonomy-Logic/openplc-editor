@@ -1,5 +1,5 @@
 /**
- * The canonical table list, pinned (DOPE-615, B1).
+ * The canonical table list, pinned.
  *
  * This list is the single source for five things that used to be written out
  * separately: the two area sets, the `image.conf` keys and units, the

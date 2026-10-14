@@ -47,7 +47,7 @@ const PIN_MAPPING_KIND = 'pin-mapping'
  * meaningful answer ("this target supports no producers") and is NOT the same
  * as passing no `activeKinds` at all, which means "every kind"; an unresolved
  * board must therefore be answered with `ALL_ADDRESS_PRODUCERS_ACTIVE` rather
- * than with `EMPTY_CAPABILITIES` (DOPE-440).
+ * than with `EMPTY_CAPABILITIES`.
  */
 export function activeKindsFor(caps: AddressProducerCapabilities): Set<string> {
   const kinds = new Set<string>()

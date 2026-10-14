@@ -49,7 +49,7 @@ interface ModbusSlaveConfig {
  * What a segment the user never configured should expose.
  *
  * NOT `DEFAULT_BUFFER_MAPPING` when the image sizes are known, and the
- * difference is the whole point (DOPE-615). Those defaults are 1024 registers
+ * difference is the whole point. Those defaults are 1024 registers
  * and 8192 bits — precisely the fixed image the runtime used to allocate — so
  * they were right only for as long as every image was that size. Now that the
  * image follows the project, falling back to them would ship a `modbus.json`

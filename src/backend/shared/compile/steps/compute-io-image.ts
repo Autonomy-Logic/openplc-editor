@@ -136,7 +136,7 @@ export interface UnbackedLocation {
  * message: there, the area exists and that particular address has nothing
  * behind it; here, the runtime declares no buffer of that kind whatsoever, so
  * no address in it could ever work. Bare metal has no `bool_memory`, which is
- * why `%MX` is silently dropped there today (DOPE-605).
+ * why `%MX` is silently dropped there today.
  */
 export interface UnsupportedArea {
   /** POU that declares it, or `'Global Variables'` for a config global. */

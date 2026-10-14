@@ -1,10 +1,10 @@
-/** X5 (metade da medicao): o bloco de process image que o F1 emite. */
+/** X5 (the measuring half): the process image block F1 emits. */
 import { computeIoImage, IMAGE_AREAS_BAREMETAL } from '../steps/compute-io-image'
 
 const ALL = { pinMapping: true, vppIo: true, modbusTcpRemote: true, ethercat: true }
 const SERVERS = { modbusTcpServer: true, opcuaServer: false, s7Server: false }
 
-it('X5 — projeto minimo (8 DI, 8 DO, 4 %MW)', () => {
+it('X5 — minimal project (8 DI, 8 DO, 4 %MW)', () => {
   const pins = [
     ...Array.from({ length: 8 }, (_, i) => ({
       pin: `d${i}`,
@@ -56,7 +56,7 @@ it('X5 — projeto minimo (8 DI, 8 DO, 4 %MW)', () => {
     areas: IMAGE_AREAS_BAREMETAL,
   })
   // eslint-disable-next-line no-console
-  console.log(`[X5] imagem do projeto minimo: ${JSON.stringify(img.sizes)}`)
+  console.log(`[X5] minimal project image: ${JSON.stringify(img.sizes)}`)
   expect(img.sizes['%IX']).toBe(8)
   expect(img.sizes['%QX']).toBe(8)
   expect(img.sizes['%MW']).toBe(4)
