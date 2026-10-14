@@ -8,6 +8,7 @@ import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
+import { DuplicateProtocolNotice } from '../duplicate-protocol-notice'
 
 type S7CommUIDataBlock = S7CommDataBlock
 
@@ -525,6 +526,8 @@ const S7CommServerEditor = () => {
       </div>
 
       <div className='flex flex-1 flex-col gap-4 overflow-auto'>
+        <DuplicateProtocolNotice name={serverName} protocol={protocol} />
+
         <AccordionPrimitive.Root
           type='multiple'
           value={openSections}

@@ -1919,6 +1919,19 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       const servers = getState().project.data.servers ?? []
       if (servers.some((s) => s.name === dto.data.name)) return fail('Server already exists')
 
+      // ONE SERVER PER PROTOCOL. Each emitter ships one config file built from
+      // the first server of its protocol, so a second one never reaches the
+      // device -- it was only ever refused at build time, after the user had
+      // configured it. A project that already holds two is left alone: the
+      // rule governs creation, and rewriting someone's project on load is not
+      // this editor's call.
+      const sameProtocol = servers.find((s) => s.protocol === dto.data.protocol)
+      if (sameProtocol) {
+        return fail(
+          `A ${dto.data.protocol} server already exists: "${sameProtocol.name}". Only one reaches the device.`,
+        )
+      }
+
       setState(
         produce((slice: ProjectSlice) => {
           if (!slice.project.data.servers) slice.project.data.servers = []

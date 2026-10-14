@@ -10,6 +10,7 @@ import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import { FieldHelpIcon, TooltipProvider } from '../../../../../_atoms/tooltip'
+import { DuplicateProtocolNotice } from '../duplicate-protocol-notice'
 import { AddressMappingReference } from './address-mapping-reference'
 
 const BIND_ADDRESS_OPTIONS = [
@@ -462,6 +463,8 @@ const ModbusServerEditor = () => {
         </div>
 
         <div className='flex flex-1 flex-col gap-6 overflow-auto'>
+          <DuplicateProtocolNotice name={serverName} protocol={protocol} />
+
           <Panel title='Modbus Server'>
             {/* One screen for every target. What a target cannot configure comes
              * through disabled with the reason, rather than absent: a control
