@@ -75,8 +75,8 @@ function toDataPoints(value: unknown): DataPoint[] {
     return {
       id: str(record.id),
       name: str(record.name),
-      min: str(record.min),
-      max: str(record.max),
+      min: optionalStr(record.min),
+      max: optionalStr(record.max),
       datatype: str(record.datatype),
       byteoffset: num(record.byteoffset),
       bitoffset: num(record.bitoffset),

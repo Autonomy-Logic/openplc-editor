@@ -105,6 +105,8 @@ export interface PoolVppIoInput {
      *  alias-memory key (`vpp:moduleId:slot:channel`); the pool itself
      *  ignores it. */
     moduleId?: string
+    /** Configurator datapoint identity; when present it is the alias-memory key instead. */
+    datapointId?: string
   }>
 }
 
@@ -152,7 +154,7 @@ export interface BuildPoolOptions {
  * ------------------------------------------------------------------ */
 
 const BIT_ADDRESS_REGEX = /^(%[IQM]X)(\d+)\.(\d+)$/
-const WORD_ADDRESS_REGEX = /^(%[IQM][WDL])(\d+)$/
+const WORD_ADDRESS_REGEX = /^(%[IQM][BWDL])(\d+)$/
 
 interface ParsedAddress {
   prefix: string
@@ -285,9 +287,9 @@ export function buildAddressPool(
  *                  address and wants the next allocation to skip it.
  *                  In bulk-allocate loops, threading a mutable "used"
  *                  set alongside the pool is the simplest pattern.
- * @param prefix    IEC 61131-3 prefix, one of "%IX" / "%QX" / "%IW" /
- *                  "%QW" / "%MW" / "%ID" / "%QD" / "%MD" / "%IL" /
- *                  "%QL" / "%ML".
+ * @param prefix    IEC 61131-3 prefix, one of "%IX" / "%QX" / "%IB" /
+ *                  "%QB" / "%MB" / "%IW" / "%QW" / "%MW" / "%ID" /
+ *                  "%QD" / "%MD" / "%IL" / "%QL" / "%ML".
  * @param isBit     True for %IX / %QX (byte.bit addressing); false
  *                  for word/dword/lword addresses.
  * @param startFrom Linear bit index (for bit) or word index (for word)

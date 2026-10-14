@@ -25,12 +25,15 @@ export const deviceSetupSchema = z.object({
 })
 export type DeviceSetup = z.infer<typeof deviceSetupSchema>
 
-/** `datatype` is a string: the bundle reports vendor names (`Bitarea`, `UInt8`, ...) beyond its declared IEC union. */
+/**
+ * `datatype` is a string: the bundle reports vendor names (`Bitarea`, `UInt8`, ...) beyond its declared IEC union.
+ * `min`/`max` are declared by the bundle's API but omitted from what it returns.
+ */
 export const dataPointSchema = z.object({
   id: z.string(),
   name: z.string(),
-  min: z.string(),
-  max: z.string(),
+  min: z.string().optional(),
+  max: z.string().optional(),
   datatype: z.string(),
   byteoffset: z.number(),
   bitoffset: z.number(),

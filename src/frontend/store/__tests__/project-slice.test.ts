@@ -1,4 +1,8 @@
-import { modbusMemoryKey, vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
+import {
+  modbusMemoryKey,
+  vppDatapointMemoryKey,
+  vppMemoryKey,
+} from '@root/middleware/shared/utils/iec-address/registry'
 import { createStore } from 'zustand/vanilla'
 
 import type { ConfiguredEtherCATDevice } from '@root/middleware/shared/ports/esi-types'
@@ -3461,6 +3465,38 @@ describe('createProjectSlice', () => {
       // unmapped entry is returned unchanged.
       expect(entries[0].iecAddress).toBe('%QX0.0')
       expect(entries[1].iecAddress).toBe('NOPE')
+    })
+
+    it('compacts datapoint-sourced entries and restores their aliases by datapoint id', () => {
+      seedVppBoard(store)
+      const entry = (datapointId: string, channelName: string, iecAddress: string) => ({
+        slot: 1,
+        channelName,
+        channelType: 'UInt8',
+        dataType: 'USINT',
+        moduleId: '0f014700',
+        moduleName: 'UR20_2DI_P_TS_1',
+        iecAddress,
+        alias: '',
+        datapointId,
+      })
+      store.getState().deviceActions.setVendorScreenData('io-mapping', {
+        entries: [entry('g1_0', 'input_image_1', '%IB4'), entry('g1_1', 'running_number_1', '%IB7')],
+      })
+      store.getState().projectActions.rememberChannelAlias(vppDatapointMemoryKey('g1_1'), 'counter')
+      store.getState().projectActions.rememberChannelAlias(vppDatapointMemoryKey('gone_0'), 'stale')
+
+      store.getState().projectActions.recalculateIecAddresses()
+
+      const entries = (
+        store.getState().deviceDefinitions.configuration.vendorScreenData!['io-mapping'] as {
+          entries: Array<{ iecAddress: string; alias: string; datapointId: string }>
+        }
+      ).entries
+      expect(entries.map((e) => [e.datapointId, e.iecAddress, e.alias])).toEqual([
+        ['g1_0', '%IB0', ''],
+        ['g1_1', '%IB1', 'counter'],
+      ])
     })
 
     it('skips devices without a Modbus config during writeback', () => {

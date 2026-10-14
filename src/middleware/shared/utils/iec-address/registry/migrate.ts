@@ -43,6 +43,7 @@ export const ethercatConsumerId = (deviceName: string, slaveName: string): strin
  * producers (e.g. the VPP layouts) record aliases under the same key. */
 export const vppMemoryKey = (moduleId: string, slot: number, channelName: string): string =>
   `vpp:${moduleId}:${slot}:${channelName}`
+export const vppDatapointMemoryKey = (datapointId: string): string => `vpp-datapoint:${datapointId}`
 export const modbusMemoryKey = (deviceName: string, groupId: string, pointId: string): string =>
   `modbus:${deviceName}:${groupId}:${pointId}`
 export const ethercatMemoryKey = (deviceName: string, slaveName: string, channelId: string): string =>
@@ -92,7 +93,9 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
       entry.channelName,
       entry.iecAddress,
       entry.alias,
-      vppMemoryKey(entry.moduleId ?? '', entry.slot, entry.channelName),
+      entry.datapointId
+        ? vppDatapointMemoryKey(entry.datapointId)
+        : vppMemoryKey(entry.moduleId ?? '', entry.slot, entry.channelName),
     )
     if (!channel) continue
     const list = bySlot.get(entry.slot)

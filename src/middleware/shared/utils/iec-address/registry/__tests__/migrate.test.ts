@@ -1,7 +1,13 @@
 import type { PoolInputs } from '../../address-pool'
 import { channelKey } from '../allocate'
-import { migrateToRegistry, recalculateFromLegacy, unpinAllocatableChannels } from '../migrate'
-import { recalculate } from '../registry'
+import {
+  migrateToRegistry,
+  recalculateFromLegacy,
+  unpinAllocatableChannels,
+  vppDatapointMemoryKey,
+  vppMemoryKey,
+} from '../migrate'
+import { recalculate, restoreAliasesFromMemory } from '../registry'
 import { buildAliasIndex } from '../resolve'
 
 describe('migrateToRegistry', () => {
@@ -243,5 +249,43 @@ describe('unpinAllocatableChannels', () => {
       assignments: {},
     }
     expect(unpinAllocatableChannels(reg)).toEqual(reg)
+  })
+})
+
+describe('datapoint-sourced VPP entries', () => {
+  it('keys alias memory by datapoint id and keeps byte addresses', () => {
+    const reg = migrateToRegistry({
+      vendorIoMapping: {
+        entries: [
+          { slot: 1, channelName: 'img', iecAddress: '%IB3', moduleId: 'T', datapointId: 'g1_0' },
+          { slot: 1, channelName: 'legacy', iecAddress: '%IX0.0', moduleId: 'T' },
+        ],
+      },
+    })
+
+    const channels = reg.consumers[0].channels
+    expect(channels.map((channel) => channel.memoryKey)).toEqual([
+      vppDatapointMemoryKey('g1_0'),
+      vppMemoryKey('T', 1, 'legacy'),
+    ])
+    expect(channels[0].class).toEqual({ direction: 'I', size: 'B' })
+    expect(reg.assignments[channelKey('vpp-slot-1', 'img')]).toBe('%IB3')
+  })
+
+  it('restores a remembered alias only for the same datapoint id', () => {
+    const seeded = migrateToRegistry({
+      vendorIoMapping: {
+        entries: [
+          { slot: 1, channelName: 'DI_0', iecAddress: '%IX0.0', datapointId: 'new_0' },
+          { slot: 2, channelName: 'DI_0', iecAddress: '%IX0.1', datapointId: 'kept_0' },
+        ],
+      },
+    })
+    const restored = restoreAliasesFromMemory(seeded, {
+      [vppDatapointMemoryKey('old_0')]: 'start',
+      [vppDatapointMemoryKey('kept_0')]: 'stop',
+    })
+
+    expect(restored.consumers.map((consumer) => consumer.channels[0].alias)).toEqual([undefined, 'stop'])
   })
 })
