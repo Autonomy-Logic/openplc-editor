@@ -56,7 +56,7 @@ const ServerIpMismatchModal = ({ isOpen, ...rest }: ServerIpMismatchModalProps) 
       }}
       {...rest}
     >
-      <ModalContent className='flex h-auto max-h-[600px] w-[420px] select-none flex-col items-center justify-start rounded-lg p-6'>
+      <ModalContent className='flex max-h-[min(600px,92vh)] w-[420px] select-none flex-col items-center justify-start rounded-lg p-6'>
         <ModalTitle className='hidden'>Server IP Address Mismatch</ModalTitle>
         <div className='flex w-full select-none flex-col items-center gap-4'>
           <WarningIcon className='h-[60px] w-[60px] text-amber-500' />

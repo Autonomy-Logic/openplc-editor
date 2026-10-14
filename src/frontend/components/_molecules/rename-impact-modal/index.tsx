@@ -49,7 +49,7 @@ export const RenameImpactModal = ({
   return (
     <Modal open>
       <ModalContent
-        className='flex max-h-[600px] w-[600px] select-none flex-col gap-4 rounded-lg p-8'
+        className='flex max-h-[min(600px,92vh)] w-[600px] select-none flex-col gap-4 rounded-lg p-8'
         onClose={onCancel}
       >
         <ModalHeader>
