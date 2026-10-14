@@ -397,6 +397,14 @@ const ModbusServerEditor = () => {
       if (raw === undefined) return
       const floor = profile.minCounts?.[segment] ?? 0
       const ceiling = profile.maxCounts?.[segment] ?? meta.max
+      // AN EMPTY FIELD IS AN INSTRUCTION, not a typo: it unpins the segment.
+      // Without this the only way back from a number typed once was to edit
+      // the server's JSON by hand.
+      if (raw.trim() === '') {
+        actions.clearBufferCount(meta.group, meta.field)
+        setCountText((prev) => ({ ...prev, [segment]: undefined }))
+        return
+      }
       const parsed = Number.parseInt(raw, 10)
       if (Number.isNaN(parsed) || parsed < floor || parsed > ceiling) {
         setCountText((prev) => ({ ...prev, [segment]: undefined }))
@@ -661,7 +669,8 @@ const ModbusServerEditor = () => {
             {profile.configurableBuffers && (
               <p className='text-xs text-neutral-600 dark:text-neutral-400'>
                 How many addresses each IEC segment gets. A field left empty follows the I/O image — the greyed number
-                is what this project sizes it to. Type one to ask for more than that.
+                is what this project sizes it to. Type a number to ask for more than that, or 0 to publish none of it.
+                Clearing the field follows the image again.
               </p>
             )}
 

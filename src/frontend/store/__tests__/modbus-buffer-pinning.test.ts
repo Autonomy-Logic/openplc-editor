@@ -79,6 +79,62 @@ describe('Modbus counts: stored versus displayed', () => {
     expect(m.inputRegisters).toBeUndefined()
   })
 
+  it('clearing a field returns the segment to the image', () => {
+    const s = makeStore()
+    seedServer(s)
+    s.getState().projectActions.updateServerConfig('mb', { bufferMapping: { coils: { qxBits: 64 } } })
+    s.getState().projectActions.clearServerBufferCount('mb', 'coils', 'qxBits')
+
+    // Not the field, not an empty group, not an empty mapping: absent is absent.
+    expect(mappingOf(s)).toBeUndefined()
+  })
+
+  it('clearing a field does not take its neighbours with it', () => {
+    const s = makeStore()
+    seedServer(s)
+    s.getState().projectActions.updateServerConfig('mb', { bufferMapping: { coils: { qxBits: 64, mxBits: 8 } } })
+    s.getState().projectActions.updateServerConfig('mb', { bufferMapping: { inputRegisters: { iwCount: 2 } } })
+    s.getState().projectActions.clearServerBufferCount('mb', 'coils', 'qxBits')
+
+    const m = mappingOf(s)!
+    expect(m.coils?.qxBits).toBeUndefined()
+    expect(m.coils?.mxBits).toBe(8)
+    expect(m.inputRegisters?.iwCount).toBe(2)
+  })
+
+  it.each([
+    ['holdingRegisters', 'qwCount'],
+    ['holdingRegisters', 'mwCount'],
+    ['holdingRegisters', 'mdCount'],
+    ['holdingRegisters', 'mlCount'],
+    ['coils', 'qxBits'],
+    ['coils', 'mxBits'],
+    ['discreteInputs', 'ixBits'],
+    ['inputRegisters', 'iwCount'],
+  ] as const)('clears %s.%s and the emptied group goes with it', (group, field) => {
+    const s = makeStore()
+    seedServer(s)
+    s.getState().projectActions.updateServerConfig('mb', { bufferMapping: { [group]: { [field]: 7 } } })
+    expect(JSON.stringify(mappingOf(s))).toContain('7')
+
+    s.getState().projectActions.clearServerBufferCount('mb', group, field)
+    expect(mappingOf(s)).toBeUndefined()
+  })
+
+  it('clearing what was never stored creates nothing', () => {
+    const s = makeStore()
+    seedServer(s)
+    s.getState().projectActions.clearServerBufferCount('mb', 'holdingRegisters', 'qwCount')
+    expect(mappingOf(s)).toBeUndefined()
+  })
+
+  it('zero stays stored: it is a request, not an absence', () => {
+    const s = makeStore()
+    seedServer(s)
+    s.getState().projectActions.updateServerConfig('mb', { bufferMapping: { coils: { qxBits: 0 } } })
+    expect(mappingOf(s)!.coils?.qxBits).toBe(0)
+  })
+
   it('no 1024 appears on its own', () => {
     const s = makeStore()
     seedServer(s)

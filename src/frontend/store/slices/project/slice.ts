@@ -2005,6 +2005,41 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
       return ok()
     },
+    clearServerBufferCount: (name, group, field) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const config = slice.project.data.servers?.find((s) => s.name === name)?.modbusSlaveConfig
+          const mapping = config?.bufferMapping
+          if (!config || !mapping) return
+          // Enumerated rather than indexed by string: the shape is eight known
+          // fields and a cast would hide a typo in one of them.
+          if (group === 'holdingRegisters' && mapping.holdingRegisters) {
+            if (field === 'qwCount') delete mapping.holdingRegisters.qwCount
+            if (field === 'mwCount') delete mapping.holdingRegisters.mwCount
+            if (field === 'mdCount') delete mapping.holdingRegisters.mdCount
+            if (field === 'mlCount') delete mapping.holdingRegisters.mlCount
+            if (Object.keys(mapping.holdingRegisters).length === 0) delete mapping.holdingRegisters
+          }
+          if (group === 'coils' && mapping.coils) {
+            if (field === 'qxBits') delete mapping.coils.qxBits
+            if (field === 'mxBits') delete mapping.coils.mxBits
+            if (Object.keys(mapping.coils).length === 0) delete mapping.coils
+          }
+          if (group === 'discreteInputs' && mapping.discreteInputs) {
+            if (field === 'ixBits') delete mapping.discreteInputs.ixBits
+            if (Object.keys(mapping.discreteInputs).length === 0) delete mapping.discreteInputs
+          }
+          if (group === 'inputRegisters' && mapping.inputRegisters) {
+            if (field === 'iwCount') delete mapping.inputRegisters.iwCount
+            if (Object.keys(mapping.inputRegisters).length === 0) delete mapping.inputRegisters
+          }
+          // An empty mapping is not the same as no mapping: the first reads as
+          // a server that was configured and the second as one that never was.
+          if (Object.keys(mapping).length === 0) delete config.bufferMapping
+        }),
+      )
+      return ok()
+    },
 
     // -----------------------------------------------------------------------
     // S7Comm
