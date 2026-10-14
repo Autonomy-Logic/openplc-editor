@@ -46,8 +46,11 @@ export const CouplerDiagnosticsTab = ({ device, busName }: CouplerDiagnosticsTab
     void poll()
   }, [poll])
 
-  const coupler = snapshot !== null ? decodeCouplerStatus(snapshot.coupler.statusWord) : null
-  const moduleStatusBySlot = new Map<number, number>((snapshot?.modules ?? []).map((m) => [m.slot, m.statusByte]))
+  const statusWord = snapshot?.coupler.statusWord ?? null
+  const coupler = statusWord !== null ? decodeCouplerStatus(statusWord) : null
+  const moduleStatusBySlot = new Map<number, number | null>(
+    (snapshot?.modules ?? []).map((m) => [m.slot, m.statusByte]),
+  )
 
   return (
     <div className='flex flex-col gap-3'>
@@ -73,15 +76,22 @@ export const CouplerDiagnosticsTab = ({ device, busName }: CouplerDiagnosticsTab
         </div>
       )}
 
-      {coupler?.configurationMismatch === true && (
-        <div className='rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300'>
-          Configuration mismatch: at least one physical module does not match the project configuration.
+      {snapshot !== null && statusWord === null && (
+        <div className='rounded-md border border-neutral-300 bg-neutral-50 px-3 py-2 text-xs text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'>
+          The coupler status could not be read.
         </div>
       )}
 
-      {coupler?.neverWritten === true && (
-        <div className='rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300'>
-          The module list has not been written to the coupler yet. Build and upload the project to apply it.
+      {coupler?.ioConfigurationError === true && (
+        <div className='rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300'>
+          I/O configuration error: the modules on the station do not match the project configuration.
+        </div>
+      )}
+
+      {coupler?.masterConfigurationError === true && (
+        <div className='rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300'>
+          Master configuration error: the coupler refused the configuration written at startup. Check the module list
+          and rebuild.
         </div>
       )}
 
@@ -113,9 +123,15 @@ export const CouplerDiagnosticsTab = ({ device, busName }: CouplerDiagnosticsTab
             ) : (
               sorted.map((m) => {
                 const raw = moduleStatusBySlot.get(m.slot)
-                const decoded = raw !== undefined ? decodeModuleStatus(raw) : null
+                const decoded = raw !== undefined && raw !== null ? decodeModuleStatus(raw) : null
                 const stateLabel =
-                  decoded !== null ? decoded.message : snapshot === null ? 'Polling…' : 'No status reported'
+                  decoded !== null
+                    ? decoded.message
+                    : snapshot === null
+                      ? 'Polling…'
+                      : raw === null
+                        ? 'Status could not be read'
+                        : 'No status reported'
                 const stateClass =
                   decoded?.operational === true
                     ? 'text-emerald-600 dark:text-emerald-400'

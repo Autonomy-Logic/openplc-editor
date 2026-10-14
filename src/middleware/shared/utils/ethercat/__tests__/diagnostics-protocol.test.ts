@@ -71,6 +71,35 @@ describe('parseDiagnosticsResponseBody', () => {
     })
   })
 
+  test('keeps values EtherDOG could not read as null', () => {
+    const result = parseDiagnosticsResponseBody(
+      {
+        coupler: { status_word: null, poll_at_ms: 5 },
+        modules: [
+          { slot: 2, status_byte: null },
+          { slot: 1, status_byte: 0x81 },
+        ],
+      },
+      { slavePosition: 1 },
+    )
+    expect(result).toEqual({
+      success: true,
+      snapshot: {
+        coupler: { statusWord: null, pollAt: 5 },
+        modules: [
+          { slot: 1, statusByte: 0x81 },
+          { slot: 2, statusByte: null },
+        ],
+      },
+    })
+  })
+
+  test('a status word that is neither a number nor null is refused', () => {
+    expect(parseDiagnosticsResponseBody({ coupler: { status_word: '64' }, modules: [] }, { slavePosition: 1 })).toEqual(
+      { success: false, error: 'diagnostics response did not include coupler.status_word' },
+    )
+  })
+
   test('rejects an empty body', () => {
     expect(parseDiagnosticsResponseBody(null, { slavePosition: 1 })).toEqual({
       success: false,

@@ -879,8 +879,8 @@ function parseSlotsSpec(deviceEl: Record<string, unknown>): ESIDevice['slots'] {
   const slotsEl = asRecord(deviceEl['Slots'])
   if (!slotsEl) return undefined
 
-  const slotIndexIncrement = parseInt(getTextValue(slotsEl['@_SlotIndexIncrement']) || '0', 10) || 0
-  const slotPdoIncrement = parseInt(getTextValue(slotsEl['@_SlotPdoIncrement']) || '0', 10) || 0
+  const slotIndexIncrement = etgNumber(slotsEl['@_SlotIndexIncrement']) || 0
+  const slotPdoIncrement = etgNumber(slotsEl['@_SlotPdoIncrement']) || 0
   const downloadModuleIdentList = parseBoolAttr(slotsEl['@_DownloadModuleIdentList'])
   const downloadModuleListTransition = getTextValue(slotsEl['@_DownloadModuleListTransition']) || undefined
   const identifyModuleBy = getTextValue(slotsEl['@_IdentifyModuleBy']) || undefined

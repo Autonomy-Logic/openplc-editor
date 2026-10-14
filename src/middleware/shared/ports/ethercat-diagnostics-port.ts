@@ -1,9 +1,9 @@
 /**
  * Port for polling live modular-coupler diagnostics from the runtime.  The underlying
  * contract is a POST to `/api/discovery/ethercat/diagnostics` on the runtime, which asks
- * EtherDOG to read the coupler's status word (bits 6 and 7 of its device-state register)
- * and each module's status byte via CoE SDOs.  The shape here is transport-independent;
- * only the adapter changes between editor (IPC) and web (orchestrator proxy).
+ * EtherDOG to read the coupler's status bits (`0xF100`) and each configured module's state
+ * (`0xA0n0:01`) via CoE SDOs.  The shape here is transport-independent; only the adapter
+ * changes between editor (IPC) and web (orchestrator proxy).
  */
 
 import type { Result } from './types'
@@ -20,16 +20,16 @@ export interface DiagnosticsRequest {
  * in the shared decoder (see decode-diagnostics.ts).
  */
 export interface CouplerDiagnostics {
-  /** Raw status word; bit 6 = configuration mismatch, bit 7 = never written. */
-  statusWord: number
+  /** The 16 status bits of `0xF100`, or null when EtherDOG could not read them. */
+  statusWord: number | null
   /** Timestamp (epoch ms) when the runtime read the status. */
   pollAt: number
 }
 
 export interface ModuleDiagnostics {
   slot: number
-  /** Raw status byte from `0x80n0:04` for each module (ETG.5001). */
-  statusByte: number
+  /** Sub-index 1 of the module's `0xA0n0` object, or null when EtherDOG could not read it. */
+  statusByte: number | null
 }
 
 export interface DiagnosticsSnapshot {

@@ -1,9 +1,9 @@
 import {
   enrichDeviceData,
   esiStartupData,
-  lacksPdoFlags,
   lacksEsiStartupData,
   lacksPdoAssignment,
+  lacksPdoFlags,
   migrateSlavePdoFlags,
   recordPdoAssignment,
 } from '@root/backend/shared/ethercat/enrich-device-data'

@@ -183,6 +183,17 @@ describe('parseESIDeviceFull PDO assignment fields', () => {
 })
 
 describe('parseESIDeviceFull modular device fields', () => {
+  test('slot increments in ETG hex form are read as numbers', () => {
+    const hexForm = MODULAR_COUPLER_ESI.replace(
+      'SlotIndexIncrement="16" SlotPdoIncrement="1"',
+      'SlotIndexIncrement="#x10" SlotPdoIncrement="#x2"',
+    )
+    expect(hexForm).not.toBe(MODULAR_COUPLER_ESI)
+    const slots = parseESIDeviceFull(hexForm, 0).device?.slots
+    expect(slots?.slotIndexIncrement).toBe(16)
+    expect(slots?.slotPdoIncrement).toBe(2)
+  })
+
   test('reads <Slots> block into slots and marks isModularCoupler', () => {
     const r = parseESIDeviceFull(MODULAR_COUPLER_ESI, 0)
     expect(r.device?.isModularCoupler).toBe(true)

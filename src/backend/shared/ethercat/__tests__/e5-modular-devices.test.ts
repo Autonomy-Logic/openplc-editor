@@ -465,3 +465,68 @@ describe('modular-coupler generator', () => {
     expect(order).toEqual(['0xF811', '0x8001', '0xF810', '0x8000'])
   })
 })
+
+describe('station, mandatory and fixed fields for EtherDOG', () => {
+  const contract = (devices: ConfiguredEtherCATDevice[]) => {
+    const result = generateEtherdogConfigs(bus(devices))
+    if (result === null) throw new Error('generator returned null')
+    const parsed: unknown = JSON.parse(result.busconfig)
+    if (!Array.isArray(parsed)) throw new Error('busconfig is not an array')
+    const root: { config: { slaves: Record<string, unknown>[] } } = parsed[0]
+    return root.config.slaves
+  }
+
+  test('a modular coupler lists its slot rules and modules in slot order', () => {
+    const device = coupler({
+      slotsSpec: {
+        slots: [{ minInstances: 1, maxInstances: 8, moduleClasses: ['Di'], moduleIdents: ['0x1'] }],
+        slotIndexIncrement: 16,
+        slotPdoIncrement: 1,
+        downloadModuleIdentList: true,
+      },
+      modules: [
+        module_({ slot: 2, ident: '0x00000002', moduleClass: 'Di' }),
+        module_({ slot: 1, ident: '0x00000001' }),
+      ],
+    })
+    expect(contract([device])[0]?.modular).toEqual({
+      slot_index_increment: 16,
+      slots: [{ min_instances: 1, max_instances: 8, module_classes: ['Di'], module_idents: ['0x1'] }],
+      modules: [
+        { slot: 1, ident: '0x00000001', class: '' },
+        { slot: 2, ident: '0x00000002', class: 'Di' },
+      ],
+    })
+  })
+
+  test('a plain slave has no modular, mandatory_pdos or fixed keys', () => {
+    const plain = coupler({
+      isModularCoupler: false,
+      slotsSpec: undefined,
+      rxPdos: [makePdo('0x1600')],
+      txPdos: [makePdo('0x1A00')],
+    })
+    const [slave] = contract([plain])
+    expect(slave).not.toHaveProperty('modular')
+    expect(slave).not.toHaveProperty('mandatory_pdos')
+    expect(JSON.stringify(slave)).not.toContain('"fixed"')
+  })
+
+  test('mandatory PDOs of the slave and its modules are listed once; fixed rides on the PDO', () => {
+    const device = coupler({
+      txPdos: [{ ...makePdo('0x1AFF'), mandatory: true, fixed: true }],
+      modules: [
+        module_({ slot: 1, ident: '0x1', txPdos: [{ ...makePdo('0x1A00'), mandatory: true, fixed: true }] }),
+        module_({ slot: 2, ident: '0x1', rxPdos: [{ ...makePdo('0x1601'), fixed: false }] }),
+      ],
+    })
+    const [slave] = contract([device])
+    expect(slave?.mandatory_pdos).toEqual(['0x1AFF', '0x1A00'])
+    const pdos = firstSlave([device])
+    expect(pdos.tx_pdos.map((p) => [p.index, 'fixed' in p])).toEqual([
+      ['0x1AFF', true],
+      ['0x1A00', true],
+    ])
+    expect(pdos.rx_pdos.map((p) => 'fixed' in p)).toEqual([false])
+  })
+})

@@ -3,23 +3,23 @@
  * module status bytes the runtime returns into user-facing warnings.  Both editor and
  * web render the same banners, so the mapping lives here.
  *
- * Interpretation follows ETG.5001:
- *   - Device-state bit 6: configuration mismatch — the physical bus is different from
- *     the project's configured module list.
- *   - Device-state bit 7: configuration never written — `0xF030` has not been issued yet.
+ *   - `0xF100` bit 6: I/O configuration error, the modules on the station differ from the
+ *     configured module list.
+ *   - `0xF100` bit 7: master configuration error, the coupler refused the configuration the
+ *     master wrote.
  *   - Per-module status byte: 0x00 operational, 0x81 wrong module, 0x82 no module,
  *     0x83 configuration mismatch for the slot, others vendor-specific.
  */
 
 export interface DecodedCouplerStatus {
-  configurationMismatch: boolean
-  neverWritten: boolean
+  ioConfigurationError: boolean
+  masterConfigurationError: boolean
 }
 
 export function decodeCouplerStatus(statusWord: number): DecodedCouplerStatus {
   return {
-    configurationMismatch: (statusWord & 0x40) !== 0,
-    neverWritten: (statusWord & 0x80) !== 0,
+    ioConfigurationError: (statusWord & 0x40) !== 0,
+    masterConfigurationError: (statusWord & 0x80) !== 0,
   }
 }
 

@@ -672,7 +672,8 @@
                   "name": "Controlbit 15",
                   "data_type": "BOOL"
                 }
-              ]
+              ],
+              "fixed": true
             },
             {
               "index": "0x1601",
@@ -713,7 +714,8 @@
                   "name": "Padding",
                   "data_type": "PAD"
                 }
-              ]
+              ],
+              "fixed": true
             }
           ],
           "tx_pdos": [
@@ -833,7 +835,8 @@
                   "name": "IOLink event available",
                   "data_type": "BOOL"
                 }
-              ]
+              ],
+              "fixed": true
             },
             {
               "index": "0x1A00",
@@ -881,7 +884,8 @@
                   "name": "Module state",
                   "data_type": "USINT"
                 }
-              ]
+              ],
+              "fixed": true
             },
             {
               "index": "0x1A01",
@@ -894,7 +898,8 @@
                   "name": "Module state",
                   "data_type": "USINT"
                 }
-              ]
+              ],
+              "fixed": true
             },
             {
               "index": "0x1A03",
@@ -935,9 +940,56 @@
                   "name": "Module state",
                   "data_type": "USINT"
                 }
-              ]
+              ],
+              "fixed": true
             }
-          ]
+          ],
+          "mandatory_pdos": [
+            "0x16FF",
+            "0x1AFF",
+            "0x1A00",
+            "0x1601",
+            "0x1A01",
+            "0x1A03"
+          ],
+          "modular": {
+            "slot_index_increment": 16,
+            "slots": [
+              {
+                "min_instances": 1,
+                "max_instances": 64,
+                "module_classes": [
+                  "Do",
+                  "Di",
+                  "Ao",
+                  "Ai",
+                  "Sf",
+                  "Fc",
+                  "SAI",
+                  "IOLink",
+                  "Ts"
+                ],
+                "module_idents": []
+              }
+            ],
+            "modules": [
+              {
+                "slot": 1,
+                "ident": "0x00091F84",
+                "class": "Di"
+              },
+              {
+                "slot": 2,
+                "ident": "0x01012FA0",
+                "class": "Do"
+              },
+              {
+                "slot": 4,
+                "ident": "0x040115C4",
+                "class": "Ai"
+              }
+            ]
+          }
         }
       ],
       "diagnostics": {

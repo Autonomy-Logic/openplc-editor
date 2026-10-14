@@ -6,27 +6,27 @@
 import { decodeCouplerStatus, decodeModuleStatus } from '../diagnostics-decode'
 
 describe('decodeCouplerStatus', () => {
-  test('bit 6 means configuration mismatch', () => {
-    expect(decodeCouplerStatus(0b0100_0000).configurationMismatch).toBe(true)
-    expect(decodeCouplerStatus(0b0000_0000).configurationMismatch).toBe(false)
+  test('bit 6 is the I/O configuration error', () => {
+    expect(decodeCouplerStatus(0b0100_0000).ioConfigurationError).toBe(true)
+    expect(decodeCouplerStatus(0b0000_0000).ioConfigurationError).toBe(false)
   })
 
-  test('bit 7 means configuration never written', () => {
-    expect(decodeCouplerStatus(0b1000_0000).neverWritten).toBe(true)
-    expect(decodeCouplerStatus(0b0000_0000).neverWritten).toBe(false)
+  test('bit 7 is the master configuration error', () => {
+    expect(decodeCouplerStatus(0b1000_0000).masterConfigurationError).toBe(true)
+    expect(decodeCouplerStatus(0b0000_0000).masterConfigurationError).toBe(false)
   })
 
   test('both bits set are reported together', () => {
     expect(decodeCouplerStatus(0b1100_0000)).toEqual({
-      configurationMismatch: true,
-      neverWritten: true,
+      ioConfigurationError: true,
+      masterConfigurationError: true,
     })
   })
 
   test('unrelated bits do not trigger either flag', () => {
     expect(decodeCouplerStatus(0b0011_1111)).toEqual({
-      configurationMismatch: false,
-      neverWritten: false,
+      ioConfigurationError: false,
+      masterConfigurationError: false,
     })
   })
 })

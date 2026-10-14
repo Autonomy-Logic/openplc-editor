@@ -24,6 +24,8 @@ interface RuntimePdo {
   index: string
   name: string
   entries: RuntimePdoEntry[]
+  /** The device's mapping of this PDO is fixed; EtherDOG compares it with the entries. */
+  fixed?: boolean
 }
 
 interface RuntimeChannel {
@@ -82,6 +84,19 @@ interface RuntimeSlaveConfig {
   }
 }
 
+interface RuntimeSlotRule {
+  min_instances: number
+  max_instances: number
+  module_classes: string[]
+  module_idents: string[]
+}
+
+interface RuntimeModular {
+  slot_index_increment: number
+  slots: RuntimeSlotRule[]
+  modules: Array<{ slot: number; ident: string; class: string }>
+}
+
 interface RuntimeSlave {
   position: number
   name: string
@@ -94,6 +109,10 @@ interface RuntimeSlave {
   sdo_configurations: RuntimeSdoConfig[]
   rx_pdos: RuntimePdo[]
   tx_pdos: RuntimePdo[]
+  /** PDO indices the device requires to be assigned. */
+  mandatory_pdos?: string[]
+  /** Slot rules and modules of a modular coupler. */
+  modular?: RuntimeModular
 }
 
 interface RuntimeMaster {
@@ -220,6 +239,7 @@ function convertPdo(pdo: PersistedPdo): RuntimePdo {
         data_type: entry.index === '0x0000' ? 'PAD' : entry.dataType,
       }),
     ),
+    ...(pdo.fixed === true ? { fixed: true } : {}),
   }
 }
 
@@ -632,6 +652,27 @@ function deriveModuleChannelInfo(module: ConfiguredEtherCATModule): PersistedCha
   return out
 }
 
+/** Indices of every PDO the ESI marks Mandatory, on the slave and its modules. */
+function mandatoryPdos(allPdos: readonly PersistedPdo[]): string[] {
+  return [...new Set(allPdos.filter((pdo) => pdo.mandatory === true).map((pdo) => pdo.index))]
+}
+
+/** The coupler's `<Slots>` rules and its modules, for EtherDOG's station check and diagnostics. */
+function buildModular(device: ConfiguredEtherCATDevice): RuntimeModular | undefined {
+  const spec = device.slotsSpec
+  if (device.isModularCoupler !== true || spec === undefined) return undefined
+  return {
+    slot_index_increment: spec.slotIndexIncrement,
+    slots: spec.slots.map((slot) => ({
+      min_instances: slot.minInstances,
+      max_instances: slot.maxInstances,
+      module_classes: slot.moduleClasses ?? [],
+      module_idents: slot.moduleIdents ?? [],
+    })),
+    modules: modulesBySlot(device).map((m) => ({ slot: m.slot, ident: m.ident, class: m.moduleClass ?? '' })),
+  }
+}
+
 /**
  * Builds a runtime slave from a configured device.
  */
@@ -652,6 +693,8 @@ function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSla
   }))
 
   const cfg = device.config
+  const mandatory = mandatoryPdos(allPdos)
+  const modular = buildModular(device)
 
   return {
     position,
@@ -694,6 +737,8 @@ function buildSlave(device: ConfiguredEtherCATDevice, index: number): RuntimeSla
     sdo_configurations: buildStartupSdos(device),
     rx_pdos: buildBusPdos(device, 'rx'),
     tx_pdos: buildBusPdos(device, 'tx'),
+    ...(mandatory.length > 0 ? { mandatory_pdos: mandatory } : {}),
+    ...(modular !== undefined ? { modular } : {}),
   }
 }
 

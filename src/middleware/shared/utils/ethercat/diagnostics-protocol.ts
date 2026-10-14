@@ -16,8 +16,8 @@ export interface DiagnosticsResponseBody {
   status?: string
   bus_name?: string
   slave_position?: number
-  coupler?: { status_word?: number; poll_at_ms?: number }
-  modules?: Array<{ slot?: number; status_byte?: number }>
+  coupler?: { status_word?: number | null; poll_at_ms?: number }
+  modules?: Array<{ slot?: number; status_byte?: number | null }>
   error?: string
   message?: string
 }
@@ -44,7 +44,7 @@ export function parseDiagnosticsResponseBody(
   }
   const coupler = body['coupler']
   const statusWord = isRecord(coupler) ? coupler['status_word'] : undefined
-  if (!isRecord(coupler) || typeof statusWord !== 'number') {
+  if (!isRecord(coupler) || (typeof statusWord !== 'number' && statusWord !== null)) {
     const explicit = text(body['error']) ?? text(body['message'])
     return { success: false, error: explicit ?? 'diagnostics response did not include coupler.status_word' }
   }
@@ -54,7 +54,9 @@ export function parseDiagnosticsResponseBody(
     if (!isRecord(m)) continue
     const slot = m['slot']
     const statusByte = m['status_byte']
-    if (typeof slot === 'number' && typeof statusByte === 'number') modules.push({ slot, statusByte })
+    if (typeof slot === 'number' && (typeof statusByte === 'number' || statusByte === null)) {
+      modules.push({ slot, statusByte })
+    }
   }
   modules.sort((a, b) => a.slot - b.slot)
   const pollAtMs = coupler['poll_at_ms']
