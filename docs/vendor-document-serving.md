@@ -12,8 +12,11 @@ vpp-doc://<packageId>/<path inside the package>
   main window is created.
 - Handler: `src/main/modules/vendor-document/serve.ts`.
 - URL builder: `buildVendorDocumentUrl` in `src/middleware/shared/vendor-document/document-url.ts`,
-  exposed to the UI as `DevicePort.getVendorDocumentUrl(packageId, relPath)`. The web adapter returns
-  `null`: the browser host has no package-file route yet.
+  exposed to the UI as `DevicePort.getVendorDocumentUrl(packageId, relPath)`.
+- Web host: the adapter returns `<Edge API base>/devices/<vPLC id>/vpp/files/<relPath>`, the Edge
+  route next to the vPLC's archive route, only for the selected vPLC's own package and only when
+  `VITE_VPP_DOCUMENT_ROUTE_ENABLED=true`. Otherwise, and always on the Node host, it returns `null`
+  and the screen says the configurator is not available in this host yet.
 
 ## What the handler guarantees
 

@@ -10,9 +10,16 @@ export const VENDOR_DOCUMENT_SCHEME = 'vpp-doc'
 
 const PACKAGE_ID_RE = /^[a-zA-Z0-9_-][a-zA-Z0-9._-]*$/
 
-export function buildVendorDocumentUrl(packageId: string, relPath: string): string | null {
-  if (!PACKAGE_ID_RE.test(packageId)) return null
+/** `relPath` as percent-encoded URL segments, or `null` when empty or it steps outside the package. */
+export function encodeVendorDocumentPath(relPath: string): string | null {
   const segments = relPath.split('/').filter((segment) => segment.length > 0)
   if (segments.length === 0 || segments.some((segment) => segment === '.' || segment === '..')) return null
-  return `${VENDOR_DOCUMENT_SCHEME}://${packageId.toLowerCase()}/${segments.map(encodeURIComponent).join('/')}`
+  return segments.map(encodeURIComponent).join('/')
+}
+
+export function buildVendorDocumentUrl(packageId: string, relPath: string): string | null {
+  if (!PACKAGE_ID_RE.test(packageId)) return null
+  const path = encodeVendorDocumentPath(relPath)
+  if (path === null) return null
+  return `${VENDOR_DOCUMENT_SCHEME}://${packageId.toLowerCase()}/${path}`
 }
