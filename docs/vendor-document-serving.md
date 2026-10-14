@@ -73,3 +73,19 @@ A VPP screen embeds the document with a section of layout `vendor-document`
 - The dirty compare hashes the archive (`src/frontend/utils/vpp/owned-slice.ts`); `cleanState` keeps it
   whole for the revert.
 - Switching tabs unmounts the iframe; reopening replays the boot from the stored data.
+
+## The `datapoint-io-table` screen section
+
+The I/O Mapping for a configurator-driven station is a section of layout `datapoint-io-table`
+(`vendor-screen/layouts/datapoint-io-table-layout.tsx`). It takes no fields beyond `id` and `title`:
+
+```json
+{ "id": "io-mapping", "title": "I/O Mapping", "layout": "datapoint-io-table" }
+```
+
+- It reads `device-setup` (modules, in slot order) and `io-mapping` (channels and addresses), the keys
+  the `vendor-document` section writes, and owns both whatever `persistence` says.
+- It is read-only: no slot picker, add, remove, clear, reorder, mode or parameter controls, and any
+  `actions` on the section are ignored. The station is changed only in the configurator.
+- The Alias cell is the one write: `validateAliasEdit` gates it, `renameAlias` cascades a rename onto
+  bound variables, and the session alias memory is keyed by `datapointId`.

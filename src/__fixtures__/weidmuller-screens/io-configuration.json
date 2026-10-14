@@ -1,0 +1,21 @@
+{
+  "sections": [
+    {
+      "id": "configurator",
+      "title": "I/O Configurator",
+      "layout": "vendor-document",
+      "document": "configurator/index.html",
+      "bundleVersion": "3.5.22",
+      "controllers": {
+        "UC20-M3000": "UC20-M3000",
+        "UC20-M4000": "UC20-M4000",
+        "UC20-WL2000": "UC20-WL2000"
+      }
+    },
+    {
+      "id": "io-mapping",
+      "title": "I/O Mapping",
+      "layout": "datapoint-io-table"
+    }
+  ]
+}

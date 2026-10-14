@@ -10,6 +10,7 @@ import { createIframeConfiguratorClient } from '@root/middleware/shared/vendor-d
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ScreenSection } from '../index'
+import { notifyDroppedAliases } from '../notify-dropped-aliases'
 
 /** Never add `allow-same-origin`: with it the guest could reach the host. */
 const IFRAME_SANDBOX = 'allow-scripts allow-forms'
@@ -77,13 +78,7 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
       onSnapshot: (snapshot) => {
         const applied = applyConfiguratorSnapshot(store, { configuratorKey, controller, bundleVersion }, snapshot)
         setUnaddressable(applied.unaddressable)
-        if (applied.dropped.length > 0) {
-          toast({
-            title: 'Aliases removed',
-            description: `The channels of ${applied.dropped.map((d) => d.alias).join(', ')} no longer exist, so their aliases were removed.`,
-            variant: 'warn',
-          })
-        }
+        notifyDroppedAliases(applied.dropped)
       },
       onError: (message) => toast({ title: 'I/O Configurator', description: message, variant: 'fail' }),
     })

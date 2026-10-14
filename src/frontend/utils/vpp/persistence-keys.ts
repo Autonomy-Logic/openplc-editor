@@ -35,6 +35,7 @@ export interface PersistableSection {
 }
 
 export const VENDOR_DOCUMENT_LAYOUT = 'vendor-document'
+export const DATAPOINT_IO_TABLE_LAYOUT = 'datapoint-io-table'
 export const DEVICE_SETUP_KEY = 'device-setup'
 export const IO_MAPPING_KEY = 'io-mapping'
 const DEFAULT_CONFIGURATOR_KEY = 'configurator'
@@ -49,6 +50,8 @@ const DEFAULT_CONFIGURATOR_KEY = 'configurator'
  */
 export function getSectionPersistenceKey(section: PersistableSection | null | undefined): string | null {
   if (!section || typeof section !== 'object') return null
+  // Reads what a configurator section wrote, so its key is fixed.
+  if (section.layout === DATAPOINT_IO_TABLE_LAYOUT) return IO_MAPPING_KEY
   if (typeof section.persistence === 'string' && section.persistence.length > 0) return section.persistence
   if (section.layout === VENDOR_DOCUMENT_LAYOUT) return DEFAULT_CONFIGURATOR_KEY
   if (typeof section.id === 'string' && section.id.length > 0) return section.id
@@ -76,7 +79,7 @@ export function collectScreenPersistenceKeys(screenDefinition: unknown): string[
     if (key === null) continue
     add(key)
     // A configurator section writes the device setup and the I/O mapping derived from it in the same store write.
-    if (section.layout === VENDOR_DOCUMENT_LAYOUT) {
+    if (section.layout === VENDOR_DOCUMENT_LAYOUT || section.layout === DATAPOINT_IO_TABLE_LAYOUT) {
       add(DEVICE_SETUP_KEY)
       add(IO_MAPPING_KEY)
     }

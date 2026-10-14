@@ -31,6 +31,13 @@ describe('getSectionPersistenceKey', () => {
     expect(getSectionPersistenceKey({ id: 'editor', layout: 'vendor-document', persistence: 'cfg' })).toBe('cfg')
   })
 
+  it('pins a datapoint-io-table section to the I/O mapping a configurator writes', () => {
+    expect(getSectionPersistenceKey({ id: 'mapping', layout: 'datapoint-io-table' })).toBe('io-mapping')
+    expect(getSectionPersistenceKey({ id: 'mapping', layout: 'datapoint-io-table', persistence: 'other' })).toBe(
+      'io-mapping',
+    )
+  })
+
   it('ignores non-string / empty values for persistence and id', () => {
     expect(getSectionPersistenceKey({ persistence: '', id: 'fallback' })).toBe('fallback')
     expect(getSectionPersistenceKey({ persistence: 42 as unknown as string, id: 'fallback' })).toBe('fallback')
@@ -111,6 +118,13 @@ describe('vendor-document ownership', () => {
 
   it('owns the device setup and the I/O mapping it writes alongside the archive', () => {
     expect(collectScreenPersistenceKeys(screen)).toEqual(['configurator', 'device-setup', 'io-mapping'])
+  })
+
+  it('gives an I/O Mapping screen without the configurator the same two keys', () => {
+    expect(collectScreenPersistenceKeys({ sections: [{ id: 'mapping', layout: 'datapoint-io-table' }] })).toEqual([
+      'io-mapping',
+      'device-setup',
+    ])
   })
 
   it('lists only configurator sections as archive keys', () => {

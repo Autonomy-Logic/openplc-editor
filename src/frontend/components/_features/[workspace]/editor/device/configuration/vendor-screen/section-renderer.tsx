@@ -4,6 +4,7 @@ import { useState } from 'react'
 
 import type { ModuleSystem, ScreenSection } from './index'
 import { ConfiguratorScreen } from './layouts/configurator-screen'
+import { DatapointIoTableLayout } from './layouts/datapoint-io-table-layout'
 import { FormLayout } from './layouts/form-layout'
 import { IoTableLayout } from './layouts/io-table-layout'
 import { ModuleSlotsLayout } from './layouts/module-slots-layout'
@@ -15,7 +16,7 @@ import { ModuleSlotsLayout } from './layouts/module-slots-layout'
  * placeholder — and therefore persists nothing, because a layout the editor
  * cannot draw is one whose field semantics it also cannot honour.
  */
-const SUPPORTED_LAYOUTS = new Set(['module-slots', 'io-table', 'form', 'vendor-document'])
+const SUPPORTED_LAYOUTS = new Set(['module-slots', 'io-table', 'form', 'vendor-document', 'datapoint-io-table'])
 
 type SectionRendererProps = {
   section: ScreenSection
@@ -38,6 +39,8 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
         return <FormLayout section={section} />
       case 'vendor-document':
         return <ConfiguratorScreen section={section} />
+      case 'datapoint-io-table':
+        return <DatapointIoTableLayout />
       default:
         return null
     }
