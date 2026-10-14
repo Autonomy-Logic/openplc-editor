@@ -78,7 +78,7 @@ const ConfirmInstallLibrariesModal = () => {
         modalActions.onOpenChange('confirm-install-libraries', open)
       }}
     >
-      <ModalContent className='flex max-h-[600px] w-[520px] select-none flex-col rounded-lg p-6'>
+      <ModalContent className='flex max-h-[min(600px,92vh)] w-[520px] select-none flex-col rounded-lg p-6'>
         {phase === 'ready' && (
           <>
             <ModalTitle className='mb-2 text-xl font-semibold'>Install libraries</ModalTitle>
