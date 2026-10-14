@@ -3,9 +3,11 @@ import {
   describeEditorTooOldForRuntime,
   describeIncompatibleRuntime,
   describeVppRuntimeMismatch,
+  isEtherdogCapableRuntime,
   isStrucppCompatibleRuntime,
   isRetainConfigCapableRuntime,
   isUserManagementCapableRuntime,
+  MIN_ETHERDOG_RUNTIME_VERSION,
   MIN_RUNTIME_VERSION,
   MIN_STRUCPP_RUNTIME_VERSION,
   MIN_RETAIN_CONFIG_RUNTIME_VERSION,
@@ -41,6 +43,32 @@ describe('isRetainConfigCapableRuntime', () => {
     expect(isRetainConfigCapableRuntime(undefined)).toBe(false)
     expect(isRetainConfigCapableRuntime('')).toBe(false)
     expect(isRetainConfigCapableRuntime('dev')).toBe(false)
+  })
+})
+
+describe('isEtherdogCapableRuntime', () => {
+  it('is exposed with the documented minimum version', () => {
+    expect(MIN_ETHERDOG_RUNTIME_VERSION).toBe('4.3.0')
+  })
+
+  it('accepts v4.3.0 and newer, including a pre-release on the target patch', () => {
+    expect(isEtherdogCapableRuntime('v4.3.0')).toBe(true)
+    expect(isEtherdogCapableRuntime('4.3.1')).toBe(true)
+    expect(isEtherdogCapableRuntime('v5.0.0')).toBe(true)
+    expect(isEtherdogCapableRuntime('v4.3.0-rc.1')).toBe(true)
+  })
+
+  it('rejects runtimes that still bundle the SOEM plugin', () => {
+    expect(isEtherdogCapableRuntime('v4.2.4')).toBe(false)
+    expect(isEtherdogCapableRuntime('4.2.99')).toBe(false)
+    expect(isEtherdogCapableRuntime('v4.1.0')).toBe(false)
+  })
+
+  it('treats an unknown version as legacy', () => {
+    expect(isEtherdogCapableRuntime(null)).toBe(false)
+    expect(isEtherdogCapableRuntime(undefined)).toBe(false)
+    expect(isEtherdogCapableRuntime('')).toBe(false)
+    expect(isEtherdogCapableRuntime('dev')).toBe(false)
   })
 })
 

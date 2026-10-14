@@ -108,8 +108,13 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-file-accelerator')
   }
 
-  handleExportProjectRequest(xmlFormatTarget: 'old-editor' | 'codesys') {
-    this.mainWindow.webContents.send('compiler:export-project-request', xmlFormatTarget)
+  handleExportProjectRequest() {
+    this.mainWindow.webContents.send('compiler:export-project-request')
+  }
+
+  // The renderer owns the overwrite confirmation, so this only forwards the request.
+  handleImportPlcopenRequest() {
+    this.mainWindow.webContents.send('project:import-plcopen-accelerator')
   }
 
   async handleGetRecent() {
@@ -117,9 +122,9 @@ export default class MenuBuilder {
     return response
   }
 
-  async handleOpenProjectByPath(projectPath: string) {
-    const response = await this.projectService.openProjectByPath(projectPath)
-    this.mainWindow.webContents.send('project:open-recent-accelerator', response)
+  // The renderer opens it through project:read-files, which sets the file-access root.
+  handleOpenProjectByPath(projectPath: string) {
+    this.mainWindow.webContents.send('project:open-recent-accelerator', projectPath)
   }
 
   handleCloseTab() {
@@ -250,8 +255,21 @@ export default class MenuBuilder {
   async buildDarwinTemplate(): Promise<MenuItemConstructorOptions[]> {
     const recent = await this.handleGetRecent()
     const homeDir = process.env.HOME || ''
+    // Not `role: 'appMenu'`: its labels use `app.name`, which is the package name, not the product name.
+    const appName = 'OpenPLC Editor'
     const defaultDarwinMenu: MenuItemConstructorOptions = {
-      role: 'appMenu',
+      label: appName,
+      submenu: [
+        { role: 'about', label: `About ${appName}` },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide', label: `Hide ${appName}` },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit', label: `Quit ${appName}` },
+      ],
     }
 
     const subMenuFile: DarwinMenuItemConstructorOptions = {
@@ -301,12 +319,12 @@ export default class MenuBuilder {
         { type: 'separator' },
         {
           label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
-          click: () => this.handleExportProjectRequest('old-editor'),
+          click: () => this.handleExportProjectRequest(),
           enabled: this.projectOpen,
         },
         {
-          label: i18n.t('menu:file.submenu.exportToCodesysXml'),
-          click: () => this.handleExportProjectRequest('codesys'),
+          label: i18n.t('menu:file.submenu.importFromPLCOpenXml'),
+          click: () => this.handleImportPlcopenRequest(),
           enabled: this.projectOpen,
         },
         { type: 'separator' },
@@ -504,7 +522,7 @@ export default class MenuBuilder {
         return {
           label: `${projectName} (${projectPath})`,
           click: () => {
-            void this.handleOpenProjectByPath(projectEntry.path)
+            this.handleOpenProjectByPath(projectEntry.path)
           },
         }
       }),
@@ -544,9 +562,8 @@ export default class MenuBuilder {
         // KNOWN DIVERGENCE from the in-app React File menu (`menus/file.tsx`),
         // which is the only File menu on Windows while this is the only one on
         // Linux. Deliberate for now, and tracked rather than fixed here:
-        //   - native only: New Project, Open Project, Export to CODESYS XML,
-        //     Board Package Manager
-        //   - React only: README, Import PLCopen XML (both capability-gated)
+        //   - native only: New Project, Open Project, Board Package Manager
+        //   - React only: README (capability-gated)
         // Everything either menu offers now WORKS on its platform, which is the
         // part that mattered: Save As was disabled here, so on Linux a
         // retrieved project could not be saved at all. Full parity is a bigger
@@ -618,12 +635,12 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
-            click: () => this.handleExportProjectRequest('old-editor'),
+            click: () => this.handleExportProjectRequest(),
             enabled: this.projectOpen,
           },
           {
-            label: i18n.t('menu:file.submenu.exportToCodesysXml'),
-            click: () => this.handleExportProjectRequest('codesys'),
+            label: i18n.t('menu:file.submenu.importFromPLCOpenXml'),
+            click: () => this.handleImportPlcopenRequest(),
             enabled: this.projectOpen,
           },
           {
@@ -852,7 +869,7 @@ export default class MenuBuilder {
           return {
             label: `${projectName} (${projectPath})`,
             click: () => {
-              void this.handleOpenProjectByPath(projectEntry.path)
+              this.handleOpenProjectByPath(projectEntry.path)
             },
           }
         }),

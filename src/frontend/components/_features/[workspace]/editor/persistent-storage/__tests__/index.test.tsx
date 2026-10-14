@@ -7,7 +7,8 @@
 
 import { fireEvent, render, screen } from '@testing-library/react'
 
-import { useOpenPLCStore } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import { DEFAULT_RETAIN_FLUSH_SECONDS, RETAIN_MAX_FLUSH_SECONDS } from '@root/middleware/shared/ports/types'
 
 import { PersistentStorageEditor } from '../index'
@@ -24,12 +25,14 @@ function input(el: HTMLElement): HTMLInputElement {
   return el
 }
 
+let store: OpenPLCStore
+
 function settings() {
-  return useOpenPLCStore.getState().deviceDefinitions.configuration.persistentStorage
+  return store.getState().deviceDefinitions.configuration.persistentStorage
 }
 
 function setSettings(value: { enabled: boolean; path: string; flushSeconds: number } | undefined) {
-  useOpenPLCStore.setState((s) => ({
+  store.setState((s) => ({
     ...s,
     deviceDefinitions: {
       ...s.deviceDefinitions,
@@ -39,14 +42,14 @@ function setSettings(value: { enabled: boolean; path: string; flushSeconds: numb
 }
 
 beforeEach(() => {
-  setSettings(undefined)
+  store = createTestStore()
 })
 
 describe('PersistentStorageEditor', () => {
   it('renders with no device attached', () => {
     // The predecessor showed "you are not connected" here. There is nothing to
     // connect to now: the settings are part of the project.
-    render(<PersistentStorageEditor />)
+    render(<PersistentStorageEditor />, { wrapper: createStoreWrapper(store) })
 
     expect(screen.getByRole('heading', { name: /persistent storage/i })).toBeTruthy()
     expect(screen.getByLabelText(/file location/i)).toBeTruthy()
@@ -54,14 +57,14 @@ describe('PersistentStorageEditor', () => {
   })
 
   it('shows storage off for a project that never configured it', () => {
-    render(<PersistentStorageEditor />)
+    render(<PersistentStorageEditor />, { wrapper: createStoreWrapper(store) })
 
     expect(input(screen.getByRole('checkbox')).checked).toBe(false)
     expect(input(screen.getByLabelText(/file location/i)).disabled).toBe(true)
   })
 
   it('writes the toggle into the project, materialising the record on first edit', () => {
-    render(<PersistentStorageEditor />)
+    render(<PersistentStorageEditor />, { wrapper: createStoreWrapper(store) })
 
     fireEvent.click(screen.getByRole('checkbox'))
 
@@ -74,7 +77,7 @@ describe('PersistentStorageEditor', () => {
 
   it('writes the path into the project', () => {
     setSettings({ enabled: true, path: '', flushSeconds: 5 })
-    render(<PersistentStorageEditor />)
+    render(<PersistentStorageEditor />, { wrapper: createStoreWrapper(store) })
 
     fireEvent.change(screen.getByLabelText(/file location/i), { target: { value: '/data/retain.bin' } })
 
@@ -83,7 +86,7 @@ describe('PersistentStorageEditor', () => {
 
   it('writes the commit period into the project', () => {
     setSettings({ enabled: true, path: '/data/retain.bin', flushSeconds: 5 })
-    render(<PersistentStorageEditor />)
+    render(<PersistentStorageEditor />, { wrapper: createStoreWrapper(store) })
 
     fireEvent.change(screen.getByLabelText(/save every/i), { target: { value: '30' } })
 
@@ -95,7 +98,7 @@ describe('PersistentStorageEditor', () => {
     // fills this in. Showing a made-up path here would be a claim about a box
     // the editor has never talked to.
     setSettings({ enabled: true, path: '', flushSeconds: 5 })
-    render(<PersistentStorageEditor />)
+    render(<PersistentStorageEditor />, { wrapper: createStoreWrapper(store) })
 
     const path = input(screen.getByLabelText(/file location/i))
     expect(path.value).toBe('')
@@ -104,7 +107,7 @@ describe('PersistentStorageEditor', () => {
 
   it('flags a period the runtime would refuse at upload', () => {
     setSettings({ enabled: true, path: '/data/retain.bin', flushSeconds: RETAIN_MAX_FLUSH_SECONDS + 1 })
-    render(<PersistentStorageEditor />)
+    render(<PersistentStorageEditor />, { wrapper: createStoreWrapper(store) })
 
     expect(screen.getByRole('alert')).toBeTruthy()
     expect(screen.getByLabelText(/save every/i).getAttribute('aria-invalid')).toBe('true')
@@ -115,7 +118,7 @@ describe('PersistentStorageEditor', () => {
     // 1.5 shipped as 2. A UI that accepts a value the device will not use is
     // worse than one that refuses it.
     setSettings({ enabled: true, path: '/data/retain.bin', flushSeconds: 1.5 })
-    render(<PersistentStorageEditor />)
+    render(<PersistentStorageEditor />, { wrapper: createStoreWrapper(store) })
 
     expect(screen.getByRole('alert')).toBeTruthy()
     expect(screen.getByLabelText(/save every/i).getAttribute('aria-invalid')).toBe('true')
@@ -123,14 +126,14 @@ describe('PersistentStorageEditor', () => {
 
   it('does not flag a period inside the accepted range', () => {
     setSettings({ enabled: true, path: '/data/retain.bin', flushSeconds: 5 })
-    render(<PersistentStorageEditor />)
+    render(<PersistentStorageEditor />, { wrapper: createStoreWrapper(store) })
 
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('disables the fields while storage is off, so nothing is edited into a disabled stanza', () => {
     setSettings({ enabled: false, path: '/data/retain.bin', flushSeconds: 5 })
-    render(<PersistentStorageEditor />)
+    render(<PersistentStorageEditor />, { wrapper: createStoreWrapper(store) })
 
     expect(input(screen.getByLabelText(/file location/i)).disabled).toBe(true)
     expect(input(screen.getByLabelText(/save every/i)).disabled).toBe(true)

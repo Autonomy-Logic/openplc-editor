@@ -28,7 +28,7 @@
  */
 
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
 import { getIecVariableLineMap, getIecVariableLineMapFromText } from '../../utils/generate-iec-variables-to-string'
 import { generatePythonLspPreamble, type PythonLspPreamble } from '../../utils/python/generatePythonLspPreamble'
 import {
@@ -66,14 +66,14 @@ const EMPTY_PREAMBLE: PythonLspPreamble = {
  * and Go-to-Definition on a Python POU lands on the wrong declaration. Read the
  * POU's text when it has one; fall back to the canonical walk when it does not.
  */
-function variableLineMapFor(pouName: string, variables: PLCVariable[]) {
-  const pou = openPLCStoreBase.getState().project.data.pous.find((candidate) => candidate.name === pouName)
+function variableLineMapFor(store: OpenPLCStore, pouName: string, variables: PLCVariable[]) {
+  const pou = store.getState().project.data.pous.find((candidate) => candidate.name === pouName)
   const text = pou?.variablesText
   return text === undefined ? getIecVariableLineMap(variables) : getIecVariableLineMapFromText(text, variables)
 }
 
 export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
-  const { workerUrl, monaco: monacoApi, onCrash } = opts
+  const { store, workerUrl, monaco: monacoApi, onCrash } = opts
 
   // Captured from `beforeListen` so attachPou / detachPou can send
   // `pyright/createFile` / `pyright/deleteFile` alongside didOpen /
@@ -124,7 +124,7 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
   const navigateToStore: NavigateToTarget = (target) => {
     const entry = [...entryByUri.values()].find((e) => e.lspUri === target.uri)
     if (!entry) return false
-    return redirectPythonNavTarget(target, {
+    return redirectPythonNavTarget(store, target, {
       sourceUri: entry.lspUri,
       sourcePouName: entry.pouName,
       variableNameByPreambleLine: entry.preamble.variableNameByPreambleLine,
@@ -311,7 +311,7 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
       // buffer but never enter the analysis queue.
       const lspUri = `${uri}.py`
       const preamble = generatePythonLspPreamble(variables, dataTypes)
-      const iecVariableLineMap = variableLineMapFor(pouName, variables)
+      const iecVariableLineMap = variableLineMapFor(store, pouName, variables)
       entryByUri.set(uri, { pouName, lspUri, preamble, iecVariableLineMap })
       setBodyLineOffset(lspUri, preamble.lineCount)
       void pyrightConnection?.sendNotification('pyright/createFile', { kind: 'create', uri: lspUri })
@@ -338,7 +338,7 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
       const existing = entryByUri.get(uri)
       const lspUri = existing?.lspUri ?? `${uri}.py`
       const preamble = generatePythonLspPreamble(variables, dataTypes)
-      const iecVariableLineMap = variableLineMapFor(existing?.pouName ?? '', variables)
+      const iecVariableLineMap = variableLineMapFor(store, existing?.pouName ?? '', variables)
       entryByUri.set(uri, { pouName: existing?.pouName ?? '', lspUri, preamble, iecVariableLineMap })
       setBodyLineOffset(lspUri, preamble.lineCount)
       const text = augmentedDocument(uri, bodyText)

@@ -7,7 +7,7 @@ import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useDebugValue, useIsDebuggerVisible } from '../../../../hooks/use-debug-value'
 import { forceDebugVariable, releaseDebugVariable } from '../../../../services/debug-force-variable'
 import { resolveScopeExpressionType } from '../../../../services/graphical-scope'
-import { useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import { RungLadderState } from '../../../../store/slices/ladder'
 import { cn } from '../../../../utils/cn'
 import { getLiteralType } from '../../../../utils/keywords'
@@ -25,6 +25,7 @@ import { DEFAULT_VARIABLE_HEIGHT, DEFAULT_VARIABLE_WIDTH } from './utils/constan
 import { BlockNodeData, BlockVariant, LadderBlockConnectedVariables, VariableNode, VariableProps } from './utils/types'
 
 const VariableElement = (block: VariableProps) => {
+  const store = useOpenPLCStoreApi()
   const { id, data } = block
   const pouName = useBoundPou()
   const pous = useOpenPLCStore((state) => state.project.data.pous)
@@ -153,7 +154,7 @@ const VariableElement = (block: VariableProps) => {
   const handleSubmitVariableValueOnTextareaBlur = (currentValue?: string) => {
     const variableNameToSubmit = currentValue ?? variableValue
 
-    const { project, ladderFlows } = useOpenPLCStore.getState()
+    const { project, ladderFlows } = store.getState()
     const { pou, rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
       nodeId: id,
     })
@@ -239,21 +240,23 @@ const VariableElement = (block: VariableProps) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-    if (data.variable.name) await forceDebugVariable(debugger_, compositeKey, debugIndex, new Uint8Array([1]), true)
+    if (data.variable.name)
+      await forceDebugVariable(store, debugger_, compositeKey, debugIndex, new Uint8Array([1]), true)
   }
 
   const handleForceFalse = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-    if (data.variable.name) await forceDebugVariable(debugger_, compositeKey, debugIndex, new Uint8Array([0]), false)
+    if (data.variable.name)
+      await forceDebugVariable(store, debugger_, compositeKey, debugIndex, new Uint8Array([0]), false)
   }
 
   const handleReleaseForce = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-    if (data.variable.name) await releaseDebugVariable(debugger_, compositeKey, debugIndex)
+    if (data.variable.name) await releaseDebugVariable(store, debugger_, compositeKey, debugIndex)
   }
 
   const handleForceValueOpen = (e: React.MouseEvent) => {
@@ -298,6 +301,7 @@ const VariableElement = (block: VariableProps) => {
     }
 
     await forceDebugVariable(
+      store,
       debugger_,
       compositeKey,
       debugIndex,

@@ -1,7 +1,11 @@
 /**
  * window:project-open tells the menu whether a project is open, so its project-only items
- * (and their accelerators) are off on the start screen.
+ * (and their accelerators) are off on the start screen. Closing also drops the file-access root.
  */
+
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import MainProcessBridge from '../main'
 
@@ -30,7 +34,7 @@ jest.mock('../../../../backend/editor/utils', () => ({ getOpenProjectPath: jest.
 
 const listeners = new Map<string, (...args: unknown[]) => unknown>()
 
-const menuBuilder = { buildMenu: jest.fn(), setProjectOpen: jest.fn(() => Promise.resolve()) }
+const menuBuilder = { buildMenu: jest.fn(() => Promise.resolve()), setProjectOpen: jest.fn(() => Promise.resolve()) }
 
 function createBridge(): MainProcessBridge {
   const bridge = new MainProcessBridge({
@@ -79,5 +83,123 @@ describe('window:project-open', () => {
     emit('window:project-open', payload)
 
     expect(menuBuilder.setProjectOpen).not.toHaveBeenCalled()
+  })
+})
+
+describe('file-access root', () => {
+  const projectService = {
+    readRawProjectFiles: jest.fn(() => Promise.resolve({ success: true })),
+    updateProjectHistory: jest.fn(() => Promise.resolve()),
+  }
+  let workDir: string
+  let projectA: string
+  let projectB: string
+  let bridge: MainProcessBridge
+
+  beforeEach(() => {
+    workDir = mkdtempSync(join(tmpdir(), 'dope-668-'))
+    projectA = join(workDir, 'a')
+    projectB = join(workDir, 'b')
+    for (const project of [projectA, projectB]) {
+      mkdirSync(project)
+      writeFileSync(join(project, 'main.st'), 'PROGRAM main END_PROGRAM')
+    }
+    listeners.clear()
+    bridge = new MainProcessBridge({
+      ipcMain: {
+        on: jest.fn((channel: string, handler: (...args: unknown[]) => unknown) => listeners.set(channel, handler)),
+        handle: jest.fn(),
+        removeHandler: jest.fn(),
+        removeAllListeners: jest.fn(),
+      },
+      mainWindow: {
+        isDestroyed: jest.fn(() => false),
+        webContents: { send: jest.fn(), on: jest.fn(), isCrashed: jest.fn(() => false) },
+      },
+      projectService,
+      store: { get: jest.fn(() => undefined) },
+      menuBuilder,
+      pouService: {},
+      compilerModule: {},
+      hardwareModule: { isSerialPortPresent: jest.fn(() => true) },
+      quitCoordinator: {},
+    } as never)
+    bridge.setupMainIpcListener()
+  })
+
+  afterEach(() => rmSync(workDir, { recursive: true, force: true }))
+
+  const readFile = (project: string) => bridge.handleFileReadContent({} as never, join(project, 'main.st'))
+
+  it('follows the project opened last', async () => {
+    await bridge.handleReadProjectFiles({} as never, projectA)
+    await bridge.handleReadProjectFiles({} as never, projectB)
+
+    expect((await readFile(projectB)).success).toBe(true)
+    expect((await readFile(projectA)).success).toBe(false)
+  })
+
+  it('refuses every path once the project closes', async () => {
+    await bridge.handleReadProjectFiles({} as never, projectB)
+
+    emit('window:project-open', false)
+
+    expect((await readFile(projectB)).success).toBe(false)
+  })
+
+  it('accepts the next project opened after a close', async () => {
+    await bridge.handleReadProjectFiles({} as never, projectA)
+    emit('window:project-open', false)
+
+    await bridge.handleReadProjectFiles({} as never, projectB)
+
+    expect((await readFile(projectB)).success).toBe(true)
+  })
+
+  it('rebuilds the menu so Recent shows the history the open changed', async () => {
+    menuBuilder.buildMenu.mockClear()
+
+    await bridge.handleReadProjectFiles({} as never, projectB)
+
+    expect(projectService.updateProjectHistory).toHaveBeenCalledWith(projectB)
+    expect(menuBuilder.buildMenu).toHaveBeenCalled()
+  })
+
+  it('rebuilds the menu after a failed open too', async () => {
+    projectService.readRawProjectFiles.mockResolvedValueOnce({ success: false })
+    menuBuilder.buildMenu.mockClear()
+
+    await bridge.handleReadProjectFiles({} as never, join(workDir, 'gone'))
+
+    expect(menuBuilder.buildMenu).toHaveBeenCalled()
+  })
+
+  it('stops a watcher started in the previous project after the root moves', async () => {
+    await bridge.handleReadProjectFiles({} as never, projectA)
+    const watched = join(projectA, 'main.st')
+    expect((await bridge.handleFileWatchStart({} as never, watched)).success).toBe(true)
+
+    await bridge.handleReadProjectFiles({} as never, projectB)
+
+    expect(bridge.handleFileWatchStop({} as never, watched).success).toBe(true)
+    expect(bridge.handleFileWatchStop({} as never, watched).success).toBe(false)
+  })
+
+  it('leaves the root on the open project when the history update fails', async () => {
+    await bridge.handleReadProjectFiles({} as never, projectA)
+    projectService.updateProjectHistory.mockRejectedValueOnce(new Error('disk full'))
+
+    expect((await bridge.handleReadProjectFiles({} as never, projectB)).success).toBe(false)
+
+    expect((await readFile(projectA)).success).toBe(true)
+    expect((await readFile(projectB)).success).toBe(false)
+  })
+
+  it('keeps the root when the project stays open', async () => {
+    await bridge.handleReadProjectFiles({} as never, projectB)
+
+    emit('window:project-open', true)
+
+    expect((await readFile(projectB)).success).toBe(true)
   })
 })

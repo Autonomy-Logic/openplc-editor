@@ -26,6 +26,7 @@
  */
 
 import { type PythonLspService, startPythonLsp } from '@root/frontend/services/python-lsp'
+import type { OpenPLCStore } from '@root/frontend/store'
 import type { PLCDataType, PLCVariable } from '@root/middleware/shared/ports/types'
 import type { editor as MonacoEditor, IDisposable } from 'monaco-editor'
 import type * as monaco from 'monaco-editor'
@@ -66,14 +67,14 @@ export function setPythonLspWorkerUrl(url: string): void {
  * fails to start — the editor still renders, just without
  * language-server diagnostics or completions.
  */
-export async function initPythonLSP(monacoModule: typeof monaco): Promise<void> {
+export async function initPythonLSP(store: OpenPLCStore, monacoModule: typeof monaco): Promise<void> {
   if (service) return
   if (!configuredWorkerUrl) {
     console.warn('[python-lsp] worker URL not registered; LSP will not start. Call setPythonLspWorkerUrl from App.tsx.')
     return
   }
   monacoApi = monacoModule
-  service = startPythonLsp({ workerUrl: configuredWorkerUrl, monaco: monacoModule })
+  service = startPythonLsp({ store, workerUrl: configuredWorkerUrl, monaco: monacoModule })
   try {
     await service.ready
   } catch (err) {

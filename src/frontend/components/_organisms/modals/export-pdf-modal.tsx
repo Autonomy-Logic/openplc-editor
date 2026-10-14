@@ -18,7 +18,7 @@ import { type PLCPou, projectCapabilities } from '../../../../middleware/shared/
 import { useProject } from '../../../../middleware/shared/providers'
 import { MagnifierIcon } from '../../../assets/icons/interface/Magnifier'
 import { executeExportPdf, renderPrintPdf } from '../../../services/print-actions'
-import { useOpenPLCStore } from '../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import { cn } from '../../../utils/cn'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 import { PageSetupFields } from '../../_molecules/page-setup-fields'
@@ -410,6 +410,7 @@ const PdfPreviewViewer = ({
 }
 
 const ExportPdfModal = () => {
+  const store = useOpenPLCStoreApi()
   const projectPort = useProject()
   const { modals, modalActions, project, print, printActions } = useOpenPLCStore()
 
@@ -452,19 +453,19 @@ const ExportPdfModal = () => {
     if (step !== 'preview' || renderState.status !== 'idle') return
     setRenderState({ status: 'loading' })
     let cancelled = false
-    void renderPrintPdf(projectPort).then((result) => {
+    void renderPrintPdf(store, projectPort).then((result) => {
       if (cancelled) return
       setRenderState(result.ok ? { status: 'ready', bytes: result.bytes } : { status: 'error', error: result.error })
     })
     return () => {
       cancelled = true
     }
-  }, [step, renderState, projectPort])
+  }, [store, step, renderState, projectPort])
 
   useEffect(() => {
     if (step !== 'exporting' || renderState.status !== 'ready') return
     let cancelled = false
-    void executeExportPdf(projectPort, renderState.bytes).then((result) => {
+    void executeExportPdf(store, projectPort, renderState.bytes).then((result) => {
       if (cancelled) return
       // Failure (or a cancelled save dialog) is already toasted by
       // executeExportPdf when it's a real error — just return to preview
@@ -475,7 +476,7 @@ const ExportPdfModal = () => {
     return () => {
       cancelled = true
     }
-  }, [step, renderState, projectPort, close])
+  }, [store, step, renderState, projectPort, close])
 
   const handleBack = () => {
     if (step === 'preview') setRenderState({ status: 'idle' })

@@ -6,7 +6,8 @@ vi.mock('@root/frontend/components/_organisms/variables-code-editor', () => ({
 }))
 
 import type { PLCGlobalVariableList } from '@root/middleware/shared/ports/types'
-import { useOpenPLCStore } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import { CreateEditorObjectFromTab } from '@root/frontend/store/slices/tabs/utils'
 
 import { GlobalVariableListEditor } from '../index'
@@ -33,7 +34,7 @@ function seed(lists: PLCGlobalVariableList[], openList?: string) {
         elementType: { type: 'global-variable-list' },
       })
     : undefined
-  useOpenPLCStore.setState((state) => ({
+  store.setState((state) => ({
     ...state,
     project: { ...state.project, data: { ...state.project.data, globalVariableLists: lists } },
     editor: model ?? { type: 'available', meta: { name: 'available' } },
@@ -48,12 +49,19 @@ const rowNames = () =>
     .filter((row) => row.querySelectorAll('td').length > 0)
     .map((row) => row.querySelectorAll('td')[1]?.textContent?.trim())
 
+let store: OpenPLCStore
+
+const renderEditor = () => render(<GlobalVariableListEditor listName='GVL' />, { wrapper: createStoreWrapper(store) })
+
 describe('GlobalVariableListEditor', () => {
-  beforeEach(() => seed([]))
+  beforeEach(() => {
+    store = createTestStore()
+    seed([])
+  })
 
   it('opens on the table, with a row per member', () => {
     seed([{ name: 'GVL', variables: [member('Output1'), member('Speed', 'INT')] }], 'GVL')
-    render(<GlobalVariableListEditor listName='GVL' />)
+    renderEditor()
 
     expect(screen.queryByTestId('variables-code-editor')).toBeNull()
     expect(rowNames()).toEqual(['Output1', 'Speed'])
@@ -63,7 +71,7 @@ describe('GlobalVariableListEditor', () => {
     // An address on a list member drives nothing (the STRUCT it compiles to discards `AT`),
     // and nothing collects one into the debugger — so neither column is offered.
     seed([{ name: 'GVL', variables: [member('Output1')] }], 'GVL')
-    render(<GlobalVariableListEditor listName='GVL' />)
+    renderEditor()
 
     const headers = screen.getAllByRole('columnheader').map((header) => header.textContent?.trim())
     expect(headers).toEqual(['#', 'Name', 'Class', 'Type', 'Initial Value', 'Documentation'])
@@ -71,7 +79,7 @@ describe('GlobalVariableListEditor', () => {
 
   it('switches to the declaration and back', () => {
     seed([{ name: 'GVL', variables: [member('Output1')] }], 'GVL')
-    render(<GlobalVariableListEditor listName='GVL' />)
+    renderEditor()
 
     fireEvent.click(screen.getByLabelText('Global variable list code visualization'))
     expect(screen.getByTestId('variables-code-editor').textContent).toContain('Output1 : BOOL;')
@@ -95,7 +103,7 @@ describe('GlobalVariableListEditor', () => {
       ],
       'GVL',
     )
-    render(<GlobalVariableListEditor listName='GVL' />)
+    renderEditor()
 
     const view = screen.getByTestId('variables-code-editor')
     expect(view.textContent).toContain('oops : ???')
@@ -115,7 +123,7 @@ describe('GlobalVariableListEditor', () => {
       ],
       'GVL',
     )
-    render(<GlobalVariableListEditor listName='GVL' />)
+    renderEditor()
 
     fireEvent.click(screen.getByLabelText('Global variable list table visualization'))
     expect(screen.getByTestId('variables-code-editor')).toBeTruthy()
@@ -124,7 +132,7 @@ describe('GlobalVariableListEditor', () => {
 
   it('says so when the list is gone but its tab is still mounted', () => {
     seed([])
-    render(<GlobalVariableListEditor listName='GVL' />)
+    renderEditor()
     expect(screen.getByText('This global variable list no longer exists.')).toBeTruthy()
   })
 })

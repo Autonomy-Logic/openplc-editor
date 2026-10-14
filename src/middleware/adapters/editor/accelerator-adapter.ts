@@ -19,6 +19,7 @@
  *   project:save-accelerator
  *   project:save-file-accelerator
  *   project:retrieve-accelerator
+ *   project:import-plcopen-accelerator
  *   workspace:close-project-accelerator
  *   compiler:export-project-request
  *   workspace:close-tab-accelerator
@@ -46,8 +47,10 @@ export function createEditorAcceleratorAdapter(): AcceleratorPort {
       return window.bridge.handleOpenProjectRequest(() => callback())
     },
 
-    onOpenRecent(callback: (projectData?: unknown) => void): Unsubscribe {
-      return window.bridge.openRecentAccelerator((_event: unknown, response: unknown) => callback(response))
+    onOpenRecent(callback: (projectPath: string) => void): Unsubscribe {
+      return window.bridge.openRecentAccelerator((_event: unknown, projectPath: unknown) => {
+        if (typeof projectPath === 'string') callback(projectPath)
+      })
     },
 
     onSaveProject(callback: () => void): Unsubscribe {
@@ -64,6 +67,10 @@ export function createEditorAcceleratorAdapter(): AcceleratorPort {
 
     onRetrieveProject(callback: () => void): Unsubscribe {
       return window.bridge.retrieveProjectAccelerator(() => callback())
+    },
+
+    onImportPlcopen(callback: () => void): Unsubscribe {
+      return window.bridge.importPlcopenAccelerator(() => callback())
     },
 
     onCloseProject(callback: () => void): Unsubscribe {

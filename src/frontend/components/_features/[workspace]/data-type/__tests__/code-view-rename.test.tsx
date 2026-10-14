@@ -15,7 +15,8 @@ vi.mock('@root/frontend/components/_features/[app]/toast/use-toast', () => ({
 }))
 
 import type { PLCDataType, PLCVariable } from '@root/middleware/shared/ports/types'
-import { useOpenPLCStore } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import { serializeDataTypeToText } from '@root/frontend/utils/PLC/data-type-serializer'
 
 import { DataTypeEditor } from '../index'
@@ -31,7 +32,9 @@ const motorVariable: PLCVariable = {
   documentation: '',
 }
 
-const getState = () => useOpenPLCStore.getState()
+let store: OpenPLCStore
+
+const getState = () => store.getState()
 
 const fieldNames = (dataType: PLCDataType) =>
   dataType.derivation === 'structure' ? dataType.variable.map((field) => field.name) : undefined
@@ -69,14 +72,14 @@ const seedReference = () => {
   getState().projectActions.setPouVariables({ pouName: 'Main', variables: [motorVariable] })
 }
 
-const renderEditor = () => render(<DataTypeEditor dataTypeName='Motor' />)
+const renderEditor = () => render(<DataTypeEditor dataTypeName='Motor' />, { wrapper: createStoreWrapper(store) })
 
 const editedBody = '        Speed : INT; (* rpm *)\n        Torque : INT;'
 
 describe('DataTypeEditor rename from the code view', () => {
   beforeEach(() => {
     toastMock.mockClear()
-    getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    store = createTestStore()
   })
 
   it('renames an unreferenced type straight away, body edit included', async () => {

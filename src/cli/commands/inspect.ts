@@ -8,7 +8,7 @@
 
 import { HardwareModule } from '@root/backend/editor/hardware'
 import { buildIoDiagnostics, type IoDiagnostics } from '@root/frontend/services/io-diagnostics'
-import { openPLCStoreBase } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
 
 import { boolFlag, type ParsedArgs, stringFlag } from '../args'
 import { ErrorCode, ExitCode } from '../exit-codes'
@@ -17,7 +17,7 @@ import { loadProject } from '../project/load'
 
 const SUBCOMMANDS: readonly string[] = ['image']
 
-export async function runInspect(args: ParsedArgs, reporter: Reporter): Promise<CliResult> {
+export async function runInspect(store: OpenPLCStore, args: ParsedArgs, reporter: Reporter): Promise<CliResult> {
   // `inspect image <project>` and `inspect <project>` both work: the second
   // token is the subcommand when it names one and the project otherwise.
   const named = args.subcommand !== undefined && SUBCOMMANDS.includes(args.subcommand)
@@ -30,7 +30,7 @@ export async function runInspect(args: ParsedArgs, reporter: Reporter): Promise<
     )
   }
 
-  const loaded = await loadProject(projectPath)
+  const loaded = await loadProject(store, projectPath)
   if (!loaded.success) {
     return reporter.failure({ code: ErrorCode.ProjectNotFound, message: loaded.error }, ExitCode.NotFound)
   }
@@ -63,7 +63,7 @@ export async function runInspect(args: ParsedArgs, reporter: Reporter): Promise<
     )
   }
 
-  const state = openPLCStoreBase.getState()
+  const state = store.getState()
   const diagnostics = buildIoDiagnostics({
     board: target,
     boardInfo,

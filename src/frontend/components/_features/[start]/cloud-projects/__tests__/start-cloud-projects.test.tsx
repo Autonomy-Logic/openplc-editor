@@ -3,10 +3,9 @@
  * unchanged under both runners.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
+import { beforeEach, describe, expect, it } from '@jest/globals'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
 
 import type { EdgeAccountPort } from '../../../../../../middleware/shared/ports/edge-account-port'
 import {
@@ -18,9 +17,9 @@ import type {
   ProjectPort,
   ProjectResponse,
 } from '../../../../../../middleware/shared/ports/project-port'
-import { PlatformProvider } from '../../../../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../../../../middleware/shared/providers/types'
-import { openPLCStoreBase } from '../../../../../store'
+import type { OpenPLCStore } from '../../../../../store'
+import { createStoreWrapper, createTestStore } from '../../../../../store/testing'
 import { dispatch, getMemoryState } from '../../../../../utils/toast'
 import DisplayRecentProjects from '../../../../_organisms/display-recent-projects'
 import type { ProjectOrder } from '../../../../_organisms/project-filter-bar'
@@ -59,6 +58,7 @@ function makePorts(overrides: Partial<PlatformPorts>): PlatformPorts {
 }
 
 let capabilities: PlatformCapabilities
+let store: OpenPLCStore
 const listRecentCloudProjects = jest.fn<Promise<CloudProjectsResult>, [number]>()
 const openProjectByPath = jest.fn<Promise<ProjectResponse>, [string]>()
 /** How many times the section subscribed to each session signal. */
@@ -109,11 +109,7 @@ function Section({ searchNameFilterValue, orderBy }: SectionProps) {
 
 function renderSection(props: SectionProps) {
   const ports = makePorts({ capabilities, project: projectPort, edgeAccount: accountPort })
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <PlatformProvider ports={ports}>{children}</PlatformProvider>
-  )
-
-  return render(<Section {...props} />, { wrapper })
+  return render(<Section {...props} />, { wrapper: createStoreWrapper(store, ports) })
 }
 
 const PROJECT = { id: 'p1', name: 'Irrigation Controller 2', language: 'st', updatedAt: '2026-08-25T14:25:49.000Z' }
@@ -146,19 +142,15 @@ const CLOUD_MARK = 'Autonomy Edge project'
 const lastToast = () => getMemoryState().toasts[0]
 
 beforeEach(() => {
+  store = createTestStore()
   listRecentCloudProjects.mockReset()
   openProjectByPath.mockReset()
   restoredSubscriptions = 0
   expiredSubscriptions = 0
   dispatch({ type: 'REMOVE_TOAST' })
-  openPLCStoreBase.getState().workspaceActions.setRecent([])
+  store.getState().workspaceActions.setRecent([])
   capabilities = { ...EDITOR_CAPABILITIES, hasEdgeAccount: true }
   listRecentCloudProjects.mockResolvedValue({ status: 'ok', projects: [PROJECT] })
-})
-
-afterEach(() => {
-  // A test that opened a project left it in the real store.
-  openPLCStoreBase.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
 })
 
 describe('cloud projects on the start screen', () => {
@@ -172,7 +164,7 @@ describe('cloud projects on the start screen', () => {
   })
 
   it('marks a cloud project with a cloud, and a local one without', async () => {
-    openPLCStoreBase.getState().workspaceActions.setRecent([LOCAL])
+    store.getState().workspaceActions.setRecent([LOCAL])
 
     renderSection({ searchNameFilterValue: '' })
     await screen.findByText(PROJECT.name)
@@ -191,7 +183,7 @@ describe('cloud projects on the start screen', () => {
     expect(openProjectByPath).toHaveBeenCalledWith('p1')
     // And what came back went through the store's own open handler: the project is
     // now the open one.
-    await waitFor(() => expect(openPLCStoreBase.getState().project.meta.path).toBe('p1'))
+    await waitFor(() => expect(store.getState().project.meta.path).toBe('p1'))
   })
 
   /**
@@ -235,7 +227,7 @@ describe('cloud projects on the start screen', () => {
 
     beforeEach(() => {
       listRecentCloudProjects.mockResolvedValue({ status: 'ok', projects: ROWS })
-      openPLCStoreBase.getState().workspaceActions.setRecent([LOCAL])
+      store.getState().workspaceActions.setRecent([LOCAL])
     })
 
     it('puts the newest first by default, whichever side it came from', async () => {
@@ -275,7 +267,7 @@ describe('cloud projects on the start screen', () => {
   describe('each state says its own thing, above the grid', () => {
     it('invites a signed-out user to sign in, and still lists the local projects', async () => {
       listRecentCloudProjects.mockResolvedValueOnce({ status: 'signed-out' })
-      openPLCStoreBase.getState().workspaceActions.setRecent([LOCAL])
+      store.getState().workspaceActions.setRecent([LOCAL])
 
       renderSection({ searchNameFilterValue: '' })
 

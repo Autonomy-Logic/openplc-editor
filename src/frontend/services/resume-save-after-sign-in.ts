@@ -14,7 +14,7 @@
  */
 
 import type { EdgeSessionState } from '../../middleware/shared/ports/edge-account-port'
-import { openPLCStoreBase } from '../store'
+import type { OpenPLCStore } from '../store'
 
 /**
  * The session signals, handed in at boot.
@@ -84,11 +84,12 @@ const pendingFiles = new Map<string, QueuedSave>()
 let unsubscribe: (() => void) | null = null
 
 /** The project currently open, as the store knows it. */
-function currentProjectPath(): string {
-  return openPLCStoreBase.getState().project.meta.path
+function currentProjectPath(store: OpenPLCStore): string {
+  return store.getState().project.meta.path
 }
 
 export function resumeSaveAfterEdgeSignIn(
+  store: OpenPLCStore,
   run: () => Promise<unknown>,
   target: SaveTarget = { scope: 'project' },
 ): void {
@@ -96,7 +97,7 @@ export function resumeSaveAfterEdgeSignIn(
     return
   }
 
-  const projectPath = currentProjectPath()
+  const projectPath = currentProjectPath(store)
 
   if (target.scope === 'project') {
     // Writes every dirty file, so whatever single files were waiting are covered.
@@ -132,7 +133,7 @@ export function resumeSaveAfterEdgeSignIn(
     unsubscribe?.()
     unsubscribe = null
 
-    void replayQueued(queued, currentProjectPath())
+    void replayQueued(queued, currentProjectPath(store))
   })
 }
 

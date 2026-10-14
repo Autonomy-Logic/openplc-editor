@@ -4,16 +4,15 @@
  */
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { ReactNode } from 'react'
 
-import { openPLCStoreBase } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import { getMemoryState } from '@root/frontend/utils/toast'
 import type { EsiPort } from '@root/middleware/shared/ports/esi-port'
 import type { ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type { EtherCATDevice } from '@root/middleware/shared/ports/ethercat-types'
 import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { RuntimePort } from '@root/middleware/shared/ports/runtime-port'
-import { PlatformProvider } from '@root/middleware/shared/providers'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import { EtherCATEditor } from '..'
 
@@ -106,11 +105,11 @@ function makePorts(): PlatformPorts {
   }
 }
 
-const initialState = openPLCStoreBase.getState()
+let store: OpenPLCStore
 
 function seedStore() {
-  const state = openPLCStoreBase.getState()
-  openPLCStoreBase.setState({
+  const state = store.getState()
+  store.setState({
     editor: { type: 'plc-remote-device', meta: { name: BUS, protocol: 'ethercat' } },
     runtimeConnection: { ...state.runtimeConnection, connectionStatus: 'connected' },
     project: {
@@ -131,17 +130,14 @@ function seedStore() {
 }
 
 const configuredSlaves = () =>
-  openPLCStoreBase.getState().project.data.remoteDevices?.find((d) => d.name === BUS)?.ethercatConfig?.devices ?? []
+  store.getState().project.data.remoteDevices?.find((d) => d.name === BUS)?.ethercatConfig?.devices ?? []
 
 const addButton = () => screen.getByRole('button', { name: /Add Selected|Adding/, hidden: true })
 const browserAddButton = () => screen.getByRole('button', { name: 'Add Device', hidden: true })
 
 async function renderScannedAndSelected() {
   const ports = makePorts()
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <PlatformProvider ports={ports}>{children}</PlatformProvider>
-  )
-  render(<EtherCATEditor />, { wrapper })
+  render(<EtherCATEditor />, { wrapper: createStoreWrapper(store, ports) })
 
   const scan = await screen.findByRole('button', { name: 'Scan' })
   await waitFor(() => expect(scan.hasAttribute('disabled')).toBe(false))
@@ -165,11 +161,8 @@ describe('EtherCATEditor "Add Selected"', () => {
   beforeEach(() => {
     loadCalls = []
     pendingLoads = []
+    store = createTestStore()
     seedStore()
-  })
-
-  afterEach(() => {
-    openPLCStoreBase.setState(initialState, true)
   })
 
   it('ignores a second click while an add is running, so each slave is loaded and added once', async () => {
@@ -218,7 +211,7 @@ describe('EtherCATEditor "Add Selected"', () => {
     fireEvent.click(addButton())
     await waitFor(() => expect(pendingLoads.length).toBe(1))
     act(() => {
-      openPLCStoreBase.getState().projectActions.updateEthercatConfig(BUS, {
+      store.getState().projectActions.updateEthercatConfig(BUS, {
         masterConfig: { networkInterface: 'eth1', cycleTimeUs: 2000 },
         devices: configuredSlaves(),
       })
@@ -227,7 +220,7 @@ describe('EtherCATEditor "Add Selected"', () => {
     for (let i = 0; i < SCANNED.length; i++) await settleLoad(i, { success: false, error: 'no xml' })
 
     await waitFor(() => expect(configuredSlaves()).toHaveLength(SCANNED.length))
-    const master = openPLCStoreBase.getState().project.data.remoteDevices?.find((d) => d.name === BUS)
+    const master = store.getState().project.data.remoteDevices?.find((d) => d.name === BUS)
       ?.ethercatConfig?.masterConfig
     expect(master).toEqual({ networkInterface: 'eth1', cycleTimeUs: 2000 })
   })

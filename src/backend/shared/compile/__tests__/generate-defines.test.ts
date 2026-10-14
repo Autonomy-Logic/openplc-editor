@@ -347,6 +347,33 @@ describe('generateDefinesContent — IO Config (pin masks)', () => {
   })
 })
 
+describe('generateDefinesContent — PINPULL_DIN', () => {
+  const pullSpec = {
+    options: ['none' as const, 'up' as const, 'down' as const],
+    pins: { '34': { fixed: 'none' as const }, '16': { options: ['none' as const, 'down' as const] } },
+  }
+
+  it('omits PINPULL_DIN when the board declares no pull spec', () => {
+    const pins = [makePin({ pin: 2, pinType: 'digitalInput' })]
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, devicePinMapping: pins })
+    expect(out).not.toContain('PINPULL_DIN')
+  })
+
+  it('emits one code per digital input in PINMASK_DIN order, resolving fixed and invalid values', () => {
+    const pins: DevicePin[] = [
+      { ...makePin({ pin: 4, pinType: 'digitalInput' }), pull: 'up' },
+      makePin({ pin: 5, pinType: 'digitalOutput' }),
+      { ...makePin({ pin: 34, pinType: 'digitalInput' }), pull: 'up' },
+      { ...makePin({ pin: 16, pinType: 'digitalInput' }), pull: 'up' },
+      { ...makePin({ pin: 17, pinType: 'digitalInput' }), pull: 'down' },
+      makePin({ pin: 18, pinType: 'digitalInput' }),
+    ]
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, devicePinMapping: pins, pinPull: pullSpec })
+    expect(out).toContain('#define PINMASK_DIN 4, 34, 16, 17, 18\n')
+    expect(out).toContain('#define PINPULL_DIN 1, 0, 0, 2, 0\n')
+  })
+})
+
 describe('generateDefinesContent — Arduino library toggles', () => {
   function withMarker(marker: string) {
     return generateDefinesContent({ ...EMPTY_INPUTS, stProgramFileContent: `PROGRAM main\n${marker}\nEND_PROGRAM` })

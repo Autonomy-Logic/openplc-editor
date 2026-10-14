@@ -4,7 +4,8 @@ import type * as monaco from 'monaco-editor'
 import type { AICompleteParams, AIPort } from '../../../../middleware/shared/ports/ai-port'
 import type { EdgeSessionState } from '../../../../middleware/shared/ports/edge-account-port'
 import type { BillingErrorPayload, PLCPou, PLCVariable } from '../../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../../store'
+import type { OpenPLCStore } from '../../../store'
+import { createTestStore } from '../../../store/testing'
 import { setImeComposing } from '../ime-state'
 import { AIInlineCompletionProvider } from '../inline-completion-provider'
 
@@ -139,9 +140,11 @@ function makePou(name: string, vars: PLCVariable[] = []): PLCPou {
   }
 }
 
+let store: OpenPLCStore
+
 function seedPous(pous: PLCPou[]): void {
-  const current = openPLCStoreBase.getState().project
-  openPLCStoreBase.getState().projectActions.setProject({
+  const current = store.getState().project
+  store.getState().projectActions.setProject({
     ...current,
     data: {
       ...current.data,
@@ -165,10 +168,8 @@ function provide(
 
 beforeEach(() => {
   vi.useFakeTimers()
-  const state = openPLCStoreBase.getState()
-  state.aiActions.setAIEnabled(true)
-  state.aiActions.setPreference('inlineCompletionsEnabled', true)
-  state.aiActions.setBillingError(null)
+  store = createTestStore()
+  store.getState().aiActions.setAIEnabled(true)
   seedPous([makePou('Main')])
 })
 
@@ -179,9 +180,9 @@ afterEach(() => {
 
 describe('gates before any request', () => {
   it('asks for nothing while the AI feature is off', async () => {
-    openPLCStoreBase.getState().aiActions.setAIEnabled(false)
+    store.getState().aiActions.setAIEnabled(false)
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     const result = await provide(provider, makeModel('x := '), makePosition(1, 6))
 
@@ -191,9 +192,9 @@ describe('gates before any request', () => {
   })
 
   it('asks for nothing while the user has inline suggestions turned off', async () => {
-    openPLCStoreBase.getState().aiActions.setPreference('inlineCompletionsEnabled', false)
+    store.getState().aiActions.setPreference('inlineCompletionsEnabled', false)
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     const result = await provide(provider, makeModel('x := '), makePosition(1, 6))
 
@@ -206,7 +207,7 @@ describe('gates before any request', () => {
     // CJK composition characters are not typing; treating them as divergence would cancel mid-word.
     setImeComposing(true)
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     const result = await provide(provider, makeModel('x := '), makePosition(1, 6))
 
@@ -217,7 +218,7 @@ describe('gates before any request', () => {
 
   it('asks for nothing for a model other than its own, even one sharing its path', async () => {
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port, undefined, 'inmemory://pou/Main.st')
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port, undefined, 'inmemory://pou/Main.st')
 
     const result = await provide(provider, makeModel('x := ', 'inmemory://pouvars/Main.st'), makePosition(1, 6))
 
@@ -228,7 +229,7 @@ describe('gates before any request', () => {
 
   it('answers for its own model', async () => {
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port, undefined, 'inmemory://pou/Main.st')
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port, undefined, 'inmemory://pou/Main.st')
 
     const result = await provide(provider, makeModel('x := ', 'inmemory://pou/Main.st'), makePosition(1, 6))
 
@@ -239,7 +240,7 @@ describe('gates before any request', () => {
 
   it('asks for nothing in a completely empty editor', async () => {
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     const result = await provide(provider, makeModel(''), makePosition(1, 1))
 
@@ -252,7 +253,7 @@ describe('gates before any request', () => {
 describe('network completions', () => {
   it('joins the streamed chunks into one suggestion anchored at the cursor', async () => {
     const { port, telemetry } = makePort(yielding('hello', ' world'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     const result = await provide(provider, makeModel('x := '), makePosition(1, 6))
 
@@ -272,7 +273,7 @@ describe('network completions', () => {
   it('sends the FIM context the builder produced, not the raw document', async () => {
     seedPous([makePou('Main', [makeVariable('speed')])])
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     await provide(provider, makeModel('x := '), makePosition(1, 6))
 
@@ -290,7 +291,7 @@ describe('network completions', () => {
   ])('strips %s the model added around the code', async (_label, chunks, expected) => {
     // A leading blank line would render as an invisible ghost suggestion.
     const { port } = makePort(yielding(...chunks))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     const result = await provide(provider, makeModel('x := '), makePosition(1, 6))
 
@@ -304,7 +305,7 @@ describe('network completions', () => {
   ])('reports an empty completion as %s rather than showing nothing silently', async (reason, chunks) => {
     // Different backend problems; collapsing them would hide "nothing at all" behind "whitespace".
     const { port, telemetry } = makePort(yielding(...chunks))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     const result = await provide(provider, makeModel('x := '), makePosition(1, 6))
 
@@ -320,7 +321,7 @@ describe('network completions', () => {
   ])('caps output tokens %s', async (_label, text, column, maxTokens) => {
     // Capping output cuts total stream time without touching time-to-first-token.
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     const lineNumber = text.endsWith('\n') ? 2 : 1
 
     await provide(provider, makeModel(text), makePosition(lineNumber, column))
@@ -333,7 +334,7 @@ describe('network completions', () => {
 describe('cancellation', () => {
   it('never reaches the network when a keystroke supersedes the request during the debounce', async () => {
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     const { token, cancel } = makeToken()
 
     const pending = provider.provideInlineCompletions(makeModel('x := '), makePosition(1, 6), inlineContext, token)
@@ -354,7 +355,7 @@ describe('cancellation', () => {
         cancel()
       },
     )
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     const first = await provide(provider, makeModel('x := '), makePosition(1, 6), token)
     const second = await provide(provider, makeModel('x := '), makePosition(1, 6))
@@ -367,7 +368,7 @@ describe('cancellation', () => {
 
   it('aborts an in-flight request when the provider is disposed', async () => {
     const { port } = makePort(neverYields)
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     const pending = provider.provideInlineCompletions(
       makeModel('x := '),
@@ -383,7 +384,7 @@ describe('cancellation', () => {
 
   it('gives up and reports a timeout when no first token arrives', async () => {
     const { port, telemetry } = makePort(neverYields)
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     const pending = provider.provideInlineCompletions(
       makeModel('x := '),
@@ -405,7 +406,7 @@ describe('cancellation', () => {
 describe('cache', () => {
   it('serves a revisited cursor position without asking the model again', async () => {
     const { port, requests, telemetry } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     const model = makeModel('x := ')
 
     await provide(provider, model, makePosition(1, 6))
@@ -420,7 +421,7 @@ describe('cache', () => {
   it('drops cached completions when the project changes under them', async () => {
     // A suggestion referencing a variable the user just deleted reads as the assistant lying.
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     const model = makeModel('x := ')
     await provide(provider, model, makePosition(1, 6))
 
@@ -433,12 +434,12 @@ describe('cache', () => {
 
   it('drops cached completions when the user turns inline suggestions off', async () => {
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     const model = makeModel('x := ')
     await provide(provider, model, makePosition(1, 6))
 
-    openPLCStoreBase.getState().aiActions.setPreference('inlineCompletionsEnabled', false)
-    openPLCStoreBase.getState().aiActions.setPreference('inlineCompletionsEnabled', true)
+    store.getState().aiActions.setPreference('inlineCompletionsEnabled', false)
+    store.getState().aiActions.setPreference('inlineCompletionsEnabled', true)
     await provide(provider, model, makePosition(1, 6))
 
     expect(requests).toHaveLength(2)
@@ -447,7 +448,7 @@ describe('cache', () => {
 
   it('evicts the oldest entry once the cache is full instead of growing unbounded', async () => {
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     // 17 distinct cursor positions in one long line; the cache holds 16.
     const model = makeModel('x'.repeat(40))
 
@@ -464,7 +465,7 @@ describe('cache', () => {
 describe('type-through', () => {
   it('shrinks the ghost text as the user types it, with no new request', async () => {
     const { port, requests, telemetry } = makePort(yielding('hello world'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     await provide(provider, makeModel('x := '), makePosition(1, 6))
 
     const typed = await provide(provider, makeModel('x := hel'), makePosition(1, 9))
@@ -484,7 +485,7 @@ describe('type-through', () => {
 
   it('reports the type-through impression once, not on every keystroke', async () => {
     const { port, telemetry } = makePort(yielding('hello world'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     await provide(provider, makeModel('x := '), makePosition(1, 6))
 
     await provide(provider, makeModel('x := he'), makePosition(1, 8))
@@ -497,7 +498,7 @@ describe('type-through', () => {
   it('tolerates a tab typed where the suggestion had spaces', async () => {
     // Editors re-indent as you type; a whitespace difference is not a rejection.
     const { port, requests } = makePort(yielding('a\tbc'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     await provide(provider, makeModel('x := '), makePosition(1, 6))
 
     const typed = await provide(provider, makeModel('x := a b'), makePosition(1, 9))
@@ -509,7 +510,7 @@ describe('type-through', () => {
 
   it('stops suggesting once the whole suggestion has been typed', async () => {
     const { port } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     await provide(provider, makeModel('x := '), makePosition(1, 6))
 
     const done = await provide(provider, makeModel('x := hello'), makePosition(1, 11))
@@ -521,7 +522,7 @@ describe('type-through', () => {
   it('does not duplicate a closing paren the editor already inserted', async () => {
     // Monaco auto-closes `(`; without reconciling, ghost text would double the `)` (VS Code #170527).
     const { port } = makePort(yielding('foo(a)'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     await provide(provider, makeModel('x := '), makePosition(1, 6))
 
     const typed = await provide(provider, makeModel('x := foo()'), makePosition(1, 10))
@@ -532,7 +533,7 @@ describe('type-through', () => {
 
   it('asks again once the user types something the suggestion does not contain', async () => {
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     await provide(provider, makeModel('x := '), makePosition(1, 6))
 
     await provide(provider, makeModel('x := hey'), makePosition(1, 9))
@@ -543,7 +544,7 @@ describe('type-through', () => {
 
   it('does not compare against a suggestion anchored on another line', async () => {
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     await provide(provider, makeModel('x := '), makePosition(1, 6))
 
     await provide(provider, makeModel('x := \ny := '), makePosition(2, 6))
@@ -554,7 +555,7 @@ describe('type-through', () => {
 
   it('does not compare against a suggestion the cursor has backtracked past', async () => {
     const { port, requests } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     await provide(provider, makeModel('x := '), makePosition(1, 6))
 
     await provide(provider, makeModel('x := '), makePosition(1, 3))
@@ -568,7 +569,7 @@ describe('failures', () => {
   it('fails silently in the editor but records why', async () => {
     // Inline completion has no error UI by design; telemetry is the only visibility into it.
     const { port, telemetry } = makePort(failingWith(Object.assign(new Error('boom'), { status: 500 })))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     const result = await provide(provider, makeModel('x := '), makePosition(1, 6))
 
@@ -582,7 +583,7 @@ describe('failures', () => {
 
   it('classifies an error carrying no status by its name', async () => {
     const { port, telemetry } = makePort(failingWith(new TypeError('bad shape')))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     await provide(provider, makeModel('x := '), makePosition(1, 6))
 
@@ -592,7 +593,7 @@ describe('failures', () => {
 
   it('classifies a thrown non-Error as unknown rather than crashing on error.name', async () => {
     const { port, telemetry } = makePort(failingWith('just a string'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     await provide(provider, makeModel('x := '), makePosition(1, 6))
 
@@ -610,21 +611,21 @@ describe('failures', () => {
       monthlyLimit: 613,
     }
     const { port } = makePort(failingWith(Object.assign(new Error('Out of ACU'), { status: 402, billing })))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     await provide(provider, makeModel('x := '), makePosition(1, 6))
 
-    expect(openPLCStoreBase.getState().ai.billingError).toEqual(billing)
+    expect(store.getState().ai.billingError).toEqual(billing)
     provider.dispose()
   })
 
   it('does not record a 402 with no payload to act on', async () => {
     const { port } = makePort(failingWith(Object.assign(new Error('payment required'), { status: 402 })))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     await provide(provider, makeModel('x := '), makePosition(1, 6))
 
-    expect(openPLCStoreBase.getState().ai.billingError).toBeNull()
+    expect(store.getState().ai.billingError).toBeNull()
     provider.dispose()
   })
 })
@@ -663,7 +664,7 @@ const refused = () => Object.assign(new Error('Sign in to Autonomy Edge to use t
 describe('a signed-out account', () => {
   it('stops asking after a 401 and asks again once the backoff has elapsed', async () => {
     const { port, requests, telemetry } = makePort(failingWith(refused()))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     await provide(provider, makeModel('x := '), makePosition(1, 6))
     expect(requests).toHaveLength(1)
@@ -688,7 +689,7 @@ describe('a signed-out account', () => {
       yield 'ok'
     }
     const { port, requests } = makePort(stream)
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     await provide(provider, makeModel('a := '), makePosition(1, 6))
     await vi.advanceTimersByTimeAsync(30_000)
@@ -716,7 +717,7 @@ describe('a signed-out account', () => {
   it('holds while the session says it is expired, and resumes the moment it is restored', async () => {
     const { session, expire, restore, listeners } = makeSession()
     const { port, requests } = makePort(failingWith(refused()))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port, session)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port, session)
 
     expire(true)
     await provide(provider, makeModel('x := '), makePosition(1, 6))
@@ -754,7 +755,7 @@ describe('accept and dismiss accounting', () => {
 
   it('counts a completion as accepted when the line now contains it', async () => {
     const { port, telemetry } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     const editable = makeEditableModel('x := ')
     await show(provider, editable.model)
 
@@ -767,7 +768,7 @@ describe('accept and dismiss accounting', () => {
 
   it('counts a completion the user read and rejected as dismissed', async () => {
     const { port, telemetry } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     const editable = makeEditableModel('x := ')
     await show(provider, editable.model)
 
@@ -781,7 +782,7 @@ describe('accept and dismiss accounting', () => {
   it('ignores a completion replaced before the user could read it', async () => {
     // A suggestion superseded by the next keystroke is not a rejection; counting it would drown the signal.
     const { port, telemetry } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     const editable = makeEditableModel('x := ')
     await show(provider, editable.model)
 
@@ -795,7 +796,7 @@ describe('accept and dismiss accounting', () => {
 
   it('records nothing when no completion was ever shown', async () => {
     const { port, telemetry } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
 
     provider.freeInlineCompletions({ items: [] })
 
@@ -807,7 +808,7 @@ describe('accept and dismiss accounting', () => {
   it('still counts a dismissal when the model it was shown in is gone', async () => {
     // Losing the impression to a throw on teardown would silently skew the accept rate.
     const { port, telemetry } = makePort(yielding('hello'))
-    const provider = new AIInlineCompletionProvider('Main', 'st', port)
+    const provider = new AIInlineCompletionProvider(store, 'Main', 'st', port)
     const broken = {
       getValue: () => 'x := ',
       getOffsetAt: () => 5,

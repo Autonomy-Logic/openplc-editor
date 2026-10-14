@@ -7,8 +7,11 @@
 import type * as monaco from 'monaco-editor'
 
 import type { PLCDataType, PLCVariable } from '../../../middleware/shared/ports/types'
+import type { OpenPLCStore } from '../../store'
 
 export interface PythonLspStartOptions {
+  /** The project store the Python LSP reads POU variables from and navigates into. */
+  store: OpenPLCStore
   /**
    * URL of basedpyright's worker bundle.  Required — there is no
    * in-module fallback: a bare `require('…/pyright.worker.js?url')`

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 
-import { useOpenPLCStore } from '../../../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { hasLegacyInOutOutputHandle } from '../../../../../../utils/graphical/in-out-pin-rules'
 import { BlockNodeData } from '../../../../../_atoms/graphical-editor/fbd/block'
@@ -11,6 +11,7 @@ import { useBoundPou } from '../active-context'
 const EMPTY_DIVERGENCES: string[] = []
 
 export default function FbdEditor() {
+  const store = useOpenPLCStoreApi()
   // Bound POU comes from the `GraphicalEditorActiveProvider` set up
   // in the wrapper one level up.  With multi-mount, every open FBD
   // POU has its own FbdEditor instance — the context is what tells
@@ -92,8 +93,8 @@ export default function FbdEditor() {
    */
   useEffect(() => {
     if (!flowUpdated) return
-    scheduleFlowWriteBack(useOpenPLCStore.getState, pouName, 'fbd')
-  }, [flowUpdated])
+    scheduleFlowWriteBack(store.getState, pouName, 'fbd')
+  }, [store, flowUpdated])
 
   return (
     <div className='h-full w-full'>

@@ -7,7 +7,7 @@
  * `dtview-context.ts`.
  */
 
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
 import { getBodyLineOffset } from '../lsp-shared/body-offsets'
 import type { LspContext } from '../lsp-shared/providers'
 import { dtViewLineOffset, dtViewSpan, dtViewWindow } from './dtview-context'
@@ -33,10 +33,10 @@ import { DATA_TYPES_URI, parseDtViewUri, parsePouVarsUri, POU_DECLARATION_LINE_C
  * `lineWindow` — without it their frame lines resolve onto the
  * neighbouring slice.
  */
-export function resolveStLspContext(modelUri: string): LspContext {
+export function resolveStLspContext(store: OpenPLCStore, modelUri: string): LspContext {
   const varsPou = parsePouVarsUri(modelUri)
   if (varsPou !== null) {
-    const pou = openPLCStoreBase.getState().project.data.pous.find((p) => p.name === varsPou)
+    const pou = store.getState().project.data.pous.find((p) => p.name === varsPou)
     const isStLanguage = pou?.body.language === 'st'
     const lspUri = isStLanguage ? pouUri(varsPou) : stubUri(varsPou)
     const varsWindow = pouVarsWindow(getBodyLineOffset(lspUri))
@@ -48,7 +48,7 @@ export function resolveStLspContext(modelUri: string): LspContext {
   }
   const dtName = parseDtViewUri(modelUri)
   if (dtName !== null) {
-    const span = dtViewSpan(openPLCStoreBase.getState().project.data.dataTypes, dtName)
+    const span = dtViewSpan(store.getState().project.data.dataTypes, dtName)
     // A name absent from the document (unparseable `.dt` file) has no
     // span to shift by. Pass the view's own URI through: the worker
     // never indexed it, so every provider answers nothing rather than

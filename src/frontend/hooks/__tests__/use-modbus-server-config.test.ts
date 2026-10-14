@@ -15,8 +15,11 @@ import { act, renderHook } from '@testing-library/react'
 
 import type { ModbusBufferMapping, PLCServer } from '@root/middleware/shared/ports/types'
 
-import { useOpenPLCStore } from '../../store'
+import type { OpenPLCStore } from '../../store'
+import { createStoreWrapper, createTestStore } from '../../store/testing'
 import { useModbusServerConfig } from '../use-modbus-server-config'
+
+let store: OpenPLCStore
 
 const BOARD = 'OpenPLC Runtime v4'
 
@@ -40,8 +43,9 @@ const ethercatAt = (iecLocation: string) => ({
 })
 
 function seed(options: { servers?: unknown[]; remoteDevices?: unknown[] } = {}) {
-  const state = useOpenPLCStore.getState()
-  useOpenPLCStore.setState({
+  store = createTestStore()
+  const state = store.getState()
+  store.setState({
     ...state,
     project: {
       ...state.project,
@@ -65,12 +69,12 @@ function seed(options: { servers?: unknown[]; remoteDevices?: unknown[] } = {}) 
   } as never)
 }
 
-const mappingOf = () => useOpenPLCStore.getState().project.data.servers?.[0].modbusSlaveConfig?.bufferMapping
+const mappingOf = () => store.getState().project.data.servers?.[0].modbusSlaveConfig?.bufferMapping
 
 describe('useModbusServerConfig buffer counts', () => {
   it('offers zero, not 1024, for a project that produces nothing', () => {
     seed()
-    const { result } = renderHook(() => useModbusServerConfig('mb'))
+    const { result } = renderHook(() => useModbusServerConfig('mb'), { wrapper: createStoreWrapper(store) })
 
     expect(result.current.pinnedSegments.size).toBe(0)
     expect(result.current.buffers).toEqual({ QW: 0, MW: 0, MD: 0, ML: 0, QX: 0, MX: 0, IX: 0, IW: 0 })
@@ -82,7 +86,7 @@ describe('useModbusServerConfig buffer counts', () => {
   it('follows the image where the project produces something', () => {
     // %QX0.3 is bit 3, so the image carries four bits of bool output.
     seed({ remoteDevices: [ethercatAt('%QX0.3')] })
-    const { result } = renderHook(() => useModbusServerConfig('mb'))
+    const { result } = renderHook(() => useModbusServerConfig('mb'), { wrapper: createStoreWrapper(store) })
 
     expect(result.current.buffers.QX).toBe(4)
     expect(result.current.pinnedSegments.has('QX')).toBe(false)
@@ -92,7 +96,7 @@ describe('useModbusServerConfig buffer counts', () => {
 
   it('a pinned count wins over the image, and only for its own segment', () => {
     seed({ servers: [server({ coils: { qxBits: 64 } })], remoteDevices: [ethercatAt('%QX0.3')] })
-    const { result } = renderHook(() => useModbusServerConfig('mb'))
+    const { result } = renderHook(() => useModbusServerConfig('mb'), { wrapper: createStoreWrapper(store) })
 
     expect(result.current.buffers.QX).toBe(64)
     expect(result.current.pinnedSegments.has('QX')).toBe(true)
@@ -102,7 +106,7 @@ describe('useModbusServerConfig buffer counts', () => {
 
   it('clearing a count unpins the segment and leaves nothing behind', () => {
     seed({ servers: [server({ coils: { qxBits: 64 } })], remoteDevices: [ethercatAt('%QX0.3')] })
-    const { result, rerender } = renderHook(() => useModbusServerConfig('mb'))
+    const { result, rerender } = renderHook(() => useModbusServerConfig('mb'), { wrapper: createStoreWrapper(store) })
 
     act(() => result.current.actions.clearBufferCount('coils', 'qxBits'))
     rerender()
@@ -114,7 +118,7 @@ describe('useModbusServerConfig buffer counts', () => {
 
   it('zero is a pinned request, not an absence', () => {
     seed({ servers: [server({ coils: { qxBits: 0 } })], remoteDevices: [ethercatAt('%QX0.3')] })
-    const { result } = renderHook(() => useModbusServerConfig('mb'))
+    const { result } = renderHook(() => useModbusServerConfig('mb'), { wrapper: createStoreWrapper(store) })
 
     // The whole point of the tip: 0 publishes nothing while the image keeps
     // the four bits the EtherCAT channel produces.

@@ -1,4 +1,4 @@
-import { parseInterfaceXml, parsePousXml } from '../pou-xml'
+import { parseInterfaceXml, parsePouHeadersXml, parsePousXml } from '../pou-xml'
 
 describe('parseInterfaceXml', () => {
   it('returns an empty variables array with no returnType when interface is empty', () => {
@@ -140,5 +140,16 @@ describe('parsePousXml', () => {
     })
     expect(pous).toEqual([])
     expect(warnings).toEqual(['POU "nobody": no recognized body language found, skipped'])
+  })
+})
+
+describe('parsePouHeadersXml', () => {
+  it('reads every recognised POU interface ahead of the bodies and skips the rest', () => {
+    expect(
+      parsePouHeadersXml([
+        { '@name': 'F', '@pouType': 'function', interface: { returnType: { INT: '' } } },
+        { '@name': 'X', '@pouType': 'transition' },
+      ]),
+    ).toEqual([{ name: 'F', pouType: 'function', interface: { variables: [], returnType: 'INT' }, documentation: '' }])
   })
 })

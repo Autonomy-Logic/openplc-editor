@@ -27,7 +27,7 @@
 
 import type { Location, LocationLink } from 'vscode-languageserver-protocol'
 
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
 import { CreateEditorObjectFromTab } from '../../store/slices/tabs/utils'
 
 export interface NavTarget {
@@ -56,8 +56,11 @@ export function normaliseLocation(loc: Location | LocationLink): NavTarget {
 
 type TabLanguage = 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
 
-function buildTabPropsForPou(name: string): Parameters<typeof CreateEditorObjectFromTab>[0] | null {
-  const state = openPLCStoreBase.getState()
+function buildTabPropsForPou(
+  store: OpenPLCStore,
+  name: string,
+): Parameters<typeof CreateEditorObjectFromTab>[0] | null {
+  const state = store.getState()
   const pou = state.project.data.pous.find((p) => p.name === name)
   if (!pou) return null
 
@@ -88,13 +91,13 @@ function buildTabPropsForPou(name: string): Parameters<typeof CreateEditorObject
  * Python LSP's case, to the same suppression we use when no
  * definition is reachable).
  */
-export function routeToPou(pouName: string): boolean {
-  const tabProps = buildTabPropsForPou(pouName)
+export function routeToPou(store: OpenPLCStore, pouName: string): boolean {
+  const tabProps = buildTabPropsForPou(store, pouName)
   if (!tabProps) return false
   const {
     editorActions: { setEditor, addModel, getEditorFromEditors },
     tabsActions: { updateTabs, setSelectedTab },
-  } = openPLCStoreBase.getState()
+  } = store.getState()
 
   updateTabs(tabProps)
   const existing = getEditorFromEditors(pouName)
@@ -131,11 +134,16 @@ export function routeToPou(pouName: string): boolean {
  *
  * Returns true on success.
  */
-export function routeToPouPreamble(pouName: string, monacoLine: number, monacoColumn: number): boolean {
-  if (!routeToPou(pouName)) return false
+export function routeToPouPreamble(
+  store: OpenPLCStore,
+  pouName: string,
+  monacoLine: number,
+  monacoColumn: number,
+): boolean {
+  if (!routeToPou(store, pouName)) return false
   const {
     editorActions: { setEditorCursor, updateModelVariablesForName },
-  } = openPLCStoreBase.getState()
+  } = store.getState()
   updateModelVariablesForName(pouName, { display: 'code' })
   setEditorCursor(pouName, {
     lineNumber: Math.max(1, monacoLine),
@@ -152,11 +160,16 @@ export function routeToPouPreamble(pouName: string, monacoLine: number, monacoCo
  * (`'body'` instead of `'variables'`) and in not toggling the
  * variables panel.  Caller translates LSP→Monaco coordinates.
  */
-export function routeToPouBody(pouName: string, monacoLine: number, monacoColumn: number): boolean {
-  if (!routeToPou(pouName)) return false
+export function routeToPouBody(
+  store: OpenPLCStore,
+  pouName: string,
+  monacoLine: number,
+  monacoColumn: number,
+): boolean {
+  if (!routeToPou(store, pouName)) return false
   const {
     editorActions: { setEditorCursor },
-  } = openPLCStoreBase.getState()
+  } = store.getState()
   setEditorCursor(pouName, {
     lineNumber: Math.max(1, monacoLine),
     column: Math.max(1, monacoColumn),

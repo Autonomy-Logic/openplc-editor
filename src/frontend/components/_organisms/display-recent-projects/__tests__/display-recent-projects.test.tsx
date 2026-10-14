@@ -1,14 +1,13 @@
 import { beforeEach, describe, expect, it } from '@jest/globals'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
 
 import type { EdgeAccountPort, EdgeUserRead } from '../../../../../middleware/shared/ports/edge-account-port'
 import { EDITOR_CAPABILITIES } from '../../../../../middleware/shared/ports/platform-capabilities'
 import type { ProjectPort } from '../../../../../middleware/shared/ports/project-port'
-import { PlatformProvider } from '../../../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../../../middleware/shared/providers/types'
-import { openPLCStoreBase } from '../../../../store'
+import type { OpenPLCStore } from '../../../../store'
+import { createStoreWrapper, createTestStore } from '../../../../store/testing'
 import { dispatch, getMemoryState } from '../../../../utils/toast'
 import DisplayRecentProjects from '..'
 
@@ -104,17 +103,18 @@ function renderList(account: EdgeAccountPort, props: { onProjectUploaded?: () =>
     project: projectPort,
     edgeAccount: account,
   })
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <PlatformProvider ports={ports}>{children}</PlatformProvider>
-  )
-
-  return render(<DisplayRecentProjects searchNameFilterValue='' {...props} />, { wrapper })
+  return render(<DisplayRecentProjects searchNameFilterValue='' {...props} />, {
+    wrapper: createStoreWrapper(store, ports),
+  })
 }
 
 const lastToast = () => getMemoryState().toasts[0]
 
+let store: OpenPLCStore
+
 beforeEach(() => {
-  openPLCStoreBase.getState().workspaceActions.setRecent(RECENT)
+  store = createTestStore()
+  store.getState().workspaceActions.setRecent(RECENT)
   dispatch({ type: 'REMOVE_TOAST' })
 })
 

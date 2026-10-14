@@ -11,9 +11,16 @@
  * the last writer someone remembered.
  */
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { useOpenPLCStore } from '../index'
+import type { OpenPLCStore } from '../index'
+import { createTestStore } from '../testing'
 
-const getState = () => useOpenPLCStore.getState()
+let store: OpenPLCStore
+
+beforeEach(() => {
+  store = createTestStore()
+})
+
+const getState = () => store.getState()
 
 const pouNamed = (name: string) => getState().project.data.pous.find((pou) => pou.name === name)
 const textOf = (name: string) => pouNamed(name)?.variablesText

@@ -224,7 +224,6 @@ Named so they are not rediscovered one at a time. Each derives a path from
 | `compiler-module.ts:3545` `compileLibrary`                    | reads `library.json` and writes `build/*.stlib` relative to `cwd`                                                                                    |
 | `desktop-library-build-port.ts:118`                           | same, plus an `fs.rm` of the build subtree                                                                                                           |
 | `compiler-module.ts:2975`, `:3068`, `:3096`, `:2235`, `:2258` | read pin mapping, VPP screen data and retention config; all return empty for a cloud project, so the firmware is built without IO and without Modbus |
-| `compiler-module.ts:1959` `createXmlFile`                     | the export dialog's `defaultPath` is relative, so it opens in the wrong folder                                                                       |
 
 The reads degrade silently rather than polluting the filesystem, which makes them
 harder to notice and, for the firmware ones, more damaging. They are not fixed

@@ -147,7 +147,7 @@ const rendererProcessBridge = {
   exportPlcopenFile: (
     defaultFileName: string,
     xml: string,
-  ): Promise<{ success: boolean; error?: { title: string; description: string } }> =>
+  ): Promise<{ success: boolean; canceled?: boolean; error?: { title: string; description: string } }> =>
     ipcRenderer.invoke('project:export-plcopen-file', defaultFileName, xml),
   exportPdfFile: (
     defaultFileName: string,
@@ -162,6 +162,8 @@ const rendererProcessBridge = {
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-accelerator', callback),
   saveProjectAsAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-as-accelerator', callback),
   retrieveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:retrieve-accelerator', callback),
+  importPlcopenAccelerator: (callback: IpcRendererCallbacks) =>
+    subscribe('project:import-plcopen-accelerator', callback),
   printAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:print-accelerator', callback),
   pageSetupAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:page-setup-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
@@ -449,18 +451,6 @@ const rendererProcessBridge = {
   winGetTheme: (): Promise<'light' | 'dark' | 'nineties' | null> => ipcRenderer.invoke('system:get-theme'),
 
   // ===================== COMPILER/BUILD METHODS =====================
-  // !! Deprecated: This method is an outdated implementation and should be substituted.
-  exportProjectXml: async (
-    pathToUserProject: string,
-    dataToCreateXml: PLCProjectData,
-    parseTo: 'old-editor' | 'codesys',
-  ): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml, parseTo) as Promise<{
-      success: boolean
-      message: string
-    }>,
-  // =================== Work in Progress ===================
-  // This method is a placeholder for running the compile program.
   runCompileProgram: (compileProgramArgs: CompileProgramIpcArgs, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:run-compile-program', compileProgramArgs, [mainProcessPort])
@@ -491,39 +481,7 @@ const rendererProcessBridge = {
     rendererProcessPort.addEventListener('close', () => callback({ closePort: true }))
   },
 
-  // !! Deprecated: These methods are an outdated implementation and should be removed.
-  compileRequest: (xmlPath: string, callback: (args: CompilerPortMessage) => void) => {
-    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
-    ipcRenderer.postMessage('compiler:build-st-program', xmlPath, [mainProcessPort])
-    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
-    rendererProcessPort.addEventListener('close', () => {})
-  },
-  createBuildDirectory: async (pathToUserProject: string): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:create-build-directory', pathToUserProject) as Promise<{
-      success: boolean
-      message: string
-    }>,
-  createXmlFileToBuild: async (
-    pathToUserProject: string,
-    dataToCreateXml: PLCProjectData,
-  ): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:build-xml-file', pathToUserProject, dataToCreateXml) as Promise<{
-      success: boolean
-      message: string
-    }>,
   exportProjectRequest: (callback: IpcRendererCallbacks) => subscribe('compiler:export-project-request', callback),
-  generateCFilesRequest: (pathToStProgram: string, callback: (args: CompilerPortMessage) => void) => {
-    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
-    ipcRenderer.postMessage('compiler:generate-c-files', pathToStProgram, [mainProcessPort])
-    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
-    rendererProcessPort.addEventListener('close', () => {})
-  },
-  setupCompilerEnvironment: (callback: (args: CompilerPortMessage) => void) => {
-    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
-    ipcRenderer.postMessage('compiler:setup-environment', '', [mainProcessPort])
-    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
-    rendererProcessPort.addEventListener('close', () => {})
-  },
 
   // ===================== HARDWARE METHODS =====================
   getAvailableBoards: (): Promise<

@@ -15,7 +15,7 @@ import { useDebugCompositeKey } from '../../../../../hooks/use-debug-composite-k
 import { useDebugBoolValuesMap, useIsDebuggerVisible } from '../../../../../hooks/use-debug-value'
 import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
 import { useStableCallback } from '../../../../../hooks/use-stable-callback'
-import { useOpenPLCStore } from '../../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../store'
 import type { RungLadderState } from '../../../../../store/slices/ladder'
 import { cn } from '../../../../../utils/cn'
 import { getLadderBlockType, isLadderBlockDrag } from '../../../../../utils/graphical/drag-detection'
@@ -95,6 +95,7 @@ const rungDebugStatesEqual = (previous: RungDebugStates | null, next: RungDebugS
   mapsEqual(previous.nodeInputStates, next.nodeInputStates)
 
 export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActive = false }: RungBodyProps) => {
+  const store = useOpenPLCStoreApi()
   const pouName = useBoundPou()
   const editor = useBoundEditorModel()
   const ladderFlowActions = useOpenPLCStore((state) => state.ladderFlowActions)
@@ -322,7 +323,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
    * Add a new node to the rung
    */
   const handleAddNode = (newNodeType: string = 'mockNode', blockType: string | undefined) => {
-    const { libraries, ladderFlows } = useOpenPLCStore.getState()
+    const { libraries, ladderFlows } = store.getState()
     let pouLibrary = undefined
     if (blockType) {
       const [blockLibraryType, blockLibrary, pouName] = blockType.split('/')
@@ -429,7 +430,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
    * Remove some nodes from the rung
    */
   const handleRemoveNode = (nodes: FlowNode[]) => {
-    const { ladderFlows } = useOpenPLCStore.getState()
+    const { ladderFlows } = store.getState()
     const { nodes: newNodes, edges: newEdges, handleBranches } = removeElements({ ...rungLocal }, nodes)
 
     captureAndPush(pouName)
@@ -541,7 +542,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
    * Handle the stop of a node drag
    */
   const handleNodeDragStop = (node: FlowNode) => {
-    const { ladderFlows } = useOpenPLCStore.getState()
+    const { ladderFlows } = store.getState()
     const result = onElementDrop(rungLocal, rung, node)
 
     captureAndPush(pouName)

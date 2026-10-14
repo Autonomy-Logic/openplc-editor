@@ -5,13 +5,11 @@
  */
 
 import { act, render } from '@testing-library/react'
-import type { ReactNode } from 'react'
-
 import type { AcceleratorPort } from '../../../../middleware/shared/ports/accelerator-port'
 import { EDITOR_CAPABILITIES } from '../../../../middleware/shared/ports/platform-capabilities'
-import { PlatformProvider } from '../../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../../middleware/shared/providers/types'
-import { openPLCStoreBase } from '../../../store'
+import type { OpenPLCStore } from '../../../store'
+import { createStoreWrapper, createTestStore } from '../../../store/testing'
 import { AcceleratorHandler } from '../accelerator-handler'
 
 const PROJECT_ONLY = [
@@ -87,8 +85,10 @@ function makePorts(): PlatformPorts {
   }
 }
 
-function Wrapper({ children }: { children: ReactNode }) {
-  return <PlatformProvider ports={makePorts()}>{children}</PlatformProvider>
+let store: OpenPLCStore
+
+function renderHandler() {
+  return render(<AcceleratorHandler />, { wrapper: createStoreWrapper(store, makePorts()) })
 }
 
 function fire(event: ProjectOnlyEvent) {
@@ -98,15 +98,13 @@ function fire(event: ProjectOnlyEvent) {
 }
 
 function openModals(): string[] {
-  return Object.entries(openPLCStoreBase.getState().modals)
+  return Object.entries(store.getState().modals)
     .filter(([, modal]) => modal?.open)
     .map(([name]) => name)
 }
 
-const initialState = openPLCStoreBase.getState()
-
 beforeEach(() => {
-  openPLCStoreBase.setState(initialState, true)
+  store = createTestStore()
   listeners.clear()
   portCalls.length = 0
 })
@@ -114,48 +112,46 @@ beforeEach(() => {
 describe('on the start screen', () => {
   it.each(PROJECT_ONLY)('%s does nothing', (event) => {
     act(() => {
-      openPLCStoreBase.getState().workspaceActions.setSelectedProjectTreeLeaf({ label: 'main', type: 'program' })
+      store.getState().workspaceActions.setSelectedProjectTreeLeaf({ label: 'main', type: 'program' })
     })
-    render(<AcceleratorHandler />, { wrapper: Wrapper })
-    const before = openPLCStoreBase.getState().workspace
+    renderHandler()
+    const before = store.getState().workspace
 
     fire(event)
 
-    const after = openPLCStoreBase.getState().workspace
+    const after = store.getState().workspace
     expect(after.editingState).toBe(before.editingState)
     expect(after.isModalOpen).toEqual([])
     expect(after.isCollapsed).toBe(false)
     expect(openModals()).toEqual([])
     expect(portCalls).toEqual([])
-    expect(openPLCStoreBase.getState().project.meta.path).toBe('')
+    expect(store.getState().project.meta.path).toBe('')
   })
 })
 
 describe('with a project open', () => {
   beforeEach(() => {
-    act(() => openPLCStoreBase.getState().projectActions.updateMetaPath('/projects/demo'))
+    act(() => store.getState().projectActions.updateMetaPath('/projects/demo'))
   })
 
   it('Find in Project opens its modal', () => {
-    render(<AcceleratorHandler />, { wrapper: Wrapper })
+    renderHandler()
 
     fire('onFindInProject')
 
-    expect(openPLCStoreBase.getState().workspace.isModalOpen).toEqual([
-      { modalName: 'findInProject', modalState: true },
-    ])
+    expect(store.getState().workspace.isModalOpen).toEqual([{ modalName: 'findInProject', modalState: true }])
   })
 
   it('Switch Perspective toggles the layout', () => {
-    render(<AcceleratorHandler />, { wrapper: Wrapper })
+    renderHandler()
 
     fire('onSwitchPerspective')
 
-    expect(openPLCStoreBase.getState().workspace.isCollapsed).toBe(true)
+    expect(store.getState().workspace.isCollapsed).toBe(true)
   })
 
   it('Page Setup opens its modal', () => {
-    render(<AcceleratorHandler />, { wrapper: Wrapper })
+    renderHandler()
 
     fire('onPageSetup')
 

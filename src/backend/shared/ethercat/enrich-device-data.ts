@@ -6,6 +6,8 @@
  */
 
 import type {
+  ConfiguredEtherCATDevice,
+  EnrichDeviceData,
   ESIDevice,
   ESIPdo,
   EtherCATChannelMapping,
@@ -20,7 +22,7 @@ import {
   isCia402Drive,
 } from '@root/middleware/shared/utils/ethercat'
 
-import { esiTypeToIecType, generateDefaultChannelMappings, pdoToChannels } from './esi-parser'
+import { assignedPdos, esiTypeToIecType, generateDefaultChannelMappings, pdoToChannels } from './esi-parser'
 import { extractDefaultSdoConfigurations } from './sdo-config-defaults'
 
 /**
@@ -28,9 +30,11 @@ import { extractDefaultSdoConfigurations } from './sdo-config-defaults'
  * Preserves all entries including padding for complete PDO layout.
  */
 export function persistPdos(pdos: ESIPdo[]): PersistedPdo[] {
+  const assigned = new Set(assignedPdos(pdos))
   return pdos.map((pdo) => ({
     index: pdo.index,
     name: pdo.name,
+    assigned: assigned.has(pdo),
     entries: pdo.entries.map(
       (entry): PersistedPdoEntry => ({
         index: entry.index,
@@ -130,5 +134,26 @@ export function enrichDeviceData(
     // A CiA 402 servo is auto-recognized as a SoftMotion axis; the user can
     // disable/tune it in the device's Axis configuration.
     cia402: isCia402Drive(device) ? { ...DEFAULT_CIA402_AXIS_CONFIG } : undefined,
+  }
+}
+
+/** Saved before PDO assignment was recorded: no persisted PDO carries `assigned`. */
+export function lacksPdoAssignment(device: ConfiguredEtherCATDevice): boolean {
+  const pdos = [...(device.rxPdos ?? []), ...(device.txPdos ?? [])]
+  return pdos.length > 0 && pdos.every((pdo) => pdo.assigned === undefined)
+}
+
+/**
+ * Records the ESI's default PDO assignment on a device saved without it. Channels of unassigned
+ * PDOs, and their mappings, are dropped; the addresses of the remaining channels are kept.
+ */
+export function recordPdoAssignment(device: ConfiguredEtherCATDevice, esiDevice: ESIDevice): EnrichDeviceData {
+  const channelInfo = buildChannelInfo(esiDevice)
+  const kept = new Set(channelInfo.map((ch) => ch.channelId))
+  return {
+    channelInfo,
+    channelMappings: device.channelMappings.filter((m) => kept.has(m.channelId)),
+    rxPdos: persistPdos(esiDevice.rxPdo),
+    txPdos: persistPdos(esiDevice.txPdo),
   }
 }

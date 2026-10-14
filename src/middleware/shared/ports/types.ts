@@ -613,6 +613,7 @@ export interface BoardInfo {
     defaultAout?: string[]
     defaultDin?: string[]
     defaultDout?: string[]
+    pull?: PinPullSpec
   }
   /** When absent, the resolver in backend/shared infers capabilities from the legacy `compiler` field. */
   capabilities?: Partial<TargetCapabilities>
@@ -753,6 +754,7 @@ export interface PackageManifest {
         defaultDout?: string[]
         defaultAin?: string[]
         defaultAout?: string[]
+        pull?: PinPullSpec
       }
     }
     screens?: Record<string, string>
@@ -867,12 +869,31 @@ export interface SerialPort {
 
 export type PinType = 'digitalInput' | 'digitalOutput' | 'analogInput' | 'analogOutput'
 
+export type PinPullMode = 'none' | 'up' | 'down'
+
 export interface DevicePin {
   pin: string
   pinType: PinType
   address: string
   /** Participates in the alias registry. Used to be `name`; legacy projects auto-upgrade on load. */
   alias?: string
+  /** Digital inputs only, and only when the board declares `pins.pull`. Absent → the board's default for the pin. */
+  pull?: PinPullMode
+}
+
+export interface PinPullOverride {
+  /** Shown read-only; takes precedence over `options`. */
+  fixed?: PinPullMode
+  options?: PinPullMode[]
+  default?: PinPullMode
+}
+
+/** VPP `defaults.pins.pull`: its presence turns on the Pull column of the pin table. */
+export interface PinPullSpec {
+  options: PinPullMode[]
+  default?: PinPullMode
+  /** Keyed by the pin name as written in the pin table (`"34"`, `"D0"`). */
+  pins?: Record<string, PinPullOverride>
 }
 
 /** Mirrors the runtime's own bounds (`webserver/retain_config.py`). */
@@ -888,6 +909,13 @@ export interface PersistentStorageSettings {
   path: string
   /** Commit period in seconds. The runtime rejects an out-of-range value at install time. */
   flushSeconds: number
+}
+
+/** The vPLC a project targets, as `devices/configuration.json` records it. */
+export interface ProjectTargetDevice {
+  orchestratorId: string
+  deviceId: string
+  deviceName: string
 }
 
 export interface DeviceConfiguration {
@@ -916,6 +944,8 @@ export interface DeviceConfiguration {
    * absent simply means there is nothing to compare.
    */
   vppPackagePinsByBoard?: Record<string, VppPackagePin>
+  /** The vPLC this project targets on web; reopening the project selects it again when it is still listed. */
+  targetDevice?: ProjectTargetDevice
 }
 
 export type PlcStatus = 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'TRANSITIONING' | 'UNKNOWN'

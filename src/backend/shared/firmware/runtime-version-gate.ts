@@ -126,6 +126,20 @@ export function isUserManagementCapableRuntime(raw: string | null | undefined): 
   return isVersionAtLeast(raw, MIN_USER_MANAGEMENT_RUNTIME_VERSION)
 }
 
+/** Minimum runtime version whose EtherCAT master is the separate EtherDOG
+ *  program, which reads `conf/ethercat_busconfig.json` and leaves
+ *  `conf/ethercat_iomapping.json` to the runtime. */
+export const MIN_ETHERDOG_RUNTIME_VERSION = '4.3.0'
+
+/**
+ * Returns true iff the runtime takes the split EtherCAT files (>= 4.3.0).
+ * An unknown version answers false, so the build falls back to the legacy
+ * single `conf/ethercat.json` that every runtime in the field reads.
+ */
+export function isEtherdogCapableRuntime(raw: string | null | undefined): boolean {
+  return isVersionAtLeast(raw, MIN_ETHERDOG_RUNTIME_VERSION)
+}
+
 /**
  * Human-readable explanation suitable for surfacing as an error
  * when the gate rejects a runtime.  The reported version (or

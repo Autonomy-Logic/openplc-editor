@@ -10,12 +10,12 @@
  * manager does — straight into the tab list, not through the explorer tree.
  */
 
-import { openPLCStoreBase } from '../../store'
+import type { OpenPLCStore } from '../../store'
 
 export const DIAGNOSTICS_TAB_NAME = 'I/O Image Diagnostics'
 
-export function openDiagnosticsTab(): void {
-  const { tabsActions, editorActions } = openPLCStoreBase.getState()
+export function openDiagnosticsTab(store: OpenPLCStore): void {
+  const { tabsActions, editorActions } = store.getState()
   tabsActions.updateTabs({
     name: DIAGNOSTICS_TAB_NAME,
     path: '/diagnostics',

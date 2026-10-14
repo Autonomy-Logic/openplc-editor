@@ -1,6 +1,7 @@
 import type { ModbusIOGroup, ModbusIOPoint } from '../../../middleware/shared/ports/types'
 
 type ModbusFunctionCode = ModbusIOGroup['functionCode']
+type ModbusErrorHandling = ModbusIOGroup['errorHandling']
 
 /**
  * Maximum number of elements a single Modbus request can carry per function
@@ -27,6 +28,23 @@ export const MAX_IO_GROUP_LENGTH_BY_FC: Record<ModbusFunctionCode, number> = {
  */
 export const isSingleElementFunctionCode = (functionCode: ModbusFunctionCode): boolean =>
   functionCode === '5' || functionCode === '6'
+
+/**
+ * FC 1 to FC 4 read from the slave into the PLC's input image; FC 5, 6, 15 and
+ * 16 write the PLC's outputs to the slave.
+ */
+export const isReadFunctionCode = (functionCode: ModbusFunctionCode): boolean =>
+  functionCode === '1' || functionCode === '2' || functionCode === '3' || functionCode === '4'
+
+/**
+ * Error handling only exists for read groups: it decides what the input image
+ * holds while the slave is unreachable. A write group has nothing to apply it
+ * to, so it is always stored as the inert default.
+ */
+export const resolveIOGroupErrorHandling = (
+  functionCode: ModbusFunctionCode,
+  errorHandling: ModbusErrorHandling,
+): ModbusErrorHandling => (isReadFunctionCode(functionCode) ? errorHandling : 'keep-last-value')
 
 /**
  * Normalizes a group's length to the invariant every writer must uphold: a

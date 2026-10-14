@@ -9,13 +9,17 @@
 
 import { render, screen } from '@testing-library/react'
 
-import { useOpenPLCStore } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 
 import { DuplicateProtocolNotice } from '../duplicate-protocol-notice'
 
+let store: OpenPLCStore
+
 const withServers = (servers: Array<{ name: string; protocol: string }>) => {
-  const state = useOpenPLCStore.getState()
-  useOpenPLCStore.setState({
+  store = createTestStore()
+  const state = store.getState()
+  store.setState({
     ...state,
     project: { ...state.project, data: { ...state.project.data, servers } },
   } as never)
@@ -24,7 +28,9 @@ const withServers = (servers: Array<{ name: string; protocol: string }>) => {
 describe('DuplicateProtocolNotice', () => {
   it('says nothing when the project holds one server of the protocol', () => {
     withServers([{ name: 'mb', protocol: 'modbus-tcp' }])
-    const { container } = render(<DuplicateProtocolNotice name='mb' protocol='modbus-tcp' />)
+    const { container } = render(<DuplicateProtocolNotice name='mb' protocol='modbus-tcp' />, {
+      wrapper: createStoreWrapper(store),
+    })
     expect(container.innerHTML).toBe('')
   })
 
@@ -33,7 +39,7 @@ describe('DuplicateProtocolNotice', () => {
       { name: 'mb_a', protocol: 'modbus-tcp' },
       { name: 'mb_b', protocol: 'modbus-tcp' },
     ])
-    render(<DuplicateProtocolNotice name='mb_a' protocol='modbus-tcp' />)
+    render(<DuplicateProtocolNotice name='mb_a' protocol='modbus-tcp' />, { wrapper: createStoreWrapper(store) })
     expect(screen.getByText(/mb_b/)).toBeTruthy()
   })
 
@@ -42,7 +48,9 @@ describe('DuplicateProtocolNotice', () => {
       { name: 'mb', protocol: 'modbus-tcp' },
       { name: 's7', protocol: 's7comm' },
     ])
-    const { container } = render(<DuplicateProtocolNotice name='mb' protocol='modbus-tcp' />)
+    const { container } = render(<DuplicateProtocolNotice name='mb' protocol='modbus-tcp' />, {
+      wrapper: createStoreWrapper(store),
+    })
     expect(container.innerHTML).toBe('')
   })
 })

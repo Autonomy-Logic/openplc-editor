@@ -11,8 +11,12 @@
 
 import { renderHook } from '@testing-library/react'
 
-import { useOpenPLCStore } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
+
 import { useDuplicateOutputLocations } from '../use-duplicate-output-locations'
+
+let store: OpenPLCStore
 
 const variable = (name: string, location: string) => ({
   name,
@@ -22,8 +26,9 @@ const variable = (name: string, location: string) => ({
 })
 
 function withProject(pous: Array<{ name: string; variables: unknown[] }>, globals: unknown[] = []) {
-  const state = useOpenPLCStore.getState()
-  useOpenPLCStore.setState({
+  store = createTestStore()
+  const state = store.getState()
+  store.setState({
     ...state,
     project: {
       ...state.project,
@@ -42,7 +47,7 @@ describe('useDuplicateOutputLocations', () => {
       { name: 'motor', variables: [variable('run', '%QX0.0')] },
       { name: 'pump', variables: [variable('start', '%QX0.0')] },
     ])
-    const { result } = renderHook(() => useDuplicateOutputLocations())
+    const { result } = renderHook(() => useDuplicateOutputLocations(), { wrapper: createStoreWrapper(store) })
     expect(result.current.get('%QX0.0')).toEqual([
       { scope: 'motor', name: 'run' },
       { scope: 'pump', name: 'start' },
@@ -55,7 +60,7 @@ describe('useDuplicateOutputLocations', () => {
       { name: 'motor', variables: [variable('run', '%QX0.0')] },
       { name: 'pump', variables: [variable('run', '%QX0.0')] },
     ])
-    const { result } = renderHook(() => useDuplicateOutputLocations())
+    const { result } = renderHook(() => useDuplicateOutputLocations(), { wrapper: createStoreWrapper(store) })
     const writers = result.current.get('%QX0.0') ?? []
     expect(writers).toHaveLength(2)
     // Excluding "myself in motor" still leaves the other one.
@@ -64,7 +69,7 @@ describe('useDuplicateOutputLocations', () => {
 
   it('names the configuration global scope', () => {
     withProject([{ name: 'main', variables: [variable('local', '%QW3')] }], [variable('shared', '%QW3')])
-    const { result } = renderHook(() => useDuplicateOutputLocations())
+    const { result } = renderHook(() => useDuplicateOutputLocations(), { wrapper: createStoreWrapper(store) })
     expect(result.current.get('%QW3')).toEqual([
       { scope: 'main', name: 'local' },
       { scope: 'Global Variables', name: 'shared' },
@@ -78,20 +83,20 @@ describe('useDuplicateOutputLocations', () => {
       { name: 'a', variables: [variable('x', '%IX0.0'), variable('y', '%MW7')] },
       { name: 'b', variables: [variable('x', '%IX0.0'), variable('y', '%MW7')] },
     ])
-    const { result } = renderHook(() => useDuplicateOutputLocations())
+    const { result } = renderHook(() => useDuplicateOutputLocations(), { wrapper: createStoreWrapper(store) })
     expect(result.current.get('%IX0.0')).toBeUndefined()
     expect(result.current.get('%MW7')).toBeUndefined()
   })
 
   it('ignores an alias, which is not a literal address', () => {
     withProject([{ name: 'a', variables: [variable('x', 'MOTOR_RUN')] }])
-    const { result } = renderHook(() => useDuplicateOutputLocations())
+    const { result } = renderHook(() => useDuplicateOutputLocations(), { wrapper: createStoreWrapper(store) })
     expect(result.current.size).toBe(0)
   })
 
   it('reports a single declaration too, so the caller decides what is a clash', () => {
     withProject([{ name: 'a', variables: [variable('x', '%QW0')] }])
-    const { result } = renderHook(() => useDuplicateOutputLocations())
+    const { result } = renderHook(() => useDuplicateOutputLocations(), { wrapper: createStoreWrapper(store) })
     expect(result.current.get('%QW0')).toHaveLength(1)
   })
 })

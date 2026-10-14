@@ -10,7 +10,7 @@ function tierLabel(planSlug: string | null, tier: 'free' | 'pro'): string {
 const FREE_PLAN_SLUGS = new Set<string>(['community', 'education'])
 
 export const AITierBadge = () => {
-  const { planSlug, tier } = useOpenPLCStore.useAi()
+  const { planSlug, tier } = useOpenPLCStore((s) => s.ai)
   const label = tierLabel(planSlug, tier)
   const isPaid = planSlug ? !FREE_PLAN_SLUGS.has(planSlug) : tier === 'pro'
 

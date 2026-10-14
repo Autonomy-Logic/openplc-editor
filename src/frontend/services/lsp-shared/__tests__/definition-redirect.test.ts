@@ -2,7 +2,8 @@
  * @jest-environment jsdom
  */
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../../store'
+import type { OpenPLCStore } from '../../../store'
+import { createTestStore } from '../../../store/testing'
 import { normaliseLocation, routeToPou, routeToPouBody, routeToPouPreamble } from '../definition-redirect'
 
 function makeStPou(name: string): PLCPou {
@@ -25,8 +26,14 @@ function makePythonPou(name: string): PLCPou {
   } as PLCPou
 }
 
+let store: OpenPLCStore
+
+beforeEach(() => {
+  store = createTestStore()
+})
+
 function setProjectPous(pous: PLCPou[]) {
-  openPLCStoreBase.setState((s) => ({
+  store.setState((s) => ({
     ...s,
     project: {
       ...s.project,
@@ -77,20 +84,20 @@ describe('normaliseLocation', () => {
 describe('routeToPou', () => {
   it('returns false when the POU is not in the project', () => {
     setProjectPous([])
-    expect(routeToPou('Ghost')).toBe(false)
+    expect(routeToPou(store, 'Ghost')).toBe(false)
   })
 
   it('opens the POU tab and marks it selected when the POU exists', () => {
     setProjectPous([makeStPou('Main')])
-    expect(routeToPou('Main')).toBe(true)
-    expect(openPLCStoreBase.getState().selectedTab).toBe('Main')
-    expect(openPLCStoreBase.getState().editor.meta.name).toBe('Main')
+    expect(routeToPou(store, 'Main')).toBe(true)
+    expect(store.getState().selectedTab).toBe('Main')
+    expect(store.getState().editor.meta.name).toBe('Main')
   })
 
   it('uses the POU body language so Python POUs get a textual tab too', () => {
     setProjectPous([makePythonPou('Block')])
-    expect(routeToPou('Block')).toBe(true)
-    const editor = openPLCStoreBase.getState().editor
+    expect(routeToPou(store, 'Block')).toBe(true)
+    const editor = store.getState().editor
     expect(editor.type).toBe('plc-textual')
     if (editor.type === 'plc-textual') {
       expect(editor.meta.language).toBe('python')
@@ -105,12 +112,12 @@ describe('routeToPouPreamble', () => {
 
   it('returns false when the POU is missing', () => {
     setProjectPous([])
-    expect(routeToPouPreamble('Ghost', 1, 1)).toBe(false)
+    expect(routeToPouPreamble(store, 'Ghost', 1, 1)).toBe(false)
   })
 
   it('switches the variables panel to code mode and tags the cursor for variables', () => {
-    routeToPouPreamble('Main', 3, 7)
-    const editor = openPLCStoreBase.getState().editor
+    routeToPouPreamble(store, 'Main', 3, 7)
+    const editor = store.getState().editor
     expect(editor.type).toBe('plc-textual')
     if (editor.type === 'plc-textual') {
       expect(editor.variable.display).toBe('code')
@@ -124,8 +131,8 @@ describe('routeToPouPreamble', () => {
   })
 
   it('clamps non-positive coordinates to a safe minimum so Monaco never sees line 0', () => {
-    routeToPouPreamble('Main', 0, -1)
-    const editor = openPLCStoreBase.getState().editor
+    routeToPouPreamble(store, 'Main', 0, -1)
+    const editor = store.getState().editor
     if (editor.type === 'plc-textual') {
       expect(editor.cursorPosition).toEqual({
         lineNumber: 1,
@@ -144,12 +151,12 @@ describe('routeToPouBody', () => {
 
   it('returns false when the POU is missing', () => {
     setProjectPous([])
-    expect(routeToPouBody('Ghost', 1, 1)).toBe(false)
+    expect(routeToPouBody(store, 'Ghost', 1, 1)).toBe(false)
   })
 
   it('places the cursor in the body with the body target tag', () => {
-    routeToPouBody('Main', 12, 5)
-    const editor = openPLCStoreBase.getState().editor
+    routeToPouBody(store, 'Main', 12, 5)
+    const editor = store.getState().editor
     if (editor.type === 'plc-textual') {
       expect(editor.cursorPosition).toEqual({
         lineNumber: 12,
@@ -161,8 +168,8 @@ describe('routeToPouBody', () => {
   })
 
   it('leaves the variables panel in table mode (no display toggle)', () => {
-    routeToPouBody('Main', 12, 5)
-    const editor = openPLCStoreBase.getState().editor
+    routeToPouBody(store, 'Main', 12, 5)
+    const editor = store.getState().editor
     if (editor.type === 'plc-textual') {
       expect(editor.variable.display).toBe('table')
     }

@@ -1,8 +1,8 @@
-import { openPLCStoreBase } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
 import type { SelectedDevice } from '@root/frontend/store/slices/device/types'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import { EDITOR_CAPABILITIES, WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
-import { PlatformProvider } from '@root/middleware/shared/providers'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
@@ -49,12 +49,14 @@ const holder: SelectedDevice = {
 
 const compileProgram = vi.fn(() => Promise.resolve({ success: true }))
 
+let store: OpenPLCStore
+
 function renderBar(
   board: string,
   selectedDevice: SelectedDevice | null,
   capabilities: PlatformPorts['capabilities'] = WEB_CAPABILITIES,
 ) {
-  const { deviceActions, workspaceActions, consoleActions } = openPLCStoreBase.getState()
+  const { deviceActions, workspaceActions, consoleActions } = store.getState()
   deviceActions.setAvailableOptions({
     availableBoards: new Map([
       [PLAIN_BOARD_NAME, PLAIN_BOARD],
@@ -87,11 +89,7 @@ function renderBar(
     library: stubPort(),
     capabilities,
   }
-  render(
-    <PlatformProvider ports={ports}>
-      <DefaultWorkspaceActivityBar />
-    </PlatformProvider>,
-  )
+  render(<DefaultWorkspaceActivityBar />, { wrapper: createStoreWrapper(store, ports) })
 }
 
 /** Open the build menu and pick one of its rows. */
@@ -103,19 +101,17 @@ function chooseBuildOption(label: string) {
 }
 
 function loggedMessages() {
-  return openPLCStoreBase.getState().logs.map((entry) => entry.message)
+  return store.getState().logs.map((entry) => entry.message)
 }
 
 describe('Build — backplane gate', () => {
   beforeEach(() => {
     compileProgram.mockClear()
-    openPLCStoreBase.getState().deviceActions.clearRuntimeConnection()
+    store = createTestStore()
   })
 
   afterEach(() => {
     cleanup()
-    openPLCStoreBase.getState().deviceActions.clearRuntimeConnection()
-    openPLCStoreBase.getState().workspaceActions.setCanEdit(true)
   })
 
   it('refuses to deploy a vendor-package board to a vPLC without backplane access', async () => {

@@ -26,6 +26,7 @@ import { dirname, join } from 'node:path'
 import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
 import { UserService } from '@root/backend/editor/services'
 import { APP_VERSION } from '@root/frontend/data/constants/app-version'
+import { createOpenPLCStore, type OpenPLCStore } from '@root/frontend/store'
 import { app } from 'electron'
 
 import { boolFlag, parseArgs, type ParsedArgs, stringFlag } from './args'
@@ -202,15 +203,15 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
     case 'install-cli':
       return (await runInstallCli(args, reporter)).exitCode
     case 'inspect':
-      return (await runInspect(args, reporter)).exitCode
+      return (await runInspect(createOpenPLCStore(), args, reporter)).exitCode
     case 'packages':
       return (await runPackages(args, reporter)).exitCode
     case 'compile':
-      return (await runBuild(args, reporter, { withUpload: false })).exitCode
+      return (await runBuild(createOpenPLCStore(), args, reporter, { withUpload: false })).exitCode
     case 'upload':
-      return (await runBuild(args, reporter, { withUpload: true })).exitCode
+      return (await runBuild(createOpenPLCStore(), args, reporter, { withUpload: true })).exitCode
     case 'debug':
-      return (await runDebug(args, reporter, buildDebugContext())).exitCode
+      return (await runDebug(args, reporter, buildDebugContext(createOpenPLCStore()))).exitCode
     default:
       // Print the usage as well as the error: a mistyped command is the moment
       // the list of real commands is most useful, and hunting for --help is a
@@ -223,11 +224,12 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
   }
 }
 
-function buildDebugContext(): DebugContext {
+function buildDebugContext(store: OpenPLCStore): DebugContext {
   const dir = registryDir()
   return {
     registry: new SessionRegistry(dir),
     spawnSession: createSessionSpawner({
+      store,
       registryDir: dir,
       execPath: process.execPath,
       execArgs: daemonSpawnArgs(),
@@ -242,7 +244,7 @@ function buildDebugContext(): DebugContext {
           mode: 'json',
           streams: { out: () => undefined, err: (text) => onLine(text.replace(/\n$/, '')) },
         })
-        const result = await buildProject({
+        const result = await buildProject(store, {
           projectPath,
           target,
           host: host || undefined,

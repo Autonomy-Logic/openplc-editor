@@ -7,21 +7,58 @@
  */
 
 import { act, render, screen, within } from '@testing-library/react'
+import type { ReactNode } from 'react'
 
-// The panel refuses to paint outside a dev build, so every case below has to
-// say which build it is standing in. `mock`-prefixed because the factory closes
-// over it and both runners' hoisting rules key off that prefix.
-let mockIsDevMode = true
-jest.mock('@root/middleware/shared/providers', () => ({
-  useCapabilities: () => ({ isDevMode: mockIsDevMode }),
-}))
-
-import { useOpenPLCStore } from '@root/frontend/store'
+import { createOpenPLCStore, type OpenPLCStore, OpenPLCStoreProvider } from '@root/frontend/store'
+import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { PLCVariable } from '@root/middleware/shared/ports/types'
+import { PlatformProvider } from '@root/middleware/shared/providers'
+import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 
 import { DiagnosticsEditor } from '../index'
 
-const getState = () => useOpenPLCStore.getState()
+/** A port whose every method answers `undefined`. */
+function stubPort<T extends object>(): T {
+  return new Proxy({} as T, {
+    get: (_, prop) => (typeof prop === 'string' ? () => undefined : undefined),
+  })
+}
+
+// The panel refuses to paint outside a dev build, so every case below has to
+// say which build it is standing in.
+function makePorts(isDevMode: boolean): PlatformPorts {
+  return {
+    compiler: stubPort(),
+    runtime: stubPort(),
+    debugger: stubPort(),
+    simulator: stubPort(),
+    project: stubPort(),
+    device: stubPort(),
+    orchestrator: stubPort(),
+    system: stubPort(),
+    window: stubPort(),
+    accelerator: stubPort(),
+    theme: stubPort(),
+    versionControl: stubPort(),
+    navigation: stubPort(),
+    library: stubPort(),
+    capabilities: { ...EDITOR_CAPABILITIES, isDevMode },
+  }
+}
+
+let store: OpenPLCStore
+let devMode = true
+const getState = () => store.getState()
+
+/** Render inside the store and the ports, which tests inject rather than mock. */
+const renderPanel = () => {
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <OpenPLCStoreProvider store={store}>
+      <PlatformProvider ports={makePorts(devMode)}>{children}</PlatformProvider>
+    </OpenPLCStoreProvider>
+  )
+  return render(<DiagnosticsEditor />, { wrapper })
+}
 
 const located = (name: string, location: string): PLCVariable => ({
   name,
@@ -62,21 +99,21 @@ const seedMemoryServer = (mwCount: number) => {
 
 describe('DiagnosticsEditor', () => {
   beforeEach(() => {
-    mockIsDevMode = true
-    getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    store = createOpenPLCStore()
+    devMode = true
   })
 
   it('paints nothing in a production build, whoever renders it', () => {
-    mockIsDevMode = false
+    devMode = false
     seedProgram([located('scratch', '%MW4')])
 
-    const { container } = render(<DiagnosticsEditor />)
+    const { container } = renderPanel()
 
     expect(container.innerHTML).toBe('')
   })
 
   it('shows every table, including the ones nothing reaches', () => {
-    render(<DiagnosticsEditor />)
+    renderPanel()
 
     expect(screen.getByRole('cell', { name: 'bool_input' })).toBeTruthy()
     expect(screen.getByRole('cell', { name: 'bool_memory' })).toBeTruthy()
@@ -86,7 +123,7 @@ describe('DiagnosticsEditor', () => {
   it('sizes a memory area from the server exposure and names what sized it', () => {
     seedMemoryServer(5)
     seedProgram([located('scratch', '%MW4')])
-    render(<DiagnosticsEditor />)
+    renderPanel()
 
     const row = areaRow('int_memory')
     expect(row).not.toBeNull()
@@ -96,7 +133,7 @@ describe('DiagnosticsEditor', () => {
 
   it('reports a memory declaration with no producer, like any other area', () => {
     seedProgram([located('scratch', '%MW4')])
-    render(<DiagnosticsEditor />)
+    renderPanel()
 
     expect(screen.getByText('nothing produces this address')).toBeTruthy()
   })
@@ -104,7 +141,7 @@ describe('DiagnosticsEditor', () => {
   it('recomputes when the exposure changes, without a remount', () => {
     seedMemoryServer(5)
     seedProgram([located('scratch', '%MW4')])
-    render(<DiagnosticsEditor />)
+    renderPanel()
 
     act(() => {
       seedMemoryServer(41)
@@ -115,7 +152,7 @@ describe('DiagnosticsEditor', () => {
 
   it('reports a declaration the target cannot back', () => {
     seedProgram([located('sensor', '%IW0')])
-    render(<DiagnosticsEditor />)
+    renderPanel()
 
     expect(screen.getByText('nothing produces this address')).toBeTruthy()
   })
@@ -123,7 +160,7 @@ describe('DiagnosticsEditor', () => {
   it('lists the located declarations with the slots each one claims', () => {
     seedMemoryServer(1)
     seedProgram([located('scratch', '%MW0'), located('sensor', '%IW0')])
-    render(<DiagnosticsEditor />)
+    renderPanel()
 
     expect(screen.getByRole('cell', { name: 'scratch' })).toBeTruthy()
     expect(screen.getByRole('cell', { name: '%IW0' })).toBeTruthy()
@@ -132,13 +169,13 @@ describe('DiagnosticsEditor', () => {
   it('renders the image.conf the build would write', () => {
     seedMemoryServer(2)
     seedProgram([located('scratch', '%MW1')])
-    render(<DiagnosticsEditor />)
+    renderPanel()
 
     expect(screen.getByText(/int_memory=2 words/)).toBeTruthy()
   })
 
   it('collapses a section when its header is clicked', () => {
-    render(<DiagnosticsEditor />)
+    renderPanel()
 
     expect(screen.getByRole('cell', { name: 'bool_input' })).toBeTruthy()
     act(() => {
