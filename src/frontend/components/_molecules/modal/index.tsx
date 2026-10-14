@@ -37,7 +37,7 @@ const ModalContent = forwardRef<
       ref={ref}
       aria-describedby={undefined}
       className={cn(
-        'box fixed inset-0 z-50 m-auto flex h-[500px] w-[525px] flex-col gap-4 rounded-lg bg-white p-4 outline-none dark:bg-neutral-950',
+        'box fixed inset-0 z-50 m-auto flex h-fit max-h-[92vh] w-[525px] flex-col gap-4 overflow-y-auto rounded-lg bg-white p-4 outline-none dark:bg-neutral-950',
         className,
       )}
       {...props}
