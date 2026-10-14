@@ -17,14 +17,19 @@ import { ModuleSlotsLayout } from '../layouts/module-slots-layout'
 const BOARD = 'SLM-RP4'
 
 const io = { digitalInputs: 0, digitalOutputs: 0, analogInputs: 8, analogOutputs: 0 }
+// Every module exposes a channel named CH1, so a carried alias would be visible on a replaced slot.
+const addressMapping = {
+  baseAddressType: 'auto',
+  channels: [{ name: 'CH1', type: 'analogInput', dataType: 'INT', addressPrefix: '%IW' }],
+}
 const MODULE_SYSTEM: NonNullable<ModuleSystem> = {
   enabled: true,
   maxSlots: 15,
   discoverySupported: true,
   modules: [
-    { id: 'slm-ai-8-v', name: 'SLM-AI-8-V', hwId: '0x34A055EB', io },
-    { id: 'slm-thm-4', name: 'SLM-THM-4', hwId: '0x34608CE1', io },
-    { id: 'slm-acdci-8np-rly8', name: 'SLM-ACDCI-8NP-RLY8', hwId: '0x24A500E1', io },
+    { id: 'slm-ai-8-v', name: 'SLM-AI-8-V', hwId: '0x34A055EB', io, addressMapping },
+    { id: 'slm-thm-4', name: 'SLM-THM-4', hwId: '0x34608CE1', io, addressMapping },
+    { id: 'slm-acdci-8np-rly8', name: 'SLM-ACDCI-8NP-RLY8', hwId: '0x24A500E1', io, addressMapping },
   ],
 }
 
@@ -73,9 +78,35 @@ function moduleConfig(): { slots?: (string | null)[]; slotsConfig?: Record<strin
   return (vsd['module-configuration'] ?? {}) as { slots?: (string | null)[]; slotsConfig?: Record<string, unknown> }
 }
 
-function renderLayout(answer: PluginCommandOutcome, moduleSystem: NonNullable<ModuleSystem> = MODULE_SYSTEM) {
-  return render(<ModuleSlotsLayout section={SECTION} moduleSystem={moduleSystem} />, {
+function renderLayout(
+  answer: PluginCommandOutcome,
+  moduleSystem: NonNullable<ModuleSystem> = MODULE_SYSTEM,
+  section: ScreenSection = SECTION,
+) {
+  return render(<ModuleSlotsLayout section={section} moduleSystem={moduleSystem} />, {
     wrapper: createStoreWrapper(store, ports(answer)),
+  })
+}
+
+function aliases(): Record<number, string> {
+  const vsd = store.getState().deviceDefinitions.configuration.vendorScreenData ?? {}
+  const entries = (vsd['io-mapping'] as { entries?: Array<{ slot: number; alias: string }> } | undefined)?.entries ?? []
+  return Object.fromEntries(entries.map((e) => [e.slot, e.alias]))
+}
+
+function seedAliases() {
+  const entry = (slot: number, moduleId: string, alias: string) => ({
+    slot,
+    moduleId,
+    moduleName: moduleId,
+    channelName: 'CH1',
+    channelType: 'analogInput',
+    dataType: 'INT',
+    iecAddress: '',
+    alias,
+  })
+  store.getState().deviceActions.setVendorScreenData('io-mapping', {
+    entries: [entry(1, 'slm-thm-4', 'oven_temp'), entry(2, 'slm-ai-8-v', 'tank_level'), entry(3, 'slm-ai-8-v', 'flow')],
   })
 }
 
@@ -107,11 +138,14 @@ describe('ModuleSlotsLayout module auto-detection', () => {
 
   afterEach(cleanup)
 
-  it('is hidden while disconnected', () => {
+  it('is disabled while disconnected', () => {
     store.getState().deviceActions.setRuntimeConnectionStatus('disconnected')
     renderLayout(FOUND)
 
-    expect(screen.queryByRole('button', { name: 'Auto-Detect Modules' })).toBeNull()
+    const button = screen.getByRole('button', { name: 'Auto-Detect Modules' })
+    expect(button.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(button)
+    expect(sent).toEqual([])
   })
 
   it('is hidden when the device does not support discovery', () => {
@@ -148,9 +182,10 @@ describe('ModuleSlotsLayout module auto-detection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Auto-Detect Modules' }))
     const list = await screen.findByTestId('vpp-discovery-changes')
     expect(list.textContent).toContain('SLM-THM-4, unchanged (settings kept)')
-    expect(list.textContent).toContain('SLM-AI-8-V replaced by SLM-ACDCI-8NP-RLY8 (default settings)')
+    expect(list.textContent).toContain('SLM-AI-8-V replaced by SLM-ACDCI-8NP-RLY8 (default settings, aliases cleared)')
     expect(list.textContent).toContain('SLM-AI-8-V removed')
     expect(screen.getByText('The current backplane configuration will be replaced by the modules found.')).toBeTruthy()
+    expect(screen.getByText('Replace Backplane Configuration?')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Replace configuration' }))
 
@@ -179,6 +214,73 @@ describe('ModuleSlotsLayout module auto-detection', () => {
       expect(screen.getByTestId('vpp-action-result-detect_modules').textContent).toContain('slot 1 (0xDEADBEEF)'),
     )
     expect(screen.queryByTestId('vpp-discovery-changes')).toBeNull()
+    expect(JSON.stringify(moduleConfig())).toBe(before)
+  })
+
+  it('titles the dialog after the section', async () => {
+    renderLayout(FOUND, MODULE_SYSTEM, { ...SECTION, title: 'Rack' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-Detect Modules' }))
+
+    expect(await screen.findByText('Replace Rack?')).toBeTruthy()
+  })
+
+  it('keeps aliases of unchanged slots and clears those of a replaced slot on auto-detect', async () => {
+    seedAliases()
+    renderLayout(FOUND)
+    await waitFor(() => expect(aliases()).toEqual({ 1: 'oven_temp', 2: 'tank_level', 3: 'flow' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-Detect Modules' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Replace configuration' }))
+
+    await waitFor(() => expect(aliases()).toEqual({ 1: 'oven_temp', 2: '' }))
+  })
+
+  it('clears the aliases of a slot whose module is changed by hand, as auto-detect does', async () => {
+    seedAliases()
+    renderLayout(FOUND)
+    await waitFor(() => expect(aliases()).toEqual({ 1: 'oven_temp', 2: 'tank_level', 3: 'flow' }))
+
+    fireEvent.click(screen.getByRole('button', { name: /^Slot 2/ }))
+    const trigger = screen.getAllByRole('button').find((b) => b.getAttribute('aria-haspopup') === 'menu')
+    if (!trigger) throw new Error('module picker not found')
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    fireEvent.click(await screen.findByRole('option', { name: 'SLM-ACDCI-8NP-RLY8' }))
+
+    await waitFor(() => expect(moduleConfig().slots?.[1]).toBe('slm-acdci-8np-rly8'))
+    await waitFor(() => expect(aliases()).toEqual({ 1: 'oven_temp', 2: '', 3: 'flow' }))
+  })
+
+  it('applies a gapped answer on a section that is not stackable', async () => {
+    const physical: ScreenSection = { ...SECTION, stackable: false, maxSlots: 4 }
+    renderLayout(
+      {
+        ok: true,
+        data: {
+          modules: [
+            { slot: 1, hwId: '0x34608CE1' },
+            { slot: 3, hwId: '0x34A055EB' },
+          ],
+        },
+      },
+      MODULE_SYSTEM,
+      physical,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-Detect Modules' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Replace configuration' }))
+
+    await waitFor(() => expect(moduleConfig().slots).toEqual(['slm-thm-4', null, 'slm-ai-8-v', null]))
+    expect(moduleConfig().slotsConfig).toEqual({ '1': THERMOCOUPLE, '3': { range: '0-10V' } })
+  })
+
+  it('refuses a gapped answer on a stackable section', async () => {
+    const before = JSON.stringify(moduleConfig())
+    renderLayout({ ok: true, data: { modules: [{ slot: 2, hwId: '0x34A055EB' }] } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-Detect Modules' }))
+
+    await waitFor(() => expect(screen.getByTestId('vpp-action-result-detect_modules').textContent).toContain('no gaps'))
     expect(JSON.stringify(moduleConfig())).toBe(before)
   })
 })

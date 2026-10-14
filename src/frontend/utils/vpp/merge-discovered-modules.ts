@@ -21,18 +21,26 @@ export interface DiscoveryResultMapping {
 
 export type DiscoveryParseResult = { ok: true; modules: DiscoveredModule[] } | { ok: false; error: string }
 
+export interface DiscoveryParseOptions {
+  /** Highest slot number the section has. */
+  maxSlots: number
+  /** Stackable sections hold modules from slot 1 with no gap, so the answer must too. */
+  dense: boolean
+}
+
 const UNREADABLE = 'The device returned a module list this editor cannot read.'
 
 /**
  * Read the module list out of a successful plugin answer.
  *
- * Slots must be whole numbers from 1 with no gap or repeat, and each hardware
- * id a non-empty string; anything else is refused whole rather than applied in
- * part.
+ * Slots must be whole numbers from 1 to `maxSlots` with no repeat (and, when
+ * `dense`, no gap from slot 1). A hardware id is a non-empty string or a
+ * non-negative integer. Anything else is refused whole rather than applied in part.
  */
 export function parseDiscoveredModules(
   data: Record<string, unknown>,
   mapping: DiscoveryResultMapping,
+  options: DiscoveryParseOptions,
 ): DiscoveryParseResult {
   let node: unknown = data
   for (const key of mapping.path.split('.')) {
@@ -48,20 +56,41 @@ export function parseDiscoveredModules(
     const slot = record[mapping.slotField]
     const hwId = record[mapping.moduleIdField]
     if (typeof slot !== 'number' || !Number.isInteger(slot) || slot < 1) return { ok: false, error: UNREADABLE }
-    if (typeof hwId !== 'string' || hwId.trim().length === 0) return { ok: false, error: UNREADABLE }
-    modules.push({ slot, hwId: hwId.trim() })
+    const id = readHwId(hwId)
+    if (id === null) return { ok: false, error: UNREADABLE }
+    modules.push({ slot, hwId: id })
   }
 
   modules.sort((a, b) => a.slot - b.slot)
   for (let i = 0; i < modules.length; i++) {
-    if (modules[i].slot !== i + 1) return { ok: false, error: UNREADABLE }
+    if (i > 0 && modules[i].slot === modules[i - 1].slot) return { ok: false, error: UNREADABLE }
+    if (options.dense && modules[i].slot !== i + 1) {
+      return {
+        ok: false,
+        error: `The device reported no module at slot ${i + 1}, but this section holds modules from slot 1 with no gaps.`,
+      }
+    }
+  }
+  const last = modules[modules.length - 1]
+  if (last && last.slot > options.maxSlots) {
+    return {
+      ok: false,
+      error: `The device reported a module at slot ${last.slot}, but only ${options.maxSlots} slots are available.`,
+    }
   }
   return { ok: true, modules }
 }
 
+function readHwId(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim().length > 0 ? value.trim() : null
+  // BigInt keeps every digit of a large integer, where String() would switch to exponent notation.
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return BigInt(value).toString()
+  return null
+}
+
 /**
- * Hardware ids compare as numbers when both are hex (`0x...`) or decimal, so
- * `0x34a055eb` and `0x34A055EB` match; otherwise as case-insensitive text.
+ * Hardware ids compare as integers when both are hex (`0x...`) or decimal, so
+ * `0x00abcdef`, `0x00ABCDEF` and `11259375` match; otherwise as case-insensitive text.
  */
 export function hwIdsEqual(a: string, b: string): boolean {
   const na = hwIdNumber(a)
@@ -70,10 +99,10 @@ export function hwIdsEqual(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase()
 }
 
-function hwIdNumber(value: string): number | null {
+function hwIdNumber(value: string): bigint | null {
   const text = value.trim()
-  if (/^0x[0-9a-f]+$/i.test(text)) return Number.parseInt(text.slice(2), 16)
-  if (/^[0-9]+$/.test(text)) return Number.parseInt(text, 10)
+  if (/^0x[0-9a-f]+$/i.test(text)) return BigInt(`0x${text.slice(2)}`)
+  if (/^[0-9]+$/.test(text)) return BigInt(text)
   return null
 }
 
@@ -129,16 +158,20 @@ export type MergeDiscoveredModulesResult =
  * A slot whose module has the detected hardware id is kept with its settings
  * object untouched. A different or new module goes in with no stored settings,
  * which is how the layout represents defaults. A project slot the device did
- * not report is emptied. Any id the package does not know refuses the whole
- * plan and names every such slot.
+ * not report is emptied. An id the package does not know, an id shared by two
+ * modules, or a report at a built-in slot that cannot be confirmed refuses the
+ * whole plan.
  */
 export function mergeDiscoveredModules(args: MergeDiscoveredModulesArgs): MergeDiscoveredModulesResult {
   const { slots, slotsConfig, modules, detected, maxSlots, lockedSlotIndex } = args
 
-  if (detected.length > maxSlots) {
+  const beyond = detected.find((d) => d.slot > maxSlots)
+  if (detected.length > maxSlots || beyond) {
     return {
       ok: false,
-      error: `The device reported ${detected.length} modules, but this backplane has only ${maxSlots} slots.`,
+      error: beyond
+        ? `The device reported a module at slot ${beyond.slot}, but only ${maxSlots} slots are available.`
+        : `The device reported ${detected.length} modules, but only ${maxSlots} slots are available.`,
     }
   }
 
@@ -148,6 +181,7 @@ export function mergeDiscoveredModules(args: MergeDiscoveredModulesArgs): MergeD
   const lockedModule = lockedSlotIndex !== null ? byId.get(slots[lockedSlotIndex] ?? '') : undefined
 
   const unknown: DiscoveredModule[] = []
+  const ambiguous: string[] = []
   const conflicts: string[] = []
   const nextSlots: (string | null)[] = Array<string | null>(maxSlots).fill(null)
   const nextConfig: SlotConfigMap = {}
@@ -166,7 +200,11 @@ export function mergeDiscoveredModules(args: MergeDiscoveredModulesArgs): MergeD
     const key = String(slotNumber)
 
     if (lockedSlotIndex === index && lockedModule) {
-      if (found && lockedModule.hwId && !hwIdsEqual(found.hwId, lockedModule.hwId)) {
+      if (found && !lockedModule.hwId) {
+        conflicts.push(
+          `slot ${slotNumber} is the built-in ${lockedModule.name}, which declares no hardware id to compare with the reported ${found.hwId}`,
+        )
+      } else if (found && lockedModule.hwId && !hwIdsEqual(found.hwId, lockedModule.hwId)) {
         conflicts.push(`slot ${slotNumber} is the built-in ${lockedModule.name}, but the device reported ${found.hwId}`)
       }
       nextSlots[index] = lockedModule.id
@@ -182,6 +220,7 @@ export function mergeDiscoveredModules(args: MergeDiscoveredModulesArgs): MergeD
       continue
     }
 
+    // The project's own module wins when it carries the reported id, even if another module shares that id.
     if (current?.hwId && hwIdsEqual(current.hwId, found.hwId)) {
       nextSlots[index] = current.id
       if (slotsConfig[key]) nextConfig[key] = slotsConfig[key]
@@ -189,11 +228,16 @@ export function mergeDiscoveredModules(args: MergeDiscoveredModulesArgs): MergeD
       continue
     }
 
-    const match = selectable.find((m) => m.hwId !== undefined && hwIdsEqual(m.hwId, found.hwId))
-    if (!match) {
+    const matches = selectable.filter((m) => m.hwId !== undefined && hwIdsEqual(m.hwId, found.hwId))
+    if (matches.length === 0) {
       unknown.push(found)
       continue
     }
+    if (matches.length > 1) {
+      ambiguous.push(`slot ${slotNumber} (${found.hwId}: ${matches.map((m) => m.name).join(', ')})`)
+      continue
+    }
+    const match = matches[0]
     nextSlots[index] = match.id
     changes.push(
       currentId
@@ -209,8 +253,17 @@ export function mergeDiscoveredModules(args: MergeDiscoveredModulesArgs): MergeD
       error: `The device reported modules this package does not recognise: ${list}. Nothing was changed. Update the board package or check the installed modules.`,
     }
   }
+  if (ambiguous.length > 0) {
+    return {
+      ok: false,
+      error: `The device reported hardware ids that match more than one module in this package: ${ambiguous.join(', ')}. Nothing was changed.`,
+    }
+  }
   if (conflicts.length > 0) {
-    return { ok: false, error: `The device configuration does not match this board: ${conflicts.join('; ')}.` }
+    return {
+      ok: false,
+      error: `The device configuration does not match this board: ${conflicts.join('; ')}. Nothing was changed.`,
+    }
   }
 
   return {

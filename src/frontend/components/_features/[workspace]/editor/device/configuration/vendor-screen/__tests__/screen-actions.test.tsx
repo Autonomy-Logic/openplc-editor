@@ -236,12 +236,23 @@ describe('VppScreenActions module detection', () => {
     )
   }
 
-  it('is not offered while no device is connected', () => {
+  it('is disabled, with a reason, while no device is connected', () => {
     const send = recorder(() => Promise.resolve<PluginCommandOutcome>({ ok: true, data: {} }))
     renderDetect(send, { connected: false, discoverySupported: true, onMappedResult: () => null })
 
-    expect(screen.queryByRole('button', { name: 'Auto-Detect Modules' })).toBeNull()
+    const button = screen.getByRole('button', { name: 'Auto-Detect Modules' })
+    expect(button.hasAttribute('disabled')).toBe(true)
+    expect(button.getAttribute('title')).toContain('Connect to a device')
+    fireEvent.click(button)
     expect(send.calls).toHaveLength(0)
+  })
+
+  it('is enabled once a device is connected', () => {
+    renderDetect(undefined, { connected: true, discoverySupported: true, onMappedResult: () => null })
+
+    const button = screen.getByRole('button', { name: 'Auto-Detect Modules' })
+    expect(button.hasAttribute('disabled')).toBe(false)
+    expect(button.getAttribute('title')).toBeNull()
   })
 
   it('is not offered when the device does not support discovery', () => {
@@ -319,5 +330,87 @@ describe('VppScreenActions module detection', () => {
       expect(screen.getByTestId('vpp-action-result-detect_modules').textContent).toContain('Stop the PLC'),
     )
     expect(reached).toBe(false)
+  })
+})
+
+describe('VppScreenActions confirmation before sending', () => {
+  afterEach(cleanup)
+
+  const TEST_ACTION = {
+    id: 'self_test',
+    label: 'Run self-test',
+    type: 'command',
+    command: 'test',
+    confirm: 'The outputs will toggle during the test.',
+  }
+
+  function renderConfirm(send: (...args: unknown[]) => Promise<PluginCommandOutcome>, actions: unknown[]) {
+    return render(
+      <PlatformProvider
+        ports={{ runtime: stubPort({ sendPluginCommand: send }), capabilities: stubPort() } as unknown as PlatformPorts}
+      >
+        <VppScreenActions
+          actions={actions}
+          defaultPlugin='synergy'
+          connected
+          discoverySupported
+          onMappedResult={() => null}
+        />
+      </PlatformProvider>,
+    )
+  }
+
+  it('asks first and sends nothing when the user cancels', async () => {
+    const send = recorder(() => Promise.resolve<PluginCommandOutcome>({ ok: true, data: {} }))
+    renderConfirm(send, [TEST_ACTION])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run self-test' }))
+
+    expect(await screen.findByText('The outputs will toggle during the test.')).toBeTruthy()
+    expect(send.calls).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() => expect(screen.queryByText('The outputs will toggle during the test.')).toBeNull())
+    expect(send.calls).toHaveLength(0)
+  })
+
+  it('sends once the user continues', async () => {
+    const send = recorder(() => Promise.resolve<PluginCommandOutcome>({ ok: true, data: { passed: true } }))
+    renderConfirm(send, [TEST_ACTION])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run self-test' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
+
+    await waitFor(() => expect(screen.getByTestId('vpp-action-result-self_test')).toBeTruthy())
+    expect(send.calls).toEqual([[{ plugin: 'synergy', command: 'test', params: {} }]])
+  })
+
+  it('sends without a prompt when the action declares no confirm', async () => {
+    const send = recorder(() => Promise.resolve<PluginCommandOutcome>({ ok: true, data: {} }))
+    renderConfirm(send, [{ id: 'status', label: 'Status', type: 'command', command: 'status' }])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Status' }))
+
+    await waitFor(() => expect(send.calls).toHaveLength(1))
+    expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+  })
+
+  it('leaves the confirm of a result-mapped action to the layout, after the answer', async () => {
+    const send = recorder(() => Promise.resolve<PluginCommandOutcome>({ ok: true, data: { modules: [] } }))
+    renderConfirm(send, [
+      {
+        id: 'detect',
+        label: 'Detect',
+        type: 'command',
+        command: 'discover_modules',
+        confirm: 'Replace?',
+        resultMapping: { path: 'modules', slotField: 'slot', moduleIdField: 'hwId' },
+      },
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Detect' }))
+
+    await waitFor(() => expect(send.calls).toHaveLength(1))
+    expect(screen.queryByText('Replace?')).toBeNull()
   })
 })

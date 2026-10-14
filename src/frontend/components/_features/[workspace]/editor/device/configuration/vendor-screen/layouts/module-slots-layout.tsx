@@ -274,7 +274,7 @@ function describeSlotChange(change: SlotChange): string {
     case 'keep':
       return `${change.to?.name ?? ''}, unchanged (settings kept)`
     case 'replace':
-      return `${change.from?.name ?? ''} replaced by ${change.to?.name ?? ''} (default settings)`
+      return `${change.from?.name ?? ''} replaced by ${change.to?.name ?? ''} (default settings, aliases cleared)`
     case 'add':
       return `${change.to?.name ?? ''} added (default settings)`
     case 'remove':
@@ -445,7 +445,9 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   /* Mirrors the standalone io-table-layout: when the slot module */
   /* list changes, rebuild the IoMappingEntry[] (auto-assigned    */
   /* addresses) while preserving any user-typed aliases by        */
-  /* slot:channel key. Writes to the 'io-mapping' persistence key */
+  /* slot:channel key while the slot keeps the same module (a     */
+  /* replaced module starts with no aliases). Writes to the        */
+  /* 'io-mapping' persistence key                                  */
   /* so the rest of the compile flow keeps reading the same data. */
   /* ------------------------------------------------------------ */
   // Re-allocate when the slot module list OR any resolver-affecting
@@ -490,9 +492,16 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     )
     const capabilities = resolveTargetCapabilities(boardInfo)
 
-    const existingAliases = new Map<string, string>()
+    const existingAliases = new Map<string, { alias: string; moduleId: string }>()
     for (const entry of storedMapping?.entries ?? []) {
-      if (entry.alias) existingAliases.set(`${entry.slot}:${entry.channelName}`, entry.alias)
+      if (entry.alias)
+        existingAliases.set(`${entry.slot}:${entry.channelName}`, { alias: entry.alias, moduleId: entry.moduleId })
+    }
+    // An entry without a module id predates that field; it keeps its alias as before.
+    const aliasFor = (key: string, moduleId: string): string => {
+      const existing = existingAliases.get(key)
+      if (!existing) return ''
+      return !existing.moduleId || existing.moduleId === moduleId ? existing.alias : ''
     }
 
     // VPP slots are being regenerated, so the pool excludes the
@@ -528,7 +537,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
           channelType: channel.type,
           dataType: channel.dataType,
           iecAddress,
-          alias: existingAliases.get(aliasKey) ?? '',
+          alias: aliasFor(aliasKey, moduleId),
           modeFieldId: channel.modeFieldId,
           modeOptions: channel.modeOptions,
           modeValue: channel.modeValue,
@@ -602,7 +611,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
 
   const handleDiscoveryResult: NonNullable<VppScreenActionsProps['onMappedResult']> = (action, data) => {
     if (!action.resultMapping) return 'This action does not describe modules.'
-    const parsedModules = parseDiscoveredModules(data, action.resultMapping)
+    const parsedModules = parseDiscoveredModules(data, action.resultMapping, { maxSlots, dense: stackable })
     if (!parsedModules.ok) return parsedModules.error
     const plan = planDiscovery(parsedModules.modules)
     if (!plan.ok) return plan.error
@@ -1292,12 +1301,11 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       <Modal open={discovery !== null} onOpenChange={(open) => !open && setDiscovery(null)}>
         <ModalContent className='flex w-[480px] select-none flex-col items-center justify-evenly gap-5 rounded-lg p-6'>
           <ModalTitle className='text-center font-caption text-base font-semibold text-neutral-950 dark:text-white'>
-            {discovery?.plan.changed ? 'Replace the backplane configuration?' : 'Backplane already matches'}
+            {discovery?.plan.changed ? `Replace ${section.title}?` : `${section.title} already matches`}
           </ModalTitle>
           <p className='text-center text-sm text-neutral-600 dark:text-neutral-300'>
             {discovery?.plan.changed
-              ? (discovery.prompt ??
-                'The current backplane configuration will be replaced by the modules found on the device.')
+              ? (discovery.prompt ?? 'The current configuration will be replaced by the modules found on the device.')
               : 'The modules found on the device match the current configuration. Nothing needs to change.'}
           </p>
           {discovery && (

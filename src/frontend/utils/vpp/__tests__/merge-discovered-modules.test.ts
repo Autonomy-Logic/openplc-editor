@@ -10,6 +10,8 @@ import {
 } from '../merge-discovered-modules'
 
 const MAPPING = { path: 'modules', slotField: 'slot', moduleIdField: 'hwId' }
+const STACKABLE = { maxSlots: 15, dense: true }
+const PHYSICAL = { maxSlots: 8, dense: false }
 
 const MODULES: DiscoveryModuleDef[] = [
   { id: 'ai8v', name: 'SLM-AI-8-V', hwId: '0x34A055EB' },
@@ -42,6 +44,7 @@ describe('parseDiscoveredModules', () => {
         count: 2,
       },
       MAPPING,
+      STACKABLE,
     )
     expect(result).toEqual({
       ok: true,
@@ -53,7 +56,7 @@ describe('parseDiscoveredModules', () => {
   })
 
   it('accepts an empty backplane', () => {
-    expect(parseDiscoveredModules({ modules: [], count: 0 }, MAPPING)).toEqual({ ok: true, modules: [] })
+    expect(parseDiscoveredModules({ modules: [], count: 0 }, MAPPING, STACKABLE)).toEqual({ ok: true, modules: [] })
   })
 
   it('orders the modules by slot', () => {
@@ -65,6 +68,7 @@ describe('parseDiscoveredModules', () => {
         ],
       },
       MAPPING,
+      STACKABLE,
     )
     expect(result).toEqual({
       ok: true,
@@ -79,6 +83,7 @@ describe('parseDiscoveredModules', () => {
     const result = parseDiscoveredModules(
       { result: { found: [{ position: 1, id: '0x1' }] } },
       { path: 'result.found', slotField: 'position', moduleIdField: 'id' },
+      STACKABLE,
     )
     expect(result).toEqual({ ok: true, modules: [{ slot: 1, hwId: '0x1' }] })
   })
@@ -90,17 +95,12 @@ describe('parseDiscoveredModules', () => {
     ['a slot that is not a number', { modules: [{ slot: '1', hwId: '0x1' }] }],
     ['a slot below 1', { modules: [{ slot: 0, hwId: '0x1' }] }],
     ['a fractional slot', { modules: [{ slot: 1.5, hwId: '0x1' }] }],
+    ['a slot beyond the last one', { modules: [{ slot: 9, hwId: '0x1' }] }],
     ['an empty hwId', { modules: [{ slot: 1, hwId: '  ' }] }],
     ['a missing hwId', { modules: [{ slot: 1 }] }],
-    [
-      'a gap in the slots',
-      {
-        modules: [
-          { slot: 1, hwId: '0x1' },
-          { slot: 3, hwId: '0x2' },
-        ],
-      },
-    ],
+    ['a fractional numeric hwId', { modules: [{ slot: 1, hwId: 1.5 }] }],
+    ['a negative numeric hwId', { modules: [{ slot: 1, hwId: -1 }] }],
+    ['a boolean hwId', { modules: [{ slot: 1, hwId: true }] }],
     [
       'a repeated slot',
       {
@@ -110,9 +110,59 @@ describe('parseDiscoveredModules', () => {
         ],
       },
     ],
-    ['slots not starting at 1', { modules: [{ slot: 2, hwId: '0x1' }] }],
-  ] as Array<[string, Record<string, unknown>]>)('refuses %s', (_label: string, data: Record<string, unknown>) => {
-    expect(parseDiscoveredModules(data, MAPPING)).toMatchObject({ ok: false })
+  ] as Array<[string, Record<string, unknown>]>)(
+    'refuses %s on any section',
+    (_label: string, data: Record<string, unknown>) => {
+      expect(parseDiscoveredModules(data, MAPPING, PHYSICAL)).toMatchObject({ ok: false })
+      expect(parseDiscoveredModules(data, MAPPING, STACKABLE)).toMatchObject({ ok: false })
+    },
+  )
+
+  it('accepts gaps and a first slot above 1 on a section that is not stackable', () => {
+    const result = parseDiscoveredModules(
+      {
+        modules: [
+          { slot: 2, hwId: '0x1' },
+          { slot: 5, hwId: '0x2' },
+        ],
+      },
+      MAPPING,
+      PHYSICAL,
+    )
+    expect(result).toEqual({
+      ok: true,
+      modules: [
+        { slot: 2, hwId: '0x1' },
+        { slot: 5, hwId: '0x2' },
+      ],
+    })
+  })
+
+  it.each([
+    [
+      'a gap in the slots',
+      [
+        { slot: 1, hwId: '0x1' },
+        { slot: 3, hwId: '0x2' },
+      ],
+    ],
+    ['slots not starting at 1', [{ slot: 2, hwId: '0x1' }]],
+  ] as Array<[string, unknown[]]>)('refuses %s on a stackable section', (_label: string, modules: unknown[]) => {
+    const result = parseDiscoveredModules({ modules }, MAPPING, STACKABLE)
+    expect(result).toMatchObject({ ok: false })
+    expect(!result.ok && result.error).toContain('no gaps')
+  })
+
+  it('reads an integer hardware id as its decimal digits', () => {
+    expect(parseDiscoveredModules({ modules: [{ slot: 1, hwId: 882922987 }] }, MAPPING, STACKABLE)).toEqual({
+      ok: true,
+      modules: [{ slot: 1, hwId: '882922987' }],
+    })
+  })
+
+  it('keeps every digit of an integer id beyond the exact double range', () => {
+    const result = parseDiscoveredModules({ modules: [{ slot: 1, hwId: 1e21 }] }, MAPPING, STACKABLE)
+    expect(result).toEqual({ ok: true, modules: [{ slot: 1, hwId: '1000000000000000000000' }] })
   })
 })
 
@@ -121,6 +171,16 @@ describe('hwIdsEqual', () => {
     expect(hwIdsEqual('0x34a055eb', '0x34A055EB')).toBe(true)
     expect(hwIdsEqual('0x000000FF', '0xff')).toBe(true)
     expect(hwIdsEqual('0x34A055EB', '0x34A055EA')).toBe(false)
+  })
+
+  it('matches a decimal id against its hex form', () => {
+    expect(hwIdsEqual('882922987', '0x34A055EB')).toBe(true)
+  })
+
+  it('does not collapse ids larger than a double can hold exactly', () => {
+    expect(hwIdsEqual('0x20000000000001', '0x20000000000000')).toBe(false)
+    expect(hwIdsEqual('0xFFFFFFFFFFFFFFFF', '18446744073709551615')).toBe(true)
+    expect(hwIdsEqual('18446744073709551615', '18446744073709551614')).toBe(false)
   })
 
   it('falls back to case-insensitive text for ids that are not numbers', () => {
@@ -295,6 +355,74 @@ describe('mergeDiscoveredModules', () => {
     expect(result.ok && result.slotsConfig.meta).toBe(shared)
   })
 
+  it('refuses a module reported beyond the last slot', () => {
+    const result = mergeDiscoveredModules(args({ detected: [{ slot: 5, hwId: '0x34A055EB' }] }))
+    expect(result).toMatchObject({ ok: false })
+    expect(!result.ok && result.error).toContain('slot 5')
+  })
+
+  it('places gapped modules at their own slots on a section that is not stackable', () => {
+    const kept = { range: '0-10V' }
+    const result = mergeDiscoveredModules(
+      args({
+        slots: ['rly16', 'ai8v', null, 'thm4'],
+        slotsConfig: { '1': { x: 1 }, '2': kept, '4': { tc_type: 'K' } },
+        detected: [
+          { slot: 2, hwId: '0x34A055EB' },
+          { slot: 4, hwId: '0x24A500E1' },
+        ],
+      }),
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.slots).toEqual([null, 'ai8v', null, 'combo'])
+    expect(result.slotsConfig).toEqual({ '2': kept })
+    expect(result.slotsConfig['2']).toBe(kept)
+    expect(result.changes.map((c) => [c.slot, c.kind])).toEqual([
+      [1, 'remove'],
+      [2, 'keep'],
+      [4, 'replace'],
+    ])
+  })
+
+  it('matches a decimal id from the device against the hex id in the package', () => {
+    const result = mergeDiscoveredModules(args({ detected: [{ slot: 1, hwId: '882922987' }] }))
+    expect(result.ok && result.slots[0]).toBe('ai8v')
+  })
+
+  it('refuses a hardware id that two modules share instead of picking one', () => {
+    const twins: DiscoveryModuleDef[] = [
+      ...MODULES,
+      { id: 'ai8v-clone', name: 'SLM-AI-8-V (rev B)', hwId: '0x34a055eb' },
+    ]
+    const result = mergeDiscoveredModules(args({ modules: twins, detected: [{ slot: 1, hwId: '0x34A055EB' }] }))
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error).toContain('more than one module')
+    expect(result.error).toContain('SLM-AI-8-V, SLM-AI-8-V (rev B)')
+  })
+
+  it('keeps the project module when it carries a shared hardware id', () => {
+    const twins: DiscoveryModuleDef[] = [
+      ...MODULES,
+      { id: 'ai8v-clone', name: 'SLM-AI-8-V (rev B)', hwId: '0x34a055eb' },
+    ]
+    const config = { range: '0-5V' }
+    const result = mergeDiscoveredModules(
+      args({
+        modules: twins,
+        slots: ['ai8v-clone', null, null, null],
+        slotsConfig: { '1': config },
+        detected: [{ slot: 1, hwId: '0x34A055EB' }],
+      }),
+    )
+
+    expect(result.ok && result.slots[0]).toBe('ai8v-clone')
+    expect(result.ok && result.slotsConfig['1']).toBe(config)
+  })
+
   describe('with a built-in locked slot', () => {
     const withFixed: DiscoveryModuleDef[] = [
       { id: 'builtin', name: 'Built-in I/O', hwId: '0x1', fixed: true },
@@ -329,6 +457,36 @@ describe('mergeDiscoveredModules', () => {
         }),
       )
       expect(result).toMatchObject({ ok: false })
+    })
+
+    it('refuses a report at a locked slot whose module declares no hardware id', () => {
+      const noId: DiscoveryModuleDef[] = [{ id: 'builtin', name: 'Built-in I/O', fixed: true }, ...MODULES]
+      const result = mergeDiscoveredModules(
+        args({
+          modules: noId,
+          slots: ['builtin', null, null, null],
+          detected: [{ slot: 1, hwId: '0x34A055EB' }],
+          lockedSlotIndex: 0,
+        }),
+      )
+
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.error).toContain('declares no hardware id')
+      expect(result.error).toContain('Nothing was changed')
+    })
+
+    it('keeps a locked slot without a hardware id when the device does not report it', () => {
+      const noId: DiscoveryModuleDef[] = [{ id: 'builtin', name: 'Built-in I/O', fixed: true }, ...MODULES]
+      const result = mergeDiscoveredModules(
+        args({
+          modules: noId,
+          slots: ['builtin', null, null, null],
+          detected: [{ slot: 2, hwId: '0x34A055EB' }],
+          lockedSlotIndex: 0,
+        }),
+      )
+      expect(result.ok && result.slots.slice(0, 2)).toEqual(['builtin', 'ai8v'])
     })
 
     it('never places a fixed module in an expansion slot', () => {
