@@ -40,6 +40,7 @@ import {
   INK_COLOR,
 } from './symbols'
 import type { ContentBlock, DrawOp, PrintRenderMode } from './types'
+import { wrapPlainText } from './text-wrap'
 
 const LABEL_SIZE_PT = 7
 const BLOCK_CONNECTOR_Y = 36
@@ -306,11 +307,31 @@ function mergeRailOnlyBands(rawBoundaries: number[], placed: PlacedOps[]): numbe
   return [bands[0]?.start ?? rawBoundaries[0], ...bands.map((b) => b.end)]
 }
 
+const COMMENT_SIZE_PT = 8
+/** 1.25em — a little looser than the diagram labels so wrapped comment lines stay readable. */
+const COMMENT_LINE_HEIGHT_PT = 10
+
+/**
+ * A rung comment used to be a single unwrapped line at x = 0: anything past
+ * the right edge of the page was silently lost, which for a long note (or any
+ * Chinese one, where every character is a full em) could be most of the text.
+ * It now wraps to the content width.
+ */
 function commentBlock(comment: string, widthPt: number): ContentBlock {
+  const lines = wrapPlainText(comment, widthPt, COMMENT_SIZE_PT)
   return {
     widthPt,
-    heightPt: 12,
-    ops: [{ kind: 'text', text: comment, x: 0, y: 8, sizePt: 8, color: INK_COLOR, font: 'sans', align: 'left' }],
+    heightPt: lines.length * COMMENT_LINE_HEIGHT_PT,
+    ops: lines.map((text, i) => ({
+      kind: 'text',
+      text,
+      x: 0,
+      y: i * COMMENT_LINE_HEIGHT_PT + COMMENT_SIZE_PT,
+      sizePt: COMMENT_SIZE_PT,
+      color: INK_COLOR,
+      font: 'sans',
+      align: 'left',
+    })),
   }
 }
 

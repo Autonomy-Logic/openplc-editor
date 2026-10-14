@@ -6,6 +6,7 @@ import {
   type Bounds,
   dedupeBoundaries,
   gapAlignedCuts,
+  lineHeightPt,
   nodeBounds,
   PX_TO_PT,
   pxToPt,
@@ -32,6 +33,7 @@ import {
   INK_COLOR,
 } from './symbols'
 import type { ContentBlock, DrawOp, PrintRenderMode } from './types'
+import { wrapPlainText } from './text-wrap'
 
 const LABEL_SIZE_PT = 7
 const BLOCK_CONNECTOR_Y = 48
@@ -134,21 +136,34 @@ function connectionOps(node: Node): DrawOp[] {
   ]
 }
 
+const COMMENT_PADDING_PT = 3
+
+/**
+ * An FBD comment box is a multi-line text area on screen, but print drew its
+ * whole content as one centred line: text wider than the box spilled out on
+ * both sides and anything past the page edge was lost. It now wraps inside the
+ * box, is clipped to it, and is truncated to the lines that fit.
+ */
 function commentOps(node: Node): DrawOp[] {
   const box = nodeBounds(node)
   const content = getString(node.data, 'content') ?? getString(node.data, 'comment') ?? ''
+  const lineHeight = lineHeightPt(LABEL_SIZE_PT)
+  const lines = wrapPlainText(content, Math.max(1, box.width - 2 * COMMENT_PADDING_PT), LABEL_SIZE_PT)
+  const maxLines = Math.max(1, Math.floor((box.height - COMMENT_PADDING_PT) / lineHeight))
   return [
     { kind: 'rect', x: box.x, y: box.y, width: box.width, height: box.height, stroke: INK_COLOR, strokeWidthPt: 0.5 },
-    {
-      kind: 'text',
-      text: content,
+    { kind: 'clipPush', x: box.x, y: box.y, width: box.width, height: box.height },
+    ...lines.slice(0, maxLines).map((text, i) => ({
+      kind: 'text' as const,
+      text,
       x: box.x + box.width / 2,
-      y: box.y + 12,
+      y: box.y + COMMENT_PADDING_PT + i * lineHeight + LABEL_SIZE_PT,
       sizePt: LABEL_SIZE_PT,
       color: INK_COLOR,
-      font: 'sans',
-      align: 'center',
-    },
+      font: 'sans' as const,
+      align: 'center' as const,
+    })),
+    { kind: 'clipPop' },
   ]
 }
 
