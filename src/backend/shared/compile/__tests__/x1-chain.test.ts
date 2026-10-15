@@ -6,7 +6,6 @@
  * chain -- the core allocating and the plugins logging -- runs on the
  * containerised runtime.
  */
-import { writeFileSync } from 'fs'
 import { createStore } from 'zustand/vanilla'
 
 import type { BoardInfo, ModbusIOGroup, PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
@@ -93,7 +92,6 @@ it('X1 — image.conf reflects the producers built through the store', () => {
     areas: IMAGE_AREAS_RUNTIME_V4,
   })
   const conf = generateImageConf(img.sizes)
-  writeFileSync('/tmp/claude-1000/x1-image.conf', conf)
   const nonZero = conf.split('\n').filter((l) => /=\s*[1-9]/.test(l))
   // eslint-disable-next-line no-console
   console.log(`[X1] editor: ${JSON.stringify(img.sizes)} | image.conf: ${nonZero.join(', ')}`)
