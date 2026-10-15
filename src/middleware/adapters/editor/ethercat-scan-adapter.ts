@@ -28,6 +28,7 @@ export function createEditorEtherCATScanAdapter(options: EditorEtherCATScanAdapt
         const result = await window.bridge.etherCATScanModules(ip, {
           busName: req.busName,
           slavePosition: req.slavePosition,
+          networkInterface: req.networkInterface,
         })
 
         if (!result.success) {

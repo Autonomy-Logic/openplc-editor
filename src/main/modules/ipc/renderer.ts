@@ -838,7 +838,7 @@ const rendererProcessBridge = {
 
   etherCATScanModules: (
     ipAddress: string,
-    scanRequest: { busName: string; slavePosition: number; timeout_ms?: number },
+    scanRequest: { busName: string; slavePosition: number; networkInterface?: string; timeout_ms?: number },
   ): Promise<{ success: boolean; data?: unknown; error?: string }> =>
     ipcRenderer.invoke('ethercat:scan-modules', ipAddress, scanRequest),
 

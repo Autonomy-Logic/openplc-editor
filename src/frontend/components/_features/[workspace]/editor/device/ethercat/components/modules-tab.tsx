@@ -14,6 +14,7 @@ import { StickArrowIcon } from '@root/frontend/assets/icons/interface/StickArrow
 import TableActions from '@root/frontend/components/_atoms/table-actions'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/frontend/components/_molecules/modal'
+import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import { generateUniqueSlaveName } from '@root/frontend/utils/unique-slave-name'
 import type {
@@ -182,6 +183,11 @@ export const ModulesTab = ({
     return slot
   }, [modules])
 
+  const busInterface = useOpenPLCStore(
+    (s) =>
+      s.project.data.remoteDevices?.find((d) => d.name === busName)?.ethercatConfig?.masterConfig?.networkInterface,
+  )
+
   const handleScan = useCallback(async () => {
     if (scanPort === undefined) {
       setScanError('Scan is not available on this platform.')
@@ -190,7 +196,11 @@ export const ModulesTab = ({
     setIsScanning(true)
     setScanError(null)
     try {
-      const r = await scanPort.scanModules({ busName, slavePosition: device.position ?? 1 })
+      const r = await scanPort.scanModules({
+        busName,
+        slavePosition: device.position ?? 1,
+        networkInterface: busInterface,
+      })
       if (!r.success) {
         setScanError(r.error ?? 'Scan failed.')
         return
@@ -202,7 +212,7 @@ export const ModulesTab = ({
     } finally {
       setIsScanning(false)
     }
-  }, [scanPort, busName, device.position])
+  }, [scanPort, busName, device.position, busInterface])
 
   const handleSelectScannedSlot = useCallback((slot: number, selected: boolean) => {
     setSelectedScannedSlots((prev) => {

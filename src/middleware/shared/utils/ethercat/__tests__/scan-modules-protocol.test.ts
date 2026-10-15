@@ -30,6 +30,17 @@ describe('scan-modules-protocol', () => {
         slave_position: 3,
       })
     })
+
+    it('adds the bus interface so a bus not uploaded yet can be scanned', () => {
+      expect(buildScanModulesRequestBody({ busName: 'b', slavePosition: 1, networkInterface: 'eth1' })).toEqual({
+        bus_name: 'b',
+        slave_position: 1,
+        interface: 'eth1',
+      })
+      expect(buildScanModulesRequestBody({ busName: 'b', slavePosition: 1, networkInterface: '' })).not.toHaveProperty(
+        'interface',
+      )
+    })
   })
 
   describe('parseScanModulesResponseBody', () => {

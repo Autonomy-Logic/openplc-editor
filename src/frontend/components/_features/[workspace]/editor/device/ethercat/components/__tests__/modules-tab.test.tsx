@@ -104,6 +104,7 @@ function setup(options: {
   slots?: ESISlotsSpec
   scan?: ScanResponse['modules']
   deviceLoad?: Promise<{ success: true; device: ESIDevice }>
+  networkInterface?: string
 }) {
   const slots = options.slots ?? spec()
   const esi = stubPort<EsiPort>({
@@ -113,9 +114,10 @@ function setup(options: {
       return Promise.resolve(found ? { success: true, module: found } : { success: false, error: 'none' })
     },
   })
-  const ethercatScan = stubPort<EtherCATScanPort>({
-    scanModules: () => Promise.resolve({ success: true, scan: { slavePosition: 1, modules: options.scan ?? [] } }),
-  })
+  const scanModules = jest.fn<ReturnType<EtherCATScanPort['scanModules']>, Parameters<EtherCATScanPort['scanModules']>>(
+    () => Promise.resolve({ success: true, scan: { slavePosition: 1, modules: options.scan ?? [] } }),
+  )
+  const ethercatScan = stubPort<EtherCATScanPort>({ scanModules })
   const ports: PlatformPorts = {
     compiler: stubPort(),
     runtime: stubPort(),
@@ -136,6 +138,33 @@ function setup(options: {
     capabilities: WEB_CAPABILITIES,
   }
   const onUpdateModules = jest.fn<void, [ConfiguredEtherCATModule[]]>()
+  const store = createTestStore()
+  if (options.networkInterface !== undefined) {
+    store.getState().remoteDeviceActions.create({ name: 'Bus', protocol: 'ethercat' })
+    const { project } = store.getState()
+    store.getState().projectActions.setProject({
+      ...project,
+      data: {
+        ...project.data,
+        remoteDevices: (project.data.remoteDevices ?? []).map((d) =>
+          d.name === 'Bus'
+            ? {
+                ...d,
+                ethercatConfig: {
+                  ...d.ethercatConfig,
+                  devices: d.ethercatConfig?.devices ?? [],
+                  masterConfig: {
+                    enabled: true,
+                    networkInterface: options.networkInterface ?? '',
+                    cycleTimeUs: 1000,
+                  },
+                },
+              }
+            : d,
+        ),
+      },
+    })
+  }
   render(
     <ModulesTab
       device={coupler(options.modules)}
@@ -144,9 +173,9 @@ function setup(options: {
       onUpdateModules={onUpdateModules}
       externalUsedAddresses={new Set()}
     />,
-    { wrapper: createStoreWrapper(createTestStore(), ports) },
+    { wrapper: createStoreWrapper(store, ports) },
   )
-  return { onUpdateModules }
+  return { onUpdateModules, scanModules }
 }
 
 const button = (label: string) => screen.getByRole('button', { name: label })
@@ -233,5 +262,13 @@ describe('ModulesTab', () => {
       ['a', 2],
       ['b', 1],
     ])
+  })
+
+  it('scans with the bus network interface so a bus not uploaded yet can be scanned', async () => {
+    const { scanModules } = setup({ scan: [], networkInterface: 'eth1' })
+    await waitFor(() => expect(button('Add Module')).toHaveProperty('disabled', false))
+    fireEvent.click(button('Scan'))
+    await waitFor(() => expect(scanModules).toHaveBeenCalled())
+    expect(scanModules.mock.calls[0]?.[0]).toEqual({ busName: 'Bus', slavePosition: 1, networkInterface: 'eth1' })
   })
 })

@@ -16,6 +16,7 @@ import type { Result } from '../../ports/types'
 export type ScanModulesRequestBody = {
   bus_name: string
   slave_position: number
+  interface?: string
 }
 
 /** Shape returned by the runtime's `/api/discovery/ethercat/scan-modules`. */
@@ -35,7 +36,9 @@ export interface ScanModulesHttpResponse {
 }
 
 export function buildScanModulesRequestBody(req: ScanRequest): ScanModulesRequestBody {
-  return { bus_name: req.busName, slave_position: req.slavePosition }
+  const body: ScanModulesRequestBody = { bus_name: req.busName, slave_position: req.slavePosition }
+  if (req.networkInterface !== undefined && req.networkInterface !== '') body.interface = req.networkInterface
+  return body
 }
 
 /**

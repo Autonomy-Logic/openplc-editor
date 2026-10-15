@@ -3227,12 +3227,13 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATScanModules = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    scanRequest: { busName: string; slavePosition: number; timeout_ms?: number },
+    scanRequest: { busName: string; slavePosition: number; networkInterface?: string; timeout_ms?: number },
   ): Promise<{ success: boolean; data?: unknown; error?: string }> => {
     try {
       const postData = JSON.stringify({
         bus_name: scanRequest.busName,
         slave_position: scanRequest.slavePosition,
+        ...(scanRequest.networkInterface ? { interface: scanRequest.networkInterface } : {}),
       })
       const scanTimeout = (scanRequest.timeout_ms || 5000) + 10000
 

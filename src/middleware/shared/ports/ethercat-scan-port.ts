@@ -12,6 +12,8 @@ import type { Result } from './types'
 export interface ScanRequest {
   busName: string
   slavePosition: number
+  /** The bus's network interface; the runtime scans through it when the bus is not uploaded yet. */
+  networkInterface?: string
 }
 
 export interface ScanResponse {
