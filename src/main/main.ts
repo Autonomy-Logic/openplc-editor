@@ -34,7 +34,7 @@ import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { createQuitCoordinator } from './modules/lifecycle/quit-coordinator'
 import { store } from './modules/store'
-import { createVendorDocumentHandler } from './modules/vendor-document/serve'
+import { createVendorDocumentHandler, leavesVendorDocument } from './modules/vendor-document/serve'
 
 enableMapSet()
 
@@ -336,6 +336,10 @@ const createMainWindow = async () => {
   if (isDebug) {
     mainWindow.webContents.openDevTools()
   }
+
+  mainWindow.webContents.on('will-frame-navigate', (details) => {
+    if (!details.isMainFrame && leavesVendorDocument(details.frame?.url, details.url)) details.preventDefault()
+  })
 
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {

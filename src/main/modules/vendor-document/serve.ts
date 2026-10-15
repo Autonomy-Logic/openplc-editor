@@ -8,9 +8,10 @@ import { readFile, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 
 import { assertPathContained } from '../../../backend/editor/utils/path-containment'
+import { VENDOR_DOCUMENT_SCHEME } from '../../../middleware/shared/vendor-document/document-url'
 
 export const VENDOR_DOCUMENT_CSP =
-  "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; worker-src 'self' blob:; connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:"
+  "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; worker-src 'self' blob:; connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; form-action 'none'"
 
 const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -30,6 +31,22 @@ export interface RegisteredPackage {
 
 export interface VendorDocumentHandlerDeps {
   listPackages(): RegisteredPackage[]
+}
+
+function parseUrl(value: string | undefined): URL | null {
+  try {
+    return value ? new URL(value) : null
+  } catch {
+    return null
+  }
+}
+
+/** True when a frame showing a package document tries to navigate outside that package; CSP cannot block this. */
+export function leavesVendorDocument(fromUrl: string | undefined, toUrl: string): boolean {
+  const from = parseUrl(fromUrl)
+  if (from?.protocol !== `${VENDOR_DOCUMENT_SCHEME}:`) return false
+  const to = parseUrl(toUrl)
+  return to?.protocol !== from.protocol || to.host !== from.host
 }
 
 function notFound(): Response {
@@ -69,7 +86,8 @@ async function resolveContainedFile(packageDir: string, relPath: string): Promis
 
 export function createVendorDocumentHandler(deps: VendorDocumentHandlerDeps): (request: Request) => Promise<Response> {
   return async (request) => {
-    if (request.method !== 'GET') return new Response(null, { status: 405 })
+    if (request.method !== 'GET')
+      return new Response(null, { status: 405, headers: { 'Content-Security-Policy': VENDOR_DOCUMENT_CSP } })
 
     const url = new URL(request.url)
     // The vendor bundle probes its dev server here; a 404 keeps it from reloading.

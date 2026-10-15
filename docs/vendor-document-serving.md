@@ -36,8 +36,14 @@ vpp-doc://<packageId>/<path inside the package>
 
   ```
   default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; worker-src 'self' blob:;
-  connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:
+  connect-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;
+  form-action 'none'
   ```
+
+- A frame showing a package document cannot navigate outside its package: the main window's
+  `will-frame-navigate` handler cancels it (`leavesVendorDocument` in `serve.ts`). CSP has no directive
+  for a frame navigating itself, so this is the only guard against sending data out that way. In a
+  browser host no page can cancel that navigation; only the served CSP applies there.
 
 ## The iframe sandbox
 

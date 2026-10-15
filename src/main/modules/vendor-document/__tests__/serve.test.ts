@@ -7,7 +7,12 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { createVendorDocumentHandler, type RegisteredPackage, VENDOR_DOCUMENT_CSP } from '../serve'
+import {
+  createVendorDocumentHandler,
+  leavesVendorDocument,
+  type RegisteredPackage,
+  VENDOR_DOCUMENT_CSP,
+} from '../serve'
 
 describe('createVendorDocumentHandler', () => {
   let root: string
@@ -115,7 +120,35 @@ describe('createVendorDocumentHandler', () => {
     expect((await get('vpp-doc://com.vendor.pkg/configurator/missing.js')).status).toBe(404)
   })
 
-  it('refuses methods other than GET', async () => {
-    expect((await get('vpp-doc://com.vendor.pkg/configurator/index.html', 'POST')).status).toBe(405)
+  it('refuses methods other than GET, still under the CSP', async () => {
+    const res = await get('vpp-doc://com.vendor.pkg/configurator/index.html', 'POST')
+    expect(res.status).toBe(405)
+    expect(res.headers.get('Content-Security-Policy')).toBe(VENDOR_DOCUMENT_CSP)
   })
+
+  it('forbids form submissions anywhere', () => {
+    expect(VENDOR_DOCUMENT_CSP).toContain("form-action 'none'")
+  })
+})
+
+describe('leavesVendorDocument', () => {
+  it.each([['https://example.com/?d=1'], ['vpp-doc://com.other.pkg/index.html'], ['file:///etc/hosts'], ['not a url']])(
+    'blocks a package document navigating to %s',
+    (to) => {
+      expect(leavesVendorDocument('vpp-doc://com.vendor.pkg/configurator/index.html', to)).toBe(true)
+    },
+  )
+
+  it('lets a package document navigate inside its own package', () => {
+    expect(
+      leavesVendorDocument('vpp-doc://com.vendor.pkg/configurator/index.html', 'vpp-doc://com.vendor.pkg/other.html'),
+    ).toBe(false)
+  })
+
+  it.each([[undefined], ['file:///app/index.html'], ['https://example.com/']])(
+    'leaves frames that do not show a package document alone (%s)',
+    (from) => {
+      expect(leavesVendorDocument(from, 'https://example.com/next')).toBe(false)
+    },
+  )
 })
