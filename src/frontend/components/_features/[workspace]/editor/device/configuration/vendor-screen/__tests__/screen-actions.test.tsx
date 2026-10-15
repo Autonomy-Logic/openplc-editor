@@ -331,6 +331,38 @@ describe('VppScreenActions module detection', () => {
     )
     expect(reached).toBe(false)
   })
+
+  it('shows an error and frees the button when the transport rejects', async () => {
+    const send = recorder(() => Promise.reject(new Error('Connection lost.')))
+    renderDetect(send, { connected: true, discoverySupported: true, onMappedResult: () => null })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-Detect Modules' }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('vpp-action-result-detect_modules').textContent).toContain('Connection lost.'),
+    )
+    expect(screen.getByRole('button', { name: 'Auto-Detect Modules' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('shows an error and frees the button when applying the answer throws', async () => {
+    const send = recorder(() => Promise.resolve<PluginCommandOutcome>({ ok: true, data: { modules: [] } }))
+    renderDetect(send, {
+      connected: true,
+      discoverySupported: true,
+      onMappedResult: () => {
+        throw new Error('Could not apply the detected modules.')
+      },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-Detect Modules' }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('vpp-action-result-detect_modules').textContent).toContain(
+        'Could not apply the detected modules.',
+      ),
+    )
+    expect(screen.getByRole('button', { name: 'Auto-Detect Modules' }).hasAttribute('disabled')).toBe(false)
+  })
 })
 
 describe('VppScreenActions confirmation before sending', () => {

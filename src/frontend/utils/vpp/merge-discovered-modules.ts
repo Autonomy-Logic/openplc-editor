@@ -64,6 +64,7 @@ export function parseDiscoveredModules(
   modules.sort((a, b) => a.slot - b.slot)
   for (let i = 0; i < modules.length; i++) {
     if (i > 0 && modules[i].slot === modules[i - 1].slot) return { ok: false, error: UNREADABLE }
+    // Slot numbers count fixed slots too, so a dense answer starts at slot 1 even when that slot is built in.
     if (options.dense && modules[i].slot !== i + 1) {
       return {
         ok: false,

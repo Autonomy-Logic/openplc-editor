@@ -28,6 +28,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  *     decides, not the status code.
  */
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error && err.message ? err.message : 'The command failed.'
+}
+
 type ActionState = { status: 'idle' } | { status: 'running' } | { status: 'done'; outcome: PluginCommandOutcome }
 
 export interface VppScreenActionsProps {
@@ -100,15 +104,25 @@ function VppScreenActions({
       tickets.current[action.id] = ticket
       setState((current) => ({ ...current, [action.id]: { status: 'running' } }))
 
-      const outcome = await runtime.sendPluginCommand({
-        plugin: action.plugin,
-        command: action.command,
-        params: action.params,
-      })
+      let outcome: PluginCommandOutcome
+      try {
+        outcome = await runtime.sendPluginCommand({
+          plugin: action.plugin,
+          command: action.command,
+          params: action.params,
+        })
+      } catch (err) {
+        outcome = { ok: false, error: errorMessage(err) }
+      }
 
       if (tickets.current[action.id] !== ticket) return
       if (outcome.ok && action.resultMapping && onMappedResult) {
-        const error = onMappedResult(action, outcome.data)
+        let error: string | null
+        try {
+          error = onMappedResult(action, outcome.data)
+        } catch (err) {
+          error = errorMessage(err)
+        }
         setState((current) => ({
           ...current,
           [action.id]: error === null ? { status: 'idle' } : { status: 'done', outcome: { ok: false, error } },
