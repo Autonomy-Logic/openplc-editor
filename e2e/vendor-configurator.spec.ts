@@ -125,6 +125,7 @@ async function launch({ userData }: Paths): Promise<{ app: ElectronApplication; 
     }
     await new Promise((r) => setTimeout(r, 500))
   }
+  await shutdown(app)
   throw new Error('main window never appeared')
 }
 
@@ -156,8 +157,47 @@ async function openConfigurator(page: Page): Promise<FrameLocator> {
   return frame
 }
 
+const SANDBOX_PROBES = [
+  'parent-document',
+  'top-location',
+  'local-storage',
+  'parent-bridge',
+  'own-bridge',
+  'popup',
+  'remote-fetch',
+]
+
+/** Records and cancels every request to the probe host, from any frame; nothing may reach it. */
+async function recordProbeHostRequests(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ session }) => {
+    const seen: string[] = []
+    Reflect.set(globalThis, '__probeHostRequests', seen)
+    session.defaultSession.webRequest.onBeforeRequest({ urls: ['*://example.com/*'] }, (details, callback) => {
+      seen.push(`${details.resourceType} ${details.url}`)
+      callback({ cancel: true })
+    })
+  })
+  // Control: a request the recorder must see, so an empty list later means nothing was sent.
+  await app.evaluate(({ session }) =>
+    session.defaultSession.fetch('https://example.com/recorder-control').catch(() => null),
+  )
+  expect(await probeHostRequests(app), 'control: the recorder sees requests').toEqual([
+    expect.stringContaining('https://example.com/recorder-control'),
+  ])
+  await app.evaluate(() => {
+    const seen: unknown = Reflect.get(globalThis, '__probeHostRequests')
+    if (Array.isArray(seen)) seen.length = 0
+  })
+}
+
+const probeHostRequests = (app: ElectronApplication): Promise<unknown> =>
+  app.evaluate(() => Reflect.get(globalThis, '__probeHostRequests'))
+
 const readConfiguration = (paths: Paths): string =>
   readFileSync(join(paths.fixture, 'devices', 'configuration.json'), 'utf-8')
+
+// The tests share one bundle directory, which `beforeAll` rebuilds.
+test.describe.configure({ mode: 'serial' })
 
 test.beforeAll(async () => {
   test.setTimeout(120000)
@@ -224,6 +264,7 @@ test('the sandboxed guest reaches nothing of the host', async () => {
 
   const { app, page } = await launch(paths)
   try {
+    await recordProbeHostRequests(app)
     const frame = await openConfigurator(page)
     const html = frame.locator('html')
     await expect(html).toHaveAttribute('data-sandbox-probes', /.+/, { timeout: 15000 })
@@ -235,9 +276,16 @@ test('the sandboxed guest reaches nothing of the host', async () => {
       blocked: false,
       detail: 'object',
     })
-    for (const name of ['parent-document', 'top-location', 'local-storage', 'parent-bridge', 'remote-fetch', 'popup']) {
-      expect(byName.get(name), `${name} must be blocked`).toMatchObject({ blocked: true })
+    for (const name of SANDBOX_PROBES) {
+      expect(byName.get(name), `${name} must be blocked: ${byName.get(name)?.detail ?? 'not run'}`).toMatchObject({
+        blocked: true,
+      })
     }
+    await expect(html, 'the guest cannot navigate its frame away').toHaveAttribute('data-navigation-probe', 'stayed', {
+      timeout: 15000,
+    })
+    expect(await probeHostRequests(app), 'no form, child frame or navigation reached the probe host').toEqual([])
+    await expect(page.locator('iframe[title="I/O Configurator"]')).toHaveAttribute('src', /^vpp-doc:/)
     expect(app.windows().filter((w) => w.url() === 'about:blank')).toHaveLength(0)
   } finally {
     await shutdown(app)
