@@ -18,13 +18,14 @@
  */
 
 import {
+  ALL_ADDRESS_PRODUCERS_ACTIVE,
   ARDUINO_CLI_CAPABILITIES,
   DEFAULT_OPCUA_PROFILE,
   DEFAULT_S7_PROFILE,
   RUNTIME_V4_CAPABILITIES,
   SIMULATOR_CAPABILITIES,
 } from './presets'
-import type { OpcUaTargetProfile, S7TargetProfile, TargetCapabilities } from './types'
+import type { AddressProducerCapabilities, OpcUaTargetProfile, S7TargetProfile, TargetCapabilities } from './types'
 
 /** Minimal subset of BoardInfo the resolver consumes. Loosely typed
  *  so callers don't have to pin the full interface from middleware. */
@@ -145,9 +146,16 @@ function resolveOpcUaProfile(declared: Partial<OpcUaTargetProfile> | undefined):
  * only what it raises. A flat merge suffices: unlike OPC-UA there is no nested
  * `hw` block, because classic S7 has no crypto to accelerate.
  */
-function resolveS7Profile(declared: Partial<S7TargetProfile> | undefined): S7TargetProfile {
-  if (!declared) return DEFAULT_S7_PROFILE
-  return { ...DEFAULT_S7_PROFILE, ...declared }
+/** The preset's own profile is the floor, not the microcontroller's: Runtime v4
+ *  holds 64 areas and addresses every buffer, and answering it with the
+ *  bare-metal eight sized a v4 project short of what its plugin serves. */
+function resolveS7Profile(
+  declared: Partial<S7TargetProfile> | undefined,
+  base: S7TargetProfile | undefined,
+): S7TargetProfile {
+  const floor = base ?? DEFAULT_S7_PROFILE
+  if (!declared) return floor
+  return { ...floor, ...declared }
 }
 
 export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined): TargetCapabilities {
@@ -170,8 +178,60 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
   }
 
   if (merged.s7Server) {
-    merged.s7 = resolveS7Profile(declared?.s7)
+    merged.s7 = resolveS7Profile(declared?.s7, base.s7)
   }
 
   return merged
+}
+
+/** The four fields that say a producer is active. A block naming none of them
+ *  has not spoken about producers, whatever else it declares. */
+const ADDRESS_PRODUCER_KEYS = ['pinMapping', 'vppIo', 'modbusTcpRemote', 'ethercat'] as const
+
+/**
+ * True when nothing in the board info says which producers are active.
+ *
+ * A capability block counts only when it names a producer. One carrying just
+ * `opcuaServer` says nothing here, and reading it as authoritative resolved
+ * every producer to false — which is the all-false block this resolver exists
+ * to avoid, not a declaration.
+ *
+ * The compiler path is derived from `inferFromCompiler` rather than by listing
+ * the compilers again: that function already owns which strings it recognises
+ * and answers `EMPTY_CAPABILITIES` — the very object, so reference equality
+ * holds — for the ones it does not.
+ */
+function saysNothingAboutProducers(boardInfo: BoardInfoLike | undefined): boolean {
+  if (!boardInfo) return true
+  const declared = boardInfo.capabilities
+  if (declared && ADDRESS_PRODUCER_KEYS.some((key) => declared[key] !== undefined)) return false
+  return inferFromCompiler(boardInfo) === EMPTY_CAPABILITIES
+}
+
+/**
+ * Which producers claim IEC addresses — the answer for ADDRESS SPACE, never
+ * for UI or feature gating.
+ *
+ * The difference from `resolveTargetCapabilities` is what happens when the
+ * target says nothing. There, silence has to resolve to `EMPTY_CAPABILITIES`,
+ * because the wrong answer for gating is offering an affordance the target
+ * cannot back. Here that same answer is actively harmful: an all-false block
+ * is indistinguishable from "this target supports no producers", so every
+ * consumer drops out. In the store that froze addresses in place and reported
+ * success; in the compile-time image sizer it would size every area
+ * to zero and then refuse the build for want of a producer.
+ *
+ * So silence answers `ALL_ADDRESS_PRODUCERS_ACTIVE` instead. Permissive is the
+ * safe direction in both callers: the worst case is an address space sized or
+ * compacted for a producer the eventual target turns out not to support, while
+ * the strict reading refuses work that is fine.
+ *
+ * Silence means a board that did not resolve at all (not in the catalogue: its
+ * VPP package is not installed, the project came from another machine, or the
+ * catalogue has not loaded yet) or an entry carrying neither a capability
+ * block nor a recognised `compiler`.
+ */
+export function resolveAddressProducerCapabilities(boardInfo: BoardInfoLike | undefined): AddressProducerCapabilities {
+  if (saysNothingAboutProducers(boardInfo)) return ALL_ADDRESS_PRODUCERS_ACTIVE
+  return resolveTargetCapabilities(boardInfo)
 }
