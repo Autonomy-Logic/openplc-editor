@@ -86,6 +86,13 @@
     ],
     "artifactName": "${productName}_${version}.${ext}"
   },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": false,
+    "license": "LICENSE",
+    "runAfterFinish": true
+  },
   "linux": {
     "extraResources": [
       {

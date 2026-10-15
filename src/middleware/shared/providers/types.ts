@@ -1,5 +1,6 @@
 import type { AcceleratorPort } from '../ports/accelerator-port'
 import type { AIPort } from '../ports/ai-port'
+import type { AppUpdatePort } from '../ports/app-update-port'
 import type { CompilerPort } from '../ports/compiler-port'
 import type { DebuggerPort } from '../ports/debugger-port'
 import type { DevicePort } from '../ports/device-port'
@@ -42,6 +43,8 @@ export interface PlatformPorts {
   // Gate on `capabilities.hasEdgeAccount`, not on presence: autonomy-node has no Edge account API.
   edgeAccount?: EdgeAccountPort
   editSession?: EditSessionPort
+  // Desktop only: the notice that a newer editor is out. Absent on web, which is deployed rather than installed.
+  appUpdate?: AppUpdatePort
   // Required when `capabilities.hasStLSP` is true.
   stlibSource?: StlibSourcePort
 }
