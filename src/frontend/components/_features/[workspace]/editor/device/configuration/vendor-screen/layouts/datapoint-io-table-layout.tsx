@@ -63,7 +63,8 @@ function AliasInputCell({
   )
 }
 
-const HEADER_CELL = 'px-3 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'
+const HEADER_CELL =
+  'sticky top-10 z-10 bg-white px-3 py-1.5 dark:bg-neutral-950 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'
 
 /**
  * Read-only view of the station an embedded configurator reports: modules from
@@ -125,16 +126,22 @@ function DatapointIoTableLayout() {
   }
 
   return (
-    <div className='flex flex-col gap-3'>
+    // Scrolls on its own so the configurator above stays in view.
+    <div
+      role='region'
+      aria-label='I/O Mapping channels'
+      tabIndex={0}
+      className='flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto'
+    >
       {modules.map((module) => {
         const channels = entries.flatMap((entry, index) => (entry.slot === module.slot ? [{ entry, index }] : []))
         return (
           <section
             key={module.guid}
             aria-label={`Slot ${module.slot} ${module.instanceName}`}
-            className='overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700'
+            className='rounded-lg border border-neutral-200 dark:border-neutral-700'
           >
-            <header className='flex items-center gap-3 bg-neutral-50 px-4 py-2.5 dark:bg-neutral-900'>
+            <header className='sticky top-0 z-20 flex h-10 items-center gap-3 rounded-t-lg bg-neutral-50 px-4 dark:bg-neutral-900'>
               <span className='font-caption text-cp-sm font-semibold text-neutral-950 dark:text-white'>
                 Slot {module.slot}
               </span>

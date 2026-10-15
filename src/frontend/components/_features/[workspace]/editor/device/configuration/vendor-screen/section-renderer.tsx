@@ -61,15 +61,21 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
     )
   }
 
-  // `module-slots` is a master-detail layout and `vendor-document` an embedded
-  // page; both own the full visible area. Other layouts are content-sized and
-  // let the page-level container scroll if necessary.
-  const isFillSection = section.layout === 'module-slots' || section.layout === 'vendor-document'
-  // The iframe has no intrinsic height, so a shrinkable section would let the sections below overlap it.
-  const canShrink = section.layout === 'module-slots'
+  // `module-slots` and `datapoint-io-table` fill the visible area and scroll inside themselves;
+  // `vendor-document` keeps its fixed height. Other layouts are content-sized and let the
+  // page-level container scroll if necessary. An explicit min height replaces the default one,
+  // which is the full content height and would make the I/O Mapping grow instead of scroll.
+  const sizing =
+    section.layout === 'module-slots'
+      ? 'min-h-0 flex-1'
+      : section.layout === 'datapoint-io-table'
+        ? 'min-h-[360px] flex-1'
+        : section.layout === 'vendor-document'
+          ? 'shrink-0'
+          : ''
 
   return (
-    <div className={`flex flex-col gap-3 ${isFillSection ? 'flex-1' : ''} ${canShrink ? 'min-h-0' : ''}`}>
+    <div className={`flex flex-col gap-3 ${sizing}`}>
       <div
         className={`flex items-center justify-between ${section.collapsible ? 'cursor-pointer' : ''}`}
         onClick={() => section.collapsible && setCollapsed(!collapsed)}

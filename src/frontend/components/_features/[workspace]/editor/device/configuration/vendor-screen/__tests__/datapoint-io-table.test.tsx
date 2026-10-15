@@ -6,7 +6,7 @@ import type { DevicePort } from '@root/middleware/shared/ports/device-port'
 import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { BoardInfo, IoMappingEntry, PLCVariable } from '@root/middleware/shared/ports/types'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 
 import { UR20_16DI_16DO } from '@root/__fixtures__/device-editor-datapoints/ur20-16di-16do'
@@ -127,6 +127,16 @@ describe('datapoint-io-table section', () => {
     expect(screen.getByRole('region', { name: `Slot 2 ${DO_MODULE.name}` })).toBeTruthy()
     expect(screen.getAllByLabelText(/^Alias of /)).toHaveLength(32)
     for (const entry of ioEntries()) expect(screen.getAllByText(entry.iecAddress).length).toBeGreaterThan(0)
+  })
+
+  it('scrolls the channels in their own region, with the slot and column headers pinned', () => {
+    renderScreen()
+
+    const channels = screen.getByRole('region', { name: 'I/O Mapping channels' })
+    expect(channels.className).toContain('overflow-y-auto')
+    const slot = within(channels).getByRole('region', { name: `Slot 1 ${DI_MODULE.name}` })
+    expect(slot.querySelector('header')?.className).toContain('sticky')
+    for (const header of within(slot).getAllByRole('columnheader')) expect(header.className).toContain('sticky')
   })
 
   it.each([

@@ -96,7 +96,7 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
   if (!url) return <Notice>The I/O Configurator is not available in this host yet.</Notice>
 
   return (
-    <div className='flex min-h-0 flex-1 flex-col gap-2'>
+    <div className='flex flex-col gap-2'>
       {status.kind === 'booting' && <Notice>Loading the I/O Configurator…</Notice>}
       {status.kind === 'failed' && (
         <p role='alert' className='text-sm text-red-600 dark:text-red-400'>
@@ -110,7 +110,7 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
         title='I/O Configurator'
         src={url}
         sandbox={IFRAME_SANDBOX}
-        className={`min-h-[640px] w-full flex-1 rounded-md border border-neutral-200 bg-white dark:border-neutral-800 ${status.kind === 'failed' ? 'hidden' : ''}`}
+        className={`h-[640px] w-full rounded-md border border-neutral-200 bg-white dark:border-neutral-800 ${status.kind === 'failed' ? 'hidden' : ''}`}
       />
       {unaddressable.length > 0 && (
         <Notice>{`These datapoints have no IEC address: ${unaddressable
