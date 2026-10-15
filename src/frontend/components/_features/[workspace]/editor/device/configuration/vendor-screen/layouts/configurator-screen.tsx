@@ -67,7 +67,11 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
   useEffect(() => {
     const iframe = iframeRef.current
     if (!iframe || !controller || !configuratorKey || !bundleVersion) return
-    const vendorScreenData = store.getState().deviceDefinitions.configuration.vendorScreenData
+    const { deviceDefinitions, editor, fileActions } = store.getState()
+    const vendorScreenData = deviceDefinitions.configuration.vendorScreenData
+    const tabName = editor.type === 'plc-vendor-screen' ? editor.meta.screenName : null
+    // Saved state of the tab before a pending change marked it unsaved; restored if nothing changed.
+    let savedBeforePending: boolean | null = null
     setUnaddressable([])
     const session = startConfiguratorSession({
       port: createIframeConfiguratorClient(iframe),
@@ -75,7 +79,18 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
       storedArchive: readStoredArchive(vendorScreenData?.[configuratorKey]),
       storedModuleGuids: readStoredModuleGuids(vendorScreenData?.[DEVICE_SETUP_KEY]),
       onStatus: setStatus,
+      onPending: () => {
+        const file = tabName ? fileActions.getFile({ name: tabName }).file : undefined
+        if (!tabName || !file) return
+        savedBeforePending = file.saved
+        if (file.saved) fileActions.updateFile({ name: tabName, saved: false })
+      },
+      onUnchanged: () => {
+        if (tabName && savedBeforePending) fileActions.updateFile({ name: tabName, saved: true })
+        savedBeforePending = null
+      },
       onSnapshot: (snapshot) => {
+        savedBeforePending = null
         const applied = applyConfiguratorSnapshot(store, { configuratorKey, controller, bundleVersion }, snapshot)
         setUnaddressable(applied.unaddressable)
         notifyDroppedAliases(applied.dropped)

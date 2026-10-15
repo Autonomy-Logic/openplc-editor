@@ -6,7 +6,9 @@
  * own boot calls, at no fixed step and sometimes after the call resolves, so events
  * are only taken as user changes once the guest has been quiet for `settleMs` after
  * boot. The session reports `ready` only then, so the host can hold input until edits
- * count. A change is snapshotted once the events settle.
+ * count. A change is reported as pending at once, so a host closing before the snapshot
+ * still asks to save, and is snapshotted once the events settle. A snapshot equal to the
+ * stored state is not delivered.
  */
 
 import type { ConfiguratorPort, ConfiguratorSnapshot } from '@root/middleware/shared/ports/configurator-port'
@@ -26,6 +28,10 @@ export interface ConfiguratorSessionOptions {
   settleMs?: number
   onStatus: (status: ConfiguratorSessionStatus) => void
   onSnapshot: (snapshot: ConfiguratorSnapshot) => void
+  /** A user change arrived that no snapshot has delivered yet. */
+  onPending?: () => void
+  /** The settled snapshot equals the stored state, so nothing was delivered. */
+  onUnchanged?: () => void
   /** Errors that do not end the session: guest reports and failed snapshots. */
   onError: (message: string) => void
 }
@@ -46,7 +52,8 @@ function messageOf(error: unknown): string {
 }
 
 export function startConfiguratorSession(options: ConfiguratorSessionOptions): ConfiguratorSession {
-  const { port, controller, storedArchive, storedModuleGuids, onStatus, onSnapshot, onError } = options
+  const { port, controller, storedArchive, storedModuleGuids, onStatus, onSnapshot, onError, onPending, onUnchanged } =
+    options
   const settleMs = options.settleMs ?? DEFAULT_SETTLE_MS
 
   let disposed = false
@@ -56,6 +63,14 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
   let settleTimer: ReturnType<typeof setTimeout> | null = null
   let snapshotting = false
   let changedDuringSnapshot = false
+  let pending = false
+  let lastArchive = storedArchive
+
+  // Nothing stored and no module configured is the state a fresh project already has.
+  const isUnchanged = (snapshot: ConfiguratorSnapshot): boolean =>
+    lastArchive === null
+      ? storedModuleGuids.length === 0 && snapshot.deviceSetup.devices.length === 0
+      : snapshot.archive === lastArchive
 
   const runSnapshot = async (): Promise<void> => {
     if (snapshotting) {
@@ -68,10 +83,21 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
       const snapshot = await port.snapshot()
       if (disposed) return
       // A newer change makes this snapshot stale; the rescheduled one supersedes it.
-      if (changedDuringSnapshot) scheduleSnapshot()
-      else onSnapshot(snapshot)
+      if (changedDuringSnapshot) {
+        scheduleSnapshot()
+        return
+      }
+      pending = false
+      if (isUnchanged(snapshot)) {
+        onUnchanged?.()
+        return
+      }
+      lastArchive = snapshot.archive
+      onSnapshot(snapshot)
     } catch (error) {
-      if (!disposed) onError(messageOf(error))
+      if (disposed) return
+      onError(messageOf(error))
+      if (changedDuringSnapshot) scheduleSnapshot()
     } finally {
       snapshotting = false
     }
@@ -101,6 +127,10 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
       return
     }
     if (snapshotting) changedDuringSnapshot = true
+    if (!pending) {
+      pending = true
+      onPending?.()
+    }
     scheduleSnapshot()
   })
   const offError = port.onError((message) => {

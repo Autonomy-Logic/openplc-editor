@@ -224,7 +224,7 @@ describe('datapoint-io-table section', () => {
 
     expect(stationState()).toBe(before)
     expect(getMemoryState().toasts[0]?.title).toBe('Alias already in use')
-    expect(aliasInput(second.channelName, second.slot).value).toBe('motor_on')
+    expect(aliasInput(second.channelName, second.slot).value).toBe('')
   })
 
   it('renames every variable bound to the previous alias', () => {

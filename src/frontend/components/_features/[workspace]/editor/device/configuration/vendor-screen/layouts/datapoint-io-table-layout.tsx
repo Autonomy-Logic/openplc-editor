@@ -42,7 +42,8 @@ function AliasInputCell({
 }: {
   value: string
   label: string
-  onCommit: (next: string) => void
+  /** Returns false when the alias was refused, so the input shows the stored value again. */
+  onCommit: (next: string) => boolean
 }) {
   const [local, setLocal] = useState(value)
   useEffect(() => {
@@ -55,7 +56,7 @@ function AliasInputCell({
       value={local}
       onChange={(e) => setLocal(e.target.value)}
       onBlur={() => {
-        if (local !== value) onCommit(local)
+        if (local !== value && !onCommit(local)) setLocal(value)
       }}
       placeholder='Alias...'
       className='h-[26px] w-full rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none placeholder:text-neutral-400 focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300 dark:placeholder:text-neutral-600'
@@ -79,9 +80,9 @@ function DatapointIoTableLayout() {
   const modules = useMemo(() => readModules(storedSetup), [storedSetup])
   const entries = useMemo(() => readEntries(storedMapping), [storedMapping])
 
-  const handleAliasChange = (index: number, alias: string) => {
+  const handleAliasChange = (index: number, alias: string): boolean => {
     const target = entries[index]
-    if (!target) return
+    if (!target) return false
     const state = store.getState()
     const { configuration, pinMapping } = state.deviceDefinitions
     const pool = buildAddressPool(
@@ -99,7 +100,7 @@ function DatapointIoTableLayout() {
     if (!validation.ok) {
       const rejection = describeAliasRejection(validation, alias)
       toast({ title: rejection.title, description: rejection.description, variant: 'fail' })
-      return
+      return false
     }
 
     const oldAlias = target.alias ?? ''
@@ -115,6 +116,7 @@ function DatapointIoTableLayout() {
           : vppMemoryKey(target.moduleId ?? '', target.slot, target.channelName),
         alias,
       )
+    return true
   }
 
   if (modules.length === 0) {

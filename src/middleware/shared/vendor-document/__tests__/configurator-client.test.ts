@@ -84,7 +84,7 @@ describe('configurator client over the reference relay', () => {
     expect(scope.DeviceEditorConsumer).toBeUndefined()
 
     await client.ready()
-    await client.show()
+    await client.setController('UC20-M3000')
     await tick()
     expect(modifiedCount()).toBe(2)
   })

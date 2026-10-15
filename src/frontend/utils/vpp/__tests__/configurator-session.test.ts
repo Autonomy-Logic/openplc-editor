@@ -22,6 +22,8 @@ function createFakePort(
     loadError?: string
     readyError?: string
     lateEventsMs?: number
+    /** What the n-th snapshot returns; by default `archive-<n>` with module `g1`. */
+    snapshotResult?: (n: number) => { archive: string; guids: string[] } | Error
     bootEventsOn?: BootEventsOn
   } = {},
 ) {
@@ -71,7 +73,9 @@ function createFakePort(
       snapshots += 1
       const n = snapshots
       await snapshotGate
-      return { archive: `archive-${n}`, deviceSetup: setupOf('g1'), dataPoints: [] }
+      const result = options.snapshotResult?.(n) ?? { archive: `archive-${n}`, guids: ['g1'] }
+      if (result instanceof Error) throw result
+      return { archive: result.archive, deviceSetup: setupOf(...result.guids), dataPoints: [] }
     },
     onModified: (callback) => {
       modified.add(callback)
@@ -107,6 +111,7 @@ function start(fake: ReturnType<typeof createFakePort>, stored: { archive: strin
   const statuses: ConfiguratorSessionStatus[] = []
   const snapshots: ConfiguratorSnapshot[] = []
   const errors: string[] = []
+  const signals: string[] = []
   const session = startConfiguratorSession({
     port: fake.port,
     controller: 'UC20-M3000',
@@ -116,8 +121,10 @@ function start(fake: ReturnType<typeof createFakePort>, stored: { archive: strin
     onStatus: (status) => statuses.push(status),
     onSnapshot: (snapshot) => snapshots.push(snapshot),
     onError: (message) => errors.push(message),
+    onPending: () => signals.push('pending'),
+    onUnchanged: () => signals.push('unchanged'),
   })
-  return { session, statuses, snapshots, errors, last: () => statuses[statuses.length - 1] }
+  return { session, statuses, snapshots, errors, signals, last: () => statuses[statuses.length - 1] }
 }
 
 describe('startConfiguratorSession', () => {
@@ -196,6 +203,81 @@ describe('startConfiguratorSession', () => {
     fake.userChange()
     await vi.advanceTimersByTimeAsync(SETTLE_MS)
     expect(run.snapshots).toHaveLength(1)
+  })
+
+  it('reports a user change as pending at once, and only once until a snapshot delivers it', async () => {
+    const fake = createFakePort()
+    const run = start(fake, { archive: null, guids: [] })
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
+
+    fake.userChange()
+    fake.userChange()
+    expect(run.signals).toEqual(['pending'])
+    expect(run.snapshots).toHaveLength(0)
+
+    await vi.advanceTimersByTimeAsync(SETTLE_MS)
+    fake.userChange()
+    expect(run.snapshots).toHaveLength(1)
+    expect(run.signals).toEqual(['pending', 'pending'])
+  })
+
+  it('does not deliver a snapshot equal to the stored archive', async () => {
+    const fake = createFakePort({ loadedGuids: ['g1'], snapshotResult: () => ({ archive: 'stored', guids: ['g1'] }) })
+    const run = start(fake, { archive: 'stored', guids: ['g1'] })
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
+
+    fake.userChange()
+    await vi.advanceTimersByTimeAsync(SETTLE_MS)
+
+    expect(run.snapshots).toHaveLength(0)
+    expect(run.signals).toEqual(['pending', 'unchanged'])
+  })
+
+  it('does not deliver an empty station when nothing was stored', async () => {
+    const fake = createFakePort({ snapshotResult: () => ({ archive: 'empty', guids: [] }) })
+    const run = start(fake, { archive: null, guids: [] })
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
+
+    fake.userChange()
+    await vi.advanceTimersByTimeAsync(SETTLE_MS)
+
+    expect(run.snapshots).toHaveLength(0)
+    expect(run.signals).toEqual(['pending', 'unchanged'])
+  })
+
+  it('delivers a change back to an earlier state once a different one was delivered', async () => {
+    const results = [
+      { archive: 'one-module', guids: ['g1'] },
+      { archive: 'empty', guids: [] },
+    ]
+    const fake = createFakePort({ snapshotResult: (n) => results[n - 1] })
+    const run = start(fake, { archive: null, guids: [] })
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
+
+    fake.userChange()
+    await vi.advanceTimersByTimeAsync(SETTLE_MS)
+    fake.userChange()
+    await vi.advanceTimersByTimeAsync(SETTLE_MS)
+
+    expect(run.snapshots.map((s) => s.archive)).toEqual(['one-module', 'empty'])
+  })
+
+  it('retries after a failed snapshot when a change arrived while it ran', async () => {
+    const fake = createFakePort({
+      snapshotResult: (n) => (n === 1 ? new Error('relay timeout') : { archive: 'a', guids: ['g1'] }),
+    })
+    const run = start(fake, { archive: null, guids: [] })
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
+
+    const release = fake.holdSnapshots()
+    fake.userChange()
+    await vi.advanceTimersByTimeAsync(SETTLE_MS)
+    fake.userChange()
+    release()
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
+
+    expect(run.errors).toEqual(['relay timeout'])
+    expect(run.snapshots.map((s) => s.archive)).toEqual(['a'])
   })
 
   it('snapshots once after a burst of user changes settles', async () => {
