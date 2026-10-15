@@ -17,6 +17,9 @@ vpp-doc://<packageId>/<path inside the package>
   route next to the vPLC's archive route, only for the selected vPLC's own package and only when
   `VITE_VPP_DOCUMENT_ROUTE_ENABLED=true`. Otherwise, and always on the Node host, it returns `null`
   and the screen says the configurator is not available in this host yet.
+- Supported bundle: Weidmüller Device Editor 3.5.22 (u-OS 2.2 and later). The screen JSON records it
+  in `bundleVersion`; the relay protocol version (`RELAY_PROTOCOL_VERSION`) must match the packaged
+  `relay.js` or the screen refuses the bundle.
 
 ## What the handler guarantees
 
@@ -94,3 +97,19 @@ The I/O Mapping for a configurator-driven station is a section of layout `datapo
   `actions` on the section are ignored. The station is changed only in the configurator.
 - The Alias cell is the one write: `validateAliasEdit` gates it, `renameAlias` cascades a rename onto
   bound variables, and the session alias memory is keyed by `datapointId`.
+
+## End-to-end tests
+
+`e2e/vendor-configurator.spec.ts` (both repos) drives the embedded configurator with a fake Device
+Editor: add a module, check its channels and addresses in the I/O Mapping, set an alias, reopen and
+find it kept, and check that the sandboxed guest reaches nothing of the host.
+
+- The fake bundle and the reference relay (`src/__fixtures__/fake-device-editor/`) are bundled with
+  webpack into `relay.js` and `index.js` by `e2e/fixtures/vendor-configurator/build-package.ts`
+  (editor), next to `index.html`; `guest-device-editor.ts` also runs the sandbox probes.
+- Editor: the fixture package is unsigned, so the spec replaces the `packages:verify-signatures`
+  handler with a no-op after the bridge registers it. Signature checking in the app is unchanged.
+- Web: the browser accepts only packages signed with the production key, so the spec needs the signed
+  e2e package built by openplc-packages, passed as `E2E_VPP_FIXTURE=<path to .vpp>`, and skips without
+  it. It mocks the Edge routes with `page.route` and needs the dev server started with
+  `VITE_DEV_LOCAL_PROJECT=1 VITE_VPP_DOCUMENT_ROUTE_ENABLED=true`.
