@@ -236,6 +236,43 @@ describe('ModuleSlotsLayout module auto-detection', () => {
     await waitFor(() => expect(aliases()).toEqual({ 1: 'oven_temp', 2: '' }))
   })
 
+  it('clears the alias of a replaced slot whose stored entry carries no module id', async () => {
+    store.getState().deviceActions.setVendorScreenData('io-mapping', {
+      entries: [1, 2].map((slot) => ({
+        slot,
+        moduleName: '',
+        channelName: 'CH1',
+        channelType: 'analogInput',
+        dataType: 'INT',
+        iecAddress: '',
+        alias: slot === 1 ? 'oven_temp' : 'tank_level',
+      })),
+    })
+    renderLayout(FOUND)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-Detect Modules' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Replace configuration' }))
+
+    await waitFor(() => expect(moduleConfig().slots?.[1]).toBe('slm-acdci-8np-rly8'))
+    await waitFor(() => expect(aliases()).toEqual({ 1: 'oven_temp', 2: '' }))
+  })
+
+  it('applies nothing when the configuration changes while the confirmation is open', async () => {
+    renderLayout(FOUND)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-Detect Modules' }))
+    const confirm = await screen.findByRole('button', { name: 'Replace configuration' })
+    store.getState().deviceActions.setVendorScreenData('module-configuration', {
+      slots: ['slm-thm-4', 'slm-acdci-8np-rly8', 'slm-thm-4'],
+      slotsConfig: { '1': THERMOCOUPLE },
+    })
+    const changed = JSON.stringify(moduleConfig())
+    fireEvent.click(confirm)
+
+    await waitFor(() => expect(screen.queryByTestId('vpp-discovery-changes')).toBeNull())
+    expect(JSON.stringify(moduleConfig())).toBe(changed)
+  })
+
   it('clears the aliases of a slot whose module is changed by hand, as auto-detect does', async () => {
     seedAliases()
     renderLayout(FOUND)

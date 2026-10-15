@@ -190,6 +190,43 @@ describe('VppScreenActions', () => {
     await waitFor(() => expect(screen.queryByTestId('vpp-action-result-discover')).toBeNull())
   })
 
+  it('drops the previous device answer even when the new device is asked again before it arrives', async () => {
+    let answerA: (outcome: PluginCommandOutcome) => void = () => {}
+    const pending = [
+      new Promise<PluginCommandOutcome>((resolve) => {
+        answerA = resolve
+      }),
+      new Promise<PluginCommandOutcome>(() => {}),
+    ]
+    let call = 0
+    const send = recorder(() => pending[call++])
+    const view = (deviceKey: string) => (
+      <PlatformProvider
+        ports={{ runtime: stubPort({ sendPluginCommand: send }), capabilities: stubPort() } as unknown as PlatformPorts}
+      >
+        <VppScreenActions
+          actions={[{ id: 'discover', label: 'Discover modules', type: 'plugin-command', command: 'discover' }]}
+          defaultPlugin='synergy'
+          deviceKey={deviceKey}
+        />
+      </PlatformProvider>
+    )
+    const { rerender } = render(view('device-a'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discover modules' }))
+    rerender(view('device-b'))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Discover modules' }).hasAttribute('disabled')).toBe(false),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Discover modules' }))
+    expect(send.calls).toHaveLength(2)
+
+    answerA({ ok: true, data: { modules: ['FROM_A'] } })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(screen.queryByTestId('vpp-action-result-discover')).toBeNull()
+  })
+
   it('says so when the platform has no transport to the device', async () => {
     renderActions(undefined)
 

@@ -621,13 +621,33 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
 
   const applyDiscovery = () => {
     if (!discovery) return
+    const shown = discovery.plan
     const plan = planDiscovery(discovery.detected)
     setDiscovery(null)
     if (!plan.ok) {
       toast({ title: 'Modules not applied', description: plan.error, variant: 'fail' })
       return
     }
+    // The dialog showed one plan; a different one now means the project changed under it.
+    if (
+      JSON.stringify([plan.slots, plan.slotsConfig, plan.changes]) !==
+      JSON.stringify([shown.slots, shown.slotsConfig, shown.changes])
+    ) {
+      toast({
+        title: 'Modules not applied',
+        description: 'The module configuration changed while confirmation was open. Run detection again.',
+        variant: 'fail',
+      })
+      return
+    }
     const vsd = store.getState().deviceDefinitions.configuration.vendorScreenData
+    const replaced = new Set(plan.changes.filter((change) => change.kind === 'replace').map((change) => change.slot))
+    if (replaced.size > 0) {
+      const entries = (vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined)?.entries ?? []
+      setVendorScreenData('io-mapping', {
+        entries: entries.map((entry) => (replaced.has(entry.slot) ? { ...entry, alias: '' } : entry)),
+      })
+    }
     const live = (vsd?.[persistenceKey] as ModuleConfigState | undefined) ?? {}
     writeModuleConfig({ ...live, slots: plan.slots, slotsConfig: plan.slotsConfig })
     setSelectedSlot(0)

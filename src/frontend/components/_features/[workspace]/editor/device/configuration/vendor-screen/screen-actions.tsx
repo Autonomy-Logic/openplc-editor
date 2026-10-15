@@ -81,7 +81,8 @@ function VppScreenActions({
   // showing them next to a new device is worse than showing nothing.
   useEffect(() => {
     setState({})
-    tickets.current = {}
+    // Bump rather than reset, so a run started on the new device never reuses a pending run's ticket.
+    for (const id of Object.keys(tickets.current)) tickets.current[id] += 1
     setPendingConfirm(null)
   }, [deviceKey])
 
