@@ -5,7 +5,8 @@
  * loaded device setup with the stored one. The guest also reports `modified` for its
  * own boot calls, at no fixed step and sometimes after the call resolves, so events
  * are only taken as user changes once the guest has been quiet for `settleMs` after
- * boot. A change is snapshotted once the events settle.
+ * boot. The session reports `ready` only then, so the host can hold input until edits
+ * count. A change is snapshotted once the events settle.
  */
 
 import type { ConfiguratorPort, ConfiguratorSnapshot } from '@root/middleware/shared/ports/configurator-port'
@@ -89,6 +90,7 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
     quietTimer = setTimeout(() => {
       quietTimer = null
       accepting = true
+      onStatus({ kind: 'ready' })
     }, settleMs)
   }
 
@@ -127,7 +129,6 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
       if (disposed) return
       booted = true
       waitForQuiet()
-      onStatus({ kind: 'ready' })
     } catch (error) {
       if (!disposed) onStatus({ kind: 'failed', message: messageOf(error) })
     }

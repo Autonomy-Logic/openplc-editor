@@ -132,10 +132,23 @@ describe('startConfiguratorSession', () => {
   it('boots in order and restores the stored archive', async () => {
     const fake = createFakePort({ loadedGuids: ['g1', 'g2'] })
     const run = start(fake, { archive: 'stored', guids: ['g1', 'g2'] })
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(SETTLE_MS)
 
     expect(fake.calls).toEqual(['ready', 'setController:UC20-M3000', 'show', 'load:stored', 'getDeviceSetup'])
     expect(run.statuses).toEqual([{ kind: 'booting' }, { kind: 'ready' }])
+  })
+
+  it('reports ready only once the guest has been quiet after boot, when edits start to count', async () => {
+    const fake = createFakePort()
+    const run = start(fake, { archive: null, guids: [] })
+    await vi.advanceTimersByTimeAsync(SETTLE_MS - 1)
+    expect(run.last()).toEqual({ kind: 'booting' })
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(run.last()).toEqual({ kind: 'ready' })
+    fake.userChange()
+    await vi.advanceTimersByTimeAsync(SETTLE_MS)
+    expect(run.snapshots).toHaveLength(1)
   })
 
   it('never loads when nothing is stored', async () => {
@@ -176,10 +189,8 @@ describe('startConfiguratorSession', () => {
   it('ignores its own events even when they arrive after boot', async () => {
     const fake = createFakePort({ loadedGuids: ['g1'], lateEventsMs: SETTLE_MS / 5 })
     const run = start(fake, { archive: 'stored', guids: ['g1'] })
-    await vi.advanceTimersByTimeAsync(0)
-    expect(run.last()).toEqual({ kind: 'ready' })
-
     await vi.advanceTimersByTimeAsync(SETTLE_MS * 4)
+    expect(run.last()).toEqual({ kind: 'ready' })
     expect(run.snapshots).toHaveLength(0)
 
     fake.userChange()

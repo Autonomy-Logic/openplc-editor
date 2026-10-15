@@ -110,7 +110,7 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
         title='I/O Configurator'
         src={url}
         sandbox={IFRAME_SANDBOX}
-        className={`h-[640px] w-full rounded-md border border-neutral-200 bg-white dark:border-neutral-800 ${status.kind === 'failed' ? 'hidden' : ''}`}
+        className={`h-[640px] w-full rounded-md border border-neutral-200 bg-white dark:border-neutral-800 ${status.kind === 'failed' ? 'hidden' : ''} ${status.kind === 'booting' ? 'pointer-events-none' : ''}`}
       />
       {unaddressable.length > 0 && (
         <Notice>{`These datapoints have no IEC address: ${unaddressable
