@@ -103,13 +103,14 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
           {status.message}
         </p>
       )}
+      {/* The vendor draws the backplane at a fixed scale, about 520px tall, and never scrolls it vertically. */}
       <iframe
         key={frameKey}
         ref={iframeRef}
         title='I/O Configurator'
         src={url}
         sandbox={IFRAME_SANDBOX}
-        className={`min-h-[480px] w-full flex-1 rounded-md border border-neutral-200 bg-white dark:border-neutral-800 ${status.kind === 'failed' ? 'hidden' : ''}`}
+        className={`min-h-[640px] w-full flex-1 rounded-md border border-neutral-200 bg-white dark:border-neutral-800 ${status.kind === 'failed' ? 'hidden' : ''}`}
       />
       {unaddressable.length > 0 && (
         <Notice>{`These datapoints have no IEC address: ${unaddressable

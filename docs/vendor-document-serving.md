@@ -68,8 +68,10 @@ A VPP screen embeds the document with a section of layout `vendor-document`
   `load(stored archive)` → compare the loaded module guids with the stored `device-setup`. A mismatch
   or a rejected load fails the screen and writes nothing, so the stored archive is kept. An empty
   archive is never loaded.
-- The guest fires `modified` twice for `show` and once per `setProject`; those are counted off. Any
-  other `modified` is a user change, snapshotted once events settle, and written by
+- The guest fires `modified` for its own boot calls too: Device Editor 3.5.22 fires twice during
+  `setController` and once per `setProject`, some after the call resolves. So `modified` is ignored
+  until the guest has been quiet for the settle time after boot. After that, a `modified` is a user
+  change, snapshotted once events settle, and written by
   `applyConfiguratorSnapshot` in one store update: `configurator` `{archive, controller, bundleVersion}`
   (archive byte-for-byte), `device-setup`, and `io-mapping` derived from the datapoints with aliases
   carried over by `datapointId`.

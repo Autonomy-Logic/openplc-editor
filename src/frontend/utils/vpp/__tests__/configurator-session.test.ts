@@ -2,13 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 import type { ConfiguratorPort, ConfiguratorSnapshot } from '@root/middleware/shared/ports/configurator-port'
 import type { DeviceSetup } from '@root/middleware/shared/vendor-document/protocol'
 
-import {
-  type ConfiguratorSessionStatus,
-  LOAD_FAILED_MESSAGE,
-  LOAD_MODIFIED_EVENTS,
-  SHOW_MODIFIED_EVENTS,
-  startConfiguratorSession,
-} from '../configurator-session'
+import { type ConfiguratorSessionStatus, LOAD_FAILED_MESSAGE, startConfiguratorSession } from '../configurator-session'
 
 const SETTLE_MS = 50
 
@@ -19,10 +13,19 @@ function setupOf(...guids: string[]): DeviceSetup {
   }
 }
 
-/** A port whose guest behaves like the vendor bundle: `show` fires 2 `modified`, `setProject` 1. */
+type BootEventsOn = 'setController' | 'show'
+
+/** A port whose guest behaves like Device Editor 3.5.22: `setController` fires 2 `modified`, `setProject` 1. */
 function createFakePort(
-  options: { loadedGuids?: string[]; loadError?: string; readyError?: string; lateEventsMs?: number } = {},
+  options: {
+    loadedGuids?: string[]
+    loadError?: string
+    readyError?: string
+    lateEventsMs?: number
+    bootEventsOn?: BootEventsOn
+  } = {},
 ) {
+  const bootEventsOn = options.bootEventsOn ?? 'setController'
   const calls: string[] = []
   const modified = new Set<() => void>()
   const errors = new Set<(message: string) => void>()
@@ -45,17 +48,18 @@ function createFakePort(
     },
     setController: (id) => {
       calls.push(`setController:${id}`)
+      if (bootEventsOn === 'setController') fireOwn(2)
       return Promise.resolve()
     },
     show: () => {
       calls.push('show')
-      fireOwn(SHOW_MODIFIED_EVENTS)
+      if (bootEventsOn === 'show') fireOwn(2)
       return Promise.resolve()
     },
     load: (archive) => {
       calls.push(`load:${archive}`)
       if (options.loadError) return Promise.reject(new Error(options.loadError))
-      fireOwn(LOAD_MODIFIED_EVENTS)
+      fireOwn(1)
       return Promise.resolve()
     },
     getDeviceSetup: () => {
@@ -137,22 +141,39 @@ describe('startConfiguratorSession', () => {
   it('never loads when nothing is stored', async () => {
     const fake = createFakePort()
     const run = start(fake, { archive: null, guids: [] })
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
 
     expect(fake.calls.some((call) => call.startsWith('load'))).toBe(false)
     expect(run.last()).toEqual({ kind: 'ready' })
   })
 
-  it('does not treat its own show and setProject events as user changes', async () => {
-    const fake = createFakePort({ loadedGuids: ['g1'] })
-    const run = start(fake, { archive: 'stored', guids: ['g1'] })
-    await vi.advanceTimersByTimeAsync(SETTLE_MS * 4)
+  it.each<BootEventsOn>(['setController', 'show'])(
+    'does not treat its own boot events as user changes when they fire on %s',
+    async (bootEventsOn) => {
+      const fake = createFakePort({ loadedGuids: ['g1'], bootEventsOn })
+      const run = start(fake, { archive: 'stored', guids: ['g1'] })
+      await vi.advanceTimersByTimeAsync(SETTLE_MS * 4)
 
-    expect(fake.calls).not.toContain('snapshot')
-    expect(run.snapshots).toHaveLength(0)
-  })
+      expect(fake.calls).not.toContain('snapshot')
+      expect(run.snapshots).toHaveLength(0)
+    },
+  )
 
-  it('counts off its own events even when they arrive after boot', async () => {
+  it.each<BootEventsOn>(['setController', 'show'])(
+    'snapshots the first user change when boot events fire on %s',
+    async (bootEventsOn) => {
+      const fake = createFakePort({ bootEventsOn })
+      const run = start(fake, { archive: null, guids: [] })
+      await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
+
+      fake.userChange()
+      await vi.advanceTimersByTimeAsync(SETTLE_MS)
+
+      expect(run.snapshots).toHaveLength(1)
+    },
+  )
+
+  it('ignores its own events even when they arrive after boot', async () => {
     const fake = createFakePort({ loadedGuids: ['g1'], lateEventsMs: SETTLE_MS / 5 })
     const run = start(fake, { archive: 'stored', guids: ['g1'] })
     await vi.advanceTimersByTimeAsync(0)
@@ -169,7 +190,7 @@ describe('startConfiguratorSession', () => {
   it('snapshots once after a burst of user changes settles', async () => {
     const fake = createFakePort()
     const run = start(fake, { archive: null, guids: [] })
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
 
     fake.userChange()
     await vi.advanceTimersByTimeAsync(SETTLE_MS / 2)
@@ -184,7 +205,7 @@ describe('startConfiguratorSession', () => {
   it('discards a snapshot overtaken by a newer change and takes the settled one', async () => {
     const fake = createFakePort()
     const run = start(fake, { archive: null, guids: [] })
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
 
     const release = fake.holdSnapshots()
     fake.userChange()
@@ -235,7 +256,7 @@ describe('startConfiguratorSession', () => {
   it('reports guest errors without ending the session', async () => {
     const fake = createFakePort()
     const run = start(fake, { archive: null, guids: [] })
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
 
     fake.guestError('icon missing')
 
@@ -246,7 +267,7 @@ describe('startConfiguratorSession', () => {
   it('stops listening and disposes the port, dropping a pending snapshot', async () => {
     const fake = createFakePort()
     const run = start(fake, { archive: null, guids: [] })
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
 
     fake.userChange()
     run.session.dispose()

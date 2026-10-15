@@ -1,7 +1,7 @@
 /**
  * Test double of the vendor Device Editor bundle. Publishes `DeviceEditorProvider` at once
  * and its own `DeviceEditorConsumer` later, as the vendor does, and fires
- * `setProjectModified` with the vendor's counts: 2 on `show`, 1 per `setProject`, 1 per edit.
+ * `setProjectModified` as the vendor does: 2 on `setController`, 1 per `setProject`, 1 per edit.
  */
 
 import type { DeviceEditorConsumerLike, DeviceEditorProviderLike, RelayGuestScope } from './relay'
@@ -175,12 +175,12 @@ export function installFakeDeviceEditor(
   const provider: DeviceEditorProviderLike = {
     show: () => {
       render()
-      modified()
-      modified()
       return Promise.resolve()
     },
     setController: (deviceTypeId) => {
       state = { ...state, controller: deviceTypeId }
+      modified()
+      modified()
       return Promise.resolve()
     },
     setProject: (data) => {

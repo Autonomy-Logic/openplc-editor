@@ -2,17 +2,14 @@
  * Boot sequence and change tracking for an embedded vendor configurator.
  *
  * Boot: `ready` → `setController` → `show` → `load(stored archive)` → compare the
- * loaded device setup with the stored one. The guest reports `modified` for its
- * own `show` and `setProject` too, so those are counted off before any event is
- * taken as a user change. A change is snapshotted once the events settle.
+ * loaded device setup with the stored one. The guest also reports `modified` for its
+ * own boot calls, at no fixed step and sometimes after the call resolves, so events
+ * are only taken as user changes once the guest has been quiet for `settleMs` after
+ * boot. A change is snapshotted once the events settle.
  */
 
 import type { ConfiguratorPort, ConfiguratorSnapshot } from '@root/middleware/shared/ports/configurator-port'
 
-/** `modified` events the guest fires for one `show()`. */
-export const SHOW_MODIFIED_EVENTS = 2
-/** `modified` events the guest fires for one `setProject()`. */
-export const LOAD_MODIFIED_EVENTS = 1
 export const DEFAULT_SETTLE_MS = 300
 
 export type ConfiguratorSessionStatus = { kind: 'booting' } | { kind: 'ready' } | { kind: 'failed'; message: string }
@@ -52,8 +49,9 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
   const settleMs = options.settleMs ?? DEFAULT_SETTLE_MS
 
   let disposed = false
+  let booted = false
   let accepting = false
-  let ownEvents = 0
+  let quietTimer: ReturnType<typeof setTimeout> | null = null
   let settleTimer: ReturnType<typeof setTimeout> | null = null
   let snapshotting = false
   let changedDuringSnapshot = false
@@ -86,13 +84,20 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
     }, settleMs)
   }
 
+  function waitForQuiet(): void {
+    if (quietTimer) clearTimeout(quietTimer)
+    quietTimer = setTimeout(() => {
+      quietTimer = null
+      accepting = true
+    }, settleMs)
+  }
+
   const offModified = port.onModified(() => {
     if (disposed) return
-    if (ownEvents > 0) {
-      ownEvents -= 1
+    if (!accepting) {
+      if (booted) waitForQuiet()
       return
     }
-    if (!accepting) return
     if (snapshotting) changedDuringSnapshot = true
     scheduleSnapshot()
   })
@@ -101,7 +106,6 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
   })
 
   const restore = async (archive: string): Promise<void> => {
-    ownEvents += LOAD_MODIFIED_EVENTS
     let loadedGuids: string[]
     try {
       await port.load(archive)
@@ -118,11 +122,11 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
     try {
       await port.ready()
       await port.setController(controller)
-      ownEvents += SHOW_MODIFIED_EVENTS
       await port.show()
       if (storedArchive) await restore(storedArchive)
       if (disposed) return
-      accepting = true
+      booted = true
+      waitForQuiet()
       onStatus({ kind: 'ready' })
     } catch (error) {
       if (!disposed) onStatus({ kind: 'failed', message: messageOf(error) })
@@ -134,6 +138,7 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
     dispose: () => {
       if (disposed) return
       disposed = true
+      if (quietTimer) clearTimeout(quietTimer)
       if (settleTimer) clearTimeout(settleTimer)
       offModified()
       offError()
