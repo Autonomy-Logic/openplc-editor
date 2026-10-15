@@ -14,6 +14,7 @@
  * elaborate project fixtures.
  */
 
+import { RUNTIME_V4_S7_PROFILE } from '@root/middleware/shared/utils/target-capabilities'
 import type { PLCRemoteDevice, PLCServer } from '../../types/PLC/open-plc'
 
 // Hoist mock declarations so they apply before the shared module
@@ -84,6 +85,7 @@ function makeInput(overrides?: Partial<GenerateConfsInput>): GenerateConfsInput 
     debugMapContent: '{}',
     log: jest.fn(),
     runtimeVersion: null,
+    s7Profile: RUNTIME_V4_S7_PROFILE,
     ...overrides,
   }
 }

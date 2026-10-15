@@ -19,6 +19,7 @@ import {
   RuntimeLoginModal,
 } from '../_organisms/modals'
 import { ConfirmDeleteProjectModal } from '../_organisms/modals/confirm-delete-project-modal'
+import { ConfirmDeviceSwitchModal } from '../_organisms/modals/confirm-device-switch-modal'
 import { ConfirmInstallLibrariesModal } from '../_organisms/modals/confirm-install-libraries-modal'
 import { ConfirmPlcopenImportModal } from '../_organisms/modals/confirm-plcopen-import-modal'
 import { CreateGraphicalVariableModal } from '../_organisms/modals/create-graphical-variable-modal'
@@ -165,6 +166,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
             <ServerIpMismatchModal isOpen={modals['server-ip-mismatch'].open} />
           )}
           {modals?.['runtime-connection-lost']?.open === true && <RuntimeConnectionLostModal />}
+          {modals?.['confirm-device-switch']?.open === true && <ConfirmDeviceSwitchModal />}
           {modals?.['debugger-message']?.open === true && <DebuggerMessageModal />}
           {modals?.['debugger-ip-input']?.open === true && <DebuggerIpInputModal />}
           {modals?.['missing-libraries']?.open === true && <MissingLibrariesModal />}
