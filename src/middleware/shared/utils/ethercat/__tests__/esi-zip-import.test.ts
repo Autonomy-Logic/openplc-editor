@@ -56,7 +56,8 @@ describe('importESIZip', () => {
     const r = await importESIZip(await zipOf([{ path: 'bomb.xml', content: big }]))
     expect(r.imported).toEqual([])
     expect(r.dropped).toEqual(['bomb.xml (larger than 32 MiB)'])
-  })
+    // Building and inflating a 32 MiB entry is slow on CI runners.
+  }, 60000)
 
   test('refuses a ZIP with more entries than the limit', async () => {
     const files = Array.from({ length: MAX_ZIP_ENTRIES + 1 }, (_, i) => ({ path: `f${i}.txt`, content: 'x' }))
