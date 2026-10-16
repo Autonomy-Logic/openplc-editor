@@ -352,6 +352,24 @@ const AcceleratorHandler = () => {
   }, [store, accelerator, toggleCollapse])
 
   /**
+   * Toggle the graphical editors' radial menu (native Display menu)
+   */
+  useEffect(() => {
+    const unsub = accelerator.onToggleRadialMenu(() => {
+      if (!hasOpenProject(store)) return
+      const enabled = store.getState().uiPreferencesActions.toggleRadialMenu()
+      toast({
+        title: enabled ? 'Radial menu enabled' : 'Radial menu disabled',
+        description: enabled
+          ? 'Right-click the LD or FBD programming area to open it.'
+          : 'Re-enable it from Display > Radial Menu.',
+        variant: 'default',
+      })
+    })
+    return unsub
+  }, [store, accelerator])
+
+  /**
    * Developer I/O image diagnostics, from the native menu on a framed window.
    */
   useEffect(() => accelerator.onOpenDiagnostics?.(() => openDiagnosticsTab(store)), [accelerator, store])

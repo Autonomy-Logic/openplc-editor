@@ -28,6 +28,8 @@ export const DisplayMenu = () => {
   const store = useOpenPLCStoreApi()
   const capabilities = useCapabilities()
   const windowPort = useWindow()
+  const radialMenuEnabled = useOpenPLCStore((state) => state.uiPreferences.radialMenuEnabled)
+  const setRadialMenuEnabled = useOpenPLCStore((state) => state.uiPreferencesActions.setRadialMenuEnabled)
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
@@ -113,6 +115,14 @@ export const DisplayMenu = () => {
               </span>
             </MenuPrimitive.Item>
           </div>
+          <MenuPrimitive.CheckboxItem
+            className={ITEM}
+            checked={radialMenuEnabled}
+            onCheckedChange={(checked) => setRadialMenuEnabled(checked === true)}
+          >
+            <span>{i18n.t('menu:display.submenu.radialMenu')}</span>
+            <span className={ACCELERATOR}>{radialMenuEnabled ? 'On' : 'Off'}</span>
+          </MenuPrimitive.CheckboxItem>
           {capabilities.isDevMode && (
             <>
               <MenuPrimitive.Separator className={SEPARATOR} />

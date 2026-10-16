@@ -38,6 +38,8 @@ import type { SharedSlice } from './slices/shared'
 import { createSharedSlice } from './slices/shared'
 import type { TabsSlice } from './slices/tabs'
 import { createTabsSlice } from './slices/tabs'
+import type { UiPreferencesSlice } from './slices/ui-preferences'
+import { createUiPreferencesSlice } from './slices/ui-preferences'
 import type { VersionControlSlice } from './slices/version-control'
 import { createVersionControlSlice } from './slices/version-control'
 import type { WebRTCSlice } from './slices/webrtc'
@@ -61,6 +63,7 @@ export type RootState = AISlice &
   SearchSlice &
   SharedSlice &
   TabsSlice &
+  UiPreferencesSlice &
   VersionControlSlice &
   WebRTCSlice &
   WorkspaceSlice
@@ -93,6 +96,7 @@ export function createOpenPLCStore(config: StoreConfig = {}) {
       ...createSearchSlice(...a),
       ...createSharedSlice(...a),
       ...createTabsSlice(...a),
+      ...createUiPreferencesSlice(...a),
       ...createVersionControlSlice(...a),
       ...createWebRTCSlice(...a),
       ...createWorkspaceSlice(...a),

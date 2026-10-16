@@ -28,6 +28,7 @@
  *   edit:undo-request
  *   edit:redo-request
  *   workspace:switch-perspective-accelerator
+ *   workspace:toggle-radial-menu-accelerator
  *   workspace:open-diagnostics-accelerator
  *   about:open-accelerator
  *   project:print-accelerator
@@ -111,6 +112,10 @@ export function createEditorAcceleratorAdapter(): AcceleratorPort {
 
     onSwitchPerspective(callback: () => void): Unsubscribe {
       return window.bridge.switchPerspective(() => callback())
+    },
+
+    onToggleRadialMenu(callback: () => void): Unsubscribe {
+      return window.bridge.toggleRadialMenuAccelerator(() => callback())
     },
 
     onAbout(callback: () => void): Unsubscribe {

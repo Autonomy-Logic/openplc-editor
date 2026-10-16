@@ -67,6 +67,8 @@ export interface AcceleratorPort {
 
   // --- View actions ---
   onSwitchPerspective(callback: () => void): Unsubscribe
+  /** Display > Radial Menu from the native macOS/Linux menu; web and Windows use the in-app menu. */
+  onToggleRadialMenu(callback: () => void): Unsubscribe
   onAbout(callback: () => void): Unsubscribe
 
   /** Developer I/O image diagnostics, from the desktop's NATIVE menu — the one
