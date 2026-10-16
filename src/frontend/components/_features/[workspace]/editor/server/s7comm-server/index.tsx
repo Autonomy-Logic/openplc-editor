@@ -8,6 +8,7 @@ import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
+import { DuplicateProtocolNotice } from '../duplicate-protocol-notice'
 
 type S7CommUIDataBlock = S7CommDataBlock
 
@@ -166,8 +167,8 @@ const DataBlockModal = ({ isOpen, onClose, onSave, existingDbNumbers, editingBlo
       setError('Size must be between 1 and 65536 bytes')
       return
     }
-    if (isNaN(start) || start < 0 || start > 1023) {
-      setError('Start buffer must be between 0 and 1023')
+    if (isNaN(start) || start < 0 || start > 65535) {
+      setError('Start buffer must be between 0 and 65535')
       return
     }
 
@@ -266,7 +267,7 @@ const DataBlockModal = ({ isOpen, onClose, onSave, existingDbNumbers, editingBlo
               value={startBuffer}
               onChange={(e) => setStartBuffer(e.target.value)}
               min='0'
-              max='1023'
+              max='65535'
               className='h-[30px] w-32 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
             />
           </div>
@@ -525,6 +526,8 @@ const S7CommServerEditor = () => {
       </div>
 
       <div className='flex flex-1 flex-col gap-4 overflow-auto'>
+        <DuplicateProtocolNotice name={serverName} protocol={protocol} />
+
         <AccordionPrimitive.Root
           type='multiple'
           value={openSections}

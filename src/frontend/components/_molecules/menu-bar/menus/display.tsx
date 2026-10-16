@@ -1,10 +1,11 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { useEffect, useState } from 'react'
 
-import { useTheme, useWindow } from '../../../../../middleware/shared/providers'
+import { useCapabilities, useTheme, useWindow } from '../../../../../middleware/shared/providers'
 import { i18n } from '../../../../locales/i18n'
+import { DIAGNOSTICS_TAB_NAME, openDiagnosticsTab } from '../../../../services/io-diagnostics/open-tab'
 import { requestAppRefresh } from '../../../../services/refresh-app'
-import { useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import { MenuClasses } from '../constants'
 
 interface FullscreenElement extends HTMLElement {
@@ -24,6 +25,8 @@ export const DisplayMenu = () => {
     workspaceActions: { setSystemConfigs, toggleCollapse },
     modalActions: { openModal },
   } = useOpenPLCStore()
+  const store = useOpenPLCStoreApi()
+  const capabilities = useCapabilities()
   const windowPort = useWindow()
   const radialMenuEnabled = useOpenPLCStore((state) => state.uiPreferences.radialMenuEnabled)
   const setRadialMenuEnabled = useOpenPLCStore((state) => state.uiPreferencesActions.setRadialMenuEnabled)
@@ -120,6 +123,15 @@ export const DisplayMenu = () => {
             <span>{i18n.t('menu:display.submenu.radialMenu')}</span>
             <span className={ACCELERATOR}>{radialMenuEnabled ? 'On' : 'Off'}</span>
           </MenuPrimitive.CheckboxItem>
+          {capabilities.isDevMode && (
+            <>
+              <MenuPrimitive.Separator className={SEPARATOR} />
+              <MenuPrimitive.Item className={ITEM} onClick={() => openDiagnosticsTab(store)}>
+                <span>{DIAGNOSTICS_TAB_NAME}</span>
+                <span className={ACCELERATOR}>{'dev'}</span>
+              </MenuPrimitive.Item>
+            </>
+          )}
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>
     </MenuPrimitive.Menu>

@@ -61,6 +61,7 @@ beforeEach(() => {
     switchPerspective: register('switchPerspective'),
     toggleRadialMenuAccelerator: register('toggleRadialMenu'),
     aboutModalAccelerator: register('about'),
+    openDiagnosticsAccelerator: register('openDiagnostics'),
     quitAppRequest: register('quitApp'),
     refreshRequest: register('refresh'),
   } as unknown as typeof window.bridge
@@ -123,6 +124,7 @@ testAccelerator('onRedo', 'redo', 'handleRedoRequest')
 testAccelerator('onSwitchPerspective', 'switchPerspective', 'switchPerspective')
 testAccelerator('onToggleRadialMenu', 'toggleRadialMenu', 'toggleRadialMenuAccelerator')
 testAccelerator('onAbout', 'about', 'aboutModalAccelerator')
+testAccelerator('onOpenDiagnostics', 'openDiagnostics', 'openDiagnosticsAccelerator')
 testAccelerator('onQuitApp', 'quitApp', 'quitAppRequest')
 testAccelerator('onRefresh', 'refresh', 'refreshRequest')
 

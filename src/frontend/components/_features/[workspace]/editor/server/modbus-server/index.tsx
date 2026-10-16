@@ -10,6 +10,7 @@ import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import { FieldHelpIcon, TooltipProvider } from '../../../../../_atoms/tooltip'
+import { DuplicateProtocolNotice } from '../duplicate-protocol-notice'
 import { AddressMappingReference } from './address-mapping-reference'
 
 const BIND_ADDRESS_OPTIONS = [
@@ -153,9 +154,13 @@ interface BufferInputProps {
   max: number
   description: string
   readOnly: boolean
+  /** Shown instead of a value when the project pins no count for this segment.
+   *  A placeholder is the point: it renders as absent, which is what the
+   *  project is, while still answering "how many will I get?". */
+  placeholder?: string
 }
 
-const BufferInput = ({ label, value, onChange, onBlur, max, description, readOnly }: BufferInputProps) => (
+const BufferInput = ({ label, value, onChange, onBlur, max, description, readOnly, placeholder }: BufferInputProps) => (
   <div className='flex items-center gap-3'>
     <Label className='w-20 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>{label}</Label>
     <div className='w-24'>
@@ -164,7 +169,7 @@ const BufferInput = ({ label, value, onChange, onBlur, max, description, readOnl
           aria-label={`${label} count`}
           className='flex h-[28px] w-full items-center rounded-md border border-transparent bg-neutral-100 px-2 py-1 font-caption text-xs font-medium tabular-nums text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300'
         >
-          {value}
+          {value || placeholder}
         </span>
       ) : (
         <InputWithRef
@@ -172,6 +177,7 @@ const BufferInput = ({ label, value, onChange, onBlur, max, description, readOnl
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur}
+          placeholder={placeholder}
           min='0'
           max={max.toString()}
           className='h-[28px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
@@ -293,6 +299,7 @@ const ModbusServerEditor = () => {
     port,
     bindAddress,
     buffers,
+    pinnedSegments,
     bufferMapping,
     available,
     actions,
@@ -391,14 +398,31 @@ const ModbusServerEditor = () => {
       if (raw === undefined) return
       const floor = profile.minCounts?.[segment] ?? 0
       const ceiling = profile.maxCounts?.[segment] ?? meta.max
+      // AN EMPTY FIELD IS AN INSTRUCTION, not a typo: it unpins the segment.
+      // Without this the only way back from a number typed once was to edit
+      // the server's JSON by hand.
+      if (raw.trim() === '') {
+        actions.clearBufferCount(meta.group, meta.field)
+        setCountText((prev) => ({ ...prev, [segment]: undefined }))
+        return
+      }
       const parsed = Number.parseInt(raw, 10)
       if (Number.isNaN(parsed) || parsed < floor || parsed > ceiling) {
         setCountText((prev) => ({ ...prev, [segment]: undefined }))
         return
       }
-      if (parsed !== buffers[segment]) actions.setBufferCount(meta.group, meta.field, parsed)
+      // COMMIT ALSO WHEN THE NUMBER IS UNCHANGED, as long as the segment is
+      // not pinned yet. The old guard compared against the DISPLAYED count,
+      // which for an unpinned segment was a default this project never stored
+      // -- so typing the number the field was already showing did nothing at
+      // all, and the user was left with a screen that looked set and a project
+      // that had nothing in it. Typing a value is the act of pinning it,
+      // whatever it equals.
+      if (parsed !== buffers[segment] || !pinnedSegments.has(segment)) {
+        actions.setBufferCount(meta.group, meta.field, parsed)
+      }
     },
-    [countText, buffers, actions, profile],
+    [countText, buffers, pinnedSegments, actions, profile],
   )
 
   if (protocol !== 'modbus-tcp') {
@@ -439,6 +463,8 @@ const ModbusServerEditor = () => {
         </div>
 
         <div className='flex flex-1 flex-col gap-6 overflow-auto'>
+          <DuplicateProtocolNotice name={serverName} protocol={protocol} />
+
           <Panel title='Modbus Server'>
             {/* One screen for every target. What a target cannot configure comes
              * through disabled with the reason, rather than absent: a control
@@ -645,7 +671,9 @@ const ModbusServerEditor = () => {
           <Panel title='Buffer Mapping'>
             {profile.configurableBuffers && (
               <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-                How many addresses each IEC segment gets.
+                How many addresses each IEC segment gets. A field left empty follows the I/O image — the greyed number
+                is what this project sizes it to. Type a number to ask for more than that, or 0 to publish none of it.
+                Clearing the field follows the image again.
               </p>
             )}
 
@@ -666,7 +694,16 @@ const ModbusServerEditor = () => {
                         <BufferInput
                           key={segment}
                           label={`%${segment}`}
-                          value={absent ? '0' : (countText[segment] ?? String(buffers[segment]))}
+                          // A segment the project does not pin shows NOTHING,
+                          // with the count it would get as the placeholder.
+                          // Showing the derived number as a value is what made
+                          // 1024 look like a setting the project carried.
+                          value={
+                            absent
+                              ? '0'
+                              : (countText[segment] ?? (pinnedSegments.has(segment) ? String(buffers[segment]) : ''))
+                          }
+                          placeholder={absent ? undefined : String(buffers[segment])}
                           onChange={(value) => setCountText((prev) => ({ ...prev, [segment]: value }))}
                           onBlur={() => commitCount(segment)}
                           max={profile.maxCounts?.[segment] ?? meta.max}

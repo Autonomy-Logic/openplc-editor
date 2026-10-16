@@ -189,6 +189,14 @@ export type EditorModel = EditorModelBase &
         }
       }
     | {
+        /** Developer-only I/O image diagnostics. Gated by `isDevMode`; it has
+         *  no project element behind it, so it opens from the Display menu. */
+        type: 'plc-diagnostics'
+        meta: {
+          name: string
+        }
+      }
+    | {
         type: 'plc-package-manager'
         meta: {
           name: string

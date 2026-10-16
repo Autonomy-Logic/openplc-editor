@@ -170,6 +170,8 @@ const rendererProcessBridge = {
     subscribe('workspace:switch-perspective-accelerator', callback),
   toggleRadialMenuAccelerator: (callback: IpcRendererCallbacks) =>
     subscribe('workspace:toggle-radial-menu-accelerator', callback),
+  openDiagnosticsAccelerator: (callback: IpcRendererCallbacks) =>
+    subscribe('workspace:open-diagnostics-accelerator', callback),
 
   // ===================== POU METHODS =====================
   createPouFile: (props: CreatePouFileProps): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:create', props),

@@ -80,6 +80,12 @@ export interface BuildVppPluginFilesResult {
  */
 const PLUGIN_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 
+/** Name the runtime registers the plugin under: `plugin_name`, else `vendor_plugin`; null when it is unsafe. */
+export function resolveConfigTemplatePluginName(configTemplate: Record<string, unknown>): string | null {
+  const name = typeof configTemplate.plugin_name === 'string' ? configTemplate.plugin_name : 'vendor_plugin'
+  return PLUGIN_NAME_PATTERN.test(name) ? name : null
+}
+
 export async function buildVppPluginFiles(args: BuildVppPluginFilesArgs): Promise<BuildVppPluginFilesResult> {
   const { device, packageFiles, vendorScreenData, sha256Hex } = args
   const warnings: string[] = []
@@ -131,12 +137,12 @@ export async function buildVppPluginFiles(args: BuildVppPluginFilesArgs): Promis
       return empty()
     }
 
-    const rawPluginName = typeof configTemplate.plugin_name === 'string' ? configTemplate.plugin_name : 'vendor_plugin'
-    if (!PLUGIN_NAME_PATTERN.test(rawPluginName)) {
-      errors.push(`Invalid configTemplate.plugin_name: ${rawPluginName}`)
+    const resolvedPluginName = resolveConfigTemplatePluginName(configTemplate)
+    if (resolvedPluginName === null) {
+      errors.push(`Invalid configTemplate.plugin_name: ${String(configTemplate.plugin_name)}`)
       return empty()
     }
-    pluginName = rawPluginName
+    pluginName = resolvedPluginName
 
     const finalConfig = generateVendorPluginConfig(
       configTemplate,
