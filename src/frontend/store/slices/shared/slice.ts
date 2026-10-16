@@ -608,8 +608,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const nameCheck = validateElementName(name)
       if (!nameCheck.ok) return nameCheck
 
+      // Reachable: the project slice also refuses a second server of a protocol.
       const result = state.projectActions.createServer({ data: { name, protocol } })
-      /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
       if (!result.ok) return { ok: false, message: result.message }
 
       const editorModel = CreateServerEditor(name, protocol)
@@ -655,8 +655,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // Deep-cloned: the protocol config is nested, and a shallow copy would leave the
       // two servers sharing it, so editing one would silently edit the other.
       const copy = { ...structuredClone(source), name: newName }
+      // Duplicating a server is creating a second one of its protocol, which
+      // the project slice refuses for the same reason the build does.
       const result = state.projectActions.createServer({ data: copy })
-      /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
       if (!result.ok) return { ok: false, message: result.message }
 
       const editorModel = CreateServerEditor(newName, source.protocol)
@@ -921,9 +922,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().tabsActions.setSelectedTab(nextTab.name)
       getState().workspaceActions.setSelectedProjectTreeLeaf({
         label: nextTab.name,
-        // A diff-viewer tab has no corresponding project-tree leaf to
-        // highlight, so it maps to `null` rather than a tree leaf type.
-        type: nextTab.elementType.type === 'diff-viewer' ? null : nextTab.elementType.type,
+        // A diff-viewer or diagnostics tab has no corresponding project-tree
+        // leaf to highlight, so both map to `null` rather than a leaf type.
+        type:
+          nextTab.elementType.type === 'diff-viewer' || nextTab.elementType.type === 'diagnostics'
+            ? null
+            : nextTab.elementType.type,
       })
 
       return { success: true }

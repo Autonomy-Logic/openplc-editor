@@ -6,7 +6,7 @@ import {
   describeAliasRejection,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback } from 'react'
 
 /** The EtherCAT channel an alias belongs to: a slave channel, or a module channel when `moduleId` is set. */
@@ -59,7 +59,7 @@ export function useEthercatAliasEdit(): (target: EthercatAliasTarget, oldAlias: 
           },
           remoteDevices: state.project.data.remoteDevices,
         },
-        resolveTargetCapabilities(state.deviceAvailableOptions.availableBoards.get(board)),
+        resolveAddressProducerCapabilities(state.deviceAvailableOptions.availableBoards.get(board)),
       )
       const validation = validateAliasEdit(buildAliasRegistry(pool), alias, { kind: 'ethercat', ref })
       if (!validation.ok) {

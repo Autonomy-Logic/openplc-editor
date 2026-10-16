@@ -25,6 +25,7 @@ import {
   EtherCATModuleEditor,
 } from '../components/_features/[workspace]/editor/device/ethercat'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
+import { DiagnosticsEditor } from '../components/_features/[workspace]/editor/diagnostics'
 import { DiffViewerEditor } from '../components/_features/[workspace]/editor/diff-viewer'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { LibraryManagerEditor } from '../components/_features/[workspace]/editor/library-manager'
@@ -62,6 +63,7 @@ import {
 } from '../hooks/use-debug-value'
 import { useDeviceConnectionMonitor } from '../hooks/use-device-connection-monitor'
 import { useDevicePlcState } from '../hooks/use-device-plc-state'
+import { useRestoreProjectTargetDevice } from '../hooks/use-restore-project-target-device'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
 import { buildAllProjectFileContentsPure } from '../services/save-actions'
@@ -186,6 +188,7 @@ const WorkspaceScreen = () => {
   }, [projectPath, rawLoadedContent, loadedSerialized, initBaseline, store])
 
   useRuntimePolling()
+  useRestoreProjectTargetDevice()
   // Mirrors a baremetal target's run/stop state from the held device link's existing liveness tick (no timer of its own).
   useDevicePlcState()
   useDeviceConnectionMonitor()
@@ -620,6 +623,7 @@ const WorkspaceScreen = () => {
                         {editor['type'] === 'plc-server' && editor.meta.protocol === 's7comm' && <S7CommServerEditor />}
                         {editor['type'] === 'plc-server' && editor.meta.protocol === 'opcua' && <OpcUaServerEditor />}
                         {editor['type'] === 'plc-vendor-screen' && <VendorScreenEditor />}
+                        {editor['type'] === 'plc-diagnostics' && <DiagnosticsEditor />}
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
                         {editor['type'] === 'plc-user-management' && <UserManagementEditor />}

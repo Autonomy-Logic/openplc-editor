@@ -79,7 +79,7 @@ const RuntimeLoginModal = () => {
         modalActions.onOpenChange('runtime-login', open)
       }}
     >
-      <ModalContent className='flex min-h-[380px] w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
+      <ModalContent className='flex w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
         <ModalTitle className='mb-4 text-xl font-semibold'>Login to OpenPLC Runtime</ModalTitle>
 
         <p className='mb-6 text-center text-sm text-neutral-600 dark:text-neutral-400'>

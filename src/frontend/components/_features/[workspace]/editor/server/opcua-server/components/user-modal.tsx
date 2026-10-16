@@ -188,7 +188,7 @@ export const UserModal = ({
 
   return (
     <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <ModalContent className='h-auto max-h-[90vh] w-[500px]' onClose={onClose}>
+      <ModalContent className='max-h-[90vh] w-[500px]' onClose={onClose}>
         <ModalHeader>
           <ModalTitle>{isEditing ? 'Edit User' : 'Add User'}</ModalTitle>
         </ModalHeader>

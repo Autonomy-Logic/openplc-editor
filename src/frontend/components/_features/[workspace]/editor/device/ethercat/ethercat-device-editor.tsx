@@ -16,7 +16,7 @@ import type {
 import { useEsi } from '@root/middleware/shared/providers/platform-context'
 import { reconcilePdoChannels } from '@root/middleware/shared/utils/ethercat'
 import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Cia402AxisTab } from './components/cia402-axis-tab'
@@ -165,7 +165,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
         vendorIoMapping: { entries: ioMapping },
         remoteDevices: project.data.remoteDevices,
       },
-      resolveTargetCapabilities(boardInfo),
+      resolveAddressProducerCapabilities(boardInfo),
     )
     return new Set(pool.byAddress.keys())
   }, [store, project.data.remoteDevices, vendorScreenData])

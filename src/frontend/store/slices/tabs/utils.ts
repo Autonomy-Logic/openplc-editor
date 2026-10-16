@@ -127,6 +127,11 @@ const CreateVendorScreenEditor = (name: string, screenName: string): EditorModel
   meta: { name, screenName },
 })
 
+const CreateDiagnosticsEditor = (name = 'I/O Image Diagnostics'): EditorModel => ({
+  type: 'plc-diagnostics',
+  meta: { name },
+})
+
 const CreatePackageManagerEditor = (name = 'Package Manager'): EditorModel => ({
   type: 'plc-package-manager',
   meta: { name },
@@ -214,6 +219,8 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreateServerEditor(name, elementType.protocol)
     case 'vendor-screen':
       return CreateVendorScreenEditor(name, elementType.screenName)
+    case 'diagnostics':
+      return CreateDiagnosticsEditor(name)
     case 'package-manager':
       return CreatePackageManagerEditor(name)
     case 'library-manager':
@@ -231,6 +238,7 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
 
 export {
   CreateDeviceEditor,
+  CreateDiagnosticsEditor,
   CreateDiffViewerEditor,
   CreateEditorModelObject,
   CreateEditorObjectFromTab,
