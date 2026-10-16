@@ -35,6 +35,13 @@ export interface VppLocalAction {
   confirm?: string
 }
 
+/** Where a module list sits in a command's answer, and which keys name the slot and the module. */
+export interface VppResultMapping {
+  path: string
+  slotField: string
+  moduleIdField: string
+}
+
 export interface VppPluginCommandAction {
   kind: 'plugin-command'
   id: string
@@ -44,6 +51,10 @@ export interface VppPluginCommandAction {
   command: string
   params: Record<string, unknown>
   confirm?: string
+  /** Present only when true: the action is offered only while a device is connected. */
+  requiresConnection?: true
+  /** Present only when the screen maps the answer onto the module slots. */
+  resultMapping?: VppResultMapping
 }
 
 export type VppScreenAction = VppLocalAction | VppPluginCommandAction
@@ -76,15 +87,20 @@ export function parseScreenActions(raw: unknown, defaultPlugin?: string): VppScr
       continue
     }
 
-    if (entry.type === 'plugin-command') {
+    // `command` is the package schema's name for a plugin command; its static
+    // body is `payload` there, where the older `plugin-command` form used `params`.
+    if (entry.type === 'plugin-command' || entry.type === 'command') {
       const command = entry.command
       if (typeof command !== 'string' || !PLUGIN_COMMANDS.has(command)) continue
-      const plugin = typeof entry.plugin === 'string' ? entry.plugin : defaultPlugin
+      const plugin = typeof entry.plugin === 'string' && entry.plugin.length > 0 ? entry.plugin : defaultPlugin
       if (!plugin) continue
+      const rawParams = entry.type === 'command' ? entry.payload : entry.params
       const params =
-        entry.params !== null && typeof entry.params === 'object' && !Array.isArray(entry.params)
-          ? sanitizeParams(entry.params as Record<string, unknown>)
+        rawParams !== null && typeof rawParams === 'object' && !Array.isArray(rawParams)
+          ? sanitizeParams(rawParams as Record<string, unknown>)
           : {}
+      const resultMapping = parseResultMapping(entry.resultMapping)
+      if (entry.resultMapping !== undefined && resultMapping === null) continue
       seen.add(id)
       actions.push({
         kind: 'plugin-command',
@@ -94,10 +110,23 @@ export function parseScreenActions(raw: unknown, defaultPlugin?: string): VppScr
         command,
         params,
         ...(confirm !== undefined && { confirm }),
+        ...(entry.requiresConnection === true && { requiresConnection: true as const }),
+        ...(resultMapping !== null && { resultMapping }),
       })
     }
   }
   return actions
+}
+
+/** Null when any of the three keys is missing; the caller then drops the action. */
+function parseResultMapping(raw: unknown): VppResultMapping | null {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const record = raw as Record<string, unknown>
+  const { path, slotField, moduleIdField } = record
+  if (typeof path !== 'string' || path.length === 0) return null
+  if (typeof slotField !== 'string' || slotField.length === 0) return null
+  if (typeof moduleIdField !== 'string' || moduleIdField.length === 0) return null
+  return { path, slotField, moduleIdField }
 }
 
 /** Prototype keys would reach the request body's prototype rather than the body. */

@@ -335,6 +335,10 @@ export type ProjectActions = {
       bufferMapping?: Partial<ModbusBufferMapping>
     },
   ) => ProjectResponse
+  /** Drop one persisted buffer count, returning that segment to "publish
+   *  whatever the image turns out to be". The group and the mapping go with it
+   *  once empty, so an untouched server keeps the absent shape on disk. */
+  clearServerBufferCount: (name: string, group: keyof ModbusBufferMapping, field: string) => ProjectResponse
 
   // S7Comm
   updateS7CommServerSettings: (name: string, settings: Partial<S7CommServerSettings>) => ProjectResponse

@@ -23,6 +23,7 @@ import { useCallback, useMemo } from 'react'
 
 import type { ModbusBufferMapping } from '../../middleware/shared/ports/types'
 import type {
+  ModbusSegment,
   ModbusSegmentCounts,
   ModbusServerProfile,
   ModbusServerTransport,
@@ -35,8 +36,9 @@ import {
   resolveServerBaud,
   resolveServerSlaveId,
 } from '../../middleware/shared/utils/modbus-server-profile'
+import type { IoDiagnosticsArea } from '../services/io-diagnostics'
 import { useOpenPLCStore } from '../store'
-import { DEFAULT_BUFFER_MAPPING } from '../utils/modbus/generate-modbus-slave-config'
+import { useIoDiagnostics } from './use-io-diagnostics'
 
 export interface ModbusServerView {
   profile: ModbusServerProfile
@@ -60,6 +62,18 @@ export interface ModbusServerView {
   /** Buffer counts in IEC values. Derived and read-only when the target's
    *  firmware fixes them. */
   buffers: ModbusSegmentCounts
+  /** Which segments carry a count the USER pinned, as opposed to one this view
+   *  filled in for display.
+   *
+   * The distinction is the whole point and it was invisible before: the screen
+   * showed DEFAULT_BUFFER_MAPPING's 1024 for a server that had persisted
+   * nothing, so a number the project did not contain looked exactly like one
+   * the user had typed. `compute-io-image` treats an absent count as "expose
+   * whatever the image turns out to be" and only an explicitly persisted one
+   * as a request, so the screen was promising an exposure the build would not
+   * make. Segments missing from this set render their number as a placeholder
+   * -- visibly not a value -- rather than as content. */
+  pinnedSegments: ReadonlySet<ModbusSegment>
   /** The address-map component and the save path both speak the persisted
    *  shape. */
   bufferMapping: ModbusBufferMapping
@@ -83,19 +97,67 @@ export interface ModbusServerActions {
   setPort: (port: number) => void
   setBindAddress: (address: string) => void
   setBufferCount: (group: keyof ModbusBufferMapping, field: string, value: number) => void
+  /** Unpin a segment: the count stops being a request and the field goes back
+   *  to following the image. Without it a number, once typed, could only be
+   *  replaced by another number. */
+  clearBufferCount: (group: keyof ModbusBufferMapping, field: string) => void
 }
 
-function countsFromMapping(mapping: ModbusBufferMapping): ModbusSegmentCounts {
-  const d = DEFAULT_BUFFER_MAPPING
+/** The segments whose count the project actually stores.
+ *
+ * Read off the persisted mapping and nothing else: a segment is pinned when
+ * its field is present, absent when it is not. `undefined` everywhere is the
+ * shape a server has before anyone touches the panel. */
+function pinnedFrom(mapping: ModbusBufferMapping | undefined): ReadonlySet<ModbusSegment> {
+  const pinned = new Set<ModbusSegment>()
+  if (!mapping) return pinned
+  if (mapping.holdingRegisters?.qwCount !== undefined) pinned.add('QW')
+  if (mapping.holdingRegisters?.mwCount !== undefined) pinned.add('MW')
+  if (mapping.holdingRegisters?.mdCount !== undefined) pinned.add('MD')
+  if (mapping.holdingRegisters?.mlCount !== undefined) pinned.add('ML')
+  if (mapping.coils?.qxBits !== undefined) pinned.add('QX')
+  if (mapping.coils?.mxBits !== undefined) pinned.add('MX')
+  if (mapping.discreteInputs?.ixBits !== undefined) pinned.add('IX')
+  if (mapping.inputRegisters?.iwCount !== undefined) pinned.add('IW')
+  return pinned
+}
+
+/** What the project sizes each segment to, per the sizer the build runs.
+ *
+ * An absent prefix is zero and zero is a real size, exactly as `computeIoImage`
+ * documents it -- a project with no `%QX` has no reason to carry coils. */
+function countsFromImage(areas: readonly IoDiagnosticsArea[]): ModbusSegmentCounts {
+  const sized = new Map(areas.map((area) => [area.prefix, area.size]))
+  const at = (prefix: string) => sized.get(prefix) ?? 0
   return {
-    QW: mapping.holdingRegisters?.qwCount ?? d.holdingRegisters.qwCount,
-    MW: mapping.holdingRegisters?.mwCount ?? d.holdingRegisters.mwCount,
-    MD: mapping.holdingRegisters?.mdCount ?? d.holdingRegisters.mdCount,
-    ML: mapping.holdingRegisters?.mlCount ?? d.holdingRegisters.mlCount,
-    QX: mapping.coils?.qxBits ?? d.coils.qxBits,
-    MX: mapping.coils?.mxBits ?? d.coils.mxBits,
-    IX: mapping.discreteInputs?.ixBits ?? d.discreteInputs.ixBits,
-    IW: mapping.inputRegisters?.iwCount ?? d.inputRegisters.iwCount,
+    QW: at('%QW'),
+    MW: at('%MW'),
+    MD: at('%MD'),
+    ML: at('%ML'),
+    QX: at('%QX'),
+    MX: at('%MX'),
+    IX: at('%IX'),
+    IW: at('%IW'),
+  }
+}
+
+/** Resolve each segment the way the emitter does: a pinned count is the
+ *  request, an absent one follows the image.
+ *
+ * The fallback used to be DEFAULT_BUFFER_MAPPING -- 1024 registers and 8192
+ * bits, the fixed image this work removes. The screen showed those as the
+ * greyed number while the build sized from the project, so the one figure the
+ * panel offered as "what you get" was the one thing it would not be. */
+function countsFromMapping(mapping: ModbusBufferMapping, image: ModbusSegmentCounts): ModbusSegmentCounts {
+  return {
+    QW: mapping.holdingRegisters?.qwCount ?? image.QW,
+    MW: mapping.holdingRegisters?.mwCount ?? image.MW,
+    MD: mapping.holdingRegisters?.mdCount ?? image.MD,
+    ML: mapping.holdingRegisters?.mlCount ?? image.ML,
+    QX: mapping.coils?.qxBits ?? image.QX,
+    MX: mapping.coils?.mxBits ?? image.MX,
+    IX: mapping.discreteInputs?.ixBits ?? image.IX,
+    IW: mapping.inputRegisters?.iwCount ?? image.IW,
   }
 }
 
@@ -118,6 +180,7 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
   const availableBoards = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards)
   const servers = useOpenPLCStore((s) => s.project.data.servers)
   const updateServerConfig = useOpenPLCStore((s) => s.projectActions.updateServerConfig)
+  const clearServerBufferCount = useOpenPLCStore((s) => s.projectActions.clearServerBufferCount)
   const handleFileAndWorkspaceSavedState = useOpenPLCStore(
     (s) => s.sharedWorkspaceActions.handleFileAndWorkspaceSavedState,
   )
@@ -125,6 +188,9 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
   const boardInfo = availableBoards.get(deviceBoard)
   const profile = useMemo(() => resolveModbusServerProfile(boardInfo), [boardInfo])
   const server = useMemo(() => servers?.find((entry) => entry.name === serverName), [servers, serverName])
+  // The same snapshot the diagnostics panel renders, from the same inputs a
+  // compile reads, so the screen and the build cannot show different numbers.
+  const diagnostics = useIoDiagnostics()
 
   const view = useMemo<ModbusServerView>(() => {
     const config = server?.modbusSlaveConfig
@@ -136,7 +202,7 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
     // A target whose firmware fixes the buffer sizes reports them through the
     // profile; only a target that lets the user size them reads the server.
     const counts = profile.configurableBuffers
-      ? countsFromMapping(config?.bufferMapping ?? DEFAULT_BUFFER_MAPPING)
+      ? countsFromMapping(config?.bufferMapping ?? {}, countsFromImage(diagnostics.areas))
       : (profile.derivedCounts ?? UNKNOWN_COUNTS)
 
     // Empty means "wherever the board defaults to", which is the default UART.
@@ -166,12 +232,14 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
       port: profile.configurablePort ? (config?.port ?? profile.fixedPort) : profile.fixedPort,
       bindAddress: config?.networkInterface || '0.0.0.0',
       buffers: counts,
-      bufferMapping: profile.configurableBuffers
-        ? (config?.bufferMapping ?? DEFAULT_BUFFER_MAPPING)
-        : mappingFromCounts(counts),
+      pinnedSegments: pinnedFrom(config?.bufferMapping),
+      // RESOLVED, not persisted: the address map answers which Modbus address
+      // each segment lands on, and a segment following the image lands
+      // somewhere just as definite as a pinned one.
+      bufferMapping: mappingFromCounts(counts),
       available: !!server && profile.transports.length > 0,
     }
-  }, [profile, server, vendorScreenData])
+  }, [profile, server, vendorScreenData, diagnostics])
 
   const commit = useCallback(
     (patch: Parameters<typeof updateServerConfig>[1]) => {
@@ -228,6 +296,15 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
     [profile.configurableBuffers, commit],
   )
 
+  const clearBufferCount = useCallback(
+    (group: keyof ModbusBufferMapping, field: string) => {
+      if (!profile.configurableBuffers) return
+      clearServerBufferCount(serverName, group, field)
+      handleFileAndWorkspaceSavedState(serverName)
+    },
+    [profile.configurableBuffers, clearServerBufferCount, serverName, handleFileAndWorkspaceSavedState],
+  )
+
   return {
     ...view,
     actions: {
@@ -239,6 +316,7 @@ export function useModbusServerConfig(serverName: string): ModbusServerView & { 
       setPort,
       setBindAddress,
       setBufferCount,
+      clearBufferCount,
     },
   }
 }

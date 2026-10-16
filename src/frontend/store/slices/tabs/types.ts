@@ -16,6 +16,7 @@ export type TabsProps = {
     | { type: 'server'; protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua' }
     | { type: 'remote-device'; protocol: 'modbus-tcp' | 'ethernet-ip' | 'ethercat' | 'profinet' }
     | { type: 'vendor-screen'; screenName: string }
+    | { type: 'diagnostics' }
     | { type: 'package-manager' }
     | { type: 'library-manager' }
     | { type: 'library-manifest' }
