@@ -26,10 +26,7 @@ import { generateEtherdogConfigs } from '../generate-ethercat-config'
 import { transpileToSt } from '../../transpilers/st-transpiler'
 import type { TranspileProject } from '../../transpilers/st-transpiler/types'
 
-// Minimal UR20-4DO-P module: 4 BOOL outputs mapped onto four discrete IEC
-// locations on %QX2.* (byte 2 of the output image). RxPDO = outputs for an
-// EtherCAT slave; the PDO entries' indices/sub-indices match the ESI shape
-// the real UR20_IO.xml declares for this module.
+// Minimal UR20-4DO-P module: 4 BOOL outputs on %QX2.*, with the RxPDO entries of UR20_IO.xml.
 const ur20_4do_p = (): ConfiguredEtherCATModule => ({
   id: 'slot-1',
   slot: 1,

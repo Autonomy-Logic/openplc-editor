@@ -50,9 +50,7 @@ function isPaddingEntry(entry: PersistedPdoEntry): boolean {
   return entry.index === '0x0000'
 }
 
-// Mirror of `esiTypeToIecType` in `backend/shared/ethercat/esi-parser.ts`.  Lives here
-// because middleware/shared/utils cannot reach backend-shared under the arch rules.
-// Keep this in sync when the backend copy gains a type.
+// Mirror of `esiTypeToIecType` in `backend/shared/ethercat/esi-parser.ts`; keep the two in sync.
 function inferIecType(esiType: string, bitLen: number): string {
   const map: Record<string, string> = {
     BOOL: 'BOOL',

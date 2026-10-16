@@ -1,4 +1,3 @@
-import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStoreApi } from '@root/frontend/store'
 import {
   buildAddressPool,
@@ -16,6 +15,9 @@ export interface EthercatAliasTarget {
   moduleId?: string
   channelId: string
 }
+
+/** Outcome of an alias edit; a refusal carries the title and description to show the user. */
+export type EthercatAliasEditResult = { ok: true } | { ok: false; title: string; description: string }
 
 type IoMappingEntry = { iecAddress: string; alias?: string; slot: number; channelName: string }
 
@@ -39,9 +41,13 @@ const ioMappingEntries = (screen: unknown): IoMappingEntry[] => {
 /**
  * Gate for an alias edit on an EtherCAT channel: the alias must be unique across every
  * producer in the project. On success the old alias is renamed on every variable bound to it,
- * and the caller writes the new alias. On refusal a toast explains why and nothing changes.
+ * and the caller writes the new alias. On refusal nothing changes and the result says why.
  */
-export function useEthercatAliasEdit(): (target: EthercatAliasTarget, oldAlias: string, alias: string) => boolean {
+export function useEthercatAliasEdit(): (
+  target: EthercatAliasTarget,
+  oldAlias: string,
+  alias: string,
+) => EthercatAliasEditResult {
   const store = useOpenPLCStoreApi()
   return useCallback(
     (target, oldAlias, alias) => {
@@ -63,14 +69,12 @@ export function useEthercatAliasEdit(): (target: EthercatAliasTarget, oldAlias: 
       )
       const validation = validateAliasEdit(buildAliasRegistry(pool), alias, { kind: 'ethercat', ref })
       if (!validation.ok) {
-        const rejection = describeAliasRejection(validation, alias)
-        toast({ title: rejection.title, description: rejection.description, variant: 'fail' })
-        return false
+        return { ok: false, ...describeAliasRejection(validation, alias) }
       }
       // Rename bound variables before the new alias is written, so they follow it instead of
       // becoming orphaned.
       if (oldAlias !== '' && oldAlias !== alias) state.projectActions.renameAlias(oldAlias, alias)
-      return true
+      return { ok: true }
     },
     [store],
   )

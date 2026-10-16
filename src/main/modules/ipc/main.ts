@@ -105,9 +105,15 @@ import type {
   ListPublicLibrariesResponse,
   PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
-import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
+import type {
+  RuntimeCapabilitiesResult,
+  RuntimeUser,
+  RuntimeUserRole,
+  UpdateUserParams,
+} from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import type { VersionControlResult } from '@root/middleware/shared/ports/version-control-port'
+import { capabilitiesFromResponse } from '@root/middleware/shared/utils/build-gate/runtime-capabilities-response'
 import { findModuleByIdent } from '@root/middleware/shared/utils/ethercat/esi-module-resolve'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
@@ -235,6 +241,10 @@ interface AiStream {
  * The telemetry events the renderer may send. `satisfies` only checks one direction: a
  * renamed/deleted event breaks the build, but a new one must still be added here or it's silently dropped.
  */
+/** Runtime request timeouts: EtherDOG's own budget plus transport margin. */
+const ETHERCAT_SCAN_MODULES_TIMEOUT_MS = 15000
+const ETHERCAT_DIAGNOSTICS_TIMEOUT_MS = 13000
+
 const AI_TELEMETRY_EVENTS = [
   'completion_requested',
   'completion_shown',
@@ -401,35 +411,16 @@ class MainProcessBridge implements MainIpcModule {
   handleRuntimeGetCapabilities = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-  ): Promise<{ features: readonly string[] | null; runtimeVersion?: string; error?: string }> => {
-    const result = await this.makeRuntimeApiRequest<{
-      available?: boolean
-      features?: unknown
-      version?: unknown
-      message?: unknown
-    }>(ipAddress, '/api/discovery/ethercat/capabilities', (data: string) => {
-      const parsed: unknown = JSON.parse(data)
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        throw new Error('capabilities response was not an object')
-      }
-      const field = (key: string): unknown => (key in parsed ? Reflect.get(parsed, key) : undefined)
-      const available = field('available')
-      return {
-        available: typeof available === 'boolean' ? available : undefined,
-        features: field('features'),
-        version: field('version'),
-        message: field('message'),
-      }
-    })
-    if (!result.success) {
-      return { features: null, error: result.error }
-    }
-    const body = result.data ?? {}
-    const features = Array.isArray(body.features)
-      ? (body.features.filter((f): f is string => typeof f === 'string') as readonly string[])
-      : []
-    const runtimeVersion = typeof body.version === 'string' ? body.version : undefined
-    return { features, runtimeVersion }
+  ): Promise<RuntimeCapabilitiesResult> => {
+    const parseBody = (data: string): unknown => JSON.parse(data)
+    const result = await this.runtimeApi.makeRuntimeApiRequest(
+      ipAddress,
+      '/api/discovery/ethercat/capabilities',
+      parseBody,
+    )
+    return result.success
+      ? capabilitiesFromResponse({ statusCode: 200, body: result.data })
+      : capabilitiesFromResponse({ statusCode: result.statusCode, error: result.error })
   }
 
   handleRuntimeCreateUser = (
@@ -3230,7 +3221,7 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATScanModules = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    scanRequest: { busName: string; slavePosition: number; networkInterface?: string; timeout_ms?: number },
+    scanRequest: { busName: string; slavePosition: number; networkInterface?: string },
   ): Promise<{ success: boolean; data?: unknown; error?: string }> => {
     try {
       const postData = JSON.stringify({
@@ -3238,14 +3229,12 @@ class MainProcessBridge implements MainIpcModule {
         slave_position: scanRequest.slavePosition,
         ...(scanRequest.networkInterface ? { interface: scanRequest.networkInterface } : {}),
       })
-      const scanTimeout = (scanRequest.timeout_ms || 5000) + 10000
-
       const result = await this.makeRuntimeApiPostRequest(
         ipAddress,
         '/api/discovery/ethercat/scan-modules',
         postData,
-        (data: string) => JSON.parse(data) as Record<string, unknown>,
-        scanTimeout,
+        (data: string): unknown => JSON.parse(data),
+        ETHERCAT_SCAN_MODULES_TIMEOUT_MS,
       )
 
       if (result.success) {
@@ -3260,21 +3249,19 @@ class MainProcessBridge implements MainIpcModule {
   handleEtherCATDiagnostics = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
-    request: { busName: string; slavePosition: number; timeout_ms?: number },
+    request: { busName: string; slavePosition: number },
   ): Promise<{ success: boolean; data?: unknown; error?: string }> => {
     try {
       const postData = JSON.stringify({
         bus_name: request.busName,
         slave_position: request.slavePosition,
       })
-      const timeout = (request.timeout_ms || 3000) + 10000
-
       const result = await this.makeRuntimeApiPostRequest(
         ipAddress,
         '/api/discovery/ethercat/diagnostics',
         postData,
-        (data: string) => JSON.parse(data) as Record<string, unknown>,
-        timeout,
+        (data: string): unknown => JSON.parse(data),
+        ETHERCAT_DIAGNOSTICS_TIMEOUT_MS,
       )
 
       if (result.success) {

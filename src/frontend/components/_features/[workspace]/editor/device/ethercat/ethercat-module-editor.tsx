@@ -1,4 +1,5 @@
 import * as Tabs from '@radix-ui/react-tabs'
+import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { useEthercatAliasEdit } from '@root/frontend/hooks/use-ethercat-alias-edit'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
@@ -181,7 +182,11 @@ const EtherCATModuleEditor = ({ busName, deviceId, moduleId }: EtherCATModuleEdi
       if (!module) return
       const existing = module.channelMappings.find((m) => m.channelId === channelId)
       const target = { busName, slaveName: deviceName, moduleId: module.id, channelId }
-      if (!commitAliasEdit(target, existing?.alias ?? '', alias)) return
+      const result = commitAliasEdit(target, existing?.alias ?? '', alias)
+      if (!result.ok) {
+        toast({ title: result.title, description: result.description, variant: 'fail' })
+        return
+      }
       const next: EtherCATChannelMapping[] =
         existing !== undefined
           ? module.channelMappings.map((m) => (m.channelId === channelId ? { ...m, alias } : m))

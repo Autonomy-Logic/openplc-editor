@@ -64,6 +64,8 @@ export interface RuntimeCapabilityAdvertisement {
   /** Hello response's `features` array, or `undefined` when the runtime did not send one.
    *  Strings outside the {@link RuntimeFeature} union are ignored. */
   advertisedFeatures: readonly string[] | undefined
+  /** Why the connected runtime's features could not be read; set only when they are unknown. */
+  unavailableReason?: string
 }
 
 /** Everything the gate decides from. Primitives only, not a store slice. */
@@ -141,6 +143,17 @@ export function evaluateRuntimeCapabilityGate(state: RuntimeCapabilityState): Ru
     return {
       kind: 'allow',
       warning: `This project requires EtherDOG ${MIN_ETHERDOG_VERSION} or newer on the target (it uses ${describe(required)}).`,
+    }
+  }
+
+  if (state.advertisement.unavailableReason !== undefined) {
+    return {
+      kind: 'refuse',
+      reason:
+        `This project requires EtherDOG ${MIN_ETHERDOG_VERSION} or newer (it uses ${describe(required)}), ` +
+        `and the EtherCAT features of the connected runtime could not be read: ` +
+        `${state.advertisement.unavailableReason}. Reconnect and build again.`,
+      missing: required,
     }
   }
 

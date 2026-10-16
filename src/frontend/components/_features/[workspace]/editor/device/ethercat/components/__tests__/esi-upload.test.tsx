@@ -17,11 +17,7 @@ function stubPort<T extends object>(overrides: Partial<T> = {}): T {
   })
 }
 
-// The two EsiPort methods the upload flow touches. ZIP expansion is a pure
-// shared-utility call (`importESIZip` from middleware/shared/utils/ethercat),
-// not a port method — jszip works identically in both runtimes so the port
-// surface stays minimal and the adapters only carry what architecturally
-// differs between web and desktop.
+// The two EsiPort methods the upload flow calls; ZIP expansion is the shared `importESIZip`.
 const mockEsi = {
   parseAndSaveFile: vi.fn(),
   loadRepositoryLight: vi.fn(),

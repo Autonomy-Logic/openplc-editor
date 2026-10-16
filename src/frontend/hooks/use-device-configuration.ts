@@ -213,7 +213,11 @@ export function useDeviceConfiguration({
         const module = owner.module
         const oldAlias = module.channelMappings.find((m) => m.channelId === channelId)?.alias ?? ''
         const target = { busName, slaveName: device.name, moduleId: module.id, channelId }
-        if (!commitAliasEdit(target, oldAlias, alias)) return
+        const result = commitAliasEdit(target, oldAlias, alias)
+        if (!result.ok) {
+          toast({ title: result.title, description: result.description, variant: 'fail' })
+          return
+        }
         const existing = module.channelMappings.some((m) => m.channelId === channelId)
         const nextMappings = existing
           ? module.channelMappings.map((m) => (m.channelId === channelId ? { ...m, alias } : m))
@@ -223,7 +227,11 @@ export function useDeviceConfiguration({
       }
 
       const oldAlias = device.channelMappings.find((m) => m.channelId === channelId)?.alias ?? ''
-      if (!commitAliasEdit({ busName, slaveName: device.name, channelId }, oldAlias, alias)) return
+      const result = commitAliasEdit({ busName, slaveName: device.name, channelId }, oldAlias, alias)
+      if (!result.ok) {
+        toast({ title: result.title, description: result.description, variant: 'fail' })
+        return
+      }
       const updated = device.channelMappings.map((m) => (m.channelId === channelId ? { ...m, alias } : m))
       onUpdateChannelMappingsRef.current(updated)
     },

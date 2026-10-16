@@ -113,6 +113,31 @@ describe('evaluateRuntimeCapabilityGate', () => {
     })
   })
 
+  test('features that could not be read refuse with the reason, not as missing features', () => {
+    const verdict = evaluateRuntimeCapabilityGate({
+      requiredFeatures: required,
+      advertisement: {
+        connected: true,
+        advertisedFeatures: undefined,
+        unavailableReason: 'EtherDOG is not running on the target',
+      },
+    })
+    expect(verdict.kind).toBe('refuse')
+    if (verdict.kind !== 'refuse') return
+    expect(verdict.reason).toMatch(/could not be read: EtherDOG is not running on the target/)
+    expect(verdict.reason).not.toMatch(/does not provide/)
+    expect(verdict.missing).toEqual([...required])
+  })
+
+  test('an unread advertisement does not matter for a project without new features', () => {
+    expect(
+      evaluateRuntimeCapabilityGate({
+        requiredFeatures: [],
+        advertisement: { connected: true, advertisedFeatures: undefined, unavailableReason: 'timeout' },
+      }),
+    ).toEqual({ kind: 'allow' })
+  })
+
   test('a runtime missing one feature is refused naming only that one', () => {
     const verdict = evaluateRuntimeCapabilityGate({
       requiredFeatures: required,

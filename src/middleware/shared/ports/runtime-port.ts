@@ -85,11 +85,9 @@ export interface UsersInfoResult {
 /**
  * Result of a {@link RuntimePort.getRuntimeCapabilities} call.
  *
- * `features` carries the EtherDOG hello features array when the runtime
- * publishes one. A runtime that does not publish features (older EtherDOG,
- * non-EtherCAT runtimes) returns an empty array; `null` is reserved for
- * "could not reach the runtime at all" so a caller can tell "no features"
- * from "no answer".
+ * `features` carries the EtherDOG hello features array. A runtime that publishes none (an
+ * older runtime or EtherDOG) gives an empty array. `null` means the features are unknown: the
+ * runtime did not answer, or its EtherDOG is not running; `error` says which.
  */
 export interface RuntimeCapabilitiesResult {
   features: readonly string[] | null

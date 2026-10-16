@@ -2,6 +2,7 @@ import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast
 import { evaluatePreBuildPlcGate } from '@root/middleware/shared/utils/build-gate/pre-build-plc-gate'
 import {
   evaluateRuntimeCapabilityGate,
+  requiredRuntimeFeatures,
   runtimeCapabilityStateFor,
 } from '@root/middleware/shared/utils/build-gate/runtime-capability-gate'
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
@@ -408,18 +409,27 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       }
 
       // Target-capability gate: refuses a project that needs EtherCAT features the connected
-      // runtime does not advertise (fetched on connect). Without a connected runtime the build
-      // goes ahead with a warning naming the EtherDOG version the target needs.
+      // runtime does not advertise, read again here. Offline the build goes ahead with a warning.
       {
         const state = store.getState()
-        const rc = state.runtimeConnection
+        const connected = state.runtimeConnection.connectionStatus === 'connected'
+        const remoteDevices = state.project.data.remoteDevices
+        let advertisedFeatures = state.runtimeConnection.runtimeFeatures ?? undefined
+        let unavailableReason: string | undefined
+        if (connected && requiredRuntimeFeatures(remoteDevices).length > 0) {
+          const caps = await runtime.getRuntimeCapabilities()
+          if (caps.features !== null) {
+            state.deviceActions.setRuntimeFeatures(caps.features)
+            advertisedFeatures = caps.features
+          } else {
+            advertisedFeatures = undefined
+            unavailableReason = caps.error ?? 'no answer from the runtime'
+          }
+        }
         const gate = evaluateRuntimeCapabilityGate(
           runtimeCapabilityStateFor({
-            remoteDevices: state.project.data.remoteDevices,
-            advertisement: {
-              connected: rc.connectionStatus === 'connected',
-              advertisedFeatures: rc.runtimeFeatures ?? undefined,
-            },
+            remoteDevices,
+            advertisement: { connected, advertisedFeatures, unavailableReason },
           }),
         )
         if (gate.kind === 'refuse') {
