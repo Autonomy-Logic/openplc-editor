@@ -7,6 +7,7 @@ import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
+import { DuplicateProtocolNotice } from '../duplicate-protocol-notice'
 import { AddressSpaceTab } from './components/address-space-tab'
 import { CertificatesTab } from './components/certificates-tab'
 import { SecurityProfilesTab } from './components/security-profiles-tab'
@@ -140,6 +141,8 @@ export const OpcUaServerEditor = () => {
         <h2 className='text-lg font-semibold text-neutral-1000 dark:text-neutral-100'>OPC-UA Server: {serverName}</h2>
         <p className='text-sm text-neutral-600 dark:text-neutral-400'>Protocol: OPC-UA</p>
       </div>
+
+      <DuplicateProtocolNotice name={serverName} protocol={protocol} />
 
       <Tabs.Root value={activeTab} onValueChange={setActiveTab} className='flex min-h-0 flex-1 flex-col'>
         {/* Tab Navigation */}

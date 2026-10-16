@@ -1,85 +1,165 @@
 /*
-modbus_registers.cpp - Modbus register store + operation function codes
+modbus_registers.cpp - Modbus operation function codes, served from the process image
 Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include "modbus_registers.h"
 
-// The register banks and operation FCs only exist when full Modbus is enabled.
-// In a debug-only build this whole TU compiles to nothing, saving flash/SRAM.
+#include "arduino_runtime_glue.h"
+
+// The operation FCs only exist when full Modbus is enabled. In a debug-only
+// build this whole TU compiles to nothing, saving flash/SRAM.
 #ifdef MODBUS_ENABLED
 
-bool init_mbregs(uint8_t size_holding, uint8_t size_dint_memory, uint8_t size_lint_memory, uint8_t size_coils, uint8_t size_inputregs, uint8_t size_inputstatus)
+// ---------------------------------------------------------------------------
+// This layer owns no storage: every FC addresses the process image through
+// openplc_image_*. The register map, which clients depend on:
+//
+//   coils (0x01/0x05/0x0F)            %QX, by bit
+//   discrete inputs (0x02)            %IX, by bit
+//   input registers (0x04)            %IW, one register each
+//   holding registers (0x03/0x06/0x10)
+//       [0, n_qw)                     %QW, one register each
+//       [n_qw, n_qw+n_mw)             %MW, one register each
+//       then %MD                      two registers each, HIGH word first
+//       then %ML                      four registers each, highest word first
+//
+// A slot with nothing bound reads 0 and swallows writes.
+// ---------------------------------------------------------------------------
+
+static inline uint16_t area_count(openplc_image_area_t area)
 {
-    //Save sizes
-    modbus.holding_size = size_holding;
-    modbus.dint_memory_size = size_dint_memory;
-    modbus.lint_memory_size = size_lint_memory;
-    modbus.coils_size = size_coils;
-    modbus.input_regs_size = size_inputregs;
-    modbus.input_status_size = size_inputstatus;
-
-    //round discrete regs sizes
-    if (size_coils % 8 > 0)
-        size_coils = (size_coils / 8) + 1;
-    else
-        size_coils = size_coils / 8;
-    if (size_inputstatus % 8 > 0)
-        size_inputstatus = (size_inputstatus / 8) + 1;
-    else
-        size_inputstatus = (size_inputstatus / 8);
-
-    modbus.coils = (uint8_t *)malloc(size_coils * sizeof(uint8_t));
-    if (modbus.coils == NULL) return false;
-    memset(modbus.coils, 0, size_coils * sizeof(uint8_t));
-
-    modbus.holding = (uint16_t *)malloc(size_holding * sizeof(uint16_t));
-    if (modbus.holding == NULL) return false;
-    memset(modbus.holding, 0, size_holding * sizeof(uint16_t));
-
-    if (size_dint_memory > 0)
-    {
-        modbus.dint_memory = (uint32_t *)malloc(size_dint_memory * sizeof(uint32_t));
-        if (modbus.dint_memory == NULL) return false;
-        memset(modbus.dint_memory, 0, size_dint_memory * sizeof(uint32_t));
-    }
-
-    if (size_lint_memory > 0)
-    {
-        modbus.lint_memory = (uint64_t *)malloc(size_lint_memory * sizeof(uint64_t));
-        if (modbus.lint_memory == NULL) return false;
-        memset(modbus.lint_memory, 0, size_lint_memory * sizeof(uint64_t));
-    }
-
-    modbus.input_status = (uint8_t *)malloc(size_inputstatus * sizeof(uint8_t));
-    if (modbus.input_status == NULL) return false;
-    memset(modbus.input_status, 0, size_inputstatus * sizeof(uint8_t));
-
-    modbus.input_regs = (uint16_t *)malloc(size_inputregs * sizeof(uint16_t));
-    if (modbus.input_regs == NULL) return false;
-    memset(modbus.input_regs, 0, size_inputregs * sizeof(uint16_t));
-
-    return true;
+    return openplc_image_count(area);
 }
 
+/** Registers the holding space spans. */
+static uint16_t holding_span(void)
+{
+    return (uint16_t)(area_count(OPENPLC_AREA_INT_OUTPUT) +
+                      area_count(OPENPLC_AREA_INT_MEMORY) +
+                      (2 * area_count(OPENPLC_AREA_DINT_MEMORY)) +
+                      (4 * area_count(OPENPLC_AREA_LINT_MEMORY)));
+}
+
+/** Which image slot, and which 16-bit word of it, a holding register is. */
+typedef struct {
+    openplc_image_area_t area;
+    uint16_t index;   /* element index within the area */
+    uint8_t  word;    /* 0 = most significant word of the element */
+} mb_holding_ref_t;
+
+/** Resolve a holding register address, or false past the end. The word offset
+ *  is relative to the REGION: absolute-address parity only agrees with it when
+ *  %QW + %MW is even, and swapped the words of every %MD when it was odd. */
+static bool holding_ref(uint16_t reg, mb_holding_ref_t* out)
+{
+    const uint16_t n_qw = area_count(OPENPLC_AREA_INT_OUTPUT);
+    const uint16_t n_mw = area_count(OPENPLC_AREA_INT_MEMORY);
+    const uint16_t n_md = area_count(OPENPLC_AREA_DINT_MEMORY);
+    const uint16_t n_ml = area_count(OPENPLC_AREA_LINT_MEMORY);
+
+    const uint16_t base_md = (uint16_t)(n_qw + n_mw);
+    const uint16_t base_ml = (uint16_t)(base_md + (2 * n_md));
+    const uint16_t end     = (uint16_t)(base_ml + (4 * n_ml));
+
+    if (reg < n_qw) {
+        out->area = OPENPLC_AREA_INT_OUTPUT;
+        out->index = reg;
+        out->word = 0;
+        return true;
+    }
+    if (reg < base_md) {
+        out->area = OPENPLC_AREA_INT_MEMORY;
+        out->index = (uint16_t)(reg - n_qw);
+        out->word = 0;
+        return true;
+    }
+    if (reg < base_ml) {
+        const uint16_t off = (uint16_t)(reg - base_md);
+        out->area = OPENPLC_AREA_DINT_MEMORY;
+        out->index = (uint16_t)(off / 2);
+        out->word = (uint8_t)(off % 2);
+        return true;
+    }
+    if (reg < end) {
+        const uint16_t off = (uint16_t)(reg - base_ml);
+        out->area = OPENPLC_AREA_LINT_MEMORY;
+        out->index = (uint16_t)(off / 4);
+        out->word = (uint8_t)(off % 4);
+        return true;
+    }
+    return false;
+}
+
+/** Shift of word `word` in a `width`-byte element, word 0 being the most
+ *  significant -- the order the wire uses. */
+static inline uint8_t word_shift(uint8_t width, uint8_t word)
+{
+    return (uint8_t)(16 * (((width / 2) - 1) - word));
+}
+
+static uint16_t holding_read(uint16_t reg)
+{
+    mb_holding_ref_t ref;
+    if (!holding_ref(reg, &ref)) return 0;
+
+    uint8_t width = 0;
+    void* p = openplc_image_slot(ref.area, ref.index, &width);
+    if (p == NULL) return 0;
+
+    switch (width) {
+    case 2: return *(const uint16_t*)p;
+    case 4: return (uint16_t)(*(const uint32_t*)p >> word_shift(4, ref.word));
+    case 8: return (uint16_t)(*(const uint64_t*)p >> word_shift(8, ref.word));
+    default: return 0;
+    }
+}
+
+static void holding_write(uint16_t reg, uint16_t value)
+{
+    mb_holding_ref_t ref;
+    if (!holding_ref(reg, &ref)) return;
+
+    uint8_t width = 0;
+    void* p = openplc_image_slot(ref.area, ref.index, &width);
+    if (p == NULL) return;   // nothing bound here: the write is dropped
+
+    switch (width) {
+    case 2:
+        *(uint16_t*)p = value;
+        break;
+    case 4: {
+        // Read-modify-write: a client may send the two words in separate
+        // requests, so the other one has to survive.
+        const uint8_t shift = word_shift(4, ref.word);
+        uint32_t* slot = (uint32_t*)p;
+        *slot = (uint32_t)((*slot & ~((uint32_t)0xFFFF << shift)) | ((uint32_t)value << shift));
+        break;
+    }
+    case 8: {
+        const uint8_t shift = word_shift(8, ref.word);
+        uint64_t* slot = (uint64_t*)p;
+        *slot = (uint64_t)((*slot & ~((uint64_t)0xFFFF << shift)) | ((uint64_t)value << shift));
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+// The image stores one IEC_BOOL per bit; only the wire packs them.
 bool get_discrete(uint16_t addr, bool regtype)
 {
-    uint8_t byte_addr = addr / 8;
-    uint8_t bit_addr = addr % 8;
-    if (regtype == COILS)
-        return bitRead(modbus.coils[byte_addr], bit_addr);
-    else
-        return bitRead(modbus.input_status[byte_addr], bit_addr);
+    const uint8_t* p = openplc_image_bit(
+        regtype == COILS ? OPENPLC_AREA_BOOL_OUTPUT : OPENPLC_AREA_BOOL_INPUT, addr);
+    return (p != NULL) && (*p != 0);
 }
 
 void write_discrete(uint16_t addr, bool regtype, bool value)
 {
-    uint8_t byte_addr = addr / 8;
-    uint8_t bit_addr = addr % 8;
-    if (regtype == COILS)
-        bitWrite(modbus.coils[byte_addr], bit_addr, value);
-    else
-        bitWrite(modbus.input_status[byte_addr], bit_addr, value);
+    uint8_t* p = openplc_image_bit(
+        regtype == COILS ? OPENPLC_AREA_BOOL_OUTPUT : OPENPLC_AREA_BOOL_INPUT, addr);
+    if (p != NULL) *p = value ? 1 : 0;
 }
 
 //Modbus handling functions
@@ -93,7 +173,7 @@ void readRegisters(uint16_t startreg, uint16_t numregs)
     }
 
     //Check Address
-    if ((startreg+numregs) >= (modbus.holding_size + (2*modbus.dint_memory_size) + (4*modbus.lint_memory_size)))
+    if ((uint32_t)startreg + numregs > holding_span())
     {
         exceptionResponse(MB_FC_READ_REGS, MB_EX_ILLEGAL_ADDRESS);
         return;
@@ -114,53 +194,10 @@ void readRegisters(uint16_t startreg, uint16_t numregs)
     mb_frame[1] = MB_FC_READ_REGS;
     mb_frame[2] = mb_frame_len - 3;   //byte count
 
-    uint16_t val;
     uint16_t i = 0;
-    uint8_t pos = 0;
 	while(numregs--)
     {
-        if ((startreg + i) < modbus.holding_size)
-        {
-            //retrieve the value from the register bank for the current register
-            val = modbus.holding[startreg + i];
-        }
-        else if ((startreg + i) < (modbus.holding_size + (2*modbus.dint_memory_size))) //32-bit registers
-        {
-            if ((startreg + i) % 2 == 0) //first word
-            {
-                pos = ((startreg + i) - modbus.holding_size) / 2;
-                val = (uint16_t)(modbus.dint_memory[pos] >> 16);
-            }
-            else //second word
-            {
-                pos = ((startreg + i) - modbus.holding_size - 1) / 2;
-                val = (uint16_t)(modbus.dint_memory[pos] & 0xffff);
-            }
-        }
-        else //64-bit registers
-        {
-            if ((startreg + i) % 4 == 0) //first word
-            {
-                pos = ((startreg + i) - (modbus.holding_size + (2*modbus.dint_memory_size))) / 4;
-                val = (uint16_t)(modbus.lint_memory[pos] >> 48);
-            }
-            else if ((startreg + i) % 4 == 1) //second word
-            {
-                pos = ((startreg + i) - (modbus.holding_size + (2*modbus.dint_memory_size) - 1)) / 4;
-                val = (uint16_t)((modbus.lint_memory[pos] >> 32) & 0xffff);
-            }
-            else if ((startreg + i) % 4 == 2) //third word
-            {
-                pos = ((startreg + i) - (modbus.holding_size + (2*modbus.dint_memory_size) - 2)) / 4;
-                val = (uint16_t)((modbus.lint_memory[pos] >> 16) & 0xffff);
-            }
-            else //fourth word
-            {
-                pos = ((startreg + i) - (modbus.holding_size + (2*modbus.dint_memory_size) - 3)) / 4;
-                val = (uint16_t)(modbus.lint_memory[pos] & 0xffff);
-            }
-        }
-
+        const uint16_t val = holding_read((uint16_t)(startreg + i));
         //write the high byte of the register value
         mb_frame[3 + (i * 2)]  = val >> 8;
         //write the low byte of the register value
@@ -171,61 +208,13 @@ void readRegisters(uint16_t startreg, uint16_t numregs)
 
 void writeSingleRegister(uint16_t reg, uint16_t value)
 {
-    if (reg >= (modbus.holding_size + (2*modbus.dint_memory_size) + (4*modbus.lint_memory_size)))
+    if (reg >= holding_span())
     {
         exceptionResponse(MB_FC_WRITE_REG, MB_EX_ILLEGAL_ADDRESS);
         return;
     }
 
-    uint8_t pos = 0;
-
-    if (reg < modbus.holding_size)
-    {
-        modbus.holding[reg] = value;
-    }
-    else if (reg < (modbus.holding_size + (2*modbus.dint_memory_size))) //32-bit registers
-    {
-        if (reg % 2 == 0) //first word
-        {
-            pos = (reg - modbus.holding_size) / 2;
-            modbus.dint_memory[pos] = modbus.dint_memory[pos] & 0x0000ffff; //zeroed first word
-            modbus.dint_memory[pos] = modbus.dint_memory[pos] | ((uint32_t)value << 16); //insert first word
-        }
-        else //second word
-        {
-            pos = (reg - modbus.holding_size - 1) / 2;
-            modbus.dint_memory[pos] = modbus.dint_memory[pos] & 0xffff0000;
-            modbus.dint_memory[pos] = modbus.dint_memory[pos] | value;
-        }
-
-    }
-    else //64-bit registers
-    {
-        if (reg % 4 == 0) //first word
-        {
-            pos = (reg - (modbus.holding_size + (2*modbus.dint_memory_size))) / 4;
-            modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0x0000ffffffffffff; //zeroed first word
-            modbus.lint_memory[pos] = modbus.lint_memory[pos] | ((uint64_t)value << 48); //insert first word
-        }
-        else if (reg % 4 == 1) //second word
-        {
-            pos = (reg - (modbus.holding_size + (2*modbus.dint_memory_size) - 1)) / 4;
-            modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffff0000ffffffff;
-            modbus.lint_memory[pos] = modbus.lint_memory[pos] | ((uint64_t)value << 32);
-        }
-        else if (reg % 4 == 2) //third word
-        {
-            pos = (reg - (modbus.holding_size + (2*modbus.dint_memory_size) - 2)) / 4;
-            modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffffffff0000ffff;
-            modbus.lint_memory[pos] = modbus.lint_memory[pos] | ((uint64_t)value << 16);
-        }
-        else //fourth word
-        {
-            pos = (reg - (modbus.holding_size + (2*modbus.dint_memory_size) - 3)) / 4;
-            modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffffffffffff0000;
-            modbus.lint_memory[pos] = modbus.lint_memory[pos] | value;
-        }
-    }
+    holding_write(reg, value);
 }
 
 void writeMultipleRegisters(uint16_t startreg, uint16_t numoutputs, uint8_t bytecount)
@@ -238,7 +227,7 @@ void writeMultipleRegisters(uint16_t startreg, uint16_t numoutputs, uint8_t byte
     }
 
     //Check Address (startreg...startreg + numregs)
-    if ((startreg + numoutputs) >= (modbus.holding_size + (2*modbus.dint_memory_size) + (4*modbus.lint_memory_size)))
+    if ((uint32_t)startreg + numoutputs > holding_span())
     {
         exceptionResponse(MB_FC_WRITE_REGS, MB_EX_ILLEGAL_ADDRESS);
         return;
@@ -252,61 +241,11 @@ void writeMultipleRegisters(uint16_t startreg, uint16_t numoutputs, uint8_t byte
     mb_frame[4] = numoutputs >> 8;
     mb_frame[5] = numoutputs & 0x00FF;
 
-    uint16_t value;
     uint16_t i = 0;
-    uint8_t pos = 0;
 	while(numoutputs--)
     {
-        value = (uint16_t)mb_frame[7+i*2] << 8 | (uint16_t)mb_frame[8+i*2];
-
-        if ((startreg + i) < modbus.holding_size)
-        {
-            modbus.holding[(startreg + i)] = value;
-        }
-        else if ((startreg + i) < (modbus.holding_size + (2*modbus.dint_memory_size))) //32-bit registers
-        {
-            if ((startreg + i) % 2 == 0) //first word
-            {
-                pos = ((startreg + i) - modbus.holding_size) / 2;
-                modbus.dint_memory[pos] = modbus.dint_memory[pos] & 0x0000ffff; //zeroed first word
-                modbus.dint_memory[pos] = modbus.dint_memory[pos] | ((uint32_t)value << 16); //insert first word
-            }
-            else //second word
-            {
-                pos = ((startreg + i) - modbus.holding_size - 1) / 2;
-                modbus.dint_memory[pos] = modbus.dint_memory[pos] & 0xffff0000;
-                modbus.dint_memory[pos] = modbus.dint_memory[pos] | value;
-            }
-
-        }
-        else //64-bit registers
-        {
-            if ((startreg + i) % 4 == 0) //first word
-            {
-                pos = ((startreg + i) - (modbus.holding_size + (2*modbus.dint_memory_size))) / 4;
-                modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0x0000ffffffffffff; //zeroed first word
-                modbus.lint_memory[pos] = modbus.lint_memory[pos] | ((uint64_t)value << 48); //insert first word
-            }
-            else if ((startreg + i) % 4 == 1) //second word
-            {
-                pos = ((startreg + i) - (modbus.holding_size + (2*modbus.dint_memory_size) - 1)) / 4;
-                modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffff0000ffffffff;
-                modbus.lint_memory[pos] = modbus.lint_memory[pos] | ((uint64_t)value << 32);
-            }
-            else if ((startreg + i) % 4 == 2) //third word
-            {
-                pos = ((startreg + i) - (modbus.holding_size + (2*modbus.dint_memory_size) - 2)) / 4;
-                modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffffffff0000ffff;
-                modbus.lint_memory[pos] = modbus.lint_memory[pos] | ((uint64_t)value << 16);
-            }
-            else //fourth word
-            {
-                pos = ((startreg + i) - (modbus.holding_size + (2*modbus.dint_memory_size) - 3)) / 4;
-                modbus.lint_memory[pos] = modbus.lint_memory[pos] & 0xffffffffffff0000;
-                modbus.lint_memory[pos] = modbus.lint_memory[pos] | value;
-            }
-        }
-
+        const uint16_t value = (uint16_t)mb_frame[7+i*2] << 8 | (uint16_t)mb_frame[8+i*2];
+        holding_write((uint16_t)(startreg + i), value);
         i++;
 	}
 }
@@ -321,7 +260,7 @@ void readCoils(uint16_t startreg, uint16_t numregs)
     }
 
     //Check Address
-    if (startreg + numregs > modbus.coils_size)
+    if ((uint32_t)startreg + numregs > area_count(OPENPLC_AREA_BOOL_OUTPUT))
     {
         exceptionResponse(MB_FC_READ_COILS, MB_EX_ILLEGAL_ADDRESS);
         return;
@@ -350,7 +289,7 @@ void readCoils(uint16_t startreg, uint16_t numregs)
 	while (numregs)
     {
         i = (totregs - numregs--) / 8;
-		if (get_discrete((uint8_t)startreg, COILS))
+		if (get_discrete(startreg, COILS))
 			bitSet(mb_frame[3+i], bitn);
 		else
 			bitClear(mb_frame[3+i], bitn);
@@ -373,7 +312,7 @@ void readInputStatus(uint16_t startreg, uint16_t numregs)
     }
 
     //Check Address
-    if ((startreg + numregs) > modbus.input_status_size)
+    if ((uint32_t)startreg + numregs > area_count(OPENPLC_AREA_BOOL_INPUT))
     {
         exceptionResponse(MB_FC_READ_INPUT_STAT, MB_EX_ILLEGAL_ADDRESS);
         return;
@@ -424,7 +363,7 @@ void readInputRegisters(uint16_t startreg, uint16_t numregs)
     }
 
     //Check Address
-    if ((startreg + numregs) > modbus.input_regs_size)
+    if ((uint32_t)startreg + numregs > area_count(OPENPLC_AREA_INT_INPUT))
     {
         exceptionResponse(MB_FC_READ_INPUT_REGS, MB_EX_ILLEGAL_ADDRESS);
         return;
@@ -446,12 +385,12 @@ void readInputRegisters(uint16_t startreg, uint16_t numregs)
     mb_frame[1] = MB_FC_READ_INPUT_REGS;
     mb_frame[2] = mb_frame_len - 3;
 
-    uint16_t val;
     uint16_t i = 0;
     while(numregs--)
     {
-        //retrieve the value from the register bank for the current register
-        val = modbus.input_regs[startreg + i];
+        uint8_t width = 0;
+        const void* p = openplc_image_slot(OPENPLC_AREA_INT_INPUT, (uint16_t)(startreg + i), &width);
+        const uint16_t val = (p != NULL) ? *(const uint16_t*)p : 0;
         //write the high byte of the register value
         mb_frame[3 + (i * 2)]  = val >> 8;
         //write the low byte of the register value
@@ -469,8 +408,9 @@ void writeSingleCoil(uint16_t reg, uint16_t status)
         return;
     }
 
-    //Check Address
-    if (reg > (modbus.coils_size - 1))
+    //Check Address. Against the count, not `count - 1`, which wrapped to
+    //0xFFFF on an image with no coils and accepted every address.
+    if (reg >= area_count(OPENPLC_AREA_BOOL_OUTPUT))
     {
         exceptionResponse(MB_FC_WRITE_COIL, MB_EX_ILLEGAL_ADDRESS);
         return;
@@ -492,7 +432,7 @@ void writeMultipleCoils(uint16_t startreg, uint16_t numoutputs, uint16_t bytecou
     }
 
     //Check Address (startreg...startreg + numregs)
-    if ((startreg + numoutputs) > modbus.coils_size)
+    if ((uint32_t)startreg + numoutputs > area_count(OPENPLC_AREA_BOOL_OUTPUT))
     {
         exceptionResponse(MB_FC_WRITE_COILS, MB_EX_ILLEGAL_ADDRESS);
         return;

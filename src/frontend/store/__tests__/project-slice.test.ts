@@ -2054,6 +2054,22 @@ describe('createProjectSlice', () => {
       expect(result.message).toBe('Server already exists')
     })
 
+    it('refuses a second server of a protocol, naming the one that holds it', () => {
+      store.getState().projectActions.createServer({ data: makeModbusTcpServer('mb_a') })
+      const result = store.getState().projectActions.createServer({ data: makeModbusTcpServer('mb_b') })
+
+      expect(result.ok).toBe(false)
+      expect(result.message).toContain('mb_a')
+      expect(store.getState().project.data.servers).toHaveLength(1)
+    })
+
+    it('lets one server of each protocol live side by side', () => {
+      expect(store.getState().projectActions.createServer({ data: makeModbusTcpServer('mb') }).ok).toBe(true)
+      expect(store.getState().projectActions.createServer({ data: { name: 's7', protocol: 's7comm' } }).ok).toBe(true)
+      expect(store.getState().projectActions.createServer({ data: { name: 'ua', protocol: 'opcua' } }).ok).toBe(true)
+      expect(store.getState().project.data.servers).toHaveLength(3)
+    })
+
     it('creates a server with unknown protocol type without adding config', () => {
       const result = store.getState().projectActions.createServer({
         data: { name: 'EtherNet', protocol: 'ethernet-ip' },

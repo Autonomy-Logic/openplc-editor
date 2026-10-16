@@ -57,6 +57,7 @@ type ModuleDefinition = {
 type ModuleSystem = {
   enabled: boolean
   maxSlots: number
+  discoverySupported?: boolean
   modules: ModuleDefinition[]
 } | null
 
