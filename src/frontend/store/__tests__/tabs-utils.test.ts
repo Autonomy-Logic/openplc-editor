@@ -267,6 +267,13 @@ describe('tabs/utils', () => {
       expect(result.type).toBe('plc-datatype')
     })
 
+    it('creates editor from diagnostics tab', () => {
+      const tab: TabsProps = { name: 'I/O Image Diagnostics', elementType: { type: 'diagnostics' } }
+      const result = CreateEditorObjectFromTab(tab)
+      expect(result.type).toBe('plc-diagnostics')
+      expect(result.meta.name).toBe('I/O Image Diagnostics')
+    })
+
     it('creates editor from resource tab', () => {
       const tab: TabsProps = { name: 'Res', elementType: { type: 'resource' } }
       const result = CreateEditorObjectFromTab(tab)

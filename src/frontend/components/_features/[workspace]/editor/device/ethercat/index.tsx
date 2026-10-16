@@ -23,7 +23,7 @@ import type { EtherCATDevice, NetworkInterface } from '@root/middleware/shared/p
 import { useEsi, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { sanitizeAxisName } from '@root/middleware/shared/utils/ethercat'
 import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -62,7 +62,7 @@ function buildClaimedAddressSet(store: OpenPLCStore): Set<string> {
       vendorIoMapping: { entries: ioMapping },
       remoteDevices,
     },
-    resolveTargetCapabilities(boardInfo),
+    resolveAddressProducerCapabilities(boardInfo),
   )
   return new Set(pool.byAddress.keys())
 }

@@ -673,9 +673,13 @@ export interface VppMetadata {
   packagePath: string
   screens: Record<string, unknown>
   hidesNativeScreens?: NativeScreenId[]
+  /** Runtime plugin name from the device's `hal.configTemplate`; absent when the device has no valid one. */
+  pluginName?: string
   moduleSystem: {
     enabled: boolean
     maxSlots: number
+    /** The device can report its installed modules on request. */
+    discoverySupported?: boolean
     modules: VppModuleDefinition[]
   } | null
 }
@@ -911,6 +915,13 @@ export interface PersistentStorageSettings {
   flushSeconds: number
 }
 
+/** The vPLC a project targets, as `devices/configuration.json` records it. */
+export interface ProjectTargetDevice {
+  orchestratorId: string
+  deviceId: string
+  deviceName: string
+}
+
 export interface DeviceConfiguration {
   deviceBoard: string
   communicationPort: string
@@ -937,6 +948,8 @@ export interface DeviceConfiguration {
    * absent simply means there is nothing to compare.
    */
   vppPackagePinsByBoard?: Record<string, VppPackagePin>
+  /** The vPLC this project targets on web; reopening the project selects it again when it is still listed. */
+  targetDevice?: ProjectTargetDevice
 }
 
 export type PlcStatus = 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'TRANSITIONING' | 'UNKNOWN'

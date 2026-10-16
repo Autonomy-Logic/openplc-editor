@@ -92,7 +92,7 @@ const ConfirmDeleteProjectModal = ({ isOpen, ...rest }: ConfirmDeleteProjectModa
       }}
       {...rest}
     >
-      <ModalContent className='flex max-h-96 w-[340px] select-none flex-col items-center justify-evenly rounded-lg'>
+      <ModalContent className='flex w-[340px] select-none flex-col items-center justify-evenly rounded-lg'>
         <div className='flex select-none flex-col items-center gap-5'>
           <WarningIcon className='mt-2 h-[73px] w-[73px]' />
           <div className='flex flex-col gap-2'>

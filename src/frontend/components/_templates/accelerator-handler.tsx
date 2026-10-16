@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react'
 
 import { useAccelerator, useCapabilities, useProject, useTheme, useWindow } from '../../../middleware/shared/providers'
 import { executeExportPlcopen } from '../../services/export-actions'
+import { openDiagnosticsTab } from '../../services/io-diagnostics/open-tab'
 import { requestAppRefresh } from '../../services/refresh-app'
 import { restoreOpenProjectRoot } from '../../services/restore-open-project-root'
 import { executeSaveActiveFile, executeSaveProject } from '../../services/save-actions'
@@ -349,6 +350,11 @@ const AcceleratorHandler = () => {
     })
     return unsub
   }, [store, accelerator, toggleCollapse])
+
+  /**
+   * Developer I/O image diagnostics, from the native menu on a framed window.
+   */
+  useEffect(() => accelerator.onOpenDiagnostics?.(() => openDiagnosticsTab(store)), [accelerator, store])
 
   /**
    * Undo / Redo

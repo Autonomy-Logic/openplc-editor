@@ -158,6 +158,7 @@ import { SimulatorModule } from '../../../backend/shared/simulator/simulator-mod
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import {
   interpretPluginCommandResponse,
+  PLUGIN_COMMAND_TIMEOUT_MS,
   type PluginCommandOutcome,
 } from '../../../backend/shared/utils/vpp/screen-actions'
 import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
@@ -658,11 +659,13 @@ class MainProcessBridge implements MainIpcModule {
     args: { plugin: string; command: string; params?: Record<string, unknown> },
   ): Promise<PluginCommandOutcome> => {
     try {
-      const result = await this.makeRuntimeApiMutation(
-        'POST',
+      // Bounded by the same limit the web adapter uses; the default request timeout is shorter than a bus scan.
+      const result = await this.makeRuntimeApiPostRequest(
         ipAddress,
         '/api/plugin-command',
         JSON.stringify({ plugin: args.plugin, command: args.command, params: args.params ?? {} }),
+        (data: string) => data,
+        PLUGIN_COMMAND_TIMEOUT_MS,
       )
       if (!result.success) {
         return { ok: false, error: result.error }
