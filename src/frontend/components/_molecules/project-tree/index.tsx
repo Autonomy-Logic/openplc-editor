@@ -482,6 +482,11 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
   highlightQuery?: string
   busName?: string
   deviceId?: string
+  /**
+   * Carried on an EtherCAT module leaf so Delete can remove that one module
+   * without touching the parent coupler or the other modules on it.
+   */
+  moduleId?: string
 }
 
 const LeafSources = {
@@ -522,6 +527,7 @@ const ProjectTreeLeaf = ({
   highlightQuery,
   busName,
   deviceId,
+  moduleId,
   onClick: handleLeafClick,
   ...res
 }: IProjectTreeLeafProps) => {
@@ -545,7 +551,11 @@ const ProjectTreeLeaf = ({
       rename: renameRemoteDevice,
       duplicate: duplicateRemoteDevice,
     },
-    ethercatDeviceActions: { delete: deleteEthercatDevice, rename: renameEthercatDevice },
+    ethercatDeviceActions: {
+      delete: deleteEthercatDevice,
+      deleteModule: deleteEthercatModule,
+      rename: renameEthercatDevice,
+    },
     fileActions: { getFile },
   } = useOpenPLCStore()
 
@@ -563,6 +573,10 @@ const ProjectTreeLeaf = ({
   // A SoftMotion drive is an EtherCAT child device too (cia402.enabled) — it
   // shares every EtherCAT device action (rename/delete), just a distinct icon.
   const isEthercatDevice = useMemo(() => leafLang === 'ethercatDevice' || leafLang === 'softMotionDrive', [leafLang])
+  // A module slotted into a modular coupler. Delete must remove only this
+  // module, not the parent coupler — the module leaf carries `moduleId` for
+  // exactly that reason.
+  const isEthercatModule = useMemo(() => leafType === 'ethercat-module', [leafType])
 
   const { LeafIcon } = LeafSources[leafLang]
   const { file: associatedFile } = getFile({ name: label || '' })
@@ -743,7 +757,15 @@ const ProjectTreeLeaf = ({
   }
 
   const handleDeleteFile = () => {
-    if (!isAPou && !isDatatype && !isGlobalVariableList && !isServer && !isRemoteDevice && !isEthercatDevice) {
+    if (
+      !isAPou &&
+      !isDatatype &&
+      !isGlobalVariableList &&
+      !isServer &&
+      !isRemoteDevice &&
+      !isEthercatDevice &&
+      !isEthercatModule
+    ) {
       toast({
         title: 'Error',
         description: 'Only POU, datatype, global variable list, server, or remote device files can be deleted.',
@@ -783,6 +805,13 @@ const ProjectTreeLeaf = ({
 
     if (isRemoteDevice) {
       deleteRemoteDeviceRequest(label)
+      return
+    }
+
+    if (isEthercatModule && busName && deviceId && moduleId) {
+      // Must route to deleteModule, NOT deleteEthercatDevice — the latter
+      // would take the whole coupler and every other module slotted into it.
+      deleteEthercatModule(busName, deviceId, moduleId)
       return
     }
 

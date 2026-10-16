@@ -1,0 +1,1004 @@
+[
+  {
+    "name": "bus_a",
+    "protocol": "ETHERCAT",
+    "config": {
+      "master": {
+        "interface": "eth0",
+        "cycle_time_us": 1000,
+        "watchdog_timeout_cycles": 3,
+        "task_priority": 90
+      },
+      "slaves": [
+        {
+          "position": 1,
+          "name": "UR20_Coupler",
+          "type": "digital_io",
+          "vendor_id": "0x00000230",
+          "product_code": "0x4F911C30",
+          "revision": "0x00000001",
+          "config": {
+            "startup_checks": {
+              "check_vendor_id": true,
+              "check_product_code": true
+            },
+            "addressing": {
+              "ethercat_address": 0
+            },
+            "timeouts": {
+              "sdo_timeout_ms": 1000,
+              "init_to_preop_timeout_ms": 3000,
+              "safeop_to_op_timeout_ms": 10000
+            },
+            "watchdog": {
+              "sm_watchdog_enabled": true,
+              "sm_watchdog_ms": 100,
+              "pdi_watchdog_enabled": false,
+              "pdi_watchdog_ms": 100
+            },
+            "distributed_clocks": {
+              "enabled": false,
+              "sync_unit_cycle_us": 0,
+              "sync0_enabled": false,
+              "sync0_cycle_us": 0,
+              "sync0_shift_us": 0,
+              "sync1_enabled": false,
+              "sync1_cycle_us": 0,
+              "sync1_shift_us": 0
+            }
+          },
+          "channels": [
+            {
+              "index": 0,
+              "name": "Summarized module diagnosis",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 1
+            },
+            {
+              "index": 1,
+              "name": "Station pending",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 2
+            },
+            {
+              "index": 2,
+              "name": "Errorbit 2",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 3
+            },
+            {
+              "index": 3,
+              "name": "Systembus error",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 4
+            },
+            {
+              "index": 4,
+              "name": "Errorbit 4",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 5
+            },
+            {
+              "index": 5,
+              "name": "Errorbit 5",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 6
+            },
+            {
+              "index": 6,
+              "name": "I/O-Configuration error",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 7
+            },
+            {
+              "index": 7,
+              "name": "Masterconfiguration error",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 8
+            },
+            {
+              "index": 8,
+              "name": "Errorbit 8",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 9
+            },
+            {
+              "index": 9,
+              "name": "Errorbit 9",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 10
+            },
+            {
+              "index": 10,
+              "name": "Force mode active",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 11
+            },
+            {
+              "index": 11,
+              "name": "Errorbit 11",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 12
+            },
+            {
+              "index": 12,
+              "name": "Errorbit 12",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 13
+            },
+            {
+              "index": 13,
+              "name": "Uout error",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 14
+            },
+            {
+              "index": 14,
+              "name": "Usys error",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 15
+            },
+            {
+              "index": 15,
+              "name": "IOLink event available",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1AFF",
+              "pdo_entry_index": "0xF100",
+              "pdo_entry_subindex": 16
+            },
+            {
+              "index": 16,
+              "name": "Controlbit 0",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 1
+            },
+            {
+              "index": 17,
+              "name": "Controlbit 1",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 2
+            },
+            {
+              "index": 18,
+              "name": "Controlbit 2",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 3
+            },
+            {
+              "index": 19,
+              "name": "Controlbit 3",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 4
+            },
+            {
+              "index": 20,
+              "name": "Controlbit 4",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 5
+            },
+            {
+              "index": 21,
+              "name": "Controlbit 5",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 6
+            },
+            {
+              "index": 22,
+              "name": "Controlbit 6",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 7
+            },
+            {
+              "index": 23,
+              "name": "Controlbit 7",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 8
+            },
+            {
+              "index": 24,
+              "name": "Controlbit 8",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 9
+            },
+            {
+              "index": 25,
+              "name": "Controlbit 9",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 10
+            },
+            {
+              "index": 26,
+              "name": "Controlbit 10",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 11
+            },
+            {
+              "index": 27,
+              "name": "Controlbit 11",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 12
+            },
+            {
+              "index": 28,
+              "name": "Controlbit 12",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 13
+            },
+            {
+              "index": 29,
+              "name": "Controlbit 13",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 14
+            },
+            {
+              "index": 30,
+              "name": "Controlbit 14",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 15
+            },
+            {
+              "index": 31,
+              "name": "Controlbit 15",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x16FF",
+              "pdo_entry_index": "0xF200",
+              "pdo_entry_subindex": 16
+            },
+            {
+              "index": 32,
+              "name": "DI1",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1A00",
+              "pdo_entry_index": "0x6000",
+              "pdo_entry_subindex": 1
+            },
+            {
+              "index": 33,
+              "name": "DI2",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1A00",
+              "pdo_entry_index": "0x6000",
+              "pdo_entry_subindex": 2
+            },
+            {
+              "index": 34,
+              "name": "DI3",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1A00",
+              "pdo_entry_index": "0x6000",
+              "pdo_entry_subindex": 3
+            },
+            {
+              "index": 35,
+              "name": "DI4",
+              "type": "digital_input",
+              "bit_length": 1,
+              "pdo_index": "0x1A00",
+              "pdo_entry_index": "0x6000",
+              "pdo_entry_subindex": 4
+            },
+            {
+              "index": 36,
+              "name": "Module state",
+              "type": "analog_input",
+              "bit_length": 8,
+              "pdo_index": "0x1A00",
+              "pdo_entry_index": "0x6000",
+              "pdo_entry_subindex": 5
+            },
+            {
+              "index": 37,
+              "name": "Module state",
+              "type": "analog_input",
+              "bit_length": 8,
+              "pdo_index": "0x1A01",
+              "pdo_entry_index": "0x6010",
+              "pdo_entry_subindex": 1
+            },
+            {
+              "index": 38,
+              "name": "DO1",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x1601",
+              "pdo_entry_index": "0x7010",
+              "pdo_entry_subindex": 1
+            },
+            {
+              "index": 39,
+              "name": "DO2",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x1601",
+              "pdo_entry_index": "0x7010",
+              "pdo_entry_subindex": 2
+            },
+            {
+              "index": 40,
+              "name": "DO3",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x1601",
+              "pdo_entry_index": "0x7010",
+              "pdo_entry_subindex": 3
+            },
+            {
+              "index": 41,
+              "name": "DO4",
+              "type": "digital_output",
+              "bit_length": 1,
+              "pdo_index": "0x1601",
+              "pdo_entry_index": "0x7010",
+              "pdo_entry_subindex": 4
+            },
+            {
+              "index": 42,
+              "name": "AI1",
+              "type": "analog_input",
+              "bit_length": 16,
+              "pdo_index": "0x1A03",
+              "pdo_entry_index": "0x6030",
+              "pdo_entry_subindex": 1
+            },
+            {
+              "index": 43,
+              "name": "AI2",
+              "type": "analog_input",
+              "bit_length": 16,
+              "pdo_index": "0x1A03",
+              "pdo_entry_index": "0x6030",
+              "pdo_entry_subindex": 2
+            },
+            {
+              "index": 44,
+              "name": "AI3",
+              "type": "analog_input",
+              "bit_length": 16,
+              "pdo_index": "0x1A03",
+              "pdo_entry_index": "0x6030",
+              "pdo_entry_subindex": 3
+            },
+            {
+              "index": 45,
+              "name": "AI4",
+              "type": "analog_input",
+              "bit_length": 16,
+              "pdo_index": "0x1A03",
+              "pdo_entry_index": "0x6030",
+              "pdo_entry_subindex": 4
+            },
+            {
+              "index": 46,
+              "name": "Module state",
+              "type": "analog_input",
+              "bit_length": 8,
+              "pdo_index": "0x1A03",
+              "pdo_entry_index": "0x6030",
+              "pdo_entry_subindex": 5
+            }
+          ],
+          "sdo_configurations": [
+            {
+              "index": "0xF810",
+              "subindex": 1,
+              "value": 0,
+              "data_type": "OCTET_STRING",
+              "bit_length": 32,
+              "name": "Compatibility index",
+              "comment": "ESI InitCmd: ESI InitCmd",
+              "value_bytes": "0x00100100"
+            },
+            {
+              "index": "0x8000",
+              "subindex": 3,
+              "value": 0,
+              "data_type": "OCTET_STRING",
+              "bit_length": 80,
+              "name": "Module slot 1: Name UR20-4DI-P",
+              "comment": "Module slot 1 startup SDO: Module InitCmd",
+              "value_bytes": "0x555232302D3444492D50"
+            },
+            {
+              "index": "0x8000",
+              "subindex": 10,
+              "value": 0,
+              "data_type": "OCTET_STRING",
+              "bit_length": 32,
+              "name": "Module slot 1: Module id of UR20-4DI-P",
+              "comment": "Module slot 1 startup SDO: Module InitCmd",
+              "value_bytes": "0x841F0900"
+            },
+            {
+              "index": "0x8010",
+              "subindex": 3,
+              "value": 0,
+              "data_type": "OCTET_STRING",
+              "bit_length": 80,
+              "name": "Module slot 2: Name UR20-4DO-P",
+              "comment": "Module slot 2 startup SDO: Module InitCmd",
+              "value_bytes": "0x555232302D34444F2D50"
+            },
+            {
+              "index": "0x8010",
+              "subindex": 10,
+              "value": 0,
+              "data_type": "OCTET_STRING",
+              "bit_length": 32,
+              "name": "Module slot 2: Module id of UR20-4DO-P",
+              "comment": "Module slot 2 startup SDO: Module InitCmd",
+              "value_bytes": "0xA02F0101"
+            },
+            {
+              "index": "0x8030",
+              "subindex": 3,
+              "value": 0,
+              "data_type": "OCTET_STRING",
+              "bit_length": 112,
+              "name": "Module slot 4: Name UR20-4AI-UI-16",
+              "comment": "Module slot 4 startup SDO: Module InitCmd",
+              "value_bytes": "0x555232302D3441492D55492D3136"
+            },
+            {
+              "index": "0x8030",
+              "subindex": 10,
+              "value": 0,
+              "data_type": "OCTET_STRING",
+              "bit_length": 32,
+              "name": "Module slot 4: Module id of UR20-4AI-UI-16",
+              "comment": "Module slot 4 startup SDO: Module InitCmd",
+              "value_bytes": "0xC4150104"
+            },
+            {
+              "index": "0xF030",
+              "subindex": 0,
+              "value": 0,
+              "data_type": "OCTET_STRING",
+              "bit_length": 144,
+              "name": "Module ident list (CA)",
+              "comment": "Module ident list (0xF030) via CoE Complete Access, 4 slot(s)",
+              "complete_access": true,
+              "value_bytes": "0x0400841F0900A02F010100000000C4150104"
+            }
+          ],
+          "rx_pdos": [
+            {
+              "index": "0x16FF",
+              "name": "Mapping RxPDO Device Control",
+              "entries": [
+                {
+                  "index": "0xF200",
+                  "subindex": 1,
+                  "bit_length": 1,
+                  "name": "Controlbit 0",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 2,
+                  "bit_length": 1,
+                  "name": "Controlbit 1",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 3,
+                  "bit_length": 1,
+                  "name": "Controlbit 2",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 4,
+                  "bit_length": 1,
+                  "name": "Controlbit 3",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 5,
+                  "bit_length": 1,
+                  "name": "Controlbit 4",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 6,
+                  "bit_length": 1,
+                  "name": "Controlbit 5",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 7,
+                  "bit_length": 1,
+                  "name": "Controlbit 6",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 8,
+                  "bit_length": 1,
+                  "name": "Controlbit 7",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 9,
+                  "bit_length": 1,
+                  "name": "Controlbit 8",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 10,
+                  "bit_length": 1,
+                  "name": "Controlbit 9",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 11,
+                  "bit_length": 1,
+                  "name": "Controlbit 10",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 12,
+                  "bit_length": 1,
+                  "name": "Controlbit 11",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 13,
+                  "bit_length": 1,
+                  "name": "Controlbit 12",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 14,
+                  "bit_length": 1,
+                  "name": "Controlbit 13",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 15,
+                  "bit_length": 1,
+                  "name": "Controlbit 14",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF200",
+                  "subindex": 16,
+                  "bit_length": 1,
+                  "name": "Controlbit 15",
+                  "data_type": "BOOL"
+                }
+              ],
+              "fixed": true
+            },
+            {
+              "index": "0x1601",
+              "name": "Output",
+              "entries": [
+                {
+                  "index": "0x7010",
+                  "subindex": 1,
+                  "bit_length": 1,
+                  "name": "DO1",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0x7010",
+                  "subindex": 2,
+                  "bit_length": 1,
+                  "name": "DO2",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0x7010",
+                  "subindex": 3,
+                  "bit_length": 1,
+                  "name": "DO3",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0x7010",
+                  "subindex": 4,
+                  "bit_length": 1,
+                  "name": "DO4",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0x0000",
+                  "subindex": 0,
+                  "bit_length": 4,
+                  "name": "Padding",
+                  "data_type": "PAD"
+                }
+              ],
+              "fixed": true
+            }
+          ],
+          "tx_pdos": [
+            {
+              "index": "0x1AFF",
+              "name": "Mapping TxPDO Device Status",
+              "entries": [
+                {
+                  "index": "0xF100",
+                  "subindex": 1,
+                  "bit_length": 1,
+                  "name": "Summarized module diagnosis",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 2,
+                  "bit_length": 1,
+                  "name": "Station pending",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 3,
+                  "bit_length": 1,
+                  "name": "Errorbit 2",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 4,
+                  "bit_length": 1,
+                  "name": "Systembus error",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 5,
+                  "bit_length": 1,
+                  "name": "Errorbit 4",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 6,
+                  "bit_length": 1,
+                  "name": "Errorbit 5",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 7,
+                  "bit_length": 1,
+                  "name": "I/O-Configuration error",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 8,
+                  "bit_length": 1,
+                  "name": "Masterconfiguration error",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 9,
+                  "bit_length": 1,
+                  "name": "Errorbit 8",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 10,
+                  "bit_length": 1,
+                  "name": "Errorbit 9",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 11,
+                  "bit_length": 1,
+                  "name": "Force mode active",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 12,
+                  "bit_length": 1,
+                  "name": "Errorbit 11",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 13,
+                  "bit_length": 1,
+                  "name": "Errorbit 12",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 14,
+                  "bit_length": 1,
+                  "name": "Uout error",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 15,
+                  "bit_length": 1,
+                  "name": "Usys error",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0xF100",
+                  "subindex": 16,
+                  "bit_length": 1,
+                  "name": "IOLink event available",
+                  "data_type": "BOOL"
+                }
+              ],
+              "fixed": true
+            },
+            {
+              "index": "0x1A00",
+              "name": "Input",
+              "entries": [
+                {
+                  "index": "0x6000",
+                  "subindex": 1,
+                  "bit_length": 1,
+                  "name": "DI1",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0x6000",
+                  "subindex": 2,
+                  "bit_length": 1,
+                  "name": "DI2",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0x6000",
+                  "subindex": 3,
+                  "bit_length": 1,
+                  "name": "DI3",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0x6000",
+                  "subindex": 4,
+                  "bit_length": 1,
+                  "name": "DI4",
+                  "data_type": "BOOL"
+                },
+                {
+                  "index": "0x0000",
+                  "subindex": 0,
+                  "bit_length": 4,
+                  "name": "Padding",
+                  "data_type": "PAD"
+                },
+                {
+                  "index": "0x6000",
+                  "subindex": 5,
+                  "bit_length": 8,
+                  "name": "Module state",
+                  "data_type": "USINT"
+                }
+              ],
+              "fixed": true
+            },
+            {
+              "index": "0x1A01",
+              "name": "Input",
+              "entries": [
+                {
+                  "index": "0x6010",
+                  "subindex": 1,
+                  "bit_length": 8,
+                  "name": "Module state",
+                  "data_type": "USINT"
+                }
+              ],
+              "fixed": true
+            },
+            {
+              "index": "0x1A03",
+              "name": "Input",
+              "entries": [
+                {
+                  "index": "0x6030",
+                  "subindex": 1,
+                  "bit_length": 16,
+                  "name": "AI1",
+                  "data_type": "INT"
+                },
+                {
+                  "index": "0x6030",
+                  "subindex": 2,
+                  "bit_length": 16,
+                  "name": "AI2",
+                  "data_type": "INT"
+                },
+                {
+                  "index": "0x6030",
+                  "subindex": 3,
+                  "bit_length": 16,
+                  "name": "AI3",
+                  "data_type": "INT"
+                },
+                {
+                  "index": "0x6030",
+                  "subindex": 4,
+                  "bit_length": 16,
+                  "name": "AI4",
+                  "data_type": "INT"
+                },
+                {
+                  "index": "0x6030",
+                  "subindex": 5,
+                  "bit_length": 8,
+                  "name": "Module state",
+                  "data_type": "USINT"
+                }
+              ],
+              "fixed": true
+            }
+          ],
+          "mandatory_pdos": [
+            "0x16FF",
+            "0x1AFF",
+            "0x1A00",
+            "0x1601",
+            "0x1A01",
+            "0x1A03"
+          ],
+          "modular": {
+            "slot_index_increment": 16,
+            "slots": [
+              {
+                "min_instances": 1,
+                "max_instances": 64,
+                "module_classes": [
+                  "Do",
+                  "Di",
+                  "Ao",
+                  "Ai",
+                  "Sf",
+                  "Fc",
+                  "SAI",
+                  "IOLink",
+                  "Ts"
+                ],
+                "module_idents": []
+              }
+            ],
+            "modules": [
+              {
+                "slot": 1,
+                "ident": "0x00091F84",
+                "class": "Di"
+              },
+              {
+                "slot": 2,
+                "ident": "0x01012FA0",
+                "class": "Do"
+              },
+              {
+                "slot": 4,
+                "ident": "0x040115C4",
+                "class": "Ai"
+              }
+            ]
+          }
+        }
+      ],
+      "diagnostics": {
+        "log_connections": true,
+        "log_data_access": false,
+        "log_errors": true,
+        "max_log_entries": 10000,
+        "status_update_interval_ms": 500
+      }
+    }
+  }
+]

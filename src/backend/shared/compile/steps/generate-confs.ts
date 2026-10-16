@@ -35,6 +35,8 @@
 // DOM dependencies).  Same legacy-tree path the editor's compiler-
 // module.ts uses; flagged as an organisational smell (`backend-shared
 // → frontend`) but functional, see the build-pipeline refactor plan.
+import { validateEthercatProject } from '@root/middleware/shared/utils/ethercat'
+
 import { getErrorMessage } from '../../../../frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '../../../../frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '../../../../frontend/utils/opcua'
@@ -164,15 +166,16 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
   let ethercatBusconfig: string | null = null
   let ethercatIomapping: string | null = null
   let ethercatErrors: string[]
+  const projectErrors = validateEthercatProject(remoteDevices)
   if (isEtherdogCapableRuntime(input.runtimeVersion)) {
     const configs = generateEtherdogConfigs(remoteDevices)
     ethercatBusconfig = configs?.busconfig ?? null
     ethercatIomapping = configs?.iomapping ?? null
-    ethercatErrors = validateEthercatConfig(ethercatBusconfig, ethercatIomapping)
+    ethercatErrors = [...projectErrors, ...validateEthercatConfig(ethercatBusconfig, ethercatIomapping)]
   } else {
     const legacy = generateEthercatConfig(remoteDevices)
     ethercat = legacy ?? ''
-    ethercatErrors = validateEthercatConfig(legacy)
+    ethercatErrors = [...projectErrors, ...validateEthercatConfig(legacy)]
   }
   if (ethercatErrors.length > 0) {
     throw new Error(`EtherCAT configuration is invalid: ${ethercatErrors.join('; ')}`)

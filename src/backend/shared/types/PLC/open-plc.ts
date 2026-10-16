@@ -745,6 +745,18 @@ const EtherCATSlaveConfigSchema = z.object({
   timeouts: EtherCATTimeoutsSchema,
   watchdog: EtherCATWatchdogSchema,
   distributedClocks: EtherCATDistributedClocksSchema,
+  /**
+   * CoE flags defaulted from the ESI, overridable in the Expert view.
+   * Optional for backward compatibility; the project loader runs the one-pass migration
+   * helper to fill them in from the ESI on projects saved under the earlier schema, without CoE flags or per-PDO flags.
+   */
+  coeFlags: z
+    .object({
+      pdoAssign: z.boolean(),
+      pdoConfig: z.boolean(),
+      completeAccess: z.boolean(),
+    })
+    .optional(),
 })
 
 const PersistedPdoEntrySchema = z.object({
@@ -753,13 +765,20 @@ const PersistedPdoEntrySchema = z.object({
   bitLen: z.number(),
   name: z.string(),
   dataType: z.string(),
+  dependOnSlot: z.boolean().optional(),
 })
 
 const PersistedPdoSchema = z.object({
   index: z.string(),
   name: z.string(),
   entries: z.array(PersistedPdoEntrySchema),
+  dependOnSlot: z.boolean().optional(),
   assigned: z.boolean().optional(),
+  /** ESI defaults carried forward on first import. */
+  fixed: z.boolean().optional(),
+  mandatory: z.boolean().optional(),
+  sm: z.number().int().optional(),
+  exclude: z.array(z.string()).optional(),
 })
 
 const PersistedChannelInfoSchema = z.object({
@@ -783,6 +802,39 @@ const SDOConfigurationEntrySchema = z.object({
   bitLength: z.number(),
   name: z.string(),
   objectName: z.string(),
+  /** Byte-string payload (hex-encoded) sent via EtherDOG's value_bytes. */
+  valueBytes: z.string().optional(),
+  /** Send with CoE Complete Access. */
+  completeAccess: z.boolean().optional(),
+  dependOnSlot: z.boolean().optional(),
+  transition: z.string().optional(),
+})
+
+const ESISlotSchema = z.object({
+  name: z.string().optional(),
+  minInstances: z.number().int().min(0),
+  maxInstances: z.number().int().min(0),
+  moduleClasses: z.array(z.string()).optional(),
+  moduleIdents: z.array(z.string()).optional(),
+  defaultModuleIdent: z.string().optional(),
+})
+
+const ESISlotsSpecSchema = z.object({
+  slots: z.array(ESISlotSchema),
+  slotIndexIncrement: z.number().int(),
+  slotPdoIncrement: z.number().int(),
+  downloadModuleIdentList: z.boolean(),
+  downloadModuleListTransition: z.string().optional(),
+  identifyModuleBy: z.string().optional(),
+  maxSlotCount: z.number().int().optional(),
+})
+
+const ESIModulePdoGroupSchema = z.object({
+  group: z.number().int(),
+  sm: z.number().int().optional(),
+  alignment: z.number().int().optional(),
+  rxPdoIndex: z.string().optional(),
+  txPdoIndex: z.string().optional(),
 })
 
 /**
@@ -798,6 +850,29 @@ const Cia402AxisConfigSchema = z.object({
   scaleNum: z.number(),
   scaleDenom: z.number(),
   scaleFactor: z.number(),
+})
+
+/**
+ * One I/O module plugged into a modular coupler (ETG.5001). Mirror of
+ * {@link ConfiguredEtherCATModule} in esi-types.ts; the Zod schema is what the project
+ * loader validates against.
+ */
+const ConfiguredEtherCATModuleSchema = z.object({
+  id: z.string(),
+  slot: z.number().int().min(1),
+  name: z.string(),
+  ident: z.string(),
+  esiModuleRef: z.object({
+    repositoryItemId: z.string(),
+    moduleIdent: z.string(),
+  }),
+  channelMappings: z.array(EtherCATChannelMappingSchema),
+  channelInfo: z.array(PersistedChannelInfoSchema).optional(),
+  rxPdos: z.array(PersistedPdoSchema).optional(),
+  txPdos: z.array(PersistedPdoSchema).optional(),
+  sdoConfigurations: z.array(SDOConfigurationEntrySchema).optional(),
+  moduleClass: z.string().optional(),
+  modulePdoGroup: z.number().int().optional(),
 })
 
 const ConfiguredEtherCATDeviceSchema = z.object({
@@ -818,6 +893,19 @@ const ConfiguredEtherCATDeviceSchema = z.object({
   sdoConfigurations: z.array(SDOConfigurationEntrySchema).optional(),
   /** Present when this drive is a CiA 402 SoftMotion axis (see schema above). */
   cia402: Cia402AxisConfigSchema.optional(),
+  /**
+   * Modules plugged into this coupler, in slot order. Present only when the
+   * underlying ESI declares a `<Slots>` block (ETG.5001 modular coupler).
+   */
+  modules: z.array(ConfiguredEtherCATModuleSchema).optional(),
+  /**
+   * True when the ESI declares a `<Slots>` block. Set once at import time so
+   * the UI can offer the "Add module to slot N" affordance before any module is attached.
+   */
+  isModularCoupler: z.boolean().optional(),
+  esiInitCmdSdos: z.array(SDOConfigurationEntrySchema).optional(),
+  slotsSpec: ESISlotsSpecSchema.optional(),
+  modulePdoGroups: z.array(ESIModulePdoGroupSchema).optional(),
 })
 
 const EtherCATMasterConfigSchema = z.object({

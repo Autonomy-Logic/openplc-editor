@@ -49,7 +49,7 @@ const Project = () => {
     },
     projectActions: { updateMetaName },
     tabsActions: { updateTabs },
-    editorActions: { setEditor, addModel, getEditorFromEditors },
+    editorActions: { setEditor, addModel, getEditorFromEditors, removeModel },
     workspaceActions: { setSelectedProjectTreeLeaf },
     searchQuery,
   } = useOpenPLCStore()
@@ -110,15 +110,19 @@ const Project = () => {
     const tabToBeCreated = { name, path, elementType, configuration: tabConfig }
     updateTabs(tabToBeCreated)
 
-    const editor = getEditorFromEditors(tabToBeCreated.name)
-    if (!editor) {
-      const model = CreateEditorObjectFromTab(tabToBeCreated)
-      addModel(model)
-      setEditor(model)
-      return
-    }
-    addModel(editor)
-    setEditor(editor)
+    const existing = getEditorFromEditors(tabToBeCreated.name)
+    const fresh = CreateEditorObjectFromTab(tabToBeCreated)
+    // The editor cache is keyed by display name alone, so an element rebuilt under the same
+    // name (a module removed and added again) would reopen the old model. Any identity field
+    // that disagrees with the fresh model marks the cached one stale.
+    const existingMeta = existing === null ? null : new Map<string, unknown>(Object.entries(existing.meta))
+    const stale =
+      existing !== null &&
+      (existing.type !== fresh.type || Object.entries(fresh.meta).some(([k, v]) => existingMeta?.get(k) !== v))
+    if (stale) removeModel(tabToBeCreated.name)
+    const model = existing !== null && !stale ? existing : fresh
+    addModel(model)
+    setEditor(model)
   }
 
   const [isEditing, setIsEditing] = useState(false)
@@ -568,24 +572,81 @@ const Project = () => {
                         })
                       }
                     >
-                      {device.ethercatConfig?.devices?.map((child) => (
-                        <ProjectTreeLeaf
-                          key={child.id}
-                          leafLang={child.cia402?.enabled ? 'softMotionDrive' : 'ethercatDevice'}
-                          leafType='ethercat-device'
-                          busName={device.name}
-                          deviceId={child.id}
-                          label={child.name}
-                          highlightQuery={searchQuery}
-                          onClick={() =>
-                            handleCreateTab({
-                              name: child.name,
-                              path: `/devices/remote/${device.name}/devices/${child.id}`,
-                              elementType: { type: 'ethercat-device', busName: device.name, deviceId: child.id },
-                            })
-                          }
-                        />
-                      ))}
+                      {device.ethercatConfig?.devices?.map((child) => {
+                        // A modular coupler expands to show its slot modules.
+                        // isModularCoupler is set at import time from the ESI's <Slots>
+                        // block; existing modules make the coupler expandable even when
+                        // the flag is missing (older projects).
+                        const isModular = child.isModularCoupler === true || (child.modules?.length ?? 0) > 0
+                        if (isModular) {
+                          return (
+                            <ProjectTreeExpandableLeaf
+                              key={child.id}
+                              leafLang='ethercatDevice'
+                              leafType='ethercat-device'
+                              label={child.name}
+                              highlightQuery={searchQuery}
+                              onClick={() =>
+                                handleCreateTab({
+                                  name: child.name,
+                                  path: `/devices/remote/${device.name}/devices/${child.id}`,
+                                  elementType: { type: 'ethercat-device', busName: device.name, deviceId: child.id },
+                                })
+                              }
+                            >
+                              {(child.modules ?? [])
+                                .slice()
+                                .sort((a, b) => a.slot - b.slot)
+                                .map((module) => (
+                                  <ProjectTreeLeaf
+                                    key={module.id}
+                                    leafLang='ethercatDevice'
+                                    // Must be 'ethercat-module', not 'ethercat-device' —
+                                    // the tree's Delete action keys off leafType to
+                                    // choose between `deleteModule` (one slot) and
+                                    // `delete` (the whole coupler).
+                                    leafType='ethercat-module'
+                                    busName={device.name}
+                                    deviceId={child.id}
+                                    moduleId={module.id}
+                                    label={`Slot ${module.slot} — ${module.name}`}
+                                    highlightQuery={searchQuery}
+                                    onClick={() =>
+                                      handleCreateTab({
+                                        name: `${child.name}/${module.name}`,
+                                        path: `/devices/remote/${device.name}/devices/${child.id}/modules/${module.id}`,
+                                        elementType: {
+                                          type: 'ethercat-module',
+                                          busName: device.name,
+                                          deviceId: child.id,
+                                          moduleId: module.id,
+                                        },
+                                      })
+                                    }
+                                  />
+                                ))}
+                            </ProjectTreeExpandableLeaf>
+                          )
+                        }
+                        return (
+                          <ProjectTreeLeaf
+                            key={child.id}
+                            leafLang={child.cia402?.enabled ? 'softMotionDrive' : 'ethercatDevice'}
+                            leafType='ethercat-device'
+                            busName={device.name}
+                            deviceId={child.id}
+                            label={child.name}
+                            highlightQuery={searchQuery}
+                            onClick={() =>
+                              handleCreateTab({
+                                name: child.name,
+                                path: `/devices/remote/${device.name}/devices/${child.id}`,
+                                elementType: { type: 'ethercat-device', busName: device.name, deviceId: child.id },
+                              })
+                            }
+                          />
+                        )
+                      })}
                     </ProjectTreeExpandableLeaf>
                   ) : (
                     <ProjectTreeLeaf

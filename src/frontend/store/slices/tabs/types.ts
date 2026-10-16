@@ -23,6 +23,7 @@ export type TabsProps = {
     | { type: 'user-management' }
     | { type: 'persistent-storage' }
     | { type: 'ethercat-device'; busName: string; deviceId: string }
+    | { type: 'ethercat-module'; busName: string; deviceId: string; moduleId: string }
     | { type: 'diff-viewer'; filePath: string }
   configuration?: Record<string, unknown>
 }
