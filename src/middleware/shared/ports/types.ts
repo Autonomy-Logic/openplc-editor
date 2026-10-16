@@ -850,6 +850,8 @@ export interface IoMappingEntry {
   modeFieldId?: string
   modeOptions?: string[]
   modeValue?: string
+  /** Set on entries derived from an embedded configurator's datapoints; aliases are keyed by it. */
+  datapointId?: string
 }
 
 export interface VendorIoMapping {

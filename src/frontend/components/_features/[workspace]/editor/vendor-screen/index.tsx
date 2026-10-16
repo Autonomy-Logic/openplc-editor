@@ -1,25 +1,9 @@
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
-import { collectScreenPersistenceKeys } from '@root/frontend/utils/vpp/persistence-keys'
+import { cleanStateFingerprint, ownedSliceFingerprint, serializeOwnedSlice } from '@root/frontend/utils/vpp/owned-slice'
+import { collectConfiguratorKeys, collectScreenPersistenceKeys } from '@root/frontend/utils/vpp/persistence-keys'
 import { useEffect, useMemo } from 'react'
 
 import { VendorScreenRenderer } from '../device/configuration/vendor-screen'
-
-/**
- * Stable serialisation of the slice of `vendorScreenData` this screen
- * owns.  Sorted by key so insertion order doesn't matter for the
- * dirty-vs-clean compare.  This same shape goes into `cleanState` on
- * mount and on every successful save; "Don't save" parses it and
- * writes it back via the device slice's bulk setter.
- */
-function serializeOwnedSlice(vendorScreenData: Record<string, unknown> | undefined, ownedKeys: string[]): string {
-  const slice: Record<string, unknown> = {}
-  for (const k of [...ownedKeys].sort()) {
-    if (vendorScreenData && Object.prototype.hasOwnProperty.call(vendorScreenData, k)) {
-      slice[k] = vendorScreenData[k]
-    }
-  }
-  return JSON.stringify(slice)
-}
 
 const VendorScreenEditor = () => {
   const store = useOpenPLCStoreApi()
@@ -36,6 +20,7 @@ const VendorScreenEditor = () => {
   const moduleSystem = boardInfo?.vpp?.moduleSystem ?? null
 
   const ownedKeys = useMemo(() => collectScreenPersistenceKeys(screenDefinition), [screenDefinition])
+  const configuratorKeys = useMemo(() => collectConfiguratorKeys(screenDefinition), [screenDefinition])
 
   // Register the file entry for this tab on mount so Ctrl+S, File →
   // Save, and the save-changes-file modal on close find it.
@@ -70,13 +55,18 @@ const VendorScreenEditor = () => {
     if (!file || file.type !== 'vendor-screen') return
     // From the store for the same reason as the snapshot above: in the commit
     // where a layout seeds its defaults, this render's value predates them.
-    const current = serializeOwnedSlice(store.getState().deviceDefinitions.configuration.vendorScreenData, ownedKeys)
-    const clean = typeof file.cleanState === 'string' ? file.cleanState : current
+    const current = ownedSliceFingerprint(
+      store.getState().deviceDefinitions.configuration.vendorScreenData,
+      ownedKeys,
+      configuratorKeys,
+    )
+    const clean =
+      typeof file.cleanState === 'string' ? cleanStateFingerprint(file.cleanState, configuratorKeys) : current
     const isClean = current === clean
     if (file.saved !== isClean) {
       updateFile({ name: screenName, saved: isClean })
     }
-  }, [store, screenName, ownedKeys, vendorScreenData, getFile, updateFile])
+  }, [store, screenName, ownedKeys, configuratorKeys, vendorScreenData, getFile, updateFile])
 
   if (!screenDefinition) {
     return (

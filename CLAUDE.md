@@ -121,6 +121,11 @@ npx playwright test e2e/<spec>.ts --workers=1
   webpack dev server on `localhost:1212`, which is not running against a built app.
 - **`firstWindow()` returns the splash**, which then closes. Poll `app.windows()` for the
   one whose URL contains `index.html`.
+- **Build profile paths from `realpathSync(tmpdir())`.** On macOS Electron resolves `userData`
+  through the `/var` symlink, and a package path recorded under `/var/...` fails the containment
+  check, so the package's boards silently never load.
+- **`app.close()` hangs with a project open**: the quit confirmation holds it. Kill the process
+  (`app.process().kill('SIGKILL')`) once what the test needs is on disk.
 
 Every open tab keeps its Monaco editor mounted (hidden with `display: none`), so read
 body text from `.view-lines:visible`, never `.view-lines` alone.
@@ -229,6 +234,9 @@ Main and renderer processes communicate through typed IPC bridges:
 - **Main bridge:** `src/main/modules/ipc/main.ts` — `MainProcessBridge` registers 50+ `ipcMain.handle()` handlers
 - **Renderer bridge:** `src/main/modules/ipc/renderer.ts` — async wrappers calling `ipcRenderer.invoke()`
 - **Preload:** `src/main/modules/preload/preload.ts` — exposes `window.bridge` via `contextBridge`
+
+Vendor package documents (an embedded configurator, for example) are served to a sandboxed iframe under
+the `vpp-doc://` scheme, never with `allow-same-origin`; see `docs/vendor-document-serving.md`.
 
 ### State Management (Zustand)
 

@@ -31,7 +31,14 @@
 export interface PersistableSection {
   id?: unknown
   persistence?: unknown
+  layout?: unknown
 }
+
+export const VENDOR_DOCUMENT_LAYOUT = 'vendor-document'
+export const DATAPOINT_IO_TABLE_LAYOUT = 'datapoint-io-table'
+export const DEVICE_SETUP_KEY = 'device-setup'
+export const IO_MAPPING_KEY = 'io-mapping'
+const DEFAULT_CONFIGURATOR_KEY = 'configurator'
 
 /**
  * The single source of truth for "which key under
@@ -43,7 +50,10 @@ export interface PersistableSection {
  */
 export function getSectionPersistenceKey(section: PersistableSection | null | undefined): string | null {
   if (!section || typeof section !== 'object') return null
+  // Reads what a configurator section wrote, so its key is fixed.
+  if (section.layout === DATAPOINT_IO_TABLE_LAYOUT) return IO_MAPPING_KEY
   if (typeof section.persistence === 'string' && section.persistence.length > 0) return section.persistence
+  if (section.layout === VENDOR_DOCUMENT_LAYOUT) return DEFAULT_CONFIGURATOR_KEY
   if (typeof section.id === 'string' && section.id.length > 0) return section.id
   return null
 }
@@ -60,13 +70,37 @@ export function getSectionPersistenceKey(section: PersistableSection | null | un
  * no-op in that case.
  */
 export function collectScreenPersistenceKeys(screenDefinition: unknown): string[] {
-  if (!screenDefinition || typeof screenDefinition !== 'object') return []
-  const sections = (screenDefinition as { sections?: unknown }).sections
-  if (!Array.isArray(sections)) return []
   const out: string[] = []
-  for (const s of sections) {
-    const key = getSectionPersistenceKey(s as PersistableSection | null)
-    if (key !== null) out.push(key)
+  const add = (key: string) => {
+    if (!out.includes(key)) out.push(key)
+  }
+  for (const section of screenSections(screenDefinition)) {
+    const key = getSectionPersistenceKey(section)
+    if (key === null) continue
+    add(key)
+    // A configurator section writes the device setup and the I/O mapping derived from it in the same store write.
+    if (section.layout === VENDOR_DOCUMENT_LAYOUT || section.layout === DATAPOINT_IO_TABLE_LAYOUT) {
+      add(DEVICE_SETUP_KEY)
+      add(IO_MAPPING_KEY)
+    }
   }
   return out
+}
+
+/** Keys under `vendorScreenData` that hold an embedded configurator's opaque archive. */
+export function collectConfiguratorKeys(screenDefinition: unknown): string[] {
+  const out: string[] = []
+  for (const section of screenSections(screenDefinition)) {
+    if (section.layout !== VENDOR_DOCUMENT_LAYOUT) continue
+    const key = getSectionPersistenceKey(section)
+    if (key !== null && !out.includes(key)) out.push(key)
+  }
+  return out
+}
+
+function screenSections(screenDefinition: unknown): PersistableSection[] {
+  if (!screenDefinition || typeof screenDefinition !== 'object' || !('sections' in screenDefinition)) return []
+  const { sections } = screenDefinition
+  if (!Array.isArray(sections)) return []
+  return sections.filter((section): section is PersistableSection => !!section && typeof section === 'object')
 }

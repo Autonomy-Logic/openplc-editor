@@ -24,6 +24,7 @@ import { carryEditorMetadata } from '../utils/PLC/variable-metadata'
 import { collectDebugVariables, sanitizePou } from '../utils/save-project'
 import { toast } from '../utils/toast'
 import { pickContentForSave } from '../utils/version-control-content'
+import { serializeOwnedSlice } from '../utils/vpp/owned-slice'
 import { collectScreenPersistenceKeys } from '../utils/vpp/persistence-keys'
 import { isSaveBlockedByEndedSession, resumeSaveAfterEdgeSignIn } from './resume-save-after-sign-in'
 import { executeSaveProjectAs } from './save-project-as'
@@ -993,14 +994,7 @@ function vendorScreenOwnedKeysFor(state: RootState, screenName: string): string[
 }
 
 function serializeVendorScreenSlice(state: RootState, ownedKeys: string[]): string {
-  const vendorScreenData = state.deviceDefinitions.configuration.vendorScreenData ?? {}
-  const slice: Record<string, unknown> = {}
-  for (const k of [...ownedKeys].sort()) {
-    if (Object.prototype.hasOwnProperty.call(vendorScreenData, k)) {
-      slice[k] = vendorScreenData[k]
-    }
-  }
-  return JSON.stringify(slice)
+  return serializeOwnedSlice(state.deviceDefinitions.configuration.vendorScreenData, ownedKeys)
 }
 
 async function saveVendorScreenOnly(

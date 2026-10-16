@@ -17,6 +17,7 @@ export {
   modbusMemoryKey,
   recalculateFromLegacy,
   unpinAllocatableChannels,
+  vppDatapointMemoryKey,
   vppMemoryKey,
 } from './migrate'
 export {

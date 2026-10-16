@@ -8,7 +8,7 @@
  */
 import { hasOpenEditSessions, releaseAllEditSessions } from '@root/backend/editor/edge-edit-sessions'
 import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, shell } from 'electron'
 import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
 import { autoUpdater } from 'electron-updater'
@@ -23,17 +23,25 @@ import { MainIpcModuleConstructor } from '../backend/editor/contracts/types/modu
 import { adoptProviderTokens } from '../backend/editor/edge-account/edge-account-service'
 import { edgeOAuthProviderFromUrl, runOAuthFlow } from '../backend/editor/edge-account/oauth-browser-flow'
 import { HardwareModule } from '../backend/editor/hardware'
+import { PackageManagerModule } from '../backend/editor/package-manager'
 import { clearCloudBuildRoot } from '../backend/editor/project/cloud-build-workspace'
 import { logger, PouService, ProjectService, UserService } from '../backend/editor/services'
 import { resolveHtmlPath } from '../backend/editor/utils'
 import { getErrorMessage } from '../frontend/utils/get-error-message'
 import type { EdgeOAuthProviderId } from '../middleware/shared/ports/edge-account-port'
+import { VENDOR_DOCUMENT_SCHEME } from '../middleware/shared/vendor-document/document-url'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { createQuitCoordinator } from './modules/lifecycle/quit-coordinator'
 import { store } from './modules/store'
+import { createVendorDocumentHandler, leavesVendorDocument } from './modules/vendor-document/serve'
 
 enableMapSet()
+
+// Must run before `ready`; `standard` + `secure` give the iframe a real URL base and a secure context.
+protocol.registerSchemesAsPrivileged([
+  { scheme: VENDOR_DOCUMENT_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
+])
 
 class AppUpdater {
   constructor() {
@@ -329,6 +337,10 @@ const createMainWindow = async () => {
     mainWindow.webContents.openDevTools()
   }
 
+  mainWindow.webContents.on('will-frame-navigate', (details) => {
+    if (!details.isMainFrame && leavesVendorDocument(details.frame?.url, details.url)) details.preventDefault()
+  })
+
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
     // A provider link reaches the system browser too, but through the OAuth flow, which
@@ -497,6 +509,11 @@ app.on('second-instance', () => {
 app
   .whenReady()
   .then(() => {
+    const packageManager = new PackageManagerModule()
+    protocol.handle(
+      VENDOR_DOCUMENT_SCHEME,
+      createVendorDocumentHandler({ listPackages: () => packageManager.listInstalled() }),
+    )
     void createMainWindow()
     // Last session's cloud builds. The cloud is the source of truth for those
     // projects, so nothing here survives a restart; best-effort, since a scratch
