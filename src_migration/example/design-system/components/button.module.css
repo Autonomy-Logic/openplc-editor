@@ -1,0 +1,40 @@
+/* Button appearance. Colours and sizes come only from the tokens defined in theme-root.module.css. */
+.button {
+  min-height: var(--control-height);
+  padding: 0 calc(var(--space-control) * 1.5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font: inherit;
+  cursor: pointer;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.primary {
+  color: var(--text-on-action);
+  background: var(--action-primary);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--action-primary-hover);
+}
+
+.neutral {
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border-color: var(--border-subtle);
+}
+
+.danger {
+  color: var(--action-danger);
+  background: transparent;
+  border-color: var(--border-subtle);
+}

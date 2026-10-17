@@ -1,0 +1,3144 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Documentação da re-arquiteturação compartilhada de openplc-web e openplc-editor: arquitetura, estado, interface, migração e validação."
+    />
+    <title>OpenPLC — Documentação da migração</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #193044;
+        --muted: #536b7f;
+        --nav: #153653;
+        --blue: #176599;
+        --line: #d7e2ec;
+        --surface: #f2f6fa;
+        --paper: #fff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 34px;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--paper);
+        font:
+          16px/1.75 'Avenir Next',
+          Avenir,
+          'Segoe UI',
+          sans-serif;
+      }
+      a {
+        color: var(--blue);
+        text-underline-offset: 3px;
+      }
+      a:hover {
+        text-decoration-thickness: 2px;
+      }
+      button,
+      input {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      :focus-visible {
+        outline: 3px solid #4b9dd0;
+        outline-offset: 4px;
+      }
+      .skip-link {
+        position: fixed;
+        top: -80px;
+        left: 16px;
+        z-index: 20;
+        padding: 10px 18px;
+        background: white;
+      }
+      .skip-link:focus {
+        top: 12px;
+      }
+      .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: 284px;
+        background: var(--nav);
+        color: white;
+        display: flex;
+        flex-direction: column;
+        padding: 32px 22px 20px;
+        z-index: 10;
+        overflow: auto;
+      }
+      .brand {
+        font-size: 25px;
+        font-weight: 650;
+        letter-spacing: -0.8px;
+        line-height: 1.2;
+      }
+      .brand-subtitle {
+        font-size: 14px;
+        color: #c0d3e1;
+        margin: 8px 0 25px;
+      }
+      .search-label {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 7px;
+        color: #d2e1ec;
+      }
+      .search-input {
+        width: 100%;
+        background: #244761;
+        border: 1px solid #6a859a;
+        border-radius: 5px;
+        padding: 9px 10px;
+        color: white;
+        font-size: 14px;
+      }
+      .search-input::placeholder {
+        color: #becfdd;
+      }
+      .search-clear {
+        color: #d2e1ec;
+        border: 0;
+        padding: 7px 0;
+        font-size: 12px;
+        background: transparent;
+      }
+      .chapter-nav {
+        margin-top: 19px;
+        display: grid;
+        gap: 5px;
+      }
+      .chapter-nav a {
+        color: #d9e7f1;
+        padding: 10px 12px;
+        border-radius: 4px;
+        text-decoration: none;
+        font-size: 14px;
+        line-height: 1.4;
+        border-left: 3px solid transparent;
+      }
+      .chapter-nav a:hover {
+        background: #244761;
+      }
+      .chapter-nav a[aria-current='location'] {
+        color: white;
+        background: #2b506c;
+        border-left-color: #8cc5e7;
+      }
+      .sidebar-bottom {
+        margin-top: auto;
+        padding-top: 30px;
+        color: #bed0de;
+        font-size: 12px;
+      }
+      .print-button {
+        border: 1px solid #7b94a8;
+        border-radius: 5px;
+        padding: 8px 12px;
+        width: 100%;
+        color: white;
+        background: transparent;
+        font-size: 13px;
+      }
+      .sidebar-bottom p {
+        margin-bottom: 0;
+      }
+      .main-shell {
+        margin-left: 284px;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px 42px;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .status {
+        color: #365878;
+        background: #eaf2f8;
+        border: 1px solid #d1e1ed;
+        border-radius: 4px;
+        padding: 3px 9px;
+      }
+      .menu-toggle {
+        display: none;
+      }
+      .reading-layout {
+        max-width: 1390px;
+        margin: auto;
+        padding: 32px 42px 70px;
+        display: grid;
+        grid-template-columns: minmax(0, 900px) 190px;
+        gap: 42px;
+      }
+      main {
+        min-width: 0;
+      }
+      .document {
+        margin: 0 0 70px;
+        padding-bottom: 54px;
+        border-bottom: 1px solid var(--line);
+        scroll-margin-top: 28px;
+      }
+      .document:last-child {
+        border-bottom: 0;
+      }
+      .chapter-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        color: var(--muted);
+        font-size: 12px;
+        margin: 4px 0 16px;
+      }
+      .chapter-meta a {
+        color: var(--muted);
+      }
+      h1,
+      h2,
+      h3 {
+        color: #143956;
+        line-height: 1.25;
+        letter-spacing: -0.5px;
+      }
+      h1 {
+        font-size: 32px;
+        font-weight: 650;
+        margin: 0 0 25px;
+        max-width: 27ch;
+      }
+      #overview h1 {
+        font-size: 42px;
+        letter-spacing: -1.2px;
+      }
+      h2 {
+        font-size: 23px;
+        margin: 38px 0 17px;
+      }
+      h3 {
+        font-size: 18px;
+        margin: 28px 0 12px;
+      }
+      p {
+        margin: 0 0 18px;
+        max-width: 78ch;
+      }
+      ul,
+      ol {
+        padding-left: 24px;
+        margin: 16px 0 22px;
+      }
+      li {
+        margin: 6px 0;
+      }
+      strong {
+        font-weight: 650;
+      }
+      .heading-anchor {
+        opacity: 0;
+        font-size: 0.8em;
+        margin-left: 8px;
+        text-decoration: none;
+        font-weight: 400;
+      }
+      h2:hover .heading-anchor,
+      h3:hover .heading-anchor,
+      .heading-anchor:focus {
+        opacity: 1;
+      }
+      code {
+        font:
+          13px/1.6 'SFMono-Regular',
+          Consolas,
+          'Liberation Mono',
+          monospace;
+        background: #edf3f8;
+        padding: 2px 5px;
+        border-radius: 3px;
+        overflow-wrap: anywhere;
+      }
+      pre {
+        background: #f1f5f9;
+        border: 1px solid var(--line);
+        border-left: 3px solid #7899b5;
+        padding: 20px;
+        overflow: auto;
+        border-radius: 3px;
+        font-size: 13px;
+      }
+      pre code {
+        padding: 0;
+        background: none;
+        border-radius: 0;
+        overflow-wrap: normal;
+      }
+      .table-scroll {
+        overflow-x: auto;
+        margin: 22px 0 26px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        line-height: 1.6;
+        text-align: left;
+      }
+      th {
+        background: #eaf1f7;
+        color: #153653;
+        font-weight: 650;
+      }
+      td,
+      th {
+        padding: 12px 14px;
+        vertical-align: top;
+        border-bottom: 1px solid var(--line);
+        min-width: 125px;
+      }
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      tbody tr:nth-child(even) {
+        background: #f8fafc;
+      }
+      td code {
+        font-size: 12px;
+      }
+      .local-toc {
+        position: sticky;
+        top: 28px;
+        align-self: start;
+        border-left: 1px solid var(--line);
+        padding-left: 18px;
+        font-size: 12px;
+        max-height: calc(100vh - 60px);
+        overflow: auto;
+      }
+      .local-toc strong {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 14px;
+      }
+      .local-toc a {
+        display: block;
+        color: var(--muted);
+        text-decoration: none;
+        margin: 0 0 12px;
+        line-height: 1.5;
+      }
+      .local-toc a:hover {
+        color: var(--blue);
+      }
+      .architecture-figure {
+        margin: 25px 0;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 14px;
+      }
+      .diagram-scroll {
+        overflow: auto;
+      }
+      .architecture-figure svg {
+        width: 100%;
+        min-width: 650px;
+        display: block;
+        font-family: 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
+      }
+      figcaption {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 12px;
+      }
+      .diagram-source {
+        font-size: 13px;
+        margin: 15px 0;
+      }
+      summary {
+        cursor: pointer;
+        color: var(--blue);
+      }
+      .search-results {
+        margin: 0 0 30px;
+        padding: 22px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+      }
+      .search-results h2 {
+        margin: 0 0 12px;
+        font-size: 21px;
+      }
+      .search-results p {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .search-results li {
+        margin-bottom: 16px;
+      }
+      .result-excerpt {
+        display: block;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .reading-progress {
+        height: 3px;
+        width: 0;
+        position: fixed;
+        top: 0;
+        left: 284px;
+        background: #418bbd;
+        z-index: 12;
+      }
+      footer {
+        color: var(--muted);
+        font-size: 12px;
+        border-top: 1px solid var(--line);
+        padding-top: 20px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      @media (max-width: 1250px) {
+        .reading-layout {
+          grid-template-columns: minmax(0, 1fr);
+          max-width: 1000px;
+        }
+        .local-toc {
+          display: none;
+        }
+      }
+      @media (max-width: 850px) {
+        .sidebar {
+          position: relative;
+          width: auto;
+          padding: 23px;
+        }
+        .sidebar-bottom {
+          margin-top: 16px;
+          padding-top: 8px;
+        }
+        .brand-subtitle {
+          margin-bottom: 16px;
+        }
+        .chapter-nav {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .main-shell {
+          margin-left: 0;
+        }
+        .reading-progress {
+          left: 0;
+        }
+        .topbar {
+          padding: 15px 24px;
+          flex-wrap: wrap;
+        }
+        .reading-layout {
+          padding: 25px 24px 40px;
+        }
+        h1 {
+          font-size: 29px;
+        }
+        #overview h1 {
+          font-size: 34px;
+        }
+        .document {
+          margin-bottom: 40px;
+        }
+      }
+      @media (max-width: 480px) {
+        .chapter-nav {
+          grid-template-columns: 1fr;
+        }
+        .reading-layout {
+          padding: 24px 18px;
+        }
+        .chapter-meta {
+          font-size: 11px;
+        }
+        h2 {
+          font-size: 21px;
+        }
+        .architecture-figure {
+          padding: 8px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+      }
+      @media print {
+        @page {
+          margin: 16mm;
+        }
+        body {
+          font-size: 10pt;
+          line-height: 1.55;
+        }
+        .sidebar,
+        .topbar,
+        .local-toc,
+        .reading-progress,
+        .search-results,
+        .heading-anchor,
+        .chapter-meta a,
+        .skip-link,
+        .diagram-source {
+          display: none !important;
+        }
+        .main-shell {
+          margin: 0;
+        }
+        .reading-layout {
+          display: block;
+          padding: 0;
+          max-width: none;
+        }
+        .document,
+        .document[hidden] {
+          display: block !important;
+          break-before: page;
+          margin: 0;
+          padding: 0;
+          border: 0;
+        }
+        .document:first-of-type {
+          break-before: auto;
+        }
+        h1,
+        #overview h1 {
+          font-size: 24pt;
+        }
+        h2 {
+          font-size: 15pt;
+          break-after: avoid;
+        }
+        h3 {
+          font-size: 12pt;
+          break-after: avoid;
+        }
+        pre {
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
+        .table-scroll {
+          overflow: visible;
+        }
+        td,
+        th {
+          min-width: 0;
+          font-size: 9pt;
+          padding: 7px;
+        }
+        tr {
+          break-inside: avoid;
+        }
+        .architecture-figure svg {
+          min-width: 0;
+        }
+        .architecture-figure {
+          break-inside: avoid;
+        }
+        a {
+          color: inherit;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Ir para a documentação</a>
+    <div class="reading-progress" aria-hidden="true"></div>
+    <aside class="sidebar" aria-label="Navegação da documentação">
+      <div class="brand">OpenPLC</div>
+      <p class="brand-subtitle">Re-arquiteturação web e editor</p>
+      <label class="search-label" for="search">Buscar na documentação</label
+      ><input
+        class="search-input"
+        id="search"
+        type="search"
+        placeholder="Estado, DI, fases…"
+        autocomplete="off"
+      /><button class="search-clear" id="clear-search" type="button">Limpar busca</button>
+      <nav class="chapter-nav" aria-label="Capítulos">
+        <a href="#overview">Visão geral</a><a href="#diagnostico">Diagnóstico</a><a href="#arquitetura">Arquitetura</a
+        ><a href="#estado">Gerenciamento de estado</a><a href="#interface">Interface e estilos</a
+        ><a href="#plano">Plano de migração</a><a href="#validacao">Validação e rollback</a
+        ><a href="#acompanhamento">Acompanhamento</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <button class="print-button" id="print" type="button">Imprimir / salvar como PDF</button>
+        <p>Proposta técnica inicial<br />Baseline de 7 de outubro de 2026</p>
+      </div>
+    </aside>
+    <div class="main-shell">
+      <header class="topbar">
+        <span>openplc-web / openplc-editor</span><span class="status">Planejamento em revisão</span>
+      </header>
+      <div class="reading-layout">
+        <main id="content" tabindex="-1">
+          <section class="search-results" id="search-results" aria-labelledby="results-title" hidden>
+            <h2 id="results-title">Resultados da busca</h2>
+            <p id="result-status" role="status" aria-live="polite"></p>
+            <ul id="result-list"></ul>
+          </section>
+          <article class="document" id="overview" data-title="Visão geral">
+            <div class="chapter-meta">Documento de entrada<a href="README.md">Fonte Markdown</a></div>
+            <h1>Re-arquiteturação compartilhada do OpenPLC</h1>
+            <p>
+              Este diretório inicia a documentação da reescrita de openplc-web e openplc-editor. O código novo será
+              construído em <code>src_migration/</code> de cada repositório: primeiro a interface com redesign básico,
+              contratos e cenários simulados, depois a incorporação gradual das funcionalidades. A migração roda como
+              aplicação independente; a aplicação atual continua em <code>src/</code> e em produção até o time concluir
+              que o produto novo pode substituí-la.
+            </p>
+            <p>
+              <strong>Status:</strong> proposta técnica inicial, baseada na inspeção local de 2026-10-07. Somente
+              documentação foi criada. Nenhum entry point, store, adapter ou configuração foi alterado. As decisões
+              propostas ainda precisam ser revisadas durante a fase 0.
+            </p>
+            <h2 id="overview-objetivos-1" tabindex="-1">
+              Objetivos<a class="heading-anchor" href="#overview-objetivos-1" aria-label="Link para esta seção">#</a>
+            </h2>
+            <ul>
+              <li>
+                Retirar regras de negócio, processamento de projetos, coordenação de tarefas e Zustand dos componentes e
+                hooks de interface.
+              </li>
+              <li>
+                Injetar contratos pequenos de leitura e comandos, sem expor a store ou os ports de infraestrutura à
+                interface.
+              </li>
+              <li>
+                Realizar um redesign básico de posicionamento dos componentes, navegação e acesso às features de UI.
+              </li>
+              <li>
+                Separar estrutura, comportamento visual e estilos, permitindo trocar tema e aparência com mudanças
+                concentradas.
+              </li>
+              <li>Centralizar operações hoje distribuídas entre componentes, serviços, slices e adapters.</li>
+              <li>
+                Preservar semântica de projetos, fluxos de edição, persistência e diferenças reais entre browser e
+                Electron.
+              </li>
+              <li>
+                Melhorar o gerenciamento de estado com propriedade explícita, transações e assinaturas específicas,
+                validando o desempenho por medição.
+              </li>
+            </ul>
+            <h2 id="overview-leitura-e-uso-2" tabindex="-1">
+              Leitura e uso<a class="heading-anchor" href="#overview-leitura-e-uso-2" aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Documento</th>
+                    <th>Uso</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><a href="#diagnostico">01 — Diagnóstico</a></td>
+                    <td>Evidências, limitações do levantamento e baseline das duas bases</td>
+                  </tr>
+                  <tr>
+                    <td><a href="#arquitetura">02 — Arquitetura</a></td>
+                    <td>Camadas, DI, contratos e direção das dependências</td>
+                  </tr>
+                  <tr>
+                    <td><a href="#estado">03 — Estado</a></td>
+                    <td>Proprietários, consistência, concorrência e desempenho</td>
+                  </tr>
+                  <tr>
+                    <td><a href="#interface">04 — Interface e estilos</a></td>
+                    <td>Componentes sem lógica de aplicação e sistema de temas</td>
+                  </tr>
+                  <tr>
+                    <td><a href="#plano">05 — Plano</a></td>
+                    <td>Fases, entregas, dependências e critérios de saída</td>
+                  </tr>
+                  <tr>
+                    <td><a href="#validacao">06 — Validação</a></td>
+                    <td>Testes, paridade, medições, prontidão e rollback</td>
+                  </tr>
+                  <tr>
+                    <td><a href="#acompanhamento">07 — Acompanhamento</a></td>
+                    <td>Decisões, inventário por fluxo e registro de execução</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Começar pela fase 0 do plano. Depois criar o ambiente isolado e o catálogo visual; conectar a lógica por
+              fluxos completos somente após a aprovação dos contratos visuais correspondentes.
+            </p>
+            <h2 id="overview-premissas-e-limites-3" tabindex="-1">
+              Premissas e limites<a
+                class="heading-anchor"
+                href="#overview-premissas-e-limites-3"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              O redesign básico faz parte do escopo: reposicionar componentes e revisar o acesso às features de UI. A
+              referência de aceite visual será o novo desenho aprovado; o legado serve como referência funcional e de
+              formato de dados, sem exigir reprodução do layout antigo. O objetivo não exige manter a organização Atomic
+              Design, substituir React, eliminar Zustand nem mover processamento para um servidor. Lógica desacoplada
+              pode continuar no browser, renderer, worker ou processo principal conforme o adapter.
+            </p>
+            <p>
+              Reescrever do zero significa construir módulos novos com as fronteiras propostas. Funcionalidades e
+              algoritmos do legado serão trazidos aos poucos por reimplementação ou portabilidade de código para a
+              árvore nova, revisados e testados sob os novos contratos. A migração não importa, chama ou delega
+              operações à implementação de <code>src/</code>: não há bridges, fallback para o legado nem seleção por
+              fluxo dentro do produto atual.
+            </p>
+            <p>
+              O produto novo tem bootstrap, composição, estado, recursos e execução próprios. Pode consumir os serviços
+              externos e formatos existentes por adapters próprios; isso não implica dependência da aplicação antiga. O
+              time decide a substituição do produto em produção após os critérios de prontidão. Funcionalidade concluída
+              na migração não é automaticamente promovida à produção.
+            </p>
+            <p>
+              Os dois repositórios continuarão separados nesta proposta. Módulos comuns serão espelhados com verificação
+              de identidade; extrair um pacote físico único é uma decisão adicional, pois exige definir distribuição,
+              versionamento e releases. A localização desse eventual pacote ainda não está definida.
+            </p>
+            <h2 id="overview-estrutura-prevista-4" tabindex="-1">
+              Estrutura prevista<a
+                class="heading-anchor"
+                href="#overview-estrutura-prevista-4"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <pre><code class="language-text">src_migration/
+  contracts/           Contratos públicos de aplicação e apresentação
+  domain/              Modelos e regras independentes de frameworks
+  application/         Casos de uso, coordenação e ports de saída
+  state/               Implementações de estado, sem React
+  presentation/        Controllers e projeções, sem React ou Zustand
+  react-bindings/      Context, assinaturas React e conexão com views
+  frontend/            Views e layouts orientados a props
+  design-system/       Primitivas visuais, receitas e temas
+  infrastructure/      Adapters próprios por plataforma
+  composition/         Montagem e lifecycle por plataforma
+  fixtures/            Cenários simulados que implementam os contratos
+  __architecture__/    Verificação de fronteiras
+  docs/                Documentação desta migração
+</code></pre>
+            <p>
+              Essa estrutura ainda não foi implementada. A existência desta pasta não habilita uma aplicação nova nem
+              amplia os checks atuais.
+            </p>
+          </article>
+          <article class="document" id="diagnostico" data-title="Diagnóstico">
+            <div class="chapter-meta">Capítulo 01<a href="docs/01-diagnostico.md">Fonte Markdown</a></div>
+            <h1>01 — Diagnóstico e baseline</h1>
+            <h2 id="diagnostico-evidencia-local-1" tabindex="-1">
+              Evidência local<a
+                class="heading-anchor"
+                href="#diagnostico-evidencia-local-1"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Inspeção de 2026-10-07 dos checkouts <code>openplc-web</code> e <code>openplc-editor</code> no workspace.
+              HEADs: web <code>61028259a</code>, editor <code>f56d179fb</code>. Eles não foram alinhados a uma mesma
+              release para esta análise. Nenhuma conclusão abaixo representa um benchmark de execução.
+            </p>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Evidência</th>
+                    <th>Consequência para a migração</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      Ambos usam <code>createOpenPLCStore()</code> com 19 slices, <code>zustand/vanilla</code> e
+                      <code>subscribeWithSelector</code>
+                    </td>
+                    <td>
+                      Já existe uma factory reutilizável como referência; não começar de uma suposição de singleton
+                      obrigatório
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>OpenPLCStoreProvider</code> injeta a store por Context</td>
+                    <td>DI já existe, mas seu contrato expõe a implementação e o <code>RootState</code></td>
+                  </tr>
+                  <tr>
+                    <td>
+                      167 arquivos de componentes por base referenciam <code>useOpenPLCStore</code>,
+                      <code>OpenPLCStore</code> ou <code>RootState</code>
+                    </td>
+                    <td>A interface conhece estado de aplicação e/ou seus tipos</td>
+                  </tr>
+                  <tr>
+                    <td>94 arquivos de componentes por base chamam <code>useOpenPLCStore()</code> sem seletor</td>
+                    <td>
+                      Existe assinatura ampla; medir atualizações irrelevantes e substituir por projeções específicas
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>20 arquivos de hooks e 28 de serviços por base referenciam os mesmos identificadores</td>
+                    <td>Mover apenas componentes deixa outras dependências da interface intactas</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>project/slice.ts</code>: 2.634 linhas; barra de atividade: 1.411;
+                      <code>save-actions.ts</code>: 1.142, nas duas bases
+                    </td>
+                    <td>Regras e coordenação concentram-se em módulos grandes; dividir por responsabilidade e fluxo</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      Adapters web recebem <code>OpenPLCStore</code> para projeto, build, runtime e hidratação de
+                      bibliotecas
+                    </td>
+                    <td>A inversão existente ainda permite infraestrutura conhecer o estado global</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>save-actions.ts</code> e <code>project-adapter.ts</code> possuem caminhos de construção de
+                      arquivos de projeto
+                    </td>
+                    <td>
+                      Candidatos a uma política única de snapshot e serialização; provar equivalência antes de
+                      consolidar
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      Fluxos LD/FBD possuem write-back para <code>project.data.pous[].body.value</code> com debounce
+                    </td>
+                    <td>
+                      Existe uma janela de representações divergentes que save, undo e troca de projeto precisam
+                      coordenar
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>flow-writeback.ts</code> possui mapa de timers em escopo de módulo</td>
+                    <td>A nova implementação precisa isolar timers e disposers por instância e sessão</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      Classes Tailwind de aparência e geometria aparecem no JSX; cores também vivem na configuração
+                      global
+                    </td>
+                    <td>Temas exigem tokens semânticos e receitas separadas do componente</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Contagens consideram <code>.ts</code> e <code>.tsx</code>, excluindo <code>__tests__</code>,
+              <code>*.test.*</code> e <code>*.spec.*</code>. São buscas textuais, não análise AST: incluem referências
+              de tipos e podem alcançar comentários. Não significam que todos esses arquivos executem regras de negócio.
+            </p>
+            <h2 id="diagnostico-fontes-no-codigo-atual-2" tabindex="-1">
+              Fontes no código atual<a
+                class="heading-anchor"
+                href="#diagnostico-fontes-no-codigo-atual-2"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>Os caminhos abaixo existem nas duas bases, exceto os marcados como web:</p>
+            <ul>
+              <li><code>src/composition-root.ts</code>: criação da store e dos ports.</li>
+              <li>
+                <code>src/frontend/store/index.ts</code> e <code>context.tsx</code>: composição dos slices e API React.
+              </li>
+              <li>
+                <code>src/frontend/store/slices/project/slice.ts</code>: regras de projeto e coordenação de entidades.
+              </li>
+              <li><code>src/frontend/store/slices/history/types.ts</code>: snapshots de histórico por POU.</li>
+              <li>
+                <code>src/frontend/store/slices/shared/flow-writeback.ts</code>: sincronização e flush de fluxos
+                gráficos.
+              </li>
+              <li>
+                <code>src/frontend/services/save-actions.ts</code>: montagem, serialização e fluxo de persistência.
+              </li>
+              <li>
+                <code>src/frontend/components/_organisms/workspace-activity-bar/default.tsx</code>: build, upload e
+                depuração.
+              </li>
+              <li>
+                <code>src/frontend/components/_atoms/buttons/default/index.tsx</code>: exemplo de estilos no componente.
+              </li>
+              <li><code>src/middleware/shared/providers/types.ts</code>: contratos atuais de plataforma.</li>
+              <li>
+                <code>src/middleware/shared/ports/project-port.ts</code>: I/O de projeto e responsabilidades adicionais
+                como PDF.
+              </li>
+              <li>
+                <code>src/middleware/adapters/web/project-adapter.ts</code> e <code>web-platform.ts</code> (web):
+                dependências da store.
+              </li>
+              <li><code>src/__architecture__/validate.ts</code>: regras atuais de dependência.</li>
+              <li>
+                <code>scripts/compare-surfaces.py</code> e <code>.github/workflows/ci-sync.yml</code>: sincronização
+                atual.
+              </li>
+            </ul>
+            <h2 id="diagnostico-paridade-observada-3" tabindex="-1">
+              Paridade observada<a
+                class="heading-anchor"
+                href="#diagnostico-paridade-observada-3"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>O comando executado a partir do workspace foi:</p>
+            <pre><code class="language-sh">python3 openplc-web/scripts/compare-surfaces.py --web-root openplc-web/src --editor-root openplc-editor/src
+</code></pre>
+            <p>
+              Resultado: <code>match: false</code>, 1.226 arquivos verificados, 17 diferenças, exit code 1. É um
+              diagnóstico do legado, não uma falha causada por esta documentação. O script exclui testes e considera
+              arquivos rastreados pelo Git.
+            </p>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Superfície</th>
+                    <th>Diferenças</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>frontend</code></td>
+                    <td>9</td>
+                  </tr>
+                  <tr>
+                    <td><code>middleware/shared</code></td>
+                    <td>2</td>
+                  </tr>
+                  <tr>
+                    <td><code>backend/shared</code></td>
+                    <td>5</td>
+                  </tr>
+                  <tr>
+                    <td><code>__architecture__</code></td>
+                    <td>1</td>
+                  </tr>
+                  <tr>
+                    <td>Runtime bare-metal mapeado</td>
+                    <td>0</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Diferenças registradas, relativas a <code>src/</code>:</p>
+            <pre><code class="language-text">frontend/components/_features/[workspace]/ai-chat/ai-chat-tool-summary.tsx
+frontend/components/_features/[workspace]/editor/device/configuration/components/pin-mapping-table.tsx
+frontend/components/_molecules/pin-mapping-table/pull-input.tsx [somente web]
+frontend/services/ai/tools/index.ts
+frontend/services/ai/tools/tool-definitions.ts
+frontend/services/ai/tools/tool-executor.ts
+frontend/services/ai/tools/tool-input-adapters.ts
+frontend/store/slices/device/slice.ts
+frontend/store/slices/ladder/utils/rung-spec.ts [somente web]
+middleware/shared/ports/types.ts
+middleware/shared/utils/pin-pull/index.ts [somente web]
+backend/shared/compile/pipeline.ts
+backend/shared/compile/steps/generate-defines.ts
+backend/shared/compile/steps/resolve-board-selection.ts
+backend/shared/hardware/board-info-resolver.ts
+backend/shared/types/PLC/devices/pin.ts
+__architecture__/validate.ts
+</code></pre>
+            <p>
+              Classificar cada diferença como alteração pendente de espelhamento, diferença intencional ou defeito antes
+              de escolher o comportamento de referência. Este levantamento não resolve essa classificação.
+            </p>
+            <h2 id="diagnostico-protecoes-que-precisam-ser-ampliadas-4" tabindex="-1">
+              Proteções que precisam ser ampliadas<a
+                class="heading-anchor"
+                href="#diagnostico-protecoes-que-precisam-ser-ampliadas-4"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Os TSConfigs incluem <code>src</code>; Tailwind pesquisa <code>src</code>; descoberta de testes e
+              cobertura usam padrões de <code>src</code>; o validador resolve sua raiz dentro de <code>src</code>; os
+              gatilhos de sincronização usam as superfícies antigas. Não presumir que qualquer desses checks proteja
+              <code>src_migration</code>.
+            </p>
+            <p>
+              O validador atual permite que componentes importem store, hooks, services e utils, e que adapters importem
+              store. Essas regras são compatíveis com a migração anterior, mas insuficientes para o objetivo novo.
+            </p>
+            <h2 id="diagnostico-levantamento-ainda-necessario-5" tabindex="-1">
+              Levantamento ainda necessário<a
+                class="heading-anchor"
+                href="#diagnostico-levantamento-ainda-necessario-5"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Antes de implementar, completar inventário de telas, comandos, side effects, entry points, timers,
+              serialização, assinatura de eventos e persistência. Registrar também o placement atual, dificuldades de
+              navegação e proposta de novo acesso às features. O inventário descreve o comportamento a portar e as
+              mudanças de UX, sem autorizar chamadas ao legado. Capturar projetos de referência e medições de
+              renderização, latência, memória e tamanho de bundle. Examinar também rotas web, menus nativos, CLI do
+              editor, workers, LSPs, extensões e ações de IA como consumidores dos mesmos casos de uso.
+            </p>
+            <p>
+              Este diagnóstico é uma amostra estrutural, não uma auditoria completa nem uma identificação automática de
+              código duplicado.
+            </p>
+            <h2 id="diagnostico-premissas-confirmadas-apos-o-diagnostico-6" tabindex="-1">
+              Premissas confirmadas após o diagnóstico<a
+                class="heading-anchor"
+                href="#diagnostico-premissas-confirmadas-apos-o-diagnostico-6"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              O usuário definiu redesign básico e execução independente até a decisão de substituição pelo time. As
+              estruturas atuais são evidência para caracterização e portabilidade gradual; não serão usadas como
+              implementação de runtime por pontes. Comparação visual com o legado registra diferenças, mas não exige
+              identidade do layout.
+            </p>
+          </article>
+          <article class="document" id="arquitetura" data-title="Arquitetura">
+            <div class="chapter-meta">Capítulo 02<a href="docs/02-arquitetura.md">Fonte Markdown</a></div>
+            <h1>02 — Arquitetura proposta</h1>
+            <h2 id="arquitetura-fronteira-principal-1" tabindex="-1">
+              Fronteira principal<a
+                class="heading-anchor"
+                href="#arquitetura-fronteira-principal-1"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              A interface renderiza dados de exibição e emite intenções. Casos de uso aplicam regras, coordenam estado e
+              acionam ports de I/O. Controllers de apresentação transformam os resultados em modelos próprios de cada
+              painel. Nenhuma dessas responsabilidades depende de React para executar.
+            </p>
+            <p>
+              Os ports atuais continuam como referência para acesso a plataforma. Eles são contratos de saída da
+              aplicação, não o contrato que os componentes novos vão consumir. Um botão de build emite
+              <code>requestBuild</code>; não coordena save, compilação, upload e debugger.
+            </p>
+            <figure class="architecture-figure">
+              <div class="diagram-scroll">
+                <svg
+                  viewBox="0 0 1000 446"
+                  role="img"
+                  aria-labelledby="graph-title graph-description"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <title id="graph-title">Dependências da arquitetura proposta</title>
+                  <desc id="graph-description">
+                    A composição conecta bindings, apresentação, casos de uso, estado e adapters. Bindings dependem de
+                    views e contratos de apresentação; controllers dependem dos contratos de apresentação e aplicação;
+                    casos de uso dependem dos contratos de aplicação, domínio e ports; estado e adapters implementam
+                    ports de saída.
+                  </desc>
+                  <defs>
+                    <marker
+                      id="arrow"
+                      viewBox="0 0 10 10"
+                      refX="9"
+                      refY="5"
+                      markerWidth="6"
+                      markerHeight="6"
+                      orient="auto-start-reverse"
+                    >
+                      <path d="M 0 0 L 10 5 L 0 10 z" fill="#66839f" />
+                    </marker>
+                  </defs>
+                  <path
+                    d="M 500 92 C 500 134, 108 124, 108 162"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <path
+                    d="M 500 92 C 500 134, 304 124, 304 162"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <path
+                    d="M 500 92 C 500 134, 500 124, 500 162"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <path
+                    d="M 500 92 C 500 134, 696 124, 696 162"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <path
+                    d="M 500 92 C 500 134, 892 124, 892 162"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <path
+                    d="M 108 236 C 108 278, 108 308, 108 346"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <path
+                    d="M 108 236 C 108 278, 304 308, 304 346"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <path
+                    d="M 304 236 C 304 278, 304 308, 304 346"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <path
+                    d="M 304 236 C 304 278, 500 308, 500 346"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <path
+                    d="M 500 236 C 500 278, 500 308, 500 346"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <path
+                    d="M 500 236 C 500 278, 696 308, 696 346"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <path
+                    d="M 500 236 C 500 278, 892 308, 892 346"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <path
+                    d="M 696 236 C 696 278, 892 308, 892 346"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <path
+                    d="M 892 236 C 892 278, 892 308, 892 346"
+                    fill="none"
+                    stroke="#66839f"
+                    stroke-width="1.6"
+                    marker-end="url(#arrow)"
+                  />
+                  <g>
+                    <rect x="410" y="22" width="180" height="70" rx="6" fill="#153653" stroke="#c6d5e3" />
+                    <text x="500" y="51" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="600">
+                      Composition root
+                    </text>
+                    <text x="500" y="71" text-anchor="middle" fill="#d0dfeb" font-size="10">
+                      Montagem por plataforma
+                    </text>
+                  </g>
+                  <g>
+                    <rect x="18" y="166" width="180" height="70" rx="6" fill="#f0f5fa" stroke="#c6d5e3" />
+                    <text x="108" y="195" text-anchor="middle" fill="#153653" font-size="12" font-weight="600">
+                      Bindings React
+                    </text>
+                    <text x="108" y="215" text-anchor="middle" fill="#53697b" font-size="10">
+                      Assinaturas e conexão
+                    </text>
+                  </g>
+                  <g>
+                    <rect x="214" y="166" width="180" height="70" rx="6" fill="#f0f5fa" stroke="#c6d5e3" />
+                    <text x="304" y="195" text-anchor="middle" fill="#153653" font-size="12" font-weight="600">
+                      Apresentação
+                    </text>
+                    <text x="304" y="215" text-anchor="middle" fill="#53697b" font-size="10">
+                      Controllers e projeções
+                    </text>
+                  </g>
+                  <g>
+                    <rect x="410" y="166" width="180" height="70" rx="6" fill="#f0f5fa" stroke="#c6d5e3" />
+                    <text x="500" y="195" text-anchor="middle" fill="#153653" font-size="12" font-weight="600">
+                      Casos de uso
+                    </text>
+                    <text x="500" y="215" text-anchor="middle" fill="#53697b" font-size="10">
+                      Coordenação da aplicação
+                    </text>
+                  </g>
+                  <g>
+                    <rect x="606" y="166" width="180" height="70" rx="6" fill="#f0f5fa" stroke="#c6d5e3" />
+                    <text x="696" y="195" text-anchor="middle" fill="#153653" font-size="12" font-weight="600">
+                      Estado vanilla
+                    </text>
+                    <text x="696" y="215" text-anchor="middle" fill="#53697b" font-size="10">
+                      Implementação de estado
+                    </text>
+                  </g>
+                  <g>
+                    <rect x="802" y="166" width="180" height="70" rx="6" fill="#f0f5fa" stroke="#c6d5e3" />
+                    <text x="892" y="195" text-anchor="middle" fill="#153653" font-size="12" font-weight="600">
+                      Adapters próprios
+                    </text>
+                    <text x="892" y="215" text-anchor="middle" fill="#53697b" font-size="10">Implementação de I/O</text>
+                  </g>
+                  <g>
+                    <rect x="18" y="350" width="180" height="70" rx="6" fill="#f0f5fa" stroke="#c6d5e3" />
+                    <text x="108" y="379" text-anchor="middle" fill="#153653" font-size="12" font-weight="600">
+                      Views e design system
+                    </text>
+                    <text x="108" y="399" text-anchor="middle" fill="#53697b" font-size="10">Interface visual</text>
+                  </g>
+                  <g>
+                    <rect x="214" y="350" width="180" height="70" rx="6" fill="#f0f5fa" stroke="#c6d5e3" />
+                    <text x="304" y="379" text-anchor="middle" fill="#153653" font-size="11" font-weight="600">
+                      Contratos de apresentação
+                    </text>
+                    <text x="304" y="399" text-anchor="middle" fill="#53697b" font-size="10">Modelos e intenções</text>
+                  </g>
+                  <g>
+                    <rect x="410" y="350" width="180" height="70" rx="6" fill="#f0f5fa" stroke="#c6d5e3" />
+                    <text x="500" y="379" text-anchor="middle" fill="#153653" font-size="12" font-weight="600">
+                      Contratos de aplicação
+                    </text>
+                    <text x="500" y="399" text-anchor="middle" fill="#53697b" font-size="10">API pública</text>
+                  </g>
+                  <g>
+                    <rect x="606" y="350" width="180" height="70" rx="6" fill="#f0f5fa" stroke="#c6d5e3" />
+                    <text x="696" y="379" text-anchor="middle" fill="#153653" font-size="12" font-weight="600">
+                      Domínio
+                    </text>
+                    <text x="696" y="399" text-anchor="middle" fill="#53697b" font-size="10">Regras e invariantes</text>
+                  </g>
+                  <g>
+                    <rect x="802" y="350" width="180" height="70" rx="6" fill="#f0f5fa" stroke="#c6d5e3" />
+                    <text x="892" y="379" text-anchor="middle" fill="#153653" font-size="12" font-weight="600">
+                      Ports de saída
+                    </text>
+                    <text x="892" y="399" text-anchor="middle" fill="#53697b" font-size="10">
+                      Estado e infraestrutura
+                    </text>
+                  </g>
+                </svg>
+              </div>
+              <figcaption>
+                As setas indicam dependências conhecidas por cada camada. A composição conecta as implementações aos
+                contratos.
+              </figcaption>
+            </figure>
+            <details class="diagram-source">
+              <summary>Ver código do diagrama</summary>
+              <pre><code>flowchart TD
+  C[Composition root por plataforma] --&gt; B[Bindings React]
+  C --&gt; P[Controllers de apresentação]
+  C --&gt; A[Casos de uso]
+  C --&gt; S[Estado vanilla]
+  C --&gt; I[Adapters próprios]
+  B --&gt; V[Views e design system]
+  B --&gt; U[Contratos de apresentação]
+  P --&gt; U
+  P --&gt; Q[Contratos de aplicação]
+  A --&gt; Q
+  A --&gt; D[Domínio]
+  A --&gt; O[Ports de saída]
+  S --&gt; O
+  I --&gt; O
+</code></pre>
+            </details>
+            <p>
+              As setas mostram conhecimento de dependências; a composição conecta implementações concretas aos
+              contratos.
+            </p>
+            <h2 id="arquitetura-responsabilidades-e-imports-permitidos-2" tabindex="-1">
+              Responsabilidades e imports permitidos<a
+                class="heading-anchor"
+                href="#arquitetura-responsabilidades-e-imports-permitidos-2"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Camada</th>
+                    <th>Responsabilidade</th>
+                    <th>Dependências internas permitidas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>contracts/application</code></td>
+                    <td>Comandos, resultados e snapshots públicos de aplicação</td>
+                    <td>Contratos de aplicação; sem frameworks ou implementações</td>
+                  </tr>
+                  <tr>
+                    <td><code>contracts/presentation</code></td>
+                    <td>Modelos de exibição e interfaces de controllers</td>
+                    <td>Contratos de apresentação; sem store ou entidades mutáveis</td>
+                  </tr>
+                  <tr>
+                    <td><code>domain</code></td>
+                    <td>Entidades, invariantes e transformações puras</td>
+                    <td>Próprio domínio</td>
+                  </tr>
+                  <tr>
+                    <td><code>application</code></td>
+                    <td>Casos de uso, serviços de coordenação e definição de ports de saída</td>
+                    <td>Domínio e contratos de aplicação</td>
+                  </tr>
+                  <tr>
+                    <td><code>state</code></td>
+                    <td>Estado em memória e transações; implementação dos ports de estado</td>
+                    <td>Domínio, contratos de aplicação e ports de saída</td>
+                  </tr>
+                  <tr>
+                    <td><code>presentation</code></td>
+                    <td>Projeções e controllers independentes de UI</td>
+                    <td>Contratos de aplicação e apresentação</td>
+                  </tr>
+                  <tr>
+                    <td><code>frontend</code></td>
+                    <td>Views e layouts controlados por props</td>
+                    <td>Contratos de apresentação, design system e assets visuais</td>
+                  </tr>
+                  <tr>
+                    <td><code>design-system</code></td>
+                    <td>Primitivas, interação visual, tokens e receitas</td>
+                    <td>Próprio design system e assets visuais</td>
+                  </tr>
+                  <tr>
+                    <td><code>react-bindings</code></td>
+                    <td>Context estável, lifecycle React e assinaturas de projeções</td>
+                    <td>Contratos de apresentação e views</td>
+                  </tr>
+                  <tr>
+                    <td><code>infrastructure</code></td>
+                    <td>HTTP, IPC, workers e filesystem próprios</td>
+                    <td>Domínio, contratos de aplicação e ports de saída</td>
+                  </tr>
+                  <tr>
+                    <td><code>composition</code></td>
+                    <td>Factories, configuração, lifecycle e conexão das instâncias</td>
+                    <td>Todas as implementações necessárias à plataforma</td>
+                  </tr>
+                  <tr>
+                    <td><code>fixtures</code></td>
+                    <td>Implementação simulada dos contratos para o catálogo visual</td>
+                    <td>Contratos de apresentação</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Bibliotecas externas também precisam de allowlist: React apenas nas camadas de UI, bindings e composição;
+              Zustand apenas em <code>state</code>; transporte e APIs nativas em infraestrutura/composição. Bibliotecas
+              puras podem ser admitidas por camada com justificativa. Tipos de bibliotecas de infraestrutura não devem
+              vazar para os contratos públicos.
+            </p>
+            <p>
+              Imports entre features passam por APIs públicas. Imports de implementação privada, barrels que exponham
+              camadas proibidas e ciclos também são violações. Arquivos não classificados devem falhar no gate, não ser
+              silenciosamente ignorados. Todo import, reexport ou carregamento de implementação de <code>src/</code> a
+              partir da aplicação nova é proibido, incluindo aliases, caminhos relativos, imports dinâmicos e assets
+              executáveis. O gate deve verificar também entry points, workers, preload e recursos incluídos no build.
+            </p>
+            <h2 id="arquitetura-di-e-lifetime-3" tabindex="-1">
+              DI e lifetime<a
+                class="heading-anchor"
+                href="#arquitetura-di-e-lifetime-3"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Usar factories explícitas e interfaces pequenas como ponto de partida. Não é necessário um container de
+              DI. A composição cria uma instância por aplicação/janela e uma sessão descartável por projeto; tests criam
+              instâncias isoladas.
+            </p>
+            <p>
+              O Context React entrega referências estáveis de controllers. Snapshots mutáveis não ficam como valor de um
+              Context global que force atualização de todos os consumidores. Cada painel assina sua própria projeção nos
+              bindings.
+            </p>
+            <p>
+              <code>dispose()</code> remove timers, listeners, workers e subscriptions de uma sessão. A composição é
+              responsável por chamar os disposers e lidar com desmontagem, troca de projeto e reexecução de efeitos em
+              desenvolvimento. Instanciar serviço ou assinar evento no render é proibido.
+            </p>
+            <h2 id="arquitetura-exemplo-de-contrato-de-apresentacao-4" tabindex="-1">
+              Exemplo de contrato de apresentação<a
+                class="heading-anchor"
+                href="#arquitetura-exemplo-de-contrato-de-apresentacao-4"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>Exemplo de design, ainda não compilado nem implementado:</p>
+            <pre><code class="language-ts">export type Unsubscribe = () =&gt; void
+
+export interface ReadModel&lt;T&gt; {
+  getSnapshot(): T
+  subscribe(listener: () =&gt; void): Unsubscribe
+}
+
+export interface ActivityBarModel {
+  readonly build: {
+    readonly enabled: boolean
+    readonly status: &#39;idle&#39; | &#39;awaiting-confirmation&#39; | &#39;running&#39; | &#39;failed&#39;
+    readonly progress: number | null
+  }
+  readonly saveEnabled: boolean
+}
+
+export interface ActivityBarController {
+  readonly model: ReadModel&lt;ActivityBarModel&gt;
+  requestBuild(): void
+  requestSave(): void
+}
+</code></pre>
+            <p>
+              <code>requestBuild()</code> registra a intenção e encaminha a execução com tratamento de erro no
+              controller; não deixa uma Promise rejeitada escapar do handler. A aplicação pode usar métodos assíncronos
+              tipados em sua API própria. O modelo de exibição fornece também o estado de confirmação, erro e
+              cancelamento necessário a cada fluxo.
+            </p>
+            <p>
+              <code>getSnapshot()</code> retorna o mesmo objeto enquanto os dados relevantes não mudarem. A projeção
+              deve ser imutável e memoizada. <code>subscribe()</code> notifica somente alterações dessa projeção e
+              retorna unsubscribe. Os bindings podem usar <code>useSyncExternalStore</code> para conectar esse contrato
+              ao React, sem expor Zustand ao componente. Essa exigência de estabilidade é documentada na
+              <a href="https://react.dev/reference/react/useSyncExternalStore">referência oficial do React</a>.
+            </p>
+            <h2 id="arquitetura-fluxo-de-build-5" tabindex="-1">
+              Fluxo de build<a
+                class="heading-anchor"
+                href="#arquitetura-fluxo-de-build-5"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <ol>
+              <li>Binding entrega modelo e callbacks à view da barra.</li>
+              <li>Clique, atalho, menu nativo, CLI ou ferramenta de IA chega ao mesmo caso de uso público.</li>
+              <li>Caso de uso verifica permissão, capacidade, projeto/target e concorrência.</li>
+              <li>
+                Coordenador captura ou consolida a revisão correta do documento e decide a persistência necessária.
+              </li>
+              <li>
+                Gates de backplane e de PLC em execução produzem recusa ou confirmação tipada; a UI apenas apresenta a
+                pergunta. Preservar a ordem e os efeitos atuais por teste de caracterização antes de alterá-los.
+              </li>
+              <li>Aplicação delega compilação, upload e runtime aos ports; adapters implementam o transporte.</li>
+              <li>Estado da operação publica progresso e resultado; controller projeta esse estado para o painel.</li>
+            </ol>
+            <p>
+              Confirmação deve carregar identificador da operação e contexto/revisão. Aceitar uma pergunta antiga não
+              autoriza uma operação em outro projeto ou target. A política de revalidação pertence ao caso de uso.
+            </p>
+            <h2 id="arquitetura-organizacao-por-feature-6" tabindex="-1">
+              Organização por feature<a
+                class="heading-anchor"
+                href="#arquitetura-organizacao-por-feature-6"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Dentro das camadas, organizar módulos por responsabilidade: projetos/documentos, workspace, bibliotecas,
+              targets, build, runtime/debug, import/export, source control, IA e impressão. Evitar um
+              <code>ApplicationService</code> ou controller global com todos os métodos.
+            </p>
+            <p>
+              Centralização significa uma implementação por operação ou regra, com proprietários claros. Não significa
+              concentrar toda a aplicação em uma nova store ou classe gigantesca.
+            </p>
+            <h2 id="arquitetura-custos-e-alternativas-7" tabindex="-1">
+              Custos e alternativas<a
+                class="heading-anchor"
+                href="#arquitetura-custos-e-alternativas-7"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Escolha proposta</th>
+                    <th>Benefício</th>
+                    <th>Custo ou limite</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Controllers e contratos de apresentação separados</td>
+                    <td>Views independentes de estado e casos de uso testáveis sem React</td>
+                    <td>Mais interfaces e projeções; evitar contratos genéricos sem consumidor</td>
+                  </tr>
+                  <tr>
+                    <td>Zustand vanilla encapsulado</td>
+                    <td>Reutiliza conhecimento da equipe sem expor a biblioteca</td>
+                    <td>Abstrações precisam preservar assinaturas específicas e estabilidade</td>
+                  </tr>
+                  <tr>
+                    <td>Factories explícitas</td>
+                    <td>Dependências e lifetime visíveis</td>
+                    <td>Composição cresce; dividir factories por sessão/feature antes de considerar container</td>
+                  </tr>
+                  <tr>
+                    <td>Frontend com fixtures antes da lógica</td>
+                    <td>Permite revisar contratos, aparência e interação cedo</td>
+                    <td>
+                      Fixture não prova viabilidade funcional; caracterização e primeiro fluxo vertical reduzem esse
+                      risco
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Espelhamento entre dois repositórios</td>
+                    <td>Preserva build e distribuição atuais</td>
+                    <td>
+                      Ainda duplica arquivos fisicamente e exige gates; pacote comum pode reduzir esse custo futuramente
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Aplicação independente sem bridges</td>
+                    <td>Permite redesign e integração gradual sem depender da arquitetura antiga</td>
+                    <td>
+                      Exige portar também bootstrap, recursos e infraestrutura necessários a cada fluxo; features
+                      ausentes permanecem indisponíveis até serem implementadas
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Não substituir Zustand, routing, bundlers e distribuição simultaneamente sem evidência de necessidade.
+              Revisitar cada escolha quando protótipos e medições apontarem limites concretos.
+            </p>
+            <h2 id="arquitetura-incorporacao-gradual-do-legado-sem-dependencia-de-runtime-8" tabindex="-1">
+              Incorporação gradual do legado sem dependência de runtime<a
+                class="heading-anchor"
+                href="#arquitetura-incorporacao-gradual-do-legado-sem-dependencia-de-runtime-8"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              O legado é referência de comportamento, algoritmos e formatos. Para cada funcionalidade, caracterizar o
+              que precisa ser preservado, reimplementar ou portar os trechos necessários para a camada nova, ajustar
+              contratos/dependências e validar a execução independente. Portar código não significa mover cegamente
+              arquivos: cada módulo passa por revisão das fronteiras e das invariantes.
+            </p>
+            <p>
+              Não existe <code>infrastructure/legacy</code>, wrapper que invoque <code>src/</code>, compartilhamento de
+              store, fallback para a aplicação antiga ou montagem de uma view nova dentro do produto em produção. Também
+              não usar IPC handlers, workers, serializers ou serviços internos do legado como execução indireta. As
+              implementações necessárias devem pertencer à migração.
+            </p>
+            <p>
+              Bibliotecas externas, APIs de backend e runtime e formatos de projeto existentes podem ser consumidos por
+              adapters próprios. Compatibilidade de dados e protocolos é distinta de acoplamento à implementação do
+              produto antigo. Fixtures/projetos de teste podem ser copiados para a migração para caracterização, sem
+              importar implementações antigas nos testes novos.
+            </p>
+            <p>
+              Bootstrap, router quando aplicável, lifecycle, preload/main do Electron quando necessário, workers, assets
+              e packaging têm entrada própria. O produto novo precisa iniciar e executar seus fluxos sem carregar o
+              bootstrap, código ou estado da aplicação antiga.
+            </p>
+            <p>
+              Novos fluxos são habilitados somente dentro da aplicação de migração. Uma feature ainda ausente aparece
+              como indisponível ou como cenário claramente simulado no catálogo, nunca como sucesso de uma operação
+              real. A produção permanece no produto atual até a avaliação de prontidão e a decisão explícita do time.
+            </p>
+          </article>
+          <article class="document" id="estado" data-title="Gerenciamento de estado">
+            <div class="chapter-meta">Capítulo 03<a href="docs/03-estado.md">Fonte Markdown</a></div>
+            <h1>03 — Política de estado</h1>
+            <h2 id="estado-propriedade-antes-de-divisao-1" tabindex="-1">
+              Propriedade antes de divisão<a
+                class="heading-anchor"
+                href="#estado-propriedade-antes-de-divisao-1"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              A migração possui instâncias de estado próprias, sem leitura, escrita ou sincronização em runtime com a
+              store do produto antigo. Dados de projetos existentes entram por leitura/importação validada pelos
+              adapters novos. Separar a store por responsabilidade e frequência de atualização, não criar uma store por
+              componente. Zustand vanilla continua sendo uma implementação proposta para estado observável. O domínio,
+              os contratos públicos, os casos de uso e os componentes não conhecem Zustand.
+            </p>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Categoria</th>
+                    <th>Proprietário proposto</th>
+                    <th>Persistência</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Projeto/documento, POUs, tipos, variáveis, configurações e grafos semânticos</td>
+                    <td>Document state por sessão de projeto</td>
+                    <td>Por serializer e project port</td>
+                  </tr>
+                  <tr>
+                    <td>Revisões, dirty, undo/redo e mudanças pendentes</td>
+                    <td>Mesmo limite transacional do documento</td>
+                    <td>Política explícita; não serializar store inteira</td>
+                  </tr>
+                  <tr>
+                    <td>Bibliotecas, catálogos e dados remotos</td>
+                    <td>Serviço/cache responsável pelo recurso</td>
+                    <td>Conforme origem; separar cache de edição local</td>
+                  </tr>
+                  <tr>
+                    <td>Operações save/build/import/export</td>
+                    <td>Coordenador da operação</td>
+                    <td>Normalmente não persistir</td>
+                  </tr>
+                  <tr>
+                    <td>Target e conexão ativa</td>
+                    <td>Sessão de target</td>
+                    <td>Persistir preferência quando aplicável, não sessão viva</td>
+                  </tr>
+                  <tr>
+                    <td>Amostras de debug, telemetria e logs</td>
+                    <td>Serviços com buffers limitados</td>
+                    <td>Somente quando houver requisito de exportação</td>
+                  </tr>
+                  <tr>
+                    <td>Tabs, painéis, seleção compartilhada e preferências</td>
+                    <td>Workspace/presentation state</td>
+                    <td>Preferências versionadas por settings port</td>
+                  </tr>
+                  <tr>
+                    <td>Hover, foco e abertura de popover local</td>
+                    <td>Primitiva/view local</td>
+                    <td>Não persistir</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Cache de dados remotos fica atrás de um contrato próprio. Não duplicar a mesma coleção em Query e Zustand
+              sem definir qual é a autoridade. Avaliar a ferramenta existente por recurso durante a fase 0; não tornar
+              uma biblioteca específica parte do contrato comum.
+            </p>
+            <h2 id="estado-regras-de-consistencia-2" tabindex="-1">
+              Regras de consistência<a
+                class="heading-anchor"
+                href="#estado-regras-de-consistencia-2"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <ol>
+              <li>Cada dado editável tem uma representação canônica, proprietário e política de commit.</li>
+              <li>
+                Uma edição de documento confirma invariantes e publica uma revisão coerente; histórico e dirty são
+                atualizados na mesma transação.
+              </li>
+              <li>
+                Views e adapters não podem chamar <code>setState</code>, ler a store inteira nem escrever suas entidades
+                diretamente.
+              </li>
+              <li>
+                Ports de estado são interfaces específicas definidas na aplicação. Não substituir
+                <code>RootState</code> por outra interface igualmente global.
+              </li>
+              <li>
+                Mudanças que atravessam documento, workspace e sessão são coordenadas por caso de uso. O documento
+                permanece atomicamente válido mesmo se uma atualização visual posterior falhar.
+              </li>
+              <li>
+                Estado derivável é projetado e memoizado por suas dependências/revisões; só armazenar índices derivados
+                quando houver custo medido e invalidação definida.
+              </li>
+            </ol>
+            <h2 id="estado-documento-monaco-e-editores-graficos-3" tabindex="-1">
+              Documento, Monaco e editores gráficos<a
+                class="heading-anchor"
+                href="#estado-documento-monaco-e-editores-graficos-3"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Modelo proposto: texto e grafos semânticos pertencem ao documento. Nós do React Flow, decoração de debug,
+              viewport e objetos Monaco são representações de edição/renderização, sem identidade como formato
+              persistido.
+            </p>
+            <p>
+              Drag e resize podem manter um rascunho visual temporário. Ao confirmar, emitem um comando semântico que
+              atualiza documento, revisão e histórico. A sincronização de texto pode ser incremental para evitar cópias
+              integrais; seu limite e responsabilidade precisam constar do contrato.
+            </p>
+            <p>
+              Buffers ainda não incorporados, composição IME e alterações de extensões são consolidados por um
+              <code>DocumentBufferPort</code> implementado pela integração do editor. O caso de uso de save/build chama
+              essa barreira e captura a revisão consolidada. Não depender de um <code>useEffect</code> ou timer ter
+              rodado antes do clique.
+            </p>
+            <p>
+              A integração de editor pode conhecer Monaco/React Flow; validação IEC, alocação de endereços, renomeação
+              de referências, serialização e classificação de bibliotecas ficam fora dela. Programas externos e
+              ferramentas de IA também editam pelo mesmo caminho transacional.
+            </p>
+            <p>
+              Eliminar a dupla autoridade dos fluxos LD/FBD é um alvo, não uma mudança automática de formato. Primeiro
+              caracterizar write-back, campos desconhecidos, ordenação, undo/redo e serialização; preservar arquivos
+              existentes durante a reescrita.
+            </p>
+            <h2 id="estado-save-dirty-e-revisoes-4" tabindex="-1">
+              Save, dirty e revisões<a
+                class="heading-anchor"
+                href="#estado-save-dirty-e-revisoes-4"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <ul>
+              <li>Save captura snapshot imutável da revisão R e serializa uma vez.</li>
+              <li>Se o usuário edita durante o I/O, o sucesso confirma R; a revisão posterior permanece dirty.</li>
+              <li>
+                Saves sobre o mesmo projeto são coordenados para impedir que a resposta ou escrita antiga substitua a
+                mais nova.
+              </li>
+              <li>
+                Dirty não se resume à profundidade do undo. Usar identidade do conteúdo salvo ou checkpoints
+                equivalentes que reconheçam retorno ao estado salvo; a estratégia será escolhida com testes de custo e
+                semântica.
+              </li>
+              <li>
+                Falhas não avançam o checkpoint salvo. Arquivos desconhecidos e conteúdo bruto preservado continuam
+                fazendo parte do snapshot.
+              </li>
+              <li>
+                Atomicidade de escrita externa depende do backend/filesystem. Quando não suportada, registrar semântica
+                parcial, recuperação e limite do adapter; uma transação em memória não torna HTTP ou filesystem
+                atomicamente transacionais.
+              </li>
+            </ul>
+            <h2 id="estado-concorrencia-e-cancelamento-5" tabindex="-1">
+              Concorrência e cancelamento<a
+                class="heading-anchor"
+                href="#estado-concorrencia-e-cancelamento-5"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Operações carregam IDs de sessão, geração do target, request e revisão relevante. Antes de aplicar uma
+              resposta, verificar o contexto capturado. Cancelamento usa um port compatível com o transporte; mesmo
+              quando abortar não for possível, a resposta obsoleta não pode atualizar a sessão atual.
+            </p>
+            <p>
+              Build tem exclusão mútua no coordenador, compartilhada por clique, atalho, menu e IA. Locks não vivem em
+              <code>useState</code> do botão. Retry, timeout e revalidação de permissão pertencem à
+              aplicação/infraestrutura conforme a responsabilidade; efeitos não idempotentes não recebem retry
+              automático indiscriminado.
+            </p>
+            <p>
+              Troca de projeto encerra timers, requisições, subscriptions e buffers da sessão anterior. Timers e caches
+              são instanciados por factory, nunca em escopo de módulo com chave apenas pelo nome da POU.
+            </p>
+            <h2 id="estado-otimizacao-mensuravel-6" tabindex="-1">
+              Otimização mensurável<a
+                class="heading-anchor"
+                href="#estado-otimizacao-mensuravel-6"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <ul>
+              <li>
+                Assinar modelos pequenos por painel ou entidade; não assinar o documento inteiro para renderizar um
+                indicador.
+              </li>
+              <li>
+                Normalizar entidades por ID onde isso simplifique edição/referências; preservar ordem explicitamente.
+              </li>
+              <li>Reutilizar referências imutáveis de entidades não alteradas.</li>
+              <li>
+                Limitar retenção de histórico, logs e amostras; definir orçamento em medições, não em números
+                arbitrários.
+              </li>
+              <li>Separar debug de alta frequência do documento editável e da árvore/explorer.</li>
+              <li>Coalescer atualizações visuais de telemetria preservando o dado necessário ao debugger.</li>
+              <li>
+                Usar workers para tarefas que excedam o orçamento de interação, com payload e revisão identificados; não
+                exigir worker para toda função.
+              </li>
+              <li>Medir custo de projeção, serialização e sincronização de editor antes de adicionar caches.</li>
+            </ul>
+            <p>
+              Mais stores não garantem menos renders. A prova é o isolamento de assinaturas e a consistência dos fluxos
+              registrados em <a href="#validacao">validação</a>.
+            </p>
+          </article>
+          <article class="document" id="interface" data-title="Interface e estilos">
+            <div class="chapter-meta">Capítulo 04<a href="docs/04-interface-estilos.md">Fonte Markdown</a></div>
+            <h1>04 — Interface sem lógica de aplicação e estilos independentes</h1>
+            <h2 id="interface-o-que-pode-existir-na-interface-1" tabindex="-1">
+              O que pode existir na interface<a
+                class="heading-anchor"
+                href="#interface-o-que-pode-existir-na-interface-1"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Views recebem props de exibição e callbacks de intenção. Podem renderizar listas, escolher uma variante
+              visual e tratar semântica DOM/acessibilidade. Não validam regras IEC, montam payload de projeto, coordenam
+              I/O, calculam capacidade de target ou gerenciam operações de aplicação.
+            </p>
+            <p>
+              Estado estritamente visual, como foco/hover/popover, pode ficar em primitivas locais. Se um valor
+              participa de save, build, undo, navegação compartilhada ou troca de projeto, pertence ao
+              controller/aplicação, não à view. Campos de formulário com semântica de aplicação são controlados pelo
+              modelo correspondente; o componente emite alteração e exibe a validação recebida.
+            </p>
+            <p>
+              Se a exigência final for zero estado local inclusive visual, transferir esse estado para controles
+              headless fora das views. A proposta inicial permite estado visual local para não transformar cada
+              interação DOM em comando de aplicação.
+            </p>
+            <h2 id="interface-views-e-bindings-2" tabindex="-1">
+              Views e bindings<a
+                class="heading-anchor"
+                href="#interface-views-e-bindings-2"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <pre><code class="language-text">Controller sem React
+  -&gt; snapshot tipado + intenções
+React binding
+  -&gt; props + callbacks
+View
+  -&gt; estrutura e interação visual
+Design system
+  -&gt; receitas, tokens, variantes e acessibilidade
+</code></pre>
+            <p>
+              Hooks nos bindings somente conectam Context, lifecycle e assinaturas. Mover o corpo de um componente para
+              <code>useBuild()</code> mantendo nele a regra de negócio não satisfaz a fronteira. Views não importam
+              bindings; bindings importam e conectam views.
+            </p>
+            <h2 id="interface-redesign-basico-incluido-3" tabindex="-1">
+              Redesign básico incluído<a
+                class="heading-anchor"
+                href="#interface-redesign-basico-incluido-3"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Revisar posicionamento dos componentes, agrupamento de comandos, navegação e acesso às features. Na fase
+              0, produzir um mapa atual/proposto com o que muda, a tarefa atendida e os caminhos de acesso. O novo shell
+              e os fluxos de navegação são desenhados antes de acoplar lógica real.
+            </p>
+            <p>
+              O redesign mantém os resultados funcionais e formatos de projeto acordados, mas pode mudar a sequência de
+              interação visual. Validar descoberta de features, quantidade de passos, hierarquia dos comandos,
+              teclado/foco e feedback de operações com o time. Não definir aqui posições finais sem essa revisão.
+            </p>
+            <p>
+              A referência visual passa a ser o layout novo aprovado no catálogo. Screenshots do legado servem para
+              explicar mudanças; não são golden tests de identidade visual. Mudanças de capacidade ou regra funcional
+              precisam ser registradas separadamente das mudanças de placement.
+            </p>
+            <h2 id="interface-catalogo-visual-primeiro-4" tabindex="-1">
+              Catálogo visual primeiro<a
+                class="heading-anchor"
+                href="#interface-catalogo-visual-primeiro-4"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Criar um harness isolado para componentes e telas. A escolha entre Storybook e um catálogo próprio ainda
+              não está definida; não presumir uma dependência nova. Fixtures implementam os contratos de apresentação e
+              simulam transições explícitas, sem importar a store ou os adapters antigos.
+            </p>
+            <p>
+              Para cada feature, preparar estados normal, vazio, carregando, indisponível, read-only, erro, confirmação
+              e sucesso, conforme aplicável. As ações simuladas precisam deixar claro que são cenários de demonstração,
+              especialmente build, upload e save.
+            </p>
+            <p>
+              Cobrir shell/start screen/workspace, menus, árvore, tabs, tabelas de variáveis, console, barra de
+              atividade, formulários de projeto/device e frames dos editores antes de conectar lógica real. Monaco,
+              LD/FBD/SFC e extensões podem usar modelos sintéticos e widgets reais quando necessário para validar
+              interação. Não é necessário reimplementar Monaco ou React Flow.
+            </p>
+            <h2 id="interface-sistema-de-estilos-5" tabindex="-1">
+              Sistema de estilos<a
+                class="heading-anchor"
+                href="#interface-sistema-de-estilos-5"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Proposta inicial: CSS custom properties semânticas e estilos por componente fora do TSX. Manter Tailwind
+              disponível para o legado; escolher na fase 0 se receitas novas usarão CSS Modules ou receitas Tailwind
+              centralizadas. O critério é alterar aparência sem editar lógica e sem espalhar classes pelos componentes.
+            </p>
+            <pre><code class="language-text">design-system/
+  tokens/       Cores, tipografia, espaço, dimensões e movimento
+  themes/       Valores por tema light/dark e futuro tema de produto
+  components/   Primitivas com variantes tipadas e estilos próprios
+  recipes/      Aparência de padrões compostos e estados
+  integrations/ Temas e estilos de Monaco, React Flow e demais widgets
+</code></pre>
+            <p>
+              Exemplos de tokens: <code>--surface-workspace</code>, <code>--surface-panel</code>,
+              <code>--text-primary</code>, <code>--border-subtle</code>, <code>--action-primary</code>,
+              <code>--status-error</code>, <code>--focus-ring</code>, <code>--space-control</code>,
+              <code>--control-height</code>. O componente escolhe papel semântico, não valor literal de cor.
+            </p>
+            <p>Exemplo ilustrativo de regra em arquivo de estilo:</p>
+            <pre><code class="language-css">.button {
+  color: var(--text-on-action);
+  background: var(--action-primary);
+  min-height: var(--control-height);
+}
+</code></pre>
+            <p>
+              Tema altera valores; receita altera aparência e layout do componente; view altera estrutura quando
+              necessário. Trocar estrutura DOM ou interação não é uma simples troca de tema. Evitar prometer que tokens
+              sozinhos resolvem todos os redesigns.
+            </p>
+            <p>
+              Não injetar um objeto gigante de classes por DI em cada componente. DI injeta controllers e, quando
+              preciso, um serviço de preferência de tema. CSS e receitas determinam aparência. Variantes públicas como
+              <code>size</code>, <code>tone</code> e <code>density</code> são tipadas; overrides arbitrários de cada
+              consumidor não substituem o design system.
+            </p>
+            <h2 id="interface-temas-de-widgets-e-isolamento-6" tabindex="-1">
+              Temas de widgets e isolamento<a
+                class="heading-anchor"
+                href="#interface-temas-de-widgets-e-isolamento-6"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Monaco tem sua própria API de tema; gerar/registrar seus valores a partir dos tokens. React Flow,
+              terminal, gráficos e preview/print também exigem integração específica. Geometria que muda hit testing,
+              handles e posicionamento precisa passar por testes de interação.
+            </p>
+            <p>
+              A migração executa em aplicação/documento/janela próprios, sem carregar folhas de estilo ou resets da
+              aplicação antiga. Assets e estilos que forem portados passam a pertencer ao design system novo. Testar
+              portais de diálogos, tooltips, estilos globais de widgets e light/dark no escopo da migração.
+            </p>
+            <h2 id="interface-aceite-visual-7" tabindex="-1">
+              Aceite visual<a class="heading-anchor" href="#interface-aceite-visual-7" aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <ul>
+              <li>Placement, navegação e acesso às features correspondem ao redesign aprovado.</li>
+              <li>A mesma view roda com fixture e controller real sem alteração de código.</li>
+              <li>Light/dark e um tema alternativo de prova são aplicados por tokens/receitas.</li>
+              <li>Mudança de aparência de um botão não exige editar o handler ou caso de uso.</li>
+              <li>Teclado, foco, labels, diálogos e seleção continuam funcionais.</li>
+              <li>Layouts estreitos e estados com textos longos não quebram os controles.</li>
+              <li>
+                Nenhum componente da nova interface importa Zustand, store antiga, transporte ou regra de domínio.
+              </li>
+            </ul>
+          </article>
+          <article class="document" id="plano" data-title="Plano de migração">
+            <div class="chapter-meta">Capítulo 05<a href="docs/05-plano.md">Fonte Markdown</a></div>
+            <h1>05 — Plano incremental</h1>
+            <p>
+              Cada fase termina com evidência e atualização do acompanhamento. As entregas são integradas somente na
+              aplicação independente de migração; produção permanece no produto atual até a decisão de substituição pelo
+              time. O plano define a sequência técnica; não há cronograma nem estimativa sem inventário e capacidade da
+              equipe. Preparar contratos e fixtures não conta como entrega de funcionalidade integrada.
+            </p>
+            <h2 id="plano-fase-0-baseline-e-decisoes-1" tabindex="-1">
+              Fase 0 — Baseline e decisões<a
+                class="heading-anchor"
+                href="#plano-fase-0-baseline-e-decisoes-1"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              <strong>Entregas:</strong> inventário de telas/fluxos/comandos e estado; projetos de caracterização;
+              screenshots; consumidores fora da UI; benchmark reproduzível; classificação das 17 diferenças locais;
+              registro das decisões ainda propostas.
+            </p>
+            <p>
+              Definir o limite de cada feature, fonte canônica, escopo do redesign básico e critérios de aceite do
+              layout novo, estratégia de estilos, ferramenta de catálogo e política de módulos compartilhados. Mapear
+              campos persistidos e versões, incluindo arquivos que não são completamente interpretados. Atribuir
+              responsáveis e vincular o trabalho ao processo do projeto antes da implementação.
+            </p>
+            <p>
+              <strong>Saída:</strong> mapa de placement e acesso às features atual/proposto revisado, referência de
+              comportamento por fluxo e plataforma identificada; riscos e decisões impeditivas resolvidos para iniciar o
+              harness. Nenhuma diferença é corrigida por cópia cega.
+            </p>
+            <p>
+              <strong>Validação:</strong> testes de caracterização de round-trip, save/undo e fluxos críticos; registro
+              manual dos caminhos web/Electron. Medições não executadas permanecem marcadas como pendentes.
+            </p>
+            <h2 id="plano-fase-1-ambiente-isolado-e-fronteiras-2" tabindex="-1">
+              Fase 1 — Ambiente isolado e fronteiras<a
+                class="heading-anchor"
+                href="#plano-fase-1-ambiente-isolado-e-fronteiras-2"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              <strong>Entregas:</strong> aplicação independente em <code>src_migration</code>, com entry points próprios
+              de desenvolvimento/build, bootstrap, factories, contratos iniciais, fixtures e verificador de
+              dependências. Preparar main/preload próprios para o Electron e workers/assets necessários. A aplicação de
+              produção segue no entry point atual.
+            </p>
+            <p>
+              Ampliar ou criar configurações de TypeScript, lint, tests/cobertura, assets/workers, Tailwind quando
+              utilizado, Vite/webpack e comparação entre bases. Criar alias dedicado <code>@migration/*</code>, deixando
+              <code>@root/*</code> para o legado e proibindo seu uso pela aplicação nova. Nenhum build novo pode
+              carregar implementação de <code>src/</code>, direta ou indiretamente. Os nomes de comandos novos serão
+              definidos na implementação; não existem ainda.
+            </p>
+            <p>
+              Adicionar manifesto explícito da superfície comum nova: <code>contracts</code>, <code>domain</code>,
+              <code>application</code>, <code>state</code>, <code>presentation</code>, <code>react-bindings</code>,
+              <code>frontend</code>, <code>design-system</code>, <code>fixtures</code> e regras de arquitetura.
+              Classificar subárvores compartilhadas de infraestrutura e testes. Composição e adapters por plataforma são
+              excluídos explicitamente, nunca por exclusão ampla de tudo que pareça diferente.
+            </p>
+            <p>
+              <strong>Saída:</strong> harness inicia no browser e no renderer Electron; um teste da camada nova é
+              descoberto em cada runner; uma violação proposital falha; arquivo novo não rastreado também é verificado
+              localmente; diferenças no código comum novo falham na comparação e disparam o gate em CI.
+            </p>
+            <p>
+              <strong>Validação:</strong> smoke de inicialização com entry points próprios, sem bootstrap/store/assets
+              executáveis do legado; configurações e gate negativo para import de <code>src/</code>; duas instâncias
+              independentes sem vazamento de eventos.
+            </p>
+            <h2 id="plano-fase-2-redesign-basico-sistema-visual-e-shell-3" tabindex="-1">
+              Fase 2 — Redesign básico, sistema visual e shell<a
+                class="heading-anchor"
+                href="#plano-fase-2-redesign-basico-sistema-visual-e-shell-3"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              <strong>Entregas:</strong> layout e navegação revisados, placement dos componentes e acesso às features
+              definidos, tokens, temas, primitivas, receitas e views de start/workspace, árvore, tabs, toolbar, painéis
+              e console com fixtures. Catálogo dos estados de erro, vazio e loading.
+            </p>
+            <p>
+              <strong>Saída:</strong> shell navegável no harness, sem store/serviços antigos; estilos podem mudar sem
+              editar lógica. Rotas e chrome nativo são compostos por plataforma.
+            </p>
+            <p>
+              <strong>Validação:</strong> aceite do redesign com o time, comparação com a referência visual nova,
+              descoberta das features, teclado/foco, isolamento de CSS e cenários de capabilities simuladas nas duas
+              plataformas.
+            </p>
+            <h2 id="plano-fase-3-contratos-e-views-das-features-4" tabindex="-1">
+              Fase 3 — Contratos e views das features<a
+                class="heading-anchor"
+                href="#plano-fase-3-contratos-e-views-das-features-4"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              <strong>Entregas:</strong> formulários e tabelas, editores textuais/gráficos, devices/servers,
+              runtime/debug, bibliotecas, source control, import/export, impressão e IA/extensões com contratos e dados
+              sintéticos. Inventário visual completo dos fluxos acordados.
+            </p>
+            <p>
+              <strong>Saída:</strong> cada fluxo tem uma view e contrato de apresentação revisável; comandos de
+              demonstração não acionam recursos reais. Dependências visuais complexas são encapsuladas.
+            </p>
+            <p>
+              <strong>Validação:</strong> testes de contrato e interação, cenas representativas, erro/read-only e testes
+              visuais dos widgets. Ao final, o frontend está desacoplado; a aplicação ainda não está funcionalmente
+              migrada.
+            </p>
+            <h2 id="plano-fase-4-projetos-documentos-e-workspace-reais-5" tabindex="-1">
+              Fase 4 — Projetos, documentos e workspace reais<a
+                class="heading-anchor"
+                href="#plano-fase-4-projetos-documentos-e-workspace-reais-5"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              <strong>Entregas:</strong> domínio inicial, estado transacional, controllers reais, open/create/close,
+              tabs/seleção, edição textual, revisões/dirty, undo/redo, snapshot, serializer e save. Implementar e
+              conectar adapters próprios de persistência web e editor, portando a lógica necessária para a árvore nova
+              sem chamar a aplicação antiga.
+            </p>
+            <p>
+              Primeiro fluxo vertical: abrir projeto -&gt; selecionar POU ST -&gt; editar -&gt; salvar -&gt;
+              fechar/reabrir. Bibliotecas necessárias ao carregamento e classificação fazem parte desse fluxo, não ficam
+              para depois. Formatos antigos e arquivos não interpretados são preservados.
+            </p>
+            <p>
+              <strong>Saída:</strong> fluxo vertical passa em browser e Electron com contratos idênticos e I/O próprio
+              de cada plataforma. Aplicação controla coordenação; views não mudam para receber implementação real.
+            </p>
+            <p>
+              <strong>Validação:</strong> unitários de invariantes/revisões, contrato de adapters, E2E nas duas bases,
+              save durante edição, falha de persistência e round-trip sem alterações espúrias.
+            </p>
+            <h2 id="plano-fase-5-edicao-completa-e-configuracoes-6" tabindex="-1">
+              Fase 5 — Edição completa e configurações<a
+                class="heading-anchor"
+                href="#plano-fase-5-edicao-completa-e-configuracoes-6"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              <strong>Entregas:</strong> LD/FBD/SFC, tabelas de variáveis, tipos, referências/aliases IEC, buffers de
+              editor/LSP, libraries, device/server/remote IO, plugins e VPP. Um caminho transacional atende mouse,
+              teclado, importações e ferramentas.
+            </p>
+            <p>
+              Migrar por subfluxo completo, mantendo formato persistido e undo/redo coerentes. Reduzir representações
+              duplicadas dos grafos e implementar a barreira de buffers antes de snapshot.
+            </p>
+            <p>
+              <strong>Saída:</strong> cada editor/conjunto de configurações tem proprietário de estado, modelo canônico
+              e serializer; o subfluxo executa integralmente na migração, com dependências e recursos próprios.
+            </p>
+            <p>
+              <strong>Validação:</strong> caracterização de semântica PLC, texto/tabela sincronizados, referências
+              renomeadas, drag/undo/save, campos desconhecidos preservados e troca rápida de projeto/target.
+            </p>
+            <h2 id="plano-fase-6-build-runtime-debug-e-operacoes-restantes-7" tabindex="-1">
+              Fase 6 — Build, runtime, debug e operações restantes<a
+                class="heading-anchor"
+                href="#plano-fase-6-build-runtime-debug-e-operacoes-restantes-7"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              <strong>Entregas:</strong> coordenadores compartilhados de build/upload, gates, confirmações, status de
+              runtime, debugger/simulador, import/export, source control, print e IA. Menus, atalhos e CLI passam pelos
+              mesmos casos de uso quando aplicável.
+            </p>
+            <p>
+              Eliminar montagem duplicada de snapshots de save/build/upload. Separar transporte e sessões de debug da
+              projeção visual. Ferramentas de IA não ganham caminho alternativo de mutação.
+            </p>
+            <p>
+              <strong>Saída:</strong> fluxos operacionais não dependem de uma view montada; operações são
+              exclusivas/canceláveis conforme contrato e ignoram contexto obsoleto. Diferenças de capacidade não
+              produzem sucesso simulado.
+            </p>
+            <p>
+              <strong>Validação:</strong> gates e ordem de efeitos, duplo acionamento, cancelamento, target obsoleto,
+              progresso/erro, confirmação antiga, upload e evidência física quando o aceite exigir hardware. E2E de
+              impressão e round-trip de import/export.
+            </p>
+            <h2 id="plano-fase-7-prontidao-decisao-do-time-e-substituicao-do-produto-8" tabindex="-1">
+              Fase 7 — Prontidão, decisão do time e substituição do produto<a
+                class="heading-anchor"
+                href="#plano-fase-7-prontidao-decisao-do-time-e-substituicao-do-produto-8"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              <strong>Entregas:</strong> inventário de funcionalidades com cobertura e lacunas explícitas, aceite do
+              redesign, comparação de performance, build/packaging independentes, documentação operacional e plano de
+              release/rollback do produto completo. O time avalia as evidências e registra a decisão de substituir o
+              produto em produção; completar fases técnicas não autoriza essa promoção automaticamente.
+            </p>
+            <p>
+              <strong>Saída:</strong> critérios de <a href="#validacao">validação</a> satisfeitos em ambas as
+              plataformas e decisão de prontidão registrada pelo time. Após essa decisão, substituir o produto por
+              release do novo entry point/build. A migração pode continuar independente enquanto houver lacunas não
+              aceitas. A retirada de <code>src/</code> e eventual renomeação de <code>src_migration</code> para
+              <code>src</code> são mudanças posteriores próprias, com revisão de aliases, bundlers, CI, assets,
+              packaging e prazo de rollback.
+            </p>
+            <p>
+              <strong>Validação:</strong> suite final relevante, build/packaging, reload/reopen, manual nas duas
+              plataformas, benchmark e ensaio de rollback.
+            </p>
+            <h2 id="plano-regra-para-cada-subfluxo-9" tabindex="-1">
+              Regra para cada subfluxo<a
+                class="heading-anchor"
+                href="#plano-regra-para-cada-subfluxo-9"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <pre><code class="language-text">Caracterizar legado -&gt; revisar placement/acesso -&gt; definir contrato
+  -&gt; criar view/fixture -&gt; validar redesign
+  -&gt; reimplementar/portar lógica para as camadas novas
+  -&gt; conectar adapters próprios nas duas bases
+  -&gt; validar comportamento, independência e desempenho
+  -&gt; integrar à aplicação de migração -&gt; atualizar documentação
+
+Produto novo pronto -&gt; avaliação e decisão do time -&gt; release de substituição
+</code></pre>
+            <p>
+              Durante fases 4–6, subfluxos já prontos são integrados individualmente apenas na aplicação de migração.
+              Não há alternância por feature entre código antigo e novo na aplicação de produção. Não iniciar lógica de
+              um subfluxo antes de sua view/contrato existir. Também não esperar toda a lógica ser reescrita para provar
+              o primeiro open/edit/save real.
+            </p>
+          </article>
+          <article class="document" id="validacao" data-title="Validação e rollback">
+            <div class="chapter-meta">Capítulo 06<a href="docs/06-validacao.md">Fonte Markdown</a></div>
+            <h1>06 — Validação, prontidão e rollback</h1>
+            <h2 id="validacao-definicao-de-pronto-1" tabindex="-1">
+              Definição de pronto<a
+                class="heading-anchor"
+                href="#validacao-definicao-de-pronto-1"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Uma feature está migrada quando possui contratos públicos, view com fixtures, implementação headless,
+              proprietário de estado, adapters por plataforma, testes de comportamento, evidência manual e documentação
+              atualizada. Também precisa executar sem implementação, bootstrap ou store do legado. Chamar o legado por
+              bridge não é uma etapa permitida. Uma feature pronta dentro da migração ainda não significa que o produto
+              esteja pronto para substituir a produção.
+            </p>
+            <h2 id="validacao-matriz-de-verificacao-2" tabindex="-1">
+              Matriz de verificação<a
+                class="heading-anchor"
+                href="#validacao-matriz-de-verificacao-2"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nível</th>
+                    <th>Evidência necessária</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Arquitetura</td>
+                    <td>
+                      Imports internos/externos, aliases, reexports e ciclos respeitam as camadas; arquivos sem
+                      classificação falham
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Domínio</td>
+                    <td>Regras IEC, referências, alocação, transformação e validação independem de React/store</td>
+                  </tr>
+                  <tr>
+                    <td>Aplicação</td>
+                    <td>Sequência de efeitos, falhas, confirmações, exclusão mútua, concorrência e descarte</td>
+                  </tr>
+                  <tr>
+                    <td>Estado</td>
+                    <td>
+                      Transações, revisões, dirty, undo/redo, estabilidade de snapshots e isolamento por instância
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Apresentação</td>
+                    <td>Projeções e intenções são testáveis sem montar React nem expor Zustand</td>
+                  </tr>
+                  <tr>
+                    <td>Interface</td>
+                    <td>Props e eventos, acessibilidade, fixtures de estados e comparação visual</td>
+                  </tr>
+                  <tr>
+                    <td>Adapters</td>
+                    <td>Contratos de sucesso/erro/cancelamento, persistência e lifecycle específicos da plataforma</td>
+                  </tr>
+                  <tr>
+                    <td>Integração/E2E</td>
+                    <td>Fluxos completos no browser e Electron com I/O real ou backend de teste controlado</td>
+                  </tr>
+                  <tr>
+                    <td>Manual</td>
+                    <td>
+                      Reabrir projeto salvo, atalhos, menus, temas, editors e workflows próprios de cada plataforma
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Web usa Vitest e editor usa Jest. Compartilhar especificações e fixtures de contrato, com wrappers de
+              runner quando necessário. Não exigir testes literalmente idênticos quando as APIs de mocking divergem.
+              Revisar os thresholds e a descoberta na configuração implementada para <code>src_migration</code>; não
+              enfraquecer gates do legado.
+            </p>
+            <h2 id="validacao-independencia-e-aceite-do-redesign-3" tabindex="-1">
+              Independência e aceite do redesign<a
+                class="heading-anchor"
+                href="#validacao-independencia-e-aceite-do-redesign-3"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <ul>
+              <li>
+                Build e bootstrap novos não importam ou carregam módulos de <code>src/</code>, incluindo main/preload,
+                workers, serviços internos e assets executáveis.
+              </li>
+              <li>
+                Testes da migração não precisam iniciar a aplicação antiga; fixtures de referência são dados
+                copiados/versionados, não imports de implementação.
+              </li>
+              <li>
+                Cada fluxo funciona no processo/app novo com estado próprio e adapters próprios. Recursos externos
+                permitidos e configurações necessários são documentados.
+              </li>
+              <li>
+                Sessões de desenvolvimento usam projetos/copias e recursos de teste identificados; não há sincronização
+                automática de drafts ou stores entre aplicações. O setup define como evitar que os dois produtos
+                escrevam simultaneamente sobre o mesmo projeto ou target.
+              </li>
+              <li>
+                Features ausentes são declaradas como indisponíveis; operações reais não recebem sucesso de fixture nem
+                fallback para o legado.
+              </li>
+              <li>
+                Placement e caminhos de acesso são comparados ao redesign aprovado; resultados funcionais e dados são
+                comparados à caracterização acordada.
+              </li>
+              <li>O time valida descoberta de features, teclado/foco, feedback e consistência entre web e editor.</li>
+            </ul>
+            <h2 id="validacao-regressoes-obrigatorias-por-fluxo-relevante-4" tabindex="-1">
+              Regressões obrigatórias por fluxo relevante<a
+                class="heading-anchor"
+                href="#validacao-regressoes-obrigatorias-por-fluxo-relevante-4"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <ul>
+              <li>Abrir A, começar trabalho assíncrono, abrir B: a resposta de A não altera B.</li>
+              <li>
+                Trocar target durante discovery, hidratação VPP, build ou debug: resultados antigos não são aplicados ao
+                target atual.
+              </li>
+              <li>Editar durante save: o sucesso da revisão anterior não limpa mudanças novas.</li>
+              <li>Duplo save/build por clique e atalho: exclusão e ordenação pertencem à aplicação.</li>
+              <li>
+                Save/build/undo durante edição gráfica pendente: snapshot atualizado, ou falha explícita de
+                consolidação.
+              </li>
+              <li>
+                Fechar/reabrir e recarregar: documento e configurações persistem corretamente nas duas plataformas.
+              </li>
+              <li>Cancelar confirmação/tarefa e repetir: nenhum listener/timer duplicado ou operação fantasma.</li>
+              <li>Renomear/deletar entidade: referências, histórico, tabs e dirty permanecem coerentes.</li>
+              <li>Documento não alterado: round-trip preserva conteúdo/formatos e não cria diffs artificiais.</li>
+              <li>
+                Dados ausentes, <code>undefined</code>, <code>null</code> e <code>false</code>: preservar semântica dos
+                contratos existentes; não unificar ausência de informação com recusa.
+              </li>
+              <li>
+                Instanciar duas aplicações/projetos com POUs de mesmo nome: timers, caches e eventos ficam isolados.
+              </li>
+              <li>Tema e mudança de densidade: gráficos, handles, hit testing, portais e foco continuam corretos.</li>
+            </ul>
+            <h2 id="validacao-benchmark-reproduzivel-5" tabindex="-1">
+              Benchmark reproduzível<a
+                class="heading-anchor"
+                href="#validacao-benchmark-reproduzivel-5"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Na fase 0, escolher projetos de referência pequenos e grandes, incluindo ST e LD/FBD, e uma sessão de
+              debug representativa. Registrar fixture/versão, máquina, plataforma, modo de build, passos, repetição e
+              instrumentação. Distinguir desenvolvimento de build de produção.
+            </p>
+            <p>
+              Medir latência de input, edição/undo, open/save/build preparation, commits/renders por painel, duração de
+              projeções, heap depois de ciclos open/close e tamanho de bundle. Comparar distribuições, não apenas uma
+              execução. Como o layout muda, comparar tarefas equivalentes e registrar condições de
+              visibilidade/assinatura dos painéis; não interpretar uma diferença de renders causada pelo redesign como
+              ganho de arquitetura automaticamente. Definir budgets após a baseline; ainda não há números nem promessa
+              percentual.
+            </p>
+            <p>
+              Critérios de isolamento: atualização de debug não invalida documento/explorer; mudança de um indicador não
+              renderiza todos os painéis; fechar uma sessão libera recursos; editar uma entidade não reconstrói todas as
+              coleções sem necessidade. Instrumentar as projeções além dos renders.
+            </p>
+            <h2 id="validacao-paridade-entre-repositorios-6" tabindex="-1">
+              Paridade entre repositórios<a
+                class="heading-anchor"
+                href="#validacao-paridade-entre-repositorios-6"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              O gate novo compara o manifesto comum de <code>src_migration</code>, mantendo também a verificação antiga.
+              Fixtures e contratos relevantes são comuns; testes específicos de runtime e adapters podem divergir com
+              classificação explícita. Code identity não prova comportamento de persistência ou transporte.
+            </p>
+            <p>
+              Durante preparação, resolver a classificação do drift registrado em
+              <a href="#diagnostico">diagnóstico</a>. Não usar as 17 diferenças existentes como permissão para novas
+              diferenças. Se persistir alguma exceção transitória, registrar arquivo, razão, responsável e critério de
+              remoção.
+            </p>
+            <p>Checks existentes usam o script abaixo, a partir de cada repositório:</p>
+            <pre><code class="language-sh">python3 scripts/compare-surfaces.py --web-root ../openplc-web/src --editor-root ../openplc-editor/src
+</code></pre>
+            <p>
+              Esse comando cobre o legado; não valida a pasta nova. Os comandos e gates da migração serão documentados
+              após sua implementação na fase 1.
+            </p>
+            <h2 id="validacao-prontidao-e-substituicao-em-producao-7" tabindex="-1">
+              Prontidão e substituição em produção<a
+                class="heading-anchor"
+                href="#validacao-prontidao-e-substituicao-em-producao-7"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <ol>
+              <li>
+                Consolidar a matriz de cobertura do produto novo: funcionalidades implementadas, diferenças
+                intencionais, lacunas, suporte por plataforma e evidência de compatibilidade dos projetos.
+              </li>
+              <li>
+                Verificar aceite do redesign, qualidade dos fluxos completos, desempenho, build/packaging, instalação,
+                autenticação e integrações necessárias ao produto independente.
+              </li>
+              <li>
+                O time revisa as evidências, define o conjunto de funcionalidades necessário para substituição e decide
+                explicitamente se o produto está pronto. Lacunas só podem ser aceitas por decisão registrada; até lá a
+                migração continua separada.
+              </li>
+              <li>
+                Preparar a release do novo produto, procedimento de atualização/importação dos dados existentes,
+                backups, recuperação e versão do produto anterior para rollback.
+              </li>
+              <li>
+                Após a decisão do time, substituir o entry point/build do produto em produção. Fazer smoke nas duas
+                plataformas e acompanhar falhas/latência. Não promover componentes ou subfluxos novos dentro da
+                aplicação antiga durante o desenvolvimento.
+              </li>
+              <li>
+                Retirar código antigo somente em mudança própria, depois de revisar consumidores e o período de
+                rollback. A promoção não exige apagar imediatamente o legado.
+              </li>
+            </ol>
+            <p>
+              A migração pode usar os formatos existentes para facilitar compatibilidade. Uma mudança de formato precisa
+              de versionamento, conversão e estratégia de retorno antes da release. A escolha de implantação da release
+              deve preservar a independência das aplicações e não introduzir bridges.
+            </p>
+            <h2 id="validacao-rollback-do-produto-8" tabindex="-1">
+              Rollback do produto<a
+                class="heading-anchor"
+                href="#validacao-rollback-do-produto-8"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Rollback retorna à versão anterior do produto por procedimento de release/instalação, sem trocar
+              implementações por fluxo na composição. Encerrar operações e decidir salvar, exportar ou descartar drafts
+              antes do retorno; não presumir transferência automática de estado em memória entre produtos.
+            </p>
+            <p>
+              Dados escritos pelo produto novo precisam continuar legíveis pela versão anterior ou ter
+              conversão/restauração prevista e ensaiada. Backups e política de recuperação são definidos antes da
+              substituição.
+            </p>
+            <p>
+              Rollback do produto não desfaz upload, comando de runtime ou escrita remota já realizados. Essas operações
+              exigem sua recuperação específica. Ensaiar retorno com projeto salvo, falha parcial e operação cancelada
+              antes da release de substituição.
+            </p>
+            <h2 id="validacao-validacao-realizada-nesta-entrega-9" tabindex="-1">
+              Validação realizada nesta entrega<a
+                class="heading-anchor"
+                href="#validacao-validacao-realizada-nesta-entrega-9"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              Inspeção estrutural local, contagens textuais e comparação das superfícies do legado. Não foram executados
+              benchmark, aplicação nova, builds, testes funcionais ou E2E: esta entrega contém somente documentação. A
+              revisão documental e a identidade dos documentos entre as bases são verificadas separadamente.
+            </p>
+          </article>
+          <article class="document" id="acompanhamento" data-title="Acompanhamento">
+            <div class="chapter-meta">Capítulo 07<a href="docs/07-acompanhamento.md">Fonte Markdown</a></div>
+            <h1>07 — Acompanhamento e decisões</h1>
+            <h2 id="acompanhamento-registro-inicial-1" tabindex="-1">
+              Registro inicial<a
+                class="heading-anchor"
+                href="#acompanhamento-registro-inicial-1"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              2026-10-07: documentação inicial criada em <code>src_migration/</code> nos dois repositórios. Arquitetura
+              e sequência propostas; nenhuma fase de implementação iniciada. Baseline local e limites registrados no
+              diagnóstico.
+            </p>
+            <h2 id="acompanhamento-revisao-de-premissas-2" tabindex="-1">
+              Revisão de premissas<a
+                class="heading-anchor"
+                href="#acompanhamento-revisao-de-premissas-2"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>
+              2026-10-07: usuário confirmou redesign básico de placement e acesso às features, ausência de bridges e
+              execução independente da migração até o time decidir substituir o produto em produção. Essa orientação
+              substitui a premissa inicial de preservação visual e a proposta de integração por bridges/cutover por
+              fluxo. Nenhuma fase de implementação foi iniciada.
+            </p>
+            <h2 id="acompanhamento-decisoes-3" tabindex="-1">
+              Decisões<a class="heading-anchor" href="#acompanhamento-decisoes-3" aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Decisão</th>
+                    <th>Estado</th>
+                    <th>Condição para revisão</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>D01</td>
+                    <td>Construir código novo em <code>src_migration</code>, interface primeiro e lógica depois</td>
+                    <td>Requisito do usuário</td>
+                    <td>Alteração explícita de escopo</td>
+                  </tr>
+                  <tr>
+                    <td>D02</td>
+                    <td>Retirar lógica/estado de aplicação e acesso direto a Zustand da interface; consumir por DI</td>
+                    <td>Requisito do usuário</td>
+                    <td>Alteração explícita de escopo</td>
+                  </tr>
+                  <tr>
+                    <td>D03</td>
+                    <td>Separar estilos para facilitar mudanças futuras</td>
+                    <td>Requisito do usuário</td>
+                    <td>Alteração explícita de escopo</td>
+                  </tr>
+                  <tr>
+                    <td>D04</td>
+                    <td>Manter React e Zustand vanilla atrás de contratos</td>
+                    <td>Proposta</td>
+                    <td>Baseline ou protótipo demonstrar limitação</td>
+                  </tr>
+                  <tr>
+                    <td>D05</td>
+                    <td>Factories explícitas, controllers headless e bindings React mínimos</td>
+                    <td>Proposta</td>
+                    <td>Complexidade de composição justificar outro mecanismo</td>
+                  </tr>
+                  <tr>
+                    <td>D06</td>
+                    <td>Redesign básico de placement, navegação e acesso às features de UI</td>
+                    <td>Requisito do usuário</td>
+                    <td>Alteração explícita de escopo</td>
+                  </tr>
+                  <tr>
+                    <td>D07</td>
+                    <td>Tokens semânticos, receitas externas e integração específica de widgets</td>
+                    <td>Proposta</td>
+                    <td>Escolha de CSS Modules ou receitas Tailwind na fase 0</td>
+                  </tr>
+                  <tr>
+                    <td>D08</td>
+                    <td>Dois repositórios com manifesto comum e gates; sem novo pacote inicialmente</td>
+                    <td>Proposta</td>
+                    <td>Definição de distribuição/versionamento de pacote comum</td>
+                  </tr>
+                  <tr>
+                    <td>D09</td>
+                    <td>Documento canônico, revisão e histórico no mesmo limite transacional</td>
+                    <td>Proposta</td>
+                    <td>Caracterização dos editores e prova de round-trip</td>
+                  </tr>
+                  <tr>
+                    <td>D10</td>
+                    <td>Harness isolado; ferramenta de catálogo ainda aberta</td>
+                    <td>Pendente</td>
+                    <td>Decisão na fase 0</td>
+                  </tr>
+                  <tr>
+                    <td>D11</td>
+                    <td>
+                      Sem bridges, imports ou chamadas de runtime à implementação do legado; portabilidade gradual para
+                      a árvore nova
+                    </td>
+                    <td>Requisito do usuário</td>
+                    <td>Alteração explícita de escopo</td>
+                  </tr>
+                  <tr>
+                    <td>D12</td>
+                    <td>Aplicação de migração independente até o time decidir substituir o produto em produção</td>
+                    <td>Requisito do usuário</td>
+                    <td>Decisão de prontidão registrada pelo time</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Para alterar uma decisão, registrar contexto, opções, escolha, consequências e evidência aqui ou em um ADR
+              vinculado. Não reescrever a história para tratar uma proposta como requisito aprovado.
+            </p>
+            <h2 id="acompanhamento-perguntas-que-orientam-a-fase-0-4" tabindex="-1">
+              Perguntas que orientam a fase 0<a
+                class="heading-anchor"
+                href="#acompanhamento-perguntas-que-orientam-a-fase-0-4"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <ul>
+              <li>
+                Quais mudanças de placement, agrupamento de comandos e acesso às features compõem o redesign básico?
+              </li>
+              <li>Os repositórios permanecerão independentes durante toda a migração ou haverá distribuição comum?</li>
+              <li>Quais fluxos e plataformas são necessários no primeiro piloto operacional?</li>
+              <li>Quais projetos de referência representam uso real e podem virar fixtures sem dados privados?</li>
+              <li>
+                Quem define os budgets de desempenho, aprova o redesign e participa da decisão de prontidão para
+                substituir o produto?
+              </li>
+            </ul>
+            <p>
+              Essas perguntas não impedem manter esta documentação inicial. Respostas devem entrar nas decisões e mudar
+              o plano quando afetarem escopo ou sequência.
+            </p>
+            <h2 id="acompanhamento-inventario-inicial-por-fluxo-5" tabindex="-1">
+              Inventário inicial por fluxo<a
+                class="heading-anchor"
+                href="#acompanhamento-inventario-inicial-por-fluxo-5"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>Todas as linhas abaixo precisam de detalhamento na fase 0; nenhuma está implementada.</p>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fluxo</th>
+                    <th>Origem a investigar</th>
+                    <th>Owner novo proposto</th>
+                    <th>Principal prova</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Open/create/close e workspace</td>
+                    <td>Router, start screen, project/shared slices e project adapters</td>
+                    <td>Project session coordinator</td>
+                    <td>Troca de sessão e reopen nas duas plataformas</td>
+                  </tr>
+                  <tr>
+                    <td>Edit/save/save as</td>
+                    <td>Monaco, <code>save-actions.ts</code>, <code>save-project-as.ts</code>, file/history slices</td>
+                    <td>Document commands + persistence coordinator</td>
+                    <td>Round-trip, revisão e dirty</td>
+                  </tr>
+                  <tr>
+                    <td>LD/FBD/SFC</td>
+                    <td>Views gráficas, ladder/fbd/editor slices e write-back</td>
+                    <td>Graph document commands</td>
+                    <td>Drag, referências, undo e flush</td>
+                  </tr>
+                  <tr>
+                    <td>Variáveis/tipos/aliases</td>
+                    <td>Project slice e utilitários IEC</td>
+                    <td>Domain policies + document commands</td>
+                    <td>Renomeação e compilação equivalente</td>
+                  </tr>
+                  <tr>
+                    <td>Libraries/LSP</td>
+                    <td>Hydration, library slice, serviços LSP e widgets Monaco</td>
+                    <td>Library service + language service ports</td>
+                    <td>Ordem de hydration e descarte</td>
+                  </tr>
+                  <tr>
+                    <td>Devices/IO/VPP</td>
+                    <td>Device slice, capability/registry helpers e adapters</td>
+                    <td>Target session + configuration commands</td>
+                    <td>Persistência e target obsoleto</td>
+                  </tr>
+                  <tr>
+                    <td>Build/upload/runtime</td>
+                    <td>Activity bar, compiler/runtime ports e adapters</td>
+                    <td>Build/runtime coordinators</td>
+                    <td>Gates, snapshot e concorrência</td>
+                  </tr>
+                  <tr>
+                    <td>Debug/simulator</td>
+                    <td>Hooks, workspace, debugger/simulator e transports</td>
+                    <td>Debug session service</td>
+                    <td>Lifecycle e isolamento de telemetria</td>
+                  </tr>
+                  <tr>
+                    <td>Source control</td>
+                    <td>Version-control slice, serviços e ports</td>
+                    <td>Version control coordinator</td>
+                    <td>Diffs sem alterações espúrias</td>
+                  </tr>
+                  <tr>
+                    <td>Import/export/print</td>
+                    <td>Serviços de import/export/print e project port</td>
+                    <td>Casos de uso específicos</td>
+                    <td>Preservação de formato e saída</td>
+                  </tr>
+                  <tr>
+                    <td>IA/extensões</td>
+                    <td>Tool executor, context collector, panels e ai port</td>
+                    <td>Tools via API pública + extension registry</td>
+                    <td>Mesmo caminho de edição e validação</td>
+                  </tr>
+                  <tr>
+                    <td>Menus/atalhos/CLI</td>
+                    <td>Accelerator/window ports e entry points do editor</td>
+                    <td>Adapters de entrada dos casos de uso</td>
+                    <td>Mesmo comportamento sem view montada</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <h2 id="acompanhamento-checklist-de-fases-6" tabindex="-1">
+              Checklist de fases<a
+                class="heading-anchor"
+                href="#acompanhamento-checklist-de-fases-6"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <ul>
+              <li>
+                <input aria-label="Etapa pendente" disabled="" type="checkbox" /> Fase 0: inventário, baseline e
+                decisões
+              </li>
+              <li>
+                <input aria-label="Etapa pendente" disabled="" type="checkbox" /> Fase 1: harness, contratos, composição
+                e gates
+              </li>
+              <li>
+                <input aria-label="Etapa pendente" disabled="" type="checkbox" /> Fase 2: redesign básico, design system
+                e shell com fixtures
+              </li>
+              <li>
+                <input aria-label="Etapa pendente" disabled="" type="checkbox" /> Fase 3: views e contratos das features
+              </li>
+              <li>
+                <input aria-label="Etapa pendente" disabled="" type="checkbox" /> Fase 4: fluxo real
+                open/edit/save/reopen
+              </li>
+              <li>
+                <input aria-label="Etapa pendente" disabled="" type="checkbox" /> Fase 5: edição e configurações
+                completas
+              </li>
+              <li>
+                <input aria-label="Etapa pendente" disabled="" type="checkbox" /> Fase 6: operações, runtime/debug e
+                demais fluxos
+              </li>
+              <li>
+                <input aria-label="Etapa pendente" disabled="" type="checkbox" /> Fase 7: prontidão, decisão do time e
+                substituição do produto
+              </li>
+            </ul>
+            <h2 id="acompanhamento-registro-por-subfluxo-7" tabindex="-1">
+              Registro por subfluxo<a
+                class="heading-anchor"
+                href="#acompanhamento-registro-por-subfluxo-7"
+                aria-label="Link para esta seção"
+                >#</a
+              >
+            </h2>
+            <p>Duplicar o formulário abaixo para cada unidade de migração:</p>
+            <pre><code class="language-text">Fluxo e responsável:
+Fase e status:
+Comportamento de referência e versão:
+Referências do legado e trechos a reimplementar/portar:
+Contrato novo e camada proprietária:
+Fonte canônica, transação e persistência:
+Dependências próprias e evidência de independência do legado:
+Diferenças web/editor:
+Cenários de fixture:
+Testes de caracterização, unidade, contrato e E2E:
+Mudanças de placement/acesso, aceite do redesign e evidência manual:
+Benchmark antes/depois:
+Integração na migração e contribuição para a prontidão do produto:
+Compatibilidade de dados e procedimento de rollback da release:
+Pendências e próxima ação:
+Links locais, commits e PRs quando existirem:
+</code></pre>
+            <p>
+              Somente marcar uma fase/subfluxo concluído quando houver evidência vinculada. Atualizar os documentos da
+              camada alterada na mesma entrega. Não registrar ganho de performance sem medição nem paridade completa
+              apenas por comparação de arquivos.
+            </p>
+          </article>
+          <footer>
+            HTML gerado a partir dos oito documentos Markdown de src_migration. Os documentos originais são a fonte para
+            futuras atualizações. Esta edição não altera o status de aprovação das propostas.
+          </footer>
+        </main>
+        <aside class="local-toc" aria-label="Seções do capítulo">
+          <strong>Neste capítulo</strong>
+          <nav id="toc-links"></nav>
+        </aside>
+      </div>
+    </div>
+    <script>
+      const chapters = Array.from(document.querySelectorAll('.document'))
+      const navLinks = Array.from(document.querySelectorAll('.chapter-nav a'))
+      const search = document.querySelector('#search')
+      const results = document.querySelector('#search-results')
+      const resultList = document.querySelector('#result-list')
+      const resultStatus = document.querySelector('#result-status')
+      const normalize = (value) =>
+        value
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+      const indexed = chapters.map((chapter) => ({ chapter, text: chapter.textContent.replace(/\s+/g, ' ').trim() }))
+      const headings = {
+        overview: [
+          { id: 'overview-objetivos-1', text: 'Objetivos', level: '2' },
+          { id: 'overview-leitura-e-uso-2', text: 'Leitura e uso', level: '2' },
+          { id: 'overview-premissas-e-limites-3', text: 'Premissas e limites', level: '2' },
+          { id: 'overview-estrutura-prevista-4', text: 'Estrutura prevista', level: '2' },
+        ],
+        diagnostico: [
+          { id: 'diagnostico-evidencia-local-1', text: 'Evidência local', level: '2' },
+          { id: 'diagnostico-fontes-no-codigo-atual-2', text: 'Fontes no código atual', level: '2' },
+          { id: 'diagnostico-paridade-observada-3', text: 'Paridade observada', level: '2' },
+          {
+            id: 'diagnostico-protecoes-que-precisam-ser-ampliadas-4',
+            text: 'Proteções que precisam ser ampliadas',
+            level: '2',
+          },
+          { id: 'diagnostico-levantamento-ainda-necessario-5', text: 'Levantamento ainda necessário', level: '2' },
+          {
+            id: 'diagnostico-premissas-confirmadas-apos-o-diagnostico-6',
+            text: 'Premissas confirmadas após o diagnóstico',
+            level: '2',
+          },
+        ],
+        arquitetura: [
+          { id: 'arquitetura-fronteira-principal-1', text: 'Fronteira principal', level: '2' },
+          {
+            id: 'arquitetura-responsabilidades-e-imports-permitidos-2',
+            text: 'Responsabilidades e imports permitidos',
+            level: '2',
+          },
+          { id: 'arquitetura-di-e-lifetime-3', text: 'DI e lifetime', level: '2' },
+          {
+            id: 'arquitetura-exemplo-de-contrato-de-apresentacao-4',
+            text: 'Exemplo de contrato de apresentação',
+            level: '2',
+          },
+          { id: 'arquitetura-fluxo-de-build-5', text: 'Fluxo de build', level: '2' },
+          { id: 'arquitetura-organizacao-por-feature-6', text: 'Organização por feature', level: '2' },
+          { id: 'arquitetura-custos-e-alternativas-7', text: 'Custos e alternativas', level: '2' },
+          {
+            id: 'arquitetura-incorporacao-gradual-do-legado-sem-dependencia-de-runtime-8',
+            text: 'Incorporação gradual do legado sem dependência de runtime',
+            level: '2',
+          },
+        ],
+        estado: [
+          { id: 'estado-propriedade-antes-de-divisao-1', text: 'Propriedade antes de divisão', level: '2' },
+          { id: 'estado-regras-de-consistencia-2', text: 'Regras de consistência', level: '2' },
+          {
+            id: 'estado-documento-monaco-e-editores-graficos-3',
+            text: 'Documento, Monaco e editores gráficos',
+            level: '2',
+          },
+          { id: 'estado-save-dirty-e-revisoes-4', text: 'Save, dirty e revisões', level: '2' },
+          { id: 'estado-concorrencia-e-cancelamento-5', text: 'Concorrência e cancelamento', level: '2' },
+          { id: 'estado-otimizacao-mensuravel-6', text: 'Otimização mensurável', level: '2' },
+        ],
+        interface: [
+          { id: 'interface-o-que-pode-existir-na-interface-1', text: 'O que pode existir na interface', level: '2' },
+          { id: 'interface-views-e-bindings-2', text: 'Views e bindings', level: '2' },
+          { id: 'interface-redesign-basico-incluido-3', text: 'Redesign básico incluído', level: '2' },
+          { id: 'interface-catalogo-visual-primeiro-4', text: 'Catálogo visual primeiro', level: '2' },
+          { id: 'interface-sistema-de-estilos-5', text: 'Sistema de estilos', level: '2' },
+          { id: 'interface-temas-de-widgets-e-isolamento-6', text: 'Temas de widgets e isolamento', level: '2' },
+          { id: 'interface-aceite-visual-7', text: 'Aceite visual', level: '2' },
+        ],
+        plano: [
+          { id: 'plano-fase-0-baseline-e-decisoes-1', text: 'Fase 0 — Baseline e decisões', level: '2' },
+          {
+            id: 'plano-fase-1-ambiente-isolado-e-fronteiras-2',
+            text: 'Fase 1 — Ambiente isolado e fronteiras',
+            level: '2',
+          },
+          {
+            id: 'plano-fase-2-redesign-basico-sistema-visual-e-shell-3',
+            text: 'Fase 2 — Redesign básico, sistema visual e shell',
+            level: '2',
+          },
+          {
+            id: 'plano-fase-3-contratos-e-views-das-features-4',
+            text: 'Fase 3 — Contratos e views das features',
+            level: '2',
+          },
+          {
+            id: 'plano-fase-4-projetos-documentos-e-workspace-reais-5',
+            text: 'Fase 4 — Projetos, documentos e workspace reais',
+            level: '2',
+          },
+          {
+            id: 'plano-fase-5-edicao-completa-e-configuracoes-6',
+            text: 'Fase 5 — Edição completa e configurações',
+            level: '2',
+          },
+          {
+            id: 'plano-fase-6-build-runtime-debug-e-operacoes-restantes-7',
+            text: 'Fase 6 — Build, runtime, debug e operações restantes',
+            level: '2',
+          },
+          {
+            id: 'plano-fase-7-prontidao-decisao-do-time-e-substituicao-do-produto-8',
+            text: 'Fase 7 — Prontidão, decisão do time e substituição do produto',
+            level: '2',
+          },
+          { id: 'plano-regra-para-cada-subfluxo-9', text: 'Regra para cada subfluxo', level: '2' },
+        ],
+        validacao: [
+          { id: 'validacao-definicao-de-pronto-1', text: 'Definição de pronto', level: '2' },
+          { id: 'validacao-matriz-de-verificacao-2', text: 'Matriz de verificação', level: '2' },
+          {
+            id: 'validacao-independencia-e-aceite-do-redesign-3',
+            text: 'Independência e aceite do redesign',
+            level: '2',
+          },
+          {
+            id: 'validacao-regressoes-obrigatorias-por-fluxo-relevante-4',
+            text: 'Regressões obrigatórias por fluxo relevante',
+            level: '2',
+          },
+          { id: 'validacao-benchmark-reproduzivel-5', text: 'Benchmark reproduzível', level: '2' },
+          { id: 'validacao-paridade-entre-repositorios-6', text: 'Paridade entre repositórios', level: '2' },
+          {
+            id: 'validacao-prontidao-e-substituicao-em-producao-7',
+            text: 'Prontidão e substituição em produção',
+            level: '2',
+          },
+          { id: 'validacao-rollback-do-produto-8', text: 'Rollback do produto', level: '2' },
+          {
+            id: 'validacao-validacao-realizada-nesta-entrega-9',
+            text: 'Validação realizada nesta entrega',
+            level: '2',
+          },
+        ],
+        acompanhamento: [
+          { id: 'acompanhamento-registro-inicial-1', text: 'Registro inicial', level: '2' },
+          { id: 'acompanhamento-revisao-de-premissas-2', text: 'Revisão de premissas', level: '2' },
+          { id: 'acompanhamento-decisoes-3', text: 'Decisões', level: '2' },
+          {
+            id: 'acompanhamento-perguntas-que-orientam-a-fase-0-4',
+            text: 'Perguntas que orientam a fase 0',
+            level: '2',
+          },
+          { id: 'acompanhamento-inventario-inicial-por-fluxo-5', text: 'Inventário inicial por fluxo', level: '2' },
+          { id: 'acompanhamento-checklist-de-fases-6', text: 'Checklist de fases', level: '2' },
+          { id: 'acompanhamento-registro-por-subfluxo-7', text: 'Registro por subfluxo', level: '2' },
+        ],
+      }
+      let activeChapter = ''
+      function setActive(id) {
+        if (id === activeChapter) return
+        activeChapter = id
+        navLinks.forEach((link) => {
+          if (link.hash === '#' + id) link.setAttribute('aria-current', 'location')
+          else link.removeAttribute('aria-current')
+        })
+        const toc = document.querySelector('#toc-links')
+        toc.replaceChildren()
+        ;(headings[id] || []).forEach((heading) => {
+          const link = document.createElement('a')
+          link.href = '#' + heading.id
+          link.textContent = heading.text
+          toc.append(link)
+        })
+      }
+      function updateReading() {
+        const visible = chapters.filter((chapter) => !chapter.hidden)
+        let current = visible[0]
+        for (const chapter of visible) {
+          if (chapter.getBoundingClientRect().top <= 130) current = chapter
+        }
+        if (current) setActive(current.id)
+        const max = document.documentElement.scrollHeight - window.innerHeight
+        const sidebarWidth = window.innerWidth > 850 ? 284 : 0
+        document.querySelector('.reading-progress').style.width =
+          (max > 0 ? Math.min(1, window.scrollY / max) : 0) * (window.innerWidth - sidebarWidth) + 'px'
+      }
+      function clearSearch() {
+        search.value = ''
+        applySearch()
+      }
+      function applySearch() {
+        const term = search.value.trim()
+        results.hidden = !term
+        resultList.replaceChildren()
+        if (!term) {
+          chapters.forEach((chapter) => (chapter.hidden = false))
+          updateReading()
+          return
+        }
+        const words = normalize(term).split(/\s+/).filter(Boolean)
+        let count = 0
+        indexed.forEach(({ chapter, text }) => {
+          const normalized = normalize(text)
+          const match = words.every((word) => normalized.includes(word))
+          chapter.hidden = !match
+          if (!match) return
+          count++
+          const item = document.createElement('li')
+          const link = document.createElement('a')
+          link.href = '#' + chapter.id
+          link.textContent = chapter.dataset.title
+          const excerpt = document.createElement('span')
+          excerpt.className = 'result-excerpt'
+          const position = normalized.indexOf(words[0])
+          const start = Math.max(0, position - 70)
+          excerpt.textContent =
+            (start ? '… ' : '') + text.slice(start, start + 230) + (start + 230 < text.length ? ' …' : '')
+          item.append(link, excerpt)
+          resultList.append(item)
+        })
+        resultStatus.textContent = count
+          ? count + ' de 8 capítulos encontrados para “' + term + '”.'
+          : 'Nenhum capítulo encontrado. Tente outro termo.'
+        updateReading()
+      }
+      search.addEventListener('input', applySearch)
+      document.querySelector('#clear-search').addEventListener('click', () => {
+        clearSearch()
+        search.focus()
+      })
+      document.querySelector('#print').addEventListener('click', () => window.print())
+      navLinks.forEach((link) =>
+        link.addEventListener('click', () => {
+          clearSearch()
+          setActive(link.hash.slice(1))
+        }),
+      )
+      document.addEventListener('click', (event) => {
+        const link = event.target.closest('a[href^="#"]')
+        if (!link) return
+        const target = document.getElementById(link.hash.slice(1))
+        if (target && target.closest('.document')?.hidden) clearSearch()
+      })
+      document.addEventListener('keydown', (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+          event.preventDefault()
+          search.focus()
+          search.scrollIntoView({ block: 'center' })
+        }
+        if (event.key === 'Escape' && document.activeElement === search) clearSearch()
+      })
+      let framePending = false
+      window.addEventListener(
+        'scroll',
+        () => {
+          if (framePending) return
+          framePending = true
+          requestAnimationFrame(() => {
+            updateReading()
+            framePending = false
+          })
+        },
+        { passive: true },
+      )
+      window.addEventListener('resize', updateReading)
+      updateReading()
+    </script>
+  </body>
+</html>

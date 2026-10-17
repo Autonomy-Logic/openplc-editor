@@ -1,0 +1,36 @@
+/* Shared appearance of labelled form controls (text and select). */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.control {
+  min-height: var(--control-height);
+  padding: 0 var(--space-control);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  background: var(--surface-panel);
+  font: inherit;
+}
+
+.control:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.control[aria-invalid='true'] {
+  border-color: var(--status-error);
+}
+
+.error {
+  color: var(--status-error);
+  font-size: 12px;
+}

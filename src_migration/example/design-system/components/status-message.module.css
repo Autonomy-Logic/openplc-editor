@@ -1,0 +1,21 @@
+/* One class per tone; the component picks the class from its typed prop. */
+.status {
+  margin: 0;
+  font-size: 13px;
+}
+
+.neutral {
+  color: var(--text-muted);
+}
+
+.busy {
+  color: var(--status-busy);
+}
+
+.warning {
+  color: var(--status-warning);
+}
+
+.error {
+  color: var(--status-error);
+}
