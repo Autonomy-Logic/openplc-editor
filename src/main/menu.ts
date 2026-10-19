@@ -143,10 +143,6 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
   }
 
-  handleToggleRadialMenu() {
-    this.mainWindow.webContents.send('workspace:toggle-radial-menu-accelerator')
-  }
-
   handleOpenDiagnostics() {
     this.mainWindow.webContents.send('workspace:open-diagnostics-accelerator')
   }
@@ -511,11 +507,6 @@ export default class MenuBuilder {
           sublabel: this.themeSublabel(),
           click: () => this.updateAppTheme(),
         },
-        {
-          label: i18n.t('menu:display.submenu.radialMenu'),
-          click: () => this.handleToggleRadialMenu(),
-          enabled: this.projectOpen,
-        },
         ...this.developerMenuItems(),
       ],
     }
@@ -843,11 +834,6 @@ export default class MenuBuilder {
             label: i18n.t('menu:display.submenu.theme'),
             sublabel: this.themeSublabel(),
             click: () => this.updateAppTheme(),
-          },
-          {
-            label: i18n.t('menu:display.submenu.radialMenu'),
-            click: () => this.handleToggleRadialMenu(),
-            enabled: this.projectOpen,
           },
           ...this.developerMenuItems(),
         ],

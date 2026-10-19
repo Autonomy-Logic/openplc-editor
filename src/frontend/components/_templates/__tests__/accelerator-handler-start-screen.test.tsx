@@ -23,7 +23,6 @@ const PROJECT_ONLY = [
   'onDeleteFile',
   'onFindInProject',
   'onSwitchPerspective',
-  'onToggleRadialMenu',
   'onUndo',
   'onRedo',
 ] as const

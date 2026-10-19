@@ -6,8 +6,8 @@
  * Owns the radial menu and the "armed" element that follows the cursor until
  * the user clicks a placement target, presses Escape or clicks elsewhere.
  * Elements are armed from the radial menu (right click on the programming
- * area) or with Alt + digit, also while a text field such as a new element's
- * variable name has focus.
+ * area) or with Cmd + digit on macOS and Alt + digit elsewhere, also while a
+ * text field such as a new element's variable name has focus.
  *
  * Placement targets are DOM elements marked with `data-placement-target`
  * inside this provider. They read `armed` from the context, perform the
@@ -27,12 +27,13 @@ import {
   useState,
 } from 'react'
 
+import { i18n } from '../../../../../../locales/i18n'
 import { useOpenPLCStore } from '../../../../../../store'
 import {
-  findPlacementElement,
   formatPlacementShortcut,
   getPlacementElementForShortcut,
   getPlacementElements,
+  getShortcutModifier,
   isShortcutAllowedFromTarget,
   PLACEMENT_TARGET_ATTRIBUTE,
   type PlacementElementId,
@@ -70,11 +71,13 @@ type ProviderProps = {
 
 const hasOpenDialog = (): boolean => document.querySelector('[role="dialog"][data-state="open"]') !== null
 
+const placementLabel = (id: PlacementElementId): string => i18n.t(`editorTools:placement.elements.${id}`)
+
 export function GraphicalPlacementProvider({ language, isActive, readOnly = false, children }: ProviderProps) {
-  const radialMenuEnabled = useOpenPLCStore((state) => state.uiPreferences.radialMenuEnabled)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
   const elements = getPlacementElements(language)
+  const modifier = getShortcutModifier(navigator.platform)
   const canEdit = isActive && !readOnly && !isDebuggerVisible && elements.length > 0
 
   const [menuPosition, setMenuPosition] = useState<Point | null>(null)
@@ -106,20 +109,16 @@ export function GraphicalPlacementProvider({ language, isActive, readOnly = fals
     if (!canEdit) cancel()
   }, [canEdit, cancel])
 
-  useEffect(() => {
-    if (!radialMenuEnabled) setMenuPosition(null)
-  }, [radialMenuEnabled])
-
   const handleContextMenu = useCallback(
     (event: ReactMouseEvent) => {
-      if (!canEdit || !radialMenuEnabled) return
+      if (!canEdit) return
       event.preventDefault()
       event.stopPropagation()
       pointerRef.current = { x: event.clientX, y: event.clientY }
       setArmed(null)
       setMenuPosition({ x: event.clientX, y: event.clientY })
     },
-    [canEdit, radialMenuEnabled],
+    [canEdit],
   )
 
   useEffect(() => {
@@ -140,15 +139,15 @@ export function GraphicalPlacementProvider({ language, isActive, readOnly = fals
         cancel()
         return
       }
-      const element = getPlacementElementForShortcut(language, event)
-      if (!element || !isShortcutAllowedFromTarget(event) || hasOpenDialog()) return
+      const element = getPlacementElementForShortcut(language, event, modifier)
+      if (!element || !isShortcutAllowedFromTarget(event, modifier) || hasOpenDialog()) return
       event.preventDefault()
       event.stopPropagation()
       arm(element.id)
     }
     document.addEventListener('keydown', handleKeyDown, true)
     return () => document.removeEventListener('keydown', handleKeyDown, true)
-  }, [canEdit, language, arm, cancel])
+  }, [canEdit, language, modifier, arm, cancel])
 
   useEffect(() => {
     if (!armed) return
@@ -179,11 +178,11 @@ export function GraphicalPlacementProvider({ language, isActive, readOnly = fals
     () =>
       elements.map((element) => ({
         id: element.id,
-        label: element.label,
-        hint: formatPlacementShortcut(element),
+        label: placementLabel(element.id),
+        hint: formatPlacementShortcut(element, modifier),
         icon: renderPlacementIcon(language, element.id),
       })),
-    [elements, language],
+    [elements, language, modifier],
   )
 
   const handleSelect = useCallback(
@@ -200,8 +199,6 @@ export function GraphicalPlacementProvider({ language, isActive, readOnly = fals
     [language, armed, handleContextMenu, consume, cancel],
   )
 
-  const armedDescriptor = armed ? findPlacementElement(language, armed.id) : undefined
-
   return (
     <GraphicalPlacementContext.Provider value={value}>
       <div ref={containerRef} className='contents'>
@@ -211,14 +208,15 @@ export function GraphicalPlacementProvider({ language, isActive, readOnly = fals
         <RadialMenu
           items={menuItems}
           position={menuPosition}
-          title={language === 'ld' ? 'Ladder' : 'FBD'}
-          ariaLabel={`${language.toUpperCase()} elements`}
+          title={
+            language === 'ld' ? i18n.t('editorTools:placement.title.ld') : i18n.t('editorTools:placement.title.fbd')
+          }
           onSelect={handleSelect}
           onClose={cancel}
         />
       )}
-      {armed && armedDescriptor && (
-        <CursorFollower initialPosition={armed.origin} label={armedDescriptor.label}>
+      {armed && (
+        <CursorFollower initialPosition={armed.origin} label={placementLabel(armed.id)}>
           {renderPlacementIcon(language, armed.id)}
         </CursorFollower>
       )}

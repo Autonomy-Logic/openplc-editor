@@ -30,10 +30,10 @@ function setup() {
 describe('RadialMenu', () => {
   it('renders one item per entry around the centre with the title in the middle', () => {
     setup()
-    expect(screen.getAllByRole('menuitem').map((item) => item.getAttribute('aria-label'))).toEqual([
-      'Contact',
-      'Coil',
-      'Block',
+    expect(screen.getAllByTestId(/^radial-menu-item-/).map((item) => item.getAttribute('data-testid'))).toEqual([
+      'radial-menu-item-contact',
+      'radial-menu-item-coil',
+      'radial-menu-item-block',
     ])
     expect(screen.getByTestId('radial-menu-label').textContent).toBe('Ladder')
   })

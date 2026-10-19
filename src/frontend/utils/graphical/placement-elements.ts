@@ -1,6 +1,6 @@
 /**
  * Catalog of the elements that can be placed with the radial menu or with the
- * Alt + digit shortcuts, per graphical language.
+ * placement shortcuts (Cmd + digit on macOS, Alt + digit elsewhere), per graphical language.
  */
 
 /** Marks the DOM elements that accept a click-to-place insertion. */
@@ -22,26 +22,25 @@ export type PlacementElementId = LadderPlacementElement | FbdPlacementElement
 
 export type PlacementElementDescriptor = {
   id: PlacementElementId
-  label: string
-  /** Digit pressed together with Alt to pick the element. */
+  /** Digit pressed together with the shortcut modifier to pick the element. */
   shortcutDigit: number
 }
 
 /** Radial menu order (clockwise from the top). */
 export const LADDER_PLACEMENT_ELEMENTS: readonly PlacementElementDescriptor[] = [
-  { id: 'contact', label: 'Contact', shortcutDigit: 1 },
-  { id: 'coil', label: 'Coil', shortcutDigit: 2 },
-  { id: 'block', label: 'Block', shortcutDigit: 3 },
+  { id: 'contact', shortcutDigit: 1 },
+  { id: 'coil', shortcutDigit: 2 },
+  { id: 'block', shortcutDigit: 3 },
 ]
 
 /** Radial menu order (clockwise from the top). */
 export const FBD_PLACEMENT_ELEMENTS: readonly PlacementElementDescriptor[] = [
-  { id: 'block', label: 'Block', shortcutDigit: 3 },
-  { id: 'input-variable', label: 'Input Variable', shortcutDigit: 1 },
-  { id: 'output-variable', label: 'Output Variable', shortcutDigit: 2 },
-  { id: 'connector', label: 'Connector', shortcutDigit: 4 },
-  { id: 'continuation', label: 'Continuation', shortcutDigit: 5 },
-  { id: 'comment', label: 'Comment', shortcutDigit: 6 },
+  { id: 'block', shortcutDigit: 3 },
+  { id: 'input-variable', shortcutDigit: 1 },
+  { id: 'output-variable', shortcutDigit: 2 },
+  { id: 'connector', shortcutDigit: 4 },
+  { id: 'continuation', shortcutDigit: 5 },
+  { id: 'comment', shortcutDigit: 6 },
 ]
 
 const EMPTY: readonly PlacementElementDescriptor[] = []
@@ -81,9 +80,18 @@ export function findPlacementElement(
 
 export type ShortcutKeyEvent = Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'code'>
 
-/** Digit of an Alt + digit chord (top row or numpad), or `undefined` for any other key combination. */
-export function getAltDigit(event: ShortcutKeyEvent): number | undefined {
-  if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return undefined
+/** Modifier of the placement shortcuts: Cmd on macOS, Alt everywhere else. */
+export type ShortcutModifier = 'meta' | 'alt'
+
+/** Shortcut modifier for a `navigator.platform` value. */
+export function getShortcutModifier(platform: string): ShortcutModifier {
+  return /mac/i.test(platform) ? 'meta' : 'alt'
+}
+
+/** Digit of a modifier + digit chord (top row or numpad), or `undefined` for any other key combination. */
+export function getShortcutDigit(event: ShortcutKeyEvent, modifier: ShortcutModifier): number | undefined {
+  const pressed = modifier === 'meta' ? event.metaKey && !event.altKey : event.altKey && !event.metaKey
+  if (!pressed || event.ctrlKey || event.shiftKey) return undefined
   const match = /^(?:Digit|Numpad)([0-9])$/.exec(event.code)
   return match ? Number(match[1]) : undefined
 }
@@ -91,22 +99,26 @@ export function getAltDigit(event: ShortcutKeyEvent): number | undefined {
 export function getPlacementElementForShortcut(
   language: PlacementLanguage,
   event: ShortcutKeyEvent,
+  modifier: ShortcutModifier,
 ): PlacementElementDescriptor | undefined {
-  const digit = getAltDigit(event)
+  const digit = getShortcutDigit(event, modifier)
   if (digit === undefined) return undefined
   return getPlacementElements(language).find((element) => element.shortcutDigit === digit)
 }
 
-export function formatPlacementShortcut(element: PlacementElementDescriptor): string {
-  return `Alt + ${element.shortcutDigit}`
+export function formatPlacementShortcut(element: PlacementElementDescriptor, modifier: ShortcutModifier): string {
+  return `${modifier === 'meta' ? 'Cmd' : 'Alt'} + ${element.shortcutDigit}`
 }
 
 /**
- * Whether an Alt + digit chord may arm an element from where it was typed. Top-row digits work in
- * text fields too; numpad digits are left to the field there, since Alt + numpad enters characters on Windows.
+ * Whether a shortcut chord may arm an element from where it was typed. Top-row digits work in text
+ * fields too; with Alt, numpad digits are left to the field, since Alt + numpad enters characters on Windows.
  */
-export function isShortcutAllowedFromTarget(event: Pick<KeyboardEvent, 'code' | 'target'>): boolean {
-  return !event.code.startsWith('Numpad') || !isEditableEventTarget(event.target)
+export function isShortcutAllowedFromTarget(
+  event: Pick<KeyboardEvent, 'code' | 'target'>,
+  modifier: ShortcutModifier,
+): boolean {
+  return modifier === 'meta' || !event.code.startsWith('Numpad') || !isEditableEventTarget(event.target)
 }
 
 /** True when keyboard input on `target` belongs to a text field rather than to the canvas. */

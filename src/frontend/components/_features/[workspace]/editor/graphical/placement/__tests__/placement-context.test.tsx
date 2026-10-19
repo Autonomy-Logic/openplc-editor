@@ -48,10 +48,19 @@ const armed = () => screen.getByTestId('armed').textContent
 const openMenuAt = (x = 400, y = 300) => fireEvent.contextMenu(screen.getByTestId('area'), { clientX: x, clientY: y })
 const altDigit = (digit: number, target: Element = document.body) =>
   fireEvent.keyDown(target, { key: String(digit), code: `Digit${digit}`, altKey: true })
+const cmdDigit = (digit: number, target: Element = document.body) =>
+  fireEvent.keyDown(target, { key: String(digit), code: `Digit${digit}`, metaKey: true })
+const menuItemIds = () =>
+  screen
+    .getAllByTestId(/^radial-menu-item-/)
+    .map((item) => item.getAttribute('data-testid')?.replace('radial-menu-item-', ''))
 
 beforeEach(() => {
   consumed.length = 0
-  localStorage.clear()
+})
+
+afterEach(() => {
+  jest.restoreAllMocks()
 })
 
 describe('GraphicalPlacementProvider', () => {
@@ -64,17 +73,13 @@ describe('GraphicalPlacementProvider', () => {
     setup()
     openMenuAt()
     expect(screen.getByTestId('radial-menu')).toBeTruthy()
-    expect(screen.getAllByRole('menuitem').map((item) => item.getAttribute('aria-label'))).toEqual([
-      'Contact',
-      'Coil',
-      'Block',
-    ])
+    expect(menuItemIds()).toEqual(['contact', 'coil', 'block'])
   })
 
   it('lists the FBD elements in the FBD editor', () => {
     setup({ language: 'fbd' })
     openMenuAt()
-    expect(screen.getAllByRole('menuitem')).toHaveLength(6)
+    expect(menuItemIds()).toHaveLength(6)
   })
 
   it('reopens the menu at the new position on another right click', () => {
@@ -84,20 +89,6 @@ describe('GraphicalPlacementProvider', () => {
     openMenuAt(600, 300)
     expect(screen.getAllByTestId('radial-menu')).toHaveLength(1)
     expect(screen.getByTestId('radial-menu').style.left).not.toBe(first)
-  })
-
-  it('does not open the menu when it is disabled in the preferences', () => {
-    const { store } = setup()
-    act(() => store.getState().uiPreferencesActions.setRadialMenuEnabled(false))
-    openMenuAt()
-    expect(screen.queryByTestId('radial-menu')).toBeNull()
-  })
-
-  it('closes an open menu when the preference is turned off', () => {
-    const { store } = setup()
-    openMenuAt()
-    act(() => store.getState().uiPreferencesActions.setRadialMenuEnabled(false))
-    expect(screen.queryByTestId('radial-menu')).toBeNull()
   })
 
   it.each([
@@ -156,11 +147,34 @@ describe('GraphicalPlacementProvider', () => {
     })
   })
 
-  it('keeps shortcuts working with the radial menu disabled', () => {
-    const { store } = setup()
-    act(() => store.getState().uiPreferencesActions.setRadialMenuEnabled(false))
-    altDigit(1)
-    expect(armed()).toBe('contact')
+  describe('on macOS', () => {
+    beforeEach(() => {
+      jest.spyOn(navigator, 'platform', 'get').mockReturnValue('MacIntel')
+    })
+
+    it('arms with Cmd + digit and ignores Alt + digit', () => {
+      setup()
+      altDigit(1)
+      expect(armed()).toBe('none')
+      cmdDigit(2)
+      expect(armed()).toBe('coil')
+    })
+
+    it('arms from a focused text field, numpad digits included', () => {
+      setup()
+      cmdDigit(1, screen.getByTestId('field'))
+      expect(armed()).toBe('contact')
+      fireEvent.keyDown(screen.getByTestId('field'), { key: '3', code: 'Numpad3', metaKey: true })
+      expect(armed()).toBe('block')
+    })
+
+    it('shows the Cmd shortcut in the radial menu', () => {
+      setup()
+      openMenuAt(400, 300)
+      const anchor = getSliceAnchor(0, 3, 78)
+      fireEvent.mouseMove(screen.getByTestId('radial-menu'), { clientX: 400 + anchor.x, clientY: 300 + anchor.y })
+      expect(screen.getByTestId('radial-menu').textContent).toContain('Cmd + 1')
+    })
   })
 
   it('arms from the keyboard while the radial menu is open and closes it', () => {

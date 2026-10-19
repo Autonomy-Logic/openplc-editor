@@ -2,7 +2,7 @@
  * Radial menu and click-to-place in the LD and FBD editors.
  *
  * Right click on the programming area opens the radial menu; picking an element
- * (or pressing Alt + digit) sticks it to the cursor, and a left click inserts
+ * (or pressing Cmd + digit on macOS, Alt + digit elsewhere) sticks it to the cursor, and a left click inserts
  * it (LD: on a rung placeholder, FBD: anywhere on the canvas). Escape or a click
  * away cancels. The toolbox drag-and-drop path is checked to still work.
  *
@@ -14,6 +14,8 @@ import { join } from 'node:path'
 
 import type { ElectronApplication, Locator, Page } from '@playwright/test'
 import { _electron as electron, expect, test } from '@playwright/test'
+
+import { quitApp } from './helpers/ethercat-project'
 
 const ROOT = join(tmpdir(), 'openplc-e2e-radial-menu')
 const FIXTURE = join(ROOT, 'project')
@@ -125,16 +127,10 @@ const center = async (locator: Locator) => {
 
 const visible = (page: Page, selector: string) => page.locator(`${selector}:visible`)
 
-/** Display > Radial Menu from the native menu; waits until the renderer has stored the new value. */
-async function toggleRadialMenu(expected: boolean) {
-  await app.evaluate(({ BrowserWindow }) => {
-    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))
-    win?.webContents.send('workspace:toggle-radial-menu-accelerator')
-  })
-  await expect
-    .poll(() => page.evaluate(() => localStorage.getItem('ui-preferences-v1')))
-    .toBe(JSON.stringify({ radialMenuEnabled: expected }))
-}
+/** Modifier of the placement shortcuts on this platform. */
+const MOD = process.platform === 'darwin' ? 'Meta' : 'Alt'
+
+const menuItems = (page: Page) => page.getByTestId('radial-menu').locator('[data-testid^="radial-menu-item-"]')
 
 async function rightClick(page: Page, point: { x: number; y: number }) {
   await page.mouse.click(point.x, point.y, { button: 'right' })
@@ -173,7 +169,7 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
-  await app?.close()
+  if (app) await quitApp(app, page)
 })
 
 test.describe('ladder', () => {
@@ -188,7 +184,7 @@ test.describe('ladder', () => {
     const pane = visible(page, '.react-flow__pane').first()
     await rightClick(page, await center(pane))
     await expect(page.getByTestId('radial-menu')).toBeVisible()
-    await expect(page.getByTestId('radial-menu').getByRole('menuitem')).toHaveCount(3)
+    await expect(menuItems(page)).toHaveCount(3)
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('radial-menu')).toHaveCount(0)
   })
@@ -224,13 +220,18 @@ test.describe('ladder', () => {
     await expect(visible(page, '.react-flow__node-placeholder')).toHaveCount(0)
   })
 
-  test('Alt + 2 arms a coil that is inserted on a placeholder', async () => {
+  test('the coil shortcut arms a coil that is inserted on a placeholder', async () => {
     const pane = visible(page, '.react-flow__pane').first()
     // The new contact's variable field has focus; the shortcut must still work from there.
     const field = page.locator('textarea[placeholder="???"]:focus')
     await expect(field).toHaveCount(1)
+    if (MOD === 'Meta') {
+      // Option + digit types characters on macOS layouts, so it must not arm anything.
+      await page.keyboard.press('Alt+2')
+      await expect(page.getByTestId('cursor-follower')).toHaveCount(0)
+    }
     const before = await field.inputValue()
-    await page.keyboard.press('Alt+2')
+    await page.keyboard.press(`${MOD}+2`)
     await expect(page.getByTestId('cursor-follower')).toContainText('Coil')
     expect(await field.inputValue(), 'the chord types nothing into the field').toBe(before)
     const placeholders = visible(page, '.react-flow__node-placeholder')
@@ -244,7 +245,7 @@ test.describe('ladder', () => {
     const pane = visible(page, '.react-flow__pane').first()
     const box = await pane.boundingBox()
     if (!box) throw new Error('no pane')
-    await page.keyboard.press('Alt+1')
+    await page.keyboard.press(`${MOD}+1`)
     await expect(page.getByTestId('cursor-follower')).toContainText('Contact')
     await page.mouse.move(box.x + box.width - 20, box.y + 15)
     await page.mouse.click(box.x + box.width - 20, box.y + 15)
@@ -253,7 +254,7 @@ test.describe('ladder', () => {
   })
 
   test('Escape cancels an armed element', async () => {
-    await page.keyboard.press('Alt+3')
+    await page.keyboard.press(`${MOD}+3`)
     await expect(page.getByTestId('cursor-follower')).toContainText('Block')
     await page.keyboard.press('Escape')
     await expect(page.getByTestId('cursor-follower')).toHaveCount(0)
@@ -281,45 +282,37 @@ test.describe('fbd', () => {
     const pane = visible(page, '.react-flow__pane').first()
     const point = await center(pane)
     await rightClick(page, point)
-    await expect(page.getByTestId('radial-menu').getByRole('menuitem')).toHaveCount(6)
+    await expect(menuItems(page)).toHaveCount(6)
     await pickFromMenu(page, 'comment', 'Comment')
     await page.mouse.click(point.x - 200, point.y - 100)
     await expect(visible(page, '.react-flow__node-comment')).toHaveCount(1)
   })
 
-  test('Alt + 1 places an input variable and Alt + 2 an output variable', async () => {
+  test('the shortcuts place an input variable and an output variable', async () => {
     const pane = visible(page, '.react-flow__pane').first()
     const point = await center(pane)
-    await page.keyboard.press('Alt+1')
+    await page.keyboard.press(`${MOD}+1`)
     await page.mouse.click(point.x - 100, point.y + 80)
     await expect(visible(page, '.react-flow__node-input-variable')).toHaveCount(1)
-    await page.keyboard.press('Alt+2')
+    await page.keyboard.press(`${MOD}+2`)
     await page.mouse.click(point.x + 150, point.y + 80)
     await expect(visible(page, '.react-flow__node-output-variable')).toHaveCount(1)
   })
 
   test('a click on the zoom controls cancels instead of placing', async () => {
-    await page.keyboard.press('Alt+4')
+    await page.keyboard.press(`${MOD}+4`)
     await expect(page.getByTestId('cursor-follower')).toContainText('Connector')
     await page.locator('.react-flow__controls:visible button').first().click()
     await expect(page.getByTestId('cursor-follower')).toHaveCount(0)
     await expect(visible(page, '.react-flow__node-connector')).toHaveCount(0)
   })
 
-  test('disabling the radial menu keeps the shortcuts', async () => {
-    await toggleRadialMenu(false)
+  test('the continuation shortcut places a continuation where clicked', async () => {
     const pane = visible(page, '.react-flow__pane').first()
     const point = await center(pane)
-    await rightClick(page, point)
-    await expect(page.getByTestId('radial-menu')).toHaveCount(0)
-
-    await page.keyboard.press('Alt+5')
+    await page.keyboard.press(`${MOD}+5`)
+    await expect(page.getByTestId('cursor-follower')).toContainText('Continuation')
     await page.mouse.click(point.x + 150, point.y - 120)
     await expect(visible(page, '.react-flow__node-continuation')).toHaveCount(1)
-
-    await toggleRadialMenu(true)
-    await rightClick(page, point)
-    await expect(page.getByTestId('radial-menu')).toBeVisible()
-    await page.keyboard.press('Escape')
   })
 })

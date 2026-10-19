@@ -168,8 +168,6 @@ const rendererProcessBridge = {
   pageSetupAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:page-setup-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     subscribe('workspace:switch-perspective-accelerator', callback),
-  toggleRadialMenuAccelerator: (callback: IpcRendererCallbacks) =>
-    subscribe('workspace:toggle-radial-menu-accelerator', callback),
   openDiagnosticsAccelerator: (callback: IpcRendererCallbacks) =>
     subscribe('workspace:open-diagnostics-accelerator', callback),
 

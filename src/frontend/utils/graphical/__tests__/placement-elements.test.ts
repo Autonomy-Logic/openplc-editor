@@ -2,9 +2,10 @@ import {
   FBD_PLACEMENT_ELEMENTS,
   findPlacementElement,
   formatPlacementShortcut,
-  getAltDigit,
   getPlacementElementForShortcut,
   getPlacementElements,
+  getShortcutDigit,
+  getShortcutModifier,
   isEditableEventTarget,
   isFbdPlacementElement,
   isLadderPlacementElement,
@@ -59,50 +60,78 @@ describe('placement-elements', () => {
   })
 
   it('finds an element by id', () => {
-    expect(findPlacementElement('fbd', 'comment')?.label).toBe('Comment')
+    expect(findPlacementElement('fbd', 'comment')?.shortcutDigit).toBe(6)
     expect(findPlacementElement('ld', 'comment')).toBeUndefined()
   })
 
-  describe('getAltDigit', () => {
-    it('reads top-row and numpad digits', () => {
-      expect(getAltDigit(key('Digit1'))).toBe(1)
-      expect(getAltDigit(key('Numpad6'))).toBe(6)
+  describe('getShortcutModifier', () => {
+    it('uses Cmd on macOS and Alt everywhere else', () => {
+      expect(getShortcutModifier('MacIntel')).toBe('meta')
+      expect(getShortcutModifier('Win32')).toBe('alt')
+      expect(getShortcutModifier('Linux x86_64')).toBe('alt')
+      expect(getShortcutModifier('')).toBe('alt')
+    })
+  })
+
+  describe('getShortcutDigit', () => {
+    it('reads top-row and numpad digits with Alt', () => {
+      expect(getShortcutDigit(key('Digit1'), 'alt')).toBe(1)
+      expect(getShortcutDigit(key('Numpad6'), 'alt')).toBe(6)
+    })
+
+    it('reads digits with Cmd on macOS', () => {
+      const cmd = { altKey: false, metaKey: true }
+      expect(getShortcutDigit(key('Digit1', cmd), 'meta')).toBe(1)
+      expect(getShortcutDigit(key('Numpad6', cmd), 'meta')).toBe(6)
+    })
+
+    it('ignores the other platform modifier', () => {
+      expect(getShortcutDigit(key('Digit1'), 'meta')).toBeUndefined()
+      expect(getShortcutDigit(key('Digit1', { altKey: false, metaKey: true }), 'alt')).toBeUndefined()
+      expect(getShortcutDigit(key('Digit1', { metaKey: true }), 'meta')).toBeUndefined()
     })
 
     it('ignores other chords and keys', () => {
-      expect(getAltDigit(key('Digit1', { altKey: false }))).toBeUndefined()
-      expect(getAltDigit(key('Digit1', { ctrlKey: true }))).toBeUndefined()
-      expect(getAltDigit(key('Digit1', { metaKey: true }))).toBeUndefined()
-      expect(getAltDigit(key('Digit1', { shiftKey: true }))).toBeUndefined()
-      expect(getAltDigit(key('KeyA'))).toBeUndefined()
+      expect(getShortcutDigit(key('Digit1', { altKey: false }), 'alt')).toBeUndefined()
+      expect(getShortcutDigit(key('Digit1', { ctrlKey: true }), 'alt')).toBeUndefined()
+      expect(getShortcutDigit(key('Digit1', { metaKey: true }), 'alt')).toBeUndefined()
+      expect(getShortcutDigit(key('Digit1', { shiftKey: true }), 'alt')).toBeUndefined()
+      expect(getShortcutDigit(key('KeyA'), 'alt')).toBeUndefined()
     })
   })
 
   describe('getPlacementElementForShortcut', () => {
     it('maps the ladder shortcuts', () => {
-      expect(getPlacementElementForShortcut('ld', key('Digit1'))?.id).toBe('contact')
-      expect(getPlacementElementForShortcut('ld', key('Digit2'))?.id).toBe('coil')
-      expect(getPlacementElementForShortcut('ld', key('Digit3'))?.id).toBe('block')
-      expect(getPlacementElementForShortcut('ld', key('Digit4'))).toBeUndefined()
+      expect(getPlacementElementForShortcut('ld', key('Digit1'), 'alt')?.id).toBe('contact')
+      expect(getPlacementElementForShortcut('ld', key('Digit2'), 'alt')?.id).toBe('coil')
+      expect(getPlacementElementForShortcut('ld', key('Digit3'), 'alt')?.id).toBe('block')
+      expect(getPlacementElementForShortcut('ld', key('Digit4'), 'alt')).toBeUndefined()
     })
 
     it('maps the FBD shortcuts', () => {
-      expect(getPlacementElementForShortcut('fbd', key('Digit1'))?.id).toBe('input-variable')
-      expect(getPlacementElementForShortcut('fbd', key('Digit2'))?.id).toBe('output-variable')
-      expect(getPlacementElementForShortcut('fbd', key('Digit3'))?.id).toBe('block')
-      expect(getPlacementElementForShortcut('fbd', key('Digit4'))?.id).toBe('connector')
-      expect(getPlacementElementForShortcut('fbd', key('Digit5'))?.id).toBe('continuation')
-      expect(getPlacementElementForShortcut('fbd', key('Digit6'))?.id).toBe('comment')
-      expect(getPlacementElementForShortcut('fbd', key('Digit7'))).toBeUndefined()
+      expect(getPlacementElementForShortcut('fbd', key('Digit1'), 'alt')?.id).toBe('input-variable')
+      expect(getPlacementElementForShortcut('fbd', key('Digit2'), 'alt')?.id).toBe('output-variable')
+      expect(getPlacementElementForShortcut('fbd', key('Digit3'), 'alt')?.id).toBe('block')
+      expect(getPlacementElementForShortcut('fbd', key('Digit4'), 'alt')?.id).toBe('connector')
+      expect(getPlacementElementForShortcut('fbd', key('Digit5'), 'alt')?.id).toBe('continuation')
+      expect(getPlacementElementForShortcut('fbd', key('Digit6'), 'alt')?.id).toBe('comment')
+      expect(getPlacementElementForShortcut('fbd', key('Digit7'), 'alt')).toBeUndefined()
     })
 
-    it('ignores keys that are not an Alt + digit chord', () => {
-      expect(getPlacementElementForShortcut('ld', key('KeyC'))).toBeUndefined()
+    it('maps Cmd + digit on macOS', () => {
+      const cmd = { altKey: false, metaKey: true }
+      expect(getPlacementElementForShortcut('ld', key('Digit2', cmd), 'meta')?.id).toBe('coil')
+      expect(getPlacementElementForShortcut('ld', key('Digit2'), 'meta')).toBeUndefined()
+    })
+
+    it('ignores keys that are not a shortcut chord', () => {
+      expect(getPlacementElementForShortcut('ld', key('KeyC'), 'alt')).toBeUndefined()
     })
   })
 
-  it('formats the shortcut label', () => {
-    expect(formatPlacementShortcut(LADDER_PLACEMENT_ELEMENTS[0])).toBe('Alt + 1')
+  it('formats the shortcut label for the platform modifier', () => {
+    expect(formatPlacementShortcut(LADDER_PLACEMENT_ELEMENTS[0], 'alt')).toBe('Alt + 1')
+    expect(formatPlacementShortcut(LADDER_PLACEMENT_ELEMENTS[0], 'meta')).toBe('Cmd + 1')
   })
 
   describe('isShortcutAllowedFromTarget', () => {
@@ -110,13 +139,17 @@ describe('placement-elements', () => {
     const div = document.createElement('div')
 
     it('allows top-row digits everywhere, text fields included', () => {
-      expect(isShortcutAllowedFromTarget({ code: 'Digit1', target: input })).toBe(true)
-      expect(isShortcutAllowedFromTarget({ code: 'Digit1', target: div })).toBe(true)
+      expect(isShortcutAllowedFromTarget({ code: 'Digit1', target: input }, 'alt')).toBe(true)
+      expect(isShortcutAllowedFromTarget({ code: 'Digit1', target: div }, 'alt')).toBe(true)
     })
 
-    it('leaves numpad digits to text fields', () => {
-      expect(isShortcutAllowedFromTarget({ code: 'Numpad1', target: input })).toBe(false)
-      expect(isShortcutAllowedFromTarget({ code: 'Numpad1', target: div })).toBe(true)
+    it('leaves Alt + numpad digits to text fields', () => {
+      expect(isShortcutAllowedFromTarget({ code: 'Numpad1', target: input }, 'alt')).toBe(false)
+      expect(isShortcutAllowedFromTarget({ code: 'Numpad1', target: div }, 'alt')).toBe(true)
+    })
+
+    it('allows Cmd + numpad digits in text fields', () => {
+      expect(isShortcutAllowedFromTarget({ code: 'Numpad1', target: input }, 'meta')).toBe(true)
     })
   })
 

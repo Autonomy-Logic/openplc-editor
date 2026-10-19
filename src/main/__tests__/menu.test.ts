@@ -47,7 +47,6 @@ const PROJECT_ONLY = [
   'menu:edit.submenu.findInProject',
   'menu:edit.submenu.deletePou',
   'menu:display.submenu.switchPerspective',
-  'menu:display.submenu.radialMenu',
 ]
 
 const ALWAYS_AVAILABLE = [

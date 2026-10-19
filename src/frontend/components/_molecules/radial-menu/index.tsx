@@ -28,7 +28,6 @@ export type RadialMenuProps = {
   onClose: () => void
   /** Centre text while no item is hovered. */
   title?: string
-  ariaLabel?: string
   innerRadius?: number
   outerRadius?: number
 }
@@ -41,7 +40,6 @@ const RadialMenu = ({
   onSelect,
   onClose,
   title,
-  ariaLabel = 'Radial menu',
   innerRadius = RADIAL_MENU_INNER_RADIUS,
   outerRadius = RADIAL_MENU_OUTER_RADIUS,
 }: RadialMenuProps) => {
@@ -125,8 +123,6 @@ const RadialMenu = ({
   return createPortal(
     <div
       ref={containerRef}
-      role='menu'
-      aria-label={ariaLabel}
       data-testid='radial-menu'
       className='fixed z-[1000] select-none'
       style={{ left: center.x - outerRadius, top: center.y - outerRadius, width: size, height: size }}
@@ -171,8 +167,6 @@ const RadialMenu = ({
         return (
           <div
             key={item.id}
-            role='menuitem'
-            aria-label={item.label}
             data-testid={`radial-menu-item-${item.id}`}
             className={cn(
               'pointer-events-none absolute flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center transition-transform duration-100',
