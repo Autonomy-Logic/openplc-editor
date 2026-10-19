@@ -29,6 +29,7 @@ import type {
   LoginResult,
   PluginCommandArgs,
   RetrievableDevice,
+  RuntimeCapabilitiesResult,
   RuntimeLogsResult,
   RuntimePort,
   RuntimeStatusResult,
@@ -174,6 +175,15 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
         return await window.bridge.runtimeGetUsersInfo(ip)
       } catch (err) {
         return { hasUsers: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async getRuntimeCapabilities(): Promise<RuntimeCapabilitiesResult> {
+      try {
+        const ip = requireIp()
+        return await window.bridge.runtimeGetCapabilities(ip)
+      } catch (err) {
+        return { features: null, error: getErrorMessage(err) }
       }
     },
 

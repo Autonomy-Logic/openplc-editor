@@ -116,9 +116,11 @@ type VppMetadata = {
   deviceId: string
   packagePath: string
   screens: Record<string, unknown>
+  pluginName?: string
   moduleSystem: {
     enabled: boolean
     maxSlots: number
+    discoverySupported?: boolean
     modules: VppModuleDefinition[]
   } | null
 }

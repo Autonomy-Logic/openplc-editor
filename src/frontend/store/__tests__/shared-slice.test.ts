@@ -1396,16 +1396,18 @@ describe('createSharedSlice', () => {
   })
 
   describe('serverActions', () => {
-    function addServer(name: string) {
+    // The protocol is a parameter because only one server of each may be
+    // created, so a test needing two has to reach for a second protocol.
+    function addServer(name: string, protocol: 'modbus-tcp' | 's7comm' = 'modbus-tcp') {
       store.getState().projectActions.createServer({
-        data: { name, protocol: 'modbus-tcp' },
+        data: { name, protocol },
       })
-      const editorModel = { type: 'plc-server' as const, meta: { name, protocol: 'modbus-tcp' as const } }
+      const editorModel = { type: 'plc-server' as const, meta: { name, protocol } }
       store.getState().editorActions.addModel(editorModel)
       store.getState().fileActions.addFile({ name, type: 'server', filePath: name })
       store.getState().tabsActions.updateTabs({
         name,
-        elementType: { type: 'server', protocol: 'modbus-tcp' },
+        elementType: { type: 'server', protocol },
       })
     }
 
@@ -1482,7 +1484,9 @@ describe('createSharedSlice', () => {
       })
 
       it('returns error when new name already exists', () => {
-        addServer('ExistingServer')
+        // Names are unique across protocols, so the collision stands even
+        // though the two servers are of different ones.
+        addServer('ExistingServer', 's7comm')
         const result = store.getState().serverActions.rename('OldServer', 'ExistingServer')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Server already exists')
@@ -2439,6 +2443,22 @@ describe('createSharedSlice', () => {
         expect(store.getState().workspace.selectedProjectTreeLeaf.type).toBeNull()
       })
 
+      it('selects a diagnostics next tab with a null project-tree leaf', () => {
+        // Same as the diff viewer: the developer diagnostics tab has no
+        // project element behind it, so there is no leaf to highlight.
+        store.getState().tabsActions.updateTabs({
+          name: 'I/O Image Diagnostics',
+          path: '/diagnostics',
+          elementType: { type: 'diagnostics' },
+        })
+        store.getState().pouActions.create({ type: 'program', name: 'PouB', language: 'st' })
+
+        store.getState().sharedWorkspaceActions.forceCloseFile('PouB')
+
+        expect(store.getState().editor.type).toBe('plc-diagnostics')
+        expect(store.getState().workspace.selectedProjectTreeLeaf.type).toBeNull()
+      })
+
       it('does not resurrect the closed model in editors[]', () => {
         // forceCloseFile must remove the active model from editors[] before setEditor runs
         // for the next tab, or the closed model reappears on the next focus switch.
@@ -3087,6 +3107,25 @@ describe('createSharedSlice', () => {
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
         expect(store.getState().workspace.canEdit).toBe(true)
       })
+    })
+  })
+
+  describe('serverActions (one per protocol)', () => {
+    it('refuses a second server of a protocol and carries the reason up', () => {
+      store.getState().serverActions.create({ name: 'mb_a', protocol: 'modbus-tcp' })
+      const result = store.getState().serverActions.create({ name: 'mb_b', protocol: 'modbus-tcp' })
+
+      expect(result.ok).toBe(false)
+      expect(result.message).toContain('mb_a')
+      expect(store.getState().project.data.servers).toHaveLength(1)
+    })
+
+    it('refuses duplicating one, which is the same second server by another route', () => {
+      store.getState().serverActions.create({ name: 'mb_a', protocol: 'modbus-tcp' })
+      const result = store.getState().serverActions.duplicate('mb_a', 'mb_copy')
+
+      expect(result.ok).toBe(false)
+      expect(store.getState().project.data.servers).toHaveLength(1)
     })
   })
 

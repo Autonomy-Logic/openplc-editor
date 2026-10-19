@@ -40,6 +40,17 @@ const RuntimeCreateUserModal = () => {
         deviceActions.setRuntimeJwtToken(loginResult.accessToken)
         deviceActions.setRuntimeConnectionStatus('connected')
         deviceActions.setStoredCredentials({ username, password })
+        // Capture the EtherDOG feature set so the pre-build capability gate can read it.
+        void runtime
+          .getRuntimeCapabilities()
+          .then((caps) => {
+            if (!caps.error && caps.features !== null) {
+              deviceActions.setRuntimeFeatures(caps.features)
+            }
+          })
+          .catch(() => {
+            /* already represented as runtimeFeatures === null */
+          })
         succeededRef.current = true
         return null
       }

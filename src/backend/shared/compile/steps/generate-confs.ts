@@ -35,10 +35,13 @@
 // DOM dependencies).  Same legacy-tree path the editor's compiler-
 // module.ts uses; flagged as an organisational smell (`backend-shared
 // → frontend`) but functional, see the build-pipeline refactor plan.
+import { validateEthercatProject } from '@root/middleware/shared/utils/ethercat'
+
 import { getErrorMessage } from '../../../../frontend/utils/get-error-message'
 import { generateModbusSlaveConfig } from '../../../../frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '../../../../frontend/utils/opcua'
 import { generateS7CommConfig } from '../../../../frontend/utils/s7comm'
+import type { S7TargetProfile } from '../../../../middleware/shared/utils/target-capabilities/types'
 import { generateEthercatConfig, generateEtherdogConfigs } from '../../ethercat/generate-ethercat-config'
 import { validateEthercatConfig } from '../../ethercat/validate-ethercat-config'
 import { isEtherdogCapableRuntime } from '../../firmware/runtime-version-gate'
@@ -76,10 +79,19 @@ export interface GenerateConfsInput {
    *  are rethrown.  Each adapter wires its native log channel
    *  through this callback. */
   log: (message: string, level: 'info' | 'warning' | 'error') => void
+  /** Slots per IEC prefix for this project, from `computeIoImage`. Supplies
+   *  the counts for any Modbus server segment the user did not configure, so
+   *  `modbus.json` and `image.conf` cannot describe different images. Absent
+   *  only for callers that have no image to offer. */
+  imageSizes?: Readonly<Record<string, number>>
   /** Version the target runtime reports, or null when unknown (compile
    *  only, no device).  Picks the EtherCAT file format; see
    *  `isEtherdogCapableRuntime`. */
   runtimeVersion: string | null
+  /** The target's S7 profile, which decides how many data blocks reach the
+   *  device and which buffers it can address. The image is sized from the same
+   *  answer, so a block this drops is a block nothing sizes. */
+  s7Profile: S7TargetProfile
 }
 
 /**
@@ -115,21 +127,19 @@ export interface GenerateConfsOutput {
  * editor's "fail fast" gate.
  */
 export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOutput {
-  const { servers, remoteDevices, instances, debugMapContent, log } = input
+  const { servers, remoteDevices, instances, debugMapContent, log, imageSizes } = input
 
   // Modbus slave / master / S7Comm: pure helpers.  Each returns `null`
   // when the project has no config of that type.  Master also forwards
   // non-fatal skip diagnostics (e.g. an RTU device missing a serial
   // port) through `log` so they reach the build console.
-  // Type assertions match the editor's call sites — the generators
-  // accept a narrower shape than `PLCServer[]` / `PLCRemoteDevice[]`
-  // but the runtime values are compatible.
-  const modbusSlave = generateModbusSlaveConfig(servers as Parameters<typeof generateModbusSlaveConfig>[0])
-  const modbusMaster = generateModbusMasterConfig(
-    remoteDevices as Parameters<typeof generateModbusMasterConfig>[0],
-    (msg) => log(msg, 'warning'),
-  )
-  const s7Comm = generateS7CommConfig(servers)
+  // `imageSizes` supplies the counts for any segment the user did not
+  // configure, so this file cannot declare addresses `image.conf` says do not
+  // exist. Without it the two disagreed for the commonest project of all: one
+  // with a Modbus server nobody customised.
+  const modbusSlave = generateModbusSlaveConfig(servers, imageSizes)
+  const modbusMaster = generateModbusMasterConfig(remoteDevices, (msg) => log(msg, 'warning'))
+  const s7Comm = generateS7CommConfig(servers, input.s7Profile, (message) => log(message, 'warning'))
 
   // OPC-UA: unresolvable nodes are dropped with a warning; throws
   // `OpcUaConfigError` only when the debug map is unusable.
@@ -156,15 +166,16 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
   let ethercatBusconfig: string | null = null
   let ethercatIomapping: string | null = null
   let ethercatErrors: string[]
+  const projectErrors = validateEthercatProject(remoteDevices)
   if (isEtherdogCapableRuntime(input.runtimeVersion)) {
     const configs = generateEtherdogConfigs(remoteDevices)
     ethercatBusconfig = configs?.busconfig ?? null
     ethercatIomapping = configs?.iomapping ?? null
-    ethercatErrors = validateEthercatConfig(ethercatBusconfig, ethercatIomapping)
+    ethercatErrors = [...projectErrors, ...validateEthercatConfig(ethercatBusconfig, ethercatIomapping)]
   } else {
     const legacy = generateEthercatConfig(remoteDevices)
     ethercat = legacy ?? ''
-    ethercatErrors = validateEthercatConfig(legacy)
+    ethercatErrors = [...projectErrors, ...validateEthercatConfig(legacy)]
   }
   if (ethercatErrors.length > 0) {
     throw new Error(`EtherCAT configuration is invalid: ${ethercatErrors.join('; ')}`)

@@ -1,0 +1,239 @@
+[
+  {
+    "name": "bus_a",
+    "protocol": "ETHERCAT",
+    "config": {
+      "master": {
+        "interface": "eth0",
+        "cycle_time_us": 1000,
+        "watchdog_timeout_cycles": 3,
+        "task_priority": 90
+      },
+      "slaves": [
+        {
+          "position": 1,
+          "name": "Drive1",
+          "type": "analog_io",
+          "vendor_id": "0x0000477F",
+          "product_code": "0x00000001",
+          "revision": "0x00010001",
+          "config": {
+            "startup_checks": {
+              "check_vendor_id": true,
+              "check_product_code": true
+            },
+            "addressing": {
+              "ethercat_address": 0
+            },
+            "timeouts": {
+              "sdo_timeout_ms": 1000,
+              "init_to_preop_timeout_ms": 3000,
+              "safeop_to_op_timeout_ms": 10000
+            },
+            "watchdog": {
+              "sm_watchdog_enabled": true,
+              "sm_watchdog_ms": 100,
+              "pdi_watchdog_enabled": false,
+              "pdi_watchdog_ms": 100
+            },
+            "distributed_clocks": {
+              "enabled": false,
+              "sync_unit_cycle_us": 0,
+              "sync0_enabled": false,
+              "sync0_cycle_us": 0,
+              "sync0_shift_us": 0,
+              "sync1_enabled": false,
+              "sync1_cycle_us": 0,
+              "sync1_shift_us": 0
+            }
+          },
+          "channels": [
+            {
+              "index": 0,
+              "name": "StatusWord",
+              "type": "analog_input",
+              "bit_length": 16,
+              "pdo_index": "0x1A00",
+              "pdo_entry_index": "0x6041",
+              "pdo_entry_subindex": 0
+            },
+            {
+              "index": 1,
+              "name": "ControlWord",
+              "type": "analog_output",
+              "bit_length": 16,
+              "pdo_index": "0x1600",
+              "pdo_entry_index": "0x6040",
+              "pdo_entry_subindex": 0
+            }
+          ],
+          "sdo_configurations": [
+            {
+              "index": "0x6060",
+              "subindex": 0,
+              "value": 8,
+              "data_type": "USINT",
+              "bit_length": 8,
+              "name": "Mode of operation = CSP",
+              "comment": "ESI InitCmd: ESI InitCmd"
+            },
+            {
+              "index": "0x6098",
+              "subindex": 0,
+              "value": 1,
+              "data_type": "USINT",
+              "bit_length": 8,
+              "name": "Homing method",
+              "comment": "Startup SDO: User Startup Parameter"
+            },
+            {
+              "index": "0x1C12",
+              "subindex": 0,
+              "value": 0,
+              "data_type": "USINT",
+              "bit_length": 8,
+              "name": "RxPDO assignment: clear",
+              "comment": "RxPDO assignment (0x1C12:0 = 0)"
+            },
+            {
+              "index": "0x1600",
+              "subindex": 0,
+              "value": 0,
+              "data_type": "USINT",
+              "bit_length": 8,
+              "name": "RxPDO mapping: clear CSP mode",
+              "comment": "PDO mapping (0x1600:0 = 0)"
+            },
+            {
+              "index": "0x1600",
+              "subindex": 1,
+              "value": 1614807056,
+              "data_type": "UDINT",
+              "bit_length": 32,
+              "name": "RxPDO mapping: CSP mode entry 1",
+              "comment": "PDO mapping (0x1600:1): ControlWord"
+            },
+            {
+              "index": "0x1600",
+              "subindex": 0,
+              "value": 1,
+              "data_type": "USINT",
+              "bit_length": 8,
+              "name": "RxPDO mapping: count CSP mode",
+              "comment": "PDO mapping (0x1600:0 = 1)"
+            },
+            {
+              "index": "0x1C12",
+              "subindex": 1,
+              "value": 5632,
+              "data_type": "UINT",
+              "bit_length": 16,
+              "name": "RxPDO assignment: entry 1",
+              "comment": "RxPDO assignment (0x1C12:1 = 0x1600): CSP mode"
+            },
+            {
+              "index": "0x1C12",
+              "subindex": 0,
+              "value": 1,
+              "data_type": "USINT",
+              "bit_length": 8,
+              "name": "RxPDO assignment: count",
+              "comment": "RxPDO assignment (0x1C12:0 = 1)"
+            },
+            {
+              "index": "0x1C13",
+              "subindex": 0,
+              "value": 0,
+              "data_type": "USINT",
+              "bit_length": 8,
+              "name": "TxPDO assignment: clear",
+              "comment": "TxPDO assignment (0x1C13:0 = 0)"
+            },
+            {
+              "index": "0x1A00",
+              "subindex": 0,
+              "value": 0,
+              "data_type": "USINT",
+              "bit_length": 8,
+              "name": "TxPDO mapping: clear Status",
+              "comment": "PDO mapping (0x1A00:0 = 0)"
+            },
+            {
+              "index": "0x1A00",
+              "subindex": 1,
+              "value": 1614872592,
+              "data_type": "UDINT",
+              "bit_length": 32,
+              "name": "TxPDO mapping: Status entry 1",
+              "comment": "PDO mapping (0x1A00:1): StatusWord"
+            },
+            {
+              "index": "0x1A00",
+              "subindex": 0,
+              "value": 1,
+              "data_type": "USINT",
+              "bit_length": 8,
+              "name": "TxPDO mapping: count Status",
+              "comment": "PDO mapping (0x1A00:0 = 1)"
+            },
+            {
+              "index": "0x1C13",
+              "subindex": 1,
+              "value": 6656,
+              "data_type": "UINT",
+              "bit_length": 16,
+              "name": "TxPDO assignment: entry 1",
+              "comment": "TxPDO assignment (0x1C13:1 = 0x1A00): Status"
+            },
+            {
+              "index": "0x1C13",
+              "subindex": 0,
+              "value": 1,
+              "data_type": "USINT",
+              "bit_length": 8,
+              "name": "TxPDO assignment: count",
+              "comment": "TxPDO assignment (0x1C13:0 = 1)"
+            }
+          ],
+          "rx_pdos": [
+            {
+              "index": "0x1600",
+              "name": "CSP mode",
+              "entries": [
+                {
+                  "index": "0x6040",
+                  "subindex": 0,
+                  "bit_length": 16,
+                  "name": "ControlWord",
+                  "data_type": "UINT16"
+                }
+              ]
+            }
+          ],
+          "tx_pdos": [
+            {
+              "index": "0x1A00",
+              "name": "Status",
+              "entries": [
+                {
+                  "index": "0x6041",
+                  "subindex": 0,
+                  "bit_length": 16,
+                  "name": "StatusWord",
+                  "data_type": "UINT16"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostics": {
+        "log_connections": true,
+        "log_data_access": false,
+        "log_errors": true,
+        "max_log_entries": 10000,
+        "status_update_interval_ms": 500
+      }
+    }
+  }
+]
