@@ -9,7 +9,7 @@ import {
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
 import { vppDatapointMemoryKey, vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useEffect, useMemo, useState } from 'react'
 
 type StoredModule = { guid: string; instanceName: string; typeId: string; slot: number }
@@ -91,7 +91,7 @@ function DatapointIoTableLayout() {
         vendorIoMapping: { entries },
         remoteDevices: state.project.data.remoteDevices,
       },
-      resolveTargetCapabilities(state.deviceAvailableOptions.availableBoards.get(configuration.deviceBoard)),
+      resolveAddressProducerCapabilities(state.deviceAvailableOptions.availableBoards.get(configuration.deviceBoard)),
     )
     const validation = validateAliasEdit(buildAliasRegistry(pool), alias, {
       kind: 'vpp-io',

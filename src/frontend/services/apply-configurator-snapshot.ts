@@ -1,7 +1,7 @@
 import type { ConfiguratorSnapshot } from '../../middleware/shared/ports/configurator-port'
 import type { IoMappingEntry } from '../../middleware/shared/ports/types'
 import { buildAddressPool } from '../../middleware/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '../../middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '../../middleware/shared/utils/target-capabilities'
 import type { OpenPLCStore } from '../store'
 import {
   datapointsToIoMapping,
@@ -41,7 +41,7 @@ export function applyConfiguratorSnapshot(
   const state = store.getState()
   const { configuration, pinMapping } = state.deviceDefinitions
   const previous = storedEntries(configuration.vendorScreenData?.[IO_MAPPING_KEY])
-  const capabilities = resolveTargetCapabilities(
+  const capabilities = resolveAddressProducerCapabilities(
     state.deviceAvailableOptions.availableBoards.get(configuration.deviceBoard),
   )
   const pool = buildAddressPool(
