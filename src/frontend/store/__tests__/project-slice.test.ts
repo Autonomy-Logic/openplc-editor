@@ -3504,15 +3504,12 @@ describe('createProjectSlice', () => {
 
       store.getState().projectActions.recalculateIecAddresses()
 
-      const entries = (
-        store.getState().deviceDefinitions.configuration.vendorScreenData!['io-mapping'] as {
-          entries: Array<{ iecAddress: string; alias: string; datapointId: string }>
-        }
-      ).entries
-      expect(entries.map((e) => [e.datapointId, e.iecAddress, e.alias])).toEqual([
-        ['g1_0', '%IB0', ''],
-        ['g1_1', '%IB1', 'counter'],
-      ])
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.['io-mapping']).toMatchObject({
+        entries: [
+          { datapointId: 'g1_0', iecAddress: '%IB0', alias: '' },
+          { datapointId: 'g1_1', iecAddress: '%IB1', alias: 'counter' },
+        ],
+      })
     })
 
     it('skips devices without a Modbus config during writeback', () => {

@@ -50,8 +50,17 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
     () => (packageId && documentPath ? devicePort.getVendorDocumentUrl(packageId, documentPath) : null),
     [devicePort, packageId, documentPath],
   )
-  // The iframe is keyed on this, so a new board or document mounts a fresh guest and session.
-  const frameKey = `${deviceBoard}\n${url ?? ''}`
+  const storedArchive = useOpenPLCStore((s) =>
+    configuratorKey ? readStoredArchive(s.deviceDefinitions.configuration.vendorScreenData?.[configuratorKey]) : null,
+  )
+  // The archive the guest holds: loaded at boot or delivered by its snapshots.
+  const guestArchive = useRef(storedArchive)
+  const [generation, setGeneration] = useState(0)
+  useEffect(() => {
+    if (storedArchive !== guestArchive.current) setGeneration((g) => g + 1)
+  }, [storedArchive])
+  // Keys the iframe: a new board, document or externally replaced archive mounts a fresh guest and session.
+  const frameKey = `${deviceBoard}\n${url ?? ''}\n${generation}`
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [status, setStatus] = useState<ConfiguratorSessionStatus>({ kind: 'booting' })
@@ -63,6 +72,7 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
     const { vendorScreenData, deviceBoard: board } = deviceDefinitions.configuration
     const tabNames = configuratorScreenNames(deviceAvailableOptions.availableBoards.get(board)?.vpp?.screens)
     let restoreSaved: (() => void) | null = null
+    guestArchive.current = readStoredArchive(vendorScreenData?.[configuratorKey])
     const session = startConfiguratorSession({
       port: createIframeConfiguratorClient(iframe),
       controller,
@@ -78,6 +88,7 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
       },
       onSnapshot: (snapshot) => {
         restoreSaved = null
+        guestArchive.current = snapshot.archive
         const applied = applyConfiguratorSnapshot(store, { configuratorKey, controller, bundleVersion }, snapshot)
         notifyDroppedAliases(applied.dropped)
       },

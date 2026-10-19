@@ -158,6 +158,16 @@ const screenLabel = (page: Page, screen: string, unsaved?: boolean) => {
 
 const openScreen = (page: Page, screen: string) => screenLabel(page, screen).click({ timeout: 30000 })
 
+/** Matched by its label, not its whole text; the close icon shows on hover and is the tab's last icon. */
+async function closeTabWithoutSaving(page: Page, screen: string): Promise<void> {
+  const label = page.getByText(new RegExp(`^(\\* )?${screen.replace(/[/]/g, '\\/')}$`))
+  const tab = page.getByRole('tab').filter({ has: label })
+  await tab.hover()
+  await tab.locator('svg').last().click()
+  await page.getByRole('button', { name: "Don't Save" }).click()
+  await expect(tab).toHaveCount(0)
+}
+
 async function openConfigurator(page: Page): Promise<FrameLocator> {
   await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
   await openScreen(page, CONFIGURATOR_SCREEN)
@@ -258,6 +268,17 @@ test('a module added in the configurator is mapped, and its alias survives a rel
       for (const screen of [CONFIGURATOR_SCREEN, MAPPING_SCREEN]) {
         await expect(screenLabel(page, screen, true), `${screen} is saved too`).toHaveCount(0)
       }
+
+      // A change discarded from the I/O Mapping tab must leave the configurator too.
+      await frame.getByRole('button', { name: 'Add FAKE-4DI' }).click()
+      await openScreen(page, MAPPING_SCREEN)
+      await expect(page.getByRole('region', { name: 'Slot 2 FAKE-4DI_2' })).toBeVisible({ timeout: 15000 })
+      await closeTabWithoutSaving(page, MAPPING_SCREEN)
+      await openScreen(page, CONFIGURATOR_SCREEN)
+      await expect(frame.getByTestId('fake-modules')).toContainText('FAKE-4DI_1 (FAKE-4DI)', { timeout: 30000 })
+      await expect(frame.getByTestId('fake-modules')).not.toContainText('FAKE-4DI_2')
+      expect(await iframe.evaluate((element) => Reflect.get(element, '__e2eFrame')), 'a fresh guest').toBeUndefined()
+      await expect(screenLabel(page, CONFIGURATOR_SCREEN, true)).toHaveCount(0)
     } finally {
       await shutdown(app)
     }

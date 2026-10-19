@@ -88,6 +88,8 @@ vendor draws the backplane at a fixed scale):
   (`collectLinkedScreenKeys`): each owns the keys of all of them, a pending change marks every open
   linked tab unsaved, a save from either writes all keys and marks both saved, and "Don't save" from
   either restores all keys. A linked tab opened later takes the saved state of one already open.
+  When the stored archive changes to one the guest neither loaded nor delivered (a "Don't save" from
+  the I/O Mapping tab, for example), the configurator boots a fresh guest from the store.
 - Boot (`src/frontend/utils/vpp/configurator-session.ts`): `ready` → `setController` → `show` →
   `load(stored archive)` → compare the loaded module guids with the stored `device-setup`. A mismatch
   or a rejected load fails the screen and writes nothing, so the stored archive is kept. An empty
@@ -99,6 +101,8 @@ vendor draws the backplane at a fixed scale):
   `applyConfiguratorSnapshot` in one store update: `configurator` `{archive, controller, bundleVersion}`
   (archive byte-for-byte), `device-setup`, and `io-mapping` `{entries, unaddressable}` derived from the
   datapoints with aliases carried over by `datapointId`.
+- A failed snapshot is retried with backoff, up to `SNAPSHOT_ATTEMPTS` (3) per pending change, then
+  reported once; the change stays pending and the tab unsaved, and the next change starts over.
 - The dirty compare hashes the archive (`src/frontend/utils/vpp/owned-slice.ts`); `cleanState` keeps it
   whole for the revert.
 - Every open vendor-screen tab stays mounted, hidden while inactive (`vendor-screen-tabs.tsx`), so

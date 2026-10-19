@@ -7,13 +7,15 @@
  * are only taken as user changes once the guest has been quiet for `settleMs` after
  * boot. The session reports `ready` only then, so the host can hold input until edits
  * count. A change is reported as pending at once, so a host closing before the snapshot
- * still asks to save, and is snapshotted once the events settle. A snapshot equal to the
- * stored state is not delivered.
+ * still asks to save, and is snapshotted once the events settle. A failed snapshot is retried
+ * with backoff, then reported. A snapshot equal to the stored state is not delivered.
  */
 
 import type { ConfiguratorPort, ConfiguratorSnapshot } from '@root/middleware/shared/ports/configurator-port'
 
 export const DEFAULT_SETTLE_MS = 300
+/** Attempts at one pending change's snapshot before its error is reported; a new change starts over. */
+export const SNAPSHOT_ATTEMPTS = 3
 
 export type ConfiguratorSessionStatus = { kind: 'booting' } | { kind: 'ready' } | { kind: 'failed'; message: string }
 
@@ -64,6 +66,7 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
   let snapshotting = false
   let changedDuringSnapshot = false
   let pending = false
+  let failedSnapshots = 0
   let lastArchive = storedArchive
 
   // Nothing stored and no module configured is the state a fresh project already has.
@@ -88,6 +91,7 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
         return
       }
       pending = false
+      failedSnapshots = 0
       if (isUnchanged(snapshot)) {
         onUnchanged?.()
         return
@@ -96,19 +100,25 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
       onSnapshot(snapshot)
     } catch (error) {
       if (disposed) return
-      onError(messageOf(error))
-      if (changedDuringSnapshot) scheduleSnapshot()
+      failedSnapshots = changedDuringSnapshot ? 0 : failedSnapshots + 1
+      if (failedSnapshots < SNAPSHOT_ATTEMPTS) {
+        scheduleSnapshot(settleMs * 2 ** failedSnapshots)
+      } else {
+        // The change stays pending, so its tab stays unsaved until a later change snapshots.
+        failedSnapshots = 0
+        onError(messageOf(error))
+      }
     } finally {
       snapshotting = false
     }
   }
 
-  function scheduleSnapshot(): void {
+  function scheduleSnapshot(delayMs = settleMs): void {
     if (settleTimer) clearTimeout(settleTimer)
     settleTimer = setTimeout(() => {
       settleTimer = null
       void runSnapshot()
-    }, settleMs)
+    }, delayMs)
   }
 
   function waitForQuiet(): void {
@@ -127,6 +137,7 @@ export function startConfiguratorSession(options: ConfiguratorSessionOptions): C
       return
     }
     if (snapshotting) changedDuringSnapshot = true
+    failedSnapshots = 0
     if (!pending) {
       pending = true
       onPending?.()

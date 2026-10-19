@@ -945,6 +945,18 @@ describe('the configurator and I/O Mapping screens save and revert as one', () =
     expect(fileOf(MAPPING)?.saved).toBe(true)
   })
 
+  it('reverts to what a whole-project save wrote, not to the state the tabs opened with', async () => {
+    await executeSaveProject(store, makeProjectPort(), capabilities)
+    writeStation('second', 'second_alias')
+
+    await reloadFileFromDisk(store, MAPPING, makeProjectPort())
+
+    expect(vendorScreenData()).toMatchObject({
+      configurator: { archive: 'first' },
+      'io-mapping': { alias: 'first_alias' },
+    })
+  })
+
   it("restores the configurator's archive when the I/O Mapping tab is closed without saving", async () => {
     await executeSaveFile(store, CONFIGURATOR, makeProjectPort(), capabilities)
     writeStation('second', 'second_alias')

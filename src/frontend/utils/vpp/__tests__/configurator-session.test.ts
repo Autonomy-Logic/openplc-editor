@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 import type { ConfiguratorPort, ConfiguratorSnapshot } from '@root/middleware/shared/ports/configurator-port'
 import type { DeviceSetup } from '@root/middleware/shared/vendor-document/protocol'
 
-import { type ConfiguratorSessionStatus, LOAD_FAILED_MESSAGE, startConfiguratorSession } from '../configurator-session'
+import {
+  type ConfiguratorSessionStatus,
+  LOAD_FAILED_MESSAGE,
+  SNAPSHOT_ATTEMPTS,
+  startConfiguratorSession,
+} from '../configurator-session'
 
 const SETTLE_MS = 50
 
@@ -262,7 +267,7 @@ describe('startConfiguratorSession', () => {
     expect(run.snapshots.map((s) => s.archive)).toEqual(['one-module', 'empty'])
   })
 
-  it('retries after a failed snapshot when a change arrived while it ran', async () => {
+  it('retries at once, without reporting, when a change arrived during a failed snapshot', async () => {
     const fake = createFakePort({
       snapshotResult: (n) => (n === 1 ? new Error('relay timeout') : { archive: 'a', guids: ['g1'] }),
     })
@@ -276,8 +281,42 @@ describe('startConfiguratorSession', () => {
     release()
     await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
 
-    expect(run.errors).toEqual(['relay timeout'])
+    expect(run.errors).toEqual([])
     expect(run.snapshots.map((s) => s.archive)).toEqual(['a'])
+  })
+
+  it('retries a failed snapshot while its change is pending, without another change', async () => {
+    const fake = createFakePort({
+      snapshotResult: (n) => (n < SNAPSHOT_ATTEMPTS ? new Error('relay timeout') : { archive: 'a', guids: ['g1'] }),
+    })
+    const run = start(fake, { archive: null, guids: [] })
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
+
+    fake.userChange()
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2 ** SNAPSHOT_ATTEMPTS * 2)
+
+    expect(fake.calls.filter((call) => call === 'snapshot')).toHaveLength(SNAPSHOT_ATTEMPTS)
+    expect(run.errors).toEqual([])
+    expect(run.snapshots.map((s) => s.archive)).toEqual(['a'])
+  })
+
+  it('reports the error once the attempts run out, and starts over on the next change', async () => {
+    const fake = createFakePort({
+      snapshotResult: (n) => (n <= SNAPSHOT_ATTEMPTS ? new Error('relay timeout') : { archive: 'b', guids: ['g1'] }),
+    })
+    const run = start(fake, { archive: null, guids: [] })
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
+
+    fake.userChange()
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2 ** SNAPSHOT_ATTEMPTS * 4)
+    expect(fake.calls.filter((call) => call === 'snapshot')).toHaveLength(SNAPSHOT_ATTEMPTS)
+    expect(run.errors).toEqual(['relay timeout'])
+    expect(run.snapshots).toHaveLength(0)
+    expect(run.signals).toEqual(['pending'])
+
+    fake.userChange()
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 2)
+    expect(run.snapshots.map((s) => s.archive)).toEqual(['b'])
   })
 
   it('snapshots once after a burst of user changes settles', async () => {

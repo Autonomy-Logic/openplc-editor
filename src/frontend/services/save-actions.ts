@@ -455,6 +455,11 @@ export async function executeSaveProject(
       setEditingState(staleFlows.length > 0 ? 'unsaved' : 'saved')
       setAllToSaved()
       markAllSaved(staleFlows)
+      // Vendor-screen tabs revert to cleanState on "Don't save", so it must match what was just written.
+      for (const [name, file] of Object.entries(state.files)) {
+        if (file.type !== 'vendor-screen') continue
+        updateFile({ name, cleanState: serializeVendorScreenSlice(state, vendorScreenOwnedKeysFor(state, name)) })
+      }
 
       // A stale flow keeps `updated` set and its file dirty, so the in-memory edit isn't stranded with no way back.
       for (const flow of state.ladderFlows) {

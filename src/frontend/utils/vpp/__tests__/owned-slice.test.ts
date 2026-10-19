@@ -17,9 +17,9 @@ function data(archive: string, alias = '') {
 describe('owned slice', () => {
   it('keeps the full archive in cleanState so a revert restores it byte-for-byte', () => {
     const archive = 'x'.repeat(10_000)
-    const clean = JSON.parse(serializeOwnedSlice(data(archive), OWNED)) as { configurator: { archive: string } }
+    const clean: unknown = JSON.parse(serializeOwnedSlice(data(archive), OWNED))
 
-    expect(clean.configurator.archive).toBe(archive)
+    expect(clean).toMatchObject({ configurator: { archive } })
   })
 
   it('fingerprints the archive by hash instead of carrying it', () => {

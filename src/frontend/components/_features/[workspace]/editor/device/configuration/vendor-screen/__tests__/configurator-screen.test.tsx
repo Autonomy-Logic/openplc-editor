@@ -4,7 +4,7 @@ import type { DevicePort } from '@root/middleware/shared/ports/device-port'
 import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 
 import type { ScreenSection } from '../index'
@@ -105,6 +105,21 @@ describe('vendor-document section', () => {
 
     expect(screen.queryByTitle('I/O Configurator')).toBeNull()
     expect(screen.getByText('The I/O Configurator is not available in this host yet.')).toBeTruthy()
+  })
+
+  it('boots a fresh guest when the stored archive is replaced from outside it, as "Don\'t save" does', () => {
+    renderSection(SECTION)
+    const first = screen.getByTitle('I/O Configurator')
+
+    act(() => store.getState().deviceActions.setVendorScreenData('io-mapping', { entries: [], unaddressable: [] }))
+    expect(screen.getByTitle('I/O Configurator')).toBe(first)
+
+    act(() =>
+      store.getState().deviceActions.restoreVendorScreenSlice(['configurator'], {
+        configurator: { archive: 'saved', controller: BOARD, bundleVersion: '3.5.22' },
+      }),
+    )
+    expect(screen.getByTitle('I/O Configurator')).not.toBe(first)
   })
 
   it.each([
