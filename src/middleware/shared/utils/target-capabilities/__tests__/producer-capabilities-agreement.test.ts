@@ -146,7 +146,7 @@ const POOL_BUILDERS = [
   join('src', 'frontend', 'services', 'apply-configurator-snapshot.ts'),
   join('src', 'frontend', 'services', 'io-diagnostics', 'claims.ts'),
   join('src', 'frontend', 'hooks', 'use-alias-registry.ts'),
-  join('src', 'frontend', 'hooks', 'use-device-configuration.ts'),
+  join('src', 'frontend', 'hooks', 'use-ethercat-alias-edit.ts'),
   join('src', 'frontend', 'store', 'slices', 'project', 'slice.ts'),
 ]
 

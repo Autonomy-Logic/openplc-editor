@@ -1,0 +1,2584 @@
+<?xml version="1.0" encoding="utf-8"?>
+<EtherCATModule Version="1.12" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="..\EtherCATModule.xsd">
+	<Vendor FileVersion="0070">
+		<Id>560</Id>
+		<Name>Weidmueller Interface</Name>
+		<ImageData16x14>424DBE04000000000000DE03000028000000100000000E0000000100080000000000E0000000120B0000120B0000EA0000000000000000000000330000006600000099000000CC000000FF00000000330000333300006633000099330000CC330000FF33000000660000336600006666000099660000CC660000FF66000000990000339900006699000099990000CC990000FF99000000CC000033CC000066CC000099CC0000CCCC0000FFCC000000FF000033FF000066FF000099FF0000CCFF0000FFFF000000003300330033006600330099003300CC003300FF00330000333300333333006633330099333300CC333300FF33330000663300336633006666330099663300CC663300FF66330000993300339933006699330099993300CC993300FF99330000CC330033CC330066CC330099CC3300CCCC3300FFCC330000FF330033FF330066FF330099FF3300CCFF3300FFFF330000006600330066006600660099006600CC006600FF00660000336600333366006633660099336600CC336600FF33660000666600336666006666660099666600CC666600FF66660000996600339966006699660099996600CC996600FF99660000CC660033CC660066CC660099CC6600CCCC6600FFCC660000FF660033FF660066FF660099FF6600CCFF6600FFFF660000009900330099006600990099009900CC009900FF00990000339900333399006633990099339900CC339900FF33990000669900336699006666990099669900CC669900FF66990000999900339999006699990099999900CC999900FF99990000CC990033CC990066CC990099CC9900CCCC9900FFCC990000FF990033FF990066FF990099FF9900CCFF9900FFFF99000000CC003300CC006600CC009900CC00CC00CC00FF00CC000033CC003333CC006633CC009933CC00CC33CC00FF33CC000066CC003366CC006666CC009966CC00CC66CC00FF66CC000099CC003399CC006699CC009999CC00CC99CC00FF99CC0000CCCC0033CCCC0066CCCC0099CCCC00CCCCCC00FFCCCC0000FFCC0033FFCC0066FFCC0099FFCC00CCFFCC00FFFFCC000000FF003300FF006600FF009900FF00CC00FF00FF00FF000033FF003333FF006633FF009933FF00CC33FF00FF33FF000066FF003366FF006666FF009966FF00CC66FF00FF66FF000099FF003399FF006699FF009999FF00CC99FF00FF99FF0000CCFF0033CCFF0066CCFF0099CCFF00CCCCFF00FFCCFF0000FFFF0033FFFF0066FFFF0099FFFF00CCFFFF00FFFFFF000D0D0D001A1A1A00282828003535350043434300505050005D5D5D006B6B6B00787878008686860093939300A1A1A100AEAEAE00BBBBBB00C9C9C900D6D6D600E4E4E400F1F1F100D7D7D7D7D7D7D7D7D7D7D7D7D7D7D7D7D70000000000D7D7D7D7D7C0C0C0C0D7D7000000000000D7D7C0C0C0C0C0C0D7D7D7D7D7D7D70000C0C0D7D7D7D7D7D7D7D7D7D7D7D7D7C0C0D7D7D7D7D7D7D7D7D7D7D7D7D7C0C00000D7D7D7D7D7D7D7C0C0C0C0C0C0D7D7000000000000D7D7C0C0C0C0C0C0D7D7000000000000D7D7D7D7D7D7D7C0C00000D7D7D7D7D7D7D7D7D7D7D7D7D7C0C0D7D7D7D7D7D7D7D7D7D7D7D7D70000C0C0D7D7D7D7D7D7D7000000000000D7D7C0C0C0C0C0C0D7D70000000000D7D7D7D7D7C0C0C0C0D7D7D7D7D7D7D7D7D7D7D7D7D7D7D7D7D7</ImageData16x14>
+	</Vendor>
+	<Modules>
+		<!--UR20-4DI-P -->
+		<Module>
+			<Type ModuleClass="Di" ModuleIdent="#x00091F84" ModulePdoGroup="1">UR20-4DI-P</Type>
+			<Name>UR20-4DI-P / 1315170000</Name>
+			<TxPdo Fixed="1" Mandatory="1" Sm="3">
+				<Index DependOnSlot="1">#x1A00</Index>
+				<Name>Input</Name>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>1</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DI1</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>2</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DI2</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>3</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DI3</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>4</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DI4</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index>#x0</Index>
+					<BitLen>4</BitLen>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>5</SubIndex>
+					<BitLen>8</BitLen>
+					<Name>Module state</Name>
+					<DataType>USINT</DataType>
+				</Entry>
+			</TxPdo>
+			<Mailbox>
+				<CoE CompleteAccess="0">
+					<InitCmd>
+						<Transition>PS</Transition>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>3</SubIndex>
+						<Data>555232302d3444492d50</Data>
+						<Comment>Name UR20-4DI-P</Comment>
+					</InitCmd>
+					<InitCmd>
+						<Transition>PS</Transition>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>10</SubIndex>
+						<Data>841F0900</Data>
+						<Comment>Module id of UR20-4DI-P</Comment>
+					</InitCmd>
+				</CoE>
+			</Mailbox>
+			<Profile>
+				<ProfileNo>5001</ProfileNo>
+				<AddInfo>0</AddInfo>
+				<Dictionary>
+					<DataTypes>
+						<DataType>
+							<Name>BOOL</Name>
+							<BitSize>1</BitSize>
+						</DataType>
+						<DataType>
+							<Name>USINT</Name>
+							<BitSize>8</BitSize>
+						</DataType>
+						<DataType>
+							<Name>SINT</Name>
+							<BitSize>8</BitSize>
+						</DataType>
+						<DataType>
+							<Name>UINT</Name>
+							<BitSize>16</BitSize>
+						</DataType>
+						<DataType>
+							<Name>UDINT</Name>
+							<BitSize>32</BitSize>
+						</DataType>
+						<DataType>
+							<Name>STRING(15)</Name>
+							<BitSize>120</BitSize>
+						</DataType>
+						<DataType>
+							<Name>STRING(25)</Name>
+							<BitSize>200</BitSize>
+						</DataType>
+						<DataType>
+							<Name>DT1A00</Name>
+							<BitSize>208</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>Input Mapping 01</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>Input Mapping 02</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>48</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>Input Mapping 03</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>80</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>4</SubIdx>
+								<Name>Input Mapping 04</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>112</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>5</SubIdx>
+								<Name>Input Mapping 05</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>144</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>6</SubIdx>
+								<Name>Input Mapping 06</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>176</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT6000</Name>
+							<BitSize>32</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>DI1</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>DI2</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>17</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>DI3</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>18</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>4</SubIdx>
+								<Name>DI4</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>19</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>5</SubIdx>
+								<Name>Module state</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>24</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT8000</Name>
+							<BitSize>560</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>Type string</Name>
+								<!--<Name>Type string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>Name string</Name>
+								<!--<Name LcId="1031">*</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>216</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>6</SubIdx>
+								<Name>Product code</Name>
+								<!--<Name LcId="1031">Product code</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>416</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>8</SubIdx>
+								<Name>Serial number</Name>
+								<!--<Name LcId="1031">Serial number</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>448</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>10</SubIdx>
+								<Name>Module ident</Name>
+								<!--<Name LcId="1031">Module ident</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>480</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>11</SubIdx>
+								<Name>Slot</Name>
+								<!--<Name LcId="1031">Slot</Name>-->
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<BitOffs>512</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>32</SubIdx>
+								<Name>Ch 0: Input delay</Name>
+								<!--<Name LcId="1031">K 0: Eingangsverzoegerung</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>528</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>33</SubIdx>
+								<Name>Ch 1: Input delay</Name>
+								<!--<Name LcId="1031">K 1: Eingangsverzoegerung</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>536</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>34</SubIdx>
+								<Name>Ch 2: Input delay</Name>
+								<!--<Name LcId="1031">K 2: Eingangsverzoegerung</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>544</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>35</SubIdx>
+								<Name>Ch 3: Input delay</Name>
+								<!--<Name LcId="1031">K 3: Eingangsverzoegerung</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>552</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT9000</Name>
+							<BitSize>1328</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>Type string</Name>
+								<!--<Name LcId="1031">Type string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>Name string</Name>
+								<!--<Name LcId="1031">Name string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>216</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>6</SubIdx>
+								<Name>Product code</Name>
+								<!--<Name LcId="1031">Product code</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>416</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>8</SubIdx>
+								<Name>Serial number</Name>
+								<!--<Name LcId="1031">Serial number</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>448</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>10</SubIdx>
+								<Name>Module ident</Name>
+								<!--<Name LcId="1031">Module ident</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>480</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>11</SubIdx>
+								<Name>Slot</Name>
+								<!--<Name LcId="1031">Slot</Name>-->
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<BitOffs>512</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>32</SubIdx>
+								<Name>MX-Version</Name>
+								<!--<Name LcId="1031">MX-Version</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>528</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>33</SubIdx>
+								<Name>HW-Version</Name>
+								<!--<Name LcId="1031">HW-Version</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>728</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>34</SubIdx>
+								<Name>SW-Version</Name>
+								<!--<Name LcId="1031">SW-Version</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>928</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>35</SubIdx>
+								<Name>Serialnumber</Name>
+								<!--<Name LcId="1031">Serialnumber</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>1128</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DTA000</Name>
+							<BitSize>24</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>Module state</Name>
+								<!--<Name LcId="1031">Module state</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+					</DataTypes>
+					<Objects>
+						<Object>
+							<Index DependOnSlot="1">#x1A00</Index>
+							<Name>TxPDO Map</Name>
+							<Type>DT1A00</Type>
+							<BitSize>208</BitSize>
+							<Flags>
+								<Access>ro</Access>
+							</Flags>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x6000</Index>
+							<Name>Input UR20-4DI-P</Name>
+							<Type>DT6000</Type>
+							<BitSize>32</BitSize>
+							<Flags>
+								<Access>ro</Access>
+							</Flags>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x8000</Index>
+							<Name>Parameter UR20-4DI-P</Name>
+							<Type>DT8000</Type>
+							<BitSize>560</BitSize>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x9000</Index>
+							<Name>Information UR20-4DI-P</Name>
+							<Type>DT9000</Type>
+							<BitSize>1328</BitSize>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#xA000</Index>
+							<Name>Module state UR20-4DI-P</Name>
+							<Type>DTA000</Type>
+							<BitSize>24</BitSize>
+						</Object>
+					</Objects>
+				</Dictionary>
+			</Profile>
+		</Module>
+		<!--UR20-4DI-P-3W -->
+		<!--UR20-8DI-P-3W -->
+		<Module>
+			<Type ModuleClass="Di" ModuleIdent="#x000A1FC1" ModulePdoGroup="1">UR20-8DI-P-3W</Type>
+			<Name>UR20-8DI-P-3W / 1394400000</Name>
+			<TxPdo Fixed="1" Mandatory="1" Sm="3">
+				<Index DependOnSlot="1">#x1A00</Index>
+				<Name>Input</Name>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>1</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DI1</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>2</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DI2</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>3</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DI3</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>4</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DI4</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>5</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DI5</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>6</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DI6</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>7</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DI7</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>8</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DI8</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>9</SubIndex>
+					<BitLen>8</BitLen>
+					<Name>Module state</Name>
+					<DataType>USINT</DataType>
+				</Entry>
+			</TxPdo>
+			<Mailbox>
+				<CoE CompleteAccess="0">
+					<InitCmd>
+						<Transition>PS</Transition>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>3</SubIndex>
+						<Data>555232302d3844492d502d3357</Data>
+						<Comment>Name UR20-8DI-P-3W</Comment>
+					</InitCmd>
+					<InitCmd>
+						<Transition>PS</Transition>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>10</SubIndex>
+						<Data>C11F0A00</Data>
+						<Comment>Module id of UR20-8DI-P-3W</Comment>
+					</InitCmd>
+				</CoE>
+			</Mailbox>
+			<Profile>
+				<ProfileNo>5001</ProfileNo>
+				<AddInfo>0</AddInfo>
+				<Dictionary>
+					<DataTypes>
+						<DataType>
+							<Name>BOOL</Name>
+							<BitSize>1</BitSize>
+						</DataType>
+						<DataType>
+							<Name>UINT</Name>
+							<BitSize>16</BitSize>
+						</DataType>
+						<DataType>
+							<Name>USINT</Name>
+							<BitSize>8</BitSize>
+						</DataType>
+						<DataType>
+							<Name>UDINT</Name>
+							<BitSize>32</BitSize>
+						</DataType>
+						<DataType>
+							<Name>STRING(15)</Name>
+							<BitSize>120</BitSize>
+						</DataType>
+						<DataType>
+							<Name>STRING(25)</Name>
+							<BitSize>200</BitSize>
+						</DataType>
+						<DataType>
+							<Name>DT1A00</Name>
+							<BitSize>304</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>Input Mapping 01</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>Input Mapping 02</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>48</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>Input Mapping 03</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>80</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>4</SubIdx>
+								<Name>Input Mapping 04</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>112</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>5</SubIdx>
+								<Name>Input Mapping 05</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>144</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>6</SubIdx>
+								<Name>Input Mapping 06</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>176</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>7</SubIdx>
+								<Name>Input Mapping 07</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>208</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>8</SubIdx>
+								<Name>Input Mapping 08</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>240</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>9</SubIdx>
+								<Name>Input Mapping 09</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>272</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT6000</Name>
+							<BitSize>32</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>DI1</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>DI2</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>17</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>DI3</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>18</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>4</SubIdx>
+								<Name>DI4</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>19</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>5</SubIdx>
+								<Name>DI5</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>20</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>6</SubIdx>
+								<Name>DI6</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>21</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>7</SubIdx>
+								<Name>DI7</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>22</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>8</SubIdx>
+								<Name>DI8</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>23</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>9</SubIdx>
+								<Name>Module state</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>24</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT8000</Name>
+							<BitSize>592</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>Type string</Name>
+								<!--<Name LcId="1031">Type string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>Name string</Name>
+								<!--<Name LcId="1031">Name string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>216</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>6</SubIdx>
+								<Name>Product code</Name>
+								<!--<Name LcId="1031">Product code</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>416</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>8</SubIdx>
+								<Name>Serial number</Name>
+								<!--<Name LcId="1031">Serial number</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>448</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>10</SubIdx>
+								<Name>Module ident</Name>
+								<!--<Name LcId="1031">Module ident</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>480</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>11</SubIdx>
+								<Name>Slot</Name>
+								<!--<Name LcId="1031">Slot</Name>-->
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<BitOffs>512</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>32</SubIdx>
+								<Name>Ch 0: Input delay</Name>
+								<!--<Name LcId="1031">K 0: Eingangsverzoegerung</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>528</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>33</SubIdx>
+								<Name>Ch 1: Input delay</Name>
+								<!--<Name LcId="1031">K 1: Eingangsverzoegerung</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>536</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>34</SubIdx>
+								<Name>Ch 2: Input delay</Name>
+								<!--<Name LcId="1031">K 2: Eingangsverzoegerung</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>544</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>35</SubIdx>
+								<Name>Ch 3: Input delay</Name>
+								<!--<Name LcId="1031">K 3: Eingangsverzoegerung</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>552</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>36</SubIdx>
+								<Name>Ch 4: Input delay</Name>
+								<!--<Name LcId="1031">K 4: Eingangsverzoegerung</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>560</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>37</SubIdx>
+								<Name>Ch 5: Input delay</Name>
+								<!--<Name LcId="1031">K 5: Eingangsverzoegerung</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>568</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>38</SubIdx>
+								<Name>Ch 6: Input delay</Name>
+								<!--<Name LcId="1031">K 6: Eingangsverzoegerung</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>576</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>39</SubIdx>
+								<Name>Ch 7: Input delay</Name>
+								<!--<Name LcId="1031">K 7: Eingangsverzoegerung</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>584</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT9000</Name>
+							<BitSize>1328</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>Type string</Name>
+								<!--<Name LcId="1031">Type string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>Name string</Name>
+								<!--<Name LcId="1031">Name string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>216</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>6</SubIdx>
+								<Name>Product code</Name>
+								<!--<Name LcId="1031">Product code</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>416</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>8</SubIdx>
+								<Name>Serial number</Name>
+								<!--<Name LcId="1031">Serial number</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>448</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>10</SubIdx>
+								<Name>Module ident</Name>
+								<!--<Name LcId="1031">Module ident</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>480</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>11</SubIdx>
+								<Name>Slot</Name>
+								<!--<Name LcId="1031">Slot</Name>-->
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<BitOffs>512</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>32</SubIdx>
+								<Name>MX-Version</Name>
+								<!--<Name LcId="1031">MX-Version</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>528</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>33</SubIdx>
+								<Name>HW-Version</Name>
+								<!--<Name LcId="1031">HW-Version</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>728</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>34</SubIdx>
+								<Name>SW-Version</Name>
+								<!--<Name LcId="1031">SW-Version</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>928</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>35</SubIdx>
+								<Name>Serialnumber</Name>
+								<!--<Name LcId="1031">Serialnumber</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>1128</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DTA000</Name>
+							<BitSize>24</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>Module state</Name>
+								<!--<Name LcId="1031">Module state</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+					</DataTypes>
+					<Objects>
+						<Object>
+							<Index DependOnSlot="1">#x1A00</Index>
+							<Name>TxPDO Map</Name>
+							<Type>DT1A00</Type>
+							<BitSize>304</BitSize>
+							<Flags>
+								<Access>ro</Access>
+							</Flags>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x6000</Index>
+							<Name>Input UR20-8DI-P-3W</Name>
+							<Type>DT6000</Type>
+							<BitSize>32</BitSize>
+							<Flags>
+								<Access>ro</Access>
+							</Flags>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x8000</Index>
+							<Name>Parameter UR20-8DI-P-3W</Name>
+							<Type>DT8000</Type>
+							<BitSize>592</BitSize>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x9000</Index>
+							<Name>Information UR20-8DI-P-3W</Name>
+							<Type>DT9000</Type>
+							<BitSize>1328</BitSize>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#xA000</Index>
+							<Name>Module state UR20-8DI-P-3W</Name>
+							<Type>DTA000</Type>
+							<BitSize>24</BitSize>
+						</Object>
+					</Objects>
+				</Dictionary>
+			</Profile>
+		</Module>
+		<!--UR20-8DI-P-3W-HD -->
+		<!--UR20-8DI-P-2W -->
+		<!--UR20-16DI-P -->
+		<!--UR20-16DI-P-PLC-INT -->
+		<!--UR20-4DO-P -->
+		<Module>
+			<Type ModuleClass="Do" ModuleIdent="#x01012FA0" ModulePdoGroup="1">UR20-4DO-P</Type>
+			<Name>UR20-4DO-P / 1315220000</Name>
+			<RxPdo Fixed="1" Mandatory="1" Sm="2">
+				<Index DependOnSlot="1">#x1600</Index>
+				<Name>Output</Name>
+				<Entry>
+					<Index DependOnSlot="1">#x7000</Index>
+					<SubIndex>1</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DO1</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x7000</Index>
+					<SubIndex>2</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DO2</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x7000</Index>
+					<SubIndex>3</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DO3</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x7000</Index>
+					<SubIndex>4</SubIndex>
+					<BitLen>1</BitLen>
+					<Name>DO4</Name>
+					<DataType>BOOL</DataType>
+				</Entry>
+				<Entry>
+					<Index>#x0</Index>
+					<BitLen>4</BitLen>
+				</Entry>
+			</RxPdo>
+			<TxPdo Fixed="1" Mandatory="1" Sm="3">
+				<Index DependOnSlot="1">#x1A00</Index>
+				<Name>Input</Name>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>1</SubIndex>
+					<BitLen>8</BitLen>
+					<Name>Module state</Name>
+					<DataType>USINT</DataType>
+				</Entry>
+			</TxPdo>
+			<Mailbox>
+				<CoE CompleteAccess="0">
+					<InitCmd>
+						<Transition>PS</Transition>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>3</SubIndex>
+						<Data>555232302d34444f2d50</Data>
+						<Comment>Name UR20-4DO-P</Comment>
+					</InitCmd>
+					<InitCmd>
+						<Transition>PS</Transition>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>10</SubIndex>
+						<Data>A02F0101</Data>
+						<Comment>Module id of UR20-4DO-P</Comment>
+					</InitCmd>
+				</CoE>
+			</Mailbox>
+			<Profile>
+				<ProfileNo>5001</ProfileNo>
+				<AddInfo>0</AddInfo>
+				<Dictionary>
+					<DataTypes>
+						<DataType>
+							<Name>BOOL</Name>
+							<BitSize>1</BitSize>
+						</DataType>
+						<DataType>
+							<Name>UINT</Name>
+							<BitSize>16</BitSize>
+						</DataType>
+						<DataType>
+							<Name>UDINT</Name>
+							<BitSize>32</BitSize>
+						</DataType>
+						<DataType>
+							<Name>USINT</Name>
+							<BitSize>8</BitSize>
+						</DataType>
+						<DataType>
+							<Name>STRING(15)</Name>
+							<BitSize>120</BitSize>
+						</DataType>
+						<DataType>
+							<Name>STRING(25)</Name>
+							<BitSize>200</BitSize>
+						</DataType>
+						<DataType>
+							<Name>DT1600</Name>
+							<BitSize>176</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>Output Mapping 01</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>Output Mapping 02</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>48</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>Output Mapping 03</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>80</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>4</SubIdx>
+								<Name>Output Mapping 04</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>112</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>5</SubIdx>
+								<Name>Output Mapping 05</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>144</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT1A00</Name>
+							<BitSize>48</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>Input Mapping 01</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT6000</Name>
+							<BitSize>24</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>Module state</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT7000</Name>
+							<BitSize>24</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>DO1</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>R</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>DO2</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>17</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>R</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>DO3</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>18</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>R</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>4</SubIdx>
+								<Name>DO4</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<BitOffs>19</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>R</PdoMapping>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT8000</Name>
+							<BitSize>560</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>Type string</Name>
+								<!--<Name LcId="1031">Type string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>Name string</Name>
+								<!--<Name LcId="1031">Name string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>216</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>6</SubIdx>
+								<Name>Product code</Name>
+								<!--<Name LcId="1031">Product code</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>416</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>8</SubIdx>
+								<Name>Serial number</Name>
+								<!--<Name LcId="1031">Serial number</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>448</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>10</SubIdx>
+								<Name>Module ident</Name>
+								<!--<Name LcId="1031">Module ident</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>480</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>11</SubIdx>
+								<Name>Slot</Name>
+								<!--<Name LcId="1031">Slot</Name>-->
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<BitOffs>512</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>32</SubIdx>
+								<Name>Ch 0: Substitute value</Name>
+								<!--<Name LcId="1031">K 0: Fehlerersatzwert</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>528</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>33</SubIdx>
+								<Name>Ch 1: Substitute value</Name>
+								<!--<Name LcId="1031">K 1: Fehlerersatzwert</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>536</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>34</SubIdx>
+								<Name>Ch 2: Substitute value</Name>
+								<!--<Name LcId="1031">K 2: Fehlerersatzwert</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>544</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>35</SubIdx>
+								<Name>Ch 3: Substitute value</Name>
+								<!--<Name LcId="1031">K 3: Fehlerersatzwert</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>552</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT9000</Name>
+							<BitSize>1328</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>Type string</Name>
+								<!--<Name LcId="1031">Type string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>Name string</Name>
+								<!--<Name LcId="1031">Name string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>216</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>6</SubIdx>
+								<Name>Product code</Name>
+								<!--<Name LcId="1031">Product code</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>416</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>8</SubIdx>
+								<Name>Serial number</Name>
+								<!--<Name LcId="1031">Serial number</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>448</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>10</SubIdx>
+								<Name>Module ident</Name>
+								<!--<Name LcId="1031">Module ident</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>480</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>11</SubIdx>
+								<Name>Slot</Name>
+								<!--<Name LcId="1031">Slot</Name>-->
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<BitOffs>512</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>32</SubIdx>
+								<Name>MX-Version</Name>
+								<!--<Name LcId="1031">MX-Version</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>528</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>33</SubIdx>
+								<Name>HW-Version</Name>
+								<!--<Name LcId="1031">HW-Version</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>728</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>34</SubIdx>
+								<Name>SW-Version</Name>
+								<!--<Name LcId="1031">SW-Version</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>928</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>35</SubIdx>
+								<Name>Serialnumber</Name>
+								<!--<Name LcId="1031">Serialnumber</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>1128</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DTA000</Name>
+							<BitSize>24</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>Module state</Name>
+								<!--<Name LcId="1031">Module state</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+					</DataTypes>
+					<Objects>
+						<Object>
+							<Index DependOnSlot="1">#x1600</Index>
+							<Name>RxPDO Map</Name>
+							<Type>DT1600</Type>
+							<BitSize>176</BitSize>
+							<Flags>
+								<Access>ro</Access>
+							</Flags>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x1A00</Index>
+							<Name>TxPDO Map</Name>
+							<Type>DT1A00</Type>
+							<BitSize>48</BitSize>
+							<Flags>
+								<Access>ro</Access>
+							</Flags>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x6000</Index>
+							<Name>Input UR20-4DO-P</Name>
+							<Type>DT6000</Type>
+							<BitSize>24</BitSize>
+							<Flags>
+								<Access>ro</Access>
+							</Flags>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x7000</Index>
+							<Name>Output UR20-4DO-P</Name>
+							<Type>DT7000</Type>
+							<BitSize>24</BitSize>
+							<Flags>
+								<Access>ro</Access>
+							</Flags>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x8000</Index>
+							<Name>Parameter UR20-4DO-P</Name>
+							<Type>DT8000</Type>
+							<BitSize>560</BitSize>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x9000</Index>
+							<Name>Information UR20-4DO-P</Name>
+							<Type>DT9000</Type>
+							<BitSize>1328</BitSize>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#xA000</Index>
+							<Name>Module state UR20-4DO-P</Name>
+							<Type>DTA000</Type>
+							<BitSize>24</BitSize>
+						</Object>
+					</Objects>
+				</Dictionary>
+			</Profile>
+		</Module>
+		<!--UR20-4DO-P-2A -->
+		<!--UR20-4DO-PN-2A -->
+		<!--UR20-4RO-CO-255 -->
+		<!--UR20-4RO-SSR-255 -->
+		<!--UR20-8DO-P -->
+		<!--UR20-16DO-P -->
+		<!--UR20-16DO-P-PLC-INT -->
+		<!--UR20-4AI-UI-16 -->
+		<Module>
+			<Type ModuleClass="Ai" ModuleIdent="#x040115C4" ModulePdoGroup="1">UR20-4AI-UI-16</Type>
+			<Name>UR20-4AI-UI-16 / 1315620000</Name>
+			<TxPdo Fixed="1" Mandatory="1" Sm="3">
+				<Index DependOnSlot="1">#x1A00</Index>
+				<Name>Input</Name>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>1</SubIndex>
+					<BitLen>16</BitLen>
+					<Name>AI1</Name>
+					<DataType>INT</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>2</SubIndex>
+					<BitLen>16</BitLen>
+					<Name>AI2</Name>
+					<DataType>INT</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>3</SubIndex>
+					<BitLen>16</BitLen>
+					<Name>AI3</Name>
+					<DataType>INT</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>4</SubIndex>
+					<BitLen>16</BitLen>
+					<Name>AI4</Name>
+					<DataType>INT</DataType>
+				</Entry>
+				<Entry>
+					<Index DependOnSlot="1">#x6000</Index>
+					<SubIndex>5</SubIndex>
+					<BitLen>8</BitLen>
+					<Name>Module state</Name>
+					<DataType>USINT</DataType>
+				</Entry>
+			</TxPdo>
+			<Mailbox>
+				<CoE CompleteAccess="0">
+					<InitCmd>
+						<Transition>PS</Transition>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>3</SubIndex>
+						<Data>555232302d3441492d55492d3136</Data>
+						<Comment>Name UR20-4AI-UI-16</Comment>
+					</InitCmd>
+					<InitCmd>
+						<Transition>PS</Transition>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>10</SubIndex>
+						<Data>C4150104</Data>
+						<Comment>Module id of UR20-4AI-UI-16</Comment>
+					</InitCmd>
+				</CoE>
+			</Mailbox>
+			<Profile>
+				<ProfileNo>5001</ProfileNo>
+				<AddInfo>0</AddInfo>
+				<Dictionary>
+					<DataTypes>
+						<DataType>
+							<Name>INT</Name>
+							<BitSize>16</BitSize>
+						</DataType>
+						<DataType>
+							<Name>UINT</Name>
+							<BitSize>16</BitSize>
+						</DataType>
+						<DataType>
+							<Name>USINT</Name>
+							<BitSize>8</BitSize>
+						</DataType>
+						<DataType>
+							<Name>UDINT</Name>
+							<BitSize>32</BitSize>
+						</DataType>
+						<DataType>
+							<Name>STRING(15)</Name>
+							<BitSize>120</BitSize>
+						</DataType>
+						<DataType>
+							<Name>STRING(25)</Name>
+							<BitSize>200</BitSize>
+						</DataType>
+						<DataType>
+							<Name>DT1A00</Name>
+							<BitSize>176</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>Input Mapping 01</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>Input Mapping 02</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>48</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>Input Mapping 03</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>80</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>4</SubIdx>
+								<Name>Input Mapping 04</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>112</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>5</SubIdx>
+								<Name>Input Mapping 05</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>144</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT6000</Name>
+							<BitSize>88</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>AI1</Name>
+								<Type>INT</Type>
+								<BitSize>16</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>AI2</Name>
+								<Type>INT</Type>
+								<BitSize>16</BitSize>
+								<BitOffs>32</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>AI3</Name>
+								<Type>INT</Type>
+								<BitSize>16</BitSize>
+								<BitOffs>48</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>4</SubIdx>
+								<Name>AI4</Name>
+								<Type>INT</Type>
+								<BitSize>16</BitSize>
+								<BitOffs>64</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>5</SubIdx>
+								<Name>Module state</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>80</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT8000</Name>
+							<BitSize>600</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>Type string</Name>
+								<!--<Name LcId="1031">Type string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>Name string</Name>
+								<!--<Name LcId="1031">Name string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>216</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>6</SubIdx>
+								<Name>Product code</Name>
+								<!--<Name LcId="1031">Product code</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>416</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>8</SubIdx>
+								<Name>Serial number</Name>
+								<!--<Name LcId="1031">Serial number</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>448</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>10</SubIdx>
+								<Name>Module ident</Name>
+								<!--<Name LcId="1031">Module ident</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>480</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>11</SubIdx>
+								<Name>Slot</Name>
+								<!--<Name LcId="1031">Slot</Name>-->
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<BitOffs>512</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>32</SubIdx>
+								<Name>Frequency suppression</Name>
+								<!--<Name LcId="1031">Stoerfrequenzunterdrückung</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>528</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>33</SubIdx>
+								<Name>Ch 0: Data format</Name>
+								<!--<Name LcId="1031">K 0: Datenformat</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>536</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>34</SubIdx>
+								<Name>Ch 0: Measurement range</Name>
+								<!--<Name LcId="1031">K 0: Messbereich</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>544</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>35</SubIdx>
+								<Name>Ch 1: Data format</Name>
+								<!--<Name LcId="1031">K 1: Datenformat</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>552</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>36</SubIdx>
+								<Name>Ch 1: Measurement range</Name>
+								<!--<Name LcId="1031">K 0: Messbereich</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>560</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>37</SubIdx>
+								<Name>Ch 2: Data format</Name>
+								<!--<Name LcId="1031">K 2: Datenformat</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>568</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>38</SubIdx>
+								<Name>Ch 2: Measurement range</Name>
+								<!--<Name LcId="1031">K 2: Messbereich</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>576</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>39</SubIdx>
+								<Name>Ch 3: Data format</Name>
+								<!--<Name LcId="1031">K 3: Datenformat</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>584</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>40</SubIdx>
+								<Name>Ch 3: Measurement range</Name>
+								<!--<Name LcId="1031">K 3: Messbereich</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>592</BitOffs>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DT9000</Name>
+							<BitSize>1328</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>2</SubIdx>
+								<Name>Type string</Name>
+								<!--<Name LcId="1031">Type string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>3</SubIdx>
+								<Name>Name string</Name>
+								<!--<Name LcId="1031">Name string</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>216</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>6</SubIdx>
+								<Name>Product code</Name>
+								<!--<Name LcId="1031">Product code</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>416</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>8</SubIdx>
+								<Name>Serial number</Name>
+								<!--<Name LcId="1031">Serial number</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>448</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>10</SubIdx>
+								<Name>Module ident</Name>
+								<!--<Name LcId="1031">Module ident</Name>-->
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<BitOffs>480</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>11</SubIdx>
+								<Name>Slot</Name>
+								<!--<Name LcId="1031">Slot</Name>-->
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<BitOffs>512</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>32</SubIdx>
+								<Name>MX-Version</Name>
+								<!--<Name LcId="1031">MX-Version</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>528</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>33</SubIdx>
+								<Name>HW-Version</Name>
+								<!--<Name LcId="1031">HW-Version</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>728</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>34</SubIdx>
+								<Name>SW-Version</Name>
+								<!--<Name LcId="1031">SW-Version</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>928</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>35</SubIdx>
+								<Name>Serialnumber</Name>
+								<!--<Name LcId="1031">Serialnumber</Name>-->
+								<Type>STRING(25)</Type>
+								<BitSize>200</BitSize>
+								<BitOffs>1128</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+						<DataType>
+							<Name>DTA000</Name>
+							<BitSize>24</BitSize>
+							<SubItem>
+								<SubIdx>0</SubIdx>
+								<Name>SubIndex 000</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>0</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</SubItem>
+							<SubItem>
+								<SubIdx>1</SubIdx>
+								<Name>Module state</Name>
+								<!--<Name LcId="1031">Module state</Name>-->
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<BitOffs>16</BitOffs>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</SubItem>
+						</DataType>
+					</DataTypes>
+					<Objects>
+						<Object>
+							<Index DependOnSlot="1">#x1A00</Index>
+							<Name>TxPDO Map</Name>
+							<Type>DT1A00</Type>
+							<BitSize>176</BitSize>
+							<Flags>
+								<Access>ro</Access>
+							</Flags>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x6000</Index>
+							<Name>Input UR20-4AI-UI-16</Name>
+							<Type>DT6000</Type>
+							<BitSize>88</BitSize>
+							<Flags>
+								<Access>ro</Access>
+							</Flags>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x8000</Index>
+							<Name>Parameter UR20-4AI-UI-16</Name>
+							<Type>DT8000</Type>
+							<BitSize>600</BitSize>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#x9000</Index>
+							<Name>Information UR20-4AI-UI-16</Name>
+							<Type>DT9000</Type>
+							<BitSize>1328</BitSize>
+							<Flags>
+								<Access>ro</Access>
+							</Flags>
+						</Object>
+						<Object>
+							<Index DependOnSlot="1">#xA000</Index>
+							<Name>Module state UR20-4AI-UI-16</Name>
+							<Type>DTA000</Type>
+							<BitSize>24</BitSize>
+							<Flags>
+								<Access>ro</Access>
+							</Flags>
+						</Object>
+					</Objects>
+				</Dictionary>
+			</Profile>
+		</Module>
+		<!--UR20-4AI-UI-16-HD -->
+		<!--UR20-8AI-PLC -->
+		<!--UR20-4AI-UI-12 -->
+		<!--UR20-4AI-RTD-DIAG -->
+		<!--UR20-4AI-TC-DIAG -->
+		<!--UR20-4AO-UI-16 -->
+		<!--UR20-4AO-UI-16-DIAG -->
+		<!--UR20-4AI-UI-16-DIAG -->
+		<!--UR20-4AI-UI-16-DIAG-HD -->
+		<!--UR20-2PWM-PN-0.5A -->
+		<!--UR20-2PWM-PN-2A neu -->
+		<!--UR20-PF-O-1DI-SIL -->
+		<!--UR20-PF-O-2DI-DELAY-SIL -->
+		<!--UR20-PF-O-2DI-SIL -->
+		<!--UR20-2DI-TS-P -->
+		<!--UR20-4DI-TS-P -->
+		<!--UR20-1CNT-100-1DO -->
+		<!--UR20-2CNT-100 -->
+		<!--UR20-2FCNT-100 -->
+		<!--UR20-8AI-I-16-HD-->
+		<!--UR20-4AO-UI-16-HD -->
+		<!--UR20-4AO-UI-16-DIAG-HD -->
+		<!--UR20-8AI-I-16-DIAG-HD-->
+		<!--UR20-8DO-P-2W-HD -->
+		<!--UR20-4DI-N -->
+		<!--UR20-8DI-N-3W -->
+		<!--UR20-16DI-N -->
+		<!--UR20-16DI-N-PLC-INT -->
+		<!--UR20-4DI-2W-230V-AC -->
+		<!--UR20-4DO-N -->
+		<!--UR20-4DO-N-2A -->
+		<!--UR20-8DO-N -->
+		<!--UR20-1SSI -->
+		<!--UR20-1CNT-500 -->
+		<!--SAI-AU M12 SB 2Counter-->
+		<!--SAI-AU M12 SB 4AI-->
+		<!--SAI-AU M12 SB 4AO-->
+		<!--SAI-AU M12 SB 4PT100-->
+		<!--SAI-AU M12 SB 4THERMO-->
+		<!--SAI-AU M12 SB 8DI-->
+		<!--SAI-AU M12 SB 8DIO-->
+		<!--SAI-AU M12 SB 8DO 2A-->
+		<!--SAI-AU M8 SB 8DI-->
+		<!--SAI-AU M8 SB 8DIO-->
+		<!--SAI-AU M8 SB 8DO 2A-->
+		<!--UR20-1COM-SAI-PRO-->
+		<!--UR20-16DO-N-->
+		<!--UR20-1COM-232-485-422-->
+		<!--UR20-4AI-R-HS-16-DIAG -->
+		<!--UR20-16DO-N-PLC-INT -->
+		<!--UR20-4AI-UI-DIF-16-DIAG-->
+		<!--UR20-3EM-230V-AC-->
+		<!-- UR20-2AI-SG-24_DIAG -->
+		<!--UR20-4AO-UI-16-M -->
+		<!--UR20-4AO-UI-16-M-DIAG -->
+		<!--UR20-4AI-RTD-HP-DIAG -->
+		<!--UR20-8DI-ISO-2W -->
+		<!--UR20-4DO-ISO-4A -->
+		<!--UR20-4COM-IO-LINK_18IN_18OUT -->
+		<!--UR20-1SM-50W-6DI2DO-P -->
+		<!--UR20-8DIO-P-3W-DIAG-->
+		<!--UR20-8AI-RTD-DIAG-2W-->
+		<!--UR20-4AI-UI-DIF-32-DIAG-->
+		<!--UR20-4COM-IO-LINK_34IN_34OUT-->
+		<!--UR20-4COM-IO-LINK_66IN_66OUT-->
+		<!--UR20-4COM-IO-LINK_130IN_130OUT-->
+		<!--UR20-4AI-UI-ISO-16-DIAG-->
+		<!--UR20-2AO-UI-ISO-16-DIAG-->
+		<!--UR20-4AI-I-HART-16-DIAG-->
+		<!--UR20-2AO-UI-16-->
+		<!--UR20-2AO-UI-16-DIAG-->
+		<!--UR20-2AI-UI-16-->
+		<!--UR20-2AI-UI-16-DIAG-->
+		<!--UR20-4DI-P-TS-V2-->
+		<!--UR20-1COM-232-485-422-V2-->
+		<!--UR20-4AI-I-HART-ISO-16-->
+		<!--UR20-1COM-CANOPEN_18IN_18OUT -->
+		<!--UR20-1COM-CANOPEN_34IN_34OUT-->
+		<!--UR20-1COM-CANOPEN_64IN_64OUT-->
+		<!--UR20-1COM-CANOPEN_128IN_128OUT-->
+ 		<!--UR20-2PWM-I-2.5A-2DI-P-->
+		<!--UR20-3EM-400V-AC-333MV -->
+		<!--UR20-3EM-400V-AC-CT5A -->
+		<!--UR20-3EM-400V-AC-CT1A -->
+		<!--UR20-3EM-400V-AC-RC -->
+		<!--UR20-2PWM-PN-0.5A-V2 -->
+		<!--UR20-2PWM-PN-2A-V2 -->
+		<!--UR20-1COM-CAN_15IN_15OUT-->
+		<!--UR20-1COM-CAN_28IN_28OUT-->
+		<!--UR20-4COM-IO-LINK-V2_18IN_18OUT -->
+		<!--UR20-4COM-IO-LINK-V2_34IN_34OUT-->
+		<!--UR20-4COM-IO-LINK-V2_66IN_66OUT-->
+		<!--UR20-4COM-IO-LINK-V2_128IN_128OUT-->
+		<!--SAI-AU M12 SB 8DIO-V2-->
+		<!--SAI-AU M12 SB 8DI-V2-->
+		<!--SAI-AU M12 SB 8DO 2A-V2-->
+		<!--SAI-AU M8 SB 8DIO-V2-->
+		<!--SAI-AU M8 SB 8DI-V2-->
+		<!--SAI-AU M8 SB 8DO 2A-V2-->
+	</Modules>
+</EtherCATModule>

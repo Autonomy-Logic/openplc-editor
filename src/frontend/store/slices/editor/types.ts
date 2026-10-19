@@ -245,6 +245,18 @@ export type EditorModel = EditorModelBase &
         }
       }
     | {
+        /** One I/O module on a modular EtherCAT coupler. Opened from the
+         *  project tree as a leaf under its coupler; renders only the module's own
+         *  view (channel mappings, process data, startup parameters, device info). */
+        type: 'plc-ethercat-module'
+        meta: {
+          name: string
+          busName: string
+          deviceId: string
+          moduleId: string
+        }
+      }
+    | {
         /** Read-only source-control diff tab. Carries only the project-
          *  relative `filePath`; the original (HEAD) and current (working-
          *  tree) contents are derived live from the store at render time so

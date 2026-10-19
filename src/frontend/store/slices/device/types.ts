@@ -93,6 +93,14 @@ export type RuntimeConnection = {
    *  get-users-info / the X-OpenPLC-Runtime-Version header), or null
    *  when unknown. Gates version-dependent UI like User Management. */
   runtimeVersion: string | null
+  /**
+   * Features the connected runtime advertises in its hello
+   * response, e.g. `["ethercat.dynamic_alloc"]`. `null` when
+   * the runtime did not advertise a `features` array (an older EtherDOG). The pre-build
+   * capability gate reads this to decide whether the project can be built
+   * against the connected runtime.
+   */
+  runtimeFeatures: readonly string[] | null
   selectedDevice: SelectedDevice | null
   storedCredentials: StoredCredentials | null
   timingStats: TimingStats | null
@@ -282,6 +290,10 @@ export type DeviceActions = {
   setRuntimeJwtToken: (token: string | null) => void
   setRuntimeConnectionStatus: (status: ConnectionStatus) => void
   setRuntimeVersion: (version: string | null) => void
+  /** Record the EtherDOG features the runtime advertises.
+   *  Pass `null` to clear (e.g. on disconnect), `[]` when the runtime
+   *  does not publish a `features` array. */
+  setRuntimeFeatures: (features: readonly string[] | null) => void
   setPlcRuntimeStatus: (status: PlcStatus | null) => void
   /** Set the mode-switch position (null clears it, e.g. on disconnect). */
   setPlcSwitchPosition: (position: 'run' | 'stop' | null) => void
