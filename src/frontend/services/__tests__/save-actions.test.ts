@@ -1,8 +1,11 @@
 /** Drives a real store; a flow that fails schema validation keeps a stale `pou.body.value`. */
 
+import CONFIGURATOR_SCREEN from '../../../__fixtures__/weidmuller-screens/io-configurator.json'
+import MAPPING_SCREEN from '../../../__fixtures__/weidmuller-screens/io-mapping.json'
 import type { EdgeSessionState } from '../../../middleware/shared/ports/edge-account-port'
 import type { PlatformCapabilities } from '../../../middleware/shared/ports/platform-capabilities'
 import type { ProjectPort } from '../../../middleware/shared/ports/project-port'
+import type { BoardInfo } from '../../../middleware/shared/ports/types'
 import type { OpenPLCStore } from '../../store'
 import type { LadderFlowType } from '../../store/slices/ladder'
 import { createTestStore } from '../../store/testing'
@@ -13,6 +16,7 @@ import {
   executeSaveActiveFile,
   executeSaveFile,
   executeSaveProject,
+  reloadFileFromDisk,
   reloadPouFromDisk,
 } from '../save-actions'
 
@@ -31,6 +35,7 @@ function makeProjectPort(): ProjectPort {
   return {
     saveProject: vi.fn().mockResolvedValue({ success: true }),
     saveFile: vi.fn().mockResolvedValue({ success: true }),
+    readFileContent: vi.fn().mockResolvedValue({ success: false }),
     // What Save As asks for when a cloud write falls back to disk.
     pickPath: vi.fn().mockResolvedValue({ success: true, path: '/local/copy' }),
     trackRecentProject: vi.fn().mockResolvedValue({ success: true }),
@@ -879,5 +884,77 @@ describe('reloadPouFromDisk', () => {
     const pou = store.getState().project.data.pous.find((candidate) => candidate.name === 'ReloadInvalid')
     expect(pou?.variablesTextUnparsed).toBe(true)
     expect(pou?.variablesText).toBe('VAR\n  a : INT;\n  a : DINT;\nEND_VAR')
+  })
+})
+
+describe('the configurator and I/O Mapping screens save and revert as one', () => {
+  const BOARD = 'UC20-M3000'
+  const CONFIGURATOR = 'I/O Configurator'
+  const MAPPING = 'I/O Mapping'
+  const board: BoardInfo = {
+    compiler: 'openplc-compiler',
+    core: 'openplc',
+    preview: 'generic.png',
+    specs: {},
+    vpp: {
+      packageId: 'com.weidmuller.ucontrol',
+      vendor: 'Weidmuller',
+      deviceId: 'uc20-m3000',
+      packagePath: '/packages/com.weidmuller.ucontrol',
+      screens: { [CONFIGURATOR]: CONFIGURATOR_SCREEN, [MAPPING]: MAPPING_SCREEN },
+      moduleSystem: null,
+    },
+  }
+
+  const vendorScreenData = () => store.getState().deviceDefinitions.configuration.vendorScreenData ?? {}
+  const fileOf = (name: string) => store.getState().fileActions.getFile({ name }).file
+
+  function writeStation(archive: string, alias: string) {
+    store.getState().deviceActions.setConfiguratorSnapshot('configurator', {
+      configurator: { archive, controller: BOARD, bundleVersion: '3.5.22' },
+      deviceSetup: { modules: [{ guid: 'g1', instanceName: 'M_1', typeId: 't1', slot: 1 }] },
+      ioMapping: { entries: [], unaddressable: [] },
+    })
+    store.getState().deviceActions.setVendorScreenData('io-mapping', { entries: [], alias })
+  }
+
+  beforeEach(() => {
+    store.getState().deviceActions.setAvailableOptions({ availableBoards: new Map([[BOARD, board]]) })
+    store.getState().deviceActions.setDeviceBoard(BOARD)
+    for (const name of [CONFIGURATOR, MAPPING]) {
+      store.getState().fileActions.addFile({ name, type: 'vendor-screen', filePath: '', cleanState: '{}' })
+      store.getState().fileActions.updateFile({ name, saved: false })
+    }
+    writeStation('first', 'first_alias')
+  })
+
+  it('writes the archive, the device setup and the mapping from either tab, and marks both saved', async () => {
+    const projectPort = makeProjectPort()
+    const result = await executeSaveFile(store, MAPPING, projectPort, capabilities)
+
+    expect(result.success).toBe(true)
+    const written: unknown = JSON.parse(String(vi.mocked(projectPort.saveFile).mock.calls[0]?.[1]))
+    expect(written).toMatchObject({
+      vendorScreenData: {
+        configurator: { archive: 'first' },
+        'device-setup': { modules: [{ guid: 'g1' }] },
+        'io-mapping': { alias: 'first_alias' },
+      },
+    })
+    expect(fileOf(CONFIGURATOR)).toMatchObject({ saved: true, cleanState: fileOf(MAPPING)?.cleanState })
+    expect(fileOf(MAPPING)?.saved).toBe(true)
+  })
+
+  it("restores the configurator's archive when the I/O Mapping tab is closed without saving", async () => {
+    await executeSaveFile(store, CONFIGURATOR, makeProjectPort(), capabilities)
+    writeStation('second', 'second_alias')
+
+    const result = await reloadFileFromDisk(store, MAPPING, makeProjectPort())
+
+    expect(result.success).toBe(true)
+    expect(vendorScreenData()).toMatchObject({
+      configurator: { archive: 'first' },
+      'io-mapping': { alias: 'first_alias' },
+    })
   })
 })

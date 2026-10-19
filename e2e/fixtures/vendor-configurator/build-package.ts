@@ -1,8 +1,8 @@
 /**
- * Installs an unsigned e2e vendor package whose `UC20-M3000` board carries the configurator
- * screen, with the fake Device Editor bundled as `configurator/index.js` next to the reference
- * relay. The editor removes unsigned packages when a project opens, so a suite using it must
- * stub `packages:verify-signatures` first.
+ * Installs an unsigned e2e vendor package whose `UC20-M3000` board carries the configurator and
+ * I/O Mapping screens, with the fake Device Editor bundled as `configurator/index.js` next to the
+ * reference relay. The editor removes unsigned packages when a project opens, so a suite using it
+ * must stub `packages:verify-signatures` first.
  */
 
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -12,7 +12,8 @@ import webpack from 'webpack'
 
 export const FIXTURE_PACKAGE_ID = 'com.e2e.fake-configurator'
 export const FIXTURE_BOARD = 'UC20-M3000'
-export const FIXTURE_SCREEN = 'I/O Configuration'
+export const CONFIGURATOR_SCREEN = 'I/O Configurator'
+export const MAPPING_SCREEN = 'I/O Mapping'
 
 const HERE = __dirname
 const REPO = join(HERE, '..', '..', '..')
@@ -63,10 +64,9 @@ export function installFixturePackage(packagesDir: string, bundleDir: string): s
   copyFileSync(join(HERE, 'index.html'), join(root, 'configurator', 'index.html'))
   copyFileSync(join(bundleDir, 'relay.js'), join(root, 'configurator', 'relay.js'))
   copyFileSync(join(bundleDir, 'index.js'), join(root, 'configurator', 'index.js'))
-  copyFileSync(
-    join(REPO, 'src', '__fixtures__', 'weidmuller-screens', 'io-configuration.json'),
-    join(root, 'screens', 'io-configuration.json'),
-  )
+  for (const screen of ['io-configurator.json', 'io-mapping.json']) {
+    copyFileSync(join(REPO, 'src', '__fixtures__', 'weidmuller-screens', screen), join(root, 'screens', screen))
+  }
   writeFileSync(join(root, 'preview.png'), PREVIEW_PNG)
   writeFileSync(
     join(root, 'manifest.json'),
@@ -80,7 +80,10 @@ export function installFixturePackage(packagesDir: string, bundleDir: string): s
           preview: 'preview.png',
           target: { type: 'runtime-v4' },
           hal: { type: 'plugin' },
-          screens: { [FIXTURE_SCREEN]: 'screens/io-configuration.json' },
+          screens: {
+            [CONFIGURATOR_SCREEN]: 'screens/io-configurator.json',
+            [MAPPING_SCREEN]: 'screens/io-mapping.json',
+          },
         },
       ],
     }),

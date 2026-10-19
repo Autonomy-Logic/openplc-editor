@@ -11,11 +11,6 @@
         "UC20-M4000": "UC20-M4000",
         "UC20-WL2000": "UC20-WL2000"
       }
-    },
-    {
-      "id": "io-mapping",
-      "title": "I/O Mapping",
-      "layout": "datapoint-io-table"
     }
   ]
 }

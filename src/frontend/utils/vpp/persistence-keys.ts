@@ -98,6 +98,39 @@ export function collectConfiguratorKeys(screenDefinition: unknown): string[] {
   return out
 }
 
+function hasConfiguratorSection(screenDefinition: unknown): boolean {
+  return screenSections(screenDefinition).some(
+    (section) => section.layout === VENDOR_DOCUMENT_LAYOUT || section.layout === DATAPOINT_IO_TABLE_LAYOUT,
+  )
+}
+
+/** Screens of a board that show the configurator or its I/O Mapping; they share their keys, so they save, revert and go unsaved together. */
+export function configuratorScreenNames(screens: Record<string, unknown> | undefined): string[] {
+  if (!screens) return []
+  return Object.keys(screens).filter((name) => hasConfiguratorSection(screens[name]))
+}
+
+/** The screen itself, plus every configurator screen of the board when it is one. */
+export function linkedScreenNames(screens: Record<string, unknown> | undefined, screenName: string): string[] {
+  const linked = configuratorScreenNames(screens)
+  return linked.includes(screenName) ? linked : [screenName]
+}
+
+/** `collectScreenPersistenceKeys` over the screen and the screens linked to it. */
+export function collectLinkedScreenKeys(screens: Record<string, unknown> | undefined, screenName: string): string[] {
+  const keys = linkedScreenNames(screens, screenName).flatMap((name) => collectScreenPersistenceKeys(screens?.[name]))
+  return Array.from(new Set(keys))
+}
+
+/** `collectConfiguratorKeys` over the screen and the screens linked to it. */
+export function collectLinkedConfiguratorKeys(
+  screens: Record<string, unknown> | undefined,
+  screenName: string,
+): string[] {
+  const keys = linkedScreenNames(screens, screenName).flatMap((name) => collectConfiguratorKeys(screens?.[name]))
+  return Array.from(new Set(keys))
+}
+
 function screenSections(screenDefinition: unknown): PersistableSection[] {
   if (!screenDefinition || typeof screenDefinition !== 'object' || !('sections' in screenDefinition)) return []
   const { sections } = screenDefinition

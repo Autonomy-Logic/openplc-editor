@@ -67,7 +67,7 @@ describe('applyConfiguratorSnapshot', () => {
     store.getState().deviceActions.setConfiguratorSnapshot('configurator', {
       configurator: { archive: 'a', controller: 'c', bundleVersion: 'v' },
       deviceSetup: { modules: [] },
-      ioMapping: { entries: [] },
+      ioMapping: { entries: [], unaddressable: [] },
     })
     unsubscribe()
 

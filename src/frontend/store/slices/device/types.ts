@@ -15,7 +15,7 @@ import type {
   TimingStats,
 } from '../../../../middleware/shared/ports/types'
 import type { DeviceVpp } from '../../../../middleware/shared/ports/vpp-types'
-import type { DeviceSetupRecord } from '../../../utils/vpp/datapoints-to-io-mapping'
+import type { DeviceSetupRecord, UnaddressableDataPoint } from '../../../utils/vpp/datapoints-to-io-mapping'
 
 // ---------------------------------------------------------------------------
 // Device available options
@@ -251,7 +251,7 @@ export type ConfiguratorRecord = {
 export type ConfiguratorSnapshotRecord = {
   configurator: ConfiguratorRecord
   deviceSetup: DeviceSetupRecord
-  ioMapping: { entries: IoMappingEntry[] }
+  ioMapping: { entries: IoMappingEntry[]; unaddressable: UnaddressableDataPoint[] }
 }
 
 export type DeviceActions = {

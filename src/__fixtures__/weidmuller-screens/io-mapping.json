@@ -1,0 +1,9 @@
+{
+  "sections": [
+    {
+      "id": "io-mapping",
+      "title": "I/O Mapping",
+      "layout": "datapoint-io-table"
+    }
+  ]
+}

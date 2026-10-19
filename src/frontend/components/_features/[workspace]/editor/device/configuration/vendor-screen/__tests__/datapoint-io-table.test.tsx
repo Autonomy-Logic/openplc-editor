@@ -10,7 +10,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 
 import { UR20_16DI_16DO } from '@root/__fixtures__/device-editor-datapoints/ur20-16di-16do'
-import WEIDMULLER_SCREEN from '@root/__fixtures__/weidmuller-screens/io-configuration.json'
+import MAPPING_SCREEN from '@root/__fixtures__/weidmuller-screens/io-mapping.json'
 import { VendorScreenRenderer } from '../index'
 import { notifyDroppedAliases } from '../notify-dropped-aliases'
 import { SectionRenderer } from '../section-renderer'
@@ -79,7 +79,7 @@ function stationState() {
 }
 
 function renderScreen() {
-  return render(<VendorScreenRenderer screenDefinition={WEIDMULLER_SCREEN} moduleSystem={null} />, {
+  return render(<VendorScreenRenderer screenDefinition={MAPPING_SCREEN} moduleSystem={null} />, {
     wrapper: createStoreWrapper(store, PORTS),
   })
 }
@@ -266,6 +266,37 @@ describe('datapoint-io-table section', () => {
     expect(aliasInput(kept.channelName, kept.slot).value).toBe('kept_alias')
     expect(screen.queryByDisplayValue('dropped_alias')).toBeNull()
     expect(getMemoryState().toasts[0]?.description).toMatch(/dropped_alias/)
+  })
+
+  it('lists the datapoints the configurator reported without an address, and keeps them through edits', () => {
+    act(() => {
+      applyConfiguratorSnapshot(store, TARGET, {
+        archive: 'ef'.repeat(64),
+        deviceSetup: UR20_16DI_16DO.deviceSetup,
+        dataPoints: [
+          ...UR20_16DI_16DO.dataPoints,
+          {
+            id: `${DI_MODULE.guid}_real`,
+            name: 'UR20_16DI_P_1_REAL',
+            bitlength: 32,
+            byteoffset: 8,
+            bitoffset: 0,
+            datatype: 'REAL',
+            access: 'ro',
+          },
+        ],
+      })
+    })
+    renderScreen()
+    const notice = /These datapoints have no IEC address: UR20_16DI_P_1_REAL \(/
+    expect(screen.getByText(notice)).toBeTruthy()
+
+    const target = ioEntries()[0]
+    commitAlias(target.channelName, target.slot, 'kept_notice')
+    act(() => store.getState().projectActions.recalculateIecAddresses())
+
+    expect(aliasInput(target.channelName, target.slot).value).toBe('kept_notice')
+    expect(screen.getByText(notice)).toBeTruthy()
   })
 
   it('says how to start when the configurator has reported no modules', () => {

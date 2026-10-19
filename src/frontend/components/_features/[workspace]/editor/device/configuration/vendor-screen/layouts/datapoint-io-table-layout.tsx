@@ -1,5 +1,6 @@
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
+import type { UnaddressableDataPoint } from '@root/frontend/utils/vpp/datapoints-to-io-mapping'
 import { DEVICE_SETUP_KEY, IO_MAPPING_KEY } from '@root/frontend/utils/vpp/persistence-keys'
 import type { IoMappingEntry } from '@root/middleware/shared/ports/types'
 import {
@@ -32,6 +33,34 @@ function readModules(value: unknown): StoredModule[] {
 function readEntries(value: unknown): IoMappingEntry[] {
   if (!value || typeof value !== 'object' || !('entries' in value) || !Array.isArray(value.entries)) return []
   return value.entries.filter((entry: unknown): entry is IoMappingEntry => !!entry && typeof entry === 'object')
+}
+
+const UNADDRESSABLE_REASON: Record<UnaddressableDataPoint['reason'], string> = {
+  'unsupported-access': 'neither input nor output',
+  'unsupported-width': 'unsupported size',
+  'unsupported-datatype': 'unsupported data type',
+  'unknown-module': 'module not in the device setup',
+}
+
+function isUnaddressableReason(value: unknown): value is UnaddressableDataPoint['reason'] {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(UNADDRESSABLE_REASON, value)
+}
+
+function readUnaddressable(value: unknown): UnaddressableDataPoint[] {
+  if (!value || typeof value !== 'object' || !('unaddressable' in value) || !Array.isArray(value.unaddressable)) {
+    return []
+  }
+  return value.unaddressable.filter(
+    (point: unknown): point is UnaddressableDataPoint =>
+      !!point &&
+      typeof point === 'object' &&
+      'datapointId' in point &&
+      typeof point.datapointId === 'string' &&
+      'name' in point &&
+      typeof point.name === 'string' &&
+      'reason' in point &&
+      isUnaddressableReason(point.reason),
+  )
 }
 
 /** Commits on blur so the rename cascade runs once per edit, not once per keystroke. */
@@ -79,6 +108,7 @@ function DatapointIoTableLayout() {
   const storedMapping = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData?.[IO_MAPPING_KEY])
   const modules = useMemo(() => readModules(storedSetup), [storedSetup])
   const entries = useMemo(() => readEntries(storedMapping), [storedMapping])
+  const unaddressable = useMemo(() => readUnaddressable(storedMapping), [storedMapping])
 
   const handleAliasChange = (index: number, alias: string): boolean => {
     const target = entries[index]
@@ -107,7 +137,10 @@ function DatapointIoTableLayout() {
     if (oldAlias) state.projectActions.renameAlias(oldAlias, alias)
 
     const updated = entries.map((entry, i) => (i === index ? { ...entry, alias } : entry))
-    setVendorScreenData(IO_MAPPING_KEY, { entries: updated })
+    setVendorScreenData(IO_MAPPING_KEY, {
+      ...(storedMapping && typeof storedMapping === 'object' ? storedMapping : {}),
+      entries: updated,
+    })
     store
       .getState()
       .projectActions.rememberChannelAlias(
@@ -128,74 +161,82 @@ function DatapointIoTableLayout() {
   }
 
   return (
-    // Scrolls on its own so the configurator above stays in view.
-    <div
-      role='region'
-      aria-label='I/O Mapping channels'
-      tabIndex={0}
-      className='flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto'
-    >
-      {modules.map((module) => {
-        const channels = entries.flatMap((entry, index) => (entry.slot === module.slot ? [{ entry, index }] : []))
-        return (
-          <section
-            key={module.guid}
-            aria-label={`Slot ${module.slot} ${module.instanceName}`}
-            className='rounded-lg border border-neutral-200 dark:border-neutral-700'
-          >
-            <header className='sticky top-0 z-20 flex h-10 items-center gap-3 rounded-t-lg bg-neutral-50 px-4 dark:bg-neutral-900'>
-              <span className='font-caption text-cp-sm font-semibold text-neutral-950 dark:text-white'>
-                Slot {module.slot}
-              </span>
-              <span className='font-caption text-cp-sm font-medium text-neutral-600 dark:text-neutral-400'>
-                {module.instanceName}
-              </span>
-            </header>
-            {channels.length === 0 ? (
-              <p className='border-t border-neutral-200 px-4 py-2 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400'>
-                No addressable channels.
-              </p>
-            ) : (
-              <table className='w-full text-left'>
-                <thead>
-                  <tr className='border-t border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-950'>
-                    <th className={HEADER_CELL}>Channel</th>
-                    <th className={HEADER_CELL}>Type</th>
-                    <th className={HEADER_CELL}>IEC Address</th>
-                    <th className={HEADER_CELL}>Alias</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {channels.map(({ entry, index }) => (
-                    <tr
-                      key={entry.datapointId ?? `${entry.slot}:${entry.channelName}`}
-                      className='border-t border-neutral-100 dark:border-neutral-800'
-                    >
-                      <td className='px-3 py-1.5 font-caption text-cp-sm text-neutral-850 dark:text-neutral-300'>
-                        {entry.channelName}
-                      </td>
-                      <td className='px-3 py-1.5 font-caption text-cp-sm text-neutral-500 dark:text-neutral-400'>
-                        {entry.dataType ?? entry.channelType}
-                      </td>
-                      <td className='px-3 py-1.5 font-mono text-cp-sm font-medium text-brand dark:text-brand-light'>
-                        {entry.iecAddress}
-                      </td>
-                      <td className='px-1 py-1'>
-                        <AliasInputCell
-                          value={entry.alias ?? ''}
-                          label={`Alias of ${entry.channelName} in slot ${entry.slot}`}
-                          onCommit={(next) => handleAliasChange(index, next)}
-                        />
-                      </td>
+    <>
+      <div
+        role='region'
+        aria-label='I/O Mapping channels'
+        tabIndex={0}
+        className='flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto'
+      >
+        {modules.map((module) => {
+          const channels = entries.flatMap((entry, index) => (entry.slot === module.slot ? [{ entry, index }] : []))
+          return (
+            <section
+              key={module.guid}
+              aria-label={`Slot ${module.slot} ${module.instanceName}`}
+              className='rounded-lg border border-neutral-200 dark:border-neutral-700'
+            >
+              <header className='sticky top-0 z-20 flex h-10 items-center gap-3 rounded-t-lg bg-neutral-50 px-4 dark:bg-neutral-900'>
+                <span className='font-caption text-cp-sm font-semibold text-neutral-950 dark:text-white'>
+                  Slot {module.slot}
+                </span>
+                <span className='font-caption text-cp-sm font-medium text-neutral-600 dark:text-neutral-400'>
+                  {module.instanceName}
+                </span>
+              </header>
+              {channels.length === 0 ? (
+                <p className='border-t border-neutral-200 px-4 py-2 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400'>
+                  No addressable channels.
+                </p>
+              ) : (
+                <table className='w-full text-left'>
+                  <thead>
+                    <tr className='border-t border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-950'>
+                      <th className={HEADER_CELL}>Channel</th>
+                      <th className={HEADER_CELL}>Type</th>
+                      <th className={HEADER_CELL}>IEC Address</th>
+                      <th className={HEADER_CELL}>Alias</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
-        )
-      })}
-    </div>
+                  </thead>
+                  <tbody>
+                    {channels.map(({ entry, index }) => (
+                      <tr
+                        key={entry.datapointId ?? `${entry.slot}:${entry.channelName}`}
+                        className='border-t border-neutral-100 dark:border-neutral-800'
+                      >
+                        <td className='px-3 py-1.5 font-caption text-cp-sm text-neutral-850 dark:text-neutral-300'>
+                          {entry.channelName}
+                        </td>
+                        <td className='px-3 py-1.5 font-caption text-cp-sm text-neutral-500 dark:text-neutral-400'>
+                          {entry.dataType ?? entry.channelType}
+                        </td>
+                        <td className='px-3 py-1.5 font-mono text-cp-sm font-medium text-brand dark:text-brand-light'>
+                          {entry.iecAddress}
+                        </td>
+                        <td className='px-1 py-1'>
+                          <AliasInputCell
+                            value={entry.alias ?? ''}
+                            label={`Alias of ${entry.channelName} in slot ${entry.slot}`}
+                            onCommit={(next) => handleAliasChange(index, next)}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+          )
+        })}
+      </div>
+      {unaddressable.length > 0 && (
+        <p className='shrink-0 text-sm text-neutral-600 dark:text-neutral-400'>
+          {`These datapoints have no IEC address: ${unaddressable
+            .map((point) => `${point.name} (${UNADDRESSABLE_REASON[point.reason]})`)
+            .join(', ')}.`}
+        </p>
+      )}
+    </>
   )
 }
 

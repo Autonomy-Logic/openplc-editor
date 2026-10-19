@@ -1,9 +1,9 @@
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { applyConfiguratorSnapshot } from '@root/frontend/services/apply-configurator-snapshot'
+import { markTabsUnsaved } from '@root/frontend/services/mark-tabs-unsaved'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { type ConfiguratorSessionStatus, startConfiguratorSession } from '@root/frontend/utils/vpp/configurator-session'
-import type { UnaddressableDataPoint } from '@root/frontend/utils/vpp/datapoints-to-io-mapping'
-import { DEVICE_SETUP_KEY } from '@root/frontend/utils/vpp/persistence-keys'
+import { configuratorScreenNames, DEVICE_SETUP_KEY } from '@root/frontend/utils/vpp/persistence-keys'
 import { readVendorDocumentSection } from '@root/frontend/utils/vpp/vendor-document-section'
 import { useDevice } from '@root/middleware/shared/providers/platform-context'
 import { createIframeConfiguratorClient } from '@root/middleware/shared/vendor-document/configurator-client'
@@ -14,13 +14,6 @@ import { notifyDroppedAliases } from '../notify-dropped-aliases'
 
 /** Never add `allow-same-origin`: with it the guest could reach the host. */
 const IFRAME_SANDBOX = 'allow-scripts allow-forms'
-
-const UNADDRESSABLE_REASON: Record<UnaddressableDataPoint['reason'], string> = {
-  'unsupported-access': 'neither input nor output',
-  'unsupported-width': 'unsupported size',
-  'unsupported-datatype': 'unsupported data type',
-  'unknown-module': 'module not in the device setup',
-}
 
 function readStoredArchive(value: unknown): string | null {
   if (!value || typeof value !== 'object' || !('archive' in value)) return null
@@ -62,17 +55,14 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [status, setStatus] = useState<ConfiguratorSessionStatus>({ kind: 'booting' })
-  const [unaddressable, setUnaddressable] = useState<UnaddressableDataPoint[]>([])
 
   useEffect(() => {
     const iframe = iframeRef.current
     if (!iframe || !controller || !configuratorKey || !bundleVersion) return
-    const { deviceDefinitions, editor, fileActions } = store.getState()
-    const vendorScreenData = deviceDefinitions.configuration.vendorScreenData
-    const tabName = editor.type === 'plc-vendor-screen' ? editor.meta.screenName : null
-    // Saved state of the tab before a pending change marked it unsaved; restored if nothing changed.
-    let savedBeforePending: boolean | null = null
-    setUnaddressable([])
+    const { deviceDefinitions, deviceAvailableOptions } = store.getState()
+    const { vendorScreenData, deviceBoard: board } = deviceDefinitions.configuration
+    const tabNames = configuratorScreenNames(deviceAvailableOptions.availableBoards.get(board)?.vpp?.screens)
+    let restoreSaved: (() => void) | null = null
     const session = startConfiguratorSession({
       port: createIframeConfiguratorClient(iframe),
       controller,
@@ -80,19 +70,15 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
       storedModuleGuids: readStoredModuleGuids(vendorScreenData?.[DEVICE_SETUP_KEY]),
       onStatus: setStatus,
       onPending: () => {
-        const file = tabName ? fileActions.getFile({ name: tabName }).file : undefined
-        if (!tabName || !file) return
-        savedBeforePending = file.saved
-        if (file.saved) fileActions.updateFile({ name: tabName, saved: false })
+        restoreSaved = markTabsUnsaved(store, tabNames)
       },
       onUnchanged: () => {
-        if (tabName && savedBeforePending) fileActions.updateFile({ name: tabName, saved: true })
-        savedBeforePending = null
+        restoreSaved?.()
+        restoreSaved = null
       },
       onSnapshot: (snapshot) => {
-        savedBeforePending = null
+        restoreSaved = null
         const applied = applyConfiguratorSnapshot(store, { configuratorKey, controller, bundleVersion }, snapshot)
-        setUnaddressable(applied.unaddressable)
         notifyDroppedAliases(applied.dropped)
       },
       onError: (message) => toast({ title: 'I/O Configurator', description: message, variant: 'fail' }),
@@ -111,7 +97,7 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
   if (!url) return <Notice>The I/O Configurator is not available in this host yet.</Notice>
 
   return (
-    <div className='flex flex-col gap-2'>
+    <div className='flex min-h-0 flex-1 flex-col gap-2'>
       {status.kind === 'booting' && <Notice>Loading the I/O Configurator…</Notice>}
       {status.kind === 'failed' && (
         <p role='alert' className='text-sm text-red-600 dark:text-red-400'>
@@ -125,13 +111,8 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
         title='I/O Configurator'
         src={url}
         sandbox={IFRAME_SANDBOX}
-        className={`h-[640px] w-full rounded-md border border-neutral-200 bg-white dark:border-neutral-800 ${status.kind === 'failed' ? 'hidden' : ''} ${status.kind === 'booting' ? 'pointer-events-none' : ''}`}
+        className={`min-h-[640px] w-full flex-1 rounded-md border border-neutral-200 bg-white dark:border-neutral-800 ${status.kind === 'failed' ? 'hidden' : ''} ${status.kind === 'booting' ? 'pointer-events-none' : ''}`}
       />
-      {unaddressable.length > 0 && (
-        <Notice>{`These datapoints have no IEC address: ${unaddressable
-          .map((point) => `${point.name} (${UNADDRESSABLE_REASON[point.reason]})`)
-          .join(', ')}.`}</Notice>
-      )}
     </div>
   )
 }

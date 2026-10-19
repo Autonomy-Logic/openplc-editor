@@ -57,7 +57,18 @@ The host talks to the document only through the postMessage relay in
 ## The `vendor-document` screen section
 
 A VPP screen embeds the document with a section of layout `vendor-document`
-(`vendor-screen/layouts/configurator-screen.tsx`):
+(`vendor-screen/layouts/configurator-screen.tsx`). The configurator and its I/O Mapping are two screens
+of the board, the configurator first:
+
+```json
+"screens": {
+  "I/O Configurator": "screens/io-configurator.json",
+  "I/O Mapping": "screens/io-mapping.json"
+}
+```
+
+The configurator screen holds the one section, which fills the screen (at least 640 px, since the
+vendor draws the backplane at a fixed scale):
 
 ```json
 {
@@ -73,6 +84,10 @@ A VPP screen embeds the document with a section of layout `vendor-document`
   `controllers` gets a refusal that names the supported boards.
 - `persistence` defaults to `configurator`. The section also owns `device-setup` and `io-mapping`, so
   dirty tracking, save and "Don't save" cover all three (`collectScreenPersistenceKeys`).
+- Screens with a `vendor-document` or `datapoint-io-table` section are linked
+  (`collectLinkedScreenKeys`): each owns the keys of all of them, a pending change marks every open
+  linked tab unsaved, a save from either writes all keys and marks both saved, and "Don't save" from
+  either restores all keys. A linked tab opened later takes the saved state of one already open.
 - Boot (`src/frontend/utils/vpp/configurator-session.ts`): `ready` → `setController` → `show` →
   `load(stored archive)` → compare the loaded module guids with the stored `device-setup`. A mismatch
   or a rejected load fails the screen and writes nothing, so the stored archive is kept. An empty
@@ -82,16 +97,19 @@ A VPP screen embeds the document with a section of layout `vendor-document`
   until the guest has been quiet for the settle time after boot. After that, a `modified` is a user
   change, snapshotted once events settle, and written by
   `applyConfiguratorSnapshot` in one store update: `configurator` `{archive, controller, bundleVersion}`
-  (archive byte-for-byte), `device-setup`, and `io-mapping` derived from the datapoints with aliases
-  carried over by `datapointId`.
+  (archive byte-for-byte), `device-setup`, and `io-mapping` `{entries, unaddressable}` derived from the
+  datapoints with aliases carried over by `datapointId`.
 - The dirty compare hashes the archive (`src/frontend/utils/vpp/owned-slice.ts`); `cleanState` keeps it
   whole for the revert.
-- Switching tabs unmounts the iframe; reopening replays the boot from the stored data.
+- Every open vendor-screen tab stays mounted, hidden while inactive (`vendor-screen-tabs.tsx`), so
+  switching tabs keeps the iframe and its session: a change still settling when the user leaves the
+  tab is delivered. Closing the tab unmounts it; reopening replays the boot from the stored data.
 
 ## The `datapoint-io-table` screen section
 
 The I/O Mapping for a configurator-driven station is a section of layout `datapoint-io-table`
-(`vendor-screen/layouts/datapoint-io-table-layout.tsx`). It takes no fields beyond `id` and `title`:
+(`vendor-screen/layouts/datapoint-io-table-layout.tsx`), alone on its own screen. It takes no fields
+beyond `id` and `title`:
 
 ```json
 { "id": "io-mapping", "title": "I/O Mapping", "layout": "datapoint-io-table" }
@@ -99,6 +117,9 @@ The I/O Mapping for a configurator-driven station is a section of layout `datapo
 
 - It reads `device-setup` (modules, in slot order) and `io-mapping` (channels and addresses), the keys
   the `vendor-document` section writes, and owns both whatever `persistence` says.
+- Under the channels it lists the datapoints the configurator reported without an IEC address, stored
+  as `io-mapping.unaddressable`. Writers of `io-mapping` keep that field: the alias edit and
+  `recalculateIecAddresses` replace only `entries`; compile and the plugin config read only `entries`.
 - It is read-only: no slot picker, add, remove, clear, reorder, mode or parameter controls, and any
   `actions` on the section are ignored. The station is changed only in the configurator.
 - The Alias cell is the one write: `validateAliasEdit` gates it, `renameAlias` cascades a rename onto
@@ -107,8 +128,9 @@ The I/O Mapping for a configurator-driven station is a section of layout `datapo
 ## End-to-end tests
 
 `e2e/vendor-configurator.spec.ts` (both repos) drives the embedded configurator with a fake Device
-Editor: add a module, check its channels and addresses in the I/O Mapping, set an alias, reopen and
-find it kept, and check that the sandboxed guest reaches nothing of the host.
+Editor: add a module, switch to the I/O Mapping screen at once and check its channels and addresses
+there, set an alias, switch back and find the same iframe (not booted again), reopen and find the alias
+kept, and check that the sandboxed guest reaches nothing of the host.
 
 - The fake bundle and the reference relay (`src/__fixtures__/fake-device-editor/`) are bundled with
   webpack into `relay.js` and `index.js` by `e2e/fixtures/vendor-configurator/build-package.ts`

@@ -61,17 +61,16 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
     )
   }
 
-  // `module-slots` and `datapoint-io-table` fill the visible area and scroll inside themselves;
-  // `vendor-document` keeps its fixed height. Other layouts are content-sized and let the
-  // page-level container scroll if necessary. An explicit min height replaces the default one,
-  // which is the full content height and would make the I/O Mapping grow instead of scroll.
+  // `module-slots`, `datapoint-io-table` and `vendor-document` fill the visible area; other layouts
+  // are content-sized and let the page-level container scroll. An explicit min height replaces the
+  // default one, which is the full content height and would make the I/O Mapping grow, not scroll.
   const sizing =
     section.layout === 'module-slots'
       ? 'min-h-0 flex-1'
       : section.layout === 'datapoint-io-table'
         ? 'min-h-[360px] flex-1'
         : section.layout === 'vendor-document'
-          ? 'shrink-0'
+          ? 'flex-1'
           : ''
 
   return (

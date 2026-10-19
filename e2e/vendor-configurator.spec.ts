@@ -1,8 +1,8 @@
 /**
  * The embedded I/O Configurator on a vendor board: the fake Device Editor runs in the sandboxed
- * iframe served over `vpp-doc://`, a module added there lists its channels with IEC addresses in
- * the read-only I/O Mapping, an alias set there survives a save and a relaunch, and nothing the
- * guest tries reaches the host.
+ * iframe served over `vpp-doc://`, a module added there lists its channels with IEC addresses on
+ * the read-only I/O Mapping screen, even when that tab is opened before the change settles, an
+ * alias set there survives a save and a relaunch, and nothing the guest tries reaches the host.
  *
  * The fixture package is unsigned, so each launch replaces the `packages:verify-signatures`
  * handler with one that removes nothing; the production check is unchanged.
@@ -18,9 +18,10 @@ import { _electron as electron, expect, test } from '@playwright/test'
 
 import {
   bundleGuestScripts,
+  CONFIGURATOR_SCREEN,
   FIXTURE_BOARD,
-  FIXTURE_SCREEN,
   installFixturePackage,
+  MAPPING_SCREEN,
 } from './fixtures/vendor-configurator/build-package'
 import type { SandboxProbeResult } from './fixtures/vendor-configurator/guest-device-editor'
 
@@ -145,9 +146,21 @@ async function shutdown(app: ElectronApplication): Promise<void> {
   await exited
 }
 
+/** A tree or tab label, with the `* ` an unsaved screen gets; hidden tabs also hold the names as section titles. */
+const screenLabel = (page: Page, screen: string, unsaved?: boolean) => {
+  const name = screen.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const prefix = unsaved === undefined ? '(\\* )?' : unsaved ? '\\* ' : ''
+  return page
+    .getByText(new RegExp(`^${prefix}${name}$`))
+    .filter({ visible: true })
+    .first()
+}
+
+const openScreen = (page: Page, screen: string) => screenLabel(page, screen).click({ timeout: 30000 })
+
 async function openConfigurator(page: Page): Promise<FrameLocator> {
   await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
-  await page.getByText(FIXTURE_SCREEN, { exact: true }).first().click({ timeout: 30000 })
+  await openScreen(page, CONFIGURATOR_SCREEN)
   const iframe = page.locator('iframe[title="I/O Configurator"]')
   await expect(iframe).toHaveAttribute('sandbox', 'allow-scripts allow-forms')
   await expect(iframe).toHaveAttribute('src', /^vpp-doc:\/\/com\.e2e\.fake-configurator\/configurator\/index\.html$/)
@@ -214,10 +227,17 @@ test('a module added in the configurator is mapped, and its alias survives a rel
     const { app, page } = await launch(paths)
     try {
       const frame = await openConfigurator(page)
+      const iframe = page.locator('iframe[title="I/O Configurator"]')
+      await iframe.evaluate((element) => Reflect.set(element, '__e2eFrame', 'first'))
       await frame.getByRole('button', { name: 'Add FAKE-4DI' }).click()
+      // Leaves the configurator before its change settles; the hidden tab must still deliver it.
+      await openScreen(page, MAPPING_SCREEN)
 
       const slot = page.getByRole('region', { name: 'Slot 1 FAKE-4DI_1' })
       await expect(slot).toBeVisible({ timeout: 15000 })
+      for (const screen of [CONFIGURATOR_SCREEN, MAPPING_SCREEN]) {
+        await expect(screenLabel(page, screen, true), `${screen} is unsaved too`).toBeVisible()
+      }
       for (const bit of [0, 1, 2, 3]) {
         await expect(slot.getByRole('row', { name: new RegExp(`DI\\.${bit}\\b.*%IX\\d+\\.\\d`) })).toBeVisible()
       }
@@ -228,8 +248,16 @@ test('a module added in the configurator is mapped, and its alias survives a rel
       await alias.press('Tab')
       await expect(alias).toHaveValue('pump_run')
 
+      await openScreen(page, CONFIGURATOR_SCREEN)
+      await expect(iframe, 'the configurator was not booted again').toBeVisible()
+      expect(await iframe.evaluate((element) => Reflect.get(element, '__e2eFrame'))).toBe('first')
+      await expect(frame.getByTestId('fake-modules')).toContainText('FAKE-4DI_1 (FAKE-4DI)')
+
       await save(app)
       await expect.poll(() => readConfiguration(paths), { timeout: 15000 }).toContain('pump_run')
+      for (const screen of [CONFIGURATOR_SCREEN, MAPPING_SCREEN]) {
+        await expect(screenLabel(page, screen, true), `${screen} is saved too`).toHaveCount(0)
+      }
     } finally {
       await shutdown(app)
     }
@@ -248,6 +276,7 @@ test('a module added in the configurator is mapped, and its alias survives a rel
     try {
       const frame = await openConfigurator(page)
       await expect(frame.getByTestId('fake-modules')).toContainText('FAKE-4DI_1 (FAKE-4DI)')
+      await openScreen(page, MAPPING_SCREEN)
       await expect(page.getByLabel('Alias of DI.0 in slot 1')).toHaveValue('pump_run', { timeout: 15000 })
       // The configurator's load-failure message; Monaco's empty live regions are role=alert too.
       await expect(page.locator('p[role="alert"]')).toHaveCount(0)

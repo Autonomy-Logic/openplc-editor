@@ -60,7 +60,7 @@ export function applyConfiguratorSnapshot(
   state.deviceActions.setConfiguratorSnapshot(target.configuratorKey, {
     configurator: { archive: snapshot.archive, controller: target.controller, bundleVersion: target.bundleVersion },
     deviceSetup,
-    ioMapping: { entries: restored.entries },
+    ioMapping: { entries: restored.entries, unaddressable },
   })
   store.getState().projectActions.recalculateIecAddresses()
   return { dropped: restored.dropped, unaddressable }
