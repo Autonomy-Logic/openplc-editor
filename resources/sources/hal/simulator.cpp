@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 // Simulator HAL — derived from openplc-editor's
 // resources/sources/hal/mega_due.cpp.
 //

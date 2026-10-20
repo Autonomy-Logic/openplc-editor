@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
 opcua_log.h - telnet debug log for OPC-UA bring-up
 Copyright (C) 2026 Autonomy Logic

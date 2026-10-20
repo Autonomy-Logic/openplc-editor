@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 #include "STM32_CAN.h"
 
 extern "C" uint8_t init_stm32can(int);

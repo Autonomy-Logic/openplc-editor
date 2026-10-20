@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
 opcua_types.h - shared contracts for the baremetal OPC-UA server
 Copyright (C) 2026 Autonomy Logic

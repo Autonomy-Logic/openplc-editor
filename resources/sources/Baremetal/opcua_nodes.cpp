@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
 opcua_nodes.cpp - the address space and the data plane
 Copyright (C) 2026 Autonomy Logic

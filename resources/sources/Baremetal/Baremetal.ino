@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 // Baremetal.ino -- OpenPLC Arduino runtime entry sketch.
 //
 // This is a STATIC sketch -- the same code for every project. It hosts the

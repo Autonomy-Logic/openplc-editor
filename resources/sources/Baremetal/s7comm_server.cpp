@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
 s7comm_server.cpp - Siemens S7Comm server for the baremetal runtime
 Copyright (C) 2026 Autonomy Logic

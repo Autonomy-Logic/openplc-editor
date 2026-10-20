@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 /*
 license_store.h - Single storage interface for the on-device license blob (OLS-04)
 Copyright (C) 2022 OpenPLC - Thiago Alves

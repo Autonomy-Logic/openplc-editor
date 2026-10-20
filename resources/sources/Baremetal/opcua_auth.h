@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
 opcua_auth.h - username/password verification for the OPC-UA server
 Copyright (C) 2026 Autonomy Logic

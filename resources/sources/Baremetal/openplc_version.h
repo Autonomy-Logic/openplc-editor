@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 /*
 openplc_version.h - OpenPLC runtime/firmware version
 Copyright (C) 2022 OpenPLC - Thiago Alves

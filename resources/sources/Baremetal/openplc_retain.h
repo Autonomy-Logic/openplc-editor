@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 /*
 openplc_retain.h - Retain-variable storage interface (NODE-94)
 Copyright (C) 2026 OpenPLC - Thiago Alves

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 /*
 license_store_weak.cpp - Weak fallback backend for the license store.
 Copyright (C) 2022 OpenPLC - Thiago Alves

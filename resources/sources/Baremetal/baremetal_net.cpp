@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
 baremetal_net.cpp - the concrete network adapter every protocol server shares
 Copyright (C) 2026 Autonomy Logic

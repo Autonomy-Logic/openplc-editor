@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
 opcua_auth.cpp - PBKDF2-HMAC-SHA256 password verification
 Copyright (C) 2026 Autonomy Logic

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
 s7comm_server.h - the baremetal Siemens S7Comm server
 Copyright (C) 2026 Autonomy Logic

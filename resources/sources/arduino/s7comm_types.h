@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
 s7comm_types.h - shared contracts for the baremetal S7Comm server
 Copyright (C) 2026 Autonomy Logic

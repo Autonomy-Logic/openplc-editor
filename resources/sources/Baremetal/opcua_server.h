@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
 opcua_server.h - umbrella + scan-loop facade for the baremetal OPC-UA server
 Copyright (C) 2026 Autonomy Logic

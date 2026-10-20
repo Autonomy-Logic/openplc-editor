@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 /*
 modbus_debug.h - OpenPLC always-on debugger function codes (0x41-0x4B)
 Copyright (C) 2022 OpenPLC - Thiago Alves

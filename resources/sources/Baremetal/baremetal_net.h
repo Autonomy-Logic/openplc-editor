@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
 baremetal_net.h - the one place the runtime names a concrete network class
 Copyright (C) 2026 Autonomy Logic

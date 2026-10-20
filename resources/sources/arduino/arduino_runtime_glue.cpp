@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 // arduino_runtime_glue.cpp — Arduino-side runtime shim. Equivalent role to
 // runtime_v4_entry.cpp for the OpenPLC v4 .so build, but compiled into the
 // Arduino library at src/ instead of into a daemon-loaded .so.

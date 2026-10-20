@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 #include <Arduino_CAN.h>
 
 extern "C" void *init_arduinocan(uint8_t,int);

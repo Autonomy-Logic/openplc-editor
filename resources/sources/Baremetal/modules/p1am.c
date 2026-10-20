@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 #include <P1AM.h>
 extern "C" uint8_t p1am_init();
 extern "C" void p1am_writeDiscrete(uint32_t, uint8_t, uint8_t);

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 /*
 modbus_serial.h - Modbus RTU / debugger serial transport
 Copyright (C) 2022 OpenPLC - Thiago Alves

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 #include <ArduinoIoTCloud.h>
 #include <Arduino_ConnectionHandler.h>
 

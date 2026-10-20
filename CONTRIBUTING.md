@@ -1,5 +1,14 @@
 # Contributing
 
+## Licensing and the Contributor License Agreement
+
+The OpenPLC Editor is licensed under the GPLv3. The baremetal runtime it carries (`resources/sources`) is dual-licensed under the GPLv3 and a commercial licence.
+
+- **Contributor License Agreement.** By submitting a pull request, you agree that your contribution is licensed to Autonomy under the terms of the [Contributor License Agreement](CLA.md). The pull request template has a required checkbox confirming this; the CLA check fails until it is ticked. You keep the copyright on your contribution.
+- **Always available under the GPLv3.** Every contribution accepted here stays available under the GPLv3, in addition to any commercial licence.
+- **SPDX header.** Every new source file starts with `SPDX-License-Identifier: GPL-3.0-or-later` and the Autonomy copyright line, as in the existing files.
+- **Third-party code.** Do not add third-party code unless its licence is compatible with both the GPLv3 and the commercial licence. Ask in the pull request when in doubt.
+
 ## Setup
 
 Requires Node.js >= 22 < 24. See README.md for the full step by step.

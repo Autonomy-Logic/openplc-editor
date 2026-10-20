@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 Autonomy®
 // arduino_runtime_glue.h — sketch-facing surface for Arduino targets.
 //
 // Companion to runtime_v4_entry.cpp/.h: same role of bridging strucpp's C++
