@@ -7,7 +7,16 @@ import type {
 } from '@xyflow/react'
 import { applyNodeChanges } from '@xyflow/react'
 import { parseInt } from 'lodash'
-import { DragEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  DragEvent,
+  MouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type SyntheticEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import type { PLCVariable } from '../../../../../../middleware/shared/ports/types'
 import { mapsEqual, useContentStable } from '../../../../../hooks/use-content-stable'
@@ -20,6 +29,11 @@ import type { RungLadderState } from '../../../../../store/slices/ladder'
 import { cn } from '../../../../../utils/cn'
 import { getLadderBlockType, isLadderBlockDrag } from '../../../../../utils/graphical/drag-detection'
 import { getFunctionBlockVariablesToCleanup } from '../../../../../utils/graphical/get-function-block-variables-to-cleanup'
+import {
+  findPlaceholderWithinRadius,
+  selectOnlyPlaceholder,
+} from '../../../../../utils/graphical/ladder-placeholder-snap'
+import { isLadderPlacementElement, PLACEMENT_TARGET_ATTRIBUTE } from '../../../../../utils/graphical/placement-elements'
 import { syncNodesWithVariables } from '../../../../../utils/graphical/sync-nodes-with-variables'
 import { customNodeTypes } from '../../../../_atoms/graphical-editor/ladder'
 import type { BasicNodeData } from '../../../../_atoms/graphical-editor/ladder/utils/types'
@@ -27,6 +41,7 @@ import { getVariableRestrictionType } from '../../../../_atoms/graphical-editor/
 import { ReactFlowPanel } from '../../../../_atoms/react-flow'
 import { toast } from '../../../../_features/[app]/toast/use-toast'
 import { useBoundEditorModel, useBoundPou } from '../../../../_features/[workspace]/editor/graphical/active-context'
+import { useGraphicalPlacement } from '../../../../_features/[workspace]/editor/graphical/placement/placement-context'
 import { addNewElement, removeElements } from './ladder-utils/elements'
 import { onElementDragOver, onElementDragStart, onElementDrop } from './ladder-utils/elements/drag-n-drop'
 import {
@@ -87,6 +102,8 @@ const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = {
 }
 const PRO_OPTIONS = { hideAttribution: true }
 const NOOP = () => {}
+const PLACEMENT_EXTENT_PADDING = 50
+const PLACEMENT_SWALLOW_MS = 500
 
 const rungDebugStatesEqual = (previous: RungDebugStates | null, next: RungDebugStates | null): boolean =>
   previous !== null &&
@@ -118,6 +135,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
 
   const [rungLocal, setRungLocal] = useState<RungLadderState>(rung)
   const [dragging, setDragging] = useState(false)
+
+  const placement = useGraphicalPlacement()
+  const armedElement = placement?.language === 'ld' && !isDebuggerActive ? placement.armed : null
+  const [placementHover, setPlacementHover] = useState(false)
+  const swallowUntilRef = useRef(0)
 
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
   const reactFlowViewportRef = useRef<HTMLDivElement>(null)
@@ -322,7 +344,11 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
   /**
    * Add a new node to the rung
    */
-  const handleAddNode = (newNodeType: string = 'mockNode', blockType: string | undefined) => {
+  const handleAddNode = (
+    newNodeType: string = 'mockNode',
+    blockType: string | undefined,
+    sourceRung: RungLadderState = rungLocal,
+  ) => {
     const { libraries, ladderFlows } = store.getState()
     let pouLibrary = undefined
     if (blockType) {
@@ -395,7 +421,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       }
     }
 
-    const { nodes, edges, newNode, handleBranches } = addNewElement(rungLocal, {
+    const { nodes, edges, newNode, handleBranches } = addNewElement(sourceRung, {
       elementType: newNodeType,
       blockVariant: pouLibrary,
     })
@@ -772,6 +798,71 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
     handleAddNode(blockType, library)
   })
 
+  /**
+   * Click-to-place: while an element is armed, hovering the rung shows the
+   * placeholders and highlights the one under the pointer; a left click
+   * inserts there or cancels when no placeholder is close enough.
+   */
+  const endPlacementHover = useStableCallback(() => {
+    if (!placementHover) return
+    setPlacementHover(false)
+    setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] - PLACEMENT_EXTENT_PADDING]])
+    setRungLocal((current) => ({ ...current, nodes: removePlaceholderElements(current.nodes) }))
+  })
+
+  useEffect(() => {
+    if (!armedElement) endPlacementHover()
+  }, [armedElement, endPlacementHover])
+
+  const findPlacementPlaceholder = (nodes: FlowNode[], clientX: number, clientY: number) => {
+    if (!reactFlowInstance) return undefined
+    return findPlaceholderWithinRadius(nodes, reactFlowInstance.screenToFlowPosition({ x: clientX, y: clientY }))
+  }
+
+  const handlePlacementPointerMove = (event: ReactPointerEvent) => {
+    if (!armedElement || dragging) return
+    const { clientX, clientY } = event
+    if (!placementHover) {
+      setPlacementHover(true)
+      setReactFlowPanelExtent((extent) => [extent[0], [extent[1][0], extent[1][1] + PLACEMENT_EXTENT_PADDING]])
+    }
+    setRungLocal((current) => {
+      const hasPlaceholders = current.nodes.some(
+        (node) => node.type === 'placeholder' || node.type === 'parallelPlaceholder',
+      )
+      const nodes = hasPlaceholders ? current.nodes : renderPlaceholderElements(current)
+      const target = findPlacementPlaceholder(nodes, clientX, clientY)
+      const selected = selectOnlyPlaceholder(nodes, target?.id)
+      return selected === current.nodes ? current : { ...current, nodes: selected }
+    })
+  }
+
+  const handlePlacementPointerDown = (event: ReactPointerEvent) => {
+    if (!armedElement || !placement || event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    swallowUntilRef.current = performance.now() + PLACEMENT_SWALLOW_MS
+
+    const nodes = placementHover ? rungLocal.nodes : renderPlaceholderElements(rungLocal)
+    const target = findPlacementPlaceholder(nodes, event.clientX, event.clientY)
+    if (!target) {
+      placement.cancel()
+      return
+    }
+
+    const element = placement.consume()
+    if (!element || !isLadderPlacementElement(element)) return
+    endPlacementHover()
+    handleAddNode(element, undefined, { ...rungLocal, nodes: selectOnlyPlaceholder(nodes, target.id) })
+  }
+
+  const swallowAfterPlacement = (event: SyntheticEvent) => {
+    if (performance.now() > swallowUntilRef.current) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.type === 'click') swallowUntilRef.current = 0
+  }
+
   return (
     <div
       className={cn(
@@ -780,7 +871,17 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
         className,
       )}
     >
-      <div aria-label='Rung body' className='h-full w-full overflow-x-auto' ref={reactFlowViewportRef}>
+      <div
+        aria-label='Rung body'
+        className={cn('h-full w-full overflow-x-auto', armedElement && 'cursor-crosshair')}
+        ref={reactFlowViewportRef}
+        {...{ [PLACEMENT_TARGET_ATTRIBUTE]: 'ld-rung' }}
+        onPointerMove={armedElement ? handlePlacementPointerMove : undefined}
+        onPointerLeave={armedElement ? endPlacementHover : undefined}
+        onPointerDownCapture={armedElement ? handlePlacementPointerDown : undefined}
+        onMouseDownCapture={swallowAfterPlacement}
+        onClickCapture={swallowAfterPlacement}
+      >
         <div
           style={{
             height: reactFlowPanelExtent[1][1] + 8,
