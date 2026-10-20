@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   cla:
+    name: CLA
     runs-on: ubuntu-latest
     steps:
       - name: Check the Contributor License Agreement checkbox

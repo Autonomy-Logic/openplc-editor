@@ -106,10 +106,8 @@ unsigned long last_run = 0;
 bool first_cycle = false;
 
 // ---------------------------------------------------------------------------
-// Module includes and external sketch support
+// External sketch support
 // ---------------------------------------------------------------------------
-#include "arduino_libs.h"
-
 #ifdef USE_ARDUINO_SKETCH
     #include "ext/arduino_sketch.h"
 #endif

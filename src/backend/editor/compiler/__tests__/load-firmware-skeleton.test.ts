@@ -2,7 +2,7 @@
  * `loadFirmwareSkeletonInMemory` — focused tests.
  *
  * The method reads `resources/sources/arduino/*` + `resources/sources/Baremetal/*`
- * (incl. `Baremetal/modules/*`) off disk and returns a path-keyed
+ * off disk and returns a path-keyed
  * file map the pipeline's firmware-bundle composer consumes.
  *
  * Filesystem is real (per-test temp dir) so we exercise the actual
@@ -96,23 +96,7 @@ describe('loadFirmwareSkeletonInMemory', () => {
     expect(result['examples/Baremetal/ModbusSlave.cpp']).toBe('/* mb */\n')
   })
 
-  it('loads Baremetal/modules/* into examples/Baremetal/modules/<filename>', async () => {
-    mkdirSync(join(tmp, 'arduino'), { recursive: true })
-    mkdirSync(join(tmp, 'Baremetal', 'modules'), { recursive: true })
-    writeFileSync(join(tmp, 'Baremetal', 'Baremetal.ino'), '/* sketch */\n')
-    writeFileSync(join(tmp, 'Baremetal', 'modules', 'modbus_master.cpp'), '/* mm */\n')
-    writeFileSync(join(tmp, 'Baremetal', 'modules', 'modbus_master.h'), '#pragma once\n')
-
-    const m = makeModule(tmp)
-    const result = await m.loadFirmwareSkeletonInMemory('simulator')
-
-    expect(result['examples/Baremetal/modules/modbus_master.cpp']).toBe('/* mm */\n')
-    expect(result['examples/Baremetal/modules/modbus_master.h']).toBe('#pragma once\n')
-    // Sketch file stays at the top level.
-    expect(result['examples/Baremetal/Baremetal.ino']).toBe('/* sketch */\n')
-  })
-
-  it('skips subdirectories of Baremetal/ that are NOT "modules" (forward compat)', async () => {
+  it('skips subdirectories of Baremetal/', async () => {
     mkdirSync(join(tmp, 'arduino'), { recursive: true })
     mkdirSync(join(tmp, 'Baremetal', 'extras'), { recursive: true })
     writeFileSync(join(tmp, 'Baremetal', 'Baremetal.ino'), '/* sketch */\n')

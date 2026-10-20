@@ -795,7 +795,6 @@ class CompilerModule {
    * Path mapping (matches `copyStaticFiles`'s on-disk layout):
    *   - `resources/sources/arduino/<file>` → `src/<file>`
    *   - `resources/sources/Baremetal/<file>` → `examples/Baremetal/<file>`
-   *   - `resources/sources/Baremetal/modules/<file>` → `examples/Baremetal/modules/<file>`
    *
    * Strucpp runtime headers (`src/<filename>.hpp`) come from
    * `loadStrucppRuntimeHeaders` separately — they have a different
@@ -835,26 +834,16 @@ class CompilerModule {
       // downstream instead of crashing here.
     }
 
-    // Baremetal/* → examples/Baremetal/* (plus modules subdir).
+    // Baremetal/* → examples/Baremetal/*
     try {
       const baremetalEntries = await readdir(baremetalDir, { withFileTypes: true })
       await Promise.all(
-        baremetalEntries.map(async (e) => {
-          if (e.isFile()) {
+        baremetalEntries
+          .filter((e) => e.isFile())
+          .map(async (e) => {
             const content = await readFile(join(baremetalDir, e.name), 'utf-8')
             files[`examples/Baremetal/${e.name}`] = content
-          } else if (e.isDirectory() && e.name === 'modules') {
-            const moduleEntries = await readdir(join(baremetalDir, 'modules'), { withFileTypes: true })
-            await Promise.all(
-              moduleEntries
-                .filter((m) => m.isFile())
-                .map(async (m) => {
-                  const content = await readFile(join(baremetalDir, 'modules', m.name), 'utf-8')
-                  files[`examples/Baremetal/modules/${m.name}`] = content
-                }),
-            )
-          }
-        }),
+          }),
       )
     } catch {
       // Same defensive posture as the arduino/ block above.

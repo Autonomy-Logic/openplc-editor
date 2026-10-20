@@ -98,6 +98,6 @@ Go to [issues](https://github.com/Autonomy-Logic/openplc-editor/issues) page to 
 
 The OpenPLC Editor is licensed under the GPLv3 (see [LICENSE](LICENSE)).
 
-The baremetal runtime the editor builds into microcontroller firmware is dual-licensed: GPLv3 or a commercial licence. If you are using it in a commercial setting, you will need a commercial licence. Licences can be bought from the OpenPLC Editor (desktop or web) when you upload a program to the device.
+The baremetal runtime the editor builds into microcontroller firmware is dual-licensed: GPLv3 or a commercial licence. If you are using it in a commercial setting, you may need a commercial licence. Licences can be bought from the OpenPLC Editor (desktop or web) when you upload a program to the device.
 
-Contributions require agreeing to the [Contributor License Agreement](CLA.md); see [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions require agreeing to the [Contributor License Agreement](CLA.md) by ticking its checkbox on the pull request; see [CONTRIBUTING.md](CONTRIBUTING.md).
