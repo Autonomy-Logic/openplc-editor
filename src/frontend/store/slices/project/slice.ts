@@ -30,6 +30,7 @@ import {
   type IecAddressRegistry,
   migrateToRegistry,
   modbusConsumerId,
+  moduleRegistryChannelId,
   recalculate as recalculateRegistry,
   restoreAliasesFromMemory,
   unpinAllocatableChannels,
@@ -555,6 +556,17 @@ function applyEthercatAddresses(
         if (!info) continue
         if (info.address) mapping.iecLocation = info.address
         mapping.alias = info.alias
+      }
+      // Module channels live under the same slave consumer, keyed by the
+      // prefixed registry channel id — mirror the migrate side so the
+      // recomputed address + alias flow back onto the on-disk mapping.
+      for (const module of slave.modules ?? []) {
+        for (const mapping of module.channelMappings ?? []) {
+          const info = index.get(channelKey(consumerId, moduleRegistryChannelId(module.id, mapping.channelId)))
+          if (!info) continue
+          if (info.address) mapping.iecLocation = info.address
+          mapping.alias = info.alias
+        }
       }
     }
   }
@@ -2411,9 +2423,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           ...(device.modbusTcpConfig?.ioGroups ?? []).flatMap((group) =>
             (group.ioPoints ?? []).map((point) => point.alias ?? ''),
           ),
-          ...(device.ethercatConfig?.devices ?? []).flatMap((slave) =>
-            (slave.channelMappings ?? []).map((channel) => channel.alias ?? ''),
-          ),
+          ...(device.ethercatConfig?.devices ?? []).flatMap((slave) => [
+            ...(slave.channelMappings ?? []).map((channel) => channel.alias ?? ''),
+            ...(slave.modules ?? []).flatMap((module) => module.channelMappings.map((channel) => channel.alias ?? '')),
+          ]),
         ]),
       ].filter((alias) => alias.trim() !== '')
 
@@ -2451,6 +2464,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
             }
             for (const slave of device.ethercatConfig?.devices ?? []) {
               for (const channel of slave.channelMappings ?? []) channel.alias = remap(channel.alias)
+              for (const module of slave.modules ?? []) {
+                for (const channel of module.channelMappings) channel.alias = remap(channel.alias)
+              }
             }
           }
         }),

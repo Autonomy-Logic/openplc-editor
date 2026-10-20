@@ -36,6 +36,18 @@ const RuntimeLoginModal = () => {
         deviceActions.setRuntimeJwtToken(result.accessToken)
         deviceActions.setRuntimeConnectionStatus('connected')
         deviceActions.setStoredCredentials({ username, password })
+        // EtherDOG feature set for the pre-build capability gate. Not awaited: the modal closes
+        // at once, and until it answers the features stay unknown.
+        void runtime
+          .getRuntimeCapabilities()
+          .then((caps) => {
+            if (!caps.error && caps.features !== null) {
+              deviceActions.setRuntimeFeatures(caps.features)
+            }
+          })
+          .catch(() => {
+            /* already represented as runtimeFeatures === null */
+          })
         modalActions.closeModal()
         setUsername('')
         setPassword('')

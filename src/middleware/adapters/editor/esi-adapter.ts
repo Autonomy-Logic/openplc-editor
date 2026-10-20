@@ -110,5 +110,18 @@ export function createEditorEsiAdapter(getProjectPath: () => string): EsiPort {
         return { success: false, error: String(err) }
       }
     },
+
+    async loadModuleFull(itemId, ident) {
+      try {
+        const projectPath = requireProjectPath()
+        const result = await window.bridge.esiLoadModuleFull(projectPath, itemId, ident)
+        if (result.success && result.module) {
+          return { success: true, module: result.module }
+        }
+        return { success: false, error: result.error ?? `Module ident ${ident} not found` }
+      } catch (err) {
+        return { success: false, error: String(err) }
+      }
+    },
   }
 }

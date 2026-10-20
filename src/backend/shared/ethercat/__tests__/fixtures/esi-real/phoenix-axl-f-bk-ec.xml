@@ -1,0 +1,4286 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<EtherCATInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="EtherCATInfo.xsd" Version="1.14">
+	<!--ESI-Version 3.21-->
+	<InfoReference>AXL-IO-Modules\AXL_F_BK_EC_IO_Modules_321.xml</InfoReference>
+	<Vendor FileVersion="0001">
+		<Id>#x00000084</Id>
+		<Name>Phoenix Contact</Name>
+		<ImageData16x14>424DE6000000000000007600000028000000100000000E000000010004000000000070000000000000000000000000000000000000000000000000008000008000000080800080000000800080008080000080808000C0C0C0000000FF0000FF000000FFFF00FF000000FF00FF00FFFF0000FFFFFF00F7000000000007FF000777700000000F007FFFF00000000F007FFFF07700000F007FFFF0FFF7000F007FFFF0FFFF700F007FFF700FFFF00F007FF80F77FFF00F007FF80F77FFF00F007FFF700FFFF00F007FFFF0FFFF700F007FFFF0FFF7000F000777707700000FF7000000000007FF</ImageData16x14>
+	</Vendor>
+	<Descriptions>
+		<Groups>
+			<Group>
+				<Type>PxC_ECAT</Type>
+				<Name LcId="1031">Phoenix Contact EtherCAT Geräte</Name>
+				<Name LcId="1033">Phoenix Contact EtherCAT Devices</Name>
+				<ImageData16x14>424DE6000000000000007600000028000000100000000E000000010004000000000070000000000000000000000000000000000000000000000000008000008000000080800080000000800080008080000080808000C0C0C0000000FF0000FF000000FFFF00FF000000FF00FF00FFFF0000FFFFFF00F7000000000007FF000777700000000F007FFFF00000000F007FFFF07700000F007FFFF0FFF7000F007FFFF0FFFF700F007FFF700FFFF00F007FF80F77FFF00F007FF80F77FFF00F007FFF700FFFF00F007FFFF0FFFF700F007FFFF0FFF7000F000777707700000FF7000000000007FF</ImageData16x14>
+			</Group>
+		</Groups>
+		<Devices>
+			<Device Physics="YY">
+				<Type ProductCode="#x00290783" RevisionNo="#x00000001" ModulePdoGroup="0" CheckProductCode="EQ" CheckRevisionNo="NONE" CheckSerialNo="NONE" UseLrdLwr="0">AXL F BK EC</Type>
+				<Name LcId="1031"><![CDATA[AXL F BK EC, Axioline EtherCAT Buskoppler]]></Name>
+				<Name LcId="1033"><![CDATA[AXL F BK EC, Axioline EtherCAT Fieldbus coupler]]></Name>
+				<Info>
+					<StateMachine>
+						<Timeout>
+							<PreopTimeout>20000</PreopTimeout>
+							<SafeopOpTimeout>10000</SafeopOpTimeout>
+							<BackToInitTimeout>1000</BackToInitTimeout>
+							<BackToSafeopTimeout>500</BackToSafeopTimeout>
+						</Timeout>
+						<Behavior StartToInit="false" StartToPreop="false" StartToSafeop="false" StartToSafeopNoSync="false"></Behavior>
+					</StateMachine>
+					<Mailbox>
+						<Timeout>
+							<RequestTimeout>100</RequestTimeout>
+							<ResponseTimeout>10000</ResponseTimeout>
+						</Timeout>
+					</Mailbox>
+					<EtherCATController>
+						<DpramSize>4096</DpramSize>
+						<SmCount>4</SmCount>
+						<FmmuCount>3</FmmuCount>
+					</EtherCATController>
+					<ExecutionUnit>
+						<Type>PRIMARY</Type>
+					</ExecutionUnit>
+					<IdentificationReg134>true</IdentificationReg134>
+				</Info>
+				<GroupType>PxC_ECAT</GroupType>
+				<Profile>
+					<ProfileNo>5001</ProfileNo>
+					<AddInfo>0</AddInfo>
+					<Dictionary>
+						<DataTypes>
+							<DataType>
+								<Name>BOOL</Name>
+								<BitSize>1</BitSize>
+							</DataType>
+							<DataType>
+								<Name>UDINT</Name>
+								<BitSize>32</BitSize>
+							</DataType>
+							<DataType>
+								<Name>UINT</Name>
+								<BitSize>16</BitSize>
+							</DataType>
+							<DataType>
+								<Name>USINT</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<Name>STRING(2)</Name>
+								<BitSize>16</BitSize>
+							</DataType>
+							<DataType>
+								<Name>STRING(11)</Name>
+								<BitSize>88</BitSize>
+							</DataType>
+							<DataType>
+								<Name>STRING(5)</Name>
+								<BitSize>40</BitSize>
+							</DataType>
+							<DataType>
+								<Name>STRING(17)</Name>
+								<BitSize>136</BitSize>
+							</DataType>
+							<DataType>
+								<Name>STRING(3)</Name>
+								<BitSize>24</BitSize>
+							</DataType>
+							<DataType>
+								<Name>ARRAY [0..7] OF BYTE</Name>
+								<BaseType>USINT</BaseType>
+								<BitSize>64</BitSize>
+								<ArrayInfo>
+									<LBound>0</LBound>
+									<Elements>8</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT1018</Name>
+								<BitSize>144</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Vendor ID</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Product code</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Revision</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Serial number</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT10F3</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Maximum Messages</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Newest Message</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Newest Acknowledged Message</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>New Messages Available</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>40</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Flags</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C00ARR</Name>
+								<BaseType>USINT</BaseType>
+								<BitSize>32</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>4</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT1C00</Name>
+								<BitSize>48</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DT1C00ARR</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C12</Name>
+								<BitSize>16</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C13</Name>
+								<BitSize>16</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C32</Name>
+								<BitSize>376</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Sync mode</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Cycle time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Sync modes supported</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>64</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Minimum cycle time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>Calc and copy time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>8</SubIdx>
+									<Name>Get Cycle Time</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>144</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>9</SubIdx>
+									<Name>Delay time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>160</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>11</SubIdx>
+									<Name>SM events missed</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>192</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>12</SubIdx>
+									<Name>Cycle time too small</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>208</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>13</SubIdx>
+									<Name>Shift Time Too Short</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>224</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>15</SubIdx>
+									<Name>Minimum Cycle Distance</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>240</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>16</SubIdx>
+									<Name>Maximum Cycle Distance</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>272</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>17</SubIdx>
+									<Name>Minimum SM SYNC Distance</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>304</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>18</SubIdx>
+									<Name>Maximum SM SYNC Distance</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>336</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>32</SubIdx>
+									<Name>Sync error</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>368</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C33</Name>
+								<BitSize>248</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Sync mode</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Cycle time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Sync modes supported</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>64</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Minimum cycle time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>Calc and copy time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>8</SubIdx>
+									<Name>Get Cycle Time</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>144</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>9</SubIdx>
+									<Name>Delay time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>160</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>11</SubIdx>
+									<Name>SM Events Missed</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>192</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>12</SubIdx>
+									<Name>Cycle time too small</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>208</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>13</SubIdx>
+									<Name>Shift Time Too Short</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>224</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>32</SubIdx>
+									<Name>Sync error</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>240</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF000</Name>
+								<BitSize>112</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Index Distance</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Maximum Number of Modules</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>General Configuration</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>General Information</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF030ARR</Name>
+								<BaseType>UDINT</BaseType>
+								<BitSize>2016</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>63</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DTF030</Name>
+								<BitSize>2032</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DTF030ARR</Type>
+									<BitSize>2016</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF050ARR</Name>
+								<BaseType>UDINT</BaseType>
+								<BitSize>2016</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>63</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DTF050</Name>
+								<BitSize>2032</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DTF050ARR</Type>
+									<BitSize>2016</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF100</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Bus State</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Error_Code</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Add_Error Info</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF101</Name>
+								<BitSize>120</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Invalid Frames</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Coding Error</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Frame Start Error</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Length Error</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>64</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>CRC Error</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>CRC Status Error</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>96</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>7</SubIdx>
+									<Name>Clear Counters</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF800</Name>
+								<BitSize>24</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Swap Word Variables</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access WriteRestrictions="PreOP">rw</Access>
+										<Category>o</Category>
+										<Setting>1</Setting>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Swap DWord Variables</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>17</BitOffs>
+									<Flags>
+										<Access WriteRestrictions="PreOP">rw</Access>
+										<Category>o</Category>
+										<Setting>1</Setting>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Swap LWord Variables</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>18</BitOffs>
+									<Flags>
+										<Access WriteRestrictions="PreOP">rw</Access>
+										<Category>o</Category>
+										<Setting>1</Setting>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF980</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<SafetyMapping>SP</SafetyMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>FSoE Address</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<SafetyMapping>SP</SafetyMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+						</DataTypes>
+						<Objects>
+							<Object>
+								<Index>#x1000</Index>
+								<Name>Device Type</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>m</Category>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1008</Index>
+								<Name>Device Name</Name>
+								<Type>STRING(11)</Type>
+								<BitSize>88</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1009</Index>
+								<Name>Hardware Version</Name>
+								<Type>STRING(2)</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x100a</Index>
+								<Name>Software Version</Name>
+								<Type>STRING(5)</Type>
+								<BitSize>40</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1018</Index>
+								<Name>Identity</Name>
+								<Type>DT1018</Type>
+								<BitSize>144</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+									<SdoAccess>CompleteAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x10F3</Index>
+								<Name>Diagnosis History</Name>
+								<Type>DT10F3</Type>
+								<BitSize>64</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1c00</Index>
+								<Name>Sync Manager Type</Name>
+								<Type>DT1C00</Type>
+								<BitSize>48</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+									<SdoAccess>CompleteAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1c32</Index>
+								<Name>SM output parameter</Name>
+								<Type>DT1C32</Type>
+								<BitSize>376</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+									<SdoAccess>CompleteAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1c33</Index>
+								<Name>SM input parameter</Name>
+								<Type>DT1C33</Type>
+								<BitSize>248</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+									<SdoAccess>CompleteAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#xF000</Index>
+								<Name>Modular Device Profile</Name>
+								<Type>DTF000</Type>
+								<BitSize>112</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+									<SdoAccess>CompleteAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#xf030</Index>
+								<Name>Configured Module Ident List</Name>
+								<Type>DTF030</Type>
+								<BitSize>2032</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<Category>o</Category>
+									<SdoAccess>CompleteAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#xf050</Index>
+								<Name>Detected Module Ident List</Name>
+								<Type>DTF050</Type>
+								<BitSize>2032</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+									<SdoAccess>CompleteAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#xF100</Index>
+								<Name>Bus Coupler Diag Info</Name>
+								<Type>DTF100</Type>
+								<BitSize>64</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+									<SdoAccess>CompleteAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#xF101</Index>
+								<Name>Bus Error Counters</Name>
+								<Type>DTF101</Type>
+								<BitSize>120</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+									<SdoAccess>CompleteAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#xF800</Index>
+								<Name>Endian Settings</Name>
+								<Type>DTF800</Type>
+								<BitSize>24</BitSize>
+								<Info>
+									<SubItem>
+										<Name>SubIndex 000</Name>
+										<Info>
+											<DefaultData>03</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Swap Word Variables</Name>
+										<Info>
+											<DefaultData>01</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Swap DWord Variables</Name>
+										<Info>
+											<DefaultData>01</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Swap LWord Variables</Name>
+										<Info>
+											<DefaultData>01</DefaultData>
+										</Info>
+									</SubItem>
+								</Info>
+								<Flags>
+									<Access WriteRestrictions="PreOP">rw</Access>
+									<Category>o</Category>
+									<Setting>1</Setting>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#xF801</Index>
+								<Name>Leave OP on Busfail</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<Info>
+									<DefaultData>00</DefaultData>
+								</Info>
+								<Flags>
+									<Access WriteRestrictions="PreOP">rw</Access>
+									<Category>o</Category>
+									<Setting>1</Setting>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#xF802</Index>
+								<Name>Validate module configuration</Name>
+								<Type>BOOL</Type>
+								<BitSize>1</BitSize>
+								<Info>
+									<DefaultData>01</DefaultData>
+								</Info>
+								<Flags>
+									<Access WriteRestrictions="PreOP">rw</Access>
+									<Category>o</Category>
+									<Setting>1</Setting>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#xF803</Index>
+								<Name>Bus cycletime (ns)</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</Object>
+						</Objects>
+					</Dictionary>
+					<DiagMessages>
+						<DiagMessage>
+							<TextId>#x0000</TextId>
+							<MessageText LcId="1033">Busfailure gone</MessageText>
+							<MessageText LcId="1031">Busfehler behoben</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0A0D</TextId>
+							<MessageText LcId="1033">A firmware error occurred</MessageText>
+							<MessageText LcId="1031">Ein Firmware-Fehler ist aufgetreten</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0A1C</TextId>
+							<MessageText LcId="1033">Maximum number of modules exceeded</MessageText>
+							<MessageText LcId="1031">Maximale Anzahl der Lokalbus-Teilnehmer überschritten</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0A2F</TextId>
+							<MessageText LcId="1033">Number of modules is zero</MessageText>
+							<MessageText LcId="1031">Anzahl der Lokalbus-Teilnehmer ist null</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0A54</TextId>
+							<MessageText LcId="1033">Maximum number of I/O points exceeded</MessageText>
+							<MessageText LcId="1031">Maximale Anzahl der I/O-Punkte überschritten</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0A73</TextId>
+							<MessageText LcId="1033">Found a module with not supported chip version</MessageText>
+							<MessageText LcId="1031">Lokalbus-Teilnehmer mit nicht unterstützter Chip-Version gefunden</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0A74</TextId>
+							<MessageText LcId="1033">Found a module of not supported device manufacturer</MessageText>
+							<MessageText LcId="1031">Lokalbus-Teilnehmer eines nicht unterstützten Herstellers gefunden</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0A75</TextId>
+							<MessageText LcId="1033">Serious error on localbus module</MessageText>
+							<MessageText LcId="1031">Schwerwiegender Fehler an einem Lokalbus-Teilnehmer</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0B01</TextId>
+							<MessageText LcId="1033">A hardware or firmware error occurred</MessageText>
+							<MessageText LcId="1031">Ein Hardware- oder Firmware-Fehler ist aufgetreten</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0B02</TextId>
+							<MessageText LcId="1033">A hardware or firmware error occurred</MessageText>
+							<MessageText LcId="1031">Ein Hardware- oder Firmware-Fehler ist aufgetreten</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0B03</TextId>
+							<MessageText LcId="1033">A hardware or firmware error occurred</MessageText>
+							<MessageText LcId="1031">Ein Hardware- oder Firmware-Fehler ist aufgetreten</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0B04</TextId>
+							<MessageText LcId="1033">A hardware or firmware error occurred</MessageText>
+							<MessageText LcId="1031">Ein Hardware- oder Firmware-Fehler ist aufgetreten</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0B0C</TextId>
+							<MessageText LcId="1033">A hardware or firmware error occurred</MessageText>
+							<MessageText LcId="1031">Ein Hardware- oder Firmware-Fehler ist aufgetreten</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0BC2</TextId>
+							<MessageText LcId="1033">The local bus is in energy-saving mode</MessageText>
+							<MessageText LcId="1031">Der Lokalbus befindet sich im Energiesparmodus</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0BD1</TextId>
+							<MessageText LcId="1033">The localbus could not be activated due to malfunctions</MessageText>
+							<MessageText LcId="1031">Lokalbus-Aktivierung konnte wegen Störungen nicht ausgeführt werden</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0BF1</TextId>
+							<MessageText LcId="1033">The localbus could not be activated due to malfunctions</MessageText>
+							<MessageText LcId="1031">Lokalbus-Aktivierung konnte wegen Störungen nicht ausgeführt werden</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0BF2</TextId>
+							<MessageText LcId="1033">The localbus could not be activated due to malfunctions</MessageText>
+							<MessageText LcId="1031">Lokalbus-Aktivierung konnte wegen Störungen nicht ausgeführt werden</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0BF4</TextId>
+							<MessageText LcId="1033">The localbus could not be activated due to malfunctions</MessageText>
+							<MessageText LcId="1031">Lokalbus-Aktivierung konnte wegen Störungen nicht ausgeführt werden</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0c01</TextId>
+							<MessageText LcId="1033">Lost localbus module %u</MessageText>
+							<MessageText LcId="1031">Lokalbus Teilnehmer %u verloren</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0c02</TextId>
+							<MessageText LcId="1033">New localbus module %u added</MessageText>
+							<MessageText LcId="1031">Neuer Lokalbus Teilnehmer %u hinzugefügt</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0c11</TextId>
+							<MessageText LcId="1033">Localbus module %u at wrong position</MessageText>
+							<MessageText LcId="1031">Lokalbus Teilnehmer %u an falscher Position</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0c12</TextId>
+							<MessageText LcId="1033">Localbus module %u at wrong instance</MessageText>
+							<MessageText LcId="1031">Lokalbus Teilnehmer %u falsche Instanz</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0c13</TextId>
+							<MessageText LcId="1033">Localbus module %u has wrong process data width</MessageText>
+							<MessageText LcId="1031">Lokalbus Teilnehmer %u hat eine falsche Prozessdatenbreite</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x1243</TextId>
+							<MessageText LcId="1033">Error while getting localbus configuration</MessageText>
+							<MessageText LcId="1031">Fehler beim einlesen des Lokalbus</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2130</TextId>
+							<MessageText LcId="1033">Module %u: Short circuit, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Kurzschluss, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2140</TextId>
+							<MessageText LcId="1033">Module %u: Cross-circuit between two inputs</MessageText>
+							<MessageText LcId="1031">Modul %u: Querschluss zwischen zwei Eingängen</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2141</TextId>
+							<MessageText LcId="1033">Module %u: Cross-circuit, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Querschluss, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2142</TextId>
+							<MessageText LcId="1033">Module %u: Cross-circuit between input %u and clock output</MessageText>
+							<MessageText LcId="1031">Modul %u: Querschluss zwischen Eingang %u und Taktausgang </MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2211</TextId>
+							<MessageText LcId="1033">Module %u: Input overload, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Überlast einer Eingangs, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2310</TextId>
+							<MessageText LcId="1033">Module %u: Continuous overcurrent of the peripheral supply</MessageText>
+							<MessageText LcId="1031">Modul %u: Dauerüberstrom der Peripherieversorgung</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2320</TextId>
+							<MessageText LcId="1033">Module %u: Short curcuit, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Kurzschluss, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2326</TextId>
+							<MessageText LcId="1033">Module %u: Earth fault VCC</MessageText>
+							<MessageText LcId="1031">Modul %u: Erdschluss VCC</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2327</TextId>
+							<MessageText LcId="1033">Module %u: Earth fault GND</MessageText>
+							<MessageText LcId="1031">Modul %u: Erdschluss GND</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2330</TextId>
+							<MessageText LcId="1033">Module %u: Earth fault of the peripheral supply</MessageText>
+							<MessageText LcId="1031">Modul %u: Erdschluss der Peripherieversorgung</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2331</TextId>
+							<MessageText LcId="1033">Module %u: Earth fault of phase U</MessageText>
+							<MessageText LcId="1031">Modul %u: Erdschluss der Phase U</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2332</TextId>
+							<MessageText LcId="1033">Module %u: Earth fault of phase V</MessageText>
+							<MessageText LcId="1031">Modul %u: Erdschluss der Phase V</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2333</TextId>
+							<MessageText LcId="1033">Module %u: Earth fault of phase W</MessageText>
+							<MessageText LcId="1031">Modul %u: Erdschluss der Phase W</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2340</TextId>
+							<MessageText LcId="1033">Module %u: Short curcuit / overload at periphery</MessageText>
+							<MessageText LcId="1031">Modul %u: Kurzschluss/Überlast an der Peripherie</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2341</TextId>
+							<MessageText LcId="1033">Module %u: Short circuit of phases U-W</MessageText>
+							<MessageText LcId="1031">Modul %u: Kurzschluss der Phasen U-W</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2342</TextId>
+							<MessageText LcId="1033">Module %u: Short circuit of phases V-W</MessageText>
+							<MessageText LcId="1031">Modul %u: Kurzschluss der Phasen V-W</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2343</TextId>
+							<MessageText LcId="1033">Module %u: Short circuit of phases W-U</MessageText>
+							<MessageText LcId="1031">Modul %u: Kurzschluss der Phasen W-U</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2344</TextId>
+							<MessageText LcId="1033">Module %u: Overload at signal output, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Überlast eines Signalausgangs, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2345</TextId>
+							<MessageText LcId="1033">Module %u: Overload at clock output</MessageText>
+							<MessageText LcId="1031">Modul %u: Überlast am Taktausgang</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2370</TextId>
+							<MessageText LcId="1033">Module %u: Cross-circuit between two outputs</MessageText>
+							<MessageText LcId="1031">Modul %u: Querschluss zwischen zwei Ausgängen</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2371</TextId>
+							<MessageText LcId="1033">Module %u: Cross-circuit between external voltage and an output</MessageText>
+							<MessageText LcId="1031">Modul %u: Querschluss zwischen externer Spannung und einem Ausgang</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2380</TextId>
+							<MessageText LcId="1033">Module %u: Hardware or cross circuit error</MessageText>
+							<MessageText LcId="1031">Modul %u: Hardware oder Querschluss-Fehler</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x2382</TextId>
+							<MessageText LcId="1033">Module %u: Switch-off delay of output is still active</MessageText>
+							<MessageText LcId="1031">Modul %u: Die Ausschaltverzögerung des Ausgangs ist noch aktiv</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x3130</TextId>
+							<MessageText LcId="1033">Module %u: Supply voltage missing (Up)</MessageText>
+							<MessageText LcId="1031">Modul %u: Versorgungsspannung fehlt (Up)</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x3183</TextId>
+							<MessageText LcId="1033">Module %u: Implausible signal change</MessageText>
+							<MessageText LcId="1031">Modul %u: Unplausibler Signalwechsel</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x3184</TextId>
+							<MessageText LcId="1033">Module %u: Encoder error (input voltage too high)</MessageText>
+							<MessageText LcId="1031">Modul %u: Geberfehler (zu hohe Eingangsspannung)</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x3186</TextId>
+							<MessageText LcId="1033">Module %u: Encoder error (input voltage too low)</MessageText>
+							<MessageText LcId="1031">Modul %u: Geberfehler (zu niedrige Eingangsspannung)</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x3300</TextId>
+							<MessageText LcId="1033">Module %u: Short curcuit / output overload</MessageText>
+							<MessageText LcId="1031">Modul %u: Kurzschluss / Überlast eines Ausgangs</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x3400</TextId>
+							<MessageText LcId="1033">Module %u: I/O supply failure</MessageText>
+							<MessageText LcId="1031">Modul %u: Ausfall der Peripherieversorgung</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x3411</TextId>
+							<MessageText LcId="1033">Module %u: Undervoltage peripheral supply</MessageText>
+							<MessageText LcId="1031">Modul %u: Unterspannung an der Peripherieversorgung</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x3412</TextId>
+							<MessageText LcId="1033">Module %u: I/O supply failure</MessageText>
+							<MessageText LcId="1031">Modul %u: Ausfall der Peripherieversorgung</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x3422</TextId>
+							<MessageText LcId="1033">Module %u: Actuator supply not present</MessageText>
+							<MessageText LcId="1031">Modul %u: Aktorversorgung fehlt</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x4210</TextId>
+							<MessageText LcId="1033">Module %u: Critical module temperature</MessageText>
+							<MessageText LcId="1031">Modul %u: Kritische Modultemperatur</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x5010</TextId>
+							<MessageText LcId="1033">Module %u: Hardware defect</MessageText>
+							<MessageText LcId="1031">Modul %u: Hardware defekt</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x5112</TextId>
+							<MessageText LcId="1033">Module %u: Faulty 24V supply, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Fehlerhafte 24V Versorgung, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x5113</TextId>
+							<MessageText LcId="1033">Module %u: Faulty 5V supply, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Fehlerhafte 5V Versorgung, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x5120</TextId>
+							<MessageText LcId="1033">Module %u: Cold junction invalid, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Vergleichsstelle ungültig, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x5160</TextId>
+							<MessageText LcId="1033">Module %u: Faulty supply voltage at channel %u, Hardware defect</MessageText>
+							<MessageText LcId="1031">Modul %u: Versorgungsspannung am Kanal %u fehlerhaft, Hardware defekt</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x5230</TextId>
+							<MessageText LcId="1033">Module %u: Communication (device-internal) faulty</MessageText>
+							<MessageText LcId="1031">Modul %u: Kommunikation gestört (geräteintern)</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x6100</TextId>
+							<MessageText LcId="1033">Module %u: Firmware error, update required</MessageText>
+							<MessageText LcId="1031">Modul %u: Firmware Fehler, Update nötig</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x6010</TextId>
+							<MessageText LcId="1033">Module %u: Device reset after watchdog</MessageText>
+							<MessageText LcId="1031">Modul %u: Geräteneustart nach Watchdog</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x6130</TextId>
+							<MessageText LcId="1033">Module %u: Smart Element missing</MessageText>
+							<MessageText LcId="1031">Modul %u: Smart Element fehlt</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x6301</TextId>
+							<MessageText LcId="1033">Module %u: Device error</MessageText>
+							<MessageText LcId="1031">Modul %u: Gerätefehler</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x6302</TextId>
+							<MessageText LcId="1033">Module %u: Flash format error, Firmware defect</MessageText>
+							<MessageText LcId="1031">Modul %u: Flash-Format-Fehler, Firmware Defekt</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x6320</TextId>
+							<MessageText LcId="1033">Module %u: Subbus-Master parametrization incorrect (CRC-Error)</MessageText>
+							<MessageText LcId="1031">Modul %u: Subbus-Master Parametrierung fehlerhaft (CRC-Fehler)</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x7300</TextId>
+							<MessageText LcId="1033">Module %u: Encoder error, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Geberfehler, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x7305</TextId>
+							<MessageText LcId="1033">Module %u: Encoder error, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Geberfehler, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x7330</TextId>
+							<MessageText LcId="1033">Module %u: Electrical encoder error, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Geberfehler elektrisch, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x7340</TextId>
+							<MessageText LcId="1033">Module %u: Logical encoder error, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Geberfehler logisch, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x7610</TextId>
+							<MessageText LcId="1033">Module %u: Receive buffer full, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Empfangspuffer voll, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x7611</TextId>
+							<MessageText LcId="1033">Module %u: Transmit buffer full, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Sendepuffer voll, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x7620</TextId>
+							<MessageText LcId="1033">Module %u: Device error</MessageText>
+							<MessageText LcId="1031">Modul %u: Gerätefehler</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x7710</TextId>
+							<MessageText LcId="1033">Module %u: Open circuit, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Drahtbruch, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x8152</TextId>
+							<MessageText LcId="1033">Module %u: Tx buffer full, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Tx Buffer voll</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x815A</TextId>
+							<MessageText LcId="1033">Module %u: Rx buffer full, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Rx Buffer voll</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x8600</TextId>
+							<MessageText LcId="1033">Module %u: Input error of the incremental encoder channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Eingangsfehler Inkrementalwertgeber Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x8910</TextId>
+							<MessageText LcId="1033">Module: %u Overrange channel %u</MessageText>
+							<MessageText LcId="1031">Modul: %u Bereichsüberschreitung Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x8911</TextId>
+							<MessageText LcId="1033">Module: %u Upper counter limit reached channel %u</MessageText>
+							<MessageText LcId="1031">Modul: %u Oberer Grenzwert erreicht Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x8921</TextId>
+							<MessageText LcId="1033">Module: %u Lower counter limit reached channel %u</MessageText>
+							<MessageText LcId="1031">Modul: %u Unterer Grenzwert erreicht Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x8920</TextId>
+							<MessageText LcId="1033">Module: %u Underrange, channel %u</MessageText>
+							<MessageText LcId="1031">Modul: %u Bereichsunterschreitung, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x8F01</TextId>
+							<MessageText LcId="1033">Module: %u Symmetry violation at input, channel %u</MessageText>
+							<MessageText LcId="1031">Modul: %u Symmetrieverletzung am Eingang, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x8F08</TextId>
+							<MessageText LcId="1033">Module: %u Bright test error at output, channel %u</MessageText>
+							<MessageText LcId="1031">Modul: %u Helltestfehler am Ausgang, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x8F09</TextId>
+							<MessageText LcId="1033">Module: %u Dark test error at output, channel %u</MessageText>
+							<MessageText LcId="1031">Modul: %u Dunkeltestfehler am Ausgang, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#xFF01</TextId>
+							<MessageText LcId="1033">Module: %u Localbus module configuration does not match</MessageText>
+							<MessageText LcId="1031">Modul: %u Unterschied in der Lokalbus Modulkonfiguration</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#xA001</TextId>
+							<MessageText LcId="1033">Module %u: Subbus-Device not available / is missing, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Subbus-Modul nicht vorhanden / fehlt, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#xA002</TextId>
+							<MessageText LcId="1033">Module %u: Wrong subbus-Device available, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Falsches Subbus-Modul vorhanden, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#xA003</TextId>
+							<MessageText LcId="1033">Module %u: Subdevice replaced, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Subdevice ersetzt, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#xA010</TextId>
+							<MessageText LcId="1033">Module %u: Subbus-Device reports an Event, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Subbus-Modul meldet ein Event, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#xA012</TextId>
+							<MessageText LcId="1033">Module %u:Application not ready, channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Applikation auf dem nicht bereit, Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#xA014</TextId>
+							<MessageText LcId="1033">Module %u: Faulty application specific parametrization e.g. datastorage (IO-Link), channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Fehlerhafte applikationsspezifische Parametrierung, z.B. Datastorage (IO-Link), Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#xA020</TextId>
+							<MessageText LcId="1033">Module %u: Subbus communication error at channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Subbus Kommunikationsfehler an Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#xA021</TextId>
+							<MessageText LcId="1033">Module %u: Subbus timeout at channel %u</MessageText>
+							<MessageText LcId="1031">Modul %u: Subbus Zeitüberschreitung an Kanal %u</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0C16</TextId>
+							<MessageText LcId="1033">Module %u: An address conflict has occurred</MessageText>
+							<MessageText LcId="1031">Modul %u: Ein Adresskonflikt ist aufgetreten</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0D01</TextId>
+							<MessageText LcId="1033">Module %u: The configured Axioline Smart Element is not accessible</MessageText>
+							<MessageText LcId="1031">Modul %u: Das projektierte Axioline Smart Element ist nicht erreichbar</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0D02</TextId>
+							<MessageText LcId="1033">Module %u: An Axioline Smart Element has been detected that has not been configured</MessageText>
+							<MessageText LcId="1031">Modul %u: Ein nicht projektiertes Axioline Smart Element wurde erkannt</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0D13</TextId>
+							<MessageText LcId="1033">Module %u: The Axioline Smart Element process data length does not correspond to the configured value</MessageText>
+							<MessageText LcId="1031">Modul %u: Die Prozessdatenlänge des Axioline Smart Elements entspricht nicht dem projektierten Wert</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0D14</TextId>
+							<MessageText LcId="1033">Module %u: The Axioline Smart Element module type does not correspond to the configured value</MessageText>
+							<MessageText LcId="1031">Modul %u: Der Modultyp des Axioline Smart Elements entspricht nicht dem projektierten Wert</MessageText>
+						</DiagMessage>
+						<DiagMessage>
+							<TextId>#x0D15</TextId>
+							<MessageText LcId="1033">Module %u: An Axioline Smart Element has been replaced with an Axioline Smart Element whose module type (device type) does not correspond to the configuration</MessageText>
+							<MessageText LcId="1031">Modul %u: Ein Axioline Smart Element wurde durch ein Axioline Smart Element ersetzt, dessen Modultyp (DeviceType) nicht der Projektierung entspricht</MessageText>
+						</DiagMessage>
+					</DiagMessages>
+				</Profile>
+				<Fmmu>Outputs</Fmmu>
+				<Fmmu>Inputs</Fmmu>
+				<Fmmu>MBoxState</Fmmu>
+				<Sm MinSize="256" MaxSize="512" DefaultSize="512" StartAddress="#x1000" ControlByte="#x26" Enable="1">MBoxOut</Sm>
+				<Sm MinSize="256" MaxSize="512" DefaultSize="512" StartAddress="#x1200" ControlByte="#x22" Enable="1">MBoxIn</Sm>
+				<Sm StartAddress="#x1402" ControlByte="#x64" Enable="1">Outputs</Sm>
+				<Sm StartAddress="#x1A00" ControlByte="#x20" Enable="1">Inputs</Sm>
+				<TxPdo Fixed="true" Mandatory="true" Sm="3">
+					<Index DependOnSlot="false">#x1AFF</Index>
+					<Name LcId="1033">Bus Coupler Diag Info</Name>
+					<Name LcId="1031">Bus Coupler Diag Info</Name>
+					<Entry>
+						<Index DependOnSlot="false">#x10F3</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>16</BitLen>
+						<Name LcId="1033">New Diagnosis Message</Name>
+						<Name LcId="1031">New Diagnosis Message</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="false">#xF100</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>16</BitLen>
+						<Name LcId="1033">Localbus bus State</Name>
+						<Name LcId="1031">Localbus bus State</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="false">#xF100</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>16</BitLen>
+						<Name LcId="1033">Localbus Error_Code</Name>
+						<Name LcId="1031">Localbus Error_Code</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="false">#xF100</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>16</BitLen>
+						<Name LcId="1033">Localbus Add_Error Info</Name>
+						<Name LcId="1031">Localbus Add_Error Info</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+				</TxPdo>
+				<Mailbox DataLinkLayer="true">
+					<EoE></EoE>
+					<CoE SdoInfo="true" CompleteAccess="true" SegmentedSdo="true" PdoAssign="false" PdoConfig="false" PdoUpload="true" DiagHistory="true"></CoE>
+					<FoE></FoE>
+				</Mailbox>
+				<Dc Unknown64Bit="1" ExternalRefClock="0" UnknownFRMW="0">
+					<OpMode>
+						<Name>SM_SYNCHRON</Name>
+						<Desc>SM Synchronous</Desc>
+						<AssignActivate>#x0000</AssignActivate>
+						<CycleTimeSync0>0</CycleTimeSync0>
+						<ShiftTimeSync0>0</ShiftTimeSync0>
+						<CycleTimeSync1>0</CycleTimeSync1>
+						<ShiftTimeSync1>0</ShiftTimeSync1>
+					</OpMode>
+					<OpMode>
+						<Name>DC_SYNCHRON</Name>
+						<Desc>DC Synchronous</Desc>
+						<AssignActivate>#x0300</AssignActivate>
+						<CycleTimeSync0 Factor="1">0</CycleTimeSync0>
+						<ShiftTimeSync0>0</ShiftTimeSync0>
+						<CycleTimeSync1>0</CycleTimeSync1>
+						<ShiftTimeSync1>0</ShiftTimeSync1>
+					</OpMode>
+				</Dc>
+				<Slots IdentifyModuleBy="ModuleIdent" SlotIndexIncrement="1" SlotPdoIncrement="1" DownloadModuleIdentList="1">
+					<Slot MinInstances="1" MaxInstances="63">
+						<Name LcId="1033">Slot for Axioline terminals</Name>
+						<Name LcId="1031">Slot für Axioline Klemmen</Name>
+						<ModuleClass>
+							<Class>DI_TERM</Class>
+							<Name LcId="1033">Digital input terminals</Name>
+							<Name LcId="1031">Digitale Eingabeklemmen</Name>
+							<ImageData16x14>424DD6020000000000003600000028000000100000000E0000000100180000000000A0020000C40E0000C40E00000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000000000000000001205002C1A024B30116A4821865E30A1733FB6834BC08244FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF140F0AFFFFC5FFFEBFFFFFC5FFFFCAFFFFCDFFFFD2FFFFD6FFFFD9FFFFE5BA8B5CFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF2A1F14E9C792DFC391E3C997E6CF9DEAD6A3ECDDAAF0E3B0F3E8B5FDF7C3A37A52FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF443322E5C18ADDBE8BE2C492E5CB98E8D29EEBD7A5EFDEABF2E3B0FCF3BE8A6744FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF614930D6A666DBB884DEBD8AD9B476DEBD7EE9D09DEBD7A4EDDDAAFAEDB96D5237FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA37A51FFFFFFD5A365D1A363FFFFFFFFFFFFDCBA7AE7D09DEAD5A2F9E9B4513D28FFFFFFFFFFFF000000000000000000000000000000FFFFFFFFFFFF000000000000FFFFFFE2C693E5CD9BF7E0AB312418FFFFFFFFFFFF000000000000FFFFFF1F1F1F000000000000FFFFFF000000000000FFFFFFF1D099F7D9A1FFF1B51B140DFFFFFFFFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFF000000000000FFFFFF9C7C50947A50978358000000FFFFFFFFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFF000000000000FFFFFF837E7C7270736063697D7E7EFFFFFFFFFFFF000000000000FFFFFF4F4F4F000000000000FFFFFF000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000000000000000000000000000DFDFDFFFFFFF000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>DO_TERM</Class>
+							<Name LcId="1033">Digital output terminals</Name>
+							<Name LcId="1031">Digitale Ausgabeklemmen</Name>
+							<ImageData16x14>424DD6020000000000003600000028000000100000000E0000000100180000000000A0020000C40E0000C40E00000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000000000070F002023083A39175750257364348E7641A6864BB98F55C78244C0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF1D1226F2B6FFF2B8FFF8BEFFFDC4FFFFC9FFFFD0FFFFD5FFFFDAFFFFF0FF9A66CDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF301F3FC38FE4C491E1CA97E5D19EE7D7A4E9DDAAEEE2B0F0E8B5F3FEC6FF9663C8FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF442E5CBE89E2BE8BDDC491E2CB98E5D19FE8D8A5EBDEAAEDE4B0F1F7C1FF875AB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF3C1462A768D9B784DBBE8ADEC491E1BD7FDEC586E1CC8EE6D496EAEEBAFB754F9DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA363D5B481DAB272DCFFFFFFFFFFFFFFFFFFFFFFFFE5A3F95D3A7DFFFFFFFFFFFF000000000000000000000000000000FFFFFFA972D4FFFFFF000000000000000000000000FFFFFF3B2255FFFFFFFFFFFF000000000000FFFFFF1F1F1F000000000000FFFFFF0000000000001F1F1F1F1F1F000000000000FFFFFFFFFFFFFFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFFFFFFFFFFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFFFFFFFFFFFFFF000000000000FFFFFF4F4F4F000000000000FFFFFF0000000000004F4F4F4F4F4F000000000000FFFFFFFFFFFFFFFFFF000000000000000000000000000000DFDFDFFFFFFFDFDFDF000000000000000000000000DFDFDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>DIO_TERM</Class>
+							<Name LcId="1033">Digital input/output terminals</Name>
+							<Name LcId="1031">Digitale Ein-/Ausgabeklemmen</Name>
+							<ImageData16x14>424DD6020000000000003600000028000000100000000E0000000100180000000000A0020000C40E0000C40E00000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000000000000000000E00002200003B00005300006A0000810000930000C0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF281E14795BCE8664B49872A6AA7F99BA8C8AC9977CD8A26FE5AC64FFC1530000B9FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF3F2F1F4836B056409E654B987255918060898D6A8499737DA67D77BF8E700000A3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5C442E3729B84835A85640A1644B9973569380608C8E6A849B747EB38677000089FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF623C15261CBF392AAF1A06972B138F62499B7154945E39766F466D8E5D67000046FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000C00000A7FFFFFFFFFFFF23098E3D1F8DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000000000000000000000000000FFFFFFFFFFFF000000000000FFFFFFFFFFFF000000000000000000000000FFFFFF0000000000001F1F1F1F1F1F000000000000FFFFFF000000000000FFFFFF0000000000001F1F1F1F1F1F000027000000000000000000FFFFFFFFFFFF000000000000FFFFFF000000000000C0B4A8000000000000FFFFFFFFFFFF000007000000000000000000FFFFFFFFFFFF000000000000FFFFFF000000000000A18F7D000000000000FFFFFFFFFFFF0000000000000000000000004F4F4F4F4F4F000000000000FFFFFF000000000000FFFFFF0000000000004F4F4F4F4F4F000000000000000000000000000000000000000000DFDFDFFFFFFF000000000000FFFFFFDFDFDF000000000000000000000000DFDFDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>AIO_TERM</Class>
+							<Name LcId="1033">Analog input/output terminals</Name>
+							<Name LcId="1031">Analoge Ein-/Ausgabeklemmen</Name>
+							<ImageData16x14>424DD6020000000000003600000028000000100000000E0000000100180000000000A0020000C40E0000C40E00000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000000000000000000C00001E0500321200441F00592C0669380D784403783EFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF091C1280FFC481FDBE87FFC58EFFCA95FFCD9AFFD3A0FFD6A4FFDAB1FFE72E8B5DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0F30205CC7925EC39064CA986BD09D71D7A477DDAA7DE3B083E9B68FF9C327764DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF16452E56C18A59BE8B5EC49165CB986BD19E71D8A578DEAB7EE4B08AF4C01F5F3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF1E5A3B26A6662AA66932AE6F5EC4903FBD7F48C48671D7A358D49669E9A8001900FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF309060FFFFFFFFFFFFFFFFFF6AEBAAFFFFFFFFFFFF4ACA8BFFFFFFFFFFFFFFFFFFFFFFFF000000000000000000FFFFFF000000000000000000FFFFFF000000000000FFFFFFFFFFFF000000000000000000FFFFFFFFFFFF000000151515000000151515000000FFFFFFFFFFFF000000000000FFFFFF0000000000001F1F1F000000000000FFFFFF000000555555A5A5A5555555000000FFFFFFFFFFFF000000000000FFFFFF000000000000FFFFFF000000000000FFFFFF202020000000FFFFFF000000202020FFFFFFFFFFFF000000000000FFFFFF000000000000FFFFFF000000000000FFFFFFDFDFDF0000004F4F4F000000DFDFDFFFFFFFFFFFFF000000000000FFFFFF0000000000004F4F4F000000000000FFFFFFFFFFFF000000000000000000FFFFFFFFFFFFFFFFFF000000000000FFFFFFDFDFDF000000000000000000DFDFDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>AI_TERM</Class>
+							<Name LcId="1033">Analog input terminals</Name>
+							<Name LcId="1031">Analoge Eingabeklemmen</Name>
+							<ImageData16x14>424DD6020000000000003600000028000000100000000E0000000100180000000000A0020000C40E0000C40E00000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000000000000000000C00001E0500321200441F00592C0669380D784403783EFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF091C1280FFC481FDBE87FFC58EFFCA95FFCD9AFFD3A0FFD6A4FFDAB1FFE72E8B5DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0F30205CC7925EC39064CA986BD09D71D7A477DDAA7DE3B083E9B68FF9C327764DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF16452E56C18A59BE8B5EC49165CB986BD19E71D8A578DEAB7EE4B08AF4C01F5F3FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF1E5A3B26A6662AA66932AE6F5EC4903FBD7F48C48671D7A377DDAA85EEB917472FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF005928FFFFFFFFFFFFFFFFFF2AAB6AFFFFFFFFFFFF42C2836FD5A47FE8B4102F1FFFFFFFFFFFFF000000000000000000FFFFFF000000000000000000FFFFFF000000000000FFFFFF67CE9A75E1AB06170FFFFFFFFFFFFFFFFFFF000000151515000000151515000000FFFFFFFFFFFF000000000000FFFFFF6AD9A17AF1B5020603FFFFFFFFFFFFFFFFFF000000555555A5A5A5555555000000FFFFFFFFFFFF000000000000FFFFFF2677502F8259000000FFFFFFFFFFFFFFFFFF202020000000FFFFFF000000202020FFFFFFFFFFFF000000000000FFFFFF756E726F61687F7F7FFFFFFFFFFFFFFFFFFFDFDFDF0000004F4F4F000000DFDFDFFFFFFFFFFFFF000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000000000000000FFFFFFFFFFFFFFFFFF000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>AO_TERM</Class>
+							<Name LcId="1033">Analog output terminals</Name>
+							<Name LcId="1031">Analoge Ausgabeklemmen</Name>
+							<ImageData16x14>424DD6020000000000003600000028000000100000000E0000000100180000000000A0020000C40E0000C40E00000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000000000000000001818003A39005E5E00848400A9A900CBCB00E8E800FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00333387FFFF8DFFFF9BFFFFA8FFFFB6FFFFC2FFFFCEFFFFD8FFFFF4FFFF00E8E8FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF004F4F5BFFFF61FFFF6BFFFF77FFFF81FFFF8BFFFF96FFFF9FFFFFB5FFFF00CCCCFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00727250FFFF56FFFF61FFFF6BFFFF77FFFF82FFFF8CFFFF97FFFFADFFFF00ABABFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00989717FFFF20FFFF2DFFFF60FFFF69FFFF56FFFF63FFFF70FFFF8AFFFF008888FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00B9B9FFFFFFFFFFFFFFFFFF26FFFF4AFFFFFFFFFFFFFFFFFFFFFFFFFFFF003E3EFFFFFFFFFFFF000000000000000000FFFFFF000000000000000000FFFFFFFFFFFF000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF000000151515000000151515000000FFFFFFFFFFFF0000000000001F1F1F1F1F1F000000000000FFFFFFFFFFFFFFFFFF000000555555A5A5A5555555000000FFFFFFFFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFFFFFFFFFFFFFF202020000000FFFFFF000000202020FFFFFFFFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFFFFFFFFFFFFFFDFDFDF0000004F4F4F000000DFDFDFFFFFFFFFFFFF0000000000004F4F4F4F4F4F000000000000FFFFFFFFFFFFFFFFFFFFFFFF000000000000000000FFFFFFFFFFFFFFFFFFDFDFDF000000000000000000000000DFDFDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>FUNC_TERM</Class>
+							<Name LcId="1033">Function terminals</Name>
+							<Name LcId="1031">Funktionsklemmen</Name>
+							<ImageData16x14>424DD6020000000000003600000028000000100000000E0000000100180000000000A0020000C40E0000C40E00000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000000000000A00002200093D00185800277304348D0A41A5104CB90543BFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0509127CC0FF7DBBFF83C1FF8BC6FF91CBFF98CFFF9DD4FFA3D7FFB0E5FF2A54A9FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0A1328598EE75B8DDF6294E2699BE571A3E976A9ED7CAFF082B6F38FC3FE254A94FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF1121435388E55687DE5C8FE06296E46A9CE870A3EB77A9EE7EB0F18ABEFC1E3D7AFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF172F5F4B80DE4E82D92E6CD43775D96395E34785E04F8DE577A9ED69A8FA000038FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF17397A4479D91959CCFFFFFFFFFFFF3171D7FFFFFFFFFFFF4A8AE4FFFFFFFFFFFFFFFFFFFFFFFF000000000000FFFFFF2A54A73168D1FFFFFF000000000000FFFFFF000000000000FFFFFF000000000000FFFFFFFFFFFF000000000000DFDFDFFFFFF56996EDFFFFFF000000000000DFDFDF000000000000DFDFDF000000000000FFFFFFFFFFFF000000000000000000000000B4AA98FFFFFF000000000000000000000000000000000000000000000000FFFFFFFFFFFF000000000000A7A7A7A7A7A7575757FFFFFF000000000000000000000000000000000000000000000000FFFFFFFFFFFF0000000000006F6F6F6F6F6FFFFFFFFFFFFF000000000000000000AFAFAFAFAFAF000000000000000000FFFFFFFFFFFF000000000000000000000000000000FFFFFF000000000000DFDFDFFFFFFFFFFFFFDFDFDF000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>COMM_TERM</Class>
+							<Name LcId="1033">Communication terminals</Name>
+							<Name LcId="1031">Kommunikationsklemmen</Name>
+							<ImageData16x14>424DD6020000000000003600000028000000100000000E0000000100180000000000A0020000C40E0000C40E00000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000000000000A00002200093D00185800277304348D0A41A5104CB90543BFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0509127CC0FF7DBBFF83C1FF8BC6FF91CBFF98CFFF9DD4FFA3D7FFB0E5FF2A54A9FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0A1328598EE75B8DDF6294E2699BE571A3E976A9ED7CAFF082B6F38FC3FE254A94FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF1121435388E55687DE5C8FE06296E46A9CE870A3EB77A9EE7EB0F18ABEFC1E3D7AFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0005432263D54E82D95588DC3775D93F7CDD699CE64F8DE55895E985B9FB000038FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF2161D42160D0FFFFFFFFFFFF3878DCFFFFFFFFFFFF5B9FF7FFFFFFFFFFFFFFFFFFFFFFFF000000000000000000000000FFFFFFFFFFFF000000000000FFFFFF000000000000FFFFFF000000000000FFFFFF0000000000001F1F1F1F1F1F000000000000FFFFFF000000000000DFDFDF000000000000DFDFDF000000000000FFFFFF000000000000FFFFFFFFFFFF6F6F6F6F6F6FFFFFFF000000000000000000000000000000000000000000000000FFFFFF000000000000FFFFFFFFFFFFA7A7A7A7A7A7FFFFFF000000000000000000000000000000000000000000000000FFFFFF0000000000004F4F4F4F4F4F000000000000FFFFFF000000000000000000AFAFAFAFAFAF000000000000000000FFFFFFDFDFDF000000000000000000000000DFDFDFFFFFFF000000000000DFDFDFFFFFFFFFFFFFDFDFDF000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>SBT_TERM</Class>
+							<Name LcId="1033">SafetyBridge terminals</Name>
+							<Name LcId="1031">SafetyBridge Klemmen</Name>
+							<ImageData16x14>424DD6020000000000003600000028000000100000000E0000000100180000000000A0020000C40E0000C40E00000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFCDCDCD937B7B9C8F8F9C9B9C9CA9A99CB6B69CC3C59CD2D19CDDDD9CE8E893F1F1D5FFFFFFFFFFFFFFFFFFFFFFFFFFFF674E4E00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF79ECECFFFFFFFFFFFFFFFFFFFFFFFF817B7B00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF91E0DFFFFFFFFFFFFFFFFFFFFFFFFF808B8A00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF90D0D0FFFFFFFFFFFFFFFFFFFFFFFF809A9A00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF90BFC0FFFFFFFFFFFFFFFFFFFFFFFF7CCACA00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF90AFAFFFFFFFFFFFFF8585858E8E8EAB9394DCFFFF00FFFFA5FFFFD08181CB9292CB8E8ECB8E8EC18484FFCCCC00FFFF909E9ECACACA000000000000000000000000000000FFC8C888FFFF0000000000000000000000000000008F464600FFFF908E8E787878343434FFFFFFFFFFFFFFFFFF0000006256568AFFFF000000C4ACACA2FFFFA2FFFFA2FFFF80FFFF00FFFF897675FFFFFFF0F0F0898989303030000000000000A69B9B96FFFF0000009D808000DEDE00D2D200CCCC00C5C514BCBC938181A4A4A40000000000001212127B7B7BBCBCBCFFFFFFF2FFFF000000858585D2CDCDD2BCBCD2B2B2D2A9A9CD9B9BECEFEF707070000000F0F0F0FFFFFFFFFFFF6B6B6B838383FFFFFF0000007F8080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC4C4C40000001313130D0D0D000000000000A9A9A9FFFFFF000000676767FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBEBEB8484848C8C8C858585EBEBEBFFFFFFFFFFFF828282CDCDCDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>FSOE_TERM</Class>
+							<Name LcId="1033">FSOE terminals</Name>
+							<Name LcId="1031">FSOE Klemmen</Name>
+							<ImageData16x14>424DD6020000000000003600000028000000100000000E0000000100180000000000A0020000C40E0000C40E00000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFCDCDCD937B7B9C8F8F9C9B9C9CA9A99CB6B69CC3C59CD2D19CDDDD9CE8E893F1F1D5FFFFFFFFFFFFFFFFFFFFFFFFFFFF674E4E00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF79ECECFFFFFFFFFFFFFFFFFFFFFFFF817B7B00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF91E0DFFFFFFFFFFFFFFFFFFFFFFFFF808B8A00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF90D0D0FFFFFFFFFFFFFFFFFFFFFFFF809A9A00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF90BFC0FFFFFFFFFFFFFFFFFFFFFFFF7CCACA00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF00FFFF90AFAFFFFFFFFFFFFF8585858E8E8EAB9394DCFFFF00FFFFA5FFFFD08181CB9292CB8E8ECB8E8EC18484FFCCCC00FFFF909E9ECACACA000000000000000000000000000000FFC8C888FFFF0000000000000000000000000000008F464600FFFF908E8E787878343434FFFFFFFFFFFFFFFFFF0000006256568AFFFF000000C4ACACA2FFFFA2FFFFA2FFFF80FFFF00FFFF897675FFFFFFF0F0F0898989303030000000000000A69B9B96FFFF0000009D808000DEDE00D2D200CCCC00C5C514BCBC938181A4A4A40000000000001212127B7B7BBCBCBCFFFFFFF2FFFF000000858585D2CDCDD2BCBCD2B2B2D2A9A9CD9B9BECEFEF707070000000F0F0F0FFFFFFFFFFFF6B6B6B838383FFFFFF0000007F8080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC4C4C40000001313130D0D0D000000000000A9A9A9FFFFFF000000676767FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBEBEB8484848C8C8C858585EBEBEBFFFFFFFFFFFF828282CDCDCDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+					</Slot>
+					<ModulePdoGroup Alignment="0" RxPdo="#x0" TxPdo="#x0"></ModulePdoGroup>
+					<ModulePdoGroup Alignment="0" RxPdo="#x0" TxPdo="#x0"></ModulePdoGroup>
+				</Slots>
+				<Eeprom AssignToPdi="0">
+					<ByteSize>8192</ByteSize>
+					<!-- 	Config Data: SII EEPROM Content
+                PDIControl 			0x0140:0x0141 = 0x0C80
+                PDI Configuration	0x0150:0x0151 = 0x6600
+                SYNC0 pulse length 	0x0982:0x0983 = 0x0064
+                Extendet PDI Config 0x0152:0x0153 = 0x0000	-->
+					<ConfigData>800c046664000000</ConfigData>
+					<BootStrap>0010000200180002</BootStrap>
+				</Eeprom>
+				<ImageData16x14>424DE6000000000000007600000028000000100000000E000000010004000000000070000000000000000000000000000000000000000000000000008000008000000080800080000000800080008080000080808000C0C0C0000000FF0000FF000000FFFF00FF000000FF00FF00FFFF0000FFFFFF00F7000000000007FF000777700000000F007FFFF00000000F007FFFF07700000F007FFFF0FFF7000F007FFFF0FFFF700F007FFF700FFFF00F007FF80F77FFF00F007FF80F77FFF00F007FFF700FFFF00F007FFFF0FFFF700F007FFFF0FFF7000F000777707700000FF7000000000007FF</ImageData16x14>
+			</Device>
+		</Devices>
+		<Modules>
+			<!--FSDO4_2-->
+			<Module Crc32="#x994A8FB8">
+				<Type ModuleIdent="#x000F1D26" ModuleClass="FSOE_TERM" ModulePdoGroup="1" SRA_ParameterSupported="0">AXL SE FSDO4/2</Type>
+				<Name>AXL SE FSDO4/2</Name>
+				<RxPdo Fixed="true" Sm="2">
+					<Index DependOnSlot="1">#x1600</Index>
+					<Name>RxPDO</Name>
+					<Entry>
+						<Index DependOnSlot="1">#x7000</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>FSoE Master CMD</Name>
+						<DataType>USINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x7001</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>OutputChannel1</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x7001</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>OutputChannel2</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x7001</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>OutputChannel3</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x7001</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>OutputChannel4</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x0000</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>4</BitLen>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x7000</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>FSoE Master CRC_0</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x7000</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>FSoE Master ConnID</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+				</RxPdo>
+				<TxPdo Fixed="true" Sm="3">
+					<Index DependOnSlot="1">#x1A00</Index>
+					<Name>TxPDO</Name>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>FSoE Slave CMD</Name>
+						<DataType>USINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x0000</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>FSoE Slave CRC_0</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>FSoE Slave ConnID</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+				</TxPdo>
+				<SafetyParaMapping Fixed="true">
+					<Index>#x1E00</Index>
+					<Name>SafetyParameterSet</Name>
+					<Entry>
+						<Index DependOnSlot="1">#x9001</Index>
+						<SubIndex>7</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Communication Parameter Length</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x9001</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Watchdog Time</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x9001</Index>
+						<SubIndex>8</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Application Parameter Length</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<!-- PSTD-ID -->
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>PSTD-ID MSB</Name>
+						<DataType>USINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>PSTD-ID LSB</Name>
+						<DataType>USINT</DataType>
+					</Entry>
+					<!-- Ausgang 00 -->
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Output pair 00: Assignment</Name>
+						<Name LcId="1031">Ausgangspaar 00: Belegung</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>4</BitLen>
+						<Name LcId="1033">Output pair 00: Switch-off delay for stop category 1</Name>
+						<Name LcId="1031">Ausgangpaar 00: Abschaltverzögerung</Name>
+						<DataType>BIT4</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>5</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">Output pair 00: Assignment for switch-off delay</Name>
+						<Name LcId="1031">Ausgangspaar 00: Zuordnung der Abschaltverzögerung</Name>
+						<DataType>BIT1</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>6</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">Output pair 00: Test Impulses (Output switched off)</Name>
+						<Name LcId="1031">Ausgangspaar 00: Testimpulse bei ausgeschaltetem Ausgang</Name>
+						<DataType>BIT1</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>7</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Output pair 00: ZVEI-Class</Name>
+						<Name LcId="1031">Ausgangspaar 00: ZVEI-Klasse</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x0</Index>
+						<BitLen>6</BitLen>
+						<Name></Name>
+					</Entry>
+					<!-- Ausgang 01 -->
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>8</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Output pair 00: Assignment</Name>
+						<Name LcId="1031">Ausgangspaar 01: Belegung</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>9</SubIndex>
+						<BitLen>4</BitLen>
+						<Name LcId="1033">Output pair 01: Switch-off delay for stop category 1</Name>
+						<Name LcId="1031">Ausgangspaar 01: Abschaltverzögerung</Name>
+						<DataType>BIT4</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>10</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">Output pair 01: Assignment for switch-off delay</Name>
+						<Name LcId="1031">Ausgangspaar 01: Zuordnung der Abschaltverzögerung</Name>
+						<DataType>BIT1</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>11</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">Output pair 01: Test Impulses (Output switched off)</Name>
+						<Name LcId="1031">Ausgangspaar 01: Testimpulse bei ausgeschaltetem Ausgang</Name>
+						<DataType>BIT1</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>12</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Output pair 00: ZVEI-Class</Name>
+						<Name LcId="1031">Ausgangspaar 01: ZVEI-Klasse</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x0</Index>
+						<BitLen>6</BitLen>
+						<Name></Name>
+					</Entry>
+				</SafetyParaMapping>
+				<Profile>
+					<ProfileNo>5001</ProfileNo>
+					<Dictionary>
+						<DataTypes>
+							<DataType>
+								<Name>BOOL</Name>
+								<BitSize>1</BitSize>
+							</DataType>
+							<DataType>
+								<Name>BIT1</Name>
+								<BitSize>1</BitSize>
+							</DataType>
+							<DataType>
+								<Name>BIT2</Name>
+								<BitSize>2</BitSize>
+							</DataType>
+							<DataType>
+								<Name>BIT3</Name>
+								<BitSize>3</BitSize>
+							</DataType>
+							<DataType>
+								<Name>BIT4</Name>
+								<BitSize>4</BitSize>
+							</DataType>
+							<DataType>
+								<Name>USINT</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<Name>UINT</Name>
+								<BitSize>16</BitSize>
+							</DataType>
+							<DataType>
+								<Name>BYTE</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<Name>ARRAY [0..5] OF BYTE</Name>
+								<BaseType>BYTE</BaseType>
+								<BitSize>48</BitSize>
+								<ArrayInfo>
+									<LBound>0</LBound>
+									<Elements>6</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>STRING(2)</Name>
+								<BitSize>16</BitSize>
+							</DataType>
+							<DataType>
+								<Name>DT6000</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>FSoE Slave CMD</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>FSoE Slave ConnID</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>FSoE Slave CRC_0</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>40</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT7000</Name>
+								<BitSize>56</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>FSoE Master CMD</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>FSoE Master CRC_0</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>FSoE Master ConnID</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>40</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT7001</Name>
+								<BitSize>24</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>OutputChannel1</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>OutputChannel2</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>17</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>OutputChannel3</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>18</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>OutputChannel4</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>19</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT8000</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<!-- PSTD-ID -->
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>PSTD-ID MSB</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<SafetyMapping>SP</SafetyMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>PSTD-ID LSB</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<SafetyMapping>SP</SafetyMapping>
+									</Flags>
+								</SubItem>
+								<!-- Ausgang 00 -->
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Output pair 00: Assignment</Name>
+									<DisplayName LcId="1033">Output pair 00: Assignment</DisplayName>
+									<DisplayName LcId="1031">Ausgangspaar 00: Belegung</DisplayName>
+									<Type>DT0801EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>32</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Output pair 00: Switch-off delay for stop category 1</Name>
+									<DisplayName LcId="1033">Output pair 00: Switch-off delay for stop category 1</DisplayName>
+									<DisplayName LcId="1031">Ausgangspaar 00: Abschaltverzögerung</DisplayName>
+									<Type>DT0802EN04</Type>
+									<BitSize>4</BitSize>
+									<BitOffs>34</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Output pair 00: Assignment for switch-off delay</Name>
+									<DisplayName LcId="1033">Output pair 00: Assignment for switch-off delay</DisplayName>
+									<DisplayName LcId="1031">Ausgangspaar 00: Zuordnung der Abschaltverzögerung</DisplayName>
+									<Type>DT0803EN01</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>38</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>Output pair 00: Test Impulses (Output switched off)</Name>
+									<DisplayName LcId="1033">Output pair 00: Test Impulses (Output switched off)</DisplayName>
+									<DisplayName LcId="1031">Ausgangspaar 00: Testimpulse bei ausgeschaltetem Ausgang</DisplayName>
+									<Type>DT0804EN01</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>39</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>7</SubIdx>
+									<Name>Output pair 00: ZVEI-Class</Name>
+									<DisplayName LcId="1033">Output pair 00: ZVEI-Class</DisplayName>
+									<DisplayName LcId="1031">Ausgangspaar 00: ZVEI-Klasse</DisplayName>
+									<Type>DT0805EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>40</BitOffs>
+								</SubItem>
+								<!-- Ausgang 01 -->
+								<SubItem>
+									<SubIdx>8</SubIdx>
+									<Name>Output pair 01: Assignment</Name>
+									<DisplayName LcId="1033">Output pair 01: Assignment</DisplayName>
+									<DisplayName LcId="1031">Ausgangspaar 01: Belegung</DisplayName>
+									<Type>DT0801EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>48</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>9</SubIdx>
+									<Name>Output pair 01: Switch-off delay for stop category 1</Name>
+									<DisplayName LcId="1033">Output pair 01: Switch-off delay for stop category 1</DisplayName>
+									<DisplayName LcId="1031">Ausgangspaar 01: Abschaltverzögerung</DisplayName>
+									<Type>DT0802EN04</Type>
+									<BitSize>4</BitSize>
+									<BitOffs>50</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>10</SubIdx>
+									<Name>Output pair 01: Assignment for switch-off delay</Name>
+									<DisplayName LcId="1033">Output pair 01: Assignment for switch-off delay</DisplayName>
+									<DisplayName LcId="1031">Ausgangspaar 01: Zuordnung der Abschaltverzögerung</DisplayName>
+									<Type>DT0803EN01</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>54</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>11</SubIdx>
+									<Name>Output pair 01: Test Impulses (Output switched off)</Name>
+									<DisplayName LcId="1033">Output pair 01: Test Impulses (Output switched off)</DisplayName>
+									<DisplayName LcId="1031">Ausgangspaar 01: Testimpulse bei ausgeschaltetem Ausgang</DisplayName>
+									<Type>DT0804EN01</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>55</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>12</SubIdx>
+									<Name>Output pair 01: ZVEI-Class</Name>
+									<DisplayName LcId="1033">Output pair 01: ZVEI-Class</DisplayName>
+									<DisplayName LcId="1031">Ausgangspaar 01: ZVEI-Klasse</DisplayName>
+									<Type>DT0805EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>56</BitOffs>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT9001</Name>
+								<BitSize>176</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Version</Name>
+									<Type>STRING(2)</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Safe Address</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Connection ID</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Watchdog Time</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>64</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Unique ID</Name>
+									<Type>ARRAY [0..5] OF BYTE</Type>
+									<BitSize>48</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>Connection Type</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>128</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>7</SubIdx>
+									<Name>Communication Parameter Length</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>144</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>8</SubIdx>
+									<Name>Application Parameter Length</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>160</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF980</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<SafetyMapping>SP</SafetyMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>FSoE Address</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<SafetyMapping>SP</SafetyMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT0803EN01</Name>
+								<BaseType>BIT1</BaseType>
+								<Comment LcId="1033">Assignment for switch-off delay</Comment>
+								<Comment LcId="1031">Zuordnung der Abschaltverzögerung</Comment>
+								<BitSize>1</BitSize>
+								<EnumInfo>
+									<Text LcId="1033">Channel 1 and Channel 2</Text>
+									<Text LcId="1031">Kanal 1 und Kanal 2</Text>
+									<Enum>0</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text LcId="1033">Channel 2</Text>
+									<Text LcId="1031">Kanal 2</Text>
+									<Enum>1</Enum>
+								</EnumInfo>
+							</DataType>
+							<DataType>
+								<Name>DT0802EN04</Name>
+								<BaseType>BIT4</BaseType>
+								<Comment LcId="1031">Switch-off delay for stop category 1</Comment>
+								<Comment LcId="1031">Abschaltverzögerung</Comment>
+								<BitSize>4</BitSize>
+								<EnumInfo>
+									<Text LcId="1033">deactivated</Text>
+									<Text LcId="1031">ausgeschaltet</Text>
+									<Enum>0</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>250 ms</Text>
+									<Enum>1</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>500 ms</Text>
+									<Enum>2</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>1 s</Text>
+									<Enum>3</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>2 s</Text>
+									<Enum>4</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>4 s</Text>
+									<Enum>5</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>8 s</Text>
+									<Enum>6</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>16 s</Text>
+									<Enum>7</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>32 s</Text>
+									<Enum>8</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>64 s</Text>
+									<Enum>9</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>128 s</Text>
+									<Enum>10</Enum>
+								</EnumInfo>
+							</DataType>
+							<DataType>
+								<Name>DT0804EN01</Name>
+								<BaseType>BIT1</BaseType>
+								<Comment LcId="1033">Test Impulses (Output switched off)</Comment>
+								<Comment LcId="1031">Testimpulse bei ausgeschaltetem Ausgang</Comment>
+								<BitSize>1</BitSize>
+								<EnumInfo>
+									<Text LcId="1033">deactivated</Text>
+									<Text LcId="1031">ausgeschaltet</Text>
+									<Enum>0</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text LcId="1033">activated</Text>
+									<Text LcId="1031">eingeschaltet</Text>
+									<Enum>1</Enum>
+								</EnumInfo>
+							</DataType>
+							<DataType>
+								<Name>DT0801EN02</Name>
+								<BaseType>BIT2</BaseType>
+								<Comment LcId="1033">Assignment</Comment>
+								<Comment LcId="1031">Belegung</Comment>
+								<BitSize>2</BitSize>
+								<EnumInfo>
+									<Text LcId="1033">both not used</Text>
+									<Text LcId="1031">beide nicht belegt</Text>
+									<Enum>0</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text LcId="1033">used, both 1-channel</Text>
+									<Text LcId="1031">belegt, beide 1-kanalig</Text>
+									<Enum>1</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text LcId="1033">used, 2-channel</Text>
+									<Text LcId="1031">belegt, 2-kanalig</Text>
+									<Enum>2</Enum>
+								</EnumInfo>
+							</DataType>
+							<DataType>
+								<Name>DT0805EN02</Name>
+								<BaseType>BIT2</BaseType>
+								<Comment LcId="1033">ZVEI-Class</Comment>
+								<Comment LcId="1031">ZVEI-Klasse</Comment>
+								<BitSize>2</BitSize>
+								<EnumInfo>
+									<Text LcId="1033">Class 0: up to 3 ms</Text>
+									<Text LcId="1031">Klasse 0: bis 3 ms</Text>
+									<Enum>0</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text LcId="1033">Class 1: up to 1 ms</Text>
+									<Text LcId="1031">Klasse 1: bis 1 ms</Text>
+									<Enum>1</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text LcId="1033">Class 2: up to 500 µs</Text>
+									<Text LcId="1031">Klasse 2: bis 500 µs</Text>
+									<Enum>2</Enum>
+								</EnumInfo>
+							</DataType>
+						</DataTypes>
+						<Objects>
+							<Object>
+								<Index DependOnSlot="1">#x6000</Index>
+								<Name>FSOE Slave Frame Elements</Name>
+								<Type>DT6000</Type>
+								<BitSize>64</BitSize>
+								<Info>
+									<SubItem>
+										<Name>SubIndex 000</Name>
+										<Info>
+											<DefaultData>03</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>FSoE Slave CMD</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>FSoE Slave ConnID</Name>
+										<Info>
+											<DefaultData>0000</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>FSoE Slave CRC_0</Name>
+										<Info>
+											<DefaultData>0000</DefaultData>
+										</Info>
+									</SubItem>
+								</Info>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x7000</Index>
+								<Name>FSOE Master Frame Elements</Name>
+								<Type>DT7000</Type>
+								<BitSize>56</BitSize>
+								<Info>
+									<SubItem>
+										<Name>SubIndex 000</Name>
+										<Info>
+											<DefaultData>03</DefaultData>
+										</Info>
+									</SubItem>
+								</Info>
+								<Flags>
+									<Access>ro</Access>
+									<SdoAccess>SubIndexAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x7001</Index>
+								<Name>FSOE Outputs</Name>
+								<Type>DT7001</Type>
+								<BitSize>24</BitSize>
+								<Info>
+									<SubItem>
+										<Name>SubIndex 000</Name>
+										<Info>
+											<DefaultData>04</DefaultData>
+										</Info>
+									</SubItem>
+								</Info>
+								<Flags>
+									<Access>ro</Access>
+									<SdoAccess>SubIndexAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x8000</Index>
+								<Name>FSDO4_2</Name>
+								<Type>DT8000</Type>
+								<BitSize>64</BitSize>
+								<Info>
+									<SubItem>
+										<Name>SubIndex 000</Name>
+										<Info>
+											<DefaultData>0C</DefaultData>
+										</Info>
+									</SubItem>
+									<!-- PSTD-ID -->
+									<SubItem>
+										<Name>PSTD-ID MSB</Name>
+										<Info>
+											<DefaultData>22</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>PSTD-ID LSB</Name>
+										<Info>
+											<DefaultData>02</DefaultData>
+										</Info>
+									</SubItem>
+									<!-- Ausgang 00 -->
+									<SubItem>
+										<Name>Output pair 00: Assignment</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Output pair 00: Switch-off delay for stop category 1</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Output pair 00: Assignment for switch-off delay</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Output pair 00: Test Impulses (Output switched off)</Name>
+										<Info>
+											<DefaultData>01</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Output pair 00: ZVEI-Class</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<!-- Ausgang 01 -->
+									<SubItem>
+										<Name>Output pair 01: Assignment</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Output pair 01: Switch-off delay for stop category 1</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Output pair 01: Assignment for switch-off delay</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Output pair 01: Test Impulses (Output switched off)</Name>
+										<Info>
+											<DefaultData>01</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Output pair 01: ZVEI-Class</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+								</Info>
+								<Flags>
+									<Access>rw</Access>
+									<Category>o</Category>
+									<SafetyMapping>SP</SafetyMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x9001</Index>
+								<Name>FSOE Communication Parameter</Name>
+								<Type>DT9001</Type>
+								<BitSize>176</BitSize>
+								<Info>
+									<SubItem>
+										<Name>SubIndex 000</Name>
+										<Info>
+											<DefaultData>08</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Safe Address</Name>
+										<Info>
+											<MinData>0100</MinData>
+											<MaxData>FFFF</MaxData>
+											<DefaultData>6400</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Connection ID</Name>
+										<Info>
+											<DefaultData>0100</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Watchdog Time</Name>
+										<Info>
+											<MinData>0A00</MinData>
+											<MaxData>FFFF</MaxData>
+											<DefaultData>6400</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Connection Type</Name>
+										<Info>
+											<DefaultData>0100</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Communication Parameter Length</Name>
+										<Info>
+											<DefaultData>0200</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Application Parameter Length</Name>
+										<Info>
+											<DefaultData>0000</DefaultData>
+										</Info>
+									</SubItem>
+								</Info>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</Object>
+						</Objects>
+					</Dictionary>
+				</Profile>
+			</Module>
+			<!--FSDI8_3-->
+			<Module Crc32="#xF278C4A0">
+				<Type ModuleIdent="#x000F1D25" ModuleClass="FSOE_TERM" ModulePdoGroup="1" SRA_ParameterSupported="0">AXL SE FSDI8/3</Type>
+				<Name>AXL SE FSDI8/3</Name>
+				<RxPdo Fixed="true" Sm="2">
+					<Index DependOnSlot="1">#x1600</Index>
+					<Name>RxPDO</Name>
+					<Entry>
+						<Index DependOnSlot="1">#x7000</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>FSoE Master CMD</Name>
+						<DataType>USINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x0000</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x7000</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>FSoE Master CRC_0</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x7000</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>FSoE Master ConnID</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+				</RxPdo>
+				<TxPdo Fixed="true" Sm="3">
+					<Index DependOnSlot="1">#x1A00</Index>
+					<Name>TxPDO</Name>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>FSoE Slave CMD</Name>
+						<DataType>USINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6001</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>InputChannel1</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6001</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>InputChannel2</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6001</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>InputChannel3</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6001</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>InputChannel4</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6001</Index>
+						<SubIndex>5</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>InputChannel5</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6001</Index>
+						<SubIndex>6</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>InputChannel6</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6001</Index>
+						<SubIndex>7</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>InputChannel7</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6001</Index>
+						<SubIndex>8</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>InputChannel8</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>FSoE Slave CRC_0</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>FSoE Slave ConnID</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+				</TxPdo>
+				<SafetyParaMapping Fixed="true">
+					<Index>#x1E00</Index>
+					<Name>SafetyParameterSet</Name>
+					<Entry>
+						<Index DependOnSlot="1">#x9001</Index>
+						<SubIndex>7</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Communication Parameter Length</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x9001</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Watchdog Time</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x9001</Index>
+						<SubIndex>8</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Application Parameter Length</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<!-- PSTD-ID -->
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>PSTD-ID MSB</Name>
+						<DataType>USINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>PSTD-ID LSB</Name>
+						<DataType>USINT</DataType>
+					</Entry>
+					<!-- Eingang 00 -->
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Input pair 00: Assignment</Name>
+						<Name LcId="1031">Eingangspaar 00: Belegung</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Input pair 00: Maximum filter time</Name>
+						<Name LcId="1031">Eingangspaar 00: Maximale Filterzeit</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>5</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Input pair 00: Symmetry Monitoring</Name>
+						<Name LcId="1031">Eingangspaar 00: Symmetrie</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>6</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">Input pair 00: Start inhibit due to symmetry violation</Name>
+						<Name LcId="1031">Eingangspaar 00: Einschaltsperre bei Symmetrieverletzung</Name>
+						<DataType>BIT1</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>7</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">Input pair 00: Cross-circuit detection</Name>
+						<Name LcId="1031">Eingangspaar 00: Querschlussüberwachung</Name>
+						<DataType>BIT1</DataType>
+					</Entry>
+					<!-- Eingang 01 -->
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>8</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Input pair 01: Assignment</Name>
+						<Name LcId="1031">Eingangspaar 01: Belegung</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>9</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Input pair 01: Maximum filter time</Name>
+						<Name LcId="1031">Eingangspaar 01: Maximale Filterzeit</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>10</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Input pair 01: Symmetry Monitoring</Name>
+						<Name LcId="1031">Eingangspaar 01: Symmetrie</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>11</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">Input pair 01: Start inhibit due to symmetry violation</Name>
+						<Name LcId="1031">Eingangspaar 01: Einschaltsperre bei Symmetrieverletzung</Name>
+						<DataType>BIT1</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>12</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">Input pair 01: Cross-circuit detection</Name>
+						<Name LcId="1031">Eingangspaar 01: Querschlussüberwachung</Name>
+						<DataType>BIT1</DataType>
+					</Entry>
+					<!-- Eingang 02 -->
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>13</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Input pair 02: Assignment</Name>
+						<Name LcId="1031">Eingangspaar 02: Belegung</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>14</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Input pair 02: Maximum filter time</Name>
+						<Name LcId="1031">Eingangspaar 02: Maximale Filterzeit</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>15</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Input pair 02: Symmetry Monitoring</Name>
+						<Name LcId="1031">Eingangspaar 02: Symmetrie</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>16</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">Input pair 02: Start inhibit due to symmetry violation</Name>
+						<Name LcId="1031">Eingangspaar 02: Einschaltsperre bei Symmetrieverletzung</Name>
+						<DataType>BIT1</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>17</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">Input pair 02: Cross-circuit detection</Name>
+						<Name LcId="1031">Eingangspaar 02: Querschlussüberwachung</Name>
+						<DataType>BIT1</DataType>
+					</Entry>
+					<!-- Eingang 03 -->
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>18</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Input pair 03: Assignment</Name>
+						<Name LcId="1031">Eingangspaar 03: Belegung</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>19</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Input pair 03: Maximum filter time</Name>
+						<Name LcId="1031">Eingangspaar 03: Maximale Filterzeit</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>20</SubIndex>
+						<BitLen>2</BitLen>
+						<Name LcId="1033">Input pair 03: Symmetry Monitoring</Name>
+						<Name LcId="1031">Eingangspaar 03: Symmetrie</Name>
+						<DataType>BIT2</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>21</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">Input pair 03: Start inhibit due to symmetry violation</Name>
+						<Name LcId="1031">Eingangspaar 03: Einschaltsperre bei Symmetrieverletzung</Name>
+						<DataType>BIT1</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x8000</Index>
+						<SubIndex>22</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">Input pair 03: Cross-circuit detection</Name>
+						<Name LcId="1031">Eingangspaar 03: Querschlussüberwachung</Name>
+						<DataType>BIT1</DataType>
+					</Entry>
+				</SafetyParaMapping>
+				<Profile>
+					<ProfileNo>5001</ProfileNo>
+					<Dictionary>
+						<DataTypes>
+							<DataType>
+								<Name>BOOL</Name>
+								<BitSize>1</BitSize>
+							</DataType>
+							<DataType>
+								<Name>BIT1</Name>
+								<BitSize>1</BitSize>
+							</DataType>
+							<DataType>
+								<Name>BIT2</Name>
+								<BitSize>2</BitSize>
+							</DataType>
+							<DataType>
+								<Name>BIT3</Name>
+								<BitSize>3</BitSize>
+							</DataType>
+							<DataType>
+								<Name>BIT4</Name>
+								<BitSize>4</BitSize>
+							</DataType>
+							<DataType>
+								<Name>USINT</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<Name>UINT</Name>
+								<BitSize>16</BitSize>
+							</DataType>
+							<DataType>
+								<Name>BYTE</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<Name>ARRAY [0..5] OF BYTE</Name>
+								<BaseType>BYTE</BaseType>
+								<BitSize>48</BitSize>
+								<ArrayInfo>
+									<LBound>0</LBound>
+									<Elements>6</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>STRING(2)</Name>
+								<BitSize>16</BitSize>
+							</DataType>
+							<DataType>
+								<Name>DT6000</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>FSoE Slave CMD</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>FSoE Slave ConnID</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>FSoE Slave CRC_0</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>40</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT6001</Name>
+								<BitSize>24</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>InputChannel1</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>InputChannel2</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>17</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>InputChannel3</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>18</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>InputChannel4</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>19</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>InputChannel5</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>20</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>InputChannel6</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>21</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>7</SubIdx>
+									<Name>InputChannel7</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>22</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>8</SubIdx>
+									<Name>InputChannel8</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>23</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT7000</Name>
+								<BitSize>56</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>FSoE Master CMD</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>FSoE Master CRC_0</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>FSoE Master ConnID</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>40</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT8000</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<!-- PSTD-ID -->
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>PSTD-ID MSB</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<SafetyMapping>SP</SafetyMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>PSTD-ID LSB</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<SafetyMapping>SP</SafetyMapping>
+									</Flags>
+								</SubItem>
+								<!-- Eingang 00 -->
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Input pair 00: Assignment</Name>
+									<DisplayName LcId="1033">Input pair 00: Assignment</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 00: Belegung</DisplayName>
+									<Type>DT0801EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>32</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Input pair 00: Maximum filter time</Name>
+									<DisplayName LcId="1033">Input pair 00: Maximum filter time</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 00: Maximale Filterzeit</DisplayName>
+									<Type>DT0802EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>34</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Input pair 00: Symmetry Monitoring</Name>
+									<DisplayName LcId="1033">Input pair 00: Symmetry Monitoring</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 00: Symmetrie</DisplayName>
+									<Type>DT0803EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>36</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>Input pair 00: Start inhibit due to symmetry violation</Name>
+									<DisplayName LcId="1033">Input pair 00: Start inhibit due to symmetry violation</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 00: Einschaltsperre bei Symmetrieverletzung</DisplayName>
+									<Type>DT0804EN01</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>38</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>7</SubIdx>
+									<Name>Input pair 00: Cross-circuit detection</Name>
+									<DisplayName LcId="1033">Input pair 00: Cross-circuit detection</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 00: Querschlussüberwachung</DisplayName>
+									<Type>DT0805EN01</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>39</BitOffs>
+								</SubItem>
+								<!-- Eingang 01 -->
+								<SubItem>
+									<SubIdx>8</SubIdx>
+									<Name>Input pair 01: Assignment</Name>
+									<DisplayName LcId="1033">Input pair 01: Assignment</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 01: Belegung</DisplayName>
+									<Type>DT0801EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>40</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>9</SubIdx>
+									<Name>Input pair 01: Maximum filter time</Name>
+									<DisplayName LcId="1033">Input pair 01: Maximum filter time</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 01: Maximale Filterzeit</DisplayName>
+									<Type>DT0802EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>42</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>10</SubIdx>
+									<Name>Input pair 01: Symmetry Monitoring</Name>
+									<DisplayName LcId="1033">Input pair 01: Symmetry Monitoring</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 01: Symmetrie</DisplayName>
+									<Type>DT0803EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>44</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>11</SubIdx>
+									<Name>Input pair 01: Start inhibit due to symmetry violation</Name>
+									<DisplayName LcId="1033">Input pair 01: Start inhibit due to symmetry violation</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 01: Einschaltsperre bei Symmetrieverletzung</DisplayName>
+									<Type>DT0804EN01</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>46</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>12</SubIdx>
+									<Name>Input pair 01: Cross-circuit detection</Name>
+									<DisplayName LcId="1033">Input pair 01: Cross-circuit detection</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 01: Querschlussüberwachung</DisplayName>
+									<Type>DT0805EN01</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>47</BitOffs>
+								</SubItem>
+								<!-- Eingang 02 -->
+								<SubItem>
+									<SubIdx>13</SubIdx>
+									<Name>Input pair 02: Assignment</Name>
+									<DisplayName LcId="1033">Input pair 02: Assignment</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 02: Belegung</DisplayName>
+									<Type>DT0801EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>48</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>14</SubIdx>
+									<Name>Input pair 02: Maximum filter time</Name>
+									<DisplayName LcId="1033">Input pair 02: Maximum filter time</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 02: Maximale Filterzeit</DisplayName>
+									<Type>DT0802EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>50</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>15</SubIdx>
+									<Name>Input pair 02: Symmetry Monitoring</Name>
+									<DisplayName LcId="1033">Input pair 02: Symmetry Monitoring</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 02: Symmetrie</DisplayName>
+									<Type>DT0803EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>52</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>16</SubIdx>
+									<Name>Input pair 02: Start inhibit due to symmetry violation</Name>
+									<DisplayName LcId="1033">Input pair 02: Start inhibit due to symmetry violation</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 02: Einschaltsperre bei Symmetrieverletzung</DisplayName>
+									<Type>DT0804EN01</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>54</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>17</SubIdx>
+									<Name>Input pair 02: Cross-circuit detection</Name>
+									<DisplayName LcId="1033">Input pair 02: Cross-circuit detection</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 02: Querschlussüberwachung</DisplayName>
+									<Type>DT0805EN01</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>55</BitOffs>
+								</SubItem>
+								<!-- Eingang 03 -->
+								<SubItem>
+									<SubIdx>18</SubIdx>
+									<Name>Input pair 03: Assignment</Name>
+									<DisplayName LcId="1033">Input pair 03: Assignment</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 03: Belegung</DisplayName>
+									<Type>DT0801EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>56</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>19</SubIdx>
+									<Name>Input pair 03: Maximum filter time</Name>
+									<DisplayName LcId="1033">Input pair 03: Maximum filter time</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 03: Maximale Filterzeit</DisplayName>
+									<Type>DT0802EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>58</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>20</SubIdx>
+									<Name>Input pair 03: Symmetry Monitoring</Name>
+									<DisplayName LcId="1033">Input pair 03: Symmetry Monitoring</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 03: Symmetrie</DisplayName>
+									<Type>DT0803EN02</Type>
+									<BitSize>2</BitSize>
+									<BitOffs>60</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>21</SubIdx>
+									<Name>Input pair 03: Start inhibit due to symmetry violation</Name>
+									<DisplayName LcId="1033">Input pair 03: Start inhibit due to symmetry violation</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 03: Einschaltsperre bei Symmetrieverletzung</DisplayName>
+									<Type>DT0804EN01</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>62</BitOffs>
+								</SubItem>
+								<SubItem>
+									<SubIdx>22</SubIdx>
+									<Name>Input pair 03: Cross-circuit detection</Name>
+									<DisplayName LcId="1033">Input pair 03: Cross-circuit detection</DisplayName>
+									<DisplayName LcId="1031">Eingangspaar 03: Querschlussüberwachung</DisplayName>
+									<Type>DT0805EN01</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>63</BitOffs>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT9001</Name>
+								<BitSize>176</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Version</Name>
+									<Type>STRING(2)</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Safe Address</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Connection ID</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Watchdog Time</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>64</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Unique ID</Name>
+									<Type>ARRAY [0..5] OF BYTE</Type>
+									<BitSize>48</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>Connection Type</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>128</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>7</SubIdx>
+									<Name>Communication Parameter Length</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>144</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>8</SubIdx>
+									<Name>Application Parameter Length</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>160</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF980</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<SafetyMapping>SP</SafetyMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>FSoE Address</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+										<SafetyMapping>SP</SafetyMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT0805EN01</Name>
+								<BaseType>BIT1</BaseType>
+								<Comment LcId="1033">Cross-circuit detection</Comment>
+								<Comment LcId="1031">Querschlussüberwachung</Comment>
+								<BitSize>1</BitSize>
+								<EnumInfo>
+									<Text LcId="1033">deactivated</Text>
+									<Text LcId="1031">ausgeschaltet</Text>
+									<Enum>0</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text LcId="1033">activated</Text>
+									<Text LcId="1031">eingeschaltet</Text>
+									<Enum>1</Enum>
+								</EnumInfo>
+							</DataType>
+							<DataType>
+								<Name>DT0804EN01</Name>
+								<BaseType>BIT1</BaseType>
+								<Comment LcId="1033">Start inhibit due to symmetry violation</Comment>
+								<Comment LcId="1031">Einschaltsperre bei Symmetrieverletzung</Comment>
+								<BitSize>1</BitSize>
+								<EnumInfo>
+									<Text LcId="1033">deactivated</Text>
+									<Text LcId="1031">ausgeschaltet</Text>
+									<Enum>0</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text LcId="1033">activated</Text>
+									<Text LcId="1031">eingeschaltet</Text>
+									<Enum>1</Enum>
+								</EnumInfo>
+							</DataType>
+							<DataType>
+								<Name>DT0803EN02</Name>
+								<BaseType>BIT2</BaseType>
+								<Comment LcId="1033">Symmetry Monitoring</Comment>
+								<Comment LcId="1031">Symetrie</Comment>
+								<BitSize>2</BitSize>
+								<EnumInfo>
+									<Text LcId="1033">deactivated</Text>
+									<Text LcId="1031">ausgeschaltet</Text>
+									<Enum>0</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>100 ms</Text>
+									<Enum>1</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>1 s</Text>
+									<Enum>2</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>5 s</Text>
+									<Enum>3</Enum>
+								</EnumInfo>
+							</DataType>
+							<DataType>
+								<Name>DT0802EN02</Name>
+								<BaseType>BIT2</BaseType>
+								<Comment LcId="1033">Maximum filter time</Comment>
+								<Comment LcId="1031">Maximale Filterzeit</Comment>
+								<BitSize>2</BitSize>
+								<EnumInfo>
+									<Text>1,5 ms</Text>
+									<Enum>0</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>3 ms</Text>
+									<Enum>1</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>5 ms</Text>
+									<Enum>2</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text>15 ms</Text>
+									<Enum>3</Enum>
+								</EnumInfo>
+							</DataType>
+							<DataType>
+								<Name>DT0801EN02</Name>
+								<BaseType>BIT2</BaseType>
+								<Comment LcId="1033">Assignment</Comment>
+								<Comment LcId="1031">Belegung</Comment>
+								<BitSize>2</BitSize>
+								<EnumInfo>
+									<Text LcId="1033">both not used</Text>
+									<Text LcId="1031">beide nicht belegt</Text>
+									<Enum>0</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text LcId="1033">used, both 1-channel</Text>
+									<Text LcId="1031">belegt, beide 1-kanalig</Text>
+									<Enum>1</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text LcId="1033">used, 2-channel equivalent</Text>
+									<Text LcId="1031">belegt, 2-kanalig äquivalent</Text>
+									<Enum>2</Enum>
+								</EnumInfo>
+								<EnumInfo>
+									<Text LcId="1033">used, 2-channel non-equivalent</Text>
+									<Text LcId="1031">belegt, 2-kanalig antivalent</Text>
+									<Enum>3</Enum>
+								</EnumInfo>
+							</DataType>
+						</DataTypes>
+						<Objects>
+							<Object>
+								<Index DependOnSlot="1">#x6000</Index>
+								<Name>FSOE Slave Frame Elements</Name>
+								<Type>DT6000</Type>
+								<BitSize>64</BitSize>
+								<Info>
+									<SubItem>
+										<Name>SubIndex 000</Name>
+										<Info>
+											<DefaultData>03</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>FSoE Slave CMD</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>FSoE Slave ConnID</Name>
+										<Info>
+											<DefaultData>0000</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>FSoE Slave CRC_0</Name>
+										<Info>
+											<DefaultData>0000</DefaultData>
+										</Info>
+									</SubItem>
+								</Info>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x6001</Index>
+								<Name>FSOE Inputs</Name>
+								<Type>DT6001</Type>
+								<BitSize>24</BitSize>
+								<Info>
+									<SubItem>
+										<Name>SubIndex 000</Name>
+										<Info>
+											<DefaultData>08</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>InputChannel1</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>InputChannel2</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>InputChannel3</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>InputChannel4</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>InputChannel5</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>InputChannel6</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>InputChannel7</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>InputChannel8</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+								</Info>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+									<SafetyMapping>SP</SafetyMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x7000</Index>
+								<Name>FSOE Master Frame Elements</Name>
+								<Type>DT7000</Type>
+								<BitSize>56</BitSize>
+								<Info>
+									<SubItem>
+										<Name>SubIndex 000</Name>
+										<Info>
+											<DefaultData>03</DefaultData>
+										</Info>
+									</SubItem>
+								</Info>
+								<Flags>
+									<Access>ro</Access>
+									<SdoAccess>SubIndexAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x8000</Index>
+								<Name>FSDI8_3</Name>
+								<Type>DT8000</Type>
+								<BitSize>64</BitSize>
+								<Info>
+									<SubItem>
+										<Name>SubIndex 000</Name>
+										<Info>
+											<DefaultData>16</DefaultData>
+										</Info>
+									</SubItem>
+									<!-- PSTD-ID -->
+									<SubItem>
+										<Name>PSTD-ID MSB</Name>
+										<Info>
+											<DefaultData>10</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>PSTD-ID LSB</Name>
+										<Info>
+											<DefaultData>02</DefaultData>
+										</Info>
+									</SubItem>
+									<!-- Eingang 00 -->
+									<SubItem>
+										<Name>Input pair 00: Assignment</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 00: Maximum filter time</Name>
+										<Info>
+											<DefaultData>01</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 00: Symmetry Monitoring</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 00: Start inhibit due to symmetry violation</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 00: Cross-circuit detection</Name>
+										<Info>
+											<DefaultData>01</DefaultData>
+										</Info>
+									</SubItem>
+									<!-- Eingang 01 -->
+									<SubItem>
+										<Name>Input pair 01: Assignment</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 01: Maximum filter time</Name>
+										<Info>
+											<DefaultData>01</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 01: Symmetry Monitoring</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 01: Start inhibit due to symmetry violation</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 01: Cross-circuit detection</Name>
+										<Info>
+											<DefaultData>01</DefaultData>
+										</Info>
+									</SubItem>
+									<!-- Eingang 02 -->
+									<SubItem>
+										<Name>Input pair 02: Assignment</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 02: Maximum filter time</Name>
+										<Info>
+											<DefaultData>01</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 02: Symmetry Monitoring</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 02: Start inhibit due to symmetry violation</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 02: Cross-circuit detection</Name>
+										<Info>
+											<DefaultData>01</DefaultData>
+										</Info>
+									</SubItem>
+									<!-- Eingang 03 -->
+									<SubItem>
+										<Name>Input pair 03: Assignment</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 03: Maximum filter time</Name>
+										<Info>
+											<DefaultData>01</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 03: Symmetry Monitoring</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 03: Start inhibit due to symmetry violation</Name>
+										<Info>
+											<DefaultData>00</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Input pair 03: Cross-circuit detection</Name>
+										<Info>
+											<DefaultData>01</DefaultData>
+										</Info>
+									</SubItem>
+								</Info>
+								<Flags>
+									<Access>rw</Access>
+									<Category>o</Category>
+									<SafetyMapping>SP</SafetyMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x9001</Index>
+								<Name>FSOE Communication Parameter</Name>
+								<Type>DT9001</Type>
+								<BitSize>176</BitSize>
+								<Info>
+									<SubItem>
+										<Name>SubIndex 000</Name>
+										<Info>
+											<DefaultData>08</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Safe Address</Name>
+										<Info>
+											<MinData>0100</MinData>
+											<MaxData>FFFF</MaxData>
+											<DefaultData>6400</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Connection ID</Name>
+										<Info>
+											<DefaultData>0100</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Watchdog Time</Name>
+										<Info>
+											<MinData>0A00</MinData>
+											<MaxData>FFFF</MaxData>
+											<DefaultData>6400</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Connection Type</Name>
+										<Info>
+											<DefaultData>0100</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Communication Parameter Length</Name>
+										<Info>
+											<DefaultData>0200</DefaultData>
+										</Info>
+									</SubItem>
+									<SubItem>
+										<Name>Application Parameter Length</Name>
+										<Info>
+											<DefaultData>0000</DefaultData>
+										</Info>
+									</SubItem>
+								</Info>
+								<Flags>
+									<Access>ro</Access>
+									<Category>o</Category>
+								</Flags>
+							</Object>
+						</Objects>
+					</Dictionary>
+				</Profile>
+			</Module>
+		</Modules>
+	</Descriptions>
+</EtherCATInfo>

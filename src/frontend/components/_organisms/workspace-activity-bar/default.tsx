@@ -1,4 +1,10 @@
+import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { evaluatePreBuildPlcGate } from '@root/middleware/shared/utils/build-gate/pre-build-plc-gate'
+import {
+  evaluateRuntimeCapabilityGate,
+  requiredRuntimeFeatures,
+  runtimeCapabilityStateFor,
+} from '@root/middleware/shared/utils/build-gate/runtime-capability-gate'
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { composeLibraryDebugHarness } from '@root/middleware/shared/utils/library-debug/compose-library-debug-harness'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
@@ -400,6 +406,43 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         addLog({ level: 'error', message: AI_PENDING_CHANGES_REFUSAL })
         setIsCompiling(false)
         return
+      }
+
+      // Target-capability gate: refuses a project that needs EtherCAT features the connected
+      // runtime does not advertise, read again here. Offline the build goes ahead with a warning.
+      {
+        const state = store.getState()
+        const connected = state.runtimeConnection.connectionStatus === 'connected'
+        const remoteDevices = state.project.data.remoteDevices
+        let advertisedFeatures = state.runtimeConnection.runtimeFeatures ?? undefined
+        let unavailableReason: string | undefined
+        if (connected && requiredRuntimeFeatures(remoteDevices).length > 0) {
+          const caps = await runtime.getRuntimeCapabilities()
+          if (caps.features !== null) {
+            state.deviceActions.setRuntimeFeatures(caps.features)
+            advertisedFeatures = caps.features
+          } else {
+            advertisedFeatures = undefined
+            unavailableReason = caps.error ?? 'no answer from the runtime'
+          }
+        }
+        const gate = evaluateRuntimeCapabilityGate(
+          runtimeCapabilityStateFor({
+            remoteDevices,
+            advertisement: { connected, advertisedFeatures, unavailableReason },
+          }),
+        )
+        if (gate.kind === 'refuse') {
+          addLog({ level: 'error', message: `Build refused: ${gate.reason}` })
+          toast({
+            title: 'Build refused',
+            description: gate.reason,
+            variant: 'fail',
+          })
+          setIsCompiling(false)
+          return
+        }
+        if (gate.warning !== undefined) addLog({ level: 'warning', message: gate.warning })
       }
 
       addLog({ level: 'info', message: 'Build process started' })
