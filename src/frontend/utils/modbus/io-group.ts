@@ -121,10 +121,19 @@ export const IO_GROUP_ERROR_HANDLING_OPTIONS: ReadonlyArray<{ value: ModbusError
 ]
 
 /** The values the New IO Group form starts with (name excepted). */
-export const IO_GROUP_FORM_DEFAULTS = {
-  functionCode: '3' as ModbusFunctionCode,
+export const IO_GROUP_FORM_DEFAULTS: {
+  functionCode: ModbusFunctionCode
+  cycleTime: number
+  offset: string
+  length: number
+  errorHandling: ModbusErrorHandling
+} = {
+  functionCode: '3',
   cycleTime: 100,
   offset: '0',
   length: 1,
-  errorHandling: 'keep-last-value' as ModbusErrorHandling,
+  errorHandling: 'keep-last-value',
 }
+
+/** Longest IO group name, enforced by the form and by import alike. */
+export const IO_GROUP_NAME_MAX_LENGTH = 64

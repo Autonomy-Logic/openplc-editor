@@ -2,6 +2,7 @@ import {
   buildIOGroupExportFileName,
   detectCsvDelimiter,
   detectIOGroupFileFormat,
+  findDuplicateIOGroupNames,
   findIOGroupNameConflicts,
   IO_GROUP_IMPORT_MAX_GROUPS,
   IO_GROUP_TRANSFER_FORMAT_ID,
@@ -15,6 +16,9 @@ import {
 } from '../io-group-transfer'
 
 const HEADER = 'name,functionCode,cycleTime,offset,length,errorHandling'
+
+const envelope = (ioGroups: unknown): string =>
+  JSON.stringify({ format: IO_GROUP_TRANSFER_FORMAT_ID, version: 1, ioGroups })
 
 const sample: IOGroupDraft[] = [
   { name: 'Temperatures', functionCode: '3', cycleTime: 100, offset: '0', length: 10, errorHandling: 'set-to-zero' },
@@ -151,6 +155,27 @@ describe('parseIOGroupsCsv', () => {
     expect(result.errors.map((e) => e.field)).toEqual(['cycleTime', 'offset', 'length'])
   })
 
+  it('accepts only whole numbers for length, in decimal or hex', () => {
+    const result = parseIOGroupsCsv(`name,functionCode,length\nA,3,1e2\nB,3,12.0\nC,3,0x10\n`)
+    expect(result.errors.map((e) => [e.row, e.field])).toEqual([
+      [2, 'length'],
+      [3, 'length'],
+    ])
+    expect(result.errors[0].message).toBe('Length must be a whole number, got "1e2".')
+    expect(parseIOGroupsCsv('name,functionCode,length\nC,3,0x10\n').groups[0].length).toBe(16)
+  })
+
+  it('cuts long user values short in error messages', () => {
+    const result = parseIOGroupsCsv(`name,functionCode\nA,${'9'.repeat(500)}\n`)
+    expect(result.errors[0].message).toContain(`"${'9'.repeat(40)}…"`)
+    expect(result.errors[0].message.length).toBeLessThan(200)
+  })
+
+  it('reports the source row of every accepted group', () => {
+    const result = parseIOGroupsCsv(`${HEADER}\n\nA,3,100,0,1,\nB,4,100,0,1,\n`)
+    expect(result.rows).toEqual([3, 4])
+  })
+
   it('rejects duplicate names case-insensitively', () => {
     const result = parseIOGroupsCsv(`${HEADER}\nPump,3,100,0,1,\npump,4,100,0,1,\n`)
     expect(result.groups).toEqual([])
@@ -205,18 +230,24 @@ describe('parseIOGroupsJson', () => {
     })
   })
 
-  it('parses a bare array with string values and ignores id / ioPoints silently', () => {
-    const result = parseIOGroupsJson(
-      JSON.stringify([{ id: 'x', ioPoints: [], name: 'G1', functionCode: '16', length: '3' }]),
-    )
+  it('accepts string values and ignores id / ioPoints silently', () => {
+    const result = parseIOGroupsJson(envelope([{ id: 'x', ioPoints: [], name: 'G1', functionCode: '16', length: '3' }]))
     expect(result.errors).toEqual([])
     expect(result.warnings).toEqual([])
     expect(result.groups[0]).toMatchObject({ functionCode: '16', length: 3 })
   })
 
+  it('rejects JSON without the format id, bare arrays included', () => {
+    const missing = /Missing "format"/
+    const notExport = /Not an IO group export/
+    expect(parseIOGroupsJson(JSON.stringify([{ name: 'A', functionCode: 3 }])).errors[0].message).toMatch(notExport)
+    expect(parseIOGroupsJson('{"ioGroups":[{"name":"A","functionCode":3}]}').errors[0].message).toMatch(missing)
+    expect(parseIOGroupsJson('{"foo":1}').errors[0].message).toMatch(missing)
+  })
+
   it('warns once about unknown fields', () => {
     const result = parseIOGroupsJson(
-      JSON.stringify([
+      envelope([
         { name: 'A', functionCode: 3, note: 1 },
         { name: 'B', functionCode: 3, note: 2 },
       ]),
@@ -231,15 +262,17 @@ describe('parseIOGroupsJson', () => {
     expect(
       parseIOGroupsJson(`{"format":"${IO_GROUP_TRANSFER_FORMAT_ID}","version":99,"ioGroups":[]}`).errors[0].message,
     ).toMatch(/version 99/)
-    expect(parseIOGroupsJson('{"foo":1}').errors[0].message).toMatch(/Missing "ioGroups"/)
-    expect(parseIOGroupsJson('{"ioGroups":{}}').errors[0].message).toMatch(/must be an array/)
-    expect(parseIOGroupsJson('42').errors[0].message).toMatch(/Expected a JSON array/)
-    expect(parseIOGroupsJson('[]').errors[0].message).toBe('The file contains no IO groups.')
+    expect(parseIOGroupsJson(`{"format":"${IO_GROUP_TRANSFER_FORMAT_ID}"}`).errors[0].message).toMatch(
+      /Missing "ioGroups"/,
+    )
+    expect(parseIOGroupsJson(envelope({})).errors[0].message).toMatch(/must be an array/)
+    expect(parseIOGroupsJson('42').errors[0].message).toMatch(/Not an IO group export/)
+    expect(parseIOGroupsJson(envelope([])).errors[0].message).toBe('The file contains no IO groups.')
   })
 
   it('rejects wrong value types with the item position', () => {
     const result = parseIOGroupsJson(
-      JSON.stringify([
+      envelope([
         { name: 'A', functionCode: 3 },
         'nope',
         { name: 'C', functionCode: true },
@@ -277,6 +310,13 @@ describe('round trip', () => {
     expect(parseIOGroupsCsv(csv).groups[0].name).toBe('=HYPERLINK("x")')
   })
 
+  it('keeps a name that really starts with an apostrophe', () => {
+    for (const name of ["'=sum", "'plain", "''double"]) {
+      const csv = serializeIOGroupsToCsv([{ ...sample[0], name }])
+      expect(parseIOGroupsCsv(csv).groups[0].name).toBe(name)
+    }
+  })
+
   it('writes a BOM and CRLF line endings in CSV', () => {
     const csv = serializeIOGroupsToCsv(sample)
     expect(csv.startsWith(`\uFEFF${HEADER}\r\n`)).toBe(true)
@@ -294,7 +334,15 @@ describe('file helpers', () => {
   })
 
   it('finds name conflicts with existing groups case-insensitively', () => {
-    expect(findIOGroupNameConflicts(sample, ['temperatures', 'Other'])).toEqual(['Temperatures'])
+    expect(findIOGroupNameConflicts(sample, ['Other', 'coils', 'temperatures'])).toEqual([
+      { name: 'Temperatures', index: 0 },
+      { name: 'Coils', index: 2 },
+    ])
+  })
+
+  it('finds names that already repeat on the device', () => {
+    expect(findDuplicateIOGroupNames(['A', 'b', 'a', 'B', 'a', 'c'])).toEqual(['a', 'B'])
+    expect(findDuplicateIOGroupNames(['A', 'B'])).toEqual([])
   })
 
   it('builds a filesystem-safe export name', () => {

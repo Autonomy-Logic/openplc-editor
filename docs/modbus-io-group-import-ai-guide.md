@@ -41,7 +41,7 @@ Hard rules the importer enforces:
 - For write codes (5, 6, 15, 16), `errorHandling` is ignored. Leave it empty or use `keep-last-value`.
 - `name` must be unique within the file and also unique against groups already on the device when appending. The comparison ignores letter case.
 - `name` is at most 64 characters, with no tabs, line breaks or other control characters.
-- Integers only: no decimals, no `1e3`. Hexadecimal `0x…` is accepted for `offset`.
+- Integers only: no decimals, no `1e3`. Hexadecimal `0x…` is accepted for `offset`, `length` and `cycleTime`.
 - A file holds at most 2000 groups and 2 MB.
 
 ---
@@ -181,7 +181,7 @@ Reset_Counters,6,1000,300,1,
 }
 ```
 
-The importer is tolerant, but generate the canonical form above. Tolerated variants include a bare array instead of the envelope, `"FC 3"` or the form label as `functionCode`, a `;` or tab delimiter in CSV, and form labels such as `Function Code` as CSV headers.
+The JSON envelope is mandatory: a file without `"format": "openplc-modbus-io-groups"`, including a bare array of groups, is rejected. Within it the importer is tolerant, but generate the canonical form above. Tolerated variants include `"FC 3"` or the form label as `functionCode`, a `;` or tab delimiter in CSV, and form labels such as `Function Code` as CSV headers.
 
 ---
 

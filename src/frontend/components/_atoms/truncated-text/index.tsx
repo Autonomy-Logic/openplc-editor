@@ -12,9 +12,8 @@ type TruncatedTextProps = {
 
 /**
  * Single-line text that ends in an ellipsis when it does not fit its
- * container, and reveals the full value in a tooltip on hover or keyboard
- * focus — but only while it is actually clipped, so short values never get a
- * redundant tooltip.
+ * container, and reveals the full value in a tooltip on hover — but only
+ * while it is actually clipped, so short values never get a redundant tooltip.
  *
  * The cut is CSS-driven (`text-overflow: ellipsis`), so it follows the real
  * column width as the editor is resized instead of a fixed character count.

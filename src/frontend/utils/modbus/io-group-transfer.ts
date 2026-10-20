@@ -3,6 +3,7 @@ import {
   IO_GROUP_ERROR_HANDLING_OPTIONS,
   IO_GROUP_FORM_DEFAULTS,
   IO_GROUP_FUNCTION_CODE_OPTIONS,
+  IO_GROUP_NAME_MAX_LENGTH,
   isReadFunctionCode,
   isSingleElementFunctionCode,
   validateIOGroupLength,
@@ -45,6 +46,8 @@ export type IOGroupImportIssue = {
 
 export type IOGroupImportResult = {
   groups: IOGroupDraft[]
+  /** Source row of each entry in `groups`, same order. */
+  rows: number[]
   errors: IOGroupImportIssue[]
   warnings: IOGroupImportIssue[]
 }
@@ -57,7 +60,6 @@ export const IO_GROUP_TRANSFER_VERSION = 1
 export const IO_GROUP_IMPORT_MAX_FILE_BYTES = 2 * 1024 * 1024
 /** Upper bound on groups per file — guards the UI and the address allocator. */
 export const IO_GROUP_IMPORT_MAX_GROUPS = 2000
-export const IO_GROUP_NAME_MAX_LENGTH = 64
 export const IO_GROUP_CYCLE_TIME_MIN_MS = 1
 export const IO_GROUP_CYCLE_TIME_MAX_MS = 3_600_000
 /** Modbus addresses are 16-bit: 0 … 65535. */
@@ -115,7 +117,14 @@ type Coerced<T> = { ok: true; value: T } | { ok: false; message: string }
 const isBlank = (value: RawValue): boolean =>
   value === undefined || value === null || (typeof value === 'string' && value.trim() === '')
 
-const formatValue = (value: RawValue): string => (typeof value === 'string' ? `"${value}"` : JSON.stringify(value))
+const ECHO_MAX_LENGTH = 40
+
+/** A user value quoted for an error message, cut short so a huge cell cannot flood the issue list. */
+const formatValue = (value: RawValue): string => {
+  const text = typeof value === 'string' ? value : (JSON.stringify(value) ?? String(value))
+  const clipped = text.length > ECHO_MAX_LENGTH ? `${text.slice(0, ECHO_MAX_LENGTH)}…` : text
+  return typeof value === 'string' ? `"${clipped}"` : clipped
+}
 
 /**
  * Integers only, in decimal or `0x` hexadecimal (register maps are often
@@ -131,7 +140,8 @@ const coerceInteger = (value: RawValue): number | null => {
   return null
 }
 
-const FUNCTION_CODE_VALUES = new Set<string>(IO_GROUP_FUNCTION_CODE_OPTIONS.map((o) => o.value))
+const findFunctionCode = (code: string): ModbusFunctionCode | undefined =>
+  IO_GROUP_FUNCTION_CODE_OPTIONS.find((o) => o.value === code)?.value
 
 /** Accepts `3`, `"3"`, `"03"`, `"FC3"`, `"FC 3"` or the form label itself. */
 const coerceFunctionCode = (value: RawValue): Coerced<ModbusFunctionCode> => {
@@ -142,9 +152,8 @@ const coerceFunctionCode = (value: RawValue): Coerced<ModbusFunctionCode> => {
   }
 
   if (typeof value === 'number') {
-    return Number.isInteger(value) && FUNCTION_CODE_VALUES.has(String(value))
-      ? { ok: true, value: String(value) as ModbusFunctionCode }
-      : invalid
+    const code = Number.isInteger(value) ? findFunctionCode(String(value)) : undefined
+    return code ? { ok: true, value: code } : invalid
   }
   if (typeof value !== 'string') return invalid
 
@@ -153,8 +162,8 @@ const coerceFunctionCode = (value: RawValue): Coerced<ModbusFunctionCode> => {
   if (byLabel) return { ok: true, value: byLabel.value }
 
   const match = /^(?:fc\s*)?0*(\d{1,2})$/i.exec(trimmed)
-  if (match && FUNCTION_CODE_VALUES.has(match[1])) return { ok: true, value: match[1] as ModbusFunctionCode }
-  return invalid
+  const code = match ? findFunctionCode(match[1]) : undefined
+  return code ? { ok: true, value: code } : invalid
 }
 
 /** Accepts the stored value (`keep-last-value`) or the form label (`Keep last value`). */
@@ -250,14 +259,16 @@ const buildDraft = (
           message: `FC ${functionCode} addresses exactly one element; length ${formatValue(record.length)} was set to 1.`,
         })
     } else if (!isBlank(record.length)) {
-      const raw = typeof record.length === 'number' ? String(record.length) : record.length
-      const validation = typeof raw === 'string' ? validateIOGroupLength(functionCode, raw) : null
+      const parsed = coerceInteger(record.length)
+      const validation = parsed === null ? null : validateIOGroupLength(functionCode, String(parsed))
       if (validation?.ok) length = validation.length
       else {
         lengthOk = false
         fail(
           'length',
-          validation && !validation.ok ? validation.message : `Invalid length ${formatValue(record.length)}.`,
+          validation && !validation.ok
+            ? validation.message
+            : `Length must be a whole number, got ${formatValue(record.length)}.`,
         )
       }
     }
@@ -309,11 +320,13 @@ const finalize = (
   if (!hadRecords && errors.length === 0) errors.push({ row: null, message: 'The file contains no IO groups.' })
   reportDuplicateNames(drafts, errors)
   // Never hand back a partial list: the caller must not import anything while errors remain.
-  return { groups: errors.length === 0 ? drafts.map((d) => d.draft) : [], errors, warnings }
+  const accepted = errors.length === 0 ? drafts : []
+  return { groups: accepted.map((d) => d.draft), rows: accepted.map((d) => d.row), errors, warnings }
 }
 
 const fileLevelError = (message: string): IOGroupImportResult => ({
   groups: [],
+  rows: [],
   errors: [{ row: null, message }],
   warnings: [],
 })
@@ -330,16 +343,21 @@ const CSV_DELIMITER_CANDIDATES = [',', ';', '\t'] as const
  * a decimal comma (pt-BR, de-DE, …).
  */
 export const detectCsvDelimiter = (text: string): string => {
-  const counts = new Map<string, number>(CSV_DELIMITER_CANDIDATES.map((d) => [d, 0]))
+  const counts = CSV_DELIMITER_CANDIDATES.map(() => 0)
   let inQuotes = false
   for (const char of text) {
     if (char === '"') inQuotes = !inQuotes
     else if (!inQuotes && (char === '\n' || char === '\r')) break
-    else if (!inQuotes && counts.has(char)) counts.set(char, counts.get(char)! + 1)
+    else if (!inQuotes) {
+      const index = CSV_DELIMITER_CANDIDATES.findIndex((d) => d === char)
+      if (index >= 0) counts[index] += 1
+    }
   }
-  let best: string = ','
-  for (const delimiter of CSV_DELIMITER_CANDIDATES) if (counts.get(delimiter)! > counts.get(best)!) best = delimiter
-  return best
+  let best = 0
+  counts.forEach((count, index) => {
+    if (count > counts[best]) best = index
+  })
+  return CSV_DELIMITER_CANDIDATES[best]
 }
 
 type CsvRecord = { line: number; cells: string[] }
@@ -410,10 +428,10 @@ export const parseCsv = (text: string, delimiter: string): CsvParseResult => {
 }
 
 /**
- * Undoes the formula-injection guard applied by `escapeCsvCell`: a leading
- * apostrophe in front of a formula trigger character is the guard, not data.
+ * Undoes the guard applied by `escapeCsvCell`: a leading apostrophe in front of a
+ * formula trigger character or of another apostrophe is the guard, not data.
  */
-const unguardCsvCell = (value: string): string => (/^'[=+\-@]/.test(value) ? value.slice(1) : value)
+const unguardCsvCell = (value: string): string => (/^'['=+\-@]/.test(value) ? value.slice(1) : value)
 
 export const parseIOGroupsCsv = (input: string): IOGroupImportResult => {
   const text = stripBom(input)
@@ -452,7 +470,7 @@ export const parseIOGroupsCsv = (input: string): IOGroupImportResult => {
       row: header.line,
       message: `Missing required column${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}. Expected header: ${IO_GROUP_TRANSFER_FIELDS.join(',')}`,
     })
-  if (errors.length > 0) return { groups: [], errors, warnings }
+  if (errors.length > 0) return { groups: [], rows: [], errors, warnings }
 
   if (rows.length > IO_GROUP_IMPORT_MAX_GROUPS)
     return fileLevelError(
@@ -480,10 +498,13 @@ export const parseIOGroupsCsv = (input: string): IOGroupImportResult => {
 // JSON
 // ---------------------------------------------------------------------------
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+
 /**
- * Accepts either the export envelope
- * `{ "format": "openplc-modbus-io-groups", "version": 1, "ioGroups": [...] }`
- * or a bare array of groups, which is what people write by hand.
+ * Accepts only the export envelope
+ * `{ "format": "openplc-modbus-io-groups", "version": 1, "ioGroups": [...] }`,
+ * so an unrelated JSON file is rejected up front.
  */
 export const parseIOGroupsJson = (input: string): IOGroupImportResult => {
   const text = stripBom(input)
@@ -496,25 +517,27 @@ export const parseIOGroupsJson = (input: string): IOGroupImportResult => {
     return fileLevelError(`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`)
   }
 
-  let items: unknown
-  if (Array.isArray(parsed)) items = parsed
-  else if (parsed !== null && typeof parsed === 'object') {
-    const envelope = parsed as Record<string, unknown>
-    if (envelope.format !== undefined && envelope.format !== IO_GROUP_TRANSFER_FORMAT_ID)
+  if (!isRecord(parsed))
+    return fileLevelError(
+      `Not an IO group export. Expected an object with "format": "${IO_GROUP_TRANSFER_FORMAT_ID}" and an "ioGroups" array.`,
+    )
+  const envelope = parsed
+  if (envelope.format === undefined)
+    return fileLevelError(`Missing "format". Expected "format": "${IO_GROUP_TRANSFER_FORMAT_ID}".`)
+  if (envelope.format !== IO_GROUP_TRANSFER_FORMAT_ID)
+    return fileLevelError(
+      `Unrecognized file format ${formatValue(envelope.format)}. Expected "${IO_GROUP_TRANSFER_FORMAT_ID}".`,
+    )
+  if (envelope.version !== undefined) {
+    if (typeof envelope.version !== 'number' || !Number.isInteger(envelope.version) || envelope.version < 1)
+      return fileLevelError(`Invalid format version ${formatValue(envelope.version)}.`)
+    if (envelope.version > IO_GROUP_TRANSFER_VERSION)
       return fileLevelError(
-        `Unrecognized file format ${formatValue(envelope.format)}. Expected "${IO_GROUP_TRANSFER_FORMAT_ID}".`,
+        `The file uses format version ${envelope.version}; this editor supports up to version ${IO_GROUP_TRANSFER_VERSION}. Update the editor to import it.`,
       )
-    if (envelope.version !== undefined) {
-      if (typeof envelope.version !== 'number' || !Number.isInteger(envelope.version) || envelope.version < 1)
-        return fileLevelError(`Invalid format version ${formatValue(envelope.version)}.`)
-      if (envelope.version > IO_GROUP_TRANSFER_VERSION)
-        return fileLevelError(
-          `The file uses format version ${envelope.version}; this editor supports up to version ${IO_GROUP_TRANSFER_VERSION}. Update the editor to import it.`,
-        )
-    }
-    if (!('ioGroups' in envelope)) return fileLevelError('Missing "ioGroups" array.')
-    items = envelope.ioGroups
-  } else return fileLevelError('Expected a JSON array of IO groups or an object with an "ioGroups" array.')
+  }
+  if (!('ioGroups' in envelope)) return fileLevelError('Missing "ioGroups" array.')
+  const items = envelope.ioGroups
 
   if (!Array.isArray(items)) return fileLevelError('"ioGroups" must be an array.')
   if (items.length > IO_GROUP_IMPORT_MAX_GROUPS)
@@ -529,12 +552,12 @@ export const parseIOGroupsJson = (input: string): IOGroupImportResult => {
 
   items.forEach((item, index) => {
     const row = index + 1
-    if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+    if (!isRecord(item)) {
       errors.push({ row, message: 'Each IO group must be a JSON object.' })
       return
     }
     const record: Partial<Record<TransferField, RawValue>> = {}
-    for (const [key, value] of Object.entries(item as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(item)) {
       const field = resolveField(key)
       if (field) record[field] = value
       else if (!IGNORED_JSON_KEYS.has(key)) unknownKeys.add(key)
@@ -598,9 +621,24 @@ export const parseIOGroupsFile = (fileName: string, content: string): IOGroupImp
  * Names in `drafts` that already exist on the device (case-insensitive) —
  * a conflict only when appending; replacing removes the existing groups first.
  */
-export const findIOGroupNameConflicts = (drafts: IOGroupDraft[], existingNames: string[]): string[] => {
+export const findIOGroupNameConflicts = (
+  drafts: IOGroupDraft[],
+  existingNames: string[],
+): Array<{ name: string; index: number }> => {
   const existing = new Set(existingNames.map((n) => n.toLowerCase()))
-  return drafts.filter((d) => existing.has(d.name.toLowerCase())).map((d) => d.name)
+  return drafts.flatMap((d, index) => (existing.has(d.name.toLowerCase()) ? [{ name: d.name, index }] : []))
+}
+
+/** Names that already appear more than once on the device (case-insensitive). */
+export const findDuplicateIOGroupNames = (names: string[]): string[] => {
+  const seen = new Set<string>()
+  const duplicates = new Map<string, string>()
+  for (const name of names) {
+    const key = name.toLowerCase()
+    if (seen.has(key) && !duplicates.has(key)) duplicates.set(key, name)
+    seen.add(key)
+  }
+  return [...duplicates.values()]
 }
 
 // ---------------------------------------------------------------------------
@@ -619,11 +657,12 @@ const toDraft = (group: IOGroupDraft): IOGroupDraft => ({
 /**
  * Quotes a cell when it holds the delimiter, a quote or a line break, and
  * neutralizes spreadsheet formula injection (OWASP "CSV Injection") by
- * prefixing an apostrophe to values starting with `=`, `+`, `-` or `@`.
+ * prefixing an apostrophe to values starting with `=`, `+`, `-` or `@`. A value
+ * that already starts with an apostrophe gets one too, so import restores it.
  */
 const escapeCsvCell = (value: string | number): string => {
   let text = String(value)
-  if (/^[=+\-@]/.test(text)) text = `'${text}`
+  if (/^['=+\-@]/.test(text)) text = `'${text}`
   return /[",;\t\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
 }
 

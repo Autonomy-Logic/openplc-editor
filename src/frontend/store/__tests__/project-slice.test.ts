@@ -3150,6 +3150,41 @@ describe('createProjectSlice', () => {
     it('fails for an unknown device', () => {
       expect(store.getState().projectActions.importIOGroups('Nope', [makeIOGroup('g1')]).ok).toBe(false)
     })
+
+    it('assigns the same addresses as adding the groups one by one, across address classes', () => {
+      const batch = [
+        makeIOGroup('a', '1', 3),
+        makeIOGroup('b', '3', 2),
+        makeIOGroup('c', '15', 10),
+        makeIOGroup('d', '2', 9),
+        makeIOGroup('e', '16', 2),
+      ]
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('existing', '1', 2))
+      store.getState().projectActions.importIOGroups('Dev1', batch)
+      const imported = groupsOf().flatMap((g) => g.ioPoints!.map((p) => p.iecLocation))
+
+      const sequential = makeStore()
+      seedRuntimeV4Board(sequential)
+      seedRemoteDevice(sequential, makeRemoteDevice('Dev1'))
+      sequential.getState().projectActions.addIOGroup('Dev1', makeIOGroup('existing', '1', 2))
+      for (const group of batch) sequential.getState().projectActions.addIOGroup('Dev1', group)
+      const added = sequential
+        .getState()
+        .project.data.remoteDevices![0].modbusTcpConfig!.ioGroups.flatMap((g) => g.ioPoints!.map((p) => p.iecLocation))
+
+      expect(imported).toEqual(added)
+      expect(imported.slice(0, 5)).toEqual(['%IX0.0', '%IX0.1', '%IX0.2', '%IX0.3', '%IX0.4'])
+    })
+
+    it('gives every point of a large batch a distinct address', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      const batch = Array.from({ length: 200 }, (_, i) => makeIOGroup(`g${i}`, i % 2 ? '3' : '1', 125))
+      expect(store.getState().projectActions.importIOGroups('Dev1', batch).ok).toBe(true)
+      const addresses = groupsOf().flatMap((g) => g.ioPoints!.map((p) => p.iecLocation))
+      expect(addresses).toHaveLength(200 * 125)
+      expect(new Set(addresses).size).toBe(addresses.length)
+    })
   })
 
   describe('updateIOGroup', () => {

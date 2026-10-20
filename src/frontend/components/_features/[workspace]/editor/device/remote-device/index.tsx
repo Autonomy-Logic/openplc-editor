@@ -15,6 +15,7 @@ import {
   formatIOGroupAddressRange,
   IO_GROUP_ERROR_HANDLING_OPTIONS,
   IO_GROUP_FUNCTION_CODE_OPTIONS,
+  IO_GROUP_NAME_MAX_LENGTH,
   isReadFunctionCode,
   isSingleElementFunctionCode,
   MAX_IO_GROUP_LENGTH_BY_FC,
@@ -234,8 +235,10 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
     setFunctionCode(next)
   }
 
+  const nameOk = name.trim() !== '' && name.trim().length <= IO_GROUP_NAME_MAX_LENGTH
+
   const handleSubmit = () => {
-    if (!name.trim() || !lengthValidation.ok) return
+    if (!nameOk || !lengthValidation.ok) return
     onSubmit({
       name: name.trim(),
       functionCode,
@@ -269,6 +272,7 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder='IO Group Name'
+              maxLength={IO_GROUP_NAME_MAX_LENGTH}
               className={inputStyles}
             />
           </div>
@@ -394,7 +398,7 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!name.trim() || !lengthValidation.ok}
+            disabled={!nameOk || !lengthValidation.ok}
             className='rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-medium-dark disabled:cursor-not-allowed disabled:opacity-50'
           >
             {editingGroup ? 'Save' : 'Create'}

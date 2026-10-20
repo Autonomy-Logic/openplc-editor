@@ -235,6 +235,27 @@ function generateIOPoints(
   return points
 }
 
+/**
+ * Points for a bulk import, each seeded with the first address of its class.
+ * The registry reads only the class from that seed; `recalculateIecAddresses`
+ * then places the whole batch in one pass.
+ */
+function seedIOPoints(
+  functionCode: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16',
+  length: number,
+  groupName: string,
+): ModbusIOPoint[] {
+  const { type, iecPrefix, isBit } = getFunctionCodeInfo(functionCode)
+  const iecLocation = isBit ? `${iecPrefix}0.0` : `${iecPrefix}0`
+  return Array.from({ length }, (_, i) => ({
+    id: `${groupName}_${i}`,
+    name: `${groupName}_${i}`,
+    type,
+    iecLocation,
+    alias: '',
+  }))
+}
+
 // ---------------------------------------------------------------------------
 // Variables-text ⇄ variables-table reconcile helpers
 // ---------------------------------------------------------------------------
@@ -397,12 +418,11 @@ function activeKindsForAllocation(live: ProjectSliceRoot): Set<string> | undefin
  * seeded against a target the allocator won't manage afterwards.
  *
  * `clearGroup` drops one group's own points from the pool so a resize can
- * reuse the addresses it is about to give up. Without a `groupId` it drops
- * every group of that device (a replacing bulk import).
+ * reuse the addresses it is about to give up.
  */
 function buildModbusProducerPool(
   live: ProjectSliceRoot,
-  clearGroup?: { deviceName: string; groupId?: string },
+  clearGroup?: { deviceName: string; groupId: string },
 ): AddressPool {
   const board = live.deviceDefinitions.configuration.deviceBoard
   const remoteDevices = clearGroup
@@ -414,7 +434,7 @@ function buildModbusProducerPool(
               modbusTcpConfig: {
                 ...d.modbusTcpConfig,
                 ioGroups: d.modbusTcpConfig.ioGroups.map((g) =>
-                  clearGroup.groupId === undefined || g.id === clearGroup.groupId ? { ...g, ioPoints: [] } : g,
+                  g.id === clearGroup.groupId ? { ...g, ioPoints: [] } : g,
                 ),
               },
             },
@@ -2631,10 +2651,8 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         return { ok: false, title: 'Import failed', message: `Remote device "${deviceName}" was not found.` }
       }
 
-      // The UI validates and blocks; the store GUARANTEES the invariant.
-      // Point ids are `<groupName>_<index>`, so a duplicate group name on one
-      // device would produce colliding point ids (and alias keys). IEC
-      // identifiers are case-insensitive, hence the case-folded comparison.
+      // Point ids are `<groupName>_<index>`: a duplicate name on one device
+      // would collide. IEC identifiers are case-insensitive, hence the fold.
       const names = [...(replace ? [] : target.modbusTcpConfig.ioGroups), ...groups].map((g) => g.name.toLowerCase())
       const duplicate = names.find((name, index) => names.indexOf(name) !== index)
       if (duplicate !== undefined) {
@@ -2645,28 +2663,21 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         }
       }
 
-      // One pool for the whole batch; the shared `pending` set lets each new
-      // group see the addresses the previous ones in the batch just claimed.
-      // On replace, the device's current groups no longer hold any address.
-      const pool = buildModbusProducerPool(live, replace ? { deviceName } : undefined)
-
       setState(
         produce((slice: ProjectSlice) => {
           const device = slice.project.data.remoteDevices?.find((d) => d.name === deviceName)
           if (!device?.modbusTcpConfig) return
           if (replace) device.modbusTcpConfig.ioGroups = []
 
-          const pending = new Set<string>()
           for (const group of groups) {
             const length = clampIOGroupLength(group.functionCode, group.length)
             const errorHandling = resolveIOGroupErrorHandling(group.functionCode, group.errorHandling)
-            const ioPoints = generateIOPoints(group.functionCode, length, group.name, pool, pending)
+            const ioPoints = seedIOPoints(group.functionCode, length, group.name)
             device.modbusTcpConfig.ioGroups.push({ ...group, length, errorHandling, ioPoints })
           }
         }),
       )
-      // A single project-wide recompaction for the whole batch, instead of one
-      // per group as N separate addIOGroup calls would trigger.
+      // One project-wide allocation assigns every address of the batch.
       getState().projectActions.recalculateIecAddresses()
       return ok({ imported: groups.length })
     },

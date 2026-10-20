@@ -7,6 +7,7 @@ import {
   isReadFunctionCode,
 } from '../../../../../../utils/modbus/io-group'
 import {
+  findDuplicateIOGroupNames,
   findIOGroupNameConflicts,
   IO_GROUP_TRANSFER_FIELDS,
   type IOGroupDraft,
@@ -106,11 +107,17 @@ const ImportIOGroupsModal = ({ preview, existingGroupNames, onClose, onConfirm }
   const errors = useMemo<IOGroupImportIssue[]>(() => {
     if (!preview) return []
     if (mode === 'replace' || preview.result.errors.length > 0) return preview.result.errors
-    return findIOGroupNameConflicts(groups, existingGroupNames).map((name) => ({
+    const deviceDuplicates = findDuplicateIOGroupNames(existingGroupNames).map((name) => ({
       row: null,
-      field: 'name',
+      field: 'name' as const,
+      message: `This device already has more than one IO group named "${name}". Rename one before appending, or choose "Replace existing groups".`,
+    }))
+    const conflicts = findIOGroupNameConflicts(groups, existingGroupNames).map(({ name, index }) => ({
+      row: preview.result.rows[index] ?? null,
+      field: 'name' as const,
       message: `"${name}" already exists on this device. Rename it in the file or choose "Replace existing groups".`,
     }))
+    return [...deviceDuplicates, ...conflicts]
   }, [preview, mode, groups, existingGroupNames])
 
   const warnings = useMemo<IOGroupImportIssue[]>(
