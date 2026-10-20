@@ -50,7 +50,7 @@ void mbtask();
 // mbconfig_serial_iface() and handle_serial() live in modbus_serial.h;
 // process_mbpacket() and the per-FC frame-shape helpers (mb_pdu_request_len,
 // mb_pdu_skips_crc) live in modbus_pdu.h; the register store and operation FCs
-// (init_mbregs, get/write_discrete, readRegisters..writeMultipleCoils) in
+// (get/write_discrete, readRegisters..writeMultipleCoils) in
 // modbus_registers.h; the debugger FCs (debugInfo..debugGetDeviceId) in
 // modbus_debug.h; calcCrc() and the CRC tables in modbus_crc.{h,cpp} — all
 // included above.

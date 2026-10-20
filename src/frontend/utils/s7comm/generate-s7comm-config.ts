@@ -1,4 +1,7 @@
 import type { PLCServer } from '@root/middleware/shared/ports/open-plc-types'
+import type { S7TargetProfile } from '@root/middleware/shared/utils/target-capabilities/types'
+
+import { selectS7Areas } from './select-s7-areas'
 
 /**
  * S7Comm Runtime Configuration Interfaces
@@ -72,12 +75,21 @@ interface S7CommRuntimeConfig {
  * @param servers - Array of configured PLC servers
  * @returns JSON string for s7comm.json or null if no enabled S7Comm server
  */
-export const generateS7CommConfig = (servers: PLCServer[] | undefined): string | null => {
+export const generateS7CommConfig = (
+  servers: PLCServer[] | undefined,
+  profile: S7TargetProfile,
+  warn: (message: string) => void = () => undefined,
+): string | null => {
   if (!servers || servers.length === 0) {
     return null
   }
 
-  const s7commServer = servers.find((server) => server.protocol === 's7comm' && server.s7commSlaveConfig)
+  // Skips a server that is switched off, which is what the docstring above
+  // already promised and what the bare-metal header does. Shipping the file
+  // for a disabled server declared data blocks the image no longer sizes.
+  const s7commServer = servers.find(
+    (server) => server.protocol === 's7comm' && server.s7commSlaveConfig?.server?.enabled !== false,
+  )
 
   if (!s7commServer || !s7commServer.s7commSlaveConfig) {
     return null
@@ -98,16 +110,22 @@ export const generateS7CommConfig = (servers: PLCServer[] | undefined): string |
       ping_timeout_ms: config.server.pingTimeoutMs,
       pdu_size: config.server.pduSize,
     },
-    data_blocks: config.dataBlocks.map((db) => ({
-      db_number: db.dbNumber,
-      description: db.description,
-      size_bytes: db.sizeBytes,
-      mapping: {
-        type: db.mapping.type,
-        start_buffer: db.mapping.startBuffer,
-        ...(db.mapping.bitAddressing && { bit_addressing: db.mapping.bitAddressing }),
-      },
-    })),
+    // THE AREAS THIS TARGET SERVES, not every block the project holds. The
+    // plugin keeps 64 and drops the rest where it reads them, and the image is
+    // sized from this same selection -- shipping more than it serves sized the
+    // image for addresses no client could reach.
+    data_blocks: selectS7Areas(config, profile, warn)
+      .filter((area) => area.area === 'S7COMM_AREA_DB')
+      .map((area) => ({
+        db_number: area.dbNumber,
+        description: area.description,
+        size_bytes: area.sizeBytes,
+        mapping: {
+          type: area.mapping.type,
+          start_buffer: area.mapping.startBuffer,
+          ...(area.mapping.bitAddressing && { bit_addressing: area.mapping.bitAddressing }),
+        },
+      })),
   }
 
   // Add PLC identity if present

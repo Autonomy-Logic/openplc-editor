@@ -14,6 +14,7 @@
  * elaborate project fixtures.
  */
 
+import { RUNTIME_V4_S7_PROFILE } from '@root/middleware/shared/utils/target-capabilities'
 import type { PLCRemoteDevice, PLCServer } from '../../types/PLC/open-plc'
 
 // Hoist mock declarations so they apply before the shared module
@@ -84,6 +85,7 @@ function makeInput(overrides?: Partial<GenerateConfsInput>): GenerateConfsInput 
     debugMapContent: '{}',
     log: jest.fn(),
     runtimeVersion: null,
+    s7Profile: RUNTIME_V4_S7_PROFILE,
     ...overrides,
   }
 }
@@ -133,14 +135,14 @@ describe('generateRuntimeConfs — happy path', () => {
     expect(typeof mockedOpcUa.mock.calls[0][3]).toBe('function')
   })
 
-  it('forwards OPC-UA info messages through the log callback as level=info', () => {
+  it('forwards OPC-UA diagnostics through the log callback as level=warning', () => {
     const log = jest.fn()
     mockedOpcUa.mockImplementation((_servers, _dbg, _inst, innerLog) => {
-      innerLog?.('OPC-UA Address Space: 5 node(s) configured')
+      innerLog?.('OPC-UA: tag "Speed" (MAIN:SPEED) was left out of the build')
       return '{"opcua":{}}'
     })
     generateRuntimeConfs(makeInput({ log }))
-    expect(log).toHaveBeenCalledWith('OPC-UA Address Space: 5 node(s) configured', 'info')
+    expect(log).toHaveBeenCalledWith('OPC-UA: tag "Speed" (MAIN:SPEED) was left out of the build', 'warning')
   })
 
   it('forwards Modbus master skip diagnostics through the log callback as level=warning', () => {

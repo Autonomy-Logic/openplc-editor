@@ -170,6 +170,21 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
   }
 
+  handleOpenDiagnostics() {
+    this.mainWindow.webContents.send('workspace:open-diagnostics-accelerator')
+  }
+
+  /**
+   * The developer items, or nothing outside a dev build.
+   *
+   * Returned as a list so a template can spread it: an empty array leaves the
+   * menu byte-for-byte as it was, which is what a release build must see.
+   */
+  private developerMenuItems(): MenuItemConstructorOptions[] {
+    if (process.env.NODE_ENV !== 'development') return []
+    return [{ type: 'separator' }, { label: 'I/O Image Diagnostics', click: () => this.handleOpenDiagnostics() }]
+  }
+
   async handleOpenExternalLink(link: string) {
     try {
       await shell.openExternal(link)
@@ -515,6 +530,7 @@ export default class MenuBuilder {
           sublabel: this.themeSublabel(),
           click: () => this.updateAppTheme(),
         },
+        ...this.developerMenuItems(),
       ],
     }
 
@@ -838,6 +854,7 @@ export default class MenuBuilder {
             sublabel: this.themeSublabel(),
             click: () => this.updateAppTheme(),
           },
+          ...this.developerMenuItems(),
         ],
       },
       {
