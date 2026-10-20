@@ -3083,6 +3083,75 @@ describe('createProjectSlice', () => {
     })
   })
 
+  describe('importIOGroups', () => {
+    beforeEach(() => {
+      seedRuntimeV4Board(store)
+    })
+
+    const groupsOf = () => store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
+
+    it('appends a batch with contiguous addresses after the existing groups', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      const result = store
+        .getState()
+        .projectActions.importIOGroups('Dev1', [makeIOGroup('g2', '3', 2), makeIOGroup('g3', '4', 1)])
+      expect(result.ok).toBe(true)
+      expect(groupsOf().map((g) => g.id)).toEqual(['g1', 'g2', 'g3'])
+      expect(groupsOf().flatMap((g) => g.ioPoints!.map((p) => p.iecLocation))).toEqual([
+        '%IW0',
+        '%IW1',
+        '%IW2',
+        '%IW3',
+        '%IW4',
+      ])
+    })
+
+    it('replaces the existing groups and reuses their addresses', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('old', '3', 3))
+      const result = store
+        .getState()
+        .projectActions.importIOGroups('Dev1', [makeIOGroup('new', '3', 1)], { replace: true })
+      expect(result.ok).toBe(true)
+      expect(groupsOf().map((g) => g.id)).toEqual(['new'])
+      expect(groupsOf()[0].ioPoints![0].iecLocation).toBe('%IW0')
+    })
+
+    it('applies the same invariants as addIOGroup', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store
+        .getState()
+        .projectActions.importIOGroups('Dev1', [{ ...makeIOGroup('w', '6', 5), errorHandling: 'set-to-zero' }])
+      expect(groupsOf()[0]).toMatchObject({ length: 1, errorHandling: 'keep-last-value' })
+      expect(groupsOf()[0].ioPoints).toHaveLength(1)
+    })
+
+    it('rejects the whole batch on a duplicate name (case-insensitive), leaving the device untouched', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', { ...makeIOGroup('g1'), name: 'Pump' })
+      const result = store
+        .getState()
+        .projectActions.importIOGroups('Dev1', [makeIOGroup('g2'), { ...makeIOGroup('g3'), name: 'PUMP' }])
+      expect(result.ok).toBe(false)
+      expect(groupsOf().map((g) => g.id)).toEqual(['g1'])
+    })
+
+    it('allows reusing an existing name when replacing', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', { ...makeIOGroup('g1'), name: 'Pump' })
+      const result = store
+        .getState()
+        .projectActions.importIOGroups('Dev1', [{ ...makeIOGroup('g2'), name: 'Pump' }], { replace: true })
+      expect(result.ok).toBe(true)
+      expect(groupsOf().map((g) => g.id)).toEqual(['g2'])
+    })
+
+    it('fails for an unknown device', () => {
+      expect(store.getState().projectActions.importIOGroups('Nope', [makeIOGroup('g1')]).ok).toBe(false)
+    })
+  })
+
   describe('updateIOGroup', () => {
     beforeEach(() => {
       seedRuntimeV4Board(store)
