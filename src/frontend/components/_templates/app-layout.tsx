@@ -121,6 +121,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
         {banner && appUpdate && (
           <UpdateBanner
             update={banner}
+            className={cn('absolute left-0 right-0', showTitleBar ? 'top-[--oplc-title-bar-height]' : 'top-0')}
             onUpdate={() => appUpdate.downloadAndOpen()}
             onDismiss={() => appUpdate.dismiss()}
           />

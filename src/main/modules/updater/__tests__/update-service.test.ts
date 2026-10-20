@@ -49,6 +49,7 @@ interface Harness {
   download: jest.Mock
   openInstaller: jest.Mock
   discard: jest.Mock
+  fileExists: jest.Mock
   openExternal: jest.Mock
   requestQuit: jest.Mock
 }
@@ -87,6 +88,7 @@ function setup({
   })
   const openInstaller = jest.fn(() => Promise.resolve())
   const discard = jest.fn()
+  const fileExists = jest.fn(() => Promise.resolve(true))
   const openExternal = jest.fn()
   const requestQuit = jest.fn()
 
@@ -99,6 +101,7 @@ function setup({
     chooseDestination,
     download,
     discard,
+    fileExists,
     openInstaller,
     readAutoCheck: () => autoCheckStored,
     writeAutoCheck: (enabled) => {
@@ -133,6 +136,7 @@ function setup({
     download,
     openInstaller,
     discard,
+    fileExists,
     openExternal,
     requestQuit,
   }
@@ -394,11 +398,37 @@ describe('download and open', () => {
     expect(h.openExternal).toHaveBeenCalledWith(RELEASES_URL)
   })
 
-  it('a failure to open the installer still tells the user where the file is', async () => {
+  it('a downloaded file that was deleted since is downloaded again', async () => {
     const h = await available()
-    h.openInstaller.mockRejectedValueOnce(new Error('no handler'))
     await h.service.downloadAndOpen()
-    expect(messages(h)).toEqual(['OpenPLC Editor 4.3.3 is downloaded'])
+    h.fileExists.mockResolvedValueOnce(false)
+    await h.service.downloadAndOpen()
+    expect(h.fileExists).toHaveBeenCalledWith('/home/user/Downloads/OpenPLC.Editor-4.3.3.AppImage')
+    expect(h.download).toHaveBeenCalledTimes(2)
+    expect(h.openInstaller).toHaveBeenCalledTimes(2)
+  })
+
+  it('a failure to open the installer offers the download page and says where the file is', async () => {
+    const h = await available({ platform: 'win32' })
+    h.openInstaller.mockRejectedValueOnce(new Error('no handler'))
+    h.press(0)
+    await h.service.downloadAndOpen()
+    expect(messages(h)).toEqual(['OpenPLC Editor 4.3.3 could not be opened'])
+    expect(h.dialogs[0].detail).toContain('/home/user/Downloads/OpenPLC.Editor_4.3.3.exe')
+    expect(h.openExternal).toHaveBeenCalledWith(RELEASES_URL)
+    expect(h.requestQuit).not.toHaveBeenCalled()
+  })
+
+  it('a second click while the first is still checking the file is ignored', async () => {
+    const h = await available()
+    await h.service.downloadAndOpen()
+    let exists: (value: boolean) => void = () => undefined
+    h.fileExists.mockImplementationOnce(() => new Promise<boolean>((resolve) => (exists = resolve)))
+    const first = h.service.downloadAndOpen()
+    await h.service.downloadAndOpen()
+    exists(true)
+    await first
+    expect(h.openInstaller).toHaveBeenCalledTimes(2)
   })
 
   it('ignores a click while the download runs', async () => {

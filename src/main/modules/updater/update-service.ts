@@ -45,6 +45,7 @@ export interface UpdateServiceDeps {
   /** Saves the asset at `path`. `progress` goes from 0 to 1. */
   download(asset: ReleaseAsset, path: string, progress: (fraction: number) => void): Promise<DownloadedFile>
   discard(path: string): void
+  fileExists(path: string): Promise<boolean>
   /** Opens the installer (Windows, macOS) or shows the new AppImage in its folder (Linux). */
   openInstaller(path: string): Promise<void>
   readAutoCheck(): boolean
@@ -223,9 +224,22 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
     }
   }
 
+  let busy = false
   const downloadAndOpen = async () => {
-    if (!available || status.state === 'downloading') return
-    const { version, installer } = available
+    if (!available || busy) return
+    busy = true
+    try {
+      await fetchAndOpen(available)
+    } finally {
+      busy = false
+    }
+  }
+
+  const fetchAndOpen = async ({ version, installer }: { version: string; installer: ReleaseAsset }) => {
+    if (downloaded?.version === version && !(await deps.fileExists(downloaded.path))) {
+      deps.log('info', `[updater] ${downloaded.path} is gone; downloading it again`)
+      downloaded = null
+    }
 
     if (!downloaded || downloaded.version !== version) {
       const expected = sha256Of(installer.digest)
@@ -278,6 +292,11 @@ export function createUpdateService(deps: UpdateServiceDeps): UpdateService {
       await deps.openInstaller(downloaded.path)
     } catch (error: unknown) {
       deps.log('warn', `[updater] could not open ${downloaded.path}: ${String(error)}`)
+      await showDownloadPage(
+        `OpenPLC Editor ${version} could not be opened`,
+        `It was saved to ${downloaded.path}. Open it from there, or download it from the releases page.`,
+      )
+      return
     }
     await afterOpening(version, downloaded.path)
   }

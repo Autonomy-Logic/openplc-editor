@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { app, type BrowserWindow, dialog, ipcMain, net, shell } from 'electron'
 import log from 'electron-log'
-import { chmod, open, rename, rm } from 'fs/promises'
+import { access, chmod, open, rename, rm } from 'fs/promises'
 import { basename, join } from 'path'
 import { z } from 'zod'
 
@@ -13,6 +13,7 @@ import { compareVersions } from './version-order'
 export type { UpdateService } from './update-service'
 
 const RELEASES_API = 'https://api.github.com/repos/Autonomy-Logic/openplc-editor/releases'
+const STALL_TIMEOUT_MS = 30_000
 
 const GitHubRelease = z.object({
   tag_name: z.string(),
@@ -99,32 +100,52 @@ async function download(
   progress: (fraction: number) => void,
 ): Promise<DownloadedFile> {
   const partial = `${path}.part`
-  const response = await net.fetch(asset.url)
-  if (!response.ok || !response.body) throw new Error(`download answered ${response.status}`)
-
-  const hash = createHash('sha256')
-  let received = 0
-  const reader = response.body.getReader()
-  const file = await open(partial, 'w')
-  try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      hash.update(value)
-      await file.write(value)
-      received += value.byteLength
-      if (asset.size > 0) progress(received / asset.size)
-    }
-  } catch (error: unknown) {
-    await file.close()
-    await rm(partial, { force: true })
-    throw error
+  const stalled = new AbortController()
+  const stallError = new Error(`no data for ${STALL_TIMEOUT_MS / 1000} s`)
+  let timer: NodeJS.Timeout | undefined
+  const keepAlive = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => stalled.abort(stallError), STALL_TIMEOUT_MS)
   }
-  await file.close()
-  await rename(partial, path)
-  // An AppImage is the program itself; it has to be executable to be opened.
-  if (process.platform === 'linux') await chmod(path, 0o755)
-  return { path, sha256: hash.digest('hex') }
+
+  const aborted = new Promise<never>((_, reject) =>
+    stalled.signal.addEventListener('abort', () => reject(stallError), { once: true }),
+  )
+  aborted.catch(() => undefined)
+
+  keepAlive()
+  try {
+    const response = await net.fetch(asset.url, { signal: stalled.signal })
+    if (!response.ok || !response.body) throw new Error(`download answered ${response.status}`)
+
+    const hash = createHash('sha256')
+    let received = 0
+    const reader = response.body.getReader()
+    const file = await open(partial, 'w')
+    try {
+      for (;;) {
+        const { done, value } = await Promise.race([reader.read(), aborted])
+        if (done) break
+        keepAlive()
+        hash.update(value)
+        await file.write(value)
+        received += value.byteLength
+        if (asset.size > 0) progress(received / asset.size)
+      }
+    } catch (error: unknown) {
+      void reader.cancel().catch(() => undefined)
+      await file.close()
+      await rm(partial, { force: true })
+      throw error
+    }
+    await file.close()
+    await rename(partial, path)
+    // An AppImage is the program itself; it has to be executable to be opened.
+    if (process.platform === 'linux') await chmod(path, 0o755)
+    return { path, sha256: hash.digest('hex') }
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 async function openInstaller(path: string): Promise<void> {
@@ -175,6 +196,11 @@ export function createElectronUpdateService({
         log.warn(`[updater] could not delete ${path}: ${String(error)}`),
       )
     },
+    fileExists: (path) =>
+      access(path).then(
+        () => true,
+        () => false,
+      ),
     openInstaller,
     readAutoCheck: () => store.get('auto_update_check'),
     writeAutoCheck: (enabled) => store.set('auto_update_check', enabled),
