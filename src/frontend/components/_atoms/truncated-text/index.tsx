@@ -8,6 +8,7 @@ type TruncatedTextProps = {
   className?: string
   /** Tooltip placement; defaults to above the text. */
   side?: 'top' | 'right' | 'bottom' | 'left'
+  testId?: string
 }
 
 /**
@@ -19,7 +20,7 @@ type TruncatedTextProps = {
  * column width as the editor is resized instead of a fixed character count.
  * Must be rendered inside a `TooltipProvider`.
  */
-const TruncatedText = ({ text, className, side = 'top' }: TruncatedTextProps) => {
+const TruncatedText = ({ text, className, side = 'top', testId }: TruncatedTextProps) => {
   const ref = useRef<HTMLSpanElement>(null)
   const [open, setOpen] = useState(false)
 
@@ -31,11 +32,17 @@ const TruncatedText = ({ text, className, side = 'top' }: TruncatedTextProps) =>
   return (
     <Tooltip open={open} onOpenChange={handleOpenChange} delayDuration={300}>
       <TooltipTrigger asChild>
-        <span ref={ref} className={cn('block min-w-0 truncate', className)}>
+        <span ref={ref} data-testid={testId} className={cn('block min-w-0 truncate', className)}>
           {text}
         </span>
       </TooltipTrigger>
-      <TooltipContent side={side} align='start' sideOffset={4} className='break-all px-2 py-1 font-caption text-xs'>
+      <TooltipContent
+        side={side}
+        align='start'
+        sideOffset={4}
+        data-testid='truncated-text-tooltip'
+        className='break-all px-2 py-1 font-caption text-xs'
+      >
         {text}
       </TooltipContent>
     </Tooltip>

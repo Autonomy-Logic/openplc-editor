@@ -272,6 +272,7 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder='IO Group Name'
+              data-testid='io-group-name-input'
               maxLength={IO_GROUP_NAME_MAX_LENGTH}
               className={inputStyles}
             />
@@ -439,7 +440,7 @@ const IOGroupRow = ({ ioGroup, isExpanded, onToggleExpand, onEdit, onDelete, onU
           </button>
         </td>
         <td className='px-2 py-2 text-sm font-medium text-neutral-950 dark:text-neutral-100'>
-          <TruncatedText text={ioGroup.name} />
+          <TruncatedText text={ioGroup.name} testId={`io-group-name-${ioGroup.id}`} />
         </td>
         <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>
           <TruncatedText text={groupType} />
@@ -1095,6 +1096,7 @@ const RemoteDeviceEditor = () => {
             <input
               ref={importInputRef}
               type='file'
+              data-testid='io-group-import-input'
               accept='.csv,.json,text/csv,application/json'
               onChange={(e) => void handleImportFileSelected(e)}
               className='hidden'
@@ -1104,6 +1106,7 @@ const RemoteDeviceEditor = () => {
             <button
               type='button'
               id='import-io-groups-button'
+              data-testid='io-group-import-button'
               onClick={() => importInputRef.current?.click()}
               className={TOOLBAR_BUTTON_CLASS}
               title='Import IO groups from a CSV or JSON file'
@@ -1116,6 +1119,7 @@ const RemoteDeviceEditor = () => {
                 <button
                   type='button'
                   id='export-io-groups-button'
+                  data-testid='io-group-export-button'
                   className={TOOLBAR_BUTTON_CLASS}
                   title={ioGroups.length === 0 ? 'Add IO groups to enable export' : 'Export IO groups'}
                 >
@@ -1132,6 +1136,7 @@ const RemoteDeviceEditor = () => {
                   {(['csv', 'json'] as const).map((format) => (
                     <DropdownMenu.Item
                       key={format}
+                      data-testid={`io-group-export-${format}`}
                       onSelect={() => handleExport(format)}
                       className='flex cursor-pointer select-none items-center px-3 py-1.5 text-xs font-medium text-neutral-850 outline-none hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900 dark:data-[highlighted]:bg-neutral-900'
                     >

@@ -52,6 +52,7 @@ const IssueList = ({ issues, tone }: { issues: IOGroupImportIssue[]; tone: 'erro
   return (
     <div
       role={isError ? 'alert' : 'status'}
+      data-testid={`io-group-import-${tone}s`}
       className={cn(
         'flex max-h-[140px] shrink-0 flex-col gap-1 overflow-y-auto rounded-md border px-3 py-2',
         isError
@@ -132,10 +133,14 @@ const ImportIOGroupsModal = ({ preview, existingGroupNames, onClose, onConfirm }
 
   return (
     <Modal open={preview !== null} onOpenChange={(open) => !open && onClose()}>
-      <ModalContent className='h-fit max-h-[85vh] w-[720px]' onClose={onClose}>
+      <ModalContent className='h-fit max-h-[85vh] w-[720px]' onClose={onClose} data-testid='io-group-import-modal'>
         <ModalHeader>
           <ModalTitle>Import IO Groups</ModalTitle>
-          <p className='truncate font-caption text-xs text-neutral-600 dark:text-neutral-400' title={preview?.fileName}>
+          <p
+            data-testid='io-group-import-summary'
+            className='truncate font-caption text-xs text-neutral-600 dark:text-neutral-400'
+            title={preview?.fileName}
+          >
             {preview?.fileName}
             {groups.length > 0 && ` · ${groups.length} IO group${groups.length > 1 ? 's' : ''} found`}
           </p>
@@ -161,6 +166,7 @@ const ImportIOGroupsModal = ({ preview, existingGroupNames, onClose, onConfirm }
                     type='radio'
                     name='io-group-import-mode'
                     value={option.value}
+                    data-testid={`io-group-import-mode-${option.value}`}
                     checked={mode === option.value}
                     onChange={() => setMode(option.value)}
                     className='accent-brand'
@@ -235,6 +241,7 @@ const ImportIOGroupsModal = ({ preview, existingGroupNames, onClose, onConfirm }
           </button>
           <button
             type='button'
+            data-testid='io-group-import-confirm'
             onClick={() => canImport && onConfirm(groups, hasExistingGroups ? mode : 'append')}
             disabled={!canImport}
             className='rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-medium-dark disabled:cursor-not-allowed disabled:opacity-50'
