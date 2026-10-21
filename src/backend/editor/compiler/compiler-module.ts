@@ -781,7 +781,7 @@ class CompilerModule {
    */
   /**
    * Load the firmware skeleton files (`resources/sources/arduino/*`
-   * + `resources/sources/Baremetal/**`) into an in-memory file map
+   * + `resources/sources/Baremetal/*`) into an in-memory file map
    * keyed by the canonical project-root-relative paths the shared
    * `composeFirmwareBundle` expects.
    *
