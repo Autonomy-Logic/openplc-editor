@@ -33,6 +33,13 @@ byte-identical on openplc-web) and reads `AppUpdatePort`
 `app-update:download` and `app-update:dismiss`; the web has no adapter, so it
 never shows the banner.
 
+"Check for Updates" and "Check for Updates Automatically" are in both File
+menus: the native one (`src/main/menu.ts`, macOS and Linux) and the in-app one
+(`menus/file.tsx`, Windows, where the native File menu is hidden). The in-app
+items go through the same port (`checkNow`, `isAutoCheckEnabled`,
+`setAutoCheck`, over `app-update:check`, `app-update:get-auto-check` and
+`app-update:set-auto-check`); on the web, Check for Updates stays disabled.
+
 ## The Windows installer
 
 The Windows `.exe` used to be a one-click installer: it installed and launched

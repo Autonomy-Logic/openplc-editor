@@ -163,12 +163,18 @@ async function openInstaller(path: string): Promise<void> {
  * The banner's side of the service: `app-update:get-status` answers what a
  * renderer that just loaded should show, `app-update:status` pushes changes to
  * the window, `app-update:download` is the Update button and
- * `app-update:dismiss` its X.
+ * `app-update:dismiss` its X. `app-update:check` and the auto-check pair are
+ * the in-app File menu's items, which Windows shows instead of the native menu.
  */
 function registerUpdateIpc(service: UpdateService, getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('app-update:get-status', () => service.getStatus())
   ipcMain.on('app-update:download', () => void service.downloadAndOpen())
   ipcMain.on('app-update:dismiss', () => service.dismiss())
+  ipcMain.on('app-update:check', () => void service.checkNow())
+  ipcMain.handle('app-update:get-auto-check', () => service.isAutoCheckEnabled())
+  ipcMain.on('app-update:set-auto-check', (_event, enabled: unknown) => {
+    if (typeof enabled === 'boolean') service.setAutoCheck(enabled)
+  })
   service.onStatusChange((status) => {
     const window = getWindow()
     if (window && !window.isDestroyed()) window.webContents.send('app-update:status', status)

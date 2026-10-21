@@ -28,6 +28,14 @@ export interface AppUpdatePort {
 
   /** Hide the banner until the editor is opened again (or the user checks from the menu). */
   dismiss(): void
+
+  /** File > Check for Updates: always answers with a dialog. */
+  checkNow(): void
+
+  isAutoCheckEnabled(): Promise<boolean>
+
+  /** Applies from the next launch. */
+  setAutoCheck(enabled: boolean): void
 }
 
 /** Validates a status received from outside the renderer; anything unreadable shows nothing. */

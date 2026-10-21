@@ -50,6 +50,9 @@ function fakePort(read: Promise<AppUpdateStatus>) {
     }),
     downloadAndOpen: jest.fn(),
     dismiss: jest.fn(),
+    checkNow: jest.fn(),
+    isAutoCheckEnabled: jest.fn(() => Promise.resolve(true)),
+    setAutoCheck: jest.fn(),
   }
   return {
     port,

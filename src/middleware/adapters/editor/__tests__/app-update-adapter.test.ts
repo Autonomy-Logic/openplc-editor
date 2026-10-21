@@ -10,6 +10,9 @@ beforeEach(() => {
     appUpdateGetStatus: jest.fn().mockResolvedValue({ state: 'available', version: '4.3.3' }),
     appUpdateDownload: jest.fn(),
     appUpdateDismiss: jest.fn(),
+    appUpdateCheck: jest.fn(),
+    appUpdateGetAutoCheck: jest.fn().mockResolvedValue(true),
+    appUpdateSetAutoCheck: jest.fn(),
     onAppUpdateStatus: jest.fn().mockImplementation((callback: (status: unknown) => void) => {
       pushStatus = callback
       return unsubscribe
@@ -50,5 +53,21 @@ describe('editor app update adapter', () => {
   it('the X asks main to hide the banner', () => {
     createEditorAppUpdateAdapter().dismiss()
     expect(window.bridge.appUpdateDismiss).toHaveBeenCalledTimes(1)
+  })
+
+  it('File > Check for Updates asks main to check now', () => {
+    createEditorAppUpdateAdapter().checkNow()
+    expect(window.bridge.appUpdateCheck).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads the automatic check from main, and anything but true is off', async () => {
+    await expect(createEditorAppUpdateAdapter().isAutoCheckEnabled()).resolves.toBe(true)
+    jest.mocked(window.bridge.appUpdateGetAutoCheck).mockResolvedValue('yes')
+    await expect(createEditorAppUpdateAdapter().isAutoCheckEnabled()).resolves.toBe(false)
+  })
+
+  it('the automatic-check toggle is passed to main', () => {
+    createEditorAppUpdateAdapter().setAutoCheck(false)
+    expect(window.bridge.appUpdateSetAutoCheck).toHaveBeenCalledWith(false)
   })
 })
