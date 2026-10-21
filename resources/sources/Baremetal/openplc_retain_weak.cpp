@@ -1,8 +1,7 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-only
 // Copyright (c) 2026 Autonomy®
 /*
 openplc_retain_weak.cpp - Weak fallback backend for retain storage (NODE-94)
-Copyright (C) 2026 OpenPLC - Thiago Alves
 
 Guarantees the firmware always links even when no platform provides retain
 storage. A VPP that ships a real backend defines the STRONG symbols, which

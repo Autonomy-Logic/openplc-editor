@@ -1,5 +1,7 @@
 # Contributor License Agreement
 
+Version 1.0, 2026-10-21
+
 Thank you for contributing to this project. This Contributor License Agreement ("Agreement") sets out the terms under which you contribute. You agree to it by ticking the Contributor License Agreement box when you submit a pull request to this repository. It covers that pull request and every later contribution you submit to this repository.
 
 ## 1. Definitions
@@ -23,7 +25,7 @@ You grant Us, and every recipient of software distributed by Us, a worldwide, no
 
 ## 5. Outbound licensing
 
-We may license your Contribution under any licence, including copyleft, permissive, commercial or proprietary licences. In addition, We will always make your Contribution available under the GNU General Public License version 3, or a later version of it.
+We may license your Contribution under any licence, including copyleft, permissive, commercial or proprietary licences. In addition, We will always make your Contribution available under the GNU General Public License version 3.
 
 ## 6. Your representations
 

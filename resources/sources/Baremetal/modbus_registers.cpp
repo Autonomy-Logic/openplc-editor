@@ -1,8 +1,7 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-only
 // Copyright (c) 2026 Autonomy®
 /*
 modbus_registers.cpp - Modbus operation function codes, served from the process image
-Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include "modbus_registers.h"

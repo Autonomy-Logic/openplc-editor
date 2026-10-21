@@ -1,8 +1,7 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-only
 // Copyright (c) 2026 Autonomy®
 /*
 modbus_registers.h - Modbus operation function codes
-Copyright (C) 2022 OpenPLC - Thiago Alves
 
 The standard Modbus operation FCs (0x01-0x10), served straight from the process
 image through openplc_image_* — this layer holds no register bank of its own.

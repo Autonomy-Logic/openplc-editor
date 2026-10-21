@@ -16,11 +16,7 @@ jobs:
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
-          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
         run: |
-          case "$AUTHOR_ASSOCIATION" in
-            OWNER|MEMBER) echo "Organisation member: CLA not required."; exit 0 ;;
-          esac
           if [ "$AUTHOR_TYPE" = "Bot" ]; then
             echo "Bot account: CLA not required."; exit 0
           fi

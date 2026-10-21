@@ -29,4 +29,4 @@ This PR resolve the *#issue_number*.
 
 ## Contributor License Agreement
 
-- [ ] I have read and agree to the [Contributor License Agreement](https://github.com/Autonomy-Logic/openplc-editor/blob/development/CLA.md)
+- [ ] I have read and agree to the [Contributor License Agreement, version 1.0](https://github.com/Autonomy-Logic/openplc-editor/blob/development/CLA.md)
