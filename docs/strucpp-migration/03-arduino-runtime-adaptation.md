@@ -244,7 +244,7 @@ Nothing is project-specific except:
 
 ### Why Keep openplc.h Buffer Arrays
 
-The HAL files (`uno_leonardo_nano_micro_zero.cpp`, `esp32.cpp`, `mega_due.cpp`, etc.) use
+The HAL files (board HALs now ship in VPP packages; only `hal/simulator.cpp` remains in the editor) use
 `openplc.h` buffer pointer arrays: `bool_input[byte][bit]`, `int_input[index]`, etc.
 
 Rewriting all HAL files for STruC++ types would be a massive effort with no benefit. The

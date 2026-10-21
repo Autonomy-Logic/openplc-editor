@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 opcua_log.cpp - telnet debug log sink
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 */
 
 #include "opcua_log.h"
