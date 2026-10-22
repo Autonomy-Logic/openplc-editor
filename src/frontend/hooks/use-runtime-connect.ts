@@ -10,8 +10,8 @@
  * Connecting to a runtime is not a single await: `getUsersInfo` decides whether
  * the user is asked to log in or to create the first account, and both are
  * MODALS. So this resolves as soon as the modal is raised, not when the session
- * is up — a caller that needs the session (the debugger) must watch
- * `runtimeConnection.connectionStatus` rather than await this. That is also why
+ * is up — a caller that needs the session (the debugger) must watch the session
+ * status rather than await this (see `awaitDebugSession`). That is also why
  * the debugger's offer ends up as a modal opening a modal.
  */
 import { useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
@@ -19,6 +19,7 @@ import { useCallback } from 'react'
 
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 import { validateRuntimeVersion } from '../utils/device'
+import { getErrorMessage } from '../utils/get-error-message'
 
 export interface UseRuntimeConnectResult {
   /** Toggle: connects when disconnected, disconnects when connected. */
@@ -66,6 +67,17 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
 
     setRuntimeConnectionStatus('connecting')
 
+    const reportUnreachable = (reason: string): void => {
+      const target = runtimeIpAddress || store.getState().runtimeConnection.selectedDevice?.deviceName || 'the runtime'
+      openModal('debugger-message', {
+        type: 'error',
+        title: 'No Response',
+        message: `Could not reach the runtime at ${target}: ${reason}. Check that it is powered and on the network, and that the IP address is correct.`,
+        buttons: ['OK'],
+        onResponse: () => undefined,
+      })
+    }
+
     try {
       // Web reaches the runtime THROUGH an orchestrator agent, so the adapter
       // has to be told which device every later call is about. The Orchestrators
@@ -87,6 +99,7 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
 
       if (result.error) {
         setRuntimeConnectionStatus('error')
+        reportUnreachable(result.error)
         return
       }
 
@@ -145,8 +158,9 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
 
       // Version is OK - proceed normally
       proceedWithConnection()
-    } catch (_error) {
+    } catch (error) {
       setRuntimeConnectionStatus('error')
+      reportUnreachable(getErrorMessage(error))
     }
   }, [
     store,

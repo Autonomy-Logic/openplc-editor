@@ -27,7 +27,13 @@ import { useRuntimeConnect } from '../../../hooks/use-runtime-connect'
 import { useSimulatorDebugRun } from '../../../hooks/use-simulator-debug-run'
 import { useDebugPolling } from '../../../hooks/useDebugPolling'
 import { useDebugSession } from '../../../hooks/useDebugSession'
-import { buildDeviceResolverContext, showDeviceDialog, showDeviceInput } from '../../../services/device-link-resolution'
+import { awaitDebugSession } from '../../../services/await-debug-session'
+import {
+  buildDeviceResolverContext,
+  describeConnectTarget,
+  showDeviceDialog,
+  showDeviceInput,
+} from '../../../services/device-link-resolution'
 import { executeSaveProject } from '../../../services/save-actions'
 import { type OpenPLCStore, useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
@@ -1199,9 +1205,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
       }
 
-      const boardTarget = devDefs.configuration.deviceBoard
+      // Re-read once a connect below has brought the session up: on web the board
+      // only becomes the runtime's once that connection is established.
+      let boardTarget = devDefs.configuration.deviceBoard
       const projectPath = project.meta.path
-      const boardInfo = availableBoards.get(boardTarget)
+      let boardInfo = availableBoards.get(boardTarget)
 
       // No resolution here at all. Every target's session is established before a
       // debug session can start — a device by Connect, a runtime by logging in, the
@@ -1261,10 +1269,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         // Name the target. "Would you like to connect?" with no name is how a
         // mis-selection turns into a session on someone else's machine.
         const targetName =
-          selectedDeviceName ??
-          deviceDefinitions.configuration.runtimeIpAddress ??
-          deviceDefinitions.configuration.communicationPort ??
-          boardTarget
+          selectedDeviceName !== null
+            ? `"${selectedDeviceName}"`
+            : describeConnectTarget(store, boardTarget, boardInfo, isRuntime)
         const offer = await showDeviceDialog(
           store,
           'question',
@@ -1272,8 +1279,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           offerSimulatorStart
             ? 'The debugger runs against the running simulator. Would you like to start the simulator now?'
             : isRuntime
-              ? `The debugger runs over the runtime connection. Would you like to connect to "${targetName}" now?`
-              : `The debugger runs over the device connection. Would you like to connect to "${targetName}" now?`,
+              ? `The debugger runs over the runtime connection. Would you like to connect to ${targetName} now?`
+              : `The debugger runs over the device connection. Would you like to connect to ${targetName} now?`,
           ['Yes', 'No'],
         )
         if (offer !== 0) {
@@ -1282,8 +1289,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           return
         }
 
-        setIsDebuggerProcessing(false)
         if (offerSimulatorStart) {
+          setIsDebuggerProcessing(false)
           // Same action as the sidebar's Start: it builds, launches the emulator
           // and — via `pendingSimulatorDebugRef` — attaches the debugger once the
           // firmware event lands, so the session continues on its own.
@@ -1291,16 +1298,24 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           void handleSimulatorControl()
           return
         }
-        // Connect, then let the user press Debug again. Connecting is not a
-        // single await for a runtime (its login is a modal the user still has to
-        // fill in), so chaining the session onto it here would either race the
-        // login or need this handler to sit waiting on a status change.
+
+        // Connect, then continue once the session is up. A runtime's connect
+        // resolves while its login modal is still open, so both wait on the
+        // session status; the processing flag stays set to block a second press.
+        let sessionReady = false
         if (isRuntime) {
-          void runtimeConnect.connect()
-        } else {
-          void deviceConnect.connect()
+          await runtimeConnect.connect()
+          sessionReady = await awaitDebugSession(store, 'runtime')
+        } else if (await deviceConnect.connect()) {
+          sessionReady = await awaitDebugSession(store, 'device')
         }
-        return
+        if (!sessionReady) {
+          addLog({ level: 'info', message: 'Debugger session cancelled: the target is not connected.' })
+          setIsDebuggerProcessing(false)
+          return
+        }
+        boardTarget = store.getState().deviceDefinitions.configuration.deviceBoard
+        boardInfo = store.getState().deviceAvailableOptions.availableBoards.get(boardTarget)
       }
 
       // A RUNNING simulator already carries its debug session: Start attaches it
@@ -1310,7 +1325,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // stop before the device path -- a debug compile, an MD5 verify against
       // flashed firmware and a channel connect all describe hardware, not an
       // emulator.
-      if (isSimulatorBoard) {
+      if (resolveTargetCapabilities(boardInfo).isInProcessSimulator) {
         setIsDebuggerProcessing(false)
         return
       }

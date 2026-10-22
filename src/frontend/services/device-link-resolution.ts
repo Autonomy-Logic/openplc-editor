@@ -200,6 +200,32 @@ function trace(store: OpenPLCStore, message: string): void {
 /** Guard against a malformed spec bouncing between prompts forever. */
 const MAX_RESOLVE_ROUNDS = 8
 
+/**
+ * The target and the address it is configured to be reached at, for naming it
+ * before a connect: "OpenPLC Runtime v4 at 192.168.1.10", "ESP32 WROOM at
+ * /dev/ttyUSB0 or 192.168.1.50". Reads the project configuration only. A device
+ * lists the endpoints Connect would try, in its order; a channel that still needs
+ * input (a DHCP address) is left out, and with nothing left only the board is named.
+ */
+export function describeConnectTarget(
+  store: OpenPLCStore,
+  boardTarget: string,
+  boardInfo: BoardInfo | undefined,
+  isRuntime: boolean,
+): string {
+  if (isRuntime) {
+    const address = store.getState().deviceDefinitions.configuration.runtimeIpAddress
+    return address ? `${boardTarget} at ${address}` : boardTarget
+  }
+  const outcome = resolveDeviceLinkCandidates(boardInfo?.debug, buildDeviceResolverContext(store, boardTarget), {
+    transports: resolveTargetCapabilities(boardInfo).debuggerTransports,
+    deferPrompts: true,
+  })
+  if (outcome.kind !== 'candidates' || outcome.candidates.length === 0) return boardTarget
+  const endpoints = [...new Set(outcome.candidates.map((candidate) => describeDebugEndpoint(candidate.config)))]
+  return `${boardTarget} at ${endpoints.join(' or ')}`
+}
+
 /** What resolution found, and what it deliberately left unasked. */
 export interface ResolvedDeviceLink {
   /** Ways to reach the device that need nothing from the user, in try-order. */
