@@ -1,7 +1,7 @@
 import type {
   DeviceEditorConsumerLike,
   DeviceEditorProviderLike,
-} from '../../../src/__fixtures__/fake-device-editor/relay'
+} from '../../../src/middleware/shared/vendor-document/relay'
 
 declare global {
   interface Window {

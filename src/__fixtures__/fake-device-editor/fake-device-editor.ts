@@ -4,7 +4,11 @@
  * `setProjectModified` as the vendor does: 2 on `setController`, 1 per `setProject`, 1 per edit.
  */
 
-import type { DeviceEditorConsumerLike, DeviceEditorProviderLike, RelayGuestScope } from './relay'
+import type {
+  DeviceEditorConsumerLike,
+  DeviceEditorProviderLike,
+  RelayGuestScope,
+} from '../../middleware/shared/vendor-document/relay'
 
 export interface FakeDataPoint {
   id: string

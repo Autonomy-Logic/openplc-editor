@@ -1,5 +1,5 @@
 import './guest-scope'
 
-import { installWindowRelay } from '../../../src/__fixtures__/fake-device-editor/relay'
+import { installWindowRelay } from '../../../src/middleware/shared/vendor-document/relay'
 
 installWindowRelay(window)

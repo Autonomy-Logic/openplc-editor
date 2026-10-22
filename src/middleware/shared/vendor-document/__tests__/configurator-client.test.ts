@@ -4,7 +4,7 @@ import {
   type FakeDeviceEditorOptions,
   installFakeDeviceEditor,
 } from '../../../../__fixtures__/fake-device-editor/fake-device-editor'
-import { installRelay, type RelayGuestScope } from '../../../../__fixtures__/fake-device-editor/relay'
+import { installRelay, type RelayGuestScope } from '../relay'
 import {
   ConfiguratorDisposedError,
   ConfiguratorRemoteError,
@@ -72,7 +72,7 @@ function setup(fakeOptions: FakeDeviceEditorOptions = {}) {
 
 const tick = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms))
 
-describe('configurator client over the reference relay', () => {
+describe('configurator client over the relay', () => {
   it('takes a snapshot from the configuration and the device setup only, never the datapoints', async () => {
     const { client, fake, channel } = setup()
     await client.ready()
@@ -221,7 +221,7 @@ describe('configurator client failures', () => {
   })
 })
 
-describe('reference relay', () => {
+describe('relay', () => {
   it('rejects methods outside the protocol', async () => {
     const { client, channel } = setup()
     await client.ready()

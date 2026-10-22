@@ -1,7 +1,7 @@
 /**
- * Reference relay: runs inside the sandboxed iframe next to the vendor bundle and bridges
- * host postMessage requests to `window.DeviceEditorProvider`. The packaged `relay.js`
- * implements this same message surface.
+ * Relay: runs inside the sandboxed iframe next to the vendor bundle and bridges host postMessage
+ * requests to `window.DeviceEditorProvider`. `npm run build:relay` in openplc-editor bundles
+ * `installWindowRelay(window)` into the `relay.js` a vendor package ships.
  */
 
 import {
@@ -15,7 +15,7 @@ import {
   type RelayMethod,
   type RelayToHostMessage,
   type RelayTransport,
-} from '../../middleware/shared/vendor-document/protocol'
+} from './protocol'
 
 export interface DeviceEditorProviderLike {
   show(deviceId?: string): Promise<void>

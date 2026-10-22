@@ -57,6 +57,7 @@ npm run build            # Production build (main + renderer)
 npm run build:main       # Electron main process only
 npm run build:renderer   # React renderer only
 npm run build:dll        # Webpack DLL cache for faster dev rebuilds
+npm run build:relay      # Vendor-document relay.js for a VPP package (release/relay/)
 npm run package          # Build + create distributable (electron-builder)
 
 npm run lint             # ESLint check
@@ -126,6 +127,9 @@ npx playwright test e2e/<spec>.ts --workers=1
   check, so the package's boards silently never load.
 - **`app.close()` hangs with a project open**: the quit confirmation holds it. Kill the process
   (`app.process().kill('SIGKILL')`) once what the test needs is on disk.
+- **An unsigned fixture package is removed when a project opens.** A suite that installs one
+  (`e2e/fixtures/vendor-configurator/`) replaces the `packages:verify-signatures` handler with a
+  no-op once the bridge has registered it, as `e2e/vendor-configurator.spec.ts` does.
 
 Every open tab keeps its Monaco editor mounted (hidden with `display: none`), so read
 body text from `.view-lines:visible`, never `.view-lines` alone.

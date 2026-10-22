@@ -62,7 +62,7 @@ of the board, the configurator first:
 
 ```json
 "screens": {
-  "I/O Configurator": "screens/io-configurator.json",
+  "Backplane Configuration": "screens/backplane.json",
   "I/O Mapping": "screens/io-mapping.json"
 }
 ```
@@ -82,9 +82,10 @@ vendor draws the backplane at a fixed scale):
 
 - All three fields are required; a section missing one renders nothing. A board not listed in
   `controllers` gets a refusal that names the supported boards.
-- `persistence` defaults to `configurator`. The section also owns `device-setup` and `io-mapping`, so
-  dirty tracking, save and "Don't save" cover all three (`collectScreenPersistenceKeys`).
-- Screens with a `vendor-document` or `datapoint-io-table` section are linked
+- `persistence` defaults to `configurator`. The section also owns `device-setup`,
+  `module-configuration` and `io-mapping`, so dirty tracking, save and "Don't save" cover all four
+  (`collectScreenPersistenceKeys`).
+- Screens with a `vendor-document` section or an `io-table` section with `source: "device-setup"` are linked
   (`collectLinkedScreenKeys`): each owns the keys of all of them, a pending change marks every open
   linked tab unsaved, a save from either writes all keys and marks both saved, and "Don't save" from
   either restores all keys. A linked tab opened later takes the saved state of one already open.
@@ -99,8 +100,12 @@ vendor draws the backplane at a fixed scale):
   until the guest has been quiet for the settle time after boot. After that, a `modified` is a user
   change, snapshotted once events settle, and written by
   `applyConfiguratorSnapshot` in one store update: `configurator` `{archive, controller, bundleVersion}`
-  (archive byte-for-byte), `device-setup`, and `io-mapping` `{entries, unaddressable}` derived from the
-  datapoints with aliases carried over by `datapointId`.
+  (archive byte-for-byte), `device-setup` (the modules in bus order), `module-configuration.slots` (the
+  manifest module id of each slot, matched by exact `typeId`; `null` when the type is not in the
+  manifest catalogue) and `io-mapping.entries`. The entries come from the manifest channels of each
+  slot through the module-slots allocation rule (`allocateModuleSlots`): an alias is kept when the
+  same slot holds the same module id, and dropped aliases are reported in a toast. The configurator's
+  datapoints are not read.
 - A failed snapshot is retried with backoff, up to `SNAPSHOT_ATTEMPTS` (3) per pending change, then
   reported once; the change stays pending and the tab unsaved, and the next change starts over.
 - The dirty compare hashes the archive (`src/frontend/utils/vpp/owned-slice.ts`); `cleanState` keeps it
@@ -109,39 +114,63 @@ vendor draws the backplane at a fixed scale):
   switching tabs keeps the iframe and its session: a change still settling when the user leaves the
   tab is delivered. Closing the tab unmounts it; reopening replays the boot from the stored data.
 
-## The `datapoint-io-table` screen section
+## The read-only I/O Mapping screen section
 
-The I/O Mapping for a configurator-driven station is a section of layout `datapoint-io-table`
-(`vendor-screen/layouts/datapoint-io-table-layout.tsx`), alone on its own screen. It takes no fields
-beyond `id` and `title`:
+The I/O Mapping for a configurator-driven station is an `io-table` section with `source: "device-setup"`
+(`vendor-screen/layouts/device-setup-io-table.tsx`), alone on its own screen:
 
 ```json
-{ "id": "io-mapping", "title": "I/O Mapping", "layout": "datapoint-io-table" }
+{
+  "id": "io-mapping",
+  "title": "I/O Mapping",
+  "layout": "io-table",
+  "source": "device-setup",
+  "persistence": "io-mapping"
+}
 ```
 
-- It reads `device-setup` (modules, in slot order) and `io-mapping` (channels and addresses), the keys
-  the `vendor-document` section writes, and owns both whatever `persistence` says.
-- Under the channels it lists the datapoints the configurator reported without an IEC address, stored
-  as `io-mapping.unaddressable`. Writers of `io-mapping` keep that field: the alias edit and
-  `recalculateIecAddresses` replace only `entries`; compile and the plugin config read only `entries`.
+- It reads `device-setup` (module groups in slot order, by instance name), `module-configuration` and
+  `io-mapping` (channels and addresses), the keys the `vendor-document` section writes, and owns them
+  whatever `persistence` says. It runs no allocation on mount.
+- A slot whose `module-configuration` id is `null` shows a "Not in catalogue" badge and no rows. Saving
+  stays allowed; an `io-ranges` build refuses that station.
 - It is read-only: no slot picker, add, remove, clear, reorder, mode or parameter controls, and any
   `actions` on the section are ignored. The station is changed only in the configurator.
 - The Alias cell is the one write: `validateAliasEdit` gates it, `renameAlias` cascades a rename onto
-  bound variables, and the session alias memory is keyed by `datapointId`.
+  bound variables, and the session alias memory is keyed by module id, slot and channel name (`vppMemoryKey`).
+
+## Plugin hand-off
+
+A device with `hal.pluginConfigFormat: "io-ranges"` gets an `io-ranges` plugin config
+(`src/backend/shared/utils/vpp/generate-io-ranges-plugin-config.ts`) instead of `slots`:
+
+- Each channel's bus offset is the sum of the `processImage` bytes of the earlier slots in its direction
+  plus its own module-relative `wire`; its PLC position is its `io-mapping` address. Channels of one
+  module, kind and direction that are contiguous on both sides merge into one range.
+- The build refuses a station with a slot not in the catalogue, a module without `processImage`, or a
+  channel without `wire`.
+- The stored archive (hex) is written as `conf/<pluginName>.station.bin` next to `conf/<pluginName>.json`,
+  which names it in `configuration_archive` with its `configuration_sha256`. Without an archive the
+  plugin starts with a blank project and the build log says so.
 
 ## End-to-end tests
 
-`e2e/vendor-configurator.spec.ts` (both repos) drives the embedded configurator with a fake Device
-Editor: add a module, switch to the I/O Mapping screen at once and check its channels and addresses
-there, set an alias, switch back and find the same iframe (not booted again), reopen and find the alias
-kept, and check that the sandboxed guest reaches nothing of the host.
+`e2e/vendor-configurator.spec.ts` (editor) drives the embedded configurator with a fake Device Editor:
+add a module, switch to the I/O Mapping screen at once and check its channels and addresses there, set
+an alias, switch back and find the same iframe (not booted again), reopen and find the alias kept, check
+the stored `module-configuration` and `io-mapping`, and check that the sandboxed guest reaches nothing
+of the host.
 
-- The fake bundle and the reference relay (`src/__fixtures__/fake-device-editor/`) are bundled with
-  webpack into `relay.js` and `index.js` by `e2e/fixtures/vendor-configurator/build-package.ts`
-  (editor), next to `index.html`; `guest-device-editor.ts` also runs the sandbox probes.
-- Editor: the fixture package is unsigned, so the spec replaces the `packages:verify-signatures`
-  handler with a no-op after the bridge registers it. Signature checking in the app is unchanged.
-- Web: the browser accepts only packages signed with the production key, so the spec needs the signed
-  e2e package built by openplc-packages, passed as `E2E_VPP_FIXTURE=<path to .vpp>`, and skips without
-  it. It mocks the Edge routes with `page.route` and needs the dev server started with
-  `VITE_DEV_LOCAL_PROJECT=1 VITE_VPP_DOCUMENT_ROUTE_ENABLED=true`.
+- The relay (`src/middleware/shared/vendor-document/relay.ts`) and the fake bundle
+  (`src/__fixtures__/fake-device-editor/`) are bundled with webpack into `relay.js` and `index.js` by
+  `e2e/fixtures/vendor-configurator/build-package.ts`, next to `index.html`; `guest-device-editor.ts`
+  also runs the sandbox probes. The fixture manifest carries a catalogue for the fake's module types.
+- The fixture package is unsigned, so the spec replaces the `packages:verify-signatures` handler with a
+  no-op after the bridge registers it. Signature checking in the app is unchanged.
+- openplc-web has no e2e for it: the browser accepts only packages signed with the production key.
+
+## Building the packaged relay
+
+`npm run build:relay` bundles `installWindowRelay(window)` into `release/relay/relay.js`
+(`-- --out <dir>` writes elsewhere). A vendor package ships that file under `configurator/`, loaded by
+its `index.html` before the vendor bundle.

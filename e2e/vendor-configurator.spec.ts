@@ -5,7 +5,8 @@
  * alias set there survives a save and a relaunch, and nothing the guest tries reaches the host.
  *
  * The fixture package is unsigned, so each launch replaces the `packages:verify-signatures`
- * handler with one that removes nothing; the production check is unchanged.
+ * handler with one that removes nothing; the production check is unchanged. Its manifest carries
+ * a catalogue for the fake's module types, so rows come from the manifest channel names.
  *
  * Needs a production build and the preload copy; see "Electron e2e" in CLAUDE.md.
  */
@@ -289,8 +290,24 @@ test('a module added in the configurator is mapped, and its alias survives a rel
     vendorScreenData: {
       configurator: { bundleVersion: '3.5.22', controller: 'UC20-M3000' },
       'device-setup': { modules: [{ guid: 'fake-0001', instanceName: 'FAKE-4DI_1', typeId: 'FAKE-4DI', slot: 1 }] },
+      'module-configuration': { slots: ['fake-4di'] },
+      'io-mapping': {
+        entries: expect.arrayContaining([
+          expect.objectContaining({
+            slot: 1,
+            channelName: 'DI.0',
+            iecAddress: expect.stringMatching(/^%IX\d+\.\d$/),
+            alias: 'pump_run',
+          }),
+          expect.objectContaining({ slot: 1, channelName: 'status', iecAddress: expect.stringMatching(/^%IB\d+$/) }),
+        ]),
+      },
     },
   })
+  const entries = (stored as { vendorScreenData: { 'io-mapping': { entries: Array<Record<string, unknown>> } } })
+    .vendorScreenData['io-mapping'].entries
+  expect(entries).toHaveLength(5)
+  for (const entry of entries) expect(entry).not.toHaveProperty('datapointId')
 
   {
     const { app, page } = await launch(paths)
