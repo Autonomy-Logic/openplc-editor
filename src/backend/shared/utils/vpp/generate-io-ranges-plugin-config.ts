@@ -178,8 +178,17 @@ export function generateIoRangesPluginConfig(
       continue
     }
 
+    const channels = readChannels(module.addressMapping)
+    const known = new Set(channels.map((channel) => channel.name))
+    for (const entry of entries) {
+      if (entry.slot !== slotNumber || typeof entry.channelName !== 'string' || known.has(entry.channelName)) continue
+      errors.push(
+        `Slot ${slotNumber}: ${entry.channelName} is not a channel of ${module.name} in the manifest, so it cannot be mapped`,
+      )
+    }
+
     const placed: Placed[] = []
-    for (const channel of readChannels(module.addressMapping)) {
+    for (const channel of channels) {
       const entry = entries.find((candidate) => candidate.slot === slotNumber && candidate.channelName === channel.name)
       if (typeof entry?.iecAddress !== 'string' || entry.iecAddress === '') continue
       const address = parseAddress(entry.iecAddress)

@@ -188,6 +188,19 @@ describe('generateIoRangesPluginConfig', () => {
     if (!result.ok) expect(result.errors[0]).toBe('Slot 1: DI_0 of UR20-16DI-P declares no valid wire position')
   })
 
+  it('refuses a mapped channel the manifest channel list does not declare', () => {
+    const variant = { ...DI, addressMapping: { channelsByFormat: { raw: [] }, channels: [] } }
+    const result = generateIoRangesPluginConfig(TEMPLATE, screenData(['ur20-16di-p']), [variant], null)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errors).toHaveLength(16)
+      expect(result.errors[0]).toBe(
+        'Slot 1: DI_0 is not a channel of UR20-16DI-P in the manifest, so it cannot be mapped',
+      )
+    }
+  })
+
   it('refuses an address it cannot place', () => {
     const data = screenData(['ur20-16di-p'])
     const entries = (data['io-mapping'] as { entries: Array<{ iecAddress: string }> }).entries

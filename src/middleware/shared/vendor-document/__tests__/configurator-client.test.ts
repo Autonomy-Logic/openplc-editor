@@ -15,6 +15,8 @@ import {
 } from '../configurator-client'
 import {
   type HostToRelayMessage,
+  MAX_ARCHIVE_HEX_LENGTH,
+  MAX_DEVICE_SETUP_DEVICES,
   RELAY_CHANNEL,
   RELAY_PROTOCOL_VERSION,
   type RelayToHostMessage,
@@ -88,6 +90,31 @@ describe('configurator client over the relay', () => {
       typeof message === 'object' && message !== null && 'method' in message ? [message.method] : [],
     )
     expect(methods).toEqual(['getConfiguration', 'getDeviceSetup'])
+  })
+
+  it('refuses a snapshot whose archive is not bounded hex', async () => {
+    for (const archive of ['zz', 'abc', '', 'a'.repeat(MAX_ARCHIVE_HEX_LENGTH + 2)]) {
+      const { client, scope } = setup()
+      await client.ready()
+      const provider = scope.DeviceEditorProvider
+      if (!provider) throw new Error('the fake published no provider')
+      provider.getConfiguration = () => Promise.resolve(archive)
+      await expect(client.snapshot()).rejects.toBeInstanceOf(ConfiguratorRemoteError)
+    }
+  })
+
+  it('refuses a device setup with more devices than the bound', async () => {
+    const { client, scope } = setup()
+    await client.ready()
+    const provider = scope.DeviceEditorProvider
+    if (!provider) throw new Error('the fake published no provider')
+    const device = { guid: 'g', name: 'n', typeId: 't' }
+    provider.getDeviceSetup = () =>
+      Promise.resolve({
+        systembus: device,
+        devices: Array.from({ length: MAX_DEVICE_SETUP_DEVICES + 1 }, () => device),
+      })
+    await expect(client.getDeviceSetup()).rejects.toBeInstanceOf(ConfiguratorRemoteError)
   })
 
   it('becomes ready only after the bundle publishes its consumer, then relays its events', async () => {

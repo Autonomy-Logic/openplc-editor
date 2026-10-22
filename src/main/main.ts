@@ -49,6 +49,7 @@ export let mainWindow: BrowserWindow | null = null
 export let splash: BrowserWindow | null = null
 
 let mainIpcModule: MainProcessBridge | undefined
+let packageManager: PackageManagerModule | undefined
 // One per process, not per window: macOS re-creates the window on activate.
 const updateService = createElectronUpdateService({
   getWindow: () => mainWindow,
@@ -398,6 +399,7 @@ const createMainWindow = async () => {
     compilerModule,
     hardwareModule,
     quitCoordinator,
+    packageManagerModule: packageManager,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
 }
@@ -503,10 +505,11 @@ app.on('second-instance', () => {
 app
   .whenReady()
   .then(() => {
-    const packageManager = new PackageManagerModule()
+    const packages = new PackageManagerModule()
+    packageManager = packages
     protocol.handle(
       VENDOR_DOCUMENT_SCHEME,
-      createVendorDocumentHandler({ listPackages: () => packageManager.listInstalled() }),
+      createVendorDocumentHandler({ listPackages: () => packages.listInstalled() }),
     )
     void createMainWindow()
     // Last session's cloud builds. The cloud is the source of truth for those

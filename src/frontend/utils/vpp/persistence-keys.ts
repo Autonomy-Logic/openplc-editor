@@ -42,7 +42,7 @@ export const DEVICE_SETUP_SOURCE = 'device-setup'
 export const DEVICE_SETUP_KEY = 'device-setup'
 export const IO_MAPPING_KEY = 'io-mapping'
 export const MODULE_CONFIGURATION_KEY = 'module-configuration'
-const DEFAULT_CONFIGURATOR_KEY = 'configurator'
+const CONFIGURATOR_KEY = 'configurator'
 
 export function isDeviceSetupIoTable(section: PersistableSection): boolean {
   return section.layout === IO_TABLE_LAYOUT && section.source === DEVICE_SETUP_SOURCE
@@ -58,10 +58,10 @@ export function isDeviceSetupIoTable(section: PersistableSection): boolean {
  */
 export function getSectionPersistenceKey(section: PersistableSection | null | undefined): string | null {
   if (!section || typeof section !== 'object') return null
-  // Reads what a configurator section wrote, so its key is fixed.
+  // The configurator and the table it drives use fixed keys: the build reads the archive from `configurator`.
   if (isDeviceSetupIoTable(section)) return IO_MAPPING_KEY
+  if (section.layout === VENDOR_DOCUMENT_LAYOUT) return CONFIGURATOR_KEY
   if (typeof section.persistence === 'string' && section.persistence.length > 0) return section.persistence
-  if (section.layout === VENDOR_DOCUMENT_LAYOUT) return DEFAULT_CONFIGURATOR_KEY
   if (typeof section.id === 'string' && section.id.length > 0) return section.id
   return null
 }
@@ -88,7 +88,7 @@ export function collectScreenPersistenceKeys(screenDefinition: unknown): string[
     add(key)
     // A configurator section writes the device setup, its module slots and their I/O mapping in one store write.
     if (section.layout === VENDOR_DOCUMENT_LAYOUT || isDeviceSetupIoTable(section)) {
-      if (isDeviceSetupIoTable(section)) add(DEFAULT_CONFIGURATOR_KEY)
+      if (isDeviceSetupIoTable(section)) add(CONFIGURATOR_KEY)
       add(DEVICE_SETUP_KEY)
       add(MODULE_CONFIGURATION_KEY)
       add(IO_MAPPING_KEY)

@@ -82,7 +82,8 @@ vendor draws the backplane at a fixed scale):
 
 - All three fields are required; a section missing one renders nothing. A board not listed in
   `controllers` gets a refusal that names the supported boards.
-- `persistence` defaults to `configurator`. The section also owns `device-setup`,
+- The section always persists to `configurator` (a `persistence` value is ignored: the build reads the
+  archive from that key). It also owns `device-setup`,
   `module-configuration` and `io-mapping`, so dirty tracking, save and "Don't save" cover all four
   (`collectScreenPersistenceKeys`).
 - Screens with a `vendor-document` section or an `io-table` section with `source: "device-setup"` are linked

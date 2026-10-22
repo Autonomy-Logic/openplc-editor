@@ -22,6 +22,7 @@
  */
 
 import type { PackageManifest, VppModuleDefinition } from '../../../../middleware/shared/ports/types'
+import { configuratorArchiveSchema } from '../../../../middleware/shared/vendor-document/protocol'
 import { generateIoRangesPluginConfig } from './generate-io-ranges-plugin-config'
 import { generateVendorPluginConfig } from './generate-vendor-plugin-config'
 import { describeVppPinDrift, type InstalledVppIdentity, type VppPackagePin } from './vpp-package-pin'
@@ -32,7 +33,6 @@ const EXCLUDED_PLUGIN_FILES = new Set(['config_template.json', 'requirements.txt
 const CHECKSUM_FILENAME = 'checksum.sha256'
 const STATION_ARCHIVE_SUFFIX = '.station.bin'
 const CONFIGURATOR_KEY = 'configurator'
-const HEX_PATTERN = /^(?:[0-9a-fA-F]{2})+$/
 const TRUSTED_KEYS_FILENAME = 'trusted_keys.c'
 
 export type VppDevice = PackageManifest['devices'][number]
@@ -153,7 +153,7 @@ export async function buildVppPluginFiles(args: BuildVppPluginFilesArgs): Promis
     if (device.hal?.pluginConfigFormat === 'io-ranges') {
       const archive = readConfiguratorArchive(vendorScreenData)
       if (archive === 'invalid') {
-        errors.push('The I/O configurator station stored in the project is not valid hex data')
+        errors.push('The I/O configurator station stored in the project is not valid hex data or is too large')
         return empty(pluginName)
       }
       const archiveFileName = `${pluginName}${STATION_ARCHIVE_SUFFIX}`
@@ -271,7 +271,7 @@ function readConfiguratorArchive(vendorScreenData: Record<string, unknown>): Uin
   if (record === null || typeof record !== 'object') return null
   const archive = (record as { archive?: unknown }).archive
   if (archive === undefined || archive === '') return null
-  if (typeof archive !== 'string' || !HEX_PATTERN.test(archive)) return 'invalid'
+  if (typeof archive !== 'string' || !configuratorArchiveSchema.safeParse(archive).success) return 'invalid'
   const bytes = new Uint8Array(archive.length / 2)
   for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(archive.slice(i * 2, i * 2 + 2), 16)
   return bytes

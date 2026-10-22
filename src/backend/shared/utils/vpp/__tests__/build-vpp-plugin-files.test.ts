@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 
 import { describe, expect, it } from '@jest/globals'
 
+import { MAX_ARCHIVE_HEX_LENGTH } from '../../../../../middleware/shared/vendor-document/protocol'
 import { buildVppPluginFiles, type VppDevice } from '../build-vpp-plugin-files'
 
 const sha256Hex = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex')
@@ -363,9 +364,11 @@ describe('buildVppPluginFiles', () => {
     })
 
     it('refuses an archive that is not hex', async () => {
-      for (const archive of ['xyz', 'abc', 42]) {
+      for (const archive of ['xyz', 'abc', 42, 'a'.repeat(MAX_ARCHIVE_HEX_LENGTH + 2)]) {
         const result = await build(station(archive))
-        expect(result.errors).toEqual(['The I/O configurator station stored in the project is not valid hex data'])
+        expect(result.errors).toEqual([
+          'The I/O configurator station stored in the project is not valid hex data or is too large',
+        ])
         expect(result.files).toEqual({})
       }
     })

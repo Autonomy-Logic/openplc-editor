@@ -34,9 +34,11 @@ describe('getSectionPersistenceKey', () => {
     expect(getSectionPersistenceKey(undefined)).toBeNull()
   })
 
-  it('defaults a vendor-document section to the configurator key', () => {
+  it('always gives a vendor-document section the configurator key', () => {
     expect(getSectionPersistenceKey({ id: 'editor', layout: 'vendor-document' })).toBe('configurator')
-    expect(getSectionPersistenceKey({ id: 'editor', layout: 'vendor-document', persistence: 'cfg' })).toBe('cfg')
+    expect(getSectionPersistenceKey({ id: 'editor', layout: 'vendor-document', persistence: 'cfg' })).toBe(
+      'configurator',
+    )
   })
 
   it('pins a device-setup io-table section to the I/O mapping a configurator writes', () => {

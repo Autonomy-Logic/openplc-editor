@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { ConfiguratorPort, ConfiguratorSnapshot } from '../ports/configurator-port'
 import type { Unsubscribe } from '../ports/types'
 import {
+  configuratorArchiveSchema,
   deviceSetupSchema,
   type HostToRelayMessage,
   parseRelayToHostMessage,
@@ -167,7 +168,7 @@ export function createConfiguratorClient(
     },
     getDeviceSetup,
     snapshot: async (): Promise<ConfiguratorSnapshot> => {
-      const archive = parseResult('getConfiguration', z.string(), await request('getConfiguration', []))
+      const archive = parseResult('getConfiguration', configuratorArchiveSchema, await request('getConfiguration', []))
       const deviceSetup = await getDeviceSetup()
       return { archive, deviceSetup }
     },

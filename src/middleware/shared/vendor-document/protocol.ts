@@ -12,16 +12,27 @@ import { z } from 'zod'
 export const RELAY_CHANNEL = 'openplc.vendor-document'
 export const RELAY_PROTOCOL_VERSION = 1
 
+/** Hex characters; a Device Editor 3.5.22 station archive is around 25,000. */
+export const MAX_ARCHIVE_HEX_LENGTH = 16 * 1024 * 1024
+export const MAX_DEVICE_SETUP_DEVICES = 256
+const MAX_IDENTIFIER_LENGTH = 256
+
+/** The configurator's opaque station archive: non-empty, even-length hex. */
+export const configuratorArchiveSchema = z
+  .string()
+  .max(MAX_ARCHIVE_HEX_LENGTH)
+  .regex(/^(?:[0-9a-fA-F]{2})+$/, 'is not hex')
+
 export const deviceReferenceSchema = z.object({
-  guid: z.string(),
-  name: z.string(),
-  typeId: z.string(),
+  guid: z.string().max(MAX_IDENTIFIER_LENGTH),
+  name: z.string().max(MAX_IDENTIFIER_LENGTH),
+  typeId: z.string().max(MAX_IDENTIFIER_LENGTH),
 })
 export type DeviceReference = z.infer<typeof deviceReferenceSchema>
 
 export const deviceSetupSchema = z.object({
   systembus: deviceReferenceSchema,
-  devices: z.array(deviceReferenceSchema),
+  devices: z.array(deviceReferenceSchema).max(MAX_DEVICE_SETUP_DEVICES),
 })
 export type DeviceSetup = z.infer<typeof deviceSetupSchema>
 
