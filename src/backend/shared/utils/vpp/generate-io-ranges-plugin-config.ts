@@ -75,18 +75,31 @@ function parseAddress(address: string): { input: boolean; kind: RangeKind; plc: 
   return { input: match[1] === 'I', kind, plc: index }
 }
 
-function readChannels(addressMapping: unknown): Array<{ name: string; wire?: { byte: number; bit?: number } }> {
-  if (addressMapping === null || typeof addressMapping !== 'object') return []
-  const channels = (addressMapping as { channels?: unknown }).channels
-  if (!Array.isArray(channels)) return []
-  return channels.filter(
-    (channel): channel is { name: string; wire?: { byte: number; bit?: number } } =>
-      channel !== null && typeof channel === 'object' && typeof (channel as { name?: unknown }).name === 'string',
-  )
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** The plain-object elements of `container[key]`; anything else in the list is skipped. */
+function recordsAt(container: unknown, key: string): Array<Record<string, unknown>> {
+  if (!isRecord(container)) return []
+  const list = container[key]
+  return Array.isArray(list) ? list.filter(isRecord) : []
 }
 
 function isByteCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}
+
+function readChannels(addressMapping: unknown): Array<{ name: string; wire: unknown }> {
+  return recordsAt(addressMapping, 'channels').flatMap((channel) =>
+    typeof channel.name === 'string' ? [{ name: channel.name, wire: channel.wire }] : [],
+  )
+}
+
+function readWire(wire: unknown): { byte: number; bit?: number } | null {
+  if (!isRecord(wire) || !isByteCount(wire.byte)) return null
+  if (wire.bit === undefined) return { byte: wire.byte }
+  return isByteCount(wire.bit) && wire.bit < 8 ? { byte: wire.byte, bit: wire.bit } : null
 }
 
 function toRange(first: Placed, count: number, slot: number, module: string): IoRange {
@@ -136,20 +149,11 @@ export function generateIoRangesPluginConfig(
   archive: IoRangesArchive | null,
 ): IoRangesResult {
   const errors: string[] = []
-  const moduleConfiguration = vendorScreenData['module-configuration'] as { slots?: unknown } | undefined
-  const slots: unknown[] = Array.isArray(moduleConfiguration?.slots) ? moduleConfiguration.slots : []
-  const ioMapping = vendorScreenData['io-mapping'] as { entries?: unknown } | undefined
-  const entries = (Array.isArray(ioMapping?.entries) ? ioMapping.entries : []) as Array<{
-    slot?: unknown
-    channelName?: unknown
-    iecAddress?: unknown
-  }>
-  const deviceSetup = vendorScreenData['device-setup'] as { modules?: unknown } | undefined
-  const setupModules = (Array.isArray(deviceSetup?.modules) ? deviceSetup.modules : []) as Array<{
-    slot?: unknown
-    instanceName?: unknown
-    typeId?: unknown
-  }>
+  const moduleConfiguration = vendorScreenData['module-configuration']
+  const slots: unknown[] =
+    isRecord(moduleConfiguration) && Array.isArray(moduleConfiguration.slots) ? moduleConfiguration.slots : []
+  const entries = recordsAt(vendorScreenData['io-mapping'], 'entries')
+  const setupModules = recordsAt(vendorScreenData['device-setup'], 'modules')
 
   const inputs: IoRange[] = []
   const outputs: IoRange[] = []
@@ -196,8 +200,8 @@ export function generateIoRangesPluginConfig(
         errors.push(`Slot ${slotNumber}: ${channel.name} has an unsupported address ${entry.iecAddress}`)
         continue
       }
-      const wire = channel.wire
-      if (!wire || !isByteCount(wire.byte) || (wire.bit !== undefined && !(isByteCount(wire.bit) && wire.bit < 8))) {
+      const wire = readWire(channel.wire)
+      if (!wire) {
         errors.push(`Slot ${slotNumber}: ${channel.name} of ${module.name} declares no valid wire position`)
         continue
       }

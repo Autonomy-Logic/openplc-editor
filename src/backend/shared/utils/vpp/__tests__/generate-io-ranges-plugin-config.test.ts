@@ -211,6 +211,23 @@ describe('generateIoRangesPluginConfig', () => {
     expect(result).toEqual({ ok: false, errors: ['Slot 1: DI_0 has an unsupported address %IX0'] })
   })
 
+  it('returns errors, never throws, on malformed stored records', () => {
+    const data = screenData(['ur20-16di-p', null], {
+      'device-setup': { modules: [null, 7, { slot: 2, instanceName: 'UR20_NEW_1', typeId: 'deadbeef' }] },
+    })
+    ;(data['io-mapping'] as { entries: unknown[] }).entries.unshift(null, 'x', 3)
+
+    const result = generateIoRangesPluginConfig(TEMPLATE, data, MODULES, null)
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ['Slot 2: UR20_NEW_1 (type deadbeef) is not in the package catalogue, so its I/O cannot be mapped'],
+    })
+    expect(
+      generateIoRangesPluginConfig(TEMPLATE, { 'module-configuration': null, 'io-mapping': 'x' }, MODULES, null),
+    ).toEqual({ ok: true, config: expect.objectContaining({ inputs: [], outputs: [] }) })
+  })
+
   it('skips channels with no address and emits empty ranges for an empty station', () => {
     expect(generate({}).inputs).toEqual([])
     const data = screenData(['ur20-16di-p'])
