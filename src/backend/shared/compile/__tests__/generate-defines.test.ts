@@ -27,7 +27,6 @@ function makePin(overrides: { pin: string | number; pinType: DevicePin['pinType'
 const EMPTY_INPUTS = {
   boardEntry: undefined as BoardHalsDefinesEntry | undefined,
   devicePinMapping: [] as DevicePin[],
-  stProgramFileContent: '',
   buildMD5Hash: 'abc123',
   boardRuntime: 'arduino-cli',
 }
@@ -374,96 +373,6 @@ describe('generateDefinesContent — PINPULL_DIN', () => {
   })
 })
 
-describe('generateDefinesContent — Arduino library toggles', () => {
-  function withMarker(marker: string) {
-    return generateDefinesContent({ ...EMPTY_INPUTS, stProgramFileContent: `PROGRAM main\n${marker}\nEND_PROGRAM` })
-  }
-
-  it('toggles USE_DS18B20_BLOCK for any of the five DS18B20 FB markers', () => {
-    expect(withMarker('DS18B20;')).toContain('#define USE_DS18B20_BLOCK\n')
-    expect(withMarker('DS18B20_2_OUT;')).toContain('#define USE_DS18B20_BLOCK\n')
-    expect(withMarker('DS18B20_3_OUT;')).toContain('#define USE_DS18B20_BLOCK\n')
-    expect(withMarker('DS18B20_4_OUT;')).toContain('#define USE_DS18B20_BLOCK\n')
-    expect(withMarker('DS18B20_5_OUT;')).toContain('#define USE_DS18B20_BLOCK\n')
-  })
-
-  it('toggles USE_P1AM_BLOCKS on P1AM_INIT;', () => {
-    expect(withMarker('P1AM_INIT;')).toContain('#define USE_P1AM_BLOCKS\n')
-  })
-
-  it('toggles USE_CLOUD_BLOCKS on CLOUD_BEGIN;', () => {
-    expect(withMarker('CLOUD_BEGIN;')).toContain('#define USE_CLOUD_BLOCKS\n')
-  })
-
-  it('toggles USE_MQTT_BLOCKS for either MQTT_CONNECT; or MQTT_CONNECT_AUTH;', () => {
-    expect(withMarker('MQTT_CONNECT;')).toContain('#define USE_MQTT_BLOCKS\n')
-    expect(withMarker('MQTT_CONNECT_AUTH;')).toContain('#define USE_MQTT_BLOCKS\n')
-  })
-
-  it('toggles USE_ARDUINOCAN_BLOCK for any of the four ARDUINOCAN markers', () => {
-    expect(withMarker('ARDUINOCAN_CONF;')).toContain('#define USE_ARDUINOCAN_BLOCK\n')
-    expect(withMarker('ARDUINOCAN_WRITE;')).toContain('#define USE_ARDUINOCAN_BLOCK\n')
-    expect(withMarker('ARDUINOCAN_WRITE_WORD;')).toContain('#define USE_ARDUINOCAN_BLOCK\n')
-    expect(withMarker('ARDUINOCAN_READ;')).toContain('#define USE_ARDUINOCAN_BLOCK\n')
-  })
-
-  it('toggles USE_STM32CAN_BLOCK for any of the three STM32CAN markers', () => {
-    expect(withMarker('STM32CAN_CONF;')).toContain('#define USE_STM32CAN_BLOCK\n')
-    expect(withMarker('STM32CAN_WRITE;')).toContain('#define USE_STM32CAN_BLOCK\n')
-    expect(withMarker('STM32CAN_READ;')).toContain('#define USE_STM32CAN_BLOCK\n')
-  })
-
-  it('toggles USE_SM_BLOCKS for any of the ten SM_* markers', () => {
-    const markers = [
-      'SM_8RELAY;',
-      'SM_16RELAY;',
-      'SM_8DIN;',
-      'SM_16DIN;',
-      'SM_4REL4IN;',
-      'SM_INDUSTRIAL;',
-      'SM_RTD;',
-      'SM_BAS;',
-      'SM_HOME;',
-      'SM_8MOSFET;',
-    ]
-    for (const m of markers) {
-      expect(withMarker(m)).toContain('#define USE_SM_BLOCKS\n')
-    }
-  })
-
-  it('omits all USE_*_BLOCK defines when no markers are present', () => {
-    const out = generateDefinesContent({ ...EMPTY_INPUTS, stProgramFileContent: 'PROGRAM main\nEND_PROGRAM' })
-    expect(out).not.toContain('USE_DS18B20_BLOCK')
-    expect(out).not.toContain('USE_P1AM_BLOCKS')
-    expect(out).not.toContain('USE_CLOUD_BLOCKS')
-    expect(out).not.toContain('USE_MQTT_BLOCKS')
-    expect(out).not.toContain('USE_ARDUINOCAN_BLOCK')
-    expect(out).not.toContain('USE_STM32CAN_BLOCK')
-    expect(out).not.toContain('USE_SM_BLOCKS')
-  })
-
-  it('emits multiple library toggles when several markers co-occur', () => {
-    const st = 'P1AM_INIT;\nMQTT_CONNECT;\nDS18B20_3_OUT;\nSM_8RELAY;'
-    const out = generateDefinesContent({ ...EMPTY_INPUTS, stProgramFileContent: st })
-    expect(out).toContain('#define USE_DS18B20_BLOCK\n')
-    expect(out).toContain('#define USE_P1AM_BLOCKS\n')
-    expect(out).toContain('#define USE_MQTT_BLOCKS\n')
-    expect(out).toContain('#define USE_SM_BLOCKS\n')
-    expect(out).not.toContain('USE_CLOUD_BLOCKS')
-    expect(out).not.toContain('USE_ARDUINOCAN_BLOCK')
-    expect(out).not.toContain('USE_STM32CAN_BLOCK')
-  })
-
-  it('uses substring matching, not whole-word — markers within larger tokens still trigger', () => {
-    // Editor uses `String.prototype.includes`, so e.g. `XDS18B20;` is
-    // technically also a hit because it contains `DS18B20;`.  This is
-    // the editor's behavior; pin it so a future change to whole-word
-    // matching surfaces as a test failure.
-    const out = generateDefinesContent({ ...EMPTY_INPUTS, stProgramFileContent: 'XDS18B20;' })
-    expect(out).toContain('#define USE_DS18B20_BLOCK\n')
-  })
-})
-
 describe('generateDefinesContent — retain blob size', () => {
   it('emits OPLC_RETAIN_BLOB_SIZE when the program retains something', () => {
     const out = generateDefinesContent({ ...EMPTY_INPUTS, retainBlobSize: 148 })
@@ -578,7 +487,6 @@ describe('generateDefinesContent — full output snapshot', () => {
         makePin({ pin: 3, pinType: 'digitalInput' }),
         makePin({ pin: 13, pinType: 'digitalOutput' }),
       ],
-      stProgramFileContent: 'PROGRAM main\nVAR\nEND_VAR\nEND_PROGRAM',
       buildMD5Hash: '0123456789abcdef0123456789abcdef',
       boardRuntime: 'simulator',
     })
@@ -612,17 +520,15 @@ describe('generateDefinesContent — full output snapshot', () => {
         '#define NUM_ANALOG_OUTPUT 0',
         '',
         '',
-        '//Arduino libraries',
         '',
       ].join('\n'),
     )
   })
 
-  it('produces the canonical defines.h for a non-simulator project with library toggles', () => {
+  it('produces the canonical defines.h for a non-simulator project', () => {
     const out = generateDefinesContent({
       boardEntry: { define: 'PIN_LED=13' },
       devicePinMapping: [makePin({ pin: 4, pinType: 'analogInput' })],
-      stProgramFileContent: 'CLOUD_BEGIN; MQTT_CONNECT_AUTH;',
       buildMD5Hash: 'ff'.repeat(16),
       boardRuntime: 'arduino-cli',
     })
@@ -654,9 +560,6 @@ describe('generateDefinesContent — full output snapshot', () => {
         '#define NUM_ANALOG_OUTPUT 0',
         '',
         '',
-        '//Arduino libraries',
-        '#define USE_CLOUD_BLOCKS',
-        '#define USE_MQTT_BLOCKS',
         '',
       ].join('\n'),
     )

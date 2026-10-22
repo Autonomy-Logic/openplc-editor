@@ -1,5 +1,6 @@
-// Simulator HAL — derived from openplc-editor's
-// resources/sources/hal/mega_due.cpp.
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
+// Simulator HAL — derived from the former Mega/Due HAL.
 //
 // Identical I/O wiring (digital + analog mappings against PINMASK_*)
 // so the simulator's view of pin layout matches what the editor's

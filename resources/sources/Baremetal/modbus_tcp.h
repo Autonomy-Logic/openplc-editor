@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 modbus_tcp.h - Modbus TCP transport (Ethernet / WiFi / ESP ETH)
-Copyright (C) 2022 OpenPLC - Thiago Alves
 
 The TCP wire: brings the platform networking stack up, accepts up to
 MAX_SRV_CLIENTS connections and services MBAP-framed requests. Like the serial

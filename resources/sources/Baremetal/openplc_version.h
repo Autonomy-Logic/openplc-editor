@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 openplc_version.h - OpenPLC runtime/firmware version
-Copyright (C) 2022 OpenPLC - Thiago Alves
 
 Single source of truth for the firmware version reported by the always-on
 debugger (Modbus FC 0x47, DEBUG_GET_VERSION). This is a property of the

@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 license_blob.h - On-device license blob binary layout + storage CRC (OLS-01, OLS-03)
-Copyright (C) 2022 OpenPLC - Thiago Alves
 
 Materialization of lic_payload_t / lic_blob_t (see hardware-licensing design).
 Shared by every storage backend (AVR EEPROM, ESP32 NVS) and by the Modbus
