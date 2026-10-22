@@ -9,7 +9,7 @@ function data(archive: string, alias = '') {
   return {
     configurator: { archive, controller: 'UC20-M3000', bundleVersion: '3.5.22' },
     'device-setup': { modules: [{ guid: 'g1', instanceName: 'M1', typeId: 'T', slot: 1 }] },
-    'io-mapping': { entries: [{ datapointId: 'g1_0', alias }] },
+    'io-mapping': { entries: [{ slot: 1, channelName: 'input_image_1', alias }] },
     'hal-config': { unrelated: true },
   }
 }

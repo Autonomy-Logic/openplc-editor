@@ -1,4 +1,9 @@
-import { isValidManifestPrefix, resolveModuleChannels, type ResolverModuleDef } from '../resolve-module-channels'
+import {
+  isValidManifestPrefix,
+  MANIFEST_ADDRESS_PREFIXES,
+  resolveModuleChannels,
+  type ResolverModuleDef,
+} from '../resolve-module-channels'
 
 const rawChannels = [{ name: 'AI1', type: 'analogInput', dataType: 'UINT', addressPrefix: '%IW' }]
 const euChannels = [{ name: 'AI1', type: 'analogInput', dataType: 'REAL', addressPrefix: '%ID' }]
@@ -170,8 +175,15 @@ describe('manifest address prefixes', () => {
   const withChannels = (channels: unknown[]) =>
     resolveModuleChannels({ addressMapping: { channels } } as never, undefined)
 
-  it('accepts the eight the package schema allows', () => {
-    for (const prefix of ['%IX', '%QX', '%IW', '%QW', '%ID', '%QD', '%IL', '%QL']) {
+  // Same literal list as the openplc-packages manifest schema `addressPrefix` enum.
+  const SCHEMA_ADDRESS_PREFIXES = ['%IX', '%QX', '%IB', '%QB', '%IW', '%QW', '%ID', '%QD', '%IL', '%QL']
+
+  it('declares exactly the prefix set of the package schema', () => {
+    expect([...MANIFEST_ADDRESS_PREFIXES].sort()).toEqual([...SCHEMA_ADDRESS_PREFIXES].sort())
+  })
+
+  it('accepts the ten the package schema allows', () => {
+    for (const prefix of SCHEMA_ADDRESS_PREFIXES) {
       expect(isValidManifestPrefix(prefix)).toBe(true)
     }
   })
@@ -184,9 +196,26 @@ describe('manifest address prefixes', () => {
     expect(isValidManifestPrefix('%MX')).toBe(false)
   })
 
-  it('refuses a byte prefix, which the schema does not admit either', () => {
-    expect(isValidManifestPrefix('%IB')).toBe(false)
-    expect(isValidManifestPrefix('%QB')).toBe(false)
+  it('keeps a byte channel and its wire position', () => {
+    const byteChannel = {
+      name: 'input_image_1',
+      type: 'digitalInput',
+      dataType: 'USINT',
+      addressPrefix: '%IB',
+      wire: { byte: 1 },
+    }
+    expect(withChannels([byteChannel])).toEqual([byteChannel])
+  })
+
+  it('keeps the wire bit of a bit channel', () => {
+    const bitChannel = {
+      name: 'DI1',
+      type: 'digitalInput',
+      dataType: 'BOOL',
+      addressPrefix: '%IX',
+      wire: { byte: 0, bit: 3 },
+    }
+    expect(withChannels([bitChannel])).toEqual([bitChannel])
   })
 
   it('refuses anything that is not a prefix at all', () => {

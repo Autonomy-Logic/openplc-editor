@@ -635,6 +635,10 @@ export interface VppModuleDefinition {
   name: string
   /** Used by module-discovery to match a detected device. Modules with no hwId can only be added manually. */
   hwId?: string
+  /** Vendor type id the configurator reports for this module; matched by exact string. */
+  typeId?: string
+  /** Bytes this module occupies in the device's input and output process images. */
+  processImage?: { inputBytes: number; outputBytes: number }
   /** True for an always-present part of the device hardware (e.g. Arduino Opta's built-in I/O). Auto-placed and locked in slot 1. */
   fixed?: boolean
   image?: string
@@ -734,6 +738,8 @@ export interface PackageManifest {
       provisioning?: string
       pluginEntry?: string
       configTemplate?: string
+      /** Shape of the generated plugin config. Absent → "slots". */
+      pluginConfigFormat?: 'slots' | 'io-ranges'
       requirements?: string
       source?: string
       /** Prebuilt arduino-hal library directory, linked via --library alongside `hal.source`. */
@@ -850,8 +856,6 @@ export interface IoMappingEntry {
   modeFieldId?: string
   modeOptions?: string[]
   modeValue?: string
-  /** Set on entries derived from an embedded configurator's datapoints; aliases are keyed by it. */
-  datapointId?: string
 }
 
 export interface VendorIoMapping {

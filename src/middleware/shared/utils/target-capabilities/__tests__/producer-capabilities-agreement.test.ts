@@ -141,7 +141,7 @@ const POOL_BUILDERS = [
     'configuration',
     'vendor-screen',
     'layouts',
-    'datapoint-io-table-layout.tsx',
+    'device-setup-io-table.tsx',
   ),
   join('src', 'frontend', 'services', 'apply-configurator-snapshot.ts'),
   join('src', 'frontend', 'services', 'io-diagnostics', 'claims.ts'),

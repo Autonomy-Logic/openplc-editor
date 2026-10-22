@@ -1,10 +1,10 @@
 import { CollapsibleCard } from '@root/frontend/components/_atoms/collapsible-card'
+import { isDeviceSetupIoTable } from '@root/frontend/utils/vpp/persistence-keys'
 import { readVendorDocumentSection } from '@root/frontend/utils/vpp/vendor-document-section'
 import { useState } from 'react'
 
 import type { ModuleSystem, ScreenSection } from './index'
 import { ConfiguratorScreen } from './layouts/configurator-screen'
-import { DatapointIoTableLayout } from './layouts/datapoint-io-table-layout'
 import { FormLayout } from './layouts/form-layout'
 import { IoTableLayout } from './layouts/io-table-layout'
 import { ModuleSlotsLayout } from './layouts/module-slots-layout'
@@ -16,7 +16,7 @@ import { ModuleSlotsLayout } from './layouts/module-slots-layout'
  * placeholder — and therefore persists nothing, because a layout the editor
  * cannot draw is one whose field semantics it also cannot honour.
  */
-const SUPPORTED_LAYOUTS = new Set(['module-slots', 'io-table', 'form', 'vendor-document', 'datapoint-io-table'])
+const SUPPORTED_LAYOUTS = new Set(['module-slots', 'io-table', 'form', 'vendor-document'])
 
 type SectionRendererProps = {
   section: ScreenSection
@@ -39,8 +39,6 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
         return <FormLayout section={section} />
       case 'vendor-document':
         return <ConfiguratorScreen section={section} />
-      case 'datapoint-io-table':
-        return <DatapointIoTableLayout />
       default:
         return null
     }
@@ -61,13 +59,13 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
     )
   }
 
-  // `module-slots`, `datapoint-io-table` and `vendor-document` fill the visible area; other layouts
+  // `module-slots`, the device-setup `io-table` and `vendor-document` fill the visible area; other layouts
   // are content-sized and let the page-level container scroll. An explicit min height replaces the
   // default one, which is the full content height and would make the I/O Mapping grow, not scroll.
   const sizing =
     section.layout === 'module-slots'
       ? 'min-h-0 flex-1'
-      : section.layout === 'datapoint-io-table'
+      : isDeviceSetupIoTable(section)
         ? 'min-h-[360px] flex-1'
         : section.layout === 'vendor-document'
           ? 'flex-1'

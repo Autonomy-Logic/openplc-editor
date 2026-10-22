@@ -1,5 +1,5 @@
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
-import type { DroppedAlias } from '@root/frontend/utils/vpp/datapoints-to-io-mapping'
+import type { DroppedAlias } from '@root/frontend/utils/vpp/allocate-module-slots'
 
 function notifyDroppedAliases(dropped: DroppedAlias[]) {
   if (dropped.length === 0) return

@@ -289,7 +289,6 @@ type VppMappingEntry = {
   slot: number
   channelName: string
   moduleId?: string
-  datapointId?: string
   [key: string]: unknown
 }
 

@@ -889,7 +889,7 @@ describe('reloadPouFromDisk', () => {
 
 describe('the configurator and I/O Mapping screens save and revert as one', () => {
   const BOARD = 'UC20-M3000'
-  const CONFIGURATOR = 'I/O Configurator'
+  const CONFIGURATOR = 'Backplane Configuration'
   const MAPPING = 'I/O Mapping'
   const board: BoardInfo = {
     compiler: 'openplc-compiler',
@@ -913,7 +913,8 @@ describe('the configurator and I/O Mapping screens save and revert as one', () =
     store.getState().deviceActions.setConfiguratorSnapshot('configurator', {
       configurator: { archive, controller: BOARD, bundleVersion: '3.5.22' },
       deviceSetup: { modules: [{ guid: 'g1', instanceName: 'M_1', typeId: 't1', slot: 1 }] },
-      ioMapping: { entries: [], unaddressable: [] },
+      moduleConfiguration: { slots: [`${archive}-module`] },
+      ioMapping: { entries: [] },
     })
     store.getState().deviceActions.setVendorScreenData('io-mapping', { entries: [], alias })
   }
@@ -928,7 +929,7 @@ describe('the configurator and I/O Mapping screens save and revert as one', () =
     writeStation('first', 'first_alias')
   })
 
-  it('writes the archive, the device setup and the mapping from either tab, and marks both saved', async () => {
+  it('writes the archive, the device setup, the module slots and the mapping from either tab, and marks both saved', async () => {
     const projectPort = makeProjectPort()
     const result = await executeSaveFile(store, MAPPING, projectPort, capabilities)
 
@@ -938,6 +939,7 @@ describe('the configurator and I/O Mapping screens save and revert as one', () =
       vendorScreenData: {
         configurator: { archive: 'first' },
         'device-setup': { modules: [{ guid: 'g1' }] },
+        'module-configuration': { slots: ['first-module'] },
         'io-mapping': { alias: 'first_alias' },
       },
     })
@@ -953,6 +955,7 @@ describe('the configurator and I/O Mapping screens save and revert as one', () =
 
     expect(vendorScreenData()).toMatchObject({
       configurator: { archive: 'first' },
+      'module-configuration': { slots: ['first-module'] },
       'io-mapping': { alias: 'first_alias' },
     })
   })
@@ -966,6 +969,7 @@ describe('the configurator and I/O Mapping screens save and revert as one', () =
     expect(result.success).toBe(true)
     expect(vendorScreenData()).toMatchObject({
       configurator: { archive: 'first' },
+      'module-configuration': { slots: ['first-module'] },
       'io-mapping': { alias: 'first_alias' },
     })
   })

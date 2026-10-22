@@ -80,7 +80,7 @@ function createFakePort(
       await snapshotGate
       const result = options.snapshotResult?.(n) ?? { archive: `archive-${n}`, guids: ['g1'] }
       if (result instanceof Error) throw result
-      return { archive: result.archive, deviceSetup: setupOf(...result.guids), dataPoints: [] }
+      return { archive: result.archive, deviceSetup: setupOf(...result.guids) }
     },
     onModified: (callback) => {
       modified.add(callback)

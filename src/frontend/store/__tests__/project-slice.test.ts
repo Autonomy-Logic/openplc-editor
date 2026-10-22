@@ -1,8 +1,4 @@
-import {
-  modbusMemoryKey,
-  vppDatapointMemoryKey,
-  vppMemoryKey,
-} from '@root/middleware/shared/utils/iec-address/registry'
+import { modbusMemoryKey, vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
 import { createStore } from 'zustand/vanilla'
 
 import type { ConfiguredEtherCATDevice } from '@root/middleware/shared/ports/esi-types'
@@ -3483,31 +3479,32 @@ describe('createProjectSlice', () => {
       expect(entries[1].iecAddress).toBe('NOPE')
     })
 
-    it('compacts datapoint-sourced entries and restores their aliases by datapoint id', () => {
+    it('compacts byte channels and restores their aliases by module, slot and channel', () => {
       seedVppBoard(store)
-      const entry = (datapointId: string, channelName: string, iecAddress: string) => ({
+      const entry = (channelName: string, iecAddress: string) => ({
         slot: 1,
         channelName,
-        channelType: 'UInt8',
+        channelType: 'analogInput',
         dataType: 'USINT',
-        moduleId: '0f014700',
-        moduleName: 'UR20_2DI_P_TS_1',
+        moduleId: 'ur20-2di-p-ts',
+        moduleName: 'UR20-2DI-P-TS',
         iecAddress,
         alias: '',
-        datapointId,
       })
       store.getState().deviceActions.setVendorScreenData('io-mapping', {
-        entries: [entry('g1_0', 'input_image_1', '%IB4'), entry('g1_1', 'running_number_1', '%IB7')],
+        entries: [entry('input_image_1', '%IB4'), entry('running_number_1', '%IB7')],
       })
-      store.getState().projectActions.rememberChannelAlias(vppDatapointMemoryKey('g1_1'), 'counter')
-      store.getState().projectActions.rememberChannelAlias(vppDatapointMemoryKey('gone_0'), 'stale')
+      store
+        .getState()
+        .projectActions.rememberChannelAlias(vppMemoryKey('ur20-2di-p-ts', 1, 'running_number_1'), 'counter')
+      store.getState().projectActions.rememberChannelAlias(vppMemoryKey('ur20-4di-p', 1, 'input_image_1'), 'stale')
 
       store.getState().projectActions.recalculateIecAddresses()
 
       expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.['io-mapping']).toMatchObject({
         entries: [
-          { datapointId: 'g1_0', iecAddress: '%IB0', alias: '' },
-          { datapointId: 'g1_1', iecAddress: '%IB1', alias: 'counter' },
+          { channelName: 'input_image_1', iecAddress: '%IB0', alias: '' },
+          { channelName: 'running_number_1', iecAddress: '%IB1', alias: 'counter' },
         ],
       })
     })

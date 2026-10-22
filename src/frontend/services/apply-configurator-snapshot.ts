@@ -3,13 +3,8 @@ import type { IoMappingEntry } from '../../middleware/shared/ports/types'
 import { buildAddressPool } from '../../middleware/shared/utils/iec-address'
 import { resolveAddressProducerCapabilities } from '../../middleware/shared/utils/target-capabilities'
 import type { OpenPLCStore } from '../store'
-import {
-  datapointsToIoMapping,
-  type DroppedAlias,
-  restoreAliasesByDatapointId,
-  toDeviceSetupRecord,
-  type UnaddressableDataPoint,
-} from '../utils/vpp/datapoints-to-io-mapping'
+import { allocateModuleSlots, type DroppedAlias } from '../utils/vpp/allocate-module-slots'
+import { toDeviceSetupRecord } from '../utils/vpp/device-setup'
 import { IO_MAPPING_KEY } from '../utils/vpp/persistence-keys'
 
 export interface ConfiguratorSnapshotTarget {
@@ -20,7 +15,6 @@ export interface ConfiguratorSnapshotTarget {
 
 export interface AppliedConfiguratorSnapshot {
   dropped: DroppedAlias[]
-  unaddressable: UnaddressableDataPoint[]
 }
 
 function storedEntries(value: unknown): IoMappingEntry[] {
@@ -29,9 +23,9 @@ function storedEntries(value: unknown): IoMappingEntry[] {
 }
 
 /**
- * Persist a configurator snapshot: the archive untouched, the device setup, and
- * the I/O mapping derived from the datapoints with aliases carried over by
- * datapoint id. Addresses are then reallocated by the registry.
+ * Persist a configurator snapshot: the archive untouched, the device setup,
+ * the manifest module of each slot (matched by exact `typeId`) and the I/O
+ * mapping of those modules. Addresses are then reallocated by the registry.
  */
 export function applyConfiguratorSnapshot(
   store: OpenPLCStore,
@@ -40,28 +34,36 @@ export function applyConfiguratorSnapshot(
 ): AppliedConfiguratorSnapshot {
   const state = store.getState()
   const { configuration, pinMapping } = state.deviceDefinitions
-  const previous = storedEntries(configuration.vendorScreenData?.[IO_MAPPING_KEY])
-  const capabilities = resolveAddressProducerCapabilities(
-    state.deviceAvailableOptions.availableBoards.get(configuration.deviceBoard),
-  )
+  const board = state.deviceAvailableOptions.availableBoards.get(configuration.deviceBoard)
+  const manifestModules = board?.vpp?.moduleSystem?.modules ?? []
   const pool = buildAddressPool(
     {
       pinMapping: { pins: pinMapping.pinsByBoard[configuration.deviceBoard] ?? [] },
       remoteDevices: state.project.data.remoteDevices ?? [],
     },
-    capabilities,
+    resolveAddressProducerCapabilities(board),
     { ignoreSource: 'vpp-io' },
   )
 
   const deviceSetup = toDeviceSetupRecord(snapshot.deviceSetup)
-  const { entries, unaddressable } = datapointsToIoMapping(snapshot.dataPoints, deviceSetup, pool)
-  const restored = restoreAliasesByDatapointId(previous, entries)
+  // Exact string compare: an all-digit type id must never be parsed as a number.
+  const slots = deviceSetup.modules.map(
+    (module) => manifestModules.find((definition) => definition.typeId === module.typeId)?.id ?? null,
+  )
+  const { entries, dropped } = allocateModuleSlots({
+    slots,
+    slotsConfig: {},
+    modules: manifestModules,
+    pool,
+    previous: storedEntries(configuration.vendorScreenData?.[IO_MAPPING_KEY]),
+  })
 
   state.deviceActions.setConfiguratorSnapshot(target.configuratorKey, {
     configurator: { archive: snapshot.archive, controller: target.controller, bundleVersion: target.bundleVersion },
     deviceSetup,
-    ioMapping: { entries: restored.entries, unaddressable },
+    moduleConfiguration: { slots },
+    ioMapping: { entries },
   })
   store.getState().projectActions.recalculateIecAddresses()
-  return { dropped: restored.dropped, unaddressable }
+  return { dropped }
 }

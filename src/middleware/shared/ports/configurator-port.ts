@@ -5,14 +5,13 @@
  * iframe's globals. One instance per mounted iframe; `dispose` on unmount.
  */
 
-import type { DataPoint, DeviceSetup } from '../vendor-document/protocol'
+import type { DeviceSetup } from '../vendor-document/protocol'
 import type { Unsubscribe } from './types'
 
 export interface ConfiguratorSnapshot {
   /** Opaque vendor archive, stored and returned byte-for-byte. */
   archive: string
   deviceSetup: DeviceSetup
-  dataPoints: DataPoint[]
 }
 
 export interface ConfiguratorPort {

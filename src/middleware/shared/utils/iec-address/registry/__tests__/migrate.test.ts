@@ -1,12 +1,6 @@
 import type { PoolInputs } from '../../address-pool'
 import { channelKey } from '../allocate'
-import {
-  migrateToRegistry,
-  recalculateFromLegacy,
-  unpinAllocatableChannels,
-  vppDatapointMemoryKey,
-  vppMemoryKey,
-} from '../migrate'
+import { migrateToRegistry, recalculateFromLegacy, unpinAllocatableChannels, vppMemoryKey } from '../migrate'
 import { recalculate, restoreAliasesFromMemory } from '../registry'
 import { buildAliasIndex } from '../resolve'
 
@@ -252,38 +246,38 @@ describe('unpinAllocatableChannels', () => {
   })
 })
 
-describe('datapoint-sourced VPP entries', () => {
-  it('keys alias memory by datapoint id and keeps byte addresses', () => {
+describe('byte-addressed VPP entries', () => {
+  it('keys alias memory by module, slot and channel and keeps byte addresses', () => {
     const reg = migrateToRegistry({
       vendorIoMapping: {
         entries: [
-          { slot: 1, channelName: 'img', iecAddress: '%IB3', moduleId: 'T', datapointId: 'g1_0' },
-          { slot: 1, channelName: 'legacy', iecAddress: '%IX0.0', moduleId: 'T' },
+          { slot: 1, channelName: 'input_image_1', iecAddress: '%IB3', moduleId: 'ur20-2di-p-ts' },
+          { slot: 1, channelName: 'timestamp_1', iecAddress: '%IW0', moduleId: 'ur20-2di-p-ts' },
         ],
       },
     })
 
     const channels = reg.consumers[0].channels
     expect(channels.map((channel) => channel.memoryKey)).toEqual([
-      vppDatapointMemoryKey('g1_0'),
-      vppMemoryKey('T', 1, 'legacy'),
+      vppMemoryKey('ur20-2di-p-ts', 1, 'input_image_1'),
+      vppMemoryKey('ur20-2di-p-ts', 1, 'timestamp_1'),
     ])
     expect(channels[0].class).toEqual({ direction: 'I', size: 'B' })
-    expect(reg.assignments[channelKey('vpp-slot-1', 'img')]).toBe('%IB3')
+    expect(reg.assignments[channelKey('vpp-slot-1', 'input_image_1')]).toBe('%IB3')
   })
 
-  it('restores a remembered alias only for the same datapoint id', () => {
+  it('restores a remembered alias only for the same module on the same slot', () => {
     const seeded = migrateToRegistry({
       vendorIoMapping: {
         entries: [
-          { slot: 1, channelName: 'DI_0', iecAddress: '%IX0.0', datapointId: 'new_0' },
-          { slot: 2, channelName: 'DI_0', iecAddress: '%IX0.1', datapointId: 'kept_0' },
+          { slot: 1, channelName: 'input_image_1', iecAddress: '%IB0', moduleId: 'ur20-2di-p-ts' },
+          { slot: 2, channelName: 'input_image_1', iecAddress: '%IB1', moduleId: 'ur20-2di-p-ts' },
         ],
       },
     })
     const restored = restoreAliasesFromMemory(seeded, {
-      [vppDatapointMemoryKey('old_0')]: 'start',
-      [vppDatapointMemoryKey('kept_0')]: 'stop',
+      [vppMemoryKey('ur20-4di-p', 1, 'input_image_1')]: 'start',
+      [vppMemoryKey('ur20-2di-p-ts', 2, 'input_image_1')]: 'stop',
     })
 
     expect(restored.consumers.map((consumer) => consumer.channels[0].alias)).toEqual([undefined, 'stop'])

@@ -73,6 +73,23 @@ function setup(fakeOptions: FakeDeviceEditorOptions = {}) {
 const tick = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms))
 
 describe('configurator client over the reference relay', () => {
+  it('takes a snapshot from the configuration and the device setup only, never the datapoints', async () => {
+    const { client, fake, channel } = setup()
+    await client.ready()
+    await client.setController('UC20-M3000')
+    await client.show()
+    fake.addModule('FAKE-4DI')
+    await tick()
+    channel.sentToGuest.splice(0)
+
+    await client.snapshot()
+
+    const methods = channel.sentToGuest.flatMap((message) =>
+      typeof message === 'object' && message !== null && 'method' in message ? [message.method] : [],
+    )
+    expect(methods).toEqual(['getConfiguration', 'getDeviceSetup'])
+  })
+
   it('becomes ready only after the bundle publishes its consumer, then relays its events', async () => {
     const { client, scope, modifiedCount } = setup({ consumerDelayMs: 40 })
     let ready = false
@@ -104,10 +121,7 @@ describe('configurator client over the reference relay', () => {
     expect(snapshot.archive).toMatch(/^[0-9a-f]+$/)
     expect(snapshot.deviceSetup.systembus.typeId).toBe('UC20-M3000')
     expect(snapshot.deviceSetup.devices.map((device) => device.typeId)).toEqual(['FAKE-4DI', 'FAKE-2AI', 'FAKE-4DO'])
-    expect(snapshot.dataPoints).toHaveLength(8)
-    expect(snapshot.dataPoints[0]).toMatchObject({ id: 'fake-0001_0', datatype: 'Bitarea', bitlength: 4, access: 'ro' })
-    expect(snapshot.dataPoints.every((dataPoint) => dataPoint.direction === undefined)).toBe(true)
-    expect(snapshot.dataPoints.map((dataPoint) => dataPoint.id)).toContain('fake-0003_1_3')
+    expect(Object.keys(snapshot).sort()).toEqual(['archive', 'deviceSetup'])
 
     const second = setup()
     await second.client.ready()

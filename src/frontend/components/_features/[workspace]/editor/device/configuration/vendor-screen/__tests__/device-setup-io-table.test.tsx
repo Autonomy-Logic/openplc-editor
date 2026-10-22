@@ -9,6 +9,7 @@ import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 
+import { manifestModuleFromCapture } from '@root/__fixtures__/device-editor-datapoints/manifest-module'
 import { UR20_16DI_16DO } from '@root/__fixtures__/device-editor-datapoints/ur20-16di-16do'
 import MAPPING_SCREEN from '@root/__fixtures__/weidmuller-screens/io-mapping.json'
 import { VendorScreenRenderer } from '../index'
@@ -37,7 +38,33 @@ const VPP_BOARD: BoardInfo = {
     deviceId: 'uc20-m3000',
     packagePath: '/packages/com.weidmuller.ucontrol',
     screens: {},
-    moduleSystem: null,
+    moduleSystem: {
+      enabled: true,
+      maxSlots: 64,
+      modules: [
+        manifestModuleFromCapture(UR20_16DI_16DO, 0, { id: 'ur20-16di-p', name: 'UR20-16DI-P' }),
+        manifestModuleFromCapture(UR20_16DI_16DO, 1, { id: 'ur20-16do-p', name: 'UR20-16DO-P' }),
+        {
+          id: 'ur20-1sm-like',
+          name: 'UR20-1SM-like',
+          typeId: 'cafe0001',
+          processImage: { inputBytes: 3, outputBytes: 0 },
+          io: { digitalInputs: 1, digitalOutputs: 0, analogInputs: 1, analogOutputs: 0 },
+          addressMapping: {
+            channels: [
+              { name: 'SmCJ+', type: 'analogInput', dataType: 'INT', addressPrefix: '%IW', wire: { byte: 0 } },
+              {
+                name: 'txtValue_0.3',
+                type: 'digitalInput',
+                dataType: 'BOOL',
+                addressPrefix: '%IX',
+                wire: { byte: 2, bit: 3 },
+              },
+            ],
+          },
+        },
+      ],
+    },
   },
 }
 
@@ -110,12 +137,12 @@ function seedGlobal(variable: PLCVariable) {
   })
 }
 
-describe('datapoint-io-table section', () => {
+describe('io-table section with source device-setup', () => {
   beforeEach(() => {
     store = createTestStore()
     store.getState().deviceActions.setAvailableOptions({ availableBoards: new Map([[BOARD, VPP_BOARD]]) })
     store.getState().deviceActions.setDeviceBoard(BOARD)
-    applyConfiguratorSnapshot(store, TARGET, { archive: 'ab'.repeat(64), ...UR20_16DI_16DO })
+    applyConfiguratorSnapshot(store, TARGET, { archive: 'ab'.repeat(64), deviceSetup: UR20_16DI_16DO.deviceSetup })
   })
 
   afterEach(cleanup)
@@ -167,7 +194,8 @@ describe('datapoint-io-table section', () => {
         section={{
           id: 'io-mapping',
           title: 'I/O Mapping',
-          layout: 'datapoint-io-table',
+          layout: 'io-table',
+          source: 'device-setup',
           actions: [{ id: 'clear', label: 'Clear All Slots', kind: 'local', action: 'clear-module-slots' }],
         }}
         moduleSystem={null}
@@ -201,17 +229,17 @@ describe('datapoint-io-table section', () => {
     expect(stationState()).toBe(before)
   })
 
-  it('sets an alias on any channel and remembers it by datapoint id', () => {
+  it('sets an alias on any channel and remembers it by module, slot and channel', () => {
     renderScreen()
     const target = ioEntries()[20]
 
     commitAlias(target.channelName, target.slot, 'valve_open')
 
-    const stored = ioEntries().find((entry) => entry.datapointId === target.datapointId)
+    const stored = ioEntries().find((entry) => entry.slot === target.slot && entry.channelName === target.channelName)
     expect(stored?.alias).toBe('valve_open')
     expect(stored?.iecAddress).toBe(target.iecAddress)
     expect(ioEntries().filter((entry) => entry.alias === 'valve_open')).toHaveLength(1)
-    expect(store.getState().iecAliasMemory[`vpp-datapoint:${target.datapointId}`]).toBe('valve_open')
+    expect(store.getState().iecAliasMemory[`vpp:ur20-16do-p:2:${target.channelName}`]).toBe('valve_open')
   })
 
   it('rejects a project-wide collision with a toast and writes nothing', () => {
@@ -246,8 +274,8 @@ describe('datapoint-io-table section', () => {
 
   it('follows a configurator change: kept aliases stay, dropped ones go and are reported', () => {
     renderScreen()
-    const kept = ioEntries().find((entry) => entry.datapointId?.startsWith(DI_MODULE.guid))
-    const dropped = ioEntries().find((entry) => entry.datapointId?.startsWith(DO_MODULE.guid))
+    const kept = ioEntries().find((entry) => entry.slot === 1)
+    const dropped = ioEntries().find((entry) => entry.slot === 2)
     if (!kept || !dropped) throw new Error('fixture has no channel in one of its modules')
     commitAlias(kept.channelName, kept.slot, 'kept_alias')
     commitAlias(dropped.channelName, dropped.slot, 'dropped_alias')
@@ -256,7 +284,6 @@ describe('datapoint-io-table section', () => {
       const applied = applyConfiguratorSnapshot(store, TARGET, {
         archive: 'cd'.repeat(64),
         deviceSetup: { ...UR20_16DI_16DO.deviceSetup, devices: [DI_MODULE] },
-        dataPoints: UR20_16DI_16DO.dataPoints.filter((point) => point.id.startsWith(DI_MODULE.guid)),
       })
       notifyDroppedAliases(applied.dropped)
     })
@@ -268,41 +295,74 @@ describe('datapoint-io-table section', () => {
     expect(getMemoryState().toasts[0]?.description).toMatch(/dropped_alias/)
   })
 
-  it('lists the datapoints the configurator reported without an address, and keeps them through edits', () => {
-    act(() => {
-      applyConfiguratorSnapshot(store, TARGET, {
-        archive: 'ef'.repeat(64),
-        deviceSetup: UR20_16DI_16DO.deviceSetup,
-        dataPoints: [
-          ...UR20_16DI_16DO.dataPoints,
-          {
-            id: `${DI_MODULE.guid}_real`,
-            name: 'UR20_16DI_P_1_REAL',
-            bitlength: 32,
-            byteoffset: 8,
-            bitoffset: 0,
-            datatype: 'REAL',
-            access: 'ro',
-          },
-        ],
-      })
-    })
-    renderScreen()
-    const notice = /These datapoints have no IEC address: UR20_16DI_P_1_REAL \(/
-    expect(screen.getByText(notice)).toBeTruthy()
-
-    const target = ioEntries()[0]
-    commitAlias(target.channelName, target.slot, 'kept_notice')
-    act(() => store.getState().projectActions.recalculateIecAddresses())
-
-    expect(aliasInput(target.channelName, target.slot).value).toBe('kept_notice')
-    expect(screen.getByText(notice)).toBeTruthy()
-  })
-
   it('says how to start when the configurator has reported no modules', () => {
     store = createTestStore()
     renderScreen()
 
-    expect(screen.getByText(/No modules configured\. Add modules in the I\/O Configurator/)).toBeTruthy()
+    expect(screen.getByText(/No modules configured\. Add modules in Backplane Configuration/)).toBeTruthy()
+  })
+
+  it('writes nothing when it mounts, even with module slots and no mapping stored', () => {
+    act(() => store.getState().deviceActions.setVendorScreenData('io-mapping', { entries: [] }))
+    const before = stationState()
+
+    renderScreen()
+
+    expect(stationState()).toBe(before)
+    expect(screen.queryAllByLabelText(/^Alias of /)).toHaveLength(0)
+  })
+
+  it('lists a module whose type is not in the catalogue, with no channels', () => {
+    const unknown = { guid: 'g-unknown', name: 'UR20_8AI_1', typeId: 'deadbeef' }
+    act(() => {
+      applyConfiguratorSnapshot(store, TARGET, {
+        archive: 'cd'.repeat(64),
+        deviceSetup: { ...UR20_16DI_16DO.deviceSetup, devices: [unknown, DI_MODULE] },
+      })
+    })
+    renderScreen()
+
+    const slot = screen.getByRole('region', { name: 'Slot 1 UR20_8AI_1' })
+    expect(within(slot).getByText('Not in catalogue')).toBeTruthy()
+    expect(within(slot).getByText(/Module type deadbeef is not in this package's catalogue/)).toBeTruthy()
+    expect(within(slot).queryAllByLabelText(/^Alias of /)).toHaveLength(0)
+    const known = screen.getByRole('region', { name: `Slot 2 ${DI_MODULE.name}` })
+    expect(within(known).queryByText('Not in catalogue')).toBeNull()
+    expect(within(known).getAllByLabelText(/^Alias of /)).toHaveLength(16)
+  })
+
+  it('takes aliases on channel names with dots and signs', () => {
+    act(() => {
+      applyConfiguratorSnapshot(store, TARGET, {
+        archive: 'ef'.repeat(64),
+        deviceSetup: {
+          ...UR20_16DI_16DO.deviceSetup,
+          devices: [{ guid: 'g-sm', name: 'UR20_1SM_1', typeId: 'cafe0001' }],
+        },
+      })
+    })
+    renderScreen()
+
+    commitAlias('SmCJ+', 1, 'cold_junction')
+    commitAlias('txtValue_0.3', 1, 'limit_switch')
+
+    expect(ioEntries().map((entry) => [entry.channelName, entry.alias])).toEqual([
+      ['SmCJ+', 'cold_junction'],
+      ['txtValue_0.3', 'limit_switch'],
+    ])
+    expect(store.getState().iecAliasMemory['vpp:ur20-1sm-like:1:txtValue_0.3']).toBe('limit_switch')
+  })
+
+  it('draws nothing for an io-table source it does not know', () => {
+    const { container } = render(
+      <SectionRenderer
+        section={{ id: 'io-mapping', title: 'I/O Mapping', layout: 'io-table', source: 'datapoints' }}
+        moduleSystem={null}
+      />,
+      { wrapper: createStoreWrapper(store, PORTS) },
+    )
+
+    expect(container.querySelector('table')).toBeNull()
+    expect(screen.queryAllByLabelText(/^Alias of /)).toHaveLength(0)
   })
 })

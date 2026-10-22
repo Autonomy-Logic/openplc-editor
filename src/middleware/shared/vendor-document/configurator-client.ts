@@ -3,7 +3,6 @@ import { z } from 'zod'
 import type { ConfiguratorPort, ConfiguratorSnapshot } from '../ports/configurator-port'
 import type { Unsubscribe } from '../ports/types'
 import {
-  dataPointSchema,
   deviceSetupSchema,
   type HostToRelayMessage,
   parseRelayToHostMessage,
@@ -170,8 +169,7 @@ export function createConfiguratorClient(
     snapshot: async (): Promise<ConfiguratorSnapshot> => {
       const archive = parseResult('getConfiguration', z.string(), await request('getConfiguration', []))
       const deviceSetup = await getDeviceSetup()
-      const dataPoints = parseResult('getDataPoints', z.array(dataPointSchema), await request('getDataPoints', []))
-      return { archive, deviceSetup, dataPoints }
+      return { archive, deviceSetup }
     },
     onModified: (callback): Unsubscribe => {
       modifiedListeners.add(callback)

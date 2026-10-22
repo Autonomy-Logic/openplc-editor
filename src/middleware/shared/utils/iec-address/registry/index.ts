@@ -20,7 +20,6 @@ export {
   parseModuleRegistryChannelId,
   recalculateFromLegacy,
   unpinAllocatableChannels,
-  vppDatapointMemoryKey,
   vppMemoryKey,
 } from './migrate'
 export {

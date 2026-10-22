@@ -15,7 +15,7 @@ import type {
   TimingStats,
 } from '../../../../middleware/shared/ports/types'
 import type { DeviceVpp } from '../../../../middleware/shared/ports/vpp-types'
-import type { DeviceSetupRecord, UnaddressableDataPoint } from '../../../utils/vpp/datapoints-to-io-mapping'
+import type { DeviceSetupRecord } from '../../../utils/vpp/device-setup'
 
 // ---------------------------------------------------------------------------
 // Device available options
@@ -251,7 +251,9 @@ export type ConfiguratorRecord = {
 export type ConfiguratorSnapshotRecord = {
   configurator: ConfiguratorRecord
   deviceSetup: DeviceSetupRecord
-  ioMapping: { entries: IoMappingEntry[]; unaddressable: UnaddressableDataPoint[] }
+  /** Manifest module id per slot; `null` where the configurator's type id is not in the manifest. */
+  moduleConfiguration: { slots: Array<string | null> }
+  ioMapping: { entries: IoMappingEntry[] }
 }
 
 export type DeviceActions = {

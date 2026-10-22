@@ -13,7 +13,9 @@ const wrappers = () => screen.getAllByText(/Screen not available/).map((notice) 
 describe('vendor-screen tabs', () => {
   beforeEach(() => {
     store = createTestStore()
-    store.getState().editorActions.setEditor(CreateVendorScreenEditor('I/O Configurator', 'I/O Configurator'))
+    store
+      .getState()
+      .editorActions.setEditor(CreateVendorScreenEditor('Backplane Configuration', 'Backplane Configuration'))
     store.getState().editorActions.setEditor(CreateVendorScreenEditor('I/O Mapping', 'I/O Mapping'))
   })
 
@@ -32,7 +34,9 @@ describe('vendor-screen tabs', () => {
     const [configurator] = wrappers()
 
     act(() =>
-      store.getState().editorActions.setEditor(CreateVendorScreenEditor('I/O Configurator', 'I/O Configurator')),
+      store
+        .getState()
+        .editorActions.setEditor(CreateVendorScreenEditor('Backplane Configuration', 'Backplane Configuration')),
     )
 
     const [after, mapping] = wrappers()

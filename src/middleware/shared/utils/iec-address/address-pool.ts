@@ -105,8 +105,6 @@ export interface PoolVppIoInput {
      *  alias-memory key (`vpp:moduleId:slot:channel`); the pool itself
      *  ignores it. */
     moduleId?: string
-    /** Configurator datapoint identity; when present it is the alias-memory key instead. */
-    datapointId?: string
   }>
 }
 

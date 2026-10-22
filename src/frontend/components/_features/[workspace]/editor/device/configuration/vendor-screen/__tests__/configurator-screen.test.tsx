@@ -111,7 +111,7 @@ describe('vendor-document section', () => {
     renderSection(SECTION)
     const first = screen.getByTitle('I/O Configurator')
 
-    act(() => store.getState().deviceActions.setVendorScreenData('io-mapping', { entries: [], unaddressable: [] }))
+    act(() => store.getState().deviceActions.setVendorScreenData('io-mapping', { entries: [] }))
     expect(screen.getByTitle('I/O Configurator')).toBe(first)
 
     act(() =>

@@ -1,7 +1,6 @@
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
-import type { UnaddressableDataPoint } from '@root/frontend/utils/vpp/datapoints-to-io-mapping'
-import { DEVICE_SETUP_KEY, IO_MAPPING_KEY } from '@root/frontend/utils/vpp/persistence-keys'
+import { DEVICE_SETUP_KEY, IO_MAPPING_KEY, MODULE_CONFIGURATION_KEY } from '@root/frontend/utils/vpp/persistence-keys'
 import type { IoMappingEntry } from '@root/middleware/shared/ports/types'
 import {
   buildAddressPool,
@@ -9,7 +8,7 @@ import {
   describeAliasRejection,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
-import { vppDatapointMemoryKey, vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
+import { vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
 import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -24,43 +23,25 @@ function readModules(value: unknown): StoredModule[] {
         typeof module === 'object' &&
         'guid' in module &&
         typeof module.guid === 'string' &&
+        'instanceName' in module &&
+        typeof module.instanceName === 'string' &&
+        'typeId' in module &&
+        typeof module.typeId === 'string' &&
         'slot' in module &&
         typeof module.slot === 'number',
     )
     .sort((a, b) => a.slot - b.slot)
 }
 
+/** Manifest module id per slot, as the configurator snapshot wrote it; `null` where the type is not in the manifest. */
+function readSlots(value: unknown): Array<string | null> {
+  if (!value || typeof value !== 'object' || !('slots' in value) || !Array.isArray(value.slots)) return []
+  return value.slots.map((slot: unknown) => (typeof slot === 'string' ? slot : null))
+}
+
 function readEntries(value: unknown): IoMappingEntry[] {
   if (!value || typeof value !== 'object' || !('entries' in value) || !Array.isArray(value.entries)) return []
   return value.entries.filter((entry: unknown): entry is IoMappingEntry => !!entry && typeof entry === 'object')
-}
-
-const UNADDRESSABLE_REASON: Record<UnaddressableDataPoint['reason'], string> = {
-  'unsupported-access': 'neither input nor output',
-  'unsupported-width': 'unsupported size',
-  'unsupported-datatype': 'unsupported data type',
-  'unknown-module': 'module not in the device setup',
-}
-
-function isUnaddressableReason(value: unknown): value is UnaddressableDataPoint['reason'] {
-  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(UNADDRESSABLE_REASON, value)
-}
-
-function readUnaddressable(value: unknown): UnaddressableDataPoint[] {
-  if (!value || typeof value !== 'object' || !('unaddressable' in value) || !Array.isArray(value.unaddressable)) {
-    return []
-  }
-  return value.unaddressable.filter(
-    (point: unknown): point is UnaddressableDataPoint =>
-      !!point &&
-      typeof point === 'object' &&
-      'datapointId' in point &&
-      typeof point.datapointId === 'string' &&
-      'name' in point &&
-      typeof point.name === 'string' &&
-      'reason' in point &&
-      isUnaddressableReason(point.reason),
-  )
 }
 
 /** Commits on blur so the rename cascade runs once per edit, not once per keystroke. */
@@ -101,14 +82,17 @@ const HEADER_CELL =
  * `device-setup`, channels from `io-mapping`. The station is edited only in the
  * configurator, so the Alias is the one thing this table writes.
  */
-function DatapointIoTableLayout() {
+function DeviceSetupIoTable() {
   const store = useOpenPLCStoreApi()
   const setVendorScreenData = useOpenPLCStore((s) => s.deviceActions.setVendorScreenData)
   const storedSetup = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData?.[DEVICE_SETUP_KEY])
   const storedMapping = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData?.[IO_MAPPING_KEY])
+  const storedSlots = useOpenPLCStore(
+    (s) => s.deviceDefinitions.configuration.vendorScreenData?.[MODULE_CONFIGURATION_KEY],
+  )
   const modules = useMemo(() => readModules(storedSetup), [storedSetup])
+  const slots = useMemo(() => readSlots(storedSlots), [storedSlots])
   const entries = useMemo(() => readEntries(storedMapping), [storedMapping])
-  const unaddressable = useMemo(() => readUnaddressable(storedMapping), [storedMapping])
 
   const handleAliasChange = (index: number, alias: string): boolean => {
     const target = entries[index]
@@ -143,19 +127,14 @@ function DatapointIoTableLayout() {
     })
     store
       .getState()
-      .projectActions.rememberChannelAlias(
-        target.datapointId
-          ? vppDatapointMemoryKey(target.datapointId)
-          : vppMemoryKey(target.moduleId ?? '', target.slot, target.channelName),
-        alias,
-      )
+      .projectActions.rememberChannelAlias(vppMemoryKey(target.moduleId ?? '', target.slot, target.channelName), alias)
     return true
   }
 
   if (modules.length === 0) {
     return (
       <p className='p-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
-        No modules configured. Add modules in the I/O Configurator to generate I/O mappings.
+        No modules configured. Add modules in Backplane Configuration to generate I/O mappings.
       </p>
     )
   }
@@ -170,6 +149,7 @@ function DatapointIoTableLayout() {
       >
         {modules.map((module) => {
           const channels = entries.flatMap((entry, index) => (entry.slot === module.slot ? [{ entry, index }] : []))
+          const inCatalogue = typeof slots[module.slot - 1] === 'string'
           return (
             <section
               key={module.guid}
@@ -183,8 +163,17 @@ function DatapointIoTableLayout() {
                 <span className='font-caption text-cp-sm font-medium text-neutral-600 dark:text-neutral-400'>
                   {module.instanceName}
                 </span>
+                {!inCatalogue && (
+                  <span className='rounded bg-amber-100 px-1.5 py-0.5 font-caption text-[11px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'>
+                    Not in catalogue
+                  </span>
+                )}
               </header>
-              {channels.length === 0 ? (
+              {!inCatalogue ? (
+                <p className='border-t border-neutral-200 px-4 py-2 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400'>
+                  {`Module type ${module.typeId} is not in this package's catalogue, so it has no channels.`}
+                </p>
+              ) : channels.length === 0 ? (
                 <p className='border-t border-neutral-200 px-4 py-2 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400'>
                   No addressable channels.
                 </p>
@@ -201,7 +190,7 @@ function DatapointIoTableLayout() {
                   <tbody>
                     {channels.map(({ entry, index }) => (
                       <tr
-                        key={entry.datapointId ?? `${entry.slot}:${entry.channelName}`}
+                        key={`${entry.slot}:${entry.channelName}`}
                         className='border-t border-neutral-100 dark:border-neutral-800'
                       >
                         <td className='px-3 py-1.5 font-caption text-cp-sm text-neutral-850 dark:text-neutral-300'>
@@ -229,15 +218,8 @@ function DatapointIoTableLayout() {
           )
         })}
       </div>
-      {unaddressable.length > 0 && (
-        <p className='shrink-0 text-sm text-neutral-600 dark:text-neutral-400'>
-          {`These datapoints have no IEC address: ${unaddressable
-            .map((point) => `${point.name} (${UNADDRESSABLE_REASON[point.reason]})`)
-            .join(', ')}.`}
-        </p>
-      )}
     </>
   )
 }
 
-export { DatapointIoTableLayout }
+export { DeviceSetupIoTable }

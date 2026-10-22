@@ -3,7 +3,9 @@
     {
       "id": "io-mapping",
       "title": "I/O Mapping",
-      "layout": "datapoint-io-table"
+      "layout": "io-table",
+      "source": "device-setup",
+      "persistence": "io-mapping"
     }
   ]
 }
