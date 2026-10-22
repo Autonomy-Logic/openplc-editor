@@ -235,6 +235,27 @@ function generateIOPoints(
   return points
 }
 
+/**
+ * Points for a bulk import, each seeded with the first address of its class.
+ * The registry reads only the class from that seed; `recalculateIecAddresses`
+ * then places the whole batch in one pass.
+ */
+function seedIOPoints(
+  functionCode: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16',
+  length: number,
+  groupName: string,
+): ModbusIOPoint[] {
+  const { type, iecPrefix, isBit } = getFunctionCodeInfo(functionCode)
+  const iecLocation = isBit ? `${iecPrefix}0.0` : `${iecPrefix}0`
+  return Array.from({ length }, (_, i) => ({
+    id: `${groupName}_${i}`,
+    name: `${groupName}_${i}`,
+    type,
+    iecLocation,
+    alias: '',
+  }))
+}
+
 // ---------------------------------------------------------------------------
 // Variables-text ⇄ variables-table reconcile helpers
 // ---------------------------------------------------------------------------
@@ -2621,6 +2642,44 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // Recompact so the groups that followed reclaim the freed addresses.
       getState().projectActions.recalculateIecAddresses()
       return ok()
+    },
+    importIOGroups: (deviceName, groups, options) => {
+      const replace = options?.replace ?? false
+      const live = getState()
+      const target = live.project.data.remoteDevices?.find((d) => d.name === deviceName)
+      if (!target?.modbusTcpConfig) {
+        return { ok: false, title: 'Import failed', message: `Remote device "${deviceName}" was not found.` }
+      }
+
+      // Point ids are `<groupName>_<index>`: a duplicate name on one device
+      // would collide. IEC identifiers are case-insensitive, hence the fold.
+      const names = [...(replace ? [] : target.modbusTcpConfig.ioGroups), ...groups].map((g) => g.name.toLowerCase())
+      const duplicate = names.find((name, index) => names.indexOf(name) !== index)
+      if (duplicate !== undefined) {
+        return {
+          ok: false,
+          title: 'Import failed',
+          message: `More than one IO group would be named "${duplicate}". IO group names must be unique per device.`,
+        }
+      }
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          const device = slice.project.data.remoteDevices?.find((d) => d.name === deviceName)
+          if (!device?.modbusTcpConfig) return
+          if (replace) device.modbusTcpConfig.ioGroups = []
+
+          for (const group of groups) {
+            const length = clampIOGroupLength(group.functionCode, group.length)
+            const errorHandling = resolveIOGroupErrorHandling(group.functionCode, group.errorHandling)
+            const ioPoints = seedIOPoints(group.functionCode, length, group.name)
+            device.modbusTcpConfig.ioGroups.push({ ...group, length, errorHandling, ioPoints })
+          }
+        }),
+      )
+      // One project-wide allocation assigns every address of the batch.
+      getState().projectActions.recalculateIecAddresses()
+      return ok({ imported: groups.length })
     },
     updateIOPointAlias: (deviceName, groupId, pointId, alias) => {
       // Phase 1 — write-time alias-uniqueness gate (global, across
