@@ -37,7 +37,7 @@ const AboutModal = () => {
   const releaseDate = `Release: ${typeof BUILD_DATE !== 'undefined' ? BUILD_DATE : ''}`
   const description = 'Open Source IDE for the OpenPLC Runtime, compliant with the IEC 61131-3 international standard.'
   const copyrightYear = new Date().getFullYear()
-  const copyright = `\u00A9 ${copyrightYear} Autonomy Logic`
+  const copyright = `\u00A9 ${copyrightYear} Autonomy®`
   const linkUrl = 'https://autonomylogic.com'
 
   const handleOpenAboutLink = () => {

@@ -42,7 +42,7 @@ STruC++ solves both problems:
 | `xml2st --generate-st` (XML to ST conversion) | Unchanged (separate effort on another branch) |
 | XML generation from project JSON | Unchanged |
 | `arduino-cli` compilation/upload | Unchanged (now compiles C++ instead of C) |
-| HAL files (`resources/sources/hal/*.cpp`) | Unchanged (same buffer pointer interface) |
+| HAL files (`resources/sources/hal/*.cpp`) | Unchanged (same buffer pointer interface). Board HALs now ship in VPP packages; only `simulator.cpp` remains here. |
 | Modbus slave communication | Unchanged (debug handler functions updated later) |
 | Frontend project data handling | Unchanged |
 | POU preprocessing (Python/C++ wrappers) | Unchanged |

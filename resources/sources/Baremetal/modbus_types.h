@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 modbus_types.h - Shared type/constant declarations for the OpenPLC Modbus slave
-Copyright (C) 2022 OpenPLC - Thiago Alves
 
 Pure declarations only (enums, MBinfo, frame-size constants, status codes,
 bit helpers). No storage, no functions — every Modbus TU includes this so the

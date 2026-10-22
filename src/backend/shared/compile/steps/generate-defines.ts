@@ -142,13 +142,6 @@ export interface GenerateDefinesInput {
    *  category (`DIN` / `AIN` / `DOUT` / `AOUT`) plus matching
    *  count defines (`NUM_DISCRETE_INPUT` etc.). */
   devicePinMapping: DevicePin[]
-  /** Concatenated ST program content (the output of the ST transpiler).
-   *  Scanned with `String.prototype.includes` for the marker
-   *  function-block names that toggle the Arduino-library
-   *  `USE_*_BLOCK` defines.  The set of marker strings here is
-   *  the canonical list — every change MUST match what the
-   *  firmware's HAL headers `#ifdef`-gate on. */
-  stProgramFileContent: string
   /** MD5 hash of `program.st` bytes — embedded as `PROGRAM_MD5` so
    *  the runtime can detect a stale upload (a v4 runtime reports
    *  this back on `FC 0x45` and the debugger uses it to confirm
@@ -218,8 +211,6 @@ export interface GenerateDefinesInput {
  *      Modbus traffic into the running emulator.
  *   4. `// IO Config` — PINMASK_{DIN,AIN,DOUT,AOUT} + NUM_* derived
  *      from `devicePinMapping`.
- *   5. `// Arduino libraries` — `USE_*_BLOCK` toggles gated on FB
- *      names appearing in the ST source.
  *
  * The output is plain C preprocessor text terminated with newlines
  * matching the editor's emission exactly (so a byte-diff between
@@ -229,7 +220,6 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
   const {
     boardEntry,
     devicePinMapping,
-    stProgramFileContent,
     buildMD5Hash,
     boardRuntime,
     vppModbusState,
@@ -363,63 +353,6 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
   DEFINES_CONTENT += `#define NUM_DISCRETE_OUTPUT ${digitalOutputPins.length}\n`
   DEFINES_CONTENT += `#define NUM_ANALOG_OUTPUT ${analogOutputPins.length}\n`
   DEFINES_CONTENT += `\n\n`
-
-  // 6. Arduino libraries — toggled on FB names appearing in the ST.
-  //    The marker-string set here is the canonical list; the
-  //    firmware HAL headers `#ifdef`-gate `#include` directives off
-  //    these names, so adding a marker here without a matching
-  //    HAL change is harmless, but adding a HAL gate without the
-  //    matching marker here silently breaks link.
-  DEFINES_CONTENT += '//Arduino libraries\n'
-
-  if (
-    stProgramFileContent.includes('DS18B20;') ||
-    stProgramFileContent.includes('DS18B20_2_OUT;') ||
-    stProgramFileContent.includes('DS18B20_3_OUT;') ||
-    stProgramFileContent.includes('DS18B20_4_OUT;') ||
-    stProgramFileContent.includes('DS18B20_5_OUT;')
-  ) {
-    DEFINES_CONTENT += '#define USE_DS18B20_BLOCK\n'
-  }
-
-  if (stProgramFileContent.includes('P1AM_INIT;')) DEFINES_CONTENT += '#define USE_P1AM_BLOCKS\n'
-
-  if (stProgramFileContent.includes('CLOUD_BEGIN;')) DEFINES_CONTENT += '#define USE_CLOUD_BLOCKS\n'
-
-  if (stProgramFileContent.includes('MQTT_CONNECT;') || stProgramFileContent.includes('MQTT_CONNECT_AUTH;'))
-    DEFINES_CONTENT += '#define USE_MQTT_BLOCKS\n'
-
-  if (
-    stProgramFileContent.includes('ARDUINOCAN_CONF;') ||
-    stProgramFileContent.includes('ARDUINOCAN_WRITE;') ||
-    stProgramFileContent.includes('ARDUINOCAN_WRITE_WORD;') ||
-    stProgramFileContent.includes('ARDUINOCAN_READ;')
-  ) {
-    DEFINES_CONTENT += '#define USE_ARDUINOCAN_BLOCK\n'
-  }
-
-  if (
-    stProgramFileContent.includes('STM32CAN_CONF;') ||
-    stProgramFileContent.includes('STM32CAN_WRITE;') ||
-    stProgramFileContent.includes('STM32CAN_READ;')
-  ) {
-    DEFINES_CONTENT += '#define USE_STM32CAN_BLOCK\n'
-  }
-
-  if (
-    stProgramFileContent.includes('SM_8RELAY;') ||
-    stProgramFileContent.includes('SM_16RELAY;') ||
-    stProgramFileContent.includes('SM_8DIN;') ||
-    stProgramFileContent.includes('SM_16DIN;') ||
-    stProgramFileContent.includes('SM_4REL4IN;') ||
-    stProgramFileContent.includes('SM_INDUSTRIAL;') ||
-    stProgramFileContent.includes('SM_RTD;') ||
-    stProgramFileContent.includes('SM_BAS;') ||
-    stProgramFileContent.includes('SM_HOME;') ||
-    stProgramFileContent.includes('SM_8MOSFET;')
-  ) {
-    DEFINES_CONTENT += '#define USE_SM_BLOCKS\n'
-  }
 
   // 6. Retain blob size.  Emitted only when the program retains something,
   //    so boards that never touch retain see no change at all.  The firmware

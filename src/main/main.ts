@@ -11,7 +11,6 @@ import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, shell } from 'electron'
 import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
-import { autoUpdater } from 'electron-updater'
 import { enableMapSet } from 'immer'
 import { homedir, platform, release } from 'os'
 import { join, resolve } from 'path'
@@ -34,6 +33,7 @@ import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { createQuitCoordinator } from './modules/lifecycle/quit-coordinator'
 import { store } from './modules/store'
+import { createElectronUpdateService } from './modules/updater'
 import { createVendorDocumentHandler, leavesVendorDocument } from './modules/vendor-document/serve'
 
 enableMapSet()
@@ -43,20 +43,17 @@ protocol.registerSchemesAsPrivileged([
   { scheme: VENDOR_DOCUMENT_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ])
 
-class AppUpdater {
-  constructor() {
-    log.transports.file.level = 'info'
-    autoUpdater.logger = log
-    void autoUpdater.checkForUpdatesAndNotify()
-  }
-}
-
 Menu.setApplicationMenu(null)
 
 export let mainWindow: BrowserWindow | null = null
 export let splash: BrowserWindow | null = null
 
 let mainIpcModule: MainProcessBridge | undefined
+// One per process, not per window: macOS re-creates the window on activate.
+const updateService = createElectronUpdateService({
+  getWindow: () => mainWindow,
+  requestQuit: () => quitCoordinator.requestQuit(),
+})
 const quitCoordinator = createQuitCoordinator({
   platform: process.platform,
   getWindow: () => mainWindow,
@@ -370,7 +367,7 @@ const createMainWindow = async () => {
   // mainWindow.webContents.send('editor:getBaseTypes', _editorService.getBaseTypes())
 
   // Handles the creation of the menu
-  const menuBuilder = new MenuBuilder(mainWindow)
+  const menuBuilder = new MenuBuilder(mainWindow, updateService)
   void menuBuilder.buildMenu()
 
   /**
@@ -403,9 +400,6 @@ const createMainWindow = async () => {
     quitCoordinator,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
-
-  // Remove this if your app does not use auto updates;
-  new AppUpdater()
 }
 
 // Disable GPU Acceleration for Windows 7;
@@ -525,6 +519,8 @@ app
     // never delays the app appearing, and best-effort: a convenience command
     // failing to install is not a reason for the editor not to start.
     void installCliShimOnFirstRun()
+    // One check about a minute after launch, never blocking it; see modules/updater.
+    updateService.start()
     // Handle the app activation event;
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the
