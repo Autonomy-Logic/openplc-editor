@@ -1,34 +1,19 @@
-export type Project = {
+import type { ProjectSearchMatch } from '../../../utils/PLC/project-search'
+
+export type { ProjectSearchMatch }
+
+/** One search, kept with every occurrence it found: the count is the list's length. */
+export type ProjectSearchEntry = {
+  searchID: string
   searchQuery: string
   projectName: string
-  functions: {
-    pous: Record<
-      'program' | 'function' | 'function-block',
-      Array<{
-        name: string
-        language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st' | 'python' | 'cpp'
-        pouType: 'program' | 'function' | 'function-block'
-        body: string
-        variable: string | null
-      }>
-    >
-    dataTypes: Array<{
-      name: string
-      type: 'array' | 'structure' | 'enumerated'
-    }>
-    resource: {
-      globalVariable: string
-      task: string
-      instance: string
-    }
-  }
-  searchCounts?: number
-  searchID: string
+  matches: ProjectSearchMatch[]
+  searchCounts: number
 }
 
 export type SearchState = {
   searchQuery: string
-  searchResults: Project[]
+  searchResults: ProjectSearchEntry[]
   sensitiveCase: boolean
   regularExpression: boolean
   searchNodePosition: { x: number; y: number }
@@ -36,7 +21,7 @@ export type SearchState = {
 
 export type SearchActions = {
   setSearchQuery: (query: string) => void
-  setSearchResults: (project: Project) => void
+  setSearchResults: (project: ProjectSearchEntry) => void
   setSensitiveCase: (sensitiveCase: boolean) => void
   setRegularExpression: (regularExpression: boolean) => void
   removeSearchResult: (itemID: string) => void

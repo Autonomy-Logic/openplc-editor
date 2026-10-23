@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 
+import { useGraphicalFocus } from '../../../../../../hooks/use-graphical-focus'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { hasLegacyInOutOutputHandle } from '../../../../../../utils/graphical/in-out-pin-rules'
@@ -23,8 +24,22 @@ export default function FbdEditor() {
   const userLibraries = useOpenPLCStore((state) => state.libraries.user)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
+  const fbdFlowActions = useOpenPLCStore((state) => state.fbdFlowActions)
+
   const flow = fbdFlows.find((flow) => flow.name === pouName)
   const flowUpdated = flow?.updated || false
+
+  const selectSearchedNode = useCallback(
+    ({ nodeId }: { nodeId: string }) => {
+      const node = flow?.rung.nodes.find((candidate) => candidate.id === nodeId)
+      if (!node) return false
+
+      fbdFlowActions.setSelectedNodes({ nodes: [node], editorName: pouName })
+      return true
+    },
+    [flow?.rung.nodes, fbdFlowActions, pouName],
+  )
+  useGraphicalFocus(pouName, selectSearchedNode)
 
   const nodeDivergences = useMemo(() => {
     if (!flow) return EMPTY_DIVERGENCES
