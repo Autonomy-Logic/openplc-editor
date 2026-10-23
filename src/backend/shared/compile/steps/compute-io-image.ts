@@ -778,6 +778,11 @@ const UNBACKED_NAMES_SHOWN = 5
  *  have to branch per board. */
 const PRODUCER_HOMES = 'the Device, Remote Devices or Servers branches'
 
+/** Memory is the one area no hardware drives, so the generic sentence above
+ *  sends the user looking in two branches that cannot help. A Modbus server's
+ *  Buffer Mapping is its only producer. */
+const MEMORY_PRODUCER_HOME = "a Modbus server's Buffer Mapping, under Servers"
+
 /**
  * The BR14 violations, grouped by the area that has no producer.
  *
@@ -823,10 +828,21 @@ export function describeUnbackedLocations(issues: readonly UnbackedLocation[]): 
     lines.push(`Nothing produces ${prefix} on this target, and ${count} on it:\n  ${shown.join(' \u00b7 ')}`)
   }
 
-  lines.push(
-    'An address needs something behind it before a variable can use it. Add a producer under ' +
-      `${PRODUCER_HOMES}, whichever fits where the value comes from.`,
-  )
+  const offended = [...byPrefix.keys()]
+  const memory = offended.filter((prefix) => prefix.startsWith('%M'))
+  const physical = offended.filter((prefix) => !prefix.startsWith('%M'))
+
+  const remedy = ['An address needs something behind it before a variable can use it.']
+  if (physical.length > 0) {
+    remedy.push(`Add a producer under ${PRODUCER_HOMES}, whichever fits where the value comes from.`)
+  }
+  if (memory.length > 0) {
+    remedy.push(
+      `No pin or fieldbus produces memory, so ${memory.join(' and ')} ` +
+        `${memory.length === 1 ? 'is' : 'are'} sized under ${MEMORY_PRODUCER_HOME} and nowhere else.`,
+    )
+  }
+  lines.push(remedy.join(' '))
   return lines
 }
 
