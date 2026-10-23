@@ -779,9 +779,10 @@ const UNBACKED_NAMES_SHOWN = 5
 const PRODUCER_HOMES = 'the Device, Remote Devices or Servers branches'
 
 /** Memory is the one area no hardware drives, so the generic sentence above
- *  sends the user looking in two branches that cannot help. A Modbus server's
- *  Buffer Mapping is its only producer. */
-const MEMORY_PRODUCER_HOME = "a Modbus server's Buffer Mapping, under Servers"
+ *  sends the user looking in two branches that cannot help. Its producers are
+ *  both servers: a Modbus Buffer Mapping, or an S7comm data block, which backs
+ *  `%MW`, `%MD` and `%ML` but has no buffer code for `%MX`. */
+const MEMORY_PRODUCER_HOME = "a Modbus server's Buffer Mapping or an S7comm server's data blocks, under Servers"
 
 /**
  * The BR14 violations, grouped by the area that has no producer.

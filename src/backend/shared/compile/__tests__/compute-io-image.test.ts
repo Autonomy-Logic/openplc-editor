@@ -1216,7 +1216,7 @@ describe('the messages', () => {
   it('points memory at the Buffer Mapping, not at pins it can never come from', () => {
     const lines = describeUnbackedLocations(compute(withLocal('%MX0.1', 'flag')).unbacked)
     const remedy = lines[lines.length - 1]
-    expect(remedy).toContain("a Modbus server's Buffer Mapping, under Servers")
+    expect(remedy).toContain("a Modbus server's Buffer Mapping or an S7comm server's data blocks")
     expect(remedy).not.toContain('the Device, Remote Devices or Servers branches')
   })
 
@@ -1227,7 +1227,7 @@ describe('the messages', () => {
     const lines = describeUnbackedLocations(compute(project).unbacked)
     const remedy = lines[lines.length - 1]
     expect(remedy).toContain('the Device, Remote Devices or Servers branches')
-    expect(remedy).toContain("a Modbus server's Buffer Mapping, under Servers")
+    expect(remedy).toContain("a Modbus server's Buffer Mapping or an S7comm server's data blocks")
   })
 
   it('cuts the list short rather than naming every offender', () => {
