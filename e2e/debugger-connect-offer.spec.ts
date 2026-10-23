@@ -9,6 +9,7 @@
  *   E2E_ESP32_PROJECT     a project whose firmware is already on the board
  *   E2E_ESP32_PORT        the board's serial port
  *   E2E_ESP32_BOARD       optional: the board to set in the copy, when the project names another
+ *   E2E_ESP32_ALLOW_FLASH optional: 1 accepts the mismatch upload, which flashes the board
  * The ESP32 case uses the vendor packages and Arduino cores of the local editor
  * profile. Running needs a production build plus the preload copy; see
  * "Electron e2e" in CLAUDE.md.
@@ -26,6 +27,7 @@ const RUNTIME_IP = process.env.E2E_RUNTIME_IP ?? ''
 const ESP32_PROJECT = process.env.E2E_ESP32_PROJECT ?? ''
 const ESP32_PORT = process.env.E2E_ESP32_PORT ?? ''
 const ESP32_BOARD = process.env.E2E_ESP32_BOARD ?? ''
+const ESP32_ALLOW_FLASH = process.env.E2E_ESP32_ALLOW_FLASH === '1'
 
 type Paths = { fixture: string; userData: string }
 
@@ -179,7 +181,8 @@ async function logIn(page: Page): Promise<void> {
 const debuggerPanel = (page: Page) => page.getByText('Variables', { exact: true })
 
 async function expectDebuggerLive(page: Page, liveValue?: RegExp): Promise<void> {
-  await expect(debuggerPanel(page)).toBeVisible({ timeout: 180000 })
+  // Long enough for a firmware build and upload on the flashing path.
+  await expect(debuggerPanel(page)).toBeVisible({ timeout: 600000 })
   if (!liveValue) return
   const inline = page.locator('.debug-inline-value:visible').filter({ hasText: liveValue })
   await expect(inline.first()).toBeVisible({ timeout: 30000 })
@@ -270,20 +273,53 @@ test.describe('ESP32 target', () => {
   )
 
   test('names the board and its port, then one "Yes" starts the debugger', async () => {
-    test.setTimeout(300000)
+    test.setTimeout(900000)
     const paths = pathsFor('esp32')
     writeEsp32Fixture(paths)
     const { app, page } = await launch(paths)
     try {
       await openProject(page)
-      await debuggerButton(page).click()
 
+      // Until the vendor packages load, the board has no debug spec and the offer can
+      // only name the board, so ask again until it names the port.
       const offer = dialog(page, 'Not Connected')
-      await expect(offer).toContainText(`at ${ESP32_PORT}`)
+      await expect
+        .poll(
+          async () => {
+            await debuggerButton(page).click()
+            await offer.waitFor({ timeout: 30000 })
+            if ((await offer.innerText()).includes(`at ${ESP32_PORT}`)) return true
+            await offer.getByRole('button', { name: 'No' }).click()
+            await offer.waitFor({ state: 'hidden' })
+            return false
+          },
+          { timeout: 60000, intervals: [2000] },
+        )
+        .toBe(true)
       await expect(offer).not.toContainText('localhost')
       await offer.getByRole('button', { name: 'Yes' }).click()
 
+      if (ESP32_ALLOW_FLASH) {
+        // The board may run other firmware; the mismatch upload flashes this project.
+        const mismatch = dialog(page, 'Program Mismatch')
+        await expect
+          .poll(async () => (await mismatch.count()) > 0 || (await debuggerPanel(page).isVisible()), {
+            timeout: 180000,
+          })
+          .toBe(true)
+        if ((await mismatch.count()) > 0) await mismatch.getByRole('button', { name: 'Yes' }).click()
+      }
+
       await expectDebuggerLive(page)
+    } catch (error) {
+      // The build and upload log only in the console panel; keep it with the failure.
+      const consoleLog = join(paths.fixture, '..', 'console.txt')
+      const screen = join(paths.fixture, '..', 'screen.png')
+      writeFileSync(consoleLog, await consoleText(page).catch(() => ''))
+      await page.screenshot({ path: screen })
+      await test.info().attach('console', { path: consoleLog, contentType: 'text/plain' })
+      await test.info().attach('screen', { path: screen, contentType: 'image/png' })
+      throw error
     } finally {
       close(app)
     }
