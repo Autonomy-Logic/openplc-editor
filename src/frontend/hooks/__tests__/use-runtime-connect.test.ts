@@ -128,7 +128,7 @@ describe('useRuntimeConnect — connecting', () => {
       expect.objectContaining({
         type: 'error',
         title: 'No Response',
-        message: expect.stringContaining('Could not reach the runtime at 192.168.0.2: Connection timeout'),
+        message: expect.stringContaining('Could not reach OpenPLC Runtime v4 at 192.168.0.2: Connection timeout'),
       }),
     )
   })

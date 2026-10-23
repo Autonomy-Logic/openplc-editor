@@ -8,6 +8,7 @@
  *   E2E_RUNTIME_IP        an OpenPLC Runtime v4 with user admin/admin (its program is replaced)
  *   E2E_ESP32_PROJECT     a project whose firmware is already on the board
  *   E2E_ESP32_PORT        the board's serial port
+ *   E2E_ESP32_BOARD       optional: the board to set in the copy, when the project names another
  * The ESP32 case uses the vendor packages and Arduino cores of the local editor
  * profile. Running needs a production build plus the preload copy; see
  * "Electron e2e" in CLAUDE.md.
@@ -24,6 +25,7 @@ const ROOT = join(realpathSync(tmpdir()), 'openplc-e2e-debugger-connect-offer')
 const RUNTIME_IP = process.env.E2E_RUNTIME_IP ?? ''
 const ESP32_PROJECT = process.env.E2E_ESP32_PROJECT ?? ''
 const ESP32_PORT = process.env.E2E_ESP32_PORT ?? ''
+const ESP32_BOARD = process.env.E2E_ESP32_BOARD ?? ''
 
 type Paths = { fixture: string; userData: string }
 
@@ -118,7 +120,15 @@ function writeEsp32Fixture(paths: Paths): void {
   const configPath = join(fixture, 'devices', 'configuration.json')
   const config: Record<string, unknown> = JSON.parse(readFileSync(configPath, 'utf-8'))
   // The runtime address must not leak into a board's offer.
-  writeFileSync(configPath, JSON.stringify({ ...config, communicationPort: ESP32_PORT, runtimeIpAddress: 'localhost' }))
+  writeFileSync(
+    configPath,
+    JSON.stringify({
+      ...config,
+      ...(ESP32_BOARD ? { deviceBoard: ESP32_BOARD } : {}),
+      communicationPort: ESP32_PORT,
+      runtimeIpAddress: 'localhost',
+    }),
+  )
   writeProfile(paths, true)
 }
 
@@ -240,11 +250,13 @@ test.describe('Runtime v4 target', () => {
       await debuggerButton(page).click()
       await dialog(page, 'Not Connected').getByRole('button', { name: 'Yes' }).click()
 
-      await expect(dialog(page, 'No Response')).toContainText('Could not reach the runtime at 192.0.2.1', {
+      await expect(dialog(page, 'No Response')).toContainText('Could not reach OpenPLC Runtime v4 at 192.0.2.1', {
         timeout: 60000,
       })
       await dialog(page, 'No Response').getByRole('button', { name: 'OK' }).click()
-      await expect(page.getByText('Debugger session cancelled: the target is not connected.')).toBeVisible()
+      // The dialog was the explanation: no "cancelled" line, and no debug session.
+      await expect(page.getByText('Debugger session cancelled.')).toHaveCount(0)
+      await expect(debuggerPanel(page)).toHaveCount(0)
     } finally {
       close(app)
     }

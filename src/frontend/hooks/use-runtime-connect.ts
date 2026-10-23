@@ -17,6 +17,7 @@
 import { useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { useCallback } from 'react'
 
+import { describeRuntimeTarget } from '../services/device-link-resolution'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 import { validateRuntimeVersion } from '../utils/device'
 import { getErrorMessage } from '../utils/get-error-message'
@@ -67,12 +68,18 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
 
     setRuntimeConnectionStatus('connecting')
 
+    // Named as the debugger's connect offer names it, so the two dialogs agree.
     const reportUnreachable = (reason: string): void => {
-      const target = runtimeIpAddress || store.getState().runtimeConnection.selectedDevice?.deviceName || 'the runtime'
+      const deviceName = store.getState().runtimeConnection.selectedDevice?.deviceName
+      const target = runtimeIpAddress
+        ? describeRuntimeTarget(deviceBoard, runtimeIpAddress)
+        : deviceName
+          ? `"${deviceName}"`
+          : 'the runtime'
       openModal('debugger-message', {
         type: 'error',
         title: 'No Response',
-        message: `Could not reach the runtime at ${target}: ${reason}. Check that it is powered and on the network, and that the IP address is correct.`,
+        message: `Could not reach ${target}: ${reason}. Check that it is powered and on the network, and that the IP address is correct.`,
         buttons: ['OK'],
         onResponse: () => undefined,
       })

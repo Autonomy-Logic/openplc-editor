@@ -12,7 +12,7 @@ import type { DebugSpec } from '../../../backend/shared/hardware/debug-spec'
 import type { BoardInfo } from '../../../middleware/shared/ports/types'
 import type { OpenPLCStore } from '../../store'
 import { createTestStore } from '../../store/testing'
-import { describeConnectTarget, resolveRuntimeDebugChannel } from '../device-link-resolution'
+import { describeConnectTarget, describeRuntimeTarget, resolveRuntimeDebugChannel } from '../device-link-resolution'
 
 /** A board carries BOTH halves: the spec says how a channel is built, the
  *  capability matrix says which channels the target can actually speak. */
@@ -172,5 +172,16 @@ describe('describeConnectTarget', () => {
 
     expect(describeConnectTarget(store, 'ESP32 WROOM', esp32, false)).toBe('ESP32 WROOM')
     expect(describeConnectTarget(store, 'ESP32 WROOM', undefined, false)).toBe('ESP32 WROOM')
+  })
+})
+
+describe('describeRuntimeTarget', () => {
+  it('names the board and its address', () => {
+    expect(describeRuntimeTarget('OpenPLC Runtime v4', '192.168.1.188')).toBe('OpenPLC Runtime v4 at 192.168.1.188')
+  })
+
+  it('names only the board when no address is configured', () => {
+    expect(describeRuntimeTarget('OpenPLC Runtime v4', '')).toBe('OpenPLC Runtime v4')
+    expect(describeRuntimeTarget('OpenPLC Runtime v4', undefined)).toBe('OpenPLC Runtime v4')
   })
 })

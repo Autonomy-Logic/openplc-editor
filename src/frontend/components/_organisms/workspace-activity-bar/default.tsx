@@ -27,7 +27,11 @@ import { useRuntimeConnect } from '../../../hooks/use-runtime-connect'
 import { useSimulatorDebugRun } from '../../../hooks/use-simulator-debug-run'
 import { useDebugPolling } from '../../../hooks/useDebugPolling'
 import { useDebugSession } from '../../../hooks/useDebugSession'
-import { awaitDebugSession } from '../../../services/await-debug-session'
+import {
+  awaitDebugSession,
+  type DebugSessionOutcome,
+  SESSION_OPEN_TIMEOUT_MS,
+} from '../../../services/await-debug-session'
 import {
   buildDeviceResolverContext,
   describeConnectTarget,
@@ -1302,15 +1306,23 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         // Connect, then continue once the session is up. A runtime's connect
         // resolves while its login modal is still open, so both wait on the
         // session status; the processing flag stays set to block a second press.
-        let sessionReady = false
+        // A failed connect has already shown its own dialog, so only a cancel and a
+        // timeout are logged here.
+        let outcome: DebugSessionOutcome = 'failed'
         if (isRuntime) {
           await runtimeConnect.connect()
-          sessionReady = await awaitDebugSession(store, 'runtime')
+          outcome = await awaitDebugSession(store, 'runtime')
         } else if (await deviceConnect.connect()) {
-          sessionReady = await awaitDebugSession(store, 'device')
+          outcome = await awaitDebugSession(store, 'device')
         }
-        if (!sessionReady) {
-          addLog({ level: 'info', message: 'Debugger session cancelled: the target is not connected.' })
+        if (outcome !== 'connected') {
+          if (outcome === 'cancelled') addLog({ level: 'info', message: 'Debugger session cancelled.' })
+          if (outcome === 'timeout') {
+            addLog({
+              level: 'warning',
+              message: `Debugger not started: the session did not open within ${SESSION_OPEN_TIMEOUT_MS / 1000} s.`,
+            })
+          }
           setIsDebuggerProcessing(false)
           return
         }

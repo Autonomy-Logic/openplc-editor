@@ -200,6 +200,11 @@ function trace(store: OpenPLCStore, message: string): void {
 /** Guard against a malformed spec bouncing between prompts forever. */
 const MAX_RESOLVE_ROUNDS = 8
 
+/** A runtime as the user configured it: "OpenPLC Runtime v4 at 192.168.1.10", or the board alone. */
+export function describeRuntimeTarget(boardTarget: string, address: string | undefined): string {
+  return address ? `${boardTarget} at ${address}` : boardTarget
+}
+
 /**
  * The target and the address it is configured to be reached at, for naming it
  * before a connect: "OpenPLC Runtime v4 at 192.168.1.10", "ESP32 WROOM at
@@ -214,8 +219,7 @@ export function describeConnectTarget(
   isRuntime: boolean,
 ): string {
   if (isRuntime) {
-    const address = store.getState().deviceDefinitions.configuration.runtimeIpAddress
-    return address ? `${boardTarget} at ${address}` : boardTarget
+    return describeRuntimeTarget(boardTarget, store.getState().deviceDefinitions.configuration.runtimeIpAddress)
   }
   const outcome = resolveDeviceLinkCandidates(boardInfo?.debug, buildDeviceResolverContext(store, boardTarget), {
     transports: resolveTargetCapabilities(boardInfo).debuggerTransports,
