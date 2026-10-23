@@ -42,8 +42,8 @@ const USB_BOARD: BoardInfo = {
 }
 
 const compileForDebug = jest.fn(() => Promise.resolve({ success: true }))
-// A failed upload ends the handler instead of recursing into a second MD5 round.
-const compileProgram = jest.fn(() => Promise.resolve({ success: false, error: 'not exercised' }))
+const compileProgram = jest.fn((): Promise<{ success: boolean; error?: string }> => Promise.resolve({ success: true }))
+const verifyMd5 = jest.fn(() => Promise.resolve({ success: true, match: false, targetMd5: 'device-md5' }))
 const releaseSerialPort = jest.fn(() => Promise.resolve(true))
 const deviceConnect = jest.fn(() => Promise.resolve({ status: 'connected-with-firmware' as const }))
 
@@ -64,7 +64,7 @@ function renderBar() {
     debugger: stubPort({
       readProgramMd5: () => Promise.resolve({ success: true, md5: 'local-md5' }),
       connect: () => Promise.resolve({ success: true }),
-      verifyMd5: () => Promise.resolve({ success: true, match: false, targetMd5: 'device-md5' }),
+      verifyMd5,
       disconnect: () => Promise.resolve({ success: true }),
     }),
     simulator: stubPort(),
@@ -104,7 +104,10 @@ describe('MD5 re-upload — serial handoff', () => {
     cleanup()
   })
 
-  it('releases the held port before uploading and reconnects afterwards', async () => {
+  it('releases the held port, uploads, reconnects, then verifies the MD5 again', async () => {
+    verifyMd5
+      .mockResolvedValueOnce({ success: true, match: false, targetMd5: 'device-md5' })
+      .mockResolvedValueOnce({ success: true, match: true, targetMd5: 'local-md5' })
     renderBar()
 
     fireEvent.click(screen.getByRole('button', { name: 'Debugger' }))
@@ -122,9 +125,13 @@ describe('MD5 re-upload — serial handoff', () => {
     const [reconnected] = deviceConnect.mock.invocationCallOrder
     expect(released).toBeLessThan(uploaded)
     expect(uploaded).toBeLessThan(reconnected)
+    // The re-check waits 2 s for the board to boot the new firmware.
+    await waitFor(() => expect(verifyMd5).toHaveBeenCalledTimes(2), { timeout: 5000 })
+    expect(verifyMd5.mock.invocationCallOrder[1]).toBeGreaterThan(reconnected)
   })
 
-  it('reports the failed upload and leaves the debugger idle', async () => {
+  it('reports a failed upload and does not verify again', async () => {
+    compileProgram.mockResolvedValueOnce({ success: false, error: 'upload failed' })
     renderBar()
 
     fireEvent.click(screen.getByRole('button', { name: 'Debugger' }))
@@ -137,5 +144,6 @@ describe('MD5 re-upload — serial handoff', () => {
       ),
     )
     expect(compileForDebug).toHaveBeenCalledTimes(1)
+    expect(verifyMd5).toHaveBeenCalledTimes(1)
   })
 })

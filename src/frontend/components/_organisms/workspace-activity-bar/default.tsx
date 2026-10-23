@@ -1256,6 +1256,20 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           return
         }
 
+        // A runtime is reached by its address, or on web by the selected device;
+        // with neither, the connect would return without trying anything.
+        if (isRuntime && !devDefs.configuration.runtimeIpAddress && selectedDeviceName === null) {
+          await showDeviceDialog(
+            store,
+            'warning',
+            'No IP Address',
+            "Set the runtime's IP address in the device configuration before starting the debugger.",
+            ['OK'],
+          )
+          setIsDebuggerProcessing(false)
+          return
+        }
+
         // Name the target. "Would you like to connect?" with no name is how a
         // mis-selection turns into a session on someone else's machine.
         const targetName =
