@@ -1,8 +1,8 @@
 {
   "name": "open-plc-editor",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
-  "version": "4.3.2",
-  "license": "GPL-3.0",
+  "version": "4.3.3",
+  "license": "GPL-3.0-only",
   "author": {
     "name": "Autonomy Logic"
   },
@@ -74,7 +74,6 @@
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.8",
     "electron-store": "^8.1.0",
-    "electron-updater": "^6.1.4",
     "embla-carousel-react": "^8.0.0-rc17",
     "extract-zip": "^2.0.1",
     "fast-xml-parser": "^5.6.0",

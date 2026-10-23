@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 // arduino_runtime_glue.cpp — Arduino-side runtime shim. Equivalent role to
 // runtime_v4_entry.cpp for the OpenPLC v4 .so build, but compiled into the
 // Arduino library at src/ instead of into a daemon-loaded .so.
@@ -629,8 +631,8 @@ static bool     retain_available  = false;
 // inside its own guard, so every TU that sees openplc.h sees defines.h,
 // including this one. Re-inclusion is safe — defines.h holds nothing but
 // object-like macros, and redefining a macro to an identical token sequence is
-// permitted (C11 6.10.3p2) — and nothing here or in modbus_debug.cpp,
-// Arduino_OpenPLC.h or mega_due_bkp.cpp changes behaviour as a result. The
+// permitted (C11 6.10.3p2) — and nothing here, in modbus_debug.cpp or in
+// Arduino_OpenPLC.h changes behaviour as a result. The
 // single-path rule is simply gone; do not restore it from memory.
 static const char *retain_program_md5 = nullptr;
 

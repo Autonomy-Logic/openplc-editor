@@ -12,7 +12,7 @@
     "reload"
   ],
   "homepage": "https://github.com/Autonomy-Logic/OpenPLC_Editor",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "author": {
     "name": "Autonomy Logic"
   },

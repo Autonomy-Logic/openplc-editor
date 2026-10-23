@@ -108,6 +108,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     ipAddress: null,
     runtimeUpdateInProgress: false,
     runtimeVersion: null,
+    runtimeFeatures: null,
     selectedDevice: null,
     storedCredentials: null,
     timingStats: null,
@@ -188,6 +189,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           runtimeConnection.plcStatus = null
           runtimeConnection.ipAddress = null
           runtimeConnection.runtimeVersion = null
+          runtimeConnection.runtimeFeatures = null
           runtimeConnection.selectedDevice = null
           runtimeConnection.storedCredentials = null
           runtimeConnection.timingStats = null
@@ -562,6 +564,13 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
+    setRuntimeFeatures: (features): void => {
+      setState(
+        produce(({ runtimeConnection }: DeviceSlice) => {
+          runtimeConnection.runtimeFeatures = features
+        }),
+      )
+    },
     setPlcRuntimeStatus: (status): void => {
       setState(
         produce(({ runtimeConnection }: DeviceSlice) => {
@@ -656,6 +665,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           runtimeConnection.plcStatus = null
           runtimeConnection.ipAddress = null
           runtimeConnection.runtimeVersion = null
+          runtimeConnection.runtimeFeatures = null
           runtimeConnection.selectedDevice = null
           runtimeConnection.storedCredentials = null
           runtimeConnection.timingStats = null
@@ -876,12 +886,36 @@ function migrateVendorScreenData(
   return { vendorScreenData: undefined, vendorScreenDataByBoard: undefined }
 }
 
+/** Like `migrateVendorScreenData`; absent stays absent so no retain.conf is emitted. */
+function migratePersistentStorage(
+  provided: Partial<DeviceConfiguration>,
+  deviceBoard: string,
+): Pick<DeviceConfiguration, 'persistentStorage' | 'persistentStorageByBoard'> {
+  const flat = provided.persistentStorage
+  const archive = provided.persistentStorageByBoard
+
+  if (archive && Object.keys(archive).length > 0) {
+    const active = archive[deviceBoard] ?? flat
+    return {
+      persistentStorage: active ? { ...active } : undefined,
+      persistentStorageByBoard: active ? { ...archive, [deviceBoard]: { ...active } } : { ...archive },
+    }
+  }
+
+  if (flat) {
+    return { persistentStorage: { ...flat }, persistentStorageByBoard: { [deviceBoard]: { ...flat } } }
+  }
+
+  return { persistentStorage: undefined, persistentStorageByBoard: undefined }
+}
+
 function mergeDeviceConfigWithDefaults(
   provided: Partial<DeviceConfiguration>,
   defaults: DeviceConfiguration,
 ): DeviceConfiguration {
   const deviceBoard = provided.deviceBoard || defaults.deviceBoard
   const { vendorScreenData, vendorScreenDataByBoard } = migrateVendorScreenData(provided, deviceBoard)
+  const { persistentStorage, persistentStorageByBoard } = migratePersistentStorage(provided, deviceBoard)
   return {
     deviceBoard,
     communicationPort: provided.communicationPort ?? defaults.communicationPort,
@@ -897,6 +931,9 @@ function mergeDeviceConfigWithDefaults(
     // board.tsx's drift detection sees a blank slate instead of the real
     // prior pin, so a project with a VPP board always opens as if unpinned.
     vppPackagePinsByBoard: provided.vppPackagePinsByBoard ?? defaults.vppPackagePinsByBoard,
+    // Must merge — otherwise the next save (auto-save on build included) drops the RETAIN settings.
+    ...(persistentStorage ? { persistentStorage } : {}),
+    ...(persistentStorageByBoard ? { persistentStorageByBoard } : {}),
     // Copied: a fresh object per load is what tells the restore hook a project was (re)opened.
     ...(provided.targetDevice ? { targetDevice: { ...provided.targetDevice } } : {}),
   }

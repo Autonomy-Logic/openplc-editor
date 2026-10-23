@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 opcua_nodes.cpp - the address space and the data plane
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 
 Turns the generated OPCUA_NODES[] table into open62541 variable nodes whose
 values come straight from the PLC, with no copy in between. Every node is a data

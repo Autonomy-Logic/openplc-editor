@@ -6,12 +6,15 @@ import { APP_VERSION } from '../frontend/data/constants/app-version'
 import type { OpenPLCStore } from '../frontend/store'
 import { createEditorAcceleratorAdapter } from './adapters/editor/accelerator-adapter'
 import { createEditorAIAdapter } from './adapters/editor/ai-adapter'
+import { createEditorAppUpdateAdapter } from './adapters/editor/app-update-adapter'
 import { createEditorCompilerAdapter } from './adapters/editor/compiler-adapter'
 import { createEditorDebuggerAdapter } from './adapters/editor/debugger-adapter'
 import { createEditorDeviceAdapter } from './adapters/editor/device-adapter'
 import { editorEdgeAccountPort } from './adapters/editor/edge-account-adapter'
 import { editorEditSessionPort } from './adapters/editor/edit-session-adapter'
 import { createEditorEsiAdapter } from './adapters/editor/esi-adapter'
+import { createEditorEtherCATDiagnosticsAdapter } from './adapters/editor/ethercat-diagnostics-adapter'
+import { createEditorEtherCATScanAdapter } from './adapters/editor/ethercat-scan-adapter'
 import { createEditorLibraryAdapter } from './adapters/editor/library-adapter'
 import { createEditorNavigationAdapter } from './adapters/editor/navigation-adapter'
 import { openFetchedProject } from './adapters/editor/open-fetched-project'
@@ -79,6 +82,8 @@ export function createEditorPorts(store: OpenPLCStore): PlatformPorts {
     theme: createEditorThemeAdapter(),
     packages: editorPackages,
     esi: createEditorEsiAdapter(() => _projectPath),
+    ethercatScan: createEditorEtherCATScanAdapter({ getRuntimeIp: () => _runtimeIpAddress }),
+    ethercatDiagnostics: createEditorEtherCATDiagnosticsAdapter({ getRuntimeIp: () => _runtimeIpAddress }),
     versionControl: createEditorVersionControlAdapter(),
     navigation: createEditorNavigationAdapter(store),
     library: createEditorLibraryAdapter(),
@@ -86,6 +91,7 @@ export function createEditorPorts(store: OpenPLCStore): PlatformPorts {
     // Paired with `requiresEdgeAccount: false` in EDITOR_CAPABILITIES, so signing in stays optional here.
     edgeAccount: editorEdgeAccountPort,
     editSession: editorEditSessionPort,
+    appUpdate: createEditorAppUpdateAdapter(),
     // Wired unconditionally; visibility is gated by capabilities/consent/sign-in, not by the port's absence.
     ai: createEditorAIAdapter({
       // No build-time kill switch: the main process is the only route to AI endpoints, so an absent proxy already fails closed.

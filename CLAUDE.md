@@ -446,6 +446,17 @@ repos and merge to `development`; promote `development` to `main` in both repos;
 Release"). openplc-web has no release workflow: `production-cd.yml` deploys on every push to its
 `main`, and `staging-cd.yml` on pushes to `development`.
 
+### Update notice (never publish `latest*.yml`):
+The editor checks the GitHub releases API once per launch and, when a newer
+version is out, shows a banner at the top of the window ("Update" and an X);
+Update downloads that OS's installer, checks its sha256 against the release and
+opens it. The user installs (DOPE-486, `docs/update-notice.md`). The release
+pipeline needs nothing for it. The Windows installer is an assisted NSIS
+installer (`assets/installer.nsh`) that asks the user to close a running editor
+and never kills it; keep `oneClick: false`. **Never add `latest-mac.yml` / `latest-linux*.yml` / `latest.yml`
+to a release**: every editor from 4.1.0 to 4.3.2 still embeds electron-updater's
+`app-update.yml` and would install it without asking, unsigned on Windows.
+
 ### When adding a new port:
 1. Define the interface in `src/middleware/shared/ports/`
 2. Add it to `PlatformPorts` in `src/middleware/shared/providers/types.ts`

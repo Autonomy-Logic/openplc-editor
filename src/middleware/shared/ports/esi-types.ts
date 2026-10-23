@@ -83,6 +83,8 @@ export interface ESIPdoEntry {
   dataType: ESIDataType
   /** Optional: Comment/description */
   comment?: string
+  /** Index shifts with the module's slot (ESI `DependOnSlot` / `DependOnSlotGroup`). */
+  dependOnSlot?: boolean
 }
 
 /**
@@ -101,6 +103,21 @@ export interface ESIPdo {
   smIndex?: number
   /** List of entries in this PDO */
   entries: ESIPdoEntry[]
+  /** PDO index shifts with the module's slot (ESI `DependOnSlot` / `DependOnSlotGroup`). */
+  dependOnSlot?: boolean
+  /**
+   * Indices of other PDOs this one excludes. When assigned, each excluded
+   * PDO becomes unassignable in the Simple view with the tooltip "excluded by <index>".
+   * Normalised to the same `0x1A00` form the editor uses elsewhere.
+   */
+  exclude?: string[]
+  /**
+   * Object Strand Max (ESI `OSMax`). Zero or absent means no object strand
+   * expansion. The generator expands PDO entries into `osMax` copies with each copy's
+   * entry index incremented by `osIndexInc`. Used by multi-channel modules.
+   */
+  osMax?: number
+  osIndexInc?: number
 }
 
 // ===================== COE (CANopen over EtherCAT) =====================
@@ -174,6 +191,22 @@ export interface SDOConfigurationEntry {
   name: string
   /** Parent object name */
   objectName: string
+  /**
+   * Hex-encoded byte-string payload. When present, the generator
+   * sends this through EtherDOG's `value_bytes` plumbing and ignores
+   * `value` / `dataType` for the wire bytes. Used by module `InitCmd` writes like a
+   * module name at `0x80n0:03`.
+   */
+  valueBytes?: string
+  /**
+   * Send this SDO with CoE Complete Access. Set to `true` on
+   * module-ident-list writes to `0xF030` when the coupler advertises CompleteAccess.
+   */
+  completeAccess?: boolean
+  /** Object index shifts with the owning module's slot. */
+  dependOnSlot?: boolean
+  /** ESI InitCmd transitions, comma-separated (e.g. "PS"). Absent on user startup SDOs. */
+  transition?: string
 }
 
 // ===================== DEVICE ENRICHMENT =====================
@@ -189,9 +222,155 @@ export type EnrichDeviceData = {
   txPdos?: PersistedPdo[]
   slaveType?: string
   sdoConfigurations?: SDOConfigurationEntry[]
+  /** ESI-declared startup writes extracted from `<InitCmds>` at slave scope. */
+  esiInitCmdSdos?: SDOConfigurationEntry[]
+  /** CoE flags lifted from the ESI's `<Mailbox><CoE />`. */
+  coeFlags?: EtherCATSlaveConfig['coeFlags']
+  /** True when the ESI declares a `<Slots>` block. */
+  isModularCoupler?: boolean
+  /** The ESI's `<Slots>` block. */
+  slotsSpec?: ESISlotsSpec
+  /** The ESI's `<ModulePdoGroup>` list. */
+  modulePdoGroups?: ESIModulePdoGroup[]
 }
 
 // ===================== DEVICE =====================
+
+/**
+ * ESI `InitCmd` as the master emits it at startup.
+ *
+ * The ESI's `<InitCmds>` block declares SDO writes the master must send during the state
+ * transition named by `transition` (e.g. "PS" for PRE-OP → SAFE-OP). A module's own
+ * `InitCmd`s are stamped by its slot: the generator renumbers `index` by
+ * (slot - 1) × `SlotIndexIncrement` before emitting.
+ *
+ * Byte-string payloads (e.g. a module's name written to 0x80n0:03) are kept in
+ * `dataAscii` and emitted through EtherDOG's `value_bytes` field; the hex form in
+ * `data` is preferred when both are present. Numeric payloads use `value` + `dataType`.
+ */
+export interface ESIInitCmd {
+  /** Transition names, comma-separated when the ESI lists several: "IP", "PS", "SO", ... */
+  transition: string
+  /** Command class, usually "SDO" for CoE writes. */
+  ccs?: string
+  /** Object index. */
+  index: string
+  /** Object sub-index (0 by default). */
+  subIndex: number
+  /** Payload bytes as `0x`-prefixed hex, in wire order (e.g. "0x841F0900"). */
+  data?: string
+  /** Byte-string payload (e.g. a module's name). */
+  dataAscii?: string
+  /** Numeric payload (when the entry declares a specific type). */
+  value?: number
+  /** Data type the payload decodes to, when the entry declares one. */
+  dataType?: ESIDataType
+  /** CoE Complete Access when true. */
+  completeAccess?: boolean
+  /** Human-readable comment. */
+  comment?: string
+  /** Object index shifts with the module's slot (ESI `DependOnSlot` / `DependOnSlotGroup`). */
+  dependOnSlot?: boolean
+}
+
+/**
+ * TwinCAT `AlternativeSmMapping` preset. A pre-canned PDO assignment set
+ * the ESI offers under a short name (e.g. "CSP mode" on a servo). The editor surfaces
+ * these as a dropdown in the Simple view; selecting one assigns exactly the listed PDOs
+ * on the named sync manager.
+ */
+export interface ESIAlternativeSmMapping {
+  /** Preset name shown in the UI (e.g. "Position mode"). */
+  name: string
+  /** Sync manager this preset applies to. */
+  syncManager: number
+  /** PDO indices to assign (in order). */
+  pdoIndices: string[]
+}
+
+/**
+ * A single `<Slot>` on an ETG.5001 modular coupler. The slot is where a
+ * module physically plugs in; `moduleClass` and `moduleIdents` filter which modules the
+ * coupler accepts in this slot.
+ */
+export interface ESISlot {
+  /** Short name for the slot (e.g. "I/O slot"). */
+  name?: string
+  /** Minimum number of module instances (0 by default; the UR20 bus side slot defaults to 1). */
+  minInstances: number
+  /** Maximum number of module instances. */
+  maxInstances: number
+  /** Module classes this slot accepts (the `<Class>` of each `<ModuleClass>`). */
+  moduleClasses?: string[]
+  /** Allowed module idents (hex) when the ESI gates by ident rather than class. */
+  moduleIdents?: string[]
+  /** Default module ident to pre-populate the slot with. */
+  defaultModuleIdent?: string
+}
+
+/**
+ * The `<Slots>` block from a modular coupler ESI. Presence of this field on
+ * an {@link ESIDevice} is what `isModularCoupler` reflects.
+ */
+export interface ESISlotsSpec {
+  slots: ESISlot[]
+  /** Per-slot index increment applied to module objects (e.g. 16 for UR20: slot 2's
+   *  parameters land at `0x8010`, slot 3's at `0x8020`). */
+  slotIndexIncrement: number
+  /** Per-slot PDO index increment applied to module PDOs. */
+  slotPdoIncrement: number
+  /** When true, the generator emits `0xF030` listing the configured module idents. */
+  downloadModuleIdentList: boolean
+  /** Transition at which to emit the `0xF030` write (e.g. "IP"). */
+  downloadModuleListTransition?: string
+  /** `IdentifyModuleBy` attribute (usually "ModuleIdent"). */
+  identifyModuleBy?: string
+  /** Maximum slot count declared by the ESI (informational). */
+  maxSlotCount?: number
+}
+
+/**
+ * PDO group definition for modular couplers. ETG.5001 orders PDOs in the
+ * generated bus config by `ModulePdoGroup` first, then by slot.
+ */
+export interface ESIModulePdoGroup {
+  /** Group index (0 for coupler PDOs, 1+ for module PDOs). */
+  group: number
+  /** Sync manager assignment. */
+  sm?: number
+  /** Byte alignment the coupler applies to this group's process data (ESI `Alignment`). */
+  alignment?: number
+  /** Default RxPDO index template for this group (ETG.5001 names). */
+  rxPdoIndex?: string
+  /** Default TxPDO index template for this group. */
+  txPdoIndex?: string
+}
+
+/**
+ * An ETG.5001 I/O module. Parsed from the module ESI by
+ * {@link parseESIModuleFull}. The module's RxPDOs, TxPDOs, CoE objects and `InitCmd`s
+ * are generated with slot-adjusted indices by the generator.
+ */
+export interface ESIModule {
+  /** Module ident (hex, e.g. "0x14081A0F"). Primary key for matching against `0xF050`. */
+  ident: string
+  /** Module name shown in the UI. */
+  name: string
+  /** Module class (free-form vendor string; matched against `ESISlot.moduleClass`). */
+  moduleClass?: string
+  /** Module description. */
+  description?: string
+  /** PDO group ID that governs this module's PDO ordering. */
+  modulePdoGroup?: number
+  /** Module RxPDOs (slot-adjusted at emit time). */
+  rxPdo: ESIPdo[]
+  /** Module TxPDOs (slot-adjusted at emit time). */
+  txPdo: ESIPdo[]
+  /** Module CoE objects (slot-adjusted at emit time). */
+  coeObjects?: ESICoEObject[]
+  /** Module `InitCmd`s (slot-adjusted at emit time). */
+  initCmds: ESIInitCmd[]
+}
 
 /**
  * Complete ESI Device representation
@@ -219,6 +398,39 @@ export interface ESIDevice {
   imageUrl?: string
   /** Additional description */
   description?: string
+  /**
+   * CoE flags from `<Mailbox><CoE />`. Defaulted to the ESI values on
+   * device import; the user can override in the Expert view. The generator uses these
+   * to decide whether to emit `0x1C1n` assignment writes and complete-access SDO writes.
+   */
+  coeFlags?: {
+    pdoAssign: boolean
+    pdoConfig: boolean
+    completeAccess: boolean
+  }
+  /** ESI startup commands at slave scope. */
+  initCmds?: ESIInitCmd[]
+  /** TwinCAT `AlternativeSmMapping` presets, when the ESI declares them. */
+  alternativeSmMappings?: ESIAlternativeSmMapping[]
+  /**
+   * `<Slots>` block present when the device is a modular coupler (ETG.5001).
+   * Non-null for UR20-class couplers; undefined for plain slaves and multi-mode drives.
+   */
+  slots?: ESISlotsSpec
+  /** PDO group definitions on a modular coupler. */
+  modulePdoGroups?: ESIModulePdoGroup[]
+  /**
+   * Modules defined inline in the device ESI (vs. referenced through an
+   * external module ESI file). The coupler's catalogue combines these with external
+   * modules looked up by `parseESIModuleFull`.
+   */
+  modules?: ESIModule[]
+  /**
+   * True when the device declares `<Slots>` and is to be treated as a
+   * modular coupler. Mirrors the summary flag; present on the full device for consumers
+   * that pass {@link ESIDevice} around without the summary.
+   */
+  isModularCoupler?: boolean
 }
 
 // ===================== GROUP =====================
@@ -316,6 +528,8 @@ export interface PersistedPdoEntry {
   name: string
   /** Data type (e.g., "BOOL", "INT16", "BIT" for padding) */
   dataType: string
+  /** Index shifts with the owning module's slot. */
+  dependOnSlot?: boolean
 }
 
 /**
@@ -328,11 +542,26 @@ export interface PersistedPdo {
   name: string
   /** PDO entries including padding */
   entries: PersistedPdoEntry[]
+  /** PDO index shifts with the owning module's slot. */
+  dependOnSlot?: boolean
   /**
    * Whether the PDO is in the slave's assignment (ESI `Sm` or `Mandatory`). Absent in projects
    * saved before it was recorded, which are treated as every PDO assigned.
    */
   assigned?: boolean
+  /**
+   * ESI defaults carried forward on first import.
+   */
+  fixed?: boolean
+  mandatory?: boolean
+  /** Default sync manager this PDO is assigned to in the ESI. */
+  sm?: number
+  /**
+   * PDO indices this one excludes (from the ESI `<Exclude>` children). The
+   * Process Data view greys an excluded PDO when its excluder is assigned, with the
+   * excluding PDO named in the tooltip.
+   */
+  exclude?: string[]
 }
 
 /**
@@ -412,6 +641,12 @@ export interface ESIDeviceSummary {
   totalOutputBytes: number
   /** Additional description */
   description?: string
+  /**
+   * True when the device declares a `<Slots>` block (ETG.5001 modular
+   * coupler). Used by the ESI browser to indicate modular couplers in the list and by
+   * the project tree to decide whether a Scan modules button appears on the coupler.
+   */
+  isModularCoupler?: boolean
 }
 
 // ===================== REPOSITORY =====================
@@ -435,6 +670,19 @@ export interface ESIRepositoryItem {
 }
 
 /**
+ * A light summary of an ETG.5001 module from an ESI, used to populate
+ * the module browser modal and reconcile scanned module idents against the repository.
+ */
+export interface ESIModuleSummary {
+  /** Module ident (hex, e.g. "0x1A0F"). Primary key for 0xF050 scan matching. */
+  ident: string
+  /** Display name from the ESI's `<Module><Name>`. */
+  name: string
+  /** Vendor-defined module class (free-form), when the ESI declares one. */
+  moduleClass?: string
+}
+
+/**
  * Lightweight repository item with device summaries instead of full ESIDevice objects.
  * Used for UI display and matching without loading full PDO data.
  */
@@ -447,6 +695,13 @@ export interface ESIRepositoryItemLight {
   vendor: ESIVendor
   /** Lightweight device summaries */
   devices: ESIDeviceSummary[]
+  /**
+   * Light summaries of all modules this ESI declares, both inline modules
+   * on a device (modular coupler ESI) and standalone modules in a `<Modules>` top-level
+   * block (external module file). The module browser modal lists these; the scan
+   * reconciliation uses them to decide if a scanned ident can be added.
+   */
+  modules?: ESIModuleSummary[]
   /** ISO 8601 UTC timestamp when this file was loaded */
   loadedAt: string
   /** Parsing warnings (non-fatal issues) */
@@ -499,8 +754,77 @@ export interface ConfiguredEtherCATDevice {
   slaveType?: string
   /** SDO startup parameters extracted from CoE Object Dictionary */
   sdoConfigurations?: SDOConfigurationEntry[]
+  /**
+   * ESI-declared startup writes (`<InitCmds>` at slave scope). Emitted by the generator
+   * before any user startup SDO and before the PDO-assignment block, so multi-mode
+   * drives can set internal state the mapping switch depends on. Populated at enrich
+   * time from the ESI; the operator does not edit this list.
+   */
+  esiInitCmdSdos?: SDOConfigurationEntry[]
   /** CiA 402 SoftMotion axis configuration (present when recognized as a drive) */
   cia402?: Cia402AxisConfig
+  /**
+   * Modules plugged into this coupler, in slot order. Present only when the
+   * underlying ESI device declares a `<Slots>` block (i.e. the ESI is a modular coupler).
+   * The project tree renders the modules one indentation level below the coupler, the
+   * generator renumbers each module's PDO and object indices by its slot, and the address
+   * pool walks the modules to claim channel addresses.
+   */
+  modules?: ConfiguredEtherCATModule[]
+  /**
+   * True when the underlying ESI device declares a `<Slots>` block. Set once
+   * at import time from the parsed ESI so the UI can render the "Add module to slot N"
+   * flow without re-loading the ESI, and the project tree can render the
+   * three-level nesting (bus → coupler → modules) even when `modules` is still empty.
+   */
+  isModularCoupler?: boolean
+  /**
+   * Full `<Slots>` spec persisted at enrich time. The compile-time validator uses it to
+   * enforce MinInstances / MaxInstances per slot without reloading the ESI.
+   */
+  slotsSpec?: ESISlotsSpec
+  /** `<ModulePdoGroup>` list persisted at enrich time; orders module PDOs in the bus configuration. */
+  modulePdoGroups?: ESIModulePdoGroup[]
+}
+
+/**
+ * One I/O module plugged into a modular coupler. The module is a first-class
+ * element in the project model with its own tab, its own channel mappings and its own
+ * startup SDOs; it is NOT an EtherCAT slave of its own (ETG.5001 moves process data
+ * through the coupler's single slave position).
+ */
+export interface ConfiguredEtherCATModule {
+  /** Stable identifier within the coupler (used in project tree keys and address-pool refs). */
+  id: string
+  /** 1-based slot the module occupies on the coupler's backplane. */
+  slot: number
+  /** User-editable display name (defaults to the module's ESI name). */
+  name: string
+  /** Module ident, hex (e.g. "0x1A0F"). Matches ESIModule.ident and the coupler's 0xF030. */
+  ident: string
+  /**
+   * Reference to the module's ESI definition. For a module defined inline in the coupler's
+   * ESI, this points at the coupler's repository item and names the module ident. For an
+   * external module ESI file, it points at the module file.
+   */
+  esiModuleRef: {
+    repositoryItemId: string
+    moduleIdent: string
+  }
+  /** Module channel mappings (slot-local channelId → IEC address). */
+  channelMappings: EtherCATChannelMapping[]
+  /** Enriched channel metadata, mirror of ConfiguredEtherCATDevice.channelInfo. */
+  channelInfo?: PersistedChannelInfo[]
+  /** Module RxPDOs persisted for the generator. */
+  rxPdos?: PersistedPdo[]
+  /** Module TxPDOs persisted for the generator. */
+  txPdos?: PersistedPdo[]
+  /** Module startup SDOs (byte-string InitCmd writes carried through to EtherDOG). */
+  sdoConfigurations?: SDOConfigurationEntry[]
+  /** ESI module class, checked against the slot's accepted classes. */
+  moduleClass?: string
+  /** ESI `ModulePdoGroup` the module's PDOs belong to. */
+  modulePdoGroup?: number
 }
 
 /**
@@ -605,6 +929,19 @@ export interface EtherCATSlaveConfig {
   watchdog: EtherCATWatchdog
   /** Distributed Clocks (DC) settings */
   distributedClocks: EtherCATDistributedClocks
+  /**
+   * CoE flags defaulted from the ESI's `<Mailbox><CoE />` attributes on first
+   * device import and overridable in the Expert view. The generator uses these to decide
+   * whether to emit `0x1C1n` PDO assignment writes and Complete Access SDO writes.
+   *
+   * Optional for backward compatibility with projects saved before this field existed; the
+   * migration helper {@link migrateSlavePdoFlags} fills them in from the ESI on open.
+   */
+  coeFlags?: {
+    pdoAssign: boolean
+    pdoConfig: boolean
+    completeAccess: boolean
+  }
 }
 
 // ===================== DEVICE MATCHING =====================

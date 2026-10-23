@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 modbus_serial.h - Modbus RTU / debugger serial transport
-Copyright (C) 2022 OpenPLC - Thiago Alves
 
 The serial wire: RTU framing (declared-length, not byte-cadence), RS485 tx-enable
 timing, and single- or dual-serial polling. It fills mb_frame with a request,

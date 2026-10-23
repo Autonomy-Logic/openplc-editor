@@ -5,5 +5,21 @@
   },
   "powerRail": "Create a new power rail",
   "coil": "Create a coil",
-  "var": "VAR"
+  "var": "VAR",
+  "placement": {
+    "title": {
+      "ld": "Ladder",
+      "fbd": "FBD"
+    },
+    "elements": {
+      "contact": "Contact",
+      "coil": "Coil",
+      "block": "Block",
+      "input-variable": "Input Variable",
+      "output-variable": "Output Variable",
+      "connector": "Connector",
+      "continuation": "Continuation",
+      "comment": "Comment"
+    }
+  }
 }

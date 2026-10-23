@@ -24,7 +24,7 @@ import type {
   DeviceLicenseRequest,
 } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
-import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
+import type { ESIDevice, ESIModule, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -401,6 +401,14 @@ const rendererProcessBridge = {
     return () => ipcRenderer.removeListener('libraries:changed', listener)
   },
   handleQuitApp: () => ipcRenderer.send('app:quit'),
+  appUpdateGetStatus: (): Promise<unknown> => ipcRenderer.invoke('app-update:get-status'),
+  appUpdateDownload: () => ipcRenderer.send('app-update:download'),
+  appUpdateDismiss: () => ipcRenderer.send('app-update:dismiss'),
+  appUpdateCheck: () => ipcRenderer.send('app-update:check'),
+  appUpdateGetAutoCheck: (): Promise<unknown> => ipcRenderer.invoke('app-update:get-auto-check'),
+  appUpdateSetAutoCheck: (enabled: boolean) => ipcRenderer.send('app-update:set-auto-check', enabled),
+  onAppUpdateStatus: (callback: (status: unknown) => void) =>
+    subscribe('app-update:status', (_event, status) => callback(status)),
   requestQuitApp: () => ipcRenderer.send('app:request-quit'),
   quitRequested: (callback: IpcRendererCallbacks) => {
     const unsubscribe = subscribe('app:quit-requested', callback)
@@ -683,6 +691,10 @@ const rendererProcessBridge = {
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> =>
     ipcRenderer.invoke('runtime:get-users-info', ipAddress),
+  runtimeGetCapabilities: (
+    ipAddress: string,
+  ): Promise<{ features: readonly string[] | null; runtimeVersion?: string; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-capabilities', ipAddress),
   runtimeCreateUser: (
     ipAddress: string,
     username: string,
@@ -834,6 +846,18 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; data?: EtherCATScanResponse; error?: string }> =>
     ipcRenderer.invoke('ethercat:scan', ipAddress, scanRequest),
 
+  etherCATScanModules: (
+    ipAddress: string,
+    scanRequest: { busName: string; slavePosition: number; networkInterface?: string },
+  ): Promise<{ success: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('ethercat:scan-modules', ipAddress, scanRequest),
+
+  etherCATDiagnostics: (
+    ipAddress: string,
+    request: { busName: string; slavePosition: number },
+  ): Promise<{ success: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('ethercat:diagnostics', ipAddress, request),
+
   etherCATTest: (
     ipAddress: string,
     testRequest: EtherCATTestRequest,
@@ -892,6 +916,13 @@ const rendererProcessBridge = {
     deviceIndex: number,
   ): Promise<{ success: boolean; device?: ESIDevice; error?: string }> =>
     ipcRenderer.invoke('esi:load-device-full', projectPath, itemId, deviceIndex),
+
+  esiLoadModuleFull: (
+    projectPath: string,
+    itemId: string,
+    ident: string,
+  ): Promise<{ success: boolean; module?: ESIModule; error?: string }> =>
+    ipcRenderer.invoke('esi:load-module-full', projectPath, itemId, ident),
 
   esiLoadRepositoryLight: (
     projectPath: string,

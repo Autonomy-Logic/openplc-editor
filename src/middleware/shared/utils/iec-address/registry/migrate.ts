@@ -74,6 +74,30 @@ export const modbusMemoryKey = (deviceName: string, groupId: string, pointId: st
   `modbus:${deviceName}:${groupId}:${pointId}`
 export const ethercatMemoryKey = (deviceName: string, slaveName: string, channelId: string): string =>
   `ethercat:${deviceName}:${slaveName}:${channelId}`
+/** Memory key for a channel that belongs to a module plugged into a modular
+ *  coupler, carrying the module's slot id so the key stays stable across
+ *  slave reorderings and across channelId reuse between coupler and module. */
+export const ethercatModuleMemoryKey = (
+  deviceName: string,
+  slaveName: string,
+  moduleId: string,
+  channelId: string,
+): string => `ethercat:${deviceName}:${slaveName}:${moduleId}:${channelId}`
+
+/** Separator used to build a registry channel id that disambiguates a module
+ *  channel from a coupler-level channel with the same PDO identifier. The
+ *  `#` character never appears in a legitimate channel id, so splitting on it
+ *  is a safe inverse at write-back time. */
+export const MODULE_REGISTRY_CHANNEL_PREFIX = '#'
+export const moduleRegistryChannelId = (moduleId: string, channelId: string): string =>
+  `${moduleId}${MODULE_REGISTRY_CHANNEL_PREFIX}${channelId}`
+export function parseModuleRegistryChannelId(
+  registryChannelId: string,
+): { moduleId: string; channelId: string } | null {
+  const idx = registryChannelId.indexOf(MODULE_REGISTRY_CHANNEL_PREFIX)
+  if (idx <= 0 || idx === registryChannelId.length - 1) return null
+  return { moduleId: registryChannelId.slice(0, idx), channelId: registryChannelId.slice(idx + 1) }
+}
 
 /** Build a channel seeded (pinned) at a legacy address, or `null` when the
  *  address is not a parseable IEC location (nothing to migrate). */
@@ -165,7 +189,8 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
     }
   }
 
-  // 4. EtherCAT — one consumer per slave device.
+  // 4. EtherCAT: one consumer per slave, including its modules' channels. A module channel's
+  // registry id is prefixed with the module id; the write-back path strips the prefix.
   for (const device of inputs.remoteDevices ?? []) {
     const deviceName = device.deviceName || device.name || 'device'
     for (const slave of device.ethercatConfig?.devices ?? []) {
@@ -179,6 +204,18 @@ export function migrateToRegistry(inputs: PoolInputs): IecAddressRegistry {
           ethercatMemoryKey(deviceName, slaveName, mapping.channelId),
         )
         if (channel) channels.push(channel)
+      }
+      for (const module of slave.modules ?? []) {
+        const moduleId = module.id ?? `slot-${module.slot ?? 'unknown'}`
+        for (const mapping of module.channelMappings ?? []) {
+          const channel = seedChannel(
+            moduleRegistryChannelId(moduleId, mapping.channelId),
+            mapping.iecLocation,
+            mapping.alias,
+            ethercatModuleMemoryKey(deviceName, slaveName, moduleId, mapping.channelId),
+          )
+          if (channel) channels.push(channel)
+        }
       }
       if (channels.length > 0) {
         consumers.push({

@@ -1117,7 +1117,6 @@ async function runCompilePipelineInner(
   const definesH = generateDefinesContent({
     boardEntry,
     devicePinMapping,
-    stProgramFileContent: programSt,
     buildMD5Hash: md5,
     boardRuntime,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),

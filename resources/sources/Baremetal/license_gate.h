@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 license_gate.h - License enforcement gate (verify + demo window).
 The closed license-core (prebuilt) provides the STRONG implementation (verify +
