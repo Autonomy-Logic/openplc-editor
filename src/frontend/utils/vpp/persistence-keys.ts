@@ -31,6 +31,21 @@
 export interface PersistableSection {
   id?: unknown
   persistence?: unknown
+  layout?: unknown
+  source?: unknown
+}
+
+export const VENDOR_DOCUMENT_LAYOUT = 'vendor-document'
+export const IO_TABLE_LAYOUT = 'io-table'
+/** `io-table` source that lists the station a configurator reported, read-only. */
+export const DEVICE_SETUP_SOURCE = 'device-setup'
+export const DEVICE_SETUP_KEY = 'device-setup'
+export const IO_MAPPING_KEY = 'io-mapping'
+export const MODULE_CONFIGURATION_KEY = 'module-configuration'
+const CONFIGURATOR_KEY = 'configurator'
+
+export function isDeviceSetupIoTable(section: PersistableSection): boolean {
+  return section.layout === IO_TABLE_LAYOUT && section.source === DEVICE_SETUP_SOURCE
 }
 
 /**
@@ -43,6 +58,9 @@ export interface PersistableSection {
  */
 export function getSectionPersistenceKey(section: PersistableSection | null | undefined): string | null {
   if (!section || typeof section !== 'object') return null
+  // The configurator and the table it drives use fixed keys: the build reads the archive from `configurator`.
+  if (isDeviceSetupIoTable(section)) return IO_MAPPING_KEY
+  if (section.layout === VENDOR_DOCUMENT_LAYOUT) return CONFIGURATOR_KEY
   if (typeof section.persistence === 'string' && section.persistence.length > 0) return section.persistence
   if (typeof section.id === 'string' && section.id.length > 0) return section.id
   return null
@@ -60,13 +78,72 @@ export function getSectionPersistenceKey(section: PersistableSection | null | un
  * no-op in that case.
  */
 export function collectScreenPersistenceKeys(screenDefinition: unknown): string[] {
-  if (!screenDefinition || typeof screenDefinition !== 'object') return []
-  const sections = (screenDefinition as { sections?: unknown }).sections
-  if (!Array.isArray(sections)) return []
   const out: string[] = []
-  for (const s of sections) {
-    const key = getSectionPersistenceKey(s as PersistableSection | null)
-    if (key !== null) out.push(key)
+  const add = (key: string) => {
+    if (!out.includes(key)) out.push(key)
+  }
+  for (const section of screenSections(screenDefinition)) {
+    const key = getSectionPersistenceKey(section)
+    if (key === null) continue
+    add(key)
+    // A configurator section writes the device setup, its module slots and their I/O mapping in one store write.
+    if (section.layout === VENDOR_DOCUMENT_LAYOUT || isDeviceSetupIoTable(section)) {
+      if (isDeviceSetupIoTable(section)) add(CONFIGURATOR_KEY)
+      add(DEVICE_SETUP_KEY)
+      add(MODULE_CONFIGURATION_KEY)
+      add(IO_MAPPING_KEY)
+    }
   }
   return out
+}
+
+/** Keys under `vendorScreenData` that hold an embedded configurator's opaque archive. */
+export function collectConfiguratorKeys(screenDefinition: unknown): string[] {
+  const out: string[] = []
+  for (const section of screenSections(screenDefinition)) {
+    if (section.layout !== VENDOR_DOCUMENT_LAYOUT) continue
+    const key = getSectionPersistenceKey(section)
+    if (key !== null && !out.includes(key)) out.push(key)
+  }
+  return out
+}
+
+function hasConfiguratorSection(screenDefinition: unknown): boolean {
+  return screenSections(screenDefinition).some(
+    (section) => section.layout === VENDOR_DOCUMENT_LAYOUT || isDeviceSetupIoTable(section),
+  )
+}
+
+/** Screens of a board that show the configurator or its I/O Mapping; they share their keys, so they save, revert and go unsaved together. */
+export function configuratorScreenNames(screens: Record<string, unknown> | undefined): string[] {
+  if (!screens) return []
+  return Object.keys(screens).filter((name) => hasConfiguratorSection(screens[name]))
+}
+
+/** The screen itself, plus every configurator screen of the board when it is one. */
+export function linkedScreenNames(screens: Record<string, unknown> | undefined, screenName: string): string[] {
+  const linked = configuratorScreenNames(screens)
+  return linked.includes(screenName) ? linked : [screenName]
+}
+
+/** `collectScreenPersistenceKeys` over the screen and the screens linked to it. */
+export function collectLinkedScreenKeys(screens: Record<string, unknown> | undefined, screenName: string): string[] {
+  const keys = linkedScreenNames(screens, screenName).flatMap((name) => collectScreenPersistenceKeys(screens?.[name]))
+  return Array.from(new Set(keys))
+}
+
+/** `collectConfiguratorKeys` over the screen and the screens linked to it. */
+export function collectLinkedConfiguratorKeys(
+  screens: Record<string, unknown> | undefined,
+  screenName: string,
+): string[] {
+  const keys = linkedScreenNames(screens, screenName).flatMap((name) => collectConfiguratorKeys(screens?.[name]))
+  return Array.from(new Set(keys))
+}
+
+function screenSections(screenDefinition: unknown): PersistableSection[] {
+  if (!screenDefinition || typeof screenDefinition !== 'object' || !('sections' in screenDefinition)) return []
+  const { sections } = screenDefinition
+  if (!Array.isArray(sections)) return []
+  return sections.filter((section): section is PersistableSection => !!section && typeof section === 'object')
 }

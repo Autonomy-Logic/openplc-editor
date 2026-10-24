@@ -2509,7 +2509,12 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // the device action so the layouts (which render from the store) update.
       const vppEntries = readVppEntries(live)
       if (vppEntries.length > 0) {
-        getState().deviceActions.setVendorScreenData('io-mapping', { entries: applyVppEntries(vppEntries, index) })
+        // Other fields stored with the mapping are kept; only the addresses move.
+        const stored = live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping']
+        getState().deviceActions.setVendorScreenData('io-mapping', {
+          ...(stored && typeof stored === 'object' ? stored : {}),
+          entries: applyVppEntries(vppEntries, index),
+        })
       }
 
       // Modbus ioPoints + EtherCAT channelMappings live in project.data —
