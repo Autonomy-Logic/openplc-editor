@@ -30,6 +30,12 @@ const renderPanel = (matches: ProjectSearchMatch[]) => {
   return store
 }
 
+const entryWithID = (searchID: string, searchQuery: string, matches: ProjectSearchMatch[]) => ({
+  ...entry(matches),
+  searchID,
+  searchQuery,
+})
+
 describe('Search results panel', () => {
   it('lists one row per occurrence, and the count equals the rows', () => {
     renderPanel([bodyMatch(3, 'Motor := TRUE;'), bodyMatch(5, 'IF Motor THEN')])
@@ -47,6 +53,28 @@ describe('Search results panel', () => {
     const editor = store.getState().editors.find((model) => model.meta.name === 'main')
     expect(store.getState().tabs.map((tab) => tab.name)).toContain('main')
     expect(editor?.cursorPosition).toEqual({ lineNumber: 5, column: 4, offset: 0, target: 'body' })
+  })
+
+  it('selects the clicked row alone when two searches are open', () => {
+    const store = createTestStore()
+    render(
+      <Search
+        items={[
+          entryWithID('search-a', 'Motor', [bodyMatch(3, 'Motor := TRUE;')]),
+          entryWithID('search-b', 'Lamp', [bodyMatch(3, 'Lamp := TRUE;')]),
+        ]}
+      />,
+      { wrapper: createStoreWrapper(store) },
+    )
+
+    // Only the newest search opens by default; the panel allows both at once.
+    fireEvent.click(screen.getByText('Motor'))
+
+    const rows = screen.getAllByText(/Line 3:/)
+    fireEvent.click(rows[0])
+
+    expect(rows[0].closest('li')?.getAttribute('aria-selected')).toBe('true')
+    expect(rows[1].closest('li')?.getAttribute('aria-selected')).toBe('false')
   })
 
   it('asks the graphical editor to select the node an occurrence sits on', () => {

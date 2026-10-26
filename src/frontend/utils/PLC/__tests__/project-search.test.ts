@@ -167,6 +167,13 @@ describe('searchProject', () => {
     expect(onlyDataTypes[0].container.kind).toBe('data-type')
   })
 
+  it('reports nothing for a pattern that matches the empty string', () => {
+    const data = projectWith({ pous: [stPou('main', 'Motor := TRUE;')] })
+
+    expect(matchesOf(data, 'x*', { regularExpression: true })).toHaveLength(0)
+    expect(matchesOf(data, 'Motor*', { regularExpression: true })).toHaveLength(1)
+  })
+
   it('does not match the structural keys of a graphical body', () => {
     const data = projectWith({ pous: [ladderPou('main', ['Start'])] })
 

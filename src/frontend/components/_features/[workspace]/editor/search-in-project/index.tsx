@@ -212,6 +212,8 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
     onClose()
   }
 
+  const noElementSelected = selectedScope === 'only elements' && !Object.values(checkedOptions).some(Boolean)
+
   const handleSearchQueryChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(event.target.value)
   }
@@ -303,6 +305,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
         <button
           className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'
           onClick={handleSearch}
+          disabled={noElementSelected}
         >
           Find
         </button>

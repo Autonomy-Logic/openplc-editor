@@ -105,9 +105,9 @@ const createMatcher = (query: string, options: ProjectSearchOptions): Matcher | 
     const found: Array<{ index: number; length: number }> = []
     let match = regex.exec(text)
     while (match !== null) {
-      found.push({ index: match.index, length: match[0].length })
-      // A pattern able to match the empty string would never advance on its own.
+      // An empty match has nothing to show and would never advance on its own.
       if (match[0].length === 0) regex.lastIndex += 1
+      else found.push({ index: match.index, length: match[0].length })
       match = regex.exec(text)
     }
     return found

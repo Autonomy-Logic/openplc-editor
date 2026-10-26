@@ -141,37 +141,41 @@ async function search(page: Page, query: string): Promise<void> {
 test('every occurrence is listed, counted and reachable', async () => {
   const { userData } = writeFixture()
   const { app, page } = await launch(userData)
+  const electronProcess = app.process()
 
-  await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
-  await page.getByText('main', { exact: true }).first().waitFor({ timeout: 30000 })
+  try {
+    await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
+    await page.getByText('main', { exact: true }).first().waitFor({ timeout: 30000 })
 
-  await search(page, 'Motor')
+    await search(page, 'Motor')
 
-  const rows = page.locator('li[aria-selected]')
-  await rows.first().waitFor({ timeout: 15000 })
+    const rows = page.locator('li[aria-selected]')
+    await rows.first().waitFor({ timeout: 15000 })
 
-  const header = await page.getByText(/ - \d+ matches/).innerText()
-  const counted = Number(/ - (\d+) matches/.exec(header)?.[1])
-  expect(counted).toBe(await rows.count())
-  expect(counted).toBeGreaterThan(3)
+    const header = await page.getByText(/ - \d+ matches/).innerText()
+    const counted = Number(/ - (\d+) matches/.exec(header)?.[1])
+    expect(counted).toBe(await rows.count())
+    expect(counted).toBeGreaterThan(3)
 
-  // Lines are the POU body's own, as the editor shows it: the VAR header is not part of it.
-  await expect(page.getByText('Line 1: Motor := TRUE;')).toBeVisible()
-  await expect(page.getByText('Line 2: IF Motor THEN')).toBeVisible()
-  expect(await page.getByText('Line 5: Motor := Lamp AND xMOTOR_ON;').count()).toBe(2)
-  await expect(page.getByText('Motor drives the lamp')).toBeVisible()
-  await expect(page.getByText('MotorGlobal', { exact: true })).toBeVisible()
+    // Lines are the POU body's own, as the editor shows it: the VAR header is not part of it.
+    await expect(page.getByText('Line 1: Motor := TRUE;')).toBeVisible()
+    await expect(page.getByText('Line 2: IF Motor THEN')).toBeVisible()
+    expect(await page.getByText('Line 5: Motor := Lamp AND xMOTOR_ON;').count()).toBe(2)
+    await expect(page.getByText('Motor drives the lamp')).toBeVisible()
+    await expect(page.getByText('MotorGlobal', { exact: true })).toBeVisible()
 
-  await page.screenshot({ path: join(ROOT, 'search-results.png'), fullPage: true })
+    await page.screenshot({ path: join(ROOT, 'search-results.png'), fullPage: true })
 
-  await page.getByText('Line 2: IF Motor THEN').click()
-  await expect(page.locator('.view-lines:visible')).toContainText('IF Motor THEN')
+    await page.getByText('Line 2: IF Motor THEN').click()
+    await expect(page.locator('.view-lines:visible')).toContainText('IF Motor THEN')
 
-  // The ladder occurrence sits on a contact, so opening it selects that node on the canvas.
-  const ladderGroup = page.locator('li[aria-expanded]').filter({ hasText: 'motor_ladder' })
-  await ladderGroup.locator('li[aria-selected]').filter({ hasText: 'Motor' }).last().click()
-  await expect(page.locator('.react-flow__node.selected')).toContainText('Motor', { timeout: 15000 })
-  await page.screenshot({ path: join(ROOT, 'search-ladder.png'), fullPage: true })
-
-  await app.close().catch(() => undefined)
+    // The ladder occurrence sits on a contact, so opening it selects that node on the canvas.
+    const ladderGroup = page.locator('li[aria-expanded]').filter({ hasText: 'motor_ladder' })
+    await ladderGroup.locator('li[aria-selected]').filter({ hasText: 'Motor' }).last().click()
+    await expect(page.locator('.react-flow__node.selected')).toContainText('Motor', { timeout: 15000 })
+    await page.screenshot({ path: join(ROOT, 'search-ladder.png'), fullPage: true })
+  } finally {
+    await Promise.race([app.close().catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 15000))])
+    if (electronProcess.exitCode === null) electronProcess.kill('SIGKILL')
+  }
 })

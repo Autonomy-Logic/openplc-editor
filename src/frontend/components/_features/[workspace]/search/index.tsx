@@ -159,8 +159,8 @@ const Search = ({ items }: SearchProps) => {
     }
   }
 
-  const openMatch = (match: ProjectSearchMatch) => {
-    setSelectedMatchID(match.id)
+  const openMatch = (match: ProjectSearchMatch, searchID: string) => {
+    setSelectedMatchID(`${searchID}:${match.id}`)
     const container = match.container
 
     switch (container.kind) {
@@ -256,8 +256,8 @@ const Search = ({ items }: SearchProps) => {
                                     label={rowLabel(match)}
                                     hasVariable={match.field !== 'body'}
                                     hasComment={match.field === 'body'}
-                                    selected={selectedMatchID === match.id}
-                                    onClick={() => openMatch(match)}
+                                    selected={selectedMatchID === `${item.searchID}:${match.id}`}
+                                    onClick={() => openMatch(match, item.searchID)}
                                   />
                                 ))}
                               </ProjectSearchTreeVariableBranch>
