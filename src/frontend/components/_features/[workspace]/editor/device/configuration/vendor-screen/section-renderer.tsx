@@ -1,7 +1,10 @@
 import { CollapsibleCard } from '@root/frontend/components/_atoms/collapsible-card'
+import { isDeviceSetupIoTable } from '@root/frontend/utils/vpp/persistence-keys'
+import { readVendorDocumentSection } from '@root/frontend/utils/vpp/vendor-document-section'
 import { useState } from 'react'
 
 import type { ModuleSystem, ScreenSection } from './index'
+import { ConfiguratorScreen } from './layouts/configurator-screen'
 import { FormLayout } from './layouts/form-layout'
 import { IoTableLayout } from './layouts/io-table-layout'
 import { ModuleSlotsLayout } from './layouts/module-slots-layout'
@@ -13,7 +16,7 @@ import { ModuleSlotsLayout } from './layouts/module-slots-layout'
  * placeholder — and therefore persists nothing, because a layout the editor
  * cannot draw is one whose field semantics it also cannot honour.
  */
-const SUPPORTED_LAYOUTS = new Set(['module-slots', 'io-table', 'form'])
+const SUPPORTED_LAYOUTS = new Set(['module-slots', 'io-table', 'form', 'vendor-document'])
 
 type SectionRendererProps = {
   section: ScreenSection
@@ -24,6 +27,7 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
   const [collapsed, setCollapsed] = useState(section.collapsed ?? false)
 
   if (!SUPPORTED_LAYOUTS.has(section.layout)) return null
+  if (section.layout === 'vendor-document' && !readVendorDocumentSection(section)) return null
 
   const renderLayout = () => {
     switch (section.layout) {
@@ -33,6 +37,8 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
         return <IoTableLayout section={section} moduleSystem={moduleSystem} />
       case 'form':
         return <FormLayout section={section} />
+      case 'vendor-document':
+        return <ConfiguratorScreen section={section} />
       default:
         return null
     }
@@ -53,13 +59,20 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
     )
   }
 
-  // `module-slots` is a master-detail layout that owns the full visible
-  // area and hosts its own internal scrollers. Other layouts are
-  // content-sized and let the page-level container scroll if necessary.
-  const isFillSection = section.layout === 'module-slots'
+  // `module-slots`, the device-setup `io-table` and `vendor-document` fill the visible area; other layouts
+  // are content-sized and let the page-level container scroll. An explicit min height replaces the
+  // default one, which is the full content height and would make the I/O Mapping grow, not scroll.
+  const sizing =
+    section.layout === 'module-slots'
+      ? 'min-h-0 flex-1'
+      : isDeviceSetupIoTable(section)
+        ? 'min-h-[360px] flex-1'
+        : section.layout === 'vendor-document'
+          ? 'flex-1'
+          : ''
 
   return (
-    <div className={`flex flex-col gap-3 ${isFillSection ? 'min-h-0 flex-1' : ''}`}>
+    <div className={`flex flex-col gap-3 ${sizing}`}>
       <div
         className={`flex items-center justify-between ${section.collapsible ? 'cursor-pointer' : ''}`}
         onClick={() => section.collapsible && setCollapsed(!collapsed)}

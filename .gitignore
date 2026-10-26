@@ -22,6 +22,7 @@ release/app/dist
 # Local-only preload copy for the Electron e2e suite; see "Electron e2e" in CLAUDE.md
 release/app/configs
 release/build
+release/relay
 configs/dll
 
 .idea

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 
 import { describe, expect, it } from '@jest/globals'
 
+import { MAX_ARCHIVE_HEX_LENGTH } from '../../../../../middleware/shared/vendor-document/protocol'
 import { buildVppPluginFiles, type VppDevice } from '../build-vpp-plugin-files'
 
 const sha256Hex = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex')
@@ -292,5 +293,91 @@ describe('buildVppPluginFiles', () => {
     })
 
     expect(result.warnings).toEqual([])
+  })
+
+  describe('io-ranges format', () => {
+    const ioRangesDevice = (): VppDevice =>
+      makeDevice({
+        hal: {
+          type: 'runtime-v4',
+          pluginEntry: 'hal/plugin/main.cpp',
+          configTemplate: 'hal/plugin/config_template.json',
+          pluginConfigFormat: 'io-ranges',
+        },
+      })
+    const module = {
+      id: 'di-2',
+      name: 'DI-2',
+      processImage: { inputBytes: 1, outputBytes: 0 },
+      io: { digitalInputs: 2, digitalOutputs: 0, analogInputs: 0, analogOutputs: 0 },
+      addressMapping: {
+        channels: [
+          { name: 'DI_0', type: 'digitalInput', dataType: 'BOOL', addressPrefix: '%IX', wire: { byte: 0, bit: 0 } },
+          { name: 'DI_1', type: 'digitalInput', dataType: 'BOOL', addressPrefix: '%IX', wire: { byte: 0, bit: 1 } },
+        ],
+      },
+    }
+    const station = (archive?: unknown): Record<string, unknown> => ({
+      ...(archive !== undefined && { configurator: { archive, controller: 'UC20-M3000', bundleVersion: '3.5.22' } }),
+      'module-configuration': { slots: ['di-2'] },
+      'io-mapping': {
+        entries: [
+          { slot: 1, channelName: 'DI_0', iecAddress: '%IX0.0', alias: '' },
+          { slot: 1, channelName: 'DI_1', iecAddress: '%IX0.1', alias: '' },
+        ],
+      },
+    })
+    const build = (vendorScreenData: Record<string, unknown>, modules = [module]) =>
+      buildVppPluginFiles({
+        device: ioRangesDevice(),
+        packageFiles: makePackageFiles(),
+        packageSignature: SIGNATURE,
+        vendorScreenData,
+        modules,
+        sha256Hex,
+      })
+
+    it('writes the station archive next to the config and names it with its hash', async () => {
+      const result = await build(station('1f8b0800ff'))
+
+      expect(result.errors).toEqual([])
+      const archive = result.files['conf/synergy.station.bin']
+      expect(Array.from(archive)).toEqual([0x1f, 0x8b, 0x08, 0x00, 0xff])
+      const config = JSON.parse(read(result.files, 'conf/synergy.json')) as Record<string, unknown>
+      expect(config.configuration_archive).toBe('synergy.station.bin')
+      expect(config.configuration_sha256).toBe(sha256Hex(archive))
+      expect(config.inputs).toEqual([
+        { kind: 'bool', wire_byte: 0, wire_bit: 0, plc_byte: 0, plc_bit: 0, count: 2, slot: 0, module: 'DI-2' },
+      ])
+      expect(config).not.toHaveProperty('slots')
+    })
+
+    it('packs a blank project with a warning when the project has no station', async () => {
+      const result = await build(station())
+
+      expect(result.errors).toEqual([])
+      expect(result.files).not.toHaveProperty('conf/synergy.station.bin')
+      expect(result.warnings).toContain(
+        'The project has no I/O configurator station; the plugin will start with a blank project',
+      )
+      expect(JSON.parse(read(result.files, 'conf/synergy.json'))).not.toHaveProperty('configuration_archive')
+    })
+
+    it('refuses an archive that is not hex', async () => {
+      for (const archive of ['xyz', 'abc', 42, 'a'.repeat(MAX_ARCHIVE_HEX_LENGTH + 2)]) {
+        const result = await build(station(archive))
+        expect(result.errors).toEqual([
+          'The I/O configurator station stored in the project is not valid hex data or is too large',
+        ])
+        expect(result.files).toEqual({})
+      }
+    })
+
+    it('refuses the build and writes nothing when the station cannot be mapped', async () => {
+      const result = await build(station('ff'), [])
+
+      expect(result.errors).toEqual(['Slot 1: di-2 is not in the package catalogue, so its I/O cannot be mapped'])
+      expect(result.files).toEqual({})
+    })
   })
 })

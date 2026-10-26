@@ -3479,6 +3479,36 @@ describe('createProjectSlice', () => {
       expect(entries[1].iecAddress).toBe('NOPE')
     })
 
+    it('compacts byte channels and restores their aliases by module, slot and channel', () => {
+      seedVppBoard(store)
+      const entry = (channelName: string, iecAddress: string) => ({
+        slot: 1,
+        channelName,
+        channelType: 'analogInput',
+        dataType: 'USINT',
+        moduleId: 'ur20-2di-p-ts',
+        moduleName: 'UR20-2DI-P-TS',
+        iecAddress,
+        alias: '',
+      })
+      store.getState().deviceActions.setVendorScreenData('io-mapping', {
+        entries: [entry('input_image_1', '%IB4'), entry('running_number_1', '%IB7')],
+      })
+      store
+        .getState()
+        .projectActions.rememberChannelAlias(vppMemoryKey('ur20-2di-p-ts', 1, 'running_number_1'), 'counter')
+      store.getState().projectActions.rememberChannelAlias(vppMemoryKey('ur20-4di-p', 1, 'input_image_1'), 'stale')
+
+      store.getState().projectActions.recalculateIecAddresses()
+
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData?.['io-mapping']).toMatchObject({
+        entries: [
+          { channelName: 'input_image_1', iecAddress: '%IB0', alias: '' },
+          { channelName: 'running_number_1', iecAddress: '%IB1', alias: 'counter' },
+        ],
+      })
+    })
+
     it('skips devices without a Modbus config during writeback', () => {
       seedRemoteDevice(store, { name: 'EtherCAT', protocol: 'ethercat' })
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))

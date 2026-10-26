@@ -315,7 +315,7 @@ class MainProcessBridge implements MainIpcModule {
   // avr8js ATmega2560 emulator instance for the built-in simulator
   private simulatorModule = new SimulatorModule()
   // VPP package manager for board package operations
-  private packageManagerModule = new PackageManagerModule()
+  private packageManagerModule: PackageManagerModule
   // System-wide IEC 61131-3 library pool (bundled + user-installed)
   private libraryManagerModule = new LibraryManagerModule()
   // Shared transport for public-catalog HTTP — re-used by the
@@ -336,7 +336,9 @@ class MainProcessBridge implements MainIpcModule {
     compilerModule,
     hardwareModule,
     quitCoordinator,
+    packageManagerModule,
   }: MainIpcModuleConstructor) {
+    this.packageManagerModule = packageManagerModule ?? new PackageManagerModule()
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
     this.projectService = projectService

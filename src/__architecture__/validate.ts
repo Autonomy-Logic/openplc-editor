@@ -230,6 +230,8 @@ function getLayer(filePath: string): LayerName | null {
   // reachable from adapters/backend/main on both platforms — same `utils` rule
   // set, byte-identical between repos.
   if (rel.startsWith('middleware/shared/runtime-auth/')) return 'utils'
+  // Vendor configurator wire protocol and host client; pure, byte-identical between repos.
+  if (rel.startsWith('middleware/shared/vendor-document/')) return 'utils'
   if (rel.match(/^middleware\/adapters\/[^/]+\/components\//)) return 'adapter-components'
   if (rel.startsWith('middleware/adapters/')) return 'adapters'
 

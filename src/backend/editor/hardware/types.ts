@@ -86,6 +86,8 @@ const availableBoardsSchema = z.map(
 type VppModuleDefinition = {
   id: string
   name: string
+  typeId?: string
+  processImage?: { inputBytes: number; outputBytes: number }
   image?: string
   io: {
     digitalInputs: number

@@ -3,6 +3,7 @@ import { StateCreator } from 'zustand'
 
 import type { DeviceConfiguration, DevicePin } from '../../../../middleware/shared/ports/types'
 import { DEFAULT_RETAIN_FLUSH_SECONDS } from '../../../../middleware/shared/ports/types'
+import { DEVICE_SETUP_KEY, IO_MAPPING_KEY, MODULE_CONFIGURATION_KEY } from '../../../utils/vpp/persistence-keys'
 import { defaultDeviceConfiguration } from './data/types'
 import type { DeviceLicenseInfo, DeviceSlice, DeviceSliceRoot, PinUpdateResponse } from './types'
 import { PURCHASE_WATCH_WINDOW_MS } from './types'
@@ -789,6 +790,22 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
             deviceDefinitions.configuration.vendorScreenData = {}
           }
           deviceDefinitions.configuration.vendorScreenData[persistenceKey] = data
+          syncActiveBoardVendorBucket(deviceDefinitions.configuration)
+        }),
+      )
+    },
+    setConfiguratorSnapshot: (configuratorKey, snapshot): void => {
+      setState(
+        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+          deviceUpdated.updated = true
+          if (!deviceDefinitions.configuration.vendorScreenData) {
+            deviceDefinitions.configuration.vendorScreenData = {}
+          }
+          const target = deviceDefinitions.configuration.vendorScreenData
+          target[configuratorKey] = snapshot.configurator
+          target[DEVICE_SETUP_KEY] = snapshot.deviceSetup
+          target[MODULE_CONFIGURATION_KEY] = snapshot.moduleConfiguration
+          target[IO_MAPPING_KEY] = snapshot.ioMapping
           syncActiveBoardVendorBucket(deviceDefinitions.configuration)
         }),
       )
