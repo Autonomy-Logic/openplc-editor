@@ -24,6 +24,13 @@ export const EK1818_STATION = {
     'PROGRAM main\n  VAR\n    di0 AT %IX0.0 : BOOL;\n    do0 AT %QX0.0 : BOOL;\n  END_VAR\n\ndo0 := di0;\n\nEND_PROGRAM\n',
 }
 
+/** A CiA 402 drive with PDO assignment and 40 user startup SDOs; the status word drives the control word. */
+export const CIA402_SDO_STATION = {
+  bus: join('ethercat-cia402-sdos', 'ecat_bus.json'),
+  program:
+    'PROGRAM main\n  VAR\n    status AT %IW0 : UINT;\n    control AT %QW0 : UINT;\n  END_VAR\n\ncontrol := status;\n\nEND_PROGRAM\n',
+}
+
 export interface ProjectPaths {
   project: string
   userData: string
