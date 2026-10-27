@@ -131,16 +131,14 @@ function parseJsonOrNull(raw: string): unknown {
  * The reason an upload was refused, or null when it was accepted.
  *
  * The runtime refuses with HTTP 200 and a non-empty `UploadFileFail`, so the
- * status code alone reads a refusal as success. A body that does not parse is
- * not a refusal.
+ * status code alone reads a refusal as success. The reason is returned as the
+ * runtime sent it. A body that does not parse is not a refusal.
  */
 export function readUploadRefusal(responseBody: string): string | null {
   const parsed = parseJsonOrNull(responseBody)
   if (typeof parsed !== 'object' || parsed === null) return null
   const refusal = (parsed as Record<string, unknown>).UploadFileFail
-  if (typeof refusal !== 'string') return null
-  const trimmed = refusal.trim()
-  return trimmed === '' ? null : trimmed
+  return typeof refusal === 'string' && refusal !== '' ? refusal : null
 }
 
 /** A `Uint8Array` view over a `Buffer`'s bytes — no copy. */

@@ -76,20 +76,6 @@ export interface EtherdogLimits {
   mappedEntriesPerMaster?: number
 }
 
-/** Runtimes 4.3.0 and 4.3.1, whose EtherDOG holds the bus configuration in fixed arrays. */
-export const FIXED_ETHERDOG_LIMITS = {
-  masters: 4,
-  slavesPerMaster: 64,
-  pdosPerDirection: 16,
-  entriesPerPdo: 32,
-  channelsPerSlave: 64,
-  sdosPerSlave: 32,
-  mappedEntriesPerMaster: 2048,
-  nameLength: 63,
-  iecLocationLength: 15,
-  maxByteIndex: 65535,
-} as const satisfies EtherdogLimits
-
 /**
  * Runtimes whose EtherDOG allocates slaves, PDOs, channels, SDOs and mapped entries from the
  * configuration. A bus with more slaves than the master supports is reported by the runtime.
@@ -99,6 +85,17 @@ export const DYNAMIC_ETHERDOG_LIMITS = {
   nameLength: 63,
   iecLocationLength: 15,
   maxByteIndex: 65535,
+} as const satisfies EtherdogLimits
+
+/** Runtimes 4.3.0 and 4.3.1, whose EtherDOG holds the bus configuration in fixed arrays. */
+export const FIXED_ETHERDOG_LIMITS = {
+  ...DYNAMIC_ETHERDOG_LIMITS,
+  slavesPerMaster: 64,
+  pdosPerDirection: 16,
+  entriesPerPdo: 32,
+  channelsPerSlave: 64,
+  sdosPerSlave: 32,
+  mappedEntriesPerMaster: 2048,
 } as const satisfies EtherdogLimits
 
 /** The limits of the runtime the build targets. */
@@ -114,20 +111,22 @@ const exceeds = (count: number, limit: number | undefined): boolean => limit !==
 const validateEtherdogLimits = (
   entries: EthercatRootEntry[],
   mapping: EthercatIoMapping,
-  L: EtherdogLimits,
+  limits: EtherdogLimits,
 ): string[] => {
   const errors: string[] = []
-  if (entries.length > L.masters) {
-    errors.push(`EtherCAT has ${entries.length} masters; the runtime supports at most ${L.masters}`)
+  if (entries.length > limits.masters) {
+    errors.push(`EtherCAT has ${entries.length} masters; the runtime supports at most ${limits.masters}`)
   }
   for (const entry of entries) {
     const master = entry.name || '<unnamed master>'
-    if (master.length > L.nameLength) {
-      errors.push(`EtherCAT master name '${master}' is longer than ${L.nameLength} characters`)
+    if (master.length > limits.nameLength) {
+      errors.push(`EtherCAT master name '${master}' is longer than ${limits.nameLength} characters`)
     }
     const slaves = entry.config?.slaves ?? []
-    if (exceeds(slaves.length, L.slavesPerMaster)) {
-      errors.push(`EtherCAT master '${master}' has ${slaves.length} slaves; at most ${L.slavesPerMaster} are supported`)
+    if (exceeds(slaves.length, limits.slavesPerMaster)) {
+      errors.push(
+        `EtherCAT master '${master}' has ${slaves.length} slaves; at most ${limits.slavesPerMaster} are supported`,
+      )
     }
     for (const slave of slaves) {
       const where = `EtherCAT master '${master}', slave ${slave.position}`
@@ -135,40 +134,42 @@ const validateEtherdogLimits = (
         ['RxPDOs', slave.rx_pdos ?? []],
         ['TxPDOs', slave.tx_pdos ?? []],
       ] as const) {
-        if (exceeds(pdos.length, L.pdosPerDirection)) {
-          errors.push(`${where} has ${pdos.length} ${dir}; at most ${L.pdosPerDirection} are supported`)
+        if (exceeds(pdos.length, limits.pdosPerDirection)) {
+          errors.push(`${where} has ${pdos.length} ${dir}; at most ${limits.pdosPerDirection} are supported`)
         }
         for (const pdo of pdos) {
           const count = pdo.entries?.length ?? 0
-          if (exceeds(count, L.entriesPerPdo)) {
-            errors.push(`${where}, PDO ${pdo.index} has ${count} entries; at most ${L.entriesPerPdo} are supported`)
+          if (exceeds(count, limits.entriesPerPdo)) {
+            errors.push(
+              `${where}, PDO ${pdo.index} has ${count} entries; at most ${limits.entriesPerPdo} are supported`,
+            )
           }
         }
       }
       const channels = slave.channels?.length ?? 0
-      if (exceeds(channels, L.channelsPerSlave)) {
-        errors.push(`${where} has ${channels} channels; at most ${L.channelsPerSlave} are supported`)
+      if (exceeds(channels, limits.channelsPerSlave)) {
+        errors.push(`${where} has ${channels} channels; at most ${limits.channelsPerSlave} are supported`)
       }
       const sdos = slave.sdo_configurations?.length ?? 0
-      if (exceeds(sdos, L.sdosPerSlave)) {
-        errors.push(`${where} has ${sdos} SDO configurations; at most ${L.sdosPerSlave} are supported`)
+      if (exceeds(sdos, limits.sdosPerSlave)) {
+        errors.push(`${where} has ${sdos} SDO configurations; at most ${limits.sdosPerSlave} are supported`)
       }
     }
   }
   for (const master of mapping.masters ?? []) {
     const mapped = master.entries ?? []
-    if (exceeds(mapped.length, L.mappedEntriesPerMaster)) {
+    if (exceeds(mapped.length, limits.mappedEntriesPerMaster)) {
       errors.push(
-        `EtherCAT master '${master.name}' maps ${mapped.length} entries; at most ${L.mappedEntriesPerMaster} are supported`,
+        `EtherCAT master '${master.name}' maps ${mapped.length} entries; at most ${limits.mappedEntriesPerMaster} are supported`,
       )
     }
     for (const io of mapped) {
       const location = io.iec_location ?? ''
       const match = IEC_LOCATION.exec(location)
-      if (location.length > L.iecLocationLength || !match) {
+      if (location.length > limits.iecLocationLength || !match) {
         errors.push(`EtherCAT master '${master.name}': '${location}' is not a valid IEC location for the runtime`)
-      } else if (Number(match[1] ?? match[2]) > L.maxByteIndex) {
-        errors.push(`EtherCAT master '${master.name}': '${location}' is beyond byte ${L.maxByteIndex}`)
+      } else if (Number(match[1] ?? match[2]) > limits.maxByteIndex) {
+        errors.push(`EtherCAT master '${master.name}': '${location}' is beyond byte ${limits.maxByteIndex}`)
       }
     }
   }

@@ -317,6 +317,9 @@ describe('validateEthercatConfig', () => {
 
     describe('dynamic EtherDOG (runtime 4.3.2 and newer)', () => {
       const D = DYNAMIC_ETHERDOG_LIMITS
+      // The startup SDO count of the reported drive, above FIXED_ETHERDOG_LIMITS.sdosPerSlave
+      const REPORTED_SDOS = 109
+      const sdoList = () => Array.from({ length: REPORTED_SDOS }, () => ({}))
       const oversizedSlave = () =>
         busWith({
           channels: channels(L.channelsPerSlave + 1),
@@ -324,7 +327,7 @@ describe('validateEthercatConfig', () => {
             ...Array.from({ length: L.pdosPerDirection }, (_, i) => pdo(`0x16${i}`, 1)),
             pdo('0x16FF', L.entriesPerPdo + 1),
           ],
-          sdo_configurations: Array.from({ length: 109 }, () => ({})),
+          sdo_configurations: sdoList(),
         })
 
       it('picks the limit set from the runtime version', () => {
@@ -334,10 +337,12 @@ describe('validateEthercatConfig', () => {
         expect(etherdogLimitsFor(null)).toBe(FIXED_ETHERDOG_LIMITS)
       })
 
-      it('accepts 109 startup SDOs that the fixed limits refuse', () => {
-        const bus = busWith({ sdo_configurations: Array.from({ length: 109 }, () => ({})) })
+      it('accepts the startup SDOs that the fixed limits refuse', () => {
+        const bus = busWith({ sdo_configurations: sdoList() })
         expect(limitErrors(bus, mapWith([]), D)).toEqual([])
-        expect(limitErrors(bus, mapWith([]))[0]).toContain('109 SDO configurations; at most 32')
+        expect(limitErrors(bus, mapWith([]))[0]).toContain(
+          `${REPORTED_SDOS} SDO configurations; at most ${L.sdosPerSlave}`,
+        )
       })
 
       it('does not check slaves, PDOs, PDO entries, channels or mapped entries', () => {
@@ -356,7 +361,14 @@ describe('validateEthercatConfig', () => {
           Array.from({ length: L.mappedEntriesPerMaster + 1 }, (_, i) => ({ iec_location: `%IW${i}` })),
         )
         expect(limitErrors(busWith({}), io, D)).toEqual([])
-        expect(limitErrors(oversizedSlave(), mapWith([]))).toHaveLength(4)
+      })
+
+      it('reports the same oversized slave against the fixed limits', () => {
+        const errors = limitErrors(oversizedSlave(), mapWith([])).join('\n')
+        expect(errors).toContain(`${L.channelsPerSlave + 1} channels`)
+        expect(errors).toContain(`${L.pdosPerDirection + 1} RxPDOs`)
+        expect(errors).toContain(`PDO 0x16FF has ${L.entriesPerPdo + 1} entries`)
+        expect(errors).toContain(`${REPORTED_SDOS} SDO configurations`)
       })
 
       it('still reports too many masters and a name longer than the runtime keeps', () => {

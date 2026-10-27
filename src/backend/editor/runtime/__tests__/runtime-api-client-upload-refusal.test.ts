@@ -61,9 +61,12 @@ describe('readUploadRefusal', () => {
     expect(readUploadRefusal(JSON.stringify({ UploadFileFail: REFUSAL, CompilationStatus: 'FAILED' }))).toBe(REFUSAL)
   })
 
-  it('treats an empty or blank reason as accepted', () => {
+  it('treats an empty reason as accepted', () => {
     expect(readUploadRefusal(JSON.stringify({ UploadFileFail: '', CompilationStatus: 'COMPILING' }))).toBeNull()
-    expect(readUploadRefusal(JSON.stringify({ UploadFileFail: '   ' }))).toBeNull()
+  })
+
+  it('returns the reason exactly as the runtime sent it', () => {
+    expect(readUploadRefusal(JSON.stringify({ UploadFileFail: ' disk full\n' }))).toBe(' disk full\n')
   })
 
   it('treats a body without the field, or one that is not JSON, as accepted', () => {
