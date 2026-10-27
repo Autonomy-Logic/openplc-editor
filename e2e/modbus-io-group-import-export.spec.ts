@@ -320,53 +320,90 @@ test('appends groups after the existing ones, with warnings and fresh IEC addres
   expect(long.ioPoints.map((p) => p.iecLocation)).toEqual(['%IW5'])
 })
 
-test('a long group name is cut in the table and shown in full on hover', async () => {
-  const long = storedGroups().find((g) => g.name === LONG_NAME)
-  if (!long) throw new Error('long group missing')
-  const cell = page.getByTestId(`io-group-name-${long.id}`)
-  await expect(cell).toHaveText(LONG_NAME)
+/** Slides the pointer onto @p cell, which opens its tooltip, and checks it shows @p full. */
+async function expectTooltipOn(cell: ReturnType<Page['getByTestId']>, full: string) {
+  await expect(cell).toHaveText(full)
   expect(await cell.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true)
-  // Slide across the cell like a pointer would; the tooltip opens on movement over it.
   const box = await cell.boundingBox()
-  if (!box) throw new Error('long name cell has no box')
+  if (!box) throw new Error('cell has no box')
   await page.mouse.move(box.x - 20, box.y + box.height / 2)
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 })
-  await expect(page.getByTestId('truncated-text-tooltip').first()).toContainText(LONG_NAME)
+  await expect(page.getByTestId('truncated-text-tooltip').first()).toContainText(full)
   // Radix repeats the content in a hidden role="tooltip" node for screen readers.
-  await expect(page.getByRole('tooltip')).toHaveText(LONG_NAME)
+  await expect(page.getByRole('tooltip')).toHaveText(full)
+  // Slide away below the cell; Radix keeps the tooltip while the pointer may still be heading to it.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 6, { steps: 10 })
+  await expect(page.getByRole('tooltip')).toHaveCount(0)
+}
+
+test('long group and tag names are cut in the table and shown in full on hover', async () => {
+  const long = storedGroups().find((g) => g.name === LONG_NAME)
+  if (!long) throw new Error('long group missing')
+  await expectTooltipOn(page.getByTestId(`io-group-name-${long.id}`), LONG_NAME)
+
+  const point = long.ioPoints[0]
+  await page.getByTestId(`io-group-expand-${long.id}`).click()
+  await expectTooltipOn(page.getByTestId(`io-point-name-${point.id}`), `${LONG_NAME}_0`)
+  await page.getByTestId(`io-group-expand-${long.id}`).click()
+  await expect(page.getByTestId(`io-point-name-${point.id}`)).toHaveCount(0)
 })
 
-test('replacing with an exported file reproduces the same groups', async () => {
+test('replacing with an edited export swaps the device groups for the file', async () => {
   const before = storedGroups()
-  const exported = await exportAs(page, 'json')
-  await chooseFile(page, 'REMOTE-io-groups.json', exported)
-  await expect(page.getByTestId('io-group-import-summary')).toContainText('4 IO groups found')
+  const exported: { format: string; version: number; ioGroups: Array<{ name: string; cycleTime: number }> } =
+    JSON.parse(await exportAs(page, 'json'))
+  // Drop COILS, rename TEMPS and change its cycle time, keep the rest as exported.
+  const edited = {
+    ...exported,
+    ioGroups: exported.ioGroups
+      .filter((g) => g.name !== 'COILS')
+      .map((g) => (g.name === 'TEMPS' ? { ...g, name: 'TEMPS_B', cycleTime: 500 } : g)),
+  }
+  await chooseFile(page, 'edited.json', JSON.stringify(edited))
+  await expect(page.getByTestId('io-group-import-summary')).toContainText('3 IO groups found')
   await page.getByTestId('io-group-import-mode-replace').check()
   await confirm(page).click()
   await expect(modal(page)).toHaveCount(0)
 
-  await saveAndExpectNames(
-    app,
-    before.map((g) => g.name),
-  )
-  const fields = (g: StoredGroup) => ({
-    name: g.name,
-    functionCode: g.functionCode,
-    cycleTime: g.cycleTime,
-    offset: g.offset,
-    length: g.length,
-    errorHandling: g.errorHandling,
-    addresses: g.ioPoints.map((p) => p.iecLocation),
-  })
-  expect(storedGroups().map(fields)).toEqual(before.map(fields))
+  await saveAndExpectNames(app, ['EXISTING', 'TEMPS_B', LONG_NAME])
+  const after = storedGroups()
+  const [existing, temps, long] = after
+  expect(temps).toMatchObject({ functionCode: '3', cycleTime: 500, offset: '16', length: 3 })
+  expect(after.flatMap((g) => g.ioPoints.map((p) => p.iecLocation))).toEqual([
+    '%IW0',
+    '%IW1',
+    '%IW2',
+    '%IW3',
+    '%IW4',
+    '%IW5',
+  ])
+  expect(long.length).toBe(1)
+  // Every group was recreated, the ones whose name did not change included.
+  const beforeIds = new Set(before.map((g) => g.id))
+  expect(after.filter((g) => beforeIds.has(g.id))).toEqual([])
+  expect(existing.id).not.toBe('existing')
 })
 
-test('the New IO Group form keeps names to 64 characters', async () => {
+test('the New IO Group form keeps names to 64 characters and unique on the device', async () => {
   await page.getByLabel('Add IO Group').click()
+  const dialog = page.getByRole('dialog')
   const name = page.getByTestId('io-group-name-input')
+  const create = dialog.getByRole('button', { name: 'Create', exact: true })
+
   await name.fill('n'.repeat(70))
   await expect(name).toHaveValue('n'.repeat(64))
-  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(create).toBeEnabled()
+
+  await name.fill('existing')
+  await expect(page.getByTestId('io-group-name-error')).toHaveText(
+    'An IO group named "existing" already exists on this device.',
+  )
+  await expect(create).toBeDisabled()
+
+  await name.fill('UNIQUE_NAME')
+  await expect(page.getByTestId('io-group-name-error')).toHaveCount(0)
+  await expect(create).toBeEnabled()
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
 })
 
 test('the project builds with the imported groups in the Modbus master configuration', async () => {

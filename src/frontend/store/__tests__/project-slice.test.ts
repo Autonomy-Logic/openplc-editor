@@ -3088,7 +3088,13 @@ describe('createProjectSlice', () => {
       seedRuntimeV4Board(store)
     })
 
-    const groupsOf = () => store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups
+    const groupsIn = (target: ReturnType<typeof makeStore>): ModbusIOGroup[] => {
+      const config = target.getState().project.data.remoteDevices?.[0]?.modbusTcpConfig
+      if (!config) throw new Error('the seeded device has no Modbus TCP configuration')
+      return config.ioGroups
+    }
+    const groupsOf = () => groupsIn(store)
+    const addressesOf = (groups: ModbusIOGroup[]) => groups.flatMap((g) => (g.ioPoints ?? []).map((p) => p.iecLocation))
 
     it('appends a batch with contiguous addresses after the existing groups', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
@@ -3098,13 +3104,7 @@ describe('createProjectSlice', () => {
         .projectActions.importIOGroups('Dev1', [makeIOGroup('g2', '3', 2), makeIOGroup('g3', '4', 1)])
       expect(result.ok).toBe(true)
       expect(groupsOf().map((g) => g.id)).toEqual(['g1', 'g2', 'g3'])
-      expect(groupsOf().flatMap((g) => g.ioPoints!.map((p) => p.iecLocation))).toEqual([
-        '%IW0',
-        '%IW1',
-        '%IW2',
-        '%IW3',
-        '%IW4',
-      ])
+      expect(addressesOf(groupsOf())).toEqual(['%IW0', '%IW1', '%IW2', '%IW3', '%IW4'])
     })
 
     it('replaces the existing groups and reuses their addresses', () => {
@@ -3115,7 +3115,7 @@ describe('createProjectSlice', () => {
         .projectActions.importIOGroups('Dev1', [makeIOGroup('new', '3', 1)], { replace: true })
       expect(result.ok).toBe(true)
       expect(groupsOf().map((g) => g.id)).toEqual(['new'])
-      expect(groupsOf()[0].ioPoints![0].iecLocation).toBe('%IW0')
+      expect(addressesOf(groupsOf())[0]).toBe('%IW0')
     })
 
     it('applies the same invariants as addIOGroup', () => {
@@ -3162,16 +3162,14 @@ describe('createProjectSlice', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('existing', '1', 2))
       store.getState().projectActions.importIOGroups('Dev1', batch)
-      const imported = groupsOf().flatMap((g) => g.ioPoints!.map((p) => p.iecLocation))
+      const imported = addressesOf(groupsOf())
 
       const sequential = makeStore()
       seedRuntimeV4Board(sequential)
       seedRemoteDevice(sequential, makeRemoteDevice('Dev1'))
       sequential.getState().projectActions.addIOGroup('Dev1', makeIOGroup('existing', '1', 2))
       for (const group of batch) sequential.getState().projectActions.addIOGroup('Dev1', group)
-      const added = sequential
-        .getState()
-        .project.data.remoteDevices![0].modbusTcpConfig!.ioGroups.flatMap((g) => g.ioPoints!.map((p) => p.iecLocation))
+      const added = addressesOf(groupsIn(sequential))
 
       expect(imported).toEqual(added)
       expect(imported.slice(0, 5)).toEqual(['%IX0.0', '%IX0.1', '%IX0.2', '%IX0.3', '%IX0.4'])
@@ -3181,7 +3179,7 @@ describe('createProjectSlice', () => {
       seedRemoteDevice(store, makeRemoteDevice('Dev1'))
       const batch = Array.from({ length: 200 }, (_, i) => makeIOGroup(`g${i}`, i % 2 ? '3' : '1', 125))
       expect(store.getState().projectActions.importIOGroups('Dev1', batch).ok).toBe(true)
-      const addresses = groupsOf().flatMap((g) => g.ioPoints!.map((p) => p.iecLocation))
+      const addresses = addressesOf(groupsOf())
       expect(addresses).toHaveLength(200 * 125)
       expect(new Set(addresses).size).toBe(addresses.length)
     })

@@ -165,6 +165,23 @@ describe('parseIOGroupsCsv', () => {
     expect(parseIOGroupsCsv('name,functionCode,length\nC,3,0x10\n').groups[0].length).toBe(16)
   })
 
+  it('rejects a negative JSON offset', () => {
+    const result = parseIOGroupsJson(envelope([{ name: 'A', functionCode: 3, offset: -5 }]))
+    expect(result.groups).toEqual([])
+    expect(result.errors).toEqual([
+      { row: 1, field: 'offset', message: 'Offset must be a whole number between 0 and 65535, got -5.' },
+    ])
+  })
+
+  it('rejects a non-integer length on FC 5/6 and only warns about other whole numbers', () => {
+    const result = parseIOGroupsCsv('name,functionCode,length\nA,5,abc\nB,6,-3\nC,5,4\n')
+    expect(result.errors.map((e) => [e.row, e.message])).toEqual([
+      [2, 'Length must be a whole number, got "abc".'],
+      [3, 'Length must be a whole number, got "-3".'],
+    ])
+    expect(result.warnings.map((w) => [w.row, w.field])).toEqual([[4, 'length']])
+  })
+
   it('cuts long user values short in error messages', () => {
     const result = parseIOGroupsCsv(`name,functionCode\nA,${'9'.repeat(500)}\n`)
     expect(result.errors[0].message).toContain(`"${'9'.repeat(40)}…"`)
@@ -243,6 +260,18 @@ describe('parseIOGroupsJson', () => {
     expect(parseIOGroupsJson(JSON.stringify([{ name: 'A', functionCode: 3 }])).errors[0].message).toMatch(notExport)
     expect(parseIOGroupsJson('{"ioGroups":[{"name":"A","functionCode":3}]}').errors[0].message).toMatch(missing)
     expect(parseIOGroupsJson('{"foo":1}').errors[0].message).toMatch(missing)
+  })
+
+  it('rejects a JSON group that gives the same field twice', () => {
+    const result = parseIOGroupsJson(envelope([{ name: 'A', fc: 3, functionCode: 16 }]))
+    expect(result.groups).toEqual([])
+    expect(result.errors).toEqual([
+      {
+        row: 1,
+        field: 'functionCode',
+        message: 'Field "functionCode" is given more than once ("fc", "functionCode").',
+      },
+    ])
   })
 
   it('warns once about unknown fields', () => {

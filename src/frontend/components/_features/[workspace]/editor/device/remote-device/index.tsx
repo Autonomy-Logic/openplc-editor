@@ -189,9 +189,11 @@ type IOGroupModalProps = {
     errorHandling: 'keep-last-value' | 'set-to-zero'
   }) => void
   editingGroup?: ModbusIOGroup | null
+  /** Names of the device's other groups; a new name must differ from all of them, ignoring case. */
+  otherGroupNames: string[]
 }
 
-const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalProps) => {
+const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup, otherGroupNames }: IOGroupModalProps) => {
   const [name, setName] = useState('')
   const [functionCode, setFunctionCode] = useState<'1' | '2' | '3' | '4' | '5' | '6' | '15' | '16'>('3')
   const [cycleTime, setCycleTime] = useState('100')
@@ -235,7 +237,8 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
     setFunctionCode(next)
   }
 
-  const nameOk = name.trim() !== '' && name.trim().length <= IO_GROUP_NAME_MAX_LENGTH
+  const nameTaken = otherGroupNames.some((other) => other.toLowerCase() === name.trim().toLowerCase())
+  const nameOk = name.trim() !== '' && name.trim().length <= IO_GROUP_NAME_MAX_LENGTH && !nameTaken
 
   const handleSubmit = () => {
     if (!nameOk || !lengthValidation.ok) return
@@ -277,6 +280,14 @@ const IOGroupModal = ({ isOpen, onClose, onSubmit, editingGroup }: IOGroupModalP
               className={inputStyles}
             />
           </div>
+          {nameTaken && (
+            <p
+              data-testid='io-group-name-error'
+              className='pl-[120px] font-caption text-xs text-red-600 dark:text-red-400'
+            >
+              An IO group named "{name.trim()}" already exists on this device.
+            </p>
+          )}
           <div className='flex items-center gap-2'>
             <Label className='w-28 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Function Code</Label>
             <Select value={functionCode} onValueChange={(v) => handleFunctionCodeChange(v as typeof functionCode)}>
@@ -432,7 +443,11 @@ const IOGroupRow = ({ ioGroup, isExpanded, onToggleExpand, onEdit, onDelete, onU
     <>
       <tr className='border-b border-neutral-200 dark:border-neutral-800'>
         <td className='px-2 py-2'>
-          <button onClick={onToggleExpand} className='flex items-center justify-center'>
+          <button
+            onClick={onToggleExpand}
+            data-testid={`io-group-expand-${ioGroup.id}`}
+            className='flex items-center justify-center'
+          >
             <ArrowIcon
               direction='right'
               className={cn('h-4 w-4 stroke-brand-light transition-all', isExpanded && 'rotate-270 stroke-brand')}
@@ -509,7 +524,7 @@ const IOPointRow = ({ ioPoint, offset, onUpdateAlias }: IOPointRowProps) => {
     <tr className='border-b border-neutral-100 bg-neutral-50 dark:border-neutral-900 dark:bg-neutral-900/50'>
       <td className='px-2 py-1'></td>
       <td className='px-2 py-1 pl-6 text-xs text-neutral-600 dark:text-neutral-400'>
-        <TruncatedText text={ioPoint.name} />
+        <TruncatedText text={ioPoint.name} testId={`io-point-name-${ioPoint.id}`} />
       </td>
       <td className='px-2 py-1 text-xs text-neutral-600 dark:text-neutral-400'>
         <TruncatedText text={ioPoint.type} />
@@ -1226,6 +1241,7 @@ const RemoteDeviceEditor = () => {
         onClose={handleCloseModal}
         onSubmit={handleSubmitIOGroup}
         editingGroup={editingGroup}
+        otherGroupNames={ioGroups.filter((g) => g.id !== editingGroup?.id).map((g) => g.name)}
       />
 
       <ImportIOGroupsModal

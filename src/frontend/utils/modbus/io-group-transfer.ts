@@ -238,7 +238,7 @@ const buildDraft = (
   let offsetOk = true
   if (!isBlank(record.offset)) {
     const parsed = coerceInteger(record.offset)
-    if (parsed === null || parsed > MODBUS_MAX_ADDRESS) {
+    if (parsed === null || parsed < 0 || parsed > MODBUS_MAX_ADDRESS) {
       offsetOk = false
       fail(
         'offset',
@@ -252,7 +252,11 @@ const buildDraft = (
   let lengthOk = true
   if (functionCodeOk) {
     if (isSingleElementFunctionCode(functionCode)) {
-      if (!isBlank(record.length) && coerceInteger(record.length) !== 1)
+      const parsed = isBlank(record.length) ? 1 : coerceInteger(record.length)
+      if (parsed === null) {
+        lengthOk = false
+        fail('length', `Length must be a whole number, got ${formatValue(record.length)}.`)
+      } else if (parsed !== 1)
         warnings.push({
           row,
           field: 'length',
@@ -557,11 +561,24 @@ export const parseIOGroupsJson = (input: string): IOGroupImportResult => {
       return
     }
     const record: Partial<Record<TransferField, RawValue>> = {}
+    const keyOf: Partial<Record<TransferField, string>> = {}
+    let repeated = false
     for (const [key, value] of Object.entries(item)) {
       const field = resolveField(key)
-      if (field) record[field] = value
-      else if (!IGNORED_JSON_KEYS.has(key)) unknownKeys.add(key)
+      if (!field) {
+        if (!IGNORED_JSON_KEYS.has(key)) unknownKeys.add(key)
+        continue
+      }
+      const first = keyOf[field]
+      if (first !== undefined) {
+        repeated = true
+        errors.push({ row, field, message: `Field "${field}" is given more than once ("${first}", "${key}").` })
+        continue
+      }
+      keyOf[field] = key
+      record[field] = value
     }
+    if (repeated) return
     const draft = buildDraft(record, row, errors, warnings)
     if (draft) drafts.push({ draft, row })
   })
