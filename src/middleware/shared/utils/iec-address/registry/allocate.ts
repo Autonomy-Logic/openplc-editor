@@ -33,9 +33,9 @@ function orderedConsumers(consumers: readonly RegistryConsumer[]): RegistryConsu
   return [...consumers].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
 }
 
-/** Lowest non-negative integer not present in `set`. */
-function lowestFree(set: ReadonlySet<number>): number {
-  let i = 0
+/** Lowest non-negative integer not present in `set`, searching from `from`. */
+function lowestFree(set: ReadonlySet<number>, from: number): number {
+  let i = from
   while (set.has(i)) i++
   return i
 }
@@ -105,13 +105,17 @@ export function allocateAddresses(
     }
   }
 
-  // Pass 2 — allocate non-pinned channels at the lowest free slot.
+  // Pass 2 — allocate non-pinned channels at the lowest free slot. Slots are
+  // only added here, so each prefix's lowest free slot never moves back and
+  // the search resumes from the last one instead of from 0.
+  const nextFreeByPrefix = new Map<string, number>()
   for (const consumer of ordered) {
     for (const channel of consumer.channels) {
       if (channel.pinned) continue
       const prefix = prefixOf(channel.class)
       const set = used(prefix)
-      const linear = lowestFree(set)
+      const linear = lowestFree(set, nextFreeByPrefix.get(prefix) ?? 0)
+      nextFreeByPrefix.set(prefix, linear + 1)
       set.add(linear)
       assignments[channelKey(consumer.id, channel.channelId)] = formatAddress(channel.class, linear)
     }

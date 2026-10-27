@@ -3083,6 +3083,108 @@ describe('createProjectSlice', () => {
     })
   })
 
+  describe('importIOGroups', () => {
+    beforeEach(() => {
+      seedRuntimeV4Board(store)
+    })
+
+    const groupsIn = (target: ReturnType<typeof makeStore>): ModbusIOGroup[] => {
+      const config = target.getState().project.data.remoteDevices?.[0]?.modbusTcpConfig
+      if (!config) throw new Error('the seeded device has no Modbus TCP configuration')
+      return config.ioGroups
+    }
+    const groupsOf = () => groupsIn(store)
+    const addressesOf = (groups: ModbusIOGroup[]) => groups.flatMap((g) => (g.ioPoints ?? []).map((p) => p.iecLocation))
+
+    it('appends a batch with contiguous addresses after the existing groups', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
+      const result = store
+        .getState()
+        .projectActions.importIOGroups('Dev1', [makeIOGroup('g2', '3', 2), makeIOGroup('g3', '4', 1)])
+      expect(result.ok).toBe(true)
+      expect(groupsOf().map((g) => g.id)).toEqual(['g1', 'g2', 'g3'])
+      expect(addressesOf(groupsOf())).toEqual(['%IW0', '%IW1', '%IW2', '%IW3', '%IW4'])
+    })
+
+    it('replaces the existing groups and reuses their addresses', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('old', '3', 3))
+      const result = store
+        .getState()
+        .projectActions.importIOGroups('Dev1', [makeIOGroup('new', '3', 1)], { replace: true })
+      expect(result.ok).toBe(true)
+      expect(groupsOf().map((g) => g.id)).toEqual(['new'])
+      expect(addressesOf(groupsOf())[0]).toBe('%IW0')
+    })
+
+    it('applies the same invariants as addIOGroup', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store
+        .getState()
+        .projectActions.importIOGroups('Dev1', [{ ...makeIOGroup('w', '6', 5), errorHandling: 'set-to-zero' }])
+      expect(groupsOf()[0]).toMatchObject({ length: 1, errorHandling: 'keep-last-value' })
+      expect(groupsOf()[0].ioPoints).toHaveLength(1)
+    })
+
+    it('rejects the whole batch on a duplicate name (case-insensitive), leaving the device untouched', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', { ...makeIOGroup('g1'), name: 'Pump' })
+      const result = store
+        .getState()
+        .projectActions.importIOGroups('Dev1', [makeIOGroup('g2'), { ...makeIOGroup('g3'), name: 'PUMP' }])
+      expect(result.ok).toBe(false)
+      expect(groupsOf().map((g) => g.id)).toEqual(['g1'])
+    })
+
+    it('allows reusing an existing name when replacing', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', { ...makeIOGroup('g1'), name: 'Pump' })
+      const result = store
+        .getState()
+        .projectActions.importIOGroups('Dev1', [{ ...makeIOGroup('g2'), name: 'Pump' }], { replace: true })
+      expect(result.ok).toBe(true)
+      expect(groupsOf().map((g) => g.id)).toEqual(['g2'])
+    })
+
+    it('fails for an unknown device', () => {
+      expect(store.getState().projectActions.importIOGroups('Nope', [makeIOGroup('g1')]).ok).toBe(false)
+    })
+
+    it('assigns the same addresses as adding the groups one by one, across address classes', () => {
+      const batch = [
+        makeIOGroup('a', '1', 3),
+        makeIOGroup('b', '3', 2),
+        makeIOGroup('c', '15', 10),
+        makeIOGroup('d', '2', 9),
+        makeIOGroup('e', '16', 2),
+      ]
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('existing', '1', 2))
+      store.getState().projectActions.importIOGroups('Dev1', batch)
+      const imported = addressesOf(groupsOf())
+
+      const sequential = makeStore()
+      seedRuntimeV4Board(sequential)
+      seedRemoteDevice(sequential, makeRemoteDevice('Dev1'))
+      sequential.getState().projectActions.addIOGroup('Dev1', makeIOGroup('existing', '1', 2))
+      for (const group of batch) sequential.getState().projectActions.addIOGroup('Dev1', group)
+      const added = addressesOf(groupsIn(sequential))
+
+      expect(imported).toEqual(added)
+      expect(imported.slice(0, 5)).toEqual(['%IX0.0', '%IX0.1', '%IX0.2', '%IX0.3', '%IX0.4'])
+    })
+
+    it('gives every point of a large batch a distinct address', () => {
+      seedRemoteDevice(store, makeRemoteDevice('Dev1'))
+      const batch = Array.from({ length: 200 }, (_, i) => makeIOGroup(`g${i}`, i % 2 ? '3' : '1', 125))
+      expect(store.getState().projectActions.importIOGroups('Dev1', batch).ok).toBe(true)
+      const addresses = addressesOf(groupsOf())
+      expect(addresses).toHaveLength(200 * 125)
+      expect(new Set(addresses).size).toBe(addresses.length)
+    })
+  })
+
   describe('updateIOGroup', () => {
     beforeEach(() => {
       seedRuntimeV4Board(store)
