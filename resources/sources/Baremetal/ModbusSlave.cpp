@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 ModbusSlave.cpp - Source for Modbus Slave Library
-Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include "ModbusSlave.h"

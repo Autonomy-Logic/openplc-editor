@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 opcua_types.h - shared contracts for the baremetal OPC-UA server
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 
 Pure declarations, no storage.  The generated `opcua_config.h` instantiates
 `OPCUA_NODES[]` / `OPCUA_USERS[]` against the records declared here, so this

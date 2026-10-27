@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 modbus_pdu.h - Transport-agnostic Modbus PDU dispatch + per-FC frame shape
-Copyright (C) 2022 OpenPLC - Thiago Alves
 
 The protocol layer: it owns the set of function codes and their shapes. A
 transport fills mb_frame with a request, calls process_mbpacket() to dispatch it

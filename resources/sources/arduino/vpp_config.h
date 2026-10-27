@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 // vpp_config.h — placeholder stub for non-VPP arduino-cli boards.
 //
 // VPP-enabled boards (Arduino Opta, P1AM, etc., declared `vppIo: true`

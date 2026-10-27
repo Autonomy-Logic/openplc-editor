@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 opcua_server.h - umbrella + scan-loop facade for the baremetal OPC-UA server
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 
 `Baremetal.ino` includes this and calls `opcuatask()` once per scan, the same
 shape as `ModbusSlave.h` / `mbtask()`.  Everything below is compiled out when

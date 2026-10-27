@@ -57,6 +57,7 @@ npm run build            # Production build (main + renderer)
 npm run build:main       # Electron main process only
 npm run build:renderer   # React renderer only
 npm run build:dll        # Webpack DLL cache for faster dev rebuilds
+npm run build:relay      # Vendor-document relay.js for a VPP package (release/relay/)
 npm run package          # Build + create distributable (electron-builder)
 
 npm run lint             # ESLint check
@@ -121,6 +122,14 @@ npx playwright test e2e/<spec>.ts --workers=1
   webpack dev server on `localhost:1212`, which is not running against a built app.
 - **`firstWindow()` returns the splash**, which then closes. Poll `app.windows()` for the
   one whose URL contains `index.html`.
+- **Build profile paths from `realpathSync(tmpdir())`.** On macOS Electron resolves `userData`
+  through the `/var` symlink, and a package path recorded under `/var/...` fails the containment
+  check, so the package's boards silently never load.
+- **`app.close()` hangs with a project open**: the quit confirmation holds it. Kill the process
+  (`app.process().kill('SIGKILL')`) once what the test needs is on disk.
+- **An unsigned fixture package is removed when a project opens.** A suite that installs one
+  (`e2e/fixtures/vendor-configurator/`) replaces the `packages:verify-signatures` handler with a
+  no-op once the bridge has registered it, as `e2e/vendor-configurator.spec.ts` does.
 
 Every open tab keeps its Monaco editor mounted (hidden with `display: none`), so read
 body text from `.view-lines:visible`, never `.view-lines` alone.
@@ -229,6 +238,9 @@ Main and renderer processes communicate through typed IPC bridges:
 - **Main bridge:** `src/main/modules/ipc/main.ts` — `MainProcessBridge` registers 50+ `ipcMain.handle()` handlers
 - **Renderer bridge:** `src/main/modules/ipc/renderer.ts` — async wrappers calling `ipcRenderer.invoke()`
 - **Preload:** `src/main/modules/preload/preload.ts` — exposes `window.bridge` via `contextBridge`
+
+Vendor package documents (an embedded configurator, for example) are served to a sandboxed iframe under
+the `vpp-doc://` scheme, never with `allow-same-origin`; see `docs/vendor-document-serving.md`.
 
 ### State Management (Zustand)
 
@@ -445,6 +457,17 @@ repos and merge to `development`; promote `development` to `main` in both repos;
 (equal to `APP_VERSION`) on openplc-editor's `main`, which triggers `release.yml` ("Build and
 Release"). openplc-web has no release workflow: `production-cd.yml` deploys on every push to its
 `main`, and `staging-cd.yml` on pushes to `development`.
+
+### Update notice (never publish `latest*.yml`):
+The editor checks the GitHub releases API once per launch and, when a newer
+version is out, shows a banner at the top of the window ("Update" and an X);
+Update downloads that OS's installer, checks its sha256 against the release and
+opens it. The user installs (DOPE-486, `docs/update-notice.md`). The release
+pipeline needs nothing for it. The Windows installer is an assisted NSIS
+installer (`assets/installer.nsh`) that asks the user to close a running editor
+and never kills it; keep `oneClick: false`. **Never add `latest-mac.yml` / `latest-linux*.yml` / `latest.yml`
+to a release**: every editor from 4.1.0 to 4.3.2 still embeds electron-updater's
+`app-update.yml` and would install it without asking, unsigned on Windows.
 
 ### When adding a new port:
 1. Define the interface in `src/middleware/shared/ports/`

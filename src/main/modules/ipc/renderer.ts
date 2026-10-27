@@ -401,6 +401,14 @@ const rendererProcessBridge = {
     return () => ipcRenderer.removeListener('libraries:changed', listener)
   },
   handleQuitApp: () => ipcRenderer.send('app:quit'),
+  appUpdateGetStatus: (): Promise<unknown> => ipcRenderer.invoke('app-update:get-status'),
+  appUpdateDownload: () => ipcRenderer.send('app-update:download'),
+  appUpdateDismiss: () => ipcRenderer.send('app-update:dismiss'),
+  appUpdateCheck: () => ipcRenderer.send('app-update:check'),
+  appUpdateGetAutoCheck: (): Promise<unknown> => ipcRenderer.invoke('app-update:get-auto-check'),
+  appUpdateSetAutoCheck: (enabled: boolean) => ipcRenderer.send('app-update:set-auto-check', enabled),
+  onAppUpdateStatus: (callback: (status: unknown) => void) =>
+    subscribe('app-update:status', (_event, status) => callback(status)),
   requestQuitApp: () => ipcRenderer.send('app:request-quit'),
   quitRequested: (callback: IpcRendererCallbacks) => {
     const unsubscribe = subscribe('app:quit-requested', callback)

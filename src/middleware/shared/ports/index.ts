@@ -55,6 +55,7 @@ export type {
   AITelemetryEventName,
 } from './ai-port'
 export type { CompilerPort } from './compiler-port'
+export type { ConfiguratorPort, ConfiguratorSnapshot } from './configurator-port'
 export type { DebuggerPort } from './debugger-port'
 export type { DevicePort } from './device-port'
 export type { NavigationPort, NavigationSearch } from './navigation-port'

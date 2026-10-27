@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 opcua_log.h - telnet debug log for OPC-UA bring-up
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 
 A line-oriented log served on TCP port 23, so a developer can `telnet
 <device> 23` and watch what the OPC-UA server is doing. The LOGO! has no

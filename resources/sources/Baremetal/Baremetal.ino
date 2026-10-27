@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 // Baremetal.ino -- OpenPLC Arduino runtime entry sketch.
 //
 // This is a STATIC sketch -- the same code for every project. It hosts the
@@ -104,10 +106,8 @@ unsigned long last_run = 0;
 bool first_cycle = false;
 
 // ---------------------------------------------------------------------------
-// Module includes and external sketch support
+// External sketch support
 // ---------------------------------------------------------------------------
-#include "arduino_libs.h"
-
 #ifdef USE_ARDUINO_SKETCH
     #include "ext/arduino_sketch.h"
 #endif

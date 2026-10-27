@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 opcua_auth.h - username/password verification for the OPC-UA server
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 
 The editor stores OPC-UA passwords as
 `pbkdf2:sha256:<iterations>$<salt-b64>$<hash-b64>`, which the generated

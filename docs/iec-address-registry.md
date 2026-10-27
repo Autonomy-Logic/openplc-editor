@@ -294,8 +294,9 @@ Shipped on `feat/central-iec-address-registry` (editor + web, byte-identical):
 - **Pure core** — types, address-space, allocator (capability-scoped,
   gapless, deterministic), registry ops, `resolveLocation`, migration
   transform, and the session **alias-memory** (`memoryKey` +
-  `restoreAliasesFromMemory`, keyed `moduleId:slot:channel`; held in the store,
-  never serialized, reset on a fresh project).
+  `restoreAliasesFromMemory`, keyed `moduleId:slot:channel`, also for the
+  entries an embedded configurator's station produces; held in the store, never
+  serialized, reset on a fresh project).
 - **Central action** `recalculateIecAddresses` reallocates **VPP + Modbus +
   EtherCAT** together (`ALLOCATED_KINDS`), capability-scoped, restoring aliases
   from the session memory, and writes addresses + aliases back to each
