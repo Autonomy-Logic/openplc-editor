@@ -127,6 +127,22 @@ function parseJsonOrNull(raw: string): unknown {
   }
 }
 
+/**
+ * The reason an upload was refused, or null when it was accepted.
+ *
+ * The runtime refuses with HTTP 200 and a non-empty `UploadFileFail`, so the
+ * status code alone reads a refusal as success. A body that does not parse is
+ * not a refusal.
+ */
+export function readUploadRefusal(responseBody: string): string | null {
+  const parsed = parseJsonOrNull(responseBody)
+  if (typeof parsed !== 'object' || parsed === null) return null
+  const refusal = (parsed as Record<string, unknown>).UploadFileFail
+  if (typeof refusal !== 'string') return null
+  const trimmed = refusal.trim()
+  return trimmed === '' ? null : trimmed
+}
+
 /** A `Uint8Array` view over a `Buffer`'s bytes — no copy. */
 function asBytes(buffer: Buffer): Uint8Array {
   return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
@@ -719,6 +735,8 @@ export class RuntimeApiClient {
       )
       .then((result) => {
         if (result.success) {
+          const refusal = readUploadRefusal(result.data)
+          if (refusal !== null) return { success: false as const, error: refusal }
           opts.onUploadAccepted?.(result.data)
           return { success: true as const, data: result.data }
         }
