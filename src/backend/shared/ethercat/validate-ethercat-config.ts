@@ -1,3 +1,5 @@
+import { isDynamicEtherdogRuntime } from '../firmware/runtime-version-gate'
+
 /**
  * Subset of the runtime EtherCAT root-entry shape that the validator cares
  * about. The full shape is defined locally inside `generate-ethercat-config.ts`
@@ -57,10 +59,25 @@ const validateUniqueMasterInterfaces = (entries: EthercatRootEntry[]): string[] 
 }
 
 /**
- * Limits of runtimes 4.3.0 and newer (EtherDOG and the runtime's EtherCAT plugin). Exceeding
- * one makes EtherDOG refuse the bus configuration or the plugin refuse the mapping at start.
+ * What an EtherDOG runtime can hold. Exceeding a limit makes EtherDOG refuse the bus
+ * configuration or the runtime's EtherCAT plugin refuse the mapping at start. A limit left
+ * undefined is not checked: that runtime sizes it from the configuration.
  */
-export const ETHERDOG_LIMITS = {
+export interface EtherdogLimits {
+  masters: number
+  nameLength: number
+  iecLocationLength: number
+  maxByteIndex: number
+  slavesPerMaster?: number
+  pdosPerDirection?: number
+  entriesPerPdo?: number
+  channelsPerSlave?: number
+  sdosPerSlave?: number
+  mappedEntriesPerMaster?: number
+}
+
+/** Runtimes 4.3.0 and 4.3.1, whose EtherDOG holds the bus configuration in fixed arrays. */
+export const FIXED_ETHERDOG_LIMITS = {
   masters: 4,
   slavesPerMaster: 64,
   pdosPerDirection: 16,
@@ -71,14 +88,34 @@ export const ETHERDOG_LIMITS = {
   nameLength: 63,
   iecLocationLength: 15,
   maxByteIndex: 65535,
-} as const
+} as const satisfies EtherdogLimits
+
+/**
+ * Runtimes whose EtherDOG allocates slaves, PDOs, channels, SDOs and mapped entries from the
+ * configuration. A bus with more slaves than the master supports is reported by the runtime.
+ */
+export const DYNAMIC_ETHERDOG_LIMITS = {
+  masters: 4,
+  nameLength: 63,
+  iecLocationLength: 15,
+  maxByteIndex: 65535,
+} as const satisfies EtherdogLimits
+
+/** The limits of the runtime the build targets. */
+export const etherdogLimitsFor = (runtimeVersion: string | null | undefined): EtherdogLimits =>
+  isDynamicEtherdogRuntime(runtimeVersion) ? DYNAMIC_ETHERDOG_LIMITS : FIXED_ETHERDOG_LIMITS
 
 // Same grammar as the runtime's parser: a bit (0-7) only on X, optional there
 const IEC_LOCATION = /^%[IQ](?:X(\d+)(?:\.[0-7])?|[BWDL](\d+))$/i
 
-/** Checks what runtimes 4.3.0 and newer can hold, so an oversized project fails at build time. */
-const validateEtherdogLimits = (entries: EthercatRootEntry[], mapping: EthercatIoMapping): string[] => {
-  const L = ETHERDOG_LIMITS
+const exceeds = (count: number, limit: number | undefined): boolean => limit !== undefined && count > limit
+
+/** Checks what the target runtime can hold, so an oversized project fails at build time. */
+const validateEtherdogLimits = (
+  entries: EthercatRootEntry[],
+  mapping: EthercatIoMapping,
+  L: EtherdogLimits,
+): string[] => {
   const errors: string[] = []
   if (entries.length > L.masters) {
     errors.push(`EtherCAT has ${entries.length} masters; the runtime supports at most ${L.masters}`)
@@ -89,7 +126,7 @@ const validateEtherdogLimits = (entries: EthercatRootEntry[], mapping: EthercatI
       errors.push(`EtherCAT master name '${master}' is longer than ${L.nameLength} characters`)
     }
     const slaves = entry.config?.slaves ?? []
-    if (slaves.length > L.slavesPerMaster) {
+    if (exceeds(slaves.length, L.slavesPerMaster)) {
       errors.push(`EtherCAT master '${master}' has ${slaves.length} slaves; at most ${L.slavesPerMaster} are supported`)
     }
     for (const slave of slaves) {
@@ -98,29 +135,29 @@ const validateEtherdogLimits = (entries: EthercatRootEntry[], mapping: EthercatI
         ['RxPDOs', slave.rx_pdos ?? []],
         ['TxPDOs', slave.tx_pdos ?? []],
       ] as const) {
-        if (pdos.length > L.pdosPerDirection) {
+        if (exceeds(pdos.length, L.pdosPerDirection)) {
           errors.push(`${where} has ${pdos.length} ${dir}; at most ${L.pdosPerDirection} are supported`)
         }
         for (const pdo of pdos) {
           const count = pdo.entries?.length ?? 0
-          if (count > L.entriesPerPdo) {
+          if (exceeds(count, L.entriesPerPdo)) {
             errors.push(`${where}, PDO ${pdo.index} has ${count} entries; at most ${L.entriesPerPdo} are supported`)
           }
         }
       }
       const channels = slave.channels?.length ?? 0
-      if (channels > L.channelsPerSlave) {
+      if (exceeds(channels, L.channelsPerSlave)) {
         errors.push(`${where} has ${channels} channels; at most ${L.channelsPerSlave} are supported`)
       }
       const sdos = slave.sdo_configurations?.length ?? 0
-      if (sdos > L.sdosPerSlave) {
+      if (exceeds(sdos, L.sdosPerSlave)) {
         errors.push(`${where} has ${sdos} SDO configurations; at most ${L.sdosPerSlave} are supported`)
       }
     }
   }
   for (const master of mapping.masters ?? []) {
     const mapped = master.entries ?? []
-    if (mapped.length > L.mappedEntriesPerMaster) {
+    if (exceeds(mapped.length, L.mappedEntriesPerMaster)) {
       errors.push(
         `EtherCAT master '${master.name}' maps ${mapped.length} entries; at most ${L.mappedEntriesPerMaster} are supported`,
       )
@@ -205,7 +242,8 @@ const validateIoMapping = (entries: EthercatRootEntry[], iomappingJson: string):
  * Run all internal validations on the EtherCAT configuration produced by `generate-ethercat-config.ts`.
  *
  * `configJson` is the legacy `ethercat.json` or the EtherDOG busconfig; both share the array root.
- * `iomappingJson`, when given, is checked against it with `validateIoMapping`.
+ * `iomappingJson`, when given, is checked against it with `validateIoMapping`, and both are
+ * checked against `limits`, the limits of the EtherDOG runtime the build targets.
  *
  * Validating the generator's output (instead of its input) keeps this gate
  * honest: whatever lands in the bundle is exactly what we check, with
@@ -216,7 +254,11 @@ const validateIoMapping = (entries: EthercatRootEntry[], iomappingJson: string):
  * for surfacing the messages to the user (each platform routes errors
  * differently — Vite progress, Electron output panel, etc.).
  */
-export const validateEthercatConfig = (configJson: string | null, iomappingJson: string | null = null): string[] => {
+export const validateEthercatConfig = (
+  configJson: string | null,
+  iomappingJson: string | null = null,
+  limits: EtherdogLimits = FIXED_ETHERDOG_LIMITS,
+): string[] => {
   if (!configJson) {
     return iomappingJson ? ['Generated EtherCAT I/O mapping has no bus configuration'] : []
   }
@@ -238,7 +280,7 @@ export const validateEthercatConfig = (configJson: string | null, iomappingJson:
   if (iomappingJson !== null) {
     errors.push(...validateIoMapping(entries, iomappingJson))
     try {
-      errors.push(...validateEtherdogLimits(entries, JSON.parse(iomappingJson) as EthercatIoMapping))
+      errors.push(...validateEtherdogLimits(entries, JSON.parse(iomappingJson) as EthercatIoMapping, limits))
     } catch {
       // An unparseable mapping is already reported by validateIoMapping
     }

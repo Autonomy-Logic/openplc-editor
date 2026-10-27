@@ -43,7 +43,7 @@ import { generateOpcUaConfig, OpcUaConfigError } from '../../../../frontend/util
 import { generateS7CommConfig } from '../../../../frontend/utils/s7comm'
 import type { S7TargetProfile } from '../../../../middleware/shared/utils/target-capabilities/types'
 import { generateEthercatConfig, generateEtherdogConfigs } from '../../ethercat/generate-ethercat-config'
-import { validateEthercatConfig } from '../../ethercat/validate-ethercat-config'
+import { etherdogLimitsFor, validateEthercatConfig } from '../../ethercat/validate-ethercat-config'
 import { isEtherdogCapableRuntime } from '../../firmware/runtime-version-gate'
 import type { PLCRemoteDevice, PLCServer } from '../../types/PLC/open-plc'
 import { generateModbusMasterConfig } from '../../utils/modbus/generate-modbus-master-config'
@@ -85,8 +85,8 @@ export interface GenerateConfsInput {
    *  only for callers that have no image to offer. */
   imageSizes?: Readonly<Record<string, number>>
   /** Version the target runtime reports, or null when unknown (compile
-   *  only, no device).  Picks the EtherCAT file format; see
-   *  `isEtherdogCapableRuntime`. */
+   *  only, no device).  Picks the EtherCAT file format and limits; see
+   *  `isEtherdogCapableRuntime` and `etherdogLimitsFor`. */
   runtimeVersion: string | null
   /** The target's S7 profile, which decides how many data blocks reach the
    *  device and which buffers it can address. The image is sized from the same
@@ -171,7 +171,10 @@ export function generateRuntimeConfs(input: GenerateConfsInput): GenerateConfsOu
     const configs = generateEtherdogConfigs(remoteDevices)
     ethercatBusconfig = configs?.busconfig ?? null
     ethercatIomapping = configs?.iomapping ?? null
-    ethercatErrors = [...projectErrors, ...validateEthercatConfig(ethercatBusconfig, ethercatIomapping)]
+    ethercatErrors = [
+      ...projectErrors,
+      ...validateEthercatConfig(ethercatBusconfig, ethercatIomapping, etherdogLimitsFor(input.runtimeVersion)),
+    ]
   } else {
     const legacy = generateEthercatConfig(remoteDevices)
     ethercat = legacy ?? ''
