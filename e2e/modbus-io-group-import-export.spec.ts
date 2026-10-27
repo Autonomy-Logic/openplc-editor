@@ -348,6 +348,30 @@ test('long group and tag names are cut in the table and shown in full on hover',
   await expect(page.getByTestId(`io-point-name-${point.id}`)).toHaveCount(0)
 })
 
+test('a cut tag name is reachable with Tab and shows in full on focus', async () => {
+  const long = storedGroups().find((g) => g.name === LONG_NAME)
+  if (!long) throw new Error('long group missing')
+  const point = long.ioPoints[0]
+  const expand = page.getByTestId(`io-group-expand-${long.id}`)
+  await expand.click()
+  const cell = page.getByTestId(`io-point-name-${point.id}`)
+  await expect(cell).toHaveAttribute('tabindex', '0')
+
+  await expand.focus()
+  let reached = false
+  for (let presses = 0; presses < 10 && !reached; presses++) {
+    await page.keyboard.press('Tab')
+    reached = await cell.evaluate((el) => el === document.activeElement)
+  }
+  expect(reached).toBe(true)
+  await expect(page.getByRole('tooltip')).toHaveText(`${LONG_NAME}_0`)
+
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('tooltip')).toHaveCount(0)
+  await expand.click()
+  await expect(cell).toHaveCount(0)
+})
+
 test('replacing with an edited export swaps the device groups for the file', async () => {
   const before = storedGroups()
   const exported: { format: string; version: number; ioGroups: Array<{ name: string; cycleTime: number }> } =
