@@ -15,10 +15,11 @@ import {
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import * as Portal from '@radix-ui/react-portal'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
+import { useGraphicalFocus } from '../../../../../../hooks/use-graphical-focus'
 import { usePouSnapshot } from '../../../../../../hooks/use-pou-snapshot'
 import { ladderSelectors } from '../../../../../../hooks/use-store-selectors'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
@@ -64,7 +65,7 @@ export default function LadderEditor() {
 
   const updateModelLadder = ladderSelectors.useUpdateModelLadder()
 
-  const rungs = flow?.rungs || []
+  const rungs = useMemo(() => flow?.rungs ?? [], [flow?.rungs])
   const flowUpdated = flow?.updated || false
 
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
@@ -130,6 +131,21 @@ export default function LadderEditor() {
 
     return divergences.length > 0 ? divergences : EMPTY_DIVERGENCES
   }, [flow?.rungs, userLibraries, pous])
+
+  const selectSearchedNode = useCallback(
+    ({ nodeId, rungId }: { nodeId: string; rungId?: string }) => {
+      const rung =
+        rungs.find((candidate) => candidate.id === rungId) ??
+        rungs.find((candidate) => candidate.nodes.some((node) => node.id === nodeId))
+      const node = rung?.nodes.find((candidate) => candidate.id === nodeId)
+      if (!rung || !node) return false
+
+      ladderFlowActions.setSelectedNodes({ nodes: [node], rungId: rung.id, editorName: pouName })
+      return true
+    },
+    [rungs, ladderFlowActions, pouName],
+  )
+  useGraphicalFocus(pouName, selectSearchedNode)
 
   const scrollableRef = useRef<HTMLDivElement>(null)
   useEffect(() => {

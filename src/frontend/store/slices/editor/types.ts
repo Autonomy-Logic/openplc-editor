@@ -101,6 +101,18 @@ type EditorModelBase = {
    * Monaco's own internal cursor state is preserved naturally.
    */
   cursorPosition?: CursorPosition
+  /**
+   * Element a graphical editor should select and reveal, the counterpart of
+   * `cursorPosition` for LD and FBD. Set when a search result points at a node;
+   * the flow only exists once the editor mounts, so the request waits here
+   * until its canvas picks it up.
+   */
+  graphicalFocus?: GraphicalFocus
+}
+
+export type GraphicalFocus = {
+  nodeId: string
+  rungId?: string
 }
 
 export type EditorModel = EditorModelBase &
@@ -337,6 +349,8 @@ export type EditorActions = {
    * is exclusively a programmatic-jump channel.
    */
   setEditorCursor: (name: string, cursorPosition: CursorPosition) => void
+  /** Same channel as `setEditorCursor`, for the node a graphical editor must select. */
+  setEditorGraphicalFocus: (name: string, graphicalFocus: GraphicalFocus | undefined) => void
   getEditorFromEditors: (name: string) => EditorModel | null
   setMonacoFocused: (focused: boolean) => void
 }
