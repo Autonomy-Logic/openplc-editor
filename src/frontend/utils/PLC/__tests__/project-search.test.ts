@@ -32,7 +32,7 @@ const ladderPou = (name: string, variableNames: string[]): PLCPou => ({
             id: `contact-${index}`,
             type: 'contact',
             position: { x: 0, y: 0 },
-            data: { variable: { name: variableName }, variant: 'default' },
+            data: { variable: { name: variableName }, variant: 'default', numericId: '5487658' },
           })),
           edges: [],
         },
@@ -178,5 +178,25 @@ describe('searchProject', () => {
     const data = projectWith({ pous: [ladderPou('main', ['Start'])] })
 
     expect(matchesOf(data, 'contact')).toHaveLength(0)
+  })
+
+  it('does not match the shape name or the numeric id of a graphical node', () => {
+    const data = projectWith({ pous: [ladderPou('main', ['Start'])] })
+
+    expect(matchesOf(data, 'default')).toHaveLength(0)
+    expect(matchesOf(data, '5487658')).toHaveLength(0)
+  })
+
+  it('still finds the name of a block placed on a graphical body', () => {
+    const pou = ladderPou('main', ['Start'])
+    const body = pou.body.value as { rungs: Array<{ nodes: unknown[] }> }
+    body.rungs[0].nodes.push({
+      id: 'block-0',
+      type: 'block',
+      position: { x: 0, y: 0 },
+      data: { numericId: '1027123', variant: { name: 'TON', variables: [] } },
+    })
+
+    expect(matchesOf(projectWith({ pous: [pou] }), 'TON')).toHaveLength(1)
   })
 })

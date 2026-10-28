@@ -74,6 +74,7 @@ const STRUCTURAL_KEYS: ReadonlySet<string> = new Set([
   'measured',
   'position',
   'positionAbsolute',
+  'numericId',
 ])
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -189,6 +190,8 @@ class MatchCollector {
 
       for (const [key, entry] of Object.entries(node)) {
         if (STRUCTURAL_KEYS.has(key)) continue
+        // A block keeps its signature object under `variant`; everywhere else it is a shape name.
+        if (key === 'variant' && typeof entry === 'string') continue
         // The root's own name is the container's name, already reported next to it.
         if (isRoot && key === 'name') continue
         walk(entry, nextNodeId, nextRungId, false)
