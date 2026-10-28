@@ -1137,7 +1137,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
                         position='popper'
                         sideOffset={3}
                         align='center'
-                        className='box h-fit min-w-44 overflow-hidden rounded-lg bg-white outline-none dark:bg-neutral-950'
+                        className='box h-fit max-h-[300px] min-w-44 overflow-y-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
                       >
                         {returnTypeOptions.map((filter) => (
                           <SelectItem
