@@ -20,4 +20,26 @@ const extractSearchQuery = (body: string, searchQuery: string): string => {
   return body
 }
 
-export { escapeRegExp, extractSearchQuery }
+const escapeHtml = (text: string): string =>
+  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/** Highlights ONE occurrence by position, so two rows for the same line do not look alike. */
+const highlightOccurrence = ({
+  preview,
+  previewColumn,
+  length,
+}: {
+  preview: string
+  previewColumn: number
+  length: number
+}): string => {
+  const start = Math.max(0, previewColumn - 1)
+  const end = start + length
+  const html = `${escapeHtml(preview.slice(0, start))}<span class='bg-brand-light dark:bg-brand-medium-dark border-0 rounded-sm'>${escapeHtml(
+    preview.slice(start, end),
+  )}</span>${escapeHtml(preview.slice(end))}`
+
+  return DOMPurify.sanitize(html)
+}
+
+export { escapeRegExp, extractSearchQuery, highlightOccurrence }
