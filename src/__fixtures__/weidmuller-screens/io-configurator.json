@@ -1,0 +1,15 @@
+{
+  "sections": [
+    {
+      "id": "configurator",
+      "title": "Backplane Configuration",
+      "layout": "vendor-document",
+      "document": "configurator/index.html",
+      "bundleVersion": "3.5.22",
+      "controllers": {
+        "UC20-M3000": "UC20-M3000",
+        "UC20-M4000": "UC20-M4000"
+      }
+    }
+  ]
+}

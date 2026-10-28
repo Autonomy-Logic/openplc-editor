@@ -118,17 +118,29 @@ describe('useRuntimeConnect — connecting', () => {
     expect(spies.setRuntimeVersion).toHaveBeenCalledWith('4.2.0')
   })
 
-  it('reports an error instead of a modal when getUsersInfo fails', async () => {
-    mockGetUsersInfo.mockResolvedValue({ error: 'unreachable' })
+  it('tells the user the runtime is unreachable instead of failing silently', async () => {
+    mockGetUsersInfo.mockResolvedValue({ error: 'Connection timeout' })
     await setup().connect()
     expect(currentStatus()).toBe('error')
-    expect(spies.openModal).not.toHaveBeenCalled()
+    expect(spies.openModal).toHaveBeenCalledTimes(1)
+    expect(spies.openModal).toHaveBeenCalledWith(
+      'debugger-message',
+      expect.objectContaining({
+        type: 'error',
+        title: 'No Response',
+        message: expect.stringContaining('Could not reach OpenPLC Runtime v4 at 192.168.0.2: Connection timeout'),
+      }),
+    )
   })
 
   it('reports an error when the call throws', async () => {
     mockGetUsersInfo.mockRejectedValue(new Error('boom'))
     await setup().connect()
     expect(currentStatus()).toBe('error')
+    expect(spies.openModal).toHaveBeenCalledWith(
+      'debugger-message',
+      expect.objectContaining({ message: expect.stringContaining('192.168.0.2: boom') }),
+    )
   })
 
   it('is a no-op when already connected', async () => {
