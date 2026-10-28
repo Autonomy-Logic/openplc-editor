@@ -14,6 +14,7 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
+import type * as PrintActions from '@root/frontend/services/print-actions'
 import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { ProjectPort } from '@root/middleware/shared/ports/project-port'
@@ -67,16 +68,18 @@ const ports: PlatformPorts = {
   capabilities: EDITOR_CAPABILITIES,
 }
 
-type RenderResult = { ok: true; bytes: Uint8Array } | { ok: false; error: string }
+type RenderResult = Awaited<ReturnType<typeof PrintActions.renderPrintPdf>>
 
 let ExportPdfModal: () => JSX.Element
-let renderPrintPdf: jest.Mock<Promise<RenderResult>>
+let printActions: typeof PrintActions
 
 beforeAll(async () => {
-  const printActions = await import('@root/frontend/services/print-actions')
-  renderPrintPdf = printActions.renderPrintPdf as unknown as jest.Mock<Promise<RenderResult>>
+  printActions = await import('@root/frontend/services/print-actions')
   ExportPdfModal = (await import('../export-pdf-modal')).ExportPdfModal
 })
+
+const renderPrintPdf = () => vi.mocked(printActions.renderPrintPdf)
+const executeExportPdf = () => vi.mocked(printActions.executeExportPdf)
 
 /** Resolves on a later task, the way the real render does. */
 function renderAfterATick(): Promise<RenderResult> {
@@ -105,8 +108,10 @@ function exportButton(): HTMLButtonElement {
 
 describe('ExportPdfModal preview', () => {
   beforeEach(() => {
-    renderPrintPdf.mockReset()
-    renderPrintPdf.mockImplementation(renderAfterATick)
+    renderPrintPdf().mockReset()
+    renderPrintPdf().mockImplementation(renderAfterATick)
+    executeExportPdf().mockReset()
+    executeExportPdf().mockResolvedValue({ success: true })
   })
 
   it('enables Export once the asynchronous render resolves', async () => {
@@ -117,7 +122,7 @@ describe('ExportPdfModal preview', () => {
 
     expect(exportButton().disabled).toBe(true)
     await waitFor(() => expect(exportButton().disabled).toBe(false))
-    expect(renderPrintPdf).toHaveBeenCalledTimes(1)
+    expect(renderPrintPdf()).toHaveBeenCalledTimes(1)
   })
 
   it('renders again after going back to the options step', async () => {
@@ -131,6 +136,21 @@ describe('ExportPdfModal preview', () => {
     clickButton('Next')
 
     await waitFor(() => expect(exportButton().disabled).toBe(false))
-    expect(renderPrintPdf).toHaveBeenCalledTimes(2)
+    expect(renderPrintPdf()).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the rendered bytes when a failed export sends the wizard back to the preview', async () => {
+    executeExportPdf().mockResolvedValue({ success: false })
+    openWizard()
+
+    clickButton('Next')
+    clickButton('Next')
+    await waitFor(() => expect(exportButton().disabled).toBe(false))
+
+    clickButton('Export')
+
+    await waitFor(() => expect(executeExportPdf()).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(exportButton().disabled).toBe(false))
+    expect(renderPrintPdf()).toHaveBeenCalledTimes(1)
   })
 })

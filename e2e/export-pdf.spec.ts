@@ -113,7 +113,8 @@ test('the preview renders and Export becomes available, again after going back',
   const { app, page } = await launch()
   try {
     await page.getByText('export-pdf', { exact: true }).first().click({ timeout: 30000 })
-    await page.waitForTimeout(5000)
+    // Print has nothing to lay out until the project's POU is on the explorer.
+    await expect(page.getByText('stmain', { exact: true }).first()).toBeVisible({ timeout: 30000 })
 
     await print(app)
 
