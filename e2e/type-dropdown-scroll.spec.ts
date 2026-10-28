@@ -93,8 +93,9 @@ test('the return type list fits a short window and reaches its last type', async
     })
 
     await page.getByText('type-dropdown', { exact: true }).first().click({ timeout: 30000 })
-    await page.waitForTimeout(4000)
-    await page.getByText('addnumbers', { exact: true }).first().click({ timeout: 30000 })
+    const pou = page.getByText('addnumbers', { exact: true }).first()
+    await expect(pou).toBeVisible({ timeout: 30000 })
+    await pou.click({ timeout: 30000 })
 
     const trigger = page.locator('#return-type')
     await expect(trigger).toBeVisible({ timeout: 30000 })
@@ -104,8 +105,10 @@ test('the return type list fits a short window and reaches its last type', async
 
     const windowHeight = await page.evaluate(() => window.innerHeight)
     const box = await listbox.boundingBox()
-    expect(box).not.toBeNull()
-    expect(box!.height).toBeLessThanOrEqual(windowHeight)
+    if (!box) throw new Error('the open listbox has no bounding box')
+    expect(box.height).toBeLessThanOrEqual(windowHeight)
+    expect(box.y).toBeGreaterThanOrEqual(0)
+    expect(box.y + box.height).toBeLessThanOrEqual(windowHeight)
 
     const last = page.getByRole('option', { name: 'WSTRING' })
     await last.scrollIntoViewIfNeeded({ timeout: 15000 })
