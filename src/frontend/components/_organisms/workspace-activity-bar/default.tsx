@@ -27,7 +27,17 @@ import { useRuntimeConnect } from '../../../hooks/use-runtime-connect'
 import { useSimulatorDebugRun } from '../../../hooks/use-simulator-debug-run'
 import { useDebugPolling } from '../../../hooks/useDebugPolling'
 import { useDebugSession } from '../../../hooks/useDebugSession'
-import { buildDeviceResolverContext, showDeviceDialog, showDeviceInput } from '../../../services/device-link-resolution'
+import {
+  awaitDebugSession,
+  type DebugSessionOutcome,
+  SESSION_OPEN_TIMEOUT_MS,
+} from '../../../services/await-debug-session'
+import {
+  buildDeviceResolverContext,
+  describeConnectTarget,
+  showDeviceDialog,
+  showDeviceInput,
+} from '../../../services/device-link-resolution'
 import { executeSaveProject } from '../../../services/save-actions'
 import { type OpenPLCStore, useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import type { RuntimeConnection } from '../../../store/slices/device/types'
@@ -267,9 +277,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   // Build (Compile)
   // ---------------------------------------------------------------------------
 
+  // Resolves true when the build (and the upload, unless `compileOnly`) succeeded.
   const handleBuild = useCallback(
-    async (overrides?: { compileOnly?: boolean; cleanBuild?: boolean }) => {
-      if (isCompiling) return
+    async (overrides?: { compileOnly?: boolean; cleanBuild?: boolean }): Promise<boolean> => {
+      if (isCompiling) return false
 
       // Reveal the console and re-attach it to the tail so build output is
       // visible from the first line, even if the console was collapsed or the
@@ -302,14 +313,14 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         )
         if (gate.kind === 'refuse') {
           addLog({ level: 'error', message: gate.reason })
-          return
+          return false
         }
       }
 
       // Unreviewed AI edits must not be saved by the pre-build save or reach the target.
       if (aiChangesUnreviewed(store)) {
         addLog({ level: 'error', message: AI_PENDING_CHANGES_REFUSAL })
-        return
+        return false
       }
 
       // Always save the full project before building. The compile
@@ -335,7 +346,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // write never gates the build.
       if (canEdit) {
         const saved = await executeSave()
-        if (!saved) return
+        if (!saved) return false
       }
 
       setIsCompiling(true)
@@ -375,12 +386,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           if (response !== 1) {
             // User declined — abort the build and leave the PLC running.
             setIsCompiling(false)
-            return
+            return false
           }
           if (aiChangesUnreviewed(store)) {
             addLog({ level: 'error', message: AI_PENDING_CHANGES_REFUSAL })
             setIsCompiling(false)
-            return
+            return false
           }
           // Same unified control path as the Start/Stop button: the session routes
           // it, so this works for a runtime and a device alike.
@@ -394,7 +405,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               message: `Failed to stop PLC: ${stopResult.error ?? 'Unknown error'}`,
             })
             setIsCompiling(false)
-            return
+            return false
           }
           store.getState().deviceActions.setPlcRuntimeStatus('STOPPED')
           addLog({ level: 'info', message: 'PLC stopped before build.' })
@@ -405,7 +416,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       if (aiChangesUnreviewed(store)) {
         addLog({ level: 'error', message: AI_PENDING_CHANGES_REFUSAL })
         setIsCompiling(false)
-        return
+        return false
       }
 
       // Target-capability gate: refuses a project that needs EtherCAT features the connected
@@ -440,7 +451,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             variant: 'fail',
           })
           setIsCompiling(false)
-          return
+          return false
         }
         if (gate.warning !== undefined) addLog({ level: 'warning', message: gate.warning })
       }
@@ -492,6 +503,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
       }
 
+      let succeeded = false
       try {
         // Track whether the compile stream already surfaced an error so we
         // don't log a second, generic "Compilation failed" after a failed
@@ -541,6 +553,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           },
         )
 
+        succeeded = result.success
         if (!result.success && !streamedError) {
           addLog({ level: 'error', message: result.error ?? 'Compilation failed' })
         }
@@ -626,6 +639,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
         setIsCompiling(false)
       }
+      return succeeded
     },
     [
       compiler,
@@ -1061,10 +1075,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           message: `MD5 mismatch. Target: ${verifyResult.targetMd5}, Expected: ${md5Result.md5}`,
         })
 
-        // Second upload path, and the only one that does not go through
-        // `handleBuild`: from here the branch compiles with `compileOnly: false`,
-        // which uploads. So it asks `evaluateVppBackplaneGate` the same question
-        // the build does, and gets the refusal in the same words.
+        // The upload below goes through `handleBuild`, which refuses the same way;
+        // asked here too so a refused upload is never offered.
         //
         // Ahead of the dialog rather than after it: a refusal is not something to
         // consent to, and offering an upload we would then decline is worse than
@@ -1108,23 +1120,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             setIsDebuggerProcessing(false)
             return
           }
-          const runtimeIpAddress = deviceDefinitions.configuration.runtimeIpAddress || null
-          const runtimeJwtToken = store.getState().runtimeConnection.jwtToken || null
-          // See the handleBuild call above — compile-time alias resolution.
-          const freshProjectData = store.getState().projectActions.getCompileReadyProjectData()
-          const compileResult = await compiler.compileProgram(
-            {
-              projectData: freshProjectData,
-              boardTarget,
-              projectPath,
-              compileOnly: false,
-              isSimulator: false,
-              runtimeIpAddress,
-              runtimeJwtToken,
-            },
-            (event) => logCompilerEvent(event, consoleActions.addLog),
-          )
-          if (compileResult.success) {
+          // Through Build & Upload, so a held serial link hands the port over to the
+          // upload and is reconnected afterwards, with the same gates and inputs.
+          const uploaded = await handleBuildRef.current({ compileOnly: false })
+          if (uploaded) {
             consoleActions.addLog({
               level: 'info',
               message: 'Upload completed. Re-verifying...',
@@ -1132,10 +1131,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             await new Promise((resolve) => setTimeout(resolve, 2000))
             void handleMd5Verification(projectPath, boardTarget, isRuntimeTarget)
           } else {
-            consoleActions.addLog({
-              level: 'error',
-              message: `Upload failed: ${compileResult.error ?? 'Unknown error'}`,
-            })
+            consoleActions.addLog({ level: 'error', message: 'Upload failed: the program was not uploaded.' })
             setIsDebuggerProcessing(false)
           }
         } else {
@@ -1199,9 +1195,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
       }
 
-      const boardTarget = devDefs.configuration.deviceBoard
+      // Re-read once a connect below has brought the session up: on web the board
+      // only becomes the runtime's once that connection is established.
+      let boardTarget = devDefs.configuration.deviceBoard
       const projectPath = project.meta.path
-      const boardInfo = availableBoards.get(boardTarget)
+      let boardInfo = availableBoards.get(boardTarget)
 
       // No resolution here at all. Every target's session is established before a
       // debug session can start — a device by Connect, a runtime by logging in, the
@@ -1258,13 +1256,26 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           return
         }
 
+        // A runtime is reached by its address, or on web by the selected device;
+        // with neither, the connect would return without trying anything.
+        if (isRuntime && !devDefs.configuration.runtimeIpAddress && selectedDeviceName === null) {
+          await showDeviceDialog(
+            store,
+            'warning',
+            'No IP Address',
+            "Set the runtime's IP address in the device configuration before starting the debugger.",
+            ['OK'],
+          )
+          setIsDebuggerProcessing(false)
+          return
+        }
+
         // Name the target. "Would you like to connect?" with no name is how a
         // mis-selection turns into a session on someone else's machine.
         const targetName =
-          selectedDeviceName ??
-          deviceDefinitions.configuration.runtimeIpAddress ??
-          deviceDefinitions.configuration.communicationPort ??
-          boardTarget
+          selectedDeviceName !== null
+            ? `"${selectedDeviceName}"`
+            : describeConnectTarget(store, boardTarget, boardInfo, isRuntime)
         const offer = await showDeviceDialog(
           store,
           'question',
@@ -1272,8 +1283,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           offerSimulatorStart
             ? 'The debugger runs against the running simulator. Would you like to start the simulator now?'
             : isRuntime
-              ? `The debugger runs over the runtime connection. Would you like to connect to "${targetName}" now?`
-              : `The debugger runs over the device connection. Would you like to connect to "${targetName}" now?`,
+              ? `The debugger runs over the runtime connection. Would you like to connect to ${targetName} now?`
+              : `The debugger runs over the device connection. Would you like to connect to ${targetName} now?`,
           ['Yes', 'No'],
         )
         if (offer !== 0) {
@@ -1282,8 +1293,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           return
         }
 
-        setIsDebuggerProcessing(false)
         if (offerSimulatorStart) {
+          setIsDebuggerProcessing(false)
           // Same action as the sidebar's Start: it builds, launches the emulator
           // and — via `pendingSimulatorDebugRef` — attaches the debugger once the
           // firmware event lands, so the session continues on its own.
@@ -1291,16 +1302,32 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           void handleSimulatorControl()
           return
         }
-        // Connect, then let the user press Debug again. Connecting is not a
-        // single await for a runtime (its login is a modal the user still has to
-        // fill in), so chaining the session onto it here would either race the
-        // login or need this handler to sit waiting on a status change.
+
+        // Connect, then continue once the session is up. A runtime's connect
+        // resolves while its login modal is still open, so both wait on the
+        // session status; the processing flag stays set to block a second press.
+        // A failed connect has already shown its own dialog, so only a cancel and a
+        // timeout are logged here.
+        let outcome: DebugSessionOutcome = 'failed'
         if (isRuntime) {
-          void runtimeConnect.connect()
-        } else {
-          void deviceConnect.connect()
+          await runtimeConnect.connect()
+          outcome = await awaitDebugSession(store, 'runtime')
+        } else if (await deviceConnect.connect()) {
+          outcome = await awaitDebugSession(store, 'device')
         }
-        return
+        if (outcome !== 'connected') {
+          if (outcome === 'cancelled') addLog({ level: 'info', message: 'Debugger session cancelled.' })
+          if (outcome === 'timeout') {
+            addLog({
+              level: 'warning',
+              message: `Debugger not started: the session did not open within ${SESSION_OPEN_TIMEOUT_MS / 1000} s.`,
+            })
+          }
+          setIsDebuggerProcessing(false)
+          return
+        }
+        boardTarget = store.getState().deviceDefinitions.configuration.deviceBoard
+        boardInfo = store.getState().deviceAvailableOptions.availableBoards.get(boardTarget)
       }
 
       // A RUNNING simulator already carries its debug session: Start attaches it
@@ -1310,7 +1337,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // stop before the device path -- a debug compile, an MD5 verify against
       // flashed firmware and a channel connect all describe hardware, not an
       // emulator.
-      if (isSimulatorBoard) {
+      if (resolveTargetCapabilities(boardInfo).isInProcessSimulator) {
         setIsDebuggerProcessing(false)
         return
       }

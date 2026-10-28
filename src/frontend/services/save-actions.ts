@@ -24,7 +24,8 @@ import { carryEditorMetadata } from '../utils/PLC/variable-metadata'
 import { collectDebugVariables, sanitizePou } from '../utils/save-project'
 import { toast } from '../utils/toast'
 import { pickContentForSave } from '../utils/version-control-content'
-import { collectScreenPersistenceKeys } from '../utils/vpp/persistence-keys'
+import { serializeOwnedSlice } from '../utils/vpp/owned-slice'
+import { collectLinkedScreenKeys, linkedScreenNames } from '../utils/vpp/persistence-keys'
 import { isSaveBlockedByEndedSession, resumeSaveAfterEdgeSignIn } from './resume-save-after-sign-in'
 import { executeSaveProjectAs } from './save-project-as'
 
@@ -454,6 +455,11 @@ export async function executeSaveProject(
       setEditingState(staleFlows.length > 0 ? 'unsaved' : 'saved')
       setAllToSaved()
       markAllSaved(staleFlows)
+      // Vendor-screen tabs revert to cleanState on "Don't save", so it must match what was just written.
+      for (const [name, file] of Object.entries(state.files)) {
+        if (file.type !== 'vendor-screen') continue
+        updateFile({ name, cleanState: serializeVendorScreenSlice(state, vendorScreenOwnedKeysFor(state, name)) })
+      }
 
       // A stale flow keeps `updated` set and its file dirty, so the in-memory edit isn't stranded with no way back.
       for (const flow of state.ladderFlows) {
@@ -740,6 +746,11 @@ export async function executeSaveFile(
       const ownedKeys = vendorScreenOwnedKeysFor(state, fileName)
       const cleanState = serializeVendorScreenSlice(state, ownedKeys)
       updateFile({ name: fileName, saved: true, isNew: false, cleanState })
+      // Linked tabs own the same keys, which this save just wrote.
+      for (const name of linkedScreenNames(boardScreens(state), fileName)) {
+        if (name === fileName || state.fileActions.getFile({ name }).file?.type !== 'vendor-screen') continue
+        updateFile({ name, saved: true, isNew: false, cleanState })
+      }
     } else if (file.type === 'library-manifest') {
       const cleanState = state.project.data.libraryManifest ?? ''
       updateFile({ name: fileName, saved: true, isNew: false, cleanState })
@@ -985,22 +996,17 @@ async function saveLibraryManagerOnly(
   return projectPort.saveFile(fullPath, JSON.stringify(onDisk, null, 2))
 }
 
-function vendorScreenOwnedKeysFor(state: RootState, screenName: string): string[] {
+function boardScreens(state: RootState): Record<string, unknown> | undefined {
   const boardId = state.deviceDefinitions.configuration.deviceBoard
-  const boardInfo = state.deviceAvailableOptions.availableBoards.get(boardId)
-  const screen = boardInfo?.vpp?.screens?.[screenName]
-  return collectScreenPersistenceKeys(screen)
+  return state.deviceAvailableOptions.availableBoards.get(boardId)?.vpp?.screens
+}
+
+function vendorScreenOwnedKeysFor(state: RootState, screenName: string): string[] {
+  return collectLinkedScreenKeys(boardScreens(state), screenName)
 }
 
 function serializeVendorScreenSlice(state: RootState, ownedKeys: string[]): string {
-  const vendorScreenData = state.deviceDefinitions.configuration.vendorScreenData ?? {}
-  const slice: Record<string, unknown> = {}
-  for (const k of [...ownedKeys].sort()) {
-    if (Object.prototype.hasOwnProperty.call(vendorScreenData, k)) {
-      slice[k] = vendorScreenData[k]
-    }
-  }
-  return JSON.stringify(slice)
+  return serializeOwnedSlice(state.deviceDefinitions.configuration.vendorScreenData, ownedKeys)
 }
 
 async function saveVendorScreenOnly(
