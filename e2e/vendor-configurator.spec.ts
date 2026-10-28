@@ -369,7 +369,7 @@ test('the I/O Mapping list shows the selected module with its package picture', 
     const frame = await openConfigurator(page)
     await frame.getByRole('button', { name: 'Add FAKE-4DI' }).click()
     await frame.getByRole('button', { name: 'Add FAKE-4DO' }).click()
-    await expect(frame.getByTestId('fake-modules')).toContainText('FAKE-4DO_1 (FAKE-4DO)')
+    await expect(frame.getByTestId('fake-modules')).toContainText('FAKE-4DO_2 (FAKE-4DO)')
     await openScreen(page, MAPPING_SCREEN)
 
     const first = page.getByRole('region', { name: 'Slot 1 FAKE-4DI_1' })
@@ -377,7 +377,7 @@ test('the I/O Mapping list shows the selected module with its package picture', 
     await expect(first.getByRole('img', { name: 'FAKE-4DI' })).toHaveAttribute('src', /^data:image\/png;base64,/)
 
     await page.getByRole('button', { name: /^Slot 2(?!\d)/ }).click()
-    const second = page.getByRole('region', { name: 'Slot 2 FAKE-4DO_1' })
+    const second = page.getByRole('region', { name: 'Slot 2 FAKE-4DO_2' })
     await expect(second).toBeVisible()
     await expect(second.getByRole('row', { name: /DO\.0.*%QX\d+\.\d/ })).toBeVisible()
     await expect(second.getByRole('img')).toHaveCount(0)
