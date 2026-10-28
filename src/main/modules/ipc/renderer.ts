@@ -24,7 +24,13 @@ import type {
   DeviceLicenseRequest,
 } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
-import type { ESIDevice, ESIModule, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
+import type {
+  EsiParseOp,
+  EsiParseResult,
+  ESIRepositorySummary,
+  EsiStoredRecord,
+  EsiStoreUploadResult,
+} from '@root/middleware/shared/ports/esi-repository-mechanisms'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -80,6 +86,8 @@ import type {
   BootloaderUpdateProgress,
   RuntimeDeviceInfo,
 } from '../../../backend/editor/runtime/bootloader-api-client'
+
+type EsiStoreOutcome<T> = { ok: true; value: T } | { ok: false; error: string }
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
@@ -876,63 +884,26 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('ethercat:get-runtime-status', ipAddress),
 
   // ===================== ESI REPOSITORY METHODS =====================
-  esiLoadRepositoryIndex: (
+  // ESI repository mechanisms: the shared port (middleware/shared/utils/ethercat/esi-repository.ts)
+  // runs the parser in the main process and stores files in the project folder through these.
+  esiParse: <T extends EsiParseOp>(request: T): Promise<EsiParseResult<T>> => ipcRenderer.invoke('esi:parse', request),
+  esiStoreList: (projectPath: string): Promise<EsiStoreOutcome<EsiStoredRecord[]>> =>
+    ipcRenderer.invoke('esi:store-list', projectPath),
+  esiStoreUpload: (
     projectPath: string,
-  ): Promise<{
-    success: boolean
-    data?: { version: number; items: Array<Record<string, unknown>> }
-    error?: string
-  }> => ipcRenderer.invoke('esi:load-repository-index', projectPath),
-
-  esiSaveXmlFile: (
+    input: { filename: string; content: string; summary: ESIRepositorySummary },
+  ): Promise<EsiStoreOutcome<EsiStoreUploadResult>> => ipcRenderer.invoke('esi:store-upload', projectPath, input),
+  esiStoreSaveSummary: (
     projectPath: string,
-    itemId: string,
-    xmlContent: string,
-  ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:save-xml-file', projectPath, itemId, xmlContent),
-
-  esiLoadXmlFile: (
-    projectPath: string,
-    itemId: string,
-  ): Promise<{ success: boolean; content?: string; error?: string }> =>
-    ipcRenderer.invoke('esi:load-xml-file', projectPath, itemId),
-
-  esiDeleteXmlFile: (projectPath: string, itemId: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:delete-xml-file', projectPath, itemId),
-
-  esiParseAndSaveFile: (
-    projectPath: string,
-    filename: string,
-    content: string,
-  ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; duplicate?: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:parse-and-save-file', projectPath, filename, content),
-
-  esiClearRepository: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:clear-repository', projectPath),
-
-  esiLoadDeviceFull: (
-    projectPath: string,
-    itemId: string,
-    deviceIndex: number,
-  ): Promise<{ success: boolean; device?: ESIDevice; error?: string }> =>
-    ipcRenderer.invoke('esi:load-device-full', projectPath, itemId, deviceIndex),
-
-  esiLoadModuleFull: (
-    projectPath: string,
-    itemId: string,
-    ident: string,
-  ): Promise<{ success: boolean; module?: ESIModule; error?: string }> =>
-    ipcRenderer.invoke('esi:load-module-full', projectPath, itemId, ident),
-
-  esiLoadRepositoryLight: (
-    projectPath: string,
-  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; needsMigration?: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:load-repository-light', projectPath),
-
-  esiMigrateRepository: (
-    projectPath: string,
-  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; error?: string }> =>
-    ipcRenderer.invoke('esi:migrate-repository', projectPath),
+    id: string,
+    summary: ESIRepositorySummary,
+  ): Promise<EsiStoreOutcome<void>> => ipcRenderer.invoke('esi:store-save-summary', projectPath, id, summary),
+  esiStoreRemove: (projectPath: string, id: string): Promise<EsiStoreOutcome<void>> =>
+    ipcRenderer.invoke('esi:store-remove', projectPath, id),
+  esiStoreClear: (projectPath: string): Promise<EsiStoreOutcome<void>> =>
+    ipcRenderer.invoke('esi:store-clear', projectPath),
+  esiStoreReadXml: (projectPath: string, id: string): Promise<EsiStoreOutcome<string>> =>
+    ipcRenderer.invoke('esi:store-read-xml', projectPath, id),
 
   // ===================== SIMULATOR METHODS =====================
   simulatorLoadFirmware: (hexPath: string): Promise<{ success: boolean; error?: string }> =>

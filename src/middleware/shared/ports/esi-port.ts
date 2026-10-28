@@ -2,15 +2,12 @@
  * EsiPort — Abstracts ESI (EtherCAT Slave Information) repository management.
  *
  * The ESI repository stores parsed EtherCAT device description files (XML)
- * for use in device configuration. The persistence mechanism differs between
- * platforms:
+ * for use in device configuration.
  *
- * Editor adapter: Delegates to main process ESIService which reads/writes
- *                 XML files and a JSON index in the project's devices/esi/ directory.
- * Web adapter:    Will delegate to a backend API for ESI file management.
- *
- * All parsing and processing happens in the shared backend
- * (src/backend/shared/ethercat/). The port only handles persistence I/O.
+ * Every platform uses the same implementation, `createEsiRepositoryPort`
+ * (`middleware/shared/utils/ethercat/esi-repository.ts`). Platforms only
+ * supply mechanisms (`esi-repository-mechanisms.ts`): where the shared parser
+ * runs and where files are stored. Never implement this port per platform.
  */
 
 import type { ESIDevice, ESIModule, ESIRepositoryItemLight } from './esi-types'
@@ -18,36 +15,32 @@ import type { Result } from './types'
 
 export interface EsiPort {
   /**
-   * Load the ESI repository as lightweight items (instant from v2 cached index).
-   * Returns needsMigration=true if the repository is in v1 format.
+   * Load the ESI repository as lightweight items. Rows written by an older
+   * Editor are re-parsed and updated as they load, so needsMigration is false.
    */
   loadRepositoryLight(): Promise<Result<{ items: ESIRepositoryItemLight[]; needsMigration?: boolean }>>
 
   /**
-   * Migrate a v1 repository to v2 format with device summaries.
-   * Returns the updated list of lightweight items.
+   * Same as loadRepositoryLight; kept for callers that still handle a
+   * separate migration step.
    */
   migrateRepository(): Promise<Result<{ items: ESIRepositoryItemLight[] }>>
 
   /**
    * Parse an ESI XML file and save it to the repository.
-   * The filename and raw XML content are provided; parsing happens on the backend.
+   * The filename and raw XML content are provided; the shared parser builds the row.
    *
    * On success, `item` is present when the file was newly added, and omitted
    * with `duplicate: true` when the file is considered a duplicate — letting
    * callers distinguish a real add from a silent skip.
    *
-   * Dedup semantics are adapter-defined and differ by platform:
-   *   - Editor adapter: filename-based. Reimporting the same bytes under a
-   *     different name adds a new entry; replacing a file's contents without
-   *     renaming it is reported as a duplicate.
-   *   - Web adapter: SHA-256 content-hash-based. Identical bytes are a
-   *     duplicate regardless of filename.
+   * A file is a duplicate when the repository already holds identical bytes
+   * (SHA-256 of the content), whatever its filename.
    *
    * `dedupAfterRetry: true` marks a response that landed after a
    * transient-failure retry — the first attempt likely persisted the file but
    * its response was lost. It can accompany any of three result shapes (only
-   * the web adapter ever sets it; the editor's local IPC adapter never does):
+   * a store whose transport retries, such as the Edge backend, ever sets it):
    *   - `item` + `dedupAfterRetry`: recovered add — the backend returned the
    *     matched row in the dedup response. Treat as a normal add, but note the
    *     row may already be present in the caller's list, so dedup by `id` when
