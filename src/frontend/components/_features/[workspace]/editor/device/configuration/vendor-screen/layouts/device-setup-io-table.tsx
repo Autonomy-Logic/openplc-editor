@@ -1,7 +1,8 @@
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
+import { boardSelectors } from '@root/frontend/hooks/use-store-selectors'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { DEVICE_SETUP_KEY, IO_MAPPING_KEY, MODULE_CONFIGURATION_KEY } from '@root/frontend/utils/vpp/persistence-keys'
-import type { IoMappingEntry } from '@root/middleware/shared/ports/types'
+import type { IoMappingEntry, VppModuleDefinition } from '@root/middleware/shared/ports/types'
 import {
   buildAddressPool,
   buildAliasRegistry,
@@ -10,7 +11,12 @@ import {
 } from '@root/middleware/shared/utils/iec-address'
 import { vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
 import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+
+import { IoChannelTable } from '../components/io-channel-table'
+import { ModulePicture, ModuleSummary, SlotDetailHeading, SlotDetailPane } from '../components/slot-detail'
+import { SlotList, SlotListItem } from '../components/slot-list'
+import { moduleIoSummary } from '../components/slot-list-helpers'
 
 type StoredModule = { guid: string; instanceName: string; typeId: string; slot: number }
 
@@ -44,43 +50,20 @@ function readEntries(value: unknown): IoMappingEntry[] {
   return value.entries.filter((entry: unknown): entry is IoMappingEntry => !!entry && typeof entry === 'object')
 }
 
-/** Commits on blur so the rename cascade runs once per edit, not once per keystroke. */
-function AliasInputCell({
-  value,
-  label,
-  onCommit,
-}: {
-  value: string
-  label: string
-  /** Returns false when the alias was refused, so the input shows the stored value again. */
-  onCommit: (next: string) => boolean
-}) {
-  const [local, setLocal] = useState(value)
-  useEffect(() => {
-    setLocal(value)
-  }, [value])
+const EMPTY_CATALOGUE: VppModuleDefinition[] = []
+
+function NotInCatalogueBadge() {
   return (
-    <input
-      type='text'
-      aria-label={label}
-      value={local}
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={() => {
-        if (local !== value && !onCommit(local)) setLocal(value)
-      }}
-      placeholder='Alias...'
-      className='h-[26px] w-full rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none placeholder:text-neutral-400 focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300 dark:placeholder:text-neutral-600'
-    />
+    <span className='shrink-0 rounded bg-amber-100 px-1.5 py-0.5 font-caption text-[11px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'>
+      Not in catalogue
+    </span>
   )
 }
-
-const HEADER_CELL =
-  'sticky top-10 z-10 bg-white px-3 py-1.5 dark:bg-neutral-950 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'
 
 /**
  * Read-only view of the station an embedded configurator reports: modules from
  * `device-setup`, channels from `io-mapping`. The station is edited only in the
- * configurator, so the Alias is the one thing this table writes.
+ * configurator, so the Alias is the one thing this screen writes.
  */
 function DeviceSetupIoTable() {
   const store = useOpenPLCStoreApi()
@@ -94,9 +77,14 @@ function DeviceSetupIoTable() {
   const slots = useMemo(() => readSlots(storedSlots), [storedSlots])
   const entries = useMemo(() => readEntries(storedMapping), [storedMapping])
 
-  const handleAliasChange = (index: number, alias: string): boolean => {
-    const target = entries[index]
-    if (!target) return false
+  const deviceBoard = boardSelectors.useDeviceBoard()
+  const vpp = boardSelectors.useAvailableBoards().get(deviceBoard)?.vpp
+  const catalogue = vpp?.moduleSystem?.modules ?? EMPTY_CATALOGUE
+
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
+  const selected = modules.find((module) => module.slot === selectedSlot) ?? modules[0]
+
+  const handleAliasChange = (target: IoMappingEntry, alias: string): boolean => {
     const state = store.getState()
     const { configuration, pinMapping } = state.deviceDefinitions
     const pool = buildAddressPool(
@@ -120,7 +108,7 @@ function DeviceSetupIoTable() {
     const oldAlias = target.alias ?? ''
     if (oldAlias) state.projectActions.renameAlias(oldAlias, alias)
 
-    const updated = entries.map((entry, i) => (i === index ? { ...entry, alias } : entry))
+    const updated = entries.map((entry) => (entry === target ? { ...entry, alias } : entry))
     setVendorScreenData(IO_MAPPING_KEY, {
       ...(storedMapping && typeof storedMapping === 'object' ? storedMapping : {}),
       entries: updated,
@@ -131,7 +119,7 @@ function DeviceSetupIoTable() {
     return true
   }
 
-  if (modules.length === 0) {
+  if (!selected) {
     return (
       <p className='p-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
         No modules configured. Add modules in Backplane Configuration to generate I/O mappings.
@@ -139,86 +127,71 @@ function DeviceSetupIoTable() {
     )
   }
 
+  const definitionAt = (slot: number): VppModuleDefinition | undefined => {
+    const id = slots[slot - 1]
+    return typeof id === 'string' ? catalogue.find((definition) => definition.id === id) : undefined
+  }
+  const selectedDefinition = definitionAt(selected.slot)
+  const selectedInCatalogue = typeof slots[selected.slot - 1] === 'string'
+  const orderNumber = selectedDefinition?.specs?.orderNumber
+  const channels = entries.filter((entry) => entry.slot === selected.slot)
+
   return (
-    <>
-      <div
-        role='region'
-        aria-label='I/O Mapping channels'
-        tabIndex={0}
-        className='flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto'
-      >
+    <div className='flex min-h-0 flex-1 gap-4'>
+      <SlotList>
         {modules.map((module) => {
-          const channels = entries.flatMap((entry, index) => (entry.slot === module.slot ? [{ entry, index }] : []))
-          const inCatalogue = typeof slots[module.slot - 1] === 'string'
+          const definition = definitionAt(module.slot)
           return (
-            <section
+            <SlotListItem
               key={module.guid}
-              aria-label={`Slot ${module.slot} ${module.instanceName}`}
-              className='rounded-lg border border-neutral-200 dark:border-neutral-700'
-            >
-              <header className='sticky top-0 z-20 flex h-10 items-center gap-3 rounded-t-lg bg-neutral-50 px-4 dark:bg-neutral-900'>
-                <span className='font-caption text-cp-sm font-semibold text-neutral-950 dark:text-white'>
-                  Slot {module.slot}
-                </span>
-                <span className='font-caption text-cp-sm font-medium text-neutral-600 dark:text-neutral-400'>
-                  {module.instanceName}
-                </span>
-                {!inCatalogue && (
-                  <span className='rounded bg-amber-100 px-1.5 py-0.5 font-caption text-[11px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'>
-                    Not in catalogue
-                  </span>
-                )}
-              </header>
-              {!inCatalogue ? (
-                <p className='border-t border-neutral-200 px-4 py-2 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400'>
-                  {`Module type ${module.typeId} is not in this package's catalogue, so it has no channels.`}
-                </p>
-              ) : channels.length === 0 ? (
-                <p className='border-t border-neutral-200 px-4 py-2 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400'>
-                  No addressable channels.
-                </p>
-              ) : (
-                <table className='w-full text-left'>
-                  <thead>
-                    <tr className='border-t border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-950'>
-                      <th className={HEADER_CELL}>Channel</th>
-                      <th className={HEADER_CELL}>Type</th>
-                      <th className={HEADER_CELL}>IEC Address</th>
-                      <th className={HEADER_CELL}>Alias</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {channels.map(({ entry, index }) => (
-                      <tr
-                        key={`${entry.slot}:${entry.channelName}`}
-                        className='border-t border-neutral-100 dark:border-neutral-800'
-                      >
-                        <td className='px-3 py-1.5 font-caption text-cp-sm text-neutral-850 dark:text-neutral-300'>
-                          {entry.channelName}
-                        </td>
-                        <td className='px-3 py-1.5 font-caption text-cp-sm text-neutral-500 dark:text-neutral-400'>
-                          {entry.dataType ?? entry.channelType}
-                        </td>
-                        <td className='px-3 py-1.5 font-mono text-cp-sm font-medium text-brand dark:text-brand-light'>
-                          {entry.iecAddress}
-                        </td>
-                        <td className='px-1 py-1'>
-                          <AliasInputCell
-                            value={entry.alias ?? ''}
-                            label={`Alias of ${entry.channelName} in slot ${entry.slot}`}
-                            onCommit={(next) => handleAliasChange(index, next)}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </section>
+              slotNumber={module.slot}
+              moduleName={definition?.name ?? module.instanceName}
+              ioSummary={definition ? moduleIoSummary(definition) : undefined}
+              badge={typeof slots[module.slot - 1] === 'string' ? undefined : <NotInCatalogueBadge />}
+              subtitle={definition ? module.instanceName : undefined}
+              isSelected={module === selected}
+              onSelect={() => setSelectedSlot(module.slot)}
+            />
           )
         })}
-      </div>
-    </>
+      </SlotList>
+
+      <SlotDetailPane>
+        <section aria-label={`Slot ${selected.slot} ${selected.instanceName}`}>
+          <div className='mb-5 flex gap-5'>
+            <div className='flex min-w-0 flex-1 flex-col'>
+              <SlotDetailHeading slotNumber={selected.slot} />
+              <p className='font-caption text-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                {selectedDefinition?.name ?? selected.instanceName}
+              </p>
+              {orderNumber && <ModuleSummary specs={{ 'Order number': orderNumber }} />}
+            </div>
+            {selectedDefinition && (
+              <ModulePicture
+                image={selectedDefinition.image}
+                packagePath={vpp?.packagePath}
+                alt={selectedDefinition.name}
+              />
+            )}
+          </div>
+
+          {!selectedInCatalogue ? (
+            <p className='text-sm text-neutral-500 dark:text-neutral-400'>
+              {`Module type ${selected.typeId} is not in this package's catalogue, so it has no channels.`}
+            </p>
+          ) : channels.length === 0 ? (
+            <p className='text-sm text-neutral-500 dark:text-neutral-400'>No addressable channels.</p>
+          ) : (
+            <IoChannelTable
+              entries={channels}
+              typeOf={(entry) => entry.dataType ?? entry.channelType}
+              aliasLabel={(entry) => `Alias of ${entry.channelName} in slot ${entry.slot}`}
+              onAliasCommit={handleAliasChange}
+            />
+          )}
+        </section>
+      </SlotDetailPane>
+    </div>
   )
 }
 

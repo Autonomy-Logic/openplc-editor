@@ -130,11 +130,18 @@ The I/O Mapping for a configurator-driven station is an `io-table` section with 
 }
 ```
 
-- It reads `device-setup` (module groups in slot order, by instance name), `module-configuration` and
+- It reads `device-setup` (the modules in slot order, by instance name), `module-configuration` and
   `io-mapping` (channels and addresses), the keys the `vendor-document` section writes, and owns them
   whatever `persistence` says. It runs no allocation on mount.
-- A slot whose `module-configuration` id is `null` shows a "Not in catalogue" badge and no rows. Saving
-  stays allowed; an `io-ranges` build refuses that station.
+- It draws the `module-slots` look from the presentational pieces in `vendor-screen/components/`: the
+  slots listed on the left ("Slot N", the manifest module name, the instance name below it), and on the
+  right the selected slot's module name, its `specs.orderNumber`, its picture and its channel table
+  (Channel, Type, IEC Address, Alias). The picture is the manifest module's optional `image`, fetched
+  with `getPreviewImage` from the package; a module without one shows no picture.
+- The selection is local UI state: it starts at the first slot, stays on its slot number across
+  configurator snapshots while that slot exists, and otherwise falls back to the first slot.
+- A slot whose `module-configuration` id is `null` shows a "Not in catalogue" badge in the list and a
+  message with no rows on the right. Saving stays allowed; an `io-ranges` build refuses that station.
 - It is read-only: no slot picker, add, remove, clear, reorder, mode or parameter controls, and any
   `actions` on the section are ignored. The station is changed only in the configurator.
 - The Alias cell is the one write: `validateAliasEdit` gates it, `renameAlias` cascades a rename onto

@@ -273,7 +273,7 @@ test('a module added in the configurator is mapped, and its alias survives a rel
       // A change discarded from the I/O Mapping tab must leave the configurator too.
       await frame.getByRole('button', { name: 'Add FAKE-4DI' }).click()
       await openScreen(page, MAPPING_SCREEN)
-      await expect(page.getByRole('region', { name: 'Slot 2 FAKE-4DI_2' })).toBeVisible({ timeout: 15000 })
+      await expect(page.getByRole('button', { name: /^Slot 2.*FAKE-4DI_2/ })).toBeVisible({ timeout: 15000 })
       await closeTabWithoutSaving(page, MAPPING_SCREEN)
       await openScreen(page, CONFIGURATOR_SCREEN)
       await expect(frame.getByTestId('fake-modules')).toContainText('FAKE-4DI_1 (FAKE-4DI)', { timeout: 30000 })
@@ -354,6 +354,33 @@ test('the sandboxed guest reaches nothing of the host', async () => {
     expect(await probeHostRequests(app), 'no form, child frame or navigation reached the probe host').toEqual([])
     await expect(page.locator('iframe[title="I/O Configurator"]')).toHaveAttribute('src', /^vpp-doc:/)
     expect(app.windows().filter((w) => w.url() === 'about:blank')).toHaveLength(0)
+  } finally {
+    await shutdown(app)
+  }
+})
+
+test('the I/O Mapping list shows the selected module with its package picture', async () => {
+  test.setTimeout(120000)
+  const paths = pathsFor('picture')
+  writeFixture(paths)
+
+  const { app, page } = await launch(paths)
+  try {
+    const frame = await openConfigurator(page)
+    await frame.getByRole('button', { name: 'Add FAKE-4DI' }).click()
+    await frame.getByRole('button', { name: 'Add FAKE-4DO' }).click()
+    await expect(frame.getByTestId('fake-modules')).toContainText('FAKE-4DO_1 (FAKE-4DO)')
+    await openScreen(page, MAPPING_SCREEN)
+
+    const first = page.getByRole('region', { name: 'Slot 1 FAKE-4DI_1' })
+    await expect(first).toBeVisible({ timeout: 15000 })
+    await expect(first.getByRole('img', { name: 'FAKE-4DI' })).toHaveAttribute('src', /^data:image\/png;base64,/)
+
+    await page.getByRole('button', { name: /^Slot 2/ }).click()
+    const second = page.getByRole('region', { name: 'Slot 2 FAKE-4DO_1' })
+    await expect(second).toBeVisible()
+    await expect(second.getByRole('row', { name: /DO\.0.*%QX\d+\.\d/ })).toBeVisible()
+    await expect(second.getByRole('img')).toHaveCount(0)
   } finally {
     await shutdown(app)
   }
