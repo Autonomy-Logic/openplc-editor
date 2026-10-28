@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 baremetal_net.h - the one place the runtime names a concrete network class
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 
 Everything above this header is typed on Arduino's abstract `Client`, so the
 protocol servers contain no board macros. An unrecognised target is a hard

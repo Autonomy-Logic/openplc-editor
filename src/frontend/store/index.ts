@@ -1,7 +1,6 @@
-import { createSelectorHooks } from 'auto-zustand-selectors-hook'
 import { enableMapSet } from 'immer'
-import { create } from 'zustand'
 import { subscribeWithSelector } from 'zustand/middleware'
+import { createStore } from 'zustand/vanilla'
 
 // Enable Immer's MapSet plugin for Map/Set support in store state
 enableMapSet()
@@ -76,8 +75,8 @@ export interface StoreConfig {
 }
 
 export function createOpenPLCStore(config: StoreConfig = {}) {
-  return create(
-    subscribeWithSelector<RootState>((...a) => ({
+  return createStore<RootState>()(
+    subscribeWithSelector((...a) => ({
       ...createAISliceFactory(config.ai)(...a),
       ...createConsoleSlice(...a),
       ...createDeviceSlice(...a),
@@ -101,5 +100,6 @@ export function createOpenPLCStore(config: StoreConfig = {}) {
   )
 }
 
-export const openPLCStoreBase = createOpenPLCStore()
-export const useOpenPLCStore = createSelectorHooks(openPLCStoreBase)
+export type OpenPLCStore = ReturnType<typeof createOpenPLCStore>
+
+export { OpenPLCStoreProvider, useOpenPLCStore, useOpenPLCStoreApi } from './context'

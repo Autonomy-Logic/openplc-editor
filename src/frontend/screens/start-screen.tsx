@@ -7,7 +7,8 @@ import { FolderIcon } from '../assets/icons/interface/Folder'
 import { PlusIcon } from '../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../assets/icons/interface/StickArrow'
 import { StartAccountSection } from '../components/_features/[start]/account'
-import { StartCloudProjects } from '../components/_features/[start]/cloud-projects'
+import { CloudProjectsNotice } from '../components/_features/[start]/cloud-projects'
+import { useRecentCloudProjects } from '../components/_features/[start]/cloud-projects/use-recent-cloud-projects'
 import { MenuDivider, MenuItem, MenuRoot, MenuSection } from '../components/_features/[start]/menu'
 import { OpenCloudProjectModal } from '../components/_features/[start]/open-cloud-project'
 import DisplayRecentProjects from '../components/_organisms/display-recent-projects'
@@ -24,8 +25,7 @@ const StartScreen = () => {
   // Held here because the bar orders both lists below it, not just the local one.
   const [orderBy, setOrderBy] = useState<ProjectOrder>('Recent')
   const [openCloudOpen, setOpenCloudOpen] = useState(false)
-  // Bumped when the Edge account changes, so the sibling cloud list re-reads.
-  const [cloudRevision, setCloudRevision] = useState(0)
+  const { cloud, reload: reloadCloud } = useRecentCloudProjects()
   const capabilities = useCapabilities()
   const system = useSystem()
   const projectPort = useProject()
@@ -172,11 +172,12 @@ const StartScreen = () => {
       </StartSideContent>
       <StartMainContent>
         <ProjectFilterBar setSearchFilterValue={searchFilter} setOrderBy={setOrderBy} />
-        {/* Hidden entirely when there is nothing to show; the filter box covers both sections. */}
-        <StartCloudProjects searchNameFilterValue={searchFilterValue} revision={cloudRevision} orderBy={orderBy} />
+        <CloudProjectsNotice cloud={cloud} onSignedIn={reloadCloud} />
         <DisplayRecentProjects
           searchNameFilterValue={searchFilterValue}
-          onProjectUploaded={() => setCloudRevision((current) => current + 1)}
+          orderBy={orderBy}
+          cloud={cloud}
+          onProjectUploaded={reloadCloud}
         />
       </StartMainContent>
       <OpenCloudProjectModal open={openCloudOpen} onOpenChange={setOpenCloudOpen} />

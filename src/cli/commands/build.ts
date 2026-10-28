@@ -17,7 +17,7 @@ import { join } from 'node:path'
 
 import { HardwareModule } from '@root/backend/editor/hardware'
 import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
-import { openPLCStoreBase } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
 import { compileProgramFlow } from '@root/middleware/adapters/editor/compile-program-flow'
 import type { CompileProgressEvent } from '@root/middleware/shared/ports/types'
 import { evaluatePreBuildPlcGate } from '@root/middleware/shared/utils/build-gate/pre-build-plc-gate'
@@ -67,7 +67,12 @@ export interface BuildRequest {
 }
 
 /** The command line's entry: parse argv into a `BuildRequest`, then run it. */
-export async function runBuild(args: ParsedArgs, reporter: Reporter, options: BuildOptions): Promise<CliResult> {
+export async function runBuild(
+  store: OpenPLCStore,
+  args: ParsedArgs,
+  reporter: Reporter,
+  options: BuildOptions,
+): Promise<CliResult> {
   const projectPath = args.positionals[0] ?? stringFlag(args, 'project')
   if (!projectPath) {
     return reporter.failure(
@@ -86,6 +91,7 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
   const failedToResolve = 'error' in resolved
 
   return executeBuild(
+    store,
     {
       projectPath,
       target: stringFlag(args, 'target'),
@@ -102,10 +108,10 @@ export async function runBuild(args: ParsedArgs, reporter: Reporter, options: Bu
   )
 }
 
-async function executeBuild(request: BuildRequest, reporter: Reporter): Promise<CliResult> {
+async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter: Reporter): Promise<CliResult> {
   const projectPath = request.projectPath
 
-  const loaded = await loadProject(projectPath)
+  const loaded = await loadProject(store, projectPath)
   if (!loaded.success) {
     return reporter.failure({ code: ErrorCode.ProjectNotFound, message: loaded.error }, ExitCode.NotFound)
   }
@@ -113,7 +119,7 @@ async function executeBuild(request: BuildRequest, reporter: Reporter): Promise<
   for (const warning of project.warnings) reporter.progress(`warning: ${warning}`)
 
   // The port dropdown and the address field, from argv.
-  applyConnectionOverrides({ port: request.port, host: request.host })
+  applyConnectionOverrides(store, { port: request.port, host: request.host })
 
   // The project remembers the board its dropdown was left on; `--target`
   // overrides it so one fixture can be built for several targets in a matrix.
@@ -170,7 +176,7 @@ async function executeBuild(request: BuildRequest, reporter: Reporter): Promise<
     }
   } else if (request.withUpload && capabilities.directUsbUpload) {
     // arduino-cli needs the port; the project may already remember it.
-    if (!currentCommunicationPort()) {
+    if (!currentCommunicationPort(store)) {
       return reporter.failure(
         {
           code: ErrorCode.MissingArgument,
@@ -260,7 +266,7 @@ async function executeBuild(request: BuildRequest, reporter: Reporter): Promise<
       cleanBuild: request.cleanBuild,
       runtimeIpAddress: host,
       runtimeJwtToken: runtime?.tokens.getToken() ?? null,
-      communicationPort: currentCommunicationPort() || undefined,
+      communicationPort: currentCommunicationPort(store) || undefined,
       vendorScreenData: project.vendorScreenData,
     },
     createCliCompileTransport(runtime),
@@ -293,7 +299,7 @@ async function executeBuild(request: BuildRequest, reporter: Reporter): Promise<
     },
     () =>
       request.withUpload
-        ? `Uploaded "${project.name}" to ${host ?? currentCommunicationPort() ?? 'the target'} (${target}).`
+        ? `Uploaded "${project.name}" to ${host ?? currentCommunicationPort(store) ?? 'the target'} (${target}).`
         : `Built "${project.name}" for ${target}.\nArtifacts: ${join(project.projectPath, 'build', target)}`,
   )
 }
@@ -354,8 +360,8 @@ async function ensurePlcStoppedForBuild(input: {
 }
 
 /** The port the store now holds — after `--port` has been applied. */
-function currentCommunicationPort(): string | undefined {
-  return openPLCStoreBase.getState().deviceDefinitions.configuration.communicationPort || undefined
+function currentCommunicationPort(store: OpenPLCStore): string | undefined {
+  return store.getState().deviceDefinitions.configuration.communicationPort || undefined
 }
 
 /**
@@ -368,18 +374,22 @@ function currentCommunicationPort(): string | undefined {
  * only that path, and made any future required flag on `upload` an invisible
  * runtime failure instead of a compile error.
  */
-export async function buildProject(options: {
-  projectPath: string
-  target?: string
-  host?: string
-  port?: string
-  credentials?: { username: string; password: string }
-  withUpload: boolean
-  cleanBuild?: boolean
-  autoApprove?: boolean
-  reporter: Reporter
-}): Promise<CliResult> {
+export async function buildProject(
+  store: OpenPLCStore,
+  options: {
+    projectPath: string
+    target?: string
+    host?: string
+    port?: string
+    credentials?: { username: string; password: string }
+    withUpload: boolean
+    cleanBuild?: boolean
+    autoApprove?: boolean
+    reporter: Reporter
+  },
+): Promise<CliResult> {
   return executeBuild(
+    store,
     {
       projectPath: options.projectPath,
       target: options.target,

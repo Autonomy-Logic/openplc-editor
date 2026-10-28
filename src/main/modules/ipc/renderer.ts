@@ -24,7 +24,7 @@ import type {
   DeviceLicenseRequest,
 } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
-import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
+import type { ESIDevice, ESIModule, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -147,7 +147,7 @@ const rendererProcessBridge = {
   exportPlcopenFile: (
     defaultFileName: string,
     xml: string,
-  ): Promise<{ success: boolean; error?: { title: string; description: string } }> =>
+  ): Promise<{ success: boolean; canceled?: boolean; error?: { title: string; description: string } }> =>
     ipcRenderer.invoke('project:export-plcopen-file', defaultFileName, xml),
   exportPdfFile: (
     defaultFileName: string,
@@ -162,10 +162,14 @@ const rendererProcessBridge = {
   saveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-accelerator', callback),
   saveProjectAsAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:save-as-accelerator', callback),
   retrieveProjectAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:retrieve-accelerator', callback),
+  importPlcopenAccelerator: (callback: IpcRendererCallbacks) =>
+    subscribe('project:import-plcopen-accelerator', callback),
   printAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:print-accelerator', callback),
   pageSetupAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:page-setup-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     subscribe('workspace:switch-perspective-accelerator', callback),
+  openDiagnosticsAccelerator: (callback: IpcRendererCallbacks) =>
+    subscribe('workspace:open-diagnostics-accelerator', callback),
 
   // ===================== POU METHODS =====================
   createPouFile: (props: CreatePouFileProps): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:create', props),
@@ -252,6 +256,15 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('edge-projects:save-project', files),
   edgeProjectsSaveFile: (filePath: string, content: unknown): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('edge-projects:save-file', filePath, content),
+  edgeEditSessionOpen: (
+    projectId: string,
+    client: { kind: 'web' | 'desktop'; label: string },
+    previousSessionId?: string,
+  ): Promise<unknown> => ipcRenderer.invoke('edge-edit-session:open', projectId, client, previousSessionId),
+  edgeEditSessionHeartbeat: (projectId: string, sessionId: string): Promise<unknown> =>
+    ipcRenderer.invoke('edge-edit-session:heartbeat', projectId, sessionId),
+  edgeEditSessionClose: (projectId: string, sessionId: string, closedBySessionId?: string): Promise<boolean> =>
+    ipcRenderer.invoke('edge-edit-session:close', projectId, sessionId, closedBySessionId),
   edgeUploadListFolders: (): Promise<CloudFoldersResult> => ipcRenderer.invoke('edge-upload:list-folders'),
   edgeUploadProject: (params: UploadProjectParams): Promise<UploadProjectResult> =>
     ipcRenderer.invoke('edge-upload:project', params),
@@ -388,6 +401,14 @@ const rendererProcessBridge = {
     return () => ipcRenderer.removeListener('libraries:changed', listener)
   },
   handleQuitApp: () => ipcRenderer.send('app:quit'),
+  appUpdateGetStatus: (): Promise<unknown> => ipcRenderer.invoke('app-update:get-status'),
+  appUpdateDownload: () => ipcRenderer.send('app-update:download'),
+  appUpdateDismiss: () => ipcRenderer.send('app-update:dismiss'),
+  appUpdateCheck: () => ipcRenderer.send('app-update:check'),
+  appUpdateGetAutoCheck: (): Promise<unknown> => ipcRenderer.invoke('app-update:get-auto-check'),
+  appUpdateSetAutoCheck: (enabled: boolean) => ipcRenderer.send('app-update:set-auto-check', enabled),
+  onAppUpdateStatus: (callback: (status: unknown) => void) =>
+    subscribe('app-update:status', (_event, status) => callback(status)),
   requestQuitApp: () => ipcRenderer.send('app:request-quit'),
   quitRequested: (callback: IpcRendererCallbacks) => {
     const unsubscribe = subscribe('app:quit-requested', callback)
@@ -438,18 +459,6 @@ const rendererProcessBridge = {
   winGetTheme: (): Promise<'light' | 'dark' | 'nineties' | null> => ipcRenderer.invoke('system:get-theme'),
 
   // ===================== COMPILER/BUILD METHODS =====================
-  // !! Deprecated: This method is an outdated implementation and should be substituted.
-  exportProjectXml: async (
-    pathToUserProject: string,
-    dataToCreateXml: PLCProjectData,
-    parseTo: 'old-editor' | 'codesys',
-  ): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:export-project-xml', pathToUserProject, dataToCreateXml, parseTo) as Promise<{
-      success: boolean
-      message: string
-    }>,
-  // =================== Work in Progress ===================
-  // This method is a placeholder for running the compile program.
   runCompileProgram: (compileProgramArgs: CompileProgramIpcArgs, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:run-compile-program', compileProgramArgs, [mainProcessPort])
@@ -480,39 +489,7 @@ const rendererProcessBridge = {
     rendererProcessPort.addEventListener('close', () => callback({ closePort: true }))
   },
 
-  // !! Deprecated: These methods are an outdated implementation and should be removed.
-  compileRequest: (xmlPath: string, callback: (args: CompilerPortMessage) => void) => {
-    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
-    ipcRenderer.postMessage('compiler:build-st-program', xmlPath, [mainProcessPort])
-    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
-    rendererProcessPort.addEventListener('close', () => {})
-  },
-  createBuildDirectory: async (pathToUserProject: string): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:create-build-directory', pathToUserProject) as Promise<{
-      success: boolean
-      message: string
-    }>,
-  createXmlFileToBuild: async (
-    pathToUserProject: string,
-    dataToCreateXml: PLCProjectData,
-  ): Promise<{ success: boolean; message: string }> =>
-    ipcRenderer.invoke('compiler:build-xml-file', pathToUserProject, dataToCreateXml) as Promise<{
-      success: boolean
-      message: string
-    }>,
   exportProjectRequest: (callback: IpcRendererCallbacks) => subscribe('compiler:export-project-request', callback),
-  generateCFilesRequest: (pathToStProgram: string, callback: (args: CompilerPortMessage) => void) => {
-    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
-    ipcRenderer.postMessage('compiler:generate-c-files', pathToStProgram, [mainProcessPort])
-    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
-    rendererProcessPort.addEventListener('close', () => {})
-  },
-  setupCompilerEnvironment: (callback: (args: CompilerPortMessage) => void) => {
-    const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
-    ipcRenderer.postMessage('compiler:setup-environment', '', [mainProcessPort])
-    rendererProcessPort.onmessage = (event) => callback(event.data as CompilerPortMessage)
-    rendererProcessPort.addEventListener('close', () => {})
-  },
 
   // ===================== HARDWARE METHODS =====================
   getAvailableBoards: (): Promise<
@@ -714,6 +691,10 @@ const rendererProcessBridge = {
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> =>
     ipcRenderer.invoke('runtime:get-users-info', ipAddress),
+  runtimeGetCapabilities: (
+    ipAddress: string,
+  ): Promise<{ features: readonly string[] | null; runtimeVersion?: string; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-capabilities', ipAddress),
   runtimeCreateUser: (
     ipAddress: string,
     username: string,
@@ -865,6 +846,18 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; data?: EtherCATScanResponse; error?: string }> =>
     ipcRenderer.invoke('ethercat:scan', ipAddress, scanRequest),
 
+  etherCATScanModules: (
+    ipAddress: string,
+    scanRequest: { busName: string; slavePosition: number; networkInterface?: string },
+  ): Promise<{ success: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('ethercat:scan-modules', ipAddress, scanRequest),
+
+  etherCATDiagnostics: (
+    ipAddress: string,
+    request: { busName: string; slavePosition: number },
+  ): Promise<{ success: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('ethercat:diagnostics', ipAddress, request),
+
   etherCATTest: (
     ipAddress: string,
     testRequest: EtherCATTestRequest,
@@ -923,6 +916,13 @@ const rendererProcessBridge = {
     deviceIndex: number,
   ): Promise<{ success: boolean; device?: ESIDevice; error?: string }> =>
     ipcRenderer.invoke('esi:load-device-full', projectPath, itemId, deviceIndex),
+
+  esiLoadModuleFull: (
+    projectPath: string,
+    itemId: string,
+    ident: string,
+  ): Promise<{ success: boolean; module?: ESIModule; error?: string }> =>
+    ipcRenderer.invoke('esi:load-module-full', projectPath, itemId, ident),
 
   esiLoadRepositoryLight: (
     projectPath: string,

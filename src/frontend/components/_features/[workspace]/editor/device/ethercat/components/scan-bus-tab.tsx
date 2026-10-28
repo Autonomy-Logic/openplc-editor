@@ -42,6 +42,8 @@ type ScanBusTabProps = {
   onSelectScannedDevice: (position: number, selected: boolean) => void
   onSelectAllScanned: (selected: boolean) => void
   onAddSelectedFromScan: () => void
+  isAdding: boolean
+  addProgress: { current: number; total: number } | null
   // Configured devices & manual add/remove
   configuredDevices: ConfiguredEtherCATDevice[]
   repository: ESIRepositoryItemLight[]
@@ -68,6 +70,8 @@ const ScanBusTab = ({
   onSelectScannedDevice,
   onSelectAllScanned,
   onAddSelectedFromScan,
+  isAdding,
+  addProgress,
   configuredDevices,
   repository,
   onAddDeviceFromBrowser,
@@ -101,7 +105,9 @@ const ScanBusTab = ({
 
           <button
             onClick={onScan}
-            disabled={isScanning || !selectedInterface || !isConnectedToRuntime || serviceAvailable === false}
+            disabled={
+              isScanning || isAdding || !selectedInterface || !isConnectedToRuntime || serviceAvailable === false
+            }
             className={cn(
               'flex h-[30px] items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors',
               'bg-brand text-white hover:bg-brand-medium-dark',
@@ -140,14 +146,21 @@ const ScanBusTab = ({
               <h3 className='text-sm font-medium text-neutral-950 dark:text-neutral-100'>Scanned Devices</h3>
               <button
                 onClick={onAddSelectedFromScan}
-                disabled={selectedScannedDevices.size === 0}
+                disabled={isAdding || selectedScannedDevices.size === 0}
                 className={cn(
-                  'flex h-7 items-center rounded-md bg-brand px-3 text-xs font-medium text-white transition-colors',
+                  'flex h-7 items-center gap-2 rounded-md bg-brand px-3 text-xs font-medium text-white transition-colors',
                   'hover:bg-brand-medium-dark',
                   'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand',
                 )}
               >
-                Add Selected{selectedScannedDevices.size > 0 ? ` (${selectedScannedDevices.size})` : ''}
+                {isAdding ? (
+                  <>
+                    <ArrowIcon size='sm' className='animate-spin stroke-white' />
+                    {addProgress ? `Adding ${addProgress.current}/${addProgress.total}…` : 'Adding…'}
+                  </>
+                ) : (
+                  `Add Selected${selectedScannedDevices.size > 0 ? ` (${selectedScannedDevices.size})` : ''}`
+                )}
               </button>
             </div>
             <DiscoveredDeviceTable
@@ -174,6 +187,7 @@ const ScanBusTab = ({
                   {
                     ariaLabel: 'Add Device',
                     onClick: () => setIsDeviceBrowserOpen(true),
+                    disabled: isAdding,
                     icon: <PlusIcon className='h-4 w-4 stroke-brand' />,
                     id: 'add-ethercat-device-button',
                   },

@@ -6,11 +6,11 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
+import { hasOpenEditSessions, releaseAllEditSessions } from '@root/backend/editor/edge-edit-sessions'
 import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, shell } from 'electron'
 import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
-import { autoUpdater } from 'electron-updater'
 import { enableMapSet } from 'immer'
 import { homedir, platform, release } from 'os'
 import { join, resolve } from 'path'
@@ -22,25 +22,26 @@ import { MainIpcModuleConstructor } from '../backend/editor/contracts/types/modu
 import { adoptProviderTokens } from '../backend/editor/edge-account/edge-account-service'
 import { edgeOAuthProviderFromUrl, runOAuthFlow } from '../backend/editor/edge-account/oauth-browser-flow'
 import { HardwareModule } from '../backend/editor/hardware'
+import { PackageManagerModule } from '../backend/editor/package-manager'
 import { clearCloudBuildRoot } from '../backend/editor/project/cloud-build-workspace'
 import { logger, PouService, ProjectService, UserService } from '../backend/editor/services'
 import { resolveHtmlPath } from '../backend/editor/utils'
 import { getErrorMessage } from '../frontend/utils/get-error-message'
 import type { EdgeOAuthProviderId } from '../middleware/shared/ports/edge-account-port'
+import { VENDOR_DOCUMENT_SCHEME } from '../middleware/shared/vendor-document/document-url'
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { createQuitCoordinator } from './modules/lifecycle/quit-coordinator'
 import { store } from './modules/store'
+import { createElectronUpdateService } from './modules/updater'
+import { createVendorDocumentHandler, leavesVendorDocument } from './modules/vendor-document/serve'
 
 enableMapSet()
 
-class AppUpdater {
-  constructor() {
-    log.transports.file.level = 'info'
-    autoUpdater.logger = log
-    void autoUpdater.checkForUpdatesAndNotify()
-  }
-}
+// Must run before `ready`; `standard` + `secure` give the iframe a real URL base and a secure context.
+protocol.registerSchemesAsPrivileged([
+  { scheme: VENDOR_DOCUMENT_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
+])
 
 Menu.setApplicationMenu(null)
 
@@ -48,6 +49,12 @@ export let mainWindow: BrowserWindow | null = null
 export let splash: BrowserWindow | null = null
 
 let mainIpcModule: MainProcessBridge | undefined
+let packageManager: PackageManagerModule | undefined
+// One per process, not per window: macOS re-creates the window on activate.
+const updateService = createElectronUpdateService({
+  getWindow: () => mainWindow,
+  requestQuit: () => quitCoordinator.requestQuit(),
+})
 const quitCoordinator = createQuitCoordinator({
   platform: process.platform,
   getWindow: () => mainWindow,
@@ -328,6 +335,10 @@ const createMainWindow = async () => {
     mainWindow.webContents.openDevTools()
   }
 
+  mainWindow.webContents.on('will-frame-navigate', (details) => {
+    if (!details.isMainFrame && leavesVendorDocument(details.frame?.url, details.url)) details.preventDefault()
+  })
+
   // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
     // A provider link reaches the system browser too, but through the OAuth flow, which
@@ -357,7 +368,7 @@ const createMainWindow = async () => {
   // mainWindow.webContents.send('editor:getBaseTypes', _editorService.getBaseTypes())
 
   // Handles the creation of the menu
-  const menuBuilder = new MenuBuilder(mainWindow)
+  const menuBuilder = new MenuBuilder(mainWindow, updateService)
   void menuBuilder.buildMenu()
 
   /**
@@ -388,11 +399,9 @@ const createMainWindow = async () => {
     compilerModule,
     hardwareModule,
     quitCoordinator,
+    packageManagerModule: packageManager,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
-
-  // Remove this if your app does not use auto updates;
-  new AppUpdater()
 }
 
 // Disable GPU Acceleration for Windows 7;
@@ -440,8 +449,20 @@ app.on('before-quit', (event) => {
  * Emitted when all windows have been closed and the application will quit. Calling event.preventDefault() will prevent the default
  * behavior, which is terminating the application.
  */
-app.on('will-quit', () => {
+const EDIT_SESSION_RELEASE_BUDGET_MS = 1500
+let editSessionsReleased = false
+
+app.on('will-quit', (event) => {
   logger.info('will-quit')
+  if (editSessionsReleased || !hasOpenEditSessions()) {
+    return
+  }
+  editSessionsReleased = true
+  event.preventDefault()
+  void Promise.race([
+    releaseAllEditSessions(),
+    new Promise<void>((resolve) => setTimeout(resolve, EDIT_SESSION_RELEASE_BUDGET_MS)),
+  ]).finally(() => app.quit())
 })
 
 /**
@@ -484,6 +505,12 @@ app.on('second-instance', () => {
 app
   .whenReady()
   .then(() => {
+    const packages = new PackageManagerModule()
+    packageManager = packages
+    protocol.handle(
+      VENDOR_DOCUMENT_SCHEME,
+      createVendorDocumentHandler({ listPackages: () => packages.listInstalled() }),
+    )
     void createMainWindow()
     // Last session's cloud builds. The cloud is the source of truth for those
     // projects, so nothing here survives a restart; best-effort, since a scratch
@@ -495,6 +522,8 @@ app
     // never delays the app appearing, and best-effort: a convenience command
     // failing to install is not a reason for the editor not to start.
     void installCliShimOnFirstRun()
+    // One check about a minute after launch, never blocking it; see modules/updater.
+    updateService.start()
     // Handle the app activation event;
     app.on('activate', () => {
       // On macOS it's common to re-create a window in the app when the

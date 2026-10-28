@@ -1,19 +1,22 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
-import { useCapabilities, useProject } from '../../../../../middleware/shared/providers'
+import { useAppUpdate, useCapabilities, useProject } from '../../../../../middleware/shared/providers'
 import { useHandleRemoveTab } from '../../../../hooks/use-remove-tab'
 import { i18n } from '../../../../locales/i18n'
 import { executeExportPlcopen } from '../../../../services/export-actions'
 import { executeSaveActiveFile, executeSaveProject } from '../../../../services/save-actions'
 import { executeSaveProjectAs } from '../../../../services/save-project-as'
-import { useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import { canExportPdf } from '../../../../utils/print-availability'
 import { MenuClasses } from '../constants'
 
 export const FileMenu = () => {
+  const store = useOpenPLCStoreApi()
   const projectPort = useProject()
   const capabilities = useCapabilities()
+  const appUpdate = useAppUpdate()
+  const [autoCheck, setAutoCheck] = useState(false)
   const {
     project,
     editor: activeEditor,
@@ -34,25 +37,42 @@ export const FileMenu = () => {
     setSelectedTab(activeEditor.meta.name)
   }, [activeEditor])
 
+  useEffect(() => {
+    if (!appUpdate) return
+    let active = true
+    appUpdate
+      .isAutoCheckEnabled()
+      .then((enabled) => active && setAutoCheck(enabled))
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [appUpdate])
+
+  const handleToggleAutoCheck = (checked: boolean) => {
+    setAutoCheck(checked)
+    appUpdate?.setAutoCheck(checked)
+  }
+
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
   const isSaving = editingState === 'save-request'
 
   const handleSave = () => {
     if (activeEditor.meta.name && !isSaving) {
-      void executeSaveActiveFile(projectPort, capabilities)
+      void executeSaveActiveFile(store, projectPort, capabilities)
     }
   }
 
   const handleSaveProject = () => {
     if (!isSaving) {
-      void executeSaveProject(projectPort, capabilities)
+      void executeSaveProject(store, projectPort, capabilities)
     }
   }
 
   const handleSaveProjectAs = () => {
     if (!isSaving) {
-      void executeSaveProjectAs(projectPort, capabilities)
+      void executeSaveProjectAs(store, projectPort, capabilities)
     }
   }
 
@@ -115,7 +135,7 @@ export const FileMenu = () => {
             <>
               <MenuPrimitive.Separator className={SEPARATOR} />
               {capabilities.hasProjectExport && (
-                <MenuPrimitive.Item className={ITEM} onClick={() => void executeExportPlcopen(projectPort)}>
+                <MenuPrimitive.Item className={ITEM} onClick={() => void executeExportPlcopen(store, projectPort)}>
                   <span>{i18n.t('menu:file.submenu.exportToPLCOpenXml')}</span>
                 </MenuPrimitive.Item>
               )}
@@ -147,10 +167,20 @@ export const FileMenu = () => {
             <span className={ACCELERATOR}>{'Ctrl + P'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Separator className={SEPARATOR} />
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM} disabled={!appUpdate} onClick={() => appUpdate?.checkNow()}>
             <span>{i18n.t('menu:file.submenu.updates')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + U'}</span>
           </MenuPrimitive.Item>
+          {appUpdate && (
+            <MenuPrimitive.CheckboxItem
+              className={ITEM}
+              checked={autoCheck}
+              onCheckedChange={handleToggleAutoCheck}
+              onSelect={(event) => event.preventDefault()}
+            >
+              <span>Check for Updates Automatically</span>
+              <MenuPrimitive.ItemIndicator className={ACCELERATOR}>✓</MenuPrimitive.ItemIndicator>
+            </MenuPrimitive.CheckboxItem>
+          )}
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>
     </MenuPrimitive.Menu>

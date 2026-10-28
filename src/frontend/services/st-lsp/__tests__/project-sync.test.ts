@@ -2,8 +2,9 @@
  * @jest-environment jsdom
  */
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
+import type { OpenPLCStore } from '../../../store'
 import type { SystemLibrary } from '../../../store/slices/library/types'
-import { openPLCStoreBase } from '../../../store'
+import { createTestStore } from '../../../store/testing'
 import { attachEnabledLibrariesSync, attachProjectSync, getSyncedDocumentText } from '../project-sync'
 import { pouUri, type StLspService } from '../types'
 
@@ -69,7 +70,7 @@ function makeAliasPou(name: string): PLCPou {
 /** Seed a Runtime v4 target plus one Modbus holding-register point carrying
  *  `alias`, so the store's alias index resolves it to `%IW0`. */
 function seedAliasProducer(alias: string) {
-  const { deviceActions, projectActions } = openPLCStoreBase.getState()
+  const { deviceActions, projectActions } = store.getState()
   deviceActions.setAvailableOptions({
     availableBoards: new Map([
       [
@@ -100,7 +101,7 @@ function seedAliasProducer(alias: string) {
   })
   deviceActions.setDeviceBoard('OpenPLC Runtime v4')
 
-  const current = openPLCStoreBase.getState().project
+  const current = store.getState().project
   projectActions.setProject({
     ...current,
     data: {
@@ -124,13 +125,12 @@ function seedAliasProducer(alias: string) {
     errorHandling: 'keep-last-value',
     ioPoints: [],
   })
-  const pointId =
-    openPLCStoreBase.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
+  const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
   projectActions.updateIOPointAlias('Dev1', 'g1', pointId, alias)
 }
 
 function setProjectPous(pous: PLCPou[]) {
-  openPLCStoreBase.setState((s) => ({
+  store.setState((s) => ({
     ...s,
     project: {
       ...s.project,
@@ -142,20 +142,15 @@ function setProjectPous(pous: PLCPou[]) {
   }))
 }
 
+let store: OpenPLCStore
+
 beforeEach(() => {
-  // Clear any leftover POUs from prior tests.
-  setProjectPous([])
-  // And any leftover lists: one left in the store adds its synthesized document to every
-  // later test's didOpen/didChange/didClose counts.
-  openPLCStoreBase.setState((state) => ({
-    ...state,
-    project: { ...state.project, data: { ...state.project.data, globalVariableLists: [] } },
-  }))
+  store = createTestStore()
 })
 
 describe('attachProjectSync — global variable lists', () => {
   const seedList = () => {
-    openPLCStoreBase.setState((state) => ({
+    store.setState((state) => ({
       ...state,
       project: {
         ...state.project,
@@ -187,7 +182,7 @@ describe('attachProjectSync — global variable lists', () => {
   it('opens the synthesized document with the lists already in the store', () => {
     seedList()
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
 
     const [, text] = listDocCalls(service.openDocument)[0]
     expect(text).toContain('GVL_TYPE : STRUCT')
@@ -201,10 +196,10 @@ describe('attachProjectSync — global variable lists', () => {
     // hear about it, or the editor keeps completing `GVL.` against the members as they were.
     seedList()
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     service.changeDocument.mockClear()
 
-    openPLCStoreBase.getState().projectActions.updateVariable({
+    store.getState().projectActions.updateVariable({
       scope: 'global-variable-list',
       associatedList: 'GVL',
       rowId: 0,
@@ -223,10 +218,10 @@ describe('attachProjectSync — global variable lists', () => {
     seedList()
     setProjectPous([makeStPou('Uses', 'localCopy := GVL.Output1;'), makeStPou('Ignores', 'x := 1;')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     service.changeDocument.mockClear()
 
-    openPLCStoreBase.getState().projectActions.updateVariable({
+    store.getState().projectActions.updateVariable({
       scope: 'global-variable-list',
       associatedList: 'GVL',
       rowId: 0,
@@ -247,10 +242,10 @@ describe('attachProjectSync — global variable lists', () => {
     seedList()
     setProjectPous([makeStPou('Uses', 'localCopy := GVL.Output1;')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     service.changeDocument.mockClear()
 
-    openPLCStoreBase.getState().projectActions.updateVariable({
+    store.getState().projectActions.updateVariable({
       scope: 'global-variable-list',
       associatedList: 'GVL',
       rowId: 0,
@@ -264,10 +259,10 @@ describe('attachProjectSync — global variable lists', () => {
   it('refreshes the document when a member is added through the table', () => {
     seedList()
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     service.changeDocument.mockClear()
 
-    openPLCStoreBase.getState().projectActions.createVariable({
+    store.getState().projectActions.createVariable({
       scope: 'global-variable-list',
       associatedList: 'GVL',
       data: {
@@ -290,7 +285,7 @@ describe('attachProjectSync', () => {
   it('opens every POU that exists when sync is attached', () => {
     setProjectPous([makeStPou('Main'), makeFbdPou('TankFB')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
 
     expect(service.openDocument).toHaveBeenCalledTimes(2)
     const calls = service.openDocument.mock.calls.map((c) => c[0])
@@ -300,7 +295,7 @@ describe('attachProjectSync', () => {
 
   it('sends didOpen on POU creation', () => {
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     expect(service.openDocument).not.toHaveBeenCalled()
 
     setProjectPous([makeStPou('NewProg')])
@@ -314,7 +309,7 @@ describe('attachProjectSync', () => {
   it('sends didChange when an ST body changes', () => {
     setProjectPous([makeStPou('P', 'x := 1;')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     service.changeDocument.mockClear()
 
     setProjectPous([makeStPou('P', 'x := 99;')])
@@ -328,7 +323,7 @@ describe('attachProjectSync', () => {
   it('does not re-send didChange when text is unchanged', () => {
     setProjectPous([makeStPou('Idle')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     service.openDocument.mockClear()
     service.changeDocument.mockClear()
 
@@ -343,7 +338,7 @@ describe('attachProjectSync', () => {
   it('sends didClose when a POU is deleted', () => {
     setProjectPous([makeStPou('Doomed')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     service.closeDocument.mockClear()
 
     setProjectPous([])
@@ -354,7 +349,7 @@ describe('attachProjectSync', () => {
   it('emits close-then-reopen when body language flips', () => {
     setProjectPous([makeStPou('Foo')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     service.openDocument.mockClear()
     service.closeDocument.mockClear()
 
@@ -373,7 +368,7 @@ describe('attachProjectSync', () => {
     const initial = makeFbdPou('Tank')
     setProjectPous([initial])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     service.changeDocument.mockClear()
 
     const updated: PLCPou = {
@@ -404,7 +399,7 @@ describe('attachProjectSync', () => {
   it('dispose() closes every open document', () => {
     setProjectPous([makeStPou('A'), makeStPou('B')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     service.closeDocument.mockClear()
 
     handle.dispose()
@@ -416,7 +411,7 @@ describe('attachProjectSync', () => {
   it('resync() reissues the current state without prior diffs', () => {
     setProjectPous([makeStPou('Static')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     service.openDocument.mockClear()
     service.changeDocument.mockClear()
 
@@ -431,7 +426,7 @@ describe('attachProjectSync', () => {
   it('forceResync() re-publishes every tracked document with bumped versions', () => {
     setProjectPous([makeStPou('A'), makeStPou('B')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     service.openDocument.mockClear()
     service.changeDocument.mockClear()
 
@@ -451,14 +446,14 @@ describe('attachProjectSync', () => {
   it('never publishes a bare alias name as a location', () => {
     setProjectPous([makeAliasPou('Main')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
 
     const text = service.openDocument.mock.calls.find((c) => c[0] === 'inmemory://pou/Main.st')?.[1] as string
     expect(text).not.toContain('AT label2')
     expect(text).toContain('label2 : INT;')
     // The store still holds the alias-name form — only the LSP projection is
     // resolved.
-    expect(openPLCStoreBase.getState().project.data.pous[0].interface?.variables?.[0].location).toBe('label2')
+    expect(store.getState().project.data.pous[0].interface?.variables?.[0].location).toBe('label2')
     handle.dispose()
   })
 
@@ -466,7 +461,7 @@ describe('attachProjectSync', () => {
     seedAliasProducer('label2')
     setProjectPous([makeAliasPou('Main')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
 
     const text = service.openDocument.mock.calls.find((c) => c[0] === 'inmemory://pou/Main.st')?.[1] as string
     expect(text).toContain('label2 : INT AT %IW0;')
@@ -477,13 +472,13 @@ describe('attachProjectSync', () => {
     seedAliasProducer('label2')
     setProjectPous([makeAliasPou('Main')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     service.changeDocument.mockClear()
 
     // Dropping the producer touches only `remoteDevices` — the POU array is
     // untouched, so only the alias-index subscription can catch it. Without
     // it the stub would keep advertising the now-dead `%IW0`.
-    openPLCStoreBase.setState((s) => ({
+    store.setState((s) => ({
       ...s,
       project: { ...s.project, data: { ...s.project.data, remoteDevices: [] } },
     }))
@@ -510,18 +505,16 @@ function makeSystemLibrary(name: string, version: string = '1.0.0'): SystemLibra
 
 describe('attachEnabledLibrariesSync', () => {
   beforeEach(() => {
-    // Reset the library slice to a known state between tests.  The
-    // store is shared across the file, so left-over enabled libraries
-    // would otherwise leak from earlier tests.
-    const a = openPLCStoreBase.getState().libraryActions
+    // The test store comes seeded with the bundled system libraries.
+    const a = store.getState().libraryActions
     a.setProjectLibraries([])
     a.setSystemLibraries([])
   })
 
   it('fires refreshStlibs when a library is enabled for the project', () => {
     const service = makeStubService()
-    const unsubscribe = attachEnabledLibrariesSync(service)
-    const a = openPLCStoreBase.getState().libraryActions
+    const unsubscribe = attachEnabledLibrariesSync(store, service)
+    const a = store.getState().libraryActions
     a.setSystemLibraries([makeSystemLibrary('Semaphore_Package')])
     ;(service.refreshStlibs as jest.Mock).mockClear()
 
@@ -533,11 +526,11 @@ describe('attachEnabledLibrariesSync', () => {
 
   it('fires refreshStlibs when a library is disabled for the project', () => {
     const service = makeStubService()
-    const a = openPLCStoreBase.getState().libraryActions
+    const a = store.getState().libraryActions
     a.setSystemLibraries([makeSystemLibrary('Semaphore_Package')])
     a.enableLibrary('Semaphore_Package')
 
-    const unsubscribe = attachEnabledLibrariesSync(service)
+    const unsubscribe = attachEnabledLibrariesSync(store, service)
     ;(service.refreshStlibs as jest.Mock).mockClear()
 
     a.disableLibrary('Semaphore_Package')
@@ -548,10 +541,10 @@ describe('attachEnabledLibrariesSync', () => {
 
   it('does not fire when only libraries.user changes (handled by attachLibrarySync)', () => {
     const service = makeStubService()
-    const unsubscribe = attachEnabledLibrariesSync(service)
+    const unsubscribe = attachEnabledLibrariesSync(store, service)
     ;(service.refreshStlibs as jest.Mock).mockClear()
 
-    openPLCStoreBase.getState().libraryActions.addLibrary('UserFB', 'function-block')
+    store.getState().libraryActions.addLibrary('UserFB', 'function-block')
 
     expect(service.refreshStlibs).not.toHaveBeenCalled()
     unsubscribe()
@@ -559,10 +552,10 @@ describe('attachEnabledLibrariesSync', () => {
 
   it('is order-independent — a reorder of the same set does not refresh', () => {
     const service = makeStubService()
-    const a = openPLCStoreBase.getState().libraryActions
+    const a = store.getState().libraryActions
     a.setSystemLibraries([makeSystemLibrary('A'), makeSystemLibrary('B')])
 
-    const unsubscribe = attachEnabledLibrariesSync(service)
+    const unsubscribe = attachEnabledLibrariesSync(store, service)
     a.setProjectLibraries([
       { name: 'A', version: '1.0.0' },
       { name: 'B', version: '1.0.0' },
@@ -580,10 +573,10 @@ describe('attachEnabledLibrariesSync', () => {
 
   it('unsubscribe stops the subscription firing', () => {
     const service = makeStubService()
-    const a = openPLCStoreBase.getState().libraryActions
+    const a = store.getState().libraryActions
     a.setSystemLibraries([makeSystemLibrary('Semaphore_Package')])
 
-    const unsubscribe = attachEnabledLibrariesSync(service)
+    const unsubscribe = attachEnabledLibrariesSync(store, service)
     unsubscribe()
     ;(service.refreshStlibs as jest.Mock).mockClear()
 
@@ -595,8 +588,8 @@ describe('attachEnabledLibrariesSync', () => {
   it('calls onAfterRefresh once refreshStlibs resolves (forces document re-analyze)', async () => {
     const service = makeStubService()
     const onAfterRefresh = jest.fn()
-    const unsubscribe = attachEnabledLibrariesSync(service, onAfterRefresh)
-    const a = openPLCStoreBase.getState().libraryActions
+    const unsubscribe = attachEnabledLibrariesSync(store, service, onAfterRefresh)
+    const a = store.getState().libraryActions
     a.setSystemLibraries([makeSystemLibrary('Semaphore_Package')])
     ;(service.refreshStlibs as jest.Mock).mockClear()
     onAfterRefresh.mockClear()
@@ -617,7 +610,7 @@ describe('getSyncedDocumentText', () => {
   it('reads back the text last sent to the worker for a synced URI', () => {
     setProjectPous([makeStPou('main', 'y := 2;')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     const text = getSyncedDocumentText(pouUri('main'))
     expect(text).toContain('y := 2;')
     handle.dispose()
@@ -626,7 +619,7 @@ describe('getSyncedDocumentText', () => {
   it('answers undefined for a URI the sync never sent', () => {
     setProjectPous([makeStPou('main')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     expect(getSyncedDocumentText(pouUri('ghost'))).toBeUndefined()
     handle.dispose()
   })
@@ -634,7 +627,7 @@ describe('getSyncedDocumentText', () => {
   it('answers undefined after the owning sync is disposed', () => {
     setProjectPous([makeStPou('main')])
     const service = makeStubService()
-    const handle = attachProjectSync(service)
+    const handle = attachProjectSync(store, service)
     expect(getSyncedDocumentText(pouUri('main'))).toBeDefined()
     handle.dispose()
     expect(getSyncedDocumentText(pouUri('main'))).toBeUndefined()
@@ -642,9 +635,9 @@ describe('getSyncedDocumentText', () => {
 
   it('rewires to the latest sync when a new one attaches', () => {
     setProjectPous([makeStPou('main', 'first := 1;')])
-    const first = attachProjectSync(makeStubService())
+    const first = attachProjectSync(store, makeStubService())
     setProjectPous([makeStPou('main', 'second := 2;')])
-    const second = attachProjectSync(makeStubService())
+    const second = attachProjectSync(store, makeStubService())
     expect(getSyncedDocumentText(pouUri('main'))).toContain('second := 2;')
     // Disposing the superseded sync must not tear down the live reader.
     first.dispose()

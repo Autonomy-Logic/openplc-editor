@@ -1,10 +1,11 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { useEffect, useState } from 'react'
 
-import { useTheme, useWindow } from '../../../../../middleware/shared/providers'
+import { useCapabilities, useTheme, useWindow } from '../../../../../middleware/shared/providers'
 import { i18n } from '../../../../locales/i18n'
+import { DIAGNOSTICS_TAB_NAME, openDiagnosticsTab } from '../../../../services/io-diagnostics/open-tab'
 import { requestAppRefresh } from '../../../../services/refresh-app'
-import { useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import { MenuClasses } from '../constants'
 
 interface FullscreenElement extends HTMLElement {
@@ -24,6 +25,8 @@ export const DisplayMenu = () => {
     workspaceActions: { setSystemConfigs, toggleCollapse },
     modalActions: { openModal },
   } = useOpenPLCStore()
+  const store = useOpenPLCStoreApi()
+  const capabilities = useCapabilities()
   const windowPort = useWindow()
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
@@ -71,11 +74,9 @@ export const DisplayMenu = () => {
           <MenuPrimitive.Separator className={SEPARATOR} />
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:display.submenu.zoomIn')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + +'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:display.submenu.zoomOut')}</span>
-            <span className={ACCELERATOR}>{'Ctrl + -'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} onClick={switchPerspective}>
             <span>{i18n.t('menu:display.submenu.switchPerspective')}</span>
@@ -84,7 +85,6 @@ export const DisplayMenu = () => {
           <MenuPrimitive.Separator className={SEPARATOR} />
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:display.submenu.resetPerspective')}</span>
-            <span className={ACCELERATOR}>{'Shift + F12'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Item
             className={ITEM}
@@ -104,7 +104,6 @@ export const DisplayMenu = () => {
           </MenuPrimitive.Item>
           <MenuPrimitive.Item className={ITEM} disabled>
             <span>{i18n.t('menu:display.submenu.sortAlpha')}</span>
-            <span className={ACCELERATOR}>{'F10'}</span>
           </MenuPrimitive.Item>
           <div onClick={cycleTheme}>
             <MenuPrimitive.Item className={ITEM}>
@@ -114,6 +113,15 @@ export const DisplayMenu = () => {
               </span>
             </MenuPrimitive.Item>
           </div>
+          {capabilities.isDevMode && (
+            <>
+              <MenuPrimitive.Separator className={SEPARATOR} />
+              <MenuPrimitive.Item className={ITEM} onClick={() => openDiagnosticsTab(store)}>
+                <span>{DIAGNOSTICS_TAB_NAME}</span>
+                <span className={ACCELERATOR}>{'dev'}</span>
+              </MenuPrimitive.Item>
+            </>
+          )}
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>
     </MenuPrimitive.Menu>

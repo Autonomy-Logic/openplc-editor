@@ -19,14 +19,14 @@ import { describeDebugEndpoint } from '@root/middleware/shared/utils/debug-endpo
 import { useCallback } from 'react'
 
 import { resolveDeviceLinkWithUx } from '../services/device-link-resolution'
-import { useOpenPLCStore } from '../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 import { requestDeviceFlash } from '../utils/device-connect-events'
 import { explainLicenseOutcome } from '../utils/license-outcome-dialog'
 import { useDeviceLicense } from './use-device-license'
 
 export interface UseDeviceConnectResult {
-  /** Open + hold the link for the given board. Never throws. */
-  connect: () => Promise<void>
+  /** Open + hold the link for the given board. Resolves true when a firmware answered. Never throws. */
+  connect: () => Promise<boolean>
   /** Close the held link. */
   disconnect: () => Promise<void>
   /** Live link status, mirrored from the main process. */
@@ -37,6 +37,7 @@ export interface UseDeviceConnectResult {
 }
 
 export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceConnectResult {
+  const store = useOpenPLCStoreApi()
   const device = useDevice()
   const openModal = useOpenPLCStore((s) => s.modalActions.openModal)
   const setDeviceConnectionStatus = useOpenPLCStore((s) => s.deviceActions.setDeviceConnectionStatus)
@@ -44,16 +45,16 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
   const status = useOpenPLCStore((s) => s.deviceConnection.status)
   const licensing = useDeviceLicense(boardInfo)
 
-  const connect = useCallback(async (): Promise<void> => {
-    const deviceBoard = useOpenPLCStore.getState().deviceDefinitions.configuration.deviceBoard
+  const connect = useCallback(async (): Promise<boolean> => {
+    const deviceBoard = store.getState().deviceDefinitions.configuration.deviceBoard
 
     // FIRST PASS: everything that needs nothing from the user — serial, then
     // Modbus TCP on a static address. `deferPrompts` means a DHCP channel is set
     // aside rather than interrupting with an address dialog, because with a cable
     // attached the user should never be asked for one.
-    const silent = await resolveDeviceLinkWithUx(deviceBoard, boardInfo, { deferPrompts: true })
-    if (!silent) return
-    if (silent.candidates.length === 0 && silent.awaitingInput.length === 0) return
+    const silent = await resolveDeviceLinkWithUx(store, deviceBoard, boardInfo, { deferPrompts: true })
+    if (!silent) return false
+    if (silent.candidates.length === 0 && silent.awaitingInput.length === 0) return false
 
     const tried: string[] = []
     setDeviceConnectionStatus('connecting', null)
@@ -74,7 +75,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
       // only the deferred channels surfaces the address dialog, and a cancel here
       // ends the attempt rather than looping.
       if (result.status !== 'connected-with-firmware' && silent.awaitingInput.length > 0) {
-        const prompted = await resolveDeviceLinkWithUx(deviceBoard, boardInfo, {
+        const prompted = await resolveDeviceLinkWithUx(store, deviceBoard, boardInfo, {
           onlyChannels: silent.awaitingInput,
         })
         if (prompted && prompted.candidates.length > 0) {
@@ -85,7 +86,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
           // try, so nothing was attempted at all. Saying "could not reach the
           // device" would be reporting a failure that never happened — they
           // cancelled. The `finally` below clears the button.
-          return
+          return false
         }
       }
 
@@ -99,7 +100,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
           buttons: ['OK'],
           onResponse: () => undefined,
         })
-        return
+        return false
       }
 
       if (result.status === 'error') {
@@ -110,7 +111,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
           buttons: ['OK'],
           onResponse: () => undefined,
         })
-        return
+        return false
       }
 
       if (result.status === 'no-firmware') {
@@ -123,7 +124,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
             if (buttonIndex === 0) requestDeviceFlash()
           },
         })
-        return
+        return false
       }
 
       // The link is up and a firmware answered. If this board's VPP is sold
@@ -163,14 +164,12 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
       // 'connected', but that push and this invoke's reply travel separate IPC
       // channels with no ordering guarantee between them, so settling here as well
       // would risk a visible flicker for no reason.
-      if (
-        result.status !== 'connected-with-firmware' &&
-        useOpenPLCStore.getState().deviceConnection.status === 'connecting'
-      ) {
+      if (result.status !== 'connected-with-firmware' && store.getState().deviceConnection.status === 'connecting') {
         setDeviceConnectionStatus('disconnected', null)
       }
     }
-  }, [boardInfo, device, licensing, openModal, setDeviceConnectionStatus])
+    return result.status === 'connected-with-firmware'
+  }, [store, boardInfo, device, licensing, openModal, setDeviceConnectionStatus])
 
   const disconnect = useCallback(async (): Promise<void> => {
     await device.disconnect()

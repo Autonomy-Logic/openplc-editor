@@ -5,7 +5,7 @@
  * window, any other in-app path is refused. Never assign `location.href` — it reloads the renderer.
  */
 
-import { useOpenPLCStore } from '../../../frontend/store'
+import type { OpenPLCStore } from '../../../frontend/store'
 import type { NavigationPort, NavigationSearch } from '../../shared/ports/navigation-port'
 import { buildNavigationUrl } from '../../shared/ports/navigation-port'
 
@@ -17,7 +17,7 @@ function refuse(path: string): void {
   console.warn(`[navigation] no desktop screen for "${path}" — request ignored rather than reloading the app.`)
 }
 
-export function createEditorNavigationAdapter(): NavigationPort {
+export function createEditorNavigationAdapter(store: OpenPLCStore): NavigationPort {
   // Same params the `/history` route declares; only `commit_hash` is required.
   const openHistory = (search?: NavigationSearch): boolean => {
     const commitHash = search?.commit_hash
@@ -26,7 +26,7 @@ export function createEditorNavigationAdapter(): NavigationPort {
       return false
     }
 
-    useOpenPLCStore.getState().versionControlActions.openHistoryView({ commitHash, file: search?.file })
+    store.getState().versionControlActions.openHistoryView({ commitHash, file: search?.file })
 
     return true
   }
@@ -39,7 +39,7 @@ export function createEditorNavigationAdapter(): NavigationPort {
       return false
     }
 
-    useOpenPLCStore.getState().versionControlActions.openMergeView({ sourceBranch, targetBranch: search?.target })
+    store.getState().versionControlActions.openMergeView({ sourceBranch, targetBranch: search?.target })
 
     return true
   }

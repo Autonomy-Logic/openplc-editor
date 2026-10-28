@@ -1,11 +1,11 @@
-import { XmlGenerator } from '../../../../../backend/shared/utils/PLC/xml-generator'
+import { PlcopenXmlGenerator } from '../../../../../backend/shared/utils/PLC/plcopen-xml-generator'
 import type { PLCProjectData } from '../../../../../middleware/shared/ports/open-plc-types'
 import { parsePlcopenXml } from '../index'
 
 // ---------------------------------------------------------------------------
 // Round-trip fixture: one program per language (ST, IL, LD, FBD), one data
 // type per derivation, plus a task/instance/global-variable configuration.
-// Built directly against the nested `PLCPou` shape `XmlGenerator` consumes
+// Built directly against the nested `PLCPou` shape `PlcopenXmlGenerator` consumes
 // (middleware/shared/ports/open-plc-types.ts) — the flat shape produced by
 // `parsePlcopenXml` is a different (newer) representation, so equivalence is
 // asserted field-by-field below rather than via a single deep-equal.
@@ -353,9 +353,9 @@ function makeFixture(): PLCProjectData {
   } as unknown as PLCProjectData
 }
 
-describe('parsePlcopenXml — round trip against XmlGenerator (old-editor)', () => {
+describe('parsePlcopenXml — round trip against PlcopenXmlGenerator', () => {
   const fixture = makeFixture()
-  const generated = XmlGenerator(fixture, 'old-editor')
+  const generated = PlcopenXmlGenerator(fixture)
   const result = parsePlcopenXml(generated.data as string)
 
   it('generates successfully and produces no parse warnings', () => {
@@ -418,25 +418,23 @@ describe('parsePlcopenXml — round trip against XmlGenerator (old-editor)', () 
     const ldBody = pou?.body.value as {
       name: string
       updated: boolean
-      rungs: Array<{ nodes: unknown[]; edges: unknown[] }>
+      rungs: Array<{ id: string; nodes: Array<{ id: string; data: { variable: { name: string } } }>; edges: unknown[] }>
     }
     expect(ldBody.name).toBe('mainLd')
     expect(ldBody.updated).toBe(false)
     expect(ldBody.rungs).toHaveLength(1)
     const rung = ldBody.rungs[0]
-    // Node order follows the raw XML's element-type grouping (leftPowerRail,
-    // rightPowerRail, contact, coil), not rung/visual position.
-    expect(rung.nodes.map((n) => (n as { id: string }).id).sort()).toEqual(
-      ['LEFT-POWER-RAIL-1', 'RIGHT-POWER-RAIL-4', 'CONTACT-2', 'COIL-3'].sort(),
-    )
+    // Rebuilt as the editor draws a rung: its own rails, then the elements in rung order.
+    expect(rung.nodes.map((n) => n.id)).toEqual([
+      `left-rail-${rung.id}`,
+      'CONTACT-2',
+      'COIL-3',
+      `right-rail-${rung.id}`,
+    ])
     expect(rung.edges).toHaveLength(3)
-    const nodesById = new Map(
-      (rung.nodes as Array<{ id: string; data: { variable: { name: string } } }>).map((n) => [n.id, n]),
-    )
-    const contactNode = nodesById.get('CONTACT-2') as { data: { variable: { name: string } } }
-    const coilNode = nodesById.get('COIL-3') as { data: { variable: { name: string } } }
-    expect(contactNode.data.variable).toEqual({ name: 'X1' })
-    expect(coilNode.data.variable).toEqual({ name: 'Y1' })
+    const nodesById = new Map(rung.nodes.map((n) => [n.id, n]))
+    expect(nodesById.get('CONTACT-2')?.data.variable).toEqual({ name: 'X1' })
+    expect(nodesById.get('COIL-3')?.data.variable).toEqual({ name: 'Y1' })
   })
 
   it('recovers the FBD program rung: input/output variable nodes and their edge', () => {

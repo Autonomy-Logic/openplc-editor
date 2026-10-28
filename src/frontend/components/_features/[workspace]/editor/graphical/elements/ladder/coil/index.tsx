@@ -1,4 +1,4 @@
-import { useOpenPLCStore } from '@root/frontend/store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { useState } from 'react'
 
 import { CoilNode } from '../../../../../../../_atoms/graphical-editor/ladder/coil'
@@ -14,6 +14,7 @@ type CoilElementProps = {
 }
 
 const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
+  const store = useOpenPLCStoreApi()
   const pouName = useBoundPou()
   const updateNode = useOpenPLCStore((state) => state.ladderFlowActions.updateNode)
   const onOpenChange = useOpenPLCStore((state) => state.modalActions.onOpenChange)
@@ -36,7 +37,7 @@ const CoilElement = ({ isOpen, onClose, node }: CoilElementProps) => {
   }
 
   const handleConfirmAlteration = () => {
-    const { project, ladderFlows } = useOpenPLCStore.getState()
+    const { project, ladderFlows } = store.getState()
     const { rung } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
       nodeId: node.id,
     })

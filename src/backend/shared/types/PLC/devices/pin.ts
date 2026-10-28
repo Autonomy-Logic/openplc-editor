@@ -3,6 +3,8 @@ import { z } from 'zod'
 const pinTypes = ['digitalInput', 'digitalOutput', 'analogInput', 'analogOutput'] as const
 type PinTypes = (typeof pinTypes)[number]
 
+const pinPullModes = ['none', 'up', 'down'] as const
+
 /**
  * The pin address obey the following name rules and is populated automatically by the editor.
  *
@@ -34,6 +36,7 @@ const devicePinSchema = z.preprocess(
     pinType: z.enum(pinTypes),
     address: z.string(),
     alias: z.string().optional(),
+    pull: z.enum(pinPullModes).optional(),
   }),
 )
 type DevicePin = z.infer<typeof devicePinSchema>
@@ -63,5 +66,5 @@ type DevicePin = z.infer<typeof devicePinSchema>
  */
 const pinMappingFileSchema = z.union([z.record(z.string(), devicePinSchema.array()), devicePinSchema.array()])
 
-export { devicePinSchema, pinMappingFileSchema, pinTypes }
+export { devicePinSchema, pinMappingFileSchema, pinPullModes, pinTypes }
 export type { DevicePin, PinTypes }

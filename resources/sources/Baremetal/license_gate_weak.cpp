@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 license_gate_weak.cpp - Weak fallback for the license enforcement gate.
-Copyright (C) 2022 OpenPLC - Thiago Alves
 
 Guarantees the firmware always links even when no platform VPP provides a real
 license-core. The VPP's prebuilt license-core (.a) defines the STRONG symbols

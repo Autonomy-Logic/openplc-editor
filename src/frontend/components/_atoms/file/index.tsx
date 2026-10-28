@@ -10,8 +10,11 @@ type IFileProps = ComponentPropsWithoutRef<'div'> & {
 const File = (props: IFileProps) => {
   const { projectName, projectPath, lastModified, className, ...res } = props
   return (
-    <div title='file-root' id='folder-root' className={cn('relative flex h-[160px] w-[224px]', className)} {...res}>
-      <p id={projectName} className='absolute bottom-4 left-3 flex cursor-pointer flex-col gap-[1px] text-white'>
+    <div title='file-root' id='folder-root' className={cn('relative flex h-[120px] w-[168px]', className)} {...res}>
+      <p
+        id={projectName}
+        className='absolute bottom-3 left-3 right-3 flex cursor-pointer flex-col gap-[1px] text-white'
+      >
         <span id={projectName} className='overflow-hidden overflow-ellipsis whitespace-nowrap text-sm font-bold'>
           {projectName}
         </span>

@@ -140,6 +140,7 @@ export async function edgeAuthedRequest(
     json?: unknown
     raw?: { body: Buffer; contentType: string }
     timeoutMs?: number
+    headers?: Record<string, string>
   } = {},
 ): Promise<{ status: number; body: string } | null> {
   const token = await usableAccessToken()

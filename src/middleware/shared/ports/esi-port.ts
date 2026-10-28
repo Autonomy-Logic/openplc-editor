@@ -13,7 +13,7 @@
  * (src/backend/shared/ethercat/). The port only handles persistence I/O.
  */
 
-import type { ESIDevice, ESIRepositoryItemLight } from './esi-types'
+import type { ESIDevice, ESIModule, ESIRepositoryItemLight } from './esi-types'
 import type { Result } from './types'
 
 export interface EsiPort {
@@ -78,4 +78,13 @@ export interface EsiPort {
    * This is called when the user selects a device for detailed configuration.
    */
   loadDeviceFull(itemId: string, deviceIndex: number): Promise<Result<{ device: ESIDevice }>>
+
+  /**
+   * Load a full ESIModule by ident from a repository item that holds standalone module
+   * definitions (ETG.5001 `<Modules>` or `<Devices>`-wrapped modules).  Used when the
+   * caller cannot reach the module through `loadDeviceFull` because the ESI file has
+   * no `<Device>` block of its own.  Returns the matching module or an error naming the
+   * ident.
+   */
+  loadModuleFull(itemId: string, ident: string): Promise<Result<{ module: ESIModule }>>
 }

@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 
-import { useOpenPLCStore } from '../../../../../../store'
+import { useGraphicalFocus } from '../../../../../../hooks/use-graphical-focus'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { hasLegacyInOutOutputHandle } from '../../../../../../utils/graphical/in-out-pin-rules'
 import { BlockNodeData } from '../../../../../_atoms/graphical-editor/fbd/block'
@@ -11,6 +12,7 @@ import { useBoundPou } from '../active-context'
 const EMPTY_DIVERGENCES: string[] = []
 
 export default function FbdEditor() {
+  const store = useOpenPLCStoreApi()
   // Bound POU comes from the `GraphicalEditorActiveProvider` set up
   // in the wrapper one level up.  With multi-mount, every open FBD
   // POU has its own FbdEditor instance — the context is what tells
@@ -22,8 +24,22 @@ export default function FbdEditor() {
   const userLibraries = useOpenPLCStore((state) => state.libraries.user)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
+  const fbdFlowActions = useOpenPLCStore((state) => state.fbdFlowActions)
+
   const flow = fbdFlows.find((flow) => flow.name === pouName)
   const flowUpdated = flow?.updated || false
+
+  const selectSearchedNode = useCallback(
+    ({ nodeId }: { nodeId: string }) => {
+      const node = flow?.rung.nodes.find((candidate) => candidate.id === nodeId)
+      if (!node) return false
+
+      fbdFlowActions.setSelectedNodes({ nodes: [node], editorName: pouName })
+      return true
+    },
+    [flow?.rung.nodes, fbdFlowActions, pouName],
+  )
+  useGraphicalFocus(pouName, selectSearchedNode)
 
   const nodeDivergences = useMemo(() => {
     if (!flow) return EMPTY_DIVERGENCES
@@ -92,8 +108,8 @@ export default function FbdEditor() {
    */
   useEffect(() => {
     if (!flowUpdated) return
-    scheduleFlowWriteBack(useOpenPLCStore.getState, pouName, 'fbd')
-  }, [flowUpdated])
+    scheduleFlowWriteBack(store.getState, pouName, 'fbd')
+  }, [store, flowUpdated])
 
   return (
     <div className='h-full w-full'>

@@ -16,7 +16,7 @@
  */
 
 import type { PluginCommandOutcome } from '../../../backend/shared/utils/vpp/screen-actions'
-import { openPLCStoreBase } from '../../../frontend/store'
+import type { OpenPLCStore } from '../../../frontend/store'
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type {
   CompilationStatusResult,
@@ -29,6 +29,7 @@ import type {
   LoginResult,
   PluginCommandArgs,
   RetrievableDevice,
+  RuntimeCapabilitiesResult,
   RuntimeLogsResult,
   RuntimePort,
   RuntimeStatusResult,
@@ -55,7 +56,7 @@ async function retrieveProjectFromDevice(ipAddress: string) {
   }
 }
 
-export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimePort {
+export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: () => string): RuntimePort {
   // Whether a runtime session is active. The token itself lives in the main
   // process; this only gates isReadyForDebug.
   let loggedIn = false
@@ -174,6 +175,15 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         return await window.bridge.runtimeGetUsersInfo(ip)
       } catch (err) {
         return { hasUsers: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async getRuntimeCapabilities(): Promise<RuntimeCapabilitiesResult> {
+      try {
+        const ip = requireIp()
+        return await window.bridge.runtimeGetCapabilities(ip)
+      } catch (err) {
+        return { features: null, error: getErrorMessage(err) }
       }
     },
 
@@ -408,7 +418,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     selectRetrievableDevice(device: RetrievableDevice) {
       // The adapter reads its target from the store, so this has to move before
       // the login rather than with it.
-      openPLCStoreBase.getState().deviceActions.setRuntimeIpAddress(device.key)
+      store.getState().deviceActions.setRuntimeIpAddress(device.key)
     },
 
     async fetchRetrievableProject(device: RetrievableDevice) {

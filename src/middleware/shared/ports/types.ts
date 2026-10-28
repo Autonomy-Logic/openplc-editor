@@ -613,6 +613,7 @@ export interface BoardInfo {
     defaultAout?: string[]
     defaultDin?: string[]
     defaultDout?: string[]
+    pull?: PinPullSpec
   }
   /** When absent, the resolver in backend/shared infers capabilities from the legacy `compiler` field. */
   capabilities?: Partial<TargetCapabilities>
@@ -634,6 +635,10 @@ export interface VppModuleDefinition {
   name: string
   /** Used by module-discovery to match a detected device. Modules with no hwId can only be added manually. */
   hwId?: string
+  /** Vendor type id the configurator reports for this module; matched by exact string. */
+  typeId?: string
+  /** Bytes this module occupies in the device's input and output process images. */
+  processImage?: { inputBytes: number; outputBytes: number }
   /** True for an always-present part of the device hardware (e.g. Arduino Opta's built-in I/O). Auto-placed and locked in slot 1. */
   fixed?: boolean
   image?: string
@@ -672,9 +677,13 @@ export interface VppMetadata {
   packagePath: string
   screens: Record<string, unknown>
   hidesNativeScreens?: NativeScreenId[]
+  /** Runtime plugin name from the device's `hal.configTemplate`; absent when the device has no valid one. */
+  pluginName?: string
   moduleSystem: {
     enabled: boolean
     maxSlots: number
+    /** The device can report its installed modules on request. */
+    discoverySupported?: boolean
     modules: VppModuleDefinition[]
   } | null
 }
@@ -729,6 +738,8 @@ export interface PackageManifest {
       provisioning?: string
       pluginEntry?: string
       configTemplate?: string
+      /** Shape of the generated plugin config. Absent → "slots". */
+      pluginConfigFormat?: 'slots' | 'io-ranges'
       requirements?: string
       source?: string
       /** Prebuilt arduino-hal library directory, linked via --library alongside `hal.source`. */
@@ -753,6 +764,7 @@ export interface PackageManifest {
         defaultDout?: string[]
         defaultAin?: string[]
         defaultAout?: string[]
+        pull?: PinPullSpec
       }
     }
     screens?: Record<string, string>
@@ -867,12 +879,31 @@ export interface SerialPort {
 
 export type PinType = 'digitalInput' | 'digitalOutput' | 'analogInput' | 'analogOutput'
 
+export type PinPullMode = 'none' | 'up' | 'down'
+
 export interface DevicePin {
   pin: string
   pinType: PinType
   address: string
   /** Participates in the alias registry. Used to be `name`; legacy projects auto-upgrade on load. */
   alias?: string
+  /** Digital inputs only, and only when the board declares `pins.pull`. Absent → the board's default for the pin. */
+  pull?: PinPullMode
+}
+
+export interface PinPullOverride {
+  /** Shown read-only; takes precedence over `options`. */
+  fixed?: PinPullMode
+  options?: PinPullMode[]
+  default?: PinPullMode
+}
+
+/** VPP `defaults.pins.pull`: its presence turns on the Pull column of the pin table. */
+export interface PinPullSpec {
+  options: PinPullMode[]
+  default?: PinPullMode
+  /** Keyed by the pin name as written in the pin table (`"34"`, `"D0"`). */
+  pins?: Record<string, PinPullOverride>
 }
 
 /** Mirrors the runtime's own bounds (`webserver/retain_config.py`). */
@@ -888,6 +919,13 @@ export interface PersistentStorageSettings {
   path: string
   /** Commit period in seconds. The runtime rejects an out-of-range value at install time. */
   flushSeconds: number
+}
+
+/** The vPLC a project targets, as `devices/configuration.json` records it. */
+export interface ProjectTargetDevice {
+  orchestratorId: string
+  deviceId: string
+  deviceName: string
 }
 
 export interface DeviceConfiguration {
@@ -916,6 +954,8 @@ export interface DeviceConfiguration {
    * absent simply means there is nothing to compare.
    */
   vppPackagePinsByBoard?: Record<string, VppPackagePin>
+  /** The vPLC this project targets on web; reopening the project selects it again when it is still listed. */
+  targetDevice?: ProjectTargetDevice
 }
 
 export type PlcStatus = 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'TRANSITIONING' | 'UNKNOWN'

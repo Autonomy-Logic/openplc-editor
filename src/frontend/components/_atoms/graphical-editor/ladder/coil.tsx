@@ -6,7 +6,7 @@ import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useDebugValue, useIsDebuggerVisible } from '../../../../hooks/use-debug-value'
 import { forceDebugVariable, releaseDebugVariable } from '../../../../services/debug-force-variable'
 import { isExpressionValidForType } from '../../../../services/graphical-scope'
-import { useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { HighlightedTextArea } from '../../highlighted-textarea'
@@ -19,6 +19,7 @@ import type { CoilProps } from './utils/types'
 export type { CoilNode } from './utils/types'
 
 const Coil = (block: CoilProps) => {
+  const store = useOpenPLCStoreApi()
   const { selected, data, id } = block
   const pouName = useBoundPou()
   const pous = useOpenPLCStore((state) => state.project.data.pous)
@@ -114,21 +115,23 @@ const Coil = (block: CoilProps) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-    if (data.variable.name) await forceDebugVariable(debugger_, compositeKey, debugIndex, new Uint8Array([1]), true)
+    if (data.variable.name)
+      await forceDebugVariable(store, debugger_, compositeKey, debugIndex, new Uint8Array([1]), true)
   }
 
   const handleForceFalse = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-    if (data.variable.name) await forceDebugVariable(debugger_, compositeKey, debugIndex, new Uint8Array([0]), false)
+    if (data.variable.name)
+      await forceDebugVariable(store, debugger_, compositeKey, debugIndex, new Uint8Array([0]), false)
   }
 
   const handleReleaseForce = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-    if (data.variable.name) await releaseDebugVariable(debugger_, compositeKey, debugIndex)
+    if (data.variable.name) await releaseDebugVariable(store, debugger_, compositeKey, debugIndex)
   }
 
   const handleClick = (e: React.MouseEvent) => {
@@ -144,7 +147,7 @@ const Coil = (block: CoilProps) => {
    */
   const handleSubmitCoilVariableOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || coilVariableValue
-    const { project, ladderFlows } = useOpenPLCStore.getState()
+    const { project, ladderFlows } = store.getState()
     const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
       nodeId: id,
       variableName: variableNameToSubmit,
@@ -211,7 +214,7 @@ const Coil = (block: CoilProps) => {
             readOnly={isDebuggerVisible}
             onFocus={(e) => {
               e.target.select()
-              const { project, ladderFlows } = useOpenPLCStore.getState()
+              const { project, ladderFlows } = store.getState()
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
                 nodeId: id ?? '',
               })
@@ -231,7 +234,7 @@ const Coil = (block: CoilProps) => {
               return
             }}
             onBlur={() => {
-              const { project, ladderFlows } = useOpenPLCStore.getState()
+              const { project, ladderFlows } = store.getState()
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
                 nodeId: id ?? '',
               })

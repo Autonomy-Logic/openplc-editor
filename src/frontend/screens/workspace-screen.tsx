@@ -19,8 +19,13 @@ import { BranchMergeView } from '../components/_features/[workspace]/branches/br
 import { CommitHistoryView } from '../components/_features/[workspace]/commit-history'
 import { DataTypeEditor } from '../components/_features/[workspace]/data-type'
 import { DeviceEditor } from '../components/_features/[workspace]/editor/device'
-import { EtherCATDeviceEditor, EtherCATEditor } from '../components/_features/[workspace]/editor/device/ethercat'
+import {
+  EtherCATDeviceEditor,
+  EtherCATEditor,
+  EtherCATModuleEditor,
+} from '../components/_features/[workspace]/editor/device/ethercat'
 import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/device/remote-device'
+import { DiagnosticsEditor } from '../components/_features/[workspace]/editor/diagnostics'
 import { DiffViewerEditor } from '../components/_features/[workspace]/editor/diff-viewer'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
 import { LibraryManagerEditor } from '../components/_features/[workspace]/editor/library-manager'
@@ -33,7 +38,7 @@ import { ModbusServerEditor } from '../components/_features/[workspace]/editor/s
 import { OpcUaServerEditor } from '../components/_features/[workspace]/editor/server/opcua-server'
 import { S7CommServerEditor } from '../components/_features/[workspace]/editor/server/s7comm-server'
 import { UserManagementEditor } from '../components/_features/[workspace]/editor/user-management'
-import { VendorScreenEditor } from '../components/_features/[workspace]/editor/vendor-screen'
+import { VendorScreenTabs } from '../components/_features/[workspace]/editor/vendor-screen/vendor-screen-tabs'
 import { GlobalVariableListEditor } from '../components/_features/[workspace]/global-variable-list'
 import { Search } from '../components/_features/[workspace]/search'
 import { SourceControlPanel } from '../components/_features/[workspace]/source-control'
@@ -58,15 +63,17 @@ import {
 } from '../hooks/use-debug-value'
 import { useDeviceConnectionMonitor } from '../hooks/use-device-connection-monitor'
 import { useDevicePlcState } from '../hooks/use-device-plc-state'
+import { useRestoreProjectTargetDevice } from '../hooks/use-restore-project-target-device'
 import { useRuntimePolling } from '../hooks/use-runtime-polling'
 import { forceDebugVariable, releaseDebugVariable } from '../services/debug-force-variable'
 import { buildAllProjectFileContentsPure } from '../services/save-actions'
-import { useOpenPLCStore } from '../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 import { cn } from '../utils/cn'
 import { buildGlobalCompositeKey, GLOBAL_CONFIG_NAME } from '../utils/debug-variable-finder'
 import { toast } from '../utils/toast'
 
 const WorkspaceScreen = () => {
+  const store = useOpenPLCStoreApi()
   const capabilities = useCapabilities()
   const ChatPanel = useChatPanel()
   const debuggerPort = useDebugger()
@@ -170,7 +177,7 @@ const WorkspaceScreen = () => {
       return
     }
 
-    const baselineContent = buildAllProjectFileContentsPure()
+    const baselineContent = buildAllProjectFileContentsPure(store)
 
     initBaseline({
       initialPending: [],
@@ -178,9 +185,10 @@ const WorkspaceScreen = () => {
       rawLoadedContent,
       loadedSerialized: baselineContent,
     })
-  }, [projectPath, rawLoadedContent, loadedSerialized, initBaseline])
+  }, [projectPath, rawLoadedContent, loadedSerialized, initBaseline, store])
 
   useRuntimePolling()
+  useRestoreProjectTargetDevice()
   // Mirrors a baremetal target's run/stop state from the held device link's existing liveness tick (no timer of its own).
   useDevicePlcState()
   useDeviceConnectionMonitor()
@@ -291,14 +299,14 @@ const WorkspaceScreen = () => {
       if (!debuggerPort.isConnected()) return
 
       if (value === undefined && valueBuffer === undefined) {
-        await releaseDebugVariable(debuggerPort, compositeKey, variableIndex)
+        await releaseDebugVariable(store, debuggerPort, compositeKey, variableIndex)
       } else {
         const buffer = valueBuffer ?? new Uint8Array([value ? 1 : 0])
         // variableType lets the wire-endianness swap skip BOOL/STRING payloads (see services/debug-force-variable).
-        await forceDebugVariable(debuggerPort, compositeKey, variableIndex, buffer, value ?? true, variableType)
+        await forceDebugVariable(store, debuggerPort, compositeKey, variableIndex, buffer, value ?? true, variableType)
       }
     },
-    [debugVariableIndexes, debuggerPort],
+    [debugVariableIndexes, debuggerPort, store],
   )
 
   const [graphList, _setGraphList] = useState<string[]>([])
@@ -440,7 +448,7 @@ const WorkspaceScreen = () => {
     if (!packagesPort) return
 
     const unsubOpen = packagesPort.onOpenManager(() => {
-      const { tabsActions, editorActions } = useOpenPLCStore.getState()
+      const { tabsActions, editorActions } = store.getState()
       const tab = {
         name: 'Package Manager',
         path: '/package-manager',
@@ -467,7 +475,7 @@ const WorkspaceScreen = () => {
       unsubOpen()
       unsubBoards()
     }
-  }, [packagesPort, device, setAvailableOptions])
+  }, [packagesPort, device, setAvailableOptions, store])
 
   // Which vPLC the IDE is pointed at decides which vendor package it can use:
   // a vPLC runs the package it was created with. Telling the package layer is
@@ -614,13 +622,15 @@ const WorkspaceScreen = () => {
                         )}
                         {editor['type'] === 'plc-server' && editor.meta.protocol === 's7comm' && <S7CommServerEditor />}
                         {editor['type'] === 'plc-server' && editor.meta.protocol === 'opcua' && <OpcUaServerEditor />}
-                        {editor['type'] === 'plc-vendor-screen' && <VendorScreenEditor />}
+                        {editor['type'] === 'plc-diagnostics' && <DiagnosticsEditor />}
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
                         {editor['type'] === 'plc-user-management' && <UserManagementEditor />}
                         {editor['type'] === 'plc-persistent-storage' && <PersistentStorageEditor />}
                         {editor['type'] === 'plc-library-manifest' && <LibraryManifestEditor />}
                         {editor['type'] === 'diff-viewer' && <DiffViewerEditor />}
+
+                        <VendorScreenTabs />
 
                         {/* Multi-instance (one tab per deviceId), kept mounted so each device's view state survives tab switches. */}
                         {editors
@@ -631,6 +641,25 @@ const WorkspaceScreen = () => {
                             return (
                               <div key={model.meta.deviceId} className={cn('h-full w-full', !isActive && 'hidden')}>
                                 <EtherCATDeviceEditor busName={model.meta.busName} deviceId={model.meta.deviceId} />
+                              </div>
+                            )
+                          })}
+
+                        {editors
+                          .filter((m) => m.type === 'plc-ethercat-module')
+                          .map((model) => {
+                            const isActive =
+                              editor.type === 'plc-ethercat-module' && editor.meta.moduleId === model.meta.moduleId
+                            return (
+                              <div
+                                key={`${model.meta.deviceId}:${model.meta.moduleId}`}
+                                className={cn('h-full w-full', !isActive && 'hidden')}
+                              >
+                                <EtherCATModuleEditor
+                                  busName={model.meta.busName}
+                                  deviceId={model.meta.deviceId}
+                                  moduleId={model.meta.moduleId}
+                                />
                               </div>
                             )
                           })}

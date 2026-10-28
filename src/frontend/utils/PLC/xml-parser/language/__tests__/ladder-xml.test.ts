@@ -67,22 +67,21 @@ describe('parseLadderXml', () => {
     expect(warnings).toEqual([])
     expect(body.rungs).toHaveLength(1)
     const rung = body.rungs[0]
-    // Node order within a rung follows the raw XML's element-type grouping
-    // (leftPowerRail, rightPowerRail, contact, coil, ...) — see
-    // parseLadderXml's node-collection loop — not rung/visual position.
-    expect(rung.nodes.map((n) => n.id)).toEqual(['LEFT-POWER-RAIL-1', 'RIGHT-POWER-RAIL-4', 'CONTACT-2', 'COIL-3'])
-    // Edge order follows pendingEdges collection order (grouped by the
-    // consuming node's XML element type), not visual left-to-right order —
-    // compare as a set of {source,target} pairs instead of an exact sequence.
-    expect(rung.edges).toHaveLength(3)
-    expect(rung.edges.map((e) => `${e.source}->${e.target}`).sort()).toEqual(
-      ['LEFT-POWER-RAIL-1->CONTACT-2', 'CONTACT-2->COIL-3', 'COIL-3->RIGHT-POWER-RAIL-4'].sort(),
-    )
-    expect(rung.edges.every((e) => e.type === 'smoothstep')).toBe(true)
-    expect((rung.nodes[2].data as { variable: { name: string } }).variable).toEqual({ name: 'X1' })
-    expect((rung.nodes[3].data as { variable: { name: string } }).variable).toEqual({ name: 'Y1' })
-    expect(rung.defaultBounds).toEqual([0, 0, 170, 40])
-    expect(rung.reactFlowViewport).toEqual([170, 40])
+    expect(rung.nodes.map((n) => n.id)).toEqual([
+      `left-rail-${rung.id}`,
+      'CONTACT-2',
+      'COIL-3',
+      `right-rail-${rung.id}`,
+    ])
+    expect(rung.edges.map((e) => `${e.source}.${e.sourceHandle}->${e.target}.${e.targetHandle}`)).toEqual([
+      `left-rail-${rung.id}.left-rail->CONTACT-2.input`,
+      'CONTACT-2.output->COIL-3.input',
+      `COIL-3.output->right-rail-${rung.id}.right-rail`,
+    ])
+    expect((rung.nodes[1].data as { variable: { name: string } }).variable).toEqual({ name: 'X1' })
+    expect((rung.nodes[2].data as { variable: { name: string } }).variable).toEqual({ name: 'Y1' })
+    // Numeric ids survive, so re-exporting keeps the XML's localIds.
+    expect((rung.nodes[1].data as { numericId: string }).numericId).toBe('2')
   })
 
   it('partitions disconnected nodes into separate rungs', () => {
@@ -218,7 +217,10 @@ describe('parseLadderXml', () => {
         },
       ],
     })
-    expect(warnings).toEqual([])
+    expect(warnings).toEqual([
+      'POU "p": rung 1 kept the layout from the XML, because it does not have exactly one left and one right power rail',
+      'POU "p": block type "CTU" is not defined in the project or its libraries, its pins were taken from the XML',
+    ])
     const blockNode = body.rungs[0].nodes.find((n) => n.id === 'BLOCK-2') as BlockNode<BlockVariant> | undefined
     expect(blockNode?.data.inputHandles[0].id).toBe('PV')
     expect(body.rungs[0].edges).toContainEqual(
@@ -226,7 +228,7 @@ describe('parseLadderXml', () => {
     )
   })
 
-  it('parses inVariable/outVariable leaf nodes and resolves the block-fed edge', () => {
+  it('parses outVariable leaf nodes, resolves the block-fed edge and skips an unconnected inVariable', () => {
     const { body, warnings } = parseLadderXml('p', {
       block: [
         {
@@ -266,9 +268,11 @@ describe('parseLadderXml', () => {
         },
       ],
     })
-    expect(warnings).toEqual([])
-    // The unconnected inVariable literal forms its own rung (no edge ties it
-    // to the block/outVariable component) — search across all rungs.
+    expect(warnings).toEqual([
+      'POU "p": 1 unconnected LD variable box(es) skipped',
+      'POU "p": rung 1 kept the layout from the XML, because it does not have exactly one left and one right power rail',
+      'POU "p": block type "ADD" is not defined in the project or its libraries, its pins were taken from the XML',
+    ])
     const allNodes = body.rungs.flatMap((r) => r.nodes)
     const outVarNode = allNodes.find((n) => n.id === 'OUTPUT-VARIABLE-3')
     expect(outVarNode?.data.block).toEqual({
@@ -276,8 +280,8 @@ describe('parseLadderXml', () => {
       handleId: 'OUT',
       variableType: { name: '', class: '', type: { definition: 'base-type', value: '' } },
     })
-    const inVarNode = allNodes.find((n) => n.id === 'INPUT-VARIABLE-2')
-    expect(inVarNode?.data.variable).toEqual({ name: 'LIT1' })
+    // The inVariable is wired to nothing, so it has no rung to belong to.
+    expect(allNodes.find((n) => n.id === 'INPUT-VARIABLE-2')).toBeUndefined()
   })
 
   it('warns (non-fatally) about inOutVariable nodes', () => {
@@ -303,6 +307,9 @@ describe('parseLadderXml', () => {
       ],
     })
     expect(body.rungs[0].edges).toEqual([])
-    expect(warnings).toEqual(['POU "p": LD connection references unknown localId "doesnotexist", skipped'])
+    expect(warnings).toEqual([
+      'POU "p": LD connection references unknown localId "doesnotexist", skipped',
+      'POU "p": rung 1 kept the layout from the XML, because it does not have exactly one left and one right power rail',
+    ])
   })
 })

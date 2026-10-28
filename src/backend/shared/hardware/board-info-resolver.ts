@@ -24,7 +24,13 @@
  */
 
 import type { DebugSpec } from '../../../middleware/shared/ports/debug-spec-types'
-import type { InstalledPackage, PackageManifest, PlatformOption } from '../../../middleware/shared/ports/types'
+import type {
+  InstalledPackage,
+  PackageManifest,
+  PinPullSpec,
+  PlatformOption,
+} from '../../../middleware/shared/ports/types'
+import { classifyBoardRuntime } from '../../../middleware/shared/utils/target-capabilities/runtime-kind'
 import type { TargetCapabilities } from '../../../middleware/shared/utils/target-capabilities/types'
 import { findVppDeviceByBoardName } from './find-vpp-device'
 
@@ -227,6 +233,8 @@ export interface BoardBuildInfo {
   defaultSerial?: string
   /** TCP carriers the board can bring up, from `networkInterfaces`. */
   networkInterfaces?: string[]
+  /** Per-pin pull-up/pull-down rules, from `defaults.pins.pull`. */
+  pinPull?: PinPullSpec
 
   // Debug-channel resolver spec --------------------------------------------
   /** Declarative debug spec consumed by `resolveDebugConnection`.
@@ -239,9 +247,6 @@ export interface BoardBuildInfo {
 // ---------------------------------------------------------------------------
 // Resolver
 // ---------------------------------------------------------------------------
-
-/** `boardName` literal that classifies as legacy Runtime v3. */
-const RUNTIME_V3_NAME = 'OpenPLC Runtime v3'
 
 export class BoardInfoResolver {
   constructor(private readonly config: BoardInfoResolverConfig) {}
@@ -327,6 +332,7 @@ export class BoardInfoResolver {
     if (device.serialPorts) info.serialPorts = device.serialPorts
     if (device.defaultSerial) info.defaultSerial = device.defaultSerial
     if (device.networkInterfaces) info.networkInterfaces = device.networkInterfaces
+    if (device.defaults?.pins?.pull) info.pinPull = device.defaults.pins.pull
 
     const resolveRel = this.config.resolvePackageRelativePath
     if (device.hal.source) info.halSourceFile = resolveRel(pkg.path, device.hal.source)
@@ -371,11 +377,7 @@ export class BoardInfoResolver {
     boardName: string,
     base: Omit<BoardBuildInfo, 'boardRuntime' | 'isSimulator' | 'isRuntimeV3' | 'isRuntimeV4'>,
   ): BoardBuildInfo {
-    const boardRuntime = base.compiler
-    const isRuntimeV3 = boardName === RUNTIME_V3_NAME
-    const isRuntimeV4 = boardRuntime === 'openplc-compiler' && !isRuntimeV3
-    const isSimulator = boardRuntime === 'simulator'
-    return { ...base, boardRuntime, isSimulator, isRuntimeV3, isRuntimeV4 }
+    return { ...base, ...classifyBoardRuntime(boardName, base.compiler) }
   }
 
   #mapTargetTypeToCompiler(targetType: string): string {

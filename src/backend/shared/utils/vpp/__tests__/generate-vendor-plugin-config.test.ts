@@ -148,6 +148,43 @@ describe('generateVendorPluginConfig', () => {
     expect(result.slots).toEqual([])
   })
 
+  it('skips the configurator and device setup records when merging at root', () => {
+    const data: VendorScreenData = {
+      configurator: { archive: 'ff', controller: 'UC20-M3000', bundleVersion: '3.5.22' },
+      'device-setup': { modules: [] },
+    }
+    const result = generateVendorPluginConfig({}, data, [])
+    expect(Object.keys(result)).toEqual(['slots'])
+  })
+
+  it('buckets %IB and %QB channels into byte ranges', () => {
+    const moduleBytes = {
+      id: 'bytes',
+      name: 'Bytes',
+      addressMapping: {
+        channels: [
+          { name: 'in_a', type: 'analogInput', dataType: 'USINT', addressPrefix: '%IB' },
+          { name: 'in_b', type: 'analogInput', dataType: 'USINT', addressPrefix: '%IB' },
+          { name: 'out_a', type: 'analogOutput', dataType: 'USINT', addressPrefix: '%QB' },
+        ],
+      },
+    } satisfies VppModuleDefinition
+    const data: VendorScreenData = {
+      'module-configuration': { slots: ['bytes'] },
+      'io-mapping': {
+        entries: [
+          { slot: 1, channelName: 'in_a', iecAddress: '%IB3', alias: '' },
+          { slot: 1, channelName: 'in_b', iecAddress: '%IB4', alias: '' },
+          { slot: 1, channelName: 'out_a', iecAddress: '%QB7', alias: '' },
+        ],
+      },
+    }
+    const result = generateVendorPluginConfig({}, data, [moduleBytes])
+    expect(result.slots).toEqual([
+      { slot: 1, io_mapping: { byte_inputs: { base_byte: 3, count: 2 }, byte_outputs: { base_byte: 7, count: 1 } } },
+    ])
+  })
+
   it('skips non-object form values (arrays, primitives, null)', () => {
     const data: VendorScreenData = {
       'array-key': [1, 2, 3],

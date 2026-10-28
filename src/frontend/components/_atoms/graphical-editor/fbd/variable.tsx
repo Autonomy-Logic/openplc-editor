@@ -7,7 +7,7 @@ import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useDebugValue, useIsDebuggerVisible } from '../../../../hooks/use-debug-value'
 import { forceDebugVariable, releaseDebugVariable } from '../../../../services/debug-force-variable'
 import { resolveScopeExpressionType } from '../../../../services/graphical-scope'
-import { useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import { cn } from '../../../../utils/cn'
 import { resolveArrayVariableByName } from '../../../../utils/PLC/array-variable-utils'
 import { encodeForceValue, isForcedValueHigh } from '../../../../utils/variable-sizes'
@@ -39,6 +39,7 @@ import {
 import { getFBDPouVariablesRungNodeAndEdges } from './utils/utils'
 
 const VariableElement = (block: VariableProps) => {
+  const store = useOpenPLCStoreApi()
   const { id, data, selected } = block
   const elementWidth = getVariableNodeWidth(block)
   const textAreaWidth = elementWidth - (VARIABLE_ELEMENT_SIZE - DEFAULT_VARIABLE_WIDTH)
@@ -296,21 +297,23 @@ const VariableElement = (block: VariableProps) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-    if (data.variable.name) await forceDebugVariable(debugger_, compositeKey, debugIndex, new Uint8Array([1]), true)
+    if (data.variable.name)
+      await forceDebugVariable(store, debugger_, compositeKey, debugIndex, new Uint8Array([1]), true)
   }
 
   const handleForceFalse = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-    if (data.variable.name) await forceDebugVariable(debugger_, compositeKey, debugIndex, new Uint8Array([0]), false)
+    if (data.variable.name)
+      await forceDebugVariable(store, debugger_, compositeKey, debugIndex, new Uint8Array([0]), false)
   }
 
   const handleReleaseForce = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-    if (data.variable.name) await releaseDebugVariable(debugger_, compositeKey, debugIndex)
+    if (data.variable.name) await releaseDebugVariable(store, debugger_, compositeKey, debugIndex)
   }
 
   const handleForceValue = (e: React.MouseEvent) => {
@@ -354,7 +357,15 @@ const VariableElement = (block: VariableProps) => {
       return
     }
 
-    await forceDebugVariable(debugger_, compositeKey, debugIndex, valueBuffer, isForcedValueHigh(forceValue), varType)
+    await forceDebugVariable(
+      store,
+      debugger_,
+      compositeKey,
+      debugIndex,
+      valueBuffer,
+      isForcedValueHigh(forceValue),
+      varType,
+    )
 
     setForceValueModalOpen(false)
     setForceValue('')
@@ -391,7 +402,7 @@ const VariableElement = (block: VariableProps) => {
   const handleSubmitVariableValueOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || variableValue
 
-    const { project, fbdFlows } = useOpenPLCStore.getState()
+    const { project, fbdFlows } = store.getState()
     const { pou, rung, node } = getFBDPouVariablesRungNodeAndEdges(pouName, project.data.pous, fbdFlows, {
       nodeId: id,
     })

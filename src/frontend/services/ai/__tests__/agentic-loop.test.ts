@@ -3,7 +3,8 @@
 import { beforeEach, describe, expect, it } from '@jest/globals'
 
 import { AIRequestError, type AIPort, type AISSEEvent } from '../../../../middleware/shared/ports/ai-port'
-import { openPLCStoreBase } from '../../../store'
+import type { OpenPLCStore } from '../../../store'
+import { createTestStore } from '../../../store/testing'
 import { type AgenticEvent, runAgenticLoop } from '../agentic-loop'
 import type { ToolResult } from '../tools'
 import type { AIChatRequest, AIToolDefinition } from '../types'
@@ -64,12 +65,13 @@ const noTools: AIToolDefinition[] = []
 
 describe('runAgenticLoop', () => {
   let port: AIPort
+  let store: OpenPLCStore
 
   beforeEach(() => {
     sentRequests = []
     streams = []
     port = makePort()
-    openPLCStoreBase.getState().aiActions.setConversationId(null)
+    store = createTestStore()
   })
 
   it('forwards conversation_started from the stream', async () => {
@@ -81,7 +83,7 @@ describe('runAgenticLoop', () => {
       ]),
     ]
 
-    const events = await collect(runAgenticLoop(port, baseRequest, noTools))
+    const events = await collect(runAgenticLoop(store, port, baseRequest, noTools))
 
     expect(events[0]).toEqual({
       type: 'conversation_started',
@@ -99,7 +101,7 @@ describe('runAgenticLoop', () => {
       ]),
     ]
 
-    const events = await collect(runAgenticLoop(port, baseRequest, noTools))
+    const events = await collect(runAgenticLoop(store, port, baseRequest, noTools))
 
     expect(events).toEqual([
       { type: 'text_delta', text: 'Hello ' },
@@ -112,7 +114,7 @@ describe('runAgenticLoop', () => {
   it('omits iteration_assistant_complete when message_stop fires with no accumulated text', async () => {
     streams = [makeStream([{ type: 'message_stop', stopReason: 'end_turn' }])]
 
-    const events = await collect(runAgenticLoop(port, baseRequest, noTools))
+    const events = await collect(runAgenticLoop(store, port, baseRequest, noTools))
 
     expect(events).toEqual([{ type: 'done' }])
   })
@@ -135,12 +137,12 @@ describe('runAgenticLoop', () => {
 
     // Drive the generator manually so the slice is written on `conversation_started`
     // before iter 2 builds its request, standing in for the panel.
-    const gen = runAgenticLoop(port, { ...baseRequest }, noTools, {
+    const gen = runAgenticLoop(store, port, { ...baseRequest }, noTools, {
       runTool: toolAlways({ success: true, message: 'created' }),
     })
     for await (const event of gen) {
       if (event.type === 'conversation_started') {
-        openPLCStoreBase.getState().aiActions.setConversationId(event.conversationId)
+        store.getState().aiActions.setConversationId(event.conversationId)
       }
     }
 
@@ -163,7 +165,7 @@ describe('runAgenticLoop', () => {
       ]),
     ]
 
-    const events = await collect(runAgenticLoop(port, baseRequest, noTools))
+    const events = await collect(runAgenticLoop(store, port, baseRequest, noTools))
 
     const complete = events.find((e) => e.type === 'tool_call_complete')
     expect(complete).toMatchObject({ toolId: 'toolu_rs', toolName: 'read_project_state', result: { success: true } })
@@ -171,7 +173,7 @@ describe('runAgenticLoop', () => {
     const results = events.find((e) => e.type === 'iteration_tool_results_complete')
     const block = results?.type === 'iteration_tool_results_complete' ? results.blocks[0] : undefined
     expect(block?.type === 'tool_result' ? block.content : '').toContain(
-      `Project: ${openPLCStoreBase.getState().project.meta.name}`,
+      `Project: ${store.getState().project.meta.name}`,
     )
     expect(sentRequests).toHaveLength(2)
   })
@@ -190,7 +192,9 @@ describe('runAgenticLoop', () => {
     ]
 
     const events = await collect(
-      runAgenticLoop(port, baseRequest, noTools, { runTool: toolAlways({ success: true, message: 'Foo created' }) }),
+      runAgenticLoop(store, port, baseRequest, noTools, {
+        runTool: toolAlways({ success: true, message: 'Foo created' }),
+      }),
     )
 
     expect(events).toContainEqual({
@@ -230,7 +234,7 @@ describe('runAgenticLoop', () => {
     const tools: AIToolDefinition[] = [{ name: 'create_pou', description: 'Create a POU', input_schema: {} }]
     streams = [makeStream([{ type: 'message_stop', stopReason: 'end_turn' }])]
 
-    await collect(runAgenticLoop(port, baseRequest, tools))
+    await collect(runAgenticLoop(store, port, baseRequest, tools))
 
     expect(sentRequests[0].tools).toEqual(tools)
   })
@@ -245,7 +249,7 @@ describe('runAgenticLoop', () => {
     ]
 
     const events = await collect(
-      runAgenticLoop(port, baseRequest, noTools, {
+      runAgenticLoop(store, port, baseRequest, noTools, {
         runTool: toolAlways({ success: false, message: 'POU name required' }),
       }),
     )
@@ -267,7 +271,7 @@ describe('runAgenticLoop', () => {
       },
     ]
 
-    const events = await collect(runAgenticLoop(port, baseRequest, noTools))
+    const events = await collect(runAgenticLoop(store, port, baseRequest, noTools))
 
     expect(events).toContainEqual({ type: 'text_delta', text: 'partial' })
     expect(events.at(-1)).toEqual({ type: 'error', error: 'upstream failure' })
@@ -290,7 +294,7 @@ describe('runAgenticLoop', () => {
       },
     ]
 
-    const events = await collect(runAgenticLoop(port, baseRequest, noTools))
+    const events = await collect(runAgenticLoop(store, port, baseRequest, noTools))
     const errorEvent = events.find((e) => e.type === 'error')
     expect(errorEvent).toEqual({ type: 'error', error: 'Out of ACU', billing, status: 402 })
   })
@@ -304,7 +308,7 @@ describe('runAgenticLoop', () => {
       },
     ]
 
-    const events = await collect(runAgenticLoop(port, baseRequest, noTools))
+    const events = await collect(runAgenticLoop(store, port, baseRequest, noTools))
 
     expect(events.at(-1)).toEqual({
       type: 'error',
@@ -322,7 +326,7 @@ describe('runAgenticLoop', () => {
       },
     ]
 
-    const events = await collect(runAgenticLoop(port, baseRequest, noTools))
+    const events = await collect(runAgenticLoop(store, port, baseRequest, noTools))
 
     expect(events.at(-1)).toEqual({ type: 'error', error: 'Stream error' })
   })
@@ -332,7 +336,7 @@ describe('runAgenticLoop', () => {
     controller.abort()
     streams = [makeStream([{ type: 'message_stop', stopReason: 'end_turn' }])]
 
-    const events = await collect(runAgenticLoop(port, baseRequest, noTools, { signal: controller.signal }))
+    const events = await collect(runAgenticLoop(store, port, baseRequest, noTools, { signal: controller.signal }))
 
     expect(events).toEqual([])
     expect(sentRequests).toHaveLength(0)
@@ -350,7 +354,7 @@ describe('runAgenticLoop', () => {
       },
     ]
 
-    const events = await collect(runAgenticLoop(port, baseRequest, noTools, { signal: controller.signal }))
+    const events = await collect(runAgenticLoop(store, port, baseRequest, noTools, { signal: controller.signal }))
 
     expect(events).toEqual([{ type: 'text_delta', text: 'first' }])
   })
@@ -359,7 +363,7 @@ describe('runAgenticLoop', () => {
     // Exercises the post-for-await `if (toolCalls.length === 0)` branch.
     streams = [makeStream([{ type: 'content_block_delta', delta: 'orphaned' }])]
 
-    const events = await collect(runAgenticLoop(port, baseRequest, noTools))
+    const events = await collect(runAgenticLoop(store, port, baseRequest, noTools))
 
     expect(events).toEqual([
       { type: 'text_delta', text: 'orphaned' },
@@ -371,7 +375,7 @@ describe('runAgenticLoop', () => {
   it('emits done with no assistant block when the stream ends with no events at all', async () => {
     streams = [makeStream([])]
 
-    const events = await collect(runAgenticLoop(port, baseRequest, noTools))
+    const events = await collect(runAgenticLoop(store, port, baseRequest, noTools))
 
     expect(events).toEqual([{ type: 'done' }])
   })

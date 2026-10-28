@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 
-import { useOpenPLCStore } from '../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
 
 /**
@@ -21,6 +21,7 @@ import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
  * projects).
  */
 export function usePouSnapshot() {
+  const store = useOpenPLCStoreApi()
   const { pushToHistory, undo, redo } = useOpenPLCStore((state) => state.snapshotActions)
 
   const captureAndPush = useCallback(
@@ -28,8 +29,8 @@ export function usePouSnapshot() {
       // A debounced graphical write-back may still be pending — flush it so
       // the snapshot can't pair a stale body with a fresh flow. A failed flush
       // leaves the body stale, so there is nothing coherent to capture.
-      if (flushFlowWriteBacks(useOpenPLCStore.getState, pouName).length > 0) return
-      const { project, ladderFlows, fbdFlows } = useOpenPLCStore.getState()
+      if (flushFlowWriteBacks(store.getState, pouName).length > 0) return
+      const { project, ladderFlows, fbdFlows } = store.getState()
       const pou = project.data.pous.find((p) => p.name === pouName)
       if (!pou) {
         const dataType = project.data.dataTypes.find((d) => d.name === pouName)
@@ -46,7 +47,7 @@ export function usePouSnapshot() {
         globalVariables: project.data.configurations.resource.globalVariables,
       })
     },
-    [pushToHistory],
+    [store, pushToHistory],
   )
 
   return { captureAndPush, undo, redo }

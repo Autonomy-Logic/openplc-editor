@@ -335,6 +335,10 @@ export type ProjectActions = {
       bufferMapping?: Partial<ModbusBufferMapping>
     },
   ) => ProjectResponse
+  /** Drop one persisted buffer count, returning that segment to "publish
+   *  whatever the image turns out to be". The group and the mapping go with it
+   *  once empty, so an untouched server keeps the absent shape on disk. */
+  clearServerBufferCount: (name: string, group: keyof ModbusBufferMapping, field: string) => ProjectResponse
 
   // S7Comm
   updateS7CommServerSettings: (name: string, settings: Partial<S7CommServerSettings>) => ProjectResponse
@@ -400,6 +404,13 @@ export type ProjectActions = {
     updates: Partial<Omit<ModbusIOGroup, 'id' | 'ioPoints'>>,
   ) => ProjectResponse
   deleteIOGroup: (deviceName: string, groupId: string) => ProjectResponse
+  /**
+   * Adds many IO groups in one state update and one address recalculation
+   * (bulk import). With `replace: true` the device's existing groups are
+   * removed first. Rejects the whole batch if it would leave two groups with
+   * the same name on the device.
+   */
+  importIOGroups: (deviceName: string, groups: ModbusIOGroup[], options?: { replace?: boolean }) => ProjectResponse
   updateIOPointAlias: (deviceName: string, groupId: string, pointId: string, alias: string) => ProjectResponse
   updateEthercatConfig: (deviceName: string, ethercatConfig: EthercatConfig) => ProjectResponse
 }

@@ -2,7 +2,8 @@
  * @jest-environment jsdom
  */
 import type { PLCPou } from '../../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../../store'
+import type { OpenPLCStore } from '../../../store'
+import { createTestStore } from '../../../store/testing'
 import { __clearBodyLineOffsetsForTests, setBodyLineOffset } from '../../lsp-shared/body-offsets'
 import { resolveStLspContext } from '../resolve-context'
 import { DATA_TYPES_URI, dtViewUri, pouUri, pouVarsUri } from '../types'
@@ -25,9 +26,12 @@ function makeStPou(name: string): PLCPou {
 }
 
 describe('resolveStLspContext', () => {
+  let store: OpenPLCStore
+
   beforeEach(() => {
+    store = createTestStore()
     __clearBodyLineOffsetsForTests()
-    openPLCStoreBase.setState((s) => ({
+    store.setState((s) => ({
       project: {
         ...s.project,
         data: {
@@ -41,7 +45,7 @@ describe('resolveStLspContext', () => {
 
   it('windows a pouvars view to the VAR region once the body line is registered', () => {
     setBodyLineOffset(pouUri('main'), 5)
-    expect(resolveStLspContext(pouVarsUri('main'))).toEqual({
+    expect(resolveStLspContext(store, pouVarsUri('main'))).toEqual({
       lspUri: pouUri('main'),
       lineOffset: 1,
       lineWindow: { startLine: 1, endLineExclusive: 5 },
@@ -50,7 +54,7 @@ describe('resolveStLspContext', () => {
 
   it('leaves the pouvars view unwindowed while the registry still reads 0 for the POU', () => {
     // An unpopulated registry must not window the view down to nothing.
-    expect(resolveStLspContext(pouVarsUri('main'))).toEqual({
+    expect(resolveStLspContext(store, pouVarsUri('main'))).toEqual({
       lspUri: pouUri('main'),
       lineOffset: 1,
     })
@@ -58,7 +62,7 @@ describe('resolveStLspContext', () => {
 
   it('windows a dt view to its own span in the aggregate document', () => {
     // Aggregate: line 0 TYPE, 1 Colors, 2 Motor, 3 END_TYPE.
-    expect(resolveStLspContext(dtViewUri('Motor'))).toEqual({
+    expect(resolveStLspContext(store, dtViewUri('Motor'))).toEqual({
       lspUri: DATA_TYPES_URI,
       lineOffset: 1,
       lineWindow: { startLine: 2, endLineExclusive: 3 },
@@ -67,11 +71,11 @@ describe('resolveStLspContext', () => {
 
   it('passes an unknown dt view through with no window (unparseable file)', () => {
     const uri = dtViewUri('Ghost')
-    expect(resolveStLspContext(uri)).toEqual({ lspUri: uri, lineOffset: 0 })
+    expect(resolveStLspContext(store, uri)).toEqual({ lspUri: uri, lineOffset: 0 })
   })
 
   it('passes a body-editor URI through with the registered offset and no window', () => {
     setBodyLineOffset(pouUri('main'), 5)
-    expect(resolveStLspContext(pouUri('main'))).toEqual({ lspUri: pouUri('main'), lineOffset: 5 })
+    expect(resolveStLspContext(store, pouUri('main'))).toEqual({ lspUri: pouUri('main'), lineOffset: 5 })
   })
 })

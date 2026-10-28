@@ -10,15 +10,17 @@
  * Connecting to a runtime is not a single await: `getUsersInfo` decides whether
  * the user is asked to log in or to create the first account, and both are
  * MODALS. So this resolves as soon as the modal is raised, not when the session
- * is up — a caller that needs the session (the debugger) must watch
- * `runtimeConnection.connectionStatus` rather than await this. That is also why
+ * is up — a caller that needs the session (the debugger) must watch the session
+ * status rather than await this (see `awaitDebugSession`). That is also why
  * the debugger's offer ends up as a modal opening a modal.
  */
 import { useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { useCallback } from 'react'
 
-import { useOpenPLCStore } from '../store'
+import { describeRuntimeTarget } from '../services/device-link-resolution'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 import { validateRuntimeVersion } from '../utils/device'
+import { getErrorMessage } from '../utils/get-error-message'
 
 export interface UseRuntimeConnectResult {
   /** Toggle: connects when disconnected, disconnects when connected. */
@@ -28,6 +30,7 @@ export interface UseRuntimeConnectResult {
 }
 
 export function useRuntimeConnect(): UseRuntimeConnectResult {
+  const store = useOpenPLCStoreApi()
   const runtime = useRuntime()
   const device = useDevice()
   const deviceBoard = useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard)
@@ -59,11 +62,28 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
     // `runtimeIpAddress`; the runtime port already holds the device context the
     // orchestrator screen set, so an empty address is only a stop condition on
     // the desktop path that supplies one.
-    if (!runtimeIpAddress && !useOpenPLCStore.getState().runtimeConnection.selectedDevice) {
+    if (!runtimeIpAddress && !store.getState().runtimeConnection.selectedDevice) {
       return
     }
 
     setRuntimeConnectionStatus('connecting')
+
+    // Named as the debugger's connect offer names it, so the two dialogs agree.
+    const reportUnreachable = (reason: string): void => {
+      const deviceName = store.getState().runtimeConnection.selectedDevice?.deviceName
+      const target = runtimeIpAddress
+        ? describeRuntimeTarget(deviceBoard, runtimeIpAddress)
+        : deviceName
+          ? `"${deviceName}"`
+          : 'the runtime'
+      openModal('debugger-message', {
+        type: 'error',
+        title: 'No Response',
+        message: `Could not reach ${target}: ${reason}. Check that it is powered and on the network, and that the IP address is correct.`,
+        buttons: ['OK'],
+        onResponse: () => undefined,
+      })
+    }
 
     try {
       // Web reaches the runtime THROUGH an orchestrator agent, so the adapter
@@ -74,7 +94,7 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
       //
       // Desktop carries no selected device and talks to `runtimeIpAddress`
       // directly, so this is a no-op there.
-      const selected = useOpenPLCStore.getState().runtimeConnection.selectedDevice
+      const selected = store.getState().runtimeConnection.selectedDevice
       if (selected) {
         runtime.setDeviceContext?.({
           agentId: selected.orchestratorAgentId,
@@ -86,6 +106,7 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
 
       if (result.error) {
         setRuntimeConnectionStatus('error')
+        reportUnreachable(result.error)
         return
       }
 
@@ -144,10 +165,12 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
 
       // Version is OK - proceed normally
       proceedWithConnection()
-    } catch (_error) {
+    } catch (error) {
       setRuntimeConnectionStatus('error')
+      reportUnreachable(getErrorMessage(error))
     }
   }, [
+    store,
     runtime,
     device,
     runtimeIpAddress,

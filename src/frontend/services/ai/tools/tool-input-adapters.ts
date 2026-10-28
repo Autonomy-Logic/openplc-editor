@@ -7,9 +7,11 @@ import type {
   PLCVariable,
   PLCVariableType,
 } from '../../../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../../../store'
+import type { OpenPLCStore } from '../../../store'
+import type { LadderElementSpec } from '../../../store/slices/ladder/utils/rung-spec'
 
 type TextualLanguage = 'st' | 'il' | 'python' | 'cpp'
+type CreatePouLanguage = TextualLanguage | 'ld'
 
 const BASE_TYPES = new Set([
   'bool',
@@ -45,12 +47,12 @@ function resolveVariableType(typeStr: string): PLCVariableType {
 export type CreatePouInput = {
   name: string
   type: 'program' | 'function' | 'function-block'
-  language: 'st' | 'il' | 'python' | 'cpp'
+  language: 'st' | 'il' | 'python' | 'cpp' | 'ld'
   body?: string
 }
 
 export function adaptCreatePou(input: CreatePouInput): {
-  createProps: { name: string; type: 'program' | 'function' | 'function-block'; language: TextualLanguage }
+  createProps: { name: string; type: 'program' | 'function' | 'function-block'; language: CreatePouLanguage }
   body?: string
 } {
   return {
@@ -64,8 +66,11 @@ export type UpdatePouBodyInput = {
   code: string
 }
 
-export function adaptUpdatePouBody(input: UpdatePouBodyInput): { name: string; content: PLCBody } | null {
-  const state = openPLCStoreBase.getState()
+export function adaptUpdatePouBody(
+  store: OpenPLCStore,
+  input: UpdatePouBodyInput,
+): { name: string; content: PLCBody } | null {
+  const state = store.getState()
   const pou = state.project.data.pous.find((p) => p.name === input.pouName)
   if (!pou) return null
   return {
@@ -177,6 +182,34 @@ export type UpdateDatatypeInput = {
 
 export type DeleteDatatypeInput = {
   name: string
+}
+
+// --- ladder rung adapters ---
+// The `elements[]` vocabulary is `LadderElementSpec` (store layer, `rung-spec.ts`) — reused
+// verbatim here rather than redeclared, since the tool input and the builder's spec are the
+// same shape by design (read-modify-write round-trips through it).
+
+export type ReadLadderDiagramInput = {
+  pouName: string
+}
+
+export type AddRungInput = {
+  pouName: string
+  comment?: string
+  elements: LadderElementSpec[]
+  afterRungId?: string
+}
+
+export type UpdateRungInput = {
+  pouName: string
+  rungId: string
+  comment?: string
+  elements: LadderElementSpec[]
+}
+
+export type DeleteRungInput = {
+  pouName: string
+  rungId: string
 }
 
 export { BASE_TYPES, resolveVariableType, uuidv4 }

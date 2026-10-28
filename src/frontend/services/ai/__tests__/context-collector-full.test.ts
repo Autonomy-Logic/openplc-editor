@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@jest/globals'
 
+import type { RootState } from '../../../store'
 import { collectFullProjectContext, isGraphicalLanguage } from '../context-collector'
 
 type TestPou = {
@@ -28,7 +29,7 @@ function makeState(overrides: {
         },
       },
     },
-  } as unknown as ReturnType<typeof import('../../../store').openPLCStoreBase.getState>
+  } as unknown as RootState
 }
 
 /** A body long enough to expose any truncation. */

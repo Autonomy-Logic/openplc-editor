@@ -44,6 +44,7 @@ export type WorkspaceProjectTreeLeafType =
   | 'user-management'
   | 'persistent-storage'
   | 'ethercat-device'
+  | 'ethercat-module'
   | null
 
 // ---------------------------------------------------------------------------
@@ -144,6 +145,11 @@ export type WorkspaceState = {
      */
     canEdit: boolean
     /**
+     * Whether a build or debug saves the whole project first. False only on a
+     * partner session that asked for it off; reset to true on project close.
+     */
+    autoSaveOnBuild: boolean
+    /**
      * Whether the open project was retrieved from a device and has no location
      * the user chose yet.
      *
@@ -224,6 +230,7 @@ export type WorkspaceActions = {
   setProjectLoading: (isLoading: boolean, message?: string) => void
   // Persist-permission flag (backend write access on the open project)
   setCanEdit: (value: boolean) => void
+  setAutoSaveOnBuild: (value: boolean) => void
   setIsEphemeralProject: (value: boolean) => void
 }
 

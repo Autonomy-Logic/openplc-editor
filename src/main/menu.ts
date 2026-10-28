@@ -3,6 +3,7 @@ import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } f
 
 import { ProjectService } from '../backend/editor/services'
 import { store } from './modules/store'
+import type { UpdateService } from './modules/updater'
 
 /**
  * Wip: Interface for mac machines menu.
@@ -18,6 +19,7 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
 export default class MenuBuilder {
   private mainWindow: BrowserWindow
   private projectService: ProjectService
+  private updates: UpdateService | undefined
   private projectOpen = false
   private readonly handleDevelopmentContextMenu = (_: Electron.Event, props: Electron.ContextMenuParams): void => {
     if (!this.hasLiveWindow()) return
@@ -42,9 +44,34 @@ export default class MenuBuilder {
     { role: 'toggleDevTools' },
   ]
 
-  constructor(mainWindow: BrowserWindow) {
+  constructor(mainWindow: BrowserWindow, updates?: UpdateService) {
     this.mainWindow = mainWindow
     this.projectService = new ProjectService(mainWindow)
+    this.updates = updates
+  }
+
+  /**
+   * "Check for Updates" and its automatic toggle. No accelerator: Ctrl+U is
+   * Monaco's cursor undo, and a menu accelerator would take it from the editor.
+   */
+  private updateItems(): MenuItemConstructorOptions[] {
+    const updates = this.updates
+    return [
+      {
+        label: i18n.t('menu:file.submenu.updates'),
+        enabled: updates !== undefined,
+        click: () => void updates?.checkNow(),
+      },
+      {
+        // English only, like "Board Package Manager...": menu.json is shared with
+        // openplc-web byte for byte, and the web has no updater.
+        label: 'Check for Updates Automatically',
+        type: 'checkbox',
+        checked: updates?.isAutoCheckEnabled() ?? false,
+        enabled: updates !== undefined,
+        click: (item) => updates?.setAutoCheck(item.checked),
+      },
+    ]
   }
 
   private hasLiveWindow(): boolean {
@@ -108,8 +135,13 @@ export default class MenuBuilder {
     this.mainWindow.webContents.send('project:save-file-accelerator')
   }
 
-  handleExportProjectRequest(xmlFormatTarget: 'old-editor' | 'codesys') {
-    this.mainWindow.webContents.send('compiler:export-project-request', xmlFormatTarget)
+  handleExportProjectRequest() {
+    this.mainWindow.webContents.send('compiler:export-project-request')
+  }
+
+  // The renderer owns the overwrite confirmation, so this only forwards the request.
+  handleImportPlcopenRequest() {
+    this.mainWindow.webContents.send('project:import-plcopen-accelerator')
   }
 
   async handleGetRecent() {
@@ -117,9 +149,9 @@ export default class MenuBuilder {
     return response
   }
 
-  async handleOpenProjectByPath(projectPath: string) {
-    const response = await this.projectService.openProjectByPath(projectPath)
-    this.mainWindow.webContents.send('project:open-recent-accelerator', response)
+  // The renderer opens it through project:read-files, which sets the file-access root.
+  handleOpenProjectByPath(projectPath: string) {
+    this.mainWindow.webContents.send('project:open-recent-accelerator', projectPath)
   }
 
   handleCloseTab() {
@@ -136,6 +168,21 @@ export default class MenuBuilder {
 
   handleSwitchPerspective() {
     this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
+  }
+
+  handleOpenDiagnostics() {
+    this.mainWindow.webContents.send('workspace:open-diagnostics-accelerator')
+  }
+
+  /**
+   * The developer items, or nothing outside a dev build.
+   *
+   * Returned as a list so a template can spread it: an empty array leaves the
+   * menu byte-for-byte as it was, which is what a release build must see.
+   */
+  private developerMenuItems(): MenuItemConstructorOptions[] {
+    if (process.env.NODE_ENV !== 'development') return []
+    return [{ type: 'separator' }, { label: 'I/O Image Diagnostics', click: () => this.handleOpenDiagnostics() }]
   }
 
   async handleOpenExternalLink(link: string) {
@@ -235,8 +282,21 @@ export default class MenuBuilder {
   async buildDarwinTemplate(): Promise<MenuItemConstructorOptions[]> {
     const recent = await this.handleGetRecent()
     const homeDir = process.env.HOME || ''
+    // Not `role: 'appMenu'`: its labels use `app.name`, which is the package name, not the product name.
+    const appName = 'OpenPLC Editor'
     const defaultDarwinMenu: MenuItemConstructorOptions = {
-      role: 'appMenu',
+      label: appName,
+      submenu: [
+        { role: 'about', label: `About ${appName}` },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide', label: `Hide ${appName}` },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit', label: `Quit ${appName}` },
+      ],
     }
 
     const subMenuFile: DarwinMenuItemConstructorOptions = {
@@ -286,12 +346,12 @@ export default class MenuBuilder {
         { type: 'separator' },
         {
           label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
-          click: () => this.handleExportProjectRequest('old-editor'),
+          click: () => this.handleExportProjectRequest(),
           enabled: this.projectOpen,
         },
         {
-          label: i18n.t('menu:file.submenu.exportToCodesysXml'),
-          click: () => this.handleExportProjectRequest('codesys'),
+          label: i18n.t('menu:file.submenu.importFromPLCOpenXml'),
+          click: () => this.handleImportPlcopenRequest(),
           enabled: this.projectOpen,
         },
         { type: 'separator' },
@@ -321,11 +381,7 @@ export default class MenuBuilder {
           enabled: this.projectOpen,
         },
         { type: 'separator' },
-        {
-          label: i18n.t('menu:file.submenu.updates'),
-          accelerator: 'Cmd+U',
-          enabled: false,
-        },
+        ...this.updateItems(),
         { type: 'separator' },
         {
           label: 'Board Package Manager...',
@@ -474,6 +530,7 @@ export default class MenuBuilder {
           sublabel: this.themeSublabel(),
           click: () => this.updateAppTheme(),
         },
+        ...this.developerMenuItems(),
       ],
     }
 
@@ -488,7 +545,7 @@ export default class MenuBuilder {
         return {
           label: `${projectName} (${projectPath})`,
           click: () => {
-            void this.handleOpenProjectByPath(projectEntry.path)
+            this.handleOpenProjectByPath(projectEntry.path)
           },
         }
       }),
@@ -528,9 +585,8 @@ export default class MenuBuilder {
         // KNOWN DIVERGENCE from the in-app React File menu (`menus/file.tsx`),
         // which is the only File menu on Windows while this is the only one on
         // Linux. Deliberate for now, and tracked rather than fixed here:
-        //   - native only: New Project, Open Project, Export to CODESYS XML,
-        //     Board Package Manager
-        //   - React only: README, Import PLCopen XML (both capability-gated)
+        //   - native only: New Project, Open Project, Board Package Manager
+        //   - React only: README (capability-gated)
         // Everything either menu offers now WORKS on its platform, which is the
         // part that mattered: Save As was disabled here, so on Linux a
         // retrieved project could not be saved at all. Full parity is a bigger
@@ -602,12 +658,12 @@ export default class MenuBuilder {
           },
           {
             label: i18n.t('menu:file.submenu.exportToPLCOpenXml'),
-            click: () => this.handleExportProjectRequest('old-editor'),
+            click: () => this.handleExportProjectRequest(),
             enabled: this.projectOpen,
           },
           {
-            label: i18n.t('menu:file.submenu.exportToCodesysXml'),
-            click: () => this.handleExportProjectRequest('codesys'),
+            label: i18n.t('menu:file.submenu.importFromPLCOpenXml'),
+            click: () => this.handleImportPlcopenRequest(),
             enabled: this.projectOpen,
           },
           {
@@ -641,11 +697,7 @@ export default class MenuBuilder {
             enabled: this.projectOpen,
           },
           { type: 'separator' },
-          {
-            label: i18n.t('menu:file.submenu.updates'),
-            enabled: false,
-            accelerator: 'Ctrl+U',
-          },
+          ...this.updateItems(),
           { type: 'separator' },
           {
             label: 'Board Package Manager...',
@@ -802,6 +854,7 @@ export default class MenuBuilder {
             sublabel: this.themeSublabel(),
             click: () => this.updateAppTheme(),
           },
+          ...this.developerMenuItems(),
         ],
       },
       {
@@ -835,7 +888,7 @@ export default class MenuBuilder {
           return {
             label: `${projectName} (${projectPath})`,
             click: () => {
-              void this.handleOpenProjectByPath(projectEntry.path)
+              this.handleOpenProjectByPath(projectEntry.path)
             },
           }
         }),

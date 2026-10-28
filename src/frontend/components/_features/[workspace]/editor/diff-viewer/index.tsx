@@ -7,7 +7,7 @@
  *     the backend's `/changes?includeContent=true` response (the `before`
  *     field). The backend computes this against the actually checked-out HEAD,
  *     so there's no client-side guessing about commit ordering or branch.
- *   - current (working tree): `buildAllProjectFileContents()`, which echoes the
+ *   - current (working tree): `buildAllProjectFileContents(store)`, which echoes the
  *     raw loaded bytes for files untouched this session (so a pre-existing
  *     pending change diffs raw-vs-raw, no serialization noise) and the freshly
  *     serialized form for files edited this session — keeping the diff live.
@@ -24,7 +24,7 @@ import { useEffect, useMemo } from 'react'
 
 import { useVersionControl } from '../../../../../../middleware/shared/providers'
 import { buildAllProjectFileContents } from '../../../../../services/save-actions'
-import { useOpenPLCStore } from '../../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
 import { FileDiffView } from './file-diff-view'
 
@@ -50,6 +50,7 @@ function deriveStatus(original: string, current: string): FileStatus {
 }
 
 export function DiffViewerEditor() {
+  const store = useOpenPLCStoreApi()
   const editor = useOpenPLCStore((s) => s.editor)
   const projectId = useOpenPLCStore((s) => s.project.meta.path)
   const versionControl = useVersionControl()
@@ -86,7 +87,7 @@ export function DiffViewerEditor() {
     let workingTreeSnapshot = ''
     if (filePath) {
       try {
-        workingTreeSnapshot = buildAllProjectFileContents()[filePath] ?? ''
+        workingTreeSnapshot = buildAllProjectFileContents(store)[filePath] ?? ''
       } catch {
         workingTreeSnapshot = ''
       }
@@ -108,7 +109,7 @@ export function DiffViewerEditor() {
     return () => {
       cancelled = true
     }
-  }, [headReady, filePath, projectId, versionControl, setHeadContent, mergeHeadContent])
+  }, [store, headReady, filePath, projectId, versionControl, setHeadContent, mergeHeadContent])
 
   const original = headReady && headContent && filePath ? (headContent[filePath] ?? '') : ''
 
@@ -118,7 +119,7 @@ export function DiffViewerEditor() {
     () => {
       if (!filePath) return ''
       try {
-        return buildAllProjectFileContents()[filePath] ?? ''
+        return buildAllProjectFileContents(store)[filePath] ?? ''
       } catch {
         return ''
       }
@@ -126,7 +127,7 @@ export function DiffViewerEditor() {
     // `project` drives recomputation; `buildAllProjectFileContents` reads the
     // live store internally.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filePath, project],
+    [store, filePath, project],
   )
 
   if (editor.type !== 'diff-viewer') return null

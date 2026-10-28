@@ -147,6 +147,9 @@ export type RemoteDeviceActions = {
 export type EtherCATDeviceActions = {
   delete: (busName: string, deviceId: string) => SharedResponse
   rename: (busName: string, deviceId: string, newName: string) => SharedResponse
+  /** Delete a module slotted into a modular coupler. The coupler and every
+   *  other module on it stay put; only the one module is removed. */
+  deleteModule: (busName: string, deviceId: string, moduleId: string) => SharedResponse
 }
 
 export type SnapshotActions = {
@@ -184,6 +187,8 @@ export type OpenProjectResponseData = {
   rawLoadedFiles?: Record<string, string>
   /** `false` puts the workspace in read-only mode; absent means desktop/dev-local, which stay unrestricted. */
   canEdit?: boolean
+  /** `false` skips the save before a build or debug; only a partner session sends it. Absent means `true`. */
+  autoSaveOnBuild?: boolean
 }
 
 export type SharedWorkspaceActions = {

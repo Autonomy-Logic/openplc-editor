@@ -14,12 +14,15 @@ vi.mock('@root/frontend/components/_features/[app]/toast/use-toast', () => ({
   useToast: () => ({ toast: toastMock }),
 }))
 
-import { useOpenPLCStore } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import { serializeDataTypeToText } from '@root/frontend/utils/PLC/data-type-serializer'
 
 import { DataTypeEditor } from '../index'
 
-const getState = () => useOpenPLCStore.getState()
+let store: OpenPLCStore
+
+const getState = () => store.getState()
 
 /** Resolve the model the editor itself reads: the active one, else its entry in `editors`. */
 const getBuffer = (name: string) => {
@@ -61,12 +64,12 @@ const TYPED = `TYPE\n    Motor : STRUCT\n        Speed:INT;\n    END_STRUCT;\nEN
 describe('DataTypeEditor re-canonicalises the buffer after a commit', () => {
   beforeEach(() => {
     toastMock.mockClear()
-    getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    store = createTestStore()
   })
 
   it('replaces the typed text with the canonical serialisation', async () => {
     seedMotor()
-    render(<DataTypeEditor dataTypeName='Motor' />)
+    render(<DataTypeEditor dataTypeName='Motor' />, { wrapper: createStoreWrapper(store) })
 
     typeInto(TYPED)
     await clickAway()
@@ -80,7 +83,7 @@ describe('DataTypeEditor re-canonicalises the buffer after a commit', () => {
 
   it('leaves the typed text alone when the commit fails', async () => {
     seedMotor()
-    render(<DataTypeEditor dataTypeName='Motor' />)
+    render(<DataTypeEditor dataTypeName='Motor' />, { wrapper: createStoreWrapper(store) })
 
     const broken = 'TYPE\n    Motor : STRUCT\n        oops\n'
     typeInto(broken)
@@ -92,7 +95,7 @@ describe('DataTypeEditor re-canonicalises the buffer after a commit', () => {
 
   it('does not re-commit on the next blur', async () => {
     seedMotor()
-    render(<DataTypeEditor dataTypeName='Motor' />)
+    render(<DataTypeEditor dataTypeName='Motor' />, { wrapper: createStoreWrapper(store) })
 
     typeInto(TYPED)
     await clickAway()

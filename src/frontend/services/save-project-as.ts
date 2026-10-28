@@ -13,7 +13,7 @@
 
 import type { PlatformCapabilities } from '../../middleware/shared/ports/platform-capabilities'
 import type { ProjectPort } from '../../middleware/shared/ports/project-port'
-import { openPLCStoreBase } from '../store'
+import type { OpenPLCStore } from '../store'
 import { flushFlowWriteBacks } from '../store/slices/shared/flow-writeback'
 import { toast } from '../utils/toast'
 import { buildAllProjectFileContents, flushGlobalVariableListDrafts } from './save-actions'
@@ -37,6 +37,7 @@ export interface SaveProjectAsResult {
  * it from a save that goes nowhere.
  */
 export async function executeSaveProjectAs(
+  store: OpenPLCStore,
   projectPort: ProjectPort,
   _capabilities: PlatformCapabilities,
 ): Promise<SaveProjectAsResult> {
@@ -65,11 +66,11 @@ export async function executeSaveProjectAs(
   // or a global variable list still in its text buffer, would be written out in
   // its pre-edit state -- and Save As would then adopt the destination and
   // report success for content the user can see is not what they have.
-  const staleFlows = flushFlowWriteBacks(openPLCStoreBase.getState)
-  flushGlobalVariableListDrafts()
+  const staleFlows = flushFlowWriteBacks(store.getState)
+  flushGlobalVariableListDrafts(store)
 
-  const state = openPLCStoreBase.getState()
-  const contents = buildAllProjectFileContents()
+  const state = store.getState()
+  const contents = buildAllProjectFileContents(store)
 
   const files = {
     projectPath: picked.path,

@@ -9,7 +9,15 @@
  * closes without prompting.
  */
 
-import { collectScreenPersistenceKeys, getSectionPersistenceKey } from '../persistence-keys'
+import {
+  collectConfiguratorKeys,
+  collectLinkedConfiguratorKeys,
+  collectLinkedScreenKeys,
+  collectScreenPersistenceKeys,
+  configuratorScreenNames,
+  getSectionPersistenceKey,
+  linkedScreenNames,
+} from '../persistence-keys'
 
 describe('getSectionPersistenceKey', () => {
   it('returns explicit persistence when declared', () => {
@@ -24,6 +32,24 @@ describe('getSectionPersistenceKey', () => {
     expect(getSectionPersistenceKey({})).toBeNull()
     expect(getSectionPersistenceKey(null)).toBeNull()
     expect(getSectionPersistenceKey(undefined)).toBeNull()
+  })
+
+  it('always gives a vendor-document section the configurator key', () => {
+    expect(getSectionPersistenceKey({ id: 'editor', layout: 'vendor-document' })).toBe('configurator')
+    expect(getSectionPersistenceKey({ id: 'editor', layout: 'vendor-document', persistence: 'cfg' })).toBe(
+      'configurator',
+    )
+  })
+
+  it('pins a device-setup io-table section to the I/O mapping a configurator writes', () => {
+    const section = { id: 'mapping', layout: 'io-table', source: 'device-setup' }
+    expect(getSectionPersistenceKey(section)).toBe('io-mapping')
+    expect(getSectionPersistenceKey({ ...section, persistence: 'other' })).toBe('io-mapping')
+  })
+
+  it('leaves an io-table without a source on its own key', () => {
+    expect(getSectionPersistenceKey({ id: 'table', layout: 'io-table', persistence: 'other' })).toBe('other')
+    expect(collectScreenPersistenceKeys({ sections: [{ id: 'table', layout: 'io-table' }] })).toEqual(['table'])
   })
 
   it('ignores non-string / empty values for persistence and id', () => {
@@ -93,5 +119,69 @@ describe('collectScreenPersistenceKeys', () => {
     const keys = collectScreenPersistenceKeys(screen)
     expect(keys).toContain('hal-config')
     expect(keys).toContain('module-configuration')
+  })
+})
+
+describe('vendor-document ownership', () => {
+  const screen = {
+    sections: [
+      { id: 'editor', layout: 'vendor-document' },
+      { id: 'mapping', persistence: 'io-mapping', layout: 'io-table', source: 'device-setup' },
+    ],
+  }
+
+  it('owns the device setup, the module slots and the I/O mapping it writes alongside the archive', () => {
+    expect(collectScreenPersistenceKeys(screen)).toEqual([
+      'configurator',
+      'device-setup',
+      'module-configuration',
+      'io-mapping',
+    ])
+  })
+
+  it('gives an I/O Mapping screen without the configurator the archive and the same three keys', () => {
+    expect(
+      collectScreenPersistenceKeys({ sections: [{ id: 'mapping', layout: 'io-table', source: 'device-setup' }] }),
+    ).toEqual(['io-mapping', 'configurator', 'device-setup', 'module-configuration'])
+  })
+
+  it('lists only configurator sections as archive keys', () => {
+    expect(collectConfiguratorKeys(screen)).toEqual(['configurator'])
+    expect(collectConfiguratorKeys({ sections: [{ id: 'hal', layout: 'form' }] })).toEqual([])
+  })
+})
+
+describe('configurator screens linked across tabs', () => {
+  const screens = {
+    'Backplane Configuration': { sections: [{ id: 'configurator', layout: 'vendor-document' }] },
+    'I/O Mapping': {
+      sections: [{ id: 'io-mapping', layout: 'io-table', source: 'device-setup', persistence: 'io-mapping' }],
+    },
+    Network: { sections: [{ id: 'network', layout: 'form' }] },
+  }
+
+  it('links the configurator and I/O Mapping screens, and nothing else', () => {
+    expect(configuratorScreenNames(screens)).toEqual(['Backplane Configuration', 'I/O Mapping'])
+    expect(linkedScreenNames(screens, 'I/O Mapping')).toEqual(['Backplane Configuration', 'I/O Mapping'])
+    expect(linkedScreenNames(screens, 'Network')).toEqual(['Network'])
+  })
+
+  it('gives each linked screen the archive, the device setup, the module slots and the mapping', () => {
+    for (const name of ['Backplane Configuration', 'I/O Mapping']) {
+      expect([...collectLinkedScreenKeys(screens, name)].sort()).toEqual([
+        'configurator',
+        'device-setup',
+        'io-mapping',
+        'module-configuration',
+      ])
+      expect(collectLinkedConfiguratorKeys(screens, name)).toEqual(['configurator'])
+    }
+    expect(collectLinkedScreenKeys(screens, 'Network')).toEqual(['network'])
+    expect(collectLinkedConfiguratorKeys(screens, 'Network')).toEqual([])
+  })
+
+  it('leaves a board without a configurator screen unlinked', () => {
+    expect(configuratorScreenNames(undefined)).toEqual([])
+    expect(linkedScreenNames({ Network: screens.Network }, 'Network')).toEqual(['Network'])
   })
 })

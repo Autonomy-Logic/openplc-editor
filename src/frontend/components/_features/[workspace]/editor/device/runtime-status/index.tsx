@@ -17,7 +17,7 @@ import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useOrchestrator, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useState } from 'react'
 
-import { useOpenPLCStore } from '../../../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
 import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
@@ -49,6 +49,7 @@ type BootloaderInfo = {
 }
 
 const RuntimeStatusEditor = () => {
+  const store = useOpenPLCStoreApi()
   const runtime = useRuntime()
 
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
@@ -201,13 +202,13 @@ const RuntimeStatusEditor = () => {
         // Compared against the store directly rather than the rendered
         // value: depending on runtimeVersion here would rebuild `refresh`
         // whenever it changed, re-running the effect that calls it.
-        if (reported && reported !== useOpenPLCStore.getState().runtimeConnection.runtimeVersion) {
+        if (reported && reported !== store.getState().runtimeConnection.runtimeVersion) {
           setRuntimeVersion(reported)
         }
       }
     }
     setBootloader(next)
-  }, [connected, runtime, storedCredentials, setRuntimeVersion, hostInfoFromOrchestrator])
+  }, [store, connected, runtime, storedCredentials, setRuntimeVersion, hostInfoFromOrchestrator])
 
   useEffect(() => {
     void refresh()

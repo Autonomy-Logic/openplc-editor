@@ -1,4 +1,5 @@
-import { openPLCStoreBase } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 
@@ -14,22 +15,26 @@ import { SectionRenderer } from '../section-renderer'
  * configured with.
  */
 
+let store: OpenPLCStore
+
 function renderSection(section: Partial<ScreenSection>) {
   return render(
     <SectionRenderer
       section={{ id: 'sec', title: 'Section', layout: 'form', ...section } as ScreenSection}
       moduleSystem={null}
     />,
+    { wrapper: createStoreWrapper(store) },
   )
 }
 
 function vendorScreenData(): Record<string, unknown> {
-  return openPLCStoreBase.getState().deviceDefinitions.configuration.vendorScreenData ?? {}
+  return store.getState().deviceDefinitions.configuration.vendorScreenData ?? {}
 }
 
 describe('vendor screen renderer allowlists', () => {
   beforeEach(() => {
-    openPLCStoreBase.getState().deviceActions.setVendorScreenData('sec', {})
+    store = createTestStore()
+    store.getState().deviceActions.setVendorScreenData('sec', {})
   })
 
   afterEach(cleanup)

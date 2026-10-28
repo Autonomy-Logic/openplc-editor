@@ -22,6 +22,7 @@ import {
   streamAiCompletion,
   warmAi,
 } from '@root/backend/editor/edge-ai'
+import { closeEditSession, heartbeatEditSession, openEditSession } from '@root/backend/editor/edge-edit-sessions'
 import { listCloudFolders, uploadProjectToCloud } from '@root/backend/editor/edge-project-upload'
 import {
   listCloudProjectsInFolder,
@@ -68,7 +69,7 @@ import type {
   DeviceModbusTransport,
   PlcControlResult,
 } from '@root/backend/shared/debug/types'
-import { parseESIDeviceFull } from '@root/backend/shared/ethercat/esi-parser-main'
+import { parseESIDeviceFull, parseESIModuleFull } from '@root/backend/shared/ethercat/esi-parser-main'
 import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/library/public-catalog-client'
 import type { SnapshotMetadata } from '@root/backend/shared/project/project-snapshot-archive'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
@@ -80,6 +81,7 @@ import { RuntimeLogEntry } from '@root/middleware/shared/ports'
 import type { AITelemetryEventName } from '@root/middleware/shared/ports/ai-port'
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
+import type { EditSessionBeat, EditSessionOpened } from '@root/middleware/shared/ports/edit-session-port'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -103,9 +105,16 @@ import type {
   ListPublicLibrariesResponse,
   PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
-import type { RuntimeUser, RuntimeUserRole, UpdateUserParams } from '@root/middleware/shared/ports/runtime-port'
+import type {
+  RuntimeCapabilitiesResult,
+  RuntimeUser,
+  RuntimeUserRole,
+  UpdateUserParams,
+} from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import type { VersionControlResult } from '@root/middleware/shared/ports/version-control-port'
+import { capabilitiesFromResponse } from '@root/middleware/shared/utils/build-gate/runtime-capabilities-response'
+import { findModuleByIdent } from '@root/middleware/shared/utils/ethercat/esi-module-resolve'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
@@ -115,6 +124,7 @@ import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from '
 import { unlink, writeFile } from 'fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { platform } from 'process'
+import { z } from 'zod'
 
 import { MainIpcModule, MainIpcModuleConstructor } from '../../../backend/editor/contracts/types/modules/ipc/main'
 import { toDebugCandidate, toDeviceLinkCandidates } from '../../../backend/editor/hardware/debug-channel-factory'
@@ -155,9 +165,17 @@ import { SimulatorModule } from '../../../backend/shared/simulator/simulator-mod
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import {
   interpretPluginCommandResponse,
+  PLUGIN_COMMAND_TIMEOUT_MS,
   type PluginCommandOutcome,
 } from '../../../backend/shared/utils/vpp/screen-actions'
 import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
+
+const EditSessionClientSchema = z.object({
+  kind: z.literal('desktop'),
+  label: z.string().trim().min(1).max(120),
+})
+
+const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 
 /** Why a channel could not be handed out. */
 interface ChannelUnavailable {
@@ -223,6 +241,10 @@ interface AiStream {
  * The telemetry events the renderer may send. `satisfies` only checks one direction: a
  * renamed/deleted event breaks the build, but a new one must still be added here or it's silently dropped.
  */
+/** Runtime request timeouts: EtherDOG's own budget plus transport margin. */
+const ETHERCAT_SCAN_MODULES_TIMEOUT_MS = 15000
+const ETHERCAT_DIAGNOSTICS_TIMEOUT_MS = 13000
+
 const AI_TELEMETRY_EVENTS = [
   'completion_requested',
   'completion_shown',
@@ -293,7 +315,7 @@ class MainProcessBridge implements MainIpcModule {
   // avr8js ATmega2560 emulator instance for the built-in simulator
   private simulatorModule = new SimulatorModule()
   // VPP package manager for board package operations
-  private packageManagerModule = new PackageManagerModule()
+  private packageManagerModule: PackageManagerModule
   // System-wide IEC 61131-3 library pool (bundled + user-installed)
   private libraryManagerModule = new LibraryManagerModule()
   // Shared transport for public-catalog HTTP — re-used by the
@@ -314,7 +336,9 @@ class MainProcessBridge implements MainIpcModule {
     compilerModule,
     hardwareModule,
     quitCoordinator,
+    packageManagerModule,
   }: MainIpcModuleConstructor) {
+    this.packageManagerModule = packageManagerModule ?? new PackageManagerModule()
     this.ipcMain = ipcMain
     this.mainWindow = mainWindow
     this.projectService = projectService
@@ -385,6 +409,21 @@ class MainProcessBridge implements MainIpcModule {
   // The port and the two timeouts live on `RuntimeApiClient`, not here.
 
   handleRuntimeGetUsersInfo = (_event: IpcMainInvokeEvent, ipAddress: string) => this.runtimeApi.getUsersInfo(ipAddress)
+
+  handleRuntimeGetCapabilities = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+  ): Promise<RuntimeCapabilitiesResult> => {
+    const parseBody = (data: string): unknown => JSON.parse(data)
+    const result = await this.runtimeApi.makeRuntimeApiRequest(
+      ipAddress,
+      '/api/discovery/ethercat/capabilities',
+      parseBody,
+    )
+    return result.success
+      ? capabilitiesFromResponse({ statusCode: 200, body: result.data })
+      : capabilitiesFromResponse({ statusCode: result.statusCode, error: result.error })
+  }
 
   handleRuntimeCreateUser = (
     _event: IpcMainInvokeEvent,
@@ -648,11 +687,13 @@ class MainProcessBridge implements MainIpcModule {
     args: { plugin: string; command: string; params?: Record<string, unknown> },
   ): Promise<PluginCommandOutcome> => {
     try {
-      const result = await this.makeRuntimeApiMutation(
-        'POST',
+      // Bounded by the same limit the web adapter uses; the default request timeout is shorter than a bus scan.
+      const result = await this.makeRuntimeApiPostRequest(
         ipAddress,
         '/api/plugin-command',
         JSON.stringify({ plugin: args.plugin, command: args.command, params: args.params ?? {} }),
+        (data: string) => data,
+        PLUGIN_COMMAND_TIMEOUT_MS,
       )
       if (!result.success) {
         return { ok: false, error: result.error }
@@ -874,6 +915,9 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('edge-projects:read', this.handleEdgeProjectsRead)
     this.registerHandle('edge-projects:save-project', this.handleEdgeProjectsSaveProject)
     this.registerHandle('edge-projects:save-file', this.handleEdgeProjectsSaveFile)
+    this.registerHandle('edge-edit-session:open', this.handleEdgeEditSessionOpen)
+    this.registerHandle('edge-edit-session:heartbeat', this.handleEdgeEditSessionHeartbeat)
+    this.registerHandle('edge-edit-session:close', this.handleEdgeEditSessionClose)
     this.registerHandle('edge-upload:list-folders', this.handleEdgeUploadListFolders)
     this.registerHandle('edge-upload:project', this.handleEdgeUploadProject)
     this.registerHandle('edge-vc:list-branches', this.handleEdgeVcListBranches)
@@ -924,19 +968,9 @@ class MainProcessBridge implements MainIpcModule {
     // this.ipcMain.handle('app:store-get', this.mainIpcEventHandlers.getStoreValue)
 
     // ===================== COMPILER SERVICE =====================
-    // TODO: This handle should be refactored to use MessagePortMain for better performance.
-    this.registerHandle('compiler:export-project-xml', this.handleCompilerExportProjectXml)
     this.ipcMain.on('compiler:run-compile-program', this.handleRunCompileProgram)
     this.ipcMain.on('compiler:run-debug-compilation', this.handleRunDebugCompilation)
     this.ipcMain.on('compiler:run-compile-library', this.handleRunCompileLibrary)
-
-    // +++ !! Deprecated: These handlers are outdated and should be removed. +++
-
-    // this.ipcMain.on('compiler:setup-environment', this.handleCompilerSetupEnvironment)
-    // this.ipcMain.handle('compiler:create-build-directory', this.handleCompilerCreateBuildDirectory)
-    // this.ipcMain.handle('compiler:build-xml-file', this.handleCompilerBuildXmlFile)
-    // this.ipcMain.on('compiler:build-st-program', this.handleCompilerBuildStProgram)
-    // this.ipcMain.on('compiler:generate-c-files', this.handleCompilerGenerateCFiles)
 
     // ===================== WINDOW CONTROLS =====================
     this.ipcMain.on('window-controls:close', this.handleWindowControlsClose)
@@ -988,6 +1022,7 @@ class MainProcessBridge implements MainIpcModule {
 
     // ===================== RUNTIME API =====================
     this.registerHandle('runtime:get-users-info', this.handleRuntimeGetUsersInfo)
+    this.registerHandle('runtime:get-capabilities', this.handleRuntimeGetCapabilities)
     this.registerHandle('runtime:create-user', this.handleRuntimeCreateUser)
     this.registerHandle('runtime:list-users', this.handleRuntimeListUsers)
     this.registerHandle('runtime:whoami', this.handleRuntimeWhoAmI)
@@ -1021,6 +1056,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('ethercat:get-interfaces', this.handleEtherCATGetInterfaces)
     this.registerHandle('ethercat:get-status', this.handleEtherCATGetStatus)
     this.registerHandle('ethercat:scan', this.handleEtherCATScan)
+    this.registerHandle('ethercat:scan-modules', this.handleEtherCATScanModules)
+    this.registerHandle('ethercat:diagnostics', this.handleEtherCATDiagnostics)
     this.registerHandle('ethercat:test', this.handleEtherCATTest)
     this.registerHandle('ethercat:validate', this.handleEtherCATValidate)
     this.registerHandle('ethercat:get-runtime-status', this.handleEtherCATGetRuntimeStatus)
@@ -1033,6 +1070,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('esi:parse-and-save-file', this.handleESIParseAndSaveFile)
     this.registerHandle('esi:clear-repository', this.handleESIClearRepository)
     this.registerHandle('esi:load-device-full', this.handleESILoadDeviceFull)
+    this.registerHandle('esi:load-module-full', this.handleESILoadModuleFull)
     this.registerHandle('esi:load-repository-light', this.handleESILoadRepositoryLight)
     this.registerHandle('esi:migrate-repository', this.handleESIMigrateRepository)
 
@@ -1145,11 +1183,12 @@ class MainProcessBridge implements MainIpcModule {
       this.stopSimulatorAndNotify()
       const result = await this.projectService.readRawProjectFiles(projectPath)
       if (result.success) {
-        this.currentProjectPath = projectPath
         // A retrieval lives in scratch and is pruned behind the user, so it must not appear under Recent as if it were a real project.
         if (!isRetrievedProjectPath(projectPath)) {
           await this.projectService.updateProjectHistory(projectPath)
         }
+        // Set last, so a failed open leaves the root on the project still open.
+        this.currentProjectPath = projectPath
       }
       return result
     } catch (_error) {
@@ -1157,6 +1196,9 @@ class MainProcessBridge implements MainIpcModule {
         success: false,
         error: { title: 'Error reading project', description: 'Failed to read project files' },
       }
+    } finally {
+      // The native Recent submenu is built from the history this open just changed.
+      this.handleWindowRebuildMenu()
     }
   }
 
@@ -1421,6 +1463,54 @@ class MainProcessBridge implements MainIpcModule {
     }
 
     return saveCloudFile(filePath, content)
+  }
+
+  handleEdgeEditSessionOpen = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    client: unknown,
+    previousSessionId: unknown,
+  ): Promise<EditSessionOpened> => {
+    const parsed = EditSessionClientSchema.safeParse(client)
+
+    if (
+      !isNonEmptyString(projectId) ||
+      !parsed.success ||
+      (previousSessionId !== undefined && !isNonEmptyString(previousSessionId))
+    ) {
+      return Promise.resolve({ status: 'unavailable', permanent: true })
+    }
+
+    return openEditSession(projectId, parsed.data, previousSessionId)
+  }
+
+  handleEdgeEditSessionHeartbeat = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    sessionId: unknown,
+  ): Promise<EditSessionBeat> => {
+    if (!isNonEmptyString(projectId) || !isNonEmptyString(sessionId)) {
+      return Promise.resolve({ status: 'unknown' })
+    }
+
+    return heartbeatEditSession(projectId, sessionId)
+  }
+
+  handleEdgeEditSessionClose = (
+    _event: IpcMainInvokeEvent,
+    projectId: unknown,
+    sessionId: unknown,
+    closedBySessionId: unknown,
+  ): Promise<boolean> => {
+    if (
+      !isNonEmptyString(projectId) ||
+      !isNonEmptyString(sessionId) ||
+      (closedBySessionId !== undefined && !isNonEmptyString(closedBySessionId))
+    ) {
+      return Promise.resolve(false)
+    }
+
+    return closeEditSession(projectId, sessionId, closedBySessionId)
   }
 
   // Validate before building a URL: a non-string id interpolates as `undefined`. And `undefined`
@@ -2111,14 +2201,6 @@ class MainProcessBridge implements MainIpcModule {
   handleAppQuit = () => this.quitCoordinator.confirmQuit()
 
   // Compiler service handlers
-  // TODO: This handle should be refactored to use a new approach on module implementation.
-  handleCompilerExportProjectXml = (
-    _ev: IpcMainInvokeEvent,
-    pathToUserProject: string,
-    dataToCreateXml: PLCProjectData,
-    xmlFormatTarget: 'old-editor' | 'codesys',
-  ) => this.compilerModule.createXmlFile(pathToUserProject, dataToCreateXml, xmlFormatTarget)
-
   handleRunCompileProgram = (event: IpcMainEvent, args: CompileProgramIpcArgs) => {
     const mainProcessPort = event.ports[0]
     void this.compilerModule.compileProgram(args, mainProcessPort, this).catch((error) => {
@@ -2149,34 +2231,6 @@ class MainProcessBridge implements MainIpcModule {
   loadEnabledArchives = (enabledNames: string[]): { archives: unknown[]; missing: string[] } =>
     this.libraryManagerModule.loadEnabledArchives(enabledNames)
 
-  // TODO: These handlers are outdated and should be removed.
-  // handleCompilerSetupEnvironment = (event: IpcMainEvent) => {
-  //   const replyPort = Array.isArray(event.ports) && event.ports.length > 0 ? event.ports[0] : undefined
-  //   if (replyPort) {
-  //     void this.compilerService.setupEnvironment(replyPort)
-  //   }
-  // }
-  // handleCompilerCreateBuildDirectory = (_ev: IpcMainInvokeEvent, pathToUserProject: string) =>
-  //   this.compilerService.createBuildDirectoryIfNotExist(pathToUserProject)
-  // handleCompilerBuildXmlFile = (
-  //   _ev: IpcMainInvokeEvent,
-  //   pathToUserProject: string,
-  //   dataToCreateXml: PLCProjectData,
-  // ) => this.compilerService.buildXmlFile(pathToUserProject, dataToCreateXml)
-  // handleCompilerBuildStProgram = (event: IpcMainEvent, pathToXMLFile: string) => {
-  //   const replyPort = Array.isArray(event.ports) && event.ports.length > 0 ? event.ports[0] : undefined
-  //   if (replyPort) {
-  //     this.compilerService.compileSTProgram(pathToXMLFile, replyPort)
-  //   }
-  // }
-  // handleCompilerGenerateCFiles = (event: IpcMainEvent, pathToStProgram: string) => {
-  //   const replyPort = Array.isArray(event.ports) && event.ports.length > 0 ? event.ports[0] : undefined
-  //   if (replyPort) {
-  //     this.compilerService.generateCFiles(pathToStProgram, replyPort)
-  //   }
-  // }
-
-  // Window controls handlers
   handleWindowControlsClose = () => this.mainWindow?.close()
   handleWindowControlsClosed = () => this.mainWindow?.destroy()
   handleWindowControlsHide = () => this.mainWindow?.hide()
@@ -2211,6 +2265,7 @@ class MainProcessBridge implements MainIpcModule {
 
   handleWindowProjectOpen = (_event: IpcMainEvent, open: unknown) => {
     if (typeof open !== 'boolean') return
+    if (!open) this.currentProjectPath = null
     void this.menuBuilder.setProjectOpen(open).catch((error) => {
       logger.error('Error rebuilding application menu:', error)
     })
@@ -3158,6 +3213,68 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
+  /**
+   * `POST /api/discovery/ethercat/scan-modules`.
+   * Returns the modular coupler's `0xF050` module list as the Python runtime
+   * forwards it. Keeps parsing responsibilities on the renderer — the handler
+   * just hands back the parsed JSON body so the shared protocol helpers can
+   * decide what counts as a usable row.
+   */
+  handleEtherCATScanModules = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    scanRequest: { busName: string; slavePosition: number; networkInterface?: string },
+  ): Promise<{ success: boolean; data?: unknown; error?: string }> => {
+    try {
+      const postData = JSON.stringify({
+        bus_name: scanRequest.busName,
+        slave_position: scanRequest.slavePosition,
+        ...(scanRequest.networkInterface ? { interface: scanRequest.networkInterface } : {}),
+      })
+      const result = await this.makeRuntimeApiPostRequest(
+        ipAddress,
+        '/api/discovery/ethercat/scan-modules',
+        postData,
+        (data: string): unknown => JSON.parse(data),
+        ETHERCAT_SCAN_MODULES_TIMEOUT_MS,
+      )
+
+      if (result.success) {
+        return { success: true, data: result.data }
+      }
+      return { success: false, error: result.error }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
+  handleEtherCATDiagnostics = async (
+    _event: IpcMainInvokeEvent,
+    ipAddress: string,
+    request: { busName: string; slavePosition: number },
+  ): Promise<{ success: boolean; data?: unknown; error?: string }> => {
+    try {
+      const postData = JSON.stringify({
+        bus_name: request.busName,
+        slave_position: request.slavePosition,
+      })
+      const result = await this.makeRuntimeApiPostRequest(
+        ipAddress,
+        '/api/discovery/ethercat/diagnostics',
+        postData,
+        (data: string): unknown => JSON.parse(data),
+        ETHERCAT_DIAGNOSTICS_TIMEOUT_MS,
+      )
+
+      if (result.success) {
+        return { success: true, data: result.data }
+      }
+      return { success: false, error: result.error }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  }
+
   handleEtherCATTest = async (
     _event: IpcMainInvokeEvent,
     ipAddress: string,
@@ -3277,6 +3394,24 @@ class MainProcessBridge implements MainIpcModule {
         return { success: false as const, error: xmlResult.error || 'XML file not found' }
       }
       return parseESIDeviceFull(xmlResult.content, deviceIndex)
+    })
+
+  /** Load one module by ident from a standalone-module ESI file. */
+  handleESILoadModuleFull = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string, ident: string) =>
+    this.wrapServiceCall(async () => {
+      const xmlResult = await this.esiService.loadXmlFile(projectPath, itemId)
+      if (!xmlResult.success || !xmlResult.content) {
+        return { success: false as const, error: xmlResult.error || 'XML file not found' }
+      }
+      const parsed = parseESIModuleFull(xmlResult.content)
+      if (!parsed.success || parsed.modules === undefined) {
+        return { success: false as const, error: parsed.error ?? 'Failed to parse module ESI' }
+      }
+      const matched = findModuleByIdent(parsed.modules, ident)
+      if (matched === undefined) {
+        return { success: false as const, error: `Module ident ${ident} not found in ESI item ${itemId}` }
+      }
+      return { success: true as const, module: matched }
     })
 
   handleESILoadRepositoryLight = async (_event: IpcMainInvokeEvent, projectPath: string) =>
@@ -3405,7 +3540,8 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   handleFileWatchStop = (_event: IpcMainInvokeEvent, filePath: string): { success: boolean; error?: string } => {
-    if (!this.validateFilePath(filePath)) {
+    // A registered watcher passed validation when it started; the root may have moved to another project since.
+    if (!this.fileWatchers.has(filePath) && !this.validateFilePath(filePath)) {
       return { success: false, error: 'Path is outside the project directory' }
     }
     if (this.fileWatchers.has(filePath)) {

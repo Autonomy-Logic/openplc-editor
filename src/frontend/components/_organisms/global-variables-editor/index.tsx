@@ -5,7 +5,7 @@ import type { PLCGlobalVariable, PLCVariable } from '../../../../middleware/shar
 import { MinusIcon } from '../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
-import { useOpenPLCStore } from '../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import type { GlobalVariablesTableType } from '../../../store/slices/editor'
 import { validateVariableSet } from '../../../store/slices/project/validation/variables'
 import { newGlobalNameCollision } from '../../../store/slices/shared/name-collision'
@@ -20,6 +20,7 @@ import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 import { VariablesCodeEditor } from '../variables-code-editor'
 
 const GlobalVariablesEditor = () => {
+  const store = useOpenPLCStoreApi()
   const ROWS_NOT_SELECTED = -1
   const {
     editor,
@@ -362,7 +363,7 @@ const GlobalVariablesEditor = () => {
       // The text is where a global gets a new name, so the namespace gate sits
       // here; the setter below also serves undo, which must never be refused.
       const collision = newGlobalNameCollision(
-        useOpenPLCStore.getState(),
+        store.getState(),
         newVariables.map((variable) => variable.name),
       )
       if (collision) {

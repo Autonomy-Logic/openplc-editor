@@ -1,6 +1,7 @@
 import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
 
-import { useCapabilities, useProject, useSystem, useTheme } from '../../../middleware/shared/providers'
+import { useAppUpdate, useCapabilities, useProject, useSystem, useTheme } from '../../../middleware/shared/providers'
+import { useAppUpdateStatus } from '../../hooks/use-app-update-status'
 import { useOpenPLCStore } from '../../store'
 import type { RungLadderState } from '../../store/slices/ladder'
 import type { CreateGraphicalVariableModalData } from '../../store/slices/modal/types'
@@ -19,6 +20,7 @@ import {
   RuntimeLoginModal,
 } from '../_organisms/modals'
 import { ConfirmDeleteProjectModal } from '../_organisms/modals/confirm-delete-project-modal'
+import { ConfirmDeviceSwitchModal } from '../_organisms/modals/confirm-device-switch-modal'
 import { ConfirmInstallLibrariesModal } from '../_organisms/modals/confirm-install-libraries-modal'
 import { ConfirmPlcopenImportModal } from '../_organisms/modals/confirm-plcopen-import-modal'
 import { CreateGraphicalVariableModal } from '../_organisms/modals/create-graphical-variable-modal'
@@ -37,7 +39,9 @@ import { SaveChangesFileModal } from '../_organisms/modals/save-changes-file-mod
 import { SaveChangesModal } from '../_organisms/modals/save-changes-modal'
 import { asSaveChangesModalData } from '../_organisms/modals/save-changes-modal-data'
 import { ServerIpMismatchModal } from '../_organisms/modals/server-ip-mismatch-modal'
+import { ProjectEditSessionGuard } from '../_organisms/project-edit-session-guard'
 import { TitleBar } from '../_organisms/title-bar'
+import { UpdateBanner } from '../_organisms/update-banner'
 import { AcceleratorHandler } from './accelerator-handler'
 
 type AppLayoutProps = ComponentPropsWithoutRef<'main'>
@@ -104,16 +108,36 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
 
   const showTitleBar = !caps.isNativeApplication || OS !== 'linux'
 
+  // A newer editor is out (desktop only: the web has no update port).
+  const appUpdate = useAppUpdate()
+  const update = useAppUpdateStatus()
+  const banner = appUpdate && update.state !== 'none' ? update : null
+
   return (
     <>
       <div
         className={`h-full bg-neutral-50 text-gray-500 dark:bg-neutral-950 dark:text-gray-400 ${showComponent ? 'block' : 'hidden'}`}
       >
         {showTitleBar && <TitleBar />}
+        {banner && appUpdate && (
+          <UpdateBanner
+            update={banner}
+            className={cn('absolute left-0 right-0', showTitleBar ? 'top-[--oplc-title-bar-height]' : 'top-0')}
+            onUpdate={() => appUpdate.downloadAndOpen()}
+            onDismiss={() => appUpdate.dismiss()}
+          />
+        )}
         <main
           className={cn(
             'absolute bottom-0 left-0 right-0 flex overflow-hidden',
-            showTitleBar ? 'top-[--oplc-title-bar-height]' : 'top-0',
+            // Below the title bar, and below the update banner (h-7) while it shows.
+            showTitleBar
+              ? banner
+                ? 'top-[calc(var(--oplc-title-bar-height)+1.75rem)]'
+                : 'top-[--oplc-title-bar-height]'
+              : banner
+                ? 'top-7'
+                : 'top-0',
           )}
           {...rest}
         >
@@ -164,6 +188,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
             <ServerIpMismatchModal isOpen={modals['server-ip-mismatch'].open} />
           )}
           {modals?.['runtime-connection-lost']?.open === true && <RuntimeConnectionLostModal />}
+          {modals?.['confirm-device-switch']?.open === true && <ConfirmDeviceSwitchModal />}
           {modals?.['debugger-message']?.open === true && <DebuggerMessageModal />}
           {modals?.['debugger-ip-input']?.open === true && <DebuggerIpInputModal />}
           {modals?.['missing-libraries']?.open === true && <MissingLibrariesModal />}
@@ -178,6 +203,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['page-setup']?.open === true && <PageSetupModal />}
           {modals?.['ai-consent']?.open === true && <AIConsentModal />}
           <AboutModal />
+          <ProjectEditSessionGuard />
           <AcceleratorHandler />
         </main>
       </div>

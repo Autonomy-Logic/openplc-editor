@@ -3,11 +3,13 @@ export { PlatformProvider, usePlatform } from './platform-context'
 export {
   useAccelerator,
   useAI,
+  useAppUpdate,
   useCapabilities,
   useCompiler,
   useDebugger,
   useDevice,
   useEdgeAccount as useEdgeAccountPort,
+  useEditSession,
   useNavigation,
   useOrchestrator,
   useProject,

@@ -1,8 +1,8 @@
 {
   "name": "open-plc-editor",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
-  "version": "4.3.2",
-  "license": "GPL-3.0",
+  "version": "4.3.3",
+  "license": "GPL-3.0-only",
   "author": {
     "name": "Autonomy Logic"
   },
@@ -16,6 +16,7 @@
     "cli": "electron ./release/app/dist/main/main.js --cli",
     "cli:dev": "electron ./openplc-cli.dev.js --cli",
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.renderer.prod.ts",
+    "build:relay": "cross-env TS_NODE_TRANSPILE_ONLY=true ts-node scripts/relay/build-relay.ts",
     "lint": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx}",
     "lint:fix": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx} --fix",
     "format": "cross-env NODE_ENV=development prettier --write \"./src/**/*.{ts,tsx}\"",
@@ -74,7 +75,6 @@
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.8",
     "electron-store": "^8.1.0",
-    "electron-updater": "^6.1.4",
     "embla-carousel-react": "^8.0.0-rc17",
     "extract-zip": "^2.0.1",
     "fast-xml-parser": "^5.6.0",

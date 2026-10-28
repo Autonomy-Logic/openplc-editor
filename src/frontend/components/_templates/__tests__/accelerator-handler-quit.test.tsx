@@ -4,14 +4,13 @@
  */
 
 import { act, render } from '@testing-library/react'
-import type { ReactNode } from 'react'
 
 import { EDITOR_CAPABILITIES } from '../../../../middleware/shared/ports/platform-capabilities'
 import type { AcceleratorPort } from '../../../../middleware/shared/ports/accelerator-port'
 import type { WindowPort } from '../../../../middleware/shared/ports/window-port'
-import { PlatformProvider } from '../../../../middleware/shared/providers'
 import type { PlatformPorts } from '../../../../middleware/shared/providers/types'
-import { openPLCStoreBase } from '../../../store'
+import type { OpenPLCStore } from '../../../store'
+import { createStoreWrapper, createTestStore } from '../../../store/testing'
 import { AcceleratorHandler } from '../accelerator-handler'
 
 function stubPort<T extends object>(overrides: Partial<T> = {}): T {
@@ -69,22 +68,19 @@ function makePorts(): PlatformPorts {
   }
 }
 
-function Wrapper({ children }: { children: ReactNode }) {
-  return <PlatformProvider ports={makePorts()}>{children}</PlatformProvider>
-}
-
-const initialState = openPLCStoreBase.getState()
+let store: OpenPLCStore
+let Wrapper: ReturnType<typeof createStoreWrapper>
 
 function modal(name: 'quit-application' | 'save-changes-project') {
-  return openPLCStoreBase.getState().modals[name]
+  return store.getState().modals[name]
 }
 
 function setOS(OS: 'darwin' | 'win32' | 'linux') {
-  openPLCStoreBase.getState().workspaceActions.setSystemConfigs({ OS })
+  store.getState().workspaceActions.setSystemConfigs({ OS })
 }
 
 function setUnsaved() {
-  act(() => openPLCStoreBase.getState().workspaceActions.setEditingState('unsaved'))
+  act(() => store.getState().workspaceActions.setEditingState('unsaved'))
 }
 
 function fire(key: keyof typeof listeners) {
@@ -103,7 +99,8 @@ function dispatchBeforeUnload(): boolean {
 }
 
 beforeEach(() => {
-  openPLCStoreBase.setState(initialState, true)
+  store = createTestStore()
+  Wrapper = createStoreWrapper(store, makePorts())
   windowCalls.length = 0
   for (const key of Object.keys(listeners) as Array<keyof typeof listeners>) listeners[key] = null
 })

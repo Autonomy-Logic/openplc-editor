@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2025 Autonomy / OpenPLC Project
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2025 Autonomy®
 /**
  * Variable resolution for the graphical (LD / FBD) editors, backed by the
  * STruC++ LSP.
@@ -20,7 +20,7 @@
  */
 
 import type { PLCVariable } from '../../middleware/shared/ports/types'
-import { openPLCStoreBase } from '../store'
+import type { OpenPLCStore } from '../store'
 import type { BoundBlockPin } from '../utils/PLC/validate-variable-type'
 import {
   getVariableRestrictionType,
@@ -67,6 +67,7 @@ export type ScopeTypeResult = { status: 'unavailable' } | { status: 'unknown' } 
  * compatible with it are returned. Returns [] when the LSP is unavailable.
  */
 export async function getScopeCompletions(
+  store: OpenPLCStore,
   pouName: string,
   value: string,
   expectedType?: string,
@@ -76,7 +77,7 @@ export async function getScopeCompletions(
 
   const { anchor, segment } = splitExpression(value)
   // Library symbols share the scope; only what the project declared may bind.
-  const roots = collectDeclaredRoots(openPLCStoreBase.getState().project.data, pouName)
+  const roots = collectDeclaredRoots(store.getState().project.data, pouName)
   if (anchor && !roots.has(rootIdentifierOf(anchor))) return []
 
   const items = await api.completeInScope(pouName, anchor)
