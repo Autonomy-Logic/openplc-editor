@@ -932,14 +932,15 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                       typeOf={(entry) => entry.channelType}
                       renderMode={
                         showModeColumn
-                          ? (entry) =>
-                              entry.modeFieldId && entry.modeOptions && entry.modeOptions.length > 0 ? (
+                          ? (entry) => {
+                              const { modeFieldId, modeOptions } = entry
+                              return modeFieldId && modeOptions && modeOptions.length > 0 ? (
                                 <select
-                                  value={entry.modeValue ?? entry.modeOptions[0]}
-                                  onChange={(e) => handleModeChange(entry.slot, entry.modeFieldId!, e.target.value)}
+                                  value={entry.modeValue ?? modeOptions[0]}
+                                  onChange={(e) => handleModeChange(entry.slot, modeFieldId, e.target.value)}
                                   className='h-[26px] w-full cursor-pointer rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300'
                                 >
-                                  {entry.modeOptions.map((opt) => (
+                                  {modeOptions.map((opt) => (
                                     <option key={opt} value={opt}>
                                       {opt}
                                     </option>
@@ -950,6 +951,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                                   —
                                 </span>
                               )
+                            }
                           : undefined
                       }
                       onAliasCommit={(entry, next) => handleAliasChange(entry.slot, entry.channelName, next)}

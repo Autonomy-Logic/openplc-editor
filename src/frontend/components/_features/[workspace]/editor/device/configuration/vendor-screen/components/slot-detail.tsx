@@ -40,10 +40,8 @@ function ModulePicture({ image, packagePath, alt }: { image?: string; packagePat
 
   useEffect(() => {
     let cancelled = false
-    if (!image || !packagePath) {
-      setDataUrl(null)
-      return
-    }
+    setDataUrl(null)
+    if (!image || !packagePath) return
     void devicePort
       .getPreviewImage(image, packagePath)
       .then((url: string) => {

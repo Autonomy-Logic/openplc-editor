@@ -84,13 +84,20 @@ function DeviceSetupIoTable() {
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
   const selected = modules.find((module) => module.slot === selectedSlot) ?? modules[0]
 
-  const handleAliasChange = (target: IoMappingEntry, alias: string): boolean => {
+  const handleAliasChange = (edited: IoMappingEntry, alias: string): boolean => {
     const state = store.getState()
     const { configuration, pinMapping } = state.deviceDefinitions
+    // Read the mapping at commit time: a snapshot may have replaced it since this render.
+    const currentMapping = configuration.vendorScreenData?.[IO_MAPPING_KEY]
+    const currentEntries = readEntries(currentMapping)
+    const target = currentEntries.find(
+      (entry) => entry.slot === edited.slot && entry.channelName === edited.channelName,
+    )
+    if (!target) return false
     const pool = buildAddressPool(
       {
         pinMapping: { pins: pinMapping.pinsByBoard[configuration.deviceBoard] ?? [] },
-        vendorIoMapping: { entries },
+        vendorIoMapping: { entries: currentEntries },
         remoteDevices: state.project.data.remoteDevices,
       },
       resolveAddressProducerCapabilities(state.deviceAvailableOptions.availableBoards.get(configuration.deviceBoard)),
@@ -108,9 +115,9 @@ function DeviceSetupIoTable() {
     const oldAlias = target.alias ?? ''
     if (oldAlias) state.projectActions.renameAlias(oldAlias, alias)
 
-    const updated = entries.map((entry) => (entry === target ? { ...entry, alias } : entry))
+    const updated = currentEntries.map((entry) => (entry === target ? { ...entry, alias } : entry))
     setVendorScreenData(IO_MAPPING_KEY, {
-      ...(storedMapping && typeof storedMapping === 'object' ? storedMapping : {}),
+      ...(currentMapping && typeof currentMapping === 'object' ? currentMapping : {}),
       entries: updated,
     })
     store

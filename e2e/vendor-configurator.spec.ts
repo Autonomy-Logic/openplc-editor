@@ -273,7 +273,7 @@ test('a module added in the configurator is mapped, and its alias survives a rel
       // A change discarded from the I/O Mapping tab must leave the configurator too.
       await frame.getByRole('button', { name: 'Add FAKE-4DI' }).click()
       await openScreen(page, MAPPING_SCREEN)
-      await expect(page.getByRole('button', { name: /^Slot 2.*FAKE-4DI_2/ })).toBeVisible({ timeout: 15000 })
+      await expect(page.getByRole('button', { name: /^Slot 2(?!\d).*FAKE-4DI_2/ })).toBeVisible({ timeout: 15000 })
       await closeTabWithoutSaving(page, MAPPING_SCREEN)
       await openScreen(page, CONFIGURATOR_SCREEN)
       await expect(frame.getByTestId('fake-modules')).toContainText('FAKE-4DI_1 (FAKE-4DI)', { timeout: 30000 })
@@ -376,7 +376,7 @@ test('the I/O Mapping list shows the selected module with its package picture', 
     await expect(first).toBeVisible({ timeout: 15000 })
     await expect(first.getByRole('img', { name: 'FAKE-4DI' })).toHaveAttribute('src', /^data:image\/png;base64,/)
 
-    await page.getByRole('button', { name: /^Slot 2/ }).click()
+    await page.getByRole('button', { name: /^Slot 2(?!\d)/ }).click()
     const second = page.getByRole('region', { name: 'Slot 2 FAKE-4DO_1' })
     await expect(second).toBeVisible()
     await expect(second.getByRole('row', { name: /DO\.0.*%QX\d+\.\d/ })).toBeVisible()

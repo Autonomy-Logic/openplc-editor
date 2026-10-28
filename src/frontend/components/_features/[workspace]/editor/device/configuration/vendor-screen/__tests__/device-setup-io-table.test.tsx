@@ -367,6 +367,43 @@ describe('io-table section with source device-setup', () => {
     expect(aliasInput(second.channelName, second.slot).value).toBe('previous')
   })
 
+  it('commits the alias onto the mapping stored at commit time, keeping a write that landed after the render', () => {
+    renderScreen()
+    const [edited, other] = ioEntries().filter((entry) => entry.slot === 1)
+    const input = aliasInput(edited.channelName, edited.slot)
+    fireEvent.change(input, { target: { value: 'typed_alias' } })
+
+    const mapping = store.getState().deviceDefinitions.configuration.vendorScreenData?.['io-mapping']
+    store.setState((state) => {
+      const vendorScreenData = state.deviceDefinitions.configuration.vendorScreenData ?? {}
+      return {
+        deviceDefinitions: {
+          ...state.deviceDefinitions,
+          configuration: {
+            ...state.deviceDefinitions.configuration,
+            vendorScreenData: {
+              ...vendorScreenData,
+              'io-mapping': {
+                ...(mapping && typeof mapping === 'object' ? mapping : {}),
+                entries: ioEntries().map((entry) =>
+                  entry.slot === 1 && entry.channelName === other.channelName
+                    ? { ...entry, alias: 'late_write' }
+                    : entry,
+                ),
+              },
+            },
+          },
+        },
+      }
+    })
+    fireEvent.blur(input)
+
+    const stored = (channelName: string) =>
+      ioEntries().find((entry) => entry.slot === 1 && entry.channelName === channelName)
+    expect(stored(edited.channelName)?.alias).toBe('typed_alias')
+    expect(stored(other.channelName)?.alias).toBe('late_write')
+  })
+
   it('renames every variable bound to the previous alias', () => {
     renderScreen()
     const target = ioEntries()[3]
