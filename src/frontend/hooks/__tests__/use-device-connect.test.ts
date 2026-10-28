@@ -223,8 +223,23 @@ describe('useDeviceConnect', () => {
   it('opens no dialog when a firmware answered', async () => {
     mockConnect.mockResolvedValue({ status: 'connected-with-firmware' })
     const { result } = renderConnect(board)
-    await result.current.connect()
+    await expect(result.current.connect()).resolves.toBe(true)
     expect(spies.openModal).not.toHaveBeenCalled()
+  })
+
+  it.each(['no-response', 'no-firmware', 'error'] as const)(
+    'reports no link when the outcome is %s',
+    async (status) => {
+      mockConnect.mockResolvedValue({ status })
+      const { result } = renderConnect(board)
+      await expect(result.current.connect()).resolves.toBe(false)
+    },
+  )
+
+  it('reports no link when resolution was cancelled', async () => {
+    mockResolution = null
+    const { result } = renderConnect(board)
+    await expect(result.current.connect()).resolves.toBe(false)
   })
 
   it('shows a no-response error dialog', async () => {

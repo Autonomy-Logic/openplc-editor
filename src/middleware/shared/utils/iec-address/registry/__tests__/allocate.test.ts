@@ -3,6 +3,7 @@ import type { RegistryConsumer } from '../types'
 
 const bit = { direction: 'I', size: 'X' } as const
 const word = { direction: 'Q', size: 'W' } as const
+const inputWord = { direction: 'I', size: 'W' } as const
 
 function consumer(id: string, order: number, channels: RegistryConsumer['channels']): RegistryConsumer {
   return { id, kind: 'test', order, channels }
@@ -57,6 +58,29 @@ describe('allocateAddresses', () => {
     expect(assignments[channelKey('c1', 'a')]).toBe('%QW0')
     expect(assignments[channelKey('c1', 'b')]).toBe('%QW1')
     expect(assignments[channelKey('c1', 'c')]).toBe('%QW3')
+  })
+
+  it('fills every gap between pinned slots across consumers and keeps prefixes apart', () => {
+    const { assignments } = allocateAddresses([
+      consumer('pins', 0, [
+        { channelId: 'p1', class: word, pinned: '%QW1' },
+        { channelId: 'p4', class: word, pinned: '%QW4' },
+        { channelId: 'p5', class: word, pinned: '%QW5' },
+      ]),
+      consumer('c1', 1, [
+        { channelId: 'a', class: word },
+        { channelId: 'x', class: inputWord },
+        { channelId: 'b', class: word },
+      ]),
+      consumer('c2', 2, [
+        { channelId: 'c', class: word },
+        { channelId: 'd', class: word },
+        { channelId: 'y', class: inputWord },
+      ]),
+    ])
+    expect(['a', 'b'].map((id) => assignments[channelKey('c1', id)])).toEqual(['%QW0', '%QW2'])
+    expect(['c', 'd'].map((id) => assignments[channelKey('c2', id)])).toEqual(['%QW3', '%QW6'])
+    expect([assignments[channelKey('c1', 'x')], assignments[channelKey('c2', 'y')]]).toEqual(['%IW0', '%IW1'])
   })
 
   it('honours an unparseable pinned address verbatim without reserving', () => {

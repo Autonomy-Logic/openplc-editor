@@ -11,6 +11,7 @@ import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { boardSelectors } from '@root/frontend/hooks/use-store-selectors'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
+import { allocateModuleSlots } from '@root/frontend/utils/vpp/allocate-module-slots'
 import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
 import {
   type DiscoveredModule,
@@ -20,14 +21,13 @@ import {
   type SlotChange,
 } from '@root/frontend/utils/vpp/merge-discovered-modules'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
-import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
+import type { ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry } from '@root/middleware/shared/ports/types'
 import { useDevice } from '@root/middleware/shared/providers/platform-context'
 import {
   buildAddressPool,
   buildAliasRegistry,
   describeAliasRejection,
-  nextFreeAddress,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
 import { vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
@@ -492,18 +492,6 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     )
     const capabilities = resolveAddressProducerCapabilities(boardInfo)
 
-    const existingAliases = new Map<string, { alias: string; moduleId: string }>()
-    for (const entry of storedMapping?.entries ?? []) {
-      if (entry.alias)
-        existingAliases.set(`${entry.slot}:${entry.channelName}`, { alias: entry.alias, moduleId: entry.moduleId })
-    }
-    // An entry without a module id predates that field; it keeps its alias as before.
-    const aliasFor = (key: string, moduleId: string): string => {
-      const existing = existingAliases.get(key)
-      if (!existing) return ''
-      return !existing.moduleId || existing.moduleId === moduleId ? existing.alias : ''
-    }
-
     // VPP slots are being regenerated, so the pool excludes the
     // current vpp-io claims and includes everything else (pin mapping,
     // modbus remote, EtherCAT) when active for the target.
@@ -512,38 +500,13 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     const pool = buildAddressPool({ pinMapping: { pins: activePins }, remoteDevices }, capabilities, {
       ignoreSource: 'vpp-io',
     })
-    const inFlight = new Set<string>()
-    const newEntries: IoMappingEntry[] = []
-
-    for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
-      const moduleId = slots[slotIndex]
-      if (!moduleId) continue
-      const moduleDef = availableModules.find((m) => m.id === moduleId)
-      if (!moduleDef) continue
-      const slotConfig = slotsConfig[String(slotIndex + 1)] ?? {}
-      const channels = resolveModuleChannels(moduleDef as ResolverModuleDef, slotConfig)
-      if (channels.length === 0) continue
-
-      for (const channel of channels) {
-        const isBit = channel.addressPrefix === '%IX' || channel.addressPrefix === '%QX'
-        const iecAddress = nextFreeAddress(pool, channel.addressPrefix, isBit, undefined, inFlight)
-        inFlight.add(iecAddress)
-        const aliasKey = `${slotIndex + 1}:${channel.name}`
-        newEntries.push({
-          slot: slotIndex + 1,
-          moduleId,
-          moduleName: moduleDef.name,
-          channelName: channel.name,
-          channelType: channel.type,
-          dataType: channel.dataType,
-          iecAddress,
-          alias: aliasFor(aliasKey, moduleId),
-          modeFieldId: channel.modeFieldId,
-          modeOptions: channel.modeOptions,
-          modeValue: channel.modeValue,
-        })
-      }
-    }
+    const { entries: newEntries } = allocateModuleSlots({
+      slots,
+      slotsConfig,
+      modules: availableModules,
+      pool,
+      previous: storedMapping?.entries ?? [],
+    })
 
     // Write the derived channel structure, then let the central registry own
     // the final addresses (VPP + Modbus packed together, aliases restored

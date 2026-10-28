@@ -55,6 +55,8 @@ export type ResolverModuleChannel = {
   /** Current selected mode key (the value of `slotConfig[modeFieldId]`,
    *  or the entry's `default`). Absent for static channels. */
   modeValue?: string
+  /** Module-relative position in the device's process image; bit only for BOOL channels. */
+  wire?: { byte: number; bit?: number }
 }
 
 /** One per-channel selector entry. `modes` maps the slot's value for
@@ -82,12 +84,27 @@ export type ResolverModuleDef = {
 
 export type SlotFieldValue = string | number | boolean
 
+function isOptionalArray(value: unknown): boolean {
+  return value === undefined || Array.isArray(value)
+}
+
+/** Shallow check of a manifest `addressMapping`; channels are filtered by `resolveModuleChannels`. */
+export function isResolverAddressMapping(value: unknown): value is ResolverAddressMapping {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const byFormat: unknown = Reflect.get(value, 'channelsByFormat')
+  return (
+    isOptionalArray(Reflect.get(value, 'channels')) &&
+    isOptionalArray(Reflect.get(value, 'perChannelChoices')) &&
+    (byFormat === undefined || (typeof byFormat === 'object' && byFormat !== null && !Array.isArray(byFormat)))
+  )
+}
+
 /**
  * The address prefixes a VPP manifest may declare for a channel.
  *
  * The package schema (`schema/manifest.schema.json`, `addressPrefix`) admits
- * exactly these eight: inputs and outputs, bit through lword. No byte-addressed
- * prefix and no memory prefix.
+ * exactly these ten: inputs and outputs, bit, byte, word, dword and lword. No
+ * memory prefix.
  *
  * The editor enforces the same set rather than trusting the manifest, and the
  * reason is narrow but real: `addressMapping` is typed `unknown` where the
@@ -102,7 +119,18 @@ export type SlotFieldValue = string | number | boolean
  * manifest must not take down the whole device screen, and a channel that
  * allocates nothing is visibly missing in a way the user can report.
  */
-const MANIFEST_ADDRESS_PREFIXES: ReadonlySet<string> = new Set(['%IX', '%QX', '%IW', '%QW', '%ID', '%QD', '%IL', '%QL'])
+export const MANIFEST_ADDRESS_PREFIXES: ReadonlySet<string> = new Set([
+  '%IX',
+  '%QX',
+  '%IB',
+  '%QB',
+  '%IW',
+  '%QW',
+  '%ID',
+  '%QD',
+  '%IL',
+  '%QL',
+])
 
 /** Channels already reported, so the warning does not repeat every render.
  *  Module-level and never cleared: a manifest does not change within a

@@ -4,6 +4,7 @@ import MenuBuilder from '../../../../../../main/menu'
 import type { QuitCoordinator } from '../../../../../../main/modules/lifecycle/quit-coordinator'
 import { CompilerModule } from '../../../../compiler'
 import { HardwareModule } from '../../../../hardware'
+import type { PackageManagerModule } from '../../../../package-manager'
 import { PouService, ProjectService } from '../../../../services'
 import { TStoreType } from '../store'
 
@@ -29,4 +30,6 @@ export type MainIpcModuleConstructor = {
   compilerModule: InstanceType<typeof CompilerModule>
   hardwareModule: InstanceType<typeof HardwareModule>
   quitCoordinator: QuitCoordinator
+  /** The process-wide instance; one is created when absent. */
+  packageManagerModule?: InstanceType<typeof PackageManagerModule>
 }

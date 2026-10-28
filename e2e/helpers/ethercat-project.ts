@@ -3,6 +3,7 @@
  * e2e/fixtures, the app launch, and a quit that answers the app's own prompt.
  */
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { request } from 'node:https'
 import { basename, join } from 'node:path'
 
 import type { ElectronApplication, Page } from '@playwright/test'
@@ -22,6 +23,14 @@ export const EK1818_STATION = {
   bus: join('ethercat-ek1818', 'ecat_bus.json'),
   program:
     'PROGRAM main\n  VAR\n    di0 AT %IX0.0 : BOOL;\n    do0 AT %QX0.0 : BOOL;\n  END_VAR\n\ndo0 := di0;\n\nEND_PROGRAM\n',
+}
+
+/** A CiA 402 drive with PDO assignment and 40 user startup SDOs; the status word drives the control word. */
+export const CIA402_SDO_STATION = {
+  bus: join('ethercat-cia402-sdos', 'ecat_bus.json'),
+  startupSdos: 40,
+  program:
+    'PROGRAM main\n  VAR\n    status AT %IW0 : UINT;\n    control AT %QW0 : UINT;\n  END_VAR\n\ncontrol := status;\n\nEND_PROGRAM\n',
 }
 
 export interface ProjectPaths {
@@ -153,6 +162,46 @@ export async function buildFromMenu(page: Page, option: string): Promise<void> {
     .getByRole('button', { name: 'Stop PLC and Continue', exact: true })
     .click({ timeout: 10000 })
     .catch(() => undefined)
+}
+
+/** One JSON request to the runtime API; the runtime serves a self-signed certificate. */
+export function runtimeApi(
+  host: string,
+  method: string,
+  path: string,
+  body?: object,
+  token?: string,
+): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const payload = body === undefined ? undefined : JSON.stringify(body)
+    const req = request(
+      {
+        hostname: host,
+        port: 8443,
+        path,
+        method,
+        rejectUnauthorized: false,
+        headers: {
+          ...(payload === undefined ? {} : { 'Content-Type': 'application/json' }),
+          ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }),
+        },
+      },
+      (res) => {
+        let data = ''
+        res.on('data', (chunk: Buffer) => (data += chunk.toString()))
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(data) as Record<string, unknown>)
+          } catch (err) {
+            reject(err instanceof Error ? err : new Error(String(err)))
+          }
+        })
+      },
+    )
+    req.on('error', reject)
+    if (payload !== undefined) req.write(payload)
+    req.end()
+  })
 }
 
 /** First file named @p name under @p dir, searched depth-first. */

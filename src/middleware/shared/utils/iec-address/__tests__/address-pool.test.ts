@@ -316,3 +316,24 @@ describe('target scoping releases claims when capabilities change', () => {
     expect(Array.from(pool.byAddress.keys()).sort()).toEqual(['%MW5'])
   })
 })
+
+describe('byte addresses', () => {
+  it('indexes %IB / %QB claims and allocates the next free byte', () => {
+    const pool = buildAddressPool(
+      {
+        vendorIoMapping: {
+          entries: [
+            { slot: 1, channelName: 'a', iecAddress: '%IB0' },
+            { slot: 1, channelName: 'b', iecAddress: '%IB1' },
+            { slot: 1, channelName: 'c', iecAddress: '%QB0' },
+          ],
+        },
+      },
+      vppOnlyCaps,
+    )
+
+    expect(pool.byPrefix.get('%IB')?.map((claim) => claim.address)).toEqual(['%IB0', '%IB1'])
+    expect(nextFreeAddress(pool, '%IB', false)).toBe('%IB2')
+    expect(nextFreeAddress(pool, '%QB', false, undefined, new Set(['%QB1']))).toBe('%QB2')
+  })
+})
