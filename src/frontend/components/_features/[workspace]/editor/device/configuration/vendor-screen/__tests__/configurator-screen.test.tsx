@@ -2,8 +2,10 @@ import type { OpenPLCStore } from '@root/frontend/store'
 import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import type { DevicePort } from '@root/middleware/shared/ports/device-port'
 import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
+import type { ThemePort, ThemeVariant } from '@root/middleware/shared/ports/theme-port'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
+import { RELAY_CHANNEL, RELAY_PROTOCOL_VERSION } from '@root/middleware/shared/vendor-document/protocol'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 
@@ -47,7 +49,26 @@ const SECTION: ScreenSection = {
 
 let store: OpenPLCStore
 
-function portsWith(url: string | null): PlatformPorts {
+function fakeTheme(initial: ThemeVariant) {
+  let current = initial
+  const listeners = new Set<(theme: ThemeVariant) => void>()
+  const port = stubPort<ThemePort>({
+    getCurrentTheme: () => current,
+    onThemeChanged: (callback) => {
+      listeners.add(callback)
+      return () => {
+        listeners.delete(callback)
+      }
+    },
+  })
+  const change = (theme: ThemeVariant) => {
+    current = theme
+    listeners.forEach((listener) => listener(theme))
+  }
+  return { port, change, listeners }
+}
+
+function portsWith(url: string | null, theme: ThemePort = fakeTheme('light').port): PlatformPorts {
   return {
     compiler: stubPort(),
     runtime: stubPort(),
@@ -59,7 +80,7 @@ function portsWith(url: string | null): PlatformPorts {
     system: stubPort(),
     window: stubPort(),
     accelerator: stubPort(),
-    theme: stubPort(),
+    theme,
     versionControl: stubPort(),
     navigation: stubPort(),
     library: stubPort(),
@@ -70,11 +91,14 @@ function portsWith(url: string | null): PlatformPorts {
 function renderSection(
   section: ScreenSection,
   url: string | null = 'vpp-doc://com.weidmuller.ucontrol/configurator/index.html',
+  theme?: ThemePort,
 ) {
   return render(<SectionRenderer section={section} moduleSystem={null} />, {
-    wrapper: createStoreWrapper(store, portsWith(url)),
+    wrapper: createStoreWrapper(store, portsWith(url, theme)),
   })
 }
+
+const tick = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms))
 
 describe('vendor-document section', () => {
   beforeEach(() => {
@@ -120,6 +144,45 @@ describe('vendor-document section', () => {
       }),
     )
     expect(screen.getByTitle('I/O Configurator')).not.toBe(first)
+  })
+
+  it('sends the editor theme once the relay is ready and on every change, without replacing the iframe', async () => {
+    const theme = fakeTheme('dark')
+    const { unmount } = renderSection(SECTION, undefined, theme.port)
+    const iframe = screen.getByTitle('I/O Configurator')
+    const guest = iframe instanceof HTMLIFrameElement ? iframe.contentWindow : null
+    if (!guest) throw new Error('the iframe has no window')
+    const themes: unknown[] = []
+    guest.addEventListener('message', (event: MessageEvent) => {
+      const data: unknown = event.data
+      if (typeof data === 'object' && data !== null && 'theme' in data) themes.push(data.theme)
+    })
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          source: guest,
+          origin: 'null',
+          data: { channel: RELAY_CHANNEL, kind: 'ready', relayVersion: RELAY_PROTOCOL_VERSION },
+        }),
+      )
+      await tick()
+    })
+    await act(async () => {
+      theme.change('nineties')
+      await tick()
+      theme.change('dark')
+      await tick()
+      theme.change('light')
+      await tick()
+    })
+
+    expect(themes).toEqual(['dark', 'light', 'dark', 'light'])
+    expect(screen.getByTitle('I/O Configurator')).toBe(iframe)
+    expect(iframe.getAttribute('src')).toBe('vpp-doc://com.weidmuller.ucontrol/configurator/index.html')
+
+    unmount()
+    expect(theme.listeners.size).toBe(0)
   })
 
   it.each([

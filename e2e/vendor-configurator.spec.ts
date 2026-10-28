@@ -385,3 +385,59 @@ test('the I/O Mapping list shows the selected module with its package picture', 
     await shutdown(app)
   }
 })
+
+const setEditorTheme = (app: ElectronApplication, theme: 'light' | 'dark' | 'nineties') =>
+  app.evaluate(({ BrowserWindow }, next) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))
+    win?.webContents.send('system:update-theme', next)
+  }, theme)
+
+const DARK_BODY = 'rgb(18, 19, 22)'
+const DARK_SHADOW_TEXT = 'rgb(237, 239, 242)'
+
+test('the configurator follows the editor theme without booting again', async () => {
+  test.setTimeout(120000)
+  const paths = pathsFor('theme')
+  writeFixture(paths)
+
+  const { app, page } = await launch(paths)
+  try {
+    await setEditorTheme(app, 'dark')
+    await expect(page.locator('html')).toHaveClass(/\bdark\b/)
+    const frame = await openConfigurator(page)
+    const html = frame.locator('html')
+    const body = frame.locator('body')
+    const shadowText = frame.locator('.fake-shadow-probe')
+    await expect(html).toHaveAttribute('data-openplc-theme', 'dark')
+    await expect(body).toHaveCSS('background-color', DARK_BODY)
+    await expect(shadowText).toHaveCSS('color', DARK_SHADOW_TEXT)
+
+    const iframe = page.locator('iframe[title="I/O Configurator"]')
+    await iframe.evaluate((element) => Reflect.set(element, '__e2eFrame', 'first'))
+    await frame.getByRole('button', { name: 'Add FAKE-4DI' }).click()
+    await expect(screenLabel(page, CONFIGURATOR_SCREEN, true)).toBeVisible({ timeout: 15000 })
+
+    for (const [editorTheme, guestTheme] of [
+      ['light', 'light'],
+      ['dark', 'dark'],
+      ['nineties', 'light'],
+    ] as const) {
+      await setEditorTheme(app, editorTheme)
+      await expect(html).toHaveAttribute('data-openplc-theme', guestTheme)
+      if (guestTheme === 'dark') {
+        await expect(body).toHaveCSS('background-color', DARK_BODY)
+        await expect(shadowText).toHaveCSS('color', DARK_SHADOW_TEXT)
+      } else {
+        await expect(body).not.toHaveCSS('background-color', DARK_BODY)
+        await expect(shadowText).not.toHaveCSS('color', DARK_SHADOW_TEXT)
+      }
+    }
+
+    expect(await iframe.evaluate((element) => Reflect.get(element, '__e2eFrame')), 'the same guest').toBe('first')
+    await expect(iframe).toHaveAttribute('src', /^vpp-doc:\/\/com\.e2e\.fake-configurator\/configurator\/index\.html$/)
+    await expect(frame.getByTestId('fake-modules')).toContainText('FAKE-4DI_1 (FAKE-4DI)')
+    await expect(screenLabel(page, CONFIGURATOR_SCREEN, true), 'still unsaved').toBeVisible()
+  } finally {
+    await shutdown(app)
+  }
+})
