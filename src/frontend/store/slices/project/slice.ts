@@ -1076,6 +1076,19 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
     },
 
+    getVppExtension: (packageId, screenId) => {
+      return getState().project.data.vppExtensions?.[packageId]?.[screenId]
+    },
+    setVppExtension: (packageId, screenId, data) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          if (!slice.project.data.vppExtensions) slice.project.data.vppExtensions = {}
+          if (!slice.project.data.vppExtensions[packageId]) slice.project.data.vppExtensions[packageId] = {}
+          slice.project.data.vppExtensions[packageId][screenId] = data
+        }),
+      )
+    },
+
     // -----------------------------------------------------------------------
     // POU
     // -----------------------------------------------------------------------

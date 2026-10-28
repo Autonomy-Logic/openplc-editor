@@ -477,6 +477,8 @@ export interface PLCProjectData {
     global?: string[]
     pous?: Record<string, string[]>
   }
+  /** RTOP-306: project-scope opaque data a VPP screen owns under its (packageId, screenId) key. */
+  vppExtensions?: Record<string, Record<string, unknown>>
 }
 
 /** Alias used by Monaco completion providers */

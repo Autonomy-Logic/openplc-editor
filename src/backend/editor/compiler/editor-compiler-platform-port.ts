@@ -39,6 +39,8 @@ import type {
   CheckRuntimeVersionArgs,
   CheckRuntimeVersionResult,
   CompileArduinoArgs,
+  CollectVppScreenRuntimeArtifactsArgs,
+  CollectVppScreenRuntimeArtifactsResult,
   CompileArduinoResult,
   CompilerPlatformPort,
   InstallArduinoCoreArgs,
@@ -717,6 +719,25 @@ export function createEditorCompilerPlatformPort(
           errors: [{ message, line: 0, column: 0, severity: 'error' }],
         }
       }
+    },
+
+    async collectVppScreenRuntimeArtifacts(
+      args: CollectVppScreenRuntimeArtifactsArgs,
+      _log: PlatformLog,
+    ): Promise<CollectVppScreenRuntimeArtifactsResult> {
+      const resolveAddress = (qualifier: string): string => args.addressByQualifier[qualifier] ?? ''
+      const { collectVppScreenRuntimeArtifacts: runCollect } = await import('../compile/vpp-screen-emitters')
+      const res = runCollect({
+        vppExtensions: args.vppExtensions,
+        deviceId: args.deviceId,
+        exportableVariables: args.exportableVariables,
+        resolveAddress,
+      })
+      const files: Record<string, string> = {}
+      for (const [path, content] of Object.entries(res.files)) {
+        files[path] = typeof content === 'string' ? content : Buffer.from(content).toString('utf-8')
+      }
+      return { files, errors: res.errors.length > 0 ? res.errors : undefined }
     },
   }
 }

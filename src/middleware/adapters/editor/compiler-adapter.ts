@@ -61,6 +61,8 @@ export interface IpcProjectData {
   servers?: PLCProjectData['servers']
   remoteDevices?: PLCProjectData['remoteDevices']
   libraries?: PLCProjectData['libraries']
+  /** RTOP-306: opaque VPP screen data forwarded to the pipeline for runtime emitters. */
+  vppExtensions?: Record<string, Record<string, unknown>>
   originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }>
 }
 
@@ -95,6 +97,7 @@ function toIpcProjectData(data: PLCProjectData & { originalCppPous?: unknown[] }
     servers: data.servers,
     remoteDevices: data.remoteDevices,
     libraries: data.libraries,
+    ...((data as PLCProjectData).vppExtensions ? { vppExtensions: (data as PLCProjectData).vppExtensions } : {}),
     ...(data.originalCppPous ? { originalCppPous: data.originalCppPous as IpcProjectData['originalCppPous'] } : {}),
   }
 }

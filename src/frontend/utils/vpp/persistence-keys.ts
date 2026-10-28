@@ -60,8 +60,10 @@ export function getSectionPersistenceKey(section: PersistableSection | null | un
   if (!section || typeof section !== 'object') return null
   // The configurator and the table it drives use fixed keys: the build reads the archive from `configurator`.
   if (isDeviceSetupIoTable(section)) return IO_MAPPING_KEY
-  if (section.layout === VENDOR_DOCUMENT_LAYOUT) return CONFIGURATOR_KEY
+  // An explicit `persistence` wins over the layout default, so a VPP can ship a `vendor-document`
+  // screen that stores opaque VPP-extension data instead of a configurator archive.
   if (typeof section.persistence === 'string' && section.persistence.length > 0) return section.persistence
+  if (section.layout === VENDOR_DOCUMENT_LAYOUT) return CONFIGURATOR_KEY
   if (typeof section.id === 'string' && section.id.length > 0) return section.id
   return null
 }

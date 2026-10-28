@@ -849,6 +849,59 @@ async function runCompilePipelineInner(
       })
     }
 
+    // RTOP-306: VPP screen runtime emitters. Pulls `vppExtensions` from the project, calls each
+    // installed VPP's declared emitter JS in a sandbox, merges the resulting `conf/*.json` files
+    // into the bundle. Optional on the port; web omits it and we skip the stage.
+    const vppExtensionsRaw = (projectData as { vppExtensions?: Record<string, Record<string, unknown>> }).vppExtensions
+    if (
+      port.collectVppScreenRuntimeArtifacts &&
+      vppExtensionsRaw &&
+      Object.keys(vppExtensionsRaw).length > 0
+    ) {
+      const exportableVariables: Array<{ qualifier: string; type: string; isWritable: boolean }> = []
+      const addressByQualifier: Record<string, string> = {}
+      for (const entry of projectData.pous ?? []) {
+        if (entry.type !== 'program') continue
+        const pou = entry.data
+        for (const variable of pou.variables ?? []) {
+          const qualifier = `${pou.name}.${variable.name}`
+          const typeValue = variable.type?.value ?? ''
+          exportableVariables.push({ qualifier, type: typeValue.toUpperCase(), isWritable: true })
+          addressByQualifier[qualifier] = variable.location ?? ''
+        }
+      }
+      const globals = projectData.configuration?.resource?.globalVariables ?? []
+      for (const g of globals) {
+        const qualifier = `GVL.${g.name}`
+        const typeValue = g.type?.value ?? ''
+        exportableVariables.push({ qualifier, type: typeValue.toUpperCase(), isWritable: true })
+        addressByQualifier[qualifier] = g.location ?? ''
+      }
+      const screenRes = await port.collectVppScreenRuntimeArtifacts(
+        {
+          deviceId: boardTarget,
+          vppExtensions: vppExtensionsRaw,
+          exportableVariables,
+          addressByQualifier,
+        },
+        makePlatformLog(emit, 'runtime-v4-bundle'),
+      )
+      if (screenRes.errors && screenRes.errors.length > 0) {
+        for (const message of screenRes.errors) {
+          emit({ stage: 'runtime-v4-bundle', message: `VPP screen emitter: ${message}`, level: 'warning' })
+        }
+      }
+      const screenCount = Object.keys(screenRes.files).length
+      if (screenCount > 0) {
+        Object.assign(bundle, screenRes.files)
+        emit({
+          stage: 'runtime-v4-bundle',
+          message: `Merged ${screenCount} VPP screen artifact(s) into bundle (bundle now ${Object.keys(bundle).length} files)`,
+          level: 'info',
+        })
+      }
+    }
+
     // Persistent storage (RETAIN) settings travel with the program, exactly as
     // the VPP plugin config above does: the project owns them, the upload
     // installs them, and the runtime removes its copy when nothing arrives.
