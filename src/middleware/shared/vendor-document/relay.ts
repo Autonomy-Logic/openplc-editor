@@ -8,6 +8,7 @@ import {
   type DataPoint,
   type DeviceReference,
   type DeviceSetup,
+  type HostRelayMethod,
   isRelayMethod,
   parseHostToRelayMessage,
   RELAY_CHANNEL,
@@ -111,18 +112,38 @@ async function invoke(provider: DeviceEditorProviderLike, method: RelayMethod, a
   }
 }
 
+/** Pending host query the guest is awaiting a response for. */
+interface GuestPendingHostQuery {
+  resolve: (result: unknown) => void
+  reject: (error: Error) => void
+  timer: ReturnType<typeof setTimeout>
+}
+
+export interface InstalledRelay {
+  /** Stops the relay and rejects every pending host query. */
+  stop(): void
+  /** Guest-to-host query. Returns the raw host result, caller is responsible for shape validation. */
+  callHost(method: HostRelayMethod, args: unknown[]): Promise<unknown>
+}
+
+const DEFAULT_HOST_QUERY_TIMEOUT_MS = 15_000
+
 /**
  * The vendor bundle replaces `DeviceEditorConsumer` after scripts that ran before it, so the
- * relay waits for the vendor's object and patches its methods in place. Returns a stop function.
+ * relay waits for the vendor's object and patches its methods in place. Returns a handle whose
+ * `stop()` tears it down and whose `callHost(method, args)` performs a guest-to-host query.
  */
 export function installRelay(
   scope: RelayGuestScope,
   transport: RelayTransport<RelayToHostMessage>,
   options: RelayOptions = {},
-): () => void {
+): InstalledRelay {
   const pollIntervalMs = options.pollIntervalMs ?? 50
   const bootTimeoutMs = options.bootTimeoutMs ?? 60_000
   let ready = false
+  const pendingHostQueries = new Map<string, GuestPendingHostQuery>()
+  let nextHostQueryId = 0
+  let stopped = false
 
   const announce = () => transport.post({ channel: RELAY_CHANNEL, kind: 'ready', relayVersion: RELAY_PROTOCOL_VERSION })
   const reportError = (message: string) => transport.post({ channel: RELAY_CHANNEL, kind: 'error', message })
@@ -163,14 +184,32 @@ export function installRelay(
       if (ready) announce()
       return
     }
+    if (message.kind === 'host-response') {
+      const pending = pendingHostQueries.get(message.id)
+      if (!pending) return
+      pendingHostQueries.delete(message.id)
+      clearTimeout(pending.timer)
+      if (message.ok) pending.resolve(message.result)
+      else pending.reject(new Error(message.error ?? 'host query failed'))
+      return
+    }
+    if (message.kind === 'host-event') {
+      // Host-pushed events are observed by the embedded screen through its own `postMessage` listener,
+      // not through the configurator relay. The relay forwards nothing and emits no response.
+      return
+    }
     const { id, method, args } = message
     const provider = scope.DeviceEditorProvider
-    if (!ready || !provider) {
+    if (!ready) {
       transport.post({ channel: RELAY_CHANNEL, kind: 'response', id, ok: false, error: 'relay not ready' })
       return
     }
     if (!isRelayMethod(method)) {
       transport.post({ channel: RELAY_CHANNEL, kind: 'response', id, ok: false, error: `unsupported method ${method}` })
+      return
+    }
+    if (!provider) {
+      transport.post({ channel: RELAY_CHANNEL, kind: 'response', id, ok: false, error: 'no device editor provider' })
       return
     }
     invoke(provider, method, args).then(
@@ -188,15 +227,38 @@ export function installRelay(
 
   if (tryBoot()) stopBootWait()
 
-  return () => {
+  function stop() {
+    if (stopped) return
+    stopped = true
     stopBootWait()
     unsubscribe()
+    pendingHostQueries.forEach((entry) => {
+      clearTimeout(entry.timer)
+      entry.reject(new Error('relay stopped'))
+    })
+    pendingHostQueries.clear()
   }
+
+  function callHost(method: HostRelayMethod, args: unknown[]): Promise<unknown> {
+    if (stopped) return Promise.reject(new Error('relay stopped'))
+    nextHostQueryId += 1
+    const id = `h${nextHostQueryId}`
+    return new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pendingHostQueries.delete(id)
+        reject(new Error(`host did not answer ${method} within ${DEFAULT_HOST_QUERY_TIMEOUT_MS} ms`))
+      }, DEFAULT_HOST_QUERY_TIMEOUT_MS)
+      pendingHostQueries.set(id, { resolve, reject, timer })
+      transport.post({ channel: RELAY_CHANNEL, kind: 'host-query', id, method, args })
+    })
+  }
+
+  return { stop, callHost }
 }
 
 /** Entry point for the packaged script: listens only to the embedding parent. */
-export function installWindowRelay(guest: Window & RelayGuestScope, options?: RelayOptions): () => void {
-  return installRelay(
+export function installWindowRelay(guest: Window & RelayGuestScope, options?: RelayOptions): InstalledRelay {
+  const relay = installRelay(
     guest,
     {
       post: (message) => guest.parent.postMessage(message, '*'),
@@ -211,4 +273,8 @@ export function installWindowRelay(guest: Window & RelayGuestScope, options?: Re
     },
     options,
   )
+  // Exposed so a VPP screen bundle can perform guest-to-host queries via `window.OpenPlcRelay.callHost(...)`.
+  type RelayHostScope = Window & { OpenPlcRelay?: InstalledRelay }
+  ;(guest as RelayHostScope).OpenPlcRelay = relay
+  return relay
 }

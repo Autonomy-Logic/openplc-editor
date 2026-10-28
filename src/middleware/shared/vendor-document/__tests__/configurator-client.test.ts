@@ -62,7 +62,8 @@ function setup(fakeOptions: FakeDeviceEditorOptions = {}) {
   const channel = createChannel()
   const scope: RelayGuestScope = {}
   const fake = installFakeDeviceEditor(scope, fakeOptions)
-  cleanups.push(installRelay(scope, channel.guest, { pollIntervalMs: 5, bootTimeoutMs: 1_000 }))
+  const relay = installRelay(scope, channel.guest, { pollIntervalMs: 5, bootTimeoutMs: 1_000 })
+  cleanups.push(() => relay.stop())
   const client = createConfiguratorClient(channel.host, { readyTimeoutMs: 1_000, requestTimeoutMs: 500 })
   cleanups.push(() => client.dispose())
   let modified = 0
@@ -267,7 +268,8 @@ describe('relay', () => {
 
   it('reports a bundle that never publishes its provider', async () => {
     const channel = createChannel()
-    cleanups.push(installRelay({}, channel.guest, { pollIntervalMs: 5, bootTimeoutMs: 30 }))
+    const relay = installRelay({}, channel.guest, { pollIntervalMs: 5, bootTimeoutMs: 30 })
+    cleanups.push(() => relay.stop())
     const client = createConfiguratorClient(channel.host, { readyTimeoutMs: 1_000 })
     cleanups.push(() => client.dispose())
     const errors: string[] = []

@@ -8,6 +8,13 @@ import { ConfiguratorScreen } from './layouts/configurator-screen'
 import { FormLayout } from './layouts/form-layout'
 import { IoTableLayout } from './layouts/io-table-layout'
 import { ModuleSlotsLayout } from './layouts/module-slots-layout'
+import { VppScreenHost } from './layouts/vpp-screen-host'
+
+const VPP_EXTENSIONS_PERSISTENCE = 'vpp-extensions'
+
+function isVppExtensionsSection(section: ScreenSection): boolean {
+  return section.layout === 'vendor-document' && section.persistence === VPP_EXTENSIONS_PERSISTENCE
+}
 
 /**
  * The layouts this renderer knows how to draw. A vendor package is untrusted
@@ -38,7 +45,11 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
       case 'form':
         return <FormLayout section={section} />
       case 'vendor-document':
-        return <ConfiguratorScreen section={section} />
+        return isVppExtensionsSection(section) ? (
+          <VppScreenHost section={section} />
+        ) : (
+          <ConfiguratorScreen section={section} />
+        )
       default:
         return null
     }

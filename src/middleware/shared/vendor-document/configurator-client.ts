@@ -124,6 +124,10 @@ export function createConfiguratorClient(
       case 'error':
         errorListeners.forEach((listener) => listener(message.message))
         return
+      case 'host-query':
+        // Guest-to-host query is served by `installHostQueryHandler` on a separate layer.
+        // The configurator client intentionally ignores it so both handlers can share a transport.
+        return
       default: {
         const exhaustive: never = message
         return exhaustive
