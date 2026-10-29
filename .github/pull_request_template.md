@@ -19,6 +19,7 @@ This PR resolve the *#issue_number*.
 
 - [ ] The code is complete and according to developers’ standards.
 - [ ] I have performed a self-review of my code.
+- [ ] Adapters stay thin: no logic added outside the shared surface (CLAUDE.md, "Thin adapters").
 - [ ] Meet the acceptance criteria.
 - [ ] Unit tests are written and green.
 - [ ] Test coverage: __ %.

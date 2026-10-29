@@ -51,7 +51,7 @@ import {
   restoreCommit,
   switchBranch,
 } from '@root/backend/editor/edge-version-control'
-import { ESIService } from '@root/backend/editor/ethercat'
+import { EsiProjectFiles } from '@root/backend/editor/ethercat'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-workspace'
 import { describeRetrievedLibraries } from '@root/backend/editor/project/describe-retrieved-libraries'
@@ -69,7 +69,7 @@ import type {
   DeviceModbusTransport,
   PlcControlResult,
 } from '@root/backend/shared/debug/types'
-import { parseESIDeviceFull, parseESIModuleFull } from '@root/backend/shared/ethercat/esi-parser-main'
+import { runEsiParseOp } from '@root/backend/shared/ethercat/esi-parse-ops'
 import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/library/public-catalog-client'
 import type { SnapshotMetadata } from '@root/backend/shared/project/project-snapshot-archive'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
@@ -82,6 +82,7 @@ import type { AITelemetryEventName } from '@root/middleware/shared/ports/ai-port
 import type { DeviceLicenseReport, DeviceLicenseRequest } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
 import type { EditSessionBeat, EditSessionOpened } from '@root/middleware/shared/ports/edit-session-port'
+import type { EsiParseOp } from '@root/middleware/shared/ports/esi-repository-mechanisms'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -114,7 +115,6 @@ import type {
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import type { VersionControlResult } from '@root/middleware/shared/ports/version-control-port'
 import { capabilitiesFromResponse } from '@root/middleware/shared/utils/build-gate/runtime-capabilities-response'
-import { findModuleByIdent } from '@root/middleware/shared/utils/ethercat/esi-module-resolve'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
@@ -324,7 +324,7 @@ class MainProcessBridge implements MainIpcModule {
   // configured base URL.
   private catalogTransport = createDesktopCatalogTransport()
   // ESI repository service for EtherCAT device descriptions
-  private esiService = new ESIService()
+  private esiFiles = new EsiProjectFiles()
 
   constructor({
     ipcMain,
@@ -1063,16 +1063,11 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('ethercat:get-runtime-status', this.handleEtherCATGetRuntimeStatus)
 
     // ===================== ESI REPOSITORY =====================
-    this.registerHandle('esi:load-repository-index', this.handleESILoadRepositoryIndex)
-    this.registerHandle('esi:save-xml-file', this.handleESISaveXmlFile)
-    this.registerHandle('esi:load-xml-file', this.handleESILoadXmlFile)
-    this.registerHandle('esi:delete-xml-file', this.handleESIDeleteXmlFile)
-    this.registerHandle('esi:parse-and-save-file', this.handleESIParseAndSaveFile)
-    this.registerHandle('esi:clear-repository', this.handleESIClearRepository)
-    this.registerHandle('esi:load-device-full', this.handleESILoadDeviceFull)
-    this.registerHandle('esi:load-module-full', this.handleESILoadModuleFull)
-    this.registerHandle('esi:load-repository-light', this.handleESILoadRepositoryLight)
-    this.registerHandle('esi:migrate-repository', this.handleESIMigrateRepository)
+    this.registerHandle('esi:parse', this.handleESIParse)
+    this.registerHandle('esi:file-read', this.handleESIFileRead)
+    this.registerHandle('esi:file-write', this.handleESIFileWrite)
+    this.registerHandle('esi:file-remove', this.handleESIFileRemove)
+    this.registerHandle('esi:file-list', this.handleESIFileList)
 
     // ===================== SIMULATOR =====================
     this.registerHandle('simulator:load-firmware', this.handleSimulatorLoadFirmware)
@@ -3355,70 +3350,32 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  // ===================== ESI REPOSITORY HANDLERS =====================
+  // ===================== ESI REPOSITORY MECHANISMS =====================
+  // The ESI repository logic is shared (backend/shared/ethercat/esi-repository-port.ts).
+  // The main process only runs the shared parser off the renderer thread and does file I/O.
 
-  handleESILoadRepositoryIndex = async (_event: IpcMainInvokeEvent, projectPath: string) =>
-    this.wrapServiceCall(async () => {
-      const index = await this.esiService.loadRepositoryIndex(projectPath)
-      return { success: true as const, data: index }
-    })
+  /** Run a file call and hand its outcome over IPC; the renderer rethrows the message. */
+  private async esiFileCall<T>(fn: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
+    try {
+      return { ok: true, value: await fn() }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
 
-  handleESISaveXmlFile = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string, xmlContent: string) =>
-    this.wrapServiceCall(() => this.esiService.saveXmlFile(projectPath, itemId, xmlContent))
+  handleESIParse = (_event: IpcMainInvokeEvent, request: EsiParseOp) => runEsiParseOp(request)
 
-  handleESILoadXmlFile = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string) =>
-    this.wrapServiceCall(() => this.esiService.loadXmlFile(projectPath, itemId))
+  handleESIFileRead = (_event: IpcMainInvokeEvent, projectPath: string, name: string) =>
+    this.esiFileCall(() => this.esiFiles.read(projectPath, name))
 
-  handleESIDeleteXmlFile = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string) =>
-    this.wrapServiceCall(() => this.esiService.deleteRepositoryItemV2(projectPath, itemId))
+  handleESIFileWrite = (_event: IpcMainInvokeEvent, projectPath: string, name: string, text: string) =>
+    this.esiFileCall(() => this.esiFiles.write(projectPath, name, text))
 
-  handleESIParseAndSaveFile = async (
-    _event: IpcMainInvokeEvent,
-    projectPath: string,
-    filename: string,
-    content: string,
-  ) => this.wrapServiceCall(() => this.esiService.parseAndSaveFile(projectPath, filename, content))
+  handleESIFileRemove = (_event: IpcMainInvokeEvent, projectPath: string, name: string) =>
+    this.esiFileCall(() => this.esiFiles.remove(projectPath, name))
 
-  handleESIClearRepository = async (_event: IpcMainInvokeEvent, projectPath: string) =>
-    this.wrapServiceCall(() => this.esiService.clearRepository(projectPath))
-
-  handleESILoadDeviceFull = async (
-    _event: IpcMainInvokeEvent,
-    projectPath: string,
-    itemId: string,
-    deviceIndex: number,
-  ) =>
-    this.wrapServiceCall(async () => {
-      const xmlResult = await this.esiService.loadXmlFile(projectPath, itemId)
-      if (!xmlResult.success || !xmlResult.content) {
-        return { success: false as const, error: xmlResult.error || 'XML file not found' }
-      }
-      return parseESIDeviceFull(xmlResult.content, deviceIndex)
-    })
-
-  /** Load one module by ident from a standalone-module ESI file. */
-  handleESILoadModuleFull = async (_event: IpcMainInvokeEvent, projectPath: string, itemId: string, ident: string) =>
-    this.wrapServiceCall(async () => {
-      const xmlResult = await this.esiService.loadXmlFile(projectPath, itemId)
-      if (!xmlResult.success || !xmlResult.content) {
-        return { success: false as const, error: xmlResult.error || 'XML file not found' }
-      }
-      const parsed = parseESIModuleFull(xmlResult.content)
-      if (!parsed.success || parsed.modules === undefined) {
-        return { success: false as const, error: parsed.error ?? 'Failed to parse module ESI' }
-      }
-      const matched = findModuleByIdent(parsed.modules, ident)
-      if (matched === undefined) {
-        return { success: false as const, error: `Module ident ${ident} not found in ESI item ${itemId}` }
-      }
-      return { success: true as const, module: matched }
-    })
-
-  handleESILoadRepositoryLight = async (_event: IpcMainInvokeEvent, projectPath: string) =>
-    this.wrapServiceCall(() => this.esiService.loadRepositoryLight(projectPath))
-
-  handleESIMigrateRepository = async (_event: IpcMainInvokeEvent, projectPath: string) =>
-    this.wrapServiceCall(() => this.esiService.migrateRepositoryToV2(projectPath))
+  handleESIFileList = (_event: IpcMainInvokeEvent, projectPath: string) =>
+    this.esiFileCall(() => this.esiFiles.list(projectPath))
 
   /**
    * Start the emulator, then open its session.
