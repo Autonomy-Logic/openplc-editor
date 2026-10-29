@@ -101,6 +101,51 @@ The shared surface (`src/frontend`, `src/middleware/shared`, `src/backend/shared
 is byte-identical with **openplc-web** — mirror any change and run the check suite
 in BOTH repos (web uses **Vitest**, not Jest, so a test can pass here and fail there).
 
+## Thin adapters (hard rule)
+
+**All logic lives in the shared surface. Adapters are thin: they hold only the
+platform mechanism.** Desktop and web must run the same logic, line by line, so
+a feature cannot work on one and break on the other.
+
+Platform code is everything outside the shared surface: `src/middleware/adapters/*`,
+and on the desktop also `src/main/` and `src/backend/editor/`, on the web also
+`src/backend/web/`. It may only:
+
+- **Store and bring back data**: read or write a file, list a folder, call an HTTP
+  endpoint, send over IPC or WebRTC, exactly as given.
+- **Run code elsewhere**: start a thread, Web Worker or process, and pass messages to it.
+- **Reach the OS**: native dialogs, keyring, serial ports, menus, system browser.
+- **Handle transport**: retry a transient network failure, turn an HTTP or IPC
+  failure into an `Error` with a message.
+
+Everything else is logic and goes to the shared surface, including: parsing,
+validation, hashing, dedup, ids, defaults, file and index formats (current and
+legacy), caching, ordering of writes, state machines, interpreting response
+bodies, and building or reshaping domain objects. Pass data across a platform
+boundary **verbatim**: never rebuild an object field by field
+(`{ id: x.id, name: x.name, ... }`) in platform code, or the next field added in
+shared code is silently dropped on that platform.
+
+**Pattern.** The port implementation is a shared factory, `createXxxPort(mechanisms)`,
+and the mechanism interfaces live in `src/middleware/shared/ports/`. Each
+platform's adapter only builds the mechanisms and calls the factory. Reference:
+the ESI repository. Shared: `backend/shared/ethercat/esi-repository-port.ts`
+(hashing, dedup, ids, summaries, caches), `esi-file-store.ts` (index format,
+legacy versions, validation, write order), `esi-parse-ops.ts`, and
+`ports/esi-repository-mechanisms.ts`. Mechanisms: desktop
+`adapters/editor/esi-adapter.ts` + `backend/editor/ethercat/esi-project-files.ts`
+(file read, write, list, remove); web `adapters/web/esi-adapter.ts` (Edge HTTP)
++ `services/esi/esi.worker.ts`. Test the behaviour once, in a shared test, with
+the real shared code and an in-memory mechanism.
+
+**Why.** When each platform kept its own copy of the ESI repository logic, the
+desktop copy dropped `modules` and modular EtherCAT couplers lost their modules
+on the desktop only.
+
+**Existing code** that predates this rule still has logic in adapters. Don't add
+more: when a change touches such a port, move its logic into the shared surface
+in the same PR pair (editor + web).
+
 ## Electron e2e (Playwright)
 
 No CI workflow runs Playwright, so these are local checks. `e2e/` drives the real
@@ -210,7 +255,7 @@ export const editorPorts = createEditorPorts(appStore)
 ```
 The CLI creates its own store per process and passes it down (`src/cli/main.ts`, `src/cli/session/daemon-main.ts`).
 
-**Editor adapters** (`src/middleware/adapters/editor/`) implement ports by calling `window.bridge.*` (Electron IPC). The web repo has its own adapters using HTTP/WebRTC instead.
+**Editor adapters** (`src/middleware/adapters/editor/`) supply the desktop's mechanisms (`window.bridge.*`, Electron IPC) to shared port implementations. The web repo supplies HTTP/WebRTC mechanisms instead. Adapters are thin and logic-free: see **Thin adapters (hard rule)**.
 
 ### Architecture Layer Rules
 
