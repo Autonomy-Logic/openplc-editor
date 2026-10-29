@@ -24,7 +24,7 @@ import type {
   DeviceLicenseRequest,
 } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
-import type { ESIDevice, ESIModule, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
+import type { EsiParseOp, EsiParseResult } from '@root/middleware/shared/ports/esi-repository-mechanisms'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -80,6 +80,8 @@ import type {
   BootloaderUpdateProgress,
   RuntimeDeviceInfo,
 } from '../../../backend/editor/runtime/bootloader-api-client'
+
+type EsiFileOutcome<T> = { ok: true; value: T } | { ok: false; error: string }
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
@@ -876,63 +878,17 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('ethercat:get-runtime-status', ipAddress),
 
   // ===================== ESI REPOSITORY METHODS =====================
-  esiLoadRepositoryIndex: (
-    projectPath: string,
-  ): Promise<{
-    success: boolean
-    data?: { version: number; items: Array<Record<string, unknown>> }
-    error?: string
-  }> => ipcRenderer.invoke('esi:load-repository-index', projectPath),
-
-  esiSaveXmlFile: (
-    projectPath: string,
-    itemId: string,
-    xmlContent: string,
-  ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:save-xml-file', projectPath, itemId, xmlContent),
-
-  esiLoadXmlFile: (
-    projectPath: string,
-    itemId: string,
-  ): Promise<{ success: boolean; content?: string; error?: string }> =>
-    ipcRenderer.invoke('esi:load-xml-file', projectPath, itemId),
-
-  esiDeleteXmlFile: (projectPath: string, itemId: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:delete-xml-file', projectPath, itemId),
-
-  esiParseAndSaveFile: (
-    projectPath: string,
-    filename: string,
-    content: string,
-  ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; duplicate?: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:parse-and-save-file', projectPath, filename, content),
-
-  esiClearRepository: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:clear-repository', projectPath),
-
-  esiLoadDeviceFull: (
-    projectPath: string,
-    itemId: string,
-    deviceIndex: number,
-  ): Promise<{ success: boolean; device?: ESIDevice; error?: string }> =>
-    ipcRenderer.invoke('esi:load-device-full', projectPath, itemId, deviceIndex),
-
-  esiLoadModuleFull: (
-    projectPath: string,
-    itemId: string,
-    ident: string,
-  ): Promise<{ success: boolean; module?: ESIModule; error?: string }> =>
-    ipcRenderer.invoke('esi:load-module-full', projectPath, itemId, ident),
-
-  esiLoadRepositoryLight: (
-    projectPath: string,
-  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; needsMigration?: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:load-repository-light', projectPath),
-
-  esiMigrateRepository: (
-    projectPath: string,
-  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; error?: string }> =>
-    ipcRenderer.invoke('esi:migrate-repository', projectPath),
+  // ESI repository mechanisms: the shared port runs the parser in the main process and
+  // keeps files in the project's devices/esi folder through these.
+  esiParse: <T extends EsiParseOp>(request: T): Promise<EsiParseResult<T>> => ipcRenderer.invoke('esi:parse', request),
+  esiFileRead: (projectPath: string, name: string): Promise<EsiFileOutcome<string | null>> =>
+    ipcRenderer.invoke('esi:file-read', projectPath, name),
+  esiFileWrite: (projectPath: string, name: string, text: string): Promise<EsiFileOutcome<void>> =>
+    ipcRenderer.invoke('esi:file-write', projectPath, name, text),
+  esiFileRemove: (projectPath: string, name: string): Promise<EsiFileOutcome<void>> =>
+    ipcRenderer.invoke('esi:file-remove', projectPath, name),
+  esiFileList: (projectPath: string): Promise<EsiFileOutcome<string[]>> =>
+    ipcRenderer.invoke('esi:file-list', projectPath),
 
   // ===================== SIMULATOR METHODS =====================
   simulatorLoadFirmware: (hexPath: string): Promise<{ success: boolean; error?: string }> =>
