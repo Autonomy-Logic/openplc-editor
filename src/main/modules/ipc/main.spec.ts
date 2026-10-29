@@ -11,7 +11,7 @@ jest.mock('electron', () => ({
 }))
 
 jest.mock('@root/backend/editor/ethercat', () => ({
-  ESIService: jest.fn(),
+  EsiProjectFiles: jest.fn(),
 }))
 
 jest.mock('@root/backend/editor/library-manager/desktop-catalog-transport', () => ({

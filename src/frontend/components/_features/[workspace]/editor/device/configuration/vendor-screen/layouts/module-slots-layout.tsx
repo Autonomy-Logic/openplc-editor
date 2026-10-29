@@ -23,7 +23,6 @@ import {
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
 import type { ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry } from '@root/middleware/shared/ports/types'
-import { useDevice } from '@root/middleware/shared/providers/platform-context'
 import {
   buildAddressPool,
   buildAliasRegistry,
@@ -34,6 +33,10 @@ import { vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry
 import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { IoChannelTable } from '../components/io-channel-table'
+import { ModulePicture, ModuleSummary, SlotDetailHeading, SlotDetailPane } from '../components/slot-detail'
+import { SlotList, SlotSelectButton } from '../components/slot-list'
+import { moduleIoSummary, slotRowClassName } from '../components/slot-list-helpers'
 import type { ModuleDefinition, ModuleSystem, ScreenSection } from '../index'
 import { VppScreenActions, type VppScreenActionsProps } from '../screen-actions'
 
@@ -96,33 +99,6 @@ type ConfigScreenDefinition = {
 // Walk a screen definition and return every field that contributes
 // to the configuration form. The screen JSON is a vendor artifact —
 // be tolerant of missing/oddly-shaped fragments rather than crash.
-/**
- * Alias cell with local state so the value commits on blur (focus change),
- * not on every keystroke. Committing per keystroke fires the alias-rename
- * cascade for every intermediate string while editing — e.g. clearing "flow"
- * would cascade through "flo", "fl", "f" onto bound variables. Committing on
- * blur means a single rename (old → final) reaches the store, and clearing the
- * field to empty leaves bound variables orphaned rather than partially renamed.
- */
-function AliasInputCell({ value, onCommit }: { value: string; onCommit: (next: string) => void }) {
-  const [local, setLocal] = useState(value)
-  useEffect(() => {
-    setLocal(value)
-  }, [value])
-  return (
-    <input
-      type='text'
-      value={local}
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={() => {
-        if (local !== value) onCommit(local)
-      }}
-      placeholder='Alias...'
-      className='h-[26px] w-full rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none placeholder:text-neutral-400 focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300 dark:placeholder:text-neutral-600'
-    />
-  )
-}
-
 function collectConfigFields(def: ConfigScreenDefinition | undefined | null): ConfigFieldDef[] {
   if (!def?.sections) return []
   const out: ConfigFieldDef[] = []
@@ -159,15 +135,7 @@ function SortableSlotButton({ idx, moduleName, ioSummary, isSelected, draggable,
     opacity: isDragging ? 0.4 : undefined,
   }
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`flex shrink-0 items-stretch border-b border-neutral-100 dark:border-neutral-800 ${
-        isSelected
-          ? 'bg-brand/20 dark:bg-brand/30 shadow-[inset_3px_0_0_var(--primary-default)]'
-          : 'hover:bg-neutral-50 dark:hover:bg-neutral-900'
-      }`}
-    >
+    <div ref={setNodeRef} style={style} className={slotRowClassName(isSelected)}>
       {draggable ? (
         <button
           type='button'
@@ -182,28 +150,13 @@ function SortableSlotButton({ idx, moduleName, ioSummary, isSelected, draggable,
       ) : (
         <div className='w-6 shrink-0' aria-hidden />
       )}
-      <button
-        type='button'
-        aria-selected={isSelected}
-        onClick={onSelect}
-        className='flex min-w-0 flex-1 flex-col gap-0.5 px-2 py-2 text-left'
-      >
-        <div className='flex items-center justify-between gap-2'>
-          <span
-            className={`font-caption text-cp-sm text-neutral-950 dark:text-white ${isSelected ? 'font-bold' : 'font-semibold'}`}
-          >
-            Slot {idx + 1}
-          </span>
-          {moduleName && (
-            <span className='shrink-0 text-[10px] text-neutral-400 dark:text-neutral-500'>{ioSummary}</span>
-          )}
-        </div>
-        <span
-          className={`truncate text-xs ${moduleName ? 'text-neutral-700 dark:text-neutral-300' : 'italic text-neutral-400 dark:text-neutral-600'} ${isSelected ? 'font-semibold' : ''}`}
-        >
-          {moduleName ?? 'Empty'}
-        </span>
-      </button>
+      <SlotSelectButton
+        slotNumber={idx + 1}
+        moduleName={moduleName}
+        ioSummary={ioSummary}
+        isSelected={isSelected}
+        onSelect={onSelect}
+      />
     </div>
   )
 }
@@ -401,9 +354,6 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   const selectedModuleId = slots[selectedSlot] ?? null
   const selectedModule = findModule(selectedModuleId)
 
-  /* ------------------------------------------------------------ */
-  /* Module image (lazy fetch via the SystemPort preview endpoint) */
-  /* ------------------------------------------------------------ */
   const deviceBoard = boardSelectors.useDeviceBoard()
   // Results from a plugin command describe ONE device. Changing the board or
   // the connected vPLC makes the previous answers wrong, not stale, so the
@@ -416,28 +366,6 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   const pluginName = availableBoards.get(deviceBoard)?.vpp?.pluginName
   const runtimeConnected = useOpenPLCStore((s) => s.runtimeConnection.connectionStatus === 'connected')
   const discoverySupported = moduleSystem?.discoverySupported === true
-  const devicePort = useDevice()
-  const [moduleImage, setModuleImage] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const imageRel = (selectedModule as { image?: string } | undefined)?.image
-    if (!imageRel || !packagePath) {
-      setModuleImage(null)
-      return
-    }
-    void devicePort
-      .getPreviewImage(imageRel, packagePath)
-      .then((dataUrl: string) => {
-        if (!cancelled) setModuleImage(dataUrl || null)
-      })
-      .catch(() => {
-        if (!cancelled) setModuleImage(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [selectedModule, packagePath, devicePort])
 
   /* ------------------------------------------------------------ */
   /* I/O mapping regeneration                                      */
@@ -845,18 +773,6 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   /* ------------------------------------------------------------ */
   /* Render                                                        */
   /* ------------------------------------------------------------ */
-  const slotIoSummary = (moduleId: string | null) => {
-    if (!moduleId) return ''
-    const mod = findModule(moduleId)
-    if (!mod) return ''
-    const parts: string[] = []
-    if (mod.io.digitalInputs) parts.push(`${mod.io.digitalInputs}DI`)
-    if (mod.io.digitalOutputs) parts.push(`${mod.io.digitalOutputs}DO`)
-    if (mod.io.analogInputs) parts.push(`${mod.io.analogInputs}AI`)
-    if (mod.io.analogOutputs) parts.push(`${mod.io.analogOutputs}AO`)
-    return parts.join(' / ')
-  }
-
   const ioEntriesForSelected = (() => {
     const entries = (vendorScreenData?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined)?.entries ?? []
     return entries.filter((e) => e.slot === selectedSlot + 1)
@@ -907,7 +823,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
 
       <div className='flex min-h-0 flex-1 gap-4'>
         {/* ------ Left: slot tree ------ */}
-        <div className='flex w-56 shrink-0 flex-col overflow-y-auto rounded-md border border-neutral-200 dark:border-neutral-700'>
+        <SlotList>
           <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={displayedSlots.map((idx) => String(idx))} strategy={verticalListSortingStrategy}>
               {displayedSlots.map((idx) => {
@@ -918,7 +834,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                     key={idx}
                     idx={idx}
                     moduleName={mod?.name}
-                    ioSummary={slotIoSummary(moduleId)}
+                    ioSummary={moduleIoSummary(mod)}
                     isSelected={idx === selectedSlot}
                     draggable={!!mod && !slotIsLocked(idx)}
                     onSelect={() => setSelectedSlot(idx)}
@@ -937,10 +853,10 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
               + Add module
             </button>
           )}
-        </div>
+        </SlotList>
 
         {/* ------ Right: contextual detail pane ------ */}
-        <div className='flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-md border border-neutral-200 p-4 dark:border-neutral-700'>
+        <SlotDetailPane>
           {stackable && populatedCount === 0 ? (
             <div className='flex flex-1 flex-col items-center justify-center text-center text-sm text-neutral-500 dark:text-neutral-400'>
               <p>No modules configured.</p>
@@ -953,9 +869,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
               the top of the card down to the end of the specs. */}
               <div className='mb-5 flex gap-5'>
                 <div className='flex min-w-0 flex-1 flex-col'>
-                  <h3 className='mb-3 font-caption text-base font-semibold text-neutral-950 dark:text-white'>
-                    Slot {selectedSlot + 1}
-                  </h3>
+                  <SlotDetailHeading slotNumber={selectedSlot + 1} />
 
                   {/* Module picker — always visible. In physical mode,
                   selecting "-- Empty --" clears the slot; in stackable
@@ -998,36 +912,14 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                   })()}
 
                   {selectedModule && (
-                    <>
-                      {(selectedModule as { description?: string }).description && (
-                        <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-                          {(selectedModule as { description?: string }).description}
-                        </p>
-                      )}
-                      {(selectedModule as { specs?: Record<string, string> }).specs && (
-                        <dl className='mt-2 flex flex-col gap-0.5 text-xs text-neutral-600 dark:text-neutral-400'>
-                          {Object.entries((selectedModule as { specs?: Record<string, string> }).specs ?? {}).map(
-                            ([k, v]) => (
-                              <div key={k} className='flex gap-1'>
-                                <dt className='font-medium text-neutral-500 dark:text-neutral-400'>{k}:</dt>
-                                <dd className='text-neutral-700 dark:text-neutral-300'>{v}</dd>
-                              </div>
-                            ),
-                          )}
-                        </dl>
-                      )}
-                    </>
+                    <ModuleSummary description={selectedModule.description} specs={selectedModule.specs} />
                   )}
                 </div>
 
                 {/* Module image — frameless. The PNGs ship with a
                 transparent background, so no card chrome is needed. */}
-                {selectedModule && moduleImage && (
-                  <img
-                    src={moduleImage}
-                    alt={selectedModule.name}
-                    className='h-80 w-80 shrink-0 self-start object-contain'
-                  />
+                {selectedModule && (
+                  <ModulePicture image={selectedModule.image} packagePath={packagePath} alt={selectedModule.name} />
                 )}
               </div>
 
@@ -1035,79 +927,35 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                 <div className='flex flex-col gap-5'>
                   {/* I/O Mapping */}
                   {ioEntriesForSelected.length > 0 && (
-                    <section>
-                      <h4 className='mb-2 font-caption text-sm font-semibold text-neutral-950 dark:text-white'>
-                        I/O Mapping
-                      </h4>
-                      <table className='w-full text-left'>
-                        <thead>
-                          <tr className='border-b border-neutral-200 dark:border-neutral-700'>
-                            <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                              Channel
-                            </th>
-                            <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                              Type
-                            </th>
-                            {showModeColumn && (
-                              <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                                Mode
-                              </th>
-                            )}
-                            <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                              IEC Address
-                            </th>
-                            <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                              Alias
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {ioEntriesForSelected.map((entry) => (
-                            <tr
-                              key={`${entry.slot}-${entry.channelName}`}
-                              className='border-b border-neutral-100 last:border-b-0 dark:border-neutral-800'
-                            >
-                              <td className='px-2 py-1.5 font-caption text-cp-sm text-neutral-850 dark:text-neutral-300'>
-                                {entry.channelName}
-                              </td>
-                              <td className='px-2 py-1.5 font-caption text-cp-sm text-neutral-500 dark:text-neutral-400'>
-                                {entry.channelType}
-                              </td>
-                              {showModeColumn && (
-                                <td className='px-2 py-1.5'>
-                                  {entry.modeFieldId && entry.modeOptions && entry.modeOptions.length > 0 ? (
-                                    <select
-                                      value={entry.modeValue ?? entry.modeOptions[0]}
-                                      onChange={(e) => handleModeChange(entry.slot, entry.modeFieldId!, e.target.value)}
-                                      className='h-[26px] w-full cursor-pointer rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300'
-                                    >
-                                      {entry.modeOptions.map((opt) => (
-                                        <option key={opt} value={opt}>
-                                          {opt}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  ) : (
-                                    <span className='font-caption text-cp-sm text-neutral-400 dark:text-neutral-600'>
-                                      —
-                                    </span>
-                                  )}
-                                </td>
-                              )}
-                              <td className='px-2 py-1.5 font-mono text-cp-sm font-medium text-brand dark:text-brand-light'>
-                                {entry.iecAddress}
-                              </td>
-                              <td className='px-1 py-1'>
-                                <AliasInputCell
-                                  value={entry.alias ?? ''}
-                                  onCommit={(next) => handleAliasChange(entry.slot, entry.channelName, next)}
-                                />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </section>
+                    <IoChannelTable
+                      entries={ioEntriesForSelected}
+                      typeOf={(entry) => entry.channelType}
+                      renderMode={
+                        showModeColumn
+                          ? (entry) => {
+                              const { modeFieldId, modeOptions } = entry
+                              return modeFieldId && modeOptions && modeOptions.length > 0 ? (
+                                <select
+                                  value={entry.modeValue ?? modeOptions[0]}
+                                  onChange={(e) => handleModeChange(entry.slot, modeFieldId, e.target.value)}
+                                  className='h-[26px] w-full cursor-pointer rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300'
+                                >
+                                  {modeOptions.map((opt) => (
+                                    <option key={opt} value={opt}>
+                                      {opt}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span className='font-caption text-cp-sm text-neutral-400 dark:text-neutral-600'>
+                                  —
+                                </span>
+                              )
+                            }
+                          : undefined
+                      }
+                      onAliasCommit={(entry, next) => handleAliasChange(entry.slot, entry.channelName, next)}
+                    />
                   )}
 
                   {/* Defensive hint: manifest declared a configScreen path
@@ -1239,7 +1087,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
               )}
             </>
           )}
-        </div>
+        </SlotDetailPane>
       </div>
 
       {/* Remove-module confirmation (stackable only). All slots after
