@@ -121,6 +121,7 @@ export function installFixturePackage(packagesDir: string, bundleDir: string): s
   copyFileSync(join(HERE, 'index.html'), join(root, 'configurator', 'index.html'))
   copyFileSync(join(bundleDir, 'relay.js'), join(root, 'configurator', 'relay.js'))
   copyFileSync(join(bundleDir, 'index.js'), join(root, 'configurator', 'index.js'))
+  copyFileSync(join(HERE, 'openplc-theme-overrides.css'), join(root, 'configurator', 'openplc-theme-overrides.css'))
   for (const screen of ['io-configurator.json', 'io-mapping.json']) {
     copyFileSync(join(REPO, 'src', '__fixtures__', 'weidmuller-screens', screen), join(root, 'screens', screen))
   }

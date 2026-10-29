@@ -5,6 +5,7 @@
  */
 
 import {
+  type ConfiguratorTheme,
   type DataPoint,
   type DeviceReference,
   type DeviceSetup,
@@ -43,6 +44,56 @@ export interface RelayOptions {
   pollIntervalMs?: number
   /** How long to wait for the vendor bundle to publish its provider and consumer. */
   bootTimeoutMs?: number
+  applyTheme?: (theme: ConfiguratorTheme) => void
+}
+
+export const THEME_ATTRIBUTE = 'data-openplc-theme'
+export const THEME_OVERRIDES_STYLESHEET = 'openplc-theme-overrides.css'
+
+export interface ThemeOverrides {
+  apply(theme: ConfiguratorTheme): void
+  uninstall(): void
+}
+
+/** Must run before the vendor bundle: its UI renders in shadow roots that document stylesheets cannot reach. */
+export function installThemeOverrides(guest: Window & typeof globalThis): ThemeOverrides {
+  const doc = guest.document
+  const prototype = guest.Element.prototype
+  const attachShadow = prototype.attachShadow
+  const links = new Set<HTMLLinkElement>()
+  let dark = false
+
+  const overridesLink = () => {
+    const link = doc.createElement('link')
+    link.rel = 'stylesheet'
+    link.setAttribute('href', THEME_OVERRIDES_STYLESHEET)
+    link.media = dark ? 'all' : 'not all'
+    links.add(link)
+    return link
+  }
+
+  const wrapped = function (this: Element, init: ShadowRootInit): ShadowRoot {
+    const root = attachShadow.call(this, init)
+    root.append(overridesLink())
+    return root
+  }
+  prototype.attachShadow = wrapped
+  doc.head.append(overridesLink())
+
+  return {
+    apply: (theme) => {
+      dark = theme === 'dark'
+      doc.documentElement.setAttribute(THEME_ATTRIBUTE, theme)
+      links.forEach((link) => {
+        link.media = dark ? 'all' : 'not all'
+      })
+    },
+    uninstall: () => {
+      if (prototype.attachShadow === wrapped) prototype.attachShadow = attachShadow
+      links.forEach((link) => link.remove())
+      links.clear()
+    },
+  }
 }
 
 function toRecord(value: unknown): Record<string, unknown> {
@@ -163,6 +214,10 @@ export function installRelay(
       if (ready) announce()
       return
     }
+    if (message.kind === 'theme') {
+      options.applyTheme?.(message.theme)
+      return
+    }
     const { id, method, args } = message
     const provider = scope.DeviceEditorProvider
     if (!ready || !provider) {
@@ -195,8 +250,12 @@ export function installRelay(
 }
 
 /** Entry point for the packaged script: listens only to the embedding parent. */
-export function installWindowRelay(guest: Window & RelayGuestScope, options?: RelayOptions): () => void {
-  return installRelay(
+export function installWindowRelay(
+  guest: Window & typeof globalThis & RelayGuestScope,
+  options?: RelayOptions,
+): () => void {
+  const theme = installThemeOverrides(guest)
+  const stop = installRelay(
     guest,
     {
       post: (message) => guest.parent.postMessage(message, '*'),
@@ -209,6 +268,10 @@ export function installWindowRelay(guest: Window & RelayGuestScope, options?: Re
         return () => guest.removeEventListener('message', listener)
       },
     },
-    options,
+    { ...options, applyTheme: theme.apply },
   )
+  return () => {
+    stop()
+    theme.uninstall()
+  }
 }

@@ -5,8 +5,10 @@ import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { type ConfiguratorSessionStatus, startConfiguratorSession } from '@root/frontend/utils/vpp/configurator-session'
 import { configuratorScreenNames, DEVICE_SETUP_KEY } from '@root/frontend/utils/vpp/persistence-keys'
 import { readVendorDocumentSection } from '@root/frontend/utils/vpp/vendor-document-section'
-import { useDevice } from '@root/middleware/shared/providers/platform-context'
+import type { ThemeVariant } from '@root/middleware/shared/ports/theme-port'
+import { useDevice, useTheme } from '@root/middleware/shared/providers/platform-context'
 import { createIframeConfiguratorClient } from '@root/middleware/shared/vendor-document/configurator-client'
+import type { ConfiguratorTheme } from '@root/middleware/shared/vendor-document/protocol'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ScreenSection } from '../index'
@@ -14,6 +16,8 @@ import { notifyDroppedAliases } from '../notify-dropped-aliases'
 
 /** Never add `allow-same-origin`: with it the guest could reach the host. */
 const IFRAME_SANDBOX = 'allow-scripts allow-forms'
+
+const configuratorTheme = (theme: ThemeVariant): ConfiguratorTheme => (theme === 'dark' ? 'dark' : 'light')
 
 function readStoredArchive(value: unknown): string | null {
   if (!value || typeof value !== 'object' || !('archive' in value)) return null
@@ -38,6 +42,7 @@ type ConfiguratorScreenProps = {
 function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
   const store = useOpenPLCStoreApi()
   const devicePort = useDevice()
+  const themePort = useTheme()
   const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
   const packageId = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards.get(deviceBoard)?.vpp?.packageId)
 
@@ -73,8 +78,11 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
     const tabNames = configuratorScreenNames(deviceAvailableOptions.availableBoards.get(board)?.vpp?.screens)
     let restoreSaved: (() => void) | null = null
     guestArchive.current = readStoredArchive(vendorScreenData?.[configuratorKey])
+    const port = createIframeConfiguratorClient(iframe)
+    port.setTheme(configuratorTheme(themePort.getCurrentTheme()))
+    const offTheme = themePort.onThemeChanged((theme) => port.setTheme(configuratorTheme(theme)))
     const session = startConfiguratorSession({
-      port: createIframeConfiguratorClient(iframe),
+      port,
       controller,
       storedArchive: readStoredArchive(vendorScreenData?.[configuratorKey]),
       storedModuleGuids: readStoredModuleGuids(vendorScreenData?.[DEVICE_SETUP_KEY]),
@@ -94,8 +102,11 @@ function ConfiguratorScreen({ section }: ConfiguratorScreenProps) {
       },
       onError: (message) => toast({ title: 'I/O Configurator', description: message, variant: 'fail' }),
     })
-    return () => session.dispose()
-  }, [store, frameKey, controller, configuratorKey, bundleVersion])
+    return () => {
+      offTheme()
+      session.dispose()
+    }
+  }, [store, themePort, frameKey, controller, configuratorKey, bundleVersion])
 
   if (!config) return null
 
