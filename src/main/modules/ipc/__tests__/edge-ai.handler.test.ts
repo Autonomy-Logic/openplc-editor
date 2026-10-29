@@ -46,7 +46,7 @@ jest.mock('@root/backend/editor/edge-version-control', () => ({}))
 jest.mock('@root/backend/editor/edge-projects', () => ({}))
 jest.mock('@root/backend/editor/edge-project-upload', () => ({}))
 jest.mock('@root/backend/editor/edge-account/edge-account-service', () => ({}))
-jest.mock('@root/backend/editor/ethercat', () => ({ ESIService: jest.fn() }))
+jest.mock('@root/backend/editor/ethercat', () => ({ EsiProjectFiles: jest.fn() }))
 jest.mock('@root/backend/editor/library-manager/desktop-catalog-transport', () => ({
   createDesktopCatalogTransport: jest.fn(() => ({})),
 }))

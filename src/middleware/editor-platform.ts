@@ -43,8 +43,18 @@ export function setRuntimeIpAddress(ip: string): void {
   _runtimeIpAddress = ip
 }
 
+const projectPathListeners = new Set<() => void>()
+
 export function setProjectPath(path: string): void {
+  if (path === _projectPath) return
   _projectPath = path
+  for (const listener of projectPathListeners) listener()
+}
+
+/** Subscribe to project switches; returns the unsubscribe. */
+function onProjectPathChanged(listener: () => void): () => void {
+  projectPathListeners.add(listener)
+  return () => projectPathListeners.delete(listener)
 }
 
 const editorPackages = createEditorPackageAdapter()
@@ -81,7 +91,7 @@ export function createEditorPorts(store: OpenPLCStore): PlatformPorts {
     accelerator: createEditorAcceleratorAdapter(),
     theme: createEditorThemeAdapter(),
     packages: editorPackages,
-    esi: createEditorEsiAdapter(() => _projectPath),
+    esi: createEditorEsiAdapter(() => _projectPath, onProjectPathChanged),
     ethercatScan: createEditorEtherCATScanAdapter({ getRuntimeIp: () => _runtimeIpAddress }),
     ethercatDiagnostics: createEditorEtherCATDiagnosticsAdapter({ getRuntimeIp: () => _runtimeIpAddress }),
     versionControl: createEditorVersionControlAdapter(),
