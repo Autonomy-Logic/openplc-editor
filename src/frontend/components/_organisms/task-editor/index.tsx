@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import type { PLCTask } from '../../../../middleware/shared/ports/types'
-import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
 import { MinusIcon } from '../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
-import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { useOpenPLCStore } from '../../../store'
 import type { TaskType } from '../../../store/slices/editor'
 import { cn } from '../../../utils/cn'
@@ -13,6 +11,7 @@ import { getNextName } from '../../../utils/next-name'
 import { parseResourceConfigurationToString } from '../../../utils/parse-resource-configuration-to-string'
 import { parseResourceStringToConfiguration } from '../../../utils/parse-resource-string-to-configuration'
 import TableActions from '../../_atoms/table-actions'
+import { ViewModeToggle } from '../../_atoms/view-mode-toggle'
 import { toast } from '../../_features/[app]/toast/use-toast'
 import { TaskTable } from '../../_molecules/task-table'
 import { VariablesCodeEditor } from '../variables-code-editor'
@@ -309,34 +308,14 @@ const TaskEditor = () => {
           )}
         </div>
 
-        <div
-          aria-label='Tasks visualization switch container'
-          className={cn('flex h-fit w-fit flex-1 items-center justify-center rounded-md', {
-            'absolute right-0': editorTasks.display === 'code',
-          })}
-        >
-          <TableIcon
-            aria-label='Tasks table visualization'
-            size='md'
-            onClick={() => handleVisualizationTypeChange('table')}
-            currentVisible={editorTasks.display === 'table'}
-            className={cn(
-              editorTasks.display === 'table' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-              'rounded-l-md transition-colors ease-in-out hover:cursor-pointer',
-            )}
-          />
-
-          <CodeIcon
-            aria-label='Tasks code visualization'
-            onClick={() => handleVisualizationTypeChange('code')}
-            size='md'
-            currentVisible={editorTasks.display === 'code'}
-            className={cn(
-              editorTasks.display === 'code' ? 'fill-brand' : 'fill-neutral-100 dark:fill-neutral-900',
-              'rounded-r-md transition-colors ease-in-out hover:cursor-pointer',
-            )}
-          />
-        </div>
+        <ViewModeToggle
+          display={editorTasks.display}
+          onDisplayChange={handleVisualizationTypeChange}
+          containerLabel='Tasks visualization switch container'
+          tableLabel='Tasks table visualization'
+          codeLabel='Tasks code visualization'
+          className={cn('flex-1', { 'absolute right-0': editorTasks.display === 'code' })}
+        />
       </div>
 
       {editorTasks.display === 'table' && (

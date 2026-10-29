@@ -14,6 +14,8 @@ import { zodFBDFlowSchema, zodLadderFlowSchema } from '../../../../middleware/sh
 // drifted from the runtime uppercase one and caused projects to
 // fail validation on open.
 import { baseTypeSchema } from '../../../../middleware/shared/ports/plc-schemas'
+import type { ImageTableKey } from '../../../../middleware/shared/utils/io-image/tables'
+import { IMAGE_TABLES } from '../../../../middleware/shared/utils/io-image/tables'
 
 type BaseType = z.infer<typeof baseTypeSchema>
 
@@ -289,51 +291,100 @@ type PLCConfiguration = z.infer<typeof PLCConfigurationSchema>
 const PLCServerProtocolSchema = z.enum(['modbus-tcp', 's7comm', 'ethernet-ip', 'opcua'])
 type PLCServerProtocol = z.infer<typeof PLCServerProtocolSchema>
 
+/**
+ * Every segment and every count is OPTIONAL, and absent is not zero.
+ *
+ * Absent means "publish whatever the image turns out to be"; a number is a
+ * request that sizes the area. The screen persists only what was edited, so a
+ * server with one count set is the ordinary shape on disk -- requiring all
+ * seven here dropped the whole server at parse time, and the build then
+ * reported that nothing produced the addresses it serves.
+ */
 const ModbusSlaveBufferMappingSchema = z.object({
-  holdingRegisters: z.object({
-    qwCount: z.number(),
-    mwCount: z.number(),
-    mdCount: z.number(),
-    mlCount: z.number(),
-  }),
-  coils: z.object({
-    qxBits: z.number(),
-    mxBits: z.number(),
-  }),
-  discreteInputs: z.object({
-    ixBits: z.number(),
-  }),
-  inputRegisters: z.object({
-    iwCount: z.number(),
-  }),
+  holdingRegisters: z
+    .object({
+      qwCount: z.number().optional(),
+      mwCount: z.number().optional(),
+      mdCount: z.number().optional(),
+      mlCount: z.number().optional(),
+    })
+    .optional(),
+  coils: z
+    .object({
+      qxBits: z.number().optional(),
+      mxBits: z.number().optional(),
+    })
+    .optional(),
+  discreteInputs: z
+    .object({
+      ixBits: z.number().optional(),
+    })
+    .optional(),
+  inputRegisters: z
+    .object({
+      iwCount: z.number().optional(),
+    })
+    .optional(),
 })
 type ModbusSlaveBufferMapping = z.infer<typeof ModbusSlaveBufferMappingSchema>
 
+// Wire transports a Modbus endpoint answers on. Shared by the slave (server)
+// and the master (remote device): the same two wires carry both roles, and the
+// unified server screen is modelled on the master's transport selector.
+const ModbusTransportTypeSchema = z.enum(['tcp', 'rtu'])
+type ModbusTransportType = z.infer<typeof ModbusTransportTypeSchema>
+
+// Modbus RTU parity settings
+const ModbusParitySchema = z.enum(['N', 'E', 'O'])
+type ModbusParity = z.infer<typeof ModbusParitySchema>
+
 const ModbusSlaveConfigSchema = z.object({
   enabled: z.boolean(),
+  /**
+   * Transports this server answers on. RTU and TCP together are ONE server with
+   * two transports, never two servers, so this is a set rather than the single
+   * `transport` the master carries -- a master dials one endpoint, a server
+   * listens on everything it was given.
+   *
+   * Absent means TCP, which is what every project saved before baremetal gained
+   * a real `PLCServer` implies: Runtime v4 serves TCP and nothing else.
+   */
+  transports: z.array(ModbusTransportTypeSchema).optional(),
   networkInterface: z.string(),
-  port: z.number(),
+  // Reaches `#define MBTCP_PORT` verbatim, so it is bounded like every sibling
+  // port in this file. A project file not authored by the screen -- the very
+  // population the migration exists for -- is the only way an unbounded value
+  // could arrive.
+  port: z.number().int().min(1).max(65535),
+  /**
+   * Slave id this server answers to. Meaningful on RTU, where it is the only
+   * addressing there is; on TCP the MBAP unit id is a gateway routing field and
+   * is deliberately not filtered on.
+   *
+   * 1-247 is the addressable range the screen enforces. `0` is the broadcast
+   * address, which a server must never answer on, and 248-255 are reserved.
+   */
+  slaveId: z.number().int().min(1).max(247).optional(),
+  // RTU wiring, mirroring the master's serial half. Absent on a TCP-only
+  // server, and absent on baremetal when the RTU shares the editor's default
+  // port, where the package owns the port's speed.
+  serialPort: z.string().optional(),
+  baudRate: z.number().int().positive().optional(),
+  parity: ModbusParitySchema.optional(),
+  stopBits: z.number().int().min(1).max(2).optional(),
+  dataBits: z.number().int().min(7).max(8).optional(),
   bufferMapping: ModbusSlaveBufferMappingSchema.optional(),
 })
 type ModbusSlaveConfig = z.infer<typeof ModbusSlaveConfigSchema>
 
 // S7Comm Buffer Type Enumeration
-const S7CommBufferTypeSchema = z.enum([
-  'bool_input',
-  'bool_output',
-  'bool_memory',
-  'byte_input',
-  'byte_output',
-  'int_input',
-  'int_output',
-  'int_memory',
-  'dint_input',
-  'dint_output',
-  'dint_memory',
-  'lint_input',
-  'lint_output',
-  'lint_memory',
-])
+/* The tables an S7comm data block may be mapped onto are the tables the
+ * runtime HAS, so the list is derived rather than transcribed. A table added
+ * to the runtime and forgotten here would be a block the user cannot declare;
+ * one removed and forgotten would be a block that sizes storage that is gone.
+ *
+ * `z.enum` needs a non-empty tuple literal, hence the cast on the spread. */
+const S7CommBufferTypeSchema = z.enum(IMAGE_TABLES.map((table) => table.key) as [ImageTableKey, ...ImageTableKey[]])
 type S7CommBufferType = z.infer<typeof S7CommBufferTypeSchema>
 
 // S7Comm Server Settings Schema
@@ -363,7 +414,13 @@ type S7CommPlcIdentity = z.infer<typeof S7CommPlcIdentitySchema>
 // S7Comm Buffer Mapping Schema
 const S7CommBufferMappingSchema = z.object({
   type: S7CommBufferTypeSchema,
-  startBuffer: z.number().min(0).max(1023),
+  // 65535, not 1023: 1023 was the runtime's old fixed BUFFER_SIZE, copied
+  // here as if it were a property of S7comm. The image is sized from the
+  // project now, so the only ceiling left is the ABI's own — a located
+  // variable's index is a uint16 (CON03, strucpp_abi.hpp), which makes 65535
+  // the highest addressable element. The bound stays: an unbounded start
+  // buffer would be a number with no meaning rather than a freedom.
+  startBuffer: z.number().min(0).max(65535),
   bitAddressing: z.boolean(),
 })
 type S7CommBufferMapping = z.infer<typeof S7CommBufferMappingSchema>
@@ -439,6 +496,14 @@ const OpcUaSecurityProfileSchema = z.object({
   securityPolicy: OpcUaSecurityPolicySchema,
   securityMode: OpcUaSecurityModeSchema,
   authMethods: z.array(OpcUaAuthMethodSchema).min(1),
+  /** Role granted to Anonymous sessions on this profile. An anonymous client
+   *  carries no identity, so the role it maps to must be stated explicitly
+   *  rather than inferred. Defaults to the least-privilege 'viewer'
+   *  (read-only); an administrator raises it deliberately to allow anonymous
+   *  writes. Only meaningful when authMethods includes 'Anonymous'. Optional
+   *  for backward compatibility with projects authored before this field —
+   *  those are treated as 'viewer'. */
+  anonymousRole: OpcUaUserRoleSchema.optional(),
 })
 type OpcUaSecurityProfile = z.infer<typeof OpcUaSecurityProfileSchema>
 
@@ -458,6 +523,15 @@ const OpcUaUserSchema = z.object({
   id: z.string(),
   type: z.enum(['password', 'certificate']),
   username: z.string().nullable(),
+  /** The password, in the clear. Deliberate: how a credential is stored is a
+   *  device property, so the build derives it, and to derive it the build needs
+   *  the password. A project file containing OPC-UA users is therefore a secret
+   *  and must be handled as one. */
+  password: z.string().nullable().optional(),
+  /** Legacy: a pre-hashed credential from a project authored before the build
+   *  took over derivation. Passed through untouched so existing Runtime v4
+   *  projects keep working; it cannot be re-derived for another target, so the
+   *  build warns when one is used on a target that wants a different scheme. */
   passwordHash: z.string().nullable(),
   certificateId: z.string().nullable(),
   role: OpcUaUserRoleSchema,
@@ -572,14 +646,6 @@ type ModbusFunctionCode = z.infer<typeof ModbusFunctionCodeSchema>
 const ModbusErrorHandlingSchema = z.enum(['keep-last-value', 'set-to-zero'])
 type ModbusErrorHandling = z.infer<typeof ModbusErrorHandlingSchema>
 
-// Modbus transport type: TCP/IP or RTU (serial)
-const ModbusTransportTypeSchema = z.enum(['tcp', 'rtu'])
-type ModbusTransportType = z.infer<typeof ModbusTransportTypeSchema>
-
-// Modbus RTU parity settings
-const ModbusParitySchema = z.enum(['N', 'E', 'O'])
-type ModbusParity = z.infer<typeof ModbusParitySchema>
-
 const ModbusIOPointSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -679,6 +745,18 @@ const EtherCATSlaveConfigSchema = z.object({
   timeouts: EtherCATTimeoutsSchema,
   watchdog: EtherCATWatchdogSchema,
   distributedClocks: EtherCATDistributedClocksSchema,
+  /**
+   * CoE flags defaulted from the ESI, overridable in the Expert view.
+   * Optional for backward compatibility; the project loader runs the one-pass migration
+   * helper to fill them in from the ESI on projects saved under the earlier schema, without CoE flags or per-PDO flags.
+   */
+  coeFlags: z
+    .object({
+      pdoAssign: z.boolean(),
+      pdoConfig: z.boolean(),
+      completeAccess: z.boolean(),
+    })
+    .optional(),
 })
 
 const PersistedPdoEntrySchema = z.object({
@@ -687,12 +765,20 @@ const PersistedPdoEntrySchema = z.object({
   bitLen: z.number(),
   name: z.string(),
   dataType: z.string(),
+  dependOnSlot: z.boolean().optional(),
 })
 
 const PersistedPdoSchema = z.object({
   index: z.string(),
   name: z.string(),
   entries: z.array(PersistedPdoEntrySchema),
+  dependOnSlot: z.boolean().optional(),
+  assigned: z.boolean().optional(),
+  /** ESI defaults carried forward on first import. */
+  fixed: z.boolean().optional(),
+  mandatory: z.boolean().optional(),
+  sm: z.number().int().optional(),
+  exclude: z.array(z.string()).optional(),
 })
 
 const PersistedChannelInfoSchema = z.object({
@@ -716,6 +802,39 @@ const SDOConfigurationEntrySchema = z.object({
   bitLength: z.number(),
   name: z.string(),
   objectName: z.string(),
+  /** Byte-string payload (hex-encoded) sent via EtherDOG's value_bytes. */
+  valueBytes: z.string().optional(),
+  /** Send with CoE Complete Access. */
+  completeAccess: z.boolean().optional(),
+  dependOnSlot: z.boolean().optional(),
+  transition: z.string().optional(),
+})
+
+const ESISlotSchema = z.object({
+  name: z.string().optional(),
+  minInstances: z.number().int().min(0),
+  maxInstances: z.number().int().min(0),
+  moduleClasses: z.array(z.string()).optional(),
+  moduleIdents: z.array(z.string()).optional(),
+  defaultModuleIdent: z.string().optional(),
+})
+
+const ESISlotsSpecSchema = z.object({
+  slots: z.array(ESISlotSchema),
+  slotIndexIncrement: z.number().int(),
+  slotPdoIncrement: z.number().int(),
+  downloadModuleIdentList: z.boolean(),
+  downloadModuleListTransition: z.string().optional(),
+  identifyModuleBy: z.string().optional(),
+  maxSlotCount: z.number().int().optional(),
+})
+
+const ESIModulePdoGroupSchema = z.object({
+  group: z.number().int(),
+  sm: z.number().int().optional(),
+  alignment: z.number().int().optional(),
+  rxPdoIndex: z.string().optional(),
+  txPdoIndex: z.string().optional(),
 })
 
 /**
@@ -731,6 +850,29 @@ const Cia402AxisConfigSchema = z.object({
   scaleNum: z.number(),
   scaleDenom: z.number(),
   scaleFactor: z.number(),
+})
+
+/**
+ * One I/O module plugged into a modular coupler (ETG.5001). Mirror of
+ * {@link ConfiguredEtherCATModule} in esi-types.ts; the Zod schema is what the project
+ * loader validates against.
+ */
+const ConfiguredEtherCATModuleSchema = z.object({
+  id: z.string(),
+  slot: z.number().int().min(1),
+  name: z.string(),
+  ident: z.string(),
+  esiModuleRef: z.object({
+    repositoryItemId: z.string(),
+    moduleIdent: z.string(),
+  }),
+  channelMappings: z.array(EtherCATChannelMappingSchema),
+  channelInfo: z.array(PersistedChannelInfoSchema).optional(),
+  rxPdos: z.array(PersistedPdoSchema).optional(),
+  txPdos: z.array(PersistedPdoSchema).optional(),
+  sdoConfigurations: z.array(SDOConfigurationEntrySchema).optional(),
+  moduleClass: z.string().optional(),
+  modulePdoGroup: z.number().int().optional(),
 })
 
 const ConfiguredEtherCATDeviceSchema = z.object({
@@ -751,6 +893,19 @@ const ConfiguredEtherCATDeviceSchema = z.object({
   sdoConfigurations: z.array(SDOConfigurationEntrySchema).optional(),
   /** Present when this drive is a CiA 402 SoftMotion axis (see schema above). */
   cia402: Cia402AxisConfigSchema.optional(),
+  /**
+   * Modules plugged into this coupler, in slot order. Present only when the
+   * underlying ESI declares a `<Slots>` block (ETG.5001 modular coupler).
+   */
+  modules: z.array(ConfiguredEtherCATModuleSchema).optional(),
+  /**
+   * True when the ESI declares a `<Slots>` block. Set once at import time so
+   * the UI can offer the "Add module to slot N" affordance before any module is attached.
+   */
+  isModularCoupler: z.boolean().optional(),
+  esiInitCmdSdos: z.array(SDOConfigurationEntrySchema).optional(),
+  slotsSpec: ESISlotsSpecSchema.optional(),
+  modulePdoGroups: z.array(ESIModulePdoGroupSchema).optional(),
 })
 
 const EtherCATMasterConfigSchema = z.object({

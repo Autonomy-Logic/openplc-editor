@@ -41,6 +41,10 @@ interface RuntimeSecurityProfile {
   security_policy: string
   security_mode: string
   auth_methods: string[]
+  /** Role granted to Anonymous sessions on this profile (viewer/operator/
+   *  engineer). The runtime enforces the per-variable matrix against it.
+   *  Absent -> 'viewer' (least privilege). */
+  anonymous_role: string
 }
 
 interface RuntimeServerConfig {
@@ -141,6 +145,25 @@ interface RuntimePluginConfig {
   address_space: RuntimeAddressSpace
 }
 
+/**
+ * What `buildOpcUaRuntimeConfig` hands back: the resolved v4 runtime config plus
+ * the project-model server settings.
+ *
+ * Runtime v4 wants only `runtime`, serialised. The baremetal `opcua_config.h`
+ * generator wants the resolved address space from `runtime` and the port / bind
+ * address / endpoint path from `server`, which `buildServerConfig` folds into a
+ * single `endpoint_url`.
+ */
+export interface ResolvedOpcUaConfig {
+  /** The Runtime v4 plugin config. `config.address_space` is the valuable
+   *  part: every configured variable path already resolved to an
+   *  `(arr, elem)` pair against strucpp's `debug-map.json`. */
+  runtime: RuntimeConfig
+  /** Project-model server settings, unresolved because they need no
+   *  resolution. */
+  server: OpcUaServerConfig['server']
+}
+
 interface RuntimeConfig {
   name: string
   protocol: 'OPC-UA'
@@ -169,6 +192,8 @@ const buildServerConfig = (config: OpcUaServerConfig): RuntimeServerConfig => {
         security_policy: sp.securityPolicy,
         security_mode: sp.securityMode,
         auth_methods: sp.authMethods,
+        // Anonymous sessions map to this role; absent means least-privilege.
+        anonymous_role: sp.anonymousRole ?? 'viewer',
       })),
   }
 }
@@ -219,8 +244,9 @@ const resolveVariable = (
   node: OpcUaNodeConfig,
   pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
+  fallbackWarnings: string[],
 ): RuntimeVariable => {
-  const addr = resolveVariableAddress(node, pathToAddr, instances)
+  const addr = resolveVariableAddress(node, pathToAddr, instances, fallbackWarnings)
 
   return {
     node_id: node.nodeId,
@@ -275,8 +301,9 @@ const resolveStructure = (
   pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
   droppedPaths: string[],
+  fallbackWarnings: string[],
 ): RuntimeStructure | null => {
-  const resolvedFields = resolveStructureAddresses(node, pathToAddr, instances, droppedPaths)
+  const resolvedFields = resolveStructureAddresses(node, pathToAddr, instances, droppedPaths, fallbackWarnings)
   if (resolvedFields.length === 0) {
     return null
   }
@@ -320,34 +347,40 @@ const resolveArray = (
   }
 }
 
+/** A configured node left out of the build because its variable no longer resolves. */
+interface DroppedNode {
+  node: OpcUaNodeConfig
+  reason: string
+}
+
 /**
- * Build the complete address space configuration
+ * Build the complete address space configuration.
+ *
+ * A node whose variable does not resolve (deleted or renamed, or its
+ * program no longer instantiated) is left out and recorded in
+ * `droppedNodes` instead of failing the build.
  */
 const buildAddressSpace = (
   config: OpcUaServerConfig,
   pathToAddr: Map<string, DebugLeafInfo>,
   instances: PLCInstanceInfo[],
   droppedPaths: string[],
+  fallbackWarnings: string[],
+  droppedNodes: DroppedNode[],
 ): RuntimeAddressSpace => {
   const variables: RuntimeVariable[] = []
   const structures: RuntimeStructure[] = []
   const arrays: RuntimeArray[] = []
-  const errors: OpcUaConfigError[] = []
 
   for (const node of config.addressSpace.nodes) {
     try {
       switch (node.nodeType) {
         case 'variable':
-          // Top-level variables that don't resolve are still hard
-          // errors — that means the variable was renamed/deleted in
-          // the program. The user has to fix the OPC-UA config.
-          // (Field-level mismatches are handled gracefully by
-          // resolveStructureAddresses via droppedPaths.)
-          variables.push(resolveVariable(node, pathToAddr, instances))
+          variables.push(resolveVariable(node, pathToAddr, instances, fallbackWarnings))
           break
         case 'structure': {
           // Structures and FBs are handled the same way - resolve all leaf fields
-          const struct = resolveStructure(node, pathToAddr, instances, droppedPaths)
+          const struct = resolveStructure(node, pathToAddr, instances, droppedPaths, fallbackWarnings)
           if (struct) structures.push(struct)
           break
         }
@@ -355,7 +388,7 @@ const buildAddressSpace = (
           // Arrays with fields (complex element types) are treated like structures
           // because each leaf variable needs individual address resolution
           if (node.fields && node.fields.length > 0) {
-            const struct = resolveStructure(node, pathToAddr, instances, droppedPaths)
+            const struct = resolveStructure(node, pathToAddr, instances, droppedPaths, fallbackWarnings)
             if (struct) structures.push(struct)
             break
           }
@@ -375,21 +408,11 @@ const buildAddressSpace = (
       }
     } catch (error) {
       if (error instanceof OpcUaConfigError) {
-        errors.push(error)
+        droppedNodes.push({ node, reason: error.message })
       } else {
         throw error
       }
     }
-  }
-
-  // If there are resolution errors, throw them all together
-  if (errors.length > 0) {
-    const errorMessages = errors.map((e) => e.message).join('\n\n')
-    throw new OpcUaConfigError(
-      'multiple',
-      'multiple',
-      `Failed to resolve ${errors.length} OPC-UA variable(s):\n\n${errorMessages}`,
-    )
   }
 
   return {
@@ -420,11 +443,10 @@ const parseDebugMapToInfoMap = (content: string): Map<string, DebugLeafInfo> => 
  * Converts camelCase properties to snake_case expected by the plugin.
  * Resolves variable addresses from STruC++'s debug-map.json.
  *
- * Field paths that don't resolve (e.g. stale library-FB internals
- * left over from before the pou-helpers filter) are silently dropped
- * and reported via `onWarn` rather than aborting the build, so the
- * user sees a heads-up instead of a hard failure they have to fix
- * by hand-editing JSON.
+ * Nodes and field paths that don't resolve (a deleted or renamed
+ * variable, a program no longer instantiated, stale library-FB
+ * internals) are dropped and reported via `onWarn` rather than
+ * aborting the build. Only an empty debug map still throws.
  *
  * @param servers - Array of configured PLC servers
  * @param debugMapContent - Content of the generated debug-map.json file
@@ -432,12 +454,12 @@ const parseDebugMapToInfoMap = (content: string): Map<string, DebugLeafInfo> => 
  * @param onWarn - Optional sink for "dropped X" warnings
  * @returns JSON string for opcua.json or null if no enabled OPC-UA server
  */
-export const generateOpcUaConfig = (
+export const buildOpcUaRuntimeConfig = (
   servers: PLCServer[] | undefined,
   debugMapContent: string,
   instances: PLCInstanceInfo[],
   onWarn?: (message: string) => void,
-): string | null => {
+): ResolvedOpcUaConfig | null => {
   // 1. Find OPC-UA server configuration
   if (!servers || servers.length === 0) {
     return null
@@ -469,7 +491,19 @@ export const generateOpcUaConfig = (
   //    each one via onWarn so the user can clean up the OPC-UA config
   //    later if they care.
   const droppedPaths: string[] = []
-  const addressSpace = buildAddressSpace(config, pathToAddr, instances, droppedPaths)
+  const fallbackWarnings: string[] = []
+  const droppedNodes: DroppedNode[] = []
+  const addressSpace = buildAddressSpace(config, pathToAddr, instances, droppedPaths, fallbackWarnings, droppedNodes)
+  if (onWarn) {
+    for (const message of fallbackWarnings) onWarn(message)
+    for (const { node, reason } of droppedNodes) {
+      onWarn(
+        `OPC-UA: tag "${node.displayName}" (${node.pouName}:${node.variablePath}) was left out of the build ` +
+          `because its variable no longer resolves. Remove it from the server's address space or re-pick ` +
+          `the variable.\n${reason}`,
+      )
+    }
+  }
   if (onWarn && droppedPaths.length > 0) {
     onWarn(
       `OPC-UA: dropped ${droppedPaths.length} unresolvable variable path(s) ` +
@@ -496,8 +530,28 @@ export const generateOpcUaConfig = (
     },
   }
 
-  // 4. Return as JSON string (wrapped in array as expected by runtime)
-  return JSON.stringify([runtimeConfig], null, 2)
+  return { runtime: runtimeConfig, server: config.server }
+}
+
+/**
+ * Author `conf/opcua.json` for Runtime v4.
+ *
+ * Thin wrapper over `buildOpcUaRuntimeConfig` — kept as its own export
+ * because the serialised form is a CONTRACT: the surrounding array, the
+ * two-space indent and the key order are what the v4 plugin reads, and the
+ * module's byte-identical-output guarantee is about this string. Callers that
+ * want the resolved data (the baremetal header generator) take the object
+ * instead of parsing this back.
+ */
+export const generateOpcUaConfig = (
+  servers: PLCServer[] | undefined,
+  debugMapContent: string,
+  instances: PLCInstanceInfo[],
+  onWarn?: (message: string) => void,
+): string | null => {
+  const resolved = buildOpcUaRuntimeConfig(servers, debugMapContent, instances, onWarn)
+  if (!resolved) return null
+  return JSON.stringify([resolved.runtime], null, 2)
 }
 
 /**
@@ -521,6 +575,21 @@ export const validateOpcUaConfig = (
   const hasUsernameAuth = enabledProfiles.some((sp) => sp.authMethods.includes('Username'))
   if (hasUsernameAuth && config.users.length === 0) {
     errors.push('Username authentication is enabled but no users are configured')
+  }
+
+  // At most one enabled profile may offer Anonymous. The anonymous session role
+  // is a per-profile setting, but an anonymous connection carries no endpoint
+  // identity into the runtime, so it cannot tell which Anonymous profile a
+  // client came through — the runtime falls back to the first in list order.
+  // Rather than ship that ambiguity, reject it here: this is the fix, the
+  // runtime's load-time warning is only the backstop.
+  const anonymousProfiles = enabledProfiles.filter((sp) => sp.authMethods.includes('Anonymous'))
+  if (anonymousProfiles.length > 1) {
+    errors.push(
+      `Only one enabled security profile may allow Anonymous access; found ${anonymousProfiles.length} ` +
+        `(${anonymousProfiles.map((sp) => sp.name).join(', ')}). Anonymous sessions cannot be mapped to a ` +
+        `specific endpoint, so the anonymous role would be ambiguous. Disable Anonymous on all but one profile.`,
+    )
   }
 
   // Try to resolve all variables

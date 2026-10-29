@@ -526,6 +526,43 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceAvailableOptions.availableBoards.get('Arduino Uno')).toBeDefined()
     })
 
+    it('leaves the wiring alone for a board whose package has not been split', () => {
+      // That board still renders the old Modbus screen, which reads
+      // modbus_rtu.rtu_interface directly; migrating would mirror the bug.
+      const store = makeStore()
+      const legacy = { modbus_rtu: { enabled: true, rtu_interface: 'Serial2' } }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'Old Board',
+          communicationPort: '',
+          selectedPlatformOptions: {},
+          vendorScreenData: legacy,
+        },
+      })
+      const boards = new Map<string, BoardInfo>([
+        [
+          'Old Board',
+          {
+            compiler: 'arduino-cli',
+            core: 'esp32',
+            preview: '',
+            specs: {},
+            vpp: {
+              packageId: 'com.openplc.legacy',
+              vendor: 'v',
+              deviceId: 'd',
+              packagePath: '/fake',
+              screens: { Modbus: {} },
+              moduleSystem: null,
+            },
+          },
+        ],
+      ])
+      store.getState().deviceActions.setAvailableOptions({ availableBoards: boards })
+
+      expect(store.getState().deviceDefinitions.configuration.vendorScreenData).toEqual(legacy)
+    })
+
     it('sets available communication ports', () => {
       const store = makeStore()
       const ports: CommunicationPort[] = [{ address: '/dev/ttyUSB0', manufacturer: 'FTDI' }]
@@ -570,6 +607,81 @@ describe('createDeviceSlice', () => {
       expect(cfg.communicationPort).toBe('COM3')
       // defaults preserved
       expect(cfg.runtimeIpAddress).toBe(defaultDeviceConfiguration.runtimeIpAddress)
+    })
+
+    it("keeps the project's persistent storage settings and archive on load", () => {
+      const store = makeStore()
+      const settings = { enabled: true, path: '/var/lib/openplc/retain', flushSeconds: 5 }
+      const other = { enabled: false, path: '/data/esp.bin', flushSeconds: 10 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'OpenPLC Runtime v4',
+          persistentStorage: settings,
+          persistentStorageByBoard: { 'OpenPLC Runtime v4': settings, 'ESP8266 NodeMCU': other },
+        },
+      })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg.persistentStorage).toEqual(settings)
+      expect(cfg.persistentStorageByBoard).toEqual({ 'OpenPLC Runtime v4': settings, 'ESP8266 NodeMCU': other })
+    })
+
+    it('attributes legacy flat persistent storage to the saved board', () => {
+      const store = makeStore()
+      const settings = { enabled: true, path: '', flushSeconds: 5 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: { deviceBoard: 'OpenPLC Runtime v4', persistentStorage: settings },
+      })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg.persistentStorage).toEqual(settings)
+      expect(cfg.persistentStorageByBoard).toEqual({ 'OpenPLC Runtime v4': settings })
+    })
+
+    it('restores the active board bucket when the flat view is absent', () => {
+      const store = makeStore()
+      const settings = { enabled: true, path: '/x', flushSeconds: 5 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'OpenPLC Runtime v4',
+          persistentStorageByBoard: { 'OpenPLC Runtime v4': settings },
+        },
+      })
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage).toEqual(settings)
+    })
+
+    it("switching board after load restores the other board's loaded settings", () => {
+      const store = makeStore()
+      const v4 = { enabled: true, path: '/v4', flushSeconds: 5 }
+      const esp = { enabled: false, path: '/esp', flushSeconds: 9 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'OpenPLC Runtime v4',
+          persistentStorage: v4,
+          persistentStorageByBoard: { 'OpenPLC Runtime v4': v4, 'ESP8266 NodeMCU': esp },
+        },
+      })
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage).toEqual(esp)
+      store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage).toEqual(v4)
+    })
+
+    it('leaves the active board without settings when only another board has a bucket', () => {
+      const store = makeStore()
+      const esp = { enabled: true, path: '/esp', flushSeconds: 9 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: { deviceBoard: 'OpenPLC Runtime v4', persistentStorageByBoard: { 'ESP8266 NodeMCU': esp } },
+      })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg.persistentStorage).toBeUndefined()
+      expect(cfg.persistentStorageByBoard).toEqual({ 'ESP8266 NodeMCU': esp })
+    })
+
+    it('leaves persistent storage absent for a project that never configured it', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({ configuration: { deviceBoard: 'OpenPLC Runtime v4' } })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg).not.toHaveProperty('persistentStorage')
+      expect(cfg).not.toHaveProperty('persistentStorageByBoard')
     })
 
     it('sets pinMapping', () => {
@@ -1515,6 +1627,38 @@ describe('createDeviceSlice', () => {
   })
 
   // -----------------------------------------------------------------------
+  // vppPackagePinsByBoard survives a save -> load round trip
+  // (setVppPackagePin -> setDeviceDefinitions -> mergeDeviceConfigWithDefaults)
+  // -----------------------------------------------------------------------
+  describe('vppPackagePinsByBoard round trip', () => {
+    it('keeps the recorded pin across a reload of the saved configuration', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceBoard('SLM-RP4')
+      store.getState().deviceActions.setVppPackagePin('SLM-RP4', {
+        packageId: 'com.vendor.slm',
+        version: '1.0.0',
+        contentHash: 'sha256:abc',
+      })
+      const saved = store.getState().deviceDefinitions.configuration
+
+      // Reload: a fresh store fed exactly what setDeviceDefinitions would
+      // receive when the project is reopened from disk.
+      const reloaded = makeStore()
+      reloaded.getState().deviceActions.setDeviceDefinitions({ configuration: saved })
+
+      expect(reloaded.getState().deviceDefinitions.configuration.vppPackagePinsByBoard).toEqual({
+        'SLM-RP4': { packageId: 'com.vendor.slm', version: '1.0.0', contentHash: 'sha256:abc' },
+      })
+    })
+
+    it('leaves the pin map undefined when the project never recorded one', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({ configuration: { deviceBoard: 'P1AM-100' } })
+      expect(store.getState().deviceDefinitions.configuration.vppPackagePinsByBoard).toBeUndefined()
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // setCommunicationPort
   // -----------------------------------------------------------------------
   describe('setCommunicationPort', () => {
@@ -1675,6 +1819,33 @@ describe('createDeviceSlice', () => {
       })
       store.getState().deviceActions.setSelectedDevice(null)
       expect(store.getState().runtimeConnection.selectedDevice).toBeNull()
+    })
+
+    it.each([true, false])('keeps backplaneAccess=%s as the picker read it', (backplaneAccess) => {
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedDevice({
+        orchestratorId: 'orch-1',
+        orchestratorAgentId: 'agent-1',
+        deviceId: 'dev-1',
+        deviceName: 'Test Device',
+        backplaneAccess,
+      })
+      expect(store.getState().runtimeConnection.selectedDevice?.backplaneAccess).toBe(backplaneAccess)
+    })
+
+    it('leaves backplaneAccess absent when the picker never set it', () => {
+      // Absence is the "host predates the field" case and must stay
+      // distinguishable from an explicit `false`, which is a refusal.
+      const store = makeStore()
+      store.getState().deviceActions.setSelectedDevice({
+        orchestratorId: 'orch-1',
+        orchestratorAgentId: 'agent-1',
+        deviceId: 'dev-1',
+        deviceName: 'Test Device',
+      })
+      const selected = store.getState().runtimeConnection.selectedDevice
+      expect(selected).not.toBeNull()
+      expect(selected && 'backplaneAccess' in selected).toBe(false)
     })
   })
 

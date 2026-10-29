@@ -26,6 +26,7 @@ import { dirname, join } from 'node:path'
 import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
 import { UserService } from '@root/backend/editor/services'
 import { APP_VERSION } from '@root/frontend/data/constants/app-version'
+import { createOpenPLCStore, type OpenPLCStore } from '@root/frontend/store'
 import { app } from 'electron'
 
 import { boolFlag, parseArgs, type ParsedArgs, stringFlag } from './args'
@@ -34,7 +35,9 @@ import { buildProject, runBuild } from './commands/build'
 import { runCreate } from './commands/create'
 import { type DebugContext, runDebug } from './commands/debug'
 import { runDevices } from './commands/devices'
+import { runInspect } from './commands/inspect'
 import { runInstallCli } from './commands/install-cli'
+import { runPackages } from './commands/packages'
 import { runDaemonFromStdin } from './daemon-entry'
 import { ErrorCode, ExitCode, type ExitCodeValue } from './exit-codes'
 import { createProcessReporter, Reporter } from './output'
@@ -68,7 +71,7 @@ const BOOLEAN_FLAGS = [
   'all',
 ] as const
 
-const COMMANDS_WITH_SUBCOMMANDS = ['debug'] as const
+const COMMANDS_WITH_SUBCOMMANDS = ['debug', 'inspect', 'packages'] as const
 
 const USAGE = `openplc-cli — headless OpenPLC Editor
 
@@ -79,6 +82,10 @@ Usage
   openplc-cli create --from-json <file>                     (fixture-friendly form)
   openplc-cli install-cli                                   (put openplc-cli on your PATH)
   openplc-cli devices [--timeout <ms>]
+  openplc-cli inspect image <project> [--target <board>] [--verbose]
+                            (I/O image sizes, producers and located vars — no build)
+  openplc-cli packages list                                 (boards --target accepts, and their pins)
+  openplc-cli packages install <file.vpp|dir>...            (same checks as the GUI: schema + signature)
   openplc-cli compile <project> [--target <board>] [--port <serial>] [--clean]
   openplc-cli upload  <project> (--host <address> | --port <serial>) [--target <board>] [--clean] [-y|--yes]
   openplc-cli debug open <project> --target <board> (--host <address> | --port <serial>) [--upload-if-needed]
@@ -195,12 +202,16 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
       return (await runDevices(args, reporter)).exitCode
     case 'install-cli':
       return (await runInstallCli(args, reporter)).exitCode
+    case 'inspect':
+      return (await runInspect(createOpenPLCStore(), args, reporter)).exitCode
+    case 'packages':
+      return (await runPackages(args, reporter)).exitCode
     case 'compile':
-      return (await runBuild(args, reporter, { withUpload: false })).exitCode
+      return (await runBuild(createOpenPLCStore(), args, reporter, { withUpload: false })).exitCode
     case 'upload':
-      return (await runBuild(args, reporter, { withUpload: true })).exitCode
+      return (await runBuild(createOpenPLCStore(), args, reporter, { withUpload: true })).exitCode
     case 'debug':
-      return (await runDebug(args, reporter, buildDebugContext())).exitCode
+      return (await runDebug(args, reporter, buildDebugContext(createOpenPLCStore()))).exitCode
     default:
       // Print the usage as well as the error: a mistyped command is the moment
       // the list of real commands is most useful, and hunting for --help is a
@@ -213,14 +224,19 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
   }
 }
 
-function buildDebugContext(): DebugContext {
+function buildDebugContext(store: OpenPLCStore): DebugContext {
   const dir = registryDir()
   return {
     registry: new SessionRegistry(dir),
     spawnSession: createSessionSpawner({
+      store,
       registryDir: dir,
       execPath: process.execPath,
       execArgs: daemonSpawnArgs(),
+      // This process was already aligned to the editor's (or --user-data's)
+      // userData before `debug` runs; forward it so the daemon resolves the
+      // same installed VPP packages.
+      userData: app.getPath('userData'),
       uploadProgram: async ({ projectPath, target, host, username, password, port, onLine }) => {
         // A reporter whose progress forwards to the caller and whose result is
         // discarded — `debug open` reports the outcome itself.
@@ -228,7 +244,7 @@ function buildDebugContext(): DebugContext {
           mode: 'json',
           streams: { out: () => undefined, err: (text) => onLine(text.replace(/\n$/, '')) },
         })
-        const result = await buildProject({
+        const result = await buildProject(store, {
           projectPath,
           target,
           host: host || undefined,
@@ -326,9 +342,11 @@ async function main(): Promise<void> {
   const isDaemon = process.argv.includes('--cli-daemon')
   installNeverHangGuards({ exitWhenOutputClosed: !isDaemon })
 
-  // The daemon reads its config from stdin and never parses argv.
+  // The daemon reads its config from stdin and never parses argv, so it cannot
+  // see the parent's --user-data flag; the parent forwards the resolved dir via
+  // OPENPLC_USER_DATA and we align to it here.
   if (isDaemon) {
-    alignUserDataWithEditor(undefined)
+    alignUserDataWithEditor(process.env.OPENPLC_USER_DATA || undefined)
     await runDaemonFromStdin()
     return
   }

@@ -1,0 +1,431 @@
+/**
+ * The ports arrive through `PlatformProvider`, not module mocks, so this file runs
+ * unchanged under both runners.
+ */
+
+import { beforeEach, describe, expect, it } from '@jest/globals'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+
+import type { EdgeAccountPort } from '../../../../../../middleware/shared/ports/edge-account-port'
+import {
+  EDITOR_CAPABILITIES,
+  type PlatformCapabilities,
+} from '../../../../../../middleware/shared/ports/platform-capabilities'
+import type {
+  CloudProjectsResult,
+  ProjectPort,
+  ProjectResponse,
+} from '../../../../../../middleware/shared/ports/project-port'
+import type { PlatformPorts } from '../../../../../../middleware/shared/providers/types'
+import type { OpenPLCStore } from '../../../../../store'
+import { createStoreWrapper, createTestStore } from '../../../../../store/testing'
+import { dispatch, getMemoryState } from '../../../../../utils/toast'
+import DisplayRecentProjects from '../../../../_organisms/display-recent-projects'
+import type { ProjectOrder } from '../../../../_organisms/project-filter-bar'
+import { CloudProjectsNotice } from '..'
+import { useRecentCloudProjects } from '../use-recent-cloud-projects'
+
+/** A port whose every method answers `undefined`, except the ones handed in. */
+function stubPort<T extends object>(overrides: Partial<T> = {}): T {
+  return new Proxy({} as T, {
+    get: (_, prop) => {
+      if (Reflect.has(overrides, prop)) return Reflect.get(overrides, prop)
+      return typeof prop === 'string' ? () => undefined : undefined
+    },
+  })
+}
+
+function makePorts(overrides: Partial<PlatformPorts>): PlatformPorts {
+  return {
+    compiler: stubPort(),
+    runtime: stubPort(),
+    debugger: stubPort(),
+    simulator: stubPort(),
+    project: stubPort(),
+    device: stubPort(),
+    orchestrator: stubPort(),
+    system: stubPort(),
+    window: stubPort(),
+    accelerator: stubPort(),
+    theme: stubPort(),
+    versionControl: stubPort(),
+    navigation: stubPort(),
+    library: stubPort(),
+    capabilities: EDITOR_CAPABILITIES,
+    ...overrides,
+  }
+}
+
+let capabilities: PlatformCapabilities
+let store: OpenPLCStore
+const listRecentCloudProjects = jest.fn<Promise<CloudProjectsResult>, [number]>()
+const openProjectByPath = jest.fn<Promise<ProjectResponse>, [string]>()
+/** How many times the section subscribed to each session signal. */
+let restoredSubscriptions = 0
+let expiredSubscriptions = 0
+
+// Stable objects: the load effect depends on port identity, so a fresh object per render
+// would re-run it and silently eat `mockResolvedValueOnce` queues.
+const projectPort = stubPort<ProjectPort>({ listRecentCloudProjects, openProjectByPath })
+const accountPort: EdgeAccountPort = {
+  frontendBaseUrl: 'https://edge.example.com',
+  oauthProviders: [],
+  oauthUrl: () => '',
+  fetchUser: () => Promise.resolve({ status: 'no-session' }),
+  fetchPlanCaption: () => Promise.resolve(null),
+  signIn: () => Promise.resolve({ status: 'failed' }),
+  signOut: () => Promise.resolve(),
+  session: {
+    isExpired: () => false,
+    isAbsent: () => true,
+    onExpired: () => {
+      expiredSubscriptions += 1
+      return () => undefined
+    },
+    onRestored: () => {
+      restoredSubscriptions += 1
+      return () => undefined
+    },
+    markRestored: () => undefined,
+  },
+}
+
+type SectionProps = { searchNameFilterValue: string; orderBy?: ProjectOrder }
+
+function Section({ searchNameFilterValue, orderBy }: SectionProps) {
+  const { cloud, reload } = useRecentCloudProjects()
+
+  return (
+    <>
+      <CloudProjectsNotice cloud={cloud} onSignedIn={reload} />
+      <DisplayRecentProjects searchNameFilterValue={searchNameFilterValue} orderBy={orderBy} cloud={cloud} />
+      <button type='button' onClick={reload}>
+        test-reload
+      </button>
+    </>
+  )
+}
+
+function renderSection(props: SectionProps) {
+  const ports = makePorts({ capabilities, project: projectPort, edgeAccount: accountPort })
+  return render(<Section {...props} />, { wrapper: createStoreWrapper(store, ports) })
+}
+
+const PROJECT = { id: 'p1', name: 'Irrigation Controller 2', language: 'st', updatedAt: '2026-08-25T14:25:49.000Z' }
+
+/** The shape `openProjectByPath` hands back for a cloud project, trimmed to what the store reads. */
+const OPENED: ProjectResponse = {
+  success: true,
+  data: {
+    meta: { name: PROJECT.name, path: 'p1', type: 'plc-project' },
+    projectData: {
+      pous: [],
+      dataTypes: [],
+      globalVariableLists: [],
+      configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
+    },
+  },
+}
+
+const LOCAL = {
+  name: 'Local Mixer',
+  path: '/Users/me/Projects/mixer',
+  lastOpenedAt: '2026-08-25T00:00:00.000Z',
+  createdAt: '2026-08-01T00:00:00.000Z',
+}
+
+const SIGN_IN_COPY = /^Sign in with your Autonomy Edge account$/i
+const LOADING = { name: /loading cloud projects/i }
+const CLOUD_MARK = 'Autonomy Edge project'
+
+const lastToast = () => getMemoryState().toasts[0]
+
+beforeEach(() => {
+  store = createTestStore()
+  listRecentCloudProjects.mockReset()
+  openProjectByPath.mockReset()
+  restoredSubscriptions = 0
+  expiredSubscriptions = 0
+  dispatch({ type: 'REMOVE_TOAST' })
+  store.getState().workspaceActions.setRecent([])
+  capabilities = { ...EDITOR_CAPABILITIES, hasEdgeAccount: true }
+  listRecentCloudProjects.mockResolvedValue({ status: 'ok', projects: [PROJECT] })
+})
+
+describe('cloud projects on the start screen', () => {
+  it('lists the account projects in the one Projects grid', async () => {
+    renderSection({ searchNameFilterValue: '' })
+
+    expect(await screen.findByText(PROJECT.name)).not.toBeNull()
+    expect(screen.queryByText('Projects')).not.toBeNull()
+    expect(screen.queryByText(/Autonomy Edge Cloud Projects/i)).toBeNull()
+    expect(listRecentCloudProjects).toHaveBeenCalledWith(5)
+  })
+
+  it('marks a cloud project with a cloud, and a local one without', async () => {
+    store.getState().workspaceActions.setRecent([LOCAL])
+
+    renderSection({ searchNameFilterValue: '' })
+    await screen.findByText(PROJECT.name)
+
+    expect(screen.queryByText(LOCAL.name)).not.toBeNull()
+    expect(screen.getAllByLabelText(CLOUD_MARK)).toHaveLength(1)
+  })
+
+  it('opens a project through the same call a local one uses', async () => {
+    openProjectByPath.mockResolvedValueOnce(OPENED)
+
+    renderSection({ searchNameFilterValue: '' })
+    await userEvent.click(await screen.findByText(PROJECT.name))
+
+    // The id, not a path: the adapter decides which world it belongs to.
+    expect(openProjectByPath).toHaveBeenCalledWith('p1')
+    // And what came back went through the store's own open handler: the project is
+    // now the open one.
+    await waitFor(() => expect(store.getState().project.meta.path).toBe('p1'))
+  })
+
+  /**
+   * Edge refuses every write on a project past the plan's private limit, and
+   * its own SPA disables "open in editor" for it. The desktop listed it like
+   * any other, opened it, and let the user edit and commit until the API said
+   * no — so the editor has to know the state, not discover it on save.
+   */
+  describe('a project the plan no longer allows', () => {
+    beforeEach(() => {
+      listRecentCloudProjects.mockResolvedValue({
+        status: 'ok',
+        projects: [{ ...PROJECT, locked: true }],
+      })
+    })
+
+    it('does not open it, and says why instead', async () => {
+      renderSection({ searchNameFilterValue: '' })
+      await userEvent.click(await screen.findByText(PROJECT.name))
+
+      expect(openProjectByPath).not.toHaveBeenCalled()
+      await waitFor(() => expect(lastToast()?.description).toMatch(/plan that allows private projects/i))
+    })
+
+    it('marks it in the list rather than hiding it', async () => {
+      renderSection({ searchNameFilterValue: '' })
+
+      expect(await screen.findByText(PROJECT.name)).not.toBeNull()
+      expect(await screen.findByLabelText(/needs a plan with private projects/i)).not.toBeNull()
+    })
+  })
+
+  describe('the order the grid is shown in', () => {
+    const ROWS = [
+      { id: 'a', name: 'Zebra', language: 'st', updatedAt: '2026-08-26T00:00:00.000Z' },
+      { id: 'b', name: 'Alpha', language: 'st', updatedAt: '2026-08-24T00:00:00.000Z' },
+      { id: 'c', name: 'Mango', language: 'st', updatedAt: '2026-08-25T12:00:00.000Z' },
+    ]
+
+    const shown = () => screen.getAllByText(/^(Zebra|Alpha|Mango|Local Mixer)$/).map((node) => node.textContent)
+
+    beforeEach(() => {
+      listRecentCloudProjects.mockResolvedValue({ status: 'ok', projects: ROWS })
+      store.getState().workspaceActions.setRecent([LOCAL])
+    })
+
+    it('puts the newest first by default, whichever side it came from', async () => {
+      renderSection({ searchNameFilterValue: '' })
+      await screen.findByText('Zebra')
+
+      expect(shown()).toEqual(['Zebra', 'Mango', 'Local Mixer', 'Alpha'])
+    })
+
+    it('orders by name across both sides when asked', async () => {
+      renderSection({ searchNameFilterValue: '', orderBy: 'Name' })
+      await screen.findByText('Zebra')
+
+      expect(shown()).toEqual(['Alpha', 'Local Mixer', 'Mango', 'Zebra'])
+    })
+
+    it('narrows both sides with the one search', async () => {
+      renderSection({ searchNameFilterValue: 'm', orderBy: 'Name' })
+      await screen.findByText('Mango')
+
+      expect(shown()).toEqual(['Local Mixer', 'Mango'])
+    })
+  })
+
+  it('reports a failed open with the reason the adapter gave', async () => {
+    openProjectByPath.mockResolvedValueOnce({
+      success: false,
+      error: { title: 'x', description: 'Autonomy Edge answered 403.' },
+    })
+
+    renderSection({ searchNameFilterValue: '' })
+    await userEvent.click(await screen.findByText(PROJECT.name))
+
+    await waitFor(() => expect(lastToast()?.description).toBe('Autonomy Edge answered 403.'))
+  })
+
+  describe('each state says its own thing, above the grid', () => {
+    it('invites a signed-out user to sign in, and still lists the local projects', async () => {
+      listRecentCloudProjects.mockResolvedValueOnce({ status: 'signed-out' })
+      store.getState().workspaceActions.setRecent([LOCAL])
+
+      renderSection({ searchNameFilterValue: '' })
+
+      expect(await screen.findByText(SIGN_IN_COPY)).not.toBeNull()
+      expect(screen.queryByText(LOCAL.name)).not.toBeNull()
+      expect(screen.queryByLabelText(CLOUD_MARK)).toBeNull()
+    })
+
+    it('offers a sign-in the user can actually press', async () => {
+      listRecentCloudProjects.mockResolvedValueOnce({ status: 'signed-out' })
+
+      renderSection({ searchNameFilterValue: '' })
+
+      const button = await screen.findByRole('button', { name: 'Sign in' })
+      expect(screen.queryByRole('dialog')).toBeNull()
+
+      await userEvent.click(button)
+
+      expect(await screen.findByRole('dialog')).not.toBeNull()
+    })
+
+    it('offers a way in for someone with no account at all', async () => {
+      listRecentCloudProjects.mockResolvedValueOnce({ status: 'signed-out' })
+
+      renderSection({ searchNameFilterValue: '' })
+
+      const link = await screen.findByRole('link', { name: /create an account/i })
+
+      expect(link.getAttribute('href')).toBe('https://edge.example.com/signup')
+      expect(link.getAttribute('target')).toBe('_blank')
+    })
+
+    it('does not show the invitation once projects are listed', async () => {
+      renderSection({ searchNameFilterValue: '' })
+      await screen.findByText(PROJECT.name)
+
+      expect(screen.queryByRole('button', { name: 'Sign in' })).toBeNull()
+    })
+
+    it('does NOT tell an offline user to sign in', async () => {
+      listRecentCloudProjects.mockResolvedValueOnce({ status: 'unreachable' })
+
+      renderSection({ searchNameFilterValue: '' })
+
+      expect(await screen.findByText(/Could not reach Autonomy Edge/i)).not.toBeNull()
+      expect(screen.queryByText(SIGN_IN_COPY)).toBeNull()
+      expect(screen.queryByText(/local projects below are unaffected/i)).not.toBeNull()
+    })
+
+    it('treats a read that throws as Edge being out of reach', async () => {
+      listRecentCloudProjects.mockRejectedValueOnce(new Error('socket hang up'))
+
+      renderSection({ searchNameFilterValue: '' })
+
+      expect(await screen.findByText(/Could not reach Autonomy Edge/i)).not.toBeNull()
+    })
+
+    it('does NOT tell a signed-in user with no projects to sign in', async () => {
+      listRecentCloudProjects.mockResolvedValueOnce({ status: 'ok', projects: [] })
+
+      renderSection({ searchNameFilterValue: '' })
+
+      await waitFor(() => expect(screen.queryByRole('status', LOADING)).toBeNull())
+      expect(screen.queryByText(SIGN_IN_COPY)).toBeNull()
+      expect(screen.queryByLabelText(CLOUD_MARK)).toBeNull()
+    })
+
+    it('drops a cloud card the search does not match', async () => {
+      renderSection({ searchNameFilterValue: 'zzz' })
+
+      await waitFor(() => expect(screen.queryByRole('status', LOADING)).toBeNull())
+      expect(screen.queryByText(PROJECT.name)).toBeNull()
+    })
+
+    it('shows placeholders, and no message, while the first answer is in flight', () => {
+      listRecentCloudProjects.mockReturnValueOnce(new Promise(() => undefined))
+
+      renderSection({ searchNameFilterValue: '' })
+
+      expect(screen.queryByText('Projects')).not.toBeNull()
+      expect(screen.queryByText(SIGN_IN_COPY)).toBeNull()
+      expect(screen.queryByRole('status', LOADING)).not.toBeNull()
+    })
+
+    it('clears the placeholders once the answer lands', async () => {
+      renderSection({ searchNameFilterValue: '' })
+
+      await screen.findByText(PROJECT.name)
+
+      expect(screen.queryByRole('status', LOADING)).toBeNull()
+    })
+
+    it('clears them for a signed-out user too, rather than loading forever', async () => {
+      listRecentCloudProjects.mockResolvedValueOnce({ status: 'signed-out' })
+
+      renderSection({ searchNameFilterValue: '' })
+
+      await screen.findByText(SIGN_IN_COPY)
+
+      expect(screen.queryByRole('status', LOADING)).toBeNull()
+    })
+  })
+
+  describe('builds with no cloud projects at all', () => {
+    it('shows no notice and no placeholders when the platform has no Edge account', () => {
+      capabilities = { ...EDITOR_CAPABILITIES, hasEdgeAccount: false }
+
+      renderSection({ searchNameFilterValue: '' })
+
+      expect(screen.queryByRole('status', LOADING)).toBeNull()
+      expect(screen.queryByText(SIGN_IN_COPY)).toBeNull()
+      expect(listRecentCloudProjects).not.toHaveBeenCalled()
+    })
+
+    it('shows no notice and no placeholders when the channel is unavailable', async () => {
+      listRecentCloudProjects.mockResolvedValueOnce({ status: 'unavailable' })
+
+      renderSection({ searchNameFilterValue: '' })
+
+      // A main process predating the feature; no sign-in offered since it can't help.
+      await waitFor(() => expect(screen.queryByRole('status', LOADING)).toBeNull())
+      expect(screen.queryByText(SIGN_IN_COPY)).toBeNull()
+      expect(screen.queryByText(/Could not reach Autonomy Edge/i)).toBeNull()
+    })
+  })
+
+  describe('when something else changes what is on the account', () => {
+    it('re-reads when asked to', async () => {
+      renderSection({ searchNameFilterValue: '' })
+      await screen.findByText(PROJECT.name)
+      expect(listRecentCloudProjects).toHaveBeenCalledTimes(1)
+
+      const uploaded = { ...PROJECT, id: 'p2', name: 'Just Published' }
+      listRecentCloudProjects.mockResolvedValueOnce({ status: 'ok', projects: [uploaded, PROJECT] })
+
+      await userEvent.click(screen.getByRole('button', { name: 'test-reload' }))
+
+      expect(await screen.findByText('Just Published')).not.toBeNull()
+      expect(listRecentCloudProjects).toHaveBeenCalledTimes(2)
+    })
+
+    it('does not re-read when only the search changes', async () => {
+      const { rerender } = renderSection({ searchNameFilterValue: '' })
+      await screen.findByText(PROJECT.name)
+
+      rerender(<Section searchNameFilterValue='zzz' />)
+
+      // Search filters what is already here; it doesn't re-ask Edge.
+      expect(listRecentCloudProjects).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('reloads when a session comes back, and empties when one ends', async () => {
+    renderSection({ searchNameFilterValue: '' })
+    await screen.findByText(PROJECT.name)
+
+    // Subscribed to the session's own signal rather than polling or asking /auth/me.
+    expect(restoredSubscriptions).toBeGreaterThan(0)
+    expect(expiredSubscriptions).toBeGreaterThan(0)
+  })
+})

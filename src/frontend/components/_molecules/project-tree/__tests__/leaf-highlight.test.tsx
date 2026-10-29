@@ -1,6 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render as rtlRender, screen } from '@testing-library/react'
+import type { ReactElement } from 'react'
 
-import { useOpenPLCStore } from '../../../../store'
+import type { OpenPLCStore } from '../../../../store'
+import { createStoreWrapper, createTestStore } from '../../../../store/testing'
 import { ProjectTreeExpandableLeaf, ProjectTreeLeaf } from '../index'
 
 // https://github.com/Autonomy-Logic/openplc-editor/issues/640
@@ -9,7 +11,15 @@ import { ProjectTreeExpandableLeaf, ProjectTreeLeaf } from '../index'
 // matching POU's name appeared in the tree as literal markup
 // (`<span class="bg-brand-light...`). The label must stay the element's real
 // name; highlighting is applied safely inside the leaf via `highlightQuery`.
+let store: OpenPLCStore
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: createStoreWrapper(store) })
+
 describe('ProjectTreeLeaf search highlight', () => {
+  beforeEach(() => {
+    store = createTestStore()
+  })
+
   it('renders the plain name and applies a safe highlight when highlightQuery matches', () => {
     const { container } = render(
       <ProjectTreeLeaf leafLang='fbd' leafType='function-block' label='Taktgeber' highlightQuery='Takt' />,
@@ -49,7 +59,7 @@ describe('ProjectTreeLeaf search highlight', () => {
     if (leaf) fireEvent.click(leaf)
 
     // Selection must record the real POU name, never the decorated display string.
-    const { selectedProjectTreeLeaf } = useOpenPLCStore.getState().workspace
+    const { selectedProjectTreeLeaf } = store.getState().workspace
     expect(selectedProjectTreeLeaf.label).toBe('Taktgeber')
   })
 

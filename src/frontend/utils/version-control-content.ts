@@ -22,7 +22,36 @@ export function pickContentForSave(path: string, freshSerialized: string, syncSt
   const loadedSer = syncState.loadedSerialized[path]
   const raw = syncState.rawLoadedContent[path]
   if (loadedSer !== undefined && freshSerialized === loadedSer && raw !== undefined) {
+    // The snapshot taken on open already carries the libraries the save derives from
+    // usage, so "unchanged since open" is true even when the file on disk never declared
+    // them. Echoing the raw text would then drop the one thing the save exists to add.
+    if (path === 'project.json' && declaresLibrariesRawLacks(freshSerialized, raw)) {
+      return freshSerialized
+    }
     return raw
   }
   return freshSerialized
+}
+
+/** True when `fresh` declares a library `raw` does not; anything unparseable reads as "no". */
+function declaresLibrariesRawLacks(fresh: string, raw: string): boolean {
+  const names = (text: string): Set<string> | null => {
+    try {
+      const parsed: unknown = JSON.parse(text)
+      const libraries = (parsed as { data?: { libraries?: unknown } }).data?.libraries
+      if (!Array.isArray(libraries)) return new Set()
+      return new Set(
+        libraries.flatMap((entry) => {
+          const name = (entry as { name?: unknown }).name
+          return typeof name === 'string' ? [name] : []
+        }),
+      )
+    } catch {
+      return null
+    }
+  }
+  const freshNames = names(fresh)
+  const rawNames = names(raw)
+  if (!freshNames || !rawNames) return false
+  return [...freshNames].some((name) => !rawNames.has(name))
 }

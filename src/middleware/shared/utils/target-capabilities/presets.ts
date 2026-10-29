@@ -10,7 +10,8 @@
  * updated yet.
  */
 
-import type { AddressProducerCapabilities, TargetCapabilities } from './types'
+import { IMAGE_TABLES } from '../io-image/tables'
+import type { AddressProducerCapabilities, OpcUaTargetProfile, S7TargetProfile, TargetCapabilities } from './types'
 
 /**
  * Every address producer active. NOT a target preset — no board reports this,
@@ -35,6 +36,95 @@ export const ALL_ADDRESS_PRODUCERS_ACTIVE: AddressProducerCapabilities = {
   ethercat: true,
 }
 
+/**
+ * Conservative baseline for a baremetal OPC-UA server. A VPP declares only the
+ * fields it raises; `resolveTargetCapabilities` fills the rest from here.
+ *
+ * The numbers are the safe end of every axis: `maxSessions: 1` because each
+ * session is 16 KB of protocol-mandated buffers, `arenaBytes: 32 KB` to cover
+ * one session plus channel state plus the node pool, `security: 'none'` with
+ * all-false `hw` to keep mbedTLS out of the link.
+ */
+export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
+  arenaBytes: 32 * 1024,
+  maxSessions: 1,
+  nodePoolSlots: 8,
+  maxNodesPerRead: 20,
+  maxNodesPerWrite: 20,
+  maxNodesPerBrowse: 10,
+  maxReferencesPerNode: 32,
+  maxArrayLength: 256,
+  security: 'none',
+  certificates: false,
+  subscriptions: false,
+  // 600 000 and PBKDF2 by default, matching what Runtime v4 consumes, so a
+  // target declaring nothing keeps working. Constrained targets opt down.
+  kdfIterations: 600_000,
+  passwordScheme: 'pbkdf2-sha256',
+  hw: { sha256: false, aes: false, pk: false, trng: false, rtc: false },
+}
+
+/**
+ * Mapping types a bare-metal S7 server can address.
+ *
+ * `openplc.h` declares an array for these seven and for no other, so a block
+ * naming one of the rest has nowhere to land. `generate-s7comm-header` holds
+ * the matching `S7COMM_BUF_*` codes and a test pins the two together.
+ */
+export const BAREMETAL_S7_BUFFERS: readonly string[] = [
+  'bool_input',
+  'bool_output',
+  'int_input',
+  'int_output',
+  'int_memory',
+  'dint_memory',
+  'lint_memory',
+]
+
+/**
+ * Every mapping type the Runtime v4 plugin's parser accepts.
+ *
+ * DERIVED, not restated: the plugin's table and the editor's schema are both
+ * the image table list, so writing the fourteen out again is one more copy to
+ * drift. Bare metal's set cannot be derived the same way -- it is smaller than
+ * the areas the firmware declares, because `openplc.h` has an array the S7
+ * plugin has no buffer code for.
+ */
+export const RUNTIME_S7_BUFFERS: readonly string[] = IMAGE_TABLES.map((table) => table.key)
+
+/**
+ * What a target gets when it declares `s7Server` and nothing else. Below Runtime
+ * v4's numbers, because v4 is a Linux process with a thread per client and this
+ * is a microcontroller where each client is a PDU pair in .bss.
+ *
+ * `szl` is on because the clients that need it refuse to talk to a device
+ * without it, at ~228 bytes. `pduSize` 240 is what an S7-300 offers and what
+ * every client copes with.
+ */
+export const DEFAULT_S7_PROFILE: S7TargetProfile = {
+  maxClients: 2,
+  pduSize: 240,
+  maxDataBlocks: 8,
+  szl: true,
+  writeEnabled: true,
+  buffers: BAREMETAL_S7_BUFFERS,
+}
+
+/**
+ * Runtime v4's own numbers, which are the plugin's: 64 areas in the config
+ * record and every mapping type its parser accepts. Carried as a preset
+ * because the editor sizes the image from what the target serves, and
+ * answering with the microcontroller's eight sized a v4 project short.
+ */
+export const RUNTIME_V4_S7_PROFILE: S7TargetProfile = {
+  maxClients: 32,
+  pduSize: 240,
+  maxDataBlocks: 64,
+  szl: true,
+  writeEnabled: true,
+  buffers: RUNTIME_S7_BUFFERS,
+}
+
 export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   pinMapping: false,
   vppIo: false,
@@ -44,6 +134,11 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   modbusTcpRemote: true,
   ethercat: true,
   modbusTcpServer: true,
+  // The Simulator runs no Modbus slave at all — the flags are UX, so a
+  // project authored for another target keeps its server config while the
+  // user simulates it. It has no VPP Modbus screen, so it resolves to the
+  // `plc-server` profile, where RTU is not on offer anyway.
+  modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
   // RTU over the emulated virtual serial port the in-process simulator
@@ -69,6 +164,7 @@ export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   modbusTcpRemote: false,
   ethercat: false,
   modbusTcpServer: false,
+  modbusRtuServer: false,
   opcuaServer: false,
   s7Server: false,
   debuggerTransports: ['modbus-tcp'],
@@ -99,8 +195,12 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   modbusTcpRemote: true,
   ethercat: true,
   modbusTcpServer: true,
+  // The Runtime v4 Modbus slave plugin is a TCP listener; there is no serial
+  // path in it.
+  modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
+  s7: RUNTIME_V4_S7_PROFILE,
   debuggerTransports: ['websocket'],
   pythonFunctionBlocks: true,
   arduinoApiCompletions: false,
@@ -121,7 +221,16 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   vppIo: false,
   modbusTcpRemote: false,
   ethercat: false,
-  modbusTcpServer: false,
+  // The baremetal firmware serves both, gated by the VPP Modbus screen's
+  // per-transport toggles. These read `false` until DOPE-442 because the
+  // config lived in a vendor screen the Servers UX could not see; now that
+  // one screen renders both stores, hiding the target's real capability is
+  // what would be wrong.
+  //
+  // A board still only gets the screen when its VPP declares a Modbus screen,
+  // so a package that has not been migrated is unaffected.
+  modbusTcpServer: true,
+  modbusRtuServer: true,
   opcuaServer: false,
   s7Server: false,
   // Arduino targets speak RTU over USB always; some also speak TCP

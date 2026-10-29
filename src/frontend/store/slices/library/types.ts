@@ -50,6 +50,12 @@ export type LibraryActions = {
    */
   enableLibrary: (name: string) => void
   /**
+   * Enable, without asking, every non-bundled installed library that owns one
+   * of `typeNames`. Called when a block is placed: the block never wrote to
+   * `project.libraries`, so the other editor had nothing to warn about.
+   */
+  ensureLibrariesForTypes: (typeNames: readonly string[]) => void
+  /**
    * Remove a system library from the current project.  No-op for
    * canonical libraries.  Drops the row from `state.project.libraries`.
    */

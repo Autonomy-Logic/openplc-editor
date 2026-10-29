@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Autonomy / OpenPLC Project
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /**
  * Public type surface for the Python LSP service.
  */
@@ -7,8 +7,11 @@
 import type * as monaco from 'monaco-editor'
 
 import type { PLCDataType, PLCVariable } from '../../../middleware/shared/ports/types'
+import type { OpenPLCStore } from '../../store'
 
 export interface PythonLspStartOptions {
+  /** The project store the Python LSP reads POU variables from and navigates into. */
+  store: OpenPLCStore
   /**
    * URL of basedpyright's worker bundle.  Required — there is no
    * in-module fallback: a bare `require('…/pyright.worker.js?url')`

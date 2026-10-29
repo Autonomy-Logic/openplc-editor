@@ -735,8 +735,8 @@ describe('updateVariableValidation', () => {
 
   // -- Alias-name locations (single-field model) --
   // A non-`%` location is an alias binding; its concrete address (and thus
-  // its type match) is resolved at compile time, so validation accepts any
-  // non-empty non-`%` string regardless of the variable's type.
+  // its type match) is resolved at compile time, so validation accepts it
+  // regardless of the variable's type — as long as it is a legal identifier.
   it('accepts a non-% location as an alias name (BOOL)', () => {
     const boolVar = makeVariable('Test', 'BOOL', '')
     const result = updateVariableValidation([], { location: 'push_button' }, boolVar)
@@ -747,6 +747,23 @@ describe('updateVariableValidation', () => {
     const stringVar = makeVariable('Test', 'STRING', '')
     const result = updateVariableValidation([], { location: 'some_alias' }, stringVar)
     expect(result.ok).toBe(true)
+  })
+
+  it('refuses an alias name that is not a legal identifier', () => {
+    // The alias is spliced into the declaration as the operand of `AT`, so
+    // `AT flow sensor` would be written into the POU file and nothing could
+    // parse it back — including the variables code view (DOPE-650).
+    const intVar = makeVariable('Test', 'INT', '')
+    const result = updateVariableValidation([], { location: 'flow sensor' }, intVar)
+    expect(result.ok).toBe(false)
+    // and for its own reason, not the address-class hint for INT
+    expect(result.message).toContain('single word')
+    expect(result.message).not.toContain('%IW0')
+  })
+
+  it('refuses an alias name starting with a digit', () => {
+    const intVar = makeVariable('Test', 'INT', '')
+    expect(updateVariableValidation([], { location: '1st_sensor' }, intVar).ok).toBe(false)
   })
 
   // -- BOOL location validation edge cases --

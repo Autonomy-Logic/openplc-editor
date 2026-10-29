@@ -22,7 +22,6 @@ import type {
   PlatformDeviceContext,
 } from '../../../../middleware/shared/ports/compiler-platform-port'
 
-jest.mock('../../utils/PLC/xml-generator', () => ({ XmlGenerator: jest.fn() }))
 jest.mock('../../library/program-build-pipeline', () => ({ runProgramBuildPipeline: jest.fn() }))
 jest.mock('../../library/program-build-helpers', () => ({
   buildKnownPous: jest.fn(() => []),
@@ -36,7 +35,15 @@ jest.mock('../../firmware/runtime-version-gate', () => ({
   describeIncompatibleRuntime: jest.fn((v: string | null) => `Runtime ${String(v)} too old`),
 }))
 jest.mock('../steps/generate-confs', () => ({
-  generateRuntimeConfs: jest.fn(() => ({ modbusSlave: '', modbusMaster: '', s7Comm: '', opcUa: null, ethercat: '' })),
+  generateRuntimeConfs: jest.fn(() => ({
+    modbusSlave: '',
+    modbusMaster: '',
+    s7Comm: '',
+    opcUa: null,
+    ethercat: '',
+    ethercatBusconfig: null,
+    ethercatIomapping: null,
+  })),
 }))
 
 import { runProgramBuildPipeline } from '../../library/program-build-pipeline'

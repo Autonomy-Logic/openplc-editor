@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 modbus_pdu.h - Transport-agnostic Modbus PDU dispatch + per-FC frame shape
-Copyright (C) 2022 OpenPLC - Thiago Alves
 
 The protocol layer: it owns the set of function codes and their shapes. A
 transport fills mb_frame with a request, calls process_mbpacket() to dispatch it
@@ -30,5 +31,11 @@ int32_t mb_pdu_request_len(const uint8_t *f, uint16_t n);
 // validation (they are well-formed and performance-sensitive). Lets the serial
 // transport decide CRC handling without hardcoding the debug FC list.
 bool mb_pdu_skips_crc(uint8_t fc);
+
+// True for the editor's private function codes, 0x41-0x4B. Deliberately NOT the
+// same set as mb_pdu_skips_crc(): that one excludes MB_FC_PLC_SET_STATE, which
+// does carry a CRC, and reusing it here would leave run/stop unreachable on the
+// editor's own slave id.
+bool mb_pdu_is_editor_fc(uint8_t fc);
 
 #endif

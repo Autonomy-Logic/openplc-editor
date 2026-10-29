@@ -25,7 +25,6 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     close: {
       window: false,
       app: false,
-      appDarwin: false,
     },
     // PLC Logs
     isPlcLogsVisible: false,
@@ -60,6 +59,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     projectLoadingMessage: '',
     // Persist-permission flag (backend write access on the open project)
     canEdit: true,
+    autoSaveOnBuild: true,
     isEphemeralProject: false,
   },
 
@@ -89,13 +89,6 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.close.app = value
-        }),
-      )
-    },
-    setCloseAppDarwin: (value) => {
-      setState(
-        produce(({ workspace }: WorkspaceSlice) => {
-          workspace.close.appDarwin = value
         }),
       )
     },
@@ -162,6 +155,8 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.isEphemeralProject = false
           workspace.editingState = 'initial-state'
           workspace.selectedProjectTreeLeaf = { label: '', type: null }
+          workspace.isCollapsed = false
+          workspace.isModalOpen = []
           workspace.isDebuggerVisible = false
           workspace.debuggerTargetIp = null
           workspace.debugCContent = null
@@ -191,6 +186,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.isProjectLoading = false
           workspace.projectLoadingMessage = ''
           workspace.canEdit = true
+          workspace.autoSaveOnBuild = true
         }),
       )
     },
@@ -448,6 +444,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
           workspace.canEdit = value
+        }),
+      )
+    },
+    setAutoSaveOnBuild: (value: boolean) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.autoSaveOnBuild = value
         }),
       )
     },

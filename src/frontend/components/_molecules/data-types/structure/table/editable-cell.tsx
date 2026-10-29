@@ -23,6 +23,9 @@ const EditableNameCell = ({ getValue, row: { index }, column: { id }, table }: I
   const [cellValue, setCellValue] = useState(initialValue)
 
   const onBlur = () => {
+    // Runs on every blur: leaving the cell untouched is not an edit.
+    if (cellValue === initialValue) return
+
     const existingVariableNames = table
       .getRowModel()
       .rows.map((row) => row.original.name)
@@ -90,6 +93,8 @@ const EditableInitialValueCell = ({
   const [cellValue, setCellValue] = useState(displayValue)
 
   const onBlur = () => {
+    // Leaving the cell untouched must not turn a missing initial value into an empty one.
+    if (cellValue === displayValue) return
     const newInitialValue: PLCStructureVariable['initialValue'] = { simpleValue: { value: cellValue } }
     table.options.meta?.updateData(index, id, newInitialValue)
   }

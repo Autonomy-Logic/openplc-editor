@@ -230,6 +230,8 @@ function getLayer(filePath: string): LayerName | null {
   // reachable from adapters/backend/main on both platforms — same `utils` rule
   // set, byte-identical between repos.
   if (rel.startsWith('middleware/shared/runtime-auth/')) return 'utils'
+  // Vendor configurator wire protocol and host client; pure, byte-identical between repos.
+  if (rel.startsWith('middleware/shared/vendor-document/')) return 'utils'
   if (rel.match(/^middleware\/adapters\/[^/]+\/components\//)) return 'adapter-components'
   if (rel.startsWith('middleware/adapters/')) return 'adapters'
 
@@ -374,9 +376,6 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   ],
   'frontend/components/_features/[workspace]/editor/device/ethercat/index.tsx': ['backend-shared'],
   'frontend/hooks/use-device-configuration.ts': ['backend-shared', 'components'],
-  'frontend/utils/PLC/xml-generator/codesys/language/fbd-xml.ts': ['components', 'store'],
-  'frontend/utils/PLC/xml-generator/codesys/language/ladder-xml.ts': ['components', 'store'],
-  'frontend/utils/PLC/xml-generator/codesys/pou-xml.ts': ['store'],
   'frontend/utils/PLC/xml-generator/old-editor/language/fbd-xml.ts': ['components', 'store'],
   'frontend/utils/PLC/xml-generator/old-editor/language/ladder-xml.ts': ['components', 'store'],
   'frontend/utils/PLC/xml-generator/old-editor/pou-xml.ts': ['store'],
@@ -396,6 +395,10 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   'frontend/store/slices/ladder/utils/index.ts': ['components'],
   // Ladder slice — needs nodesBuilder + defaultCustomNodesStyles for rung creation
   'frontend/store/slices/ladder/slice.ts': ['components'],
+  // AI rung-spec builder — needs nodesBuilder, connectNodes and
+  // updateDiagramElementsPosition to turn a logical rung spec into a real
+  // xyflow graph, same as the interactive editor does
+  'frontend/store/slices/ladder/utils/rung-spec.ts': ['components'],
   // Device CONNECT flow (D72) — resolves RTU params from the board debug spec
   // via the shared `resolveDebugConnection` resolver, same as the activity bar's
   // debugger/post-flash paths.
@@ -421,13 +424,48 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   // debug session. Pre-existing; it was invisible until `extractImports` learned
   // to read multi-line imports.
   'frontend/components/_organisms/workspace-activity-bar/default.tsx': ['backend-shared'],
-  // PLCopen export — needs the shared XmlGenerator composing function
-  // (backend/shared/utils/PLC/xml-generator.ts) to turn the converted
+  // ---------------------------------------------------------------------------
+  // VPP (Vendor Plugin Package) — DOPE-637/638
+  //
+  // `VppPackagePin` is `z.infer` of the pin schema in the project-file
+  // configuration, so backend/shared is its home: it is part of the shape a
+  // project persists, and the three layers below only name it. `screen-actions`
+  // is the one parser for a vendor screen's declarative actions, for the same
+  // reason `device-link-resolution.ts` is the one reader of a debug spec — a
+  // second interpreter is how two of them come to disagree.
+  //
+  // Same judgement as `ports/debugger-port.ts` above: hoisting these into
+  // ports/types.ts would drag the schema they are inferred from along with it.
+  // ---------------------------------------------------------------------------
+  // Pin drift warning — compares the pin a project recorded against the package
+  // actually installed; `describeVppPinDrift` is the one place that is worded.
+  'frontend/components/_features/[workspace]/editor/device/configuration/board.tsx': ['backend-shared'],
+  // Vendor screen actions — parses and runs a screen's declarative actions.
+  'frontend/components/_features/[workspace]/editor/device/configuration/vendor-screen/screen-actions.tsx': [
+    'backend-shared',
+  ],
+  // Type-only: the store holds the recorded pin per board.
+  'frontend/store/slices/device/types.ts': ['backend-shared'],
+  // Type-only: the package port answers with the pin a project would record.
+  'middleware/shared/ports/package-port.ts': ['backend-shared'],
+  // Type-only: the runtime port returns a plugin command's outcome.
+  'middleware/shared/ports/runtime-port.ts': ['backend-shared'],
+  // Type-only: BoardInfo carries the pin of the package a VPP board came from.
+  'middleware/shared/ports/types.ts': ['backend-shared'],
+
+  // PLCopen export — needs the shared PlcopenXmlGenerator composing function
+  // (backend/shared/utils/PLC/plcopen-xml-generator.ts) to turn the converted
   // project data into XML before handing it to the platform port. No
   // frontend-reachable layer re-exports this function today; the
   // conversion logic itself stays local (mirrors compiler-adapter.ts's
   // portToSchemaProjectData) and has no other backend-shared dependency.
   'frontend/services/export-actions.ts': ['backend-shared'],
+  // I/O image diagnostics — reads the compile pipeline's own sizer and the two
+  // emitters it feeds (`computeIoImage`, `generateImageConf`,
+  // `generateProcessImageDefines`). The point of the tool is to answer what a
+  // BUILD would produce, so calling anything other than the functions the build
+  // calls would make it a second opinion instead of a preview.
+  'frontend/services/io-diagnostics/index.ts': ['backend-shared'],
 }
 
 // ---------------------------------------------------------------------------
@@ -495,22 +533,61 @@ function validate(): Violation[] {
   return violations
 }
 
+/**
+ * Tests inject the store and the platform ports instead of mocking them, so a
+ * mock cannot bypass the Provider: `createTestStore()` / `createStoreWrapper()`
+ * from `frontend/store/testing` and a `PlatformProvider` with test ports.
+ */
+function validateTestInjection(): { file: string; line: number; mocked: string }[] {
+  const found: { file: string; line: number; mocked: string }[] = []
+  const tests = collectFiles(SRC_ROOT, ['.ts', '.tsx']).filter(
+    (f) => !f.includes('__architecture__/') && (f.includes('__tests__/') || /\.(test|spec)\.[jt]sx?$/.test(f)),
+  )
+  const mockCall = /\b(?:vi|jest)\.(?:mock|doMock)\(\s*['"]([^'"]+)['"]/g
+
+  for (const file of tests) {
+    const source = readFileSync(file, 'utf-8')
+    let match: RegExpExecArray | null
+    while ((match = mockCall.exec(source)) !== null) {
+      const resolved = resolveImport(match[1], file)
+      if (!resolved) continue
+      const target = relative(SRC_ROOT, resolved).replace(/\\/g, '/')
+      const mocksStore = target.startsWith('frontend/store/') && !target.startsWith('frontend/store/slices/')
+      if (mocksStore || target.startsWith('middleware/shared/providers/')) {
+        found.push({
+          file: relative(SRC_ROOT, file).replace(/\\/g, '/'),
+          line: source.slice(0, match.index).split('\n').length,
+          mocked: match[1],
+        })
+      }
+    }
+  }
+  return found
+}
+
 // ---------------------------------------------------------------------------
 // Run
 // ---------------------------------------------------------------------------
 
 const violations = validate()
+const mockedInjections = validateTestInjection()
 
-if (violations.length === 0) {
+if (violations.length === 0 && mockedInjections.length === 0) {
   //
   console.log('Architecture validation passed. No layer violations found.')
   process.exit(0)
 } else {
-  console.error(`Architecture validation FAILED. ${violations.length} violation(s) found:\n`)
+  console.error(`Architecture validation FAILED. ${violations.length + mockedInjections.length} violation(s) found:\n`)
   for (const v of violations) {
     console.error(`  ${v.file}:${v.line}`)
     console.error(`    Import: ${v.importPath}`)
     console.error(`    Rule:   ${v.message}`)
+    console.error()
+  }
+  for (const m of mockedInjections) {
+    console.error(`  ${m.file}:${m.line}`)
+    console.error(`    Mock:   ${m.mocked}`)
+    console.error('    Rule:   tests inject the store and platform ports; they must not module-mock them')
     console.error()
   }
   process.exit(1)

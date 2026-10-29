@@ -1,15 +1,14 @@
-/**
- * Aggregate type that groups all port interfaces + platform capabilities.
- * This is the shape of the value provided by PlatformContext.
- */
-
 import type { AcceleratorPort } from '../ports/accelerator-port'
 import type { AIPort } from '../ports/ai-port'
+import type { AppUpdatePort } from '../ports/app-update-port'
 import type { CompilerPort } from '../ports/compiler-port'
 import type { DebuggerPort } from '../ports/debugger-port'
 import type { DevicePort } from '../ports/device-port'
 import type { EdgeAccountPort } from '../ports/edge-account-port'
+import type { EditSessionPort } from '../ports/edit-session-port'
 import type { EsiPort } from '../ports/esi-port'
+import type { EtherCATDiagnosticsPort } from '../ports/ethercat-diagnostics-port'
+import type { EtherCATScanPort } from '../ports/ethercat-scan-port'
 import type { LibraryPort } from '../ports/library-port'
 import type { NavigationPort } from '../ports/navigation-port'
 import type { OrchestratorPort } from '../ports/orchestrator-port'
@@ -42,19 +41,16 @@ export interface PlatformPorts {
   capabilities: PlatformCapabilities
   packages?: PackagePort
   esi?: EsiPort
+  /** Scan modules on a modular coupler via EtherDOG's 0xF050 path. */
+  ethercatScan?: EtherCATScanPort
+  /** Poll modular-coupler diagnostics (status word + per-module status byte). */
+  ethercatDiagnostics?: EtherCATDiagnosticsPort
   ai?: AIPort
-  /**
-   * Optional — the web build only. The desktop editor has no Edge account and
-   * sets `capabilities.hasEdgeAccount` false; gate on that capability rather than
-   * on this being present.
-   */
+  // Gate on `capabilities.hasEdgeAccount`, not on presence: autonomy-node has no Edge account API.
   edgeAccount?: EdgeAccountPort
-  /**
-   * Optional — present only on platforms that intend to host the
-   * STruC++ language server.  When `capabilities.hasStLSP` is true
-   * this port MUST be set; the editor adapter wires it, the web
-   * adapter wires a fetch-based variant, and headless test
-   * harnesses can leave it `undefined`.
-   */
+  editSession?: EditSessionPort
+  // Desktop only: the notice that a newer editor is out. Absent on web, which is deployed rather than installed.
+  appUpdate?: AppUpdatePort
+  // Required when `capabilities.hasStLSP` is true.
   stlibSource?: StlibSourcePort
 }

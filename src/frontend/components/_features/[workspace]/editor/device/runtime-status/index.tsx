@@ -17,7 +17,7 @@ import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useOrchestrator, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useState } from 'react'
 
-import { useOpenPLCStore } from '../../../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
 import { ScanCycleStats } from '../../../../../_molecules/scan-cycle-stats'
@@ -49,6 +49,7 @@ type BootloaderInfo = {
 }
 
 const RuntimeStatusEditor = () => {
+  const store = useOpenPLCStoreApi()
   const runtime = useRuntime()
 
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
@@ -98,10 +99,15 @@ const RuntimeStatusEditor = () => {
    * is absent and the header simply shows less.
    */
   const hostInfoFromOrchestrator = useCallback(async (): Promise<DeviceInfo | null> => {
-    const orchestratorId = selectedDevice?.orchestratorId
-    if (!orchestratorId || !orchestrator.getOrchestratorHostInfo) return null
+    // The details route resolves an orchestrator by its AGENT id (the
+    // run-command identifier), not the database record id. selectedDevice's
+    // `orchestratorId` holds the record id, so passing it 404s and the header
+    // shows no host facts at all; `orchestratorAgentId` is what the endpoint
+    // keys on.
+    const agentId = selectedDevice?.orchestratorAgentId
+    if (!agentId || !orchestrator.getOrchestratorHostInfo) return null
 
-    const host = await orchestrator.getOrchestratorHostInfo(orchestratorId)
+    const host = await orchestrator.getOrchestratorHostInfo(agentId)
     if (!host) return null
 
     // Narrowed rather than asserted: the agent's numbers arrive as strings,
@@ -128,7 +134,7 @@ const RuntimeStatusEditor = () => {
       memoryBytes: megabytes === undefined ? undefined : megabytes * 1024 * 1024,
       agentVersion: host.agentVersion,
     }
-  }, [orchestrator, selectedDevice?.orchestratorId])
+  }, [orchestrator, selectedDevice?.orchestratorAgentId])
 
   const refresh = useCallback(async () => {
     // Disconnected clears everything. The component stays mounted while
@@ -196,13 +202,13 @@ const RuntimeStatusEditor = () => {
         // Compared against the store directly rather than the rendered
         // value: depending on runtimeVersion here would rebuild `refresh`
         // whenever it changed, re-running the effect that calls it.
-        if (reported && reported !== useOpenPLCStore.getState().runtimeConnection.runtimeVersion) {
+        if (reported && reported !== store.getState().runtimeConnection.runtimeVersion) {
           setRuntimeVersion(reported)
         }
       }
     }
     setBootloader(next)
-  }, [connected, runtime, storedCredentials, setRuntimeVersion, hostInfoFromOrchestrator])
+  }, [store, connected, runtime, storedCredentials, setRuntimeVersion, hostInfoFromOrchestrator])
 
   useEffect(() => {
     void refresh()
@@ -284,7 +290,7 @@ const RuntimeStatusEditor = () => {
           ) : (
             // Names the source, so a blank kernel/architecture reads as "the
             // agent does not report these" rather than "something is wrong".
-            <InfoField label='Orchestrator agent' value={deviceInfo?.agentVersion} />
+            <InfoField label='Device Agent' value={deviceInfo?.agentVersion} />
           )}
           <InfoField label='Host' value={deviceInfo?.hostname} />
           <InfoField label='Operating system' value={deviceInfo?.system} />

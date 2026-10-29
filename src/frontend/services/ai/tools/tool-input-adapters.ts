@@ -1,0 +1,215 @@
+import { v4 as uuidv4 } from 'uuid'
+
+import type { PLCBody } from '../../../../middleware/shared/ports/open-plc-types'
+import type {
+  PLCDataType,
+  PLCStructureVariable,
+  PLCVariable,
+  PLCVariableType,
+} from '../../../../middleware/shared/ports/types'
+import type { OpenPLCStore } from '../../../store'
+import type { LadderElementSpec } from '../../../store/slices/ladder/utils/rung-spec'
+
+type TextualLanguage = 'st' | 'il' | 'python' | 'cpp'
+type CreatePouLanguage = TextualLanguage | 'ld'
+
+const BASE_TYPES = new Set([
+  'bool',
+  'sint',
+  'int',
+  'dint',
+  'lint',
+  'usint',
+  'uint',
+  'udint',
+  'ulint',
+  'real',
+  'lreal',
+  'time',
+  'date',
+  'tod',
+  'dt',
+  'string',
+  'byte',
+  'word',
+  'dword',
+  'lword',
+])
+
+function resolveVariableType(typeStr: string): PLCVariableType {
+  const lower = typeStr.toLowerCase()
+  if (BASE_TYPES.has(lower)) {
+    return { definition: 'base-type' as const, value: lower }
+  }
+  return { definition: 'user-data-type' as const, value: typeStr }
+}
+
+export type CreatePouInput = {
+  name: string
+  type: 'program' | 'function' | 'function-block'
+  language: 'st' | 'il' | 'python' | 'cpp' | 'ld'
+  body?: string
+}
+
+export function adaptCreatePou(input: CreatePouInput): {
+  createProps: { name: string; type: 'program' | 'function' | 'function-block'; language: CreatePouLanguage }
+  body?: string
+} {
+  return {
+    createProps: { name: input.name, type: input.type, language: input.language },
+    body: input.body,
+  }
+}
+
+export type UpdatePouBodyInput = {
+  pouName: string
+  code: string
+}
+
+export function adaptUpdatePouBody(
+  store: OpenPLCStore,
+  input: UpdatePouBodyInput,
+): { name: string; content: PLCBody } | null {
+  const state = store.getState()
+  const pou = state.project.data.pous.find((p) => p.name === input.pouName)
+  if (!pou) return null
+  return {
+    name: input.pouName,
+    content: { language: pou.body.language, value: input.code } as PLCBody,
+  }
+}
+
+export type CreateVariableInput = {
+  pouName?: string | null
+  name: string
+  class?: 'input' | 'output' | 'inOut' | 'external' | 'local' | 'temp'
+  type: string
+  initialValue?: string
+}
+
+export function adaptCreateVariable(input: CreateVariableInput): {
+  scope: 'global' | 'local'
+  associatedPou?: string
+  data: PLCVariable
+} {
+  const isGlobal = !input.pouName
+  const variableData: PLCVariable = {
+    name: input.name,
+    class: isGlobal ? 'global' : (input.class ?? 'local'),
+    type: resolveVariableType(input.type),
+    location: '',
+    initialValue: input.initialValue ?? null,
+    documentation: '',
+    debug: false,
+  }
+
+  return {
+    scope: isGlobal ? 'global' : 'local',
+    associatedPou: input.pouName ?? undefined,
+    data: variableData,
+  }
+}
+
+export type DeletePouInput = {
+  pouName: string
+}
+
+export type UpdateVariableInput = {
+  pouName?: string | null
+  currentName: string
+  newName?: string
+  class?: 'input' | 'output' | 'inOut' | 'external' | 'local' | 'temp'
+  type?: string
+  initialValue?: string
+}
+
+export type DeleteVariableInput = {
+  pouName?: string | null
+  variableName: string
+}
+
+export type CreateDatatypeInput = {
+  name: string
+  derivation: 'structure' | 'enumerated' | 'array'
+  fields?: Array<{ name: string; type: string }>
+  values?: string[]
+  baseType?: string
+  dimensions?: string[]
+  initialValue?: string
+}
+
+/** Null when required fields are missing. */
+export function buildDatatypeFromCreateInput(input: CreateDatatypeInput): PLCDataType | null {
+  if (input.derivation === 'structure') {
+    if (!input.fields || input.fields.length === 0) return null
+    const variable: PLCStructureVariable[] = input.fields.map((f) => ({
+      name: f.name,
+      type: resolveVariableType(f.type),
+    }))
+    return { name: input.name, derivation: 'structure', variable }
+  }
+  if (input.derivation === 'enumerated') {
+    if (!input.values || input.values.length === 0) return null
+    return {
+      name: input.name,
+      derivation: 'enumerated',
+      values: input.values.map((v) => ({ description: v })),
+      ...(input.initialValue !== undefined ? { initialValue: input.initialValue } : {}),
+    }
+  }
+  if (input.derivation === 'array') {
+    if (!input.baseType || !input.dimensions || input.dimensions.length === 0) return null
+    return {
+      name: input.name,
+      derivation: 'array',
+      baseType: resolveVariableType(input.baseType),
+      dimensions: input.dimensions.map((d) => ({ dimension: d })),
+      ...(input.initialValue !== undefined ? { initialValue: input.initialValue } : {}),
+    }
+  }
+  return null
+}
+
+export type UpdateDatatypeInput = {
+  name: string
+  newName?: string
+  fields?: Array<{ name: string; type: string }>
+  values?: string[]
+  baseType?: string
+  dimensions?: string[]
+  initialValue?: string
+}
+
+export type DeleteDatatypeInput = {
+  name: string
+}
+
+// --- ladder rung adapters ---
+// The `elements[]` vocabulary is `LadderElementSpec` (store layer, `rung-spec.ts`) — reused
+// verbatim here rather than redeclared, since the tool input and the builder's spec are the
+// same shape by design (read-modify-write round-trips through it).
+
+export type ReadLadderDiagramInput = {
+  pouName: string
+}
+
+export type AddRungInput = {
+  pouName: string
+  comment?: string
+  elements: LadderElementSpec[]
+  afterRungId?: string
+}
+
+export type UpdateRungInput = {
+  pouName: string
+  rungId: string
+  comment?: string
+  elements: LadderElementSpec[]
+}
+
+export type DeleteRungInput = {
+  pouName: string
+  rungId: string
+}
+
+export { BASE_TYPES, resolveVariableType, uuidv4 }

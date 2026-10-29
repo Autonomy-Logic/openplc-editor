@@ -81,7 +81,7 @@
       <div class="loadingWrapper">
         <div class="loadingText">
           <span style="font-size: 12px; font-weight: 700">AUTONOMY</span>
-          <span>© 2021-2025</span>
+          <span>© 2021-<span id="copyrightYear"></span></span>
         </div>
         <div class="loadingText">
           <span id="initialLoading">Loading</span>
@@ -95,6 +95,8 @@
 
     <script>
       document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('copyrightYear').textContent = new Date().getFullYear()
+
         function updateProgressBar(progress) {
           const progressBar = document.getElementById('progressBar')
 

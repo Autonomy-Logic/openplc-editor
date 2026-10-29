@@ -20,7 +20,7 @@
 import { HardwareModule } from '@root/backend/editor/hardware'
 import { ProjectService } from '@root/backend/editor/services'
 import { parseProjectFiles } from '@root/backend/shared/utils/parse-project-files'
-import { openPLCStoreBase } from '@root/frontend/store'
+import type { OpenPLCStore } from '@root/frontend/store'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 
 export interface LoadedProject {
@@ -39,7 +39,7 @@ export interface LoadedProject {
 
 export type LoadProjectResult = { success: true; project: LoadedProject } | { success: false; error: string }
 
-export async function loadProject(projectPath: string): Promise<LoadProjectResult> {
+export async function loadProject(store: OpenPLCStore, projectPath: string): Promise<LoadProjectResult> {
   // The main process's own reader, so the CLI sees exactly the file set the
   // GUI sees — including the defaults it synthesises for missing device files.
   const raw = await new ProjectService().readRawProjectFiles(projectPath)
@@ -68,20 +68,29 @@ export async function loadProject(projectPath: string): Promise<LoadProjectResul
   // resolution and the debug-spec resolver both read `availableBoards`, and
   // `setAvailableOptions` is what re-syncs aliases for the active target. Without
   // it the store looks like an editor that has not finished starting up.
-  openPLCStoreBase
+  store
     .getState()
     .deviceActions.setAvailableOptions({ availableBoards: await new HardwareModule().getAvailableBoards() })
 
-  // The SHARED singleton, not a private instance. Everything the editor's own
-  // resolvers read comes off it — `buildDeviceResolverContext` reads the device
-  // configuration and runtime connection from `useOpenPLCStore.getState()`, and
-  // the debug tree builder reads the project. Hydrating a private store would
-  // leave those resolvers looking at an empty one, and the CLI would have to
-  // reimplement them. One project per process is the same assumption the editor
-  // makes, and a CLI invocation is one project.
-  openPLCStoreBase.getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
+  // The process's one store, the same one the editor's own resolvers are handed
+  // (`buildDeviceResolverContext`, the debug tree builder), so the CLI resolves
+  // exactly what the GUI would. A CLI invocation is one project.
+  store.getState().sharedWorkspaceActions.handleOpenProjectResponse(parsed)
 
-  const state = openPLCStoreBase.getState()
+  // Re-apply the board list now that the project is in the store. One migration
+  // hangs off this action and reads project state: the fold of the pre-split
+  // `modbus_rtu` wiring keys into `serial`, which is gated on the board's package
+  // shipping a `serial` screen and so cannot run before the boards resolve. In
+  // the GUI the project lands first and the boards arrive after, so it fires
+  // once; here the order is reversed and it fired against an empty store,
+  // meaning a CLI compile and a GUI compile of the same on-disk project could
+  // disagree. Idempotent by construction -- it returns the input unchanged when
+  // nothing moved.
+  store
+    .getState()
+    .deviceActions.setAvailableOptions({ availableBoards: await new HardwareModule().getAvailableBoards() })
+
+  const state = store.getState()
   return {
     success: true,
     project: {
@@ -108,10 +117,25 @@ export async function loadProject(projectPath: string): Promise<LoadProjectResul
  * into the compile arguments would build fine and then fail to resolve a debug
  * channel, for no visible reason.
  */
-export function applyConnectionOverrides(overrides: { port?: string; host?: string }): void {
-  const configuration: { communicationPort?: string; runtimeIpAddress?: string } = {}
-  if (overrides.port) configuration.communicationPort = overrides.port
-  if (overrides.host) configuration.runtimeIpAddress = overrides.host
-  if (Object.keys(configuration).length === 0) return
-  openPLCStoreBase.getState().deviceActions.setDeviceDefinitions({ configuration })
+export function applyConnectionOverrides(store: OpenPLCStore, overrides: { port?: string; host?: string }): void {
+  const patch: { communicationPort?: string; runtimeIpAddress?: string } = {}
+  if (overrides.port) patch.communicationPort = overrides.port
+  if (overrides.host) patch.runtimeIpAddress = overrides.host
+  if (Object.keys(patch).length === 0) return
+  // Merged onto what the project loaded, not sent alone.
+  //
+  // `setDeviceDefinitions` REPLACES `configuration` with merge(passed,
+  // DEFAULTS) -- not with merge(passed, current) -- so handing it `--host` by
+  // itself reset `deviceBoard`, `communicationPort` and, fatally,
+  // `vendorScreenData`. That last one is the `screens` the debug-spec resolver
+  // reads, so a TCP channel declaring `enabledWhen: screens.network.enabled`
+  // evaluated against an empty object and was never eligible. Serial then
+  // failed too (its port had just been wiped) and the CLI reported that the
+  // target "declares none this build can open" -- on a board sitting on the
+  // network with its port open.
+  //
+  // It only showed on a board whose TCP channel is state-gated: the LOGO!'s is
+  // `enabledWhen: true`, so it resolved either way and hid this.
+  const current = store.getState().deviceDefinitions.configuration
+  store.getState().deviceActions.setDeviceDefinitions({ configuration: { ...current, ...patch } })
 }

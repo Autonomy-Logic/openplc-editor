@@ -1,17 +1,39 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { ComponentProps, useEffect, useRef, useState } from 'react'
+import { CloudUpload } from 'lucide-react'
+import { ComponentProps, useEffect, useMemo, useRef, useState } from 'react'
 
-import { useProject } from '../../../../middleware/shared/providers'
+import type { CloudProjectSummary } from '../../../../middleware/shared/ports/project-port'
+import { useCapabilities, useEdgeAccountPort, useProject } from '../../../../middleware/shared/providers'
+import { useEdgeAccount } from '../../../hooks/use-edge-account'
 import { useOpenPLCStore } from '../../../store'
 import { cn } from '../../../utils/cn'
 import { File } from '../../_atoms/file'
 import { toast } from '../../_features/[app]/toast/use-toast'
+import { CloudProjectCard, CloudProjectPlaceholder } from '../../_features/[start]/cloud-projects'
+import type { RecentCloudProjects } from '../../_features/[start]/cloud-projects/use-recent-cloud-projects'
+import { UploadToCloudModal } from '../../_features/[start]/upload-to-cloud'
+import type { ProjectOrder } from '../project-filter-bar'
 
 export type IDisplayRecentProjectProps = ComponentProps<'section'> & {
   searchNameFilterValue: string
+  orderBy?: ProjectOrder
+  cloud?: RecentCloudProjects
+  onProjectUploaded?: () => void
 }
 
-const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRecentProjectProps) => {
+type LocalProject = { name: string; path: string; lastOpenedAt: string }
+
+type GridEntry =
+  | { kind: 'local'; key: string; name: string; time: number; project: LocalProject }
+  | { kind: 'cloud'; key: string; name: string; time: number; summary: CloudProjectSummary }
+
+const DisplayRecentProjects = ({
+  searchNameFilterValue,
+  orderBy = 'Recent',
+  cloud,
+  onProjectUploaded,
+  ...props
+}: IDisplayRecentProjectProps) => {
   const {
     workspace: { recent },
     workspaceActions: { setRecent },
@@ -20,6 +42,14 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
   } = useOpenPLCStore()
 
   const project = useProject()
+  const caps = useCapabilities()
+  const edgeAccount = useEdgeAccountPort()
+
+  // canPublish also requires the platform to implement the call: the web build has no local projects to publish.
+  const { status: accountStatus } = useEdgeAccount(caps.hasEdgeAccount, edgeAccount)
+  const canPublish = accountStatus === 'signed-in' && project.uploadProjectToCloud !== undefined
+
+  const [projectToUpload, setProjectToUpload] = useState<{ name: string; path: string } | null>(null)
 
   const [recentProjects, setRecentProjects] = useState(recent)
   const [projectTimes, setProjectTimes] = useState<{ [key: string]: string }>({})
@@ -109,11 +139,8 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
     })
   }
 
-  // "Remove from list" — disk untouched. Fires immediately, no
-  // confirmation: the project files stay where they are, re-opening
-  // the project re-adds it to recents. The sibling "Delete project"
-  // action routes through the confirm-delete-project modal because
-  // its blast radius is `rm -rf` on the project directory.
+  // Disk untouched, fires immediately: re-opening the project re-adds it to recents.
+  // "Delete project" routes through a confirm modal instead, since its blast radius is rm -rf.
   const handleRemoveFromList = async (projectPath: string) => {
     const result = await project.removeRecentProject(projectPath)
     if (!result.success) {
@@ -131,82 +158,163 @@ const DisplayRecentProjects = ({ searchNameFilterValue, ...props }: IDisplayRece
     openModal('confirm-delete-project', { projectName, projectPath })
   }
 
+  const entries = useMemo(() => {
+    const filter = searchNameFilterValue.trim().toLowerCase()
+    const cloudProjects = cloud?.status === 'ok' ? cloud.projects : []
+
+    const all: GridEntry[] = [
+      ...recentProjects.map(
+        (proj): GridEntry => ({
+          kind: 'local',
+          key: `local:${proj.path}`,
+          name: proj.name ?? '',
+          time: new Date(proj.lastOpenedAt).getTime(),
+          project: proj,
+        }),
+      ),
+      ...cloudProjects
+        .filter((summary) => !filter || summary.name.toLowerCase().includes(filter))
+        .map(
+          (summary): GridEntry => ({
+            kind: 'cloud',
+            key: `cloud:${summary.id}`,
+            name: summary.name,
+            time: new Date(summary.updatedAt).getTime(),
+            summary,
+          }),
+        ),
+    ]
+
+    return all.sort((a, b) => (orderBy === 'Name' ? a.name.localeCompare(b.name) : b.time - a.time))
+  }, [recentProjects, cloud, searchNameFilterValue, orderBy])
+
   return (
     <section
-      className='flex h-[52%] w-full select-none flex-col pr-9 2xl:h-3/5 3xl:h-3/4 4xl:h-4/5 4xl:pr-0'
+      // `flex-1 min-h-0`, not a percentage: the cloud section above is as tall as its rows, and a
+      // fixed share of the column pushed this one past the `overflow-hidden` main, clipping the
+      // last row even with its own scroll at the end.
+      className='flex min-h-0 w-full flex-1 select-none flex-col pr-9 4xl:pr-0'
       {...props}
     >
       <h2 className='mb-6 flex  cursor-default justify-start font-caption text-xl font-medium text-neutral-1000 dark:text-white'>
         Projects
       </h2>
-      <div className='scroll-area flex h-auto w-full flex-wrap  gap-[25px] overflow-y-auto'>
-        {recentProjects.map((proj) => (
-          <div key={proj.path} className='group relative'>
-            <File
-              onClick={() => void handleOpenProjectByPath(proj.path)}
-              className='overflow-hidden'
-              projectName={proj.name}
-              projectPath={proj.path}
-              lastModified={projectTimes[proj.path]}
-            />
-            {/* 3-dot overflow menu — always visible, positioned on
-             *  the SVG folder BODY's top-right (not the tab above
-             *  it). The folder shape's body starts at y≈33 inside a
-             *  160px-tall card, so `top-10` (40px) sits just inside
-             *  the blue body and leaves the tab clean. Stops click
-             *  propagation so opening the menu doesn't also fire
-             *  the card's onClick (open project). */}
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger asChild>
-                <button
-                  aria-label='Project actions'
-                  onClick={(e) => e.stopPropagation()}
-                  className='absolute right-2 top-10 rounded p-1 hover:bg-black/20 focus:outline-none dark:hover:bg-black/40'
-                  title='More actions'
-                >
-                  <svg className='h-4 w-4 text-white' viewBox='0 0 16 16' fill='currentColor' aria-hidden='true'>
-                    <path d='M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z' />
-                  </svg>
-                </button>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content
-                  side='bottom'
-                  align='end'
-                  sideOffset={4}
-                  onCloseAutoFocus={(e) => e.preventDefault()}
-                  className='z-[60] min-w-[180px] overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900'
-                >
-                  <DropdownMenu.Item
-                    onSelect={() => void handleRemoveFromList(proj.path)}
-                    className={cn(
-                      'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-xs outline-none',
-                      'text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800',
-                    )}
+      <div className='scroll-area flex min-h-0 w-full flex-1 flex-wrap content-start gap-[25px] overflow-y-auto pb-2'>
+        {entries.map((entry) => {
+          if (entry.kind === 'cloud') {
+            return <CloudProjectCard key={entry.key} summary={entry.summary} />
+          }
+
+          const proj = entry.project
+
+          return (
+            <div key={entry.key} className='group relative'>
+              <File
+                onClick={() => void handleOpenProjectByPath(proj.path)}
+                className='overflow-hidden'
+                projectName={proj.name}
+                projectPath={proj.path}
+                lastModified={projectTimes[proj.path]}
+              />
+              {/* top-7 sits just inside the folder body's SVG shape, clear of the tab above it.
+                Stops click propagation so opening the menu doesn't also fire the card's onClick. */}
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    aria-label='Project actions'
+                    onClick={(e) => e.stopPropagation()}
+                    className='absolute right-2 top-7 rounded p-1 hover:bg-black/20 focus:outline-none dark:hover:bg-black/40'
+                    title='More actions'
                   >
-                    <svg className='h-3.5 w-3.5 text-neutral-500' viewBox='0 0 16 16' fill='currentColor'>
-                      <path d='M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z' />
+                    <svg className='h-4 w-4 text-white' viewBox='0 0 16 16' fill='currentColor' aria-hidden='true'>
+                      <path d='M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z' />
                     </svg>
-                    Remove from list
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item
-                    onSelect={() => handleDeleteProjectRequest(proj.name, proj.path)}
-                    className={cn(
-                      'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-xs outline-none',
-                      'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40',
-                    )}
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    side='bottom'
+                    align='end'
+                    sideOffset={4}
+                    onCloseAutoFocus={(e) => e.preventDefault()}
+                    className='z-[60] min-w-[180px] overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900'
                   >
-                    <svg className='h-3.5 w-3.5' viewBox='0 0 16 16' fill='currentColor'>
-                      <path d='M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25ZM4.005 5.073a.75.75 0 0 1 .673.627l.79 5.532a.75.75 0 0 0 .742.643h3.58a.75.75 0 0 0 .742-.643l.79-5.532a.75.75 0 0 1 1.49.214l-.79 5.532A2.25 2.25 0 0 1 9.79 13.5H6.21a2.25 2.25 0 0 1-2.23-1.928l-.79-5.532a.75.75 0 0 1 .626-.867Z' />
-                    </svg>
-                    Delete project
-                  </DropdownMenu.Item>
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Root>
+                    {canPublish && (
+                      <DropdownMenu.Item
+                        onSelect={() => setProjectToUpload({ name: proj.name, path: proj.path })}
+                        className={cn(
+                          'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-xs outline-none',
+                          // blue-500 for the hover tint: text-brand's var() can't take Tailwind's /5 opacity modifier.
+                          'text-brand hover:bg-blue-500/5 dark:hover:bg-blue-500/10',
+                        )}
+                      >
+                        <CloudUpload className='h-3.5 w-3.5 text-brand' />
+                        Upload to Cloud
+                      </DropdownMenu.Item>
+                    )}
+                    <DropdownMenu.Item
+                      onSelect={() => void handleRemoveFromList(proj.path)}
+                      className={cn(
+                        'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-xs outline-none',
+                        'text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800',
+                      )}
+                    >
+                      <svg className='h-3.5 w-3.5 text-neutral-500' viewBox='0 0 16 16' fill='currentColor'>
+                        <path d='M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z' />
+                      </svg>
+                      Remove from list
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      onSelect={() => handleDeleteProjectRequest(proj.name, proj.path)}
+                      className={cn(
+                        'flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-xs outline-none',
+                        'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40',
+                      )}
+                    >
+                      <svg className='h-3.5 w-3.5' viewBox='0 0 16 16' fill='currentColor'>
+                        <path d='M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25ZM4.005 5.073a.75.75 0 0 1 .673.627l.79 5.532a.75.75 0 0 0 .742.643h3.58a.75.75 0 0 0 .742-.643l.79-5.532a.75.75 0 0 1 1.49.214l-.79 5.532A2.25 2.25 0 0 1 9.79 13.5H6.21a2.25 2.25 0 0 1-2.23-1.928l-.79-5.532a.75.75 0 0 1 .626-.867Z' />
+                      </svg>
+                      Delete project
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            </div>
+          )
+        })}
+        {cloud === null ? (
+          <div role='status' aria-label='Loading cloud projects' className='contents'>
+            {[0, 1, 2].map((index) => (
+              <CloudProjectPlaceholder key={index} />
+            ))}
           </div>
-        ))}
+        ) : null}
       </div>
+
+      {/* One dialog for the whole list rather than one per card: only a single upload can
+          be in flight, and mounting a modal per project would have every card ask Edge for
+          the folder list. */}
+      {projectToUpload && (
+        <UploadToCloudModal
+          open
+          onOpenChange={(next) => {
+            if (!next) setProjectToUpload(null)
+          }}
+          projectPath={projectToUpload.path}
+          projectName={projectToUpload.name}
+          onUploaded={() => {
+            toast({
+              title: 'Uploaded to Autonomy Edge',
+              description: `${projectToUpload.name} is now on your account. The copy on this computer is unchanged.`,
+              variant: 'default',
+            })
+            setProjectToUpload(null)
+            // Before the toast is even read: the project belongs at the top of the cloud
+            // list, and seeing it land there is the confirmation that matters.
+            onProjectUploaded?.()
+          }}
+        />
+      )}
     </section>
   )
 }

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 // Baremetal.ino -- OpenPLC Arduino runtime entry sketch.
 //
 // This is a STATIC sketch -- the same code for every project. It hosts the
@@ -34,6 +36,23 @@
 
 #if defined(MODBUS_ENABLED) || defined(DEBUGGER_ENABLED)
 #include "ModbusSlave.h"
+#endif
+
+// Protocol servers. Included unconditionally: each facade is defined either way
+// and the implementation compiles out when the target's VPP does not declare the
+// capability. The call sites below are still guarded, because an unconditional
+// call to an empty function keeps the call and the evaluation of its argument.
+#include "opcua_server.h"
+#include "opcua_log.h"
+#include "s7comm_server.h"   // brings in s7comm_config.h -> S7COMM_ENABLED
+
+// Network device-discovery responder ("Search" in the editor). Feature-gated so
+// only targets declaring SUPPORTS_UDP_SCAN pull it in; unrelated to Modbus.
+#if defined(SUPPORTS_UDP_SCAN)
+#include "udp_scan.h"
+// Weak NULL default for the discovery brand/type string. A VPP declares its
+// identity with a strong OPLC_DEVICE_NAME in its HAL, which overrides this.
+extern "C" { const char *OPLC_DEVICE_NAME __attribute__((weak)) = 0; }
 #endif
 
 // Include WiFi lib to turn off WiFi radio on ESP32/ESP8266 if not using WiFi
@@ -87,10 +106,8 @@ unsigned long last_run = 0;
 bool first_cycle = false;
 
 // ---------------------------------------------------------------------------
-// Module includes and external sketch support
+// External sketch support
 // ---------------------------------------------------------------------------
-#include "arduino_libs.h"
-
 #ifdef USE_ARDUINO_SKETCH
     #include "ext/arduino_sketch.h"
 #endif
@@ -215,12 +232,18 @@ void setup()
                 mbconfig_serial_iface(&MBSERIAL_IFACE, MBSERIAL_BAUD, -1);
             #endif
             modbus.slaveid = MBSERIAL_SLAVE;
-            // NOTE (single-serial model): the debugger and Modbus RTU share one
-            // mb_serialport. When MBSERIAL_SHARES_DEBUG_SERIAL is defined the RTU
-            // port IS the debugger's default serial, so this single begin() also
-            // brings up the debugger. Running the debugger on the default USB
-            // serial while RTU uses a *different* UART simultaneously would need
-            // a second serial handler — a documented follow-up.
+            // Two models, chosen by which UART the project gave Modbus RTU:
+            //
+            //  - MBSERIAL_SHARES_DEBUG_SERIAL: the RTU port IS the debugger's
+            //    default serial, so the single begin() above brings up both and
+            //    one mb_serialport serves them.
+            //  - MBSERIAL_ON_SECONDARY: the RTU has its own UART and the
+            //    debugger keeps the default one, begun further up. `handle_serial`
+            //    polls both, each with its own RX assembly buffer.
+            //
+            // The second case was once listed here as an unimplemented
+            // follow-up; it landed in 4b3c1386f and is now the normal shape,
+            // since the editor's connection occupies the default port.
         #elif defined(DEBUGGER_ENABLED)
             // Modbus TCP-only build: no MBSERIAL, but the always-on debugger
             // still needs the default serial up on mb_serialport to respond.
@@ -229,37 +252,85 @@ void setup()
             modbus.slaveid = DEBUG_SLAVE;
         #endif
 
-        #ifdef MBTCP
-            uint8_t mac[] = { MBTCP_MAC };
-            uint8_t ip[] = { MBTCP_IP };
-            uint8_t dns[] = { MBTCP_DNS };
-            uint8_t gateway[] = { MBTCP_GATEWAY };
-            uint8_t subnet[] = { MBTCP_SUBNET };
-
-            if (sizeof(ip)/sizeof(uint8_t) < 4)
-                mbconfig_ethernet_iface(mac, NULL, NULL, NULL, NULL);
-            else if (sizeof(dns)/sizeof(uint8_t) < 4)
-                mbconfig_ethernet_iface(mac, ip, NULL, NULL, NULL);
-            else if (sizeof(gateway)/sizeof(uint8_t) < 4)
-                mbconfig_ethernet_iface(mac, ip, dns, NULL, NULL);
-            else if (sizeof(subnet)/sizeof(uint8_t) < 4)
-                mbconfig_ethernet_iface(mac, ip, dns, gateway, NULL);
-            else
-                mbconfig_ethernet_iface(mac, ip, dns, gateway, subnet);
-        #endif
-
-        init_mbregs(MAX_ANALOG_OUTPUT + MAX_MEMORY_WORD, MAX_MEMORY_DWORD, MAX_MEMORY_LWORD, MAX_DIGITAL_OUTPUT, MAX_ANALOG_INPUT, MAX_DIGITAL_INPUT);
-        mapEmptyBuffers();
     #elif defined(DEBUGGER_ENABLED)
         // Always-on debugger without full Modbus: bring up the serial port and
         // the Modbus RTU framing/slave id ONLY. The debugger reads/writes IEC
-        // variables directly through the strucpp debug table (openplc_debug_*),
-        // so it needs NO operation buffers — init_mbregs()/mapEmptyBuffers() are
-        // deliberately not called here, saving SRAM on small boards.
+        // variables by symbol through the strucpp debug table, so it reaches
+        // every variable whether or not a slot is bound.
         DEBUG_IFACE.begin(DEBUG_BAUD);
         mbconfig_serial_iface(&DEBUG_IFACE, DEBUG_BAUD, -1);
         modbus.slaveid = DEBUG_SLAVE;
     #endif
+
+    // Outside the transport branch above: the backing belongs to the image, so
+    // whichever protocol addresses located variables needs it, not Modbus
+    // specifically.
+    #if defined(MODBUS_ENABLED) || S7COMM_ENABLED
+        mapEmptyBuffers();
+    #endif
+
+    // ---- The network, on its own switch ----------------------------------
+    //
+    // Everything below is gated on the NETWORK being enabled, not on Modbus
+    // being served. The link carries the debugger, the ethernet upload,
+    // discovery, OPC-UA and S7Comm; Modbus TCP is one tenant among several and
+    // was never the right thing to hang the interface off. A project with no
+    // Modbus server used to compile a firmware that never called
+    // mbconfig_*_iface(), which on a board reached only over Ethernet is a
+    // device that boots and can never be reached again.
+#if defined(OPLC_NET_ENABLED)
+    {
+        uint8_t mac[] = { MBTCP_MAC };
+        uint8_t ip[] = { MBTCP_IP };
+        uint8_t dns[] = { MBTCP_DNS };
+        uint8_t gateway[] = { MBTCP_GATEWAY };
+        uint8_t subnet[] = { MBTCP_SUBNET };
+
+        // Five byte arrays, `sizeof(arr) < 4` as a compile-time DHCP-vs-static
+        // selector: an unset value is emitted as a single `0` byte.
+        if (sizeof(ip)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, NULL, NULL, NULL, NULL);
+        else if (sizeof(dns)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, ip, NULL, NULL, NULL);
+        else if (sizeof(gateway)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, ip, dns, NULL, NULL);
+        else if (sizeof(subnet)/sizeof(uint8_t) < 4)
+            mbconfig_ethernet_iface(mac, ip, dns, gateway, NULL);
+        else
+            mbconfig_ethernet_iface(mac, ip, dns, gateway, subnet);
+    }
+
+    // The TCP listener: Modbus TCP when the project serves it, and the
+    // debugger's transport regardless, on a board reached only this way.
+    #ifdef MB_TCP_ACTIVE
+        mbtcp_server_begin();
+    #endif
+
+    // OPC-UA and S7Comm listen on the interface brought up above, and must not
+    // re-init the link themselves (see baremetal_net.h). No-ops when disabled.
+    #if OPCUA_ENABLED
+        opcua_log_begin();
+        opcua_init();
+    #endif
+    #if S7COMM_ENABLED
+        s7comm_init();
+    #endif
+#endif  // OPLC_NET_ENABLED
+
+#if defined(SUPPORTS_UDP_SCAN)
+    // Network is up now; start answering editor discovery probes.
+    udp_scan_begin();
+#endif
+
+#if defined(BOARD_LOGO8)
+    // The LOGO! core defers its SysTick/millis() time base, because its reset
+    // path skips the Energia _init that would start it. Start it here and before
+    // setupCycleDelay(), so the scan-cycle baseline is captured from a running
+    // micros(); otherwise the first cycle underflows and the scan runs unthrottled.
+    (*(volatile uint32_t *)0xE000E014u) = (F_CPU / 1000U) - 1U;  /* SYST_RVR */
+    (*(volatile uint32_t *)0xE000E018u) = 0U;                    /* SYST_CVR */
+    (*(volatile uint32_t *)0xE000E010u) = 0x00000007U;           /* SYST_CSR: CLK|TICKINT|EN */
+#endif
 
     setupCycleDelay(base_tick_ns);
 
@@ -269,39 +340,54 @@ void setup()
 }
 
 // =============================================================================
-// MAP EMPTY BUFFERS (for Modbus)
+// BACK THE UNBOUND SLOTS
 // =============================================================================
-#ifdef MODBUS_ENABLED
+// Compiled when a protocol that addresses LOCATED variables is enabled. The
+// debugger reaches variables by symbol, so it can never name an unbound slot
+// and a debug-only build saves the SRAM.
+#if defined(MODBUS_ENABLED) || S7COMM_ENABLED
+
+// Storage for slots the program declared no variable for -- the image is a
+// table of pointers into program variables, and those slots have none. Keeps
+// a sized-but-undeclared address usable as scratch. Static so an image too big
+// for the board fails at link rather than at runtime.
+static IEC_BOOL empty_bits[MAX_DIGITAL_INPUT + MAX_DIGITAL_OUTPUT] = {};
+static IEC_UINT empty_words[MAX_ANALOG_INPUT + MAX_ANALOG_OUTPUT] = {};
+#if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
+static IEC_UINT  empty_memory_words[MAX_MEMORY_WORD] = {};
+static IEC_UDINT empty_memory_dwords[MAX_MEMORY_DWORD] = {};
+static IEC_ULINT empty_memory_lwords[MAX_MEMORY_LWORD] = {};
+#endif
+
 void mapEmptyBuffers()
 {
     for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
     {
         if (bool_output[i/8][i%8] == NULL)
         {
-            bool_output[i/8][i%8] = (IEC_BOOL *)malloc(sizeof(IEC_BOOL));
-            *bool_output[i/8][i%8] = 0;
-        }
-    }
-    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
-    {
-        if (int_output[i] == NULL)
-        {
-            int_output[i] = (IEC_UINT *)(modbus.holding + i);
+            bool_output[i/8][i%8] = &empty_bits[i];
         }
     }
     for (int i = 0; i < MAX_DIGITAL_INPUT; i++)
     {
         if (bool_input[i/8][i%8] == NULL)
         {
-            bool_input[i/8][i%8] = (IEC_BOOL *)malloc(sizeof(IEC_BOOL));
-            *bool_input[i/8][i%8] = 0;
+            // Offset past the output half -- one array, two disjoint ranges.
+            bool_input[i/8][i%8] = &empty_bits[MAX_DIGITAL_OUTPUT + i];
+        }
+    }
+    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
+    {
+        if (int_output[i] == NULL)
+        {
+            int_output[i] = &empty_words[i];
         }
     }
     for (int i = 0; i < MAX_ANALOG_INPUT; i++)
     {
         if (int_input[i] == NULL)
         {
-            int_input[i] = (IEC_UINT *)(modbus.input_regs + i);
+            int_input[i] = &empty_words[MAX_ANALOG_OUTPUT + i];
         }
     }
     #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
@@ -309,139 +395,54 @@ void mapEmptyBuffers()
         {
             if (int_memory[i] == NULL)
             {
-                int_memory[i] = (IEC_UINT *)(modbus.holding + MAX_ANALOG_OUTPUT + i);
+                int_memory[i] = &empty_memory_words[i];
             }
         }
         for (int i = 0; i < MAX_MEMORY_DWORD; i++)
         {
             if (dint_memory[i] == NULL)
             {
-                dint_memory[i] = (IEC_UDINT *)(modbus.dint_memory + i);
+                dint_memory[i] = &empty_memory_dwords[i];
             }
         }
         for (int i = 0; i < MAX_MEMORY_LWORD; i++)
         {
             if (lint_memory[i] == NULL)
             {
-                lint_memory[i] = (IEC_ULINT *)(modbus.lint_memory + i);
+                lint_memory[i] = &empty_memory_lwords[i];
             }
         }
     #endif
 }
 
+#endif // MODBUS_ENABLED || S7COMM_ENABLED
+
 // =============================================================================
 // MODBUS TASK
 // =============================================================================
+#ifdef MODBUS_ENABLED
+
+// Nothing to synchronise: the FC handlers address the process image directly.
 void modbusTask()
 {
-    // Sync OpenPLC Buffers with Modbus Buffers
-    for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
-    {
-        if (bool_output[i/8][i%8] != NULL)
-        {
-            write_discrete(i, COILS, (bool)*bool_output[i/8][i%8]);
-        }
-    }
-    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
-    {
-        if (int_output[i] != NULL)
-        {
-            modbus.holding[i] = *int_output[i];
-        }
-    }
-    for (int i = 0; i < MAX_DIGITAL_INPUT; i++)
-    {
-        if (bool_input[i/8][i%8] != NULL)
-        {
-            write_discrete(i, INPUTSTATUS, (bool)*bool_input[i/8][i%8]);
-        }
-    }
-    for (int i = 0; i < MAX_ANALOG_INPUT; i++)
-    {
-        if (int_input[i] != NULL)
-        {
-            modbus.input_regs[i] = *int_input[i];
-        }
-    }
-    #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
-        for (int i = 0; i < MAX_MEMORY_WORD; i++)
-        {
-            if (int_memory[i] != NULL)
-            {
-                modbus.holding[i + MAX_ANALOG_OUTPUT] = *int_memory[i];
-            }
-        }
-        for (int i = 0; i < MAX_MEMORY_DWORD; i++)
-        {
-            if (dint_memory[i] != NULL)
-            {
-                modbus.dint_memory[i] = *dint_memory[i];
-            }
-        }
-        for (int i = 0; i < MAX_MEMORY_LWORD; i++)
-        {
-            if (lint_memory[i] != NULL)
-            {
-                modbus.lint_memory[i] = *lint_memory[i];
-            }
-        }
-    #endif
-
-    // Read changes from clients
     mbtask();
-
-    // Write changes back to OpenPLC Buffers
-    for (int i = 0; i < MAX_DIGITAL_OUTPUT; i++)
-    {
-        if (bool_output[i/8][i%8] != NULL)
-        {
-            *bool_output[i/8][i%8] = get_discrete(i, COILS);
-        }
-    }
-    for (int i = 0; i < MAX_ANALOG_OUTPUT; i++)
-    {
-        if (int_output[i] != NULL)
-        {
-            *int_output[i] = modbus.holding[i];
-        }
-    }
-    #if !defined(__AVR_ATmega328P__) && !defined(__AVR_ATmega168__) && !defined(__AVR_ATmega32U4__) && !defined(__AVR_ATmega16U4__)
-        for (int i = 0; i < MAX_MEMORY_WORD; i++)
-        {
-            if (int_memory[i] != NULL)
-            {
-                *int_memory[i] = modbus.holding[i + MAX_ANALOG_OUTPUT];
-            }
-        }
-        for (int i = 0; i < MAX_MEMORY_DWORD; i++)
-        {
-            if (dint_memory[i] != NULL)
-            {
-                *dint_memory[i] = modbus.dint_memory[i];
-            }
-        }
-        for (int i = 0; i < MAX_MEMORY_LWORD; i++)
-        {
-            if (lint_memory[i] != NULL)
-            {
-                *lint_memory[i] = modbus.lint_memory[i];
-            }
-        }
-    #endif
-
-    // The reverse-copies above (COILS → bool_output, holding → int_output,
-    // memory) write located variables' raw storage directly, clobbering any
-    // debugger force. Re-impose forces here so forcing works while STILL
-    // mirroring Modbus client writes into mapped outputs. (Supersedes the open
-    // PR #719, which made forcing work by deleting the digital reverse-copy —
-    // at the cost of Modbus coil mirroring.)
-    runtime_apply_located_forces();
 }
 #endif
 
 // =============================================================================
 // SCHEDULER
 // =============================================================================
+/** How much of the current scan cycle is still unspent.
+ *
+ *  Zero once the cycle is already over budget, so a late caller is told there
+ *  is no room rather than being handed a huge number from unsigned wraparound.
+ *  OPC-UA uses this to decide whether it may run at all; see opcuatask(). */
+static inline uint32_t cycle_slack_us()
+{
+    const unsigned long used = micros() - last_run;
+    return (used >= scan_cycle) ? 0u : (uint32_t)(scan_cycle - used);
+}
+
 void scheduler()
 {
     runtime_plc_cycle();
@@ -453,10 +454,29 @@ void scheduler()
     #if defined(MODBUS_ENABLED)
         modbusTask();
     #elif defined(DEBUGGER_ENABLED)
-        // Debug-only: poll the serial transport for debugger requests. No buffer
-        // sync (modbusTask's mirror loops) because there are no operation buffers.
+        // Debug-only: poll the serial transport for debugger requests.
         mbtask();
     #endif
+
+    // OPC-UA and S7Comm get the tail of the cycle, after the PLC logic and
+    // Modbus. Each is handed what remains and declines to run unless that covers
+    // its worst case, so neither can extend the cycle. No-ops when disabled.
+    //
+    // cycle_slack_us() is called twice deliberately: the protocols share one
+    // budget, so the second sees what the first actually spent.
+    //
+    // Guarded rather than relying on the no-op bodies, because the call and its
+    // micros() argument survive when the body compiles to `return`.
+    #if OPCUA_ENABLED
+        opcuatask(cycle_slack_us());
+    #endif
+    #if S7COMM_ENABLED
+        s7commtask(cycle_slack_us());
+    #endif
+
+    // Protocol writes go to located storage raw, bypassing IECVar::set() and so
+    // clobbering a force. Re-impose after ALL of them, not just Modbus.
+    runtime_apply_located_forces();
 
     if (!first_cycle)
     {
@@ -471,6 +491,12 @@ void scheduler()
 // =============================================================================
 void loop()
 {
+#if defined(SUPPORTS_UDP_SCAN)
+    // Answer editor discovery probes every iteration, independent of the scan
+    // cycle, so Search stays responsive even with a long task interval.
+    udp_scan_poll();
+#endif
+
     if ((micros() - last_run) >= scan_cycle)
     {
         scheduler();
@@ -490,6 +516,21 @@ void loop()
         mbtask();
     }
     #endif
+
+    // OPC-UA gets the same inter-cycle slack Modbus does. Servicing it only from
+    // scheduler() capped it at one message per scan while Modbus was polled
+    // twice per cycle. No fixed guard is needed here: opcuatask() is given the
+    // real remaining slack and decides for itself. Guarded for the same reason
+    // as in scheduler().
+    #if OPCUA_ENABLED
+        opcuatask(cycle_slack_us());
+    #endif
+    #if S7COMM_ENABLED
+        s7commtask(cycle_slack_us());
+    #endif
+
+    // Same repair as in scheduler(): the inter-cycle service writes raw too.
+    runtime_apply_located_forces();
 
     #ifdef SIMULATOR_MODE
     __asm volatile("sleep");

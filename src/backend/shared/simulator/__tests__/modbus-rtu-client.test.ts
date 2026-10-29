@@ -394,6 +394,16 @@ describe('ModbusRtuClient', () => {
       expect(result.error).toBe('ERROR_OUT_OF_MEMORY')
     })
 
+    it('maps the frame-overflow exception to ERROR_OUT_OF_MEMORY', async () => {
+      await connectClient()
+
+      autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_LIST + 0x80, new Uint8Array([0x04])))
+
+      const result = await client.getVariablesList([0, 1])
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('ERROR_OUT_OF_MEMORY')
+    })
+
     it('returns error on unknown error code', async () => {
       await connectClient()
 

@@ -1,29 +1,20 @@
-import { useOpenPLCStore } from '@root/frontend/store'
-import { collectScreenPersistenceKeys } from '@root/frontend/utils/vpp/persistence-keys'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
+import { cleanStateFingerprint, ownedSliceFingerprint, serializeOwnedSlice } from '@root/frontend/utils/vpp/owned-slice'
+import {
+  collectLinkedConfiguratorKeys,
+  collectLinkedScreenKeys,
+  linkedScreenNames,
+} from '@root/frontend/utils/vpp/persistence-keys'
 import { useEffect, useMemo } from 'react'
 
 import { VendorScreenRenderer } from '../device/configuration/vendor-screen'
 
-/**
- * Stable serialisation of the slice of `vendorScreenData` this screen
- * owns.  Sorted by key so insertion order doesn't matter for the
- * dirty-vs-clean compare.  This same shape goes into `cleanState` on
- * mount and on every successful save; "Don't save" parses it and
- * writes it back via the device slice's bulk setter.
- */
-function serializeOwnedSlice(vendorScreenData: Record<string, unknown> | undefined, ownedKeys: string[]): string {
-  const slice: Record<string, unknown> = {}
-  for (const k of [...ownedKeys].sort()) {
-    if (vendorScreenData && Object.prototype.hasOwnProperty.call(vendorScreenData, k)) {
-      slice[k] = vendorScreenData[k]
-    }
-  }
-  return JSON.stringify(slice)
+type VendorScreenEditorProps = {
+  screenName: string
 }
 
-const VendorScreenEditor = () => {
-  const editor = useOpenPLCStore((s) => s.editor)
-  const screenName = editor.type === 'plc-vendor-screen' ? editor.meta.screenName : ''
+const VendorScreenEditor = ({ screenName }: VendorScreenEditorProps) => {
+  const store = useOpenPLCStoreApi()
   const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
   const availableBoards = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards)
   const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
@@ -31,10 +22,12 @@ const VendorScreenEditor = () => {
   const updateFile = useOpenPLCStore((s) => s.fileActions.updateFile)
   const getFile = useOpenPLCStore((s) => s.fileActions.getFile)
   const boardInfo = availableBoards.get(deviceBoard)
-  const screenDefinition = boardInfo?.vpp?.screens?.[screenName] ?? null
+  const screens = boardInfo?.vpp?.screens
+  const screenDefinition = screens?.[screenName] ?? null
   const moduleSystem = boardInfo?.vpp?.moduleSystem ?? null
 
-  const ownedKeys = useMemo(() => collectScreenPersistenceKeys(screenDefinition), [screenDefinition])
+  const ownedKeys = useMemo(() => collectLinkedScreenKeys(screens, screenName), [screens, screenName])
+  const configuratorKeys = useMemo(() => collectLinkedConfiguratorKeys(screens, screenName), [screens, screenName])
 
   // Register the file entry for this tab on mount so Ctrl+S, File →
   // Save, and the save-changes-file modal on close find it.
@@ -45,11 +38,21 @@ const VendorScreenEditor = () => {
   // exists for the same name (re-opening keeps the prior cleanState).
   useEffect(() => {
     if (!screenName || !screenDefinition) return
+    // Read the slice from the store, not from this render: the form layouts
+    // seed their field defaults in their own mount effects, which run before
+    // this one, and those defaults are not an edit. Snapshotting the render's
+    // pre-seed value made the screen dirty the moment it opened.
+    const { vendorScreenData: seededData } = store.getState().deviceDefinitions.configuration
+    // A linked tab already open holds the saved state; the live slice may carry its unsaved edits.
+    const linkedClean = linkedScreenNames(screens, screenName)
+      .filter((name) => name !== screenName)
+      .map((name) => getFile({ name }).file)
+      .find((file) => file?.type === 'vendor-screen' && typeof file.cleanState === 'string')?.cleanState
     addFile({
       name: screenName,
       type: 'vendor-screen',
       filePath: '',
-      cleanState: serializeOwnedSlice(vendorScreenData, ownedKeys),
+      cleanState: typeof linkedClean === 'string' ? linkedClean : serializeOwnedSlice(seededData, ownedKeys),
     })
     // Intentionally only on (screenName / ownedKeys) — depending on
     // vendorScreenData would reset cleanState on every keystroke,
@@ -62,13 +65,20 @@ const VendorScreenEditor = () => {
     if (!screenName) return
     const file = getFile({ name: screenName }).file
     if (!file || file.type !== 'vendor-screen') return
-    const current = serializeOwnedSlice(vendorScreenData, ownedKeys)
-    const clean = typeof file.cleanState === 'string' ? file.cleanState : current
+    // From the store for the same reason as the snapshot above: in the commit
+    // where a layout seeds its defaults, this render's value predates them.
+    const current = ownedSliceFingerprint(
+      store.getState().deviceDefinitions.configuration.vendorScreenData,
+      ownedKeys,
+      configuratorKeys,
+    )
+    const clean =
+      typeof file.cleanState === 'string' ? cleanStateFingerprint(file.cleanState, configuratorKeys) : current
     const isClean = current === clean
     if (file.saved !== isClean) {
       updateFile({ name: screenName, saved: isClean })
     }
-  }, [screenName, ownedKeys, vendorScreenData, getFile, updateFile])
+  }, [store, screenName, ownedKeys, configuratorKeys, vendorScreenData, getFile, updateFile])
 
   if (!screenDefinition) {
     return (
@@ -78,6 +88,11 @@ const VendorScreenEditor = () => {
     )
   }
 
+  // The Modbus screen is rendered by the native server editor rather than the
+  // generic form layout, so a baremetal board and a Runtime v4 target present
+  // the same Modbus UI. The tab, the persistence keys and the dirty/save path
+  // are unchanged — only the renderer differs, which is what keeps this from
+  // needing a project migration.
   return (
     <div className='flex min-h-0 flex-1 flex-col overflow-y-auto p-4'>
       <VendorScreenRenderer screenDefinition={screenDefinition} moduleSystem={moduleSystem} />

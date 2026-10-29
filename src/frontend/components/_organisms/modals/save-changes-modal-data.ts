@@ -16,6 +16,7 @@
  * - 'open-recent-project': Close current, then open a recent project (editor)
  * - 'open-project-by-path': Close current, then open project at path (editor)
  * - 'close-app': Save before quitting the application (editor)
+ * - 'refresh-app': Save before reloading the application (both platforms)
  * - 'retrieve-project': Close current, then open the project fetched from a
  *   device (both platforms)
  */
@@ -26,6 +27,7 @@ const VALIDATION_CONTEXTS = [
   'open-project-by-path',
   'close-project',
   'close-app',
+  'refresh-app',
   'retrieve-project',
 ] as const
 

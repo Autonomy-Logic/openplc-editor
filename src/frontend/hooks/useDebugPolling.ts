@@ -25,7 +25,7 @@ import { useCallback, useEffect, useRef } from 'react'
 
 import type { DebugTreeNode } from '../../middleware/shared/ports/types'
 import { useCapabilities, useDebugger } from '../../middleware/shared/providers'
-import { openPLCStoreBase, useOpenPLCStore } from '../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 import { DEBUG_MEDIUM_PROFILE, debugProfileFor, DEFAULT_DEBUG_MEDIUM } from '../utils/debug-medium-profile'
 import { buildActiveIndexSet } from '../utils/debug-polling-filter'
 import { walkDebugResponse } from '../utils/debug-response-walker'
@@ -81,6 +81,7 @@ export interface UseDebugPollingOptions {
 }
 
 export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void {
+  const store = useOpenPLCStoreApi()
   const debuggerPort = useDebugger()
   const capabilities = useCapabilities()
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
@@ -158,7 +159,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
 
     // Use cached active indexes — only rebuild when invalidation triggers change
     if (!activeIndexesRef.current) {
-      const state = openPLCStoreBase.getState()
+      const state = store.getState()
       const { activeIndexes, cacheResult } = buildActiveIndexSet(state, allLeaves, visibleVarsCacheRef.current)
       if (cacheResult !== visibleVarsCacheRef.current) {
         visibleVarsCacheRef.current = cacheResult
@@ -201,7 +202,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
 
     // Update stale data tracking
     lastResponseTimestampRef.current = Date.now()
-    if (openPLCStoreBase.getState().workspace.debugDataStale) {
+    if (store.getState().workspace.debugDataStale) {
       workspaceActions.setDebugDataStale(false)
     }
 
@@ -214,7 +215,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
         debugBoolValues: currentBool,
         debugNonBoolValues: currentNonBool,
         debugTargetEndian,
-      } = openPLCStoreBase.getState().workspace
+      } = store.getState().workspace
       const changedBool = new Map<string, string>()
       const changedNonBool = new Map<string, string>()
 
@@ -306,7 +307,7 @@ export function useDebugPolling({ debugTreesRef }: UseDebugPollingOptions): void
     if (itemsProcessed > 0) {
       batchOffsetRef.current = (batchOffset + itemsProcessed) % activeIndexes.length
     }
-  }, [debuggerPort, getAllLeaves, workspaceActions, consoleActions])
+  }, [store, debuggerPort, getAllLeaves, workspaceActions, consoleActions])
 
   // Ref-based poll so the interval never resets due to callback identity changes
   const pollRef = useRef(pollVariables)

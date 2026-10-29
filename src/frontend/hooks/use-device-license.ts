@@ -23,7 +23,7 @@ import { useDevice, useSystem } from '@root/middleware/shared/providers/platform
 import { resolveLicensingTarget } from '@root/middleware/shared/utils/licensing'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 
-import { useOpenPLCStore } from '../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
 import { buildLicenseBuyUrl } from '../utils/license-buy-url'
 
 /**
@@ -102,6 +102,7 @@ export function useDeviceLicense(
   boardInfo: BoardInfo | undefined,
   opts?: UseDeviceLicenseOptions,
 ): UseDeviceLicenseResult {
+  const store = useOpenPLCStoreApi()
   const ownsWatch = opts?.ownsWatch ?? false
   const device = useDevice()
   const system = useSystem()
@@ -189,7 +190,7 @@ export function useDeviceLicense(
   useEffect(() => {
     if (!ownsWatch || !awaitingPurchase) return
     const tick = () => {
-      const { phase, awaitingPurchaseUntil: until } = useOpenPLCStore.getState().deviceLicense
+      const { phase, awaitingPurchaseUntil: until } = store.getState().deviceLicense
       if (until === null || Date.now() >= until) {
         // The window closed (or the watch was cancelled between ticks): stop
         // instead of polling a forgotten checkout forever.
@@ -208,7 +209,7 @@ export function useDeviceLicense(
     tick()
     const timer = setInterval(tick, PURCHASE_POLL_INTERVAL_MS)
     return () => clearInterval(timer)
-  }, [ownsWatch, awaitingPurchase, setAwaitingPurchase])
+  }, [store, ownsWatch, awaitingPurchase, setAwaitingPurchase])
 
   /**
    * Build the purchase link for a given device id.

@@ -23,7 +23,7 @@ type LadderRung = { id: string; nodes: import('@xyflow/react').Node[] }
 type LadderFlow = { name: string; rungs: LadderRung[] }
 type FBDFlow = { name: string; rung: { nodes: import('@xyflow/react').Node[] } }
 
-const getBlockExpectedType = (node: Node): string => {
+export const getBlockExpectedType = (node: Node): string => {
   const variant = (node.data as { variant?: { name?: string } }).variant
 
   if (node.type === 'contact' || node.type === 'coil') {

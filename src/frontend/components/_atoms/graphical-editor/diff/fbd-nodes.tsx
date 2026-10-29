@@ -9,6 +9,7 @@ import {
 import { BlockNodeVisual } from '../fbd/block-visual'
 import { CommentVisual } from '../fbd/comment-visual'
 import { ConnectionVisual } from '../fbd/connection-visual'
+import { getVariableNodeWidth } from '../fbd/utils/variable-size'
 import { VariableVisual } from '../fbd/variable-visual'
 import { DiffWrapper, renderFBDHandles } from './diff-wrapper'
 
@@ -51,13 +52,13 @@ export function ReadOnlyFBDBlock({ data, width, height }: NodeProps) {
   )
 }
 
-export function ReadOnlyFBDVariable({ data }: NodeProps) {
+export function ReadOnlyFBDVariable({ data, width }: NodeProps) {
   const status = (data.diffStatus as DiffStatus) ?? 'unchanged'
   const varName = (data.variable as { name?: string })?.name ?? ''
 
   return (
     <DiffWrapper status={status}>
-      <VariableVisual variableName={varName} />
+      <VariableVisual variableName={varName} width={getVariableNodeWidth({ width })} title={varName || undefined} />
       {renderFBDHandles(data.handles)}
     </DiffWrapper>
   )

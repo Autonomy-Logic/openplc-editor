@@ -2,8 +2,8 @@
  * Editor CompilerPort adapter — delegates to Electron IPC bridge.
  *
  * Communicates with the main process CompilerModule via MessageChannel IPC.
- * The main process handles the full pipeline: XML generation, ST transpilation,
- * C code generation, and binary compilation.
+ * The main process handles the full pipeline: ST transpilation, strucpp
+ * compilation and the binary build.
  *
  * Type mapping:
  *   - Port POUs use flat format: { name, pouType, ... }
@@ -22,7 +22,6 @@ import type {
   CompileProgramArgs,
   CompilerPort,
   DebugCompileArgs,
-  ExportXmlArgs,
 } from '../../shared/ports/compiler-port'
 import type { StlibArchiveDTO } from '../../shared/ports/library-port'
 import type {
@@ -32,7 +31,6 @@ import type {
   DebugCompileResult,
   PLCPou,
   PLCProjectData,
-  Result,
 } from '../../shared/ports/types'
 import { resolveTargetCapabilities } from '../../shared/utils/target-capabilities'
 import { compileProgramFlow } from './compile-program-flow'
@@ -151,7 +149,18 @@ export type CompileLibraryIpcArgs = [
   nativePous: NativePouRef[],
 ]
 
-export function createEditorCompilerAdapter(): CompilerPort {
+/**
+ * Cross-port collaborators the compiler adapter cannot build itself.
+ *
+ * `findPackageUpdateNotice` reaches the package catalogue, which belongs to a
+ * different port, so it is injected at the platform wiring rather than reached
+ * for from here. Optional so a test can construct the adapter bare.
+ */
+export interface EditorCompilerAdapterDeps {
+  findPackageUpdateNotice?: (packageId: string) => Promise<string | null>
+}
+
+export function createEditorCompilerAdapter(deps: EditorCompilerAdapterDeps = {}): CompilerPort {
   return {
     /**
      * The Build / Build & Upload flow.
@@ -171,6 +180,7 @@ export function createEditorCompilerAdapter(): CompilerPort {
           getAvailableBoards: () => window.bridge.getAvailableBoards(),
           loadAllLibraries: async () => (await window.bridge.loadAllLibraries()) as StlibArchiveDTO[],
           runCompileProgram: (compileArgs, onMessage) => window.bridge.runCompileProgram(compileArgs, onMessage),
+          findPackageUpdateNotice: deps.findPackageUpdateNotice,
         },
         onProgress,
       )
@@ -258,16 +268,6 @@ export function createEditorCompilerAdapter(): CompilerPort {
           },
         )
       })
-    },
-
-    async exportProjectXml(args: ExportXmlArgs): Promise<Result<{ message: string }>> {
-      const ipcData = toIpcProjectData(args.projectData)
-      const result = await window.bridge.exportProjectXml(args.projectPath, ipcData as never, args.format)
-
-      if (result.success) {
-        return { success: true, message: result.message }
-      }
-      return { success: false, error: result.message }
     },
 
     async compileLibrary(

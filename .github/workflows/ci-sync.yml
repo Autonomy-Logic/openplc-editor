@@ -102,12 +102,18 @@ jobs:
         run: |
           BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
 
+          HEAD_BRANCH="${{ github.event.pull_request.head.ref }}"
+
           PR_JSON=$(gh pr list \
             --repo Autonomy-Logic/openplc-web \
             --base "$BASE_BRANCH" \
             --state open \
-            --limit 10 \
+            --limit 50 \
             --json number,headRefName,title)
+
+          # The mirror PR shares this PR's branch name, so try it first: scanning by
+          # recency alone stops finding it as soon as newer PRs pile up in front.
+          PR_JSON=$(echo "$PR_JSON" | jq --arg head "$HEAD_BRANCH" 'sort_by(.headRefName != $head)')
 
           PR_COUNT=$(echo "$PR_JSON" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
           echo "pr_count=$PR_COUNT" >> "$GITHUB_OUTPUT"

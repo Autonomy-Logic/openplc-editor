@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from 'react'
 
 import type { PLCDataType } from '../../../../../../middleware/shared/ports/types'
 import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
-import { useOpenPLCStore } from '../../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../store'
 import { arrayValidation } from '../../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../../utils/cn'
 import { GenericDataTypeTable } from '../../../../_atoms/generic-data-type-table'
@@ -27,14 +27,12 @@ const DimensionsTable = ({
   handleRowClick,
   setArrayTable,
 }: DataTypeDimensionsTableProps) => {
+  const store = useOpenPLCStoreApi()
   const tableBodyRef = useRef<HTMLTableSectionElement>(null)
   const tableBodyRowRef = useRef<HTMLTableRowElement>(null)
 
   const {
     editor,
-    project: {
-      data: { dataTypes },
-    },
     projectActions: { updateDatatype },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
@@ -46,7 +44,9 @@ const DimensionsTable = ({
   // `derivation` / `baseType` / `initialValue` from the array
   // datatype (which would corrupt it for downstream consumers).
   const writeDimensions = (newDimensions: PLCArrayDatatype['dimensions']) => {
-    const current = dataTypes.find((dt) => dt.name === name)
+    // From the store, not this render: the cells call in through a memoised
+    // column definition, so this closure can be several renders old.
+    const current = store.getState().project.data.dataTypes.find((dt) => dt.name === name)
     if (!current || current.derivation !== 'array') return
     updateDatatype(name, { ...current, dimensions: newDimensions })
     handleFileAndWorkspaceSavedState(editor.meta.name)
@@ -78,7 +78,11 @@ const DimensionsTable = ({
 
   const handleBlur = (rowIndex: number) => {
     const inputElement = document.getElementById(`dimension-input-${rowIndex}`) as HTMLInputElement
-    const prevRows = tableData
+    // The column definition that calls this is memoised on [name, selectedRow],
+    // so `tableData` here can predate the table's first fill ([]): comparing or
+    // rebuilding from it would rewrite, or wipe, the dimensions. Read the store.
+    const stored = store.getState().project.data.dataTypes.find((dt) => dt.name === name)
+    const prevRows = stored?.derivation === 'array' ? stored.dimensions : tableData
 
     if (inputElement) {
       const inputValue = inputElement.value.trim()
@@ -96,6 +100,8 @@ const DimensionsTable = ({
           variant: 'fail',
         })
       } else {
+        // Runs on every blur: an unchanged dimension is not an edit.
+        if (prevRows[rowIndex]?.dimension === inputValue) return
         captureAndPush(editor.meta.name)
 
         const newRows = prevRows.map((row, index) => ({

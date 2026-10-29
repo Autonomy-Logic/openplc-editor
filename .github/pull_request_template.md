@@ -19,6 +19,7 @@ This PR resolve the *#issue_number*.
 
 - [ ] The code is complete and according to developers’ standards.
 - [ ] I have performed a self-review of my code.
+- [ ] Adapters stay thin: no logic added outside the shared surface (CLAUDE.md, "Thin adapters").
 - [ ] Meet the acceptance criteria.
 - [ ] Unit tests are written and green.
 - [ ] Test coverage: __ %.
@@ -26,3 +27,7 @@ This PR resolve the *#issue_number*.
 - [ ] Changes were communicated and updated in the ticket description.
 - [ ] Reviewed and accepted by the Product Owner.
 - [ ] End-to-end test are successful.
+
+## Contributor License Agreement
+
+- [ ] I have read and agree to the [Contributor License Agreement, version 1.0](https://github.com/Autonomy-Logic/openplc-editor/blob/development/CLA.md)

@@ -35,7 +35,7 @@ const QuitApplicationModal = ({ isOpen, ...rest }: QuitApplicationModalProps) =>
       }}
       {...rest}
     >
-      <ModalContent className='flex max-h-80 w-[300px] select-none flex-col items-center justify-evenly rounded-lg'>
+      <ModalContent className='flex w-[300px] select-none flex-col items-center justify-evenly rounded-lg'>
         <div className='flex select-none flex-col items-center gap-6'>
           <WarningIcon className='mr-2 mt-2 h-[73px] w-[73px]' />
           <div>

@@ -1,0 +1,2889 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- automatically created by WAGO GmbH & Co.KG -->
+<EtherCATInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="EtherCATInfo.xsd" Version="1.3">
+	<Vendor FileVersion="25">
+		<Id>33</Id>
+		<Name><![CDATA[WAGO]]></Name>
+		<URL>http://www.wago.com</URL>
+		<ImageData16x14>424DB6030000000000003600000028000000100000000E00000001002000000000008003000000000000000000000000000000000000008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FF008000FF008000FF008000FF008000FF008000FF008000FFC0C0C0FF008000FF008000FF008000FF008000FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FF008000FF008000FF008000FF008000FF008000FF008000FFC0C0C0FF008000FF008000FF008000FF008000FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FFC0C0C0FFC0C0C0FFC0C0C0FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FFC0C0C0FFC0C0C0FFC0C0C0FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FFFFFFFFFFFFFFFFFF008000FF008000FF008000FF008000FF008000FFFFFFFFFF008000FF008000FF008000FF008000FFFFFFFFFF008000FF008000FF008000FFFFFFFFFFFFFFFFFF008000FF008000FF008000FF008000FF008000FFFFFFFFFF008000FF008000FF008000FF008000FFFFFFFFFF008000FF008000FF008000FF008000FFFFFFFFFF008000FF008000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF008000FF008000FF008000FFFFFFFFFF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF008000FF</ImageData16x14>
+	</Vendor>
+	<Descriptions>
+		<Groups>
+			<Group>
+				<Type>WAGO Series 750 Bus Coupler</Type>
+				<Name><![CDATA[EtherCAT fieldbus coupler series 750]]></Name>
+				<ImageData16x14>424DB6030000000000003600000028000000100000000E00000001002000000000008003000000000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FF808080FF808080FF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFC0C0C0FFC0C0C0FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFC0C0C0FFC0C0C0FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFC0C0C0FFC0C0C0FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFC0C0C0FFC0C0C0FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFF000000FFFFFFFFFF00FF00FF00FF00FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF000000FF000000FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF000000FF000000FFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF000000FF000000FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF000000FF000000FFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFF000000FFFFFFFFFF00FF00FF00FF00FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FF808080FF808080FF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+			</Group>
+		</Groups>
+		<Devices>
+			<Device Physics="YY">
+				<Type CheckRevisionNo="EQ" ProductCode="#x07500354" RevisionNo="#x00000002" ModulePdoGroup="0"><![CDATA[750-354]]></Type>
+				<Name><![CDATA[750-354 EtherCat fieldbus coupler]]></Name>
+				<Name LcId = "1801"><![CDATA[EtherCAT FC]]></Name>
+				<Info>
+					<StateMachine>
+						<Timeout>
+							<PreopTimeout>5000</PreopTimeout>
+							<SafeopOpTimeout>100</SafeopOpTimeout>
+							<BackToInitTimeout>150</BackToInitTimeout>
+							<BackToSafeopTimeout>150</BackToSafeopTimeout>
+						</Timeout>
+					</StateMachine>
+					<Mailbox>
+						<Timeout>
+							<RequestTimeout>100</RequestTimeout>
+							<ResponseTimeout>100</ResponseTimeout>
+						</Timeout>
+					</Mailbox>
+				</Info>
+				<GroupType>WAGO Series 750 Bus Coupler</GroupType>
+				<Profile>
+					<ProfileNo>5001</ProfileNo>
+					<Dictionary>
+						<DataTypes>
+							<DataType>
+								<Name>UDINT</Name>
+								<BitSize>32</BitSize>
+							</DataType>
+							<DataType>
+								<Name>USINT</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<Name>STRING(40)</Name>
+								<BitSize>320</BitSize>
+							</DataType>
+							<DataType>
+								<Name>STRING(5)</Name>
+								<BitSize>40</BitSize>
+							</DataType>
+							<DataType>
+								<Name>STRING(12)</Name>
+								<BitSize>96</BitSize>
+							</DataType>
+							<DataType>
+								<Name>BOOL</Name>
+								<BitSize>1</BitSize>
+							</DataType>
+							<DataType>
+								<Name>UINT</Name>
+								<BitSize>16</BitSize>
+							</DataType>
+							<DataType>
+								<Name>ARRAY [0..25] OF BYTE</Name>
+								<BaseType>USINT</BaseType>
+								<BitSize>208</BitSize>
+								<ArrayInfo>
+									<LBound>0</LBound>
+									<Elements>26</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>ARRAY [0..0] OF BYTE</Name>
+								<BaseType>USINT</BaseType>
+								<BitSize>8</BitSize>
+								<ArrayInfo>
+									<LBound>0</LBound>
+									<Elements>1</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>ARRAY [0..2] OF BYTE</Name>
+								<BaseType>USINT</BaseType>
+								<BitSize>24</BitSize>
+								<ArrayInfo>
+									<LBound>0</LBound>
+									<Elements>3</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT1018</Name>
+								<BitSize>144</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Vendor ID</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Product Code</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Revision Number</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Serial Number</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT10F3</Name>
+								<BitSize>2560</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Maximum Messages</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Newest Message</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Newest Acknowledged Message</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>New Message Available</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>40</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Flags</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>Diagnosis Message 1</Name>
+									<Type>ARRAY [0..25] OF BYTE</Type>
+									<BitSize>208</BitSize>
+									<BitOffs>64</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>7</SubIdx>
+									<Name>Diagnosis Message 2</Name>
+									<Type>ARRAY [0..25] OF BYTE</Type>
+									<BitSize>208</BitSize>
+									<BitOffs>272</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>8</SubIdx>
+									<Name>Diagnosis Message 3</Name>
+									<Type>ARRAY [0..25] OF BYTE</Type>
+									<BitSize>208</BitSize>
+									<BitOffs>480</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>9</SubIdx>
+									<Name>Diagnosis Message 4</Name>
+									<Type>ARRAY [0..25] OF BYTE</Type>
+									<BitSize>208</BitSize>
+									<BitOffs>688</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>10</SubIdx>
+									<Name>Diagnosis Message 5</Name>
+									<Type>ARRAY [0..25] OF BYTE</Type>
+									<BitSize>208</BitSize>
+									<BitOffs>896</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>11</SubIdx>
+									<Name>Diagnosis Message 6</Name>
+									<Type>ARRAY [0..25] OF BYTE</Type>
+									<BitSize>208</BitSize>
+									<BitOffs>1104</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>12</SubIdx>
+									<Name>Diagnosis Message 7</Name>
+									<Type>ARRAY [0..25] OF BYTE</Type>
+									<BitSize>208</BitSize>
+									<BitOffs>1312</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>13</SubIdx>
+									<Name>Diagnosis Message 8</Name>
+									<Type>ARRAY [0..25] OF BYTE</Type>
+									<BitSize>208</BitSize>
+									<BitOffs>1520</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>14</SubIdx>
+									<Name>Diagnosis Message 9</Name>
+									<Type>ARRAY [0..25] OF BYTE</Type>
+									<BitSize>208</BitSize>
+									<BitOffs>1728</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>15</SubIdx>
+									<Name>Diagnosis Message 10</Name>
+									<Type>ARRAY [0..25] OF BYTE</Type>
+									<BitSize>208</BitSize>
+									<BitOffs>1936</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>16</SubIdx>
+									<Name>Diagnosis Message 11</Name>
+									<Type>ARRAY [0..25] OF BYTE</Type>
+									<BitSize>208</BitSize>
+									<BitOffs>2144</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>17</SubIdx>
+									<Name>Diagnosis Message 12</Name>
+									<Type>ARRAY [0..25] OF BYTE</Type>
+									<BitSize>208</BitSize>
+									<BitOffs>2352</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT16FF</Name>
+								<BitSize>208</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>FC Control, K-Bus Cycle Overrun Flag Disable</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>FC Control, Input Process Data Hold Request</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>FC Control, Output Process Data Hold Request</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>FC Control, Output Process Data Clear Request</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Gap</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>144</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>Diagnostics Control Word</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>176</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1AFF</Name>
+								<BitSize>240</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>FC Status, K-Bus Cycle Overrun Flag</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>FC Status, Input Process Data Hold Ack.</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>FC Status, Output Process Data Hold Ack.</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>FC Status, Output Process Data Clear Ack.</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Gap</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>144</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>Diagnosis History, New Message Available</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>176</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>7</SubIdx>
+									<Name>Diagnostics Status Word</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>208</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C00ARR</Name>
+								<BaseType>USINT</BaseType>
+								<BitSize>32</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>4</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT1C00</Name>
+								<BitSize>48</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DT1C00ARR</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C12ARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>1056</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>66</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT1C12</Name>
+								<BitSize>1072</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DT1C12ARR</Type>
+									<BitSize>1056</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C13ARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>1056</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>66</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT1C13</Name>
+								<BitSize>1072</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DT1C13ARR</Type>
+									<BitSize>1056</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C32</Name>
+								<BitSize>112</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Synchronization Type</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Synchronization Types Supported</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Minimum Cycle Time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>11</SubIdx>
+									<Name>Cycle Time too Small</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C33</Name>
+								<BitSize>112</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Synchronization Type</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Synchronization Types Supported</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Minimum Cycle Time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>11</SubIdx>
+									<Name>Cycle Time too Small</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT2000</Name>
+								<BitSize>56</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Write Terminal Number into This to Fill the Table</Name>
+									<Type>ARRAY [0..0] OF BYTE</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Status</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Reply</Name>
+									<Type>ARRAY [0..2] OF BYTE</Type>
+									<BitSize>24</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT2002ARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>1024</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>64</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT2002</Name>
+								<BitSize>1040</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DT2002ARR</Type>
+									<BitSize>1024</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT2003ARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>1024</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>64</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT2003</Name>
+								<BitSize>1040</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DT2003ARR</Type>
+									<BitSize>1024</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT2004ARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>1024</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>64</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT2004</Name>
+								<BitSize>1040</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DT2004ARR</Type>
+									<BitSize>1024</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT2005ARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>1024</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>64</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT2005</Name>
+								<BitSize>1040</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DT2005ARR</Type>
+									<BitSize>1024</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT2006ARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>1024</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>64</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT2006</Name>
+								<BitSize>1040</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DT2006ARR</Type>
+									<BitSize>1024</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT2007ARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>1024</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>64</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT2007</Name>
+								<BitSize>1040</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DT2007ARR</Type>
+									<BitSize>1024</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT2008ARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>1024</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>64</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT2008</Name>
+								<BitSize>1040</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DT2008ARR</Type>
+									<BitSize>1024</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT2009ARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>1024</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>64</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT2009</Name>
+								<BitSize>1040</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DT2009ARR</Type>
+									<BitSize>1024</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT2010</Name>
+								<BitSize>56</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Terminal Number (1..64), Coupler (0)</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Table Number (0..x)</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Register Number (0..x)</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Data</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>40</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT2011</Name>
+								<BitSize>56</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>R (0x52) = Read, W (0x57) = Write</Name>
+									<Type>ARRAY [0..0] OF BYTE</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Status</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Reply</Name>
+									<Type>ARRAY [0..2] OF BYTE</Type>
+									<BitSize>24</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT2100</Name>
+								<BitSize>24</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Use Linear Assignment after next Coldstart</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Backup>1</Backup>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Current Assignment (TRUE = Linear, FALSE = Conforming to Modular Device Profile)</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>17</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF000</Name>
+								<BitSize>128</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Index Distance</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Maximum Number of Modules</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Standard Entries in Object 0x8yy0</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Standard Entries in Object 0x9yy0</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Module PDO Group of Device</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF00EARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>48</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>3</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DTF00E</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DTF00EARR</Type>
+									<BitSize>48</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF00FARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>48</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>3</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DTF00F</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DTF00FARR</Type>
+									<BitSize>48</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF030ARR</Name>
+								<BaseType>UDINT</BaseType>
+								<BitSize>2048</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>64</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DTF030</Name>
+								<BitSize>2064</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DTF030ARR</Type>
+									<BitSize>2048</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF040ARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>1024</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>64</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DTF040</Name>
+								<BitSize>1040</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DTF040ARR</Type>
+									<BitSize>1024</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF050ARR</Name>
+								<BaseType>UDINT</BaseType>
+								<BitSize>2048</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>64</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DTF050</Name>
+								<BitSize>2064</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Elements</Name>
+									<Type>DTF050ARR</Type>
+									<BitSize>2048</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF100</Name>
+								<BitSize>40</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>K-Bus Cycle Overrun Flag</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Input Process Data Hold Ack.</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>17</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Output Process Data Hold Ack.</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>18</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Output Process Data Clear Ack.</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>19</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Diagnostics Status Word</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DTF200</Name>
+								<BitSize>40</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>K-Bus Cycle Overrun Flag Disable</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Input Process Data Hold Request</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>17</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Output Process Data Hold Request</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>18</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Output Process Data Clear Request</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>19</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Diagnostics Control Word</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+						</DataTypes>
+						<Objects>
+							<Object>
+								<Index>#x1000</Index>
+								<Name>Device Type</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1001</Index>
+								<Name>Error Register</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1008</Index>
+								<Name>Manufacturer Device Name</Name>
+								<Type>STRING(40)</Type>
+								<BitSize>320</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1009</Index>
+								<Name>Manufacturer Hardware Version</Name>
+								<Type>STRING(5)</Type>
+								<BitSize>40</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x100A</Index>
+								<Name>Manufacturer Software Version</Name>
+								<Type>STRING(12)</Type>
+								<BitSize>96</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1018</Index>
+								<Name>Identity Object</Name>
+								<Type>DT1018</Type>
+								<BitSize>144</BitSize>
+							</Object>
+							<Object>
+								<Index>#x10F3</Index>
+								<Name>Diagnosis History</Name>
+								<Type>DT10F3</Type>
+								<BitSize>2560</BitSize>
+							</Object>
+							<Object>
+								<Index>#x16FF</Index>
+								<Name>Device Control PDO</Name>
+								<Type>DT16FF</Type>
+								<BitSize>208</BitSize>
+							</Object>
+							<Object>
+								<Index>#x1AFF</Index>
+								<Name>Device Status PDO</Name>
+								<Type>DT1AFF</Type>
+								<BitSize>240</BitSize>
+							</Object>
+							<Object>
+								<Index>#x1C00</Index>
+								<Name>Sync Manager Communication Type</Name>
+								<Type>DT1C00</Type>
+								<BitSize>48</BitSize>
+							</Object>
+							<Object>
+								<Index>#x1C12</Index>
+								<Name>RxPDO Assign</Name>
+								<Type>DT1C12</Type>
+								<BitSize>1072</BitSize>
+							</Object>
+							<Object>
+								<Index>#x1C13</Index>
+								<Name>TxPDO Assign</Name>
+								<Type>DT1C13</Type>
+								<BitSize>1072</BitSize>
+							</Object>
+							<Object>
+								<Index>#x1C32</Index>
+								<Name>Sync Manager 2 Synchronization</Name>
+								<Type>DT1C32</Type>
+								<BitSize>112</BitSize>
+							</Object>
+							<Object>
+								<Index>#x1C33</Index>
+								<Name>Sync Manager 3 Synchronization</Name>
+								<Type>DT1C33</Type>
+								<BitSize>112</BitSize>
+							</Object>
+							<Object>
+								<Index>#x2000</Index>
+								<Name>Register Table Fill Command Object</Name>
+								<Type>DT2000</Type>
+								<BitSize>56</BitSize>
+							</Object>
+							<Object>
+								<Index>#x2001</Index>
+								<Name>Terminal Number</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2002</Index>
+								<Name>Terminal Channel 1</Name>
+								<Type>DT2002</Type>
+								<BitSize>1040</BitSize>
+								<Flags>
+									<SdoAccess>SubIndexAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2003</Index>
+								<Name>Terminal Channel 2</Name>
+								<Type>DT2003</Type>
+								<BitSize>1040</BitSize>
+								<Flags>
+									<SdoAccess>SubIndexAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2004</Index>
+								<Name>Terminal Channel 3</Name>
+								<Type>DT2004</Type>
+								<BitSize>1040</BitSize>
+								<Flags>
+									<SdoAccess>SubIndexAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2005</Index>
+								<Name>Terminal Channel 4</Name>
+								<Type>DT2005</Type>
+								<BitSize>1040</BitSize>
+								<Flags>
+									<SdoAccess>SubIndexAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2006</Index>
+								<Name>Terminal Channel 5</Name>
+								<Type>DT2006</Type>
+								<BitSize>1040</BitSize>
+								<Flags>
+									<SdoAccess>SubIndexAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2007</Index>
+								<Name>Terminal Channel 6</Name>
+								<Type>DT2007</Type>
+								<BitSize>1040</BitSize>
+								<Flags>
+									<SdoAccess>SubIndexAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2008</Index>
+								<Name>Terminal Channel 7</Name>
+								<Type>DT2008</Type>
+								<BitSize>1040</BitSize>
+								<Flags>
+									<SdoAccess>SubIndexAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2009</Index>
+								<Name>Terminal Channel 8</Name>
+								<Type>DT2009</Type>
+								<BitSize>1040</BitSize>
+								<Flags>
+									<SdoAccess>SubIndexAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2010</Index>
+								<Name>Single Register Access Data</Name>
+								<Type>DT2010</Type>
+								<BitSize>56</BitSize>
+							</Object>
+							<Object>
+								<Index>#x2011</Index>
+								<Name>Single Register Read/Write Command Object</Name>
+								<Type>DT2011</Type>
+								<BitSize>56</BitSize>
+							</Object>
+							<Object>
+								<Index>#x2100</Index>
+								<Name>PDO Index Assignment-Workaround for some Masters</Name>
+								<Type>DT2100</Type>
+								<BitSize>24</BitSize>
+								<Info>
+									<SubItem>
+										<Name>Use Linear Assignment after next Coldstart</Name>
+										<Info>
+											<DefaultValue>0</DefaultValue>
+										</Info>
+									</SubItem>
+								</Info>
+							</Object>
+							<Object>
+								<Index>#xF000</Index>
+								<Name>Modular Device Profile</Name>
+								<Type>DTF000</Type>
+								<BitSize>128</BitSize>
+							</Object>
+							<Object>
+								<Index>#xF00E</Index>
+								<Name>PDO Group Alignment PDO Numbers</Name>
+								<Type>DTF00E</Type>
+								<BitSize>64</BitSize>
+							</Object>
+							<Object>
+								<Index>#xF00F</Index>
+								<Name>Module PDO Group Alignment</Name>
+								<Type>DTF00F</Type>
+								<BitSize>64</BitSize>
+							</Object>
+							<Object>
+								<Index>#xF030</Index>
+								<Name>Configured Module List</Name>
+								<Type>DTF030</Type>
+								<BitSize>2064</BitSize>
+								<Flags>
+									<SdoAccess>SubIndexAccess</SdoAccess>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#xF040</Index>
+								<Name>Detected Address List</Name>
+								<Type>DTF040</Type>
+								<BitSize>1040</BitSize>
+							</Object>
+							<Object>
+								<Index>#xF050</Index>
+								<Name>Detected Module List</Name>
+								<Type>DTF050</Type>
+								<BitSize>2064</BitSize>
+							</Object>
+							<Object>
+								<Index>#xF100</Index>
+								<Name>Device Status</Name>
+								<Type>DTF100</Type>
+								<BitSize>40</BitSize>
+							</Object>
+							<Object>
+								<Index>#xF200</Index>
+								<Name>Device Control</Name>
+								<Type>DTF200</Type>
+								<BitSize>40</BitSize>
+							</Object>
+						</Objects>
+					</Dictionary>
+				</Profile>
+				<Fmmu>Outputs</Fmmu>
+				<Fmmu>Inputs</Fmmu>
+				<Fmmu>MBoxState</Fmmu>
+				<Sm MinSize="32" MaxSize="1024" DefaultSize="512" StartAddress="#x1000" ControlByte="#x26" Enable="1">MBoxOut</Sm>
+				<Sm MinSize="32" MaxSize="1024" DefaultSize="512" StartAddress="#x1400" ControlByte="#x22" Enable="1">MBoxIn</Sm>
+				<Sm StartAddress="#x1800" ControlByte="#x64">Outputs</Sm>
+				<Sm StartAddress="#x2400" ControlByte="#x00">Inputs</Sm>
+				<RxPdo Fixed="1" Mandatory="1" Sm="2">
+					<Index>#x16FF</Index>
+					<Name>Output</Name>
+					<Entry>
+						<Index>#xF200</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>FC Control, K-Bus Cycle Overrun Flag Disable</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index>#xF200</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>FC Control, Input Process Data Hold Request</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index>#xF200</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>FC Control, Output Process Data Hold Request</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index>#xF200</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>FC Control, Output Process Data Clear Request</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x0</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>12</BitLen>
+						<Name>Gap</Name>
+					</Entry>
+					<Entry>
+						<Index>#xF200</Index>
+						<SubIndex>5</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Diagnostics Control Word</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+				</RxPdo>
+				<TxPdo Fixed="1" Mandatory="1" Sm="3">
+					<Index>#x1AFF</Index>
+					<Name>Input</Name>
+					<Entry>
+						<Index>#xF100</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>FC Status, K-Bus Cycle Overrun Flag</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index>#xF100</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>FC Status, Input Process Data Hold Ack.</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index>#xF100</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>FC Status, Output Process Data Hold Ack.</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index>#xF100</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>FC Status, Output Process Data Clear Ack.</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x0</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>11</BitLen>
+						<Name>Gap</Name>
+					</Entry>
+					<Entry>
+						<Index>#x10F3</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>Diagnosis History, New Message Available</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index>#xF100</Index>
+						<SubIndex>5</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Diagnostics Status Word</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+				</TxPdo>
+				<Mailbox DataLinkLayer="1">
+					<CoE SdoInfo="1" PdoAssign="0" PdoConfig="0" PdoUpload="1" CompleteAccess="1" SegmentedSdo="1" DiagHistory="1"></CoE>
+				</Mailbox>
+				<Slots IdentifyModuleBy="ModuleIdent" SlotIndexIncrement="16" SlotPdoIncrement="1">
+					<Slot MinInstances="1" MaxInstances="64" SlotIndexIncrement="16" SlotPdoIncrement="1">
+						<Name>Terminals</Name>
+						<ModuleClass>
+							<Class>750-DI</Class>
+							<Name>Digital Input(s)</Name>
+							<ImageData16x14>424DB6030000000000003600000028000000100000000E00000001002000000000008003000000000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FF808080FF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FFFFFFFFFF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFF00FFFFFF00FFFFFFFFFFFFFF00FFFFFFFFFFFFFF00FFFFFF00FFFFFFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFFFFFFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFFFFFFFFFFFFFFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFF00FFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFF808080FF808080FF808080FF808080FF808080FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>750-DI_DIAG</Class>
+							<Name>Digital Input(s) with diagnosis</Name>
+							<ImageData16x14>424DB6030000000000003600000028000000100000000E00000001002000000000008003000000000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FF808080FF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FFFFFFFFFF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFF00FFFFFF00FFFFFFFFFFFFFF00FFFFFFFFFFFFFF00FFFFFF00FFFFFFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFFFFFFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFFFFFFFFFFFFFFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFF00FFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFF808080FF808080FF808080FF808080FF808080FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>750-DO</Class>
+							<Name>Digital Output</Name>
+							<ImageData16x14>424DB6030000000000003600000028000000100000000E00000001002000000000008003000000000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FF808080FF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFF0000FFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FFFFFFFFFF808080FF808080FF808080FFFFFFFFFFFFFFFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF0000FFFF0000FFFFFFFFFFFF0000FFFFFFFFFFFF0000FFFF0000FFFFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFF808080FF808080FF808080FF808080FF808080FF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>750-DO_DIAG</Class>
+							<Name>Digital Output with diagnosis</Name>
+							<ImageData16x14>424DB6030000000000003600000028000000100000000E00000001002000000000008003000000000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FF808080FF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFF0000FFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FFFFFFFFFF808080FF808080FF808080FFFFFFFFFFFFFFFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF0000FFFF0000FFFFFFFFFFFF0000FFFFFFFFFFFF0000FFFF0000FFFFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFF808080FF808080FF808080FF808080FF808080FF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>750-AI</Class>
+							<Name>Analog Input</Name>
+							<ImageData16x14>424DB6030000000000003600000028000000100000000E00000001002000000000008003000000000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FF808080FF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FFFFFFFFFF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFF00FFFFFF00FFFFFFFFFFFFFF00FFFFFFFFFFFFFF00FFFFFF00FFFFFFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFFFFFFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFF00FFFFFFFFFFFFFFFFFFFFFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFF00FFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FF00FF808080FF808080FF808080FF808080FF808080FF00FF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>750-AO</Class>
+							<Name>Analog Output</Name>
+							<ImageData16x14>424DB6030000000000003600000028000000100000000E00000001002000000000008003000000000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FF808080FF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFF0000FFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FFFFFFFFFF808080FF808080FF808080FFFFFFFFFFFFFFFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF0000FFFF0000FFFFFFFFFFFF0000FFFFFFFFFFFF0000FFFF0000FFFFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FF808080FF808080FF808080FF808080FF808080FFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+						<ModuleClass>
+							<Class>750-Special</Class>
+							<Name>Special</Name>
+							<ImageData16x14>424DB6030000000000003600000028000000100000000E00000001002000000000008003000000000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FF808080FF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FF808080FFFFFFFFFFFFFFFFFF808080FF808080FF808080FFFFFFFFFF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFF808080FF808080FFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFF808080FF808080FFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FFFFFFFFFF808080FFFF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFF808080FF0000FFFF0000FFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFF808080FF808080FFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFF808080FF808080FFFFFFFFFF808080FF008000FF008000FFFFFFFFFF008000FF008000FF808080FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFF808080FF808080FFFFFFFFFFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FF808080FFFFFFFFFFFFFFFFFFC0C0C0FF808080FF808080FF808080FF808080FF808080FFC0C0C0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFC0C0C0FFFFFFFFFF</ImageData16x14>
+						</ModuleClass>
+					</Slot>
+					<ModulePdoGroup Alignment="0" RxPdo="#x0" TxPdo="#x0"></ModulePdoGroup>
+					<ModulePdoGroup Alignment="0" RxPdo="#x0" TxPdo="#x0"></ModulePdoGroup>
+					<ModulePdoGroup Alignment="2" RxPdo="#x1701" TxPdo="#x1B01"></ModulePdoGroup>
+				</Slots>
+				<Eeprom>
+					<ByteSize>2048</ByteSize>
+					<ConfigData>080602000A000100000000000000</ConfigData>
+				</Eeprom>
+				<ImageData16x14>424DB6030000000000003600000028000000100000000E00000001002000000000008003000000000000000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FF808080FF808080FF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFC0C0C0FFC0C0C0FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFC0C0C0FFC0C0C0FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFC0C0C0FFC0C0C0FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFC0C0C0FFC0C0C0FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFF000000FFFFFFFFFF00FF00FF00FF00FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF000000FF000000FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF000000FF000000FFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF000000FF000000FFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFF000000FF000000FFFFFFFFFF0000FFFF0000FFFF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FFFFFFFFFFFFFFFFFF000000FFFFFFFFFF00FF00FF00FF00FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF808080FF808080FF808080FF808080FF808080FF808080FF808080FF808080FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+			</Device>
+		</Devices>
+		<Modules>
+			<Module>
+				<Type ModuleClass="750-Special" ModuleIdent="#x4043940" ModulePdoGroup="1">750-404 (5B in; 5B out)</Type>
+				<Name>750-404 (5B in; 5B out)</Name>
+				<RxPdo Fixed="1" Mandatory="1" Sm="2">
+					<Index DependOnSlot="1">#x1600</Index>
+					<Name>Output(s)</Name>
+					<Entry>
+						<Index DependOnSlot="1">#x7000</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Control</Name>
+						<DataType>USINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x0000</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Gap</Name>
+						<DataType></DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x7000</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>DWord 1</Name>
+						<DataType>UDINT</DataType>
+					</Entry>
+				</RxPdo>
+				<TxPdo Fixed="1" Mandatory="1" Sm="3">
+					<Index DependOnSlot="1">#x1a00</Index>
+					<Name>Input(s)</Name>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Status</Name>
+						<DataType>USINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x0000</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>Gap</Name>
+						<DataType></DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>DWord 1</Name>
+						<DataType>UDINT</DataType>
+					</Entry>
+				</TxPdo>
+				<Profile>
+					<Dictionary>
+						<DataTypes>
+							<DataType>
+								<Name>USINT</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<Name>UDINT</Name>
+								<BitSize>32</BitSize>
+							</DataType>
+							<DataType>
+								<Name>UINT</Name>
+								<BitSize>16</BitSize>
+							</DataType>
+							<DataType>
+								<Name>DT1600</Name>
+								<BitSize>112</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Output Mapping Area 1</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Output Mapping Area 2</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Output Mapping Area 3</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1A00</Name>
+								<BitSize>112</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Input Mapping Area 1</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Input Mapping Area 2</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Input Mapping Area 3</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT6000</Name>
+								<BitSize>56</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Status</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>DWord 1</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT7000</Name>
+								<BitSize>56</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Control</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>DWord 1</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>24</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT9000</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>9</SubIdx>
+									<Name>Module PDO Group</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>10</SubIdx>
+									<Name>Module Ident</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+						</DataTypes>
+						<Objects>
+							<Object>
+								<Index DependOnSlot="1">#x1600</Index>
+								<Name>RxPDO Mapping Terminal 5</Name>
+								<Type>DT1600</Type>
+								<BitSize>112</BitSize>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x1A00</Index>
+								<Name>TxPDO Mapping Terminal 5</Name>
+								<Type>DT1A00</Type>
+								<BitSize>112</BitSize>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x6000</Index>
+								<Name>750-404</Name>
+								<Type>DT6000</Type>
+								<BitSize>56</BitSize>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x7000</Index>
+								<Name>750-404</Name>
+								<Type>DT7000</Type>
+								<BitSize>56</BitSize>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x9000</Index>
+								<Name>Module Identification IOM 5</Name>
+								<Type>DT9000</Type>
+								<BitSize>64</BitSize>
+							</Object>
+						</Objects>
+					</Dictionary>
+				</Profile>
+			</Module>
+			<Module>
+				<Type ModuleClass="750-AI" ModuleIdent="#x4502590" ModulePdoGroup="1">750-450 (12B in)</Type>
+				<Name>750-450 (12B in)</Name>
+				<TxPdo Fixed="1" Mandatory="1" Sm="3">
+					<Index DependOnSlot="1">#x1a00</Index>
+					<Name>Input(s)</Name>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Channel 1, Word 1</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Channel 2, Word 1</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Channel 3, Word 1</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Channel 4, Word 1</Name>
+						<DataType>UINT</DataType>
+					</Entry>
+				</TxPdo>
+				<Profile>
+					<Dictionary>
+						<DataTypes>
+							<DataType>
+								<Name>USINT</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<Name>UDINT</Name>
+								<BitSize>32</BitSize>
+							</DataType>
+							<DataType>
+								<Name>UINT</Name>
+								<BitSize>16</BitSize>
+							</DataType>
+							<DataType>
+								<Name>DT1A00</Name>
+								<BitSize>144</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Input Mapping Area 1</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Input Mapping Area 2</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Input Mapping Area 3</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Input Mapping Area 4</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT6000</Name>
+								<BitSize>80</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Channel 1, Word 1</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Channel 2, Word 1</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Channel 3, Word 1</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Channel 4, Word 1</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>64</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT9000</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>9</SubIdx>
+									<Name>Module PDO Group</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>10</SubIdx>
+									<Name>Module Ident</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+						</DataTypes>
+						<Objects>
+							<Object>
+								<Index DependOnSlot="1">#x1A00</Index>
+								<Name>TxPDO Mapping Terminal 1</Name>
+								<Type>DT1A00</Type>
+								<BitSize>144</BitSize>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x6000</Index>
+								<Name>750-450</Name>
+								<Type>DT6000</Type>
+								<BitSize>80</BitSize>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x9000</Index>
+								<Name>Module Identification IOM 1</Name>
+								<Type>DT9000</Type>
+								<BitSize>64</BitSize>
+							</Object>
+						</Objects>
+					</Dictionary>
+				</Profile>
+			</Module>
+			<Module>
+				<Type ModuleClass="750-DI" ModuleIdent="#x80000041" ModulePdoGroup="2">750-4xx / 750-14xx (4b in)</Type>
+				<Name>750-4xx / 750-14xx (4b in)</Name>
+				<TxPdo Fixed="1" Mandatory="1" Sm="3">
+					<Index DependOnSlot="1">#x1a00</Index>
+					<Name>Input(s)</Name>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>Channel 1, Data 1</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>Channel 2, Data 1</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>Channel 3, Data 1</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x6000</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>Channel 4, Data 1</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+				</TxPdo>
+				<Profile>
+					<Dictionary>
+						<DataTypes>
+							<DataType>
+								<Name>USINT</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<Name>UDINT</Name>
+								<BitSize>32</BitSize>
+							</DataType>
+							<DataType>
+								<Name>BOOL</Name>
+								<BitSize>1</BitSize>
+							</DataType>
+							<DataType>
+								<Name>UINT</Name>
+								<BitSize>16</BitSize>
+							</DataType>
+							<DataType>
+								<Name>DT1A00</Name>
+								<BitSize>144</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Input Mapping Area 1</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Input Mapping Area 2</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Input Mapping Area 3</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Input Mapping Area 4</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT6000</Name>
+								<BitSize>24</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Channel 1, Data 1</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Channel 2, Data 1</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>17</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Channel 3, Data 1</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>18</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Channel 4, Data 1</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>19</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>T</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT9000</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>9</SubIdx>
+									<Name>Module PDO Group</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>10</SubIdx>
+									<Name>Module Ident</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+						</DataTypes>
+						<Objects>
+							<Object>
+								<Index DependOnSlot="1">#x1A00</Index>
+								<Name>TxPDO Mapping Terminal 7</Name>
+								<Type>DT1A00</Type>
+								<BitSize>144</BitSize>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x6000</Index>
+								<Name>750-4xx / 750-14xx</Name>
+								<Type>DT6000</Type>
+								<BitSize>24</BitSize>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x9000</Index>
+								<Name>Module Identification IOM 7</Name>
+								<Type>DT9000</Type>
+								<BitSize>64</BitSize>
+							</Object>
+						</Objects>
+					</Dictionary>
+				</Profile>
+			</Module>
+			<Module>
+				<Type ModuleClass="750-DO" ModuleIdent="#x80000042" ModulePdoGroup="2">750-5xx / 750-15xx (4b out)</Type>
+				<Name>750-5xx / 750-15xx (4b out)</Name>
+				<RxPdo Fixed="1" Mandatory="1" Sm="2">
+					<Index DependOnSlot="1">#x1600</Index>
+					<Name>Output(s)</Name>
+					<Entry>
+						<Index DependOnSlot="1">#x7000</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>Channel 1, Data 1</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x7000</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>Channel 2, Data 1</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x7000</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>Channel 3, Data 1</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="1">#x7000</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>1</BitLen>
+						<Name>Channel 4, Data 1</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+				</RxPdo>
+				<Profile>
+					<Dictionary>
+						<DataTypes>
+							<DataType>
+								<Name>USINT</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<Name>UDINT</Name>
+								<BitSize>32</BitSize>
+							</DataType>
+							<DataType>
+								<Name>BOOL</Name>
+								<BitSize>1</BitSize>
+							</DataType>
+							<DataType>
+								<Name>UINT</Name>
+								<BitSize>16</BitSize>
+							</DataType>
+							<DataType>
+								<Name>DT1600</Name>
+								<BitSize>144</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Output Mapping Area 1</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Output Mapping Area 2</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Output Mapping Area 3</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Output Mapping Area 4</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT7000</Name>
+								<BitSize>24</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Channel 1, Data 1</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Channel 2, Data 1</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>17</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Channel 3, Data 1</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>18</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Channel 4, Data 1</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>19</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<PdoMapping>R</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT9000</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>9</SubIdx>
+									<Name>Module PDO Group</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>10</SubIdx>
+									<Name>Module Ident</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+						</DataTypes>
+						<Objects>
+							<Object>
+								<Index DependOnSlot="1">#x1600</Index>
+								<Name>RxPDO Mapping Terminal 17</Name>
+								<Type>DT1600</Type>
+								<BitSize>144</BitSize>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x7000</Index>
+								<Name>750-5xx / 750-15xx</Name>
+								<Type>DT7000</Type>
+								<BitSize>24</BitSize>
+							</Object>
+							<Object>
+								<Index DependOnSlot="1">#x9000</Index>
+								<Name>Module Identification IOM 17</Name>
+								<Type>DT9000</Type>
+								<BitSize>64</BitSize>
+							</Object>
+						</Objects>
+					</Dictionary>
+				</Profile>
+			</Module>
+		</Modules>
+	</Descriptions>
+</EtherCATInfo>

@@ -18,7 +18,7 @@ import { type PLCPou, projectCapabilities } from '../../../../middleware/shared/
 import { useProject } from '../../../../middleware/shared/providers'
 import { MagnifierIcon } from '../../../assets/icons/interface/Magnifier'
 import { executeExportPdf, renderPrintPdf } from '../../../services/print-actions'
-import { useOpenPLCStore } from '../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import { cn } from '../../../utils/cn'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 import { PageSetupFields } from '../../_molecules/page-setup-fields'
@@ -410,12 +410,16 @@ const PdfPreviewViewer = ({
 }
 
 const ExportPdfModal = () => {
+  const store = useOpenPLCStoreApi()
   const projectPort = useProject()
   const { modals, modalActions, project, print, printActions } = useOpenPLCStore()
 
   const isOpen = modals['export-pdf']?.open || false
   const [step, setStep] = useState<Step>('select')
   const [renderState, setRenderState] = useState<RenderState>({ status: 'idle' })
+  // A ref, not state: gating the render effect on `renderState` would re-run it and
+  // let its cleanup cancel the in-flight render before the bytes arrive.
+  const renderStartedRef = useRef(false)
 
   const projectCaps = projectCapabilities({ type: project.meta.type })
   // SFC has no PrintPou renderer in backend/shared/print (never in scope for
@@ -434,6 +438,7 @@ const ExportPdfModal = () => {
   const close = useCallback(() => {
     modalActions.onOpenChange('export-pdf', false)
     setStep('select')
+    renderStartedRef.current = false
     setRenderState({ status: 'idle' })
     printActions.resetPrintSelection()
   }, [modalActions, printActions])
@@ -449,22 +454,23 @@ const ExportPdfModal = () => {
   }, [])
 
   useEffect(() => {
-    if (step !== 'preview' || renderState.status !== 'idle') return
+    if (step !== 'preview' || renderStartedRef.current) return
+    renderStartedRef.current = true
     setRenderState({ status: 'loading' })
     let cancelled = false
-    void renderPrintPdf(projectPort).then((result) => {
+    void renderPrintPdf(store, projectPort).then((result) => {
       if (cancelled) return
       setRenderState(result.ok ? { status: 'ready', bytes: result.bytes } : { status: 'error', error: result.error })
     })
     return () => {
       cancelled = true
     }
-  }, [step, renderState, projectPort])
+  }, [store, step, projectPort])
 
   useEffect(() => {
     if (step !== 'exporting' || renderState.status !== 'ready') return
     let cancelled = false
-    void executeExportPdf(projectPort, renderState.bytes).then((result) => {
+    void executeExportPdf(store, projectPort, renderState.bytes).then((result) => {
       if (cancelled) return
       // Failure (or a cancelled save dialog) is already toasted by
       // executeExportPdf when it's a real error — just return to preview
@@ -475,10 +481,13 @@ const ExportPdfModal = () => {
     return () => {
       cancelled = true
     }
-  }, [step, renderState, projectPort, close])
+  }, [store, step, renderState, projectPort, close])
 
   const handleBack = () => {
-    if (step === 'preview') setRenderState({ status: 'idle' })
+    if (step === 'preview') {
+      renderStartedRef.current = false
+      setRenderState({ status: 'idle' })
+    }
     setStep(step === 'options' ? 'select' : 'options')
   }
 

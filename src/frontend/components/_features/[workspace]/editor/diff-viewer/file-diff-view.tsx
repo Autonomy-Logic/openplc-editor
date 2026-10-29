@@ -7,7 +7,9 @@
 
 import { DiffEditor } from '@monaco-editor/react'
 
+import { ensureOpenplcThemes } from '../monaco/theme-utils'
 import { GraphicalDiffViewer, isGraphicalFile } from './graphical-diff-viewer'
+import { useDiffEditorTeardown, useDiffModelPaths } from './use-diff-editor-teardown'
 
 export { isGraphicalFile }
 
@@ -66,6 +68,10 @@ type FileDiffViewProps = {
 }
 
 export function FileDiffView({ filePath, original, current, isDark }: FileDiffViewProps) {
+  const editorRef = useDiffEditorTeardown()
+
+  const modelPaths = useDiffModelPaths()
+
   if (isGraphicalFile(filePath)) {
     return (
       <GraphicalDiffViewer originalContent={original} currentContent={current} filePath={filePath} isDark={isDark} />
@@ -77,7 +83,18 @@ export function FileDiffView({ filePath, original, current, isDark }: FileDiffVi
       original={formatContentForDisplay(filePath, original)}
       modified={formatContentForDisplay(filePath, current)}
       language={getLanguageFromPath(filePath)}
-      theme={isDark ? 'vs-dark' : 'vs'}
+      // `setTheme` is global to every Monaco on the page, so a built-in theme here
+      // replaced the app's for the POU editor too and left its ST highlighting dead
+      // until the user toggled dark mode.
+      theme={isDark ? 'openplc-dark' : 'openplc-light'}
+      beforeMount={ensureOpenplcThemes}
+      originalModelPath={modelPaths.original}
+      modifiedModelPath={modelPaths.modified}
+      keepCurrentOriginalModel
+      keepCurrentModifiedModel
+      onMount={(editor) => {
+        editorRef.current = editor
+      }}
       options={{
         readOnly: true,
         minimap: { enabled: false },

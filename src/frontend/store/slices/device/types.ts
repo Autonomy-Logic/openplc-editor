@@ -1,3 +1,4 @@
+import type { VppPackagePin } from '../../../../backend/shared/types/PLC/devices/configuration'
 import type { DeviceLicenseReport } from '../../../../middleware/shared/ports/device-port'
 import type { EtherCATRuntimeStatusResponse } from '../../../../middleware/shared/ports/ethercat-types'
 import type {
@@ -7,10 +8,14 @@ import type {
   DeviceConfiguration,
   DeviceLinkTransport,
   DevicePin,
+  IoMappingEntry,
   PersistentStorageSettings,
   PlcStatus,
+  ProjectTargetDevice,
   TimingStats,
 } from '../../../../middleware/shared/ports/types'
+import type { DeviceVpp } from '../../../../middleware/shared/ports/vpp-types'
+import type { DeviceSetupRecord } from '../../../utils/vpp/device-setup'
 
 // ---------------------------------------------------------------------------
 // Device available options
@@ -54,6 +59,15 @@ export type SelectedDevice = {
   orchestratorAgentId: string
   deviceId: string
   deviceName: string
+  /** Whether this vPLC holds the Device's backplane I/O. Absent means the host did not say, not `false`. */
+  backplaneAccess?: boolean
+  /**
+   * The vendor package this vPLC runs. `null` means it was created without
+   * one; absent means the host predates the field and said nothing, which
+   * gates nothing. Selecting a device with a package is what makes the IDE
+   * fetch its archive and offer its boards.
+   */
+  vpp?: DeviceVpp | null
 }
 
 export type StoredCredentials = {
@@ -79,6 +93,14 @@ export type RuntimeConnection = {
    *  get-users-info / the X-OpenPLC-Runtime-Version header), or null
    *  when unknown. Gates version-dependent UI like User Management. */
   runtimeVersion: string | null
+  /**
+   * Features the connected runtime advertises in its hello
+   * response, e.g. `["ethercat.dynamic_alloc"]`. `null` when
+   * the runtime did not advertise a `features` array (an older EtherDOG). The pre-build
+   * capability gate reads this to decide whether the project can be built
+   * against the connected runtime.
+   */
+  runtimeFeatures: readonly string[] | null
   selectedDevice: SelectedDevice | null
   storedCredentials: StoredCredentials | null
   timingStats: TimingStats | null
@@ -219,6 +241,21 @@ export type PinUpdateResponse = {
 // Device actions
 // ---------------------------------------------------------------------------
 
+/** What an embedded configurator persists: its archive is opaque and kept byte-for-byte. */
+export type ConfiguratorRecord = {
+  archive: string
+  controller: string
+  bundleVersion: string
+}
+
+export type ConfiguratorSnapshotRecord = {
+  configurator: ConfiguratorRecord
+  deviceSetup: DeviceSetupRecord
+  /** Manifest module id per slot; `null` where the configurator's type id is not in the manifest. */
+  moduleConfiguration: { slots: Array<string | null> }
+  ioMapping: { entries: IoMappingEntry[] }
+}
+
 export type DeviceActions = {
   setAvailableOptions: (options: {
     availableBoards?: Map<string, BoardInfo>
@@ -255,10 +292,19 @@ export type DeviceActions = {
   setRuntimeJwtToken: (token: string | null) => void
   setRuntimeConnectionStatus: (status: ConnectionStatus) => void
   setRuntimeVersion: (version: string | null) => void
+  /** Record the EtherDOG features the runtime advertises.
+   *  Pass `null` to clear (e.g. on disconnect), `[]` when the runtime
+   *  does not publish a `features` array. */
+  setRuntimeFeatures: (features: readonly string[] | null) => void
   setPlcRuntimeStatus: (status: PlcStatus | null) => void
   /** Set the mode-switch position (null clears it, e.g. on disconnect). */
   setPlcSwitchPosition: (position: 'run' | 'stop' | null) => void
   setSelectedDevice: (device: SelectedDevice | null) => void
+  /**
+   * Record the vPLC this project targets (null clears it). A project property:
+   * a change marks the device configuration for saving; an unchanged value is a no-op.
+   */
+  setTargetDevice: (target: ProjectTargetDevice | null) => void
   setStoredCredentials: (credentials: StoredCredentials | null) => void
   setTimingStats: (stats: TimingStats | null) => void
   setIncludeTimingStatsInPolling: (include: boolean) => void
@@ -308,7 +354,11 @@ export type DeviceActions = {
    * re-sending the other two.
    */
   setPersistentStorage: (patch: Partial<PersistentStorageSettings>) => void
+  /** Record (or clear, with `null`) the VPP package a board was authored against. */
+  setVppPackagePin: (board: string, pin: VppPackagePin | null) => void
   setVendorScreenData: (persistenceKey: string, data: unknown) => void
+  /** Write an embedded configurator's archive, device setup and derived I/O mapping as one store update. */
+  setConfiguratorSnapshot: (configuratorKey: string, snapshot: ConfiguratorSnapshotRecord) => void
   /** Restore `vendorScreenData[k]` for every k in `ownedKeys`: from
    *  `snapshot[k]` when present, else by deleting the key.  Used by
    *  the vendor-screen tab's "Don't save" revert. */

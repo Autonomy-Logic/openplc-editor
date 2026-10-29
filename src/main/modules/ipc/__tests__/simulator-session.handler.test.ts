@@ -21,7 +21,7 @@ jest.mock('electron', () => ({
   shell: { openExternal: jest.fn() },
 }))
 
-jest.mock('@root/backend/editor/ethercat', () => ({ ESIService: jest.fn() }))
+jest.mock('@root/backend/editor/ethercat', () => ({ EsiProjectFiles: jest.fn() }))
 jest.mock('@root/backend/editor/library-manager/desktop-catalog-transport', () => ({
   createDesktopCatalogTransport: jest.fn(() => ({})),
 }))
@@ -57,7 +57,7 @@ function createBridge(): Bridge {
     mainWindow: {
       isDestroyed: jest.fn(() => false),
       isMaximized: jest.fn(() => false),
-      webContents: { reload: jest.fn(), send: jest.fn() },
+      webContents: { reload: jest.fn(), send: jest.fn(), on: jest.fn() },
     },
     projectService: {},
     store: { get: jest.fn(() => undefined) },

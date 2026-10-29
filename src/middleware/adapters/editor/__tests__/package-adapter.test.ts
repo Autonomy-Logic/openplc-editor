@@ -164,7 +164,13 @@ describe('createEditorPackageAdapter', () => {
         json: async () => catalog,
       })
       const result = await adapter.listRemoteCatalog()
-      expect(global.fetch).toHaveBeenCalledWith(expect.stringMatching(/\/vpp-catalog\/v1\/catalog\.json$/))
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/\/vpp-catalog\/v1\/catalog\.json$/),
+        // The deadline matters as much as the URL: the startup prime behind the
+        // build's package-update notice must not leave a request open for the
+        // session, and the catalog browser must not spin forever.
+        { signal: expect.any(AbortSignal) },
+      )
       expect(result).toEqual(catalog)
     })
 

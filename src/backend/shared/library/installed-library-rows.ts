@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Autonomy / OpenPLC Project
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /**
  * Pure mappers from a parsed `.stlib` archive to the
  * `InstalledLibrary` row shape rendered by the Library Manager.

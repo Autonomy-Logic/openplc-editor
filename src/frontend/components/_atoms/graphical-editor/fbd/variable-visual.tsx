@@ -18,6 +18,10 @@ export type VariableVisualProps = {
   forcedValue?: boolean
   debuggerColor?: string
   className?: string
+  /** Outer width of the box; defaults to the fixed legacy width */
+  width?: number
+  /** Native tooltip, e.g. the full name where the box truncates it */
+  title?: string
   /** Optional slot to replace the default text (e.g. with a HighlightedTextArea) */
   nameSlot?: ReactNode
 }
@@ -32,12 +36,15 @@ export const VariableVisual = ({
   forcedValue,
   debuggerColor,
   className,
+  width = VARIABLE_ELEMENT_SIZE,
+  title,
   nameSlot,
 }: VariableVisualProps) => {
   return (
     <div
+      title={title}
       style={{
-        width: VARIABLE_ELEMENT_SIZE,
+        width,
         height: VARIABLE_ELEMENT_HEIGHT,
         ...(debuggerColor
           ? {
@@ -57,7 +64,7 @@ export const VariableVisual = ({
     >
       <div
         className='relative flex items-center'
-        style={{ width: DEFAULT_VARIABLE_WIDTH, height: DEFAULT_VARIABLE_HEIGHT }}
+        style={{ width: width - (VARIABLE_ELEMENT_SIZE - DEFAULT_VARIABLE_WIDTH), height: DEFAULT_VARIABLE_HEIGHT }}
       >
         {nameSlot !== undefined ? (
           nameSlot

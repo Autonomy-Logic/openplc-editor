@@ -15,7 +15,8 @@
  *     whether a session is active (for isReadyForDebug).
  */
 
-import { openPLCStoreBase } from '../../../frontend/store'
+import type { PluginCommandOutcome } from '../../../backend/shared/utils/vpp/screen-actions'
+import type { OpenPLCStore } from '../../../frontend/store'
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type {
   CompilationStatusResult,
@@ -26,7 +27,9 @@ import type {
   ListUsersResult,
   LoginParams,
   LoginResult,
+  PluginCommandArgs,
   RetrievableDevice,
+  RuntimeCapabilitiesResult,
   RuntimeLogsResult,
   RuntimePort,
   RuntimeStatusResult,
@@ -53,7 +56,7 @@ async function retrieveProjectFromDevice(ipAddress: string) {
   }
 }
 
-export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimePort {
+export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: () => string): RuntimePort {
   // Whether a runtime session is active. The token itself lives in the main
   // process; this only gates isReadyForDebug.
   let loggedIn = false
@@ -175,6 +178,15 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
       }
     },
 
+    async getRuntimeCapabilities(): Promise<RuntimeCapabilitiesResult> {
+      try {
+        const ip = requireIp()
+        return await window.bridge.runtimeGetCapabilities(ip)
+      } catch (err) {
+        return { features: null, error: getErrorMessage(err) }
+      }
+    },
+
     async listUsers(): Promise<ListUsersResult> {
       try {
         const ip = requireIp()
@@ -253,6 +265,26 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
         return await window.bridge.runtimeGetSerialPorts(ip)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    /**
+     * VPP screen actions through the runtime's existing `POST
+     * /api/plugin-command` catch-all, over the same direct HTTPS transport
+     * every other runtime call uses. The main process already interprets the
+     * response — that route reports plugin failures at HTTP 200 — so this is a
+     * pass-through.
+     */
+    async sendPluginCommand(args: PluginCommandArgs): Promise<PluginCommandOutcome> {
+      try {
+        const ip = requireIp()
+        return await window.bridge.runtimeSendPluginCommand(ip, {
+          plugin: args.plugin,
+          command: args.command,
+          params: args.params ?? {},
+        })
+      } catch (err) {
+        return { ok: false, error: getErrorMessage(err) }
       }
     },
 
@@ -386,7 +418,7 @@ export function createEditorRuntimeAdapter(getIpAddress: () => string): RuntimeP
     selectRetrievableDevice(device: RetrievableDevice) {
       // The adapter reads its target from the store, so this has to move before
       // the login rather than with it.
-      openPLCStoreBase.getState().deviceActions.setRuntimeIpAddress(device.key)
+      store.getState().deviceActions.setRuntimeIpAddress(device.key)
     },
 
     async fetchRetrievableProject(device: RetrievableDevice) {

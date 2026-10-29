@@ -7,6 +7,11 @@
  *   2. Allocate the rest, lowest-free-index first, per independent prefix
  *      space.
  *
+ * Besides the assignments, the result carries `slotCounts`: how many slots
+ * each prefix space ended up needing. It is the same reservation data the
+ * two passes already build, so exposing it costs nothing, and it is what
+ * sizes the runtime's I/O image.
+ *
  * Order is stable (consumer `order` then `id`, channels in declaration
  * order) so the output is reproducible across sessions — re-opening a
  * project never gratuitously renumbers. Non-pinned channels never collide
@@ -28,9 +33,9 @@ function orderedConsumers(consumers: readonly RegistryConsumer[]): RegistryConsu
   return [...consumers].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
 }
 
-/** Lowest non-negative integer not present in `set`. */
-function lowestFree(set: ReadonlySet<number>): number {
-  let i = 0
+/** Lowest non-negative integer not present in `set`, searching from `from`. */
+function lowestFree(set: ReadonlySet<number>, from: number): number {
+  let i = from
   while (set.has(i)) i++
   return i
 }
@@ -100,17 +105,39 @@ export function allocateAddresses(
     }
   }
 
-  // Pass 2 — allocate non-pinned channels at the lowest free slot.
+  // Pass 2 — allocate non-pinned channels at the lowest free slot. Slots are
+  // only added here, so each prefix's lowest free slot never moves back and
+  // the search resumes from the last one instead of from 0.
+  const nextFreeByPrefix = new Map<string, number>()
   for (const consumer of ordered) {
     for (const channel of consumer.channels) {
       if (channel.pinned) continue
       const prefix = prefixOf(channel.class)
       const set = used(prefix)
-      const linear = lowestFree(set)
+      const linear = lowestFree(set, nextFreeByPrefix.get(prefix) ?? 0)
+      nextFreeByPrefix.set(prefix, linear + 1)
       set.add(linear)
       assignments[channelKey(consumer.id, channel.channelId)] = formatAddress(channel.class, linear)
     }
   }
 
-  return { assignments, conflicts }
+  // Per-prefix high-water mark, from the reservation sets already built
+  // above. `usedByPrefix` never holds an empty set (every `used()` call is
+  // followed by an `add`, or by a conflict on an already-populated set), but
+  // the guard keeps an absent prefix indistinguishable from a zero one.
+  // Iterated rather than `Math.max(...set)`: a space may legitimately hold
+  // tens of thousands of slots, and spreading that many arguments is an
+  // engine limit away from throwing.
+  const slotCounts: Record<string, number> = {}
+  for (const [prefix, set] of usedByPrefix) {
+    /* istanbul ignore next -- unreachable: see the invariant above */
+    if (set.size === 0) continue
+    let highest = 0
+    for (const linear of set) {
+      if (linear > highest) highest = linear
+    }
+    slotCounts[prefix] = highest + 1
+  }
+
+  return { assignments, conflicts, slotCounts }
 }

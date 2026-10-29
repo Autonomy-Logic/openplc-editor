@@ -42,11 +42,6 @@ const sha256 = (s: string): string =>
     .update(Uint8Array.from(Buffer.from(s, 'utf-8')))
     .digest('hex')
 
-const DEFAULT_FILES: Record<string, string> = {
-  'manifest.json': '{"formatVersion":"1.0"}',
-  'hal/arduino/hal.cpp': 'void hardwareInit() {}',
-}
-
 interface FixtureOpts {
   files?: Record<string, string>
   /** Override fields on the signed payload (e.g. a foreign keyId). */
@@ -75,7 +70,13 @@ describe('PackageManagerModule.verifyInstalledSignatures', () => {
   /** Write a package directory under packagesDir and register it. */
   function installFixture(packageId: string, opts: FixtureOpts = {}): string {
     const dir = join(packagesDir, packageId)
-    const files = opts.files ?? DEFAULT_FILES
+    const version = (opts.payloadOverride?.version as string | undefined) ?? '1.0.0'
+    // manifest.json's declared identity must match the signed payload's, or
+    // verifyPackageSignature's identity check refuses the package on its own.
+    const files = opts.files ?? {
+      'manifest.json': JSON.stringify({ package: { id: packageId, version } }),
+      'hal/arduino/hal.cpp': 'void hardwareInit() {}',
+    }
     const fileHashes: Record<string, string> = {}
     for (const [rel, content] of Object.entries(files)) {
       const full = join(dir, rel)
@@ -90,7 +91,7 @@ describe('PackageManagerModule.verifyInstalledSignatures', () => {
         alg: 'ed25519',
         keyId: KEY_ID,
         packageId,
-        version: '1.0.0',
+        version,
         signedAt: '2026-06-01T00:00:00.000Z',
         files: fileHashes,
         ...opts.payloadOverride,

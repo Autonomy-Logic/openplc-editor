@@ -98,6 +98,10 @@ describe('global variable list — POU externals', () => {
   })
 })
 
+// The error strings below are STruC++'s own. This parser used to have a regex of its
+// own and a hand-written message for each shape; the compiler now decides what a GVL
+// is, so it decides what is wrong with one too — and unlike the old messages, its
+// report carries the line.
 describe('global variable list — text form', () => {
   it('writes the address BEFORE the colon, as IEC and the CODESYS importer do', () => {
     // A round-trip test alone cannot catch this: a serializer and parser that agree with
@@ -145,15 +149,15 @@ describe('global variable list — text form', () => {
     const result = parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL\nEND_VAR', 'GVL')
 
     expect(result.globalVariableList).toBeUndefined()
-    expect(result.error).toMatch(/missing semicolon/)
+    expect(result.error).toMatch(/Expected `Semicolon`/)
   })
 
   it('requires the VAR_GLOBAL wrapper', () => {
-    expect(parseGlobalVariableListFromText('A : BOOL;', 'GVL').error).toMatch(/must start with VAR_GLOBAL/)
+    expect(parseGlobalVariableListFromText('A : BOOL;', 'GVL').error).toMatch(/while parsing a statement/)
   })
 
   it('requires END_VAR to close the block', () => {
-    expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL;', 'GVL').error).toMatch(/must end with END_VAR/)
+    expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL;', 'GVL').error).toMatch(/Expected `END_VAR`/)
   })
 
   it('reports an empty declaration', () => {
@@ -161,18 +165,18 @@ describe('global variable list — text form', () => {
   })
 
   it('reports a missing colon distinctly from a missing semicolon', () => {
-    expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A BOOL;\nEND_VAR', 'GVL').error).toMatch(/missing colon/)
+    expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A BOOL;\nEND_VAR', 'GVL').error).toMatch(/Expected `Colon`/)
   })
 
   it('rejects a member named after an IEC keyword', () => {
     expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  IF : BOOL;\nEND_VAR', 'GVL').error).toMatch(
-      /invalid variable name/,
+      /Expected `END_VAR`, found `IF`/,
     )
   })
 
   it('rejects a type it cannot resolve', () => {
     expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A : NOT_A_TYPE_?;\nEND_VAR', 'GVL').error).toMatch(
-      /cannot parse|unknown type/,
+      /unexpected character/,
     )
   })
 
@@ -331,18 +335,97 @@ describe('global variable list — CODESYS declaration forms', () => {
   it('catches a block reopened before it closed', () => {
     expect(
       parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL;\nVAR_GLOBAL\n  B : INT;\nEND_VAR', 'GVL').error,
-    ).toMatch(/opened again before END_VAR/)
+    ).toMatch(/Expected `END_VAR`, found `VAR_GLOBAL`/)
   })
 
   it('catches a stray END_VAR', () => {
     expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL;\nEND_VAR\nEND_VAR', 'GVL').error).toMatch(
-      /END_VAR without a matching VAR_GLOBAL/,
+      /Expected `END_PROGRAM`, found `END_VAR`/,
     )
   })
 
   it('reports a declaration sitting outside any block', () => {
     expect(parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL;\nEND_VAR\n  B : INT;', 'GVL').error).toMatch(
-      /outside a VAR_GLOBAL/,
+      /while parsing a statement/,
     )
+  })
+})
+
+/**
+ * A `{` is a pragma only where a pragma can be written. The blanking pass runs over
+ * the caller's own string and every span the parser reports addresses it, so blanking
+ * one brace too many does not fail loudly — it hands back a member whose text has a
+ * hole in it, and a GVL is written back from the model, so the hole reaches the disk.
+ */
+describe('global variable list — what counts as a pragma', () => {
+  it('leaves a brace inside a string initial value alone', () => {
+    const parsed = parseGlobalVariableListFromText("VAR_GLOBAL\n  Fmt : STRING := '{0}';\nEND_VAR", 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables[0].initialValue).toBe("'{0}'")
+  })
+
+  it('leaves a brace inside a comment alone', () => {
+    const parsed = parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL; (* see {x} *)\nEND_VAR', 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables[0].documentation).toBe('see {x}')
+  })
+
+  it('leaves a brace inside a line comment alone', () => {
+    const parsed = parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL; // see {x}\nEND_VAR', 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables[0].documentation).toBe('see {x}')
+  })
+
+  it('drops a pragma sitting between declarations', () => {
+    const parsed = parseGlobalVariableListFromText(
+      "VAR_GLOBAL\n  A : BOOL;\n  {attribute 'hidden'}\n  B : INT;\nEND_VAR",
+      'GVL',
+    )
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables.map((v) => v.name)).toEqual(['A', 'B'])
+  })
+
+  it('drops a pragma holding a brace of its own', () => {
+    const parsed = parseGlobalVariableListFromText("{attribute 'a' := '{b}'}\nVAR_GLOBAL\n  A : BOOL;\nEND_VAR", 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables.map((v) => v.name)).toEqual(['A'])
+  })
+
+  it('keeps the qualifier when a pragma precedes the header', () => {
+    // The qualifier is read out of the header span, which the blanking pass must not
+    // have shifted.
+    const parsed = parseGlobalVariableListFromText(
+      "{attribute 'qualified_only'}\nVAR_GLOBAL CONSTANT\n  A : BOOL;\nEND_VAR",
+      'GVL',
+    )
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.qualifier).toBe('CONSTANT')
+  })
+
+  it('does not read a qualifier out of the header comment', () => {
+    const parsed = parseGlobalVariableListFromText('VAR_GLOBAL // RETAIN one day\n  A : BOOL;\nEND_VAR', 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.qualifier).toBeUndefined()
+  })
+
+  it('reads a declaration list sharing a line', () => {
+    const parsed = parseGlobalVariableListFromText('VAR_GLOBAL\n  A : BOOL; B : INT;\nEND_VAR', 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables.map((v) => v.name)).toEqual(['A', 'B'])
+  })
+
+  it('reads a whole list written on one line', () => {
+    const parsed = parseGlobalVariableListFromText('VAR_GLOBAL A : BOOL; B : INT; END_VAR', 'GVL')
+
+    expect(parsed.error).toBeUndefined()
+    expect(parsed.globalVariableList?.variables.map((v) => v.name)).toEqual(['A', 'B'])
   })
 })

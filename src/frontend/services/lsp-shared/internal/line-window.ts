@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2025 Autonomy / OpenPLC Project
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2025 Autonomy®
 /**
  * Bounds of the slice a partial code view (`dtview://`, `pouvars://`)
  * renders, as half-open aggregate-document lines. Absent window means

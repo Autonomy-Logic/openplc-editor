@@ -45,6 +45,19 @@ export function tokenizeRecipe(recipe: string): string[] {
     if (i >= n) break
 
     let token = ''
+    // Whether double quotes in THIS token group or are part of it, decided by
+    // its first character and fixed for the whole token.
+    //
+    // Grouping, when the token opens with one: `"{source_file}"`, a Windows path
+    // with spaces, and renesas_uno's `"-DPROJECT_NAME="/path/x.ino""`, which is
+    // shell concatenation of a quoted prefix, a bare path and an empty pair.
+    // Those have to reach the compiler unquoted.
+    //
+    // Content, when it does not: stm32duino writes
+    // `-DVARIANT_H="{build.variant_h}"` and `variant.h` does
+    // `#include VARIANT_H`, so the quotes are the macro's value. Eating them
+    // leaves `#include variant_BLACKPILL_F411CE.h`, which gcc rejects.
+    const quotesGroup = recipe[i] === '"'
     while (i < n && !isWhitespace(recipe[i])) {
       const ch = recipe[i]
       if (ch === "'") {
@@ -59,16 +72,25 @@ export function tokenizeRecipe(recipe: string): string[] {
         }
         i++ // skip closing '
       } else if (ch === '"') {
-        // Double-quoted segment: literal until next double quote.
-        i++
-        while (i < n && recipe[i] !== '"') {
-          token += recipe[i]
-          i++
-        }
-        if (i >= n) {
+        // A double quote either GROUPS the token or is PART OF IT, and which one
+        // depends on where it sits.
+        //
+        // Wrapping the whole token, it groups: `"{source_file}"` and
+        // `"C:\\Path With Spaces\\f.cpp"` must reach the compiler unquoted, or the
+        // spawn looks for a file whose name begins with a quote.
+        //
+        // Anywhere else it is content. stm32duino writes
+        // `-DVARIANT_H="{build.variant_h}"`, and `variant.h` does
+        // `#include VARIANT_H` — the quotes ARE the macro's value, so eating them
+        // leaves `#include variant_BLACKPILL_F411CE.h`, which gcc rejects with
+        // "#include expects \"FILENAME\" or <FILENAME>". Verified against
+        // arduino-cli's own argv, which carries the quotes.
+        const close = recipe.indexOf('"', i + 1)
+        if (close === -1) {
           throw new Error(`tokenizeRecipe: unterminated double quote in recipe near position ${i}`)
         }
-        i++ // skip closing "
+        token += quotesGroup ? recipe.slice(i + 1, close) : recipe.slice(i, close + 1)
+        i = close + 1
       } else {
         token += ch
         i++

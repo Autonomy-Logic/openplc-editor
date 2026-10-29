@@ -7,7 +7,7 @@
  * should hide stay visible (or vice-versa).
  */
 
-import { evalVisible, type VisibleCondition } from '../eval-visible'
+import { evalVisible, MAX_VISIBLE_DEPTH, type VisibleCondition } from '../eval-visible'
 
 describe('evalVisible', () => {
   it('treats a missing clause as always visible', () => {
@@ -85,9 +85,14 @@ describe('evalVisible', () => {
       expect(evalVisible(clause, { channels: 4 })).toBe(false)
     })
 
-    it('shows the field for an unknown operator (forgiving default)', () => {
+    it('hides the field for an unknown operator', () => {
       const clause: VisibleCondition = { condition: 'x', operator: 'weird-op', value: 1 }
-      expect(evalVisible(clause, { x: 1 })).toBe(true)
+      expect(evalVisible(clause, { x: 1 })).toBe(false)
+    })
+
+    it('hides the field when the clause has no usable condition reference', () => {
+      const clause = { condition: 42, operator: 'equals', value: 42 } as unknown as VisibleCondition
+      expect(evalVisible(clause, {})).toBe(false)
     })
   })
 
@@ -116,6 +121,32 @@ describe('evalVisible', () => {
       }
       expect(evalVisible(clause, { enabled: true, enable_dhcp: false })).toBe(true)
       expect(evalVisible(clause, { enabled: true, enable_dhcp: true })).toBe(false)
+    })
+  })
+
+  describe('hostile clauses', () => {
+    it('hides a clause nested past the depth cap instead of recursing', () => {
+      let clause: VisibleCondition = { condition: 'x', operator: 'equals', value: 1 }
+      for (let i = 0; i <= MAX_VISIBLE_DEPTH + 2; i += 1) {
+        clause = { operator: 'and', conditions: [clause] }
+      }
+
+      expect(evalVisible(clause, { x: 1 })).toBe(false)
+    })
+
+    it('hides a composite clause with an unknown combinator', () => {
+      const clause = {
+        operator: 'xor',
+        conditions: [{ condition: 'x', operator: 'equals', value: 1 }],
+      } as unknown as VisibleCondition
+
+      expect(evalVisible(clause, { x: 1 })).toBe(false)
+    })
+
+    it('hides a composite clause whose conditions are not a list', () => {
+      const clause = { operator: 'and', conditions: 'nope' } as unknown as VisibleCondition
+
+      expect(evalVisible(clause, { x: 1 })).toBe(false)
     })
   })
 })

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PendingChange } from '../../../../../middleware/shared/ports/version-control-port'
 import { useProject, useVersionControl } from '../../../../../middleware/shared/providers'
 import { buildAllProjectFileContents, buildAllProjectFileContentsPure } from '../../../../services/save-actions'
-import { useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import type { TabsProps } from '../../../../store/slices/tabs'
 import { CreateEditorObjectFromTab } from '../../../../store/slices/tabs/utils'
 import type { PendingChangeStatus } from '../../../../store/slices/version-control/types'
@@ -212,6 +212,7 @@ function ChangesTreeItem({
 // ---------------------------------------------------------------------------
 
 export function ChangesSection({ projectId }: ChangesSectionProps) {
+  const store = useOpenPLCStoreApi()
   const versionControl = useVersionControl()
   const projectPort = useProject()
   const {
@@ -433,8 +434,8 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
       // for diff baseline) and the pure serialization of current state
       // (for the save flow's "state == sync state?" detection).
       versionControlActions.commitBaseline({
-        newBaseline: buildAllProjectFileContents(),
-        loadedSerialized: buildAllProjectFileContentsPure(),
+        newBaseline: buildAllProjectFileContents(store),
+        loadedSerialized: buildAllProjectFileContentsPure(store),
       })
 
       setMessage('')
@@ -640,7 +641,7 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
             {message.length}/500
           </span>
         </div>
-        <div className='flex gap-2'>
+        <div className='flex flex-wrap gap-2'>
           <button
             onClick={() => void handleCommit()}
             disabled={!canCommit || isCommitting}

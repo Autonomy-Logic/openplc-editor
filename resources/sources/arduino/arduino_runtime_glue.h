@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 // arduino_runtime_glue.h — sketch-facing surface for Arduino targets.
 //
 // Companion to runtime_v4_entry.cpp/.h: same role of bridging strucpp's C++
@@ -139,6 +141,136 @@ uint16_t openplc_debug_elem_count(uint8_t arr);
 uint16_t openplc_debug_size(uint8_t arr, uint16_t elem);
 uint16_t openplc_debug_read(uint8_t arr, uint16_t elem, uint8_t* dest);
 uint8_t  openplc_debug_set(uint8_t arr, uint16_t elem, uint8_t forcing, const uint8_t* bytes, uint16_t len);
+
+// Write a value WITHOUT forcing it: the plain "set it now, the program may change
+// it next scan" write an OPC-UA or fieldbus write means. openplc_debug_set()
+// forces, and a forced variable is one the PLC program can never move again.
+uint8_t  openplc_debug_write(uint8_t arr, uint16_t elem, const uint8_t* bytes, uint16_t len);
+
+// Address a leaf's value IN PLACE instead of copying it out. Returns a pointer
+// into live PLC storage and writes the value's CURRENT length (not its padded
+// wire width) to *out_len; returns NULL and sets *out_len to 0 out of bounds.
+//
+// Force-aware: it yields the forced value while a force is active, the same one
+// openplc_debug_read() would copy. A located variable is written by the program
+// straight into its raw storage, so this deliberately does not hand out that raw
+// pointer.
+//
+// THE POINTER IS ONLY VALID UNTIL THE CALLER YIELDS TO THE SCAN. That is the
+// whole contract, and it is what makes this safe on a cooperative super-loop and
+// unsafe anywhere else: the value can move the moment the PLC program runs
+// again. A caller that can be preempted by the scan must use
+// openplc_debug_read() and own the copy. This is why the underlying
+// strucpp::debug::handle_ptr is not part of the Linux C exports.
+//
+// For STRING / WSTRING the pointer addresses the characters themselves, with no
+// length prefix and no padding. *out_len is in BYTES for both, so a WSTRING
+// reports 2 * its code-unit count and the caller can treat the region as opaque
+// bytes without knowing the width. Both are capped at 126 code units, the same
+// DEBUG_STRING_CAP the wire format uses.
+const void* openplc_debug_ptr(uint8_t arr, uint16_t elem, uint16_t* out_len);
+
+// strucpp::debug::STATUS_* as plain macros, so a caller on this side of the
+// boundary can interpret what openplc_debug_set / _write return without
+// including the C++ runtime header. arduino_runtime_glue.cpp static_asserts
+// these against the real constants. Note that success is 0x7E and not zero.
+// Bytes a STRING / WSTRING occupies on the debug wire: 1 length byte plus the
+// padded payload (126 characters, doubled for UTF-16 code units). Here for the
+// same reason as the STATUS_* macros below -- the Modbus side sizes its frame
+// from these and cannot include debug_dispatch.hpp -- and held to
+// strucpp::debug::DEBUG_*_WIDTH by a static_assert in arduino_runtime_glue.cpp.
+//
+// A frame too small for the widest of these does not fail: it SKIPS the value,
+// silently, which is how a WSTRING read came back empty rather than refused.
+#define OPENPLC_DEBUG_STRING_WIRE   127
+#define OPENPLC_DEBUG_WSTRING_WIRE  253
+
+// Characters (STRING) or UTF-16 code units (WSTRING) a value can hold on the
+// wire -- the payload of the two widths above, without their length byte. A
+// caller building a write buffer sizes it from this; a longer value is
+// truncated, never refused. Also held to strucpp's DEBUG_STRING_CAP by a
+// static_assert in arduino_runtime_glue.cpp.
+#define OPENPLC_DEBUG_STRING_CAP    126
+
+#define OPENPLC_DEBUG_STATUS_OK             0x7E
+#define OPENPLC_DEBUG_STATUS_OUT_OF_BOUNDS  0x81
+#define OPENPLC_DEBUG_STATUS_DATA_TOO_LARGE 0x82
+
+// ---------------------------------------------------------------------------
+// Process image access, for protocols that address LOCATED variables.
+//
+// Modbus and S7comm serve `AT %...` declarations; OPC-UA serves every program
+// variable and goes through openplc_debug_* above instead. This is the surface
+// for the first kind: it hands out a pointer into the image so a protocol never
+// needs a mirror buffer of its own.
+//
+// THE COUNT IS SEPARATE FROM THE POINTER ON PURPOSE. A NULL from the accessors
+// means EITHER out of range OR in range with no variable bound, and the two
+// need different answers on the wire: Modbus owes MB_EX_ILLEGAL_ADDRESS for the
+// first and a legitimate zero for the second. With the count exposed, the
+// protocol decides that and the accessor only addresses storage. It is the same
+// split Runtime v4 has between image_table_capacity() and indexing the table.
+//
+// ONE INVARIANT, both families: an index is valid exactly while
+//   index < openplc_image_count(area)
+// `_slot` serves the word-and-wider areas, `_bit` the three bit areas, and the
+// count is in whichever unit that area's addresses use.
+// ---------------------------------------------------------------------------
+
+/** The small AVRs carry only the four basic tables: no %M area and no REAL
+ *  I/O. openplc.h splits on exactly this list, and the split is by MCU rather
+ *  than by whether a MAX_* is defined, because the editor emits all nine
+ *  macros for every target while the arrays exist only on the larger one. */
+#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__) || \
+    defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega16U4__)
+#define OPENPLC_HAS_EXTENDED_AREAS 0
+#else
+#define OPENPLC_HAS_EXTENDED_AREAS 1
+#endif
+
+/** The nine areas bare metal declares storage for. Values are part of the ABI
+ *  between the library and the sketch's translation unit; append, never
+ *  renumber. The five areas Runtime v4 has and bare metal does not (%IB, %QB,
+ *  %IL, %QL, %MX) are absent rather than present-and-empty: a protocol asking
+ *  for one gets OPENPLC_AREA_NONE from any lookup that names areas. */
+typedef enum
+{
+    OPENPLC_AREA_BOOL_INPUT  = 0,  /* %IX, counted in bits  */
+    OPENPLC_AREA_BOOL_OUTPUT = 1,  /* %QX, counted in bits  */
+    OPENPLC_AREA_INT_INPUT   = 2,  /* %IW */
+    OPENPLC_AREA_INT_OUTPUT  = 3,  /* %QW */
+    OPENPLC_AREA_REAL_INPUT  = 4,  /* %ID, IEC_REAL on this runtime */
+    OPENPLC_AREA_REAL_OUTPUT = 5,  /* %QD, IEC_REAL on this runtime */
+    OPENPLC_AREA_INT_MEMORY  = 6,  /* %MW */
+    OPENPLC_AREA_DINT_MEMORY = 7,  /* %MD */
+    OPENPLC_AREA_LINT_MEMORY = 8,  /* %ML */
+    OPENPLC_AREA_NONE        = 9
+} openplc_image_area_t;
+
+/** Addressable units in this area, in the unit its addresses use: BITS for the
+ *  two bit areas, elements for the rest. Zero for an area this target does not
+ *  have, which is every %M area and both REAL areas on a small AVR.
+ *
+ *  For a bit area this is the count the ARRAY can hold, `(MAX/8) * 8`, not the
+ *  MAX_* macro. They are equal in any build the editor produced, which pads the
+ *  bit macros to a whole byte and asserts it below, but a hand-written
+ *  defines.h with a remainder would otherwise report slots that the [MAX/8][8]
+ *  declaration has no room for. */
+uint16_t openplc_image_count(openplc_image_area_t area);
+
+/** The storage behind slot `index` of a word-and-wider area, or NULL when the
+ *  index is out of range or no located variable is bound there.
+ *
+ *  `width` receives the element size in bytes and is set even when the return
+ *  is NULL, so a caller can tell "this target has no such area" (width 0) from
+ *  "the area exists, that slot is empty" (width set) without a second call.
+ *  Passing a bit area here yields NULL with width 0: use openplc_image_bit. */
+void* openplc_image_slot(openplc_image_area_t area, uint16_t index, uint8_t* width);
+
+/** The storage behind one bit of a bit area, addressed by its FLAT bit index
+ *  so the caller does not repeat the [byte][bit] split. NULL out of range or
+ *  unbound. IEC_BOOL is uint8_t; the header stays free of openplc.h. */
+uint8_t* openplc_image_bit(openplc_image_area_t area, uint16_t bit_index);
 
 #ifdef __cplusplus
 }

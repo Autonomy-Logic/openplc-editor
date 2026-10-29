@@ -27,7 +27,6 @@ function makePin(overrides: { pin: string | number; pinType: DevicePin['pinType'
 const EMPTY_INPUTS = {
   boardEntry: undefined as BoardHalsDefinesEntry | undefined,
   devicePinMapping: [] as DevicePin[],
-  stProgramFileContent: '',
   buildMD5Hash: 'abc123',
   boardRuntime: 'arduino-cli',
 }
@@ -108,14 +107,8 @@ describe('generateDefinesContent — simulator comms block', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
-      vppModbusState: {
-        modbus_rtu: {
-          enabled: true,
-          rtu_interface: 'Serial1',
-          rtu_baud_rate: '115200',
-          rtu_slave_id: 1,
-        },
-      },
+      vppModbusState: { serial: { baud_rate: '115200' } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial1', slaveId: 1 },
     })
     expect(out).toContain('#define MBSERIAL_IFACE Serial1')
     expect(out).toContain('#define MBSERIAL_BAUD 115200')
@@ -129,9 +122,8 @@ describe('generateDefinesContent — simulator comms block', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'openplc-compiler',
-      vppModbusState: {
-        modbus_rtu: { enabled: true, rtu_interface: 'Serial1', rtu_baud_rate: '115200', rtu_slave_id: 1 },
-      },
+      vppModbusState: { serial: { baud_rate: '115200' } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial1' },
     })
     expect(out).not.toContain('MBSERIAL_IFACE')
     expect(out).not.toContain('MODBUS_ENABLED')
@@ -145,7 +137,7 @@ describe('generateDefinesContent — simulator comms block', () => {
     const withEmptyState = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
-      vppModbusState: { modbus_rtu: { enabled: false }, modbus_tcp: { enabled: false } },
+      vppModbusState: {},
     })
     const withoutState = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
     // Same output either way — empty state collapses to no block.
@@ -159,11 +151,11 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
     expect(out).toContain('//Debugger\n#define DEBUGGER_ENABLED\n')
   })
 
-  it('emits DEBUGGER_ENABLED when the Modbus screen is present but disabled', () => {
+  it('emits DEBUGGER_ENABLED when the board has screen state but no Modbus server', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
-      vppModbusState: { modbus_rtu: { enabled: false }, modbus_tcp: { enabled: false } },
+      vppModbusState: {},
     })
     expect(out).toContain('#define DEBUGGER_ENABLED')
   })
@@ -172,10 +164,8 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
-      vppModbusState: {
-        serial: { baud_rate: '9600' },
-        modbus_rtu: { enabled: true, serial_port: 'Serial', rtu_slave_id: 1 },
-      },
+      vppModbusState: { serial: { baud_rate: '9600' } },
+      modbusServer: { enabled: true, transports: ['rtu' as const], port: 502 },
       defaultSerial: 'Serial',
     })
     expect(out).toContain('#define DEBUGGER_ENABLED')
@@ -205,14 +195,13 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
   // file. Emitting 115200 while MBSERIAL_BAUD said 9600 built a firmware the
   // editor could not talk to, and the user was told "No Firmware Detected" about
   // a board that was running fine.
-  it('aligns DEBUG_BAUD with MBSERIAL_BAUD for a published VPP (no `serial` section)', () => {
+  it('aligns DEBUG_BAUD with MBSERIAL_BAUD when the RTU shares the default port', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: {
-        modbus_rtu: { enabled: true, rtu_interface: 'Serial', rtu_baud_rate: '9600', rtu_slave_id: 1 },
-      },
+      vppModbusState: { serial: { baud_rate: '9600' } },
+      modbusServer: { enabled: true, transports: ['rtu' as const], port: 502 },
     })
     expect(out).toContain('#define MBSERIAL_BAUD 9600')
     expect(out).toContain('#define MBSERIAL_SHARES_DEBUG_SERIAL')
@@ -223,12 +212,12 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
   // editor dials 9600 (spec params ignore `enabledWhen`), so a firmware built at
   // 115200 opened the port and answered nothing — "No Firmware Detected" on a
   // healthy board.
-  it('aligns DEBUG_BAUD with the screen baud when Modbus is DISABLED', () => {
+  it('takes DEBUG_BAUD from the Serial screen even with no Modbus server', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: { modbus_rtu: { enabled: false, rtu_baud_rate: '9600' } },
+      vppModbusState: { serial: { baud_rate: '9600' } },
     })
     expect(out).toContain('#define DEBUGGER_ENABLED')
     expect(out).toContain('#define DEBUG_BAUD 9600')
@@ -236,51 +225,64 @@ describe('generateDefinesContent — Debugger block (always-on debug)', () => {
     expect(out).not.toContain('#define MODBUS_ENABLED')
   })
 
-  it('keeps DEBUG_BAUD at the firmware default when the RTU has its own second port', () => {
+  it('keeps DEBUG_BAUD on the package value when the RTU has its own second port', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: {
-        modbus_rtu: { enabled: true, rtu_interface: 'Serial1', rtu_baud_rate: '9600', rtu_slave_id: 1 },
-      },
+      vppModbusState: { serial: { baud_rate: '57600' } },
+      modbusServer: { transports: ['rtu' as const], serialPort: 'Serial1', baudRate: 9600 },
     })
-    // Two distinct ports, two distinct rates — and the debugger keeps the default.
+    // Two distinct ports, two distinct rates — and the debugger keeps the one
+    // the package states for its own line.
     expect(out).toContain('#define MBSERIAL_BAUD 9600')
     expect(out).toContain('#define MBSERIAL_ON_SECONDARY')
-    expect(out).toContain('#define DEBUG_BAUD 115200')
+    expect(out).toContain('#define DEBUG_BAUD 57600')
   })
 
-  it('emits DEBUG_SLAVE from the RTU screen so it matches the id the editor addresses', () => {
+  it('keeps the two ids apart when the RTU shares the editor line', () => {
+    // The firmware answers both on that UART and routes by function code, so the
+    // server keeps the address the user picked. Emitting one id for both is what
+    // made this field read-only on the default port.
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: {
-        modbus_rtu: { enabled: true, rtu_interface: 'Serial', rtu_baud_rate: '9600', rtu_slave_id: 3 },
-      },
+      vppModbusState: { serial: { baud_rate: '9600' } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial', slaveId: 7 },
     })
-    expect(out).toContain('#define MBSERIAL_SLAVE 3')
-    expect(out).toContain('#define DEBUG_SLAVE 3')
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
+    expect(out).toContain('#define DEBUG_SLAVE 1')
   })
 
-  // The slave-id twin of the DEBUG_BAUD regression above, and the harsher one:
-  // Connect sweeps baud rates, but nothing sweeps slave ids. With Modbus off and
-  // slave id 7 saved on the screen, the editor addresses 7 while a firmware left
-  // on modbus_config.h's `#ifndef DEBUG_SLAVE 1` fallback frames on 1 — every
-  // frame dropped at the id check, reported as "No Firmware Detected".
-  it('aligns DEBUG_SLAVE with the screen slave id when Modbus is DISABLED', () => {
+  it('keeps the editor id untouched when the RTU has a UART of its own', () => {
     const out = generateDefinesContent({
       ...EMPTY_INPUTS,
       boardRuntime: 'arduino-cli',
       defaultSerial: 'Serial',
-      vppModbusState: { modbus_rtu: { enabled: false, rtu_slave_id: 7 } },
+      vppModbusState: { serial: { baud_rate: '9600' } },
+      modbusServer: { transports: ['rtu'], serialPort: 'Serial1', slaveId: 7 },
     })
-    expect(out).toContain('#define DEBUG_SLAVE 7')
+    expect(out).toContain('#define MBSERIAL_SLAVE 7')
+    expect(out).toContain('#define DEBUG_SLAVE 1')
+  })
+
+  // The editor's id is a constant, so nothing a project can express moves it.
+  // This used to be derived from the screen, and a stale value there addressed a
+  // firmware framing on another id — every frame dropped at the id check and
+  // reported as "No Firmware Detected".
+  it('emits DEBUG_SLAVE 1 whatever the board screens hold', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      boardRuntime: 'arduino-cli',
+      defaultSerial: 'Serial',
+      vppModbusState: { serial: {} },
+    })
+    expect(out).toContain('#define DEBUG_SLAVE 1')
     expect(out).not.toContain('#define MODBUS_ENABLED')
   })
 
-  it('falls back to DEBUG_SLAVE 1 when the project states no slave id', () => {
+  it('emits DEBUG_SLAVE 1 for a project with no screen state at all', () => {
     const out = generateDefinesContent({ ...EMPTY_INPUTS, boardRuntime: 'arduino-cli' })
     expect(out).toContain('#define DEBUG_SLAVE 1')
   })
@@ -344,93 +346,30 @@ describe('generateDefinesContent — IO Config (pin masks)', () => {
   })
 })
 
-describe('generateDefinesContent — Arduino library toggles', () => {
-  function withMarker(marker: string) {
-    return generateDefinesContent({ ...EMPTY_INPUTS, stProgramFileContent: `PROGRAM main\n${marker}\nEND_PROGRAM` })
+describe('generateDefinesContent — PINPULL_DIN', () => {
+  const pullSpec = {
+    options: ['none' as const, 'up' as const, 'down' as const],
+    pins: { '34': { fixed: 'none' as const }, '16': { options: ['none' as const, 'down' as const] } },
   }
 
-  it('toggles USE_DS18B20_BLOCK for any of the five DS18B20 FB markers', () => {
-    expect(withMarker('DS18B20;')).toContain('#define USE_DS18B20_BLOCK\n')
-    expect(withMarker('DS18B20_2_OUT;')).toContain('#define USE_DS18B20_BLOCK\n')
-    expect(withMarker('DS18B20_3_OUT;')).toContain('#define USE_DS18B20_BLOCK\n')
-    expect(withMarker('DS18B20_4_OUT;')).toContain('#define USE_DS18B20_BLOCK\n')
-    expect(withMarker('DS18B20_5_OUT;')).toContain('#define USE_DS18B20_BLOCK\n')
+  it('omits PINPULL_DIN when the board declares no pull spec', () => {
+    const pins = [makePin({ pin: 2, pinType: 'digitalInput' })]
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, devicePinMapping: pins })
+    expect(out).not.toContain('PINPULL_DIN')
   })
 
-  it('toggles USE_P1AM_BLOCKS on P1AM_INIT;', () => {
-    expect(withMarker('P1AM_INIT;')).toContain('#define USE_P1AM_BLOCKS\n')
-  })
-
-  it('toggles USE_CLOUD_BLOCKS on CLOUD_BEGIN;', () => {
-    expect(withMarker('CLOUD_BEGIN;')).toContain('#define USE_CLOUD_BLOCKS\n')
-  })
-
-  it('toggles USE_MQTT_BLOCKS for either MQTT_CONNECT; or MQTT_CONNECT_AUTH;', () => {
-    expect(withMarker('MQTT_CONNECT;')).toContain('#define USE_MQTT_BLOCKS\n')
-    expect(withMarker('MQTT_CONNECT_AUTH;')).toContain('#define USE_MQTT_BLOCKS\n')
-  })
-
-  it('toggles USE_ARDUINOCAN_BLOCK for any of the four ARDUINOCAN markers', () => {
-    expect(withMarker('ARDUINOCAN_CONF;')).toContain('#define USE_ARDUINOCAN_BLOCK\n')
-    expect(withMarker('ARDUINOCAN_WRITE;')).toContain('#define USE_ARDUINOCAN_BLOCK\n')
-    expect(withMarker('ARDUINOCAN_WRITE_WORD;')).toContain('#define USE_ARDUINOCAN_BLOCK\n')
-    expect(withMarker('ARDUINOCAN_READ;')).toContain('#define USE_ARDUINOCAN_BLOCK\n')
-  })
-
-  it('toggles USE_STM32CAN_BLOCK for any of the three STM32CAN markers', () => {
-    expect(withMarker('STM32CAN_CONF;')).toContain('#define USE_STM32CAN_BLOCK\n')
-    expect(withMarker('STM32CAN_WRITE;')).toContain('#define USE_STM32CAN_BLOCK\n')
-    expect(withMarker('STM32CAN_READ;')).toContain('#define USE_STM32CAN_BLOCK\n')
-  })
-
-  it('toggles USE_SM_BLOCKS for any of the ten SM_* markers', () => {
-    const markers = [
-      'SM_8RELAY;',
-      'SM_16RELAY;',
-      'SM_8DIN;',
-      'SM_16DIN;',
-      'SM_4REL4IN;',
-      'SM_INDUSTRIAL;',
-      'SM_RTD;',
-      'SM_BAS;',
-      'SM_HOME;',
-      'SM_8MOSFET;',
+  it('emits one code per digital input in PINMASK_DIN order, resolving fixed and invalid values', () => {
+    const pins: DevicePin[] = [
+      { ...makePin({ pin: 4, pinType: 'digitalInput' }), pull: 'up' },
+      makePin({ pin: 5, pinType: 'digitalOutput' }),
+      { ...makePin({ pin: 34, pinType: 'digitalInput' }), pull: 'up' },
+      { ...makePin({ pin: 16, pinType: 'digitalInput' }), pull: 'up' },
+      { ...makePin({ pin: 17, pinType: 'digitalInput' }), pull: 'down' },
+      makePin({ pin: 18, pinType: 'digitalInput' }),
     ]
-    for (const m of markers) {
-      expect(withMarker(m)).toContain('#define USE_SM_BLOCKS\n')
-    }
-  })
-
-  it('omits all USE_*_BLOCK defines when no markers are present', () => {
-    const out = generateDefinesContent({ ...EMPTY_INPUTS, stProgramFileContent: 'PROGRAM main\nEND_PROGRAM' })
-    expect(out).not.toContain('USE_DS18B20_BLOCK')
-    expect(out).not.toContain('USE_P1AM_BLOCKS')
-    expect(out).not.toContain('USE_CLOUD_BLOCKS')
-    expect(out).not.toContain('USE_MQTT_BLOCKS')
-    expect(out).not.toContain('USE_ARDUINOCAN_BLOCK')
-    expect(out).not.toContain('USE_STM32CAN_BLOCK')
-    expect(out).not.toContain('USE_SM_BLOCKS')
-  })
-
-  it('emits multiple library toggles when several markers co-occur', () => {
-    const st = 'P1AM_INIT;\nMQTT_CONNECT;\nDS18B20_3_OUT;\nSM_8RELAY;'
-    const out = generateDefinesContent({ ...EMPTY_INPUTS, stProgramFileContent: st })
-    expect(out).toContain('#define USE_DS18B20_BLOCK\n')
-    expect(out).toContain('#define USE_P1AM_BLOCKS\n')
-    expect(out).toContain('#define USE_MQTT_BLOCKS\n')
-    expect(out).toContain('#define USE_SM_BLOCKS\n')
-    expect(out).not.toContain('USE_CLOUD_BLOCKS')
-    expect(out).not.toContain('USE_ARDUINOCAN_BLOCK')
-    expect(out).not.toContain('USE_STM32CAN_BLOCK')
-  })
-
-  it('uses substring matching, not whole-word — markers within larger tokens still trigger', () => {
-    // Editor uses `String.prototype.includes`, so e.g. `XDS18B20;` is
-    // technically also a hit because it contains `DS18B20;`.  This is
-    // the editor's behavior; pin it so a future change to whole-word
-    // matching surfaces as a test failure.
-    const out = generateDefinesContent({ ...EMPTY_INPUTS, stProgramFileContent: 'XDS18B20;' })
-    expect(out).toContain('#define USE_DS18B20_BLOCK\n')
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, devicePinMapping: pins, pinPull: pullSpec })
+    expect(out).toContain('#define PINMASK_DIN 4, 34, 16, 17, 18\n')
+    expect(out).toContain('#define PINPULL_DIN 1, 0, 0, 2, 0\n')
   })
 })
 
@@ -449,6 +388,96 @@ describe('generateDefinesContent — retain blob size', () => {
   })
 })
 
+describe('generateDefinesContent — process image', () => {
+  it('overrides every MAX_* the firmware declares a buffer for', () => {
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      imageSizes: { '%IX': 240, '%QX': 240, '%IW': 64, '%QW': 64, '%ID': 8, '%QD': 8, '%MW': 40, '%MD': 4, '%ML': 2 },
+    })
+    expect(out).toContain('//Process image')
+    expect(out).toContain('#define MAX_DIGITAL_INPUT 240')
+    expect(out).toContain('#define MAX_DIGITAL_OUTPUT 240')
+    expect(out).toContain('#define MAX_ANALOG_INPUT 64')
+    expect(out).toContain('#define MAX_ANALOG_OUTPUT 64')
+    expect(out).toContain('#define MAX_REAL_INPUT 8')
+    expect(out).toContain('#define MAX_REAL_OUTPUT 8')
+    expect(out).toContain('#define MAX_MEMORY_WORD 40')
+    expect(out).toContain('#define MAX_MEMORY_DWORD 4')
+    expect(out).toContain('#define MAX_MEMORY_LWORD 2')
+  })
+
+  it('emits the bit areas in BITS, which is what openplc.h divides by 8', () => {
+    // SAME unit as image.conf — both are in bits. What differs is padding:
+    // only this emitter pads, because openplc.h writes
+    // bool_input[MAX_DIGITAL_INPUT/8][8] and divides.
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: { '%QX': 64 } })
+    expect(out).toContain('#define MAX_DIGITAL_OUTPUT 64')
+    expect(out).not.toContain('#define MAX_DIGITAL_OUTPUT 8')
+  })
+
+  it('emits a zero rather than skipping the area', () => {
+    // Skipping would hand the area back to openplc.h's fallback, which is the
+    // opposite of what a project with nothing in that area asked for.
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: { '%QX': 8 } })
+    expect(out).toContain('#define MAX_MEMORY_WORD 0')
+    expect(out).toContain('#define MAX_DIGITAL_INPUT 0')
+  })
+
+  it('emits no macro for an area bare metal has no buffer for', () => {
+    // %MX, %IB, %QB and %MB have no MAX_* because openplc.h declares no
+    // bit-addressed memory and no byte-addressed buffer at all. The compile
+    // gate refuses those declarations before the build gets here.
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: { '%MX': 16, '%IB': 4 } })
+    expect(out).not.toContain('%MX')
+    expect(out).not.toMatch(/MAX_MEMORY_BIT|MAX_BYTE/)
+  })
+
+  it('rounds the two bit macros up to a whole byte', () => {
+    // FR06 lives HERE now, and only here: openplc.h declares
+    // bool_output[MAX_DIGITAL_OUTPUT/8][8] and divides, so six bits would
+    // declare bool_output[0][8] and none of the six would be addressable.
+    // The sizer reports the raw high-water mark so the other two consumers
+    // see an exact figure; this emitter is the one that needs a whole byte.
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: { '%QX': 6, '%IX': 11 } })
+    expect(out).toContain('#define MAX_DIGITAL_OUTPUT 8')
+    expect(out).toContain('#define MAX_DIGITAL_INPUT 16')
+  })
+
+  it('leaves a bit count that is already a whole byte alone', () => {
+    const out = generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: { '%QX': 16 } })
+    expect(out).toContain('#define MAX_DIGITAL_OUTPUT 16')
+  })
+
+  it('does not round the word and dword macros', () => {
+    // Only the bit areas are declared [N/8][8]. Padding %MW would reserve
+    // memory the project never asked for, which is the opposite of BR10.
+    const out = generateDefinesContent({
+      ...EMPTY_INPUTS,
+      imageSizes: { '%MW': 3, '%MD': 5, '%ML': 7, '%IW': 9, '%QD': 11 },
+    })
+    expect(out).toContain('#define MAX_MEMORY_WORD 3')
+    expect(out).toContain('#define MAX_MEMORY_DWORD 5')
+    expect(out).toContain('#define MAX_MEMORY_LWORD 7')
+    expect(out).toContain('#define MAX_ANALOG_INPUT 9')
+    expect(out).toContain('#define MAX_REAL_OUTPUT 11')
+  })
+
+  it('emits nothing at all for a target we do not size', () => {
+    // Runtime v3 and the simulator. Their defines.h must stay byte-identical,
+    // or every one of them rebuilds for no reason and openplc.h's own #ifdef
+    // ladder stops being what decides.
+    expect(generateDefinesContent({ ...EMPTY_INPUTS })).not.toContain('Process image')
+    expect(generateDefinesContent({ ...EMPTY_INPUTS })).not.toContain('MAX_DIGITAL_INPUT')
+  })
+
+  it('is deterministic and fixed in macro order', () => {
+    const sizes = { '%QX': 16, '%MW': 7 }
+    expect(generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: sizes })).toBe(
+      generateDefinesContent({ ...EMPTY_INPUTS, imageSizes: { '%MW': 7, '%QX': 16 } }),
+    )
+  })
+})
+
 describe('generateDefinesContent — full output snapshot', () => {
   it('produces the canonical defines.h for a typical simulator project', () => {
     const out = generateDefinesContent({
@@ -458,7 +487,6 @@ describe('generateDefinesContent — full output snapshot', () => {
         makePin({ pin: 3, pinType: 'digitalInput' }),
         makePin({ pin: 13, pinType: 'digitalOutput' }),
       ],
-      stProgramFileContent: 'PROGRAM main\nVAR\nEND_VAR\nEND_PROGRAM',
       buildMD5Hash: '0123456789abcdef0123456789abcdef',
       boardRuntime: 'simulator',
     })
@@ -492,17 +520,15 @@ describe('generateDefinesContent — full output snapshot', () => {
         '#define NUM_ANALOG_OUTPUT 0',
         '',
         '',
-        '//Arduino libraries',
         '',
       ].join('\n'),
     )
   })
 
-  it('produces the canonical defines.h for a non-simulator project with library toggles', () => {
+  it('produces the canonical defines.h for a non-simulator project', () => {
     const out = generateDefinesContent({
       boardEntry: { define: 'PIN_LED=13' },
       devicePinMapping: [makePin({ pin: 4, pinType: 'analogInput' })],
-      stProgramFileContent: 'CLOUD_BEGIN; MQTT_CONNECT_AUTH;',
       buildMD5Hash: 'ff'.repeat(16),
       boardRuntime: 'arduino-cli',
     })
@@ -534,9 +560,6 @@ describe('generateDefinesContent — full output snapshot', () => {
         '#define NUM_ANALOG_OUTPUT 0',
         '',
         '',
-        '//Arduino libraries',
-        '#define USE_CLOUD_BLOCKS',
-        '#define USE_MQTT_BLOCKS',
         '',
       ].join('\n'),
     )

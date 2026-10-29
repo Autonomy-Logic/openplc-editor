@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import type { PLCVariable } from '../../../../../middleware/shared/ports'
 import { PLCPou } from '../../../../../middleware/shared/ports'
 import { RefreshIcon } from '../../../../assets/icons/interface/Refresh'
-import { useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import { LibraryState } from '../../../../store/slices/library'
 import { checkVariableName } from '../../../../store/slices/project/validation/variables'
 import { cn } from '../../../../utils/cn'
@@ -66,6 +66,7 @@ export const BlockNodeElement = <T extends object>({
   wrongVariable?: boolean
   scale?: number
 }) => {
+  const store = useOpenPLCStoreApi()
   const pouName = useBoundPou()
   const editor = useBoundEditorModel()
   const updateModelVariables = useOpenPLCStore((state) => state.editorActions.updateModelVariables)
@@ -165,7 +166,7 @@ export const BlockNodeElement = <T extends object>({
       return
     }
 
-    const { project, libraries, ladderFlows } = useOpenPLCStore.getState()
+    const { project, libraries, ladderFlows } = store.getState()
     const pous = project.data.pous
     const libraryBlock = resolveLibraryBlock(blockNameValue, libraries, pous)
 
@@ -174,6 +175,11 @@ export const BlockNodeElement = <T extends object>({
       toast({ title: 'Invalid name', description: 'The name could not be changed', variant: 'fail' })
       return
     }
+
+    // The block's library goes into `project.libraries` here, not only through the
+    // Library Manager: without the entry the other editor renders the block from its
+    // node data and has nothing to warn about when the library is not installed.
+    store.getState().libraryActions.ensureLibrariesForTypes([blockNameValue])
 
     const { pou, rung, node, variables, edges } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: nodeId ?? '',
@@ -201,7 +207,7 @@ export const BlockNodeElement = <T extends object>({
         title: '',
       }
 
-      const project = useOpenPLCStore.getState().project
+      const project = store.getState().project
       const currentPou = project.data.pous.find((p) => p.name === pouName)
       pushToHistory(pouName, {
         variables: currentPou?.interface?.variables ?? [],
@@ -315,7 +321,7 @@ export const BlockNodeElement = <T extends object>({
       [rung.defaultBounds[0], rung.defaultBounds[1]],
     )
 
-    const project2 = useOpenPLCStore.getState().project
+    const project2 = store.getState().project
     const currentPou2 = project2.data.pous.find((p) => p.name === pouName)
     pushToHistory(pouName, {
       variables: currentPou2?.interface?.variables ?? [],
@@ -411,6 +417,7 @@ export const BlockNodeElement = <T extends object>({
 
 const Block = <T extends object>(block: BlockProps<T>) => {
   const { data, dragging, height, width, selected, id } = block
+  const store = useOpenPLCStoreApi()
 
   const pouName = useBoundPou()
   const pous = useOpenPLCStore((state) => state.project.data.pous)
@@ -433,8 +440,49 @@ const Block = <T extends object>(block: BlockProps<T>) => {
   // saved since in-outs became input-only.
   const staleInOutSourcePins = useMemo(() => legacyInOutSourcePinIds(data), [data])
 
+  // Output pins that already have a NAMED variable of their own on the rung, so
+  // the block must not draw a second badge for the same value.
+  //
+  // Derived from the rung's own nodes, not from `data.connectedVariables`. That
+  // field is a denormalised cache and it does not carry output entries in
+  // practice -- a CTU with `current_count` wired to CV records only its inputs
+  // (`R`, `PV`), so the skip never fired and CV was badged twice: once by the
+  // block, once by the variable. The rung graph is the authority, and reading it
+  // also fixes projects saved before now without a migration.
+  //
+  // An output variable node with an EMPTY name is a bare pin stub (every TON
+  // carries one for ET). That is not a connected variable, it shows no badge of
+  // its own, and the block's badge is the only place its value appears -- so it
+  // must NOT suppress anything.
+  // Subscribe to the flows array only (a stable reference until the ladder
+  // actually changes), then derive in a memo. As a live selector this ran its
+  // whole-POU scan on EVERY store update — a debug-value tick, a cursor move —
+  // once per rendered block; keyed on the flows reference it runs only when the
+  // ladder is edited.
+  const ladderFlows = useOpenPLCStore((state) => state.ladderFlows)
+  const connectedOutputKey = useMemo(() => {
+    const rung = ladderFlows.find((flow) => flow.name === pouName)?.rungs.find((r) => r.nodes.some((n) => n.id === id))
+    if (!rung) return ''
+    const names: string[] = []
+    for (const node of rung.nodes) {
+      if (node.type !== 'variable') continue
+      const nd = node.data as {
+        variant?: string
+        block?: { id?: string; handleId?: string }
+        variable?: { name?: string }
+      }
+      if (nd.variant !== 'output') continue
+      if (nd.block?.id !== id) continue
+      if (!nd.block?.handleId) continue
+      if (!nd.variable?.name) continue
+      names.push(nd.block.handleId)
+    }
+    return names.sort().join('\u0000')
+  }, [ladderFlows, pouName, id])
+
   const connectedOutputNames = useMemo(() => {
-    const names = new Set<string>()
+    // Union with the cache: where it DOES carry an output entry, honour it.
+    const names = new Set<string>(connectedOutputKey ? connectedOutputKey.split('\u0000') : [])
     if (Array.isArray(data.connectedVariables)) {
       for (const cv of data.connectedVariables) {
         if (cv.type === 'output' && cv.variable) {
@@ -443,7 +491,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
       }
     }
     return names
-  }, [data.connectedVariables])
+  }, [connectedOutputKey, data.connectedVariables])
 
   const inputVariableRef = useRef<
     HTMLTextAreaElement & {
@@ -468,7 +516,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
       switch (blockType) {
         case 'function-block': {
           if (!data.variable || data.variable.name === '') {
-            const { project, ladderFlows } = useOpenPLCStore.getState()
+            const { project, ladderFlows } = store.getState()
             const { variables } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
               nodeId: id,
             })
@@ -485,7 +533,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
           break
       }
     }
-  }, [data])
+  }, [store, data])
 
   /**
    * Update wrongVariable state when the table of variables is updated
@@ -496,7 +544,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    const { ladderFlows } = useOpenPLCStore.getState()
+    const { ladderFlows } = store.getState()
     const {
       variables: freshVariables,
       rung: freshRung,
@@ -549,7 +597,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
     }
 
     setWrongVariable(true)
-  }, [pous, data.variable.name])
+  }, [store, pous, data.variable.name])
 
   /**
    * Handle with the variable input onBlur event
@@ -563,7 +611,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
       return
     }
 
-    const { ladderFlows } = useOpenPLCStore.getState()
+    const { ladderFlows } = store.getState()
     const { variables, rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
     })
@@ -626,7 +674,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
           updateNodeVariable({ name: variableNameToSubmit })
           return
         }
-        const project = useOpenPLCStore.getState().project
+        const project = store.getState().project
         const currentPou = project.data.pous.find((p) => p.name === pouName)
         pushToHistory(pouName, {
           variables: currentPou?.interface?.variables ?? [],
@@ -665,7 +713,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
   }
 
   const handleUpdateDivergence = () => {
-    const { ladderFlows, libraries } = useOpenPLCStore.getState()
+    const { ladderFlows, libraries } = store.getState()
     const { variables, rung, node, edges } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
       nodeId: id,
     })
@@ -912,7 +960,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
             handleSubmit={() => handleSubmitBlockVariableOnTextareaBlur(blockVariableValue, false)}
             onFocus={(e) => {
               e.target.select()
-              const { ladderFlows } = useOpenPLCStore.getState()
+              const { ladderFlows } = store.getState()
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
                 nodeId: id,
               })
@@ -932,7 +980,7 @@ const Block = <T extends object>(block: BlockProps<T>) => {
               return
             }}
             onBlur={() => {
-              const { ladderFlows } = useOpenPLCStore.getState()
+              const { ladderFlows } = store.getState()
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, pous, ladderFlows, {
                 nodeId: id,
               })

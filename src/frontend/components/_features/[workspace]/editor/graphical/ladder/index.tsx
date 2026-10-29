@@ -15,13 +15,14 @@ import {
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import * as Portal from '@radix-ui/react-portal'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
+import { useGraphicalFocus } from '../../../../../../hooks/use-graphical-focus'
 import { usePouSnapshot } from '../../../../../../hooks/use-pou-snapshot'
 import { ladderSelectors } from '../../../../../../hooks/use-store-selectors'
-import { useOpenPLCStore } from '../../../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import { RungLadderState } from '../../../../../../store/slices/ladder'
 import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { cn } from '../../../../../../utils/cn'
@@ -36,10 +37,12 @@ import { useBoundPou } from '../active-context'
 import BlockElement from '../elements/ladder/block'
 import CoilElement from '../elements/ladder/coil'
 import ContactElement from '../elements/ladder/contact'
+import { useGraphicalPlacement } from '../placement/placement-context'
 
 const EMPTY_DIVERGENCES: string[] = []
 
 export default function LadderEditor() {
+  const store = useOpenPLCStoreApi()
   // Bound POU comes from the `GraphicalEditorActiveProvider` set up
   // in the wrapper one level up.  Mirrors `FbdEditor` — see that
   // file for the multi-mount rationale.
@@ -58,10 +61,11 @@ export default function LadderEditor() {
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
 
   const { captureAndPush } = usePouSnapshot()
+  const placement = useGraphicalPlacement()
 
   const updateModelLadder = ladderSelectors.useUpdateModelLadder()
 
-  const rungs = flow?.rungs || []
+  const rungs = useMemo(() => flow?.rungs ?? [], [flow?.rungs])
   const flowUpdated = flow?.updated || false
 
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
@@ -128,6 +132,21 @@ export default function LadderEditor() {
     return divergences.length > 0 ? divergences : EMPTY_DIVERGENCES
   }, [flow?.rungs, userLibraries, pous])
 
+  const selectSearchedNode = useCallback(
+    ({ nodeId, rungId }: { nodeId: string; rungId?: string }) => {
+      const rung =
+        rungs.find((candidate) => candidate.id === rungId) ??
+        rungs.find((candidate) => candidate.nodes.some((node) => node.id === nodeId))
+      const node = rung?.nodes.find((candidate) => candidate.id === nodeId)
+      if (!rung || !node) return false
+
+      ladderFlowActions.setSelectedNodes({ nodes: [node], rungId: rung.id, editorName: pouName })
+      return true
+    },
+    [rungs, ladderFlowActions, pouName],
+  )
+  useGraphicalFocus(pouName, selectSearchedNode)
+
   const scrollableRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (scrollableRef.current) {
@@ -148,8 +167,8 @@ export default function LadderEditor() {
    */
   useEffect(() => {
     if (!flowUpdated) return
-    scheduleFlowWriteBack(useOpenPLCStore.getState, pouName, 'ld')
-  }, [flowUpdated])
+    scheduleFlowWriteBack(store.getState, pouName, 'ld')
+  }, [store, flowUpdated])
 
   const getRungPos = (rungId: UniqueIdentifier) => rungs.findIndex((rung) => rung.id === rungId)
 
@@ -242,7 +261,12 @@ export default function LadderEditor() {
   }
 
   return (
-    <div className='h-full w-full overflow-y-auto' ref={scrollableRef} style={{ scrollbarGutter: 'stable' }}>
+    <div
+      className='h-full w-full overflow-y-auto'
+      ref={scrollableRef}
+      style={{ scrollbarGutter: 'stable' }}
+      onContextMenu={placement?.handleContextMenu}
+    >
       <div className='flex flex-1 flex-col gap-4 px-2'>
         <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
           <div

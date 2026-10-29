@@ -1,6 +1,7 @@
 import { Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../../../middleware/shared/ports/types'
+import { getBlockExpectedType } from '../../../../utils/graphical/sync-nodes-with-variables'
 import { validateVariableType } from '../../../../utils/PLC/validate-variable-type'
 import { FBDFlowState } from '../../fbd'
 import { LadderFlowState } from '../../ladder'
@@ -21,20 +22,6 @@ export type TypeChangeValidationResult = {
   compatibleCount: number
   incompatibleCount: number
   warnings: string[]
-}
-
-const getBlockExpectedType = (node: Node): string => {
-  const variant = (node.data as { variant?: { name?: string } }).variant
-
-  if (node.type === 'contact' || node.type === 'coil') {
-    return 'BOOL'
-  }
-
-  if (variant && typeof variant.name === 'string') {
-    return variant.name.trim().toUpperCase()
-  }
-
-  return ''
 }
 
 const checkTypeCompatibility = (

@@ -1,6 +1,6 @@
 import * as Switch from '@radix-ui/react-switch'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
-import { useOpenPLCStore } from '@root/frontend/store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import type { LibraryState } from '@root/frontend/store/slices/library'
 import { cn } from '@root/frontend/utils/cn'
 import { hasLegacyInOutOutputHandle } from '@root/frontend/utils/graphical/in-out-pin-rules'
@@ -64,6 +64,7 @@ const searchLibraryByPouName = (
 }
 
 const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: BlockElementProps<T>) => {
+  const store = useOpenPLCStoreApi()
   const pouName = useBoundPou()
   const editor = useBoundEditorModel()
   const updateModelVariables = useOpenPLCStore((state) => state.editorActions.updateModelVariables)
@@ -433,7 +434,7 @@ const BlockElement = <T extends object>({ isOpen, onClose, selectedNode }: Block
       executionOrder: Number(formState.executionOrder),
     }
 
-    const { fbdFlows } = useOpenPLCStore.getState()
+    const { fbdFlows } = store.getState()
     const { rung, edges, variables } = getFBDPouVariablesRungNodeAndEdges(pouName, pous, fbdFlows, {
       nodeId: selectedNode.id,
     })

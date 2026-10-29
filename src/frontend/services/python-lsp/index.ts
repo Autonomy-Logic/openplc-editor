@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Autonomy / OpenPLC Project
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /**
  * Python LSP service orchestrator.
  *
@@ -27,7 +27,9 @@
  * boot, disposed only at shutdown.
  */
 
-import { getIecVariableLineMap } from '../../utils/generate-iec-variables-to-string'
+import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import type { OpenPLCStore } from '../../store'
+import { getIecVariableLineMap, getIecVariableLineMapFromText } from '../../utils/generate-iec-variables-to-string'
 import { generatePythonLspPreamble, type PythonLspPreamble } from '../../utils/python/generatePythonLspPreamble'
 import {
   createLspDocumentMirror,
@@ -55,8 +57,23 @@ const EMPTY_PREAMBLE: PythonLspPreamble = {
   variableNameByPreambleLine: new Map(),
 }
 
+/**
+ * Where each variable's declaration sits in the buffer the user is looking at.
+ *
+ * The variables code view renders the POU's own `variablesText` (DOPE-650), so
+ * a map computed from the canonical serialisation is off by whatever the user's
+ * formatting adds — a comment, a blank line, a different order within a block —
+ * and Go-to-Definition on a Python POU lands on the wrong declaration. Read the
+ * POU's text when it has one; fall back to the canonical walk when it does not.
+ */
+function variableLineMapFor(store: OpenPLCStore, pouName: string, variables: PLCVariable[]) {
+  const pou = store.getState().project.data.pous.find((candidate) => candidate.name === pouName)
+  const text = pou?.variablesText
+  return text === undefined ? getIecVariableLineMap(variables) : getIecVariableLineMapFromText(text, variables)
+}
+
 export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
-  const { workerUrl, monaco: monacoApi, onCrash } = opts
+  const { store, workerUrl, monaco: monacoApi, onCrash } = opts
 
   // Captured from `beforeListen` so attachPou / detachPou can send
   // `pyright/createFile` / `pyright/deleteFile` alongside didOpen /
@@ -107,7 +124,7 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
   const navigateToStore: NavigateToTarget = (target) => {
     const entry = [...entryByUri.values()].find((e) => e.lspUri === target.uri)
     if (!entry) return false
-    return redirectPythonNavTarget(target, {
+    return redirectPythonNavTarget(store, target, {
       sourceUri: entry.lspUri,
       sourcePouName: entry.pouName,
       variableNameByPreambleLine: entry.preamble.variableNameByPreambleLine,
@@ -294,7 +311,7 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
       // buffer but never enter the analysis queue.
       const lspUri = `${uri}.py`
       const preamble = generatePythonLspPreamble(variables, dataTypes)
-      const iecVariableLineMap = getIecVariableLineMap(variables)
+      const iecVariableLineMap = variableLineMapFor(store, pouName, variables)
       entryByUri.set(uri, { pouName, lspUri, preamble, iecVariableLineMap })
       setBodyLineOffset(lspUri, preamble.lineCount)
       void pyrightConnection?.sendNotification('pyright/createFile', { kind: 'create', uri: lspUri })
@@ -321,7 +338,7 @@ export function startPythonLsp(opts: PythonLspStartOptions): PythonLspService {
       const existing = entryByUri.get(uri)
       const lspUri = existing?.lspUri ?? `${uri}.py`
       const preamble = generatePythonLspPreamble(variables, dataTypes)
-      const iecVariableLineMap = getIecVariableLineMap(variables)
+      const iecVariableLineMap = variableLineMapFor(store, existing?.pouName ?? '', variables)
       entryByUri.set(uri, { pouName: existing?.pouName ?? '', lspUri, preamble, iecVariableLineMap })
       setBodyLineOffset(lspUri, preamble.lineCount)
       const text = augmentedDocument(uri, bodyText)

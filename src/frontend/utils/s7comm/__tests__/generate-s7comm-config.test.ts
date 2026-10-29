@@ -1,3 +1,4 @@
+import { RUNTIME_V4_S7_PROFILE } from '@root/middleware/shared/utils/target-capabilities'
 import type { PLCServer, S7CommSlaveConfig } from '../../../../middleware/shared/ports/types'
 import { generateS7CommConfig } from '../index'
 
@@ -19,7 +20,7 @@ const makeMinimalS7CommConfig = (): S7CommSlaveConfig => ({
       description: 'Data Block 1',
       sizeBytes: 256,
       mapping: {
-        type: 'output',
+        type: 'int_output',
         startBuffer: 0,
         bitAddressing: false,
       },
@@ -41,7 +42,7 @@ const makeFullS7CommConfig = (): S7CommSlaveConfig => ({
       enabled: true,
       sizeBytes: 128,
       mapping: {
-        type: 'input',
+        type: 'int_input',
         startBuffer: 0,
         bitAddressing: false,
       },
@@ -50,7 +51,7 @@ const makeFullS7CommConfig = (): S7CommSlaveConfig => ({
       enabled: true,
       sizeBytes: 128,
       mapping: {
-        type: 'output',
+        type: 'int_output',
         startBuffer: 0,
         bitAddressing: false,
       },
@@ -80,25 +81,25 @@ const makeS7CommServer = (config?: S7CommSlaveConfig): PLCServer => ({
 
 describe('generateS7CommConfig', () => {
   it('returns null for undefined servers', () => {
-    expect(generateS7CommConfig(undefined)).toBeNull()
+    expect(generateS7CommConfig(undefined, RUNTIME_V4_S7_PROFILE)).toBeNull()
   })
 
   it('returns null for empty servers array', () => {
-    expect(generateS7CommConfig([])).toBeNull()
+    expect(generateS7CommConfig([], RUNTIME_V4_S7_PROFILE)).toBeNull()
   })
 
   it('returns null when no s7comm server exists', () => {
     const servers: PLCServer[] = [{ name: 'Modbus', protocol: 'modbus-tcp' }]
-    expect(generateS7CommConfig(servers)).toBeNull()
+    expect(generateS7CommConfig(servers, RUNTIME_V4_S7_PROFILE)).toBeNull()
   })
 
   it('returns null when s7comm server has no slave config', () => {
     const servers: PLCServer[] = [{ name: 'S7', protocol: 's7comm' }]
-    expect(generateS7CommConfig(servers)).toBeNull()
+    expect(generateS7CommConfig(servers, RUNTIME_V4_S7_PROFILE)).toBeNull()
   })
 
   it('generates minimal config with server and data blocks', () => {
-    const result = generateS7CommConfig([makeS7CommServer()])
+    const result = generateS7CommConfig([makeS7CommServer()], RUNTIME_V4_S7_PROFILE)
 
     expect(result).not.toBeNull()
     const parsed = JSON.parse(result!)
@@ -119,12 +120,12 @@ describe('generateS7CommConfig', () => {
     expect(parsed.data_blocks[0].db_number).toBe(1)
     expect(parsed.data_blocks[0].description).toBe('Data Block 1')
     expect(parsed.data_blocks[0].size_bytes).toBe(256)
-    expect(parsed.data_blocks[0].mapping.type).toBe('output')
+    expect(parsed.data_blocks[0].mapping.type).toBe('int_output')
     expect(parsed.data_blocks[0].mapping.start_buffer).toBe(0)
   })
 
   it('does not include bit_addressing when bitAddressing is false', () => {
-    const result = generateS7CommConfig([makeS7CommServer()])
+    const result = generateS7CommConfig([makeS7CommServer()], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.data_blocks[0].mapping.bit_addressing).toBeUndefined()
@@ -134,14 +135,14 @@ describe('generateS7CommConfig', () => {
     const config = makeMinimalS7CommConfig()
     config.dataBlocks[0].mapping.bitAddressing = true
 
-    const result = generateS7CommConfig([makeS7CommServer(config)])
+    const result = generateS7CommConfig([makeS7CommServer(config)], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.data_blocks[0].mapping.bit_addressing).toBe(true)
   })
 
   it('includes plc_identity when present', () => {
-    const result = generateS7CommConfig([makeS7CommServer(makeFullS7CommConfig())])
+    const result = generateS7CommConfig([makeS7CommServer(makeFullS7CommConfig())], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.plc_identity).toBeDefined()
@@ -153,25 +154,25 @@ describe('generateS7CommConfig', () => {
   })
 
   it('omits plc_identity when not present', () => {
-    const result = generateS7CommConfig([makeS7CommServer()])
+    const result = generateS7CommConfig([makeS7CommServer()], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.plc_identity).toBeUndefined()
   })
 
   it('includes all system areas when present', () => {
-    const result = generateS7CommConfig([makeS7CommServer(makeFullS7CommConfig())])
+    const result = generateS7CommConfig([makeS7CommServer(makeFullS7CommConfig())], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.system_areas).toBeDefined()
     expect(parsed.system_areas.pe_area.enabled).toBe(true)
     expect(parsed.system_areas.pe_area.size_bytes).toBe(128)
-    expect(parsed.system_areas.pe_area.mapping.type).toBe('input')
+    expect(parsed.system_areas.pe_area.mapping.type).toBe('int_input')
     expect(parsed.system_areas.pe_area.mapping.start_buffer).toBe(0)
 
     expect(parsed.system_areas.pa_area.enabled).toBe(true)
     expect(parsed.system_areas.pa_area.size_bytes).toBe(128)
-    expect(parsed.system_areas.pa_area.mapping.type).toBe('output')
+    expect(parsed.system_areas.pa_area.mapping.type).toBe('int_output')
 
     expect(parsed.system_areas.mk_area.enabled).toBe(true)
     expect(parsed.system_areas.mk_area.size_bytes).toBe(256)
@@ -179,14 +180,14 @@ describe('generateS7CommConfig', () => {
   })
 
   it('omits system_areas when not present', () => {
-    const result = generateS7CommConfig([makeS7CommServer()])
+    const result = generateS7CommConfig([makeS7CommServer()], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.system_areas).toBeUndefined()
   })
 
   it('includes logging when present', () => {
-    const result = generateS7CommConfig([makeS7CommServer(makeFullS7CommConfig())])
+    const result = generateS7CommConfig([makeS7CommServer(makeFullS7CommConfig())], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.logging).toBeDefined()
@@ -196,7 +197,7 @@ describe('generateS7CommConfig', () => {
   })
 
   it('omits logging when not present', () => {
-    const result = generateS7CommConfig([makeS7CommServer()])
+    const result = generateS7CommConfig([makeS7CommServer()], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.logging).toBeUndefined()
@@ -208,11 +209,11 @@ describe('generateS7CommConfig', () => {
       peArea: {
         enabled: true,
         sizeBytes: 64,
-        mapping: { type: 'input', startBuffer: 0, bitAddressing: false },
+        mapping: { type: 'int_input', startBuffer: 0, bitAddressing: false },
       },
     }
 
-    const result = generateS7CommConfig([makeS7CommServer(config)])
+    const result = generateS7CommConfig([makeS7CommServer(config)], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.system_areas).toBeDefined()
@@ -227,11 +228,11 @@ describe('generateS7CommConfig', () => {
       paArea: {
         enabled: false,
         sizeBytes: 32,
-        mapping: { type: 'output', startBuffer: 10, bitAddressing: false },
+        mapping: { type: 'int_output', startBuffer: 10, bitAddressing: false },
       },
     }
 
-    const result = generateS7CommConfig([makeS7CommServer(config)])
+    const result = generateS7CommConfig([makeS7CommServer(config)], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.system_areas.pa_area.enabled).toBe(false)
@@ -248,7 +249,7 @@ describe('generateS7CommConfig', () => {
       },
     }
 
-    const result = generateS7CommConfig([makeS7CommServer(config)])
+    const result = generateS7CommConfig([makeS7CommServer(config)], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.system_areas.mk_area.enabled).toBe(true)
@@ -260,7 +261,7 @@ describe('generateS7CommConfig', () => {
     const config = makeMinimalS7CommConfig()
     config.systemAreas = {}
 
-    const result = generateS7CommConfig([makeS7CommServer(config)])
+    const result = generateS7CommConfig([makeS7CommServer(config)], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.system_areas).toBeUndefined()
@@ -275,7 +276,7 @@ describe('generateS7CommConfig', () => {
       },
     }
 
-    const result = generateS7CommConfig([makeS7CommServer(config)])
+    const result = generateS7CommConfig([makeS7CommServer(config)], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.system_areas.pe_area.enabled).toBe(true)
@@ -289,10 +290,10 @@ describe('generateS7CommConfig', () => {
       dbNumber: 2,
       description: 'Data Block 2',
       sizeBytes: 512,
-      mapping: { type: 'memory', startBuffer: 256, bitAddressing: true },
+      mapping: { type: 'int_memory', startBuffer: 256, bitAddressing: true },
     })
 
-    const result = generateS7CommConfig([makeS7CommServer(config)])
+    const result = generateS7CommConfig([makeS7CommServer(config)], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.data_blocks).toHaveLength(2)
@@ -307,14 +308,14 @@ describe('generateS7CommConfig', () => {
       { name: 'OPC-UA', protocol: 'opcua' },
     ]
 
-    const result = generateS7CommConfig(servers)
+    const result = generateS7CommConfig(servers, RUNTIME_V4_S7_PROFILE)
     expect(result).not.toBeNull()
     const parsed = JSON.parse(result!)
     expect(parsed.server.port).toBe(102)
   })
 
   it('generates valid JSON output', () => {
-    const result = generateS7CommConfig([makeS7CommServer(makeFullS7CommConfig())])
+    const result = generateS7CommConfig([makeS7CommServer(makeFullS7CommConfig())], RUNTIME_V4_S7_PROFILE)
     expect(result).not.toBeNull()
     expect(() => JSON.parse(result!)).not.toThrow()
   })
@@ -325,7 +326,7 @@ describe('generateS7CommConfig', () => {
       paArea: { enabled: true, sizeBytes: 64 },
     }
 
-    const result = generateS7CommConfig([makeS7CommServer(config)])
+    const result = generateS7CommConfig([makeS7CommServer(config)], RUNTIME_V4_S7_PROFILE)
     const parsed = JSON.parse(result!)
 
     expect(parsed.system_areas.pa_area.mapping).toBeUndefined()

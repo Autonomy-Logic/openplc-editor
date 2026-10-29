@@ -15,7 +15,7 @@
 
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 
-import { toDebugCandidate } from '../debug-channel-factory'
+import { toDebugCandidate, toDeviceLinkCandidates } from '../debug-channel-factory'
 
 const wsConstructorArgs: Array<{ host: string; port: number; token: string; rejectUnauthorized: boolean }> = []
 

@@ -10,24 +10,35 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@root/
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { boardSelectors } from '@root/frontend/hooks/use-store-selectors'
-import { useOpenPLCStore } from '@root/frontend/store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
+import { allocateModuleSlots } from '@root/frontend/utils/vpp/allocate-module-slots'
 import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
+import {
+  type DiscoveredModule,
+  mergeDiscoveredModules,
+  type MergeDiscoveredModulesResult,
+  parseDiscoveredModules,
+  type SlotChange,
+} from '@root/frontend/utils/vpp/merge-discovered-modules'
 import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
-import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
+import type { ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry } from '@root/middleware/shared/ports/types'
-import { useDevice } from '@root/middleware/shared/providers/platform-context'
 import {
   buildAddressPool,
   buildAliasRegistry,
-  describeSource,
-  nextFreeAddress,
+  describeAliasRejection,
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
 import { vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { IoChannelTable } from '../components/io-channel-table'
+import { ModulePicture, ModuleSummary, SlotDetailHeading, SlotDetailPane } from '../components/slot-detail'
+import { SlotList, SlotSelectButton } from '../components/slot-list'
+import { moduleIoSummary, slotRowClassName } from '../components/slot-list-helpers'
 import type { ModuleDefinition, ModuleSystem, ScreenSection } from '../index'
+import { VppScreenActions, type VppScreenActionsProps } from '../screen-actions'
 
 // Same help glyph the HAL Settings form-layout uses, so per-field
 // explanations live in a tooltip instead of cluttering the row.
@@ -88,33 +99,6 @@ type ConfigScreenDefinition = {
 // Walk a screen definition and return every field that contributes
 // to the configuration form. The screen JSON is a vendor artifact —
 // be tolerant of missing/oddly-shaped fragments rather than crash.
-/**
- * Alias cell with local state so the value commits on blur (focus change),
- * not on every keystroke. Committing per keystroke fires the alias-rename
- * cascade for every intermediate string while editing — e.g. clearing "flow"
- * would cascade through "flo", "fl", "f" onto bound variables. Committing on
- * blur means a single rename (old → final) reaches the store, and clearing the
- * field to empty leaves bound variables orphaned rather than partially renamed.
- */
-function AliasInputCell({ value, onCommit }: { value: string; onCommit: (next: string) => void }) {
-  const [local, setLocal] = useState(value)
-  useEffect(() => {
-    setLocal(value)
-  }, [value])
-  return (
-    <input
-      type='text'
-      value={local}
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={() => {
-        if (local !== value) onCommit(local)
-      }}
-      placeholder='Alias...'
-      className='h-[26px] w-full rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none placeholder:text-neutral-400 focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300 dark:placeholder:text-neutral-600'
-    />
-  )
-}
-
 function collectConfigFields(def: ConfigScreenDefinition | undefined | null): ConfigFieldDef[] {
   if (!def?.sections) return []
   const out: ConfigFieldDef[] = []
@@ -151,15 +135,7 @@ function SortableSlotButton({ idx, moduleName, ioSummary, isSelected, draggable,
     opacity: isDragging ? 0.4 : undefined,
   }
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`flex shrink-0 items-stretch border-b border-neutral-100 dark:border-neutral-800 ${
-        isSelected
-          ? 'bg-brand/20 dark:bg-brand/30 shadow-[inset_3px_0_0_var(--primary-default)]'
-          : 'hover:bg-neutral-50 dark:hover:bg-neutral-900'
-      }`}
-    >
+    <div ref={setNodeRef} style={style} className={slotRowClassName(isSelected)}>
       {draggable ? (
         <button
           type='button'
@@ -174,28 +150,13 @@ function SortableSlotButton({ idx, moduleName, ioSummary, isSelected, draggable,
       ) : (
         <div className='w-6 shrink-0' aria-hidden />
       )}
-      <button
-        type='button'
-        aria-selected={isSelected}
-        onClick={onSelect}
-        className='flex min-w-0 flex-1 flex-col gap-0.5 px-2 py-2 text-left'
-      >
-        <div className='flex items-center justify-between gap-2'>
-          <span
-            className={`font-caption text-cp-sm text-neutral-950 dark:text-white ${isSelected ? 'font-bold' : 'font-semibold'}`}
-          >
-            Slot {idx + 1}
-          </span>
-          {moduleName && (
-            <span className='shrink-0 text-[10px] text-neutral-400 dark:text-neutral-500'>{ioSummary}</span>
-          )}
-        </div>
-        <span
-          className={`truncate text-xs ${moduleName ? 'text-neutral-700 dark:text-neutral-300' : 'italic text-neutral-400 dark:text-neutral-600'} ${isSelected ? 'font-semibold' : ''}`}
-        >
-          {moduleName ?? 'Empty'}
-        </span>
-      </button>
+      <SlotSelectButton
+        slotNumber={idx + 1}
+        moduleName={moduleName}
+        ioSummary={ioSummary}
+        isSelected={isSelected}
+        onSelect={onSelect}
+      />
     </div>
   )
 }
@@ -261,7 +222,25 @@ const ModuleSlotPicker = ({
   )
 }
 
+function describeSlotChange(change: SlotChange): string {
+  switch (change.kind) {
+    case 'keep':
+      return `${change.to?.name ?? ''}, unchanged (settings kept)`
+    case 'replace':
+      return `${change.from?.name ?? ''} replaced by ${change.to?.name ?? ''} (default settings, aliases cleared)`
+    case 'add':
+      return `${change.to?.name ?? ''} added (default settings)`
+    case 'remove':
+      return `${change.from?.name ?? ''} removed`
+    default: {
+      const exhaustive: never = change.kind
+      return exhaustive
+    }
+  }
+}
+
 function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
+  const store = useOpenPLCStoreApi()
   const maxSlots = section.maxSlots || moduleSystem?.maxSlots || 8
   // Memoize so hooks depending on this don't fire every render.
   const availableModules = useMemo(() => moduleSystem?.modules ?? [], [moduleSystem])
@@ -359,6 +338,12 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
 
   const [removeModalOpen, setRemoveModalOpen] = useState(false)
   const [clearAllModalOpen, setClearAllModalOpen] = useState(false)
+  // Detected modules awaiting the user's answer; null when no dialog is open.
+  const [discovery, setDiscovery] = useState<{
+    detected: DiscoveredModule[]
+    plan: Extract<MergeDiscoveredModulesResult, { ok: true }>
+    prompt: string | undefined
+  } | null>(null)
 
   const findModule = useCallback(
     (id: string | null | undefined): ModuleDefinition | undefined =>
@@ -369,34 +354,18 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   const selectedModuleId = slots[selectedSlot] ?? null
   const selectedModule = findModule(selectedModuleId)
 
-  /* ------------------------------------------------------------ */
-  /* Module image (lazy fetch via the SystemPort preview endpoint) */
-  /* ------------------------------------------------------------ */
   const deviceBoard = boardSelectors.useDeviceBoard()
+  // Results from a plugin command describe ONE device. Changing the board or
+  // the connected vPLC makes the previous answers wrong, not stale, so the
+  // action panel is keyed on both and clears when either moves.
+  const selectedDevice = useOpenPLCStore((s) => s.runtimeConnection.selectedDevice)
+  const connectedDeviceKey = `${deviceBoard}:${selectedDevice?.orchestratorId ?? ''}:${selectedDevice?.deviceId ?? ''}`
   const availableBoards = boardSelectors.useAvailableBoards()
   const packagePath = availableBoards.get(deviceBoard)?.vpp?.packagePath
-  const devicePort = useDevice()
-  const [moduleImage, setModuleImage] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const imageRel = (selectedModule as { image?: string } | undefined)?.image
-    if (!imageRel || !packagePath) {
-      setModuleImage(null)
-      return
-    }
-    void devicePort
-      .getPreviewImage(imageRel, packagePath)
-      .then((dataUrl: string) => {
-        if (!cancelled) setModuleImage(dataUrl || null)
-      })
-      .catch(() => {
-        if (!cancelled) setModuleImage(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [selectedModule, packagePath, devicePort])
+  // Plugin commands go to the plugin the device's config template registers.
+  const pluginName = availableBoards.get(deviceBoard)?.vpp?.pluginName
+  const runtimeConnected = useOpenPLCStore((s) => s.runtimeConnection.connectionStatus === 'connected')
+  const discoverySupported = moduleSystem?.discoverySupported === true
 
   /* ------------------------------------------------------------ */
   /* I/O mapping regeneration                                      */
@@ -404,7 +373,9 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   /* Mirrors the standalone io-table-layout: when the slot module */
   /* list changes, rebuild the IoMappingEntry[] (auto-assigned    */
   /* addresses) while preserving any user-typed aliases by        */
-  /* slot:channel key. Writes to the 'io-mapping' persistence key */
+  /* slot:channel key while the slot keeps the same module (a     */
+  /* replaced module starts with no aliases). Writes to the        */
+  /* 'io-mapping' persistence key                                  */
   /* so the rest of the compile flow keeps reading the same data. */
   /* ------------------------------------------------------------ */
   // Re-allocate when the slot module list OR any resolver-affecting
@@ -440,19 +411,14 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     if (allocKey === lastAllocKey.current) return
     lastAllocKey.current = allocKey
 
-    const state = useOpenPLCStore.getState()
+    const state = store.getState()
     const vsd = state.deviceDefinitions.configuration.vendorScreenData
     const storedMapping = vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined
     const remoteDevices = state.project.data.remoteDevices ?? []
     const boardInfo = state.deviceAvailableOptions.availableBoards.get(
       state.deviceDefinitions.configuration.deviceBoard,
     )
-    const capabilities = resolveTargetCapabilities(boardInfo)
-
-    const existingAliases = new Map<string, string>()
-    for (const entry of storedMapping?.entries ?? []) {
-      if (entry.alias) existingAliases.set(`${entry.slot}:${entry.channelName}`, entry.alias)
-    }
+    const capabilities = resolveAddressProducerCapabilities(boardInfo)
 
     // VPP slots are being regenerated, so the pool excludes the
     // current vpp-io claims and includes everything else (pin mapping,
@@ -462,45 +428,20 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     const pool = buildAddressPool({ pinMapping: { pins: activePins }, remoteDevices }, capabilities, {
       ignoreSource: 'vpp-io',
     })
-    const inFlight = new Set<string>()
-    const newEntries: IoMappingEntry[] = []
-
-    for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
-      const moduleId = slots[slotIndex]
-      if (!moduleId) continue
-      const moduleDef = availableModules.find((m) => m.id === moduleId)
-      if (!moduleDef) continue
-      const slotConfig = slotsConfig[String(slotIndex + 1)] ?? {}
-      const channels = resolveModuleChannels(moduleDef as ResolverModuleDef, slotConfig)
-      if (channels.length === 0) continue
-
-      for (const channel of channels) {
-        const isBit = channel.addressPrefix === '%IX' || channel.addressPrefix === '%QX'
-        const iecAddress = nextFreeAddress(pool, channel.addressPrefix, isBit, undefined, inFlight)
-        inFlight.add(iecAddress)
-        const aliasKey = `${slotIndex + 1}:${channel.name}`
-        newEntries.push({
-          slot: slotIndex + 1,
-          moduleId,
-          moduleName: moduleDef.name,
-          channelName: channel.name,
-          channelType: channel.type,
-          dataType: channel.dataType,
-          iecAddress,
-          alias: existingAliases.get(aliasKey) ?? '',
-          modeFieldId: channel.modeFieldId,
-          modeOptions: channel.modeOptions,
-          modeValue: channel.modeValue,
-        })
-      }
-    }
+    const { entries: newEntries } = allocateModuleSlots({
+      slots,
+      slotsConfig,
+      modules: availableModules,
+      pool,
+      previous: storedMapping?.entries ?? [],
+    })
 
     // Write the derived channel structure, then let the central registry own
     // the final addresses (VPP + Modbus packed together, aliases restored
     // from the session memory) and reconcile variables. This layout renders
     // from the store, so the registry's write-back propagates automatically.
     setVendorScreenData('io-mapping', { entries: newEntries })
-    useOpenPLCStore.getState().projectActions.recalculateIecAddresses()
+    store.getState().projectActions.recalculateIecAddresses()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, formatSelectionKey])
 
@@ -537,6 +478,70 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
       if (slotsConfig['1']) clearedConfig['1'] = slotsConfig['1']
     }
     writeModuleConfig({ ...moduleConfig, slots: cleared, slotsConfig: clearedConfig })
+  }
+
+  /* Plan from the store's current slots, not this render's, so a dialog
+   * confirmed later still merges onto what the project holds then. */
+  const planDiscovery = (detected: DiscoveredModule[]): MergeDiscoveredModulesResult => {
+    const vsd = store.getState().deviceDefinitions.configuration.vendorScreenData
+    const live = (vsd?.[persistenceKey] as ModuleConfigState | undefined) ?? {}
+    const stored = live.slots ?? []
+    const liveSlots =
+      stored.length >= maxSlots
+        ? stored.slice(0, maxSlots)
+        : [...stored, ...Array<string | null>(maxSlots - stored.length).fill(null)]
+    return mergeDiscoveredModules({
+      slots: liveSlots,
+      slotsConfig: live.slotsConfig ?? {},
+      modules: availableModules,
+      detected,
+      maxSlots,
+      lockedSlotIndex: fixedModule !== null && liveSlots[0] === fixedModule.id ? 0 : null,
+    })
+  }
+
+  const handleDiscoveryResult: NonNullable<VppScreenActionsProps['onMappedResult']> = (action, data) => {
+    if (!action.resultMapping) return 'This action does not describe modules.'
+    const parsedModules = parseDiscoveredModules(data, action.resultMapping, { maxSlots, dense: stackable })
+    if (!parsedModules.ok) return parsedModules.error
+    const plan = planDiscovery(parsedModules.modules)
+    if (!plan.ok) return plan.error
+    setDiscovery({ detected: parsedModules.modules, plan, prompt: action.confirm })
+    return null
+  }
+
+  const applyDiscovery = () => {
+    if (!discovery) return
+    const shown = discovery.plan
+    const plan = planDiscovery(discovery.detected)
+    setDiscovery(null)
+    if (!plan.ok) {
+      toast({ title: 'Modules not applied', description: plan.error, variant: 'fail' })
+      return
+    }
+    // The dialog showed one plan; a different one now means the project changed under it.
+    if (
+      JSON.stringify([plan.slots, plan.slotsConfig, plan.changes]) !==
+      JSON.stringify([shown.slots, shown.slotsConfig, shown.changes])
+    ) {
+      toast({
+        title: 'Modules not applied',
+        description: 'The module configuration changed while confirmation was open. Run detection again.',
+        variant: 'fail',
+      })
+      return
+    }
+    const vsd = store.getState().deviceDefinitions.configuration.vendorScreenData
+    const replaced = new Set(plan.changes.filter((change) => change.kind === 'replace').map((change) => change.slot))
+    if (replaced.size > 0) {
+      const entries = (vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined)?.entries ?? []
+      setVendorScreenData('io-mapping', {
+        entries: entries.map((entry) => (replaced.has(entry.slot) ? { ...entry, alias: '' } : entry)),
+      })
+    }
+    const live = (vsd?.[persistenceKey] as ModuleConfigState | undefined) ?? {}
+    writeModuleConfig({ ...live, slots: plan.slots, slotsConfig: plan.slotsConfig })
+    setSelectedSlot(0)
   }
 
   /* Stackable: append the first available module to the tail of the
@@ -591,7 +596,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     }
     writeModuleConfig({ ...moduleConfig, slots: nextSlots, slotsConfig: nextSlotsConfig })
 
-    const vsd = useOpenPLCStore.getState().deviceDefinitions.configuration.vendorScreenData
+    const vsd = store.getState().deviceDefinitions.configuration.vendorScreenData
     const entries = (vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined)?.entries ?? []
     const shifted = entries.map((e) => ({ ...e, slot: remap(e.slot) }))
     setVendorScreenData('io-mapping', { entries: shifted })
@@ -641,7 +646,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
 
     // Rewrite io-mapping so the alias preservation effect finds the
     // shifted entries at their new slot numbers.
-    const vsd = useOpenPLCStore.getState().deviceDefinitions.configuration.vendorScreenData
+    const vsd = store.getState().deviceDefinitions.configuration.vendorScreenData
     const entries = (vsd?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined)?.entries ?? []
     const shifted = entries
       .filter((e) => e.slot !== index + 1)
@@ -666,7 +671,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   }
 
   const handleAliasChange = (slot: number, channelName: string, alias: string) => {
-    const state = useOpenPLCStore.getState()
+    const state = store.getState()
     const vsd = state.deviceDefinitions.configuration.vendorScreenData
     const sourceRef = { kind: 'vpp-io' as const, ref: `slot-${slot}:${channelName}` }
 
@@ -690,16 +695,13 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
         vendorIoMapping: { entries: currentEntries },
         remoteDevices: state.project.data.remoteDevices,
       },
-      resolveTargetCapabilities(boardInfo),
+      resolveAddressProducerCapabilities(boardInfo),
     )
     const registry = buildAliasRegistry(pool)
     const validation = validateAliasEdit(registry, alias, sourceRef)
     if (!validation.ok) {
-      toast({
-        title: 'Alias already in use',
-        description: `"${alias}" is already assigned to ${describeSource(validation.conflict.source)} (${validation.conflict.address}). Alias names must be unique across all I/O channels.`,
-        variant: 'fail',
-      })
+      const rejection = describeAliasRejection(validation, alias)
+      toast({ title: rejection.title, description: rejection.description, variant: 'fail' })
       return
     }
 
@@ -710,14 +712,14 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     const targetEntry = currentEntries.find((e) => e.slot === slot && e.channelName === channelName)
     const oldAlias = targetEntry?.alias ?? ''
     if (oldAlias) {
-      useOpenPLCStore.getState().projectActions.renameAlias(oldAlias, alias)
+      store.getState().projectActions.renameAlias(oldAlias, alias)
     }
 
     const entries = currentEntries.map((e) => (e.slot === slot && e.channelName === channelName ? { ...e, alias } : e))
     setVendorScreenData('io-mapping', { entries })
     // Record in the session alias-memory so the alias returns if this module
     // is removed and re-added on the same slot within the session.
-    useOpenPLCStore
+    store
       .getState()
       .projectActions.rememberChannelAlias(vppMemoryKey(targetEntry?.moduleId ?? '', slot, channelName), alias)
     // Variables bound to this channel hold its alias NAME (resolved at
@@ -739,7 +741,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
    * slotsConfig key convention).
    */
   const handleModeChange = (slot: number, modeFieldId: string, newValue: string) => {
-    const state = useOpenPLCStore.getState()
+    const state = store.getState()
     const vsd = state.deviceDefinitions.configuration.vendorScreenData
     const moduleConfig = (vsd?.['module-configuration'] ?? {}) as ModuleConfigState
     const prevSlotsConfig = moduleConfig.slotsConfig ?? {}
@@ -771,18 +773,6 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
   /* ------------------------------------------------------------ */
   /* Render                                                        */
   /* ------------------------------------------------------------ */
-  const slotIoSummary = (moduleId: string | null) => {
-    if (!moduleId) return ''
-    const mod = findModule(moduleId)
-    if (!mod) return ''
-    const parts: string[] = []
-    if (mod.io.digitalInputs) parts.push(`${mod.io.digitalInputs}DI`)
-    if (mod.io.digitalOutputs) parts.push(`${mod.io.digitalOutputs}DO`)
-    if (mod.io.analogInputs) parts.push(`${mod.io.analogInputs}AI`)
-    if (mod.io.analogOutputs) parts.push(`${mod.io.analogOutputs}AO`)
-    return parts.join(' / ')
-  }
-
   const ioEntriesForSelected = (() => {
     const entries = (vendorScreenData?.['io-mapping'] as { entries?: IoMappingEntry[] } | undefined)?.entries ?? []
     return entries.filter((e) => e.slot === selectedSlot + 1)
@@ -800,36 +790,40 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
     // section grants us; both panes inside scroll independently so the
     // page-level container never needs to.
     <div className='flex min-h-0 flex-1 flex-col gap-3'>
-      {/* Top-level actions (e.g. Clear All Slots) */}
-      {section.actions && (
-        <div className='flex gap-2'>
-          {(
-            section.actions as Array<{ id: string; label: string; type: string; action?: string; confirm?: string }>
-          ).map((action) =>
-            action.type === 'local' && action.action === 'clear-module-slots' ? (
-              <button
-                key={action.id}
-                type='button'
-                onClick={() => (action.confirm ? setClearAllModalOpen(true) : handleClearAll())}
-                // Clear All only does work if there's at least one
-                // non-locked, non-empty slot to clear.  The fixed
-                // built-in slot doesn't count — Clear All preserves
-                // it.  Without this guard the button would always
-                // appear enabled for fixed-module devices even when
-                // every expansion slot is already empty.
-                disabled={!slots.some((s, idx) => s !== null && !slotIsLocked(idx))}
-                className='cursor-pointer rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
-              >
-                {action.label}
-              </button>
-            ) : null,
-          )}
-        </div>
-      )}
+      {/* Top-level actions: local ones (Clear All Slots) and the device-facing
+          `discover` / `test` / `status` commands, which go through the
+          runtime's existing plugin-command route. */}
+      <VppScreenActions
+        actions={section.actions}
+        defaultPlugin={pluginName}
+        deviceKey={connectedDeviceKey}
+        connected={runtimeConnected}
+        discoverySupported={discoverySupported}
+        onMappedResult={handleDiscoveryResult}
+        renderLocalAction={(action) =>
+          action.action === 'clear-module-slots' ? (
+            <button
+              key={action.id}
+              type='button'
+              onClick={() => (action.confirm ? setClearAllModalOpen(true) : handleClearAll())}
+              // Clear All only does work if there's at least one
+              // non-locked, non-empty slot to clear.  The fixed
+              // built-in slot doesn't count — Clear All preserves
+              // it.  Without this guard the button would always
+              // appear enabled for fixed-module devices even when
+              // every expansion slot is already empty.
+              disabled={!slots.some((s, idx) => s !== null && !slotIsLocked(idx))}
+              className='cursor-pointer rounded-md border border-neutral-200 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800'
+            >
+              {action.label}
+            </button>
+          ) : null
+        }
+      />
 
       <div className='flex min-h-0 flex-1 gap-4'>
         {/* ------ Left: slot tree ------ */}
-        <div className='flex w-56 shrink-0 flex-col overflow-y-auto rounded-md border border-neutral-200 dark:border-neutral-700'>
+        <SlotList>
           <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={displayedSlots.map((idx) => String(idx))} strategy={verticalListSortingStrategy}>
               {displayedSlots.map((idx) => {
@@ -840,7 +834,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                     key={idx}
                     idx={idx}
                     moduleName={mod?.name}
-                    ioSummary={slotIoSummary(moduleId)}
+                    ioSummary={moduleIoSummary(mod)}
                     isSelected={idx === selectedSlot}
                     draggable={!!mod && !slotIsLocked(idx)}
                     onSelect={() => setSelectedSlot(idx)}
@@ -859,10 +853,10 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
               + Add module
             </button>
           )}
-        </div>
+        </SlotList>
 
         {/* ------ Right: contextual detail pane ------ */}
-        <div className='flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-md border border-neutral-200 p-4 dark:border-neutral-700'>
+        <SlotDetailPane>
           {stackable && populatedCount === 0 ? (
             <div className='flex flex-1 flex-col items-center justify-center text-center text-sm text-neutral-500 dark:text-neutral-400'>
               <p>No modules configured.</p>
@@ -875,9 +869,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
               the top of the card down to the end of the specs. */}
               <div className='mb-5 flex gap-5'>
                 <div className='flex min-w-0 flex-1 flex-col'>
-                  <h3 className='mb-3 font-caption text-base font-semibold text-neutral-950 dark:text-white'>
-                    Slot {selectedSlot + 1}
-                  </h3>
+                  <SlotDetailHeading slotNumber={selectedSlot + 1} />
 
                   {/* Module picker — always visible. In physical mode,
                   selecting "-- Empty --" clears the slot; in stackable
@@ -920,36 +912,14 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                   })()}
 
                   {selectedModule && (
-                    <>
-                      {(selectedModule as { description?: string }).description && (
-                        <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-                          {(selectedModule as { description?: string }).description}
-                        </p>
-                      )}
-                      {(selectedModule as { specs?: Record<string, string> }).specs && (
-                        <dl className='mt-2 flex flex-col gap-0.5 text-xs text-neutral-600 dark:text-neutral-400'>
-                          {Object.entries((selectedModule as { specs?: Record<string, string> }).specs ?? {}).map(
-                            ([k, v]) => (
-                              <div key={k} className='flex gap-1'>
-                                <dt className='font-medium text-neutral-500 dark:text-neutral-400'>{k}:</dt>
-                                <dd className='text-neutral-700 dark:text-neutral-300'>{v}</dd>
-                              </div>
-                            ),
-                          )}
-                        </dl>
-                      )}
-                    </>
+                    <ModuleSummary description={selectedModule.description} specs={selectedModule.specs} />
                   )}
                 </div>
 
                 {/* Module image — frameless. The PNGs ship with a
                 transparent background, so no card chrome is needed. */}
-                {selectedModule && moduleImage && (
-                  <img
-                    src={moduleImage}
-                    alt={selectedModule.name}
-                    className='h-80 w-80 shrink-0 self-start object-contain'
-                  />
+                {selectedModule && (
+                  <ModulePicture image={selectedModule.image} packagePath={packagePath} alt={selectedModule.name} />
                 )}
               </div>
 
@@ -957,79 +927,35 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
                 <div className='flex flex-col gap-5'>
                   {/* I/O Mapping */}
                   {ioEntriesForSelected.length > 0 && (
-                    <section>
-                      <h4 className='mb-2 font-caption text-sm font-semibold text-neutral-950 dark:text-white'>
-                        I/O Mapping
-                      </h4>
-                      <table className='w-full text-left'>
-                        <thead>
-                          <tr className='border-b border-neutral-200 dark:border-neutral-700'>
-                            <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                              Channel
-                            </th>
-                            <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                              Type
-                            </th>
-                            {showModeColumn && (
-                              <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                                Mode
-                              </th>
-                            )}
-                            <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                              IEC Address
-                            </th>
-                            <th className='px-2 py-1.5 font-caption text-[11px] font-medium text-neutral-500 dark:text-neutral-400'>
-                              Alias
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {ioEntriesForSelected.map((entry) => (
-                            <tr
-                              key={`${entry.slot}-${entry.channelName}`}
-                              className='border-b border-neutral-100 last:border-b-0 dark:border-neutral-800'
-                            >
-                              <td className='px-2 py-1.5 font-caption text-cp-sm text-neutral-850 dark:text-neutral-300'>
-                                {entry.channelName}
-                              </td>
-                              <td className='px-2 py-1.5 font-caption text-cp-sm text-neutral-500 dark:text-neutral-400'>
-                                {entry.channelType}
-                              </td>
-                              {showModeColumn && (
-                                <td className='px-2 py-1.5'>
-                                  {entry.modeFieldId && entry.modeOptions && entry.modeOptions.length > 0 ? (
-                                    <select
-                                      value={entry.modeValue ?? entry.modeOptions[0]}
-                                      onChange={(e) => handleModeChange(entry.slot, entry.modeFieldId!, e.target.value)}
-                                      className='h-[26px] w-full cursor-pointer rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300'
-                                    >
-                                      {entry.modeOptions.map((opt) => (
-                                        <option key={opt} value={opt}>
-                                          {opt}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  ) : (
-                                    <span className='font-caption text-cp-sm text-neutral-400 dark:text-neutral-600'>
-                                      —
-                                    </span>
-                                  )}
-                                </td>
-                              )}
-                              <td className='px-2 py-1.5 font-mono text-cp-sm font-medium text-brand dark:text-brand-light'>
-                                {entry.iecAddress}
-                              </td>
-                              <td className='px-1 py-1'>
-                                <AliasInputCell
-                                  value={entry.alias ?? ''}
-                                  onCommit={(next) => handleAliasChange(entry.slot, entry.channelName, next)}
-                                />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </section>
+                    <IoChannelTable
+                      entries={ioEntriesForSelected}
+                      typeOf={(entry) => entry.channelType}
+                      renderMode={
+                        showModeColumn
+                          ? (entry) => {
+                              const { modeFieldId, modeOptions } = entry
+                              return modeFieldId && modeOptions && modeOptions.length > 0 ? (
+                                <select
+                                  value={entry.modeValue ?? modeOptions[0]}
+                                  onChange={(e) => handleModeChange(entry.slot, modeFieldId, e.target.value)}
+                                  className='h-[26px] w-full cursor-pointer rounded border border-neutral-100 bg-white px-2 font-caption text-cp-sm text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300'
+                                >
+                                  {modeOptions.map((opt) => (
+                                    <option key={opt} value={opt}>
+                                      {opt}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span className='font-caption text-cp-sm text-neutral-400 dark:text-neutral-600'>
+                                  —
+                                </span>
+                              )
+                            }
+                          : undefined
+                      }
+                      onAliasCommit={(entry, next) => handleAliasChange(entry.slot, entry.channelName, next)}
+                    />
                   )}
 
                   {/* Defensive hint: manifest declared a configScreen path
@@ -1161,7 +1087,7 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
               )}
             </>
           )}
-        </div>
+        </SlotDetailPane>
       </div>
 
       {/* Remove-module confirmation (stackable only). All slots after
@@ -1200,6 +1126,55 @@ function ModuleSlotsLayout({ section, moduleSystem }: ModuleSlotsLayoutProps) {
           </ModalContent>
         </Modal>
       )}
+
+      {/* Detected-modules confirmation. Nothing is written unless the user
+       *  confirms here; closing or cancelling leaves the project as it was. */}
+      <Modal open={discovery !== null} onOpenChange={(open) => !open && setDiscovery(null)}>
+        <ModalContent className='flex w-[480px] select-none flex-col items-center justify-evenly gap-5 rounded-lg p-6'>
+          <ModalTitle className='text-center font-caption text-base font-semibold text-neutral-950 dark:text-white'>
+            {discovery?.plan.changed ? `Replace ${section.title}?` : `${section.title} already matches`}
+          </ModalTitle>
+          <p className='text-center text-sm text-neutral-600 dark:text-neutral-300'>
+            {discovery?.plan.changed
+              ? (discovery.prompt ?? 'The current configuration will be replaced by the modules found on the device.')
+              : 'The modules found on the device match the current configuration. Nothing needs to change.'}
+          </p>
+          {discovery && (
+            <ul
+              data-testid='vpp-discovery-changes'
+              className='flex max-h-60 w-full flex-col gap-1 overflow-y-auto rounded-md border border-neutral-200 p-2 text-xs text-neutral-700 dark:border-neutral-700 dark:text-neutral-300'
+            >
+              {discovery.plan.changes.length === 0 ? (
+                <li className='italic'>No modules were found on the device.</li>
+              ) : (
+                discovery.plan.changes.map((change) => (
+                  <li key={change.slot}>
+                    <span className='font-semibold'>Slot {change.slot}:</span> {describeSlotChange(change)}
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+          <div className='flex w-full flex-col gap-2'>
+            {discovery?.plan.changed && (
+              <button
+                type='button'
+                onClick={applyDiscovery}
+                className='w-full rounded-lg bg-red-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-red-700'
+              >
+                Replace configuration
+              </button>
+            )}
+            <button
+              type='button'
+              onClick={() => setDiscovery(null)}
+              className='w-full rounded-lg bg-neutral-100 px-4 py-2 text-center text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100 dark:hover:bg-neutral-800'
+            >
+              {discovery?.plan.changed ? 'Cancel' : 'Close'}
+            </button>
+          </div>
+        </ModalContent>
+      </Modal>
 
       {/* Clear-all confirmation. Driven by the action's `confirm` field
        *  in the screen JSON — when present, the local button routes

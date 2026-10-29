@@ -21,6 +21,7 @@ import {
   buildSetVariableRequest,
   buildWriteLicenseRequest,
   parseGetDeviceIdResponse,
+  isGetListOverflowException,
   parseGetListResponse,
   parseGetMd5Response,
   parseGetStatusResponse,
@@ -155,6 +156,27 @@ describe('parseGetListResponse', () => {
     const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_LIST, ModbusDebugResponse.SUCCESS])
     const result = parseGetListResponse(buf)
     expect(result.success).toBe(false)
+  })
+
+  it('reports a slave-failure exception as ERROR_OUT_OF_MEMORY so the poller shrinks the batch', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_LIST + 0x80, 0x04])
+    const result = parseGetListResponse(buf)
+    expect(result).toEqual({ success: false, error: 'ERROR_OUT_OF_MEMORY' })
+  })
+
+  it('keeps any other exception a function code mismatch', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_LIST + 0x80, 0x01])
+    const result = parseGetListResponse(buf)
+    expect(result).toEqual({ success: false, error: 'Function code mismatch' })
+  })
+})
+
+describe('isGetListOverflowException', () => {
+  it('matches only GET_LIST with the slave-failure exception code', () => {
+    expect(isGetListOverflowException(ModbusFunctionCode.DEBUG_GET_LIST + 0x80, 0x04)).toBe(true)
+    expect(isGetListOverflowException(ModbusFunctionCode.DEBUG_GET_LIST + 0x80, 0x01)).toBe(false)
+    expect(isGetListOverflowException(ModbusFunctionCode.DEBUG_GET_LIST, 0x04)).toBe(false)
+    expect(isGetListOverflowException(ModbusFunctionCode.DEBUG_GET + 0x80, 0x04)).toBe(false)
   })
 })
 

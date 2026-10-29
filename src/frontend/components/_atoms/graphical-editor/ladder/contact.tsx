@@ -6,8 +6,9 @@ import { useDebugCompositeKey } from '../../../../hooks/use-debug-composite-key'
 import { useDebugValue, useIsDebuggerVisible } from '../../../../hooks/use-debug-value'
 import { forceDebugVariable, releaseDebugVariable } from '../../../../services/debug-force-variable'
 import { isExpressionValidForType } from '../../../../services/graphical-scope'
-import { useOpenPLCStore } from '../../../../store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import { cn } from '../../../../utils/cn'
+import { edgeTriggerInstanceName, edgeTriggerTypeForVariant } from '../../../../utils/PLC/edge-trigger-instance'
 import { useBoundPou } from '../../../_features/[workspace]/editor/graphical/active-context'
 import { HighlightedTextArea } from '../../highlighted-textarea'
 import { VariablesBlockAutoComplete } from './autocomplete'
@@ -19,6 +20,7 @@ import type { ContactProps } from './utils/types'
 export type { ContactNode } from './utils/types'
 
 const Contact = (block: ContactProps) => {
+  const store = useOpenPLCStoreApi()
   const { selected, data, id } = block
   const pouName = useBoundPou()
   const pous = useOpenPLCStore((state) => state.project.data.pous)
@@ -29,6 +31,9 @@ const Contact = (block: ContactProps) => {
   const getCompositeKey = useDebugCompositeKey()
   const compositeKey = getCompositeKey(data.variable.name)
   const { value: debugValue, isForced, forcedValue, debugIndex } = useDebugValue(compositeKey)
+  const edgeTriggerType = edgeTriggerTypeForVariant(data.variant)
+  const edgeTriggerName = edgeTriggerType ? edgeTriggerInstanceName(edgeTriggerType, data.numericId) : null
+  const { value: edgeOutputValue } = useDebugValue(edgeTriggerName ? getCompositeKey(`${edgeTriggerName}.Q`) : '')
 
   const contact = DEFAULT_CONTACT_TYPES[data.variant]
   const [contactVariableValue, setContactVariableValue] = useState<string>(data.variable.name)
@@ -100,11 +105,15 @@ const Contact = (block: ContactProps) => {
   const debuggerStrokeColor = (() => {
     if (!isDebuggerVisible || !data.variable.name || wrongVariable) return undefined
     if (debugValue === undefined) return undefined
+    if (isForced) return forcedValue ? '#80C000' : '#4080FF'
 
-    const isTrue = debugValue === '1' || debugValue.toUpperCase() === 'TRUE'
+    // An edge contact passes power only in the scan its trigger fires, so it shows the trigger, never the variable.
+    const shownValue = edgeTriggerType ? edgeOutputValue : debugValue
+    if (shownValue === undefined) return undefined
+
+    const isTrue = shownValue === '1' || shownValue.toUpperCase() === 'TRUE'
     const displayState = data.variant === 'negated' ? !isTrue : isTrue
 
-    if (isForced) return forcedValue ? '#80C000' : '#4080FF'
     return displayState ? '#00FF00' : '#0464FB'
   })()
 
@@ -115,21 +124,23 @@ const Contact = (block: ContactProps) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-    if (data.variable.name) await forceDebugVariable(debugger_, compositeKey, debugIndex, new Uint8Array([1]), true)
+    if (data.variable.name)
+      await forceDebugVariable(store, debugger_, compositeKey, debugIndex, new Uint8Array([1]), true)
   }
 
   const handleForceFalse = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-    if (data.variable.name) await forceDebugVariable(debugger_, compositeKey, debugIndex, new Uint8Array([0]), false)
+    if (data.variable.name)
+      await forceDebugVariable(store, debugger_, compositeKey, debugIndex, new Uint8Array([0]), false)
   }
 
   const handleReleaseForce = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsContextMenuOpen(false)
-    if (data.variable.name) await releaseDebugVariable(debugger_, compositeKey, debugIndex)
+    if (data.variable.name) await releaseDebugVariable(store, debugger_, compositeKey, debugIndex)
   }
 
   const handleClick = (e: React.MouseEvent) => {
@@ -145,7 +156,7 @@ const Contact = (block: ContactProps) => {
    */
   const handleSubmitContactVariableOnTextareaBlur = (variableName?: string) => {
     const variableNameToSubmit = variableName || contactVariableValue
-    const { project, ladderFlows } = useOpenPLCStore.getState()
+    const { project, ladderFlows } = store.getState()
     const { rung, node } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
       nodeId: id,
       variableName: variableNameToSubmit,
@@ -212,7 +223,7 @@ const Contact = (block: ContactProps) => {
             readOnly={isDebuggerVisible}
             onFocus={(e) => {
               e.target.select()
-              const { project, ladderFlows } = useOpenPLCStore.getState()
+              const { project, ladderFlows } = store.getState()
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
                 nodeId: id ?? '',
               })
@@ -232,7 +243,7 @@ const Contact = (block: ContactProps) => {
               return
             }}
             onBlur={() => {
-              const { project, ladderFlows } = useOpenPLCStore.getState()
+              const { project, ladderFlows } = store.getState()
               const { node, rung } = getLadderPouVariablesRungNodeAndEdges(pouName, project.data.pous, ladderFlows, {
                 nodeId: id ?? '',
               })

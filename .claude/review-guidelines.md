@@ -3,8 +3,9 @@
 Order of concern: correctness, architecture, tests, style.
 
 - Layer dependencies respect ports and adapters: frontend, backend, and middleware only communicate through the ports in `src/middleware/shared/ports/`. `npm run validate:arch` must pass.
+- **Thin adapters**: all logic is in the shared surface; platform code (`middleware/adapters/*`, desktop `main/` and `backend/editor/`, web `backend/web/`) only stores and brings back data verbatim, runs code on another thread or process, reaches the OS, and handles transport. Reject any parsing, validation, hashing, dedup, ids, defaults, file or index formats, caching, write ordering, response interpretation or field-by-field object building in platform code. See "Thin adapters (hard rule)" in CLAUDE.md.
 - DTOs cross layer boundaries, never domain entities.
-- 100%-coverage directories stay at 100%; new behavior comes with tests (Jest for logic, Playwright for user flows).
+- Coverage floors in `jest.config.json` hold; every demand comes with unit tests (Jest), an end-to-end test (Playwright) and the developer's manual test.
 - TypeScript Best Practices in CLAUDE.md apply to every diff (no `any`, no `as`, no `!`, no floating promises, boundary validation over casting).
 - Named exports over default exports.
 - No emojis in code, comments, or docs.

@@ -52,7 +52,7 @@ const MissingLibrariesModal = () => {
         onOpenChange('missing-libraries', open)
       }}
     >
-      <ModalContent className='flex h-auto max-h-[80vh] w-[480px] select-none flex-col gap-4 p-6'>
+      <ModalContent className='flex h-fit max-h-[80vh] w-[480px] select-none flex-col gap-4 overflow-y-auto p-6'>
         <div className='flex flex-col items-center gap-3'>
           <WarningIcon size='lg' className='h-12 w-12' />
           <ModalTitle className='text-xl font-semibold'>Missing libraries</ModalTitle>

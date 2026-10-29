@@ -1,12 +1,12 @@
 import type { DebuggerPort } from '../../middleware/shared/ports/debugger-port'
-import { useOpenPLCStore } from '../store'
+import type { OpenPLCStore } from '../store'
 import { applySwapToVariableBytes } from '../utils/endian'
 
 /**
  * Force a variable to a specific value via the debug protocol, then update
  * the store's forced-variables Map on success.
  *
- * Uses `useOpenPLCStore.getState()` for imperative (non-hook) access so it is
+ * Uses `store.getState()` for imperative (non-hook) access so it is
  * safe to call from async event handlers without stale-closure issues.
  *
  * The optional `typeName` (canonical IEC, e.g. `'REAL'`, `'DINT'`) drives
@@ -17,6 +17,7 @@ import { applySwapToVariableBytes } from '../utils/endian'
  * swapping.
  */
 export async function forceDebugVariable(
+  store: OpenPLCStore,
   debuggerPort: DebuggerPort,
   compositeKey: string,
   debugIndex: number | undefined,
@@ -29,7 +30,7 @@ export async function forceDebugVariable(
   // Editor's internal codec produces LE bytes; swap to target-native
   // here if the target is BE.  No-op for LE targets and for
   // single-byte / string buffers.
-  const { debugTargetEndian } = useOpenPLCStore.getState().workspace
+  const { debugTargetEndian } = store.getState().workspace
   if (typeName !== undefined) {
     applySwapToVariableBytes(valueBuffer, 0, valueBuffer.length, typeName, debugTargetEndian)
   } else if (debugTargetEndian === 'be' && valueBuffer.length > 1) {
@@ -42,7 +43,7 @@ export async function forceDebugVariable(
 
   const result = await debuggerPort.setVariable(debugIndex, true, valueBuffer)
   if (result.success) {
-    const state = useOpenPLCStore.getState()
+    const state = store.getState()
     const newForced = new Map(state.workspace.debugForcedVariables)
     newForced.set(compositeKey, forcedMapValue)
     state.workspaceActions.setDebugForcedVariables(newForced)
@@ -55,6 +56,7 @@ export async function forceDebugVariable(
  * the store's forced-variables Map on success.
  */
 export async function releaseDebugVariable(
+  store: OpenPLCStore,
   debuggerPort: DebuggerPort,
   compositeKey: string,
   debugIndex: number | undefined,
@@ -63,7 +65,7 @@ export async function releaseDebugVariable(
 
   const result = await debuggerPort.setVariable(debugIndex, false)
   if (result.success) {
-    const state = useOpenPLCStore.getState()
+    const state = store.getState()
     const newForced = new Map(state.workspace.debugForcedVariables)
     newForced.delete(compositeKey)
     state.workspaceActions.setDebugForcedVariables(newForced)

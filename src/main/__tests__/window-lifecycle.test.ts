@@ -13,9 +13,10 @@ const mockLoadURL = jest.fn()
 const mockResolveHtmlPath = jest.fn(() => 'http://localhost:1313')
 const mockWindows: MockWindow[] = []
 
+/** Minimal Electron window used to exercise startup and destruction without a GUI. */
 class MockWindow extends EventEmitter {
   destroyed = false
-  webContents = { send: jest.fn(), openDevTools: jest.fn(), setWindowOpenHandler: jest.fn() }
+  webContents = { on: jest.fn(), send: jest.fn(), openDevTools: jest.fn(), setWindowOpenHandler: jest.fn() }
   loadURL = mockLoadURL
   loadFile = jest.fn(() => Promise.resolve())
   setIgnoreMouseEvents = jest.fn()
@@ -23,17 +24,21 @@ class MockWindow extends EventEmitter {
   maximize = jest.fn()
   minimize = jest.fn()
   getBounds = jest.fn()
+  /** Register each created window so tests can distinguish the splash from the editor. */
   constructor() {
     super()
     mockWindows.push(this)
   }
+  /** Emit the lifecycle event that clears the application window reference. */
   destroy() {
     this.destroyed = true
     this.emit('closed')
   }
+  /** Close this test window synchronously. */
   close() {
     this.destroy()
   }
+  /** Report whether window operations must stop. */
   isDestroyed() {
     return this.destroyed
   }
@@ -50,6 +55,7 @@ jest.mock('electron', () => ({
   BrowserWindow: MockWindow,
   Menu: { setApplicationMenu: jest.fn() },
   ipcMain: {},
+  protocol: { registerSchemesAsPrivileged: jest.fn() },
 }))
 jest.mock('electron-devtools-installer', () => ({ __esModule: true, default: jest.fn() }))
 jest.mock('electron-debug', () => ({}))
@@ -57,6 +63,13 @@ jest.mock('electron-log', () => ({ transports: { file: {} } }))
 jest.mock('electron-updater', () => ({ autoUpdater: { checkForUpdatesAndNotify: jest.fn() } }))
 jest.mock('../../backend/editor/cli-shim/first-run', () => ({}))
 jest.mock('../../backend/editor/compiler', () => ({ CompilerModule: jest.fn() }))
+jest.mock('../../backend/editor/package-manager', () => ({ PackageManagerModule: jest.fn() }))
+jest.mock('../../backend/editor/edge-edit-sessions', () => ({}))
+jest.mock('../../backend/editor/edge-account/edge-account-service', () => ({}))
+jest.mock('../../backend/editor/edge-account/oauth-browser-flow', () => ({}))
+jest.mock('../../backend/editor/project/cloud-build-workspace', () => ({}))
+jest.mock('../modules/vendor-document/serve', () => ({}))
+jest.mock('../modules/updater', () => ({ createElectronUpdateService: jest.fn(() => ({ start: jest.fn() })) }))
 jest.mock('../../backend/editor/hardware', () => ({ HardwareModule: jest.fn() }))
 jest.mock('../../backend/editor/services', () => ({
   UserService: jest.fn(),

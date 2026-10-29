@@ -3,9 +3,13 @@ import {
   describeEditorTooOldForRuntime,
   describeIncompatibleRuntime,
   describeVppRuntimeMismatch,
+  isDynamicEtherdogRuntime,
+  isEtherdogCapableRuntime,
   isStrucppCompatibleRuntime,
   isRetainConfigCapableRuntime,
   isUserManagementCapableRuntime,
+  MIN_DYNAMIC_ETHERDOG_RUNTIME_VERSION,
+  MIN_ETHERDOG_RUNTIME_VERSION,
   MIN_RUNTIME_VERSION,
   MIN_STRUCPP_RUNTIME_VERSION,
   MIN_RETAIN_CONFIG_RUNTIME_VERSION,
@@ -41,6 +45,58 @@ describe('isRetainConfigCapableRuntime', () => {
     expect(isRetainConfigCapableRuntime(undefined)).toBe(false)
     expect(isRetainConfigCapableRuntime('')).toBe(false)
     expect(isRetainConfigCapableRuntime('dev')).toBe(false)
+  })
+})
+
+describe('isEtherdogCapableRuntime', () => {
+  it('is exposed with the documented minimum version', () => {
+    expect(MIN_ETHERDOG_RUNTIME_VERSION).toBe('4.3.0')
+  })
+
+  it('accepts v4.3.0 and newer, including a pre-release on the target patch', () => {
+    expect(isEtherdogCapableRuntime('v4.3.0')).toBe(true)
+    expect(isEtherdogCapableRuntime('4.3.1')).toBe(true)
+    expect(isEtherdogCapableRuntime('v5.0.0')).toBe(true)
+    expect(isEtherdogCapableRuntime('v4.3.0-rc.1')).toBe(true)
+  })
+
+  it('rejects runtimes that still bundle the SOEM plugin', () => {
+    expect(isEtherdogCapableRuntime('v4.2.4')).toBe(false)
+    expect(isEtherdogCapableRuntime('4.2.99')).toBe(false)
+    expect(isEtherdogCapableRuntime('v4.1.0')).toBe(false)
+  })
+
+  it('treats an unknown version as legacy', () => {
+    expect(isEtherdogCapableRuntime(null)).toBe(false)
+    expect(isEtherdogCapableRuntime(undefined)).toBe(false)
+    expect(isEtherdogCapableRuntime('')).toBe(false)
+    expect(isEtherdogCapableRuntime('dev')).toBe(false)
+  })
+})
+
+describe('isDynamicEtherdogRuntime', () => {
+  it('is exposed with the documented minimum version', () => {
+    expect(MIN_DYNAMIC_ETHERDOG_RUNTIME_VERSION).toBe('4.3.2')
+  })
+
+  it('accepts v4.3.2 and newer, including a pre-release on the target patch', () => {
+    expect(isDynamicEtherdogRuntime('v4.3.2')).toBe(true)
+    expect(isDynamicEtherdogRuntime('4.4.0')).toBe(true)
+    expect(isDynamicEtherdogRuntime('v5.0.0')).toBe(true)
+    expect(isDynamicEtherdogRuntime('v4.3.2-rc.1')).toBe(true)
+  })
+
+  it('rejects runtimes whose EtherDOG holds fixed arrays', () => {
+    expect(isDynamicEtherdogRuntime('v4.3.1')).toBe(false)
+    expect(isDynamicEtherdogRuntime('4.3.0')).toBe(false)
+    expect(isDynamicEtherdogRuntime('v4.2.4')).toBe(false)
+  })
+
+  it('treats an unknown version as fixed', () => {
+    expect(isDynamicEtherdogRuntime(null)).toBe(false)
+    expect(isDynamicEtherdogRuntime(undefined)).toBe(false)
+    expect(isDynamicEtherdogRuntime('')).toBe(false)
+    expect(isDynamicEtherdogRuntime('dev')).toBe(false)
   })
 })
 

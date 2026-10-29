@@ -1,25 +1,19 @@
 /**
  * export-actions.ts test file
  *
- * `executeExportPlcopen` reads `openPLCStoreBase.getState()`, converts the
- * flat store project shape into `XmlGenerator`'s schema shape, and calls
- * `projectPort.exportPlcopenFile`. All three collaborators are mocked so the
- * test exercises only the conversion + orchestration logic in this file.
+ * `executeExportPlcopen` reads the store it is given, converts the
+ * flat store project shape into `PlcopenXmlGenerator`'s schema shape, and calls
+ * `projectPort.exportPlcopenFile`. The generator and toast are mocked and the
+ * store is a real one seeded per test, so the test exercises only the
+ * conversion + orchestration logic in this file.
  */
 
 import type { ProjectPort } from '../../../middleware/shared/ports/project-port'
 import type { PLCProjectData } from '../../../middleware/shared/ports/types'
 
 const mockXmlGenerator = vi.fn()
-vi.mock('../../../backend/shared/utils/PLC/xml-generator', () => ({
-  XmlGenerator: (...args: unknown[]) => mockXmlGenerator(...args),
-}))
-
-const mockGetState = vi.fn()
-vi.mock('../../store', () => ({
-  openPLCStoreBase: {
-    getState: () => mockGetState(),
-  },
+vi.mock('../../../backend/shared/utils/PLC/plcopen-xml-generator', () => ({
+  PlcopenXmlGenerator: (...args: unknown[]) => mockXmlGenerator(...args),
 }))
 
 const mockToast = vi.fn()
@@ -27,6 +21,8 @@ vi.mock('../../utils/toast', () => ({
   toast: (...args: unknown[]) => mockToast(...args),
 }))
 
+import type { OpenPLCStore } from '../../store'
+import { createTestStore } from '../../store/testing'
 import { executeExportPlcopen } from '../export-actions'
 
 function makeProjectData(overrides?: Partial<PLCProjectData>): PLCProjectData {
@@ -46,13 +42,13 @@ function makeProjectData(overrides?: Partial<PLCProjectData>): PLCProjectData {
   }
 }
 
-function makeState(projectData: PLCProjectData, projectName = 'MyProject') {
-  return {
+function seedProject(projectData: PLCProjectData, projectName = 'MyProject') {
+  store.setState({
     project: {
-      meta: { name: projectName, type: 'plc-project' as const, path: 'proj-1' },
+      meta: { name: projectName, type: 'plc-project', path: 'proj-1' },
       data: projectData,
     },
-  }
+  })
 }
 
 function makeProjectPort(overrides?: Partial<ProjectPort>): ProjectPort {
@@ -63,22 +59,24 @@ function makeProjectPort(overrides?: Partial<ProjectPort>): ProjectPort {
   } as unknown as ProjectPort
 }
 
+let store: OpenPLCStore
+
 beforeEach(() => {
   vi.clearAllMocks()
-  mockGetState.mockReturnValue(makeState(makeProjectData()))
+  store = createTestStore()
+  seedProject(makeProjectData())
 })
 
 describe('executeExportPlcopen', () => {
-  it('converts the flat project data into schema shape and passes it to XmlGenerator', async () => {
+  it('converts the flat project data into schema shape and passes it to PlcopenXmlGenerator', async () => {
     mockXmlGenerator.mockReturnValue({ ok: true, message: 'ok', data: '<project/>' })
     const projectPort = makeProjectPort()
 
-    const result = await executeExportPlcopen(projectPort)
+    const result = await executeExportPlcopen(store, projectPort)
 
     expect(result).toEqual({ success: true })
     expect(mockXmlGenerator).toHaveBeenCalledTimes(1)
-    const [schemaData, dialect] = mockXmlGenerator.mock.calls[0]
-    expect(dialect).toBe('old-editor')
+    const [schemaData] = mockXmlGenerator.mock.calls[0]
     expect(schemaData.pous).toEqual([
       {
         type: 'program',
@@ -115,9 +113,9 @@ describe('executeExportPlcopen', () => {
         },
       ],
     })
-    mockGetState.mockReturnValue(makeState(projectData))
+    seedProject(projectData)
 
-    await executeExportPlcopen(makeProjectPort())
+    await executeExportPlcopen(store, makeProjectPort())
 
     const [schemaData] = mockXmlGenerator.mock.calls[0]
     expect(schemaData.pous[0]).toMatchObject({ type: 'function', data: { name: 'AddOne', returnType: 'INT' } })
@@ -126,22 +124,34 @@ describe('executeExportPlcopen', () => {
 
   it('calls exportPlcopenFile with the project name and generated XML, and toasts success', async () => {
     mockXmlGenerator.mockReturnValue({ ok: true, message: 'ok', data: '<project/>' })
-    mockGetState.mockReturnValue(makeState(makeProjectData(), 'Widgets'))
+    seedProject(makeProjectData(), 'Widgets')
     const exportPlcopenFile = vi.fn().mockResolvedValue({ success: true })
     const projectPort = makeProjectPort({ exportPlcopenFile })
 
-    const result = await executeExportPlcopen(projectPort)
+    const result = await executeExportPlcopen(store, projectPort)
 
     expect(result).toEqual({ success: true })
     expect(exportPlcopenFile).toHaveBeenCalledWith('Widgets.xml', '<project/>')
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'default' }))
   })
 
-  it('toasts a failure and returns success:false when XmlGenerator fails', async () => {
+  it('stays silent and returns success:false when the save dialog is dismissed', async () => {
+    mockXmlGenerator.mockReturnValue({ ok: true, message: 'ok', data: '<project/>' })
+    const projectPort = makeProjectPort({
+      exportPlcopenFile: vi.fn().mockResolvedValue({ success: false, canceled: true }),
+    })
+
+    const result = await executeExportPlcopen(store, projectPort)
+
+    expect(result).toEqual({ success: false })
+    expect(mockToast).not.toHaveBeenCalled()
+  })
+
+  it('toasts a failure and returns success:false when PlcopenXmlGenerator fails', async () => {
     mockXmlGenerator.mockReturnValue({ ok: false, message: 'Main POU not found.' })
     const projectPort = makeProjectPort()
 
-    const result = await executeExportPlcopen(projectPort)
+    const result = await executeExportPlcopen(store, projectPort)
 
     expect(result).toEqual({ success: false })
     expect(projectPort.exportPlcopenFile).not.toHaveBeenCalled()
@@ -155,7 +165,7 @@ describe('executeExportPlcopen', () => {
     const exportPlcopenFile = vi.fn().mockResolvedValue({ success: false, error: 'disk full' })
     const projectPort = makeProjectPort({ exportPlcopenFile })
 
-    const result = await executeExportPlcopen(projectPort)
+    const result = await executeExportPlcopen(store, projectPort)
 
     expect(result).toEqual({ success: false })
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'fail', description: 'disk full' }))
@@ -167,7 +177,7 @@ describe('executeExportPlcopen', () => {
     })
     const projectPort = makeProjectPort()
 
-    const result = await executeExportPlcopen(projectPort)
+    const result = await executeExportPlcopen(store, projectPort)
 
     expect(result).toEqual({ success: false })
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'fail', description: 'boom' }))

@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 modbus_debug.h - OpenPLC always-on debugger function codes (0x41-0x4B)
-Copyright (C) 2022 OpenPLC - Thiago Alves
 
 The debugger PDU handlers, dispatched from process_mbpacket. Kept ungated: the
 dispatch in modbus_pdu references them unconditionally (the always-on debugger is
@@ -31,5 +32,12 @@ void debugReadLicense(void);                                // 0x4A
 // FC 0x4B -- set the runtime run/stop state. Command only; the state is read
 // back through debugGetStatus (FC 0x46), which reports it.
 void plcSetState(uint8_t desired);
+// FC 0x4C -- reboot into the device's firmware bootloader (magic-guarded, so a
+// stray frame can't reset a running PLC). `magic` points at the 4 payload bytes.
+void rebootToBootloader(const uint8_t *magic);
+// FC 0x4D -- report the device's programming-lock state. Read-only and
+// side-effect free (unlike 0x4C, which raises the unlock prompt on the device),
+// so the editor can poll it while waiting for the user to unlock.
+void getLockState(void);
 
 #endif
