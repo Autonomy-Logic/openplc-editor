@@ -82,10 +82,14 @@ describe('file-backed ESI row store', () => {
   ])('keeps an index with %s as a backup and starts empty', async (_case, text) => {
     const { folder, files } = memoryFolder({ [ESI_INDEX_FILE]: text })
 
-    expect(await createFileEsiRowStore(folder).list()).toEqual([])
+    const store = createFileEsiRowStore(folder)
+    expect(await store.list()).toEqual([])
+    expect(await store.list()).toEqual([])
+
     const backups = [...files.keys()].filter((name) => name.startsWith(`${ESI_INDEX_FILE}.corrupt-`))
     expect(backups).toHaveLength(1)
     expect(files.get(backups[0])).toBe(text)
+    expect(index(files)).toEqual({ version: 3, items: [] })
   })
 
   it('refuses an index from a newer Editor instead of rewriting it', async () => {
@@ -159,5 +163,22 @@ describe('file-backed ESI row store', () => {
 
     expect(subscribed).toBe(true)
     expect(createFileEsiRowStore(memoryFolder().folder).onScopeChanged).toBeUndefined()
+  })
+
+  it('reports XML it could not delete on clear, after emptying the index', async () => {
+    const { folder, files } = memoryFolder()
+    const store = createFileEsiRowStore(folder)
+    await store.insert(ROW, '<xml/>')
+    await store.insert({ ...ROW, id: ID2 }, '<two/>')
+    const remove = folder.remove
+    folder.remove = (name) => (name === `${ID}.xml` ? Promise.reject(new Error('locked')) : remove(name))
+
+    await expect(store.clear()).rejects.toThrow('Could not delete 1 ESI file(s)')
+    expect(index(files)).toEqual({ version: 3, items: [] })
+    expect(files.has(`${ID2}.xml`)).toBe(false)
+
+    folder.remove = remove
+    await expect(store.clear()).resolves.toBeUndefined()
+    expect(files.has(`${ID}.xml`)).toBe(false)
   })
 })

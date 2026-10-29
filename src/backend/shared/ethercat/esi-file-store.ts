@@ -5,7 +5,7 @@
  * Index format, version 3: `{ version: 3, items: EsiStoredRow[] }`, rows kept
  * verbatim. Versions 1 and 2 are read as rows without a summary, so the port
  * re-parses them. An index that is not valid JSON or has an unexpected shape is
- * kept as a `.bak` copy and the repository starts empty.
+ * kept once as a `.bak` copy and replaced by an empty index.
  */
 
 import type { EsiFileStore, EsiRowStore, EsiStoredRow } from '@root/middleware/shared/ports/esi-repository-mechanisms'
@@ -91,6 +91,8 @@ export function createFileEsiRowStore(files: EsiFileStore): EsiRowStore {
     const index = readEsiIndex(text)
     if ('rows' in index) return index.rows
     await files.write(`${ESI_INDEX_FILE}.corrupt-${Date.now()}.bak`, text)
+    // Replaced by an empty index so the backup is made once, not on every read.
+    await writeRows([])
     return []
   }
 
@@ -135,7 +137,10 @@ export function createFileEsiRowStore(files: EsiFileStore): EsiRowStore {
       exclusive(async () => {
         const names = await files.list()
         await writeRows([])
-        await Promise.allSettled(names.filter((n) => n.endsWith('.xml')).map((n) => files.remove(n)))
+        const removals = await Promise.allSettled(names.filter((n) => n.endsWith('.xml')).map((n) => files.remove(n)))
+        const failed = removals.filter((r) => r.status === 'rejected').length
+        // The index is already empty; report leftover files so the caller can clear again.
+        if (failed > 0) throw new Error(`Could not delete ${failed} ESI file(s); try clearing again.`)
       }),
 
     async readXml(id) {
