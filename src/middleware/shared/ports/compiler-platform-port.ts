@@ -328,8 +328,17 @@ export interface CollectVppScreenRuntimeArtifactsArgs {
   vppExtensions: Record<string, Record<string, unknown>>
   /** PLC model snapshot the emitter can read via `input.model.exportableVariables`. */
   exportableVariables: ReadonlyArray<{ qualifier: string; type: string; isWritable: boolean }>
-  /** Address resolver provided to the emitter so it can look up IEC addresses by qualifier. */
+  /** Address resolver provided to the emitter so it can look up IEC addresses by qualifier.
+   *  Hardware VPPs (Modbus master, EtherCAT, Weidmüller HAL) consume this to pin exports to a
+   *  located variable backed by the device's I/O. */
   addressByQualifier: Record<string, string>
+  /** STruC++ `debug-map.json` content for this compile. Publisher VPPs (Data Hub, OPC-UA-like
+   *  bridges) consume this through `model.resolveDebugEntry` to export any program variable,
+   *  not just located ones. Empty when the compile produced no debug map. */
+  debugMapContent: string
+  /** Program instances from the project's configuration/resource. Needed to build the
+   *  STruC++ debug path from a `<pou>.<var>` qualifier the same way the OPC-UA resolver does. */
+  instances: ReadonlyArray<{ name: string; task: string; program: string }>
 }
 
 export interface CollectVppScreenRuntimeArtifactsResult {

@@ -853,11 +853,7 @@ async function runCompilePipelineInner(
     // installed VPP's declared emitter JS in a sandbox, merges the resulting `conf/*.json` files
     // into the bundle. Optional on the port; web omits it and we skip the stage.
     const vppExtensionsRaw = (projectData as { vppExtensions?: Record<string, Record<string, unknown>> }).vppExtensions
-    if (
-      port.collectVppScreenRuntimeArtifacts &&
-      vppExtensionsRaw &&
-      Object.keys(vppExtensionsRaw).length > 0
-    ) {
+    if (port.collectVppScreenRuntimeArtifacts && vppExtensionsRaw && Object.keys(vppExtensionsRaw).length > 0) {
       const exportableVariables: Array<{ qualifier: string; type: string; isWritable: boolean }> = []
       const addressByQualifier: Record<string, string> = {}
       for (const entry of projectData.pous ?? []) {
@@ -877,12 +873,21 @@ async function runCompilePipelineInner(
         exportableVariables.push({ qualifier, type: typeValue.toUpperCase(), isWritable: true })
         addressByQualifier[qualifier] = g.location ?? ''
       }
+      const vppInstances = (projectData.configuration?.resource?.instances ?? []).map(
+        (inst: { name: string; task: string; program: string }) => ({
+          name: inst.name,
+          task: inst.task,
+          program: inst.program,
+        }),
+      )
       const screenRes = await port.collectVppScreenRuntimeArtifacts(
         {
           deviceId: boardTarget,
           vppExtensions: vppExtensionsRaw,
           exportableVariables,
           addressByQualifier,
+          debugMapContent: debugMapJson,
+          instances: vppInstances,
         },
         makePlatformLog(emit, 'runtime-v4-bundle'),
       )
