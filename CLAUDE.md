@@ -538,7 +538,7 @@ new alias.
 
 ## Environment
 
-- **Node.js:** >= 22.x < 24
+- **Node.js:** 22.x
 - **Dev server port:** 1313
 - **Supported platforms:** macOS, Windows, Linux (x64 & ARM64)
 - **Binaries:** Auto-downloaded via `scripts/download-binaries.ts` during `npm install`
