@@ -98,8 +98,6 @@ function renderSection(
   })
 }
 
-const tick = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms))
-
 describe('vendor-document section', () => {
   beforeEach(() => {
     store = createTestStore()
@@ -107,7 +105,10 @@ describe('vendor-document section', () => {
     store.getState().deviceActions.setDeviceBoard(BOARD)
   })
 
-  afterEach(cleanup)
+  afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+  })
 
   it('embeds the package document in a sandbox without same-origin', () => {
     renderSection(SECTION)
@@ -147,6 +148,7 @@ describe('vendor-document section', () => {
   })
 
   it('sends the editor theme once the relay is ready and on every change, without replacing the iframe', async () => {
+    vi.useFakeTimers()
     const theme = fakeTheme('dark')
     const { unmount } = renderSection(SECTION, undefined, theme.port)
     const iframe = screen.getByTitle('I/O Configurator')
@@ -166,15 +168,15 @@ describe('vendor-document section', () => {
           data: { channel: RELAY_CHANNEL, kind: 'ready', relayVersion: RELAY_PROTOCOL_VERSION },
         }),
       )
-      await tick()
+      await vi.advanceTimersByTimeAsync(0)
     })
     await act(async () => {
       theme.change('nineties')
-      await tick()
+      await vi.advanceTimersByTimeAsync(0)
       theme.change('dark')
-      await tick()
+      await vi.advanceTimersByTimeAsync(0)
       theme.change('light')
-      await tick()
+      await vi.advanceTimersByTimeAsync(0)
     })
 
     expect(themes).toEqual(['dark', 'light', 'dark', 'light'])

@@ -386,11 +386,33 @@ test('the I/O Mapping list shows the selected module with its package picture', 
   }
 })
 
-const setEditorTheme = (app: ElectronApplication, theme: 'light' | 'dark' | 'nineties') =>
-  app.evaluate(({ BrowserWindow }, next) => {
-    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))
-    win?.webContents.send('system:update-theme', next)
-  }, theme)
+const EDITOR_THEMES = ['light', 'dark', 'nineties'] as const
+type EditorTheme = (typeof EDITOR_THEMES)[number]
+
+const editorTheme = (page: Page): Promise<EditorTheme | undefined> =>
+  page
+    .locator('html')
+    .evaluate((root, themes) => themes.find((theme) => root.classList.contains(theme)), [...EDITOR_THEMES])
+
+const clickChangeTheme = (app: ElectronApplication) =>
+  app.evaluate(({ Menu }) => {
+    const pending = [...(Menu.getApplicationMenu()?.items ?? [])]
+    for (let item = pending.shift(); item; item = pending.shift()) {
+      if (item.label === 'Change Theme') return item.click()
+      pending.push(...(item.submenu?.items ?? []))
+    }
+    throw new Error('no Change Theme menu item')
+  })
+
+const setEditorTheme = async (app: ElectronApplication, page: Page, theme: EditorTheme) => {
+  for (let clicks = 0; clicks < EDITOR_THEMES.length; clicks++) {
+    const current = await editorTheme(page)
+    if (current === theme) return
+    await clickChangeTheme(app)
+    await expect.poll(() => editorTheme(page)).not.toBe(current)
+  }
+  expect(await editorTheme(page)).toBe(theme)
+}
 
 const DARK_BODY = 'rgb(18, 19, 22)'
 const DARK_SHADOW_TEXT = 'rgb(237, 239, 242)'
@@ -402,7 +424,7 @@ test('the configurator follows the editor theme without booting again', async ()
 
   const { app, page } = await launch(paths)
   try {
-    await setEditorTheme(app, 'dark')
+    await setEditorTheme(app, page, 'dark')
     await expect(page.locator('html')).toHaveClass(/\bdark\b/)
     const frame = await openConfigurator(page)
     const html = frame.locator('html')
@@ -422,7 +444,7 @@ test('the configurator follows the editor theme without booting again', async ()
       ['dark', 'dark'],
       ['nineties', 'light'],
     ] as const) {
-      await setEditorTheme(app, editorTheme)
+      await setEditorTheme(app, page, editorTheme)
       await expect(html).toHaveAttribute('data-openplc-theme', guestTheme)
       if (guestTheme === 'dark') {
         await expect(body).toHaveCSS('background-color', DARK_BODY)
