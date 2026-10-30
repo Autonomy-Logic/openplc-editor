@@ -4,6 +4,7 @@ import type { ConfiguratorPort, ConfiguratorSnapshot } from '../ports/configurat
 import type { Unsubscribe } from '../ports/types'
 import {
   configuratorArchiveSchema,
+  type ConfiguratorTheme,
   deviceSetupSchema,
   type HostToRelayMessage,
   parseRelayToHostMessage,
@@ -81,6 +82,12 @@ export function createConfiguratorClient(
   const errorListeners = new Set<(message: string) => void>()
   let nextId = 0
   let disposed = false
+  let relayReady = false
+  let theme: ConfiguratorTheme | null = null
+
+  const postTheme = () => {
+    if (theme) transport.post({ channel: RELAY_CHANNEL, kind: 'theme', theme })
+  }
 
   let settleReady: { resolve: () => void; reject: (error: Error) => void } | null = null
   const readyPromise = new Promise<void>((resolve, reject) => {
@@ -106,6 +113,8 @@ export function createConfiguratorClient(
           return
         }
         clearTimeout(readyTimer)
+        relayReady = true
+        postTheme()
         settleReady.resolve()
         settleReady = null
         return
@@ -167,6 +176,11 @@ export function createConfiguratorClient(
       await request('setProject', [archive], loadTimeoutMs)
     },
     getDeviceSetup,
+    setTheme: (next) => {
+      if (disposed) return
+      theme = next
+      if (relayReady) postTheme()
+    },
     snapshot: async (): Promise<ConfiguratorSnapshot> => {
       const archive = parseResult('getConfiguration', configuratorArchiveSchema, await request('getConfiguration', []))
       const deviceSetup = await getDeviceSetup()
