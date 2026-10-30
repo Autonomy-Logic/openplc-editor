@@ -35,7 +35,7 @@
 import { z } from 'zod'
 
 import { isValidVersion } from '../../../frontend/utils/semver'
-import type { PackageManifest } from './types'
+import type { PackageManifest, RuntimeLicenseMode } from './types'
 
 /**
  * A compatibility floor must be a version this codebase can compare.
@@ -83,6 +83,11 @@ const versionFloor = z
  * same constraint, so a package that would be refused here cannot be built
  * there either.
  */
+/** Values of `package.runtimeLicense`; mirrors openplc-packages' `schema/manifest.schema.json`. */
+export const RUNTIME_LICENSE_MODES = ['user', 'vpp', 'vendor'] as const satisfies readonly RuntimeLicenseMode[]
+
+const runtimeLicense = z.enum(RUNTIME_LICENSE_MODES)
+
 const boardManagerUrl = z.string().refine(
   (value) => {
     try {
@@ -115,6 +120,8 @@ export const PackageManifestSchema = z
         // constraint that silently does not apply — see `versionFloor`.
         minEditorVersion: versionFloor.optional(),
         minRuntimeVersion: versionFloor.optional(),
+        // Read by the licence status; an unknown value is refused here and dropped on read below.
+        runtimeLicense: runtimeLicense.optional(),
       })
       .passthrough(),
     devices: z
@@ -205,6 +212,23 @@ function withComparableFloorsOnly(value: unknown): unknown {
   return droppedAny ? { ...value, package: kept } : value
 }
 
+/**
+ * Return `value` without a `package.runtimeLicense` this codebase does not
+ * know, logging it. Same strict-at-entry / tolerant-on-read split as the
+ * floors: the package stays loadable and reads as one that declares no mode.
+ */
+function withKnownRuntimeLicenseOnly(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.package)) return value
+  const declared = value.package.runtimeLicense
+  if (declared === undefined || runtimeLicense.safeParse(declared).success) return value
+
+  console.warn(
+    `[package-manifest] installed package declares an unknown runtimeLicense (${JSON.stringify(declared)}); ignoring it`,
+  )
+  const { runtimeLicense: _dropped, ...kept } = value.package
+  return { ...value, package: kept }
+}
+
 /** True for a board-manager URL this codebase is willing to pass to arduino-cli. */
 function isUsableBoardManagerUrl(value: unknown): boolean {
   return value === undefined || (typeof value === 'string' && boardManagerUrl.safeParse(value).success)
@@ -261,5 +285,7 @@ function withUsableBoardManagerUrlsOnly(value: unknown): unknown {
  * silently trading one invisible outcome for another.
  */
 export function parseInstalledPackageManifest(value: unknown): PackageManifest | null {
-  return parsePackageManifest(withUsableBoardManagerUrlsOnly(withComparableFloorsOnly(value)))
+  return parsePackageManifest(
+    withKnownRuntimeLicenseOnly(withUsableBoardManagerUrlsOnly(withComparableFloorsOnly(value))),
+  )
 }
