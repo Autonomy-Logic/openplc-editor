@@ -73,6 +73,7 @@ function createFakePort(
       calls.push('getDeviceSetup')
       return Promise.resolve(setupOf(...(options.loadedGuids ?? [])))
     },
+    setTheme: () => undefined,
     snapshot: async (): Promise<ConfiguratorSnapshot> => {
       calls.push('snapshot')
       snapshots += 1

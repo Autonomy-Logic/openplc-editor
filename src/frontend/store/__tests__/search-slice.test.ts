@@ -1,25 +1,18 @@
 import { createStore } from 'zustand/vanilla'
 
 import { createSearchSlice } from '../slices/search/slice'
-import type { Project, SearchSlice } from '../slices/search/types'
+import type { ProjectSearchEntry, SearchSlice } from '../slices/search/types'
 
 function makeStore() {
   return createStore<SearchSlice>()(createSearchSlice)
 }
 
-function makeProject(overrides: Partial<Project> = {}): Project {
+function makeProject(overrides: Partial<ProjectSearchEntry> = {}): ProjectSearchEntry {
   return {
     searchQuery: 'test',
     projectName: 'Project1',
-    functions: {
-      pous: {
-        program: [],
-        function: [],
-        'function-block': [],
-      },
-      dataTypes: [],
-      resource: { globalVariable: '', task: '', instance: '' },
-    },
+    matches: [],
+    searchCounts: 0,
     searchID: 'id-1',
     ...overrides,
   }

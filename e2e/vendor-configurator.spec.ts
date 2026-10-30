@@ -273,7 +273,7 @@ test('a module added in the configurator is mapped, and its alias survives a rel
       // A change discarded from the I/O Mapping tab must leave the configurator too.
       await frame.getByRole('button', { name: 'Add FAKE-4DI' }).click()
       await openScreen(page, MAPPING_SCREEN)
-      await expect(page.getByRole('region', { name: 'Slot 2 FAKE-4DI_2' })).toBeVisible({ timeout: 15000 })
+      await expect(page.getByRole('button', { name: /^Slot 2(?!\d).*FAKE-4DI_2/ })).toBeVisible({ timeout: 15000 })
       await closeTabWithoutSaving(page, MAPPING_SCREEN)
       await openScreen(page, CONFIGURATOR_SCREEN)
       await expect(frame.getByTestId('fake-modules')).toContainText('FAKE-4DI_1 (FAKE-4DI)', { timeout: 30000 })
@@ -354,6 +354,111 @@ test('the sandboxed guest reaches nothing of the host', async () => {
     expect(await probeHostRequests(app), 'no form, child frame or navigation reached the probe host').toEqual([])
     await expect(page.locator('iframe[title="I/O Configurator"]')).toHaveAttribute('src', /^vpp-doc:/)
     expect(app.windows().filter((w) => w.url() === 'about:blank')).toHaveLength(0)
+  } finally {
+    await shutdown(app)
+  }
+})
+
+test('the I/O Mapping list shows the selected module with its package picture', async () => {
+  test.setTimeout(120000)
+  const paths = pathsFor('picture')
+  writeFixture(paths)
+
+  const { app, page } = await launch(paths)
+  try {
+    const frame = await openConfigurator(page)
+    await frame.getByRole('button', { name: 'Add FAKE-4DI' }).click()
+    await frame.getByRole('button', { name: 'Add FAKE-4DO' }).click()
+    await expect(frame.getByTestId('fake-modules')).toContainText('FAKE-4DO_2 (FAKE-4DO)')
+    await openScreen(page, MAPPING_SCREEN)
+
+    const first = page.getByRole('region', { name: 'Slot 1 FAKE-4DI_1' })
+    await expect(first).toBeVisible({ timeout: 15000 })
+    await expect(first.getByRole('img', { name: 'FAKE-4DI' })).toHaveAttribute('src', /^data:image\/png;base64,/)
+
+    await page.getByRole('button', { name: /^Slot 2(?!\d)/ }).click()
+    const second = page.getByRole('region', { name: 'Slot 2 FAKE-4DO_2' })
+    await expect(second).toBeVisible()
+    await expect(second.getByRole('row', { name: /DO\.0.*%QX\d+\.\d/ })).toBeVisible()
+    await expect(second.getByRole('img')).toHaveCount(0)
+  } finally {
+    await shutdown(app)
+  }
+})
+
+const EDITOR_THEMES = ['light', 'dark', 'nineties'] as const
+type EditorTheme = (typeof EDITOR_THEMES)[number]
+
+const editorTheme = (page: Page): Promise<EditorTheme | undefined> =>
+  page
+    .locator('html')
+    .evaluate((root, themes) => themes.find((theme) => root.classList.contains(theme)), [...EDITOR_THEMES])
+
+const clickChangeTheme = (app: ElectronApplication) =>
+  app.evaluate(({ Menu }) => {
+    const pending = [...(Menu.getApplicationMenu()?.items ?? [])]
+    for (let item = pending.shift(); item; item = pending.shift()) {
+      if (item.label === 'Change Theme') return item.click()
+      pending.push(...(item.submenu?.items ?? []))
+    }
+    throw new Error('no Change Theme menu item')
+  })
+
+const setEditorTheme = async (app: ElectronApplication, page: Page, theme: EditorTheme) => {
+  for (let clicks = 0; clicks < EDITOR_THEMES.length; clicks++) {
+    const current = await editorTheme(page)
+    if (current === theme) return
+    await clickChangeTheme(app)
+    await expect.poll(() => editorTheme(page)).not.toBe(current)
+  }
+  expect(await editorTheme(page)).toBe(theme)
+}
+
+const DARK_BODY = 'rgb(18, 19, 22)'
+const DARK_SHADOW_TEXT = 'rgb(237, 239, 242)'
+
+test('the configurator follows the editor theme without booting again', async () => {
+  test.setTimeout(120000)
+  const paths = pathsFor('theme')
+  writeFixture(paths)
+
+  const { app, page } = await launch(paths)
+  try {
+    await setEditorTheme(app, page, 'dark')
+    await expect(page.locator('html')).toHaveClass(/\bdark\b/)
+    const frame = await openConfigurator(page)
+    const html = frame.locator('html')
+    const body = frame.locator('body')
+    const shadowText = frame.locator('.fake-shadow-probe')
+    await expect(html).toHaveAttribute('data-openplc-theme', 'dark')
+    await expect(body).toHaveCSS('background-color', DARK_BODY)
+    await expect(shadowText).toHaveCSS('color', DARK_SHADOW_TEXT)
+
+    const iframe = page.locator('iframe[title="I/O Configurator"]')
+    await iframe.evaluate((element) => Reflect.set(element, '__e2eFrame', 'first'))
+    await frame.getByRole('button', { name: 'Add FAKE-4DI' }).click()
+    await expect(screenLabel(page, CONFIGURATOR_SCREEN, true)).toBeVisible({ timeout: 15000 })
+
+    for (const [editorTheme, guestTheme] of [
+      ['light', 'light'],
+      ['dark', 'dark'],
+      ['nineties', 'light'],
+    ] as const) {
+      await setEditorTheme(app, page, editorTheme)
+      await expect(html).toHaveAttribute('data-openplc-theme', guestTheme)
+      if (guestTheme === 'dark') {
+        await expect(body).toHaveCSS('background-color', DARK_BODY)
+        await expect(shadowText).toHaveCSS('color', DARK_SHADOW_TEXT)
+      } else {
+        await expect(body).not.toHaveCSS('background-color', DARK_BODY)
+        await expect(shadowText).not.toHaveCSS('color', DARK_SHADOW_TEXT)
+      }
+    }
+
+    expect(await iframe.evaluate((element) => Reflect.get(element, '__e2eFrame')), 'the same guest').toBe('first')
+    await expect(iframe).toHaveAttribute('src', /^vpp-doc:\/\/com\.e2e\.fake-configurator\/configurator\/index\.html$/)
+    await expect(frame.getByTestId('fake-modules')).toContainText('FAKE-4DI_1 (FAKE-4DI)')
+    await expect(screenLabel(page, CONFIGURATOR_SCREEN, true), 'still unsaved').toBeVisible()
   } finally {
     await shutdown(app)
   }

@@ -58,10 +58,13 @@ const fakeModule = (typeId: string, inputBytes: number, outputBytes: number, cha
 
 /** Catalogue for the fake Device Editor's module types, following the package catalogue rules. */
 export const FIXTURE_MODULES = [
-  fakeModule('FAKE-4DI', 2, 0, [
-    ...[0, 1, 2, 3].map((i) => bit(`DI.${i}`, true, 0, i)),
-    scalar('status', true, 'USINT', 'B', 1),
-  ]),
+  {
+    ...fakeModule('FAKE-4DI', 2, 0, [
+      ...[0, 1, 2, 3].map((i) => bit(`DI.${i}`, true, 0, i)),
+      scalar('status', true, 'USINT', 'B', 1),
+    ]),
+    image: 'preview.png',
+  },
   fakeModule('FAKE-4DO', 0, 2, [...[0, 1, 2, 3].map((i) => bit(`DO.${i}`, false, 0, i)), bit('enable', false, 1, 3)]),
   fakeModule('FAKE-2AI', 12, 0, [
     scalar('AI0', true, 'INT', 'W', 0),
@@ -118,6 +121,7 @@ export function installFixturePackage(packagesDir: string, bundleDir: string): s
   copyFileSync(join(HERE, 'index.html'), join(root, 'configurator', 'index.html'))
   copyFileSync(join(bundleDir, 'relay.js'), join(root, 'configurator', 'relay.js'))
   copyFileSync(join(bundleDir, 'index.js'), join(root, 'configurator', 'index.js'))
+  copyFileSync(join(HERE, 'openplc-theme-overrides.css'), join(root, 'configurator', 'openplc-theme-overrides.css'))
   for (const screen of ['io-configurator.json', 'io-mapping.json']) {
     copyFileSync(join(REPO, 'src', '__fixtures__', 'weidmuller-screens', screen), join(root, 'screens', screen))
   }

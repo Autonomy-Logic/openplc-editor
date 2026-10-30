@@ -10,7 +10,7 @@
 import { z } from 'zod'
 
 export const RELAY_CHANNEL = 'openplc.vendor-document'
-export const RELAY_PROTOCOL_VERSION = 1
+export const RELAY_PROTOCOL_VERSION = 2
 
 /** Hex characters; a Device Editor 3.5.22 station archive is around 25,000. */
 export const MAX_ARCHIVE_HEX_LENGTH = 16 * 1024 * 1024
@@ -69,7 +69,7 @@ export function isRelayMethod(value: unknown): value is RelayMethod {
   return RELAY_METHODS.some((method) => method === value)
 }
 
-/** Methods a VPP screen (guest) may invoke on the host. Added by the RTOP-306 PoC, additive to v1. */
+/** Methods a VPP screen (guest) may invoke on the host. Additive to the v1 relay surface. */
 export const HOST_RELAY_METHODS = ['getPlcVariables', 'getPlcAddress', 'getPersistence', 'setPersistence'] as const
 export type HostRelayMethod = (typeof HOST_RELAY_METHODS)[number]
 
@@ -85,8 +85,12 @@ export function isHostEventTopic(value: unknown): value is HostEventTopic {
   return HOST_EVENT_TOPICS.some((topic) => topic === value)
 }
 
+export const CONFIGURATOR_THEMES = ['light', 'dark'] as const
+export type ConfiguratorTheme = (typeof CONFIGURATOR_THEMES)[number]
+
 const hostToRelaySchema = z.discriminatedUnion('kind', [
   z.object({ channel: z.literal(RELAY_CHANNEL), kind: z.literal('hello') }),
+  z.object({ channel: z.literal(RELAY_CHANNEL), kind: z.literal('theme'), theme: z.enum(CONFIGURATOR_THEMES) }),
   z.object({
     channel: z.literal(RELAY_CHANNEL),
     kind: z.literal('request'),

@@ -5,7 +5,7 @@
  * iframe's globals. One instance per mounted iframe; `dispose` on unmount.
  */
 
-import type { DeviceSetup } from '../vendor-document/protocol'
+import type { ConfiguratorTheme, DeviceSetup } from '../vendor-document/protocol'
 import type { Unsubscribe } from './types'
 
 export interface ConfiguratorSnapshot {
@@ -22,6 +22,8 @@ export interface ConfiguratorPort {
   /** Applies a stored archive. Rejects an empty archive without calling the guest. */
   load(archive: string): Promise<void>
   getDeviceSetup(): Promise<DeviceSetup>
+  /** Sent as soon as the relay is ready; later calls are sent at once. */
+  setTheme(theme: ConfiguratorTheme): void
   snapshot(): Promise<ConfiguratorSnapshot>
   onModified(callback: () => void): Unsubscribe
   onError(callback: (message: string) => void): Unsubscribe

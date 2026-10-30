@@ -1213,6 +1213,42 @@ describe('the messages', () => {
     expect(lines[1]).toContain('%MD')
   })
 
+  it('points memory at the Buffer Mapping, not at pins it can never come from', () => {
+    const lines = describeUnbackedLocations(compute(withLocal('%MX0.1', 'flag')).unbacked)
+    const remedy = lines[lines.length - 1]
+    expect(remedy).toContain("%MX is sized under a Modbus server's Buffer Mapping, under Servers")
+    expect(remedy).not.toContain('the Device, Remote Devices or Servers branches')
+  })
+
+  it('does not send %MX to S7comm, which has no buffer code for it', () => {
+    const remedy = describeUnbackedLocations(compute(withLocal('%MX0.1', 'flag')).unbacked).at(-1)
+    expect(remedy).not.toContain('S7comm')
+  })
+
+  it('offers S7comm alongside Modbus for the word areas it can back', () => {
+    const remedy = describeUnbackedLocations(compute(withLocal('%MW3859', 'count')).unbacked).at(-1)
+    expect(remedy).toContain("%MW is sized under a Modbus server's Buffer Mapping or an S7comm server's data blocks")
+  })
+
+  it('separates the bit and word memory remedies when both are unbacked', () => {
+    const project = makeProject({
+      pous: [{ name: 'main', variables: [variable('flag', '%MX0.1'), variable('count', '%MW3859')] }],
+    })
+    const remedy = describeUnbackedLocations(compute(project).unbacked).at(-1)
+    expect(remedy).toContain("%MX is sized under a Modbus server's Buffer Mapping, under Servers")
+    expect(remedy).toContain("%MW is sized under a Modbus server's Buffer Mapping or an S7comm server's data blocks")
+  })
+
+  it('keeps both remedies when a physical area and memory are both unbacked', () => {
+    const project = makeProject({
+      pous: [{ name: 'main', variables: [variable('v', '%QW3859'), variable('flag', '%MX0.1')] }],
+    })
+    const lines = describeUnbackedLocations(compute(project).unbacked)
+    const remedy = lines[lines.length - 1]
+    expect(remedy).toContain('the Device, Remote Devices or Servers branches')
+    expect(remedy).toContain("%MX is sized under a Modbus server's Buffer Mapping, under Servers")
+  })
+
   it('cuts the list short rather than naming every offender', () => {
     const many = Array.from({ length: 9 }, (_, i) => variable(`v${i}`, `%MW${i}`))
     const lines = describeUnbackedLocations(

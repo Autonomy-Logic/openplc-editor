@@ -338,6 +338,19 @@ export const createEditorSlice: StateCreator<EditorSlice, [], [], EditorSlice> =
         }),
       ),
 
+    setEditorGraphicalFocus: (name, graphicalFocus) =>
+      setState(
+        produce((state: EditorState) => {
+          const index = state.editors.findIndex((e) => e.meta.name === name)
+          if (index !== -1) {
+            state.editors[index].graphicalFocus = graphicalFocus
+          }
+          if (state.editor.meta.name === name && state.editor.type !== 'available') {
+            state.editor.graphicalFocus = graphicalFocus
+          }
+        }),
+      ),
+
     getEditorFromEditors: (name) => {
       const { editor, editors } = getState()
       if (name === editor.meta.name) return editor
