@@ -11,6 +11,7 @@ import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { useDeviceConnect } from '../../../../../../hooks/use-device-connect'
 import { useDeviceLicense } from '../../../../../../hooks/use-device-license'
+import { useRuntimeCommercialLicense } from '../../../../../../hooks/use-runtime-commercial-license'
 import { useRuntimeConnect } from '../../../../../../hooks/use-runtime-connect'
 import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
@@ -28,6 +29,7 @@ import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../..
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 import { DeviceLicenseStatus } from './components/device-license-status'
 import { PinMappingTable } from './components/pin-mapping-table'
+import { RuntimeCommercialLicenseStatus } from './components/runtime-commercial-license-status'
 
 const Board = memo(function () {
   const store = useOpenPLCStoreApi()
@@ -73,6 +75,8 @@ const Board = memo(function () {
   // OWNS the purchase watch: `useDeviceConnect` above holds a second instance of
   // the hook, and without a single owner both would poll on every watch tick.
   const licensing = useDeviceLicense(currentBoardInfo, { ownsWatch: true })
+  // Runtime commercial licence; resolved by the owner hook beside the runtime polling.
+  const runtimeLicense = useRuntimeCommercialLicense()
 
   // Whether this target exposes the GPIO pin-mapping table. Arduino boards
   // enable it via their preset; runtime-v4 GPIO boards (e.g. the Raspberry
@@ -730,6 +734,15 @@ const Board = memo(function () {
                     onBuy={() => void licensing.buy()}
                     onRecheck={() => void licensing.refresh()}
                     onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
+                  />
+                ) : null}
+                {connectionStatus === 'connected' ? (
+                  <RuntimeCommercialLicenseStatus
+                    status={runtimeLicense.status}
+                    hardwareId={runtimeLicense.hardwareId}
+                    buyUrl={runtimeLicense.buyUrl}
+                    awaitingPurchase={runtimeLicense.awaitingPurchase}
+                    onBuy={() => void runtimeLicense.buy()}
                   />
                 ) : null}
               </DeviceConnectButton>

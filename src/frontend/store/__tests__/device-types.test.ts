@@ -98,6 +98,7 @@ describe('Device slice types', () => {
         connectionStatus: 'disconnected',
         plcStatus: null,
         switchPosition: null,
+        license: null,
         ipAddress: null,
         runtimeVersion: null,
         runtimeFeatures: null,
@@ -143,6 +144,7 @@ describe('Device slice types', () => {
         connectionStatus: 'connected',
         plcStatus: 'RUNNING',
         switchPosition: 'run',
+        license: 'commercial',
         ipAddress: '192.168.1.1',
         runtimeVersion: 'v4.1.9',
         runtimeFeatures: null,
@@ -187,6 +189,7 @@ describe('Device slice types', () => {
           connectionStatus: 'disconnected',
           plcStatus: null,
           switchPosition: null,
+          license: null,
           ipAddress: null,
           runtimeVersion: null,
           runtimeFeatures: null,
@@ -200,6 +203,12 @@ describe('Device slice types', () => {
         },
         deviceConnection: { status: 'disconnected', port: null, transport: null, debugTransport: null },
         deviceLicense: { phase: 'idle', report: null, awaitingPurchaseUntil: null },
+        runtimeCommercialLicense: {
+          hardwareId: null,
+          status: null,
+          awaitingPurchaseUntil: null,
+          dismissedDisclaimers: [],
+        },
       }
       expect(state.deviceAvailableOptions).toBeDefined()
       expect(state.deviceDefinitions).toBeDefined()
@@ -209,6 +218,7 @@ describe('Device slice types', () => {
       // Licensing is its own top-level key, not a field on the connection: the
       // link being up and the device being entitled change for unrelated reasons.
       expect(state.deviceLicense).toBeDefined()
+      expect(state.runtimeCommercialLicense).toBeDefined()
     })
   })
 

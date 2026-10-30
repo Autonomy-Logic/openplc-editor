@@ -106,6 +106,7 @@ import type {
   ListPublicLibrariesResponse,
   PublicLibrary,
 } from '@root/middleware/shared/ports/public-catalog-types'
+import type { RuntimeHardwareIdResult, RuntimeLicenseSyncResult } from '@root/middleware/shared/ports/runtime-port'
 import type {
   RuntimeCapabilitiesResult,
   RuntimeUser,
@@ -115,6 +116,11 @@ import type {
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import type { VersionControlResult } from '@root/middleware/shared/ports/version-control-port'
 import { capabilitiesFromResponse } from '@root/middleware/shared/utils/build-gate/runtime-capabilities-response'
+import {
+  parseRuntimeCommercialLicense,
+  parseRuntimeHardwareId,
+  type RuntimeCommercialLicense,
+} from '@root/middleware/shared/utils/licensing'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
@@ -150,6 +156,7 @@ import {
   type LicenseReadWritable,
   resolveDeviceLicense,
 } from '../../../backend/editor/license/license-flow'
+import { lookupRuntimeLicenses, syncRuntimeLicenses } from '../../../backend/editor/license/runtime-license-sync'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { BootloaderApiClient } from '../../../backend/editor/runtime/bootloader-api-client'
 import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
@@ -176,6 +183,8 @@ const EditSessionClientSchema = z.object({
 })
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0
+
+const licenseField = (license: RuntimeCommercialLicense | undefined) => (license ? { license } : {})
 
 /** Why a channel could not be handed out. */
 interface ChannelUnavailable {
@@ -524,11 +533,13 @@ class MainProcessBridge implements MainIpcModule {
         // Run/stop mode-switch position. Absent on runtimes older than the
         // run/stop interface — treat undefined as "no gating".
         switchPosition?: 'run' | 'stop'
+        license?: unknown
       }>(ipAddress, endpoint, (data: string) => {
         const response = JSON.parse(data) as {
           status: string
           timing_stats?: TimingStatsResponse
           switchPosition?: 'run' | 'stop'
+          license?: unknown
         }
         return response
       })
@@ -552,6 +563,7 @@ class MainProcessBridge implements MainIpcModule {
           status: result.data.status,
           timingStats,
           ...(result.data.switchPosition ? { switchPosition: result.data.switchPosition } : {}),
+          ...licenseField(parseRuntimeCommercialLicense(result.data.license)),
         }
       } else {
         return { success: false, error: !result.success ? result.error : 'Unknown error' }
@@ -560,6 +572,27 @@ class MainProcessBridge implements MainIpcModule {
       return { success: false, error: getErrorMessage(error) }
     }
   }
+
+  handleRuntimeGetHardwareId = (_event: IpcMainInvokeEvent, ipAddress: string) => this.readRuntimeHardwareId(ipAddress)
+
+  private async readRuntimeHardwareId(ipAddress: string): Promise<RuntimeHardwareIdResult> {
+    const res = await this.makeRuntimeApiRequest<unknown>(ipAddress, '/api/hardware-id', (data) => JSON.parse(data))
+    if (!res.success) return { success: false, error: res.error }
+    const parsed = parseRuntimeHardwareId(res.data)
+    return parsed
+      ? { success: true, ...parsed }
+      : { success: false, error: 'The runtime sent a hardware ID the editor could not read.' }
+  }
+
+  handleRuntimeSyncLicenses = (_event: IpcMainInvokeEvent, ipAddress: string): Promise<RuntimeLicenseSyncResult> =>
+    syncRuntimeLicenses({
+      getHardwareId: () => this.readRuntimeHardwareId(ipAddress),
+      lookup: lookupRuntimeLicenses,
+      upload: async (body) => {
+        const res = await this.runtimeApi.makeRuntimeApiPostRequest(ipAddress, '/api/runtime-license', body, () => true)
+        return res.success ? { stored: true } : { stored: false, error: res.error }
+      },
+    })
 
   handleRuntimeStartPlc = (_event: IpcMainInvokeEvent, ipAddress: string) => this.restStartPlc(ipAddress)
 
@@ -1030,6 +1063,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('runtime:delete-user', this.handleRuntimeDeleteUser)
     this.registerHandle('runtime:login', this.handleRuntimeLogin)
     this.registerHandle('runtime:get-status', this.handleRuntimeGetStatus)
+    this.registerHandle('runtime:get-hardware-id', this.handleRuntimeGetHardwareId)
+    this.registerHandle('runtime:sync-licenses', this.handleRuntimeSyncLicenses)
     this.registerHandle('runtime:start-plc', this.handleRuntimeStartPlc)
     this.registerHandle('runtime:stop-plc', this.handleRuntimeStopPlc)
     this.registerHandle('runtime:get-compilation-status', this.handleRuntimeGetCompilationStatus)

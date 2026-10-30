@@ -15,8 +15,13 @@
 
 import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useOrchestrator, useRuntime } from '@root/middleware/shared/providers/platform-context'
+import {
+  COMMERCIAL_LICENSE_DISCLAIMER,
+  type TargetCommercialLicenseStatus,
+} from '@root/middleware/shared/utils/licensing'
 import { useCallback, useEffect, useState } from 'react'
 
+import { useRuntimeCommercialLicense } from '../../../../../../hooks/use-runtime-commercial-license'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
@@ -69,6 +74,7 @@ const RuntimeStatusEditor = () => {
     (state): ((include: boolean) => void) => state.deviceActions.setIncludeEthercatStatsInPolling,
   )
 
+  const runtimeLicense = useRuntimeCommercialLicense()
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null)
   const [bootloader, setBootloader] = useState<BootloaderInfo>({ present: false })
   const [changeOpen, setChangeOpen] = useState(false)
@@ -283,8 +289,35 @@ const RuntimeStatusEditor = () => {
           </div>
         )}
 
+        {runtimeLicense.status === 'unlicensed' && (
+          <div
+            className='flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950'
+            role='note'
+          >
+            <p className='text-sm text-amber-900 dark:text-amber-200'>{COMMERCIAL_LICENSE_DISCLAIMER}</p>
+            {runtimeLicense.awaitingPurchase ? (
+              <p className='text-xs text-amber-800 dark:text-amber-300'>
+                Waiting for the purchase to complete. The license is installed on this target as soon as it clears.
+              </p>
+            ) : (
+              runtimeLicense.buyUrl && (
+                <button
+                  className='w-fit text-xs font-medium text-brand hover:underline'
+                  onClick={() => void runtimeLicense.buy()}
+                  type='button'
+                >
+                  Buy licences
+                </button>
+              )
+            )}
+          </div>
+        )}
+
         <dl className='grid grid-cols-2 gap-x-8 gap-y-2 md:grid-cols-3'>
           <InfoField label='Runtime version' value={runtimeVersion} />
+          {describeRuntimeLicense(runtimeLicense.status) && (
+            <InfoField label='License' value={describeRuntimeLicense(runtimeLicense.status)} />
+          )}
           {bootloader.present ? (
             <InfoField label='Bootloader' value={bootloader.version} />
           ) : (
@@ -324,6 +357,20 @@ const RuntimeStatusEditor = () => {
       />
     </div>
   )
+}
+
+/** Label for the License field; null hides it (no runtime report, or not connected). */
+function describeRuntimeLicense(status: TargetCommercialLicenseStatus | null): string | null {
+  switch (status) {
+    case 'licensed':
+      return 'Commercial'
+    case 'unlicensed':
+      return 'GPLv3'
+    case 'vpp-flow':
+      return 'Board license required'
+    default:
+      return null
+  }
 }
 
 const InfoField = ({ label, value }: { label: string; value?: string | null }) => (

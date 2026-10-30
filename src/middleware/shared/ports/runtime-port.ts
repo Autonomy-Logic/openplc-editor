@@ -38,6 +38,7 @@
  */
 
 import type { PluginCommandOutcome } from '../../../backend/shared/utils/vpp/screen-actions'
+import type { RuntimeCommercialLicense, RuntimeHardwareId } from '../utils/licensing/runtime-commercial-license'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -135,8 +136,26 @@ export interface RuntimeStatusResult {
    *  `'run'`, and runtimes older than this field omit it entirely — treat
    *  `undefined` as "no gating". */
   switchPosition?: 'run' | 'stop'
+  /** Commercial licence state of the runtime; absent on runtimes that do not report it. */
+  license?: RuntimeCommercialLicense
   error?: string
 }
+
+/** `GET /api/hardware-id`; `hardwareId` is null when the target derives none. */
+export type RuntimeHardwareIdResult = ({ success: true } & RuntimeHardwareId) | { success: false; error: string }
+
+/** One licence file sent to `POST /api/runtime-license`, identified by its order. */
+export interface RuntimeLicenseUploadOutcome {
+  orderId: string
+  stored: boolean
+  error?: string
+}
+
+/** What the editor did with the Edge licences for a runtime's hardware ID. */
+export type RuntimeLicenseSyncResult =
+  | { status: 'synced'; hardwareId: string; uploads: RuntimeLicenseUploadOutcome[] }
+  | { status: 'no-hardware-id' }
+  | { status: 'failed'; error: string }
 
 export interface CompilationStatusResult {
   success: boolean
@@ -386,6 +405,16 @@ export interface RuntimePort {
 
   /** Get current PLC runtime status with optional timing statistics. */
   getStatus(includeStats?: boolean): Promise<RuntimeStatusResult>
+
+  /** Read the hardware ID the runtime is bound to (the host's in a vPLC). */
+  getHardwareId?(): Promise<RuntimeHardwareIdResult>
+
+  /**
+   * Fetch the commercial licences Edge holds for the runtime's hardware ID and
+   * upload each one to the runtime. Never throws; absent on platforms that do
+   * not deliver licences (vPLC seats come from the agent there).
+   */
+  syncRuntimeLicenses?(): Promise<RuntimeLicenseSyncResult>
 
   /** Start the PLC program on the runtime.  `status`, when present,
    *  carries the raw `status` field of the runtime's response body

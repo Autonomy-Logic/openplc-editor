@@ -26,7 +26,7 @@ import { useState } from 'react'
 import { cn } from '../../../../../../../utils/cn'
 
 /** Filled shield + check — "this device holds a licence". */
-function ShieldLicensedIcon({ size = 14 }: { size?: number }) {
+export function ShieldLicensedIcon({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox='0 0 16 16' fill='none' aria-hidden='true'>
       <path d='M8 1.5 13 3.2v4.1c0 3.2-2.1 6-5 7.2-2.9-1.2-5-4-5-7.2V3.2L8 1.5Z' fill='currentColor' />
@@ -36,7 +36,7 @@ function ShieldLicensedIcon({ size = 14 }: { size?: number }) {
 }
 
 /** Outline shield + dash — "no licence on this device". */
-function ShieldUnlicensedIcon({ size = 14 }: { size?: number }) {
+export function ShieldUnlicensedIcon({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox='0 0 16 16' fill='none' aria-hidden='true'>
       <path

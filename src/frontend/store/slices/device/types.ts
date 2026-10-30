@@ -15,6 +15,10 @@ import type {
   TimingStats,
 } from '../../../../middleware/shared/ports/types'
 import type { DeviceVpp } from '../../../../middleware/shared/ports/vpp-types'
+import type {
+  RuntimeCommercialLicense,
+  TargetCommercialLicenseStatus,
+} from '../../../../middleware/shared/utils/licensing'
 import type { DeviceSetupRecord } from '../../../utils/vpp/device-setup'
 
 // ---------------------------------------------------------------------------
@@ -88,6 +92,8 @@ export type RuntimeConnection = {
    *  poll. `'run'` on any device without a physical switch, so a null-safe
    *  caller treats absence as "no gating". */
   switchPosition: 'run' | 'stop' | null
+  /** Commercial licence state from `/api/status`, or null when the runtime does not report one. */
+  license: RuntimeCommercialLicense | null
   ipAddress: string | null
   /** Version string reported by the connected runtime (from
    *  get-users-info / the X-OpenPLC-Runtime-Version header), or null
@@ -117,6 +123,18 @@ export type RuntimeConnection = {
    * said the device carries on by itself.
    */
   runtimeUpdateInProgress: boolean
+}
+
+/** Commercial licence of the connected runtime target, resolved in one place for every view. */
+export type RuntimeCommercialLicenseInfo = {
+  /** Hardware ID the connected runtime reports (the host's in a vPLC), or null. */
+  hardwareId: string | null
+  /** Resolved status of the connected runtime target, or null while none is connected. */
+  status: TargetCommercialLicenseStatus | null
+  /** End (epoch ms) of the window in which a purchase started here is watched for, or null. */
+  awaitingPurchaseUntil: number | null
+  /** Hardware IDs whose connect dialog was dismissed; never persisted, so it lasts until the editor restarts. */
+  dismissedDisclaimers: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -219,6 +237,7 @@ export type DeviceState = {
   runtimeConnection: RuntimeConnection
   deviceConnection: DeviceConnection
   deviceLicense: DeviceLicenseInfo
+  runtimeCommercialLicense: RuntimeCommercialLicenseInfo
 }
 
 // ---------------------------------------------------------------------------
@@ -299,6 +318,11 @@ export type DeviceActions = {
   setPlcRuntimeStatus: (status: PlcStatus | null) => void
   /** Set the mode-switch position (null clears it, e.g. on disconnect). */
   setPlcSwitchPosition: (position: 'run' | 'stop' | null) => void
+  setRuntimeLicense: (license: RuntimeCommercialLicense | null) => void
+  setRuntimeHardwareId: (hardwareId: string | null) => void
+  setRuntimeCommercialLicenseStatus: (status: TargetCommercialLicenseStatus | null) => void
+  setRuntimeLicensePurchaseWatch: (until: number | null) => void
+  dismissRuntimeLicenseDisclaimer: (hardwareId: string) => void
   setSelectedDevice: (device: SelectedDevice | null) => void
   /**
    * Record the vPLC this project targets (null clears it). A project property:
