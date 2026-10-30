@@ -35,7 +35,10 @@ function collectGlobals(variables: PLCVariable[]): ExportableVariable[] {
 function fingerprint(store: OpenPLCStore): string {
   const projectData = store.getState().project.data
   const pous = projectData.pous
-    .map((p) => `${p.name}:${(p.interface?.variables ?? []).map((v) => `${v.name}|${v.type.value}|${v.location}`).join(',')}`)
+    .map(
+      (p) =>
+        `${p.name}:${(p.interface?.variables ?? []).map((v) => `${v.name}|${v.type.value}|${v.location}`).join(',')}`,
+    )
     .join(';')
   const globals = (projectData.configurations.resource.globalVariables ?? [])
     .map((v) => `${v.name}|${v.type.value}|${v.location}`)

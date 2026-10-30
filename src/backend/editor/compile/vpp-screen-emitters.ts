@@ -10,7 +10,7 @@
 
 import { readFileSync } from 'fs'
 import { join, normalize, relative } from 'path'
-import { createContext,Script } from 'vm'
+import { createContext, Script } from 'vm'
 
 import { PackageManagerModule } from '../package-manager/package-manager-module'
 

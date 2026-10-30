@@ -305,13 +305,12 @@ describe('configurator theme', () => {
     const applied: unknown[] = []
     const scope: RelayGuestScope = {}
     installFakeDeviceEditor(scope)
-    cleanups.push(
-      installRelay(scope, channel.guest, {
-        pollIntervalMs: 5,
-        bootTimeoutMs: 1_000,
-        applyTheme: (theme) => applied.push(theme),
-      }),
-    )
+    const relay = installRelay(scope, channel.guest, {
+      pollIntervalMs: 5,
+      bootTimeoutMs: 1_000,
+      applyTheme: (theme) => applied.push(theme),
+    })
+    cleanups.push(() => relay.stop())
     const client = createConfiguratorClient(channel.host, { readyTimeoutMs: 1_000 })
     cleanups.push(() => client.dispose())
     client.setTheme('dark')

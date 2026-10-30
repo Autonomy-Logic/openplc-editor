@@ -185,25 +185,25 @@ function TableLayout({ section, disabled = false }: TableLayoutProps) {
                       withIndicator
                       className='flex h-[26px] w-24 items-center justify-between gap-1 rounded-md border border-neutral-100 bg-white px-2 py-0.5 font-caption text-cp-sm font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark data-[disabled]:opacity-50 dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
                     />
-                  <SelectContent
-                    className='h-fit w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-                    sideOffset={4}
-                    position='popper'
-                    align='center'
-                    side='bottom'
-                  >
-                    {(col.options && col.options.length > 0 ? col.options : ['RO', 'RW']).map((opt) => (
-                      <SelectItem
-                        key={opt}
-                        value={opt}
-                        className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
-                      >
-                        <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
-                          {opt}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                    <SelectContent
+                      className='h-fit w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-100 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                      sideOffset={4}
+                      position='popper'
+                      align='center'
+                      side='bottom'
+                    >
+                      {(col.options && col.options.length > 0 ? col.options : ['RO', 'RW']).map((opt) => (
+                        <SelectItem
+                          key={opt}
+                          value={opt}
+                          className='flex w-full cursor-pointer items-center px-2 py-[6px] outline-none hover:bg-neutral-200 dark:hover:bg-neutral-850'
+                        >
+                          <span className='font-caption text-cp-sm font-medium text-neutral-850 dark:text-neutral-300'>
+                            {opt}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                 </div>
               )

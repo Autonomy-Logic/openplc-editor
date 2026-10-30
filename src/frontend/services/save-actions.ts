@@ -71,7 +71,9 @@ function buildProjectJsonContent(state: StoreState): string {
   // VPP extension stays byte-identical with its pre-RTOP-306 shape.
   const vppExtensions = project.data.vppExtensions
   const hasVppExtensions =
-    vppExtensions !== undefined && Object.keys(vppExtensions).length > 0 && Object.values(vppExtensions).some((inner) => Object.keys(inner).length > 0)
+    vppExtensions !== undefined &&
+    Object.keys(vppExtensions).length > 0 &&
+    Object.values(vppExtensions).some((inner) => Object.keys(inner).length > 0)
   return JSON.stringify(
     {
       meta: { name: project.meta.name, type: metaType },
