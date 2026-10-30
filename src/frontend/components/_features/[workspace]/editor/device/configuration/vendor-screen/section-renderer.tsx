@@ -10,6 +10,7 @@ import { FormLayout } from './layouts/form-layout'
 import { IoTableLayout } from './layouts/io-table-layout'
 import { ModuleSlotsLayout } from './layouts/module-slots-layout'
 import { TableLayout } from './layouts/table-layout'
+import { VariableTreePickerLayout } from './layouts/variable-tree-picker-layout'
 import { VppScreenHost } from './layouts/vpp-screen-host'
 import { useSectionStorage } from './use-section-storage'
 
@@ -26,7 +27,14 @@ function isVppExtensionsSection(section: ScreenSection): boolean {
  * placeholder — and therefore persists nothing, because a layout the editor
  * cannot draw is one whose field semantics it also cannot honour.
  */
-const SUPPORTED_LAYOUTS = new Set(['module-slots', 'io-table', 'form', 'table', 'vendor-document'])
+const SUPPORTED_LAYOUTS = new Set([
+  'module-slots',
+  'io-table',
+  'form',
+  'table',
+  'variable-tree-picker',
+  'vendor-document',
+])
 
 type SectionRendererProps = {
   section: ScreenSection
@@ -64,6 +72,8 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
         return <FormLayout section={section} disabled={disabled} />
       case 'table':
         return <TableLayout section={section} disabled={disabled} />
+      case 'variable-tree-picker':
+        return <VariableTreePickerLayout section={section} disabled={disabled} />
       case 'vendor-document':
         return isVppExtensionsSection(section) ? (
           <VppScreenHost section={section} />
