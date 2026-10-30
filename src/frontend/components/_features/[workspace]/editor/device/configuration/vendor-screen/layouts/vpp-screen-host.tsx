@@ -1,5 +1,5 @@
-import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { createProjectPlcModel } from '@root/frontend/services/plc-model/project-plc-model'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { readVendorDocumentSection } from '@root/frontend/utils/vpp/vendor-document-section'
 import { useDevice } from '@root/middleware/shared/providers/platform-context'
 import { createIframeTransport } from '@root/middleware/shared/vendor-document/configurator-client'
