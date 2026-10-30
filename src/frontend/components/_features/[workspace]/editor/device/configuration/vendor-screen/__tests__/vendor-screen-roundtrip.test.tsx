@@ -8,7 +8,7 @@ import { VendorScreenRenderer } from '../index'
 
 /**
  * Hardware-agnostic round-trip for the VendorScreenRenderer. Exercises the
- * generic surface we promoted in RTOP-306:
+ * generic surface:
  *
  *   - a form section and a table section share one vpp-extensions bucket via
  *     `storageId`;

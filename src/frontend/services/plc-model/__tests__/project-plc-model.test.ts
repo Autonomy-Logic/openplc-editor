@@ -3,8 +3,13 @@ import type { PLCProjectData, PLCVariable } from '@root/middleware/shared/ports/
 
 import { createProjectPlcModel } from '../project-plc-model'
 
-function makeVariable(name: string, type: string, location: string): PLCVariable {
-  return { name, type: { definition: 'base-type', value: type }, location, documentation: '' }
+function makeVariable(
+  name: string,
+  type: string,
+  location: string,
+  overrides?: Partial<Pick<PLCVariable, 'class' | 'flag'>>,
+): PLCVariable {
+  return { name, type: { definition: 'base-type', value: type }, location, documentation: '', ...overrides }
 }
 
 function seedProject(
@@ -51,9 +56,27 @@ describe('createProjectPlcModel', () => {
     const port = createProjectPlcModel(store)
     const variables = port.listExportableVariables()
     expect(variables).toEqual([
-      { qualifier: 'Program0.pump_speed', type: 'INT', isWritable: true },
-      { qualifier: 'Program0.temp_pv', type: 'REAL', isWritable: true },
-      { qualifier: 'GVL.setpoint', type: 'INT', isWritable: true },
+      {
+        qualifier: 'Program0.pump_speed',
+        scope: { kind: 'program', programName: 'Program0' },
+        variable: 'pump_speed',
+        type: 'INT',
+        isWritable: true,
+      },
+      {
+        qualifier: 'Program0.temp_pv',
+        scope: { kind: 'program', programName: 'Program0' },
+        variable: 'temp_pv',
+        type: 'REAL',
+        isWritable: true,
+      },
+      {
+        qualifier: 'GVL.setpoint',
+        scope: { kind: 'gvl', listName: 'GVL' },
+        variable: 'setpoint',
+        type: 'INT',
+        isWritable: true,
+      },
     ])
   })
 
@@ -79,6 +102,46 @@ describe('createProjectPlcModel', () => {
     expect(port.resolveAddress('GVL.unknown')).toBe('')
     expect(port.resolveAddress('UnknownPou.var')).toBe('')
     expect(port.resolveAddress('malformed')).toBe('')
+  })
+
+  it('derives isWritable from the variable class and flag — VAR_INPUT, VAR_EXTERNAL, VAR_TEMP and VAR_CONSTANT ship as RO', () => {
+    const store = createTestStore()
+    seedProject(store, {
+      pous: [
+        {
+          name: 'Program0',
+          pouType: 'program',
+          interface: {
+            variables: [
+              makeVariable('rw_local', 'INT', ''),
+              makeVariable('ro_input', 'INT', '', { class: 'input' }),
+              makeVariable('ro_external', 'INT', '', { class: 'external' }),
+              makeVariable('ro_temp', 'INT', '', { class: 'temp' }),
+              makeVariable('ro_constant', 'INT', '', { flag: 'constant' }),
+            ],
+          },
+          body: { language: 'st', value: '' },
+        },
+      ],
+      configurations: {
+        resource: {
+          tasks: [],
+          instances: [],
+          globalVariables: [makeVariable('ro_global_const', 'INT', '%MW0', { flag: 'constant' })],
+        },
+      },
+    })
+
+    const port = createProjectPlcModel(store)
+    const writableMap = Object.fromEntries(port.listExportableVariables().map((v) => [v.variable, v.isWritable]))
+    expect(writableMap).toEqual({
+      rw_local: true,
+      ro_input: false,
+      ro_external: false,
+      ro_temp: false,
+      ro_constant: false,
+      ro_global_const: false,
+    })
   })
 
   it('returns an empty list when the project has no POU programs and no globals', () => {

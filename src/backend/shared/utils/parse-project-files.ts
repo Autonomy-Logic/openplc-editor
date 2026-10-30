@@ -79,7 +79,7 @@ export interface ParsedProjectData {
      *  on disk — the manifest editor seeds a template on first edit. */
     libraryManifest?: string
     debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
-    /** RTOP-306: VPP extension payloads keyed by (packageId, screenId). Opaque to the parser. */
+    /** VPP extension payloads keyed by (packageId, screenId). Opaque to the parser. */
     vppExtensions?: Record<string, Record<string, unknown>>
   }
   /** POUs that could not be parsed at all — non-empty means the project must NOT open with

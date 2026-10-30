@@ -48,10 +48,20 @@ function TableLayout({ section, disabled = false }: TableLayoutProps) {
   const storage = useSectionStorage(section)
   const variables = useExportableVariables()
 
-  const columns = (Array.isArray(section.columns) ? (section.columns as ColumnDef[]) : []).filter(
-    (c): c is ColumnDef => !!c && typeof c.id === 'string' && typeof c.label === 'string',
+  // Memoize both derived views of the section schema so unrelated re-renders do not create new
+  // array / object identities, which would thrash the `columnDefs` useMemo downstream (and with
+  // it the `useReactTable` column rebuild on every store commit).
+  const columns = useMemo(
+    () =>
+      (Array.isArray(section.columns) ? (section.columns as ColumnDef[]) : []).filter(
+        (c): c is ColumnDef => !!c && typeof c.id === 'string' && typeof c.label === 'string',
+      ),
+    [section.columns],
   )
-  const search = (section.search && typeof section.search === 'object' ? (section.search as SearchSpec) : null) ?? null
+  const search = useMemo(
+    () => (section.search && typeof section.search === 'object' ? (section.search as SearchSpec) : null) ?? null,
+    [section.search],
+  )
 
   // Current exports[] from storage, treated as the source of truth for
   // row selection and per-row direction. The checkbox is derived from

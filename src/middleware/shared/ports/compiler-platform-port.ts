@@ -35,6 +35,7 @@
  * server-side, but the pipeline never knows.
  */
 
+import type { ExportableVariable } from './plc-model-port'
 import type { PLCProjectData, StructuredCompileError } from './types'
 
 /**
@@ -327,7 +328,7 @@ export interface CollectVppScreenRuntimeArtifactsArgs {
   /** Opaque VPP extensions persisted in the project, keyed by (packageId, screenId). */
   vppExtensions: Record<string, Record<string, unknown>>
   /** PLC model snapshot the emitter can read via `input.model.exportableVariables`. */
-  exportableVariables: ReadonlyArray<{ qualifier: string; type: string; isWritable: boolean }>
+  exportableVariables: ReadonlyArray<ExportableVariable>
   /** Address resolver provided to the emitter so it can look up IEC addresses by qualifier.
    *  Hardware VPPs (Modbus master, EtherCAT, Weidmüller HAL) consume this to pin exports to a
    *  located variable backed by the device's I/O. */
@@ -450,7 +451,7 @@ export interface CompilerPlatformPort {
   packageVppPlugin(args: PackageVppPluginArgs, log: PlatformLog): Promise<PackageVppPluginResult>
 
   /**
-   * RTOP-306: materialize files emitted by VPP screen runtime emitters. Called right after
+   * Materialize files emitted by VPP screen runtime emitters. Called right after
    * `packageVppPlugin`. Looks up each `(packageId, screenId)` in `vppExtensions`, runs the
    * declared emitter JS from the installed package in a sandboxed `vm.Script`, and returns the
    * files to merge at `conf/*.json` paths. Optional on the port because web has no way to run

@@ -316,6 +316,15 @@ export function installWindowRelay(
   guest: Window & typeof globalThis & RelayGuestScope,
   options?: RelayOptions,
 ): InstalledRelay {
+  type RelayHostScope = Window & { OpenPlcRelay?: InstalledRelay }
+  const scope = guest as RelayHostScope
+  // Refuse a second install on the same window: HMR or a nested re-mount would otherwise
+  // overwrite the stored handle while the previous relay keeps its listener attached, so
+  // callHost calls would race between two instances.
+  if (scope.OpenPlcRelay !== undefined) {
+    console.warn('[OpenPlcRelay] already installed on this window; returning the existing handle')
+    return scope.OpenPlcRelay
+  }
   const theme = installThemeOverrides(guest)
   const relay = installRelay(
     guest,
@@ -333,13 +342,14 @@ export function installWindowRelay(
     { ...options, applyTheme: theme.apply },
   )
   // Exposed so a VPP screen bundle can perform guest-to-host queries via `window.OpenPlcRelay.callHost(...)`.
-  type RelayHostScope = Window & { OpenPlcRelay?: InstalledRelay }
-  ;(guest as RelayHostScope).OpenPlcRelay = relay
-  return {
+  const installed: InstalledRelay = {
     stop: () => {
       relay.stop()
       theme.uninstall()
+      scope.OpenPlcRelay = undefined
     },
     callHost: (method, args) => relay.callHost(method, args),
   }
+  scope.OpenPlcRelay = installed
+  return installed
 }

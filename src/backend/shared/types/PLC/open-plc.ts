@@ -1039,7 +1039,7 @@ const PLCProjectDataSchema = z.object({
       }),
     )
     .optional(),
-  /** RTOP-306: opaque VPP screen data keyed by (packageId, screenId). */
+  /** Opaque VPP screen data keyed by (packageId, screenId). */
   vppExtensions: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
 })
 

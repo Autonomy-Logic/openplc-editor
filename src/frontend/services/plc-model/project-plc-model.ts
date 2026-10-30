@@ -1,40 +1,57 @@
 /**
  * Adapter: builds a PlcModelPort from a project store. Walks POU programs and the configuration's
- * global variables, flattens them into `ExportableVariable` for VPP screens to list. Scoped to
- * the RTOP-306 PoC — covers the top-level variables a Data Hub screen marks RO/RW.
+ * global variables, flattens them into `ExportableVariable` for VPP screens to list. Covers the
+ * top-level variables a Data Hub screen marks RO/RW.
  */
 
 import type { OpenPLCStore } from '@root/frontend/store'
-import type { PlcModelPort } from '@root/middleware/shared/ports/plc-model-port'
-import type { PLCPou, PLCVariable } from '@root/middleware/shared/ports/types'
-import type { ExportableVariable } from '@root/middleware/shared/vendor-document/protocol'
+import type { ExportableScope, ExportableVariable, PlcModelPort } from '@root/middleware/shared/ports/plc-model-port'
+import type { PLCPou, PLCVariable, VariableClass } from '@root/middleware/shared/ports/types'
 
-function toExportable(qualifier: string, variable: PLCVariable): ExportableVariable {
+/** Reserved identifier for the Data Hub's flat global namespace. See the `createPou` guard. */
+const GVL_SCOPE_NAME = 'GVL'
+
+/** Variable classes that are inherently read-only to the Data Hub provider: VAR_INPUT is driven
+ *  by the caller / IEC input area, VAR_EXTERNAL mirrors a global owned elsewhere, VAR_TEMP is
+ *  recomputed each scan. VAR_CONSTANT (via `flag`) also pins to RO regardless of class. */
+const READ_ONLY_VARIABLE_CLASSES = new Set<VariableClass>(['input', 'external', 'temp'])
+
+function isVariableWritable(variable: PLCVariable): boolean {
+  if (variable.flag === 'constant') return false
+  const cls = variable.class ?? 'local'
+  return !READ_ONLY_VARIABLE_CLASSES.has(cls)
+}
+
+function toExportable(scope: ExportableScope, variable: PLCVariable): ExportableVariable {
+  const identifier = scope.kind === 'program' ? scope.programName : scope.listName
   return {
-    qualifier,
+    qualifier: `${identifier}.${variable.name}`,
+    scope,
+    variable: variable.name,
     type: variable.type.value.toUpperCase(),
-    isWritable: true,
+    isWritable: isVariableWritable(variable),
   }
 }
 
 function collectFromPou(pou: PLCPou): ExportableVariable[] {
   if (pou.pouType !== 'program') return []
   const variables = pou.interface?.variables ?? []
-  return variables.map((variable) => toExportable(`${pou.name}.${variable.name}`, variable))
+  return variables.map((variable) => toExportable({ kind: 'program', programName: pou.name }, variable))
 }
 
 function collectGlobals(variables: PLCVariable[]): ExportableVariable[] {
-  return variables.map((variable) => toExportable(`GVL.${variable.name}`, variable))
+  return variables.map((variable) => toExportable({ kind: 'gvl', listName: GVL_SCOPE_NAME }, variable))
 }
 
 /**
- * Compact fingerprint of the model slice this port exposes. Compared string-wise on every store
- * commit; the subscription fires only when it changes, so edits in unrelated slices (editor tabs,
- * console, debugger) do not wake the VPP screens.
+ * Compact fingerprint of the model slice this port exposes. Walks only POU **programs** (the
+ * picker never lists function / function-block locals) and the configuration's flat global
+ * variables, so edits elsewhere in the project do not force a selector-level change.
  */
-function fingerprint(store: OpenPLCStore): string {
-  const projectData = store.getState().project.data
+function fingerprintState(state: ReturnType<OpenPLCStore['getState']>): string {
+  const projectData = state.project.data
   const pous = projectData.pous
+    .filter((p) => p.pouType === 'program')
     .map(
       (p) =>
         `${p.name}:${(p.interface?.variables ?? []).map((v) => `${v.name}|${v.type.value}|${v.location}`).join(',')}`,
@@ -70,14 +87,10 @@ export function createProjectPlcModel(store: OpenPLCStore): PlcModelPort {
       return variable?.location ?? ''
     },
     onModelChanged(callback) {
-      let last = fingerprint(store)
-      return store.subscribe(() => {
-        const next = fingerprint(store)
-        if (next !== last) {
-          last = next
-          callback()
-        }
-      })
+      // `subscribeWithSelector` is wired into the store factory: a selector-returning subscribe
+      // only calls back when the projection changes (strict equality on the fingerprint string),
+      // so unrelated store commits do not wake VPP screen hosts.
+      return store.subscribe(fingerprintState, () => callback())
     },
   }
 }

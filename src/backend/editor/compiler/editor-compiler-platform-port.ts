@@ -736,7 +736,7 @@ export function createEditorCompilerPlatformPort(
       const resolveAddress = (qualifier: string): string => args.addressByQualifier[qualifier] ?? ''
       const resolveDebugEntry = buildResolveDebugEntry(args.debugMapContent, args.instances)
       const { collectVppScreenRuntimeArtifacts: runCollect } = await import('../compile/vpp-screen-emitters')
-      const res = runCollect({
+      const res = await runCollect({
         vppExtensions: args.vppExtensions,
         deviceId: args.deviceId,
         exportableVariables: args.exportableVariables,

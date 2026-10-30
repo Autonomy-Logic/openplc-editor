@@ -140,9 +140,22 @@ export type RelayToHostMessage = z.infer<typeof relayToHostSchema>
 /** Host-pushed event the guest can subscribe to. One of the discriminants of HostToRelayMessage. */
 export type HostEventMessage = Extract<HostToRelayMessage, { kind: 'host-event' }>
 
+/**
+ * Scope of a PLC variable exposed to a VPP screen. The structured decomposition rides alongside
+ * the flat wire qualifier so a POU happening to be named `GVL` cannot be confused with the
+ * global namespace downstream — the shape mirrors `ExportableScope` in `plc-model-port`.
+ */
+export const exportableScopeSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('program'), programName: z.string().min(1) }),
+  z.object({ kind: z.literal('gvl'), listName: z.string().min(1) }),
+])
+export type ExportableScope = z.infer<typeof exportableScopeSchema>
+
 /** Shape of a PLC variable exposed to a VPP screen via `getPlcVariables`. */
 export const exportableVariableSchema = z.object({
   qualifier: z.string().min(1),
+  scope: exportableScopeSchema,
+  variable: z.string().min(1),
   type: z.string().min(1),
   isWritable: z.boolean(),
 })

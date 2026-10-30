@@ -1,4 +1,4 @@
-import { useOpenPLCStore } from '@root/frontend/store'
+import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import {
   getSectionPersistenceKey,
   getSectionVppExtensionScreenId,
@@ -24,6 +24,11 @@ export interface SectionStorage {
   readonly: boolean
 }
 
+/** Shared frozen empty payload returned when the section has no backing bucket yet. Reusing one
+ *  reference keeps `storage.values` identity stable across renders, so downstream `useMemo`s that
+ *  depend on it (column defs, memoized form shapes) are not invalidated by every store commit. */
+const EMPTY_VALUES: SectionStoragePayload = Object.freeze({})
+
 /**
  * Resolves a section's storage adapter — the single call both form-layout
  * and table-layout make to read current values and persist individual
@@ -38,9 +43,12 @@ export interface SectionStorage {
  * Writes are read-modify-write merges: the whole bucket is replaced with
  * `{ ...current, [key]: value }`. For a vpp-extensions section without a
  * resolvable `packageId` or `screenId`, `setField` is a no-op and `readonly`
- * is true — the section renders but changes don't stick.
+ * is true — the section renders but changes don't stick. The merge reads
+ * `current` through `storeApi.getState()` at the moment of the write so the
+ * `setPayload` identity does not thrash on every unrelated store commit.
  */
 export function useSectionStorage(section: PersistableSection): SectionStorage {
+  const storeApi = useOpenPLCStoreApi()
   const isVpp = isVppExtensionsSection(section)
   const vppScreenId = isVpp ? getSectionVppExtensionScreenId(section) : null
   const vendorKey = isVpp ? null : getSectionPersistenceKey(section)
@@ -59,23 +67,28 @@ export function useSectionStorage(section: PersistableSection): SectionStorage {
     return s.deviceDefinitions.configuration.vendorScreenData?.[vendorKey] as SectionStoragePayload | undefined
   })
 
-  const setVppExtension = useOpenPLCStore((s) => s.projectActions.setVppExtension)
-  const setVendorScreenData = useOpenPLCStore((s) => s.deviceActions.setVendorScreenData)
-
-  const values = (isVpp ? vppValues : vendorValues) ?? {}
+  const values = (isVpp ? vppValues : vendorValues) ?? EMPTY_VALUES
   const readonly = isVpp ? !packageId || !vppScreenId : !vendorKey
 
   const setPayload = useCallback(
     (patch: SectionStoragePayload) => {
       if (readonly) return
-      const merged = { ...values, ...patch }
+      const state = storeApi.getState()
       if (isVpp && packageId && vppScreenId) {
-        setVppExtension(packageId, vppScreenId, merged)
+        const current =
+          (state.project.data.vppExtensions?.[packageId]?.[vppScreenId] as SectionStoragePayload | undefined) ?? {}
+        state.projectActions.setVppExtension(packageId, vppScreenId, { ...current, ...patch })
       } else if (!isVpp && vendorKey) {
-        setVendorScreenData(vendorKey, merged as Record<string, string | number | boolean>)
+        const current =
+          (state.deviceDefinitions.configuration.vendorScreenData?.[vendorKey] as SectionStoragePayload | undefined) ??
+          {}
+        state.deviceActions.setVendorScreenData(vendorKey, {
+          ...current,
+          ...patch,
+        } as Record<string, string | number | boolean>)
       }
     },
-    [isVpp, packageId, vppScreenId, vendorKey, values, readonly, setVppExtension, setVendorScreenData],
+    [storeApi, isVpp, packageId, vppScreenId, vendorKey, readonly],
   )
 
   const setField = useCallback(

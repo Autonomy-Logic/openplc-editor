@@ -84,7 +84,8 @@ describe('theme overrides', () => {
 describe('window relay theme messages', () => {
   function installed() {
     const guest = mountGuest()
-    cleanups.push(installWindowRelay(guest, { bootTimeoutMs: 60_000 }))
+    const relay = installWindowRelay(guest, { bootTimeoutMs: 60_000 })
+    cleanups.push(() => relay.stop())
     const send = (source: Window, data: unknown) =>
       guest.dispatchEvent(new guest.MessageEvent('message', { source, data }))
     const theme = () => guest.document.documentElement.getAttribute(THEME_ATTRIBUTE)

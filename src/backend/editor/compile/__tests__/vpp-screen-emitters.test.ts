@@ -2,6 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
+import { createInProcessEmitterSandbox } from '../vpp-emitter-sandbox'
 import { collectVppScreenRuntimeArtifacts } from '../vpp-screen-emitters'
 
 // The collector reaches into PackageManagerModule for installed packages. We mock it to a tiny
@@ -11,7 +12,16 @@ jest.mock('../../package-manager/package-manager-module', () => {
 })
 import { PackageManagerModule } from '../../package-manager/package-manager-module'
 
+// `jest.mocked(PackageManagerModule)` enforces the full class contract on `mockImplementation`'s
+// return. The test only exercises `listInstalled` + `getInstalledPackageManifest`, so a partial
+// stub is intentional here — the broader cast is the pragmatic trade-off for not re-implementing
+// 13 unused methods per fixture.
 const MockedPackageManagerModule = PackageManagerModule as unknown as jest.Mock
+
+// Tests use the in-process sandbox: the emitter source is trusted (we author it in the fixture),
+// so the worker boundary adds nothing but startup latency. The worker sandbox is covered through
+// its own module's integration tests.
+const testSandbox = createInProcessEmitterSandbox()
 
 describe('collectVppScreenRuntimeArtifacts', () => {
   let packageDir: string
@@ -51,8 +61,8 @@ describe('collectVppScreenRuntimeArtifacts', () => {
     MockedPackageManagerModule.mockReset()
   })
 
-  it('emits conf/data-hub.json with resolved addresses', () => {
-    const res = collectVppScreenRuntimeArtifacts({
+  it('emits conf/data-hub.json with resolved addresses', async () => {
+    const res = await collectVppScreenRuntimeArtifacts({
       vppExtensions: {
         'com.test.vpp': {
           'data-hub': {
@@ -66,6 +76,7 @@ describe('collectVppScreenRuntimeArtifacts', () => {
       deviceId: 'test-board',
       exportableVariables: [],
       resolveAddress: (q) => (q === 'Program0.pump_speed' ? '%QW0.1' : q === 'Program0.temp_pv' ? '%IW0.0' : ''),
+      sandbox: testSandbox,
     })
     expect(res.errors).toEqual([])
     expect(res.files['conf/data-hub.json']).toBeDefined()
@@ -78,8 +89,8 @@ describe('collectVppScreenRuntimeArtifacts', () => {
     })
   })
 
-  it('reports an emitter error for a variable with no address, prefixed by (packageId:screenId)', () => {
-    const res = collectVppScreenRuntimeArtifacts({
+  it('reports an emitter error for a variable with no address, prefixed by (packageId:screenId)', async () => {
+    const res = await collectVppScreenRuntimeArtifacts({
       vppExtensions: {
         'com.test.vpp': {
           'data-hub': {
@@ -90,29 +101,32 @@ describe('collectVppScreenRuntimeArtifacts', () => {
       deviceId: 'test-board',
       exportableVariables: [],
       resolveAddress: () => '',
+      sandbox: testSandbox,
     })
     expect(res.errors).toEqual(['com.test.vpp:data-hub: orphan has no address'])
     const parsed = JSON.parse(res.files['conf/data-hub.json'] as string)
     expect(parsed.exports).toEqual([])
   })
 
-  it('skips emitters for packages with no entry in vppExtensions', () => {
-    const res = collectVppScreenRuntimeArtifacts({
+  it('skips emitters for packages with no entry in vppExtensions', async () => {
+    const res = await collectVppScreenRuntimeArtifacts({
       vppExtensions: {},
       deviceId: 'test-board',
       exportableVariables: [],
       resolveAddress: () => '',
+      sandbox: testSandbox,
     })
     expect(res.files).toEqual({})
     expect(res.errors).toEqual([])
   })
 
-  it('errors when a project uses a VPP that is not installed', () => {
-    const res = collectVppScreenRuntimeArtifacts({
+  it('errors when a project uses a VPP that is not installed', async () => {
+    const res = await collectVppScreenRuntimeArtifacts({
       vppExtensions: { 'not.installed': { x: {} } },
       deviceId: 'test-board',
       exportableVariables: [],
       resolveAddress: () => '',
+      sandbox: testSandbox,
     })
     expect(res.files).toEqual({})
     expect(res.errors[0]).toMatch(/not installed/)
@@ -148,8 +162,8 @@ describe('collectVppScreenRuntimeArtifacts', () => {
       }))
     })
 
-    it('exposes a resolveDebugEntry callback the emitter can read verbatim', () => {
-      const res = collectVppScreenRuntimeArtifacts({
+    it('exposes a resolveDebugEntry callback the emitter can read verbatim', async () => {
+      const res = await collectVppScreenRuntimeArtifacts({
         vppExtensions: {
           'com.test.vpp': {
             'debug-screen': {
@@ -169,6 +183,7 @@ describe('collectVppScreenRuntimeArtifacts', () => {
           if (q === 'GVL.setpoint') return { arr: 0, elem: 7, datatype: 'DINT' }
           return null
         },
+        sandbox: testSandbox,
       })
       expect(res.errors).toEqual(['com.test.vpp:debug-screen: Program0.missing not in debug map'])
       const parsed = JSON.parse(res.files['conf/debug-exports.json'] as string)
@@ -178,8 +193,8 @@ describe('collectVppScreenRuntimeArtifacts', () => {
       ])
     })
 
-    it('defaults resolveDebugEntry to a null-returner when the collector arg is omitted', () => {
-      const res = collectVppScreenRuntimeArtifacts({
+    it('defaults resolveDebugEntry to a null-returner when the collector arg is omitted', async () => {
+      const res = await collectVppScreenRuntimeArtifacts({
         vppExtensions: {
           'com.test.vpp': {
             'debug-screen': { exports: [{ qualifier: 'Program0.pump_speed' }] },
@@ -188,6 +203,7 @@ describe('collectVppScreenRuntimeArtifacts', () => {
         deviceId: 'test-board',
         exportableVariables: [],
         resolveAddress: () => '',
+        sandbox: testSandbox,
       })
       expect(res.errors).toEqual(['com.test.vpp:debug-screen: Program0.pump_speed not in debug map'])
       const parsed = JSON.parse(res.files['conf/debug-exports.json'] as string)

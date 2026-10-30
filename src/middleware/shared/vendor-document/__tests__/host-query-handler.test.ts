@@ -99,4 +99,21 @@ describe('installHostQueryHandler', () => {
     await flush()
     expect(posted).toEqual([])
   })
+
+  it('drops a dispatcher reply that resolves after dispose() so it cannot land on a reused transport', async () => {
+    const { transport, posted, deliver } = createMemoryTransport()
+    let release: (value: string) => void = () => undefined
+    const session = installHostQueryHandler(
+      transport,
+      () =>
+        new Promise<string>((resolve) => {
+          release = resolve
+        }),
+    )
+    deliver({ channel: RELAY_CHANNEL, kind: 'host-query', id: 'g5', method: 'getPlcVariables', args: [] })
+    session.dispose()
+    release('late')
+    await flush()
+    expect(posted).toEqual([])
+  })
 })

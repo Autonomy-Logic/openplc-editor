@@ -112,7 +112,7 @@ export type ProjectActions = {
   updateMetaName: (name: string) => void
   updateMetaPath: (path: string) => void
 
-  /** RTOP-306: read / write opaque VPP screen data keyed by (packageId, screenId). */
+  /** Read / write opaque VPP screen data keyed by (packageId, screenId). */
   getVppExtension: (packageId: string, screenId: string) => unknown
   setVppExtension: (packageId: string, screenId: string, data: unknown) => void
 

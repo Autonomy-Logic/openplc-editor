@@ -1095,6 +1095,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
     createPou: (dto) => {
       const existing = getState().project.data.pous.find((p) => p.name === dto.data.name)
       if (existing) return fail('POU already exists')
+      // `GVL` is reserved for the global variable namespace used by the Data Hub qualifier wire
+      // format, so allowing a POU with that name would make `GVL.foo` ambiguous between the two
+      // scopes. Case-insensitive because IEC identifiers are case-insensitive on compile.
+      if (dto.data.name.toUpperCase() === 'GVL') return fail('POU name "GVL" is reserved for the global namespace')
 
       setState(
         produce((slice: ProjectSlice) => {
