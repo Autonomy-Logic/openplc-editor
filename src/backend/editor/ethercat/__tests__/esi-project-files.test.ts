@@ -4,6 +4,8 @@ import { join } from 'node:path'
 
 import { EsiProjectFiles } from '../esi-project-files'
 
+jest.mock('electron', () => ({ app: { getPath: () => require('node:os').tmpdir() } }))
+
 describe('EsiProjectFiles', () => {
   let project: string
   const files = new EsiProjectFiles()
