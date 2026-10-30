@@ -33,6 +33,11 @@ export interface PersistableSection {
   persistence?: unknown
   layout?: unknown
   source?: unknown
+  // Opt-in override for the vpp-extensions screen id. Multiple sections in the
+  // same screen may share the same `storageId` to persist into one bucket
+  // (e.g. a Connection form + a Variables table that both back one Data Hub
+  // payload). Ignored unless `persistence === "vpp-extensions"`.
+  storageId?: unknown
 }
 
 export const VENDOR_DOCUMENT_LAYOUT = 'vendor-document'
@@ -42,10 +47,15 @@ export const DEVICE_SETUP_SOURCE = 'device-setup'
 export const DEVICE_SETUP_KEY = 'device-setup'
 export const IO_MAPPING_KEY = 'io-mapping'
 export const MODULE_CONFIGURATION_KEY = 'module-configuration'
+export const VPP_EXTENSIONS_PERSISTENCE = 'vpp-extensions'
 const CONFIGURATOR_KEY = 'configurator'
 
 export function isDeviceSetupIoTable(section: PersistableSection): boolean {
   return section.layout === IO_TABLE_LAYOUT && section.source === DEVICE_SETUP_SOURCE
+}
+
+export function isVppExtensionsSection(section: PersistableSection): boolean {
+  return section.persistence === VPP_EXTENSIONS_PERSISTENCE
 }
 
 /**
@@ -55,13 +65,40 @@ export function isDeviceSetupIoTable(section: PersistableSection): boolean {
  * Returns `null` when the section is malformed (no usable `id` or
  * `persistence`) — the schema requires `id`, but the runtime guard
  * keeps a broken VPP package from silently dropping writes.
+ *
+ * `vpp-extensions` sections also return `null`: their data lives in
+ * `project.data.vppExtensions[packageId][screenId]`, serialized in bulk
+ * by `save-actions`, not under `vendorScreenData`. Call
+ * `getSectionVppExtensionScreenId` to resolve their screen id instead.
  */
 export function getSectionPersistenceKey(section: PersistableSection | null | undefined): string | null {
   if (!section || typeof section !== 'object') return null
   // The configurator and the table it drives use fixed keys: the build reads the archive from `configurator`.
   if (isDeviceSetupIoTable(section)) return IO_MAPPING_KEY
-  if (section.layout === VENDOR_DOCUMENT_LAYOUT) return CONFIGURATOR_KEY
+  // vpp-extensions sections are routed through the project store's vppExtensions API, not vendorScreenData.
+  if (isVppExtensionsSection(section)) return null
+  // An explicit `persistence` wins over the layout default, so a VPP can ship a `vendor-document`
+  // screen that stores opaque VPP-extension data instead of a configurator archive.
   if (typeof section.persistence === 'string' && section.persistence.length > 0) return section.persistence
+  if (section.layout === VENDOR_DOCUMENT_LAYOUT) return CONFIGURATOR_KEY
+  if (typeof section.id === 'string' && section.id.length > 0) return section.id
+  return null
+}
+
+/**
+ * Screen id under `project.data.vppExtensions[packageId]` where this
+ * section's data lives. Returns `null` for sections that do not use the
+ * vpp-extensions persistence slice.
+ *
+ * `storageId` is an opt-in override: multiple sections in the same screen
+ * declaring the same `storageId` share one vpp-extensions bucket, so a
+ * Connection form and a Variables table can feed a single flat payload
+ * the runtime emitter consumes. Default is `section.id`.
+ */
+export function getSectionVppExtensionScreenId(section: PersistableSection | null | undefined): string | null {
+  if (!section || typeof section !== 'object') return null
+  if (!isVppExtensionsSection(section)) return null
+  if (typeof section.storageId === 'string' && section.storageId.length > 0) return section.storageId
   if (typeof section.id === 'string' && section.id.length > 0) return section.id
   return null
 }

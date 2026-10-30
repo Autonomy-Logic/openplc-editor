@@ -35,9 +35,18 @@ import {
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
+import { buildLeafInfoMap, type DebugLeafInfo, parseDebugMap } from '@root/frontend/utils/debug-parser'
+import {
+  buildDebugPath,
+  buildGlobalDebugPath,
+  findInstanceName,
+  type PLCInstanceMapping,
+} from '@root/frontend/utils/debug-variable-finder'
 import type {
   CheckRuntimeVersionArgs,
   CheckRuntimeVersionResult,
+  CollectVppScreenRuntimeArtifactsArgs,
+  CollectVppScreenRuntimeArtifactsResult,
   CompileArduinoArgs,
   CompileArduinoResult,
   CompilerPlatformPort,
@@ -60,6 +69,7 @@ import { createHash } from 'crypto'
 import { promises as fs } from 'fs'
 import { dirname, join } from 'path'
 
+import type { EmitterDebugEntry } from '../compile/vpp-screen-emitters'
 import type { CompilerModule } from './compiler-module'
 
 /**
@@ -718,6 +728,27 @@ export function createEditorCompilerPlatformPort(
         }
       }
     },
+
+    async collectVppScreenRuntimeArtifacts(
+      args: CollectVppScreenRuntimeArtifactsArgs,
+      _log: PlatformLog,
+    ): Promise<CollectVppScreenRuntimeArtifactsResult> {
+      const resolveAddress = (qualifier: string): string => args.addressByQualifier[qualifier] ?? ''
+      const resolveDebugEntry = buildResolveDebugEntry(args.debugMapContent, args.instances)
+      const { collectVppScreenRuntimeArtifacts: runCollect } = await import('../compile/vpp-screen-emitters')
+      const res = await runCollect({
+        vppExtensions: args.vppExtensions,
+        deviceId: args.deviceId,
+        exportableVariables: args.exportableVariables,
+        resolveAddress,
+        resolveDebugEntry,
+      })
+      const files: Record<string, string> = {}
+      for (const [path, content] of Object.entries(res.files)) {
+        files[path] = typeof content === 'string' ? content : Buffer.from(content).toString('utf-8')
+      }
+      return { files, errors: res.errors.length > 0 ? res.errors : undefined }
+    },
   }
 }
 
@@ -827,4 +858,44 @@ export async function findHexInCompilationPath(compilationPath: string, fqbn: st
     // No build/ dir — compile didn't run.
   }
   return null
+}
+
+/**
+ * Build the `resolveDebugEntry(qualifier) → {arr, elem, datatype} | null` closure the VPP
+ * emitter sandbox calls to translate a program variable qualifier into a STruC++ debug-map
+ * address. Mirrors how the OPC-UA config generator resolves nodes (same helpers, same
+ * uppercase convention), so a qualifier the debugger can watch is one a publisher VPP can
+ * export. Returns a closure that always returns `null` when the debug map is empty or
+ * unparseable, so the emitter can refuse the compile with a clean error.
+ *
+ * Qualifier shape (as produced by the pipeline today):
+ *   - "<POU_NAME>.<VAR_NAME>" — a program-local VAR, resolved via instance mapping
+ *   - "GVL.<VAR_NAME>"        — a CONFIGURATION VAR_GLOBAL, bare uppercase path
+ */
+function buildResolveDebugEntry(
+  debugMapContent: string,
+  instances: ReadonlyArray<{ name: string; task: string; program: string }>,
+): (qualifier: string) => EmitterDebugEntry | null {
+  const parsed = debugMapContent ? parseDebugMap(debugMapContent) : undefined
+  const pathToInfo: Map<string, DebugLeafInfo> | null = parsed ? buildLeafInfoMap(parsed) : null
+  const instanceMapping: PLCInstanceMapping[] = instances.map((i) => ({ name: i.name, program: i.program }))
+
+  return (qualifier: string): EmitterDebugEntry | null => {
+    if (pathToInfo === null) return null
+    const dot = qualifier.indexOf('.')
+    if (dot <= 0) return null
+    const pouName = qualifier.slice(0, dot)
+    const variablePath = qualifier.slice(dot + 1)
+    let debugPath: string
+    if (pouName === 'GVL' || pouName === 'CONFIG') {
+      debugPath = buildGlobalDebugPath(variablePath)
+    } else {
+      const instanceName = findInstanceName(pouName, instanceMapping)
+      if (instanceName === null) return null
+      debugPath = buildDebugPath(instanceName, variablePath)
+    }
+    const info = pathToInfo.get(debugPath.toUpperCase())
+    if (info === undefined) return null
+    return { arr: info.arr, elem: info.elem, datatype: info.type }
+  }
 }

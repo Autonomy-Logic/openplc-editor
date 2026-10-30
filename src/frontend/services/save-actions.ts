@@ -67,6 +67,14 @@ function buildProjectJsonContent(state: StoreState): string {
   const libraries = [...declared, ...derived].sort((a, b) => a.name.localeCompare(b.name))
   // A re-saved library must round-trip as `plc-library`, not silently downgrade to `plc-project`.
   const metaType: 'plc-project' | 'plc-library' = project.meta.type === 'plc-library' ? 'plc-library' : 'plc-project'
+  // vppExtensions is opaque: packages with no screen payloads are pruned so dead package ids do
+  // not accrete across install/uninstall cycles, and a project that has never used a VPP
+  // extension stays byte-identical with its baseline shape.
+  const rawVppExtensions = project.data.vppExtensions
+  const prunedVppExtensions = rawVppExtensions
+    ? Object.fromEntries(Object.entries(rawVppExtensions).filter(([, screens]) => Object.keys(screens).length > 0))
+    : undefined
+  const hasVppExtensions = prunedVppExtensions !== undefined && Object.keys(prunedVppExtensions).length > 0
   return JSON.stringify(
     {
       meta: { name: project.meta.name, type: metaType },
@@ -79,6 +87,7 @@ function buildProjectJsonContent(state: StoreState): string {
         configuration: project.data.configurations,
         libraries,
         debugVariables,
+        ...(hasVppExtensions ? { vppExtensions: prunedVppExtensions } : {}),
       },
     },
     null,

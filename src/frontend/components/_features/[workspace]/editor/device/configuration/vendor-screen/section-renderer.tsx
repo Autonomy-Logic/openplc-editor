@@ -1,4 +1,5 @@
 import { CollapsibleCard } from '@root/frontend/components/_atoms/collapsible-card'
+import { evalVisible, type VisibleCondition } from '@root/frontend/utils/vpp/eval-visible'
 import { isDeviceSetupIoTable } from '@root/frontend/utils/vpp/persistence-keys'
 import { readVendorDocumentSection } from '@root/frontend/utils/vpp/vendor-document-section'
 import { useState } from 'react'
@@ -8,6 +9,16 @@ import { ConfiguratorScreen } from './layouts/configurator-screen'
 import { FormLayout } from './layouts/form-layout'
 import { IoTableLayout } from './layouts/io-table-layout'
 import { ModuleSlotsLayout } from './layouts/module-slots-layout'
+import { TableLayout } from './layouts/table-layout'
+import { VariableTreePickerLayout } from './layouts/variable-tree-picker-layout'
+import { VppScreenHost } from './layouts/vpp-screen-host'
+import { useSectionStorage } from './use-section-storage'
+
+const VPP_EXTENSIONS_PERSISTENCE = 'vpp-extensions'
+
+function isVppExtensionsSection(section: ScreenSection): boolean {
+  return section.layout === 'vendor-document' && section.persistence === VPP_EXTENSIONS_PERSISTENCE
+}
 
 /**
  * The layouts this renderer knows how to draw. A vendor package is untrusted
@@ -16,7 +27,14 @@ import { ModuleSlotsLayout } from './layouts/module-slots-layout'
  * placeholder — and therefore persists nothing, because a layout the editor
  * cannot draw is one whose field semantics it also cannot honour.
  */
-const SUPPORTED_LAYOUTS = new Set(['module-slots', 'io-table', 'form', 'vendor-document'])
+const SUPPORTED_LAYOUTS = new Set([
+  'module-slots',
+  'io-table',
+  'form',
+  'table',
+  'variable-tree-picker',
+  'vendor-document',
+])
 
 type SectionRendererProps = {
   section: ScreenSection
@@ -25,9 +43,24 @@ type SectionRendererProps = {
 
 function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
   const [collapsed, setCollapsed] = useState(section.collapsed ?? false)
+  // Shared storage read-only subscription: fuels `enabledWhen` evaluation for
+  // layouts that honour it. Reading before the SUPPORTED_LAYOUTS guard keeps
+  // the hook order stable; it does nothing when the section does not persist.
+  const storage = useSectionStorage(section)
 
   if (!SUPPORTED_LAYOUTS.has(section.layout)) return null
   if (section.layout === 'vendor-document' && !readVendorDocumentSection(section)) return null
+
+  const enabledClause = (section.enabledWhen ?? undefined) as VisibleCondition | undefined
+  // Flat value snapshot for the condition DSL — strings/numbers/booleans only;
+  // arrays like `exports` are coerced to a presence boolean so a condition can
+  // reference "there is at least one export" without caring about shape.
+  const flatValues: Record<string, string | number | boolean> = {}
+  for (const [k, v] of Object.entries(storage.values)) {
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') flatValues[k] = v
+    else if (Array.isArray(v)) flatValues[k] = v.length > 0
+  }
+  const disabled = enabledClause ? !evalVisible(enabledClause, flatValues) : false
 
   const renderLayout = () => {
     switch (section.layout) {
@@ -36,9 +69,17 @@ function SectionRenderer({ section, moduleSystem }: SectionRendererProps) {
       case 'io-table':
         return <IoTableLayout section={section} moduleSystem={moduleSystem} />
       case 'form':
-        return <FormLayout section={section} />
+        return <FormLayout section={section} disabled={disabled} />
+      case 'table':
+        return <TableLayout section={section} disabled={disabled} />
+      case 'variable-tree-picker':
+        return <VariableTreePickerLayout section={section} disabled={disabled} />
       case 'vendor-document':
-        return <ConfiguratorScreen section={section} />
+        return isVppExtensionsSection(section) ? (
+          <VppScreenHost section={section} />
+        ) : (
+          <ConfiguratorScreen section={section} />
+        )
       default:
         return null
     }
