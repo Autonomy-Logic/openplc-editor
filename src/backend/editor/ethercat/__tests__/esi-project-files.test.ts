@@ -2,6 +2,15 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+// Local project paths must not require a running Electron application.
+jest.mock('electron', () => ({
+  app: {
+    getPath: jest.fn(() => {
+      throw new Error('Local ESI files must not access Electron userData')
+    }),
+  },
+}))
+
 import { EsiProjectFiles } from '../esi-project-files'
 
 describe('EsiProjectFiles', () => {

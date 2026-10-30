@@ -60,7 +60,6 @@ jest.mock('electron', () => ({
 jest.mock('electron-devtools-installer', () => ({ __esModule: true, default: jest.fn() }))
 jest.mock('electron-debug', () => ({}))
 jest.mock('electron-log', () => ({ transports: { file: {} } }))
-jest.mock('electron-updater', () => ({ autoUpdater: { checkForUpdatesAndNotify: jest.fn() } }))
 jest.mock('../../backend/editor/cli-shim/first-run', () => ({}))
 jest.mock('../../backend/editor/compiler', () => ({ CompilerModule: jest.fn() }))
 jest.mock('../../backend/editor/package-manager', () => ({ PackageManagerModule: jest.fn() }))
