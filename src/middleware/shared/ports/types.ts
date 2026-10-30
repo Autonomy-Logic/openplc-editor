@@ -688,6 +688,9 @@ export interface VppMetadata {
   } | null
 }
 
+/** `user`: a runtime licence for the hardware; `vpp`: a valid licence of the package; `vendor`: always licensed. */
+export type RuntimeLicenseMode = 'user' | 'vpp' | 'vendor'
+
 export interface PackageManifest {
   formatVersion: string
   package: {
@@ -705,6 +708,8 @@ export interface PackageManifest {
     minEditorVersion?: string
     /** Oldest runtime this package works with. Checked at compile time, since the target device is unknown at install time. */
     minRuntimeVersion?: string
+    /** Who licenses the OpenPLC Runtime on this package's targets. Absent on packages built before the field existed. */
+    runtimeLicense?: RuntimeLicenseMode
   }
   devices: Array<{
     id: string

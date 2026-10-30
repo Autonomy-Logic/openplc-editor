@@ -282,3 +282,51 @@ describe('PackageManifestSchema — target.uploadMethod', () => {
     }
   })
 })
+
+describe('PackageManifestSchema — runtimeLicense', () => {
+  it('accepts a manifest that declares none', () => {
+    expect(PackageManifestSchema.safeParse(manifest()).success).toBe(true)
+  })
+
+  it.each(['user', 'vpp', 'vendor'])('accepts %s', (mode) => {
+    expect(PackageManifestSchema.safeParse(manifest({ runtimeLicense: mode })).success).toBe(true)
+  })
+
+  it.each([['free'], [''], [1], [null]])('refuses %p at the trust boundary', (mode) => {
+    const result = PackageManifestSchema.safeParse(manifest({ runtimeLicense: mode }))
+    expect(result.success).toBe(false)
+    if (!result.success) expect(result.error.issues[0].path).toEqual(['package', 'runtimeLicense'])
+  })
+})
+
+describe('parseInstalledPackageManifest — runtimeLicense', () => {
+  let warnSpy: jest.SpyInstance
+
+  beforeEach(() => {
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    warnSpy.mockRestore()
+  })
+
+  it.each(['user', 'vpp', 'vendor'])('exposes %s for an installed package', (mode) => {
+    const parsed = parseInstalledPackageManifest(manifest({ runtimeLicense: mode }))
+    expect(parsed?.package.runtimeLicense).toBe(mode)
+    expect(warnSpy).not.toHaveBeenCalled()
+  })
+
+  it('reads a package without the field as declaring none', () => {
+    const parsed = parseInstalledPackageManifest(manifest())
+    expect(parsed?.package.id).toBe('vendor.board')
+    expect(parsed?.package.runtimeLicense).toBeUndefined()
+  })
+
+  it('drops an unknown value and keeps the package readable', () => {
+    const parsed = parseInstalledPackageManifest(manifest({ runtimeLicense: 'free', minEditorVersion: '4.3' }))
+    expect(parsed?.package.id).toBe('vendor.board')
+    expect(parsed?.package).not.toHaveProperty('runtimeLicense')
+    expect(parsed?.package.minEditorVersion).toBe('4.3')
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('runtimeLicense'))
+  })
+})
