@@ -35,6 +35,7 @@
  * server-side, but the pipeline never knows.
  */
 
+import type { ExportableVariable } from './plc-model-port'
 import type { PLCProjectData, StructuredCompileError } from './types'
 
 /**
@@ -321,6 +322,33 @@ export interface PackageVppPluginArgs {
   boardTarget: string
 }
 
+export interface CollectVppScreenRuntimeArtifactsArgs {
+  /** Selected board (device id) in the VPP manifest, e.g. `uc20-m3000`. */
+  deviceId: string
+  /** Opaque VPP extensions persisted in the project, keyed by (packageId, screenId). */
+  vppExtensions: Record<string, Record<string, unknown>>
+  /** PLC model snapshot the emitter can read via `input.model.exportableVariables`. */
+  exportableVariables: ReadonlyArray<ExportableVariable>
+  /** Address resolver provided to the emitter so it can look up IEC addresses by qualifier.
+   *  Hardware VPPs (Modbus master, EtherCAT, Weidmüller HAL) consume this to pin exports to a
+   *  located variable backed by the device's I/O. */
+  addressByQualifier: Record<string, string>
+  /** STruC++ `debug-map.json` content for this compile. Publisher VPPs (Data Hub, OPC-UA-like
+   *  bridges) consume this through `model.resolveDebugEntry` to export any program variable,
+   *  not just located ones. Empty when the compile produced no debug map. */
+  debugMapContent: string
+  /** Program instances from the project's configuration/resource. Needed to build the
+   *  STruC++ debug path from a `<pou>.<var>` qualifier the same way the OPC-UA resolver does. */
+  instances: ReadonlyArray<{ name: string; task: string; program: string }>
+}
+
+export interface CollectVppScreenRuntimeArtifactsResult {
+  /** Files to merge into the runtime-v4 bundle (`conf/data-hub.json` etc.). */
+  files: RuntimeV4Bundle
+  /** Non-fatal messages — the pipeline logs these but does not abort. */
+  errors?: string[]
+}
+
 export interface PackageVppPluginResult {
   /** Extra files to merge into the runtime-v4 upload bundle.  Keys
    *  are paths relative to the bundle root (matching
@@ -421,6 +449,19 @@ export interface CompilerPlatformPort {
    *  remote VPP packages).  The pipeline calls this between
    *  `composeRuntimeV4Bundle` and `uploadRuntimeV4`. */
   packageVppPlugin(args: PackageVppPluginArgs, log: PlatformLog): Promise<PackageVppPluginResult>
+
+  /**
+   * Materialize files emitted by VPP screen runtime emitters. Called right after
+   * `packageVppPlugin`. Looks up each `(packageId, screenId)` in `vppExtensions`, runs the
+   * declared emitter JS from the installed package in a sandboxed `vm.Script`, and returns the
+   * files to merge at `conf/*.json` paths. Optional on the port because web has no way to run
+   * emitters without downloading the package: it may omit this method and the pipeline treats
+   * that as a no-op.
+   */
+  collectVppScreenRuntimeArtifacts?(
+    args: CollectVppScreenRuntimeArtifactsArgs,
+    log: PlatformLog,
+  ): Promise<CollectVppScreenRuntimeArtifactsResult>
 
   /**
    * Persist a composed runtime-v4 bundle to the platform's build location.
