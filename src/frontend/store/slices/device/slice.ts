@@ -135,6 +135,7 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     hardwareId: null,
     status: null,
     awaitingPurchaseUntil: null,
+    checking: false,
     dismissedDisclaimers: [],
   },
 
@@ -619,6 +620,13 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
       setState(
         produce(({ runtimeCommercialLicense }: DeviceSlice) => {
           runtimeCommercialLicense.awaitingPurchaseUntil = until
+        }),
+      )
+    },
+    setRuntimeLicenseChecking: (checking): void => {
+      setState(
+        produce(({ runtimeCommercialLicense }: DeviceSlice) => {
+          runtimeCommercialLicense.checking = checking
         }),
       )
     },

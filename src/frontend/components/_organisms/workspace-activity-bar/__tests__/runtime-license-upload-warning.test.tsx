@@ -8,7 +8,6 @@ import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capa
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import {
-  COMMERCIAL_LICENSE_DISCLAIMER,
   commercialLicenseConsoleLines,
   type TargetCommercialLicenseStatus,
 } from '@root/middleware/shared/utils/licensing'
@@ -87,8 +86,8 @@ describe('Build and upload — runtime commercial licence warning', () => {
   it('ends an upload to an unlicensed target with the framed disclaimer', async () => {
     renderBar('unlicensed')
     chooseBuildOption('Build and upload')
-    await waitFor(() => expect(warnings()).toContain(COMMERCIAL_LICENSE_DISCLAIMER))
-    expect(warnings().slice(-3)).toEqual(commercialLicenseConsoleLines())
+    const framed = commercialLicenseConsoleLines()
+    await waitFor(() => expect(warnings().slice(-framed.length)).toEqual(framed))
     expect(compileProgram).toHaveBeenCalledWith(expect.objectContaining({ compileOnly: false }), expect.any(Function))
   })
 
@@ -100,7 +99,7 @@ describe('Build and upload — runtime commercial licence warning', () => {
       chooseBuildOption('Build and upload')
       await waitFor(() => expect(compileProgram).toHaveBeenCalled())
       await waitFor(() => expect(store.getState().logs.length).toBeGreaterThan(0))
-      expect(warnings()).not.toContain(COMMERCIAL_LICENSE_DISCLAIMER)
+      expect(warnings()).not.toContain(commercialLicenseConsoleLines()[0])
       compileProgram.mockClear()
     }
   })
@@ -109,7 +108,7 @@ describe('Build and upload — runtime commercial licence warning', () => {
     renderBar('unlicensed')
     chooseBuildOption('Build only')
     await waitFor(() => expect(compileProgram).toHaveBeenCalled())
-    expect(warnings()).not.toContain(COMMERCIAL_LICENSE_DISCLAIMER)
+    expect(warnings()).not.toContain(commercialLicenseConsoleLines()[0])
 
     cleanup()
     store = createTestStore()
@@ -118,6 +117,6 @@ describe('Build and upload — runtime commercial licence warning', () => {
     renderBar('unlicensed')
     chooseBuildOption('Build and upload')
     await waitFor(() => expect(store.getState().logs.map((entry) => entry.message)).toContain('upload failed'))
-    expect(warnings()).not.toContain(COMMERCIAL_LICENSE_DISCLAIMER)
+    expect(warnings()).not.toContain(commercialLicenseConsoleLines()[0])
   })
 })

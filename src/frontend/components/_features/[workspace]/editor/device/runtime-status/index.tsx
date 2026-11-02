@@ -15,13 +15,12 @@
 
 import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useOrchestrator, useRuntime } from '@root/middleware/shared/providers/platform-context'
-import {
-  COMMERCIAL_LICENSE_DISCLAIMER,
-  type TargetCommercialLicenseStatus,
-} from '@root/middleware/shared/utils/licensing'
 import { useCallback, useEffect, useState } from 'react'
 
-import { useRuntimeCommercialLicense } from '../../../../../../hooks/use-runtime-commercial-license'
+import {
+  type RuntimeCommercialLicenseView,
+  useRuntimeCommercialLicense,
+} from '../../../../../../hooks/use-runtime-commercial-license'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
@@ -289,35 +288,9 @@ const RuntimeStatusEditor = () => {
           </div>
         )}
 
-        {runtimeLicense.status === 'unlicensed' && (
-          <div
-            className='flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950'
-            role='note'
-          >
-            <p className='text-sm text-amber-900 dark:text-amber-200'>{COMMERCIAL_LICENSE_DISCLAIMER}</p>
-            {runtimeLicense.awaitingPurchase ? (
-              <p className='text-xs text-amber-800 dark:text-amber-300'>
-                Waiting for the purchase to complete. The license is installed on this target as soon as it clears.
-              </p>
-            ) : (
-              runtimeLicense.buyUrl && (
-                <button
-                  className='w-fit text-xs font-medium text-brand hover:underline'
-                  onClick={() => void runtimeLicense.buy()}
-                  type='button'
-                >
-                  Buy licences
-                </button>
-              )
-            )}
-          </div>
-        )}
-
         <dl className='grid grid-cols-2 gap-x-8 gap-y-2 md:grid-cols-3'>
           <InfoField label='Runtime version' value={runtimeVersion} />
-          {describeRuntimeLicense(runtimeLicense.status) && (
-            <InfoField label='License' value={describeRuntimeLicense(runtimeLicense.status)} />
-          )}
+          <LicenseField license={runtimeLicense} />
           {bootloader.present ? (
             <InfoField label='Bootloader' value={bootloader.version} />
           ) : (
@@ -359,18 +332,45 @@ const RuntimeStatusEditor = () => {
   )
 }
 
-/** Label for the License field; null hides it (no runtime report, or not connected). */
-function describeRuntimeLicense(status: TargetCommercialLicenseStatus | null): string | null {
-  switch (status) {
+/** License value for the connected runtime target; null hides the field (no runtime report, or not connected). */
+function describeRuntimeLicense(
+  license: Pick<RuntimeCommercialLicenseView, 'status' | 'checking' | 'awaitingPurchase'>,
+): string | null {
+  switch (license.status) {
     case 'licensed':
       return 'Commercial'
     case 'unlicensed':
+      if (license.checking) return 'Checking for a license…'
+      if (license.awaitingPurchase) return 'GPLv3, waiting for purchase confirmation'
       return 'GPLv3'
     case 'vpp-flow':
       return 'Board license required'
     default:
       return null
   }
+}
+
+const LicenseField = ({ license }: { license: RuntimeCommercialLicenseView }) => {
+  const value = describeRuntimeLicense(license)
+  if (!value) return null
+  const canBuy = license.status === 'unlicensed' && !license.checking && !license.awaitingPurchase && !!license.buyUrl
+  return (
+    <div className='flex flex-col'>
+      <dt className='text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400'>License</dt>
+      <dd className='flex items-baseline gap-2 text-sm text-neutral-900 dark:text-neutral-100'>
+        {value}
+        {canBuy && (
+          <button
+            className='text-xs font-medium text-brand hover:underline'
+            onClick={() => void license.buy()}
+            type='button'
+          >
+            Buy licences
+          </button>
+        )}
+      </dd>
+    </div>
+  )
 }
 
 const InfoField = ({ label, value }: { label: string; value?: string | null }) => (

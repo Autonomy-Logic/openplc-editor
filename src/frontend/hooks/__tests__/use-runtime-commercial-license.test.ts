@@ -237,9 +237,11 @@ describe('useRuntimeCommercialLicenseOwner', () => {
     const { result } = renderOwner()
     await flush()
     expect(result.current.status).toBe('unlicensed')
+    expect(result.current.checking).toBe(true)
     expect(dialog()?.open ?? false).toBe(false)
     await act(async () => finish({ status: 'synced', hardwareId: ID, uploads: [] }))
     await flush()
+    expect(result.current.checking).toBe(false)
     expect(dialog()?.open).toBe(true)
   })
 

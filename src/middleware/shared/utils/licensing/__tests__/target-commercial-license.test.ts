@@ -54,10 +54,21 @@ describe('resolveTargetCommercialLicense', () => {
 
 describe('commercialLicenseConsoleLines', () => {
   it('frames the approved text between rules of asterisks', () => {
-    const [top, text, bottom] = commercialLicenseConsoleLines()
-    expect(top).toMatch(/^\*{10,}$/)
-    expect(bottom).toBe(top)
-    expect(text).toBe(COMMERCIAL_LICENSE_DISCLAIMER)
+    const lines = commercialLicenseConsoleLines()
+    const top = lines[0]
+    expect(top).toMatch(/^\*{72}$/)
+    expect(lines.at(-1)).toBe(top)
+    expect(lines.slice(1, -1).join(' ')).toBe(COMMERCIAL_LICENSE_DISCLAIMER)
+  })
+
+  it('wraps the text so no line is wider than the rules', () => {
+    const lines = commercialLicenseConsoleLines()
+    const text = lines.slice(1, -1)
+    expect(text.length).toBeGreaterThan(1)
+    for (const line of text) {
+      expect(line.length).toBeLessThanOrEqual(lines[0].length)
+      expect(line).toBe(line.trim())
+    }
   })
 })
 

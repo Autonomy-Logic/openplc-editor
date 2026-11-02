@@ -133,6 +133,8 @@ export type RuntimeCommercialLicenseInfo = {
   status: TargetCommercialLicenseStatus | null
   /** End (epoch ms) of the window in which a purchase started here is watched for, or null. */
   awaitingPurchaseUntil: number | null
+  /** True while the licence check that runs on connect has not finished. */
+  checking: boolean
   /** Hardware IDs whose connect dialog was dismissed; never persisted, so it lasts until the editor restarts. */
   dismissedDisclaimers: string[]
 }
@@ -322,6 +324,7 @@ export type DeviceActions = {
   setRuntimeHardwareId: (hardwareId: string | null) => void
   setRuntimeCommercialLicenseStatus: (status: TargetCommercialLicenseStatus | null) => void
   setRuntimeLicensePurchaseWatch: (until: number | null) => void
+  setRuntimeLicenseChecking: (checking: boolean) => void
   dismissRuntimeLicenseDisclaimer: (hardwareId: string) => void
   setSelectedDevice: (device: SelectedDevice | null) => void
   /**

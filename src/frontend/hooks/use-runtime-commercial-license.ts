@@ -36,6 +36,8 @@ export interface RuntimeCommercialLicenseView {
   /** Opens the purchase page and watches for the licence to arrive. */
   buy: () => Promise<void>
   awaitingPurchase: boolean
+  /** True while the licence check that runs on connect has not finished. */
+  checking: boolean
 }
 
 export function useRuntimeCommercialLicense(): RuntimeCommercialLicenseView {
@@ -43,6 +45,7 @@ export function useRuntimeCommercialLicense(): RuntimeCommercialLicenseView {
   const status = useOpenPLCStore((state) => state.runtimeCommercialLicense.status)
   const hardwareId = useOpenPLCStore((state) => state.runtimeCommercialLicense.hardwareId)
   const awaitingPurchaseUntil = useOpenPLCStore((state) => state.runtimeCommercialLicense.awaitingPurchaseUntil)
+  const checking = useOpenPLCStore((state) => state.runtimeCommercialLicense.checking)
   const setPurchaseWatch = useOpenPLCStore((state) => state.deviceActions.setRuntimeLicensePurchaseWatch)
 
   const buyUrl = useMemo(() => buildRuntimeLicenseBuyUrl(system.getEdgeFrontendUrl(), hardwareId), [system, hardwareId])
@@ -54,8 +57,8 @@ export function useRuntimeCommercialLicense(): RuntimeCommercialLicenseView {
   }, [buyUrl, setPurchaseWatch, system])
 
   return useMemo(
-    () => ({ status, hardwareId, buyUrl, buy, awaitingPurchase: awaitingPurchaseUntil !== null }),
-    [status, hardwareId, buyUrl, buy, awaitingPurchaseUntil],
+    () => ({ status, hardwareId, buyUrl, buy, awaitingPurchase: awaitingPurchaseUntil !== null, checking }),
+    [status, hardwareId, buyUrl, buy, awaitingPurchaseUntil, checking],
   )
 }
 
@@ -139,11 +142,15 @@ export function useRuntimeCommercialLicenseOwner(): void {
     setDelivered(false)
     if (!connected) {
       deviceActions.setRuntimeHardwareId(null)
+      deviceActions.setRuntimeLicenseChecking(false)
       return
     }
     let cancelled = false
+    deviceActions.setRuntimeLicenseChecking(true)
     void deliverRef.current().finally(() => {
-      if (!cancelled) setDelivered(true)
+      if (cancelled) return
+      setDelivered(true)
+      store.getState().deviceActions.setRuntimeLicenseChecking(false)
     })
     return () => {
       cancelled = true

@@ -12,11 +12,12 @@
  */
 
 import type { OpenPLCStore } from '@root/frontend/store'
-import type { RuntimeConnection } from '@root/frontend/store/slices/device/types'
+import type { RuntimeCommercialLicenseInfo, RuntimeConnection } from '@root/frontend/store/slices/device/types'
 import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import type { OrchestratorPort } from '@root/middleware/shared/ports/orchestrator-port'
 import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { BootloaderPort, RuntimePort } from '@root/middleware/shared/ports/runtime-port'
+import type { SystemPort } from '@root/middleware/shared/ports/system-port'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import { render as rtlRender, screen, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
@@ -43,6 +44,7 @@ const getCapabilities = vi.fn()
 const bootloaderLogin = vi.fn()
 const getStatus = vi.fn()
 const getOrchestratorHostInfo = vi.fn()
+const openExternalLink = vi.fn()
 
 const ports: PlatformPorts = {
   compiler: stubPort(),
@@ -66,7 +68,10 @@ const ports: PlatformPorts = {
   // The production source of these facts for an orchestrator-managed device,
   // which has no bootloader container to ask.
   orchestrator: stubPort<OrchestratorPort>({ getOrchestratorHostInfo }),
-  system: stubPort(),
+  system: stubPort<SystemPort>({
+    getEdgeFrontendUrl: () => 'https://edge.example.com',
+    openExternalLink: (url: string) => openExternalLink(url) as Promise<{ success: boolean }>,
+  }),
   window: stubPort(),
   accelerator: stubPort(),
   theme: stubPort(),
@@ -114,6 +119,7 @@ beforeEach(() => {
   getCapabilities.mockResolvedValue({ success: false, error: 'No bootloader on this device' })
   bootloaderLogin.mockResolvedValue({ success: false, error: 'no' })
   getStatus.mockResolvedValue({ success: false, error: 'no' })
+  openExternalLink.mockResolvedValue({ success: true })
 })
 
 /**
@@ -356,5 +362,56 @@ describe('A device with no bootloader', () => {
 
     await waitFor(() => expect(getOrchestratorHostInfo).toHaveBeenCalled())
     expect(screen.getByText('Runtime Status')).toBeTruthy()
+  })
+})
+
+describe('runtime commercial license', () => {
+  const HW_ID = `hw2:${'ab'.repeat(32)}`
+  const DISCLAIMER_START = 'This target does not have a commercial license'
+
+  const licenseState = (patch: Partial<RuntimeCommercialLicenseInfo>) =>
+    store.setState((state) => ({ runtimeCommercialLicense: { ...state.runtimeCommercialLicense, ...patch } }))
+
+  const licenseValue = () => screen.getByText('License').nextElementSibling?.textContent
+
+  it('shows GPLv3 and a buy link inside the License field, with no separate notice', async () => {
+    licenseState({ status: 'unlicensed', hardwareId: HW_ID })
+    render(<RuntimeStatusEditor />)
+    await waitFor(() => expect(licenseValue()).toBe('GPLv3Buy licences'))
+    expect(screen.queryByText(new RegExp(DISCLAIMER_START))).toBeNull()
+    expect(screen.queryByRole('note')).toBeNull()
+    screen.getByRole('button', { name: 'Buy licences' }).click()
+    await waitFor(() =>
+      expect(openExternalLink).toHaveBeenCalledWith(
+        `https://edge.example.com/buy?hardwareId=${encodeURIComponent(HW_ID)}`,
+      ),
+    )
+  })
+
+  it('shows the check that runs on connect', async () => {
+    licenseState({ status: 'unlicensed', hardwareId: HW_ID, checking: true })
+    render(<RuntimeStatusEditor />)
+    await waitFor(() => expect(licenseValue()).toBe('Checking for a license…'))
+    expect(screen.queryByRole('button', { name: 'Buy licences' })).toBeNull()
+  })
+
+  it('shows a purchase being waited for', async () => {
+    licenseState({ status: 'unlicensed', hardwareId: HW_ID, awaitingPurchaseUntil: Date.now() + 60_000 })
+    render(<RuntimeStatusEditor />)
+    await waitFor(() => expect(licenseValue()).toBe('GPLv3, waiting for purchase confirmation'))
+    expect(screen.queryByRole('button', { name: 'Buy licences' })).toBeNull()
+  })
+
+  it('shows Commercial for a licensed target', async () => {
+    licenseState({ status: 'licensed', hardwareId: HW_ID })
+    render(<RuntimeStatusEditor />)
+    await waitFor(() => expect(licenseValue()).toBe('Commercial'))
+  })
+
+  it('hides the field when the runtime reports no license', async () => {
+    licenseState({ status: 'unknown' })
+    render(<RuntimeStatusEditor />)
+    await waitFor(() => expect(screen.getByText('Runtime version')).toBeTruthy())
+    expect(screen.queryByText('License')).toBeNull()
   })
 })

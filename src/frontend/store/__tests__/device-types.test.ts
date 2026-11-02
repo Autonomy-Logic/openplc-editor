@@ -207,6 +207,7 @@ describe('Device slice types', () => {
           hardwareId: null,
           status: null,
           awaitingPurchaseUntil: null,
+          checking: false,
           dismissedDisclaimers: [],
         },
       }

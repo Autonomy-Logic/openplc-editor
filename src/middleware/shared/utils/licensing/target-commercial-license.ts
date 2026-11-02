@@ -43,11 +43,28 @@ export function resolveTargetCommercialLicense({
   return 'unknown'
 }
 
-const RULE = '*'.repeat(72)
+const CONSOLE_WIDTH = 72
+const RULE = '*'.repeat(CONSOLE_WIDTH)
 
-/** The disclaimer framed for the console, one entry per line. */
+/** Greedy word wrap; a word longer than `width` keeps its own line. */
+function wrapWords(text: string, width: number): string[] {
+  const lines: string[] = []
+  let line = ''
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (line && line.length + 1 + word.length > width) {
+      lines.push(line)
+      line = word
+    } else {
+      line = line ? `${line} ${word}` : word
+    }
+  }
+  if (line) lines.push(line)
+  return lines
+}
+
+/** The disclaimer framed for the console, one entry per line, each no wider than the rules. */
 export function commercialLicenseConsoleLines(): string[] {
-  return [RULE, COMMERCIAL_LICENSE_DISCLAIMER, RULE]
+  return [RULE, ...wrapWords(COMMERCIAL_LICENSE_DISCLAIMER, CONSOLE_WIDTH), RULE]
 }
 
 const HARDWARE_ID_RE = /^hw2:[0-9a-f]{64}$/
