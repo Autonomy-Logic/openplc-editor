@@ -118,8 +118,9 @@ import type { VersionControlResult } from '@root/middleware/shared/ports/version
 import { capabilitiesFromResponse } from '@root/middleware/shared/utils/build-gate/runtime-capabilities-response'
 import {
   parseRuntimeCommercialLicense,
-  parseRuntimeHardwareId,
+  readRuntimeHardwareId,
   type RuntimeCommercialLicense,
+  syncRuntimeLicenses,
 } from '@root/middleware/shared/utils/licensing'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
@@ -156,7 +157,7 @@ import {
   type LicenseReadWritable,
   resolveDeviceLicense,
 } from '../../../backend/editor/license/license-flow'
-import { lookupRuntimeLicenses, syncRuntimeLicenses } from '../../../backend/editor/license/runtime-license-sync'
+import { createRuntimeLicenseMechanisms } from '../../../backend/editor/license/runtime-license-mechanisms'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { BootloaderApiClient } from '../../../backend/editor/runtime/bootloader-api-client'
 import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
@@ -573,26 +574,11 @@ class MainProcessBridge implements MainIpcModule {
     }
   }
 
-  handleRuntimeGetHardwareId = (_event: IpcMainInvokeEvent, ipAddress: string) => this.readRuntimeHardwareId(ipAddress)
-
-  private async readRuntimeHardwareId(ipAddress: string): Promise<RuntimeHardwareIdResult> {
-    const res = await this.makeRuntimeApiRequest<unknown>(ipAddress, '/api/hardware-id', (data) => JSON.parse(data))
-    if (!res.success) return { success: false, error: res.error }
-    const parsed = parseRuntimeHardwareId(res.data)
-    return parsed
-      ? { success: true, ...parsed }
-      : { success: false, error: 'The runtime sent a hardware ID the editor could not read.' }
-  }
+  handleRuntimeGetHardwareId = (_event: IpcMainInvokeEvent, ipAddress: string): Promise<RuntimeHardwareIdResult> =>
+    readRuntimeHardwareId(createRuntimeLicenseMechanisms(this.runtimeApi, ipAddress))
 
   handleRuntimeSyncLicenses = (_event: IpcMainInvokeEvent, ipAddress: string): Promise<RuntimeLicenseSyncResult> =>
-    syncRuntimeLicenses({
-      getHardwareId: () => this.readRuntimeHardwareId(ipAddress),
-      lookup: lookupRuntimeLicenses,
-      upload: async (body) => {
-        const res = await this.runtimeApi.makeRuntimeApiPostRequest(ipAddress, '/api/runtime-license', body, () => true)
-        return res.success ? { stored: true } : { stored: false, error: res.error }
-      },
-    })
+    syncRuntimeLicenses(createRuntimeLicenseMechanisms(this.runtimeApi, ipAddress))
 
   handleRuntimeStartPlc = (_event: IpcMainInvokeEvent, ipAddress: string) => this.restStartPlc(ipAddress)
 
