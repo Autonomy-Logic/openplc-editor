@@ -112,6 +112,10 @@ export type ProjectActions = {
   updateMetaName: (name: string) => void
   updateMetaPath: (path: string) => void
 
+  /** Read / write opaque VPP screen data keyed by (packageId, screenId). */
+  getVppExtension: (packageId: string, screenId: string) => unknown
+  setVppExtension: (packageId: string, screenId: string, data: unknown) => void
+
   /** Replace the in-memory `library.json` content.  Library projects
    *  only — POU bodies use `updatePou` for the same flow.  The
    *  manifest editor calls this on every Monaco edit; the save
