@@ -7,6 +7,7 @@ import {
 } from '@root/middleware/shared/utils/build-gate/runtime-capability-gate'
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { composeLibraryDebugHarness } from '@root/middleware/shared/utils/library-debug/compose-library-debug-harness'
+import { commercialLicenseConsoleLines } from '@root/middleware/shared/utils/licensing'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -556,6 +557,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         succeeded = result.success
         if (!result.success && !streamedError) {
           addLog({ level: 'error', message: result.error ?? 'Compilation failed' })
+        }
+
+        // Set only for a connected runtime target; null for every other target.
+        if (doUpload && result.success && store.getState().runtimeCommercialLicense.status === 'unlicensed') {
+          for (const line of commercialLicenseConsoleLines()) addLog({ level: 'warning', message: line })
         }
 
         // Ethernet handoff: after a successful upload the device is now running at

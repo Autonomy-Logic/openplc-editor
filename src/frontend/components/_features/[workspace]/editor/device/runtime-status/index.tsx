@@ -17,6 +17,10 @@ import type { TimingStats } from '@root/middleware/shared/ports/types'
 import { useOrchestrator, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useState } from 'react'
 
+import {
+  type RuntimeCommercialLicenseView,
+  useRuntimeCommercialLicense,
+} from '../../../../../../hooks/use-runtime-commercial-license'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import { EtherCATStats } from '../../../../../_molecules/ethercat-stats'
 import { PluginStatsPanel } from '../../../../../_molecules/plugin-stats-panel'
@@ -69,6 +73,7 @@ const RuntimeStatusEditor = () => {
     (state): ((include: boolean) => void) => state.deviceActions.setIncludeEthercatStatsInPolling,
   )
 
+  const runtimeLicense = useRuntimeCommercialLicense()
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null)
   const [bootloader, setBootloader] = useState<BootloaderInfo>({ present: false })
   const [changeOpen, setChangeOpen] = useState(false)
@@ -285,6 +290,7 @@ const RuntimeStatusEditor = () => {
 
         <dl className='grid grid-cols-2 gap-x-8 gap-y-2 md:grid-cols-3'>
           <InfoField label='Runtime version' value={runtimeVersion} />
+          <LicenseField license={runtimeLicense} />
           {bootloader.present ? (
             <InfoField label='Bootloader' value={bootloader.version} />
           ) : (
@@ -322,6 +328,47 @@ const RuntimeStatusEditor = () => {
         onOpenChange={setChangeOpen}
         open={changeOpen}
       />
+    </div>
+  )
+}
+
+/** License value for the connected runtime target; null hides the field (no runtime report, or not connected). */
+function describeRuntimeLicense(
+  license: Pick<RuntimeCommercialLicenseView, 'status' | 'checking' | 'awaitingPurchase'>,
+): string | null {
+  switch (license.status) {
+    case 'licensed':
+      return 'Commercial'
+    case 'unlicensed':
+      if (license.checking) return 'Checking for a license…'
+      if (license.awaitingPurchase) return 'GPLv3, waiting for purchase confirmation'
+      return 'GPLv3'
+    case 'vpp-flow':
+      return 'Board license required'
+    default:
+      return null
+  }
+}
+
+const LicenseField = ({ license }: { license: RuntimeCommercialLicenseView }) => {
+  const value = describeRuntimeLicense(license)
+  if (!value) return null
+  const canBuy = license.status === 'unlicensed' && !license.checking && !license.awaitingPurchase && !!license.buyUrl
+  return (
+    <div className='flex flex-col'>
+      <dt className='text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400'>License</dt>
+      <dd className='flex items-baseline gap-2 text-sm text-neutral-900 dark:text-neutral-100'>
+        {value}
+        {canBuy && (
+          <button
+            className='text-xs font-medium text-brand hover:underline'
+            onClick={() => void license.buy()}
+            type='button'
+          >
+            Buy licences
+          </button>
+        )}
+      </dd>
     </div>
   )
 }

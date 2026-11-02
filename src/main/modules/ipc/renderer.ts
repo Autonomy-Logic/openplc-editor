@@ -51,6 +51,8 @@ import type {
 } from '@root/middleware/shared/ports/public-catalog-types'
 import type {
   ListUsersResult,
+  RuntimeHardwareIdResult,
+  RuntimeLicenseSyncResult,
   RuntimeUserRole,
   UpdateUserParams,
   WhoAmIResult,
@@ -68,6 +70,7 @@ import type {
   Stash,
   VersionControlResult,
 } from '@root/middleware/shared/ports/version-control-port'
+import type { RuntimeCommercialLicense } from '@root/middleware/shared/utils/licensing'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
@@ -745,8 +748,14 @@ const rendererProcessBridge = {
     }
     /** Run/stop mode-switch position; absent on older runtimes. */
     switchPosition?: 'run' | 'stop'
+    /** Commercial licence state; absent on runtimes that do not report it. */
+    license?: RuntimeCommercialLicense
     error?: string
   }> => ipcRenderer.invoke('runtime:get-status', ipAddress, includeStats),
+  runtimeGetHardwareId: (ipAddress: string): Promise<RuntimeHardwareIdResult> =>
+    ipcRenderer.invoke('runtime:get-hardware-id', ipAddress),
+  runtimeSyncLicenses: (ipAddress: string): Promise<RuntimeLicenseSyncResult> =>
+    ipcRenderer.invoke('runtime:sync-licenses', ipAddress),
   runtimeStartPlc: (ipAddress: string): Promise<{ success: boolean; error?: string; status?: string }> =>
     ipcRenderer.invoke('runtime:start-plc', ipAddress),
   runtimeStopPlc: (ipAddress: string): Promise<{ success: boolean; error?: string }> =>

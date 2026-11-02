@@ -151,6 +151,7 @@ export type {
   RenamePouParams,
   WriteProjectFiles,
 } from './project-port'
+export type { RawHttpReply, RuntimeLicenseMechanisms } from './runtime-license-mechanisms'
 export type {
   CompilationStatusResult,
   CreateUserParams,
@@ -159,6 +160,9 @@ export type {
   DiscoveredRuntimeDevice,
   LoginParams,
   LoginResult,
+  RuntimeHardwareIdResult,
+  RuntimeLicenseSyncResult,
+  RuntimeLicenseUploadOutcome,
   RuntimeLogsResult,
   RuntimeProjectSnapshotMetadata,
   RuntimeStatusResult,

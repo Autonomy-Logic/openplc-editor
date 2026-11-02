@@ -30,6 +30,8 @@ import type {
   PluginCommandArgs,
   RetrievableDevice,
   RuntimeCapabilitiesResult,
+  RuntimeHardwareIdResult,
+  RuntimeLicenseSyncResult,
   RuntimeLogsResult,
   RuntimePort,
   RuntimeStatusResult,
@@ -229,6 +231,22 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
         return await window.bridge.runtimeGetStatus(ip, includeStats)
       } catch (err) {
         return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async getHardwareId(): Promise<RuntimeHardwareIdResult> {
+      try {
+        return await window.bridge.runtimeGetHardwareId(requireIp())
+      } catch (err) {
+        return { success: false, error: getErrorMessage(err) }
+      }
+    },
+
+    async syncRuntimeLicenses(): Promise<RuntimeLicenseSyncResult> {
+      try {
+        return await window.bridge.runtimeSyncLicenses(requireIp())
+      } catch (err) {
+        return { status: 'failed', error: getErrorMessage(err) }
       }
     },
 

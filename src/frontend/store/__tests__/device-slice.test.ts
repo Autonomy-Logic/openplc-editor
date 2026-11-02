@@ -1794,6 +1794,25 @@ describe('createDeviceSlice', () => {
   })
 
   // -----------------------------------------------------------------------
+  // setRuntimeLicense
+  // -----------------------------------------------------------------------
+  describe('setRuntimeLicense', () => {
+    it('defaults to null, meaning not reported', () => {
+      expect(makeStore().getState().runtimeConnection.license).toBeNull()
+    })
+
+    it('records the reported licence and clears it', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setRuntimeLicense('gpl')
+      expect(store.getState().runtimeConnection.license).toBe('gpl')
+      store.getState().deviceActions.setRuntimeLicense('commercial')
+      expect(store.getState().runtimeConnection.license).toBe('commercial')
+      store.getState().deviceActions.setRuntimeLicense(null)
+      expect(store.getState().runtimeConnection.license).toBeNull()
+    })
+  })
+
+  // -----------------------------------------------------------------------
   // setSelectedDevice
   // -----------------------------------------------------------------------
   describe('setSelectedDevice', () => {
