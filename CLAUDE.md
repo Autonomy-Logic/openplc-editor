@@ -142,6 +142,11 @@ the real shared code and an in-memory mechanism.
 desktop copy dropped `modules` and modular EtherCAT couplers lost their modules
 on the desktop only.
 
+**Enforcement.** `.claude/hooks/thin-adapter-guard.mjs` (a Claude Code `PreToolUse` hook in
+`.claude/settings.json`) blocks an agent's first write to each platform file in a session and shows
+this rule; the same write then passes, so the agent must name the mechanism or move the logic. It
+loads only when Claude Code runs from this repository, and does not see shell edits.
+
 **Existing code** that predates this rule still has logic in adapters. Don't add
 more: when a change touches such a port, move its logic into the shared surface
 in the same PR pair (editor + web).

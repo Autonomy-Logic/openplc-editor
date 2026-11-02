@@ -31,6 +31,7 @@ import type {
   PlatformLog,
   RuntimeV4Bundle,
 } from '../../../middleware/shared/ports/compiler-platform-port'
+import type { ExportableVariable } from '../../../middleware/shared/ports/plc-model-port'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
 import { resolveModbusServerProfile } from '../../../middleware/shared/utils/modbus-server-profile'
@@ -77,6 +78,17 @@ import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { narrowModbusTransports, selectModbusServer } from './steps/modbus-defines'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
 import { selectThirdPartyLibraries } from './third-party-libraries'
+
+// Variable classes that are inherently read-only to the Data Hub provider.
+const PIPELINE_READ_ONLY_VARIABLE_CLASSES = new Set<string>(['input', 'external', 'temp'])
+
+/** Mirror of `project-plc-model`'s `isVariableWritable`, kept on the pipeline side where the
+ *  schema-shape POU variables are iterated. VAR_INPUT / VAR_EXTERNAL / VAR_TEMP and VAR_CONSTANT
+ *  are RO regardless of the Data Hub picker's RW toggle. */
+function pipelineIsVariableWritable(variable: { class?: string; flag?: string }): boolean {
+  if (variable.flag === 'constant') return false
+  return !PIPELINE_READ_ONLY_VARIABLE_CLASSES.has(variable.class ?? 'local')
+}
 
 // ---------------------------------------------------------------------------
 // Public contract
@@ -847,6 +859,76 @@ async function runCompilePipelineInner(
         message: `Merged ${vppFileCount} VPP plugin file(s) into bundle (bundle now ${Object.keys(bundle).length} files)`,
         level: 'info',
       })
+    }
+
+    // VPP screen runtime emitters. Pulls `vppExtensions` from the project, calls each
+    // installed VPP's declared emitter JS in a sandbox, merges the resulting `conf/*.json` files
+    // into the bundle. Optional on the port; web omits it and we skip the stage.
+    const vppExtensionsRaw = (projectData as { vppExtensions?: Record<string, Record<string, unknown>> }).vppExtensions
+    if (port.collectVppScreenRuntimeArtifacts && vppExtensionsRaw && Object.keys(vppExtensionsRaw).length > 0) {
+      const exportableVariables: ExportableVariable[] = []
+      const addressByQualifier: Record<string, string> = {}
+      for (const entry of projectData.pous ?? []) {
+        if (entry.type !== 'program') continue
+        const pou = entry.data
+        for (const variable of pou.variables ?? []) {
+          const qualifier = `${pou.name}.${variable.name}`
+          const typeValue = variable.type?.value ?? ''
+          exportableVariables.push({
+            qualifier,
+            scope: { kind: 'program', programName: pou.name },
+            variable: variable.name,
+            type: typeValue.toUpperCase(),
+            isWritable: pipelineIsVariableWritable(variable),
+          })
+          addressByQualifier[qualifier] = variable.location ?? ''
+        }
+      }
+      const globals = projectData.configuration?.resource?.globalVariables ?? []
+      for (const g of globals) {
+        const qualifier = `GVL.${g.name}`
+        const typeValue = g.type?.value ?? ''
+        exportableVariables.push({
+          qualifier,
+          scope: { kind: 'gvl', listName: 'GVL' },
+          variable: g.name,
+          type: typeValue.toUpperCase(),
+          isWritable: pipelineIsVariableWritable(g),
+        })
+        addressByQualifier[qualifier] = g.location ?? ''
+      }
+      const vppInstances = (projectData.configuration?.resource?.instances ?? []).map(
+        (inst: { name: string; task: string; program: string }) => ({
+          name: inst.name,
+          task: inst.task,
+          program: inst.program,
+        }),
+      )
+      const screenRes = await port.collectVppScreenRuntimeArtifacts(
+        {
+          deviceId: boardTarget,
+          vppExtensions: vppExtensionsRaw,
+          exportableVariables,
+          addressByQualifier,
+          debugMapContent: debugMapJson,
+          instances: vppInstances,
+        },
+        makePlatformLog(emit, 'runtime-v4-bundle'),
+      )
+      if (screenRes.errors && screenRes.errors.length > 0) {
+        for (const message of screenRes.errors) {
+          emit({ stage: 'runtime-v4-bundle', message: `VPP screen emitter: ${message}`, level: 'warning' })
+        }
+      }
+      const screenCount = Object.keys(screenRes.files).length
+      if (screenCount > 0) {
+        Object.assign(bundle, screenRes.files)
+        emit({
+          stage: 'runtime-v4-bundle',
+          message: `Merged ${screenCount} VPP screen artifact(s) into bundle (bundle now ${Object.keys(bundle).length} files)`,
+          level: 'info',
+        })
+      }
     }
 
     // Persistent storage (RETAIN) settings travel with the program, exactly as
