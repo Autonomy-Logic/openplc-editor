@@ -11,7 +11,7 @@ The OpenPLC Editor is licensed under the GPLv3. The baremetal runtime it carries
 
 ## Setup
 
-Requires Node.js >= 22 < 24. See README.md for the full step by step.
+Requires Node.js 22.x. See README.md for the full step by step.
 
 ```bash
 npm install
