@@ -36,8 +36,8 @@ function getActivePinsDraft(draft: DeviceSlice): DevicePin[] {
 
 /**
  * Reset licensing to its initial state on an Immer draft — THE one way to drop
- * a licence. Three paths must do it (`clearDeviceLicense`, an actual board
- * change in `setDeviceBoard`, `clearDeviceDefinitions`), and when each inlined
+ * a licence. Every path that drops one must call it (`clearDeviceLicense`, an actual
+ * board, port or address change, `clearDeviceDefinitions`), and when each inlined
  * its own reset they drifted: two of them forgot the purchase watch, whose poll
  * then outlived the board it was started for and kept running `refresh()` —
  * including its licence WRITE — against whatever board came next. Route any
@@ -530,15 +530,21 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     },
     setCommunicationPort: (communicationPort): void => {
       setState(
-        produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
+        produce(({ deviceDefinitions, deviceUpdated, deviceLicense }: DeviceSlice) => {
           deviceUpdated.updated = true
+          // Another port may lead to another device, so the last license check no longer applies.
+          if (deviceDefinitions.configuration.communicationPort !== communicationPort) resetDeviceLicense(deviceLicense)
           deviceDefinitions.configuration.communicationPort = communicationPort
         }),
       )
     },
-    setRuntimeIpAddress: (ipAddress): void => {
+    setRuntimeIpAddress: (ipAddress, options): void => {
       setState(
-        produce(({ deviceDefinitions, runtimeConnection }: DeviceSlice) => {
+        produce(({ deviceDefinitions, runtimeConnection, deviceLicense }: DeviceSlice) => {
+          // Another address may lead to another device, so the last license check no longer applies.
+          if (!options?.sameDevice && deviceDefinitions.configuration.runtimeIpAddress !== ipAddress) {
+            resetDeviceLicense(deviceLicense)
+          }
           deviceDefinitions.configuration.runtimeIpAddress = ipAddress
           runtimeConnection.ipAddress = ipAddress
         }),

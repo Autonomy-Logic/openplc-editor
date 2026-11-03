@@ -228,7 +228,7 @@ describe('useRuntimeConnect — toggle off', () => {
     store.getState().deviceActions.setRuntimeConnectionStatus('connected')
   })
 
-  it('drops the token, the credentials, the session and the licence', async () => {
+  it('drops the token, the credentials, the session and the license', async () => {
     await setup().toggle()
     expect(spies.setRuntimeJwtToken).toHaveBeenCalledWith(null)
     expect(currentStatus()).toBe('disconnected')
