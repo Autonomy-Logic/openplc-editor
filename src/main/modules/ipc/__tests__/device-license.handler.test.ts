@@ -267,7 +267,7 @@ describe('device:refresh-license', () => {
 
     expect(second.outcome).toEqual({
       state: 'check-failed',
-      error: 'A licence check is already running on this device.',
+      error: 'A license check is already running on this device.',
     })
     expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledTimes(1)
 
@@ -421,7 +421,7 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
       expect(result.outcome.retryable).toBe(false)
-      expect(result.outcome.error).toMatch(/no hardware identity a licence can be issued for/)
+      expect(result.outcome.error).toMatch(/no hardware identity a license can be issued for/)
       // The storage wording must not follow this condition anywhere.
       expect(result.outcome.error).not.toMatch(/storage|rebuild/i)
     }

@@ -6,6 +6,7 @@
 
 import type { DeviceLicenseState } from '../../ports/device-port'
 import type { RuntimeLicenseMode } from '../../ports/types'
+import { frameConsoleNotice } from './console-notice'
 import type { RuntimeCommercialLicense } from './runtime-commercial-license'
 
 /** Approved wording, shown verbatim wherever the target is unlicensed. */
@@ -43,28 +44,9 @@ export function resolveTargetCommercialLicense({
   return 'unknown'
 }
 
-const CONSOLE_WIDTH = 72
-const RULE = '*'.repeat(CONSOLE_WIDTH)
-
-/** Greedy word wrap; a word longer than `width` keeps its own line. */
-function wrapWords(text: string, width: number): string[] {
-  const lines: string[] = []
-  let line = ''
-  for (const word of text.split(/\s+/).filter(Boolean)) {
-    if (line && line.length + 1 + word.length > width) {
-      lines.push(line)
-      line = word
-    } else {
-      line = line ? `${line} ${word}` : word
-    }
-  }
-  if (line) lines.push(line)
-  return lines
-}
-
 /** The disclaimer framed for the console, one entry per line, each no wider than the rules. */
 export function commercialLicenseConsoleLines(): string[] {
-  return [RULE, ...wrapWords(COMMERCIAL_LICENSE_DISCLAIMER, CONSOLE_WIDTH), RULE]
+  return frameConsoleNotice(COMMERCIAL_LICENSE_DISCLAIMER)
 }
 
 const HARDWARE_ID_RE = /^hw2:[0-9a-f]{64}$/

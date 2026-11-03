@@ -309,7 +309,8 @@ export type DeviceActions = {
    *  change, can also be invoked by UI to reset to manifest defaults. */
   clearSelectedPlatformOptions: () => void
   setCommunicationPort: (port: string) => void
-  setRuntimeIpAddress: (ipAddress: string) => void
+  /** Drops the last license check when the address changes, unless `sameDevice` says the device only moved. */
+  setRuntimeIpAddress: (ipAddress: string, options?: { sameDevice?: boolean }) => void
   setRuntimeJwtToken: (token: string | null) => void
   setRuntimeConnectionStatus: (status: ConnectionStatus) => void
   setRuntimeVersion: (version: string | null) => void
