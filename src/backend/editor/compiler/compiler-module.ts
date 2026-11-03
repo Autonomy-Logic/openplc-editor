@@ -2554,7 +2554,7 @@ class CompilerModule {
               logLevel: 'warning',
               message:
                 `Could not read license-store backend at ${licenseStoreFile}: ${getErrorMessage(lsErr)}. ` +
-                'This board will report that it cannot store a licence.',
+                'This board will report that it cannot store a license.',
             })
           }
         }
@@ -2568,7 +2568,7 @@ class CompilerModule {
             message:
               `Board "${boardTarget}" belongs to a licensed VPP but its manifest declares no ` +
               '`hal.licenseStore`. Every licensed VPP needs one, so this is a packaging fault: the ' +
-              'firmware will link the weak default and report that its licence storage is missing.',
+              'firmware will link the weak default and report that its license storage is missing.',
           })
         }
 

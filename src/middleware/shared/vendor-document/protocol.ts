@@ -10,7 +10,7 @@
 import { z } from 'zod'
 
 export const RELAY_CHANNEL = 'openplc.vendor-document'
-export const RELAY_PROTOCOL_VERSION = 1
+export const RELAY_PROTOCOL_VERSION = 2
 
 /** Hex characters; a Device Editor 3.5.22 station archive is around 25,000. */
 export const MAX_ARCHIVE_HEX_LENGTH = 16 * 1024 * 1024
@@ -69,14 +69,48 @@ export function isRelayMethod(value: unknown): value is RelayMethod {
   return RELAY_METHODS.some((method) => method === value)
 }
 
+/** Methods a VPP screen (guest) may invoke on the host. Additive to the v1 relay surface. */
+export const HOST_RELAY_METHODS = ['getPlcVariables', 'getPlcAddress', 'getPersistence', 'setPersistence'] as const
+export type HostRelayMethod = (typeof HOST_RELAY_METHODS)[number]
+
+export function isHostRelayMethod(value: unknown): value is HostRelayMethod {
+  return HOST_RELAY_METHODS.some((method) => method === value)
+}
+
+/** Topics the host pushes to the guest via `host-event`. Closed set — unknown topics are dropped. */
+export const HOST_EVENT_TOPICS = ['plcModel/changed'] as const
+export type HostEventTopic = (typeof HOST_EVENT_TOPICS)[number]
+
+export function isHostEventTopic(value: unknown): value is HostEventTopic {
+  return HOST_EVENT_TOPICS.some((topic) => topic === value)
+}
+
+export const CONFIGURATOR_THEMES = ['light', 'dark'] as const
+export type ConfiguratorTheme = (typeof CONFIGURATOR_THEMES)[number]
+
 const hostToRelaySchema = z.discriminatedUnion('kind', [
   z.object({ channel: z.literal(RELAY_CHANNEL), kind: z.literal('hello') }),
+  z.object({ channel: z.literal(RELAY_CHANNEL), kind: z.literal('theme'), theme: z.enum(CONFIGURATOR_THEMES) }),
   z.object({
     channel: z.literal(RELAY_CHANNEL),
     kind: z.literal('request'),
     id: z.string().min(1),
     method: z.string(),
     args: z.array(z.unknown()),
+  }),
+  z.object({
+    channel: z.literal(RELAY_CHANNEL),
+    kind: z.literal('host-response'),
+    id: z.string().min(1),
+    ok: z.boolean(),
+    result: z.unknown().optional(),
+    error: z.string().optional(),
+  }),
+  z.object({
+    channel: z.literal(RELAY_CHANNEL),
+    kind: z.literal('host-event'),
+    topic: z.string(),
+    payload: z.unknown().optional(),
   }),
 ])
 export type HostToRelayMessage = z.infer<typeof hostToRelaySchema>
@@ -93,8 +127,40 @@ const relayToHostSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ channel: z.literal(RELAY_CHANNEL), kind: z.literal('modified') }),
   z.object({ channel: z.literal(RELAY_CHANNEL), kind: z.literal('error'), message: z.string() }),
+  z.object({
+    channel: z.literal(RELAY_CHANNEL),
+    kind: z.literal('host-query'),
+    id: z.string().min(1),
+    method: z.string(),
+    args: z.array(z.unknown()),
+  }),
 ])
 export type RelayToHostMessage = z.infer<typeof relayToHostSchema>
+
+/** Host-pushed event the guest can subscribe to. One of the discriminants of HostToRelayMessage. */
+export type HostEventMessage = Extract<HostToRelayMessage, { kind: 'host-event' }>
+
+/**
+ * Scope of a PLC variable exposed to a VPP screen. The structured decomposition rides alongside
+ * the flat wire qualifier so a POU happening to be named `GVL` cannot be confused with the
+ * global namespace downstream — the shape mirrors `ExportableScope` in `plc-model-port`.
+ */
+export const exportableScopeSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('program'), programName: z.string().min(1) }),
+  z.object({ kind: z.literal('gvl'), listName: z.string().min(1) }),
+])
+export type ExportableScope = z.infer<typeof exportableScopeSchema>
+
+/** Shape of a PLC variable exposed to a VPP screen via `getPlcVariables`. */
+export const exportableVariableSchema = z.object({
+  qualifier: z.string().min(1),
+  scope: exportableScopeSchema,
+  variable: z.string().min(1),
+  type: z.string().min(1),
+  isWritable: z.boolean(),
+})
+export type ExportableVariable = z.infer<typeof exportableVariableSchema>
+export const exportableVariablesSchema = z.array(exportableVariableSchema)
 
 export function parseHostToRelayMessage(data: unknown): HostToRelayMessage | null {
   const parsed = hostToRelaySchema.safeParse(data)

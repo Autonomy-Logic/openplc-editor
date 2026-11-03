@@ -50,7 +50,8 @@ function createChannel() {
     },
   }
   const rawToHost = (data: unknown) => deliver(hostHandlers, data)
-  return { host, guest, sentToGuest, rawToHost }
+  const rawToGuest = (data: unknown) => deliver(guestHandlers, data)
+  return { host, guest, sentToGuest, rawToHost, rawToGuest }
 }
 
 const cleanups: Array<() => void> = []
@@ -62,7 +63,8 @@ function setup(fakeOptions: FakeDeviceEditorOptions = {}) {
   const channel = createChannel()
   const scope: RelayGuestScope = {}
   const fake = installFakeDeviceEditor(scope, fakeOptions)
-  cleanups.push(installRelay(scope, channel.guest, { pollIntervalMs: 5, bootTimeoutMs: 1_000 }))
+  const relay = installRelay(scope, channel.guest, { pollIntervalMs: 5, bootTimeoutMs: 1_000 })
+  cleanups.push(() => relay.stop())
   const client = createConfiguratorClient(channel.host, { readyTimeoutMs: 1_000, requestTimeoutMs: 500 })
   cleanups.push(() => client.dispose())
   let modified = 0
@@ -226,6 +228,19 @@ describe('configurator client failures', () => {
     expect(channel.sentToGuest.every((message) => JSON.stringify(message).includes('"hello"'))).toBe(true)
   })
 
+  it('refuses a relay of protocol version 1', async () => {
+    const channel = createChannel()
+    const client = createConfiguratorClient(channel.host)
+    cleanups.push(() => client.dispose())
+    client.setTheme('dark')
+    channel.guest.post({ channel: RELAY_CHANNEL, kind: 'ready', relayVersion: 1 })
+    await expect(client.ready()).rejects.toThrow(
+      'The configurator package ships relay protocol version 1, but this editor requires version 2.',
+    )
+    await expect(client.ready()).rejects.toBeInstanceOf(RelayVersionMismatchError)
+    expect(channel.sentToGuest).toEqual([{ channel: RELAY_CHANNEL, kind: 'hello' }])
+  })
+
   it('rejects a malformed result from the guest', async () => {
     const channel = createChannel()
     const client = createConfiguratorClient(channel.host)
@@ -248,6 +263,67 @@ describe('configurator client failures', () => {
   })
 })
 
+describe('configurator theme', () => {
+  const themesSent = (sent: unknown[]) =>
+    sent.flatMap((message) =>
+      typeof message === 'object' && message !== null && 'theme' in message ? [message.theme] : [],
+    )
+
+  it('sends the theme right after the relay is ready, before any request, and later changes at once', async () => {
+    const channel = createChannel()
+    const client = createConfiguratorClient(channel.host, { requestTimeoutMs: 30 })
+    cleanups.push(() => client.dispose())
+    client.setTheme('light')
+    client.setTheme('dark')
+    expect(themesSent(channel.sentToGuest)).toEqual([])
+
+    channel.guest.post({ channel: RELAY_CHANNEL, kind: 'ready', relayVersion: RELAY_PROTOCOL_VERSION })
+    await client.ready()
+    void client.show().catch(() => undefined)
+    await tick(5)
+    client.setTheme('light')
+
+    const kinds = channel.sentToGuest.map((message) =>
+      typeof message === 'object' && message !== null && 'kind' in message ? message.kind : null,
+    )
+    expect(kinds).toEqual(['hello', 'theme', 'request', 'theme'])
+    expect(themesSent(channel.sentToGuest)).toEqual(['dark', 'light'])
+  })
+
+  it('sends nothing after dispose', async () => {
+    const channel = createChannel()
+    const client = createConfiguratorClient(channel.host)
+    channel.guest.post({ channel: RELAY_CHANNEL, kind: 'ready', relayVersion: RELAY_PROTOCOL_VERSION })
+    await client.ready()
+    client.dispose()
+    client.setTheme('dark')
+    expect(themesSent(channel.sentToGuest)).toEqual([])
+  })
+
+  it('reaches the relay, which applies only light or dark', async () => {
+    const channel = createChannel()
+    const applied: unknown[] = []
+    const scope: RelayGuestScope = {}
+    installFakeDeviceEditor(scope)
+    const relay = installRelay(scope, channel.guest, {
+      pollIntervalMs: 5,
+      bootTimeoutMs: 1_000,
+      applyTheme: (theme) => applied.push(theme),
+    })
+    cleanups.push(() => relay.stop())
+    const client = createConfiguratorClient(channel.host, { readyTimeoutMs: 1_000 })
+    cleanups.push(() => client.dispose())
+    client.setTheme('dark')
+    await client.ready()
+    await tick()
+    for (const theme of ['nineties', 'DARK', '', 1, null]) {
+      channel.rawToGuest({ channel: RELAY_CHANNEL, kind: 'theme', theme })
+    }
+    await tick()
+    expect(applied).toEqual(['dark'])
+  })
+})
+
 describe('relay', () => {
   it('rejects methods outside the protocol', async () => {
     const { client, channel } = setup()
@@ -267,7 +343,8 @@ describe('relay', () => {
 
   it('reports a bundle that never publishes its provider', async () => {
     const channel = createChannel()
-    cleanups.push(installRelay({}, channel.guest, { pollIntervalMs: 5, bootTimeoutMs: 30 }))
+    const relay = installRelay({}, channel.guest, { pollIntervalMs: 5, bootTimeoutMs: 30 })
+    cleanups.push(() => relay.stop())
     const client = createConfiguratorClient(channel.host, { readyTimeoutMs: 1_000 })
     cleanups.push(() => client.dispose())
     const errors: string[] = []

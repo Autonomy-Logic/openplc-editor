@@ -145,11 +145,9 @@ describe('user-facing licensing messages', () => {
     expect(offenders.map((m) => `${m.rel}:${m.line} — ${m.text.slice(0, 70)}`)).toEqual([])
   })
 
-  it('spells licence the way the UI does', () => {
-    // The dialogs are British ("Licence Check Failed"), and these strings land
-    // inside the same paragraph — "holds a licence. the stored license..." was
-    // the rendered result of mixing them.
-    const offenders = collected.filter((m) => /\blicens(e|es)\b/.test(m.text))
+  it('spells license the way the UI does', () => {
+    // These strings render inside the dialog paragraph, so they follow its American spelling.
+    const offenders = collected.filter((m) => /\blicenc(e|es)\b/i.test(m.text))
     expect(offenders.map((m) => `${m.rel}:${m.line} — ${m.text.slice(0, 70)}`)).toEqual([])
   })
 })

@@ -68,6 +68,14 @@ function addChildFrame(): void {
 
 installFakeDeviceEditor(window, { document })
 
+// The vendor UI renders inside shadow roots; this one sits outside the body the fake redraws.
+const shadowHost = document.createElement('div')
+const shadowProbe = document.createElement('p')
+shadowProbe.className = 'fake-shadow-probe'
+shadowProbe.textContent = 'shadow content'
+shadowHost.attachShadow({ mode: 'open' }).append(shadowProbe)
+document.documentElement.append(shadowHost)
+
 async function runProbes(): Promise<void> {
   const results = await Promise.all([
     probe('own-scope', () => typeof window.DeviceEditorProvider),

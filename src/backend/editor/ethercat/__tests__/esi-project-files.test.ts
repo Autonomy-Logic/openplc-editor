@@ -4,6 +4,9 @@ import { join } from 'node:path'
 
 import { EsiProjectFiles } from '../esi-project-files'
 
+// CI installs with --ignore-scripts, so the electron package has no binary and cannot be imported.
+jest.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))
+
 describe('EsiProjectFiles', () => {
   let project: string
   const files = new EsiProjectFiles()

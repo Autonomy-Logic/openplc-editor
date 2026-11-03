@@ -177,6 +177,27 @@ of the host.
   no-op after the bridge registers it. Signature checking in the app is unchanged.
 - openplc-web has no e2e for it: the browser accepts only packages signed with the production key.
 
+## Theme
+
+The configurator follows the editor theme without reloading, so its archive and unsaved state survive a switch.
+
+- The host sends a `theme` message (`light` or `dark`; the editor's `nineties` is sent as `light`) right after
+  the relay reports ready, before any request, and again on every editor theme change
+  (`ConfiguratorPort.setTheme`, wired in `configurator-screen.tsx`). The iframe `src` never changes for it.
+- The relay accepts it only from its parent and only with one of those two values (the zod schema in
+  `protocol.ts`). It sets `data-openplc-theme` on the guest's `<html>` and switches the overrides links' `media`
+  between `all` (dark) and `not all` (light).
+- At load, before the vendor bundle runs, the relay (`installThemeOverrides` in `relay.ts`) wraps
+  `Element.prototype.attachShadow` and links `openplc-theme-overrides.css`, relative to the wrapper document,
+  into the document head and every shadow root created afterwards: the vendor UI renders inside shadow roots,
+  which document stylesheets cannot reach.
+- The package ships both stylesheets under `configurator/`: `openplc-theme.css` (tokens under
+  `html[data-openplc-theme="dark"]`), linked by its `index.html`, and `openplc-theme-overrides.css`, which only the
+  relay links. A package without them stays light.
+- The theme message came with relay protocol version 2, so an editor and a package must both carry version 2.
+- `e2e/vendor-configurator.spec.ts` opens the configurator in the dark theme and switches it live; the fixture
+  ships its own `openplc-theme-overrides.css` and a shadow-root probe in `guest-device-editor.ts`.
+
 ## Building the packaged relay
 
 `npm run build:relay` bundles `installWindowRelay(window)` into `release/relay/relay.js`
