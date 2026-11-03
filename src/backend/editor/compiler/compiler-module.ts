@@ -178,7 +178,10 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { app as electronApp } from 'electron'
 import JSZip from 'jszip'
 
-import type { ThirdPartyLibraryRequest } from '../../../middleware/shared/ports/compiler-platform-port'
+import type {
+  ThirdPartyLibraryRequest,
+  VppScreenConfigInputs,
+} from '../../../middleware/shared/ports/compiler-platform-port'
 import type { PersistentStorageSettings, PlatformOption } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
@@ -1834,6 +1837,7 @@ class CompilerModule {
     boardTarget: string,
     normalizedProjectPath: string,
     sourceTargetFolderPath: string,
+    screenConfigInputs: VppScreenConfigInputs,
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
     // Second gate, deliberately re-run here rather than trusted from
@@ -2101,6 +2105,8 @@ class CompilerModule {
           installed: readInstalledPin(match.pkg.packageId),
         },
         sha256Hex: (bytes) => createHash('sha256').update(bytes).digest('hex'),
+        packageId: match.pkg.packageId,
+        screenConfigInputs,
       })
 
       for (const warning of built.warnings) handleOutputData(warning, 'info')
