@@ -1,0 +1,45 @@
+{
+  "name": "ecat_bus",
+  "protocol": "ethercat",
+  "ethercatConfig": {
+    "masterConfig": {
+      "enabled": true,
+      "networkInterface": "eth0",
+      "cycleTimeUs": 1000
+    },
+    "devices": [
+      {
+        "id": "drive",
+        "position": 1,
+        "name": "Interpolation drive",
+        "esiDeviceRef": {
+          "repositoryItemId": "11111111-2222-4333-8444-555555555555",
+          "deviceIndex": 0
+        },
+        "vendorId": "0x00000100",
+        "productCode": "0x00005100",
+        "revisionNo": "0x00000001",
+        "addedFrom": "repository",
+        "config": {
+          "startupChecks": { "checkVendorId": true, "checkProductCode": true },
+          "addressing": { "ethercatAddress": 0 },
+          "timeouts": { "sdoTimeoutMs": 1000, "initToPreOpTimeoutMs": 3000, "safeOpToOpTimeoutMs": 10000 },
+          "watchdog": { "smWatchdogEnabled": true, "smWatchdogMs": 100, "pdiWatchdogEnabled": false, "pdiWatchdogMs": 100 },
+          "distributedClocks": {
+            "dcEnabled": false,
+            "dcSyncUnitCycleUs": 0,
+            "dcSync0Enabled": false,
+            "dcSync0CycleUs": 0,
+            "dcSync0ShiftUs": 0,
+            "dcSync1Enabled": false,
+            "dcSync1CycleUs": 0,
+            "dcSync1ShiftUs": 0
+          },
+          "coeFlags": { "pdoAssign": false, "pdoConfig": false, "completeAccess": false }
+        },
+        "channelMappings": [],
+        "isModularCoupler": false
+      }
+    ]
+  }
+}
