@@ -2936,7 +2936,7 @@ class MainProcessBridge implements MainIpcModule {
       if (read.unsupported) {
         return {
           error:
-            'this device has no hardware identity a licence can be issued for. ' +
+            'this device has no hardware identity a license can be issued for. ' +
             'Licensed VPPs require hardware that reports a unique identifier.',
           retryable: false,
         } as const
@@ -3054,7 +3054,7 @@ class MainProcessBridge implements MainIpcModule {
         // Reported rather than queued: the caller is a button or a connect, and a
         // second answer arriving later for a question already being answered is
         // noise at best and a contradictory badge at worst.
-        return { outcome: { state: 'check-failed', error: 'A licence check is already running on this device.' } }
+        return { outcome: { state: 'check-failed', error: 'A license check is already running on this device.' } }
       }
       this.deviceLicenseSequenceInFlight = true
 

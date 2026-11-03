@@ -485,7 +485,7 @@ const Board = memo(function () {
         // AUTO flow: a check-failed outcome stays on the badge instead of
         // opening an error modal the user did not ask for — the loudest case
         // it suppresses is a runtime that predates the licence FCs, where
-        // every connect would otherwise open "Licence Check Failed" on a
+        // every connect would otherwise open "License Check Failed" on a
         // working device. User-initiated paths (serial connect, the badge's
         // own retry) keep the dialog.
         quietCheckFailed: true,
