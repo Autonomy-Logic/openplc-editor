@@ -230,7 +230,6 @@ describe('explainLicenseOutcome', () => {
 
   describe('demo-mode wording', () => {
     it('both unlicensed dialogs say exactly the demo-mode notice, with no demo duration', () => {
-      // The demo window differs per VPP, so no dialog may name one.
       const { opened, openModal, buy, retry } = harness()
 
       explainLicenseOutcome(report({ state: 'unlicensed', entitlementChecked: true }), { openModal, buy, retry })

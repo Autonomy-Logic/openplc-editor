@@ -22,18 +22,48 @@ function stubPort<T extends object>(overrides: Partial<NoInfer<T>> = {}): T {
   })
 }
 
-const BOARD_NAME = 'OpenPLC Runtime'
-const BOARD: BoardInfo = { compiler: 'runtime_v4', core: 'openplc', preview: 'generic.png', specs: {} }
+type Target = 'runtime-v4' | 'arduino-serial'
+
+const RUNTIME_BOARD: BoardInfo = { compiler: 'runtime_v4', core: 'openplc', preview: 'generic.png', specs: {} }
+const SERIAL_PORT = '/dev/ttyACM0'
+const SERIAL_BOARD: BoardInfo = {
+  compiler: 'arduino-cli',
+  core: 'rp2040:rp2040',
+  preview: 'aralalta.png',
+  specs: {},
+  debug: {
+    channels: [
+      {
+        label: 'Modbus RTU',
+        channel: 'rtu',
+        enabledWhen: true,
+        params: { port: { $ref: 'configuration.communicationPort' }, baudRate: 115200, slaveId: 1 },
+      },
+    ],
+  },
+}
+
+const BOARDS: Record<Target, [string, BoardInfo]> = {
+  'runtime-v4': ['OpenPLC Runtime', RUNTIME_BOARD],
+  'arduino-serial': ['X-Peak Aralalta', SERIAL_BOARD],
+}
 
 const compileProgram = jest.fn((): Promise<{ success: boolean; error?: string }> => Promise.resolve({ success: true }))
+const releaseSerialPort = jest.fn(() => Promise.resolve(true))
+const deviceConnect = jest.fn(() => Promise.resolve({ status: 'connected-with-firmware' as const }))
 
 let store: OpenPLCStore
 
-function renderBar(outcome: DeviceLicenseState | null) {
+function renderBar(outcome: DeviceLicenseState | null, target: Target = 'runtime-v4') {
   const { deviceActions, workspaceActions, consoleActions } = store.getState()
-  deviceActions.setAvailableOptions({ availableBoards: new Map([[BOARD_NAME, BOARD]]) })
-  deviceActions.setDeviceBoard(BOARD_NAME)
-  deviceActions.setRuntimeConnectionStatus('connected')
+  const [boardName, board] = BOARDS[target]
+  deviceActions.setAvailableOptions({ availableBoards: new Map([[boardName, board]]) })
+  deviceActions.setDeviceBoard(boardName)
+  if (target === 'runtime-v4') deviceActions.setRuntimeConnectionStatus('connected')
+  if (target === 'arduino-serial') {
+    deviceActions.setCommunicationPort(SERIAL_PORT)
+    deviceActions.setDeviceConnectionStatus('connected', SERIAL_PORT)
+  }
   if (outcome) deviceActions.setDeviceLicenseReport({ deviceId: '659a3520540f803625ddc34081e893d3', outcome })
   workspaceActions.setCanEdit(false)
   consoleActions.clearLogs()
@@ -44,7 +74,7 @@ function renderBar(outcome: DeviceLicenseState | null) {
     debugger: stubPort(),
     simulator: stubPort(),
     project: stubPort(),
-    device: stubPort(),
+    device: stubPort({ releaseSerialPort, connect: deviceConnect }),
     orchestrator: stubPort(),
     system: stubPort(),
     window: stubPort(),
@@ -75,7 +105,7 @@ const framed = demoModeConsoleLines()
 
 describe('Build and upload — demo-mode warning', () => {
   beforeEach(() => {
-    compileProgram.mockClear()
+    jest.clearAllMocks()
     store = createTestStore()
   })
 
@@ -83,14 +113,32 @@ describe('Build and upload — demo-mode warning', () => {
     cleanup()
   })
 
-  it.each<[string, DeviceLicenseState]>([
+  const NO_LICENSE: [string, DeviceLicenseState][] = [
     ['no license on record', { state: 'unlicensed', entitlementChecked: true }],
     ['no license stored', { state: 'unlicensed', entitlementChecked: false }],
     ['no license storage in the firmware', { state: 'unsupported' }],
-  ])('ends an upload with the framed notice when the last check found %s', async (_label, outcome) => {
-    renderBar(outcome)
+  ]
+
+  describe.each<Target>(['runtime-v4', 'arduino-serial'])('on a %s target', (target) => {
+    it.each(NO_LICENSE)(
+      'ends an upload with the framed notice when the last check found %s',
+      async (_label, outcome) => {
+        renderBar(outcome, target)
+        chooseBuildOption('Build and upload')
+        await waitFor(() => expect(warnings().slice(-framed.length)).toEqual(framed))
+        expect(compileProgram).toHaveBeenCalledWith(
+          expect.objectContaining({ compileOnly: false }),
+          expect.any(Function),
+        )
+      },
+    )
+  })
+
+  it('releases and reconnects the serial link around the upload and still warns', async () => {
+    renderBar({ state: 'unlicensed', entitlementChecked: true }, 'arduino-serial')
     chooseBuildOption('Build and upload')
     await waitFor(() => expect(warnings().slice(-framed.length)).toEqual(framed))
+    expect(releaseSerialPort).toHaveBeenCalledWith(SERIAL_PORT)
   })
 
   it('prints it again on every upload, not only the first', async () => {

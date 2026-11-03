@@ -499,6 +499,31 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceLicense.awaitingPurchaseUntil).not.toBeNull()
     })
 
+    it('a port change drops the license, the same port keeps it', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setCommunicationPort('/dev/ttyACM0')
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+
+      store.getState().deviceActions.setCommunicationPort('/dev/ttyACM0')
+      expect(store.getState().deviceLicense.report).toEqual(LICENSED)
+
+      store.getState().deviceActions.setCommunicationPort('/dev/ttyACM1')
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchaseUntil: null })
+    })
+
+    it('an address change drops the license, unless the same device only moved', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setRuntimeIpAddress('192.168.0.10')
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+
+      store.getState().deviceActions.setRuntimeIpAddress('192.168.0.10')
+      store.getState().deviceActions.setRuntimeIpAddress('192.168.0.20', { sameDevice: true })
+      expect(store.getState().deviceLicense.report).toEqual(LICENSED)
+
+      store.getState().deviceActions.setRuntimeIpAddress('192.168.0.30')
+      expect(store.getState().deviceLicense.report).toBeNull()
+    })
+
     it('clearDeviceDefinitions clears licensing and the watch — a new project may select another board', () => {
       // A "Licensed" badge carried across a project close would be an assertion
       // about hardware that is not even connected — and a purchase watch carried

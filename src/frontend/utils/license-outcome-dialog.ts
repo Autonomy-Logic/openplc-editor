@@ -6,7 +6,7 @@
  * defensible on its own:
  *
  *   licensed          → say nothing. A silent success is the correct UX; a dialog
- *                       confirming a licence nobody asked about is noise on every
+ *                       confirming a license nobody asked about is noise on every
  *                       single connect.
  *   unlicensed + checked   → demo mode, and OFFER TO BUY. The backend was asked
  *                       and said there is no purchase, so this is the one branch
@@ -15,9 +15,8 @@
  *                       Nobody asked whether a purchase exists; telling someone
  *                       who already paid to pay again is the worst thing this
  *                       flow can do.
- *   unsupported       → the device cannot store a licence. Buying would not help,
- *                       so no purchase is offered; the detail (when present) names
- *                       a build mismatch, which is actionable.
+ *   unsupported       → the device cannot store a license. Buying would not help,
+ *                       so no purchase is offered.
  *   check-failed      → say we could not tell, and offer a retry. Never present
  *                       this as "not licensed".
  */
@@ -56,7 +55,7 @@ export interface LicenseDialogHandlers {
    * For the AUTOMATIC flows (the runtime settle effect) — a modal the user did
    * not ask for, about a question they did not ask, is the wrong surface for
    * "we could not tell". The loudest case this quiets is a runtime that
-   * predates the licence function codes, where every connect would otherwise
+   * predates the license function codes, where every connect would otherwise
    * open "License Check Failed" on a working device. User-INITIATED paths
    * (serial connect, the badge's own recheck dialog) leave this unset: there
    * the user asked a question and silence would read as success.
@@ -125,7 +124,7 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
         // button in the panel any more (that is the point), so silencing the
         // modal too would leave the automatic flow with no surface at all: no
         // dialog, no action, and a popover the user has no reason to open. The
-        // loud case this quieting exists for -- a runtime predating the licence
+        // loud case this quieting exists for -- a runtime predating the license
         // FCs on every connect -- is retryable, so it stays quiet.
         return false
       }

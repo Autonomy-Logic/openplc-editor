@@ -559,9 +559,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           addLog({ level: 'error', message: result.error ?? 'Compilation failed' })
         }
 
-        // From the last license check on this board; null when it was never checked.
         const licenseState = store.getState().deviceLicense.report?.outcome.state
-        if (doUpload && result.success && (licenseState === 'unlicensed' || licenseState === 'unsupported')) {
+        const lastCheckFoundNoLicense = licenseState === 'unlicensed' || licenseState === 'unsupported'
+        if (doUpload && result.success && lastCheckFoundNoLicense) {
           for (const line of demoModeConsoleLines()) addLog({ level: 'warning', message: line })
         }
 
@@ -591,12 +591,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             )
             const trimmed = entered?.trim()
             if (trimmed) {
-              store.getState().deviceActions.setRuntimeIpAddress(trimmed)
+              store.getState().deviceActions.setRuntimeIpAddress(trimmed, { sameDevice: true })
             }
           } else {
             const newIp = vsd.modbus_tcp?.ip_address || vsd.network?.ip_address
             if (newIp && newIp !== cfg.runtimeIpAddress) {
-              store.getState().deviceActions.setRuntimeIpAddress(newIp)
+              store.getState().deviceActions.setRuntimeIpAddress(newIp, { sameDevice: true })
             }
           }
         }
