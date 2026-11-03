@@ -192,8 +192,8 @@ export interface DevicePort {
    * URL the sandboxed vendor configurator iframe loads `relPath` of an installed package from,
    * or `null` when this host cannot serve package files or the id or path is invalid.
    * Editor: `vpp-doc://<packageId>/<relPath>`, served by the main process.
-   * Web: the Edge package-file route of the selected vPLC when `VITE_VPP_DOCUMENT_ROUTE_ENABLED`
-   *      is `true`, else `null`; always `null` on the Node host and for any package but the vPLC's own.
+   * Web: the app's static `vendor-frame/loader.html#<nonce>`, which receives the document's files from
+   *      the archive the browser verified; `null` on the Node host and for any package but the vPLC's own.
    */
   getVendorDocumentUrl(packageId: string, relPath: string): string | null
 
