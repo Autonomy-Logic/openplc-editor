@@ -416,7 +416,7 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceLicense.awaitingPurchaseUntil).toBeNull()
     })
 
-    it('a board change drops the licence AND the purchase watch — both were bound to the OLD board', () => {
+    it('a board change drops the license AND the purchase watch — both were bound to the OLD board', () => {
       // setDeviceBoard already wipes everything else that is board-specific
       // (platform options, the pin-table row, vendor-screen data). A licence
       // report is just as board-specific: it was verified against the previous
@@ -485,7 +485,7 @@ describe('createDeviceSlice', () => {
       expect(archive?.['Raspberry Pi 4']?.enabled).toBe(false)
     })
 
-    it('leaves the licence alone when setDeviceBoard is called with the same board', () => {
+    it('leaves the license alone when setDeviceBoard is called with the same board', () => {
       // The device screen re-sets the board on several paths; only an actual
       // change invalidates the licence — or ends a running purchase watch.
       const store = makeStore()

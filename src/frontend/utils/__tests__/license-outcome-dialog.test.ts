@@ -1,4 +1,5 @@
 import type { DeviceLicenseReport } from '@root/middleware/shared/ports/device-port'
+import { DEMO_MODE_NOTICE } from '@root/middleware/shared/utils/licensing'
 
 import { explainLicenseOutcome, type OpenLicenseDialog } from '../license-outcome-dialog'
 
@@ -34,7 +35,7 @@ describe('explainLicenseOutcome', () => {
     expect(opened).toHaveLength(0)
   })
 
-  it('is silent for a freshly activated licence too', () => {
+  it('is silent for a freshly activated license too', () => {
     const { opened, openModal, buy } = harness()
 
     explainLicenseOutcome(report({ state: 'licensed', how: 'activated' }), { openModal, buy })
@@ -49,7 +50,7 @@ describe('explainLicenseOutcome', () => {
       explainLicenseOutcome(report({ state: 'unlicensed', entitlementChecked: true }), { openModal, buy, retry })
 
       expect(opened).toHaveLength(1)
-      expect(opened[0].buttons).toEqual(['Buy Licence', 'Continue in Demo Mode'])
+      expect(opened[0].buttons).toEqual(['Buy License', 'Continue in Demo Mode'])
       opened[0].onResponse(0)
       expect(buy).toHaveBeenCalledTimes(1)
       expect(retry).not.toHaveBeenCalled()
@@ -64,7 +65,7 @@ describe('explainLicenseOutcome', () => {
       expect(buy).not.toHaveBeenCalled()
     })
 
-    it("quotes the backend's own wording when it gave one", () => {
+    it('says only the demo-mode notice, even when the server gave a reason', () => {
       const { opened, openModal, buy } = harness()
 
       explainLicenseOutcome(
@@ -72,7 +73,8 @@ describe('explainLicenseOutcome', () => {
         { openModal, buy },
       )
 
-      expect(opened[0].message).toContain('no active subscription')
+      expect(opened[0].title).toBe('No License for This Device')
+      expect(opened[0].message).toBe(DEMO_MODE_NOTICE)
     })
   })
 
@@ -84,8 +86,8 @@ describe('explainLicenseOutcome', () => {
 
       explainLicenseOutcome(report({ state: 'unlicensed', entitlementChecked: false }), { openModal, buy, retry })
 
-      expect(opened[0].buttons).toEqual(['Check for Licence', 'Continue in Demo Mode'])
-      expect(opened[0].buttons).not.toContain('Buy Licence')
+      expect(opened[0].buttons).toEqual(['Check for License', 'Continue in Demo Mode'])
+      expect(opened[0].buttons).not.toContain('Buy License')
       opened[0].onResponse(0)
       expect(retry).toHaveBeenCalledTimes(1)
       expect(buy).not.toHaveBeenCalled()
@@ -115,16 +117,15 @@ describe('explainLicenseOutcome', () => {
       expect(retry).not.toHaveBeenCalled()
     })
 
-    it('names the firmware and tells the user to rebuild, without blaming the hardware', () => {
+    it('names the firmware, not the hardware', () => {
       const { opened, openModal, buy } = harness()
 
       explainLicenseOutcome(report({ state: 'unsupported' }), { openModal, buy })
 
-      expect(opened[0].message).toMatch(/rebuild and\s+upload/i)
-      expect(opened[0].message).toContain('This hardware supports it')
-      // The old wording ("This Device Cannot Store A Licence") read as a hardware
-      // limitation and cost a debugging session.
-      expect(opened[0].title).not.toMatch(/cannot store/i)
+      expect(opened[0].title).toBe('License Storage Missing from This Firmware')
+      expect(opened[0].message).toBe(
+        'The firmware on this device reports no license storage, so a license cannot be written to it.',
+      )
     })
   })
 
@@ -139,8 +140,10 @@ describe('explainLicenseOutcome', () => {
       })
 
       expect(opened[0].type).toBe('error')
-      expect(opened[0].message).toContain('Activation request failed: 429')
-      expect(opened[0].message).toContain('NOT the same as having no licence')
+      expect(opened[0].title).toBe('License Check Failed')
+      expect(opened[0].message).toBe(
+        'The editor could not determine whether this device holds a license.\n\nActivation request failed: 429',
+      )
       expect(opened[0].buttons).toEqual(['Try Again', 'Continue'])
       opened[0].onResponse(0)
       expect(retry).toHaveBeenCalledTimes(1)
@@ -183,7 +186,7 @@ describe('explainLicenseOutcome', () => {
 
     it('stays quiet on the automatic flow for a RETRYABLE failure', () => {
       // The loud case this exists for: a runtime predating the licence FCs would
-      // otherwise open "Licence Check Failed" on every single connect.
+      // otherwise open "License Check Failed" on every single connect.
       const { opened, openModal, buy } = harness()
 
       const shown = explainLicenseOutcome(report({ state: 'check-failed', error: 'No response from runtime' }), {
@@ -205,14 +208,14 @@ describe('explainLicenseOutcome', () => {
       const { opened, openModal, buy } = harness()
 
       const shown = explainLicenseOutcome(
-        report({ state: 'check-failed', error: 'this hardware cannot hold a licence', retryable: false }),
+        report({ state: 'check-failed', error: 'this hardware cannot hold a license', retryable: false }),
         { openModal, buy, retry: jest.fn(() => Promise.resolve()), quietCheckFailed: true },
       )
 
       expect(shown).toBe(true)
       expect(opened).toHaveLength(1)
       expect(opened[0].buttons).toEqual(['OK'])
-      expect(opened[0].message).toContain('this hardware cannot hold a licence')
+      expect(opened[0].message).toContain('this hardware cannot hold a license')
     })
 
     it('never labels the failure as "not licensed"', () => {
@@ -221,20 +224,37 @@ describe('explainLicenseOutcome', () => {
       explainLicenseOutcome(report({ state: 'check-failed', error: 'Request timeout' }), { openModal, buy })
 
       expect(opened[0].title).not.toMatch(/not licen/i)
-      expect(opened[0].buttons).not.toContain('Buy Licence')
+      expect(opened[0].buttons).not.toContain('Buy License')
     })
   })
 
   describe('demo-mode wording', () => {
-    it('is explicit that the DEVICE enforces demo mode, not the editor', () => {
-      // Saying or implying the editor gates the upload would be false: it uploads
-      // either way, and the licence-core on the device is what limits actuation.
-      const { opened, openModal, buy } = harness()
+    it('both unlicensed dialogs say exactly the demo-mode notice, with no demo duration', () => {
+      // The demo window differs per VPP, so no dialog may name one.
+      const { opened, openModal, buy, retry } = harness()
 
-      explainLicenseOutcome(report({ state: 'unlicensed', entitlementChecked: true }), { openModal, buy })
+      explainLicenseOutcome(report({ state: 'unlicensed', entitlementChecked: true }), { openModal, buy, retry })
+      explainLicenseOutcome(report({ state: 'unlicensed', entitlementChecked: false }), { openModal, buy, retry })
 
-      expect(opened[0].message).toContain('enforced on the device, not by the editor')
-      expect(opened[0].message).toContain('build and upload')
+      expect(opened.map((props) => props.message)).toEqual([DEMO_MODE_NOTICE, DEMO_MODE_NOTICE])
+      expect(opened[1].title).toBe('No License Stored on This Device')
+      for (const props of opened) expect(props.message).not.toMatch(/hour|minute/i)
+    })
+
+    it('spells license the American way in every title, message and button', () => {
+      const { opened, openModal, buy, retry } = harness()
+      const outcomes: DeviceLicenseReport['outcome'][] = [
+        { state: 'unlicensed', entitlementChecked: true },
+        { state: 'unlicensed', entitlementChecked: false },
+        { state: 'unsupported' },
+        { state: 'check-failed', error: 'x' },
+      ]
+
+      for (const outcome of outcomes) explainLicenseOutcome(report(outcome), { openModal, buy, retry })
+
+      for (const props of opened) {
+        expect([props.title, props.message, ...props.buttons].join(' ')).not.toMatch(/licenc/i)
+      }
     })
 
     it('never claims to know the execution mode the board is running in', () => {

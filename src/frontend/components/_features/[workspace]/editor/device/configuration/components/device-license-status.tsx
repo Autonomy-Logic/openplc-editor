@@ -103,8 +103,8 @@ function describeOutcome(report: DeviceLicenseReport): {
         negative: false,
         detail:
           report.outcome.how === 'activated'
-            ? 'A licence was just written to this device and read back to confirm it.'
-            : 'This device is holding a licence issued for it and for this VPP.',
+            ? 'A license was just written to this device and read back to confirm it.'
+            : 'This device is holding a license issued for it and for this VPP.',
       }
     case 'unlicensed':
       return {
@@ -112,10 +112,10 @@ function describeOutcome(report: DeviceLicenseReport): {
         Icon: ShieldUnlicensedIcon,
         negative: true,
         detail: report.outcome.entitlementChecked
-          ? `No licence is registered for this device.${
-              report.outcome.backendReason ? ` The licence server said: ${report.outcome.backendReason}` : ''
+          ? `No license is registered for this device.${
+              report.outcome.backendReason ? ` The license server said: ${report.outcome.backendReason}` : ''
             }`
-          : 'This device is not holding a valid licence. Nobody has checked yet whether one was purchased for it.',
+          : 'This device is not holding a valid license. Nobody has checked yet whether one was purchased for it.',
       }
     case 'unsupported':
       // The label points at the FIRMWARE, not the board. "Not storable" read as a
@@ -126,15 +126,15 @@ function describeOutcome(report: DeviceLicenseReport): {
         Icon: ShieldUnknownIcon,
         negative: false,
         detail:
-          'The firmware on this device reports no licence storage. This hardware supports it, ' +
+          'The firmware on this device reports no license storage. This hardware supports it, ' +
           'so the image was built without the storage backend. Rebuild and upload.',
       }
     case 'check-failed':
       return {
-        label: 'Licence check failed',
+        label: 'License check failed',
         Icon: ShieldUnknownIcon,
         negative: false,
-        detail: `${report.outcome.error}\n\nThis is not the same as having no licence. Nothing on the device has changed.`,
+        detail: `${report.outcome.error}\n\nThis is not the same as having no license. Nothing on the device has changed.`,
       }
   }
 }
@@ -156,7 +156,7 @@ export function DeviceLicenseStatus({
   if (!report) {
     return isChecking ? (
       <span className='font-caption text-cp-xs font-medium text-neutral-500 dark:text-neutral-500'>
-        Checking licence…
+        Checking license…
       </span>
     ) : null
   }
@@ -177,7 +177,7 @@ export function DeviceLicenseStatus({
   const badgeLabel = showWaiting
     ? 'Waiting for purchase…'
     : isChecking && !awaitingPurchase
-      ? 'Checking licence…'
+      ? 'Checking license…'
       : label
 
   // The purchase button appears ONLY where buying is the honest next step: the
@@ -207,7 +207,7 @@ export function DeviceLicenseStatus({
       <Popover.Trigger asChild>
         <button
           type='button'
-          aria-label='Licence status'
+          aria-label='License status'
           className={cn(
             'flex w-fit items-center gap-1 font-caption text-cp-xs font-medium outline-none',
             negative
@@ -276,7 +276,7 @@ export function DeviceLicenseStatus({
 
           {awaitingPurchase ? (
             <p className='font-caption text-cp-sm text-neutral-600 dark:text-neutral-400'>
-              Waiting for the purchase to complete. OpenPLC keeps checking for up to ten minutes and writes the licence
+              Waiting for the purchase to complete. OpenPLC keeps checking for up to ten minutes and writes the license
               to this device as soon as the purchase clears. You can keep working in the meantime.
             </p>
           ) : null}
@@ -297,7 +297,7 @@ export function DeviceLicenseStatus({
               ) : null}
               {offerPurchase ? (
                 <button type='button' onClick={onBuy} className='font-caption text-cp-xs text-brand hover:underline'>
-                  Buy licence
+                  Buy license
                 </button>
               ) : null}
               {awaitingPurchase ? (

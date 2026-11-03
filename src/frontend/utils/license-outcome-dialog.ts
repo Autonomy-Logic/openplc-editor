@@ -20,13 +20,10 @@
  *                       a build mismatch, which is actionable.
  *   check-failed      → say we could not tell, and offer a retry. Never present
  *                       this as "not licensed".
- *
- * The demo-mode wording is deliberate about WHO enforces it: the closed
- * license-core inside the VPP does, on the device. The editor uploads either way —
- * it does not gate the build on a licence, and saying it might would be false.
  */
 
 import type { DeviceLicenseReport, DeviceLicenseState } from '@root/middleware/shared/ports/device-port'
+import { DEMO_MODE_NOTICE } from '@root/middleware/shared/utils/licensing'
 
 /** The subset of the modal action this needs, so tests need no store. */
 export type OpenLicenseDialog = (
@@ -60,20 +57,12 @@ export interface LicenseDialogHandlers {
    * not ask for, about a question they did not ask, is the wrong surface for
    * "we could not tell". The loudest case this quiets is a runtime that
    * predates the licence function codes, where every connect would otherwise
-   * open "Licence Check Failed" on a working device. User-INITIATED paths
+   * open "License Check Failed" on a working device. User-INITIATED paths
    * (serial connect, the badge's own recheck dialog) leave this unset: there
    * the user asked a question and silence would read as success.
    */
   quietCheckFailed?: boolean
 }
-
-// "About two hours" mirrors LIC_GATE_DEMO_MS (7200000 ms) in the closed gate.
-// If the product decision changes the window, this sentence changes with it —
-// a dialog promising minutes while the device enforces hours (or the reverse)
-// is the kind of copy drift a customer notices before we do.
-const DEMO_EXPLANATION =
-  'The device will run in DEMO mode: the VPP stops driving outputs about two hours after each start. ' +
-  'You can still build and upload. The licence is enforced on the device, not by the editor.'
 
 /**
  * Show the dialog this outcome warrants, if any. Returns whether one was opened,
@@ -90,12 +79,11 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
 
     case 'unlicensed': {
       if (outcome.entitlementChecked) {
-        const reason = outcome.backendReason ? `\n\nThe licence server said: ${outcome.backendReason}` : ''
         openModal('debugger-message', {
           type: 'warning',
-          title: 'No Licence for This Device',
-          message: `This VPP is a paid product and no licence is registered for this device.${reason}\n\n${DEMO_EXPLANATION}`,
-          buttons: ['Buy Licence', 'Continue in Demo Mode'],
+          title: 'No License for This Device',
+          message: DEMO_MODE_NOTICE,
+          buttons: ['Buy License', 'Continue in Demo Mode'],
           onResponse: (buttonIndex: number) => {
             if (buttonIndex === 0) void buy(report.deviceId)
           },
@@ -106,9 +94,9 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
       // Nobody asked the backend. Offer a check, NOT a purchase.
       openModal('debugger-message', {
         type: 'warning',
-        title: 'No Licence Stored on This Device',
-        message: `This device is not holding a valid licence for this VPP. It may simply not have been activated yet.\n\n${DEMO_EXPLANATION}`,
-        buttons: retry ? ['Check for Licence', 'Continue in Demo Mode'] : ['OK'],
+        title: 'No License Stored on This Device',
+        message: DEMO_MODE_NOTICE,
+        buttons: retry ? ['Check for License', 'Continue in Demo Mode'] : ['OK'],
         onResponse: (buttonIndex: number) => {
           if (retry && buttonIndex === 0) void retry()
         },
@@ -117,19 +105,11 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
     }
 
     case 'unsupported':
-      // Unconditional wording, and it names the FIRMWARE. Every licensable VPP
-      // targets hardware that persists a licence, so a board answering this was
-      // built without its storage backend — "your hardware cannot do this" would
-      // be false, and it is the message that sent us looking at a NodeMCU that
-      // stores licences perfectly well.
+      // Names the firmware, not the hardware: the image was built without a license store.
       openModal('debugger-message', {
         type: 'warning',
-        title: 'Licence Storage Missing from This Firmware',
-        message:
-          'The firmware on this device reports no licence storage, so a licence cannot be ' +
-          'written to it.\n\nThis hardware supports it: every licensed VPP targets hardware that ' +
-          'does. The image on the board was built without the storage backend, so rebuild and ' +
-          `upload it.\n\n${DEMO_EXPLANATION}`,
+        title: 'License Storage Missing from This Firmware',
+        message: 'The firmware on this device reports no license storage, so a license cannot be written to it.',
         // No purchase offered: buying would not fix a firmware built wrong.
         buttons: ['OK'],
         onResponse: () => undefined,
@@ -157,10 +137,8 @@ export function explainLicenseOutcome(report: DeviceLicenseReport, handlers: Lic
         const canRetry = retry !== undefined && outcome.retryable !== false
         openModal('debugger-message', {
           type: 'error',
-          title: 'Licence Check Failed',
-          message:
-            `The editor could not determine whether this device holds a licence.\n\n${outcome.error}\n\n` +
-            'This is NOT the same as having no licence. Nothing has changed on the device.',
+          title: 'License Check Failed',
+          message: `The editor could not determine whether this device holds a license.\n\n${outcome.error}`,
           buttons: canRetry ? ['Try Again', 'Continue'] : ['OK'],
           onResponse: (buttonIndex: number) => {
             // `retry` re-runs the whole licensing flow, which reaches the

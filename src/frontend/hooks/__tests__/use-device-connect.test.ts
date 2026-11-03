@@ -379,7 +379,7 @@ describe('useDeviceConnect', () => {
       expect(spies.openModal).not.toHaveBeenCalled()
     })
 
-    it('settles the licence over the held link after a successful connect', async () => {
+    it('settles the license over the held link after a successful connect', async () => {
       mockConnect.mockResolvedValue({ status: 'connected-with-firmware' })
       mockRefreshLicense.mockResolvedValue({
         deviceId: '659a3520540f803625ddc34081e893d3',
@@ -430,8 +430,8 @@ describe('useDeviceConnect', () => {
       await result.current.connect()
 
       const [, props] = spies.openModal.mock.calls[0]
-      expect(props).toMatchObject({ title: 'No Licence for This Device' })
-      expect((props as { buttons: string[] }).buttons).toEqual(['Buy Licence', 'Continue in Demo Mode'])
+      expect(props).toMatchObject({ title: 'No License for This Device' })
+      expect((props as { buttons: string[] }).buttons).toEqual(['Buy License', 'Continue in Demo Mode'])
 
       // Buying opens the device-BOUND purchase page: the id derived main-side is
       // what makes the purchase attach to this board rather than to nothing.
@@ -452,8 +452,8 @@ describe('useDeviceConnect', () => {
       await result.current.connect()
 
       const [, props] = spies.openModal.mock.calls[0]
-      expect(props).toMatchObject({ title: 'Licence Check Failed' })
-      expect((props as { buttons: string[] }).buttons).not.toContain('Buy Licence')
+      expect(props).toMatchObject({ title: 'License Check Failed' })
+      expect((props as { buttons: string[] }).buttons).not.toContain('Buy License')
     })
 
     it('re-runs the flow when the user retries, and explains the NEW outcome', async () => {
@@ -489,10 +489,10 @@ describe('useDeviceConnect', () => {
       expect(spies.setDeviceLicenseReport).toHaveBeenCalledWith({
         outcome: { state: 'check-failed', error: 'bridge is gone' },
       })
-      expect(spies.openModal.mock.calls[0][1]).toMatchObject({ title: 'Licence Check Failed' })
+      expect(spies.openModal.mock.calls[0][1]).toMatchObject({ title: 'License Check Failed' })
     })
 
-    it('drops the licence on a DELIBERATE disconnect', async () => {
+    it('drops the license on a DELIBERATE disconnect', async () => {
       // The user is done with this device; a badge left behind would assert
       // possession for hardware nothing is talking to. A link that merely DROPS
       // keeps it — that is the device slice's job, not this hook's.
