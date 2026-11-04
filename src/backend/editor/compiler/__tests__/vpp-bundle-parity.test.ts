@@ -103,6 +103,8 @@ function walk(dir: string, rel = ''): string[] {
   return out.sort()
 }
 
+const NO_SCREEN_CONFIGS = { vppExtensions: {}, debugMapContent: '', instances: [] }
+
 describe('VPP bundle parity — desktop writer vs shared builder', () => {
   let pkgDir: string
   let projectDir: string
@@ -139,6 +141,7 @@ describe('VPP bundle parity — desktop writer vs shared builder', () => {
       BOARD,
       projectDir,
       targetDir,
+      NO_SCREEN_CONFIGS,
       () => undefined,
     )
 
@@ -182,6 +185,7 @@ describe('VPP bundle parity — desktop writer vs shared builder', () => {
       BOARD,
       projectDir,
       targetDir,
+      NO_SCREEN_CONFIGS,
       () => undefined,
     )
 
@@ -194,6 +198,7 @@ describe('VPP bundle parity — desktop writer vs shared builder', () => {
       BOARD,
       projectDir,
       targetDir,
+      NO_SCREEN_CONFIGS,
       () => undefined,
     )
 

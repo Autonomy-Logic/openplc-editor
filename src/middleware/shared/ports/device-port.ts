@@ -193,7 +193,7 @@ export interface DevicePort {
    * or `null` when this host cannot serve package files or the id or path is invalid.
    * Editor: `vpp-doc://<packageId>/<relPath>`, served by the main process.
    * Web: the app's static `vendor-frame/loader.html#<nonce>`, which receives the document's files from
-   *      the archive the browser verified; `null` on the Node host and for any package but the vPLC's own.
+   *      the archive the browser verified, on both Edge and Node; `null` for any package but the vPLC's own.
    */
   getVendorDocumentUrl(packageId: string, relPath: string): string | null
 

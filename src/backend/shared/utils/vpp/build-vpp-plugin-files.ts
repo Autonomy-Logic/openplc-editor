@@ -21,9 +21,11 @@
  * not; nothing else about the output may differ between platforms.
  */
 
+import type { VppScreenConfigInputs } from '../../../../middleware/shared/ports/compiler-platform-port'
 import type { PackageManifest, VppModuleDefinition } from '../../../../middleware/shared/ports/types'
 import { configuratorArchiveSchema } from '../../../../middleware/shared/vendor-document/protocol'
 import { generateIoRangesPluginConfig } from './generate-io-ranges-plugin-config'
+import { generateScreenConfigFiles } from './generate-screen-config-files'
 import { generateVendorPluginConfig } from './generate-vendor-plugin-config'
 import { describeVppPinDrift, type InstalledVppIdentity, type VppPackagePin } from './vpp-package-pin'
 
@@ -61,6 +63,10 @@ export interface BuildVppPluginFilesArgs {
   pin?: { recorded?: VppPackagePin; installed: InstalledVppIdentity | null }
   /** Lower-case hex sha256 of the given bytes. */
   sha256Hex: (bytes: Uint8Array) => string | Promise<string>
+  /** Id of the package being packed; keys its buckets in `screenConfigInputs.vppExtensions`. */
+  packageId?: string
+  /** Compile outputs for the configs declared in `hal.screenConfigs`; omitted, none are generated. */
+  screenConfigInputs?: VppScreenConfigInputs
 }
 
 export interface BuildVppPluginFilesResult {
@@ -182,6 +188,21 @@ export async function buildVppPluginFiles(args: BuildVppPluginFilesArgs): Promis
     }
 
     files[`conf/${pluginName}.json`] = encodeUtf8(JSON.stringify(finalConfig, null, 2))
+
+    if (args.packageId !== undefined && args.screenConfigInputs !== undefined) {
+      const screenConfigs = generateScreenConfigFiles({
+        pluginName,
+        packageId: args.packageId,
+        screenConfigs: device.hal?.screenConfigs,
+        inputs: args.screenConfigInputs,
+      })
+      if (screenConfigs.errors.length > 0) {
+        errors.push(...screenConfigs.errors)
+        return empty(pluginName)
+      }
+      warnings.push(...screenConfigs.warnings)
+      for (const [path, content] of Object.entries(screenConfigs.files)) files[path] = encodeUtf8(content)
+    }
     // name,path,enabled,type,config_path,venv_path — the deterministic
     // locations compile.sh and apply_vpp_plugin_conf() agree on.
     files['vpp_plugins.conf'] = encodeUtf8(
