@@ -51,8 +51,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
+const KNOWN_FORMATS: ReadonlySet<unknown> = new Set(SCREEN_CONFIG_FORMATS)
+
 function isScreenConfigFormat(value: unknown): value is ScreenConfigFormat {
-  return typeof value === 'string' && (SCREEN_CONFIG_FORMATS as readonly string[]).includes(value)
+  return KNOWN_FORMATS.has(value)
 }
 
 /** Validates `hal.screenConfigs`; any malformed entry is an error, never a silent skip. */
@@ -220,6 +222,21 @@ export function generateVariableExportsConfig(
   return { content, warnings }
 }
 
+function generateForFormat(
+  declaration: ScreenConfigDeclaration,
+  data: unknown,
+  resolve: (qualifier: string) => DebugEntry | null,
+): { content: Record<string, unknown>; warnings: string[] } {
+  switch (declaration.format) {
+    case 'variable-exports':
+      return generateVariableExportsConfig(declaration.storageId, data, resolve)
+    default: {
+      const unhandled: never = declaration.format
+      throw new Error(`Unhandled screen config format: ${String(unhandled)}`)
+    }
+  }
+}
+
 /** Builds every `conf/<pluginName>.<file>.json` the device declares. */
 export function generateScreenConfigFiles(args: {
   pluginName: string
@@ -235,7 +252,7 @@ export function generateScreenConfigFiles(args: {
   const resolve = createDebugEntryResolver(args.inputs.debugMapContent, args.inputs.instances)
   const buckets = args.inputs.vppExtensions[args.packageId] ?? {}
   for (const declaration of declarations) {
-    const generated = generateVariableExportsConfig(declaration.storageId, buckets[declaration.storageId], resolve)
+    const generated = generateForFormat(declaration, buckets[declaration.storageId], resolve)
     files[`conf/${args.pluginName}.${declaration.file}.json`] = JSON.stringify(generated.content, null, 2)
     warnings.push(...generated.warnings)
   }

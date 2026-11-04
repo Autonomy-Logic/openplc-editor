@@ -835,11 +835,11 @@ async function runCompilePipelineInner(
     // map and the bundle is unchanged.  Without this, programs
     // upload but the runtime runs as a generic v4 with no physical
     // I/O — the diagnostic surface for that failure is silence.
-    const instances = (projectData.configuration?.resource?.instances ?? []).map(
-      (inst: { name: string; program: string }) => ({ name: inst.name, program: inst.program }),
-    )
-    const vppExtensions =
-      (projectData as { vppExtensions?: Record<string, Record<string, unknown>> }).vppExtensions ?? {}
+    const instances = (projectData.configuration?.resource?.instances ?? []).map((inst) => ({
+      name: inst.name,
+      program: inst.program,
+    }))
+    const vppExtensions = projectData.vppExtensions ?? {}
     const vppResult = await port.packageVppPlugin(
       { boardTarget, screenConfigInputs: { vppExtensions, debugMapContent: debugMapJson, instances } },
       makePlatformLog(emit, 'runtime-v4-bundle'),
