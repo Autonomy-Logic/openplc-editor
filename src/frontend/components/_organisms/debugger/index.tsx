@@ -165,7 +165,7 @@ const Debugger = ({ graphList }: DebuggerData) => {
                   position='popper'
                   align='center'
                   side='bottom'
-                  className='z-10 w-[--radix-select-trigger-width] flex-col gap-1 overflow-hidden rounded-md border border-neutral-200 bg-white dark:bg-neutral-900'
+                  className='z-20 w-[--radix-select-trigger-width] flex-col gap-1 overflow-hidden rounded-md border border-neutral-200 bg-white dark:bg-neutral-900'
                 >
                   {[1, 10, 30, 60, 300, 600].map((value) => (
                     <Select.Item
