@@ -141,7 +141,7 @@ const Debugger = ({ graphList }: DebuggerData) => {
             <span className='flex h-7 select-none items-center justify-center rounded-md bg-inherit  p-2 text-cp-sm font-medium text-neutral-1000 outline-none  dark:text-white'>
               Range
             </span>
-            <div className='relative z-[999999] flex gap-2'>
+            <div className='relative flex gap-2'>
               <Select.Root onValueChange={(value) => setRange(Number(value))}>
                 <Select.Trigger
                   value={String(range)}
@@ -165,7 +165,7 @@ const Debugger = ({ graphList }: DebuggerData) => {
                   position='popper'
                   align='center'
                   side='bottom'
-                  className='z-[999999] w-[--radix-select-trigger-width] flex-col gap-1 overflow-hidden rounded-md border border-neutral-200 bg-white dark:bg-neutral-900'
+                  className='z-10 w-[--radix-select-trigger-width] flex-col gap-1 overflow-hidden rounded-md border border-neutral-200 bg-white dark:bg-neutral-900'
                 >
                   {[1, 10, 30, 60, 300, 600].map((value) => (
                     <Select.Item
