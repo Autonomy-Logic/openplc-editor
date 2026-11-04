@@ -32,8 +32,15 @@ test('an oversized DefaultData decodes at the sub-item width in Startup Paramete
     await page.getByText('Startup Parameters', { exact: true }).first().click({ timeout: 60000 })
 
     await expect(page.getByText('1 object(s), 2 parameter(s)')).toBeVisible({ timeout: 60000 })
-    await expect(page.getByRole('row', { name: /Interpolation time index/ })).toContainText('-1')
-    await expect(page.getByRole('row', { name: /Interpolation time period value/ })).toContainText('1')
+
+    const timeIndexRow = page.getByRole('row', { name: /Interpolation time index/ })
+    await expect(timeIndexRow.locator('td').nth(5)).toHaveText('-1')
+    await expect(timeIndexRow.locator('input')).toHaveValue('-1')
+
+    const timePeriodRow = page.getByRole('row', { name: /Interpolation time period value/ })
+    await expect(timePeriodRow.locator('td').nth(5)).toHaveText('1')
+    await expect(timePeriodRow.locator('input')).toHaveValue('1')
+
     await expect(page.getByText('4261412607')).toHaveCount(0)
   } finally {
     await quitApp(app, page)

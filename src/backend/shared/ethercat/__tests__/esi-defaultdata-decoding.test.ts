@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { z } from 'zod'
+
 import type {
   ConfiguredEtherCATDevice,
   ESICoEObject,
@@ -50,7 +52,21 @@ const entriesOf = (xml: string): SDOConfigurationEntry[] => {
   return extractDefaultSdoConfigurations(parsed.device.coeObjects ?? [])
 }
 
-type RuntimeSdoRow = { index: string; subindex: number; value: number | string }
+const runtimeSdoRowSchema = z.object({
+  index: z.string(),
+  subindex: z.number(),
+  value: z.union([z.number(), z.string()]),
+})
+
+const busConfigSchema = z.array(
+  z.object({
+    config: z.object({
+      slaves: z.array(z.object({ sdo_configurations: z.array(runtimeSdoRowSchema).optional() })),
+    }),
+  }),
+)
+
+type RuntimeSdoRow = z.infer<typeof runtimeSdoRowSchema>
 
 const startupSdosOf = (entries: SDOConfigurationEntry[]): RuntimeSdoRow[] => {
   const device: ConfiguredEtherCATDevice = {
@@ -79,7 +95,7 @@ const startupSdosOf = (entries: SDOConfigurationEntry[]): RuntimeSdoRow[] => {
 
   const result = generateEtherdogConfigs(bus)
   if (result === null) throw new Error('generator returned null')
-  const parsed = JSON.parse(result.busconfig) as { config: { slaves: { sdo_configurations: RuntimeSdoRow[] }[] } }[]
+  const parsed = busConfigSchema.parse(JSON.parse(result.busconfig))
   return parsed[0]?.config.slaves[0]?.sdo_configurations ?? []
 }
 
@@ -175,6 +191,9 @@ describe('BitSize that does not fit its integer type', () => {
     ['INT', '8', 'FEFF'],
     ['USINT', '16', '0100'],
     ['UDINT', '16', '01000000'],
+    ['SINT', '16', 'FDFF'],
+    ['UINT', '8', '01'],
+    ['DINT', '16', 'FEFF'],
   ]
 
   describe('on a composite sub-item', () => {
