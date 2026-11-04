@@ -17,8 +17,6 @@ import { join, resolve } from 'path'
 
 import { ensureCliShimInstalled, shimStatePath } from '../backend/editor/cli-shim/first-run'
 import { CompilerModule } from '../backend/editor/compiler'
-// TODO: Refactor this type declaration
-import { MainIpcModuleConstructor } from '../backend/editor/contracts/types/modules/ipc/main'
 import { adoptProviderTokens } from '../backend/editor/edge-account/edge-account-service'
 import { edgeOAuthProviderFromUrl, runOAuthFlow } from '../backend/editor/edge-account/oauth-browser-flow'
 import { HardwareModule } from '../backend/editor/hardware'
@@ -47,6 +45,8 @@ Menu.setApplicationMenu(null)
 
 export let mainWindow: BrowserWindow | null = null
 export let splash: BrowserWindow | null = null
+
+let isCreatingMainWindow = false
 
 let mainIpcModule: MainProcessBridge | undefined
 let packageManager: PackageManagerModule | undefined
@@ -175,233 +175,261 @@ async function completeProviderSignIn(provider: EdgeOAuthProviderId): Promise<vo
   }
 }
 
-const createMainWindow = async () => {
-  // Check if the application is on debug method, install the extensions
-  if (isDebug) {
-    await installExtensions()
-  }
-  // Create a string with the resources folder path based on app environment;
-  const RESOURCES_PATH = app.isPackaged ? join(process.resourcesPath, 'assets') : join(__dirname, '../../assets')
-
-  /**
-   * Create a function that return the asset that the name was given;
-   */
-  const getAssetPath = (...paths: string[]): string => join(RESOURCES_PATH, ...paths)
-
-  /**
-   * Get the window bounds from the store.
-   */
-  const { bounds } = store.get('window')
-
-  /**
-   * Splash window configuration
-   */
-
-  splash = new BrowserWindow({
-    width: 580,
-    height: 366,
-    resizable: false,
-    frame: false,
-    show: false,
-    webPreferences: {
-      sandbox: true,
-    },
-  })
-
-  const splashPath = app.isPackaged
-    ? resolve(__dirname, '../main/splash.html')
-    : 'src/main/modules/preload/splash-screen/splash.html'
-  splash
-    .loadFile(splashPath)
-    .then(() => logger.info('Splash screen loaded successfully'))
-    .catch((error: unknown) => logger.error('Error loading splash screen: ' + getErrorMessage(error)))
-
-  splash.setIgnoreMouseEvents(false)
-
-  splash.once('ready-to-show', () => {
-    splash?.show()
-  })
-
-  splash.on('closed', () => (splash = null))
-
-  /**
-   * Main window configuration
-   */
-
-  // Create the main window instance.
-  mainWindow = new BrowserWindow({
-    minWidth: 1124,
-    minHeight: 628,
-    show: false,
-    icon: getAssetPath('icon.png'),
-    ...titlebarStyles,
-    webPreferences: {
-      sandbox: true,
-      preload: app.isPackaged ? join(__dirname, 'preload.js') : join(__dirname, '../../configs/dll/preload.js'),
-    },
-  })
-
-  // Load the Url or index.html file;
-  void mainWindow.loadURL(resolveHtmlPath('index.html'))
-
-  // Save window bounds on resize, close, and move events
-  const saveBounds = () => {
-    store.set('window.bounds', mainWindow?.getBounds())
-  }
-
-  const isMaximizedWindow = () => {
-    mainWindow?.webContents.send('window-controls:toggle-maximized')
-  }
-
-  /**
-   * -> Ready to show event (https://www.electronjs.org/docs/latest/api/browser-window#event-ready-to-show)
-   * Emitted when the web page has been rendered (while not being shown) and window can be displayed without a visual flash.
-   */
-  mainWindow.once('ready-to-show', () => {
-    if (!mainWindow) {
-      throw new Error('"mainWindow" is not defined')
+/**
+ * Create and initialize one main window, keeping the splash visible until its renderer loads.
+ * Concurrent activation requests are ignored while startup is pending. Failed startup
+ * destroys the window and closes the splash so a later activation can retry.
+ * @returns A promise that settles after renderer startup or failure cleanup.
+ */
+const createMainWindow = async (): Promise<void> => {
+  if (mainWindow !== null || isCreatingMainWindow) return
+  isCreatingMainWindow = true
+  try {
+    // Check if the application is on debug method, install the extensions
+    if (isDebug) {
+      await installExtensions()
     }
-    mainWindow.maximize()
-    if (process.env.START_MINIMIZED) {
-      mainWindow.minimize()
-    }
-    setTimeout(() => {
-      if (splash === null) {
-        mainWindow?.destroy()
-        return
+    // Create a string with the resources folder path based on app environment;
+    const RESOURCES_PATH = app.isPackaged ? join(process.resourcesPath, 'assets') : join(__dirname, '../../assets')
+
+    /**
+     * Create a function that return the asset that the name was given;
+     */
+    const getAssetPath = (...paths: string[]): string => join(RESOURCES_PATH, ...paths)
+
+    /**
+     * Get the window bounds from the store.
+     */
+    const { bounds } = store.get('window')
+
+    /**
+     * Splash window configuration
+     */
+
+    splash = new BrowserWindow({
+      width: 580,
+      height: 366,
+      resizable: false,
+      frame: false,
+      show: false,
+      webPreferences: {
+        sandbox: true,
+      },
+    })
+
+    const splashPath = app.isPackaged
+      ? resolve(__dirname, '../main/splash.html')
+      : 'src/main/modules/preload/splash-screen/splash.html'
+    splash
+      .loadFile(splashPath)
+      .then(() => logger.info('Splash screen loaded successfully'))
+      .catch((error: unknown) => logger.error('Error loading splash screen: ' + getErrorMessage(error)))
+
+    splash.setIgnoreMouseEvents(false)
+
+    splash.once('ready-to-show', () => {
+      splash?.show()
+    })
+
+    splash.on('closed', () => (splash = null))
+
+    /**
+     * Main window configuration
+     */
+
+    // Create the main window instance.
+    mainWindow = new BrowserWindow({
+      minWidth: 1124,
+      minHeight: 628,
+      show: false,
+      icon: getAssetPath('icon.png'),
+      ...titlebarStyles,
+      webPreferences: {
+        sandbox: true,
+        preload: app.isPackaged ? join(__dirname, 'preload.js') : join(__dirname, '../../configs/dll/preload.js'),
+      },
+    })
+
+    const window = mainWindow
+
+    /** Retry renderer startup in development and reveal the window only after loading succeeds. */
+    const loadMainWindow = async () => {
+      const maxAttempts = isDebug ? 20 : 1
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (window.isDestroyed()) return
+
+        try {
+          await window.loadURL(resolveHtmlPath('index.html'))
+          logger.info(`Main window loaded successfully on attempt ${attempt}`)
+
+          if (window.isDestroyed()) return
+
+          window.maximize()
+          if (process.env.START_MINIMIZED) {
+            window.minimize()
+          }
+          if (splash && !splash.isDestroyed()) {
+            splash.close()
+          }
+          window.show()
+          return
+        } catch (error) {
+          logger.warn(`Main window load attempt ${attempt}/${maxAttempts} failed: ${getErrorMessage(error)}`)
+          if (attempt === maxAttempts) throw error
+          if (window.isDestroyed()) return
+          await new Promise((resolvePromise) => setTimeout(resolvePromise, 250))
+        }
       }
-      splash.close()
-      mainWindow?.show()
-    }, 3000)
-  })
+    }
 
-  /**
-   * -> Close event (https://www.electronjs.org/docs/latest/api/browser-window#event-close)
-   * Emitted when the window is going to be closed. It's emitted before the beforeunload and unload event of the DOM.
-   * Calling event.preventDefault() will cancel the close.
-   */
-  mainWindow.on('close', saveBounds)
-  mainWindow.on('close', (event) => {
-    logger.info('mainWindow close')
-    quitCoordinator.handleWindowClose(event)
-    if (process.platform !== 'darwin') mainWindow?.webContents.send('window-controls:is-closing')
-  })
+    // Save window bounds on resize, close, and move events
+    /** Persist the current window geometry. */
+    const saveBounds = () => {
+      store.set('window.bounds', mainWindow?.getBounds())
+    }
 
-  /**
-   * -> Closed event (https://www.electronjs.org/docs/latest/api/browser-window#event-closed)
-   * Emitted when the window is closed. After you have received this event you should remove the reference to the window
-   * and avoid using it any more.
-   */
-  mainWindow.on('closed', () => {
-    logger.info('mainWindow closed')
-    mainWindow = null
-  })
+    /** Notify the renderer when the maximized state changes. */
+    const isMaximizedWindow = () => {
+      mainWindow?.webContents.send('window-controls:toggle-maximized')
+    }
 
-  /**
-   * -> Move event (https://www.electronjs.org/docs/latest/api/browser-window#event-move)
-   * Emitted when the window is being moved to a new position.
-   */
-  mainWindow.on('move', saveBounds)
+    /**
+     * -> Close event (https://www.electronjs.org/docs/latest/api/browser-window#event-close)
+     * Emitted when the window is going to be closed. It's emitted before the beforeunload and unload event of the DOM.
+     * Calling event.preventDefault() will cancel the close.
+     */
+    mainWindow.on('close', saveBounds)
+    mainWindow.on('close', (event) => {
+      logger.info('mainWindow close')
+      quitCoordinator.handleWindowClose(event)
+      if (process.platform !== 'darwin') mainWindow?.webContents.send('window-controls:is-closing')
+    })
 
-  /**
-   * -> Maximize event (https://www.electronjs.org/docs/latest/api/browser-window#event-maximize)
-   * Emitted when the window is maximized.
-   */
-  mainWindow.on('maximize', () => {
-    isMaximizedWindow()
-  })
+    /**
+     * -> Closed event (https://www.electronjs.org/docs/latest/api/browser-window#event-closed)
+     * Emitted when the window is closed. After you have received this event you should remove the reference to the window
+     * and avoid using it any more.
+     */
+    mainWindow.on('closed', () => {
+      logger.info('mainWindow closed')
+      mainWindow = null
+    })
 
-  /**
-   * -> Unmaximize event (https://www.electronjs.org/docs/latest/api/browser-window#event-unmaximize)
-   * Emitted when the window exits from a maximized state.
-   */
-  mainWindow.on('unmaximize', () => {
-    isMaximizedWindow()
-  })
+    /**
+     * -> Move event (https://www.electronjs.org/docs/latest/api/browser-window#event-move)
+     * Emitted when the window is being moved to a new position.
+     */
+    mainWindow.on('move', saveBounds)
 
-  /**
-   * -> Resize event (https://www.electronjs.org/docs/latest/api/browser-window#event-resize)
-   */
-  // Emitted after the window has been resized.
-  mainWindow.on('resize', saveBounds)
+    /**
+     * -> Maximize event (https://www.electronjs.org/docs/latest/api/browser-window#event-maximize)
+     * Emitted when the window is maximized.
+     */
+    mainWindow.on('maximize', () => {
+      isMaximizedWindow()
+    })
 
-  // Maximize the window if bounds are not set
-  if (!bounds) {
-    mainWindow.maximize()
-  }
+    /**
+     * -> Unmaximize event (https://www.electronjs.org/docs/latest/api/browser-window#event-unmaximize)
+     * Emitted when the window exits from a maximized state.
+     */
+    mainWindow.on('unmaximize', () => {
+      isMaximizedWindow()
+    })
 
-  // Open devtools if the app is not packaged;
-  if (isDebug) {
-    mainWindow.webContents.openDevTools()
-  }
+    /**
+     * -> Resize event (https://www.electronjs.org/docs/latest/api/browser-window#event-resize)
+     */
+    // Emitted after the window has been resized.
+    mainWindow.on('resize', saveBounds)
 
-  mainWindow.webContents.on('will-frame-navigate', (details) => {
-    if (!details.isMainFrame && leavesVendorDocument(details.frame?.url, details.url)) details.preventDefault()
-  })
+    // Maximize the window if bounds are not set
+    if (!bounds) {
+      mainWindow.maximize()
+    }
 
-  // Open urls in the user's browser
-  mainWindow.webContents.setWindowOpenHandler((edata) => {
-    // A provider link reaches the system browser too, but through the OAuth flow, which
-    // is what listens for the browser to come back with the session.
-    const provider = edgeOAuthProviderFromUrl(edata.url)
+    // Open devtools if the app is not packaged;
+    if (isDebug) {
+      mainWindow.webContents.openDevTools()
+    }
 
-    if (provider) {
-      void completeProviderSignIn(provider)
+    mainWindow.webContents.on('will-frame-navigate', (details) => {
+      if (!details.isMainFrame && leavesVendorDocument(details.frame?.url, details.url)) details.preventDefault()
+    })
+
+    // Open urls in the user's browser
+    mainWindow.webContents.setWindowOpenHandler((edata) => {
+      // A provider link reaches the system browser too, but through the OAuth flow, which
+      // is what listens for the browser to come back with the session.
+      const provider = edgeOAuthProviderFromUrl(edata.url)
+
+      if (provider) {
+        void completeProviderSignIn(provider)
+
+        return { action: 'deny' }
+      }
+
+      // Only web links leave the app: a `file:` or custom-scheme URL would run whatever the OS registers for it.
+      if (isWebUrl(edata.url)) {
+        void shell.openExternal(edata.url)
+      } else {
+        log.warn(`[main] refused to open external URL with scheme ${edata.url.split(':')[0] || '(none)'}`)
+      }
 
       return { action: 'deny' }
-    }
+    })
 
-    // Only web links leave the app: a `file:` or custom-scheme URL would run whatever the OS registers for it.
-    if (isWebUrl(edata.url)) {
-      void shell.openExternal(edata.url)
-    } else {
-      log.warn(`[main] refused to open external URL with scheme ${edata.url.split(':')[0] || '(none)'}`)
-    }
+    /**
+     * Add event listeners...
+     */
 
-    return { action: 'deny' }
-  })
+    // mainWindow.webContents.send('editor:getBaseTypes', _editorService.getBaseTypes())
 
-  /**
-   * Add event listeners...
-   */
+    // Handles the creation of the menu
+    const menuBuilder = new MenuBuilder(mainWindow, updateService)
+    void menuBuilder.buildMenu()
 
-  // mainWindow.webContents.send('editor:getBaseTypes', _editorService.getBaseTypes())
+    /**
+     * Creates a singleton instance for project service, which will be used across the entire application
+     */
+    const projectService = new ProjectService(mainWindow)
 
-  // Handles the creation of the menu
-  const menuBuilder = new MenuBuilder(mainWindow, updateService)
-  void menuBuilder.buildMenu()
+    /**
+     * Creates a singleton instance for POU service, which will be used across the entire application
+     */
+    const pouService = new PouService()
 
-  /**
-   * Creates a singleton instance for project service, which will be used across the entire application
-   */
-  const projectService = new ProjectService(mainWindow)
+    /**
+     * Creates a singleton instance for compiler service, which will be used across the entire application
+     */
 
-  /**
-   * Creates a singleton instance for POU service, which will be used across the entire application
-   */
-  const pouService = new PouService()
+    const compilerModule = new CompilerModule()
 
-  /**
-   * Creates a singleton instance for compiler service, which will be used across the entire application
-   */
+    const hardwareModule = new HardwareModule()
 
-  const compilerModule = new CompilerModule()
-
-  const hardwareModule = new HardwareModule()
-
-  mainIpcModule = new MainProcessBridge({
-    mainWindow,
-    ipcMain,
-    projectService,
-    store,
-    menuBuilder,
-    pouService,
-    compilerModule,
-    hardwareModule,
-    quitCoordinator,
-    packageManagerModule: packageManager,
-  } as unknown as MainIpcModuleConstructor)
-  mainIpcModule.setupMainIpcListener()
+    mainIpcModule = new MainProcessBridge({
+      mainWindow,
+      ipcMain,
+      projectService,
+      store,
+      menuBuilder,
+      pouService,
+      compilerModule,
+      hardwareModule,
+      quitCoordinator,
+      packageManagerModule: packageManager,
+    })
+    mainIpcModule.setupMainIpcListener()
+    await loadMainWindow()
+  } catch (error) {
+    logger.error(`Unable to create or load main window: ${getErrorMessage(error)}`)
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy()
+    mainWindow = null
+    if (splash && !splash.isDestroyed()) splash.close()
+  } finally {
+    isCreatingMainWindow = false
+  }
 }
 
 // Disable GPU Acceleration for Windows 7;
@@ -427,6 +455,7 @@ if (!app.requestSingleInstanceLock()) {
  * the application's dock or taskbar icon.
  */
 app.on('activate', () => {
+  if (isCreatingMainWindow) return
   if (mainWindow === null) {
     void createMainWindow()
   } else {
@@ -524,12 +553,6 @@ app
     void installCliShimOnFirstRun()
     // One check about a minute after launch, never blocking it; see modules/updater.
     updateService.start()
-    // Handle the app activation event;
-    app.on('activate', () => {
-      // On macOS it's common to re-create a window in the app when the
-      // dock icon is clicked and there are no other windows open.
-      if (mainWindow === null) void createMainWindow()
-    })
   })
   .catch((err: unknown) => logger.error(getErrorMessage(err)))
 
