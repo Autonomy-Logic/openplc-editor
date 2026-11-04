@@ -4,6 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
+import {
+  ALL_INTERFACES_ADDRESS,
+  type BindAddressMode,
+  buildBindAddressSuggestions,
+  getBindAddressMode,
+  isValidIpv4Address,
+  LOCALHOST_ADDRESS,
+  SPECIFIC_INTERFACE_MODE,
+} from '../../../../../../utils/opcua/bind-address'
+import { GenericComboboxCell } from '../../../../../_atoms/generic-table-inputs/generic-combobox-cell'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
@@ -25,10 +35,15 @@ import { UsersTab } from './components/users-tab'
  * - Address Space: Variable selection for OPC-UA exposure
  */
 
-const DEFAULT_NETWORK_INTERFACE_OPTIONS = [
-  { value: '0.0.0.0', label: 'All Interfaces (0.0.0.0)' },
-  { value: '127.0.0.1', label: 'Localhost (127.0.0.1)' },
+const NETWORK_INTERFACE_OPTIONS: Array<{ value: BindAddressMode; label: string }> = [
+  { value: ALL_INTERFACES_ADDRESS, label: 'All Interfaces (0.0.0.0)' },
+  { value: LOCALHOST_ADDRESS, label: 'Localhost (127.0.0.1)' },
+  { value: SPECIFIC_INTERFACE_MODE, label: 'Specific Interface' },
 ]
+
+// Field-style trigger for the interface address combobox (matches the select above).
+const comboboxTriggerStyles =
+  'flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
 
 // Input styles matching Modbus server editor
 const inputStyles =
@@ -244,6 +259,15 @@ const GeneralSettingsTab = ({ config, onServerUpdate, onCycleTimeUpdate }: Gener
   const [productUri, setProductUri] = useState(config.server.productUri)
   const [endpointPath, setEndpointPath] = useState(config.server.endpointPath)
 
+  // Network interface: the select shows a mode, the stored value is always an IP.
+  // The mode is kept locally so "Specific Interface" can stay selected while the
+  // user has not picked an address yet (the stored value is untouched until then).
+  const bindAddress = config.server.bindAddress
+  const [bindAddressMode, setBindAddressMode] = useState<BindAddressMode>(() => getBindAddressMode(bindAddress))
+  const [bindAddressError, setBindAddressError] = useState<string | null>(null)
+  const deviceIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress)
+  const connectedIpAddress = useOpenPLCStore((state) => state.runtimeConnection.ipAddress)
+
   // Sync local state when config changes
   useEffect(() => {
     setPort(config.server.port.toString())
@@ -253,6 +277,71 @@ const GeneralSettingsTab = ({ config, onServerUpdate, onCycleTimeUpdate }: Gener
     setProductUri(config.server.productUri)
     setEndpointPath(config.server.endpointPath)
   }, [config])
+
+  // Re-derive the mode only when the stored address itself changes, so editing
+  // other fields does not drop a pending "Specific Interface" selection.
+  useEffect(() => {
+    setBindAddressMode(getBindAddressMode(bindAddress))
+    setBindAddressError(null)
+  }, [bindAddress])
+
+  const bindAddressSuggestions = useMemo(
+    () =>
+      buildBindAddressSuggestions({
+        currentBindAddress: bindAddress,
+        deviceIpAddress,
+        connectedIpAddress,
+      }),
+    [bindAddress, deviceIpAddress, connectedIpAddress],
+  )
+
+  const bindAddressOptions = useMemo(
+    () =>
+      bindAddressSuggestions.map((suggestion) => ({
+        id: suggestion.address,
+        value: suggestion.address,
+        label: `${suggestion.address} (${suggestion.source})`,
+      })),
+    [bindAddressSuggestions],
+  )
+
+  const handleBindAddressModeChange = useCallback(
+    (mode: string) => {
+      setBindAddressError(null)
+      if (mode === SPECIFIC_INTERFACE_MODE) {
+        setBindAddressMode(SPECIFIC_INTERFACE_MODE)
+        // Preselect the best known address so the setting is immediately usable.
+        const firstSuggestion = bindAddressSuggestions[0]?.address
+        if (firstSuggestion && firstSuggestion !== bindAddress) {
+          onServerUpdate({ bindAddress: firstSuggestion })
+        }
+        return
+      }
+      setBindAddressMode(getBindAddressMode(mode))
+      if (mode !== bindAddress) {
+        onServerUpdate({ bindAddress: mode })
+      }
+    },
+    [bindAddress, bindAddressSuggestions, onServerUpdate],
+  )
+
+  const handleSpecificBindAddressChange = useCallback(
+    (value: string) => {
+      const address = value.trim()
+      if (!address) return
+      if (!isValidIpv4Address(address)) {
+        setBindAddressError(`"${address}" is not a valid IPv4 address (e.g. 192.168.1.10).`)
+        return
+      }
+      setBindAddressError(null)
+      if (address !== bindAddress) {
+        onServerUpdate({ bindAddress: address })
+      }
+    },
+    [bindAddress, onServerUpdate],
+  )
+
+  const specificBindAddress = getBindAddressMode(bindAddress) === SPECIFIC_INTERFACE_MODE ? bindAddress : ''
 
   const handlePortBlur = useCallback(() => {
     const portNum = parseInt(port, 10)
@@ -348,14 +437,14 @@ const GeneralSettingsTab = ({ config, onServerUpdate, onCycleTimeUpdate }: Gener
         <div className='flex items-center gap-4'>
           <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Network Interface</Label>
           <div className='w-64'>
-            <Select value={config.server.bindAddress} onValueChange={(value) => onServerUpdate({ bindAddress: value })}>
+            <Select value={bindAddressMode} onValueChange={handleBindAddressModeChange}>
               <SelectTrigger
                 withIndicator
                 placeholder='Select network interface'
                 className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
               />
               <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
-                {DEFAULT_NETWORK_INTERFACE_OPTIONS.map((option) => (
+                {NETWORK_INTERFACE_OPTIONS.map((option) => (
                   <SelectItem
                     key={option.value}
                     value={option.value}
@@ -373,6 +462,40 @@ const GeneralSettingsTab = ({ config, onServerUpdate, onCycleTimeUpdate }: Gener
             </Select>
           </div>
         </div>
+
+        {/* Specific Interface Address */}
+        {bindAddressMode === SPECIFIC_INTERFACE_MODE && (
+          <div className='flex items-start gap-4'>
+            <Label className='w-32 whitespace-nowrap pt-2 text-xs text-neutral-950 dark:text-white'>
+              Interface Address
+            </Label>
+            <div className='flex flex-col gap-1'>
+              <div className='w-64'>
+                <GenericComboboxCell
+                  value={specificBindAddress}
+                  onValueChange={handleSpecificBindAddressChange}
+                  selectValues={bindAddressOptions}
+                  displayLabel={specificBindAddress || 'Select or type an IPv4 address'}
+                  disableFilter
+                  canAddACustomOption
+                  showClearOption={false}
+                  showChevron
+                  triggerClassName={comboboxTriggerStyles}
+                  placeholder='192.168.1.10'
+                  customValueLabel='Use this address'
+                  emptyMessage='No known addresses. Type the IPv4 address of the interface.'
+                />
+              </div>
+              {bindAddressError ? (
+                <span className='text-xs text-red-500 dark:text-red-400'>{bindAddressError}</span>
+              ) : (
+                <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                  IPv4 address of the target device interface the server will listen on.
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Port */}
         <div className='flex items-center gap-4'>
