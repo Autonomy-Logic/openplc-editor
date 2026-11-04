@@ -381,3 +381,50 @@ describe('buildVppPluginFiles', () => {
     })
   })
 })
+
+describe('buildVppPluginFiles: hal.screenConfigs', () => {
+  const screenDevice = (screenConfigs: unknown): VppDevice =>
+    makeDevice({
+      hal: {
+        type: 'runtime-v4',
+        pluginEntry: 'hal/plugin/main.cpp',
+        configTemplate: 'hal/plugin/config_template.json',
+        screenConfigs,
+      },
+    } as Partial<VppDevice>)
+  const screenConfigInputs = {
+    vppExtensions: { 'com.synergy-logic.slm-rp4': { 'data-hub': { enabled: false } } },
+    debugMapContent: '',
+    instances: [],
+  }
+
+  it('writes each declared screen config next to the plugin config', async () => {
+    const result = await buildVppPluginFiles({
+      device: screenDevice([{ storageId: 'data-hub', format: 'variable-exports', file: 'data-hub' }]),
+      packageFiles: makePackageFiles(),
+      packageSignature: SIGNATURE,
+      vendorScreenData: {},
+      sha256Hex,
+      packageId: 'com.synergy-logic.slm-rp4',
+      screenConfigInputs,
+    })
+
+    expect(result.errors).toEqual([])
+    expect(JSON.parse(read(result.files, 'conf/synergy.data-hub.json'))).toEqual({ enabled: false })
+  })
+
+  it('stops the build on a malformed declaration', async () => {
+    const result = await buildVppPluginFiles({
+      device: screenDevice([{ storageId: 'data-hub', format: 'js-emitter', file: 'data-hub' }]),
+      packageFiles: makePackageFiles(),
+      packageSignature: SIGNATURE,
+      vendorScreenData: {},
+      sha256Hex,
+      packageId: 'com.synergy-logic.slm-rp4',
+      screenConfigInputs,
+    })
+
+    expect(result.errors).toEqual(['hal.screenConfigs[0].format must be one of: variable-exports'])
+    expect(Object.keys(result.files)).not.toContain('conf/synergy.data-hub.json')
+  })
+})
