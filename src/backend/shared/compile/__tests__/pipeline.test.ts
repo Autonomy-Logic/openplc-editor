@@ -1224,7 +1224,13 @@ describe('runCompilePipeline — runtime v4 path', () => {
       emit,
     )
     expect(result.success).toBe(true)
-    expect(port.packageVppPlugin).toHaveBeenCalledWith({ boardTarget: 'SLM-RP4' }, expect.any(Function))
+    expect(port.packageVppPlugin).toHaveBeenCalledWith(
+      {
+        boardTarget: 'SLM-RP4',
+        screenConfigInputs: { vppExtensions: {}, debugMapContent: '{}', instances: [] },
+      },
+      expect.any(Function),
+    )
     expect(callOrder).toEqual(['vpp', 'upload'])
   })
 

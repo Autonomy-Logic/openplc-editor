@@ -742,6 +742,8 @@ export interface PackageManifest {
       configTemplate?: string
       /** Shape of the generated plugin config. Absent → "slots". */
       pluginConfigFormat?: 'slots' | 'io-ranges'
+      /** Sibling configs `conf/<plugin_name>.<file>.json` generated from custom screen buckets; validated when packed. */
+      screenConfigs?: ReadonlyArray<{ storageId: string; format: string; file: string }>
       requirements?: string
       source?: string
       /** Prebuilt arduino-hal library directory, linked via --library alongside `hal.source`. */

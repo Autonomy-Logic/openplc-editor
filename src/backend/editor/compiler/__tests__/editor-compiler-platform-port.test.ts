@@ -315,11 +315,27 @@ describe('createEditorCompilerPlatformPort', () => {
 
   // ---- packageVppPlugin --------------------------------------------------
 
+  const SCREEN_CONFIG_INPUTS = {
+    vppExtensions: { 'com.weidmuller.ucontrol': { 'data-hub': { enabled: false } } },
+    debugMapContent: '{}',
+    instances: [{ name: 'INSTANCE0', program: 'main' }],
+  }
+
   it('packageVppPlugin forwards to handler and returns empty files map on success', async () => {
     const handleVendorPluginPackaging = jest.fn(async () => undefined)
     const port = createEditorCompilerPlatformPort(makeHandlers({ handleVendorPluginPackaging }), makeContext())
-    const result = await port.packageVppPlugin({ boardTarget: 'SLM-RP4' }, () => undefined)
+    const result = await port.packageVppPlugin(
+      { boardTarget: 'SLM-RP4', screenConfigInputs: SCREEN_CONFIG_INPUTS },
+      () => undefined,
+    )
     expect(handleVendorPluginPackaging).toHaveBeenCalledTimes(1)
+    expect(handleVendorPluginPackaging).toHaveBeenCalledWith(
+      'SLM-RP4',
+      expect.any(String),
+      expect.any(String),
+      SCREEN_CONFIG_INPUTS,
+      expect.any(Function),
+    )
     // No `getVppRuntimeFloor` in the default context, so no floor is known —
     // which the pipeline reads as "no constraint".
     expect(result).toEqual({ files: {}, minRuntimeVersion: null })
@@ -328,7 +344,10 @@ describe('createEditorCompilerPlatformPort', () => {
   it('packageVppPlugin surfaces the VPP runtime floor when the context can resolve one', async () => {
     const getVppRuntimeFloor = jest.fn(() => '4.1.9')
     const port = createEditorCompilerPlatformPort(makeHandlers(), makeContext({ getVppRuntimeFloor }))
-    const result = await port.packageVppPlugin({ boardTarget: 'SLM-RP4' }, () => undefined)
+    const result = await port.packageVppPlugin(
+      { boardTarget: 'SLM-RP4', screenConfigInputs: SCREEN_CONFIG_INPUTS },
+      () => undefined,
+    )
     expect(getVppRuntimeFloor).toHaveBeenCalledWith('SLM-RP4')
     expect(result.minRuntimeVersion).toBe('4.1.9')
   })
@@ -340,7 +359,10 @@ describe('createEditorCompilerPlatformPort', () => {
       throw new Error('registry unreadable')
     })
     const port = createEditorCompilerPlatformPort(makeHandlers(), makeContext({ getVppRuntimeFloor }))
-    const result = await port.packageVppPlugin({ boardTarget: 'SLM-RP4' }, () => undefined)
+    const result = await port.packageVppPlugin(
+      { boardTarget: 'SLM-RP4', screenConfigInputs: SCREEN_CONFIG_INPUTS },
+      () => undefined,
+    )
     expect(result.minRuntimeVersion).toBeNull()
     expect(result.errors).toBeUndefined()
   })
@@ -350,7 +372,10 @@ describe('createEditorCompilerPlatformPort', () => {
       throw new Error('VPP read failed')
     })
     const port = createEditorCompilerPlatformPort(makeHandlers({ handleVendorPluginPackaging }), makeContext())
-    const result = await port.packageVppPlugin({ boardTarget: 'SLM-RP4' }, () => undefined)
+    const result = await port.packageVppPlugin(
+      { boardTarget: 'SLM-RP4', screenConfigInputs: SCREEN_CONFIG_INPUTS },
+      () => undefined,
+    )
     expect(result.files).toEqual({})
     expect(result.errors).toHaveLength(1)
     expect(result.errors?.[0]?.message).toBe('VPP read failed')
@@ -363,6 +388,7 @@ describe('createEditorCompilerPlatformPort', () => {
         _boardTarget: string,
         _projectPath: string,
         _sourceTargetFolderPath: string,
+        _screenConfigInputs: unknown,
         callback: (chunk: Buffer | string, level?: 'info' | 'error') => void,
       ) => {
         callback('plain string line', 'info')
@@ -371,7 +397,7 @@ describe('createEditorCompilerPlatformPort', () => {
       },
     )
     const port = createEditorCompilerPlatformPort(makeHandlers({ handleVendorPluginPackaging }), makeContext())
-    await port.packageVppPlugin({ boardTarget: 'SLM-RP4' }, log)
+    await port.packageVppPlugin({ boardTarget: 'SLM-RP4', screenConfigInputs: SCREEN_CONFIG_INPUTS }, log)
     expect(log).toHaveBeenCalledWith('plain string line', 'info')
     expect(log).toHaveBeenCalledWith('buffer line', 'error')
     expect(log).toHaveBeenCalledWith('default level line', 'info')
