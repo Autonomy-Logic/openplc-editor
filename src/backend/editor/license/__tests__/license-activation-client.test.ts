@@ -117,7 +117,7 @@ describe('checkDeviceActivation', () => {
     const result = await checkDeviceActivation(INPUT)
 
     expect(result.licensed).toBe(false)
-    expect(result.error).toMatch(/sent no licence data/)
+    expect(result.error).toMatch(/sent no license data/)
   })
 
   it('rejects a blob that does not decode to exactly 98 bytes', async () => {

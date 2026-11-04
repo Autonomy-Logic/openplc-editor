@@ -29,7 +29,7 @@ function setup(
 }
 
 function expand() {
-  fireEvent.click(screen.getByRole('button', { name: 'Licence status' }))
+  fireEvent.click(screen.getByRole('button', { name: 'License status' }))
 }
 
 describe('DeviceLicenseStatus', () => {
@@ -53,10 +53,10 @@ describe('DeviceLicenseStatus', () => {
 
   it('shows progress while a check is in flight with nothing known yet', () => {
     setup(null, { isChecking: true })
-    expect(screen.getByText('Checking licence…')).toBeTruthy()
+    expect(screen.getByText('Checking license…')).toBeTruthy()
   })
 
-  it('labels a stored, verified licence as Licensed', () => {
+  it('labels a stored, verified license as Licensed', () => {
     setup({ deviceId: DEVICE_ID, outcome: { state: 'licensed', how: 'already-stored' } })
     expect(screen.getByText('Licensed')).toBeTruthy()
   })
@@ -70,11 +70,11 @@ describe('DeviceLicenseStatus', () => {
     // Three states, deliberately not two: collapsing these either tells a paying
     // customer to buy again or hides a real failure behind a reassuring badge.
     setup({ outcome: { state: 'check-failed', error: 'Request timeout' } })
-    expect(screen.getByText('Licence check failed')).toBeTruthy()
+    expect(screen.getByText('License check failed')).toBeTruthy()
     expect(screen.queryByText('Not licensed')).toBeNull()
   })
 
-  it('labels missing storage as a FIRMWARE fault, distinctly from having no licence', () => {
+  it('labels missing storage as a FIRMWARE fault, distinctly from having no license', () => {
     // "Not storable" read as a hardware limitation and sent us looking at a
     // NodeMCU that stores licences fine — the image was built without the backend.
     setup({ deviceId: DEVICE_ID, outcome: { state: 'unsupported' } })
@@ -205,7 +205,7 @@ describe('DeviceLicenseStatus', () => {
     it('offers a purchase ONLY when the backend confirmed there is no entitlement', () => {
       const { onBuy } = setup({ deviceId: DEVICE_ID, outcome: { state: 'unlicensed', entitlementChecked: true } })
       expand()
-      fireEvent.click(screen.getByRole('button', { name: 'Buy licence' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Buy license' }))
       expect(onBuy).toHaveBeenCalledTimes(1)
     })
 
@@ -213,26 +213,26 @@ describe('DeviceLicenseStatus', () => {
       // Offering to buy here is a guess, and the wrong one for anyone who paid.
       setup({ deviceId: DEVICE_ID, outcome: { state: 'unlicensed', entitlementChecked: false } })
       expand()
-      expect(screen.queryByRole('button', { name: 'Buy licence' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Buy license' })).toBeNull()
     })
 
     it('does NOT offer a purchase when the check failed', () => {
       setup({ outcome: { state: 'check-failed', error: 'Activation request failed: 429' } })
       expand()
-      expect(screen.queryByRole('button', { name: 'Buy licence' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Buy license' })).toBeNull()
     })
 
-    it('does NOT offer a purchase when the device cannot store a licence', () => {
+    it('does NOT offer a purchase when the device cannot store a license', () => {
       // Buying would not make the device able to store one.
       setup({ deviceId: DEVICE_ID, outcome: { state: 'unsupported' } })
       expand()
-      expect(screen.queryByRole('button', { name: 'Buy licence' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Buy license' })).toBeNull()
     })
 
     it('hides the purchase button when no valid link could be built', () => {
       setup({ deviceId: DEVICE_ID, outcome: { state: 'unlicensed', entitlementChecked: true } }, { buyUrl: null })
       expand()
-      expect(screen.queryByRole('button', { name: 'Buy licence' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Buy license' })).toBeNull()
     })
 
     it('tells an unsupported device to rebuild, and does not blame the hardware', () => {
@@ -251,10 +251,10 @@ describe('DeviceLicenseStatus', () => {
       expect(screen.getByText(/no active subscription/)).toBeTruthy()
     })
 
-    it('states that a failed check is not the same as having no licence', () => {
+    it('states that a failed check is not the same as having no license', () => {
       setup({ outcome: { state: 'check-failed', error: 'Request timeout' } })
       expand()
-      expect(screen.getByText(/not the same as having no licence/)).toBeTruthy()
+      expect(screen.getByText(/not the same as having no license/)).toBeTruthy()
     })
   })
 
@@ -274,7 +274,7 @@ describe('DeviceLicenseStatus', () => {
       // "Waiting…"/"Checking…" reads as flapping when it is one continuous wait.
       setup(UNLICENSED, { awaitingPurchase: true, isChecking: true })
       expect(screen.getByText('Waiting for purchase…')).toBeTruthy()
-      expect(screen.queryByText('Checking licence…')).toBeNull()
+      expect(screen.queryByText('Checking license…')).toBeNull()
     })
 
     it('does NOT outrank a failed check — a dead link must not hide behind a calm wait', () => {
@@ -283,7 +283,7 @@ describe('DeviceLicenseStatus', () => {
       // the remaining minutes of the window. The failure label wins, and the
       // watch keeps running underneath.
       setup({ outcome: { state: 'check-failed', error: 'Request timeout' } }, { awaitingPurchase: true })
-      expect(screen.getByText('Licence check failed')).toBeTruthy()
+      expect(screen.getByText('License check failed')).toBeTruthy()
       expect(screen.queryByText('Waiting for purchase…')).toBeNull()
     })
 
@@ -294,15 +294,15 @@ describe('DeviceLicenseStatus', () => {
         { outcome: { state: 'check-failed', error: 'Request timeout' } },
         { awaitingPurchase: true, isChecking: true },
       )
-      expect(screen.getByText('Licence check failed')).toBeTruthy()
-      expect(screen.queryByText('Checking licence…')).toBeNull()
+      expect(screen.getByText('License check failed')).toBeTruthy()
+      expect(screen.queryByText('Checking license…')).toBeNull()
       expect(screen.queryByText('Waiting for purchase…')).toBeNull()
     })
 
     it('withdraws the purchase button while waiting — offering it again invites a double buy', () => {
       setup(UNLICENSED, { awaitingPurchase: true })
       expand()
-      expect(screen.queryByRole('button', { name: 'Buy licence' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Buy license' })).toBeNull()
     })
 
     it('offers to stop waiting, and only then', () => {
@@ -318,13 +318,13 @@ describe('DeviceLicenseStatus', () => {
       expect(screen.queryByRole('button', { name: 'Stop waiting' })).toBeNull()
     })
 
-    it('explains that OpenPLC keeps checking and writes the licence when the purchase clears', () => {
+    it('explains that OpenPLC keeps checking and writes the license when the purchase clears', () => {
       setup(UNLICENSED, { awaitingPurchase: true })
       expand()
       // The subject is deliberately product-neutral ("OpenPLC", not "the
       // editor"): the same bytes render in the desktop editor and the web IDE.
       expect(screen.getByText(/OpenPLC keeps checking/)).toBeTruthy()
-      expect(screen.getByText(/writes the licence to this device as soon as the purchase clears/)).toBeTruthy()
+      expect(screen.getByText(/writes the license to this device as soon as the purchase clears/)).toBeTruthy()
     })
   })
 })

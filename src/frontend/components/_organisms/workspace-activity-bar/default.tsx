@@ -7,6 +7,7 @@ import {
 } from '@root/middleware/shared/utils/build-gate/runtime-capability-gate'
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { composeLibraryDebugHarness } from '@root/middleware/shared/utils/library-debug/compose-library-debug-harness'
+import { demoModeConsoleLines } from '@root/middleware/shared/utils/licensing'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -558,6 +559,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           addLog({ level: 'error', message: result.error ?? 'Compilation failed' })
         }
 
+        const licenseState = store.getState().deviceLicense.report?.outcome.state
+        const lastCheckFoundNoLicense = licenseState === 'unlicensed' || licenseState === 'unsupported'
+        if (doUpload && result.success && lastCheckFoundNoLicense) {
+          for (const line of demoModeConsoleLines()) addLog({ level: 'warning', message: line })
+        }
+
         // Ethernet handoff: after a successful upload the device is now running at
         // the program's configured IP (which may differ from the address we just
         // uploaded to). Advance the connect/upload IP to it, so the reconnect —
@@ -584,12 +591,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             )
             const trimmed = entered?.trim()
             if (trimmed) {
-              store.getState().deviceActions.setRuntimeIpAddress(trimmed)
+              store.getState().deviceActions.setRuntimeIpAddress(trimmed, { sameDevice: true })
             }
           } else {
             const newIp = vsd.modbus_tcp?.ip_address || vsd.network?.ip_address
             if (newIp && newIp !== cfg.runtimeIpAddress) {
-              store.getState().deviceActions.setRuntimeIpAddress(newIp)
+              store.getState().deviceActions.setRuntimeIpAddress(newIp, { sameDevice: true })
             }
           }
         }
