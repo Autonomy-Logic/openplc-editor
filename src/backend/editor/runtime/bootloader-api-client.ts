@@ -124,6 +124,7 @@ const UpdateProgressSchema = z.object({
 import type {
   BootloaderApiResult,
   BootloaderCapabilities,
+  BootloaderCapabilitiesOptions,
   BootloaderLogs,
   BootloaderStatus,
   BootloaderUpdateProgress,
@@ -153,6 +154,7 @@ void _contract
 export type {
   BootloaderApiResult,
   BootloaderCapabilities,
+  BootloaderCapabilitiesOptions,
   BootloaderLogs,
   BootloaderStatus,
   BootloaderUpdateProgress,
@@ -203,6 +205,24 @@ const BARE_HOST =
 const isDialableHost = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= 253 && BARE_HOST.test(value)
 
+/** Default timeout of a capability request, which runs on every connect. */
+const CAPABILITIES_TIMEOUT_MS = 4000
+
+const MIN_CAPABILITIES_TIMEOUT_MS = 500
+const MAX_CAPABILITIES_TIMEOUT_MS = 8000
+
+/**
+ * The capability request timeout carried by untrusted `options`.
+ *
+ * @returns `options.timeoutMs` when it is an integer from 500 to 8000 ms, otherwise `undefined`.
+ */
+export function capabilitiesTimeoutMs(options: unknown): number | undefined {
+  if (typeof options !== 'object' || options === null || !('timeoutMs' in options)) return undefined
+  const { timeoutMs } = options
+  if (typeof timeoutMs !== 'number' || !Number.isInteger(timeoutMs)) return undefined
+  return timeoutMs >= MIN_CAPABILITIES_TIMEOUT_MS && timeoutMs <= MAX_CAPABILITIES_TIMEOUT_MS ? timeoutMs : undefined
+}
+
 export class BootloaderApiClient {
   private readonly port = BOOTLOADER_API_PORT
 
@@ -239,13 +259,14 @@ export class BootloaderApiClient {
    * case for a native install or an orchestrator-managed vPLC -- not an error
    * worth showing anybody.
    */
-  async getCapabilities(ipAddress: string): Promise<BootloaderApiResult<BootloaderCapabilities>> {
+  async getCapabilities(
+    ipAddress: string,
+    options?: BootloaderCapabilitiesOptions,
+  ): Promise<BootloaderApiResult<BootloaderCapabilities>> {
     const result = await this.request(ipAddress, {
       method: 'GET',
       path: '/api/bootloader/capabilities',
-      // Shorter still: this runs on every connect, and a device with no
-      // bootloader must not make the editor wait.
-      timeoutMs: 4000,
+      timeoutMs: capabilitiesTimeoutMs(options) ?? CAPABILITIES_TIMEOUT_MS,
     })
     if (!result.success) return result
     return this.parse(CapabilitiesSchema, result.data)
@@ -452,13 +473,23 @@ export class BootloaderApiClient {
         },
       )
 
-      request.on('timeout', () => {
+      const onTimeout = () => {
         request.destroy()
         resolve({
           success: false,
           error: `The bootloader on ${ipAddress}:${this.port} did not respond within ${timeout / 1000}s`,
         })
+      }
+      const handshakeTimer = setTimeout(onTimeout, timeout)
+      request.on('socket', (socket) => {
+        if (request.reusedSocket) {
+          clearTimeout(handshakeTimer)
+          return
+        }
+        socket.once('secureConnect', () => clearTimeout(handshakeTimer))
       })
+      request.on('close', () => clearTimeout(handshakeTimer))
+      request.on('timeout', onTimeout)
       request.on('error', (error) => {
         resolve({ success: false, error: getErrorMessage(error) })
       })

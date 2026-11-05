@@ -151,7 +151,7 @@ import {
   resolveDeviceLicense,
 } from '../../../backend/editor/license/license-flow'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
-import { BootloaderApiClient } from '../../../backend/editor/runtime/bootloader-api-client'
+import { BootloaderApiClient, capabilitiesTimeoutMs } from '../../../backend/editor/runtime/bootloader-api-client'
 import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
 import { logger } from '../../../backend/editor/services'
 import {
@@ -377,8 +377,10 @@ class MainProcessBridge implements MainIpcModule {
   // Thin pass-throughs: the client owns validation and message wording, and
   // its errors are written to be shown to a person as they are.
 
-  handleBootloaderGetCapabilities = (_event: IpcMainInvokeEvent, ipAddress: string) =>
-    this.bootloaderApi.getCapabilities(ipAddress)
+  handleBootloaderGetCapabilities = (_event: IpcMainInvokeEvent, ipAddress: string, options?: unknown) => {
+    const timeoutMs = capabilitiesTimeoutMs(options)
+    return this.bootloaderApi.getCapabilities(ipAddress, timeoutMs === undefined ? undefined : { timeoutMs })
+  }
 
   handleBootloaderLogin = (_event: IpcMainInvokeEvent, ipAddress: string, username: string, password: string) =>
     this.bootloaderApi.login(ipAddress, username, password)

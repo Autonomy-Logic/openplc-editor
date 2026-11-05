@@ -19,6 +19,7 @@ import type { PluginCommandOutcome } from '../../../backend/shared/utils/vpp/scr
 import type { OpenPLCStore } from '../../../frontend/store'
 import { getErrorMessage } from '../../../frontend/utils/get-error-message'
 import type {
+  BootloaderCapabilitiesOptions,
   CompilationStatusResult,
   DiscoverDevicesOptions,
   DiscoverDevicesResult,
@@ -81,9 +82,9 @@ export function createEditorRuntimeAdapter(store: OpenPLCStore, getIpAddress: ()
      * runtime's API.
      */
     bootloader: {
-      async getCapabilities() {
+      async getCapabilities(options?: BootloaderCapabilitiesOptions) {
         try {
-          return await window.bridge.bootloaderGetCapabilities(requireIp())
+          return await window.bridge.bootloaderGetCapabilities(requireIp(), options)
         } catch (err) {
           return { success: false as const, error: getErrorMessage(err) }
         }

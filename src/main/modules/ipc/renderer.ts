@@ -53,6 +53,7 @@ import type {
   ListUsersResult,
   RuntimeUserRole,
   UpdateUserParams,
+  UsersInfoResult,
   WhoAmIResult,
 } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
@@ -75,6 +76,7 @@ import { ipcRenderer, IpcRendererEvent } from 'electron'
 import type {
   BootloaderApiResult,
   BootloaderCapabilities,
+  BootloaderCapabilitiesOptions,
   BootloaderLogs,
   BootloaderStatus,
   BootloaderUpdateProgress,
@@ -691,7 +693,7 @@ const rendererProcessBridge = {
   },
 
   // ===================== RUNTIME API METHODS =====================
-  runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> =>
+  runtimeGetUsersInfo: (ipAddress: string): Promise<UsersInfoResult> =>
     ipcRenderer.invoke('runtime:get-users-info', ipAddress),
   runtimeGetCapabilities: (
     ipAddress: string,
@@ -756,8 +758,11 @@ const rendererProcessBridge = {
   // The bootloader is a separate service on port 8445 with its own session.
   // Results are the client's discriminated union, so a caller checks `success`
   // and shows `error` verbatim -- its messages are written for a person.
-  bootloaderGetCapabilities: (ipAddress: string): Promise<BootloaderApiResult<BootloaderCapabilities>> =>
-    ipcRenderer.invoke('bootloader:get-capabilities', ipAddress),
+  bootloaderGetCapabilities: (
+    ipAddress: string,
+    options?: BootloaderCapabilitiesOptions,
+  ): Promise<BootloaderApiResult<BootloaderCapabilities>> =>
+    ipcRenderer.invoke('bootloader:get-capabilities', ipAddress, options),
   bootloaderLogin: (
     ipAddress: string,
     username: string,

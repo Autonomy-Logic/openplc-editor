@@ -34,10 +34,12 @@ import type { PlcControlResult } from '@root/backend/shared/debug/types'
 import { SNAPSHOT_LIMITS } from '@root/backend/shared/project/project-snapshot-archive'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
+import type { UsersInfoRawFacts, UsersInfoResult } from '@root/middleware/shared/ports/runtime-port'
 import {
   createRuntimeTokenManager,
   type RuntimeTokenManager,
 } from '@root/middleware/shared/runtime-auth/runtime-token-manager'
+import { usersInfoFromFacts } from '@root/middleware/shared/utils/runtime-provisioning'
 import { z } from 'zod'
 
 /** The runtime's HTTPS API port. Also the debug WebSocket's port. */
@@ -160,6 +162,20 @@ function headerSafe(value: string): string {
   return value.replace(/[\r\n"\\]/g, '_')
 }
 
+/** Raised by `httpRequest` when its own connection timer fires. */
+class RuntimeConnectionTimeoutError extends Error {
+  constructor() {
+    super('Connection timeout')
+    this.name = 'RuntimeConnectionTimeoutError'
+  }
+}
+
+/** The string `code` of a Node request error, when it carries one. */
+function errorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined
+  return typeof error.code === 'string' ? error.code : undefined
+}
+
 export class RuntimeApiClient {
   private readonly RUNTIME_API_PORT = RUNTIME_API_PORT
   private readonly RUNTIME_CONNECTION_TIMEOUT_MS = 5000 // 5 seconds (important-comment)
@@ -219,16 +235,31 @@ export class RuntimeApiClient {
    * The runtime version rides along in a response header, and it is the only
    * place it is available before logging in.
    */
-  async getUsersInfo(address: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> {
+  async getUsersInfo(address: string): Promise<UsersInfoResult> {
+    return usersInfoFromFacts(await this.getUsersInfoFacts(address))
+  }
+
+  /**
+   * The raw outcome of `GET /api/get-users-info`: the response as received, or
+   * the request error with its Node `code` and whether this client's own
+   * connection timer fired.
+   */
+  async getUsersInfoFacts(address: string): Promise<UsersInfoRawFacts> {
     try {
       const res = await this.httpRequest({ method: 'GET', url: this.runtimeUrl(address, '/api/get-users-info') })
-      const runtimeVersion = firstHeaderValue(res.headers['x-openplc-runtime-version'])
-
-      if (res.statusCode === 404) return { hasUsers: false, runtimeVersion }
-      if (res.statusCode === 200) return { hasUsers: true, runtimeVersion }
-      return { hasUsers: false, error: res.data || `Unexpected status: ${res.statusCode}`, runtimeVersion }
+      return {
+        kind: 'response',
+        statusCode: res.statusCode,
+        body: res.data,
+        runtimeVersion: firstHeaderValue(res.headers['x-openplc-runtime-version']),
+      }
     } catch (error) {
-      return { hasUsers: false, error: getErrorMessage(error) }
+      return {
+        kind: 'error',
+        code: errorCode(error),
+        message: getErrorMessage(error),
+        timedOut: error instanceof RuntimeConnectionTimeoutError,
+      }
     }
   }
 
@@ -335,7 +366,7 @@ export class RuntimeApiClient {
       })
       req.setTimeout(options.timeoutMs ?? this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
         req.destroy()
-        reject(new Error('Connection timeout'))
+        reject(new RuntimeConnectionTimeoutError())
       })
       req.on('error', (error: Error) => {
         reject(error)
