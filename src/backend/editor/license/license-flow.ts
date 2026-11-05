@@ -15,7 +15,13 @@
 
 import type { DeviceLicenseReport, DeviceLicenseState } from '../../../middleware/shared/ports/device-port'
 import { crc32IsoHdlc, deserializeLicenseBlob, LIC_BLOB_SIZE, LIC_MAGIC_LE } from '../../shared/debug/license-blob'
-import type { DebugLicenseReadResult, DebugLicenseWriteResult, DeviceIdSource } from '../../shared/debug/types'
+import type {
+  DebugBoardIdProvisionResult,
+  DebugDeviceIdResult,
+  DebugLicenseReadResult,
+  DebugLicenseWriteResult,
+  DeviceIdSource,
+} from '../../shared/debug/types'
 import { deriveDeviceId, deriveVppId } from './device-identity'
 import { checkDeviceActivation } from './license-activation-client'
 
@@ -64,6 +70,34 @@ export function identityFromSources(sources: readonly DeviceIdSource[]): DeviceI
     }
   }
   return { kind: 'anchor', anchor: sources[0]?.bytes ?? new Uint8Array(0) }
+}
+
+/** Just enough of a bare-metal channel to read, and when needed provision, the board identity. */
+export interface BoardIdentityChannel {
+  getDeviceId(): Promise<DebugDeviceIdResult>
+  provisionBoardId?(id: Uint8Array): Promise<DebugBoardIdProvisionResult>
+}
+
+/**
+ * Read a bare-metal board's ID sources (FC 0x48). When it reports none, store a
+ * generated ID (FC 0x4E) and read again. A board with no slot for one keeps
+ * reporting none; a board that already holds one keeps it.
+ */
+export async function readBoardIdSources(
+  channel: BoardIdentityChannel,
+  generateId: () => Uint8Array,
+): Promise<DebugDeviceIdResult> {
+  const first = await channel.getDeviceId()
+  if (!first.success || first.unsupported || (first.sources?.length ?? 0) > 0 || !channel.provisionBoardId) {
+    return first
+  }
+
+  const provision = await channel.provisionBoardId(generateId())
+  if (!provision.success) {
+    return { success: false, error: provision.error ?? 'The board could not store its generated ID.' }
+  }
+  if (provision.unsupported) return first
+  return channel.getDeviceId()
 }
 
 export interface DeviceLicenseInput {

@@ -1,6 +1,6 @@
 /*
  * id_report_host_test.c - Generic board-ID layer against stubbed VPP hooks: factory ID first,
- * generated ID fallback, degenerate IDs refused, and the raw ID report frame.
+ * generated ID fallback, degenerate IDs refused, the raw ID report frame and write-once provisioning.
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -14,6 +14,9 @@ static size_t  g_hw_len = 0u;
 static uint8_t g_slot[LIC_BOARD_ID_SIZE];
 static size_t  g_slot_len = 0u;
 static int     g_failures = 0;
+static lic_board_id_status_t g_write_status = LIC_BOARD_ID_OK;
+static int     g_write_corrupts = 0;
+static int     g_writes = 0;
 
 size_t hardwareUniqueId(uint8_t *out, size_t cap)
 {
@@ -31,11 +34,16 @@ size_t license_board_id_read(uint8_t *out, size_t cap)
     return g_slot_len;
 }
 
-int license_board_id_write(const uint8_t *id, size_t len)
+lic_board_id_status_t license_board_id_write(const uint8_t *id, size_t len)
 {
-    (void)id;
-    (void)len;
-    return 0;
+    g_writes++;
+    if (g_write_status != LIC_BOARD_ID_OK)
+        return g_write_status;
+    memcpy(g_slot, id, len);
+    g_slot_len = len;
+    if (g_write_corrupts)
+        g_slot[0] ^= 0x01u;
+    return LIC_BOARD_ID_OK;
 }
 
 static void check_int(const char *name, long got, long want)
@@ -121,6 +129,52 @@ int main(void)
     check_int("all-00 slot refused", (long)license_platform_anchor(anchor, sizeof(anchor), &kind), 0);
     set_slot(generated, 8u);
     check_int("short slot refused", (long)license_platform_anchor(anchor, sizeof(anchor), &kind), 0);
+
+    /* Provisioning: input checks. */
+    g_slot_len = 0u;
+    g_hw_len = 0u;
+    g_writes = 0;
+    memset(filled, 0xFF, sizeof(filled));
+    check_int("provision all-FF -> invalid", license_board_id_provision(filled, sizeof(filled)), LIC_BOARD_ID_INVALID);
+    check_int("provision short -> invalid", license_board_id_provision(generated, 8u), LIC_BOARD_ID_INVALID);
+    check_int("provision NULL -> invalid", license_board_id_provision(NULL, LIC_BOARD_ID_SIZE), LIC_BOARD_ID_INVALID);
+    check_int("invalid input never writes", g_writes, 0);
+
+    /* Provisioning: refused on a board with a factory ID. */
+    set_hw(factory, sizeof(factory));
+    check_int("provision with factory ID -> taken", license_board_id_provision(generated, sizeof(generated)),
+              LIC_BOARD_ID_TAKEN);
+    check_int("factory ID board never writes", g_writes, 0);
+    g_hw_len = 0u;
+
+    /* Provisioning: once, then refused. */
+    check_int("first provision -> ok", license_board_id_provision(generated, sizeof(generated)), LIC_BOARD_ID_OK);
+    check_int("provisioned ID is the anchor", (long)license_platform_anchor(anchor, sizeof(anchor), &kind),
+              LIC_BOARD_ID_SIZE);
+    check_int("provisioned anchor bytes", memcmp(anchor, generated, LIC_BOARD_ID_SIZE) == 0, 1);
+    filled[0] = 0x00u;
+    check_int("second provision -> taken", license_board_id_provision(filled, sizeof(filled)), LIC_BOARD_ID_TAKEN);
+    check_int("slot unchanged after refusal", memcmp(g_slot, generated, LIC_BOARD_ID_SIZE) == 0, 1);
+
+    /* Provisioning: a blank (all-FF) slot counts as empty. */
+    memset(filled, 0xFF, sizeof(filled));
+    set_slot(filled, sizeof(filled));
+    check_int("blank slot -> provision ok", license_board_id_provision(generated, sizeof(generated)), LIC_BOARD_ID_OK);
+
+    /* Provisioning: backend failures. */
+    g_slot_len = 0u;
+    g_write_status = LIC_BOARD_ID_UNSUPPORTED;
+    check_int("no slot -> unsupported", license_board_id_provision(generated, sizeof(generated)),
+              LIC_BOARD_ID_UNSUPPORTED);
+    g_write_status = LIC_BOARD_ID_IO_ERROR;
+    check_int("write failure -> io error", license_board_id_provision(generated, sizeof(generated)),
+              LIC_BOARD_ID_IO_ERROR);
+    g_write_status = LIC_BOARD_ID_OK;
+    g_slot_len = 0u;
+    g_write_corrupts = 1;
+    check_int("read-back mismatch -> io error", license_board_id_provision(generated, sizeof(generated)),
+              LIC_BOARD_ID_IO_ERROR);
+    g_write_corrupts = 0;
 
     printf("\n%s: %d failure(s)\n", g_failures ? "FAILED" : "ALL PASS", g_failures);
     return g_failures ? 1 : 0;

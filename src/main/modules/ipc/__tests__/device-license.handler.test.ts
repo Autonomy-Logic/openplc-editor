@@ -39,13 +39,17 @@ jest.mock('../../../../backend/shared/simulator/simulator-module', () => ({
   SimulatorModule: jest.fn(() => ({ stop: jest.fn() })),
 }))
 
-jest.mock('../../../../backend/editor/license/license-flow', () => ({
-  identityFromSources: jest.requireActual<typeof import('../../../../backend/editor/license/license-flow')>(
+jest.mock('../../../../backend/editor/license/license-flow', () => {
+  const actual = jest.requireActual<typeof import('../../../../backend/editor/license/license-flow')>(
     '../../../../backend/editor/license/license-flow',
-  ).identityFromSources,
-  inspectDeviceLicense: jest.fn(),
-  resolveDeviceLicense: jest.fn(),
-}))
+  )
+  return {
+    identityFromSources: actual.identityFromSources,
+    readBoardIdSources: actual.readBoardIdSources,
+    inspectDeviceLicense: jest.fn(),
+    resolveDeviceLicense: jest.fn(),
+  }
+})
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const licenseFlow = require('../../../../backend/editor/license/license-flow') as {

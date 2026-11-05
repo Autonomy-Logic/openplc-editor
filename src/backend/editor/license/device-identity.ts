@@ -21,7 +21,7 @@
  * nothing, and the board runs demo with no error saying why.
  */
 
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 
 /** Domain-separation prefix for the device-id digest. Mixed
  *  in as raw ASCII bytes ahead of the hardware anchor so the same anchor
@@ -82,4 +82,18 @@ export function deriveVppId(packageId: string): string {
     .update(packageId)
     .digest('hex')
     .slice(0, VPP_ID_BYTES * 2)
+}
+
+/** Length of a generated board ID (LIC_BOARD_ID_SIZE in the firmware). */
+const GENERATED_BOARD_ID_BYTES = 16
+
+/**
+ * A fresh random board ID for FC 0x4E. Never one repeated byte, which the
+ * firmware refuses as a blank slot.
+ */
+export function generateBoardId(): Uint8Array {
+  for (;;) {
+    const id = Uint8Array.from(randomBytes(GENERATED_BOARD_ID_BYTES))
+    if (id.some((b) => b !== id[0])) return id
+  }
 }

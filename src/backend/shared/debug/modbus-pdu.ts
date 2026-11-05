@@ -33,6 +33,9 @@
  *   readLicense response:  [FC=0x4a] [status] [len: U16BE] [blob...]   (SUCCESS)
  *                          [FC=0x4a] [status]                          (otherwise)
  *
+ *   provisionBoardId request:  [FC=0x4e] [board id: 16 bytes]
+ *   provisionBoardId response: [FC=0x4e] [status]
+ *
  * The license `len` is BIG-ENDIAN like every other length on this wire, while
  * the blob it frames is little-endian content (see license-blob.ts). The two
  * conventions coexist by design: the framing is Modbus, the payload is a C
@@ -59,6 +62,7 @@ import { detectTargetEndian, type TargetEndian } from '../../../frontend/utils/e
 import { ModbusDebugResponse, ModbusFunctionCode, PlcRuntimeState } from '../simulator/types'
 import type {
   DebugAnchorResult,
+  DebugBoardIdProvisionResult,
   DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
@@ -215,6 +219,20 @@ export function buildWriteLicenseRequest(blob: Uint8Array): Uint8Array {
   writeU8(buf, 0, ModbusFunctionCode.DEBUG_WRITE_LICENSE)
   writeU16BE(buf, 1, blob.length)
   buf.set(blob, 3)
+  return buf
+}
+
+/** Length of a generated board ID (LIC_BOARD_ID_SIZE in license_board_id.h). */
+export const BOARD_ID_BYTES = 16
+
+/** Build a board-ID provisioning request (FC 0x4E): `[FC][id:16]`. */
+export function buildProvisionBoardIdRequest(id: Uint8Array): Uint8Array {
+  if (id.length !== BOARD_ID_BYTES) {
+    throw new Error(`A board ID is ${BOARD_ID_BYTES} bytes, got ${id.length}`)
+  }
+  const buf = alloc(1 + BOARD_ID_BYTES)
+  writeU8(buf, 0, ModbusFunctionCode.PROVISION_BOARD_ID)
+  buf.set(id, 1)
   return buf
 }
 
@@ -541,6 +559,31 @@ export function parseWriteLicenseResponse(data: Uint8Array): DebugLicenseWriteRe
   }
 
   return { success: true, status }
+}
+
+/**
+ * Parse a board-ID provisioning response (FC 0x4E): `[FC][status]`.
+ * BOARD_ID_TAKEN and LIC_UNSUPPORTED are device states (`success: true`);
+ * LIC_CORRUPT means the board refused the ID itself.
+ */
+export function parseProvisionBoardIdResponse(data: Uint8Array): DebugBoardIdProvisionResult {
+  if (data.length < 2) {
+    return { success: false, error: `Invalid response: too short (${data.length} bytes)` }
+  }
+
+  const fc = readU8(data, 0)
+  const status = readU8(data, 1)
+
+  if (fc !== ModbusFunctionCode.PROVISION_BOARD_ID) {
+    return { success: false, error: 'Function code mismatch' }
+  }
+  if (status === ModbusDebugResponse.SUCCESS) return { success: true, status }
+  if (status === ModbusDebugResponse.BOARD_ID_TAKEN) return { success: true, status, taken: true }
+  if (status === ModbusDebugResponse.LIC_UNSUPPORTED) return { success: true, status, unsupported: true }
+  if (status === ModbusDebugResponse.LIC_CORRUPT) {
+    return { success: false, status, error: 'The board refused the board ID as invalid' }
+  }
+  return { success: false, status, error: statusError(status) }
 }
 
 /**

@@ -1,4 +1,4 @@
-import { deriveDeviceId, deriveVppId } from '../device-identity'
+import { deriveDeviceId, deriveVppId, generateBoardId } from '../device-identity'
 
 describe('deriveDeviceId', () => {
   it('derives the golden 16-byte device id for the real NodeMCU anchor', () => {
@@ -62,5 +62,15 @@ describe('deriveVppId', () => {
 
   it('returns 16 lowercase hex chars (8 bytes)', () => {
     expect(deriveVppId('com.openplc.espressif')).toMatch(/^[0-9a-f]{16}$/)
+  })
+})
+
+describe('generateBoardId', () => {
+  it('returns 16 bytes that are not one repeated byte, different on every call', () => {
+    const a = generateBoardId()
+    const b = generateBoardId()
+    expect(a.length).toBe(16)
+    expect(a.some((x) => x !== a[0])).toBe(true)
+    expect(Array.from(a)).not.toEqual(Array.from(b))
   })
 })

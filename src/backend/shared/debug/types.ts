@@ -132,6 +132,19 @@ export interface DebugLicenseWriteResult {
 }
 
 /**
+ * Result of a board-ID provisioning call (FC 0x4E). `taken`: the board already
+ * has an ID and kept it. `unsupported`: the board has no slot for a generated
+ * ID. Both are device states (`success: true`), not transport failures.
+ */
+export interface DebugBoardIdProvisionResult {
+  success: boolean
+  status?: number
+  taken?: boolean
+  unsupported?: boolean
+  error?: string
+}
+
+/**
  * Result of a read-license call (FC 0x4A). `blob` is present only on SUCCESS.
  * `empty` (status LIC_EMPTY) means virgin storage — no license provisioned;
  * `corrupt` (status LIC_CORRUPT) means the magic matched but the crc32 failed.
@@ -195,13 +208,12 @@ export interface DeviceChannelTransport {
   connect(): Promise<void>
   disconnect(): void
   /** Identity read (FC 0x48), one function code with two medium-specific
-   *  meanings, hence two methods (DOPE-589).
+   *  frames, hence two methods.
    *
-   *  `getDeviceId` is the BAREMETAL read: the closed license-core derives the
-   *  device_id inside the artifact and the firmware reports it, so nothing on
-   *  this side hashes anything. It doubles as the readiness probe that says
-   *  whether an OpenPLC firmware is answering at all - which is why a
-   *  SUCCESSFUL reply matters and an empty id does not fail it.
+   *  `getDeviceId` is the BAREMETAL read: the firmware reports its raw ID
+   *  sources and the editor derives the device_id from them. It doubles as the
+   *  readiness probe that says whether an OpenPLC firmware is answering at all -
+   *  which is why a SUCCESSFUL reply matters and an empty report does not fail it.
    *
    *  `getAnchor` is the RUNTIME-V4 read: the runtime answers 0x48 at the
    *  webserver level with the raw device-tree anchor and the editor derives the
@@ -233,6 +245,8 @@ export interface DeviceChannelTransport {
   /** Store a VPP license blob (FC 0x49). Optional for the same reason as
    *  `readLicense`. Storing does not validate — read back to confirm. */
   writeLicense?(blob: Uint8Array): Promise<DebugLicenseWriteResult>
+  /** Store a generated board ID once (FC 0x4E). Baremetal only. */
+  provisionBoardId?(id: Uint8Array): Promise<DebugBoardIdProvisionResult>
   /** Hand the channel a fresh auth token mid-session. Only media that
    *  authenticate per command need it — the runtime-v4 WebSocket, whose server
    *  re-verifies the JWT on every debug_command (openplc-runtime#169): without
@@ -309,14 +323,14 @@ export interface DeviceModbusTransport
   getDeviceId(): Promise<DebugDeviceIdResult>
   /** Never on this medium. Declared rather than merely absent so the XOR in
    *  `LicenseChannel` (main.ts) can be a type-level guarantee instead of a
-   *  comment: baremetal answers 0x48 with a derived id, and a Modbus client
-   *  that grew a `getAnchor` would be reporting a raw serial the editor would
-   *  then hash a second time. */
+   *  comment: baremetal answers 0x48 with the multi-source frame, which only
+   *  `getDeviceId` parses. */
   getAnchor?: never
   getStatus(): Promise<DebugStatusResult>
   setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult>
   readLicense(): Promise<DebugLicenseReadResult>
   writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult>
+  provisionBoardId(id: Uint8Array): Promise<DebugBoardIdProvisionResult>
   /**
    * The two payload-carrying operations, restated for the main process.
    *

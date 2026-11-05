@@ -17,6 +17,7 @@ import {
   buildGetMd5Request,
   buildGetStatusRequest,
   buildGetVersionRequest,
+  buildProvisionBoardIdRequest,
   buildReadLicenseRequest,
   buildSetVariableRequest,
   buildWriteLicenseRequest,
@@ -26,6 +27,7 @@ import {
   parseGetMd5Response,
   parseGetStatusResponse,
   parseGetVersionResponse,
+  parseProvisionBoardIdResponse,
   parseReadLicenseResponse,
   parseSetVariableResponse,
   parseWriteLicenseResponse,
@@ -669,5 +671,46 @@ describe('parseReadLicenseResponse', () => {
     const result = parseReadLicenseResponse(new Uint8Array([ModbusFunctionCode.DEBUG_READ_LICENSE]))
     expect(result.success).toBe(false)
     expect(result.error).toMatch(/too short/)
+  })
+})
+
+describe('buildProvisionBoardIdRequest / parseProvisionBoardIdResponse', () => {
+  const ID = Uint8Array.from({ length: 16 }, (_, i) => i + 1)
+  const reply = (status: number) => Uint8Array.from([ModbusFunctionCode.PROVISION_BOARD_ID, status])
+
+  it('builds [0x4E][id:16]', () => {
+    const pdu = buildProvisionBoardIdRequest(ID)
+    expect(pdu.length).toBe(17)
+    expect(pdu[0]).toBe(0x4e)
+    expect(Array.from(pdu.subarray(1))).toEqual(Array.from(ID))
+  })
+
+  it('refuses an ID that is not 16 bytes', () => {
+    expect(() => buildProvisionBoardIdRequest(new Uint8Array(15))).toThrow(/16 bytes/)
+    expect(() => buildProvisionBoardIdRequest(new Uint8Array(17))).toThrow(/16 bytes/)
+  })
+
+  it('maps SUCCESS to stored', () => {
+    expect(parseProvisionBoardIdResponse(reply(ModbusDebugResponse.SUCCESS))).toEqual({ success: true, status: 0x7e })
+  })
+
+  it('maps BOARD_ID_TAKEN and LIC_UNSUPPORTED to device states', () => {
+    expect(parseProvisionBoardIdResponse(reply(0x88))).toEqual({ success: true, status: 0x88, taken: true })
+    expect(parseProvisionBoardIdResponse(reply(0x85))).toEqual({ success: true, status: 0x85, unsupported: true })
+  })
+
+  it('maps LIC_CORRUPT to a refused ID and other codes to an error', () => {
+    const invalid = parseProvisionBoardIdResponse(reply(ModbusDebugResponse.LIC_CORRUPT))
+    expect(invalid).toMatchObject({ success: false, status: 0x84, error: expect.stringMatching(/invalid/) as string })
+    const io = parseProvisionBoardIdResponse(reply(ModbusDebugResponse.ERROR_OUT_OF_MEMORY))
+    expect(io).toMatchObject({ success: false, error: 'ERROR_OUT_OF_MEMORY' })
+  })
+
+  it('rejects a short frame and a foreign function code', () => {
+    expect(parseProvisionBoardIdResponse(Uint8Array.from([0x4e]))).toMatchObject({ success: false })
+    expect(parseProvisionBoardIdResponse(Uint8Array.from([0x49, 0x7e]))).toEqual({
+      success: false,
+      error: 'Function code mismatch',
+    })
   })
 })

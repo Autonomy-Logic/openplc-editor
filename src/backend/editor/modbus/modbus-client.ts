@@ -2,15 +2,18 @@ import {
   buildGetDeviceIdRequest,
   buildGetStatusRequest,
   buildPlcSetStateRequest,
+  buildProvisionBoardIdRequest,
   buildReadLicenseRequest,
   buildWriteLicenseRequest,
   parseGetDeviceIdResponse,
   parseGetStatusResponse,
   parsePlcSetStateResponse,
+  parseProvisionBoardIdResponse,
   parseReadLicenseResponse,
   parseWriteLicenseResponse,
 } from '@root/backend/shared/debug/modbus-pdu'
 import type {
+  DebugBoardIdProvisionResult,
   DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
@@ -40,6 +43,8 @@ export enum ModbusFunctionCode {
   /** Set the runtime run/stop state. Reads go through DEBUG_GET_STATUS (0x46),
    *  which already reports it. */
   PLC_SET_STATE = 0x4b,
+  /** Store a generated board ID once, on a board without a factory ID. */
+  PROVISION_BOARD_ID = 0x4e,
 }
 
 export enum ModbusDebugResponse {
@@ -59,6 +64,8 @@ export enum ModbusDebugResponse {
    *  Mirrors `STATUS_READ_ONLY` in STruC++'s `debug_dispatch.hpp`, and the copy
    *  of this enum in `backend/shared/simulator/types.ts`. */
   READ_ONLY = 0x87,
+  /** PROVISION_BOARD_ID only: the board already has an ID (factory or stored). */
+  BOARD_ID_TAKEN = 0x88,
 }
 
 interface ModbusTcpClientOptions {
@@ -411,7 +418,7 @@ export class ModbusTcpClient implements DeviceModbusTransport {
 
   /**
    * FC 0x48 DEBUG_GET_DEVICE_ID. Bare `[FC]` PDU (no payload). TCP frame is
-   * [MBAP:6][FC@7][...], so the pure PDU `[FC][status][id_len:u8][id_bytes...]`
+   * [MBAP:6][FC@7][...], so the pure PDU `[FC][status][count:u8][sources...]`
    * starts at offset 7 — hand it to the shared parseGetDeviceIdResponse rather
    * than parsing inline.
    */
@@ -540,6 +547,24 @@ export class ModbusTcpClient implements DeviceModbusTransport {
         return { success: false, error: 'Transaction ID mismatch' }
       }
       return parseWriteLicenseResponse(Uint8Array.prototype.slice.call(data, 7))
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
+  /** FC 0x4E. Stores a generated board ID once; the board refuses it when it already has one. */
+  async provisionBoardId(id: Uint8Array): Promise<DebugBoardIdProvisionResult> {
+    if (!this.socket) return { success: false, error: 'Not connected to target' }
+    try {
+      const { request, transactionId } = this.buildTcpFrame(buildProvisionBoardIdRequest(id))
+      const data = await this.sendTcpRequest(request)
+      if (data.length < 9) {
+        return { success: false, error: `Invalid response: too short (${data.length} bytes, need at least 9)` }
+      }
+      if (data.readUInt16BE(0) !== transactionId) {
+        return { success: false, error: 'Transaction ID mismatch' }
+      }
+      return parseProvisionBoardIdResponse(Uint8Array.prototype.slice.call(data, 7))
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }

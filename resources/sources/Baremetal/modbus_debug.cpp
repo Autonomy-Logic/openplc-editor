@@ -17,7 +17,7 @@ modbus_debug.cpp - OpenPLC always-on debugger function codes (0x41-0x4B)
 #include "openplc.h"
 #include "openplc_version.h"
 
-// DEBUG_GET_DEVICE_ID (0x48) reports the raw ID sources from license_id_report().
+// 0x48 reports the raw ID sources (license_id_report); 0x4E provisions the generated ID.
 #include "license_platform.h"
 
 /**
@@ -482,6 +482,26 @@ void debugGetDeviceId()
         reportLen = 1u;
     }
     mb_frame_len = 3 + (int)reportLen;
+}
+
+// PDU request:  [FC][board id:16]
+// PDU response: [FC][STATUS]: SUCCESS, BOARD_ID_TAKEN, LIC_CORRUPT (invalid ID),
+// LIC_UNSUPPORTED (no slot) or ERROR_OUT_OF_MEMORY (store failed).
+void debugProvisionBoardId(const uint8_t *id)
+{
+    uint8_t status;
+
+    switch (license_board_id_provision(id, LIC_BOARD_ID_SIZE))
+    {
+        case LIC_BOARD_ID_OK:          status = MB_DEBUG_SUCCESS; break;
+        case LIC_BOARD_ID_TAKEN:       status = MB_BOARD_ID_TAKEN; break;
+        case LIC_BOARD_ID_INVALID:     status = MB_DEBUG_LIC_CORRUPT; break;
+        case LIC_BOARD_ID_UNSUPPORTED: status = MB_DEBUG_LIC_UNSUPPORTED; break;
+        default:                       status = MB_DEBUG_ERROR_OUT_OF_MEMORY; break;
+    }
+    mb_frame[1] = MB_FC_PROVISION_BOARD_ID;
+    mb_frame[2] = status;
+    mb_frame_len = 3;
 }
 
 // ---------------------------------------------------------------------------

@@ -63,6 +63,7 @@ import {
 import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
 import type {
   DebugAnchorResult,
+  DebugBoardIdProvisionResult,
   DebugDeviceIdResult,
   DebugStatusResult,
   DeviceDebugChannel,
@@ -151,11 +152,13 @@ import {
 } from '../../../backend/editor/hardware/device-session-manager'
 import { type DiscoveredRuntime, discoverRuntimes } from '../../../backend/editor/hardware/discover-runtimes'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
+import { generateBoardId } from '../../../backend/editor/license/device-identity'
 import {
   type DeviceIdentity,
   identityFromSources,
   inspectDeviceLicense,
   type LicenseReadWritable,
+  readBoardIdSources,
   resolveDeviceLicense,
 } from '../../../backend/editor/license/license-flow'
 import { createRuntimeLicenseMechanisms } from '../../../backend/editor/license/runtime-license-mechanisms'
@@ -200,7 +203,11 @@ interface ChannelUnavailable {
  */
 type LicenseChannel = LicenseReadWritable &
   (
-    | { getDeviceId(): Promise<DebugDeviceIdResult>; getAnchor?: never }
+    | {
+        getDeviceId(): Promise<DebugDeviceIdResult>
+        provisionBoardId?(id: Uint8Array): Promise<DebugBoardIdProvisionResult>
+        getAnchor?: never
+      }
     | { getAnchor(): Promise<DebugAnchorResult>; getDeviceId?: never }
   )
 
@@ -2951,7 +2958,7 @@ class MainProcessBridge implements MainIpcModule {
     // Exactly one of the two exists on any real channel; narrowed on the channel rather
     // than the reply, so each branch statically knows which kind it holds.
     if (client.getDeviceId) {
-      const read = await client.getDeviceId()
+      const read = await readBoardIdSources(client, generateBoardId)
       const bad = settle(read)
       if (bad) return bad
       const identity = identityFromSources(read.sources ?? [])

@@ -1,14 +1,17 @@
 import {
   buildPlcSetStateRequest,
+  buildProvisionBoardIdRequest,
   buildReadLicenseRequest,
   buildWriteLicenseRequest,
   isGetListOverflowException,
   parseGetDeviceIdResponse,
   parsePlcSetStateResponse,
+  parseProvisionBoardIdResponse,
   parseReadLicenseResponse,
   parseWriteLicenseResponse,
 } from '@root/backend/shared/debug/modbus-pdu'
 import type {
+  DebugBoardIdProvisionResult,
   DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
@@ -620,6 +623,22 @@ export class ModbusRtuClient {
         return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
       }
       return parseWriteLicenseResponse(response.subarray(7))
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /** FC 0x4E. Stores a generated board ID once; the board refuses it when it already has one. */
+  async provisionBoardId(id: Uint8Array): Promise<DebugBoardIdProvisionResult> {
+    try {
+      const pdu = buildProvisionBoardIdRequest(id)
+      const response = await this.sendRequest(
+        this.assembleRequest(ModbusFunctionCode.PROVISION_BOARD_ID, pdu.subarray(1)),
+      )
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+      return parseProvisionBoardIdResponse(response.subarray(7))
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }

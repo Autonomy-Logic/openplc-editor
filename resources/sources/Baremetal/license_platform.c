@@ -7,7 +7,6 @@ license_platform.c - Board anchor from the VPP hooks and the raw ID report. See 
 
 #if LIC_PLATFORM_ENABLED
 
-#include "license_board_id.h"
 #include "license_platform.h"
 
 /* 0 for an ID of one repeated byte (all 00, all FF, blank slot), else 1. */
@@ -67,6 +66,37 @@ size_t license_id_report(uint8_t *out, size_t cap)
     out[1] = kind;
     out[2] = (uint8_t)n;
     return LIC_ID_REPORT_HEADER + n;
+}
+
+lic_board_id_status_t license_board_id_provision(const uint8_t *id, size_t len)
+{
+    uint8_t probe[LIC_ANCHOR_MAX];
+    uint8_t stored[LIC_BOARD_ID_SIZE];
+    lic_board_id_status_t st;
+    size_t n;
+    size_t i;
+
+    if (id == NULL || len != LIC_BOARD_ID_SIZE || !lic_id_acceptable(id, len))
+        return LIC_BOARD_ID_INVALID;
+
+    n = hardwareUniqueId(probe, sizeof(probe));
+    if (n != 0u && n <= sizeof(probe) && lic_id_acceptable(probe, n))
+        return LIC_BOARD_ID_TAKEN;
+    if (license_board_id_read(stored, sizeof(stored)) == LIC_BOARD_ID_SIZE &&
+        lic_id_acceptable(stored, LIC_BOARD_ID_SIZE))
+        return LIC_BOARD_ID_TAKEN;
+
+    st = license_board_id_write(id, len);
+    if (st != LIC_BOARD_ID_OK)
+        return st;
+
+    if (license_board_id_read(stored, sizeof(stored)) != LIC_BOARD_ID_SIZE)
+        return LIC_BOARD_ID_IO_ERROR;
+    for (i = 0u; i < LIC_BOARD_ID_SIZE; i++) {
+        if (stored[i] != id[i])
+            return LIC_BOARD_ID_IO_ERROR;
+    }
+    return LIC_BOARD_ID_OK;
 }
 
 #endif /* LIC_PLATFORM_ENABLED */

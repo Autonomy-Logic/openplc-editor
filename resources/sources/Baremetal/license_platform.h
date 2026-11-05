@@ -9,6 +9,8 @@ license_platform.h - Board anchor from the VPP hooks and the raw ID report (FC 0
 #include <stddef.h>
 #include <stdint.h>
 
+#include "license_board_id.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -39,6 +41,14 @@ size_t license_platform_anchor(uint8_t *out, size_t cap, uint8_t *kind);
  * when cap is below LIC_ID_REPORT_MAX.
  */
 size_t license_id_report(uint8_t *out, size_t cap);
+
+/**
+ * Store a generated board ID once (FC 0x4E). Refused with TAKEN when the board
+ * already reports a factory ID or holds a generated one, and with INVALID when
+ * id is not LIC_BOARD_ID_SIZE bytes or is one repeated byte. The write is read
+ * back before OK is returned.
+ */
+lic_board_id_status_t license_board_id_provision(const uint8_t *id, size_t len);
 
 #ifdef __cplusplus
 }

@@ -79,6 +79,9 @@ protocol, transport, register and debug layers agree on the same contracts.
 // programming lock is engaged. Not an error code, because the editor keeps
 // asking for a few seconds while the user clears the lock at the device.
 #define MB_REFUSED_LOCKED                0x6C
+// MB_FC_PROVISION_BOARD_ID only: refused because the board already has an ID
+// (factory ID or a generated one already stored).
+#define MB_BOARD_ID_TAKEN                0x88
 
 // Modbus registers struct
 // What a Modbus slave is, on this firmware: an id. The register banks that used
@@ -112,6 +115,7 @@ enum {
     MB_FC_PLC_SET_STATE       = 0x4B, // Set the runtime run/stop state
     MB_FC_REBOOT_BOOTLOADER   = 0x4C, // Reboot the device into its firmware bootloader (magic-guarded)
     MB_FC_GET_LOCK_STATE      = 0x4D, // Read the device's programming-lock state (read-only)
+    MB_FC_PROVISION_BOARD_ID  = 0x4E, // Store a generated board ID once (write-once)
 };
 
 //Exception Codes

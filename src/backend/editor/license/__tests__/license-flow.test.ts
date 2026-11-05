@@ -1,11 +1,17 @@
 import { serializeLicenseBlob } from '../../../shared/debug/license-blob'
-import type { DebugLicenseReadResult, DebugLicenseWriteResult } from '../../../shared/debug/types'
+import type {
+  DebugBoardIdProvisionResult,
+  DebugDeviceIdResult,
+  DebugLicenseReadResult,
+  DebugLicenseWriteResult,
+} from '../../../shared/debug/types'
 import { deriveDeviceId, deriveVppId } from '../device-identity'
 import {
   type DeviceIdentity,
   identityFromSources,
   inspectDeviceLicense,
   type LicenseReadWritable,
+  readBoardIdSources,
   resolveDeviceLicense,
   verifyStoredLicenseBlob,
 } from '../license-flow'
@@ -537,5 +543,87 @@ describe('inspectDeviceLicense', () => {
     })
 
     expect(result).toEqual({ deviceId: DEVICE_ID, outcome: { state: 'check-failed', error: 'port closed' } })
+  })
+})
+
+describe('readBoardIdSources', () => {
+  const GENERATED = Uint8Array.from({ length: 16 }, (_, i) => 0xa0 + i)
+  const FACTORY = Uint8Array.from([0x24, 0x6f, 0x28, 0x9a, 0x01, 0xc4])
+
+  function board(opts: {
+    reads: DebugDeviceIdResult[]
+    provision?: DebugBoardIdProvisionResult
+    noProvision?: boolean
+  }) {
+    const getDeviceId = jest.fn<Promise<DebugDeviceIdResult>, []>()
+    for (const r of opts.reads) getDeviceId.mockResolvedValueOnce(r)
+    const provisionBoardId = jest
+      .fn<Promise<DebugBoardIdProvisionResult>, [Uint8Array]>()
+      .mockResolvedValue(opts.provision ?? { success: true, status: 0x7e })
+    return {
+      getDeviceId,
+      provisionBoardId: opts.noProvision ? undefined : provisionBoardId,
+      provisionSpy: provisionBoardId,
+    }
+  }
+
+  it('returns a factory ID without provisioning', async () => {
+    const b = board({ reads: [{ success: true, sources: [{ kind: 'hardware', bytes: FACTORY }] }] })
+    const read = await readBoardIdSources(b, () => GENERATED)
+    expect(read.sources).toEqual([{ kind: 'hardware', bytes: FACTORY }])
+    expect(b.provisionSpy).not.toHaveBeenCalled()
+  })
+
+  it('provisions a generated ID on a board that reports none, then reads it back', async () => {
+    const b = board({
+      reads: [
+        { success: true, sources: [] },
+        { success: true, sources: [{ kind: 'generated', bytes: GENERATED }] },
+      ],
+    })
+    const read = await readBoardIdSources(b, () => GENERATED)
+    expect(b.provisionSpy).toHaveBeenCalledWith(GENERATED)
+    expect(read.sources).toEqual([{ kind: 'generated', bytes: GENERATED }])
+    expect(b.getDeviceId).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads again when the board says it already has an ID', async () => {
+    const b = board({
+      reads: [
+        { success: true, sources: [] },
+        { success: true, sources: [{ kind: 'generated', bytes: GENERATED }] },
+      ],
+      provision: { success: true, status: 0x88, taken: true },
+    })
+    const read = await readBoardIdSources(b, () => GENERATED)
+    expect(read.sources).toHaveLength(1)
+  })
+
+  it('keeps the empty report when the board has no slot', async () => {
+    const b = board({
+      reads: [{ success: true, sources: [] }],
+      provision: { success: true, status: 0x85, unsupported: true },
+    })
+    const read = await readBoardIdSources(b, () => GENERATED)
+    expect(read).toEqual({ success: true, sources: [] })
+    expect(b.getDeviceId).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails when the board could not store the ID', async () => {
+    const b = board({
+      reads: [{ success: true, sources: [] }],
+      provision: { success: false, status: 0x82, error: 'ERROR_OUT_OF_MEMORY' },
+    })
+    expect(await readBoardIdSources(b, () => GENERATED)).toEqual({ success: false, error: 'ERROR_OUT_OF_MEMORY' })
+  })
+
+  it('does not provision when the read failed or the channel cannot provision', async () => {
+    const failed = board({ reads: [{ success: false, error: 'Request timeout' }] })
+    expect(await readBoardIdSources(failed, () => GENERATED)).toEqual({ success: false, error: 'Request timeout' })
+    expect(failed.provisionSpy).not.toHaveBeenCalled()
+
+    const readOnly = board({ reads: [{ success: true, sources: [] }], noProvision: true })
+    expect(await readBoardIdSources(readOnly, () => GENERATED)).toEqual({ success: true, sources: [] })
+    expect(readOnly.provisionSpy).not.toHaveBeenCalled()
   })
 })
