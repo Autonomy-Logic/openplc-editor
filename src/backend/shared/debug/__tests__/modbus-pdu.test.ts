@@ -352,27 +352,83 @@ describe('buildGetDeviceIdRequest / parseGetDeviceIdResponse', () => {
     expect(buf[0]).toBe(ModbusFunctionCode.DEBUG_GET_DEVICE_ID)
   })
 
-  it('parses id bytes and hex on success', () => {
+  it('parses one hardware source', () => {
     const buf = new Uint8Array([
       ModbusFunctionCode.DEBUG_GET_DEVICE_ID,
       ModbusDebugResponse.SUCCESS,
-      0x03, // id_len = 3
+      0x01, // count
+      0x01, // kind: hardware
+      0x03, // len
       0x0a,
       0xbc,
       0x01,
     ])
     const result = parseGetDeviceIdResponse(buf)
     expect(result.success).toBe(true)
-    expect(Array.from(result.deviceId!)).toEqual([0x0a, 0xbc, 0x01])
-    expect(result.deviceIdHex).toBe('0abc01')
+    expect(result.sources).toHaveLength(1)
+    expect(result.sources![0].kind).toBe('hardware')
+    expect(Array.from(result.sources![0].bytes)).toEqual([0x0a, 0xbc, 0x01])
   })
 
-  it('handles id_len = 0 (unsupported core) as success with empty id', () => {
+  it('parses a generated source and several sources in order', () => {
+    const buf = new Uint8Array([
+      ModbusFunctionCode.DEBUG_GET_DEVICE_ID,
+      ModbusDebugResponse.SUCCESS,
+      0x02,
+      0x02,
+      0x02,
+      0x11,
+      0x22,
+      0x01,
+      0x01,
+      0x33,
+    ])
+    const result = parseGetDeviceIdResponse(buf)
+    expect(result.success).toBe(true)
+    expect(result.sources!.map((s) => s.kind)).toEqual(['generated', 'hardware'])
+    expect(Array.from(result.sources![0].bytes)).toEqual([0x11, 0x22])
+    expect(Array.from(result.sources![1].bytes)).toEqual([0x33])
+  })
+
+  it('handles count = 0 (no ID) as success with no sources', () => {
     const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_DEVICE_ID, ModbusDebugResponse.SUCCESS, 0x00])
     const result = parseGetDeviceIdResponse(buf)
     expect(result.success).toBe(true)
-    expect(result.deviceIdHex).toBe('')
-    expect(Array.from(result.deviceId!)).toEqual([])
+    expect(result.sources).toEqual([])
+  })
+
+  it('ignores trailing bytes after the last source', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_DEVICE_ID, ModbusDebugResponse.SUCCESS, 0x00, 0xaa, 0xbb])
+    expect(parseGetDeviceIdResponse(buf).sources).toEqual([])
+  })
+
+  it('flags an unknown source kind', () => {
+    const buf = new Uint8Array([
+      ModbusFunctionCode.DEBUG_GET_DEVICE_ID,
+      ModbusDebugResponse.SUCCESS,
+      0x01,
+      0x07,
+      0x01,
+      0x0a,
+    ])
+    const result = parseGetDeviceIdResponse(buf)
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/Unknown identity source kind 0x7/)
+  })
+
+  it('flags an empty source', () => {
+    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_DEVICE_ID, ModbusDebugResponse.SUCCESS, 0x01, 0x01, 0x00])
+    const result = parseGetDeviceIdResponse(buf)
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/Incomplete identity source 1 of 1/)
+  })
+
+  it('surfaces LIC_UNSUPPORTED as unsupported', () => {
+    const result = parseGetDeviceIdResponse(
+      new Uint8Array([ModbusFunctionCode.DEBUG_GET_DEVICE_ID, ModbusDebugResponse.LIC_UNSUPPORTED]),
+    )
+    expect(result.success).toBe(false)
+    expect(result.unsupported).toBe(true)
   })
 
   it('flags too-short buffer', () => {
@@ -395,7 +451,7 @@ describe('buildGetDeviceIdRequest / parseGetDeviceIdResponse', () => {
     expect(result.error).toBe('ERROR_OUT_OF_BOUNDS')
   })
 
-  it('flags a missing id_len byte', () => {
+  it('flags a missing count byte', () => {
     const result = parseGetDeviceIdResponse(
       new Uint8Array([ModbusFunctionCode.DEBUG_GET_DEVICE_ID, ModbusDebugResponse.SUCCESS]),
     )
@@ -403,11 +459,34 @@ describe('buildGetDeviceIdRequest / parseGetDeviceIdResponse', () => {
     expect(result.error).toMatch(/at least 3/)
   })
 
-  it('flags truncated id bytes', () => {
-    const buf = new Uint8Array([ModbusFunctionCode.DEBUG_GET_DEVICE_ID, ModbusDebugResponse.SUCCESS, 0x04, 0x0a, 0x0b])
+  it('flags truncated source bytes', () => {
+    const buf = new Uint8Array([
+      ModbusFunctionCode.DEBUG_GET_DEVICE_ID,
+      ModbusDebugResponse.SUCCESS,
+      0x01,
+      0x01,
+      0x04,
+      0x0a,
+      0x0b,
+    ])
     const result = parseGetDeviceIdResponse(buf)
     expect(result.success).toBe(false)
-    expect(result.error).toMatch(/Incomplete identity data/)
+    expect(result.error).toMatch(/Incomplete identity source 1 of 1/)
+  })
+
+  it('flags a missing source header', () => {
+    const buf = new Uint8Array([
+      ModbusFunctionCode.DEBUG_GET_DEVICE_ID,
+      ModbusDebugResponse.SUCCESS,
+      0x02,
+      0x01,
+      0x01,
+      0x0a,
+      0x02,
+    ])
+    const result = parseGetDeviceIdResponse(buf)
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/Incomplete identity source 2 of 2/)
   })
 })
 

@@ -66,6 +66,8 @@ import type {
   DebugStatusResult,
   DebugTransportResult,
   DebugVersionResult,
+  DeviceIdSource,
+  DeviceIdSourceKind,
   Md5ProbeResult,
   PlcControlResult,
 } from './types'
@@ -410,16 +412,8 @@ export function parseGetVersionResponse(data: Uint8Array): DebugVersionResult {
   return { success: true, version }
 }
 
-/**
- * Parse the FC 0x48 identity frame: `[FC][status][id_len:u8][id_bytes...]`.
- *
- * The FRAME is medium-independent, the MEANING is not (DOPE-589): bare metal
- * answers the derived device_id, runtime-v4 answers its raw device-tree anchor.
- * So the byte-level parse lives here once and the two typed wrappers below give
- * the bytes the name they actually have. `id_len === 0` is a valid SUCCESS
- * reply: the board has no identity a licence can be bound to.
- */
-function parseIdentityFrame(data: Uint8Array): { bytes: Uint8Array } | { error: string; unsupported?: boolean } {
+/** FC and status checks shared by both FC 0x48 frame shapes; null when the reply is SUCCESS. */
+function checkIdentityHeader(data: Uint8Array): { error: string; unsupported?: boolean } | null {
   if (data.length < 2) {
     return { error: `Invalid response: too short (${data.length} bytes)` }
   }
@@ -442,6 +436,13 @@ function parseIdentityFrame(data: Uint8Array): { bytes: Uint8Array } | { error: 
   if (status !== ModbusDebugResponse.SUCCESS) {
     return { error: statusError(status) }
   }
+  return null
+}
+
+/** Runtime-v4 frame: `[FC][status][id_len:u8][id_bytes...]`; `id_len === 0` is a valid SUCCESS reply. */
+function parseIdentityFrame(data: Uint8Array): { bytes: Uint8Array } | { error: string; unsupported?: boolean } {
+  const bad = checkIdentityHeader(data)
+  if (bad) return bad
 
   if (data.length < 3) {
     return { error: `Incomplete identity response (${data.length} bytes, expected at least 3)` }
@@ -457,19 +458,44 @@ function parseIdentityFrame(data: Uint8Array): { bytes: Uint8Array } | { error: 
 
 const toHex = (bytes: Uint8Array): string => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 
+/** LIC_ID_KIND_* in license_platform.h. */
+const ID_SOURCE_KINDS: Readonly<Record<number, DeviceIdSourceKind | undefined>> = { 1: 'hardware', 2: 'generated' }
+
 /**
- * BARE METAL. The bytes are the DERIVED device_id, produced inside the closed
- * license-core (`license_gate_device_id`), so nothing here hashes them again.
- * An empty id means this board cannot hold a licence.
+ * BARE METAL. Frame: `[FC][status][count:u8]` then `[kind:u8][len:u8][bytes]`
+ * per source. The bytes are raw; the editor derives the device_id. Count 0
+ * means this board has no ID yet.
  */
 export function parseGetDeviceIdResponse(data: Uint8Array): DebugDeviceIdResult {
-  const parsed = parseIdentityFrame(data)
-  if ('error' in parsed) {
-    return parsed.unsupported
-      ? { success: false, unsupported: true, error: parsed.error }
-      : { success: false, error: parsed.error }
+  const bad = checkIdentityHeader(data)
+  if (bad) {
+    return bad.unsupported
+      ? { success: false, unsupported: true, error: bad.error }
+      : { success: false, error: bad.error }
   }
-  return { success: true, deviceId: parsed.bytes, deviceIdHex: toHex(parsed.bytes) }
+  if (data.length < 3) {
+    return { success: false, error: `Incomplete identity response (${data.length} bytes, expected at least 3)` }
+  }
+
+  const count = readU8(data, 2)
+  const sources: DeviceIdSource[] = []
+  let pos = 3
+  for (let i = 0; i < count; i++) {
+    if (data.length < pos + 2) {
+      return { success: false, error: `Incomplete identity source ${i + 1} of ${count}` }
+    }
+    const kind = ID_SOURCE_KINDS[readU8(data, pos)]
+    const len = readU8(data, pos + 1)
+    if (kind === undefined) {
+      return { success: false, error: `Unknown identity source kind 0x${readU8(data, pos).toString(16)}` }
+    }
+    if (len === 0 || data.length < pos + 2 + len) {
+      return { success: false, error: `Incomplete identity source ${i + 1} of ${count}` }
+    }
+    sources.push({ kind, bytes: data.slice(pos + 2, pos + 2 + len) })
+    pos += 2 + len
+  }
+  return { success: true, sources }
 }
 
 /**

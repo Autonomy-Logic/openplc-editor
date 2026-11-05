@@ -20,12 +20,15 @@ function fakeChannel(script: DebugDeviceIdResult[]) {
   }
 }
 
-const ANSWERED: DebugDeviceIdResult = { success: true, deviceId: Uint8Array.from([1, 2, 3, 4]) }
+const ANSWERED: DebugDeviceIdResult = {
+  success: true,
+  sources: [{ kind: 'hardware', bytes: Uint8Array.from([1, 2, 3, 4]) }],
+}
 /** Opened, but nothing spoke the debug protocol — a blank board, or a wrong baud. */
 const SILENT: DebugDeviceIdResult = { success: false }
 /** Answered the frame but reported no identity (no license-core linked, or an
  *  architecture the closed reader refuses: AVR, RP2040). */
-const EMPTY_ID: DebugDeviceIdResult = { success: true, deviceId: Uint8Array.from([]) }
+const EMPTY_ID: DebugDeviceIdResult = { success: true, sources: [] }
 
 describe('planBaudAttempts', () => {
   it('leads with the configured rate, then sweeps the rest', () => {

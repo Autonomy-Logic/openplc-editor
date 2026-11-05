@@ -3,11 +3,13 @@ import {
   buildReadLicenseRequest,
   buildWriteLicenseRequest,
   isGetListOverflowException,
+  parseGetDeviceIdResponse,
   parsePlcSetStateResponse,
   parseReadLicenseResponse,
   parseWriteLicenseResponse,
 } from '@root/backend/shared/debug/modbus-pdu'
 import type {
+  DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DebugStatusResult,
@@ -566,7 +568,7 @@ export class ModbusRtuClient {
     }
   }
 
-  async getDeviceId(): Promise<{ success: boolean; deviceId?: Uint8Array; deviceIdHex?: string; error?: string }> {
+  async getDeviceId(): Promise<DebugDeviceIdResult> {
     try {
       const request = this.assembleRequest(ModbusFunctionCode.DEBUG_GET_DEVICE_ID, allocBytes(0))
       const response = await this.sendRequest(request)
@@ -574,28 +576,7 @@ export class ModbusRtuClient {
       if (response.length < 10) {
         return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 10)` }
       }
-
-      const functionCodeResponse = readUint8(response, 7)
-      const statusCode = readUint8(response, 8)
-
-      if (functionCodeResponse !== (ModbusFunctionCode.DEBUG_GET_DEVICE_ID as number)) {
-        return { success: false, error: 'Function code mismatch' }
-      }
-      if (statusCode !== (ModbusDebugResponse.SUCCESS as number)) {
-        return { success: false, error: `Unknown error code: 0x${statusCode.toString(16)}` }
-      }
-
-      const idLen = readUint8(response, 9)
-      if (response.length < 10 + idLen) {
-        return {
-          success: false,
-          error: `Incomplete device-id data (expected ${idLen} bytes, got ${response.length - 10})`,
-        }
-      }
-
-      const deviceId = response.slice(10, 10 + idLen)
-      const deviceIdHex = Array.from(deviceId, (b) => b.toString(16).padStart(2, '0')).join('')
-      return { success: true, deviceId, deviceIdHex }
+      return parseGetDeviceIdResponse(response.slice(7))
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }

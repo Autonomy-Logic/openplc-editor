@@ -153,6 +153,7 @@ import { type DiscoveredRuntime, discoverRuntimes } from '../../../backend/edito
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
 import {
   type DeviceIdentity,
+  identityFromSources,
   inspectDeviceLicense,
   type LicenseReadWritable,
   resolveDeviceLicense,
@@ -2953,7 +2954,9 @@ class MainProcessBridge implements MainIpcModule {
       const read = await client.getDeviceId()
       const bad = settle(read)
       if (bad) return bad
-      return { identity: { kind: 'device-id', deviceId: read.deviceId ?? new Uint8Array(0) } }
+      const identity = identityFromSources(read.sources ?? [])
+      if ('error' in identity) return { error: identity.error, retryable: false } as const
+      return { identity }
     }
 
     if (client.getAnchor) {

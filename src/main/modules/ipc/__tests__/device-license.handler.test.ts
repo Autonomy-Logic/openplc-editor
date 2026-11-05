@@ -40,6 +40,9 @@ jest.mock('../../../../backend/shared/simulator/simulator-module', () => ({
 }))
 
 jest.mock('../../../../backend/editor/license/license-flow', () => ({
+  identityFromSources: jest.requireActual<typeof import('../../../../backend/editor/license/license-flow')>(
+    '../../../../backend/editor/license/license-flow',
+  ).identityFromSources,
   inspectDeviceLicense: jest.fn(),
   resolveDeviceLicense: jest.fn(),
 }))
@@ -77,10 +80,10 @@ function holdClient(
   return jest.spyOn(session, 'noteTraffic')
 }
 
-/** Baremetal half of the union: the board reports an id its closed core derived. */
+/** Baremetal: the board reports its raw ID sources. */
 function deviceIdClient(overrides: Partial<{ getDeviceId: jest.Mock }> = {}) {
   return {
-    getDeviceId: jest.fn(() => Promise.resolve({ success: true, deviceId: ANCHOR })),
+    getDeviceId: jest.fn(() => Promise.resolve({ success: true, sources: [{ kind: 'hardware', bytes: ANCHOR }] })),
     readLicense: jest.fn(),
     writeLicense: jest.fn(),
     ...overrides,
@@ -161,7 +164,7 @@ describe('device:read-license', () => {
     expect(client.getDeviceId).toHaveBeenCalledTimes(1)
     expect(licenseFlow.inspectDeviceLicense).toHaveBeenCalledWith(client, {
       ...REQUEST,
-      identity: { kind: 'device-id', deviceId: ANCHOR },
+      identity: { kind: 'anchor', anchor: ANCHOR },
     })
     expect(result).toEqual({ deviceId: 'abc', outcome: { state: 'licensed', how: 'already-stored' } })
     // The board-id read is device traffic; not noting it lets the liveness poll
@@ -193,7 +196,7 @@ describe('device:read-license', () => {
   })
 
   it('passes an empty identity through rather than inventing one', async () => {
-    // A board answering id_len = 0 is a real reply; the flow is the layer that
+    // A board answering count 0 is a real reply; the flow is the layer that
     // knows it cannot be licensed, and it must get the chance to say so.
     const bridge = createBridge()
     const client = deviceIdClient({ getDeviceId: jest.fn(() => Promise.resolve({ success: true })) })
@@ -204,7 +207,7 @@ describe('device:read-license', () => {
 
     expect(licenseFlow.inspectDeviceLicense).toHaveBeenCalledWith(client, {
       ...REQUEST,
-      identity: { kind: 'device-id', deviceId: new Uint8Array(0) },
+      identity: { kind: 'anchor', anchor: new Uint8Array(0) },
     })
   })
 
@@ -233,7 +236,7 @@ describe('device:refresh-license', () => {
 
     expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(client, {
       ...REQUEST,
-      identity: { kind: 'device-id', deviceId: ANCHOR },
+      identity: { kind: 'anchor', anchor: ANCHOR },
     })
     expect(result.outcome).toEqual({ state: 'licensed', how: 'activated' })
     // Once for the anchor read, once after the sequence: the sequence spans an
@@ -344,9 +347,7 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
     // serialising this traffic with everyone else's.
     expect(licenseFlow.inspectDeviceLicense).toHaveBeenCalledWith(wsClient, {
       ...REQUEST,
-      // kind: 'anchor' is the assertion that matters here: this is the path
-      // where the editor still derives, and a regression to 'device-id' would
-      // mean the runtime's raw serial being published as an identity.
+      // The runtime's raw serial reaches the flow as an anchor to derive from.
       identity: { kind: 'anchor', anchor: ANCHOR },
     })
     expect(result.outcome).toEqual({ state: 'licensed', how: 'already-stored' })

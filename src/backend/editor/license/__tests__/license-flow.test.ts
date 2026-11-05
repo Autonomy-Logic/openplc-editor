@@ -2,6 +2,8 @@ import { serializeLicenseBlob } from '../../../shared/debug/license-blob'
 import type { DebugLicenseReadResult, DebugLicenseWriteResult } from '../../../shared/debug/types'
 import { deriveDeviceId, deriveVppId } from '../device-identity'
 import {
+  type DeviceIdentity,
+  identityFromSources,
   inspectDeviceLicense,
   type LicenseReadWritable,
   resolveDeviceLicense,
@@ -283,73 +285,42 @@ describe('resolveDeviceLicense', () => {
     expect(checkDeviceActivation).not.toHaveBeenCalled()
   })
 
-  /*
-   * The baremetal half of the union (DOPE-589). The board reports an id the
-   * closed license-core already derived, so the editor must USE it, not hash it
-   * again: a second hash would produce an identity the device can never
-   * reproduce and no licence was ever issued for.
-   */
-  it('uses a reported device id as-is, without hashing it again', async () => {
-    const reported = Uint8Array.from(Buffer.from(DEVICE_ID, 'hex'))
-    const link = transport({ reads: [] })
+  it('derives a bare-metal identity from its single raw ID source', async () => {
+    const identity = identityFromSources([{ kind: 'hardware', bytes: ANCHOR }])
+    expect(identity).toEqual({ kind: 'anchor', anchor: ANCHOR })
 
-    const result = await resolveDeviceLicense(link, {
-      identity: { kind: 'device-id', deviceId: reported },
-      packageId: PACKAGE_ID,
-    })
-
-    // Same hex the anchor path derives for this board: the two halves of the
-    // union agree on the identity, which is the whole point of the move.
+    const link = transport({ reads: [{ success: true, status: LIC_SUCCESS, blob: blobFor() }] })
+    const result = await resolveDeviceLicense(link, { identity: identity as DeviceIdentity, packageId: PACKAGE_ID })
     expect(result.deviceId).toBe(DEVICE_ID)
-    expect(deriveDeviceId(reported)).not.toBe(DEVICE_ID) // hashing again WOULD differ
   })
 
-  it('refuses an empty reported device id', async () => {
-    const link = transport({ reads: [] })
+  it('treats a generated ID source like a factory one', () => {
+    expect(identityFromSources([{ kind: 'generated', bytes: ANCHOR }])).toEqual({ kind: 'anchor', anchor: ANCHOR })
+  })
 
-    const result = await resolveDeviceLicense(link, {
-      identity: { kind: 'device-id', deviceId: new Uint8Array(0) },
-      packageId: PACKAGE_ID,
-    })
+  it('maps no ID source to an empty anchor, which the flow refuses', async () => {
+    const identity = identityFromSources([])
+    expect(identity).toEqual({ kind: 'anchor', anchor: new Uint8Array(0) })
+
+    const link = transport({ reads: [] })
+    const result = await resolveDeviceLicense(link, { identity: identity as DeviceIdentity, packageId: PACKAGE_ID })
 
     expect(result.deviceId).toBeUndefined()
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
       expect(result.outcome.error).toMatch(/did not report an identity a license can be issued for/)
-      // Terminal: re-asking cannot change it, so the UI must not offer a retry.
       expect(result.outcome.retryable).toBe(false)
-      // The message names the ACTION (rebuild), not the internals. "license-core"
-      // is a component the user cannot act on.
-      expect(result.outcome.error).toMatch(/rebuild and upload/i)
-      expect(result.outcome.error).not.toMatch(/license-core/i)
     }
     expect(link.readCount()).toBe(0)
     expect(checkDeviceActivation).not.toHaveBeenCalled()
   })
 
-  it('refuses a reported device id of the wrong length', async () => {
-    // 9 bytes is what an AVR ArduinoUniqueID used to report on 0x48. A firmware
-    // that still answers a raw anchor there, against a license-core that
-    // derives, would send a customer to checkout for an id no device holds.
-    const link = transport({ reads: [] })
-
-    const result = await resolveDeviceLicense(link, {
-      identity: { kind: 'device-id', deviceId: new Uint8Array(9) },
-      packageId: PACKAGE_ID,
-    })
-
-    expect(result.deviceId).toBeUndefined()
-    expect(result.outcome.state).toBe('check-failed')
-    if (result.outcome.state === 'check-failed') {
-      // The width is an internal contract; it used to be the FIRST thing a user
-      // saw when connecting a board flashed by an older editor.
-      expect(result.outcome.error).toMatch(/format this editor does not recognise/)
-      expect(result.outcome.error).toMatch(/rebuild and upload/i)
-      expect(result.outcome.error).not.toMatch(/\d+-byte|expected 16/)
-      expect(result.outcome.retryable).toBe(false)
-    }
-    expect(link.readCount()).toBe(0)
-    expect(checkDeviceActivation).not.toHaveBeenCalled()
+  it('refuses several ID sources, which need a derivation this editor does not have', () => {
+    const identity = identityFromSources([
+      { kind: 'hardware', bytes: ANCHOR },
+      { kind: 'generated', bytes: ANCHOR },
+    ])
+    expect(identity).toEqual({ error: expect.stringMatching(/format this editor does not recognise/) as string })
   })
 
   it('reports check-failed when the device does not answer the read at all', async () => {

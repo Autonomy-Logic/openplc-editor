@@ -133,11 +133,11 @@ export async function connectWithRetries(client: Connectable, { attempts, backof
 export async function readDeviceIdWithRetries(
   client: DeviceIdReadable,
   { attempts, backoffMs }: ProbeBudget,
-): Promise<{ success: boolean; deviceId?: Uint8Array }> {
-  let last: { success: boolean; deviceId?: Uint8Array } = { success: false }
+): Promise<{ success: boolean }> {
+  let last: { success: boolean } = { success: false }
   for (let attempt = 0; attempt < attempts; attempt++) {
     const result = await client.getDeviceId()
-    last = { success: result.success, deviceId: result.deviceId }
+    last = { success: result.success }
     if (last.success) return last
     if (attempt < attempts - 1) await new Promise((resolve) => setTimeout(resolve, backoffMs))
   }

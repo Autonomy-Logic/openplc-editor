@@ -29,9 +29,7 @@ import { createHash } from 'node:crypto'
 const DEVICE_ID_PREFIX = 'openplc-dev-v1|'
 
 /** Device id = first 16 bytes of the digest (matches `lic_blob_t.deviceId`,
- *  and `LIC_DEVICE_ID_SIZE` in the firmware contract). Exported because the
- *  bare-metal path no longer derives here: it receives an already-derived id
- *  from the board and has to check its LENGTH against the same constant. */
+ *  and `LIC_DEVICE_ID_SIZE` in the firmware contract). */
 export const DEVICE_ID_BYTES = 16
 
 /** VPP id = first 8 bytes of the digest (matches `lic_blob_t.productId`). */
@@ -47,12 +45,10 @@ const VPP_ID_BYTES = 8
  *
  * ANCHOR NORMALIZATION CONTRACT — do not "fix" this by trimming here.
  * The anchor is hashed EXACTLY as the board-id read (FC 0x48) answered it,
- * because what 0x48 answers is already what the on-device verifier derives
- * from:
- *   - bare metal no longer reaches this function at all since DOPE-589: the
- *     closed license-core derives the id inside the artifact and the board
- *     reports it on FC 0x48, so there is nothing here to normalize. The raw
- *     anchor never leaves the device;
+ * because what 0x48 answers is already what a paid VPP's on-device verifier
+ * derives from:
+ *   - bare metal reports its raw ID source (factory ID or generated ID) as
+ *     read, the same bytes the paid VPP's private core hashes on the board;
  *   - a runtime-v4 target answers its device-tree serial with trailing
  *     NUL/LF/CR/space ALREADY stripped: the runtime's webserver strips on
  *     the wire and the closed core's __linux__ branch strips on read — the

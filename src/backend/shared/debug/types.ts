@@ -59,21 +59,15 @@ export interface DebugVersionResult {
 }
 
 /**
- * WHY THERE ARE TWO OF THESE AND NOT ONE (DOPE-589). FC 0x48 answers a
- * different KIND of value depending on the platform, and one shared type would
- * make the field name a lie on one of them:
+ * FC 0x48 answers a raw identity on both platforms, in two frame shapes, so
+ * there are two result types:
  *
- *   - bare metal answers the DERIVED device_id. The closed license-core reads
- *     the silicon and derives it internally (`license_gate_device_id`), so the
- *     raw factory serial never leaves the artifact and the open firmware links
- *     no unique-id library at all;
- *   - runtime-v4 answers the RAW anchor, its device-tree serial, and the
- *     editor derives the device_id from it in TypeScript.
+ *   - bare metal answers a list of ID sources, each tagged hardware (the
+ *     silicon's factory ID) or generated (the ID the editor wrote into the
+ *     board-ID slot);
+ *   - runtime-v4 answers one raw anchor, its device-tree serial.
  *
- * The licensing flow takes the union (`DeviceIdentity` in license-flow.ts) so
- * the compiler makes every caller say which one it holds. Collapsing them back
- * into one field is how a derived id gets hashed a second time, or a raw serial
- * gets published as an identity.
+ * The editor derives the device_id from the raw bytes in both cases.
  *
  * `unsupported` (status LIC_UNSUPPORTED, 0x85) means the target answered that
  * it has NO identity to license against - a runtime-v4 host with no
@@ -82,19 +76,25 @@ export interface DebugVersionResult {
  * (no retry nag) instead of an endlessly retryable check-failed.
  */
 
+/** Kind of one bare-metal ID source (LIC_ID_KIND_* in license_platform.h). */
+export type DeviceIdSourceKind = 'hardware' | 'generated'
+
+export interface DeviceIdSource {
+  kind: DeviceIdSourceKind
+  bytes: Uint8Array
+}
+
 /**
- * Bare-metal identity read (FC 0x48). `deviceId` is the 16-byte derived
- * device_id, or EMPTY when the board has no identity a licence can be bound to
- * (no license-core linked, or an architecture the closed reader refuses).
+ * Bare-metal identity read (FC 0x48): the board's raw ID sources, EMPTY when
+ * the board has no identity a licence can be bound to.
  *
- * An empty id is a SUCCESS reply and must stay one: `device-probe` reads the
- * successful reply, not the bytes, as proof that firmware is running.
+ * An empty list is a SUCCESS reply and must stay one: `device-probe` reads the
+ * successful reply, not the sources, as proof that firmware is running.
  */
 export interface DebugDeviceIdResult {
   success: boolean
   unsupported?: boolean
-  deviceId?: Uint8Array
-  deviceIdHex?: string
+  sources?: DeviceIdSource[]
   error?: string
 }
 

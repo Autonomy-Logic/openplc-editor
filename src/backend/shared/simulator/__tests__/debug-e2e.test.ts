@@ -113,20 +113,13 @@ describeIfHex('Phase 4 debugger end-to-end (avr8js + ModbusRtuClient)', () => {
     expect(result.version).toMatch(/^\d+\.\d+\.\d+/)
   }, 30000)
 
-  it('FC 0x48 DEBUG_GET_DEVICE_ID answers a well-formed reply with no id', async () => {
+  it('FC 0x48 DEBUG_GET_DEVICE_ID answers a well-formed reply with no ID source', async () => {
     const result = await client.getDeviceId()
-    // The simulator links no license-core, so `license_gate_device_id` resolves
-    // to the weak default in license_gate_weak.cpp and answers 0. That is the
-    // truthful reply rather than a gap: an identity exists only to bind a paid
-    // VPP licence to a board, and a simulated board cannot hold one.
-    //
-    // What matters is that the FRAME is still valid: SUCCESS status, id_len
-    // 0, no trailing bytes. `device-probe` reads the successful reply (not
-    // the id bytes) as proof of firmware, so an empty id must not look like
-    // a protocol error.
+    // The simulator has no VPP, so the weak hooks report no factory ID and no
+    // generated ID: SUCCESS with count 0. `device-probe` reads the successful
+    // reply as proof of firmware, so it must not look like a protocol error.
     expect(result.success).toBe(true)
     expect(result.error).toBeUndefined()
-    expect(result.deviceId).toHaveLength(0)
-    expect(result.deviceIdHex).toBe('')
+    expect(result.sources).toEqual([])
   }, 30000)
 })

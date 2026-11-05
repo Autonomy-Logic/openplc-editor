@@ -3,6 +3,7 @@
 #ifndef openplc_h
 #define openplc_h
 
+#include <stddef.h>
 #include <stdint.h>
 
 /* Pulled in HERE, not left to the includer, so the MAX_* overrides below
@@ -191,6 +192,16 @@ void updateOutputBuffers();
  * HAL's behalf and never imposes a sampling period.
  * ---------------------------------------------------------------------- */
 uint8_t hardwareStateSwitch(void);
+
+/* ---- Optional: factory unique ID ---------------------------------------
+ * Weak default reports no ID, so the board falls back to the generated ID
+ * the editor writes into the board-ID slot (license_board_id_*). A HAL whose
+ * chip has a reliable factory ID copies it, raw, into out and returns its
+ * length; 0 when there is none or it does not fit in cap. The HAL owns every
+ * chip-specific rule: register address, byte order, reading twice, refusing
+ * degenerate values. Called from the Modbus handler; must not block.
+ * ---------------------------------------------------------------------- */
+size_t hardwareUniqueId(uint8_t *out, size_t cap);
 
 /* ---- Optional: reboot into the device's firmware bootloader ------------
  * Weak default is a no-op; a HAL whose device has a resident bootloader

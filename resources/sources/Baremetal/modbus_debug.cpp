@@ -17,22 +17,8 @@ modbus_debug.cpp - OpenPLC always-on debugger function codes (0x41-0x4B)
 #include "openplc.h"
 #include "openplc_version.h"
 
-// The identity behind DEBUG_GET_DEVICE_ID (0x48) comes from the closed
-// license-core, not from a library compiled into this open firmware.
-//
-// It used to come from ArduinoUniqueID (ricaun), included right here, and that
-// had two problems. The library `#error`s out on any core it does not cover
-// (mbed is one, so every Arduino Opta, Portenta Machine Control and Edge
-// Control build failed, DOPE-587), and it made this file read the raw factory
-// serial in order to publish it on a channel with no authentication.
-//
-// Now the firmware ASKS: `license_gate_device_id()` reads the silicon inside
-// the closed artifact and hands back the derived device_id, so the anchor never
-// leaves it. On a board with no license-core the weak default answers 0, which
-// is the truthful answer for a board no licence can be bound to. Nothing here
-// derives, normalizes or reformats what it gets: the bytes go on the wire as
-// they arrive, because the editor compares them against what it purchased.
-#include "license_gate.h"
+// DEBUG_GET_DEVICE_ID (0x48) reports the raw ID sources from license_id_report().
+#include "license_platform.h"
 
 /**
  * @brief Sends a Modbus response frame for the DEBUG_INFO function code.
@@ -481,30 +467,21 @@ void debugGetVersion()
 }
 
 // PDU request:  [FC]
-// PDU response: [FC, STATUS, id_len:u8, id_bytes...]
-//
-// Reports this board's device_id: LIC_DEVICE_ID_SIZE bytes on a board that can
-// hold a licence, and id_len = 0 on one that cannot. Both are SUCCESS replies.
-// The empty answer is not an error and must not look like one: `device-probe`
-// reads a successful reply, not the id bytes, as proof that firmware is running
-// (requiring bytes once reported mbed boards as having no firmware at all), and
-// the editor's licensing flow reads a zero-length id as "no licence can be
-// bound to this board" (license-flow.ts, deriveIdentity).
-//
-// The frame is the capacity limit, so it is passed as one: if the id could not
-// fit after [FC][STATUS][id_len], `license_gate_device_id` refuses and reports
-// nothing rather than a truncated identity, which would be a DIFFERENT id and
-// would match no licence ever issued.
+// PDU response: [FC][STATUS][count:u8] then [kind:u8][len:u8][bytes] per ID source; count 0 = no ID.
 void debugGetDeviceId()
 {
-    size_t idLen;
+    size_t reportLen;
 
     mb_frame[1] = MB_FC_DEBUG_GET_DEVICE_ID;
     mb_frame[2] = MB_DEBUG_SUCCESS;
 
-    idLen = license_gate_device_id(&mb_frame[4], (size_t)(MB_RESPONSE_CAPACITY - 4));
-    mb_frame[3] = (uint8_t)idLen;
-    mb_frame_len = 4 + (int)idLen;
+    reportLen = license_id_report(&mb_frame[3], (size_t)(MB_RESPONSE_CAPACITY - 3));
+    if (reportLen == 0u)
+    {
+        mb_frame[3] = 0u;
+        reportLen = 1u;
+    }
+    mb_frame_len = 3 + (int)reportLen;
 }
 
 // ---------------------------------------------------------------------------

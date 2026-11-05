@@ -701,25 +701,25 @@ describe('ModbusRtuClient', () => {
   // getDeviceId (FC 0x48)
   // -----------------------------------------------------------------------
   describe('getDeviceId', () => {
-    it('returns id bytes and hex on success', async () => {
+    it('returns the raw ID sources on success', async () => {
       await connectClient()
-      const payload = new Uint8Array([ModbusDebugResponse.SUCCESS, 0x03, 0x0a, 0xbc, 0x01])
+      const payload = new Uint8Array([ModbusDebugResponse.SUCCESS, 0x01, 0x01, 0x03, 0x0a, 0xbc, 0x01])
       autoRespond(buildResponse(1, ModbusFunctionCode.DEBUG_GET_DEVICE_ID, payload))
       const result = await client.getDeviceId()
       expect(result.success).toBe(true)
-      expect(Array.from(result.deviceId!)).toEqual([0x0a, 0xbc, 0x01])
-      expect(result.deviceIdHex).toBe('0abc01')
+      expect(result.sources).toHaveLength(1)
+      expect(result.sources![0].kind).toBe('hardware')
+      expect(Array.from(result.sources![0].bytes)).toEqual([0x0a, 0xbc, 0x01])
     })
 
-    it('handles id_len = 0 (unsupported core) as success with empty id', async () => {
+    it('handles count = 0 (no ID) as success with no sources', async () => {
       await connectClient()
       autoRespond(
         buildResponse(1, ModbusFunctionCode.DEBUG_GET_DEVICE_ID, new Uint8Array([ModbusDebugResponse.SUCCESS, 0x00])),
       )
       const result = await client.getDeviceId()
       expect(result.success).toBe(true)
-      expect(result.deviceIdHex).toBe('')
-      expect(Array.from(result.deviceId!)).toEqual([])
+      expect(result.sources).toEqual([])
     })
 
     it('returns error on function code mismatch', async () => {
@@ -738,18 +738,18 @@ describe('ModbusRtuClient', () => {
       expect(result.error).toContain('Unknown error code')
     })
 
-    it('returns error on incomplete id data', async () => {
+    it('returns error on incomplete source data', async () => {
       await connectClient()
       autoRespond(
         buildResponse(
           1,
           ModbusFunctionCode.DEBUG_GET_DEVICE_ID,
-          new Uint8Array([ModbusDebugResponse.SUCCESS, 0x04, 0x0a, 0x0b]),
+          new Uint8Array([ModbusDebugResponse.SUCCESS, 0x01, 0x01, 0x08, 0x0a, 0x0b]),
         ),
       )
       const result = await client.getDeviceId()
       expect(result.success).toBe(false)
-      expect(result.error).toContain('Incomplete device-id data')
+      expect(result.error).toContain('Incomplete identity source 1 of 1')
     })
 
     it('returns error on too-short response', async () => {
