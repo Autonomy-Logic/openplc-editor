@@ -42,6 +42,7 @@ import { VendorScreenTabs } from '../components/_features/[workspace]/editor/ven
 import { GlobalVariableListEditor } from '../components/_features/[workspace]/global-variable-list'
 import { Search } from '../components/_features/[workspace]/search'
 import { SourceControlPanel } from '../components/_features/[workspace]/source-control'
+import { EditingLockBoundary } from '../components/_molecules/editing-lock-boundary'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import { Console as ConsoleComponent } from '../components/_organisms/console'
 import { ConsoleFilters } from '../components/_organisms/console/filters'
@@ -625,8 +626,16 @@ const WorkspaceScreen = () => {
                         {editor['type'] === 'plc-diagnostics' && <DiagnosticsEditor />}
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
-                        {editor['type'] === 'plc-user-management' && <UserManagementEditor />}
-                        {editor['type'] === 'plc-persistent-storage' && <PersistentStorageEditor />}
+                        {editor['type'] === 'plc-user-management' && (
+                          <EditingLockBoundary>
+                            <UserManagementEditor />
+                          </EditingLockBoundary>
+                        )}
+                        {editor['type'] === 'plc-persistent-storage' && (
+                          <EditingLockBoundary>
+                            <PersistentStorageEditor />
+                          </EditingLockBoundary>
+                        )}
                         {editor['type'] === 'plc-library-manifest' && <LibraryManifestEditor />}
                         {editor['type'] === 'diff-viewer' && <DiffViewerEditor />}
 
