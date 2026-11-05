@@ -142,7 +142,7 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
                   ? 'Bundled libraries ship with strucpp and cannot be uninstalled'
                   : 'Uninstall selected library'
               }
-              className='rounded-md p-1 hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
+              className='rounded-md p-1 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-neutral-900'
             >
               <MinusIcon className='!stroke-brand' />
             </button>
