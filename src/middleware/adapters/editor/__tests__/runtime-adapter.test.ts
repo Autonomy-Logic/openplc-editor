@@ -1,6 +1,6 @@
 import type { OpenPLCStore } from '../../../../frontend/store'
 import { createTestStore } from '../../../../frontend/store/testing'
-import type { RuntimePort } from '../../../shared/ports/runtime-port'
+import type { RuntimePort, UsersInfoResult } from '../../../shared/ports/runtime-port'
 import { createEditorRuntimeAdapter } from '../runtime-adapter'
 
 let adapter: RuntimePort
@@ -253,6 +253,17 @@ describe('getUsersInfo', () => {
     const result = await adapter.getUsersInfo()
 
     expect(result).toEqual({ hasUsers: false, error: 'Timeout' })
+  })
+
+  it('hands the transport failure kind from the bridge through unchanged', async () => {
+    const refused: UsersInfoResult = {
+      hasUsers: false,
+      error: 'connect ECONNREFUSED 192.168.1.100:8443',
+      failure: 'refused',
+    }
+    jest.mocked(window.bridge.runtimeGetUsersInfo).mockResolvedValue(refused)
+
+    await expect(adapter.getUsersInfo()).resolves.toStrictEqual(refused)
   })
 })
 
@@ -854,7 +865,7 @@ describe('the bootloader surface', () => {
 
   it('reaches the bridge for each call, with the selected device address', async () => {
     await adapter.bootloader.getCapabilities()
-    expect(window.bridge.bootloaderGetCapabilities).toHaveBeenCalledWith(mockIpAddress)
+    expect(jest.mocked(window.bridge.bootloaderGetCapabilities).mock.calls).toEqual([[mockIpAddress]])
 
     await adapter.bootloader.login('op', 'op')
     expect(window.bridge.bootloaderLogin).toHaveBeenCalledWith(mockIpAddress, 'op', 'op')
@@ -879,6 +890,15 @@ describe('the bootloader surface', () => {
 
     await adapter.bootloader.clearSession()
     expect(window.bridge.bootloaderClearSession).toHaveBeenCalledWith(mockIpAddress)
+  })
+
+  it('hands the capability options to the bridge unchanged', async () => {
+    const options = { timeoutMs: 2500 }
+
+    await adapter.bootloader.getCapabilities(options)
+
+    expect(window.bridge.bootloaderGetCapabilities).toHaveBeenCalledWith(mockIpAddress, options)
+    expect(jest.mocked(window.bridge.bootloaderGetCapabilities).mock.calls[0]?.at(1)).toBe(options)
   })
 
   it('returns what the bridge returns', async () => {
