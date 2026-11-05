@@ -1,0 +1,355 @@
+import type { DeviceCommand } from '../commands'
+import { buildExec, pollInstallerCommand, PROVISIONING_COMMANDS, startInstallerCommand } from '../commands'
+import { DOCKER_CONTAINER_RECORDS, INSTALLER_URL, V3_UNITS } from '../runtime-names'
+
+const LOG_DIR = '/tmp/tmp.Xy7Qa9Zk2B'
+const HOSTILE_USERNAME = 'pi; rm -rf /'
+const HOSTILE_PASSWORD = 'x$(reboot)`id`\'"'
+const SUDO_PREFIX = "/usr/bin/sudo -S -k -p '' sh -c "
+const SHELL_SPECIALS = new Set([';', '&', '|', '<', '>', '(', ')', '$', '`', '*', '?', '[', '#', '~', '\n'])
+
+const fixedCommands: [string, DeviceCommand][] = Object.entries(PROVISIONING_COMMANDS)
+const allCommands: [string, DeviceCommand][] = [
+  ...fixedCommands,
+  ['startInstallerCommand', startInstallerCommand(LOG_DIR)],
+  ['pollInstallerCommand', pollInstallerCommand(LOG_DIR, 1234, 65536)],
+]
+
+function readSingleQuoted(text: string, start: number): { value: string; next: number } {
+  const end = text.indexOf("'", start)
+  if (end < 0) throw new Error('unterminated single quote')
+  return { value: text.slice(start, end), next: end + 1 }
+}
+
+function readDoubleQuoted(text: string, start: number): { value: string; next: number } {
+  let value = ''
+  let index = start
+  while (index < text.length) {
+    const character = text[index]
+    if (character === '"') return { value, next: index + 1 }
+    if (character === '$' || character === '`') throw new Error('expansion inside double quotes')
+    if (character === '\\' && '$`"\\\n'.includes(text[index + 1] ?? '')) {
+      value += text[index + 1]
+      index += 2
+    } else {
+      value += character
+      index += 1
+    }
+  }
+  throw new Error('unterminated double quote')
+}
+
+function shellWords(text: string): string[] {
+  const words: string[] = []
+  let word: string | null = null
+  let index = 0
+  while (index < text.length) {
+    const character = text[index]
+    if (character === ' ' || character === '\t') {
+      if (word !== null) words.push(word)
+      word = null
+      index += 1
+    } else if (character === "'") {
+      const read = readSingleQuoted(text, index + 1)
+      word = (word ?? '') + read.value
+      index = read.next
+    } else if (character === '"') {
+      const read = readDoubleQuoted(text, index + 1)
+      word = (word ?? '') + read.value
+      index = read.next
+    } else if (character === '\\') {
+      word = (word ?? '') + (text[index + 1] ?? '')
+      index += 2
+    } else if (SHELL_SPECIALS.has(character)) {
+      throw new Error(`unquoted shell character ${character}`)
+    } else {
+      word = (word ?? '') + character
+      index += 1
+    }
+  }
+  if (word !== null) words.push(word)
+  return words
+}
+
+function hasOption(command: string, option: string): boolean {
+  return command.split(/\s+/).includes(option)
+}
+
+const FORBIDDEN_IN_START = [
+  'restart',
+  'docker pull',
+  'docker create',
+  'docker run',
+  'docker rm',
+  'docker compose',
+  'docker-compose',
+  'rm -',
+  'curl',
+  'install.sh',
+]
+
+describe('PROVISIONING_COMMANDS', () => {
+  it('holds exactly the fixed command set', () => {
+    expect(Object.keys(PROVISIONING_COMMANDS).sort()).toEqual(
+      [
+        'probeSystem',
+        'privilegeCheck',
+        'inspectRuntime',
+        'startDockerAndBootloader',
+        'startBootloader',
+        'startRuntimeContainer',
+        'startNativeService',
+        'prepareInstaller',
+        'dockerPresent',
+      ].sort(),
+    )
+  })
+
+  it('runs only the system probe without elevation', () => {
+    const elevation = Object.fromEntries(fixedCommands.map(([name, command]) => [name, command.elevated]))
+
+    expect(elevation).toEqual({
+      probeSystem: false,
+      privilegeCheck: true,
+      inspectRuntime: true,
+      startDockerAndBootloader: true,
+      startBootloader: true,
+      startRuntimeContainer: true,
+      startNativeService: true,
+      prepareInstaller: true,
+      dockerPresent: true,
+    })
+  })
+
+  it('probes the system with uname, the systemd directory, dpkg, getconf and id, printing each key', () => {
+    const { command } = PROVISIONING_COMMANDS.probeSystem
+    for (const fragment of [
+      'uname -s',
+      '/run/systemd/system',
+      'dpkg --print-architecture',
+      'uname -m',
+      'getconf LONG_BIT',
+      'id -u',
+      'os=',
+      'systemd=',
+      'dpkg_arch=',
+      'machine=',
+      'long_bit=',
+      'uid=',
+    ]) {
+      expect(command).toContain(fragment)
+    }
+  })
+
+  it('checks privileges by running /bin/true only', () => {
+    expect(PROVISIONING_COMMANDS.privilegeCheck.command).toBe('/bin/true')
+  })
+
+  it('inspects Docker, both containers, the native unit and every v3 unit, falling back to Docker records', () => {
+    const { command } = PROVISIONING_COMMANDS.inspectRuntime
+    for (const fragment of [
+      'docker=',
+      'bootloader=',
+      'runtime_container=',
+      'native=',
+      'v3=',
+      'none',
+      'openplc-bootloader',
+      'openplc-runtime',
+      'openplc-runtime.service',
+      DOCKER_CONTAINER_RECORDS,
+      'config.v2.json',
+      ...V3_UNITS,
+    ]) {
+      expect(command).toContain(fragment)
+    }
+  })
+
+  it.each([
+    ['probeSystem', PROVISIONING_COMMANDS.probeSystem],
+    ['inspectRuntime', PROVISIONING_COMMANDS.inspectRuntime],
+    ['dockerPresent', PROVISIONING_COMMANDS.dockerPresent],
+  ])('keeps %s read-only', (_, { command }) => {
+    for (const fragment of ['systemctl start', 'docker start', ...FORBIDDEN_IN_START]) {
+      expect(command).not.toContain(fragment)
+    }
+  })
+
+  it('reports whether Docker is present', () => {
+    const { command } = PROVISIONING_COMMANDS.dockerPresent
+    expect(command).toContain('docker=yes')
+    expect(command).toContain('docker=no')
+  })
+
+  it('starts the Docker service, then the bootloader container', () => {
+    const { command } = PROVISIONING_COMMANDS.startDockerAndBootloader
+    const dockerService = command.indexOf('systemctl start docker')
+    const bootloader = command.indexOf('docker start openplc-bootloader')
+
+    expect(dockerService).toBeGreaterThanOrEqual(0)
+    expect(bootloader).toBeGreaterThan(dockerService)
+    expect(command).not.toContain('docker start openplc-runtime')
+  })
+
+  it('starts only the bootloader container', () => {
+    const { command } = PROVISIONING_COMMANDS.startBootloader
+    expect(command).toContain('docker start openplc-bootloader')
+    expect(command).not.toContain('systemctl')
+    expect(command).not.toContain('docker start openplc-runtime')
+  })
+
+  it('starts only the runtime container, never the bootloader', () => {
+    const { command } = PROVISIONING_COMMANDS.startRuntimeContainer
+    expect(command).toContain('docker start openplc-runtime')
+    expect(command).not.toContain('openplc-bootloader')
+    expect(command).not.toContain('systemctl')
+  })
+
+  it('starts only the native v4 service', () => {
+    const { command } = PROVISIONING_COMMANDS.startNativeService
+    expect(command).toContain('systemctl start openplc-runtime.service')
+    expect(command).not.toContain('docker')
+  })
+
+  it.each([
+    ['startDockerAndBootloader', PROVISIONING_COMMANDS.startDockerAndBootloader],
+    ['startBootloader', PROVISIONING_COMMANDS.startBootloader],
+    ['startRuntimeContainer', PROVISIONING_COMMANDS.startRuntimeContainer],
+    ['startNativeService', PROVISIONING_COMMANDS.startNativeService],
+  ])('%s never restarts, pulls, creates, removes or installs anything', (_, { command }) => {
+    for (const fragment of FORBIDDEN_IN_START) {
+      expect(command).not.toContain(fragment)
+    }
+  })
+})
+
+describe('prepareInstaller', () => {
+  const { command } = PROVISIONING_COMMANDS.prepareInstaller
+
+  it('creates a fresh private directory with mktemp -d and names no fixed temporary path', () => {
+    expect(command).toContain('mktemp -d')
+    expect(command).not.toContain('/tmp')
+  })
+
+  it('downloads with HTTPS restricted for the request and every redirect, into the new directory', () => {
+    expect(command).toContain(`curl --proto '=https' --proto-redir '=https' -fsSL ${INSTALLER_URL} -o `)
+    expect(command).toContain('/install.sh')
+  })
+
+  it('names no URL other than the installer URL', () => {
+    const urls = command.match(/[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s'"]*/g) ?? []
+
+    expect(urls.length).toBeGreaterThan(0)
+    expect(new Set(urls)).toEqual(new Set(['https://runtime.getedge.me']))
+    expect(command).not.toContain('raw.githubusercontent.com')
+  })
+
+  it('keeps certificate verification on', () => {
+    expect(command).not.toContain('--insecure')
+    expect(command.split(/\s+/).some((word) => /^-[A-Za-z]*k[A-Za-z]*$/.test(word))).toBe(false)
+  })
+
+  it('reports the directory and the download result', () => {
+    for (const fragment of ['dir=', 'download=ok', 'download=failed']) {
+      expect(command).toContain(fragment)
+    }
+  })
+})
+
+describe('startInstallerCommand', () => {
+  const started = startInstallerCommand(LOG_DIR)
+
+  it('runs the downloaded installer as administrator, with no argument', () => {
+    expect(started.elevated).toBe(true)
+    expect(started.command).toMatch(/bash\s+['"]?\/tmp\/tmp\.Xy7Qa9Zk2B\/install\.sh['"]?\s*(?:[<>&;|)'"]|2>|$)/)
+  })
+
+  it('detaches the installer so the command returns at once', () => {
+    expect(started.command).toMatch(/\b(?:setsid|nohup)\b/)
+  })
+
+  it('writes the installer output and exit status into the private directory', () => {
+    expect(started.command).toContain(`${LOG_DIR}/install.log`)
+    expect(started.command).toContain(`${LOG_DIR}/exit`)
+  })
+
+  it('downloads nothing', () => {
+    expect(started.command).not.toContain('curl')
+    expect(started.command).not.toContain('://')
+  })
+})
+
+describe('pollInstallerCommand', () => {
+  const polled = pollInstallerCommand(LOG_DIR, 1234, 65536)
+
+  it('reads as administrator from the private directory', () => {
+    expect(polled.elevated).toBe(true)
+    expect(polled.command).toContain(`${LOG_DIR}/install.log`)
+    expect(polled.command).toContain(`${LOG_DIR}/exit`)
+  })
+
+  it('prints the exit state, the size, the offset read and a separator', () => {
+    for (const fragment of ['exit=', 'running', 'size=', 'from=', '---']) {
+      expect(polled.command).toContain(fragment)
+    }
+  })
+
+  it('places the requested offset and byte count in the command', () => {
+    expect(polled.command).toContain('1234')
+    expect(polled.command).toContain('65536')
+    expect(pollInstallerCommand(LOG_DIR, 0, 4096).command).not.toBe(polled.command)
+  })
+
+  it('removes nothing', () => {
+    expect(polled.command).not.toContain('rm ')
+  })
+})
+
+describe('buildExec', () => {
+  it.each(allCommands)('runs %s unchanged for root, without sending the password', (_, command) => {
+    expect(buildExec(command, 'root')).toEqual({ command: command.command, sendsPassword: false })
+  })
+
+  it('runs a command that needs no elevation unchanged for a sudo account', () => {
+    const probe = PROVISIONING_COMMANDS.probeSystem
+
+    expect(buildExec(probe, 'sudo')).toEqual({ command: probe.command, sendsPassword: false })
+  })
+
+  const elevatedCommands = allCommands.filter(([, command]) => command.elevated)
+
+  it.each(elevatedCommands)('wraps %s in sudo by absolute path, reading the password from stdin', (_, command) => {
+    const exec = buildExec(command, 'sudo')
+
+    expect(exec.sendsPassword).toBe(true)
+    expect(exec.command.startsWith(SUDO_PREFIX)).toBe(true)
+  })
+
+  it.each(elevatedCommands)('quotes %s so the shell receives it whole, with stdin from /dev/null', (_, command) => {
+    expect(shellWords(buildExec(command, 'sudo').command)).toEqual([
+      '/usr/bin/sudo',
+      '-S',
+      '-k',
+      '-p',
+      '',
+      'sh',
+      '-c',
+      `${command.command} </dev/null`,
+    ])
+  })
+
+  it.each(allCommands)('never preserves the environment through sudo for %s', (_, command) => {
+    expect(hasOption(buildExec(command, 'sudo').command, '-E')).toBe(false)
+    expect(hasOption(buildExec(command, 'root').command, '-E')).toBe(false)
+  })
+
+  it.each(allCommands)('never places a username or password in the %s command line', (_, command) => {
+    for (const account of ['root', 'sudo'] as const) {
+      const line = buildExec(command, account).command
+      expect(line).not.toContain(HOSTILE_USERNAME)
+      expect(line).not.toContain(HOSTILE_PASSWORD)
+      expect(line).not.toContain('commissioner42')
+      expect(line).not.toContain('S3cr3t-Pi!')
+    }
+  })
+})
