@@ -148,15 +148,20 @@ in the same PR pair (editor + web).
 
 ## Electron e2e (Playwright)
 
-No CI workflow runs Playwright, so these are local checks. `e2e/` drives the real
-Electron app through `_electron.launch`, and three things bite before any assertion:
+`ci-e2e-debug-lock.yml` runs the `debug-*` specs on every pull request; every other
+spec is a local check. `e2e/` drives the real Electron app through `_electron.launch`,
+and three things bite before any assertion:
 
 ```bash
-npm run build                                          # main + renderer
+OPENPLC_E2E_DEBUG_SEAM=1 npm run build                 # main + renderer
 mkdir -p release/app/configs/dll
 cp release/app/dist/main/preload.js release/app/configs/dll/preload.js
 npx playwright test e2e/<spec>.ts --workers=1
 ```
+
+`OPENPLC_E2E_DEBUG_SEAM=1` installs `window.__OPENPLC_E2E_DEBUG_SESSION__`, which opens
+and closes a debug session with no PLC attached. Any other build drops the branch, and
+`electron-builder`'s `beforePack` hook refuses to package a renderer that carries it.
 
 - **The preload copy is required.** `main.ts` picks the preload with `app.isPackaged`,
   and a suite launching `release/app/dist/main/main.js` directly is NOT packaged, so it
@@ -425,7 +430,7 @@ It is inert in the editor (no orchestrator devices) and kept so the shared surfa
   the platform providers — `validate:arch` rejects it (openplc-web runs these shared tests without
   per-file isolation, where such a mock would leak).
 - **Coverage:** per-directory floors are in `jest.config.json` (`coverageThreshold`).
-- **End-to-end:** Playwright specs in `e2e/` drive the built Electron app through `_electron.launch`; run them as described in "Electron e2e (Playwright)" above. No CI workflow runs them.
+- **End-to-end:** Playwright specs in `e2e/` drive the built Electron app through `_electron.launch`; run them as described in "Electron e2e (Playwright)" above. CI runs the `debug-*` specs only.
 - **Manual:** the developer's manual test is required for every demand.
 
 ## Code Style

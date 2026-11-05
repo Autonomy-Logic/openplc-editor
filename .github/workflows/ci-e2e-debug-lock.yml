@@ -1,0 +1,60 @@
+name: CI - Debug Lock E2E
+
+on:
+  workflow_dispatch:
+  # Called from `ci.yml` on every pull request.
+  workflow_call:
+
+jobs:
+  debug-lock-e2e:
+    name: Debug Lock E2E (Electron)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # Same reason as the unit-test job: --ignore-scripts skips the
+      # postinstall that fetches strucpp, which the renderer imports.
+      - name: Install strucpp
+        run: npm run setup:strucpp
+
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('./package.json').devDependencies['@playwright/test'].replace(/^[^0-9]*/, '')")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build the renderer with the test-only debug seam
+        run: npm run build
+        env:
+          OPENPLC_E2E_DEBUG_SEAM: '1'
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Run the debug lock specs
+        run: xvfb-run --auto-servernum npx playwright test debug-
+        env:
+          NODE_ENV: production
+
+      - name: Upload the Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-editor
+          path: playwright-report/
+          retention-days: 7

@@ -203,6 +203,12 @@ void import('monaco-editor').then((monaco) => {
   bootStLsp(appStore, editorPorts, monaco)
 })
 
+if (process.env.OPENPLC_E2E_DEBUG_SEAM === '1') {
+  void import('./frontend/services/testing/debug-session-seam').then(({ installDebugSessionSeam }) => {
+    installDebugSessionSeam(appStore, window)
+  })
+}
+
 function AppContent() {
   const {
     project: {
