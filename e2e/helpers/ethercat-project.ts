@@ -33,6 +33,13 @@ export const CIA402_SDO_STATION = {
     'PROGRAM main\n  VAR\n    status AT %IW0 : UINT;\n    control AT %QW0 : UINT;\n  END_VAR\n\ncontrol := status;\n\nEND_PROGRAM\n',
 }
 
+/** A drive whose only CoE object is the KS100E DT60C2 layout, with no SDO defaults saved yet. */
+export const INTERPOLATION_DRIVE_STATION = {
+  bus: join('ethercat-defaultdata', 'ecat_bus.json'),
+  esiDir: 'ethercat-defaultdata',
+  program: 'PROGRAM main\n  VAR\n    status AT %IW0 : UINT;\n  END_VAR\n\nstatus := status;\n\nEND_PROGRAM\n',
+}
+
 export interface ProjectPaths {
   project: string
   userData: string
@@ -41,7 +48,7 @@ export interface ProjectPaths {
 export function writeEthercatProject(
   root: string,
   runtimeIpAddress: string,
-  station: { bus: string; program: string },
+  station: { bus: string; program: string; esiDir?: string },
 ): ProjectPaths {
   const project = join(root, 'project')
   const userData = join(root, 'userdata')
@@ -80,6 +87,16 @@ export function writeEthercatProject(
   writeFileSync(join(project, 'pous', 'programs', 'main.st'), station.program)
   const busFile = join(__dirname, '..', 'fixtures', station.bus)
   copyFileSync(busFile, join(project, 'devices', 'remote', basename(busFile)))
+
+  if (station.esiDir !== undefined) {
+    const source = join(__dirname, '..', 'fixtures', station.esiDir)
+    const target = join(project, 'devices', 'esi')
+    mkdirSync(target, { recursive: true })
+    for (const entry of readdirSync(source)) {
+      if (entry === basename(busFile)) continue
+      copyFileSync(join(source, entry), join(target, entry))
+    }
+  }
 
   const history = join(userData, 'User', 'History')
   mkdirSync(history, { recursive: true })
