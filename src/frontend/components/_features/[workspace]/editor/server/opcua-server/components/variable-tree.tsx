@@ -1,8 +1,7 @@
 import { ChevronDownIcon, ChevronRightIcon } from '@radix-ui/react-icons'
 import { cn } from '@root/frontend/utils/cn'
+import type { VariableTreeNode } from '@root/frontend/utils/opcua/types'
 import { useCallback, useState } from 'react'
-
-import type { VariableTreeNode } from '../hooks/use-project-variables'
 
 interface VariableTreeProps {
   nodes: VariableTreeNode[]

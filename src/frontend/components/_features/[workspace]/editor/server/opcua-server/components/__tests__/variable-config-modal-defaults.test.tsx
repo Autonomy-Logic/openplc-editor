@@ -1,7 +1,7 @@
 import { buildDefaultNodeConfig } from '@root/frontend/utils/opcua/node-defaults'
 import type { VariableTreeNode } from '@root/frontend/utils/opcua/types'
 import type { OpcUaNodeConfig } from '@root/middleware/shared/ports/types'
-import { describe, expect, it, jest } from '@jest/globals'
+import { describe, expect, it } from '@jest/globals'
 import { fireEvent, render, screen } from '@testing-library/react'
 
 import { VariableConfigModal } from '../variable-config-modal'
@@ -16,12 +16,12 @@ const node = (over: Partial<VariableTreeNode> & { id: string; name: string }): V
 })
 
 function saveWithoutTouching(variable: VariableTreeNode, existingNodeIds: string[] = []): OpcUaNodeConfig {
-  const onSave = jest.fn<(config: OpcUaNodeConfig) => void>()
+  const saved: OpcUaNodeConfig[] = []
   render(
     <VariableConfigModal
       isOpen
       onClose={() => undefined}
-      onSave={onSave}
+      onSave={(config) => saved.push(config)}
       variable={variable}
       existingNodeIds={existingNodeIds}
     />,
@@ -29,8 +29,8 @@ function saveWithoutTouching(variable: VariableTreeNode, existingNodeIds: string
 
   fireEvent.click(screen.getByRole('button', { name: 'Add to Address Space' }))
 
-  expect(onSave).toHaveBeenCalledTimes(1)
-  return onSave.mock.calls[0][0]
+  expect(saved).toHaveLength(1)
+  return saved[0]
 }
 
 /**
