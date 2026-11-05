@@ -13,13 +13,15 @@ function renderBoundary(store: ReturnType<typeof createTestStore>) {
   )
 }
 
+const addButton = () => screen.getByRole<HTMLButtonElement>('button', { name: 'Add' })
+
 describe('EditingLockBoundary', () => {
   it('should render its children untouched while no debug session is open', () => {
     const store = createTestStore()
 
     renderBoundary(store)
 
-    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled()
+    expect(addButton().matches(':disabled')).toBe(false)
   })
 
   it('should not mark itself locked while no debug session is open', () => {
@@ -38,7 +40,7 @@ describe('EditingLockBoundary', () => {
       store.getState().workspaceActions.setDebuggerVisible(true)
     })
 
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(addButton().matches(':disabled')).toBe(true)
   })
 
   it('should mark itself locked once a debug session opens', () => {
@@ -88,7 +90,7 @@ describe('EditingLockBoundary', () => {
       store.getState().workspaceActions.clearDebugState()
     })
 
-    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled()
+    expect(addButton().matches(':disabled')).toBe(false)
     expect(container.querySelector('[data-editing-locked="true"]')).toBeNull()
   })
 })

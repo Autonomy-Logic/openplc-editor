@@ -29,8 +29,14 @@ const EXPECTED: Record<EditorModel['type'], EditorLockPolicy> = {
   'plc-ethercat-module': 'self-locked',
 }
 
+const isEditorType = (value: string): value is EditorModel['type'] => value in EXPECTED
+
+const CASES = Object.keys(EXPECTED)
+  .filter(isEditorType)
+  .map((type) => ({ type, policy: EXPECTED[type] }))
+
 describe('editorLockPolicy', () => {
-  it.each(Object.entries(EXPECTED))('should classify %s as %s', (type, policy) => {
+  it.each(CASES)('should classify $type as $policy', ({ type, policy }) => {
     expect(editorLockPolicy(type)).toBe(policy)
   })
 
@@ -39,9 +45,7 @@ describe('editorLockPolicy', () => {
   })
 
   it('should never answer outside the three policies', () => {
-    const answers = new Set(Object.keys(EXPECTED).map((type) => editorLockPolicy(type)))
-
-    expect([...answers].sort()).toEqual(['host-locked', 'read-only', 'self-locked'])
+    expect([...new Set(Object.values(EXPECTED))].sort()).toEqual(['host-locked', 'read-only', 'self-locked'])
   })
 
   it('should keep every editor that owns a sub-tab, a view toggle or a debug action self-locked', () => {
