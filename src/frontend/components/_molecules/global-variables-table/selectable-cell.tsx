@@ -434,7 +434,11 @@ const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }
   }, [initialValue])
 
   return (
-    <button className='flex h-full w-full cursor-pointer items-center justify-center' onClick={onClick}>
+    <button
+      aria-label='Toggle debug for this variable'
+      className='flex h-full w-full cursor-pointer items-center justify-center'
+      onClick={onClick}
+    >
       <DebuggerIcon variant={cellValue ? 'default' : 'muted'} />
     </button>
   )
