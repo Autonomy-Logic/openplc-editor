@@ -76,11 +76,18 @@ export interface CreateUserParams {
   role?: RuntimeUserRole
 }
 
+export type RuntimeConnectFailureKind = 'refused' | 'timeout' | 'host-unreachable' | 'network-unreachable' | 'other'
+
 export interface UsersInfoResult {
   hasUsers: boolean
   runtimeVersion?: string
   error?: string
+  failure?: RuntimeConnectFailureKind
 }
+
+export type UsersInfoRawFacts =
+  | { kind: 'response'; statusCode: number; body: string; runtimeVersion?: string }
+  | { kind: 'error'; code?: string; message: string; timedOut: boolean }
 
 /**
  * Result of a {@link RuntimePort.getRuntimeCapabilities} call.
@@ -324,8 +331,12 @@ export type RuntimeDeviceInfo = {
   dockerVersion?: string
 }
 
+export interface BootloaderCapabilitiesOptions {
+  timeoutMs?: number
+}
+
 export interface BootloaderPort {
-  getCapabilities(): Promise<BootloaderApiResult<BootloaderCapabilities>>
+  getCapabilities(options?: BootloaderCapabilitiesOptions): Promise<BootloaderApiResult<BootloaderCapabilities>>
   login(username: string, password: string): Promise<BootloaderApiResult<{ role?: string }>>
   getStatus(): Promise<BootloaderApiResult<BootloaderStatus>>
   /** Host facts for the Runtime Status header. Authenticated, like status. */

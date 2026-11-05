@@ -218,6 +218,7 @@ The codebase uses **dependency inversion** via port interfaces. Frontend code ne
 |------|---------------|
 | `CompilerPort` | PLC compilation pipeline |
 | `RuntimePort` | Remote PLC runtime control (login, start/stop, status) |
+| `RuntimeProvisioningPort` | Install or start the OpenPLC Runtime on a device over SSH (desktop only; absent on web) |
 | `DebuggerPort` | Debug protocol (read/write variables, MD5 verification) |
 | `SimulatorPort` | Built-in AVR simulator |
 | `ProjectPort` | Project CRUD operations |

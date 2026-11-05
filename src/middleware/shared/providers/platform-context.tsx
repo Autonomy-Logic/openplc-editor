@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useContext } from 'react'
 
+import type { RuntimeProvisioningPort } from '../ports/runtime-provisioning-port'
 import type { PlatformPorts } from './types'
 
 /**
@@ -143,6 +144,10 @@ export function useEditSession() {
 
 export function useAppUpdate() {
   return usePlatform().appUpdate
+}
+
+export function useRuntimeProvisioning(): RuntimeProvisioningPort | undefined {
+  return usePlatform().runtimeProvisioning
 }
 
 export function useLibrary() {
