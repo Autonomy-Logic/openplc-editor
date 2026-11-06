@@ -6,8 +6,17 @@ let store: OpenPLCStore
 
 const openDebugSession = () => store.getState().workspaceActions.setDebuggerVisible(true)
 
+// `read_ladder_diagram` only answers for a Ladder POU and `read_pou_body` needs a
+// transpiler for one, so the fixture carries both a Ladder and a textual POU.
 const seedProject = () => {
-  expect(store.getState().pouActions.create({ type: 'program', name: 'main', language: 'st' }).ok).toBe(true)
+  expect(store.getState().pouActions.create({ type: 'program', name: 'main', language: 'ld' }).ok).toBe(true)
+  expect(store.getState().pouActions.create({ type: 'program', name: 'logic', language: 'st' }).ok).toBe(true)
+}
+
+const readInputFor = (tool: ToolName): unknown => {
+  if (tool === 'read_pou_body') return { name: 'logic' }
+  if (tool === 'read_ladder_diagram') return { pouName: 'main' }
+  return {}
 }
 
 const WRITE_TOOLS: ToolName[] = [
@@ -94,7 +103,7 @@ describe('AI tools during a debug session (TC13, TC14)', () => {
   it.each(READ_TOOLS)('should still answer the read tool %s while the debugger is open', async (tool) => {
     openDebugSession()
 
-    const result = await executeTool(store, tool, { name: 'main', pouName: 'main' })
+    const result = await executeTool(store, tool, readInputFor(tool))
 
     expect(result.success).toBe(true)
   })
