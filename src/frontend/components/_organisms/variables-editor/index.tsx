@@ -551,6 +551,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
   const handleDescriptionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     event.preventDefault()
     event.stopPropagation()
+    if (isEditingLocked) return
     // This runs on blur: leaving the field without typing is not an edit.
     if (event.target.value === (pou?.documentation ?? '')) return
     updatePouDocumentation(editor.meta.name, event.target.value)
@@ -560,6 +561,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
   const handleDescriptionValueChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     event.preventDefault()
     event.stopPropagation()
+    if (isEditingLocked) return
     setPouDescription(event.target.value)
   }
 
@@ -1172,7 +1174,8 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
                   onBlur={handleDescriptionChange}
                   value={pouDescription}
                   onChange={handleDescriptionValueChange}
-                  className='h-full w-full rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
+                  disabled={isEditingLocked}
+                  className='h-full w-full rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-850 dark:text-neutral-300'
                 />
               </div>
 
