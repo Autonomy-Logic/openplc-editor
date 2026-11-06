@@ -18,6 +18,8 @@ import {
   RuntimeCreateUserModal,
   RuntimeDiscoverDevicesModal,
   RuntimeLoginModal,
+  RuntimeNoDeviceModal,
+  RuntimeProvisioningDialog,
 } from '../_organisms/modals'
 import { ConfirmDeleteProjectModal } from '../_organisms/modals/confirm-delete-project-modal'
 import { ConfirmDeviceSwitchModal } from '../_organisms/modals/confirm-device-switch-modal'
@@ -198,6 +200,8 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
           {modals?.['runtime-login']?.open === true && <RuntimeLoginModal />}
           {modals?.['runtime-create-user']?.open === true && <RuntimeCreateUserModal />}
           {modals?.['runtime-discover-devices']?.open === true && <RuntimeDiscoverDevicesModal />}
+          <RuntimeNoDeviceModal />
+          <RuntimeProvisioningDialog />
           {modals?.['retrieve-project']?.open === true && <RetrieveProjectModal />}
           {modals?.['export-pdf']?.open === true && <ExportPdfModal />}
           {modals?.['page-setup']?.open === true && <PageSetupModal />}
