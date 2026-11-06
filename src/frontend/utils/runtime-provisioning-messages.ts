@@ -44,6 +44,9 @@ export const WHAT_WILL_BE_DONE: { ifInstalled: string; install: readonly string[
 
 const NOTHING_CHANGED = 'Nothing was changed on the device.'
 
+const HOST_KEY_FILE_LOCATION =
+  "ssh-known-hosts.json in the editor's user data folder, the folder that also holds the editor's logs folder"
+
 const FIELD_RULES: Record<RunRequestField | 'payload', string> = {
   host: 'The device address was refused: it must be an IP address or a host name of at most 253 characters.',
   port: 'The SSH port was refused: it must be a whole number from 1 to 65535.',
@@ -152,7 +155,7 @@ function deviceMessage(key: DeviceMessageKey, facts: ProvisioningMessageFacts): 
     case 'debugger-request-ended':
       return {
         title: 'Debugger not started',
-        body: `The debugger was not started because the OpenPLC Runtime is being installed or started on ${host}. Start the debugger again once the editor is connected.`,
+        body: `The debugger was not started because the editor is not connected to the OpenPLC Runtime on ${host}. The dialog shown explains what to do. Start the debugger again once the editor is connected.`,
       }
   }
 }
@@ -186,12 +189,12 @@ function outcomeMessage(key: RuntimeProvisioningOutcome['kind'], facts: Provisio
     case 'host-key-changed':
       return {
         title: 'Host key changed',
-        body: `The SSH host key of ${facts.target ?? host} changed since the editor saved it. Nothing was sent to the device. Clearing the saved key is manual: follow docs/runtime-ssh-provisioning.md.`,
+        body: `The SSH host key of ${facts.target ?? host} changed since the editor saved it. Nothing was sent to the device. Clearing the saved key is manual: remove its entry from ${HOST_KEY_FILE_LOCATION}.`,
       }
     case 'host-key-file-unusable':
       return {
         title: 'Host key file unusable',
-        body: 'The file of saved SSH host keys could not be read or is invalid. The operation stopped.',
+        body: `The file of saved SSH host keys, ${HOST_KEY_FILE_LOCATION}, could not be read or is invalid. The operation stopped.`,
       }
     case 'host-key-not-saved':
       return {

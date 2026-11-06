@@ -38,7 +38,9 @@ to log in to the device over SSH and install or start the runtime there.
      `systemctl start openplc-runtime.service`;
    - install: the official installer is downloaded from `https://runtime.getedge.me` over HTTPS only,
      into a fresh `mktemp -d` folder, and run detached with `setsid`, so it keeps running when the SSH
-     session ends. The editor reads its log once a second and shows the lines;
+     session ends. The editor reads its log once a second and shows the lines. It stops following and
+     reports the result as unknown when the installer log stays empty for 60 reads in a row, or when the
+     installer is still running 60 minutes after it started;
    - a runtime already running: nothing is changed.
 9. The editor then waits for the runtime to answer on TCP 8443, checking every 2 s for at most 120 s. When
    it answers, the dialog closes and the usual connect continues: the login dialog, or "Create First
@@ -46,12 +48,24 @@ to log in to the device over SSH and install or start the runtime there.
 
 While an operation runs, its dialog can be hidden. The Connect button then shows the operation in
 progress ("Installing runtime...", "Starting runtime..." or "Preparing runtime...") and a click reopens
-the dialog; a second operation cannot start. When the dialog was hidden at the end of the operation, the
-Connect button reads "Show result" until the dialog is opened and closed, unless the editor is connected.
+the dialog; a second operation cannot start. When the dialog was hidden at the end of an operation that
+did not succeed, the Connect button reads "Show result" until the dialog is opened and closed, unless the
+editor is connected. A successful ending never shows "Show result": the button follows the connection
+status.
 
 Answering "Yes" to the debugger's "Not Connected" offer runs the same flow. When the connect turns to this
-flow (steps 3 to 5) or reopens a running operation, the debugger request ends with one console line ("The debugger was not
-started because ...") and no dialog; start the debugger again once the editor is connected.
+flow (steps 3 to 5) or reopens a running operation, the debugger request ends with one console line ("The
+debugger was not started because the editor is not connected to the OpenPLC Runtime on ... The dialog shown
+explains what to do. Start the debugger again once the editor is connected.") and no debugger dialog.
+
+Closing the project or quitting the editor during an operation:
+
+- Closing the project declines an open offer.
+- Closing the project before the installer starts or the start command is sent ends the operation
+  "cancelled"; after that, the operation keeps running on the device and the editor reports its result as
+  unknown. The editor does not reconnect, and no event of the operation reaches the editor after the close.
+- Quitting stops following the operation only once the quit is committed (a quit cancelled at the save
+  prompt leaves it running), and nothing about it is shown after a restart.
 
 The feature exists only in the desktop editor. It is inactive in openplc-web because the web platform
 has no provisioning port (`runtimeProvisioning` is absent from its platform ports), so a failed connect
@@ -87,10 +101,13 @@ The offer dialog lists what will be done on the device:
 - The password is scrubbed from every line of device output before it is shown, sent to the renderer or
   logged.
 - A non-root account runs each administrative command as
-  `/usr/bin/sudo -S -k -p '' sh -c '<command> </dev/null'`, with the password written to the command's
-  standard input. `-k` ignores any cached sudo credentials and `-p ''` prints no prompt. The password
+  `/usr/bin/sudo -S -k -p '' sh -c 'exec </dev/null; <command>'`, with the password written to sudo's
+  standard input. `-k` ignores any cached sudo credentials and `-p ''` prints no prompt. The whole command
+  then reads its standard input from `/dev/null`, so no part of it can read the password. The password
   never appears on a command line.
-- The root account (uid 0) runs the commands directly, without sudo.
+- The root account (uid 0) runs the commands directly, without sudo. Root commands, and the commands
+  that need no administrator rights, also run with standard input from `/dev/null`
+  (`exec </dev/null; <command>`).
 - Only password login is used. A device that does not offer password authentication over SSH stops the
   operation with "Password login not accepted".
 

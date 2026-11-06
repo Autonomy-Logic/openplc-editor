@@ -2,7 +2,9 @@ import { INSTALLER_DOWNLOAD_FAILURE_MARKERS } from './runtime-names'
 
 const SAFE_DIR = /^\/[A-Za-z0-9._/-]{1,255}$/
 const POLL_HEADER =
-  /^exit=(running|[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\nsize=(0|[1-9][0-9]{0,14})\nfrom=(0|[1-9][0-9]{0,14})\n---\n/
+  /^exit=(running|[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\nsize=(0|[1-9][0-9]{0,14})\nfrom=(0|[1-9][0-9]{0,14})\n---\n$/
+const POLL_HEADER_LINES = 4
+const NEWLINE_BYTE = 0x0a
 
 export function isSafeInstallerDir(path: string): boolean {
   return SAFE_DIR.test(path) && !path.split('/').includes('..')
@@ -28,14 +30,26 @@ export function parsePrepareInstaller(
   return ready ? { kind: 'ready', dir: dirs[0] } : { kind: 'invalid' }
 }
 
+function pollHeaderLength(stdout: Uint8Array): number | null {
+  let newlines = 0
+  for (let index = 0; index < stdout.length; index += 1) {
+    if (stdout[index] !== NEWLINE_BYTE) continue
+    newlines += 1
+    if (newlines === POLL_HEADER_LINES) return index + 1
+  }
+  return null
+}
+
 export function parseInstallerPoll(
-  stdout: string,
-): { exit: number | 'running'; size: number; from: number; text: string } | null {
-  const header = POLL_HEADER.exec(stdout)
+  stdout: Uint8Array,
+): { exit: number | 'running'; size: number; from: number; body: Uint8Array } | null {
+  const headerLength = pollHeaderLength(stdout)
+  if (headerLength === null) return null
+  const header = POLL_HEADER.exec(new TextDecoder().decode(stdout.subarray(0, headerLength)))
   if (header === null) return null
-  const [matched, exitText, sizeText, fromText] = header
+  const [, exitText, sizeText, fromText] = header
   const exit = exitText === 'running' ? 'running' : Number(exitText)
-  return { exit, size: Number(sizeText), from: Number(fromText), text: stdout.slice(matched.length) }
+  return { exit, size: Number(sizeText), from: Number(fromText), body: stdout.slice(headerLength) }
 }
 
 function containsInOrder(line: string, fragments: readonly string[]): boolean {

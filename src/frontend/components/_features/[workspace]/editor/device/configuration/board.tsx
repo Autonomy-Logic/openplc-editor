@@ -54,7 +54,12 @@ function runtimeProvisioningActivity(
     const label = view.operation === null ? PREPARING_RUNTIME_LABEL : RUNNING_OPERATION_LABELS[view.operation]
     return { label, onClick: reopenDialog }
   }
-  if (view.stage === 'ended' && !view.acknowledged && connectionStatus !== 'connected') {
+  const showsResult =
+    view.stage === 'ended' &&
+    view.outcome.kind !== 'connected-ready' &&
+    !view.acknowledged &&
+    connectionStatus !== 'connected'
+  if (showsResult) {
     return { label: SHOW_RESULT_LABEL, onClick: reopenDialog }
   }
   return undefined

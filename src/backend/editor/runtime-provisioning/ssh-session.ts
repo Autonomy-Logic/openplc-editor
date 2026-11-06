@@ -69,9 +69,11 @@ function runOnChannel(
     exitCode = typeof code === 'number' ? code : null
   })
   channel.on('close', () => {
+    const stdout = Buffer.concat(output.stdout)
     resolve({
       exitCode,
-      stdout: Buffer.concat(output.stdout).toString('utf8'),
+      stdout: stdout.toString('utf8'),
+      stdoutBytes: new Uint8Array(stdout),
       stderr: Buffer.concat(output.stderr).toString('utf8'),
       truncated: output.truncated,
     })

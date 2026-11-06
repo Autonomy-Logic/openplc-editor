@@ -1,3 +1,4 @@
+import { isSafeInstallerDir } from './installer'
 import {
   BOOTLOADER_CONTAINER,
   DOCKER_CONTAINER_RECORDS,
@@ -89,12 +90,22 @@ export const PROVISIONING_COMMANDS: {
   dockerPresent: { command: DOCKER_PRESENT, elevated: true },
 }
 
+function assertSafeInstallerDir(dir: string): void {
+  if (!isSafeInstallerDir(dir)) throw new Error('The installer directory is not a safe absolute path')
+}
+
 export function startInstallerCommand(dir: string): DeviceCommand {
+  assertSafeInstallerDir(dir)
   const job = `bash ${dir}/install.sh >${dir}/install.log 2>&1; echo $? >${dir}/exit.tmp && mv ${dir}/exit.tmp ${dir}/exit`
   return { command: `setsid sh -c '${job}' </dev/null >/dev/null 2>&1 &`, elevated: true }
 }
 
 export function pollInstallerCommand(dir: string, offset: number, maxBytes: number): DeviceCommand {
+  assertSafeInstallerDir(dir)
+  if (!Number.isSafeInteger(offset) || offset < 0)
+    throw new Error('The installer log offset is not a non-negative integer')
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0)
+    throw new Error('The installer log read size is not a positive integer')
   const command = [
     `if [ -f ${dir}/exit ]; then e=$(cat ${dir}/exit); else e=running; fi`,
     `s=$(wc -c <${dir}/install.log 2>/dev/null) || s=0`,
@@ -107,14 +118,17 @@ export function pollInstallerCommand(dir: string, offset: number, maxBytes: numb
   return { command, elevated: true }
 }
 
+const STDIN_FROM_DEV_NULL = 'exec </dev/null; '
+
 function singleQuoted(text: string): string {
   return `'${text.split("'").join("'\\''")}'`
 }
 
 export function buildExec(cmd: DeviceCommand, account: Account): { command: string; sendsPassword: boolean } {
-  if (!cmd.elevated || account === 'root') return { command: cmd.command, sendsPassword: false }
+  const command = `${STDIN_FROM_DEV_NULL}${cmd.command}`
+  if (!cmd.elevated || account === 'root') return { command, sendsPassword: false }
   return {
-    command: `${SUDO_PATH} -S -k -p '' sh -c ${singleQuoted(`${cmd.command} </dev/null`)}`,
+    command: `${SUDO_PATH} -S -k -p '' sh -c ${singleQuoted(command)}`,
     sendsPassword: true,
   }
 }

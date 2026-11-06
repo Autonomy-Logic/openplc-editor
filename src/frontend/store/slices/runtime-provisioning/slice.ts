@@ -131,6 +131,10 @@ const createRuntimeProvisioningSlice: StateCreator<RuntimeProvisioningSlice, [],
       setState(
         produce(({ runtimeProvisioning }: RuntimeProvisioningSlice) => {
           if (runtimeProvisioning.view.stage === 'running') runtimeProvisioning.detachRequested = true
+          if (runtimeProvisioning.view.stage === 'offer') {
+            runtimeProvisioning.view = { stage: 'idle' }
+            runtimeProvisioning.dialogVisible = false
+          }
         }),
       )
     },

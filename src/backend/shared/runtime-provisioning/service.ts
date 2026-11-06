@@ -47,6 +47,10 @@ export const RUNTIME_WAIT_MS = 120_000
 
 export const RUNTIME_WAIT_INTERVAL_MS = 2_000
 
+export const INSTALLER_START_POLL_LIMIT = 60
+
+export const INSTALLER_FOLLOW_MAX_MS = 3_600_000
+
 const EXEC_MAX_OUTPUT_BYTES = 2 * POLL_READ_BYTES
 
 export interface RuntimeProvisioningServiceState {
@@ -138,7 +142,12 @@ function openFailureOutcome(failure: OpenFailure | null, target: string): Runtim
   }
 }
 
+function stopped(context: RunContext): boolean {
+  return context.outcome !== null || context.cancelRequested
+}
+
 function chooseAuth(context: RunContext, methodsLeft: string[] | null): SshAuthChoice {
+  if (stopped(context)) return 'stop'
   if (methodsLeft === null) return 'none'
   if (context.passwordTried) {
     context.openFailure = 'rejected'
@@ -153,7 +162,7 @@ function chooseAuth(context: RunContext, methodsLeft: string[] | null): SshAuthC
 }
 
 function checkpoint(context: RunContext): void {
-  if (context.outcome !== null || context.cancelRequested) throw new Error('Runtime provisioning stopped')
+  if (stopped(context)) throw new Error('Runtime provisioning stopped')
 }
 
 function release(context: RunContext): void {
@@ -243,6 +252,7 @@ export function createRuntimeProvisioningService(
   }
 
   async function verifyHostKey(context: RunContext, state: HostKeyFileState, keyBase64: string): Promise<boolean> {
+    if (stopped(context)) return false
     const nowIso = new Date(mechanisms.clock.now()).toISOString()
     const decision = decideHostKey(state, { host: context.host, port: context.port }, keyBase64, nowIso)
     if (decision.kind === 'match') return true
@@ -252,7 +262,7 @@ export function createRuntimeProvisioningService(
     }
     try {
       await mechanisms.hostKeyFile.replace(decision.nextFileText)
-      return true
+      return !stopped(context)
     } catch {
       context.openFailure = 'not-saved'
       return false
@@ -315,15 +325,28 @@ export function createRuntimeProvisioningService(
         for (const message of consoleBound.accept(line)) emit({ type: 'console', level: 'info', message })
       }
     }
+    const followStartedAt = mechanisms.clock.now()
+    let decoder = new TextDecoder()
+    let logStarted = false
+    let emptyPolls = 0
     let offset = 0
     for (;;) {
       await sleep(context, INSTALLER_POLL_INTERVAL_MS)
       const result = await exec(context, session, pollInstallerCommand(dir, offset, POLL_READ_BYTES))
-      const poll = parseInstallerPoll(result.stdout)
+      const poll = parseInstallerPoll(result.stdoutBytes)
       if (poll === null) return { kind: 'unknown' }
-      publish(pipeline.push(poll.text, { startsMidLine: poll.from > offset }))
+      const skipped = poll.from > offset
+      if (skipped) decoder = new TextDecoder()
+      publish(pipeline.push(decoder.decode(poll.body, { stream: true }), { startsMidLine: skipped }))
       offset = Math.max(poll.from, poll.size)
-      if (poll.exit !== 'running') {
+      if (poll.exit === 'running') {
+        if (poll.size > 0) logStarted = true
+        else if (!logStarted) emptyPolls += 1
+        const neverStarted = emptyPolls >= INSTALLER_START_POLL_LIMIT
+        if (neverStarted || mechanisms.clock.now() - followStartedAt >= INSTALLER_FOLLOW_MAX_MS)
+          return { kind: 'unknown' }
+      } else {
+        publish(pipeline.push(decoder.decode(), { startsMidLine: false }))
         publish(pipeline.end())
         const verdict = classifyInstallerExit(poll.exit, tail.lines())
         if (verdict === 'ok') return waitForRuntime(context, 'install', tail.lines())

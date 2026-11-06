@@ -29,10 +29,19 @@ export function createLinePipeline(password: string): {
   push(chunk: string, options: { startsMidLine: boolean }): string[]
   end(): string[]
 } {
+  const holdLimit = LINE_CHAR_LIMIT + password.length
   let held = ''
   let discarding = false
   const finish = (line: string): string =>
     truncateLine(scrubPassword(line.endsWith('\r') ? line.slice(0, -1) : line, password))
+  const capHeld = (): string[] => {
+    if (held.length <= holdLimit) return []
+    const scrubbed = scrubPassword(held, password)
+    const kept = scrubbed.slice(0, Math.max(scrubbed.length - Math.max(password.length - 1, 0), 0))
+    held = ''
+    discarding = true
+    return [`${kept.slice(0, LINE_CHAR_LIMIT)}${LINE_TRUNCATION_MARKER}`]
+  }
   return {
     push(chunk, { startsMidLine }) {
       if (startsMidLine) {
@@ -41,14 +50,15 @@ export function createLinePipeline(password: string): {
       }
       const firstNewline = chunk.indexOf('\n')
       if (firstNewline < 0) {
-        if (!discarding) held += chunk
-        return []
+        if (discarding) return []
+        held += chunk
+        return capHeld()
       }
       const parts = chunk.split('\n')
       const first = discarding ? [] : [held + parts[0]]
       discarding = false
       held = parts[parts.length - 1]
-      return [...first, ...parts.slice(1, -1)].map(finish)
+      return [...[...first, ...parts.slice(1, -1)].map(finish), ...capHeld()]
     },
     end() {
       const last = discarding || held === '' ? [] : [finish(held)]

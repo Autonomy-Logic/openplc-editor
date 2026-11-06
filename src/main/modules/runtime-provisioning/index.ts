@@ -41,7 +41,7 @@ export interface ProvisioningIpcMain {
 }
 
 export interface ProvisioningApp {
-  on(event: 'before-quit', listener: () => void): unknown
+  on(event: 'will-quit', listener: () => void): unknown
 }
 
 function watchRenderer(renderer: ProvisioningRenderer, onGone: () => void): () => void {
@@ -109,5 +109,5 @@ export function registerRuntimeProvisioning({
 
   ipcMain.handle(CANCEL_CHANNEL, () => service.cancel())
 
-  app.on('before-quit', () => service.detach('quit'))
+  app.on('will-quit', () => service.detach('quit'))
 }

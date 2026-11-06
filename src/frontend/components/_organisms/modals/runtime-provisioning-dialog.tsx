@@ -132,7 +132,15 @@ function dismissDialog(store: OpenPLCStore): void {
   else if (view.stage === 'ended') runtimeProvisioningActions.acknowledgeEnding()
 }
 
-const MessageText = ({ message, tone = 'neutral' }: { message: ProvisioningMessage; tone?: 'neutral' | 'alert' }) => {
+const MessageText = ({
+  message,
+  tone = 'neutral',
+  withTitle = true,
+}: {
+  message: ProvisioningMessage
+  tone?: 'neutral' | 'alert'
+  withTitle?: boolean
+}) => {
   const paragraphs = message.body.split('\n').filter((line) => line.trim() !== '')
   return (
     <div
@@ -142,7 +150,7 @@ const MessageText = ({ message, tone = 'neutral' }: { message: ProvisioningMessa
           : 'flex flex-col gap-1 text-sm text-neutral-700 dark:text-neutral-300'
       }
     >
-      <p className='font-semibold'>{message.title}</p>
+      {withTitle && <p className='font-semibold'>{message.title}</p>}
       {paragraphs.map((paragraph, index) => (
         <p key={index}>{paragraph}</p>
       ))}
@@ -333,7 +341,7 @@ const EndedStage = ({ view, onClose }: { view: EndedView; onClose: () => void })
   return (
     <>
       <ModalTitle className='text-xl font-semibold'>{title}</ModalTitle>
-      <MessageText message={{ title, body }} />
+      <MessageText message={{ title, body }} withTitle={false} />
       {lastLines.length > 0 && (
         <pre
           data-testid='runtime-provisioning-last-lines'

@@ -22,6 +22,7 @@ export interface SshSessionOpenRequest {
 export interface SshExecResult {
   exitCode: number | null
   stdout: string
+  stdoutBytes: Uint8Array
   stderr: string
   truncated: boolean
 }

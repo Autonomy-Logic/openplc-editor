@@ -364,10 +364,21 @@ export class RuntimeApiClient {
           resolve({ statusCode: res.statusCode ?? 0, data, headers: res.headers })
         })
       })
-      req.setTimeout(options.timeoutMs ?? this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+      const timeoutMs = options.timeoutMs ?? this.RUNTIME_CONNECTION_TIMEOUT_MS
+      const onTimeout = () => {
         req.destroy()
         reject(new RuntimeConnectionTimeoutError())
+      }
+      const handshakeTimer = setTimeout(onTimeout, timeoutMs)
+      req.on('socket', (socket) => {
+        if (req.reusedSocket) {
+          clearTimeout(handshakeTimer)
+          return
+        }
+        socket.once('secureConnect', () => clearTimeout(handshakeTimer))
       })
+      req.on('close', () => clearTimeout(handshakeTimer))
+      req.setTimeout(timeoutMs, onTimeout)
       req.on('error', (error: Error) => {
         reject(error)
       })

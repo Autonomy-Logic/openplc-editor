@@ -28,11 +28,25 @@ function followEvent(store: OpenPLCStore, event: RuntimeProvisioningEvent): void
   }
 }
 
-function detachOnProjectClose(store: OpenPLCStore, provisioning: RuntimeProvisioningPort): () => void {
+function forwardEvents(store: OpenPLCStore, provisioning: RuntimeProvisioningPort): () => void {
+  let unsubscribe: (() => void) | null = provisioning.onEvent((event) => followEvent(store, event))
+  return () => {
+    const stop = unsubscribe
+    unsubscribe = null
+    stop?.()
+  }
+}
+
+function detachOnProjectClose(
+  store: OpenPLCStore,
+  provisioning: RuntimeProvisioningPort,
+  stopEvents: () => void,
+): () => void {
   return store.subscribe(
     (state) => state.runtimeProvisioning.detachRequested,
     (requested) => {
       if (!requested) return
+      stopEvents()
       store.getState().runtimeProvisioningActions.clearDetachRequest()
       void provisioning.cancel()
     },
@@ -44,8 +58,8 @@ async function runFollowed(
   provisioning: RuntimeProvisioningPort,
   request: RuntimeProvisioningRunRequest,
 ): Promise<RuntimeProvisioningOutcome> {
-  const stopEvents = provisioning.onEvent((event) => followEvent(store, event))
-  const stopDetach = detachOnProjectClose(store, provisioning)
+  const stopEvents = forwardEvents(store, provisioning)
+  const stopDetach = detachOnProjectClose(store, provisioning, stopEvents)
   try {
     return await provisioning.run(request)
   } catch {
