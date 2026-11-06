@@ -32,6 +32,7 @@ import { VENDOR_DOCUMENT_SCHEME } from '../middleware/shared/vendor-document/doc
 import MenuBuilder from './menu'
 import MainProcessBridge from './modules/ipc/main'
 import { createQuitCoordinator } from './modules/lifecycle/quit-coordinator'
+import { createDesktopRuntimeProvisioningService, registerRuntimeProvisioning } from './modules/runtime-provisioning'
 import { store } from './modules/store'
 import { createElectronUpdateService } from './modules/updater'
 import { createVendorDocumentHandler, leavesVendorDocument } from './modules/vendor-document/serve'
@@ -61,6 +62,11 @@ const quitCoordinator = createQuitCoordinator({
   quitApp: () => app.quit(),
   stopSimulator: () => mainIpcModule?.stopSimulator(),
   canPrompt: () => mainIpcModule?.canPromptQuit() ?? false,
+})
+registerRuntimeProvisioning({
+  ipcMain,
+  app,
+  service: createDesktopRuntimeProvisioningService(app.getPath('userData')),
 })
 
 if (process.env.NODE_ENV === 'production') {

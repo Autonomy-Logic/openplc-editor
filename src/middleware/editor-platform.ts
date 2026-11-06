@@ -23,6 +23,7 @@ import { createEditorPackageAdapter } from './adapters/editor/package-adapter'
 import { createPackageUpdateNotifier } from './adapters/editor/package-update-notice'
 import { createEditorProjectAdapter } from './adapters/editor/project-adapter'
 import { createEditorRuntimeAdapter } from './adapters/editor/runtime-adapter'
+import { createEditorRuntimeProvisioningAdapter } from './adapters/editor/runtime-provisioning-adapter'
 import { createEditorSimulatorAdapter } from './adapters/editor/simulator-adapter'
 import { createEditorStlibSourceAdapter } from './adapters/editor/stlib-source-adapter'
 import { createEditorSystemAdapter } from './adapters/editor/system-adapter'
@@ -81,6 +82,7 @@ export function createEditorPorts(store: OpenPLCStore): PlatformPorts {
       findPackageUpdateNotice: (packageId) => packageUpdateNotifier.notice(packageId),
     }),
     runtime: editorRuntime,
+    runtimeProvisioning: createEditorRuntimeProvisioningAdapter(),
     debugger: createEditorDebuggerAdapter(),
     simulator: createEditorSimulatorAdapter(),
     project: editorProject,

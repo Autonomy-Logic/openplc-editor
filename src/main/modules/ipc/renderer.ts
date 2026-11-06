@@ -413,6 +413,13 @@ const rendererProcessBridge = {
   appUpdateSetAutoCheck: (enabled: boolean) => ipcRenderer.send('app-update:set-auto-check', enabled),
   onAppUpdateStatus: (callback: (status: unknown) => void) =>
     subscribe('app-update:status', (_event, status) => callback(status)),
+  runtimeProvisioningProbeSsh: (request: unknown): Promise<unknown> =>
+    ipcRenderer.invoke('runtime-provisioning:probe-ssh', request),
+  runtimeProvisioningRun: (request: unknown): Promise<unknown> =>
+    ipcRenderer.invoke('runtime-provisioning:run', request),
+  runtimeProvisioningCancel: (): Promise<void> => ipcRenderer.invoke('runtime-provisioning:cancel'),
+  onRuntimeProvisioningEvent: (callback: (event: unknown) => void): (() => void) =>
+    subscribe('runtime-provisioning:event', (_event, payload) => callback(payload)),
   requestQuitApp: () => ipcRenderer.send('app:request-quit'),
   quitRequested: (callback: IpcRendererCallbacks) => {
     const unsubscribe = subscribe('app:quit-requested', callback)

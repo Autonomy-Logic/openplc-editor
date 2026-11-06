@@ -465,6 +465,7 @@ It is inert in the editor (no orchestrator devices) and kept so the shared surfa
 - **Socket.io** for real-time communication
 - **Winston** for structured logging (main process)
 - **serialport** for serial communication
+- **ssh2** for installing or starting the OpenPLC Runtime on a device over SSH (main process only, `src/main/modules/runtime-provisioning/`; remembered host keys in `userData/ssh-known-hosts.json`)
 - **pdf-lib** + **@pdf-lib/fontkit** for PDF export (print/export-to-PDF)
 
 ## Important Patterns
