@@ -9,7 +9,7 @@ import { CreateEditorModelObject } from '../../../store/slices/tabs/utils'
 import { createStoreWrapper, createTestStore } from '../../../store/testing'
 import { AcceleratorHandler } from '../accelerator-handler'
 
-const EDITING_ACCELERATORS = ['onUndo', 'onRedo', 'onDeleteFile', 'onImportPLCopenXML'] as const
+const EDITING_ACCELERATORS = ['onUndo', 'onRedo', 'onDeleteFile', 'onImportPlcopen'] as const
 
 type EditingEvent = (typeof EDITING_ACCELERATORS)[number]
 
@@ -80,8 +80,6 @@ function fire(event: EditingEvent) {
   if (!callback) throw new Error(`nothing subscribed to ${event}`)
   act(() => callback())
 }
-
-
 
 function openModals(): string[] {
   return Object.entries(store.getState().modals)
