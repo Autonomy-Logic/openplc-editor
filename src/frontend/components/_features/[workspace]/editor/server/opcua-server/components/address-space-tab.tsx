@@ -239,7 +239,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
           </div>
 
           {/* Variable Tree */}
-          <EditingLockBoundary className='h-auto w-auto flex-1 overflow-y-auto p-2'>
+          <EditingLockBoundary className='oplc-visible-scrollbar h-auto w-auto flex-1 overflow-y-auto p-2'>
             <VariableTree
               nodes={projectVariables}
               selectedIds={selectedVariableIds}
@@ -260,7 +260,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
           </div>
 
           {/* Selected Variables List */}
-          <EditingLockBoundary className='h-auto w-auto flex-1 overflow-y-auto p-2'>
+          <EditingLockBoundary className='oplc-visible-scrollbar h-auto w-auto flex-1 overflow-y-auto p-2'>
             <SelectedVariablesList
               nodes={config.addressSpace.nodes}
               missingNodeIds={missingNodeIds}

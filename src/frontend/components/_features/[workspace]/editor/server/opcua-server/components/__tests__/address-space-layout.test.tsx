@@ -150,3 +150,12 @@ describe('the Address Space tab layout (TC34, TC36, TC37, TC38)', () => {
     ).toBeTruthy()
   })
 })
+
+describe('the Address Space lists show they can scroll (TC39)', () => {
+  it('should give both lists the always-visible scrollbar', () => {
+    renderTab([])
+
+    const lists = document.querySelectorAll('.oplc-visible-scrollbar')
+    expect(lists).toHaveLength(2)
+  })
+})
