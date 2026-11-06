@@ -111,12 +111,13 @@ const closeDebugSession = (store: ReturnType<typeof createTestStore>) =>
     store.getState().workspaceActions.clearDebugState()
   })
 
-const treeCheckbox = (name: string) => {
-  const row = screen.getByText(name).closest('div')
+/** The selection tick of the Available PLC Variables tree is a button, not an input. */
+const treeTick = (name: string) => {
+  const row = screen.getByText(name).closest('div')?.parentElement
   if (!row) throw new Error(`no tree row for ${name}`)
-  const box = row.parentElement?.querySelector<HTMLInputElement>('input[type="checkbox"]')
-  if (!box) throw new Error(`no checkbox for ${name}`)
-  return box
+  const tick = row.querySelector<HTMLButtonElement>('button[aria-label="Toggle selection"]')
+  if (!tick) throw new Error(`no selection tick for ${name}`)
+  return tick
 }
 
 describe('OPC-UA Address Space during a debug session (TC12)', () => {
@@ -165,12 +166,18 @@ describe('OPC-UA Address Space during a debug session (TC12)', () => {
     expect(server?.opcuaServerConfig?.addressSpace.nodes).toHaveLength(1)
   })
 
+  it('should keep the available variables ticks usable while no debug session is open', () => {
+    renderTab([])
+
+    expect(treeTick('X').matches(':disabled')).toBe(false)
+  })
+
   it('should disable the available variables ticks while the debugger is open', () => {
     const store = renderTab([])
 
     openDebugSession(store)
 
-    expect(treeCheckbox('X').matches(':disabled')).toBe(true)
+    expect(treeTick('X').matches(':disabled')).toBe(true)
   })
 
   it('should keep the variable filter usable while the debugger is open (BR03)', () => {
