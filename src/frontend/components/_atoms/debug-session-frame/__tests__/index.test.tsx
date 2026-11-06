@@ -21,6 +21,12 @@ const closeDebugSession = () =>
 
 const frame = () => container.querySelector('[data-debug-session-frame="true"]')
 
+/** jsdom serialises an inline hex colour as rgb(), so the expectation is built the same way. */
+const asRgb = (hex: string) => {
+  const value = Number.parseInt(hex.slice(1), 16)
+  return `rgb(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255})`
+}
+
 const renderFrame = () => {
   store = createTestStore()
   container = render(<DebugSessionFrame />, { wrapper: createStoreWrapper(store) }).container
@@ -46,7 +52,7 @@ describe('the online frame (TC24, TC25)', () => {
 
     openDebugSession()
 
-    expect(frame()?.getAttribute('style')).toContain(DEBUG_SESSION_FRAME_COLOR)
+    expect(frame()?.getAttribute('style')).toContain(asRgb(DEBUG_SESSION_FRAME_COLOR))
   })
 
   it('should lay the frame along the outer edge of the window', () => {
@@ -111,7 +117,7 @@ describe('the gaps between the panels (TC24)', () => {
 
     openDebugSession()
 
-    expect(handle()?.getAttribute('style')).toContain(DEBUG_SESSION_FRAME_COLOR)
+    expect(handle()?.getAttribute('style')).toContain(asRgb(DEBUG_SESSION_FRAME_COLOR))
   })
 
   it('should unmark the gap once the debugger closes', () => {
