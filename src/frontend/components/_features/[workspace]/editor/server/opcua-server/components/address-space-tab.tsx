@@ -1,10 +1,16 @@
 import { useOpenPLCStore } from '@root/frontend/store'
 import { findInstanceName } from '@root/frontend/utils/debug-variable-finder'
 import { newUuid } from '@root/frontend/utils/new-uuid'
-import { planBulkAdd, type SkipReport } from '@root/frontend/utils/opcua/bulk-selection'
+import {
+  anonymousAccess,
+  bulkConfirmationMessage,
+  planBulkAdd,
+  planBulkRemove,
+  type SkipReport,
+} from '@root/frontend/utils/opcua/bulk-selection'
 import { isComplexTreeNode as isComplexType } from '@root/frontend/utils/opcua/node-defaults'
 import { isGlobalScopePou } from '@root/frontend/utils/opcua/resolve-indices'
-import { countTopLevelEntries, indexTree, treeIdForNode } from '@root/frontend/utils/opcua/tree-index'
+import { countTopLevelEntries, indexTree, isHiddenByFilter, treeIdForNode } from '@root/frontend/utils/opcua/tree-index'
 import type { VariableTreeNode } from '@root/frontend/utils/opcua/types'
 import { toast } from '@root/frontend/utils/toast'
 import type { OpcUaNodeConfig, OpcUaServerConfig } from '@root/middleware/shared/ports/types'
@@ -44,9 +50,14 @@ const reportSkipped = (skipped: SkipReport): void => {
   toast({ title: 'Some entries were skipped', description: lines.join('\n'), variant: 'warn' })
 }
 
+/** A bulk action waiting on its confirmation; it carries everything the answer needs. */
+type PendingBulk =
+  | { kind: 'add'; message: string; nodes: OpcUaNodeConfig[]; skipped: SkipReport }
+  | { kind: 'remove'; message: string; nodeIds: string[] }
+
 export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressSpaceTabProps) => {
   const {
-    projectActions: { addOpcUaNode, addOpcUaNodes, updateOpcUaNode, removeOpcUaNode },
+    projectActions: { addOpcUaNode, addOpcUaNodes, updateOpcUaNode, removeOpcUaNode, removeOpcUaNodes },
   } = useOpenPLCStore()
 
   // Get all project variables for the tree
@@ -62,6 +73,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
     // Initialize with IDs of already configured nodes
     return new Set(config.addressSpace.nodes.map((n) => treeIdForNode(n, treeIndex)))
   })
+  const [pendingBulk, setPendingBulk] = useState<PendingBulk | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingVariable, setEditingVariable] = useState<VariableTreeNode | null>(null)
   const [editingConfig, setEditingConfig] = useState<OpcUaNodeConfig | undefined>(undefined)
@@ -86,6 +98,41 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
   )
 
   // Handle namespace URI change
+  const applyBulkAdd = useCallback(
+    (nodes: OpcUaNodeConfig[], skipped: SkipReport) => {
+      if (nodes.length > 0) {
+        addOpcUaNodes(serverName, nodes)
+        setSelectedVariableIds((prev) => {
+          const next = new Set(prev)
+          for (const node of nodes) next.add(treeIdForNode(node, treeIndex))
+          return next
+        })
+        onConfigChange()
+      }
+      reportSkipped(skipped)
+    },
+    [serverName, addOpcUaNodes, treeIndex, onConfigChange],
+  )
+
+  const applyBulkRemove = useCallback(
+    (nodeIds: string[]) => {
+      if (nodeIds.length === 0) return
+      const removed = new Set(
+        config.addressSpace.nodes
+          .filter((node) => nodeIds.includes(node.id))
+          .map((node) => treeIdForNode(node, treeIndex)),
+      )
+      removeOpcUaNodes(serverName, nodeIds)
+      setSelectedVariableIds((prev) => {
+        const next = new Set(prev)
+        for (const id of removed) next.delete(id)
+        return next
+      })
+      onConfigChange()
+    },
+    [config.addressSpace.nodes, treeIndex, serverName, removeOpcUaNodes, onConfigChange],
+  )
+
   const runBulkAdd = useCallback(
     (groups: VariableTreeNode[]) => {
       if (isEditingLocked) return
@@ -99,33 +146,81 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
         createId: newUuid,
       })
 
-      if (plan.nodes.length > 0) {
-        addOpcUaNodes(serverName, plan.nodes)
-        setSelectedVariableIds((prev) => {
-          const next = new Set(prev)
-          for (const node of plan.nodes) next.add(treeIdForNode(node, treeIndex))
-          return next
+      // BR25: a confirmation only for an action that really exposes something.
+      const access = anonymousAccess(config.securityProfiles)
+      if (access && plan.nodes.length > 0) {
+        setPendingBulk({
+          kind: 'add',
+          message: bulkConfirmationMessage({
+            count: plan.nodes.length,
+            access,
+            serverEnabled: config.server.enabled,
+          }),
+          nodes: plan.nodes,
+          skipped: plan.skipped,
         })
-        onConfigChange()
+        return
       }
 
-      reportSkipped(plan.skipped)
+      applyBulkAdd(plan.nodes, plan.skipped)
     },
     [
       isEditingLocked,
       treeIndex,
       filter,
       config.addressSpace.nodes,
+      config.securityProfiles,
+      config.server.enabled,
       instances,
-      serverName,
-      addOpcUaNodes,
-      onConfigChange,
+      applyBulkAdd,
     ],
+  )
+
+  const runBulkRemove = useCallback(
+    (groups: VariableTreeNode[]) => {
+      if (isEditingLocked) return
+
+      const plan = planBulkRemove({
+        groups,
+        index: treeIndex,
+        filter,
+        existingNodes: config.addressSpace.nodes,
+      })
+      if (plan.nodeIds.length === 0) return
+
+      setPendingBulk({
+        kind: 'remove',
+        message: `${plan.nodeIds.length} ${plan.nodeIds.length === 1 ? 'node' : 'nodes'} will be removed from the address space.`,
+        nodeIds: plan.nodeIds,
+      })
+    },
+    [isEditingLocked, treeIndex, filter, config.addressSpace.nodes],
   )
 
   const handleSelectAll = useCallback(() => runBulkAdd(projectVariables), [runBulkAdd, projectVariables])
 
-  const handleSelectGroup = useCallback((group: VariableTreeNode) => runBulkAdd([group]), [runBulkAdd])
+  const handleRemoveAll = useCallback(() => runBulkRemove(projectVariables), [runBulkRemove, projectVariables])
+
+  /** A group whose visible children are all exposed is unticked; otherwise it is ticked. */
+  const handleSelectGroup = useCallback(
+    (group: VariableTreeNode) => {
+      const visible = (group.children ?? []).filter((child) => !isHiddenByFilter(child, filter))
+      const allExposed = visible.length > 0 && visible.every((child) => selectedVariableIds.has(child.id))
+      if (allExposed) {
+        runBulkRemove([group])
+        return
+      }
+      runBulkAdd([group])
+    },
+    [filter, selectedVariableIds, runBulkAdd, runBulkRemove],
+  )
+
+  const confirmPendingBulk = useCallback(() => {
+    if (!pendingBulk) return
+    if (pendingBulk.kind === 'add') applyBulkAdd(pendingBulk.nodes, pendingBulk.skipped)
+    else applyBulkRemove(pendingBulk.nodeIds)
+    setPendingBulk(null)
+  }, [pendingBulk, applyBulkAdd, applyBulkRemove])
 
   // Handle variable selection from tree
   const handleVariableSelect = useCallback(
@@ -276,7 +371,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
   )
 
   return (
-    <div className='flex h-full flex-col gap-4'>
+    <div className='relative flex h-full flex-col gap-4'>
       {/* Split Pane Layout */}
       <div className='flex flex-1 gap-4 overflow-hidden'>
         {/* Left Panel - Available Variables */}
@@ -330,6 +425,14 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
             <p className='text-xs text-neutral-500 dark:text-neutral-400'>
               {config.addressSpace.nodes.length} variable{config.addressSpace.nodes.length !== 1 ? 's' : ''} configured
             </p>
+            <button
+              type='button'
+              onClick={handleRemoveAll}
+              disabled={isEditingLocked || config.addressSpace.nodes.length === 0}
+              className='mt-2 h-[24px] rounded-md border border-neutral-300 bg-white px-2 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+            >
+              Remove all
+            </button>
           </div>
 
           {/* Selected Variables List */}
@@ -343,6 +446,34 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
           </EditingLockBoundary>
         </div>
       </div>
+
+      {pendingBulk && (
+        <div
+          role='alertdialog'
+          aria-label='Confirm the bulk action'
+          className='absolute inset-0 z-50 flex items-center justify-center bg-black/30'
+        >
+          <div className='flex max-w-md flex-col gap-4 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'>
+            <p className='font-caption text-sm text-neutral-950 dark:text-white'>{pendingBulk.message}</p>
+            <div className='flex justify-end gap-2'>
+              <button
+                type='button'
+                onClick={() => setPendingBulk(null)}
+                className='h-[28px] rounded-md border border-neutral-300 bg-white px-3 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200'
+              >
+                Cancel
+              </button>
+              <button
+                type='button'
+                onClick={confirmPendingBulk}
+                className='h-[28px] rounded-md bg-brand px-3 font-caption text-xs font-medium text-white hover:bg-brand-medium-dark'
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Variable Configuration Modal */}
       <VariableConfigModal
