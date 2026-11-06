@@ -79,6 +79,46 @@ export async function startRawServer(onConnection: (socket: net.Socket) => void)
   }
 }
 
+export interface FreezableProxy {
+  port: number
+  freeze(): void
+  stop(): Promise<void>
+}
+
+/** Loopback TCP proxy that forwards both ways until frozen, then reads and drops everything without closing. */
+export async function startFreezableProxy(targetPort: number): Promise<FreezableProxy> {
+  let frozen = false
+  const sockets: net.Socket[] = []
+  const server = net.createServer({ allowHalfOpen: true }, (client) => {
+    const upstream = net.connect({ port: targetPort, host: LOOPBACK, allowHalfOpen: true })
+    sockets.push(client, upstream)
+    for (const socket of [client, upstream]) socket.on('error', () => undefined)
+    client.on('data', (chunk: Uint8Array) => {
+      if (!frozen) upstream.write(chunk)
+    })
+    upstream.on('data', (chunk: Uint8Array) => {
+      if (!frozen) client.write(chunk)
+    })
+    client.on('end', () => {
+      if (!frozen) upstream.end()
+    })
+    upstream.on('end', () => {
+      if (!frozen) client.end()
+    })
+  })
+  const port = await listenOn(server)
+  return {
+    port,
+    freeze: () => {
+      frozen = true
+    },
+    stop: async () => {
+      sockets.forEach((socket) => socket.destroy())
+      await closeServer(server)
+    },
+  }
+}
+
 export function receivedByteCount(connection: RawConnection): number {
   return connection.received.reduce((total, chunk) => total + chunk.length, 0)
 }
@@ -141,6 +181,21 @@ export function passwordOnly(context: AuthContext): void {
 
 export function publicKeyOnly(context: AuthContext): void {
   context.reject(['publickey'])
+}
+
+export const HANG_COMMAND = 'hang'
+
+/** Answers every command with its name and exit code 0, except `hang`, which is accepted and never ended. */
+export function hangOrAnswer(onHang: (channel: ServerChannel) => void = () => undefined): ExecBehaviour {
+  return (command, channel) => {
+    if (command === HANG_COMMAND) {
+      onHang(channel)
+      return
+    }
+    channel.write(`ran ${command}`)
+    channel.exit(0)
+    channel.end()
+  }
 }
 
 export const unreadableProbe: ExecBehaviour = (_command, channel) => {

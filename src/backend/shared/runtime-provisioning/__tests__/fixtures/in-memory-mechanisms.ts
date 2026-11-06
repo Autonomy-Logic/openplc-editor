@@ -113,7 +113,16 @@ export type DeviceCall =
   | { kind: 'banner-read'; host: string; port: number; timeoutMs: number; maxBytes: number }
   | { kind: 'host-key-read' }
   | { kind: 'host-key-replace'; text: string; saved: boolean }
-  | { kind: 'open'; host: string; port: number; username: string; password: string; timeoutMs: number }
+  | {
+      kind: 'open'
+      host: string
+      port: number
+      username: string
+      password: string
+      timeoutMs: number
+      keepaliveIntervalMs: number
+      keepaliveCountMax: number
+    }
   | { kind: 'host-key-check'; key: string; accepted: boolean }
   | { kind: 'auth'; method: 'none' | 'password'; password: string | null }
   | { kind: 'auth-stop' }
@@ -123,6 +132,7 @@ export type DeviceCall =
       command: string
       stdin: string | undefined
       sudo: boolean
+      timeoutMs: number
       at: number
     }
   | { kind: 'close' }
@@ -403,6 +413,7 @@ export function createFakeDevice(options: FakeDeviceOptions = {}): FakeDevice {
           command,
           stdin: execOptions.stdin,
           sudo: recognized.sudo,
+          timeoutMs: execOptions.timeoutMs,
           at: now,
         })
         if (state.closed) return Promise.reject(new Error('Not connected'))
@@ -467,8 +478,8 @@ export function createFakeDevice(options: FakeDeviceOptions = {}): FakeDevice {
     },
     sshSession: {
       async open(request) {
-        const { host, port, username, password, timeoutMs } = request
-        log.push({ kind: 'open', host, port, username, password, timeoutMs })
+        const { host, port, username, password, timeoutMs, keepaliveIntervalMs, keepaliveCountMax } = request
+        log.push({ kind: 'open', host, port, username, password, timeoutMs, keepaliveIntervalMs, keepaliveCountMax })
         options.onOpen?.()
         if (options.sshReachable === false) {
           return { kind: 'error', code: 'ECONNREFUSED', message: `connect ECONNREFUSED ${host}:${port}` }

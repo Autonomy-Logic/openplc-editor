@@ -43,6 +43,7 @@ const EVERY_KEY: ProvisioningMessageKey[] = [
   'v3-present',
   'download-failed',
   'installer-failed',
+  'start-failed',
 ]
 
 const HOST_KEY_FILE_KEYS: ProvisioningMessageKey[] = ['host-key-changed', 'host-key-file-unusable']
@@ -237,6 +238,33 @@ describe('provisioningMessage', () => {
 
   it('says a started runtime did not answer within 120 s', () => {
     expect(text('not-started', { operation: 'start', lastLines: [] })).toContain('120')
+  })
+
+  it('titles a failed start command "Runtime start failed" and says nothing was installed (P18)', () => {
+    expect(provisioningMessage('start-failed', { host: HOST })).toEqual({
+      title: 'Runtime start failed',
+      body: `The OpenPLC Runtime could not be started on ${HOST}: the start command failed. Nothing was installed. Its last lines are in the editor console.`,
+    })
+  })
+
+  it('names the device when the host of a failed start command is not known', () => {
+    expect(provisioningMessage('start-failed', {}).body).toContain('could not be started on the device:')
+  })
+
+  it('says the start command failed, never that the runtime was started or did not answer within 120 s', () => {
+    const { body } = provisioningMessage('start-failed', { host: HOST, lastLines: ['Error response from daemon'] })
+
+    expect(body).toContain(HOST)
+    expect(body).toContain('start command failed')
+    expect(body).not.toContain('120')
+    expect(body).not.toContain('was started')
+  })
+
+  it('appends the last lines of a failed start command when it has any', () => {
+    const lastLines = ['Error response from daemon: No such container: openplc-runtime', 'exit status 1']
+    const { body } = provisioningMessage('start-failed', { host: HOST, lastLines })
+
+    expect(body).toContain(`\n\nLast lines:\n${lastLines.join('\n')}`)
   })
 
   it('says the result is unknown and asks to Connect again', () => {

@@ -2,6 +2,8 @@ import type {
   HostKeyFileReadResult,
   RuntimeProvisioningMechanisms,
   SshBannerReadResult,
+  SshExecResult,
+  SshSession,
   SshSessionOpenRequest,
   SshSessionOpenResult,
 } from '../../../../middleware/shared/ports/runtime-provisioning-mechanisms'
@@ -14,7 +16,8 @@ import type {
 } from '../../../../middleware/shared/ports/runtime-provisioning-port'
 import type { AuditOperation, AuditOutcome } from '../audit'
 import { formatAuditLine } from '../audit'
-import { buildExec, PROVISIONING_COMMANDS } from '../commands'
+import type { DeviceCommand } from '../commands'
+import { buildExec, INSTALLER_DOWNLOAD_MAX_S, PROVISIONING_COMMANDS } from '../commands'
 import { parseHostKeyFile } from '../host-key-file'
 import * as provisioning from '../index'
 import {
@@ -31,6 +34,7 @@ import type { RuntimeProvisioningService } from '../service'
 import {
   createRuntimeProvisioningService,
   INSTALLER_POLL_INTERVAL_MS,
+  PREPARE_INSTALLER_TIMEOUT_MS,
   RUNTIME_WAIT_INTERVAL_MS,
   RUNTIME_WAIT_MS,
   SSH_SESSION_TIMEOUT_MS,
@@ -39,6 +43,7 @@ import type {
   DeviceCall,
   FakeDevice,
   FakeDeviceOptions,
+  FixedCommandName,
   InstallerPollReply,
   RecordedCommandName,
   RuntimeFactsInput,
@@ -205,6 +210,90 @@ function setupHeldOpen(replace?: (text: string) => Promise<void>): HeldOpenHarne
   return { device, service, opened }
 }
 
+const STILL_PENDING = 'still pending'
+const SETTLE_TURNS = 10_000
+
+async function settledWithin<T>(promise: Promise<T>): Promise<T | typeof STILL_PENDING> {
+  const settled: T[] = []
+  void promise.then((value) => {
+    settled.push(value)
+  })
+  for (let turn = 0; turn < SETTLE_TURNS && settled.length === 0; turn += 1) await Promise.resolve()
+  return settled.length === 0 ? STILL_PENDING : settled[0]
+}
+
+async function untilTrue(condition: () => boolean): Promise<void> {
+  for (let turn = 0; turn < SETTLE_TURNS && !condition(); turn += 1) await Promise.resolve()
+}
+
+function deadlines(device: FakeDevice): [RecordedCommandName, number][] {
+  return execCalls(device).map((call): [RecordedCommandName, number] => [call.name, call.timeoutMs])
+}
+
+function runs(command: string, deviceCommand: DeviceCommand): boolean {
+  return command === buildExec(deviceCommand, 'root').command || command === buildExec(deviceCommand, 'sudo').command
+}
+
+function neverSettlingOn(session: SshSession, deviceCommand: DeviceCommand, reached: () => void): SshSession {
+  return {
+    exec(command, options) {
+      const sent = session.exec(command, options)
+      if (!runs(command, deviceCommand)) return sent
+      sent.catch(() => undefined)
+      reached()
+      return new Promise<SshExecResult>(() => undefined)
+    },
+    close: () => session.close(),
+    onClosed: (callback) => session.onClosed(callback),
+  }
+}
+
+interface StuckHarness extends Harness {
+  reached(): boolean
+}
+
+function setupStuckOn(name: FixedCommandName): StuckHarness {
+  const device = createFakeDevice()
+  let reached = false
+  let opens = 0
+  const mechanisms: RuntimeProvisioningMechanisms = {
+    ...device.mechanisms,
+    sshSession: {
+      async open(request) {
+        const opened = await device.mechanisms.sshSession.open(request)
+        opens += 1
+        if (opened.kind !== 'open' || opens > 1) return opened
+        const markReached = (): void => {
+          reached = true
+        }
+        return { kind: 'open', session: neverSettlingOn(opened.session, PROVISIONING_COMMANDS[name], markReached) }
+      },
+    },
+  }
+  const service = createRuntimeProvisioningService(mechanisms)
+  device.watch(service)
+  return { device, service, reached: () => reached }
+}
+
+function setupEndingWhileOpening(end: (service: RuntimeProvisioningService) => Promise<void> | void): Harness {
+  const device = createFakeDevice()
+  const ending: { service: RuntimeProvisioningService | null } = { service: null }
+  const mechanisms: RuntimeProvisioningMechanisms = {
+    ...device.mechanisms,
+    sshSession: {
+      async open(request) {
+        const opened = await device.mechanisms.sshSession.open(request)
+        if (ending.service !== null) await end(ending.service)
+        return opened
+      },
+    },
+  }
+  const service = createRuntimeProvisioningService(mechanisms)
+  ending.service = service
+  device.watch(service)
+  return { device, service }
+}
+
 describe('runtime provisioning service exports', () => {
   it('pins the SSH session timeout, the poll interval and the runtime wait', () => {
     expect(SSH_SESSION_TIMEOUT_MS).toBe(20_000)
@@ -229,6 +318,134 @@ describe('runtime provisioning service exports', () => {
         RUNTIME_WAIT_INTERVAL_MS,
       }),
     )
+  })
+})
+
+describe('SSH keepalive and device command deadlines (F22, AC10.3, BR26)', () => {
+  const RUNTIME_CONTAINER_STOPPED = runtimeOutput({
+    docker: 'active',
+    bootloader: 'running',
+    runtimeContainer: 'stopped',
+  })
+
+  it('pins the keepalive at 5 s x 3 and the command deadlines at 30 s, 150 s for the download and the start', () => {
+    expect(provisioning).toEqual(
+      expect.objectContaining({
+        SSH_KEEPALIVE_INTERVAL_MS: 5_000,
+        SSH_KEEPALIVE_COUNT_MAX: 3,
+        EXEC_TIMEOUT_MS: 30_000,
+        PREPARE_INSTALLER_TIMEOUT_MS: 150_000,
+        START_COMMAND_TIMEOUT_MS: 150_000,
+      }),
+    )
+  })
+
+  it("gives the installer download step more time than curl's own limit, so curl gives up first", () => {
+    expect(PREPARE_INSTALLER_TIMEOUT_MS).toBeGreaterThan(INSTALLER_DOWNLOAD_MAX_S * 1000)
+  })
+
+  it('opens the SSH session with a keepalive every 5 s, given up after 3 unanswered', async () => {
+    const { device, service } = setup()
+
+    await service.run(REQUEST)
+
+    expect(device.log.filter((call) => call.kind === 'open')).toEqual([
+      expect.objectContaining({ timeoutMs: SSH_SESSION_TIMEOUT_MS, keepaliveIntervalMs: 5_000, keepaliveCountMax: 3 }),
+    ])
+  })
+
+  it('gives the download step 150 s and every other install command 30 s, up to the Docker check', async () => {
+    const { device, service } = setup({
+      runtime: runtimeOutput({ docker: 'absent' }),
+      polls: [
+        { exit: 'running', text: 'Installing\n' },
+        { exit: 'running', text: '[ERROR] Could not download the Docker installer.\n' },
+        { exit: 1 },
+      ],
+      commands: { dockerPresent: { stdout: 'docker=no\n' } },
+    })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'download-failed', dockerPresent: false })
+    expect(deadlines(device)).toEqual([
+      ['probeSystem', 30_000],
+      ['privilegeCheck', 30_000],
+      ['inspectRuntime', 30_000],
+      ['prepareInstaller', 150_000],
+      ['startInstaller', 30_000],
+      ['pollInstaller', 30_000],
+      ['pollInstaller', 30_000],
+      ['pollInstaller', 30_000],
+      ['dockerPresent', 30_000],
+    ])
+  })
+
+  it('gives every poll of a followed installer 30 s', async () => {
+    const { device, service } = setup({
+      polls: [
+        { exit: 'running', text: 'one\n' },
+        { exit: 'running', text: 'two\n' },
+        { exit: 'running', text: 'three\n' },
+        { exit: 0, text: 'Done\n' },
+      ],
+    })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'connected-ready', operation: 'install' })
+    const polls = deadlines(device).filter(([name]) => name === 'pollInstaller')
+    expect(polls).toEqual([
+      ['pollInstaller', 30_000],
+      ['pollInstaller', 30_000],
+      ['pollInstaller', 30_000],
+      ['pollInstaller', 30_000],
+    ])
+  })
+
+  it.each([
+    ['startRuntimeContainer', { docker: 'active', bootloader: 'running', runtimeContainer: 'stopped' }],
+    ['startDockerAndBootloader', { docker: 'inactive', bootloader: 'stopped', runtimeContainer: 'stopped' }],
+    ['startBootloader', { docker: 'active', bootloader: 'stopped', runtimeContainer: 'stopped' }],
+    ['startNativeService', { native: 'inactive' }],
+  ] satisfies [RecordedCommandName, RuntimeFactsInput][])(
+    'gives the start command %s 150 s and the inspection commands 30 s (TC32)',
+    async (started, facts) => {
+      const { device, service } = setup({ runtime: runtimeOutput(facts) })
+
+      await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'connected-ready', operation: 'start' })
+      expect(deadlines(device)).toEqual([
+        ['probeSystem', 30_000],
+        ['privilegeCheck', 30_000],
+        ['inspectRuntime', 30_000],
+        [started, 150_000],
+      ])
+    },
+  )
+
+  it('ends unknown with no wait when the start command passes its deadline (P7)', async () => {
+    const { device, service } = setup({
+      runtime: RUNTIME_CONTAINER_STOPPED,
+      commands: { startRuntimeContainer: { rejectWith: 'SSH command timed out after 150000 ms' } },
+    })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'unknown' })
+    expect(checkCalls(device)).toEqual([])
+    expect(auditWrites(device)).toEqual([expectedAudit(device, REQUEST, 'start', 'unknown')])
+    expect(device.sessionClosed()).toBe(true)
+  })
+
+  it('ends unknown, never start-failed, when the channel drops while the start command runs (AS-19)', async () => {
+    const harness: Harness = setup({
+      runtime: RUNTIME_CONTAINER_STOPPED,
+      commands: {
+        startRuntimeContainer: () => {
+          harness.device.dropConnection()
+          return { exitCode: null }
+        },
+      },
+    })
+
+    await expect(harness.service.run(REQUEST)).resolves.toEqual({ kind: 'unknown' })
+    expect(checkCalls(harness.device)).toEqual([])
+    expect(auditWrites(harness.device)).toEqual([expectedAudit(harness.device, REQUEST, 'start', 'unknown')])
+    expect(harness.device.sessionClosed()).toBe(true)
   })
 })
 
@@ -332,7 +549,16 @@ describe('host keys', () => {
     await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'connected-ready', operation: 'install' })
 
     expect(device.log.filter((call) => call.kind === 'open')).toEqual([
-      { kind: 'open', host: HOST, port: 22, username: USERNAME, password: PASSWORD, timeoutMs: SSH_SESSION_TIMEOUT_MS },
+      {
+        kind: 'open',
+        host: HOST,
+        port: 22,
+        username: USERNAME,
+        password: PASSWORD,
+        timeoutMs: SSH_SESSION_TIMEOUT_MS,
+        keepaliveIntervalMs: 5_000,
+        keepaliveCountMax: 3,
+      },
     ])
     const saved = parseHostKeyFile(device.hostKeyFile())
     expect(saved.kind === 'valid' ? saved.entries : []).toEqual([
@@ -714,7 +940,32 @@ describe('start an installed runtime', () => {
     },
   )
 
-  it('reports not started with the scrubbed output of a failed start command, without waiting (P8)', async () => {
+  it('reports a failed start command as start-failed with its scrubbed lines, in the console, without waiting (P18)', async () => {
+    const { device, service } = setup({
+      runtime: runtimeOutput({ docker: 'active', bootloader: 'running', runtimeContainer: 'stopped' }),
+      commands: {
+        startRuntimeContainer: {
+          exitCode: 1,
+          stdout: 'starting openplc-runtime\n',
+          stderr: `Error response from daemon: No such container: openplc-runtime\nsudo echoed ${PASSWORD}\n`,
+        },
+      },
+    })
+    const lastLines = [
+      'starting openplc-runtime',
+      'Error response from daemon: No such container: openplc-runtime',
+      `sudo echoed ${PASSWORD_MASK}`,
+    ]
+
+    const outcome = await service.run(REQUEST)
+
+    expect(outcome).toEqual({ kind: 'start-failed', lastLines })
+    expect(JSON.stringify(outcome)).not.toContain(PASSWORD)
+    expect(checkCalls(device)).toEqual([])
+    expect(auditWrites(device)).toEqual([expectedAudit(device, REQUEST, 'start', 'failure')])
+  })
+
+  it('sends the lines of a failed start command to the console, in order, before the audit event (AC09.5)', async () => {
     const { device, service } = setup({
       runtime: runtimeOutput({ docker: 'active', bootloader: 'running', runtimeContainer: 'stopped' }),
       commands: {
@@ -726,19 +977,42 @@ describe('start an installed runtime', () => {
       },
     })
 
-    const outcome = await service.run(REQUEST)
+    await service.run(REQUEST)
 
-    expect(outcome).toEqual({ kind: 'not-started', operation: 'start', lastLines: expect.any(Array) })
-    expect(lastLinesOf(outcome)).toEqual(
-      expect.arrayContaining([
-        'starting openplc-runtime',
-        'Error response from daemon: No such container: openplc-runtime',
-        `sudo echoed ${PASSWORD_MASK}`,
-      ]),
-    )
-    expect(JSON.stringify(outcome)).not.toContain(PASSWORD)
+    const consoleAndAudit = events(device).filter((event) => event.type === 'console' || event.type === 'audit')
+    expect(consoleAndAudit).toEqual([
+      { type: 'console', level: 'info', message: 'starting openplc-runtime' },
+      { type: 'console', level: 'info', message: 'Error response from daemon: No such container: openplc-runtime' },
+      { type: 'console', level: 'info', message: `sudo echoed ${PASSWORD_MASK}` },
+      { type: 'audit', line: expectedAudit(device, REQUEST, 'start', 'failure') },
+    ])
+    expect(JSON.stringify(events(device))).not.toContain(PASSWORD)
+  })
+
+  it('reports a start command killed by a signal, exit code null, as start-failed', async () => {
+    const { device, service } = setup({
+      runtime: runtimeOutput({ native: 'inactive' }),
+      commands: { startNativeService: { exitCode: null, stderr: 'Killed\n' } },
+    })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'start-failed', lastLines: ['Killed'] })
+    expect(consoleMessages(device)).toEqual(['Killed'])
     expect(checkCalls(device)).toEqual([])
-    expect(auditWrites(device)).toEqual([expectedAudit(device, REQUEST, 'start', 'failure')])
+  })
+
+  it('bounds the lines of a failed start command to the last 200, each cut at 4,096 characters (M15, M17)', async () => {
+    const longLine = `line 203 ${'z'.repeat(LINE_CHAR_LIMIT + 50)}`
+    const original = Array.from({ length: 205 }, (_, index) => (index === 202 ? longLine : `line ${index + 1}`))
+    const { device, service } = setup({
+      runtime: runtimeOutput({ native: 'inactive' }),
+      commands: { startNativeService: { exitCode: 1, stdout: `${original.join('\n')}\n` } },
+    })
+
+    const outcome = await service.run(REQUEST)
+    const expected = [...original.slice(5, 202), truncated(longLine), ...original.slice(203)]
+
+    expect(outcome).toEqual({ kind: 'start-failed', lastLines: expected })
+    expect(consoleMessages(device)).toEqual(expected)
   })
 
   it.each([
@@ -1274,6 +1548,72 @@ describe('cancel', () => {
     expect(checkCalls(harness.device)).toEqual([])
     expect(harness.device.sessionClosed()).toBe(true)
   })
+})
+
+describe('cancel ends the run at once while Cancel is offered (F23, TC45, AC09.4, BR27)', () => {
+  it.each([
+    ['the device inspection', 'probeSystem', 'inspect', []],
+    ['the installer download', 'prepareInstaller', 'install', ['prepareInstaller']],
+  ] satisfies [string, FixedCommandName, AuditOperation, RecordedCommandName[]][])(
+    'ends cancelled during %s while its command never settles, even after the session closes',
+    async (_, name, operation, sentAfterInspection) => {
+      const { device, service, reached } = setupStuckOn(name)
+      const outcome = service.run(REQUEST)
+      await untilTrue(reached)
+      expect(reached()).toBe(true)
+      const sentBeforeCancel = execCalls(device).length
+
+      await service.cancel()
+      const afterCancel = {
+        state: service.inspectState(),
+        sessionClosed: device.sessionClosed(),
+        audit: auditWrites(device),
+      }
+      const ending = await settledWithin(outcome)
+
+      expect({ ...afterCancel, ending }).toEqual({
+        state: IDLE_STATE,
+        sessionClosed: true,
+        audit: [expectedAudit(device, REQUEST, operation, 'cancelled')],
+        ending: { kind: 'cancelled' },
+      })
+      expect(execCalls(device)).toHaveLength(sentBeforeCancel)
+      expect(namesAfterInspection(device)).toEqual(sentAfterInspection)
+    },
+  )
+
+  it.each(['probeSystem', 'prepareInstaller'] satisfies FixedCommandName[])(
+    'accepts a new run once a cancel during %s returned',
+    async (name) => {
+      const { device, service, reached } = setupStuckOn(name)
+      void service.run(REQUEST)
+      await untilTrue(reached)
+
+      await service.cancel()
+
+      expect(await settledWithin(service.run(REQUEST))).toEqual({ kind: 'connected-ready', operation: 'install' })
+      expect(countOf(device, 'open')).toBe(2)
+    },
+  )
+
+  it.each([
+    ['a cancel', (service: RuntimeProvisioningService) => service.cancel(), { kind: 'cancelled' }],
+    ['a detach', (service: RuntimeProvisioningService) => service.detach('quit'), { kind: 'unknown' }],
+  ] satisfies [string, (service: RuntimeProvisioningService) => Promise<void> | void, RuntimeProvisioningOutcome][])(
+    'closes at once a session that finishes opening after %s while connecting, and sends nothing on it (M14)',
+    async (_, end, expected) => {
+      const { device, service } = setupEndingWhileOpening(end)
+
+      const ending = await settledWithin(service.run(REQUEST))
+      await untilTrue(() => device.sessionClosed())
+
+      expect(ending).toEqual(expected)
+      expect(countOf(device, 'open')).toBe(1)
+      expect(device.sessionClosed()).toBe(true)
+      expect(execCalls(device)).toEqual([])
+      expect(auditWrites(device)).toHaveLength(1)
+    },
+  )
 })
 
 describe('nothing reaches the device once the run has an outcome (M14, AS-19)', () => {

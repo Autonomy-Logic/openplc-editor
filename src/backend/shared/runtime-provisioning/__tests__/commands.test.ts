@@ -1,5 +1,12 @@
 import type { Account, DeviceCommand } from '../commands'
-import { buildExec, pollInstallerCommand, PROVISIONING_COMMANDS, startInstallerCommand } from '../commands'
+import {
+  buildExec,
+  INSTALLER_CONNECT_TIMEOUT_S,
+  INSTALLER_DOWNLOAD_MAX_S,
+  pollInstallerCommand,
+  PROVISIONING_COMMANDS,
+  startInstallerCommand,
+} from '../commands'
 import { DOCKER_CONTAINER_RECORDS, INSTALLER_URL, V3_UNITS } from '../runtime-names'
 
 const LOG_DIR = '/tmp/tmp.Xy7Qa9Zk2B'
@@ -251,9 +258,24 @@ describe('prepareInstaller', () => {
     expect(command).not.toContain('/tmp')
   })
 
-  it('downloads with HTTPS restricted for the request and every redirect, into the new directory', () => {
-    expect(command).toContain(`curl --proto '=https' --proto-redir '=https' -fsSL ${INSTALLER_URL} -o `)
-    expect(command).toContain('/install.sh')
+  it('downloads with HTTPS restricted for the request and every redirect, within 20 s to connect and 120 s in all (F23)', () => {
+    expect(command).toContain(
+      `if curl --proto '=https' --proto-redir '=https' --connect-timeout 20 --max-time 120 -fsSL ${INSTALLER_URL} -o "$d/install.sh"; then echo download=ok; else echo download=failed; fi`,
+    )
+  })
+
+  it('pins the installer download limits at 20 s to connect and 120 s in all (F23)', () => {
+    expect(INSTALLER_CONNECT_TIMEOUT_S).toBe(20)
+    expect(INSTALLER_DOWNLOAD_MAX_S).toBe(120)
+  })
+
+  it('passes both download limits to curl before the installer URL', () => {
+    const url = command.indexOf(INSTALLER_URL)
+
+    expect(command.indexOf(`--connect-timeout ${INSTALLER_CONNECT_TIMEOUT_S} `)).toBeGreaterThan(-1)
+    expect(command.indexOf(`--connect-timeout ${INSTALLER_CONNECT_TIMEOUT_S} `)).toBeLessThan(url)
+    expect(command.indexOf(`--max-time ${INSTALLER_DOWNLOAD_MAX_S} `)).toBeGreaterThan(-1)
+    expect(command.indexOf(`--max-time ${INSTALLER_DOWNLOAD_MAX_S} `)).toBeLessThan(url)
   })
 
   it('names no URL other than the installer URL', () => {

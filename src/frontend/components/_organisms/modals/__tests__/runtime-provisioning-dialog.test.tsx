@@ -51,6 +51,8 @@ const CLOSE_NAME = /close/i
 const CONSOLE_METHODS: ConsoleMethod[] = ['log', 'info', 'warn', 'error', 'debug']
 const FAILURE_LINES = ['Reading package lists...', 'E: Unable to locate package docker-ce']
 const BASE_FACTS: Facts = { host: DEVICE_IP, sshPort: 22 }
+const START_FAILURE_LINE = 'Error response from daemon: No such container: openplc-runtime'
+const START_FAILED_TITLE = 'Runtime start failed'
 
 const ENDINGS: Ending[] = [
   ['connected-ready', { kind: 'connected-ready', operation: 'install' }, { ...BASE_FACTS, operation: 'install' }],
@@ -74,6 +76,7 @@ const ENDINGS: Ending[] = [
   ['v3-present', { kind: 'v3-present' }, BASE_FACTS],
   ['download-failed', { kind: 'download-failed', dockerPresent: false }, { ...BASE_FACTS, dockerPresent: false }],
   ['installer-failed', { kind: 'installer-failed', lastLines: FAILURE_LINES }, BASE_FACTS],
+  ['start-failed', { kind: 'start-failed', lastLines: [START_FAILURE_LINE] }, BASE_FACTS],
   [
     'not-started after an install',
     { kind: 'not-started', operation: 'install', lastLines: FAILURE_LINES },
@@ -90,7 +93,9 @@ const SUCCESSFUL_ENDINGS = ENDINGS.filter(([, outcome]) => outcome.kind === 'con
 const FAILED_ENDINGS = ENDINGS.filter(([, outcome]) => !['connected-ready', 'cancelled'].includes(outcome.kind))
 const ENDINGS_WITH_LAST_LINES = ENDINGS.filter(
   ([, outcome]) =>
-    outcome.kind === 'installer-failed' || (outcome.kind === 'not-started' && outcome.operation === 'install'),
+    outcome.kind === 'installer-failed' ||
+    outcome.kind === 'start-failed' ||
+    (outcome.kind === 'not-started' && outcome.operation === 'install'),
 )
 const ENDINGS_WITHOUT_LAST_LINES = ENDINGS.filter(
   ([ending]) => !ENDINGS_WITH_LAST_LINES.some(([name]) => name === ending),
@@ -338,6 +343,7 @@ function endWith(
 
 function withLastLines(outcome: RuntimeProvisioningOutcome, lastLines: string[]): RuntimeProvisioningOutcome {
   if (outcome.kind === 'installer-failed') return { kind: 'installer-failed', lastLines }
+  if (outcome.kind === 'start-failed') return { kind: 'start-failed', lastLines }
   if (outcome.kind === 'not-started') return { kind: 'not-started', operation: outcome.operation, lastLines }
   return outcome
 }
@@ -875,6 +881,20 @@ describe('the ended stage', () => {
     expect(screen.queryByTestId('runtime-provisioning-last-lines')).toBeNull()
   })
 
+  it('shows the line of a failed start command under one "Runtime start failed" title, with no 120 s wording (P18)', () => {
+    endWith({ kind: 'start-failed', lastLines: [START_FAILURE_LINE] })
+    renderDialog()
+
+    const titled = Array.from(dialog().querySelectorAll('*')).filter(
+      (element) => normalize(element.textContent ?? '') === START_FAILED_TITLE,
+    )
+
+    expect(shownText(screen.getByTestId('runtime-provisioning-last-lines'))).toContain(START_FAILURE_LINE)
+    expect(titled).toHaveLength(1)
+    expect(shownText()).not.toContain('120')
+    expect(shownText()).not.toContain('was started')
+  })
+
   it('offers no way to accept a changed host key (TC26, BR15)', () => {
     endWith({ kind: 'host-key-changed', target: `${DEVICE_IP}:22` })
     renderDialog()
@@ -925,6 +945,19 @@ describe('the toast at the end of an operation', () => {
     endWith(outcome, [], nextOperationId(), false)
 
     expect(toasts.map(({ variant }) => variant)).toEqual(['fail'])
+  })
+
+  it('reports a failed start command with one "Runtime start failed" failure toast and its body (P18)', () => {
+    renderDialog()
+
+    endWith({ kind: 'start-failed', lastLines: [START_FAILURE_LINE] }, [], nextOperationId(), false)
+
+    expect(toasts.map(({ variant, text }) => ({ variant, text }))).toEqual([
+      {
+        variant: 'fail',
+        text: `${START_FAILED_TITLE}\nThe OpenPLC Runtime could not be started on ${DEVICE_IP}: the start command failed. Nothing was installed. Its last lines are in the editor console.`,
+      },
+    ])
   })
 
   it('reports a cancelled operation with no toast (P12)', () => {

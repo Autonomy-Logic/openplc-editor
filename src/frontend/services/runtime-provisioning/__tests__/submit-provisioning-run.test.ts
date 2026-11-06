@@ -58,6 +58,7 @@ const ENDINGS_THAT_DISCONNECT: RuntimeProvisioningOutcome[] = [
   { kind: 'v3-present' },
   { kind: 'download-failed', dockerPresent: false },
   { kind: 'installer-failed', lastLines: ['E: Unable to locate package docker-ce'] },
+  { kind: 'start-failed', lastLines: ['Error response from daemon: No such container: openplc-runtime'] },
 ]
 
 const ENDINGS_TO_SCAN: RuntimeProvisioningOutcome[] = [

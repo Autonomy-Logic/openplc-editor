@@ -31,6 +31,10 @@ const CONNECTION_LABELS = ['Connect', 'Connecting...', 'Disconnect']
 const FAILURE_LINES = ['Reading package lists...', 'E: Unable to locate package docker-ce']
 const INSTALLER_FAILED: RuntimeProvisioningOutcome = { kind: 'installer-failed', lastLines: FAILURE_LINES }
 const CONNECTED_READY: RuntimeProvisioningOutcome = { kind: 'connected-ready', operation: 'install' }
+const START_FAILED: RuntimeProvisioningOutcome = {
+  kind: 'start-failed',
+  lastLines: ['Error response from daemon: No such container: openplc-runtime'],
+}
 
 let store: OpenPLCStore
 let log: PortCallLog
@@ -228,6 +232,16 @@ describe('Board runtime row during runtime provisioning', () => {
 
     it('still offers Show result for a failed install while disconnected', () => {
       seedEnded(INSTALLER_FAILED)
+      store.getState().deviceActions.setRuntimeConnectionStatus('disconnected')
+      renderBoard()
+
+      expect(activityButton().textContent).toBe('Show result')
+    })
+
+    it('offers Show result for a failed start command while disconnected (P18)', () => {
+      seedRunning('start')
+      provisioningActions().finishRun(START_FAILED, ENDED_AT)
+      provisioningActions().setDialogVisible(false)
       store.getState().deviceActions.setRuntimeConnectionStatus('disconnected')
       renderBoard()
 

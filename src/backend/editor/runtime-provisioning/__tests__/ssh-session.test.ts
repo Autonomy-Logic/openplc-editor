@@ -9,18 +9,28 @@ import type {
   SshSessionOpenResult,
 } from '../../../../middleware/shared/ports/runtime-provisioning-mechanisms'
 import { createSshSessionMechanism } from '../ssh-session'
-import type { ExecBehaviour, SshServerBehaviour, TestSshServer } from './fixtures/local-servers'
+import type { ExecBehaviour, FreezableProxy, SshServerBehaviour, TestSshServer } from './fixtures/local-servers'
 import {
+  HANG_COMMAND,
+  hangOrAnswer,
   LOOPBACK,
   refusedPort,
   SERVER_PASSWORD,
   SERVER_USERNAME,
+  startFreezableProxy,
   startRawServer,
   startSshServer,
 } from './fixtures/local-servers'
 
 const OPEN_TIMEOUT_MS = 10_000
 const SHORT_TIMEOUT_MS = 200
+const EXEC_TIMEOUT_MS = 10_000
+const KEEPALIVE_INTERVAL_MS = 5_000
+const KEEPALIVE_COUNT_MAX = 3
+const FAST_KEEPALIVE: Partial<SshSessionOpenRequest> = { keepaliveIntervalMs: 200, keepaliveCountMax: 2 }
+const BOUND_MS = 2_000
+const REAL_TIME_TEST_MS = 10_000
+const STILL_PENDING = `still pending after ${BOUND_MS} ms`
 
 const servers: TestSshServer[] = []
 const sessions: SshSession[] = []
@@ -49,6 +59,8 @@ function request(port: number, overrides: Partial<SshSessionOpenRequest> = {}): 
     username: SERVER_USERNAME,
     password: SERVER_PASSWORD,
     timeoutMs: OPEN_TIMEOUT_MS,
+    keepaliveIntervalMs: KEEPALIVE_INTERVAL_MS,
+    keepaliveCountMax: KEEPALIVE_COUNT_MAX,
     verifyHostKey: () => Promise.resolve(true),
     chooseAuth: passwordLogin(),
     ...overrides,
@@ -61,10 +73,43 @@ async function open(port: number, overrides: Partial<SshSessionOpenRequest> = {}
   return result
 }
 
-async function openSession(port: number): Promise<SshSession> {
-  const result = await open(port)
+async function openSession(port: number, overrides: Partial<SshSessionOpenRequest> = {}): Promise<SshSession> {
+  const result = await open(port, overrides)
   if (result.kind !== 'open') throw new Error(`expected an open session, got ${result.message}`)
   return result.session
+}
+
+async function freezableProxy(targetPort: number): Promise<FreezableProxy> {
+  const proxy = await startFreezableProxy(targetPort)
+  stops.push(() => proxy.stop())
+  return proxy
+}
+
+function within<T>(promise: Promise<T>, ms = BOUND_MS): Promise<T | typeof STILL_PENDING> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(STILL_PENDING), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
+function realTime(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function settlement(promise: Promise<unknown>): Promise<string> {
+  return promise.then(
+    () => 'resolved',
+    (error: unknown) => `rejected: ${error instanceof Error ? error.message : String(error)}`,
+  )
 }
 
 function laterTick<T>(value: T): Promise<T> {
@@ -83,8 +128,8 @@ function afterStdinEnds(reply: (stdin: string, channel: ServerChannel) => void):
 
 afterEach(async () => {
   sessions.splice(0).forEach((session) => session.close())
-  await Promise.all(servers.splice(0).map((server) => server.stop()))
   await Promise.all(stops.splice(0).map((stop) => stop()))
+  await Promise.all(servers.splice(0).map((server) => server.stop()))
   jest.restoreAllMocks()
 })
 
@@ -238,7 +283,9 @@ describe('running a command on the session', () => {
     })
     const session = await openSession(server.port)
 
-    await expect(session.exec('cat', { stdin: 'S3cr3t-Pi!\n', maxOutputBytes: 1024 })).resolves.toMatchObject({
+    await expect(
+      session.exec('cat', { stdin: 'S3cr3t-Pi!\n', maxOutputBytes: 1024, timeoutMs: EXEC_TIMEOUT_MS }),
+    ).resolves.toMatchObject({
       exitCode: 0,
       stdout: 'got:S3cr3t-Pi!\n',
       stderr: '',
@@ -257,7 +304,9 @@ describe('running a command on the session', () => {
     })
     const session = await openSession(server.port)
 
-    await expect(session.exec('uname -m', { maxOutputBytes: 1024 })).resolves.toMatchObject({
+    const result = await session.exec('uname -m', { maxOutputBytes: 1024, timeoutMs: EXEC_TIMEOUT_MS })
+
+    expect(result).toMatchObject({
       exitCode: 0,
       stdout: 'stdin was 0 bytes',
       stderr: '',
@@ -276,7 +325,7 @@ describe('running a command on the session', () => {
     })
     const session = await openSession(server.port)
 
-    await expect(session.exec('false', { maxOutputBytes: 1024 })).resolves.toMatchObject({
+    await expect(session.exec('false', { maxOutputBytes: 1024, timeoutMs: EXEC_TIMEOUT_MS })).resolves.toMatchObject({
       exitCode: 3,
       stdout: 'out\n',
       stderr: 'err\n',
@@ -293,7 +342,7 @@ describe('running a command on the session', () => {
     })
     const session = await openSession(server.port)
 
-    const result = await session.exec('sleep 600', { maxOutputBytes: 1024 })
+    const result = await session.exec('sleep 600', { maxOutputBytes: 1024, timeoutMs: EXEC_TIMEOUT_MS })
 
     expect(result.exitCode).toBeNull()
   })
@@ -309,7 +358,7 @@ describe('running a command on the session', () => {
     })
     const session = await openSession(server.port)
 
-    const result = await session.exec('flood', { maxOutputBytes: 1000 })
+    const result = await session.exec('flood', { maxOutputBytes: 1000, timeoutMs: EXEC_TIMEOUT_MS })
 
     expect(result.truncated).toBe(true)
     expect(result.exitCode).toBe(0)
@@ -329,7 +378,7 @@ describe('running a command on the session', () => {
     })
     const session = await openSession(server.port)
 
-    await expect(session.exec('small', { maxOutputBytes: 1000 })).resolves.toMatchObject({
+    await expect(session.exec('small', { maxOutputBytes: 1000, timeoutMs: EXEC_TIMEOUT_MS })).resolves.toMatchObject({
       exitCode: 0,
       stdout: 'a'.repeat(400),
       stderr: 'b'.repeat(400),
@@ -350,7 +399,7 @@ describe('running a command on the session', () => {
     })
     const session = await openSession(server.port)
 
-    const result = await session.exec('cat install.log', { maxOutputBytes: 1024 })
+    const result = await session.exec('cat install.log', { maxOutputBytes: 1024, timeoutMs: EXEC_TIMEOUT_MS })
 
     expect(Array.from(result.stdoutBytes)).toEqual(Array.from(sent))
     expect(result.stdout).toBe('Größe: 5 €\n')
@@ -366,7 +415,7 @@ describe('running a command on the session', () => {
     })
     const session = await openSession(server.port)
 
-    const result = await session.exec('flood', { maxOutputBytes: 1000 })
+    const result = await session.exec('flood', { maxOutputBytes: 1000, timeoutMs: EXEC_TIMEOUT_MS })
 
     expect(result.truncated).toBe(true)
     expect(Array.from(result.stdoutBytes)).toEqual(Array.from(new TextEncoder().encode(result.stdout)))
@@ -383,8 +432,8 @@ describe('running a command on the session', () => {
     })
     const session = await openSession(server.port)
 
-    const first = await session.exec('first', { maxOutputBytes: 1024 })
-    const second = await session.exec('second', { maxOutputBytes: 1024 })
+    const first = await session.exec('first', { maxOutputBytes: 1024, timeoutMs: EXEC_TIMEOUT_MS })
+    const second = await session.exec('second', { maxOutputBytes: 1024, timeoutMs: EXEC_TIMEOUT_MS })
 
     expect([first.stdout, second.stdout]).toEqual(['ran first', 'ran second'])
     expect(server.connectionCount()).toBe(1)
@@ -417,4 +466,119 @@ describe('closing the session', () => {
     expect(kept).toHaveBeenCalledTimes(1)
     expect(removed).not.toHaveBeenCalled()
   })
+})
+
+describe('a session whose device stops answering (keepalive, F22, AC10.3)', () => {
+  it(
+    'closes a silent session through keepalive, firing onClosed before the pending exec settles',
+    async () => {
+      let hangReached: () => void = () => undefined
+      const reached = new Promise<void>((resolve) => {
+        hangReached = resolve
+      })
+      const server = await serve({ exec: hangOrAnswer(() => hangReached()) })
+      const proxy = await freezableProxy(server.port)
+      const session = await openSession(proxy.port, FAST_KEEPALIVE)
+      const order: string[] = []
+      const closed = new Promise<void>((resolve) =>
+        session.onClosed(() => {
+          order.push('onClosed')
+          resolve()
+        }),
+      )
+      const settled = settlement(session.exec(HANG_COMMAND, { maxOutputBytes: 1024, timeoutMs: 60_000 })).then(() => {
+        order.push('exec settled')
+      })
+      expect(await within(reached)).not.toBe(STILL_PENDING)
+
+      proxy.freeze()
+
+      expect(await within(Promise.all([closed, settled]))).not.toBe(STILL_PENDING)
+      expect(order).toEqual(['onClosed', 'exec settled'])
+    },
+    REAL_TIME_TEST_MS,
+  )
+
+  it(
+    'keeps a live session open through a command the device answers after 1,500 ms',
+    async () => {
+      const server = await serve({
+        exec: (_command, channel) => {
+          setTimeout(() => {
+            channel.exit(0)
+            channel.end()
+          }, 1_500)
+        },
+      })
+      const proxy = await freezableProxy(server.port)
+      const session = await openSession(proxy.port, FAST_KEEPALIVE)
+      const closed = jest.fn()
+      session.onClosed(closed)
+
+      const result = await within(session.exec('slow', { maxOutputBytes: 1024, timeoutMs: 60_000 }), 4_000)
+
+      expect(result).toMatchObject({ exitCode: 0 })
+      expect(closed).not.toHaveBeenCalled()
+    },
+    REAL_TIME_TEST_MS,
+  )
+})
+
+describe('a command past its deadline (F22, BR26)', () => {
+  it(
+    'rejects with a timed out error, keeps the session open and lets the next command run',
+    async () => {
+      const server = await serve({ exec: hangOrAnswer() })
+      const session = await openSession(server.port)
+      const closed = jest.fn()
+      session.onClosed(closed)
+
+      const outcome = await within(settlement(session.exec(HANG_COMMAND, { maxOutputBytes: 1024, timeoutMs: 300 })))
+
+      expect(outcome).toMatch(/^rejected: .*timed out/)
+      expect(closed).not.toHaveBeenCalled()
+      await expect(within(session.exec('quick', { maxOutputBytes: 1024, timeoutMs: 300 }))).resolves.toMatchObject({
+        exitCode: 0,
+        stdout: 'ran quick',
+      })
+    },
+    REAL_TIME_TEST_MS,
+  )
+
+  it(
+    'closes the channel of a command past its deadline',
+    async () => {
+      let channelClosed: () => void = () => undefined
+      const serverSawClose = new Promise<string>((resolve) => {
+        channelClosed = () => resolve('channel closed')
+      })
+      const server = await serve({ exec: hangOrAnswer((channel) => channel.on('close', () => channelClosed())) })
+      const session = await openSession(server.port)
+
+      void settlement(session.exec(HANG_COMMAND, { maxOutputBytes: 1024, timeoutMs: 300 }))
+
+      expect(await within(serverSawClose)).toBe('channel closed')
+    },
+    REAL_TIME_TEST_MS,
+  )
+
+  it(
+    'resolves a quick command under its deadline, and nothing rejects or closes in the 500 ms after',
+    async () => {
+      const server = await serve({ exec: hangOrAnswer() })
+      const session = await openSession(server.port)
+      const closed = jest.fn()
+      session.onClosed(closed)
+
+      const outcome = await within(settlement(session.exec('quick', { maxOutputBytes: 1024, timeoutMs: 300 })))
+      await realTime(500)
+
+      expect(outcome).toBe('resolved')
+      expect(closed).not.toHaveBeenCalled()
+      await expect(within(session.exec('again', { maxOutputBytes: 1024, timeoutMs: 300 }))).resolves.toMatchObject({
+        exitCode: 0,
+      })
+    },
+    REAL_TIME_TEST_MS,
+  )
 })

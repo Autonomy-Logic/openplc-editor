@@ -269,6 +269,13 @@ describe('toRuntimeProvisioningOutcome', () => {
     expect(toRuntimeProvisioningOutcome(outcome)).toEqual(outcome)
   })
 
+  it('keeps a start-failed outcome with its last lines (P18)', () => {
+    expect(toRuntimeProvisioningOutcome({ kind: 'start-failed', lastLines: ['a', 'b'] })).toEqual({
+      kind: 'start-failed',
+      lastLines: ['a', 'b'],
+    })
+  })
+
   it.each([
     ['an unknown kind', { kind: 'rebooted' }],
     ['no kind', { operation: 'start' }],
@@ -289,6 +296,8 @@ describe('toRuntimeProvisioningOutcome', () => {
     ['download-failed without dockerPresent', { kind: 'download-failed' }],
     ['installer-failed without lastLines', { kind: 'installer-failed' }],
     ['installer-failed with a non-string line', { kind: 'installer-failed', lastLines: [null] }],
+    ['start-failed without lastLines', { kind: 'start-failed' }],
+    ['start-failed with a numeric line', { kind: 'start-failed', lastLines: ['ok', 2] }],
     ['null', null],
     ['undefined', undefined],
     ['a string', 'connected-ready'],
