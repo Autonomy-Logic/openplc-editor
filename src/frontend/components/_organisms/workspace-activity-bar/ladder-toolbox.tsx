@@ -1,3 +1,4 @@
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../store'
 import { cn } from '../../../utils/cn'
 import { getFunctionBlockVariablesToCleanup } from '../../../utils/graphical/get-function-block-variables-to-cleanup'
@@ -21,6 +22,8 @@ export const LadderToolbox = () => {
     },
     projectActions: { deleteVariable },
   } = useOpenPLCStore()
+
+  const isEditingLocked = useIsEditingLocked()
 
   const editorName = editor.meta.name
   const pou = pous.find((pou) => pou.name === editorName)
@@ -64,6 +67,8 @@ export const LadderToolbox = () => {
   }
 
   const handleRemoveNodes = () => {
+    if (isEditingLocked) return
+
     const allNodesToRemove = flow?.rungs.flatMap((rung) => resolveSelectedNodes(rung)) || []
 
     flow?.rungs.forEach((rung) => {
@@ -123,8 +128,10 @@ export const LadderToolbox = () => {
       <TooltipSidebarWrapperButton tooltipContent='Delete selected elements'>
         <DeleteElementButton
           onClick={handleRemoveNodes}
+          disabled={isEditingLocked}
           className={cn({
-            'disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent': selectedNodes.length === 0,
+            'disabled cursor-not-allowed opacity-50 [&>*:first-child]:hover:bg-transparent':
+              selectedNodes.length === 0 || isEditingLocked,
           })}
         />
       </TooltipSidebarWrapperButton>
