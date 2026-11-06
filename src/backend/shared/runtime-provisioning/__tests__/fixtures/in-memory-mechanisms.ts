@@ -52,6 +52,7 @@ export type RecordedCommandName = ScriptedCommandName | 'pollInstaller' | 'unrec
 export interface ExecReply {
   exitCode?: number | null
   stdout?: string
+  stdoutBytes?: Uint8Array
   stderr?: string
   rejectWith?: string
 }
@@ -66,6 +67,7 @@ export type ExecHandler = (context: ExecContext) => ExecReply | Promise<ExecRepl
 export interface InstallerPollReply {
   exit: 'running' | number
   text?: string
+  bytes?: Uint8Array
   from?: number
   size?: number
   raw?: string
@@ -236,7 +238,7 @@ export const RUNTIME_REFUSED: UsersInfoRawFacts = {
 
 const NEUTRAL_FAILURE = { message: 'connection closed' }
 const MAX_AUTH_ROUNDS = 6
-const SLEEP_LIMIT = 1_000
+const SLEEP_LIMIT = 5_000
 
 function abortError(): Error {
   const error = new Error('The operation was aborted')
@@ -244,19 +246,41 @@ function abortError(): Error {
   return error
 }
 
-function execResult(reply: ExecReply): SshExecResult {
+type FakeExecResult = SshExecResult & { stdoutBytes: Uint8Array }
+
+export function utf8Bytes(text: string): Uint8Array {
+  return new TextEncoder().encode(text)
+}
+
+export function joinBytes(...parts: Uint8Array[]): Uint8Array {
+  const all = new Uint8Array(parts.reduce((total, part) => total + part.length, 0))
+  let at = 0
+  for (const part of parts) {
+    all.set(part, at)
+    at += part.length
+  }
+  return all
+}
+
+function execResult(reply: ExecReply): FakeExecResult {
+  const stdoutBytes = reply.stdoutBytes ?? utf8Bytes(reply.stdout ?? '')
   return {
     exitCode: reply.exitCode === undefined ? 0 : reply.exitCode,
-    stdout: reply.stdout ?? '',
+    stdout: reply.stdout ?? new TextDecoder().decode(stdoutBytes),
+    stdoutBytes,
     stderr: reply.stderr ?? '',
     truncated: false,
   }
 }
 
-function pollStdout(reply: InstallerPollReply, from: number): string {
-  const text = reply.text ?? ''
-  const size = reply.size ?? from + text.length
-  return `exit=${reply.exit}\nsize=${size}\nfrom=${from}\n---\n${text}`
+function pollBody(reply: InstallerPollReply): Uint8Array {
+  return reply.bytes ?? utf8Bytes(reply.text ?? '')
+}
+
+function pollStdoutBytes(reply: InstallerPollReply, from: number): Uint8Array {
+  const body = pollBody(reply)
+  const size = reply.size ?? from + body.length
+  return joinBytes(utf8Bytes(`exit=${reply.exit}\nsize=${size}\nfrom=${from}\n---\n`), body)
 }
 
 interface Recognized {
@@ -336,8 +360,8 @@ export function createFakeDevice(options: FakeDeviceOptions = {}): FakeDevice {
         : polls[Math.min(index, polls.length - 1)]
     if (reply.raw !== undefined) return { stdout: reply.raw }
     const from = reply.from ?? pollOffset
-    pollOffset = from + (reply.text ?? '').length
-    return { stdout: pollStdout(reply, from) }
+    pollOffset = from + pollBody(reply).length
+    return { stdoutBytes: pollStdoutBytes(reply, from) }
   }
 
   async function reply(recognized: Recognized, stdin: string | undefined, index: number): Promise<ExecReply> {

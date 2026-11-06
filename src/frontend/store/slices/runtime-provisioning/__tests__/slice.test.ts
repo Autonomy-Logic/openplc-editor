@@ -240,6 +240,29 @@ describe('the runtime provisioning slice', () => {
 
     expect(slice().detachRequested).toBe(false)
   })
+
+  it('declines an open offer on project close: idle, hidden, no detach, remembered ports kept (AC02)', () => {
+    actions().rememberSshPort(HOST, 2222)
+    actions().showOffer(HOST, 2222)
+
+    actions().requestDetachOnProjectClose()
+
+    expect(slice()).toEqual({
+      view: { stage: 'idle' },
+      dialogVisible: false,
+      sessionSshPorts: { [HOST]: 2222 },
+      detachRequested: false,
+    })
+  })
+
+  it('keeps an ending and its dialog as they are on project close', () => {
+    finishedRun()
+    const before = slice()
+
+    actions().requestDetachOnProjectClose()
+
+    expect(slice()).toEqual(before)
+  })
 })
 
 describe('the runtime provisioning slice in the store', () => {
@@ -263,6 +286,16 @@ describe('the runtime provisioning slice in the store', () => {
     expect(slice().view).toEqual(ended)
     expect(slice().detachRequested).toBe(false)
     expect(slice().sessionSshPorts).toEqual({ [HOST]: 2222 })
+  })
+
+  it('declines an open offer when the project closes, hiding its dialog', () => {
+    actions().showOffer(HOST, 22)
+
+    store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+
+    expect(slice().view).toEqual({ stage: 'idle' })
+    expect(slice().dialogVisible).toBe(false)
+    expect(slice().detachRequested).toBe(false)
   })
 
   it('keeps the dialog visible when every modal is closed', () => {

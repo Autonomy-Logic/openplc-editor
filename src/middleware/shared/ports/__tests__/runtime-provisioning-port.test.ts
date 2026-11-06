@@ -58,6 +58,8 @@ describe('ProvisioningHostSchema', () => {
     ['a bracketed IPv6 literal', '[fe80::1]'],
     ['an IPv6 zone index', 'fe80::1%eth0'],
     ['non-hex IPv6 digits', 'gggg::1'],
+    ['an IPv6 address with two double colons', 'fe80::1::2'],
+    ['an IPv6 address with two double colons around a group', '1::2::3'],
     ['a control character', 'plc\n.local'],
   ])('rejects %s', (_, host) => {
     expect(ProvisioningHostSchema.safeParse(host).success).toBe(false)
@@ -108,6 +110,8 @@ describe('SshProbeRequestSchema', () => {
     ['port "22" as a string', { host: '192.168.1.50', port: '22' }],
     ['port 22.5', { host: '192.168.1.50', port: 22.5 }],
     ['an invalid host', { host: 'plc..local', port: 22 }],
+    ['an IPv6 host with two double colons', { host: 'fe80::1::2', port: 22 }],
+    ['an IPv6 host with two double colons around a group', { host: '1::2::3', port: 22 }],
     ['no port', { host: '192.168.1.50' }],
   ])('rejects %s', (_, request) => {
     expect(SshProbeRequestSchema.safeParse(request).success).toBe(false)
@@ -143,6 +147,8 @@ describe('validateRunRequest', () => {
     ['host', 'a hostname of 254 characters', { ...validRequest, host: host254 }],
     ['host', 'an empty host', { ...validRequest, host: '' }],
     ['host', 'a host with a shell metacharacter', { ...validRequest, host: 'plc;reboot' }],
+    ['host', 'an IPv6 host with two double colons', { ...validRequest, host: 'fe80::1::2' }],
+    ['host', 'an IPv6 host with two double colons around a group', { ...validRequest, host: '1::2::3' }],
     ['host', 'a numeric host', { ...validRequest, host: 192 }],
     ['username', 'a username of 33 characters', { ...validRequest, username: 'u'.repeat(33) }],
     ['username', 'an empty username', { ...validRequest, username: '' }],

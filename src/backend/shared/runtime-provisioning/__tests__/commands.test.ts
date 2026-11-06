@@ -1,4 +1,4 @@
-import type { DeviceCommand } from '../commands'
+import type { Account, DeviceCommand } from '../commands'
 import { buildExec, pollInstallerCommand, PROVISIONING_COMMANDS, startInstallerCommand } from '../commands'
 import { DOCKER_CONTAINER_RECORDS, INSTALLER_URL, V3_UNITS } from '../runtime-names'
 
@@ -6,6 +6,26 @@ const LOG_DIR = '/tmp/tmp.Xy7Qa9Zk2B'
 const HOSTILE_USERNAME = 'pi; rm -rf /'
 const HOSTILE_PASSWORD = 'x$(reboot)`id`\'"'
 const SUDO_PREFIX = "/usr/bin/sudo -S -k -p '' sh -c "
+const STDIN_FROM_DEV_NULL = 'exec </dev/null; '
+const INJECTION_DIR = "/tmp/x'; touch /tmp/PWNED; '"
+const UNSAFE_DIRS: [string, string][] = [
+  ['a directory that closes the quote and runs a command', INJECTION_DIR],
+  ['a relative directory', 'relative/dir'],
+  ['a directory with a parent segment', '/tmp/../etc'],
+  ['an empty directory', ''],
+]
+const INVALID_OFFSETS: [string, number][] = [
+  ['NaN', Number.NaN],
+  ['-1', -1],
+  ['1.5', 1.5],
+  ['one past the largest safe integer', Number.MAX_SAFE_INTEGER + 1],
+]
+const INVALID_MAX_BYTES: [string, number][] = [
+  ['0', 0],
+  ['-1', -1],
+  ['1.5', 1.5],
+  ['NaN', Number.NaN],
+]
 const SHELL_SPECIALS = new Set([';', '&', '|', '<', '>', '(', ')', '$', '`', '*', '?', '[', '#', '~', '\n'])
 
 const fixedCommands: [string, DeviceCommand][] = Object.entries(PROVISIONING_COMMANDS)
@@ -277,6 +297,10 @@ describe('startInstallerCommand', () => {
     expect(started.command).not.toContain('curl')
     expect(started.command).not.toContain('://')
   })
+
+  it.each(UNSAFE_DIRS)('refuses %s', (_, dir) => {
+    expect(() => startInstallerCommand(dir)).toThrow(Error)
+  })
 })
 
 describe('pollInstallerCommand', () => {
@@ -303,17 +327,40 @@ describe('pollInstallerCommand', () => {
   it('removes nothing', () => {
     expect(polled.command).not.toContain('rm ')
   })
+
+  it.each(UNSAFE_DIRS)('refuses %s', (_, dir) => {
+    expect(() => pollInstallerCommand(dir, 0, 65536)).toThrow(Error)
+  })
+
+  it.each(INVALID_OFFSETS)('refuses the offset %s', (_, offset) => {
+    expect(() => pollInstallerCommand(LOG_DIR, offset, 65536)).toThrow(Error)
+  })
+
+  it.each(INVALID_MAX_BYTES)('refuses the byte count %s', (_, maxBytes) => {
+    expect(() => pollInstallerCommand(LOG_DIR, 0, maxBytes)).toThrow(Error)
+  })
+
+  it('accepts offset 0, the largest safe offset and a byte count of 1', () => {
+    expect(() => pollInstallerCommand(LOG_DIR, 0, 1)).not.toThrow()
+    expect(() => pollInstallerCommand(LOG_DIR, Number.MAX_SAFE_INTEGER, 65536)).not.toThrow()
+  })
 })
 
 describe('buildExec', () => {
-  it.each(allCommands)('runs %s unchanged for root, without sending the password', (_, command) => {
-    expect(buildExec(command, 'root')).toEqual({ command: command.command, sendsPassword: false })
+  it.each(allCommands)('runs %s for root with stdin from /dev/null, without sending the password', (_, command) => {
+    expect(buildExec(command, 'root')).toEqual({
+      command: `${STDIN_FROM_DEV_NULL}${command.command}`,
+      sendsPassword: false,
+    })
   })
 
-  it('runs a command that needs no elevation unchanged for a sudo account', () => {
+  it('runs a command that needs no elevation for a sudo account with stdin from /dev/null', () => {
     const probe = PROVISIONING_COMMANDS.probeSystem
 
-    expect(buildExec(probe, 'sudo')).toEqual({ command: probe.command, sendsPassword: false })
+    expect(buildExec(probe, 'sudo')).toEqual({
+      command: `${STDIN_FROM_DEV_NULL}${probe.command}`,
+      sendsPassword: false,
+    })
   })
 
   const elevatedCommands = allCommands.filter(([, command]) => command.elevated)
@@ -325,17 +372,26 @@ describe('buildExec', () => {
     expect(exec.command.startsWith(SUDO_PREFIX)).toBe(true)
   })
 
-  it.each(elevatedCommands)('quotes %s so the shell receives it whole, with stdin from /dev/null', (_, command) => {
-    expect(shellWords(buildExec(command, 'sudo').command)).toEqual([
-      '/usr/bin/sudo',
-      '-S',
-      '-k',
-      '-p',
-      '',
-      'sh',
-      '-c',
-      `${command.command} </dev/null`,
-    ])
+  it.each(elevatedCommands)(
+    'quotes %s so the shell receives it whole, with stdin from /dev/null for the whole command',
+    (_, command) => {
+      expect(shellWords(buildExec(command, 'sudo').command)).toEqual([
+        '/usr/bin/sudo',
+        '-S',
+        '-k',
+        '-p',
+        '',
+        'sh',
+        '-c',
+        `${STDIN_FROM_DEV_NULL}${command.command}`,
+      ])
+    },
+  )
+
+  it.each(allCommands)('no longer redirects only the last simple command of %s from /dev/null', (_, command) => {
+    for (const account of ['root', 'sudo'] satisfies Account[]) {
+      expect(buildExec(command, account).command.endsWith(" </dev/null'")).toBe(false)
+    }
   })
 
   it.each(allCommands)('never preserves the environment through sudo for %s', (_, command) => {

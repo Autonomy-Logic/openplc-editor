@@ -1,8 +1,12 @@
 import type {
   HostKeyFileReadResult,
+  RuntimeProvisioningMechanisms,
   SshBannerReadResult,
+  SshSessionOpenRequest,
+  SshSessionOpenResult,
 } from '../../../../middleware/shared/ports/runtime-provisioning-mechanisms'
 import type {
+  RuntimeProvisioningEvent,
   RuntimeProvisioningOutcome,
   RuntimeProvisioningPhase,
   RuntimeProvisioningRunRequest,
@@ -65,6 +69,7 @@ import {
   sleepCalls,
   START_TIME,
   systemOutput,
+  utf8Bytes,
 } from './fixtures/in-memory-mechanisms'
 
 const HOST = '192.168.1.50'
@@ -163,12 +168,55 @@ function lastLinesOf(outcome: RuntimeProvisioningOutcome): string[] {
   return outcome.kind === 'not-started' || outcome.kind === 'installer-failed' ? outcome.lastLines : []
 }
 
+function pollCount(device: FakeDevice): number {
+  return commandNames(device).filter((name) => name === 'pollInstaller').length
+}
+
+async function untilLogged(device: FakeDevice, kind: DeviceCall['kind']): Promise<void> {
+  for (let turn = 0; turn < 100 && countOf(device, kind) === 0; turn += 1) await Promise.resolve()
+}
+
+const OPEN_FAILED: SshSessionOpenResult = { kind: 'error', message: 'connection closed' }
+
+interface HeldOpen {
+  request: SshSessionOpenRequest
+  finish(result: SshSessionOpenResult): void
+}
+
+interface HeldOpenHarness extends Harness {
+  opened: Promise<HeldOpen>
+}
+
+function setupHeldOpen(replace?: (text: string) => Promise<void>): HeldOpenHarness {
+  const device = createFakeDevice()
+  let deliver: (held: HeldOpen) => void = () => undefined
+  const opened = new Promise<HeldOpen>((resolve) => {
+    deliver = resolve
+  })
+  const mechanisms: RuntimeProvisioningMechanisms = {
+    ...device.mechanisms,
+    hostKeyFile: replace === undefined ? device.mechanisms.hostKeyFile : { ...device.mechanisms.hostKeyFile, replace },
+    sshSession: {
+      open: (request) => new Promise<SshSessionOpenResult>((resolve) => deliver({ request, finish: resolve })),
+    },
+  }
+  const service = createRuntimeProvisioningService(mechanisms)
+  device.watch(service)
+  return { device, service, opened }
+}
+
 describe('runtime provisioning service exports', () => {
   it('pins the SSH session timeout, the poll interval and the runtime wait', () => {
     expect(SSH_SESSION_TIMEOUT_MS).toBe(20_000)
     expect(INSTALLER_POLL_INTERVAL_MS).toBe(1_000)
     expect(RUNTIME_WAIT_MS).toBe(120_000)
     expect(RUNTIME_WAIT_INTERVAL_MS).toBe(2_000)
+  })
+
+  it('pins the installer follow bounds: 60 empty polls and 60 minutes (M18)', () => {
+    expect(provisioning).toEqual(
+      expect.objectContaining({ INSTALLER_START_POLL_LIMIT: 60, INSTALLER_FOLLOW_MAX_MS: 3_600_000 }),
+    )
   })
 
   it('is re-exported from the runtime-provisioning index', () => {
@@ -991,6 +1039,53 @@ describe('installer output never leaks the password (AS-09)', () => {
   })
 })
 
+describe('installer output decoded as one UTF-8 stream across polls (M15, AS-09)', () => {
+  const UTF8_PASSWORD = 'Pässwört-€1'
+  const MASKED_LINE = `sudo echoed ${PASSWORD_MASK} here`
+
+  it('masks a non-ASCII password split between two polls inside the bytes of one character', async () => {
+    const line = utf8Bytes(`sudo echoed ${UTF8_PASSWORD} here\n`)
+    const insideEuro = line.indexOf(0xe2) + 1
+    const { device, service } = setup({
+      devicePassword: UTF8_PASSWORD,
+      polls: [
+        { exit: 'running', bytes: line.subarray(0, insideEuro) },
+        { exit: 'running', bytes: line.subarray(insideEuro) },
+        { exit: 1 },
+      ],
+    })
+
+    const outcome = await service.run({ ...REQUEST, password: UTF8_PASSWORD })
+    const shown = [
+      ...outputLines(device),
+      ...consoleMessages(device),
+      ...lastLinesOf(outcome),
+      ...auditEvents(device),
+      ...auditWrites(device),
+    ].join('\n')
+
+    expect(outcome.kind).toBe('installer-failed')
+    expect(outputLines(device)).toEqual([MASKED_LINE])
+    expect(consoleMessages(device)).toEqual([MASKED_LINE])
+    expect(lastLinesOf(outcome)).toEqual([MASKED_LINE])
+    for (const fragment of [UTF8_PASSWORD, 'Pässwört', '€1', '\uFFFD']) expect(shown).not.toContain(fragment)
+  })
+
+  it('counts the poll offset in bytes, so a multi-byte log is followed with no unrecognized poll', async () => {
+    const { device, service } = setup({
+      polls: [
+        { exit: 'running', text: 'Grüße aus München\n' },
+        { exit: 'running', text: 'Größe: 5 €\n' },
+        { exit: 0, text: 'Fertig\n' },
+      ],
+    })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'connected-ready', operation: 'install' })
+    expect(commandNames(device)).not.toContain('unrecognized')
+    expect(outputLines(device)).toEqual(['Grüße aus München', 'Größe: 5 €', 'Fertig'])
+  })
+})
+
 describe('a flooding installer (AS-12)', () => {
   const FLOOD_LINES = 'flood line\n'.repeat(5957)
   const LONG_WINDOW = 'h'.repeat(POLL_READ_BYTES)
@@ -1178,6 +1273,189 @@ describe('cancel', () => {
     expect(namesAfterInspection(harness.device)).toEqual(['startRuntimeContainer'])
     expect(checkCalls(harness.device)).toEqual([])
     expect(harness.device.sessionClosed()).toBe(true)
+  })
+})
+
+describe('nothing reaches the device once the run has an outcome (M14, AS-19)', () => {
+  it('saves no host key and trusts none when the host-key check comes after a detach', async () => {
+    const { device, service, opened } = setupHeldOpen()
+    const outcome = service.run(REQUEST)
+    const held = await opened
+
+    service.detach('quit')
+    const trusted = await held.request.verifyHostKey(ED25519_AAAA)
+    held.finish(OPEN_FAILED)
+
+    await expect(outcome).resolves.toEqual({ kind: 'unknown' })
+    expect(trusted).toBe(false)
+    expect(countOf(device, 'host-key-replace')).toBe(0)
+    expect(device.hostKeyFile()).toEqual({ kind: 'absent' })
+    expect(auditWrites(device)).toEqual([expectedAudit(device, REQUEST, 'inspect', 'unknown')])
+  })
+
+  it.each([
+    ['before any method was tried', null],
+    ['when password is offered', ['password']],
+    ['when publickey and password are offered', ['publickey', 'password']],
+  ] satisfies [string, string[] | null][])(
+    'answers stop to the authentication choice %s after a detach',
+    async (_, methodsLeft) => {
+      const { device, service, opened } = setupHeldOpen()
+      const outcome = service.run(REQUEST)
+      const held = await opened
+
+      service.detach('renderer-gone')
+      const choice = held.request.chooseAuth(methodsLeft)
+      held.finish(OPEN_FAILED)
+
+      await expect(outcome).resolves.toEqual({ kind: 'unknown' })
+      expect(choice).toBe('stop')
+      expect(auditWrites(device)).toHaveLength(1)
+    },
+  )
+
+  it('trusts no key, sends no authentication and ends cancelled when cancelled while connecting (TC45 SSH login)', async () => {
+    const { device, service, opened } = setupHeldOpen()
+    const outcome = service.run(REQUEST)
+    const held = await opened
+
+    await service.cancel()
+    const trusted = await held.request.verifyHostKey(ED25519_AAAA)
+    const choices = [held.request.chooseAuth(null), held.request.chooseAuth(['password'])]
+    held.finish(OPEN_FAILED)
+
+    await expect(outcome).resolves.toEqual({ kind: 'cancelled' })
+    expect(trusted).toBe(false)
+    expect(choices).toEqual(['stop', 'stop'])
+    expect(countOf(device, 'host-key-replace')).toBe(0)
+    expect(auditWrites(device)).toEqual([expectedAudit(device, REQUEST, 'inspect', 'cancelled')])
+  })
+
+  it('resolves the host-key check false when the run ends while the first-use key is being saved', async () => {
+    const replaced: string[] = []
+    let finishSave: () => void = () => undefined
+    const { device, service, opened } = setupHeldOpen((text) => {
+      replaced.push(text)
+      return new Promise<void>((resolve) => {
+        finishSave = resolve
+      })
+    })
+    const outcome = service.run(REQUEST)
+    const held = await opened
+
+    const trusted = held.request.verifyHostKey(ED25519_AAAA)
+    service.detach('quit')
+    finishSave()
+
+    await expect(trusted).resolves.toBe(false)
+    held.finish(OPEN_FAILED)
+    await expect(outcome).resolves.toEqual({ kind: 'unknown' })
+    expect(replaced).toHaveLength(1)
+    expect(auditWrites(device)).toHaveLength(1)
+  })
+
+  it.each([
+    ['a cancel', (service: RuntimeProvisioningService) => void service.cancel(), { kind: 'cancelled' }],
+    ['a detach', (service: RuntimeProvisioningService) => service.detach('quit'), { kind: 'unknown' }],
+  ] satisfies [string, (service: RuntimeProvisioningService) => void, RuntimeProvisioningOutcome][])(
+    'sends no password and saves no key after %s as the SSH session opens',
+    async (_, act, ending) => {
+      const harness: Harness = setup({ onOpen: () => act(harness.service) })
+
+      await expect(harness.service.run(REQUEST)).resolves.toEqual(ending)
+      await untilLogged(harness.device, 'host-key-check')
+      expect(countOf(harness.device, 'host-key-check')).toBe(1)
+      expect(authCalls(harness.device)).toEqual([])
+      expect(countOf(harness.device, 'host-key-replace')).toBe(0)
+      expect(auditWrites(harness.device)).toHaveLength(1)
+    },
+  )
+})
+
+describe('bounded installer following (M18, AS-12)', () => {
+  const START_POLL_LIMIT = 60
+  const FOLLOW_MAX_MS = 3_600_000
+
+  function flowingOutput(index: number): InstallerPollReply {
+    return { exit: 'running', text: `progress ${index}\n` }
+  }
+
+  it('ends unknown after 60 polls report a running installer and an empty log, polling no more', async () => {
+    const { device, service } = setup({ polls: () => ({ exit: 'running' }) })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'unknown' })
+    expect(pollCount(device)).toBe(START_POLL_LIMIT)
+    expect(commandNames(device).at(-1)).toBe('pollInstaller')
+    expect(device.sessionClosed()).toBe(true)
+    expect(phaseFlags(device).at(-1)).toEqual(['installing', false])
+    expect(auditWrites(device)).toEqual([expectedAudit(device, REQUEST, 'install', 'unknown')])
+  })
+
+  it('keeps following when the log grows on the 60th poll, after 59 empty polls', async () => {
+    const { device, service } = setup({
+      polls: ({ index }) => {
+        if (index < 59) return { exit: 'running' }
+        if (index === 59) return { exit: 'running', text: 'Installing\n' }
+        if (index < 150) return { exit: 'running' }
+        return { exit: 0, text: 'Done\n' }
+      },
+    })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'connected-ready', operation: 'install' })
+    expect(pollCount(device)).toBe(151)
+    expect(outputLines(device)).toEqual(['Installing', 'Done'])
+  })
+
+  it('ends unknown at the first running poll 60 minutes after the installer started, while output keeps flowing', async () => {
+    const { device, service } = setup({ polls: ({ index }) => flowingOutput(index) })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'unknown' })
+    const startedAt = execCalls(device).find((call) => call.name === 'startInstaller')?.at ?? Number.NaN
+    const elapsed = execCalls(device)
+      .filter((call) => call.name === 'pollInstaller')
+      .map((call) => call.at - startedAt)
+    expect(elapsed.at(-1)).toBeGreaterThanOrEqual(FOLLOW_MAX_MS)
+    expect(elapsed.at(-2)).toBeLessThan(FOLLOW_MAX_MS)
+    expect(commandNames(device).at(-1)).toBe('pollInstaller')
+    expect(device.sessionClosed()).toBe(true)
+    expect(phaseFlags(device).at(-1)).toEqual(['installing', false])
+    expect(auditWrites(device)).toEqual([expectedAudit(device, REQUEST, 'install', 'unknown')])
+  })
+
+  it.each([
+    ['an empty log for 60 polls', (): InstallerPollReply => ({ exit: 'running' })],
+    ['60 minutes of output', flowingOutput],
+  ] satisfies [string, (index: number) => InstallerPollReply][])(
+    'accepts a new run after ending on %s, instead of answering busy',
+    async (_, firstRunPoll) => {
+      let firstRun = true
+      const { device, service } = setup({
+        polls: ({ index }) => (firstRun ? firstRunPoll(index) : { exit: 0, text: 'Done\n' }),
+      })
+
+      await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'unknown' })
+      firstRun = false
+
+      await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'connected-ready', operation: 'install' })
+      expect(countOf(device, 'open')).toBe(2)
+    },
+  )
+})
+
+describe('onEvent', () => {
+  it('stops calling a callback once its unsubscribe is called, while another subscriber still gets events', async () => {
+    const first: RuntimeProvisioningEvent[] = []
+    const second: RuntimeProvisioningEvent[] = []
+    let unsubscribeFirst: () => void = () => undefined
+    const harness: Harness = setup({ onOpen: () => unsubscribeFirst() })
+    unsubscribeFirst = harness.service.onEvent((event) => first.push(event))
+    harness.service.onEvent((event) => second.push(event))
+
+    await harness.service.run(REQUEST)
+
+    expect(first).toEqual([{ type: 'phase', phase: 'connecting', cancellable: true }])
+    expect(second.length).toBeGreaterThan(1)
+    expect(second[0]).toEqual(first[0])
   })
 })
 

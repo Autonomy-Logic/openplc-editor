@@ -1,7 +1,9 @@
 import type { DevicePort } from '../../../../middleware/shared/ports/device-port'
 import type {
   RunRequestField,
+  RuntimeProvisioningEvent,
   RuntimeProvisioningOutcome,
+  RuntimeProvisioningPort,
 } from '../../../../middleware/shared/ports/runtime-provisioning-port'
 import type { OpenPLCStore } from '../../../store'
 import { createTestStore } from '../../../store/testing'
@@ -392,6 +394,79 @@ describe('closing the project during a run', () => {
     expect(log.calls).toEqual(['provisioning.run', 'provisioning.cancel'])
     expect(provisioning.runRequests).toHaveLength(1)
     expect(serializedState(store)).not.toContain(SSH_PASSWORD)
+  })
+
+  function cancelEndingRun(emitWhileCancelling: RuntimeProvisioningEvent[] = []): RuntimeProvisioningPort {
+    return {
+      ...provisioning.port,
+      cancel: () => {
+        for (const event of emitWhileCancelling) provisioning.emit(event)
+        const cancelled = provisioning.port.cancel()
+        provisioning.endRun({ kind: 'cancelled' })
+        return cancelled
+      },
+    }
+  }
+
+  it('ends cancelled with no reconnect when the project closes before the installer starts (TC50)', async () => {
+    const done = submitProvisioningRun(store, { ...ports(), runtimeProvisioning: cancelEndingRun() }, VALID_INPUT)
+    await runStarted()
+    provisioning.emit({ type: 'phase', phase: 'connecting', cancellable: true })
+
+    store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    await done
+
+    expect(slice().view).toEqual(expect.objectContaining({ stage: 'ended', outcome: { kind: 'cancelled' } }))
+    expect(connectionStatus(store)).toBe('disconnected')
+    expect(provisioning.cancelCalls).toBe(1)
+    expect(log.calls).toEqual(['provisioning.run', 'provisioning.cancel'])
+  })
+
+  it('lets no event of the run reach the console or the view once the project closed (TC50)', async () => {
+    const done = submit()
+    await runStarted()
+    provisioning.emit({ type: 'phase', phase: 'installing', cancellable: false, operation: 'install' })
+    provisioning.emit({ type: 'output', line: 'Installing Docker' })
+
+    store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    await settle(() => provisioning.cancelCalls === 1)
+    const viewAtClose = slice().view
+    const consoleAtClose = consoleLines()
+    provisioning.emit({ type: 'phase', phase: 'waiting-runtime', cancellable: false })
+    provisioning.emit({ type: 'output', line: 'a line after the close' })
+    provisioning.emit({ type: 'console', level: 'info', message: 'a console line after the close' })
+    provisioning.emit({ type: 'audit', line: 'install unknown on 192.168.1.50:22' })
+    const viewAfterEvents = slice().view
+    const consoleAfterEvents = consoleLines()
+    provisioning.endRun({ kind: 'unknown' })
+    await done
+
+    expect(viewAfterEvents).toEqual(viewAtClose)
+    expect(consoleAfterEvents).toEqual(consoleAtClose)
+    expect(slice().view).toEqual(expect.objectContaining({ stage: 'ended', outcome: { kind: 'unknown' } }))
+    expect(connectionStatus(store)).toBe('disconnected')
+  })
+
+  it('stops forwarding events before it asks the device side to cancel', async () => {
+    const whileCancelling: RuntimeProvisioningEvent[] = [
+      { type: 'console', level: 'info', message: 'console line sent while cancelling' },
+      { type: 'output', line: 'output line sent while cancelling' },
+      { type: 'audit', line: 'audit line sent while cancelling' },
+    ]
+    const done = submitProvisioningRun(
+      store,
+      { ...ports(), runtimeProvisioning: cancelEndingRun(whileCancelling) },
+      VALID_INPUT,
+    )
+    await runStarted()
+
+    store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+    await done
+
+    expect(provisioning.cancelCalls).toBe(1)
+    expect(consoleLines()).toEqual([])
+    expect(JSON.stringify(slice().view)).not.toContain('while cancelling')
+    expect(slice().view).toEqual(expect.objectContaining({ stage: 'ended', outcome: { kind: 'cancelled' } }))
   })
 
   it('stops watching for a project close once the run has returned', async () => {

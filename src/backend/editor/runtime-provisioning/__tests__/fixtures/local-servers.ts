@@ -95,7 +95,10 @@ function toHostKeyPair(pair: { private: string; public: string }): HostKeyPair {
 }
 
 export function ed25519HostKey(): HostKeyPair {
-  return toHostKeyPair(utils.generateKeyPairSync('ed25519'))
+  for (;;) {
+    const pair = utils.generateKeyPairSync('ed25519')
+    if (!(utils.parseKey(pair.private) instanceof Error)) return toHostKeyPair(pair)
+  }
 }
 
 export function ecdsaHostKey(): HostKeyPair {

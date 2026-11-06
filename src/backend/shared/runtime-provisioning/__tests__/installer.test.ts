@@ -55,12 +55,31 @@ describe('parsePrepareInstaller', () => {
 })
 
 describe('parseInstallerPoll', () => {
-  it('reads a running installer and the log text after the separator', () => {
-    expect(parseInstallerPoll('exit=running\nsize=120\nfrom=0\n---\nhello\nworld\n')).toEqual({
+  function bytesOf(text: string): Uint8Array {
+    return new TextEncoder().encode(text)
+  }
+
+  function joined(...parts: Uint8Array[]): Uint8Array {
+    const all = new Uint8Array(parts.reduce((total, part) => total + part.length, 0))
+    let at = 0
+    for (const part of parts) {
+      all.set(part, at)
+      at += part.length
+    }
+    return all
+  }
+
+  function parsed(stdout: Uint8Array) {
+    const poll = parseInstallerPoll(stdout)
+    return poll === null ? null : { exit: poll.exit, size: poll.size, from: poll.from, body: Array.from(poll.body) }
+  }
+
+  it('reads a running installer and the log bytes after the separator', () => {
+    expect(parsed(bytesOf('exit=running\nsize=120\nfrom=0\n---\nhello\nworld\n'))).toEqual({
       exit: 'running',
       size: 120,
       from: 0,
-      text: 'hello\nworld\n',
+      body: Array.from(bytesOf('hello\nworld\n')),
     })
   })
 
@@ -69,31 +88,55 @@ describe('parseInstallerPoll', () => {
     ['1', 1],
     ['127', 127],
   ])('reads exit status %s', (code, exit) => {
-    expect(parseInstallerPoll(`exit=${code}\nsize=70000\nfrom=4464\n---\ntail\n`)).toEqual({
+    expect(parsed(bytesOf(`exit=${code}\nsize=70000\nfrom=4464\n---\ntail\n`))).toEqual({
       exit,
       size: 70000,
       from: 4464,
-      text: 'tail\n',
+      body: Array.from(bytesOf('tail\n')),
     })
   })
 
   it('reads an empty log read', () => {
-    expect(parseInstallerPoll('exit=running\nsize=0\nfrom=0\n---\n')).toEqual({
+    expect(parsed(bytesOf('exit=running\nsize=0\nfrom=0\n---\n'))).toEqual({
       exit: 'running',
       size: 0,
       from: 0,
-      text: '',
+      body: [],
     })
   })
 
-  it('keeps log text that looks like the header verbatim', () => {
+  it('keeps log bytes that look like the header verbatim', () => {
     const text = 'exit=0\nsize=1\n---\nfrom=9\n'
 
-    expect(parseInstallerPoll(`exit=running\nsize=300\nfrom=10\n---\n${text}`)).toEqual({
+    expect(parsed(bytesOf(`exit=running\nsize=300\nfrom=10\n---\n${text}`))).toEqual({
       exit: 'running',
       size: 300,
       from: 10,
-      text,
+      body: Array.from(bytesOf(text)),
+    })
+  })
+
+  it('returns a body that ends in the middle of a multi-byte character as the raw bytes received', () => {
+    const euro = bytesOf('\u20ac')
+    const body = joined(bytesOf('Pässwört-'), euro.subarray(0, 1))
+
+    expect(parsed(joined(bytesOf('exit=running\nsize=12\nfrom=0\n---\n'), body))).toEqual({
+      exit: 'running',
+      size: 12,
+      from: 0,
+      body: Array.from(body),
+    })
+    expect(Array.from(body.subarray(-1))).toEqual([0xe2])
+  })
+
+  it('returns a body that starts in the middle of a multi-byte character as the raw bytes received', () => {
+    const body = joined(bytesOf('\u20ac').subarray(1), bytesOf('1 ok\n'))
+
+    expect(parsed(joined(bytesOf('exit=1\nsize=19\nfrom=12\n---\n'), body))).toEqual({
+      exit: 1,
+      size: 19,
+      from: 12,
+      body: [0x82, 0xac, ...Array.from(bytesOf('1 ok\n'))],
     })
   })
 
@@ -107,8 +150,9 @@ describe('parseInstallerPoll', () => {
     ['a negative size', 'exit=running\nsize=-1\nfrom=0\n---\nx\n'],
     ['a fractional offset', 'exit=running\nsize=120\nfrom=1.5\n---\nx\n'],
     ['a size that is not a number', 'exit=running\nsize=big\nfrom=0\n---\nx\n'],
+    ['a header with a non-ASCII digit', 'exit=running\nsize=\u0661\nfrom=0\n---\nx\n'],
   ])('returns null for %s', (_, stdout) => {
-    expect(parseInstallerPoll(stdout)).toBeNull()
+    expect(parseInstallerPoll(bytesOf(stdout))).toBeNull()
   })
 })
 

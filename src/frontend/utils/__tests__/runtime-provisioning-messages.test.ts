@@ -45,6 +45,8 @@ const EVERY_KEY: ProvisioningMessageKey[] = [
   'installer-failed',
 ]
 
+const HOST_KEY_FILE_KEYS: ProvisioningMessageKey[] = ['host-key-changed', 'host-key-file-unusable']
+
 const UNSUPPORTED_REASONS: [string, Facts, RegExp, string][] = [
   ['its operating system', { reason: 'os', detail: 'Windows_NT' }, /operating system/i, 'Windows_NT'],
   ['its init system', { reason: 'init', detail: 'openrc' }, /init/i, 'openrc'],
@@ -105,14 +107,13 @@ describe('provisioningMessage', () => {
     expect(message).toMatch(/start/i)
   })
 
-  it('names the changed host key, says nothing was sent, and points to the manual clearing steps', () => {
+  it('names the changed host key, says nothing was sent, and that clearing it is manual', () => {
     const message = text('host-key-changed', { target: `${HOST}:2222` })
 
     expect(message).toContain(`${HOST}:2222`)
     expect(message).toMatch(/changed/i)
     expect(message).toMatch(/(nothing|no\b)[^.]*\bsent\b|sent nothing/i)
     expect(message).toMatch(/manual|by hand/i)
-    expect(message).toContain('docs/runtime-ssh-provisioning.md')
   })
 
   it('says the host-key file could not be read or is invalid, and the operation stopped', () => {
@@ -120,6 +121,24 @@ describe('provisioningMessage', () => {
 
     expect(message).toMatch(/read|invalid/i)
     expect(message).toMatch(/stopped/i)
+  })
+
+  it.each(HOST_KEY_FILE_KEYS)(
+    'names ssh-known-hosts.json in the user data folder that holds the logs folder, for %s (TC26)',
+    (key) => {
+      const { body } = provisioningMessage(key, { host: HOST, target: `${HOST}:22` })
+
+      expect(body).toContain('ssh-known-hosts.json')
+      expect(body).toMatch(/user data folder/i)
+      expect(body).toMatch(/\blogs\b/)
+    },
+  )
+
+  it.each(HOST_KEY_FILE_KEYS)('points to no repository path and no per-OS path for %s', (key) => {
+    const { body } = provisioningMessage(key, { host: HOST, target: `${HOST}:22` })
+
+    expect(body).not.toContain('docs/')
+    expect(body).not.toMatch(/AppData|Application Support|\.config|~\/|[A-Z]:\\/)
   })
 
   it('says the device key could not be saved and the operation stopped before login', () => {
@@ -227,12 +246,20 @@ describe('provisioningMessage', () => {
     expect(message).toMatch(/connect again/i)
   })
 
-  it('says the debugger was not started because the runtime is being installed or started', () => {
-    const message = text('debugger-request-ended', { host: HOST })
+  it('keeps the debugger title and says the debugger was not started because the editor is not connected', () => {
+    const { title, body } = provisioningMessage('debugger-request-ended', { host: HOST })
 
-    expect(message).toMatch(/debugger/i)
-    expect(message).toMatch(/install|start/i)
-    expect(message).toMatch(/connect/i)
+    expect(title).toBe('Debugger not started')
+    expect(body).toMatch(/debugger/i)
+    expect(body).toMatch(/(not|n't) connected/i)
+    expect(body).toMatch(/dialog/i)
+    expect(body).toMatch(/connect/i)
+  })
+
+  it('does not say or imply that an install or start is running when the debugger request ends (TC15)', () => {
+    const { body } = provisioningMessage('debugger-request-ended', { host: HOST })
+
+    expect(body).not.toMatch(/being (installed|started)|installing|starting/i)
   })
 
   it('says the device SSH did not answer and nothing changed', () => {

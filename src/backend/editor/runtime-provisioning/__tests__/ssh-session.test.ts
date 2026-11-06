@@ -238,7 +238,7 @@ describe('running a command on the session', () => {
     })
     const session = await openSession(server.port)
 
-    await expect(session.exec('cat', { stdin: 'S3cr3t-Pi!\n', maxOutputBytes: 1024 })).resolves.toEqual({
+    await expect(session.exec('cat', { stdin: 'S3cr3t-Pi!\n', maxOutputBytes: 1024 })).resolves.toMatchObject({
       exitCode: 0,
       stdout: 'got:S3cr3t-Pi!\n',
       stderr: '',
@@ -257,7 +257,7 @@ describe('running a command on the session', () => {
     })
     const session = await openSession(server.port)
 
-    await expect(session.exec('uname -m', { maxOutputBytes: 1024 })).resolves.toEqual({
+    await expect(session.exec('uname -m', { maxOutputBytes: 1024 })).resolves.toMatchObject({
       exitCode: 0,
       stdout: 'stdin was 0 bytes',
       stderr: '',
@@ -276,7 +276,7 @@ describe('running a command on the session', () => {
     })
     const session = await openSession(server.port)
 
-    await expect(session.exec('false', { maxOutputBytes: 1024 })).resolves.toEqual({
+    await expect(session.exec('false', { maxOutputBytes: 1024 })).resolves.toMatchObject({
       exitCode: 3,
       stdout: 'out\n',
       stderr: 'err\n',
@@ -329,12 +329,48 @@ describe('running a command on the session', () => {
     })
     const session = await openSession(server.port)
 
-    await expect(session.exec('small', { maxOutputBytes: 1000 })).resolves.toEqual({
+    await expect(session.exec('small', { maxOutputBytes: 1000 })).resolves.toMatchObject({
       exitCode: 0,
       stdout: 'a'.repeat(400),
       stderr: 'b'.repeat(400),
       truncated: false,
     })
+  })
+
+  it('returns the stdout bytes as received, a character split between two writes included, beside their text', async () => {
+    const sent = new TextEncoder().encode('Größe: 5 €\n')
+    const insideEuro = sent.indexOf(0xe2) + 1
+    const server = await serve({
+      exec: (_command, channel) => {
+        channel.write(sent.subarray(0, insideEuro))
+        channel.write(sent.subarray(insideEuro))
+        channel.exit(0)
+        channel.end()
+      },
+    })
+    const session = await openSession(server.port)
+
+    const result = await session.exec('cat install.log', { maxOutputBytes: 1024 })
+
+    expect(Array.from(result.stdoutBytes)).toEqual(Array.from(sent))
+    expect(result.stdout).toBe('Größe: 5 €\n')
+  })
+
+  it('keeps the stdout bytes within the output bound', async () => {
+    const server = await serve({
+      exec: (_command, channel) => {
+        channel.write('a'.repeat(5000))
+        channel.exit(0)
+        channel.end()
+      },
+    })
+    const session = await openSession(server.port)
+
+    const result = await session.exec('flood', { maxOutputBytes: 1000 })
+
+    expect(result.truncated).toBe(true)
+    expect(Array.from(result.stdoutBytes)).toEqual(Array.from(new TextEncoder().encode(result.stdout)))
+    expect(result.stdoutBytes.length).toBeLessThanOrEqual(1000)
   })
 
   it('runs several commands one after another on the same session', async () => {

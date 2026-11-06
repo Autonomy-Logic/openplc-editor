@@ -208,6 +208,32 @@ describe('Board runtime row during runtime provisioning', () => {
       expect(runtimeButton().textContent).toBe('Disconnect')
     })
 
+    it('shows Connecting... and no activity after a successful install while the connect is under way (TC49)', () => {
+      seedEnded(CONNECTED_READY)
+      store.getState().deviceActions.setRuntimeConnectionStatus('connecting')
+      renderBoard()
+
+      expect(within(runtimeRow()).queryByTestId(ACTIVITY_TEST_ID)).toBeNull()
+      expect(runtimeButton().textContent).toBe('Connecting...')
+    })
+
+    it('shows Connect and no activity after a successful install once disconnected (TC49)', () => {
+      seedEnded(CONNECTED_READY)
+      store.getState().deviceActions.setRuntimeConnectionStatus('disconnected')
+      renderBoard()
+
+      expect(within(runtimeRow()).queryByTestId(ACTIVITY_TEST_ID)).toBeNull()
+      expect(runtimeButton().textContent).toBe('Connect')
+    })
+
+    it('still offers Show result for a failed install while disconnected', () => {
+      seedEnded(INSTALLER_FAILED)
+      store.getState().deviceActions.setRuntimeConnectionStatus('disconnected')
+      renderBoard()
+
+      expect(activityButton().textContent).toBe('Show result')
+    })
+
     it('offers nothing once the ending was acknowledged', () => {
       seedEnded(INSTALLER_FAILED)
       acknowledgeInView()

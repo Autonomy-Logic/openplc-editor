@@ -838,6 +838,21 @@ describe('the ended stage', () => {
     expect(missingLines(outcome.kind, facts)).toEqual([])
   })
 
+  it.each(ENDINGS)('shows the title of a %s ending once, followed by its body', (_ending, outcome, facts) => {
+    const lines = 'lastLines' in outcome ? outcome.lastLines : []
+    endWith(outcome, lines)
+    renderDialog()
+    const [title, ...bodyLines] = messageLines(outcome.kind, facts)
+
+    const titled = Array.from(dialog().querySelectorAll('*')).filter(
+      (element) => normalize(element.textContent ?? '') === title,
+    )
+
+    expect(titled).toHaveLength(1)
+    expect(bodyLines.filter((line) => !shownText().includes(line))).toEqual([])
+    expect(follows(titled[0], deepestElementWith(dialog(), bodyLines[0]))).toBe(true)
+  })
+
   it.each(ENDINGS_WITH_LAST_LINES)(
     'shows the last 200 installer lines of a %s ending (TC39, AC09.5)',
     (_e, outcome) => {

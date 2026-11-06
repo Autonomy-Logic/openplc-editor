@@ -2,6 +2,8 @@ import { Board } from '@root/frontend/components/_features/[workspace]/editor/de
 import { createPlatformPorts } from '@root/frontend/services/__tests__/fixtures/platform-ports'
 import {
   boardInfo,
+  BOOTLOADER_SILENT,
+  bootloaderReports,
   createCallLog,
   createFakeDevice,
   DEVICE_IP,
@@ -218,6 +220,40 @@ describe('debugger offer and runtime provisioning', () => {
       expect(debugCompiles).toEqual([])
     })
   })
+
+  describe.each([
+    ['the bootloader reports recovery', () => bootloaderReports('recovery', true), false],
+    ['the bootloader is busy', () => bootloaderReports('updating', false), false],
+    ['neither the runtime nor SSH answers', () => BOOTLOADER_SILENT, true],
+  ] satisfies [string, () => FakeRuntime['bootloaderAnswer'], boolean][])(
+    'when %s and no provisioning operation can run (TC15, AC06.4)',
+    (_case, bootloaderAnswer, noDeviceModal) => {
+      beforeEach(() => {
+        runtime.usersInfoAnswers = [REFUSED]
+        runtime.bootloaderAnswer = bootloaderAnswer()
+      })
+
+      it('ends the debugger request with exactly one info console line and no cancelled session', async () => {
+        renderWorkspace()
+        await acceptNotConnectedOffer()
+        await waitForRequestToEnd()
+
+        expect(requestEndedLines().map((entry) => [entry.level, entry.message.includes(REQUEST_ENDED.body)])).toEqual([
+          ['info', true],
+        ])
+        expect(cancelledLines()).toEqual([])
+      })
+
+      it('starts no provisioning operation', async () => {
+        renderWorkspace()
+        await acceptNotConnectedOffer()
+        await waitForRequestToEnd()
+
+        expect(provisioning.runRequests).toEqual([])
+        expect(store.getState().modalActions.getModalState('runtime-no-device').open).toBe(noDeviceModal)
+      })
+    },
+  )
 
   describe('while an install runs with its dialog hidden', () => {
     beforeEach(() => {

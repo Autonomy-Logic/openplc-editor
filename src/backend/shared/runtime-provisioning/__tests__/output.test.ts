@@ -188,6 +188,83 @@ describe('createLinePipeline', () => {
   })
 })
 
+describe('createLinePipeline hold cap (M17)', () => {
+  const HOLD = LINE_CHAR_LIMIT + PASSWORD.length
+  const CAPPED_X = `${'x'.repeat(LINE_CHAR_LIMIT)}${LINE_TRUNCATION_MARKER}`
+
+  function distinctChunk(index: number): string {
+    return `${index}:`.padEnd(POLL_READ_BYTES, String.fromCharCode(97 + (index % 26)))
+  }
+
+  it('turns 1,600 newline-free chunks of 64 KiB into exactly one capped line, then resumes after the next newline', () => {
+    const pipeline = createLinePipeline(PASSWORD)
+    const emitted: string[] = []
+    for (let index = 0; index < 1600; index += 1) emitted.push(...pipeline.push(distinctChunk(index), FROM_START))
+
+    expect(emitted).toHaveLength(1)
+    expect(emitted[0].endsWith(LINE_TRUNCATION_MARKER)).toBe(true)
+    expect(emitted[0].length - LINE_TRUNCATION_MARKER.length).toBeLessThanOrEqual(LINE_CHAR_LIMIT)
+    expect(pipeline.push('tail\nnext\n', FROM_START)).toEqual(['next'])
+  })
+
+  it('holds an open line of exactly the cap and returns it cut at the end', () => {
+    const pipeline = createLinePipeline(PASSWORD)
+
+    expect(pipeline.push('x'.repeat(HOLD), FROM_START)).toEqual([])
+    expect(pipeline.end()).toEqual([truncated('x'.repeat(HOLD))])
+  })
+
+  it('emits the capped line on the push that crosses the cap, with no character of a password it cut', () => {
+    const pipeline = createLinePipeline(PASSWORD)
+
+    expect(pipeline.push('x'.repeat(HOLD), FROM_START)).toEqual([])
+    expect(pipeline.push('S3c', FROM_START)).toEqual([CAPPED_X])
+  })
+
+  it('emits the complete lines of the chunk before the capped line', () => {
+    const pipeline = createLinePipeline(PASSWORD)
+
+    expect(pipeline.push(`first\n${'x'.repeat(HOLD + 1)}`, FROM_START)).toEqual(['first', CAPPED_X])
+  })
+
+  it('masks a password that is whole inside the held text when the cap is crossed', () => {
+    const pipeline = createLinePipeline(PASSWORD)
+    pipeline.push(`${'a'.repeat(100)}${PASSWORD}`, FROM_START)
+
+    const out = pipeline.push('b'.repeat(HOLD), FROM_START)
+
+    expect(out).toEqual([
+      `${'a'.repeat(100)}${PASSWORD_MASK}${'b'.repeat(LINE_CHAR_LIMIT - 100 - PASSWORD_MASK.length)}${LINE_TRUNCATION_MARKER}`,
+    ])
+  })
+
+  it('drops a password that ends the held text when the cap is crossed', () => {
+    const pipeline = createLinePipeline(PASSWORD)
+    pipeline.push('x'.repeat(HOLD - 5), FROM_START)
+
+    const out = [...pipeline.push(PASSWORD, FROM_START), ...pipeline.push(' rest\nnext\n', FROM_START)]
+
+    expect(out).toEqual([CAPPED_X, 'next'])
+  })
+
+  it('never shows any part of a password the cap cut through, before or after the cut', () => {
+    const pipeline = createLinePipeline(PASSWORD)
+    pipeline.push('x'.repeat(HOLD - 3), FROM_START)
+
+    const out = [...pipeline.push('S3cr3t', FROM_START), ...pipeline.push('-Pi! more\nclean\n', FROM_START)]
+
+    expect(out).toEqual([CAPPED_X, 'clean'])
+    expect(out.join('\n')).not.toMatch(/S3|-Pi/)
+  })
+
+  it('returns nothing at the end after a capped line', () => {
+    const pipeline = createLinePipeline(PASSWORD)
+    pipeline.push('x'.repeat(HOLD + 1), FROM_START)
+
+    expect(pipeline.end()).toEqual([])
+  })
+})
+
 describe('createConsoleBound', () => {
   it('passes the first 10,000 lines, then one truncation line, then nothing', () => {
     const bound = createConsoleBound()

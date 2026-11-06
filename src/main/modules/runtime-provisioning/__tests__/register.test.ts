@@ -103,15 +103,25 @@ class FakeIpcMain {
   }
 }
 
+interface QuitEvent {
+  preventDefault(): void
+}
+
 class FakeApp extends EventEmitter {
   quit(): { prevented: boolean } {
     const outcome = { prevented: false }
-    this.emit('before-quit', {
+    const event: QuitEvent = {
       preventDefault: () => {
         outcome.prevented = true
       },
-    })
+    }
+    this.emit('before-quit', event)
+    if (!outcome.prevented) this.emit('will-quit', event)
     return outcome
+  }
+
+  preventNextQuits(): void {
+    this.on('before-quit', (event: QuitEvent) => event.preventDefault())
   }
 }
 
@@ -368,6 +378,58 @@ describe('quitting the editor (AC10.3, TC50)', () => {
 
     expect(app.quit()).toEqual({ prevented: false })
     expect(cancels).toBe(0)
+  })
+
+  it('listens for the committed quit only, registering nothing on before-quit', () => {
+    const { app } = setup()
+
+    expect(app.listenerCount('before-quit')).toBe(0)
+    expect(app.listenerCount('will-quit')).toBe(1)
+  })
+
+  it('leaves the operation running, with no audit entry, when another listener prevents the quit', async () => {
+    const quits: { prevented: boolean }[] = []
+    const harness = setup(
+      duringInspection(({ app }) => {
+        app.preventNextQuits()
+        quits.push(app.quit())
+      }),
+    )
+
+    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual({
+      kind: 'connected-ready',
+      operation: 'install',
+    })
+    expect(quits).toEqual([{ prevented: true }])
+    expect(harness.detaches).toEqual([])
+  })
+
+  it('ends the operation unknown on will-quit after a prevented quit, with one audit entry and the reason quit', async () => {
+    const atPreventedQuit: { audits: number; detaches: number }[] = []
+    const harness = setup(
+      duringInspection((current) => {
+        current.app.preventNextQuits()
+        current.app.quit()
+        atPreventedQuit.push({ audits: auditWrites(current.device).length, detaches: current.detaches.length })
+        current.app.emit('will-quit')
+      }),
+    )
+
+    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual({ kind: 'unknown' })
+    expect(atPreventedQuit).toEqual([{ audits: 0, detaches: 0 }])
+    expect(harness.detaches).toEqual(['quit'])
+    expect(auditWrites(harness.device)).toEqual([expectedUnknownAudit(harness.device)])
+  })
+
+  it('changes nothing on a second will-quit once the operation ended', async () => {
+    const harness = setup(duringInspection(({ app }) => app.emit('will-quit')))
+    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual({ kind: 'unknown' })
+    const calls = harness.device.log.length
+
+    harness.app.emit('will-quit')
+
+    expect(harness.device.log).toHaveLength(calls)
+    expect(auditWrites(harness.device)).toEqual([expectedUnknownAudit(harness.device)])
   })
 })
 
