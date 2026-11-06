@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 import type { DevicePort } from '../../../../../middleware/shared/ports/device-port'
 import type {
@@ -49,6 +49,11 @@ function slice() {
 
 function noDeviceState() {
   return store.getState().modals['runtime-no-device']
+}
+
+function noDeviceSshPort(): unknown {
+  const data = noDeviceState().data
+  return typeof data === 'object' && data !== null && 'sshPort' in data ? data.sshPort : undefined
 }
 
 function normalize(text: string): string {
@@ -227,11 +232,13 @@ describe('"Try another SSH port"', () => {
     const disabledWhileChecking = button('runtime-no-device-try-port').disabled
     await act(async () => {
       pendingProbes[0]({ answered: false, reason: 'timeout' })
-      await settle(() => !button('runtime-no-device-try-port').disabled)
+      await settle(() => noDeviceSshPort() === 2222)
+    })
+    await waitFor(() => {
+      expect(button('runtime-no-device-try-port').disabled).toBe(false)
     })
 
     expect(disabledWhileChecking).toBe(true)
-    expect(button('runtime-no-device-try-port').disabled).toBe(false)
     expect(noDeviceState()).toEqual({ open: true, data: { host: DEVICE_IP, sshPort: 2222 } })
   })
 })
