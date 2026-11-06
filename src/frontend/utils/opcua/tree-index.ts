@@ -41,3 +41,28 @@ export function isHiddenByFilter(node: VariableTreeNode, filter: string): boolea
 export function visibleChildren(node: VariableTreeNode, filter: string): VariableTreeNode[] {
   return (node.children ?? []).filter((child) => !isHiddenByFilter(child, filter))
 }
+
+export type TopLevelEntryCounts = {
+  /** Distinct entries the tree exposes, whatever the filter. */
+  total: number
+  /** Of those, the ones the filter leaves visible. */
+  shown: number
+}
+
+/**
+ * BR09: an entry is a child of a group row, counted once across the groups
+ * that reference it, and a group row is not an entry of its own.
+ */
+export function countTopLevelEntries(tree: readonly VariableTreeNode[], filter: string): TopLevelEntryCounts {
+  const total = new Set<string>()
+  const shown = new Set<string>()
+
+  for (const group of tree) {
+    for (const child of group.children ?? []) {
+      total.add(child.id)
+      if (!isHiddenByFilter(child, filter)) shown.add(child.id)
+    }
+  }
+
+  return { total: total.size, shown: shown.size }
+}

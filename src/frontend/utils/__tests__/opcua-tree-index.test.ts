@@ -150,7 +150,11 @@ describe('top-level entry counts (BR09)', () => {
     children,
   })
 
-  /** The Tank fixture: 7 own entries of main, SETPOINT once, FLOW and ORPHAN_VAR. */
+  /**
+   * The Tank fixture: 7 own entries of main, SETPOINT once, FLOW and ORPHAN_VAR.
+   * A VAR_EXTERNAL row is built under the global scope wherever it is listed, so the
+   * SETPOINT rows of main and aux carry the global id and count once.
+   */
   const tank = (): VariableTreeNode[] => [
     group(GLOBAL_SCOPE_POU, 'GVL', [entry(GLOBAL_SCOPE_POU, 'SETPOINT')]),
     group('main', 'main', [
@@ -161,27 +165,24 @@ describe('top-level entry counts (BR09)', () => {
       entry('main', 'TMR1'),
       entry('main', 'CNT1'),
       entry('main', 'RECIPE'),
-      entry('main', 'SETPOINT'),
+      entry(GLOBAL_SCOPE_POU, 'SETPOINT'),
     ]),
-    group('aux', 'aux', [entry('aux', 'FLOW'), entry('aux', 'SETPOINT')]),
+    group('aux', 'aux', [entry('aux', 'FLOW'), entry(GLOBAL_SCOPE_POU, 'SETPOINT')]),
     group('orphan', 'orphan', [entry('orphan', 'ORPHAN_VAR')]),
   ]
 
-  const counts = (filter: string) => {
-    const tree = tank()
-    return countTopLevelEntries(tree, indexTree(tree), filter)
-  }
+  const counts = (filter: string) => countTopLevelEntries(tank(), filter)
 
   it('should count every distinct top-level entry with no filter', () => {
     expect(counts('')).toEqual({ total: 10, shown: 10 })
   })
 
-  it('should count a VAR_EXTERNAL once, under the global scope', () => {
+  it('should count a VAR_EXTERNAL once, however many groups list it', () => {
     const tree = tank()
-    const index = indexTree(tree)
 
-    expect(countTopLevelEntries(tree, index, '').total).toBe(10)
-    expect(countTopLevelEntries([tree[0]], index, '').total).toBe(1)
+    // GVL, main and aux all list SETPOINT; dropping two of the three changes nothing.
+    expect(countTopLevelEntries(tree, '').total).toBe(10)
+    expect(countTopLevelEntries([tree[0], tree[3]], '').total).toBe(2)
   })
 
   it('should not count a group row as an entry', () => {
@@ -202,6 +203,6 @@ describe('top-level entry counts (BR09)', () => {
   })
 
   it('should count nothing in an empty tree', () => {
-    expect(countTopLevelEntries([], indexTree([]), '')).toEqual({ total: 0, shown: 0 })
+    expect(countTopLevelEntries([], '')).toEqual({ total: 0, shown: 0 })
   })
 })
