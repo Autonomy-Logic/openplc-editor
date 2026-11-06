@@ -54,6 +54,8 @@ const Checkbox = ({
 }) => (
   <button
     type='button'
+    aria-label='Toggle selection'
+    aria-pressed={checked}
     onClick={(e) => {
       e.stopPropagation()
       onChange()

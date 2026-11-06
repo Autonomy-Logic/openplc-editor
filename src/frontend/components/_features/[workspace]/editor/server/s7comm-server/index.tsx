@@ -8,6 +8,7 @@ import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
+import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
 import { DuplicateProtocolNotice } from '../duplicate-protocol-notice'
 
 type S7CommUIDataBlock = S7CommDataBlock
@@ -526,378 +527,390 @@ const S7CommServerEditor = () => {
       </div>
 
       <div className='flex flex-1 flex-col gap-4 overflow-auto'>
-        <DuplicateProtocolNotice name={serverName} protocol={protocol} />
+        <EditingLockBoundary className='contents'>
+          <DuplicateProtocolNotice name={serverName} protocol={protocol} />
 
-        <AccordionPrimitive.Root
-          type='multiple'
-          value={openSections}
-          onValueChange={setOpenSections}
-          className='flex flex-col gap-3'
-        >
-          {/* Server Configuration Section */}
-          <AccordionItem value='server-config'>
-            <AccordionTrigger>
-              <span className='text-neutral-950 dark:text-white'>Server Configuration</span>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className='flex flex-col gap-4'>
-                <div className='flex items-center gap-4'>
-                  <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
-                    Enable Server
-                  </Label>
-                  <label className='relative inline-flex cursor-pointer items-center'>
-                    <input
-                      type='checkbox'
-                      checked={enabled}
-                      onChange={(e) => handleEnabledChange(e.target.checked)}
-                      className='peer sr-only'
-                    />
-                    <div
-                      className={cn(
-                        'h-6 w-11 rounded-full bg-neutral-300 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[""]',
-                        'peer-checked:bg-brand peer-checked:after:translate-x-full',
-                        'dark:bg-neutral-700 dark:peer-checked:bg-brand',
-                      )}
-                    />
-                  </label>
-                  <span className='text-xs text-neutral-600 dark:text-neutral-400'>
-                    {enabled ? 'Server will start when PLC runs' : 'Server is disabled'}
-                  </span>
-                </div>
-
-                <div className='flex items-center gap-4'>
-                  <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
-                    Bind Address
-                  </Label>
-                  <div className='w-64'>
-                    <Select value={bindAddress} onValueChange={handleBindAddressChange}>
-                      <SelectTrigger
-                        withIndicator
-                        placeholder='Select network interface'
-                        className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+          <AccordionPrimitive.Root
+            type='multiple'
+            value={openSections}
+            onValueChange={setOpenSections}
+            className='flex flex-col gap-3'
+          >
+            {/* Server Configuration Section */}
+            <AccordionItem value='server-config'>
+              <AccordionTrigger>
+                <span className='text-neutral-950 dark:text-white'>Server Configuration</span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className='flex flex-col gap-4'>
+                  <div className='flex items-center gap-4'>
+                    <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
+                      Enable Server
+                    </Label>
+                    <label className='relative inline-flex cursor-pointer items-center'>
+                      <input
+                        type='checkbox'
+                        checked={enabled}
+                        onChange={(e) => handleEnabledChange(e.target.checked)}
+                        className='peer sr-only'
                       />
-                      <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
-                        {NETWORK_INTERFACE_OPTIONS.map((option) => (
-                          <SelectItem
-                            key={option.value}
-                            value={option.value}
-                            className={cn(
-                              'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
-                              'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
-                            )}
-                          >
-                            <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                              {option.label}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <div
+                        className={cn(
+                          'h-6 w-11 rounded-full bg-neutral-300 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[""]',
+                          'peer-checked:bg-brand peer-checked:after:translate-x-full',
+                          'dark:bg-neutral-700 dark:peer-checked:bg-brand',
+                        )}
+                      />
+                    </label>
+                    <span className='text-xs text-neutral-600 dark:text-neutral-400'>
+                      {enabled ? 'Server will start when PLC runs' : 'Server is disabled'}
+                    </span>
                   </div>
-                </div>
 
-                <div className='flex items-center gap-4'>
-                  <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Port</Label>
-                  <div className='w-32'>
-                    <InputWithRef
-                      type='number'
-                      value={port}
-                      onChange={(e) => setPort(e.target.value)}
-                      onBlur={handlePortBlur}
-                      placeholder='102'
-                      min='1'
-                      max='65535'
-                      className={inputStyles}
-                    />
-                  </div>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Default: 102 (S7 standard)</span>
-                </div>
-
-                <div className='flex items-center gap-4'>
-                  <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Max Clients</Label>
-                  <div className='w-32'>
-                    <InputWithRef
-                      type='number'
-                      value={maxClients}
-                      onChange={(e) => setMaxClients(e.target.value)}
-                      onBlur={handleMaxClientsBlur}
-                      min='1'
-                      max='1024'
-                      className={inputStyles}
-                    />
-                  </div>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>1-1024</span>
-                </div>
-
-                <div className='flex items-center gap-4'>
-                  <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>PDU Size</Label>
-                  <div className='w-32'>
-                    <InputWithRef
-                      type='number'
-                      value={pduSize}
-                      onChange={(e) => setPduSize(e.target.value)}
-                      onBlur={handlePduSizeBlur}
-                      min='240'
-                      max='960'
-                      className={inputStyles}
-                    />
-                  </div>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>240-960 bytes</span>
-                </div>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-
-          {/* Data Blocks Section */}
-          <AccordionItem value='data-blocks'>
-            <AccordionTrigger>
-              <span className='text-neutral-950 dark:text-white'>
-                Data Blocks ({config?.dataBlocks.length || 0}/64)
-              </span>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className='flex flex-col gap-3'>
-                <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-                  Configure S7 data blocks that map to OpenPLC buffer areas. Each DB can expose different IEC variable
-                  types to S7 clients.
-                </p>
-
-                <button
-                  onClick={handleAddDataBlock}
-                  disabled={(config?.dataBlocks.length || 0) >= 64}
-                  className='flex w-fit items-center gap-2 rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-medium-dark disabled:cursor-not-allowed disabled:opacity-50'
-                >
-                  <PlusIcon className='h-4 w-4' />
-                  Add Data Block
-                </button>
-
-                {config?.dataBlocks && config.dataBlocks.length > 0 ? (
-                  <div className='mt-2 overflow-hidden rounded-md border border-neutral-200 dark:border-neutral-700'>
-                    <table className='w-full'>
-                      <thead className='bg-neutral-50 dark:bg-neutral-800'>
-                        <tr>
-                          <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
-                            DB
-                          </th>
-                          <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
-                            Description
-                          </th>
-                          <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
-                            Size
-                          </th>
-                          <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
-                            Type
-                          </th>
-                          <th className='px-3 py-2 text-right text-xs font-medium text-neutral-600 dark:text-neutral-400'>
-                            Actions
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...config.dataBlocks]
-                          .sort((a, b) => a.dbNumber - b.dbNumber)
-                          .map((db) => (
-                            <tr key={db.dbNumber} className='border-t border-neutral-200 dark:border-neutral-700'>
-                              <td className='px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100'>
-                                DB{db.dbNumber}
-                              </td>
-                              <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>
-                                {db.description || '-'}
-                              </td>
-                              <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>
-                                {db.sizeBytes} bytes
-                              </td>
-                              <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>
-                                {BUFFER_TYPE_OPTIONS.find((o) => o.value === db.mapping.type)?.label ||
-                                  db.mapping.type ||
-                                  'Unknown'}
-                              </td>
-                              <td className='px-3 py-2 text-right'>
-                                <div className='flex justify-end gap-2'>
-                                  <button
-                                    onClick={() => handleEditDataBlock(db as unknown as S7CommUIDataBlock)}
-                                    className='rounded p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200'
-                                    title='Edit'
-                                  >
-                                    <Pencil1Icon className='h-4 w-4' />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteDataBlock(db.dbNumber)}
-                                    className='rounded p-1 text-neutral-500 hover:bg-red-100 hover:text-red-600 dark:text-neutral-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
-                                    title='Delete'
-                                  >
-                                    <TrashIcon className='h-4 w-4' />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
+                  <div className='flex items-center gap-4'>
+                    <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
+                      Bind Address
+                    </Label>
+                    <div className='w-64'>
+                      <Select value={bindAddress} onValueChange={handleBindAddressChange}>
+                        <SelectTrigger
+                          withIndicator
+                          placeholder='Select network interface'
+                          className='flex h-[30px] w-full items-center justify-between gap-1 rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption !text-xs font-medium text-neutral-850 outline-none data-[state=open]:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                        />
+                        <SelectContent className='h-fit max-h-[200px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg border border-neutral-300 bg-white outline-none drop-shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'>
+                          {NETWORK_INTERFACE_OPTIONS.map((option) => (
+                            <SelectItem
+                              key={option.value}
+                              value={option.value}
+                              className={cn(
+                                'data-[state=checked]:[&:not(:hover)]:bg-neutral-100 data-[state=checked]:dark:[&:not(:hover)]:bg-neutral-900',
+                                'flex w-full cursor-pointer items-center justify-start px-2 py-1 outline-none hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                              )}
+                            >
+                              <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                                {option.label}
+                              </span>
+                            </SelectItem>
                           ))}
-                      </tbody>
-                    </table>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                ) : (
-                  <p className='mt-2 text-sm text-neutral-500 dark:text-neutral-400'>
-                    No data blocks configured. Add a data block to expose PLC data to S7 clients.
+
+                  <div className='flex items-center gap-4'>
+                    <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Port</Label>
+                    <div className='w-32'>
+                      <InputWithRef
+                        type='number'
+                        value={port}
+                        onChange={(e) => setPort(e.target.value)}
+                        onBlur={handlePortBlur}
+                        placeholder='102'
+                        min='1'
+                        max='65535'
+                        className={inputStyles}
+                      />
+                    </div>
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>Default: 102 (S7 standard)</span>
+                  </div>
+
+                  <div className='flex items-center gap-4'>
+                    <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
+                      Max Clients
+                    </Label>
+                    <div className='w-32'>
+                      <InputWithRef
+                        type='number'
+                        value={maxClients}
+                        onChange={(e) => setMaxClients(e.target.value)}
+                        onBlur={handleMaxClientsBlur}
+                        min='1'
+                        max='1024'
+                        className={inputStyles}
+                      />
+                    </div>
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>1-1024</span>
+                  </div>
+
+                  <div className='flex items-center gap-4'>
+                    <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>PDU Size</Label>
+                    <div className='w-32'>
+                      <InputWithRef
+                        type='number'
+                        value={pduSize}
+                        onChange={(e) => setPduSize(e.target.value)}
+                        onBlur={handlePduSizeBlur}
+                        min='240'
+                        max='960'
+                        className={inputStyles}
+                      />
+                    </div>
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>240-960 bytes</span>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Data Blocks Section */}
+            <AccordionItem value='data-blocks'>
+              <AccordionTrigger>
+                <span className='text-neutral-950 dark:text-white'>
+                  Data Blocks ({config?.dataBlocks.length || 0}/64)
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className='flex flex-col gap-3'>
+                  <p className='text-xs text-neutral-600 dark:text-neutral-400'>
+                    Configure S7 data blocks that map to OpenPLC buffer areas. Each DB can expose different IEC variable
+                    types to S7 clients.
                   </p>
-                )}
-              </div>
-            </AccordionContent>
-          </AccordionItem>
 
-          {/* PLC Identity Section */}
-          <AccordionItem value='plc-identity'>
-            <AccordionTrigger>
-              <span className='text-neutral-950 dark:text-white'>PLC Identity</span>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className='flex flex-col gap-4'>
-                <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-                  Configure the PLC identity returned in S7 SZL queries. These values help HMIs identify the PLC.
-                </p>
+                  <button
+                    onClick={handleAddDataBlock}
+                    disabled={(config?.dataBlocks.length || 0) >= 64}
+                    className='flex w-fit items-center gap-2 rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-medium-dark disabled:cursor-not-allowed disabled:opacity-50'
+                  >
+                    <PlusIcon className='h-4 w-4' />
+                    Add Data Block
+                  </button>
 
-                <div className='flex items-center gap-4'>
-                  <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>PLC Name</Label>
-                  <InputWithRef
-                    type='text'
-                    value={plcName}
-                    onChange={(e) => setPlcName(e.target.value)}
-                    onBlur={() => handlePlcIdentityBlur('name', plcName, config?.plcIdentity?.name)}
-                    maxLength={64}
-                    className={cn(inputStyles, 'w-64')}
-                  />
+                  {config?.dataBlocks && config.dataBlocks.length > 0 ? (
+                    <div className='mt-2 overflow-hidden rounded-md border border-neutral-200 dark:border-neutral-700'>
+                      <table className='w-full'>
+                        <thead className='bg-neutral-50 dark:bg-neutral-800'>
+                          <tr>
+                            <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                              DB
+                            </th>
+                            <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                              Description
+                            </th>
+                            <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                              Size
+                            </th>
+                            <th className='px-3 py-2 text-left text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                              Type
+                            </th>
+                            <th className='px-3 py-2 text-right text-xs font-medium text-neutral-600 dark:text-neutral-400'>
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...config.dataBlocks]
+                            .sort((a, b) => a.dbNumber - b.dbNumber)
+                            .map((db) => (
+                              <tr key={db.dbNumber} className='border-t border-neutral-200 dark:border-neutral-700'>
+                                <td className='px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100'>
+                                  DB{db.dbNumber}
+                                </td>
+                                <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>
+                                  {db.description || '-'}
+                                </td>
+                                <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>
+                                  {db.sizeBytes} bytes
+                                </td>
+                                <td className='px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400'>
+                                  {BUFFER_TYPE_OPTIONS.find((o) => o.value === db.mapping.type)?.label ||
+                                    db.mapping.type ||
+                                    'Unknown'}
+                                </td>
+                                <td className='px-3 py-2 text-right'>
+                                  <div className='flex justify-end gap-2'>
+                                    <button
+                                      onClick={() => handleEditDataBlock(db as unknown as S7CommUIDataBlock)}
+                                      className='rounded p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200'
+                                      title='Edit'
+                                    >
+                                      <Pencil1Icon className='h-4 w-4' />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteDataBlock(db.dbNumber)}
+                                      className='rounded p-1 text-neutral-500 hover:bg-red-100 hover:text-red-600 dark:text-neutral-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
+                                      title='Delete'
+                                    >
+                                      <TrashIcon className='h-4 w-4' />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className='mt-2 text-sm text-neutral-500 dark:text-neutral-400'>
+                      No data blocks configured. Add a data block to expose PLC data to S7 clients.
+                    </p>
+                  )}
                 </div>
+              </AccordionContent>
+            </AccordionItem>
 
-                <div className='flex items-center gap-4'>
-                  <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Module Type</Label>
-                  <InputWithRef
-                    type='text'
-                    value={moduleType}
-                    onChange={(e) => setModuleType(e.target.value)}
-                    onBlur={() => handlePlcIdentityBlur('moduleType', moduleType, config?.plcIdentity?.moduleType)}
-                    maxLength={64}
-                    className={cn(inputStyles, 'w-64')}
-                  />
-                </div>
+            {/* PLC Identity Section */}
+            <AccordionItem value='plc-identity'>
+              <AccordionTrigger>
+                <span className='text-neutral-950 dark:text-white'>PLC Identity</span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className='flex flex-col gap-4'>
+                  <p className='text-xs text-neutral-600 dark:text-neutral-400'>
+                    Configure the PLC identity returned in S7 SZL queries. These values help HMIs identify the PLC.
+                  </p>
 
-                <div className='flex items-center gap-4'>
-                  <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
-                    Serial Number
-                  </Label>
-                  <InputWithRef
-                    type='text'
-                    value={serialNumber}
-                    onChange={(e) => setSerialNumber(e.target.value)}
-                    onBlur={() =>
-                      handlePlcIdentityBlur('serialNumber', serialNumber, config?.plcIdentity?.serialNumber)
-                    }
-                    maxLength={64}
-                    className={cn(inputStyles, 'w-64')}
-                  />
-                </div>
-
-                <div className='flex items-center gap-4'>
-                  <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Copyright</Label>
-                  <InputWithRef
-                    type='text'
-                    value={copyright}
-                    onChange={(e) => setCopyright(e.target.value)}
-                    onBlur={() => handlePlcIdentityBlur('copyright', copyright, config?.plcIdentity?.copyright)}
-                    maxLength={64}
-                    className={cn(inputStyles, 'w-64')}
-                  />
-                </div>
-
-                <div className='flex items-center gap-4'>
-                  <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Module Name</Label>
-                  <InputWithRef
-                    type='text'
-                    value={moduleName}
-                    onChange={(e) => setModuleName(e.target.value)}
-                    onBlur={() => handlePlcIdentityBlur('moduleName', moduleName, config?.plcIdentity?.moduleName)}
-                    maxLength={64}
-                    className={cn(inputStyles, 'w-64')}
-                  />
-                </div>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-
-          {/* Logging Section */}
-          <AccordionItem value='logging'>
-            <AccordionTrigger>
-              <span className='text-neutral-950 dark:text-white'>Logging</span>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className='flex flex-col gap-4'>
-                <div className='flex items-center gap-4'>
-                  <Label className='w-40 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
-                    Log Connections
-                  </Label>
-                  <label className='relative inline-flex cursor-pointer items-center'>
-                    <input
-                      type='checkbox'
-                      checked={logConnections}
-                      onChange={(e) => handleLoggingChange('logConnections', e.target.checked)}
-                      className='peer sr-only'
+                  <div className='flex items-center gap-4'>
+                    <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>PLC Name</Label>
+                    <InputWithRef
+                      type='text'
+                      value={plcName}
+                      onChange={(e) => setPlcName(e.target.value)}
+                      onBlur={() => handlePlcIdentityBlur('name', plcName, config?.plcIdentity?.name)}
+                      maxLength={64}
+                      className={cn(inputStyles, 'w-64')}
                     />
-                    <div
-                      className={cn(
-                        'h-6 w-11 rounded-full bg-neutral-300 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[""]',
-                        'peer-checked:bg-brand peer-checked:after:translate-x-full',
-                        'dark:bg-neutral-700 dark:peer-checked:bg-brand',
-                      )}
-                    />
-                  </label>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Log client connect/disconnect</span>
-                </div>
+                  </div>
 
-                <div className='flex items-center gap-4'>
-                  <Label className='w-40 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
-                    Log Data Access
-                  </Label>
-                  <label className='relative inline-flex cursor-pointer items-center'>
-                    <input
-                      type='checkbox'
-                      checked={logDataAccess}
-                      onChange={(e) => handleLoggingChange('logDataAccess', e.target.checked)}
-                      className='peer sr-only'
+                  <div className='flex items-center gap-4'>
+                    <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
+                      Module Type
+                    </Label>
+                    <InputWithRef
+                      type='text'
+                      value={moduleType}
+                      onChange={(e) => setModuleType(e.target.value)}
+                      onBlur={() => handlePlcIdentityBlur('moduleType', moduleType, config?.plcIdentity?.moduleType)}
+                      maxLength={64}
+                      className={cn(inputStyles, 'w-64')}
                     />
-                    <div
-                      className={cn(
-                        'h-6 w-11 rounded-full bg-neutral-300 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[""]',
-                        'peer-checked:bg-brand peer-checked:after:translate-x-full',
-                        'dark:bg-neutral-700 dark:peer-checked:bg-brand',
-                      )}
-                    />
-                  </label>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-                    Log read/write operations (verbose)
-                  </span>
-                </div>
+                  </div>
 
-                <div className='flex items-center gap-4'>
-                  <Label className='w-40 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Log Errors</Label>
-                  <label className='relative inline-flex cursor-pointer items-center'>
-                    <input
-                      type='checkbox'
-                      checked={logErrors}
-                      onChange={(e) => handleLoggingChange('logErrors', e.target.checked)}
-                      className='peer sr-only'
+                  <div className='flex items-center gap-4'>
+                    <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
+                      Serial Number
+                    </Label>
+                    <InputWithRef
+                      type='text'
+                      value={serialNumber}
+                      onChange={(e) => setSerialNumber(e.target.value)}
+                      onBlur={() =>
+                        handlePlcIdentityBlur('serialNumber', serialNumber, config?.plcIdentity?.serialNumber)
+                      }
+                      maxLength={64}
+                      className={cn(inputStyles, 'w-64')}
                     />
-                    <div
-                      className={cn(
-                        'h-6 w-11 rounded-full bg-neutral-300 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[""]',
-                        'peer-checked:bg-brand peer-checked:after:translate-x-full',
-                        'dark:bg-neutral-700 dark:peer-checked:bg-brand',
-                      )}
+                  </div>
+
+                  <div className='flex items-center gap-4'>
+                    <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Copyright</Label>
+                    <InputWithRef
+                      type='text'
+                      value={copyright}
+                      onChange={(e) => setCopyright(e.target.value)}
+                      onBlur={() => handlePlcIdentityBlur('copyright', copyright, config?.plcIdentity?.copyright)}
+                      maxLength={64}
+                      className={cn(inputStyles, 'w-64')}
                     />
-                  </label>
-                  <span className='text-xs text-neutral-500 dark:text-neutral-400'>Log errors and warnings</span>
+                  </div>
+
+                  <div className='flex items-center gap-4'>
+                    <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
+                      Module Name
+                    </Label>
+                    <InputWithRef
+                      type='text'
+                      value={moduleName}
+                      onChange={(e) => setModuleName(e.target.value)}
+                      onBlur={() => handlePlcIdentityBlur('moduleName', moduleName, config?.plcIdentity?.moduleName)}
+                      maxLength={64}
+                      className={cn(inputStyles, 'w-64')}
+                    />
+                  </div>
                 </div>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </AccordionPrimitive.Root>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Logging Section */}
+            <AccordionItem value='logging'>
+              <AccordionTrigger>
+                <span className='text-neutral-950 dark:text-white'>Logging</span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className='flex flex-col gap-4'>
+                  <div className='flex items-center gap-4'>
+                    <Label className='w-40 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
+                      Log Connections
+                    </Label>
+                    <label className='relative inline-flex cursor-pointer items-center'>
+                      <input
+                        type='checkbox'
+                        checked={logConnections}
+                        onChange={(e) => handleLoggingChange('logConnections', e.target.checked)}
+                        className='peer sr-only'
+                      />
+                      <div
+                        className={cn(
+                          'h-6 w-11 rounded-full bg-neutral-300 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[""]',
+                          'peer-checked:bg-brand peer-checked:after:translate-x-full',
+                          'dark:bg-neutral-700 dark:peer-checked:bg-brand',
+                        )}
+                      />
+                    </label>
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                      Log client connect/disconnect
+                    </span>
+                  </div>
+
+                  <div className='flex items-center gap-4'>
+                    <Label className='w-40 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
+                      Log Data Access
+                    </Label>
+                    <label className='relative inline-flex cursor-pointer items-center'>
+                      <input
+                        type='checkbox'
+                        checked={logDataAccess}
+                        onChange={(e) => handleLoggingChange('logDataAccess', e.target.checked)}
+                        className='peer sr-only'
+                      />
+                      <div
+                        className={cn(
+                          'h-6 w-11 rounded-full bg-neutral-300 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[""]',
+                          'peer-checked:bg-brand peer-checked:after:translate-x-full',
+                          'dark:bg-neutral-700 dark:peer-checked:bg-brand',
+                        )}
+                      />
+                    </label>
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>
+                      Log read/write operations (verbose)
+                    </span>
+                  </div>
+
+                  <div className='flex items-center gap-4'>
+                    <Label className='w-40 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>
+                      Log Errors
+                    </Label>
+                    <label className='relative inline-flex cursor-pointer items-center'>
+                      <input
+                        type='checkbox'
+                        checked={logErrors}
+                        onChange={(e) => handleLoggingChange('logErrors', e.target.checked)}
+                        className='peer sr-only'
+                      />
+                      <div
+                        className={cn(
+                          'h-6 w-11 rounded-full bg-neutral-300 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[""]',
+                          'peer-checked:bg-brand peer-checked:after:translate-x-full',
+                          'dark:bg-neutral-700 dark:peer-checked:bg-brand',
+                        )}
+                      />
+                    </label>
+                    <span className='text-xs text-neutral-500 dark:text-neutral-400'>Log errors and warnings</span>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </AccordionPrimitive.Root>
+        </EditingLockBoundary>
       </div>
 
       <DataBlockModal

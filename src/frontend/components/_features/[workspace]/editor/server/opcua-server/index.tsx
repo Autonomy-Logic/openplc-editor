@@ -7,6 +7,7 @@ import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
+import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
 import { DuplicateProtocolNotice } from '../duplicate-protocol-notice'
 import { AddressSpaceTab } from './components/address-space-tab'
 import { CertificatesTab } from './components/certificates-tab'
@@ -159,13 +160,13 @@ export const OpcUaServerEditor = () => {
           value='general'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <div className='min-h-0 flex-1 overflow-auto pb-4'>
+          <EditingLockBoundary className='h-auto min-h-0 w-auto flex-1 overflow-auto pb-4'>
             <GeneralSettingsTab
               config={localConfig}
               onServerUpdate={handleServerSettingsUpdate}
               onCycleTimeUpdate={handleCycleTimeUpdate}
             />
-          </div>
+          </EditingLockBoundary>
         </Tabs.Content>
 
         {/* Security Profiles Tab */}
@@ -173,13 +174,13 @@ export const OpcUaServerEditor = () => {
           value='security'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <div className='min-h-0 flex-1 overflow-auto pb-4'>
+          <EditingLockBoundary className='h-auto min-h-0 w-auto flex-1 overflow-auto pb-4'>
             <SecurityProfilesTab
               config={localConfig}
               serverName={serverName}
               onConfigChange={() => handleFileAndWorkspaceSavedState(serverName)}
             />
-          </div>
+          </EditingLockBoundary>
         </Tabs.Content>
 
         {/* Users Tab */}
@@ -187,13 +188,13 @@ export const OpcUaServerEditor = () => {
           value='users'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <div className='min-h-0 flex-1 overflow-auto pb-4'>
+          <EditingLockBoundary className='h-auto min-h-0 w-auto flex-1 overflow-auto pb-4'>
             <UsersTab
               config={localConfig}
               serverName={serverName}
               onConfigChange={() => handleFileAndWorkspaceSavedState(serverName)}
             />
-          </div>
+          </EditingLockBoundary>
         </Tabs.Content>
 
         {/* Certificates Tab */}
@@ -201,13 +202,13 @@ export const OpcUaServerEditor = () => {
           value='certificates'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <div className='min-h-0 flex-1 overflow-auto pb-4'>
+          <EditingLockBoundary className='h-auto min-h-0 w-auto flex-1 overflow-auto pb-4'>
             <CertificatesTab
               config={localConfig}
               serverName={serverName}
               onConfigChange={() => handleFileAndWorkspaceSavedState(serverName)}
             />
-          </div>
+          </EditingLockBoundary>
         </Tabs.Content>
 
         {/* Address Space Tab */}

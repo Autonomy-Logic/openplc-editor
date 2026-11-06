@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
+import { cn } from '../../../utils/cn'
 
 type EditingLockBoundaryProps = {
   children: ReactNode
@@ -14,7 +15,7 @@ const EditingLockBoundary = ({ children, className }: EditingLockBoundaryProps) 
     <fieldset
       disabled={isLocked}
       data-editing-locked={isLocked ? 'true' : undefined}
-      className={`m-0 h-full w-full min-w-0 border-0 p-0 ${className ?? ''}`}
+      className={cn('m-0 h-full w-full min-w-0 border-0 p-0', className)}
     >
       {children}
     </fieldset>

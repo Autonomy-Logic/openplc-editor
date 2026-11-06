@@ -7,8 +7,10 @@ import type { VariableTreeNode } from '@root/frontend/utils/opcua/types'
 import type { OpcUaNodeConfig, OpcUaServerConfig } from '@root/middleware/shared/ports/types'
 import { useCallback, useMemo, useState } from 'react'
 
+import { useIsEditingLocked } from '../../../../../../../hooks/use-editing-lock'
 import { InputWithRef } from '../../../../../../_atoms/input'
 import { Label } from '../../../../../../_atoms/label'
+import { EditingLockBoundary } from '../../../../../../_molecules/editing-lock-boundary'
 import { findTreeNodeById, getSelectableDescendantIds, useProjectVariables } from '../hooks/use-project-variables'
 import { SelectedVariablesList } from './selected-variables-list'
 import { VariableConfigModal } from './variable-config-modal'
@@ -34,6 +36,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
   const treeIndex = useMemo(() => indexTree(projectVariables), [projectVariables])
 
   // Local state
+  const isEditingLocked = useIsEditingLocked()
   const [filter, setFilter] = useState('')
   const [selectedVariableIds, setSelectedVariableIds] = useState<Set<string>>(() => {
     // Initialize with IDs of already configured nodes
@@ -65,15 +68,17 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
   // Handle namespace URI change
   const handleNamespaceChange = useCallback(
     (namespaceUri: string) => {
+      if (isEditingLocked) return
       updateOpcUaAddressSpaceNamespace(serverName, namespaceUri)
       onConfigChange()
     },
-    [serverName, updateOpcUaAddressSpaceNamespace, onConfigChange],
+    [isEditingLocked, serverName, updateOpcUaAddressSpaceNamespace, onConfigChange],
   )
 
   // Handle variable selection from tree
   const handleVariableSelect = useCallback(
     (node: VariableTreeNode) => {
+      if (isEditingLocked) return
       if (!node.isSelectable) return
 
       // Check if already selected
@@ -120,7 +125,15 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
         setIsModalOpen(true)
       }
     },
-    [selectedVariableIds, config.addressSpace.nodes, treeIndex, serverName, removeOpcUaNode, onConfigChange],
+    [
+      isEditingLocked,
+      selectedVariableIds,
+      config.addressSpace.nodes,
+      treeIndex,
+      serverName,
+      removeOpcUaNode,
+      onConfigChange,
+    ],
   )
 
   // Handle save from configuration modal
@@ -156,6 +169,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
   // Handle edit from selected list
   const handleEditNode = useCallback(
     (node: OpcUaNodeConfig) => {
+      if (isEditingLocked) return
       // Find the corresponding tree node
       const treeNode = treeIndex.get(treeIdForNode(node, treeIndex))
       if (treeNode) {
@@ -164,12 +178,13 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
         setIsModalOpen(true)
       }
     },
-    [treeIndex],
+    [isEditingLocked, treeIndex],
   )
 
   // Handle remove from selected list
   const handleRemoveNode = useCallback(
     (nodeId: string) => {
+      if (isEditingLocked) return
       const node = config.addressSpace.nodes.find((n) => n.id === nodeId)
       if (node) {
         removeOpcUaNode(serverName, nodeId)
@@ -197,7 +212,15 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
         onConfigChange()
       }
     },
-    [config.addressSpace.nodes, serverName, removeOpcUaNode, onConfigChange, projectVariables, treeIndex],
+    [
+      isEditingLocked,
+      config.addressSpace.nodes,
+      serverName,
+      removeOpcUaNode,
+      onConfigChange,
+      projectVariables,
+      treeIndex,
+    ],
   )
 
   return (
@@ -211,7 +234,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
       </div>
 
       {/* Namespace URI */}
-      <div className='flex flex-col gap-2'>
+      <EditingLockBoundary className='flex h-auto w-auto flex-col gap-2'>
         <Label className='text-xs text-neutral-950 dark:text-white'>Namespace URI</Label>
         <InputWithRef
           type='text'
@@ -223,7 +246,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
         <span className='text-xs text-neutral-500 dark:text-neutral-400'>
           Unique namespace identifier for your OPC-UA address space
         </span>
-      </div>
+      </EditingLockBoundary>
 
       {/* Split Pane Layout */}
       <div className='flex flex-1 gap-4 overflow-hidden'>
@@ -249,14 +272,14 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
           </div>
 
           {/* Variable Tree */}
-          <div className='flex-1 overflow-y-auto p-2'>
+          <EditingLockBoundary className='h-auto w-auto flex-1 overflow-y-auto p-2'>
             <VariableTree
               nodes={projectVariables}
               selectedIds={selectedVariableIds}
               onSelect={handleVariableSelect}
               filter={filter}
             />
-          </div>
+          </EditingLockBoundary>
         </div>
 
         {/* Right Panel - Selected Variables */}
@@ -270,14 +293,14 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
           </div>
 
           {/* Selected Variables List */}
-          <div className='flex-1 overflow-y-auto p-2'>
+          <EditingLockBoundary className='h-auto w-auto flex-1 overflow-y-auto p-2'>
             <SelectedVariablesList
               nodes={config.addressSpace.nodes}
               missingNodeIds={missingNodeIds}
               onEdit={handleEditNode}
               onRemove={handleRemoveNode}
             />
-          </div>
+          </EditingLockBoundary>
         </div>
       </div>
 
