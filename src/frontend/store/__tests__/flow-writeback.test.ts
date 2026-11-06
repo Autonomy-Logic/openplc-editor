@@ -12,6 +12,7 @@ import { createLadderFlowSlice } from '../slices/ladder/slice'
 import { createLibrarySlice } from '../slices/library/slice'
 import { createModalSlice } from '../slices/modal/slice'
 import { createProjectSlice } from '../slices/project/slice'
+import { createRuntimeProvisioningSlice } from '../slices/runtime-provisioning/slice'
 import { createSearchSlice } from '../slices/search/slice'
 import {
   cancelFlowWriteBacks,
@@ -42,6 +43,7 @@ function makeStore() {
     ...createHistorySlice(...args),
     ...createVersionControlSlice(...args),
     ...createAISlice(...args),
+    ...createRuntimeProvisioningSlice(...args),
     ...createSharedSlice(...args),
   }))
 }
