@@ -20,6 +20,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { useProject } from '../../../../middleware/shared/providers'
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../store'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
@@ -55,6 +56,7 @@ const ProjectReadmeModal = () => {
   const commitSaved = useOpenPLCStore((s) => s.readmeActions.commitSaved)
 
   const projectCanEdit = useOpenPLCStore((s) => s.workspace.canEdit)
+  const isEditingLocked = useIsEditingLocked()
   const projectId = useOpenPLCStore((s) => s.project.meta.path)
   const projectName = useOpenPLCStore((s) => s.project.meta.name)
   const projectPort = useProject()
@@ -160,6 +162,7 @@ const ProjectReadmeModal = () => {
             error={error}
             isCreate={savedContent == null}
             onDraftChange={setDraft}
+            isReadOnly={isEditingLocked}
             onCommitMessageChange={setCommitMessage}
             onTabChange={setActiveTab}
             onSave={handleSave}
@@ -263,6 +266,7 @@ function EditMode({
   error,
   isCreate,
   onDraftChange,
+  isReadOnly,
   onCommitMessageChange,
   onTabChange,
   onSave,
@@ -275,6 +279,7 @@ function EditMode({
   error: string | null
   isCreate: boolean
   onDraftChange: (content: string) => void
+  isReadOnly: boolean
   onCommitMessageChange: (message: string) => void
   onTabChange: (tab: 'edit' | 'preview') => void
   onSave: () => void
@@ -294,7 +299,11 @@ function EditMode({
       {activeTab === 'edit' ? (
         <textarea
           value={draftContent}
-          onChange={(e) => onDraftChange(e.target.value)}
+          onChange={(e) => {
+            if (isReadOnly) return
+            onDraftChange(e.target.value)
+          }}
+          readOnly={isReadOnly}
           placeholder='Write your README in markdown...'
           spellCheck={false}
           className='max-h-[60vh] min-h-[260px] w-full resize-y rounded-lg border border-neutral-200 bg-white p-3 font-mono text-sm leading-relaxed text-neutral-1000 outline-none focus:border-brand dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
