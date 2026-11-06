@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals'
 
-import { indexTree, isHiddenByFilter, treeIdForNode, visibleChildren } from '../opcua/tree-index'
+import { GLOBAL_SCOPE_POU } from '../opcua/resolve-indices'
+import { countTopLevelEntries, indexTree, isHiddenByFilter, treeIdForNode, visibleChildren } from '../opcua/tree-index'
 import type { VariableTreeNode } from '../opcua/types'
 
 const node = (over: Partial<VariableTreeNode> & { id: string; name: string }): VariableTreeNode => ({
@@ -125,5 +126,82 @@ describe('visibleChildren', () => {
 
   it('should answer nothing for a node with no children', () => {
     expect(visibleChildren(tree[0].children![0], '')).toEqual([])
+  })
+})
+
+describe('top-level entry counts (BR09)', () => {
+  const entry = (pouName: string, name: string, children?: VariableTreeNode[]): VariableTreeNode => ({
+    id: `${pouName}-${name}`,
+    name,
+    type: children ? 'function_block' : 'variable',
+    pouName,
+    variablePath: name,
+    isSelectable: true,
+    children,
+  })
+
+  const group = (pouName: string, name: string, children: VariableTreeNode[]): VariableTreeNode => ({
+    id: `${pouName}-group`,
+    name,
+    type: pouName === GLOBAL_SCOPE_POU ? 'global' : 'program',
+    pouName,
+    variablePath: '',
+    isSelectable: false,
+    children,
+  })
+
+  /** The Tank fixture: 7 own entries of main, SETPOINT once, FLOW and ORPHAN_VAR. */
+  const tank = (): VariableTreeNode[] => [
+    group(GLOBAL_SCOPE_POU, 'GVL', [entry(GLOBAL_SCOPE_POU, 'SETPOINT')]),
+    group('main', 'main', [
+      entry('main', 'TANK_LEVEL'),
+      entry('main', 'TANK_ALARM'),
+      entry('main', 'PUMP_RUN'),
+      entry('main', 'Man', [entry('main', 'Liga'), entry('main', 'Desliga')]),
+      entry('main', 'TMR1'),
+      entry('main', 'CNT1'),
+      entry('main', 'RECIPE'),
+      entry('main', 'SETPOINT'),
+    ]),
+    group('aux', 'aux', [entry('aux', 'FLOW'), entry('aux', 'SETPOINT')]),
+    group('orphan', 'orphan', [entry('orphan', 'ORPHAN_VAR')]),
+  ]
+
+  const counts = (filter: string) => {
+    const tree = tank()
+    return countTopLevelEntries(tree, indexTree(tree), filter)
+  }
+
+  it('should count every distinct top-level entry with no filter', () => {
+    expect(counts('')).toEqual({ total: 10, shown: 10 })
+  })
+
+  it('should count a VAR_EXTERNAL once, under the global scope', () => {
+    const tree = tank()
+    const index = indexTree(tree)
+
+    expect(countTopLevelEntries(tree, index, '').total).toBe(10)
+    expect(countTopLevelEntries([tree[0]], index, '').total).toBe(1)
+  })
+
+  it('should not count a group row as an entry', () => {
+    expect(counts('main').shown).toBe(0)
+  })
+
+  it.each([
+    ['TANK', 2],
+    ['Desliga', 1],
+    ['Man', 1],
+    ['Liga', 1],
+  ])('should show %s entries for the filter %s', (filter, shown) => {
+    expect(counts(filter)).toEqual({ total: 10, shown })
+  })
+
+  it('should keep the total while a filter narrows what is shown', () => {
+    expect(counts('TANK').total).toBe(10)
+  })
+
+  it('should count nothing in an empty tree', () => {
+    expect(countTopLevelEntries([], indexTree([]), '')).toEqual({ total: 0, shown: 0 })
   })
 })
