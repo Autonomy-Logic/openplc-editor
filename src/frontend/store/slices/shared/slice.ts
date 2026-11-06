@@ -981,6 +981,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().aiActions.clearConversation()
       // The checkpoint belongs to the closing project; Undo must never restore it into the next one.
       getState().aiActions.closeAIReview()
+      getState().runtimeProvisioningActions.requestDetachOnProjectClose()
     },
 
     handleOpenProjectResponse: (data) => {

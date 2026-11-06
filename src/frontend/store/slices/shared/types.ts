@@ -19,6 +19,7 @@ import type { LadderFlowSlice } from '../ladder'
 import type { LibrarySlice } from '../library'
 import type { ModalSlice } from '../modal'
 import type { ProjectSlice } from '../project'
+import type { RuntimeProvisioningSlice } from '../runtime-provisioning'
 import type { SearchSlice } from '../search'
 import type { TabsSlice } from '../tabs'
 import type { VersionControlSlice } from '../version-control'
@@ -39,6 +40,7 @@ export type SharedRootState = AISlice &
   LadderFlowSlice &
   HistorySlice &
   VersionControlSlice &
+  RuntimeProvisioningSlice &
   SharedSlice
 
 export type SharedResponse = {

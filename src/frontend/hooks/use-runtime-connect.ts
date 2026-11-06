@@ -14,33 +14,33 @@
  * status rather than await this (see `awaitDebugSession`). That is also why
  * the debugger's offer ends up as a modal opening a modal.
  */
-import { useDevice, useRuntime } from '@root/middleware/shared/providers/platform-context'
+import { useDevice, useRuntime, useRuntimeProvisioning } from '@root/middleware/shared/providers/platform-context'
 import { useCallback } from 'react'
 
-import { describeRuntimeTarget } from '../services/device-link-resolution'
+import { connectRuntime, type RuntimeConnectOutcome } from '../services/runtime-connect'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../store'
-import { validateRuntimeVersion } from '../utils/device'
-import { getErrorMessage } from '../utils/get-error-message'
 
 export interface UseRuntimeConnectResult {
   /** Toggle: connects when disconnected, disconnects when connected. */
   toggle: () => Promise<void>
   /** Connect only — a no-op when already connected. */
-  connect: () => Promise<void>
+  connect: () => Promise<RuntimeConnectOutcome>
 }
 
 export function useRuntimeConnect(): UseRuntimeConnectResult {
   const store = useOpenPLCStoreApi()
   const runtime = useRuntime()
   const device = useDevice()
-  const deviceBoard = useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard)
-  const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress || '')
+  const runtimeProvisioning = useRuntimeProvisioning()
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
   const setRuntimeConnectionStatus = useOpenPLCStore((state) => state.deviceActions.setRuntimeConnectionStatus)
   const setRuntimeJwtToken = useOpenPLCStore((state) => state.deviceActions.setRuntimeJwtToken)
   const clearDeviceLicense = useOpenPLCStore((state) => state.deviceActions.clearDeviceLicense)
-  const setRuntimeVersion = useOpenPLCStore((state) => state.deviceActions.setRuntimeVersion)
-  const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
+
+  const connect = useCallback(
+    () => connectRuntime(store, { runtime, device, runtimeProvisioning }),
+    [store, runtime, device, runtimeProvisioning],
+  )
 
   const toggle = useCallback(async () => {
     if (connectionStatus === 'connected') {
@@ -57,140 +57,8 @@ export function useRuntimeConnect(): UseRuntimeConnectResult {
       clearDeviceLicense()
       return
     }
-
-    // Web reaches a device through the orchestrator and carries no
-    // `runtimeIpAddress`; the runtime port already holds the device context the
-    // orchestrator screen set, so an empty address is only a stop condition on
-    // the desktop path that supplies one.
-    if (!runtimeIpAddress && !store.getState().runtimeConnection.selectedDevice) {
-      return
-    }
-
-    setRuntimeConnectionStatus('connecting')
-
-    // Named as the debugger's connect offer names it, so the two dialogs agree.
-    const reportUnreachable = (reason: string): void => {
-      const deviceName = store.getState().runtimeConnection.selectedDevice?.deviceName
-      const target = runtimeIpAddress
-        ? describeRuntimeTarget(deviceBoard, runtimeIpAddress)
-        : deviceName
-          ? `"${deviceName}"`
-          : 'the runtime'
-      openModal('debugger-message', {
-        type: 'error',
-        title: 'No Response',
-        message: `Could not reach ${target}: ${reason}. Check that it is powered and on the network, and that the IP address is correct.`,
-        buttons: ['OK'],
-        onResponse: () => undefined,
-      })
-    }
-
-    try {
-      // Web reaches the runtime THROUGH an orchestrator agent, so the adapter
-      // has to be told which device every later call is about. The Orchestrators
-      // screen does this inside its own Connect; extracting the connect without
-      // it left `getUsersInfo` addressed at nothing, which failed silently --
-      // status went to 'error' and no login modal ever appeared.
-      //
-      // Desktop carries no selected device and talks to `runtimeIpAddress`
-      // directly, so this is a no-op there.
-      const selected = store.getState().runtimeConnection.selectedDevice
-      if (selected) {
-        runtime.setDeviceContext?.({
-          agentId: selected.orchestratorAgentId,
-          deviceId: selected.deviceId,
-        })
-      }
-
-      const result = await runtime.getUsersInfo()
-
-      if (result.error) {
-        setRuntimeConnectionStatus('error')
-        reportUnreachable(result.error)
-        return
-      }
-
-      // Remember the runtime version so version-gated UI (e.g. User
-      // Management) can react to it for the lifetime of the connection.
-      setRuntimeVersion(result.runtimeVersion ?? null)
-
-      // Validate runtime version matches the selected board target
-      const versionValidation = validateRuntimeVersion(deviceBoard, result.runtimeVersion)
-
-      // Helper to proceed with connection after validation
-      const proceedWithConnection = () => {
-        if (result.hasUsers) {
-          openModal('runtime-login', null)
-        } else {
-          openModal('runtime-create-user', null)
-        }
-      }
-
-      if (versionValidation.status === 'mismatch') {
-        // Hard error for version mismatch - cannot proceed
-        setRuntimeConnectionStatus('error')
-        openModal('debugger-message', {
-          type: 'error',
-          title: 'Runtime Version Mismatch',
-          message: versionValidation.message || 'Unknown version mismatch error',
-          buttons: ['OK'],
-          onResponse: () => {
-            // No action needed, just close the modal
-          },
-        })
-        return
-      }
-
-      if (versionValidation.status === 'missing') {
-        // Warning for older runtimes - allow user to continue anyway
-        // Note: buttons ordered as ['Continue Anyway', 'Cancel'] so Cancel (index 1) is the default
-        // when closing the modal (DebuggerMessageModal calls onResponse with last button index on close)
-        openModal('debugger-message', {
-          type: 'warning',
-          title: 'Older Runtime Detected',
-          message: versionValidation.message || 'Could not detect runtime version.',
-          buttons: ['Continue Anyway', 'Cancel'],
-          onResponse: (buttonIndex: number) => {
-            if (buttonIndex === 0) {
-              // User clicked "Continue Anyway" - proceed with connection
-              proceedWithConnection()
-            } else {
-              // User clicked "Cancel" or closed the modal - stay disconnected
-              setRuntimeConnectionStatus('disconnected')
-            }
-          },
-        })
-        return
-      }
-
-      // Version is OK - proceed normally
-      proceedWithConnection()
-    } catch (error) {
-      setRuntimeConnectionStatus('error')
-      reportUnreachable(getErrorMessage(error))
-    }
-  }, [
-    store,
-    runtime,
-    device,
-    runtimeIpAddress,
-    connectionStatus,
-    setRuntimeConnectionStatus,
-    setRuntimeJwtToken,
-    clearDeviceLicense,
-    setRuntimeVersion,
-    openModal,
-    deviceBoard,
-  ])
-
-  const connect = useCallback(async () => {
-    // Already connected, or a connect is already in flight — either way there
-    // is nothing to start. Without the `connecting` guard a second press (the
-    // debugger clears its own processing flag before this resolves) fired a
-    // second getUsersInfo and a second login modal.
-    if (connectionStatus === 'connected' || connectionStatus === 'connecting') return
-    await toggle()
-  }, [connectionStatus, toggle])
+    await connect()
+  }, [runtime, device, connectionStatus, setRuntimeConnectionStatus, setRuntimeJwtToken, clearDeviceLicense, connect])
 
   return { toggle, connect }
 }
