@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PendingChange } from '../../../../../middleware/shared/ports/version-control-port'
 import { useProject, useVersionControl } from '../../../../../middleware/shared/providers'
+import { useIsEditingLocked } from '../../../../hooks/use-editing-lock'
 import { buildAllProjectFileContents, buildAllProjectFileContentsPure } from '../../../../services/save-actions'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import type { TabsProps } from '../../../../store/slices/tabs'
@@ -213,6 +214,7 @@ function ChangesTreeItem({
 
 export function ChangesSection({ projectId }: ChangesSectionProps) {
   const store = useOpenPLCStoreApi()
+  const isEditingLocked = useIsEditingLocked()
   const versionControl = useVersionControl()
   const projectPort = useProject()
   const {
@@ -651,7 +653,7 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
           </button>
           <button
             onClick={() => setShowStashModal(true)}
-            disabled={selectedFiles.size === 0 || isStashing}
+            disabled={selectedFiles.size === 0 || isStashing || isEditingLocked}
             title='Stash selected changes for later'
             className='rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors duration-150 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-blue-900/30 dark:hover:text-blue-400'
           >
@@ -659,7 +661,7 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
           </button>
           <button
             onClick={() => setShowDiscardModal(true)}
-            disabled={selectedFiles.size === 0 || isDiscarding}
+            disabled={selectedFiles.size === 0 || isDiscarding || isEditingLocked}
             className='rounded-md bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors duration-150 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-red-900/30 dark:hover:text-red-400'
           >
             Discard
