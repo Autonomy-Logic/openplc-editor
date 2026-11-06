@@ -552,7 +552,12 @@ describe('a command past its deadline (F22, BR26)', () => {
       const serverSawClose = new Promise<string>((resolve) => {
         channelClosed = () => resolve('channel closed')
       })
-      const server = await serve({ exec: hangOrAnswer((channel) => channel.on('close', () => channelClosed())) })
+      const server = await serve({
+        exec: hangOrAnswer((channel) => {
+          channel.resume()
+          channel.on('close', () => channelClosed())
+        }),
+      })
       const session = await openSession(server.port)
 
       void settlement(session.exec(HANG_COMMAND, { maxOutputBytes: 1024, timeoutMs: 300 }))
