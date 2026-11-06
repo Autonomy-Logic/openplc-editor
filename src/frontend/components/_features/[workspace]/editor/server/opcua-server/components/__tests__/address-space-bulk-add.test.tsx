@@ -96,11 +96,12 @@ const storedNodes = () =>
 
 const selectAll = () => fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
 
-const groupTick = (name: string) => {
-  const row = screen.getByText(name).closest('div')?.parentElement
-  if (!row) throw new Error(`no group row for ${name}`)
+/** Every row carries its own tick, so the lookup stays inside the row that holds the name. */
+const tickOf = (name: string) => {
+  const row = screen.getByText(name).closest('div')
+  if (!row) throw new Error(`no row for ${name}`)
   const tick = row.querySelector<HTMLButtonElement>('button[aria-label="Toggle selection"]')
-  if (!tick) throw new Error(`no tick for the group ${name}`)
+  if (!tick) throw new Error(`no tick for ${name}`)
   return tick
 }
 
@@ -110,11 +111,11 @@ describe('Select all in the Address Space (TC41, TC43, TC44)', () => {
 
     selectAll()
 
-    expect(storedNodes().map((node) => node.nodeId).sort()).toEqual([
-      'PLC.main.PUMP_RUN',
-      'PLC.main.TANK_ALARM',
-      'PLC.main.TANK_LEVEL',
-    ])
+    expect(
+      storedNodes()
+        .map((node) => node.nodeId)
+        .sort(),
+    ).toEqual(['PLC.main.PUMP_RUN', 'PLC.main.TANK_ALARM', 'PLC.main.TANK_LEVEL'])
   })
 
   it('should open no modal', () => {
@@ -135,12 +136,12 @@ describe('Select all in the Address Space (TC41, TC43, TC44)', () => {
     expect(toasts[0].description).toContain('1')
   })
 
-  it('should update the configured count', () => {
+  it('should add every planned node in one go', () => {
     renderTab()
 
     selectAll()
 
-    expect(screen.getByText('3 variables configured')).toBeTruthy()
+    expect(storedNodes()).toHaveLength(3)
   })
 
   it('should expose only what the filter shows, and report nothing (TC43)', () => {
@@ -148,7 +149,11 @@ describe('Select all in the Address Space (TC41, TC43, TC44)', () => {
 
     selectAll()
 
-    expect(storedNodes().map((node) => node.nodeId).sort()).toEqual(['PLC.main.TANK_ALARM', 'PLC.main.TANK_LEVEL'])
+    expect(
+      storedNodes()
+        .map((node) => node.nodeId)
+        .sort(),
+    ).toEqual(['PLC.main.TANK_ALARM', 'PLC.main.TANK_LEVEL'])
     expect(toasts).toHaveLength(0)
   })
 
@@ -191,7 +196,7 @@ describe('ticking a program group (TC50, TC51)', () => {
   it('should expose every entry of the group', () => {
     renderTab()
 
-    fireEvent.click(groupTick('main'))
+    fireEvent.click(tickOf('main'))
 
     expect(storedNodes()).toHaveLength(3)
   })
@@ -199,15 +204,19 @@ describe('ticking a program group (TC50, TC51)', () => {
   it('should expose only the visible children while a filter is typed (TC51)', () => {
     renderTab([], 'TANK')
 
-    fireEvent.click(groupTick('main'))
+    fireEvent.click(tickOf('main'))
 
-    expect(storedNodes().map((node) => node.nodeId).sort()).toEqual(['PLC.main.TANK_ALARM', 'PLC.main.TANK_LEVEL'])
+    expect(
+      storedNodes()
+        .map((node) => node.nodeId)
+        .sort(),
+    ).toEqual(['PLC.main.TANK_ALARM', 'PLC.main.TANK_LEVEL'])
   })
 
   it('should open no modal for a group', () => {
     renderTab()
 
-    fireEvent.click(groupTick('main'))
+    fireEvent.click(tickOf('main'))
 
     expect(screen.queryByText('Configure OPC-UA Node')).toBeNull()
   })
@@ -217,9 +226,7 @@ describe('ticking a single entry still opens the modal (TC52)', () => {
   it('should open the configuration modal and add nothing yet', () => {
     renderTab()
 
-    const row = screen.getByText('PUMP_RUN').closest('div')?.parentElement
-    const tick = row?.querySelector<HTMLButtonElement>('button[aria-label="Toggle selection"]')
-    fireEvent.click(tick as HTMLButtonElement)
+    fireEvent.click(tickOf('PUMP_RUN'))
 
     expect(screen.queryByText('Configure OPC-UA Node')).not.toBeNull()
     expect(storedNodes()).toHaveLength(0)

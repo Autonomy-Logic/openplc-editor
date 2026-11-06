@@ -1,9 +1,12 @@
 import { useOpenPLCStore } from '@root/frontend/store'
 import { findInstanceName } from '@root/frontend/utils/debug-variable-finder'
+import { newUuid } from '@root/frontend/utils/new-uuid'
+import { planBulkAdd, type SkipReport } from '@root/frontend/utils/opcua/bulk-selection'
 import { isComplexTreeNode as isComplexType } from '@root/frontend/utils/opcua/node-defaults'
 import { isGlobalScopePou } from '@root/frontend/utils/opcua/resolve-indices'
 import { countTopLevelEntries, indexTree, treeIdForNode } from '@root/frontend/utils/opcua/tree-index'
 import type { VariableTreeNode } from '@root/frontend/utils/opcua/types'
+import { toast } from '@root/frontend/utils/toast'
 import type { OpcUaNodeConfig, OpcUaServerConfig } from '@root/middleware/shared/ports/types'
 import { useCallback, useMemo, useState } from 'react'
 
@@ -21,9 +24,29 @@ interface AddressSpaceTabProps {
   onConfigChange: () => void
 }
 
+/** FR49: one toast after a bulk action, with a line per reason. Nothing to report shows nothing. */
+const SKIP_REASON_TEXT: Record<keyof SkipReport, string> = {
+  'member-has-node': 'skipped: a member already has its own node',
+  'filter-hides-part': 'skipped: only some members match the filter',
+  'no-instance': 'skipped: program has no instance in Resources',
+  'node-id-too-long': 'skipped: Node ID over 128 characters',
+  'node-id-exists': 'skipped: Node ID already exists',
+  'browse-name-too-long': 'skipped: Browse Name over 64 characters',
+}
+
+const reportSkipped = (skipped: SkipReport): void => {
+  const lines = Object.entries(skipped)
+    .filter(([, count]) => count > 0)
+    .map(([reason, count]) => `${SKIP_REASON_TEXT[reason as keyof SkipReport]} ${count}`)
+
+  if (lines.length === 0) return
+
+  toast({ title: 'Some entries were skipped', description: lines.join('\n'), variant: 'warn' })
+}
+
 export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressSpaceTabProps) => {
   const {
-    projectActions: { addOpcUaNode, updateOpcUaNode, removeOpcUaNode },
+    projectActions: { addOpcUaNode, addOpcUaNodes, updateOpcUaNode, removeOpcUaNode },
   } = useOpenPLCStore()
 
   // Get all project variables for the tree
@@ -63,6 +86,47 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
   )
 
   // Handle namespace URI change
+  const runBulkAdd = useCallback(
+    (groups: VariableTreeNode[]) => {
+      if (isEditingLocked) return
+
+      const plan = planBulkAdd({
+        tree: groups,
+        index: treeIndex,
+        filter,
+        existingNodes: config.addressSpace.nodes,
+        instances,
+        createId: newUuid,
+      })
+
+      if (plan.nodes.length > 0) {
+        addOpcUaNodes(serverName, plan.nodes)
+        setSelectedVariableIds((prev) => {
+          const next = new Set(prev)
+          for (const node of plan.nodes) next.add(treeIdForNode(node, treeIndex))
+          return next
+        })
+        onConfigChange()
+      }
+
+      reportSkipped(plan.skipped)
+    },
+    [
+      isEditingLocked,
+      treeIndex,
+      filter,
+      config.addressSpace.nodes,
+      instances,
+      serverName,
+      addOpcUaNodes,
+      onConfigChange,
+    ],
+  )
+
+  const handleSelectAll = useCallback(() => runBulkAdd(projectVariables), [runBulkAdd, projectVariables])
+
+  const handleSelectGroup = useCallback((group: VariableTreeNode) => runBulkAdd([group]), [runBulkAdd])
+
   // Handle variable selection from tree
   const handleVariableSelect = useCallback(
     (node: VariableTreeNode) => {
@@ -225,6 +289,14 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
             <p className='text-xs text-neutral-500 dark:text-neutral-400'>
               {filter ? `${entryCounts.shown} of ${entryCounts.total} shown` : `${entryCounts.total} available`}
             </p>
+            <button
+              type='button'
+              onClick={handleSelectAll}
+              disabled={isEditingLocked || entryCounts.shown === 0}
+              className='mt-2 h-[24px] rounded-md border border-neutral-300 bg-white px-2 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+            >
+              Select all
+            </button>
           </div>
 
           {/* Filter Input */}
@@ -244,6 +316,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
               nodes={projectVariables}
               selectedIds={selectedVariableIds}
               onSelect={handleVariableSelect}
+              onSelectGroup={handleSelectGroup}
               filter={filter}
             />
           </EditingLockBoundary>
