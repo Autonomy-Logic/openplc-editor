@@ -33,11 +33,12 @@ import { trackAcuExhausted, trackUpgradeCtaClicked } from './frontend/services/a
 import { configureSaveResume } from './frontend/services/resume-save-after-sign-in'
 import { bootStLsp } from './frontend/services/st-lsp/boot'
 import { OpenPLCStoreProvider, useOpenPLCStore } from './frontend/store'
+import { selectIsEditingLocked } from './frontend/store/slices/workspace/selectors'
 import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
 import { listenForProviderSignIns } from './middleware/adapters/editor/edge-account-adapter'
 import { getEdgeWebUrl } from './middleware/adapters/editor/system-adapter'
 import { transpileProjectStInProcess } from './middleware/adapters/editor/transpile-project-st'
-import { setMenuProjectOpen } from './middleware/adapters/editor/window-adapter'
+import { setMenuDebuggerActive, setMenuProjectOpen } from './middleware/adapters/editor/window-adapter'
 import { packageUpdateNotifier, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
 import { ExtensionPanelProvider, PlatformProvider } from './middleware/shared/providers'
 
@@ -228,6 +229,12 @@ function AppContent() {
     setProjectPath(projectPath)
     setMenuProjectOpen(projectPath !== '')
   }, [projectPath])
+
+  // The native menu is the only one on macOS and Linux, so the lock has to reach it.
+  const isEditingLocked = useOpenPLCStore(selectIsEditingLocked)
+  useEffect(() => {
+    setMenuDebuggerActive(isEditingLocked)
+  }, [isEditingLocked])
 
   return (
     <PlatformProvider ports={editorPorts}>
