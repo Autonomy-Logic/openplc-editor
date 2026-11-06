@@ -288,6 +288,9 @@ Main and renderer processes communicate through typed IPC bridges:
 Vendor package documents (an embedded configurator, for example) are served to a sandboxed iframe under
 the `vpp-doc://` scheme, never with `allow-same-origin`; see `docs/vendor-document-serving.md`.
 
+Installing or starting the OpenPLC Runtime on a device over SSH (`runtime-provisioning:*` channels), its
+host-key file and the test-device steps: see `docs/runtime-ssh-provisioning.md`.
+
 ### State Management (Zustand)
 
 Single store composed of the slices in `RootState` (`src/frontend/store/index.ts`), accessed via auto-generated selector hooks:

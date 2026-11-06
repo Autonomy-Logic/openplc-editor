@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import { describeVppPinDrift, type VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
+import type { RuntimeProvisioningOperation } from '@root/middleware/shared/ports/runtime-provisioning-port'
 import { useCapabilities, useDevice, usePackages } from '@root/middleware/shared/providers/platform-context'
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
@@ -13,8 +14,10 @@ import { useDeviceConnect } from '../../../../../../hooks/use-device-connect'
 import { useDeviceLicense } from '../../../../../../hooks/use-device-license'
 import { useRuntimeConnect } from '../../../../../../hooks/use-runtime-connect'
 import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
+import { reopenProvisioningDialog } from '../../../../../../services/runtime-provisioning'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
-import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
+import type { ConnectionStatus, RuntimeConnection } from '../../../../../../store/slices/device/types'
+import type { RuntimeProvisioningView } from '../../../../../../store/slices/runtime-provisioning/types'
 import { cn } from '../../../../../../utils/cn'
 import { isEthernetUploadTarget, isOpenPLCRuntimeTarget, isSimulatorTarget } from '../../../../../../utils/device'
 import { explainLicenseOutcome } from '../../../../../../utils/license-outcome-dialog'
@@ -28,6 +31,34 @@ import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../..
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 import { DeviceLicenseStatus } from './components/device-license-status'
 import { PinMappingTable } from './components/pin-mapping-table'
+
+type RuntimeConnectActivity = {
+  label: string
+  onClick: () => void
+}
+
+const RUNNING_OPERATION_LABELS: Record<RuntimeProvisioningOperation, string> = {
+  install: 'Installing runtime...',
+  start: 'Starting runtime...',
+}
+
+const PREPARING_RUNTIME_LABEL = 'Preparing runtime...'
+const SHOW_RESULT_LABEL = 'Show result'
+
+function runtimeProvisioningActivity(
+  view: RuntimeProvisioningView,
+  connectionStatus: ConnectionStatus,
+  reopenDialog: () => void,
+): RuntimeConnectActivity | undefined {
+  if (view.stage === 'running') {
+    const label = view.operation === null ? PREPARING_RUNTIME_LABEL : RUNNING_OPERATION_LABELS[view.operation]
+    return { label, onClick: reopenDialog }
+  }
+  if (view.stage === 'ended' && !view.acknowledged && connectionStatus !== 'connected') {
+    return { label: SHOW_RESULT_LABEL, onClick: reopenDialog }
+  }
+  return undefined
+}
 
 const Board = memo(function () {
   const store = useOpenPLCStoreApi()
@@ -92,6 +123,7 @@ const Board = memo(function () {
       )['modbus_tcp']?.['enabled'] === true,
   )
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
+  const provisioningView = useOpenPLCStore((state) => state.runtimeProvisioning.view)
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
   const setVppPackagePin = useOpenPLCStore((state) => state.deviceActions.setVppPackagePin)
   const recordedPins = useOpenPLCStore(
@@ -431,6 +463,10 @@ const Board = memo(function () {
   // licence teardown all have to behave identically wherever connect is
   // invoked from.
   const { toggle: handleConnectToRuntime } = useRuntimeConnect()
+  const runtimeActivity = useMemo(
+    () => runtimeProvisioningActivity(provisioningView, connectionStatus, () => reopenProvisioningDialog(store)),
+    [provisioningView, connectionStatus, store],
+  )
 
   // Timing and EtherCAT stats polling now belongs to the Runtime Status screen
   // (RTOP-283), which is where those statistics are displayed. Polling for them
@@ -714,6 +750,7 @@ const Board = memo(function () {
                 status={connectionStatus}
                 onConnect={handleConnectToRuntime}
                 onDisconnect={handleConnectToRuntime}
+                activity={runtimeActivity}
               >
                 {connectionStatus === 'connected' && plcStatus && (
                   <span className='text-xs text-neutral-600 dark:text-neutral-400'>PLC: {plcStatus}</span>

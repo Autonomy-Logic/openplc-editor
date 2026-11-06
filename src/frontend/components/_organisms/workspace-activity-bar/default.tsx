@@ -47,6 +47,7 @@ import { logCompilerEvent } from '../../../utils/debugger-session'
 import { isOpenPLCRuntimeTarget } from '../../../utils/device'
 import { onDeviceFlashRequest } from '../../../utils/device-connect-events'
 import { getErrorMessage } from '../../../utils/get-error-message'
+import { provisioningMessage } from '../../../utils/runtime-provisioning-messages'
 import { type BuildOption, BuildOptionsPopover } from '../../_features/[workspace]/build-options'
 import { BuildLibraryButton } from '../../_molecules/workspace-activity-bar/default/build-library'
 import { ChatButton } from '../../_molecules/workspace-activity-bar/default/chat'
@@ -1317,7 +1318,12 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         // timeout are logged here.
         let outcome: DebugSessionOutcome = 'failed'
         if (isRuntime) {
-          await runtimeConnect.connect()
+          const connectOutcome = await runtimeConnect.connect()
+          if (connectOutcome === 'provisioning-flow') {
+            addLog({ level: 'info', message: provisioningMessage('debugger-request-ended', {}).body })
+            setIsDebuggerProcessing(false)
+            return
+          }
           outcome = await awaitDebugSession(store, 'runtime')
         } else if (await deviceConnect.connect()) {
           outcome = await awaitDebugSession(store, 'device')

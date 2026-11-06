@@ -3,6 +3,11 @@ import type { ReactNode } from 'react'
 import type { ConnectionStatus } from '../../../store/slices/device/types'
 import { cn } from '../../../utils/cn'
 
+type DeviceConnectActivity = {
+  label: string
+  onClick: () => void
+}
+
 type DeviceConnectButtonProps = {
   /** Live connection state. Both target families use the same four states. */
   status: ConnectionStatus
@@ -19,6 +24,7 @@ type DeviceConnectButtonProps = {
   children?: ReactNode
   /** DOM id kept for the existing onboarding/tour anchors. */
   containerId?: string
+  activity?: DeviceConnectActivity
 }
 
 /**
@@ -39,18 +45,22 @@ const DeviceConnectButton = ({
   blockedReason,
   children,
   containerId,
+  activity,
 }: DeviceConnectButtonProps) => {
   const isConnected = status === 'connected'
   const isConnecting = status === 'connecting'
-  const disabled = isConnecting || blockedReason !== undefined
+  const disabled = activity === undefined && (isConnecting || blockedReason !== undefined)
+  const connectionLabel = isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'
+  const connectionTitle = blockedReason ?? (isConnected ? 'Disconnect from the device' : 'Connect to the device')
 
   return (
     <div id={containerId} className='flex w-full items-center justify-start gap-2'>
       <button
         type='button'
-        onClick={isConnected ? onDisconnect : onConnect}
+        onClick={activity?.onClick ?? (isConnected ? onDisconnect : onConnect)}
         disabled={disabled}
-        title={blockedReason ?? (isConnected ? 'Disconnect from the device' : 'Connect to the device')}
+        title={activity?.label ?? connectionTitle}
+        data-testid={activity === undefined ? undefined : 'device-connect-activity'}
         // Same classes main used for this button. They render correctly again now
         // that cn() knows the cp-* font scale -- before that, twMerge dropped
         // `text-cp-sm` as a conflict with `text-white` and the button jumped to the
@@ -60,7 +70,7 @@ const DeviceConnectButton = ({
           'hover:bg-brand-medium-dark disabled:opacity-50',
         )}
       >
-        {isConnecting ? 'Connecting...' : isConnected ? 'Disconnect' : 'Connect'}
+        {activity?.label ?? connectionLabel}
       </button>
 
       {/* No "Connected" confirmation: the button itself reads "Disconnect" when
