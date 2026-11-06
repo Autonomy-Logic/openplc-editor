@@ -8,6 +8,7 @@ import { type HostRelayMethod, RELAY_CHANNEL } from '@root/middleware/shared/ven
 import { useEffect, useMemo, useRef } from 'react'
 
 import type { ScreenSection } from '../index'
+import { createHostRelayHandler } from './host-relay-handler'
 
 const IFRAME_SANDBOX = 'allow-scripts allow-forms'
 
@@ -41,24 +42,10 @@ function VppScreenHost({ section }: VppScreenHostProps) {
     if (!iframe || !url || !packageId) return
     const plcModel = createProjectPlcModel(store)
     const transport = createIframeTransport(iframe)
-    const session = installHostQueryHandler(transport, async (method: HostRelayMethod, args: unknown[]) => {
-      switch (method) {
-        case 'getPlcVariables':
-          return plcModel.listExportableVariables()
-        case 'getPlcAddress': {
-          const qualifier = args[0]
-          if (typeof qualifier !== 'string') throw new Error('getPlcAddress needs a qualifier string')
-          return plcModel.resolveAddress(qualifier)
-        }
-        case 'getPersistence':
-          return store.getState().projectActions.getVppExtension(packageId, screenId) ?? null
-        case 'setPersistence': {
-          const data = args[0]
-          store.getState().projectActions.setVppExtension(packageId, screenId, data)
-          return true
-        }
-      }
-    })
+    const relay = createHostRelayHandler({ store, plcModel, packageId, screenId })
+    const session = installHostQueryHandler(transport, (method: HostRelayMethod, args: unknown[]) =>
+      Promise.resolve(relay(method, args)),
+    )
     // Push PLC-model changes to the guest so it can refresh its variable list without polling.
     const unsubscribeModel = plcModel.onModelChanged(() => {
       transport.post({ channel: RELAY_CHANNEL, kind: 'host-event', topic: 'plcModel/changed' })
