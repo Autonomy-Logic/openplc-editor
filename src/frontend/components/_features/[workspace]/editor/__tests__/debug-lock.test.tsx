@@ -1,4 +1,5 @@
 import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
+import type { LibraryPort } from '@root/middleware/shared/ports/library-port'
 import type { PackagePort } from '@root/middleware/shared/ports/package-port'
 import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
@@ -41,7 +42,7 @@ const ports: PlatformPorts = {
   theme: stubPort(),
   versionControl: stubPort(),
   navigation: stubPort(),
-  library: stubPort(),
+  library: stubPort<LibraryPort>({ listInstalled: () => Promise.resolve([]) }),
   packages: stubPort<PackagePort>({ listInstalled: () => Promise.resolve([]) }),
   capabilities: EDITOR_CAPABILITIES,
 }

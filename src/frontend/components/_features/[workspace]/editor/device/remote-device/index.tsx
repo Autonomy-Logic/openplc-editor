@@ -38,6 +38,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../..
 import TableActions from '../../../../../_atoms/table-actions'
 import { TooltipProvider } from '../../../../../_atoms/tooltip'
 import { TruncatedText } from '../../../../../_atoms/truncated-text'
+import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
 import { toast } from '../../../../[app]/toast/use-toast'
 import { ImportIOGroupsModal, type IOGroupImportMode, type IOGroupImportPreview } from './import-io-groups-modal'
@@ -956,300 +957,302 @@ const RemoteDeviceEditor = () => {
         </p>
       </div>
 
-      <div className='mb-6 flex flex-wrap gap-6'>
-        {/* Transport Type Selector */}
-        <div className='flex items-center gap-2'>
-          <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Transport</Label>
-          <Select value={transport} onValueChange={(v) => handleTransportChange(v as 'tcp' | 'rtu')}>
-            <SelectTrigger withIndicator placeholder='Select transport' className={selectTriggerStyles} />
-            <SelectContent className={selectContentStyles}>
-              {TRANSPORT_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
-                  <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                    {option.label}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <EditingLockBoundary className='contents'>
+        <div className='mb-6 flex flex-wrap gap-6'>
+          {/* Transport Type Selector */}
+          <div className='flex items-center gap-2'>
+            <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Transport</Label>
+            <Select value={transport} onValueChange={(v) => handleTransportChange(v as 'tcp' | 'rtu')}>
+              <SelectTrigger withIndicator placeholder='Select transport' className={selectTriggerStyles} />
+              <SelectContent className={selectContentStyles}>
+                {TRANSPORT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
+                    <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                      {option.label}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* TCP-specific fields */}
-        {transport === 'tcp' && (
-          <>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>IP Address</Label>
-              <InputWithRef
-                value={host}
-                onChange={(e) => setHost(e.target.value)}
-                onBlur={handleHostBlur}
-                placeholder='127.0.0.1'
-                className={inputStyles}
-              />
-            </div>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Port</Label>
-              <InputWithRef
-                type='number'
-                value={port}
-                onChange={(e) => setPort(e.target.value)}
-                onBlur={handlePortBlur}
-                placeholder='502'
-                className={inputStyles}
-              />
-            </div>
-          </>
-        )}
+          {/* TCP-specific fields */}
+          {transport === 'tcp' && (
+            <>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>IP Address</Label>
+                <InputWithRef
+                  value={host}
+                  onChange={(e) => setHost(e.target.value)}
+                  onBlur={handleHostBlur}
+                  placeholder='127.0.0.1'
+                  className={inputStyles}
+                />
+              </div>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Port</Label>
+                <InputWithRef
+                  type='number'
+                  value={port}
+                  onChange={(e) => setPort(e.target.value)}
+                  onBlur={handlePortBlur}
+                  placeholder='502'
+                  className={inputStyles}
+                />
+              </div>
+            </>
+          )}
 
-        {/* RTU-specific fields */}
-        {transport === 'rtu' && (
-          <>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Serial Port</Label>
-              <SerialPortCombobox
-                value={serialPort}
-                onValueChange={handleSerialPortChange}
-                options={serialPortOptions}
-                isLoading={isLoadingSerialPorts}
-                placeholder='/dev/ttyUSB0'
-              />
-            </div>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Baud Rate</Label>
-              <Select value={baudRate} onValueChange={handleBaudRateChange}>
-                <SelectTrigger withIndicator placeholder='Select baud rate' className={selectTriggerStyles} />
-                <SelectContent className={selectContentStyles}>
-                  {BAUD_RATE_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
-                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                        {option.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Parity</Label>
-              <Select value={parity} onValueChange={(v) => handleParityChange(v as 'N' | 'E' | 'O')}>
-                <SelectTrigger withIndicator placeholder='Select parity' className={selectTriggerStyles} />
-                <SelectContent className={selectContentStyles}>
-                  {PARITY_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
-                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                        {option.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Stop Bits</Label>
-              <Select value={stopBits} onValueChange={handleStopBitsChange}>
-                <SelectTrigger withIndicator placeholder='Select stop bits' className={selectTriggerStyles} />
-                <SelectContent className={selectContentStyles}>
-                  {STOP_BITS_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
-                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                        {option.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Data Bits</Label>
-              <Select value={dataBits} onValueChange={handleDataBitsChange}>
-                <SelectTrigger withIndicator placeholder='Select data bits' className={selectTriggerStyles} />
-                <SelectContent className={selectContentStyles}>
-                  {DATA_BITS_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
-                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                        {option.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </>
-        )}
+          {/* RTU-specific fields */}
+          {transport === 'rtu' && (
+            <>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Serial Port</Label>
+                <SerialPortCombobox
+                  value={serialPort}
+                  onValueChange={handleSerialPortChange}
+                  options={serialPortOptions}
+                  isLoading={isLoadingSerialPorts}
+                  placeholder='/dev/ttyUSB0'
+                />
+              </div>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Baud Rate</Label>
+                <Select value={baudRate} onValueChange={handleBaudRateChange}>
+                  <SelectTrigger withIndicator placeholder='Select baud rate' className={selectTriggerStyles} />
+                  <SelectContent className={selectContentStyles}>
+                    {BAUD_RATE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {option.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Parity</Label>
+                <Select value={parity} onValueChange={(v) => handleParityChange(v as 'N' | 'E' | 'O')}>
+                  <SelectTrigger withIndicator placeholder='Select parity' className={selectTriggerStyles} />
+                  <SelectContent className={selectContentStyles}>
+                    {PARITY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {option.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Stop Bits</Label>
+                <Select value={stopBits} onValueChange={handleStopBitsChange}>
+                  <SelectTrigger withIndicator placeholder='Select stop bits' className={selectTriggerStyles} />
+                  <SelectContent className={selectContentStyles}>
+                    {STOP_BITS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {option.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Data Bits</Label>
+                <Select value={dataBits} onValueChange={handleDataBitsChange}>
+                  <SelectTrigger withIndicator placeholder='Select data bits' className={selectTriggerStyles} />
+                  <SelectContent className={selectContentStyles}>
+                    {DATA_BITS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {option.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
 
-        {/* Common fields - Timeout and Slave ID */}
-        <div className='flex items-center gap-2'>
-          <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Timeout (ms)</Label>
-          <InputWithRef
-            type='number'
-            value={timeout}
-            onChange={(e) => setTimeout(e.target.value)}
-            onBlur={handleTimeoutBlur}
-            placeholder='1000'
-            className={inputStyles}
-          />
-        </div>
-        <div className='flex items-center gap-2'>
-          <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Slave ID</Label>
-          <InputWithRef
-            type='number'
-            value={slaveId}
-            onChange={(e) => setSlaveId(e.target.value)}
-            onBlur={handleSlaveIdBlur}
-            placeholder='1'
-            min={transport === 'rtu' ? SLAVE_ID_RTU_MIN : SLAVE_ID_TCP_MIN}
-            max={transport === 'rtu' ? SLAVE_ID_RTU_MAX : SLAVE_ID_TCP_MAX}
-            className={inputStyles}
-          />
-        </div>
-      </div>
-
-      <div className='flex flex-1 flex-col overflow-hidden'>
-        <div className='mb-2 flex items-center justify-between'>
-          <h3 className='text-sm font-medium text-neutral-950 dark:text-neutral-100'>IO Tag Mapping</h3>
-          <div className='flex items-center gap-1'>
-            <input
-              ref={importInputRef}
-              type='file'
-              data-testid='io-group-import-input'
-              accept='.csv,.json,text/csv,application/json'
-              onChange={(e) => void handleImportFileSelected(e)}
-              className='hidden'
-              aria-hidden
-              tabIndex={-1}
+          {/* Common fields - Timeout and Slave ID */}
+          <div className='flex items-center gap-2'>
+            <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Timeout (ms)</Label>
+            <InputWithRef
+              type='number'
+              value={timeout}
+              onChange={(e) => setTimeout(e.target.value)}
+              onBlur={handleTimeoutBlur}
+              placeholder='1000'
+              className={inputStyles}
             />
-            <button
-              type='button'
-              id='import-io-groups-button'
-              data-testid='io-group-import-button'
-              onClick={() => importInputRef.current?.click()}
-              className={TOOLBAR_BUTTON_CLASS}
-              title='Import IO groups from a CSV or JSON file'
-            >
-              <Upload className='h-3.5 w-3.5' />
-              Import
-            </button>
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger asChild disabled={ioGroups.length === 0}>
-                <button
-                  type='button'
-                  id='export-io-groups-button'
-                  data-testid='io-group-export-button'
-                  className={TOOLBAR_BUTTON_CLASS}
-                  title={ioGroups.length === 0 ? 'Add IO groups to enable export' : 'Export IO groups'}
-                >
-                  <Download className='h-3.5 w-3.5' />
-                  Export
-                </button>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Portal>
-                <DropdownMenu.Content
-                  align='end'
-                  sideOffset={4}
-                  className='z-[60] min-w-[120px] overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-                >
-                  {(['csv', 'json'] as const).map((format) => (
-                    <DropdownMenu.Item
-                      key={format}
-                      data-testid={`io-group-export-${format}`}
-                      onSelect={() => handleExport(format)}
-                      className='flex cursor-pointer select-none items-center px-3 py-1.5 text-xs font-medium text-neutral-850 outline-none hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900 dark:data-[highlighted]:bg-neutral-900'
-                    >
-                      {format === 'csv' ? 'CSV (.csv)' : 'JSON (.json)'}
-                    </DropdownMenu.Item>
-                  ))}
-                </DropdownMenu.Content>
-              </DropdownMenu.Portal>
-            </DropdownMenu.Root>
-            <TableActions
-              actions={[
-                {
-                  ariaLabel: 'Add IO Group',
-                  onClick: handleOpenAddModal,
-                  icon: <PlusIcon className='h-4 w-4 stroke-brand' />,
-                  id: 'add-io-group-button',
-                },
-              ]}
-              buttonProps={{
-                className:
-                  'rounded-md p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed',
-              }}
+          </div>
+          <div className='flex items-center gap-2'>
+            <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Slave ID</Label>
+            <InputWithRef
+              type='number'
+              value={slaveId}
+              onChange={(e) => setSlaveId(e.target.value)}
+              onBlur={handleSlaveIdBlur}
+              placeholder='1'
+              min={transport === 'rtu' ? SLAVE_ID_RTU_MIN : SLAVE_ID_TCP_MIN}
+              max={transport === 'rtu' ? SLAVE_ID_RTU_MAX : SLAVE_ID_TCP_MAX}
+              className={inputStyles}
             />
           </div>
         </div>
 
-        <div className='flex-1 overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-800'>
-          <TooltipProvider>
-            <table className='w-full table-fixed'>
-              <thead className='sticky top-0 bg-neutral-100 dark:bg-neutral-900'>
-                <tr>
-                  <th className='w-8 px-2 py-2'></th>
-                  <th className='w-[14%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                    Name
-                  </th>
-                  <th className='w-[18%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                    Type
-                  </th>
-                  <th className='w-[15%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                    Address
-                  </th>
-                  <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                    Offset
-                  </th>
-                  <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                    Length
-                  </th>
-                  <th className='w-[17%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                    Function Code
-                  </th>
-                  <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                    Alias
-                  </th>
-                  <th className='w-20 px-2 py-2 text-right text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {ioGroups.length === 0 ? (
+        <div className='flex flex-1 flex-col overflow-hidden'>
+          <div className='mb-2 flex items-center justify-between'>
+            <h3 className='text-sm font-medium text-neutral-950 dark:text-neutral-100'>IO Tag Mapping</h3>
+            <div className='flex items-center gap-1'>
+              <input
+                ref={importInputRef}
+                type='file'
+                data-testid='io-group-import-input'
+                accept='.csv,.json,text/csv,application/json'
+                onChange={(e) => void handleImportFileSelected(e)}
+                className='hidden'
+                aria-hidden
+                tabIndex={-1}
+              />
+              <button
+                type='button'
+                id='import-io-groups-button'
+                data-testid='io-group-import-button'
+                onClick={() => importInputRef.current?.click()}
+                className={TOOLBAR_BUTTON_CLASS}
+                title='Import IO groups from a CSV or JSON file'
+              >
+                <Upload className='h-3.5 w-3.5' />
+                Import
+              </button>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild disabled={ioGroups.length === 0}>
+                  <button
+                    type='button'
+                    id='export-io-groups-button'
+                    data-testid='io-group-export-button'
+                    className={TOOLBAR_BUTTON_CLASS}
+                    title={ioGroups.length === 0 ? 'Add IO groups to enable export' : 'Export IO groups'}
+                  >
+                    <Download className='h-3.5 w-3.5' />
+                    Export
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align='end'
+                    sideOffset={4}
+                    className='z-[60] min-w-[120px] overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                  >
+                    {(['csv', 'json'] as const).map((format) => (
+                      <DropdownMenu.Item
+                        key={format}
+                        data-testid={`io-group-export-${format}`}
+                        onSelect={() => handleExport(format)}
+                        className='flex cursor-pointer select-none items-center px-3 py-1.5 text-xs font-medium text-neutral-850 outline-none hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900 dark:data-[highlighted]:bg-neutral-900'
+                      >
+                        {format === 'csv' ? 'CSV (.csv)' : 'JSON (.json)'}
+                      </DropdownMenu.Item>
+                    ))}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+              <TableActions
+                actions={[
+                  {
+                    ariaLabel: 'Add IO Group',
+                    onClick: handleOpenAddModal,
+                    icon: <PlusIcon className='h-4 w-4 stroke-brand' />,
+                    id: 'add-io-group-button',
+                  },
+                ]}
+                buttonProps={{
+                  className:
+                    'rounded-md p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed',
+                }}
+              />
+            </div>
+          </div>
+
+          <div className='flex-1 overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-800'>
+            <TooltipProvider>
+              <table className='w-full table-fixed'>
+                <thead className='sticky top-0 bg-neutral-100 dark:bg-neutral-900'>
                   <tr>
-                    <td colSpan={9} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
-                      No IO groups configured. Click the + button to add one, or Import a CSV / JSON file.
-                    </td>
+                    <th className='w-8 px-2 py-2'></th>
+                    <th className='w-[14%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                      Name
+                    </th>
+                    <th className='w-[18%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                      Type
+                    </th>
+                    <th className='w-[15%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                      Address
+                    </th>
+                    <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                      Offset
+                    </th>
+                    <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                      Length
+                    </th>
+                    <th className='w-[17%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                      Function Code
+                    </th>
+                    <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                      Alias
+                    </th>
+                    <th className='w-20 px-2 py-2 text-right text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                      Actions
+                    </th>
                   </tr>
-                ) : (
-                  ioGroups.map((ioGroup: ModbusIOGroup) => (
-                    <IOGroupRow
-                      key={ioGroup.id}
-                      ioGroup={ioGroup}
-                      isExpanded={expandedGroups.has(ioGroup.id)}
-                      onToggleExpand={() => handleToggleExpand(ioGroup.id)}
-                      onEdit={() => handleOpenEditModal(ioGroup.id)}
-                      onDelete={() => handleDeleteIOGroup(ioGroup.id)}
-                      onUpdateAlias={(ioPointId, alias) => handleUpdateAlias(ioGroup.id, ioPointId, alias)}
-                    />
-                  ))
-                )}
-              </tbody>
-            </table>
-          </TooltipProvider>
+                </thead>
+                <tbody>
+                  {ioGroups.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
+                        No IO groups configured. Click the + button to add one, or Import a CSV / JSON file.
+                      </td>
+                    </tr>
+                  ) : (
+                    ioGroups.map((ioGroup: ModbusIOGroup) => (
+                      <IOGroupRow
+                        key={ioGroup.id}
+                        ioGroup={ioGroup}
+                        isExpanded={expandedGroups.has(ioGroup.id)}
+                        onToggleExpand={() => handleToggleExpand(ioGroup.id)}
+                        onEdit={() => handleOpenEditModal(ioGroup.id)}
+                        onDelete={() => handleDeleteIOGroup(ioGroup.id)}
+                        onUpdateAlias={(ioPointId, alias) => handleUpdateAlias(ioGroup.id, ioPointId, alias)}
+                      />
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </TooltipProvider>
+          </div>
         </div>
-      </div>
 
-      <IOGroupModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onSubmit={handleSubmitIOGroup}
-        editingGroup={editingGroup}
-        otherGroupNames={ioGroups.filter((g) => g.id !== editingGroup?.id).map((g) => g.name)}
-      />
+        <IOGroupModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          onSubmit={handleSubmitIOGroup}
+          editingGroup={editingGroup}
+          otherGroupNames={ioGroups.filter((g) => g.id !== editingGroup?.id).map((g) => g.name)}
+        />
 
-      <ImportIOGroupsModal
-        preview={importPreview}
-        existingGroupNames={ioGroups.map((g) => g.name)}
-        onClose={() => setImportPreview(null)}
-        onConfirm={handleConfirmImport}
-      />
+        <ImportIOGroupsModal
+          preview={importPreview}
+          existingGroupNames={ioGroups.map((g) => g.name)}
+          onClose={() => setImportPreview(null)}
+          onConfirm={handleConfirmImport}
+        />
+      </EditingLockBoundary>
     </div>
   )
 }

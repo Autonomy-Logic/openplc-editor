@@ -26,6 +26,7 @@ import type { InstalledLibrary } from '@root/middleware/shared/ports/library-typ
 import { useLibrary } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useState } from 'react'
 
+import { EditingLockBoundary } from '../../../../_molecules/editing-lock-boundary'
 import { ProjectLibrariesTab } from './project-libraries-tab'
 import { SystemLibrariesTab } from './system-libraries-tab'
 
@@ -172,14 +173,18 @@ const LibraryManagerEditor = () => {
           value='system'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <SystemLibrariesTab installed={installed} onRefresh={() => void refreshInstalled()} />
+          <EditingLockBoundary className='contents'>
+            <SystemLibrariesTab installed={installed} onRefresh={() => void refreshInstalled()} />
+          </EditingLockBoundary>
         </Tabs.Content>
 
         <Tabs.Content
           value='project'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <ProjectLibrariesTab installed={installed} />
+          <EditingLockBoundary className='contents'>
+            <ProjectLibrariesTab installed={installed} />
+          </EditingLockBoundary>
         </Tabs.Content>
       </Tabs.Root>
     </div>
