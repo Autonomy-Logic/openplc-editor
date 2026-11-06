@@ -14,6 +14,7 @@ import {
   CreateRemoteDeviceEditor,
 } from '@root/frontend/store/slices/tabs/utils'
 import { DeviceEditor } from '../device'
+import { EtherCATEditor } from '../device/ethercat'
 import { RemoteDeviceEditor } from '../device/remote-device'
 import { LibraryManagerEditor } from '../library-manager'
 import { PackageManagerEditor } from '../package-manager'
@@ -161,6 +162,44 @@ describe('remote device editor during a debug session (TC11)', () => {
 
     expect(controls().length).toBeGreaterThan(0)
     expect(everyControlIsLocked()).toBe(true)
+  })
+})
+
+describe('EtherCAT editor during a debug session (TC11)', () => {
+  beforeEach(() => {
+    store = createTestStore()
+    expect(
+      store.getState().projectActions.createRemoteDevice({ data: { name: 'EC1', protocol: 'ethercat' } }).ok,
+    ).toBe(true)
+    store.getState().editorActions.setEditor(CreateRemoteDeviceEditor('EC1', 'ethercat'))
+    renderEditor(<EtherCATEditor />)
+  })
+
+  it('should leave at least one control live while no debug session is open', () => {
+    expect(controls().length).toBeGreaterThan(0)
+    expect(someControlIsLive()).toBe(true)
+  })
+
+  it('should lock every control while the debugger is open', () => {
+    openDebugSession()
+
+    expect(controls().length).toBeGreaterThan(0)
+    expect(everyControlIsLocked()).toBe(true)
+  })
+
+  it('should release the controls once the debug session is closed', () => {
+    openDebugSession()
+    closeDebugSession()
+
+    expect(someControlIsLive()).toBe(true)
+  })
+
+  /** Scan and Add are disabled without a runtime, so the mark is what proves the whole tab is held. */
+  it('should put every tab of the bus editor behind the lock while the debugger is open', () => {
+    openDebugSession()
+
+    const marked = container.querySelectorAll('[data-editing-locked="true"]')
+    expect(marked.length).toBe(3)
   })
 })
 
