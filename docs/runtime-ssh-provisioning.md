@@ -35,16 +35,32 @@ to log in to the device over SSH and install or start the runtime there.
 8. Depending on what was found:
    - start: `systemctl start docker` then `docker start openplc-bootloader`, or
      `docker start openplc-bootloader`, or `docker start openplc-runtime`, or
-     `systemctl start openplc-runtime.service`;
+     `systemctl start openplc-runtime.service`. A start command that fails ends the operation at once
+     with "Runtime start failed" and its last lines, which also go to the editor console. The editor does
+     not wait for 8443;
    - install: the official installer is downloaded from `https://runtime.getedge.me` over HTTPS only,
-     into a fresh `mktemp -d` folder, and run detached with `setsid`, so it keeps running when the SSH
-     session ends. The editor reads its log once a second and shows the lines. It stops following and
-     reports the result as unknown when the installer log stays empty for 60 reads in a row, or when the
-     installer is still running 60 minutes after it started;
+     with `--connect-timeout 20 --max-time 120`, into a fresh `mktemp -d` folder. A download that fails or
+     passes either limit gives "No internet access". The installer is then run detached with `setsid`, so
+     it keeps running when the SSH session ends. The editor reads its log once a second and shows the
+     lines. It stops following and reports the result as unknown when the installer log stays empty for 60
+     reads in a row, or when the installer is still running 60 minutes after it started;
    - a runtime already running: nothing is changed.
 9. The editor then waits for the runtime to answer on TCP 8443, checking every 2 s for at most 120 s. When
    it answers, the dialog closes and the usual connect continues: the login dialog, or "Create First
    User" on a new install.
+
+Lost connection and time limits:
+
+- The editor sends an SSH keepalive every 5 s, and closes a session whose device has not answered for
+  about 20 s.
+- Each device command has a time limit: 150 s for the installer download step and for the start command,
+  30 s for every other command.
+- A lost session or a passed limit ends the operation with the result unknown, and the user is told to
+  Connect again.
+
+While Cancel is offered, it ends the operation at once ("Operation cancelled"). The SSH session is closed,
+a command still running for the inspection or the download is abandoned, and nothing was installed or
+started.
 
 While an operation runs, its dialog can be hidden. The Connect button then shows the operation in
 progress ("Installing runtime...", "Starting runtime..." or "Preparing runtime...") and a click reopens
@@ -96,8 +112,9 @@ The offer dialog lists what will be done on the device:
 
 ## Credentials
 
-- The username and password are used for one operation only. They are never stored, never written to
-  the console or to a log file, and are cleared from memory when the operation ends.
+- The username and password are used for one operation only. They are never stored and never written to
+  the console or to a log file. The editor drops them when the operation ends: they are not kept for a
+  later operation and are never reused to reconnect.
 - The password is scrubbed from every line of device output before it is shown, sent to the renderer or
   logged.
 - A non-root account runs each administrative command as

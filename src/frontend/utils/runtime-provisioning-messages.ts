@@ -227,6 +227,14 @@ function outcomeMessage(key: RuntimeProvisioningOutcome['kind'], facts: Provisio
         title: 'Installer failed',
         body: withLastLines(`The installer failed on ${host}.`, facts.lastLines),
       }
+    case 'start-failed':
+      return {
+        title: 'Runtime start failed',
+        body: withLastLines(
+          `The OpenPLC Runtime could not be started on ${host}: the start command failed. Nothing was installed. Its last lines are in the editor console.`,
+          facts.lastLines,
+        ),
+      }
   }
 }
 

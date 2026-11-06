@@ -119,6 +119,7 @@ export type RuntimeProvisioningOutcome =
   | { kind: 'v3-present' }
   | { kind: 'download-failed'; dockerPresent: boolean }
   | { kind: 'installer-failed'; lastLines: string[] }
+  | { kind: 'start-failed'; lastLines: string[] }
 
 export type RuntimeProvisioningPhase = 'connecting' | 'inspecting' | 'starting' | 'installing' | 'waiting-runtime'
 
@@ -231,7 +232,8 @@ function toOutcomeWithDetails(fields: Fields, kind: unknown): RuntimeProvisionin
       const dockerPresent = fields.get('dockerPresent')
       return typeof dockerPresent === 'boolean' ? { kind, dockerPresent } : unknownOutcome()
     }
-    case 'installer-failed': {
+    case 'installer-failed':
+    case 'start-failed': {
       const lastLines = fields.get('lastLines')
       return isStringArray(lastLines) ? { kind, lastLines: [...lastLines] } : unknownOutcome()
     }

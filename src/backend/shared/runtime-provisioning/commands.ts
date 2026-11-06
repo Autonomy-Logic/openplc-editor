@@ -56,10 +56,15 @@ const INSPECT_RUNTIME = [
   'echo "v3=${v:-none}"',
 ].join('; ')
 
+export const INSTALLER_CONNECT_TIMEOUT_S = 20
+
+export const INSTALLER_DOWNLOAD_MAX_S = 120
+
 const PREPARE_INSTALLER = [
   'd=$(mktemp -d) || exit 1',
   'echo "dir=$d"',
-  `if curl --proto '=https' --proto-redir '=https' -fsSL ${INSTALLER_URL} -o "$d/install.sh"; ` +
+  `if curl --proto '=https' --proto-redir '=https' --connect-timeout ${INSTALLER_CONNECT_TIMEOUT_S} ` +
+    `--max-time ${INSTALLER_DOWNLOAD_MAX_S} -fsSL ${INSTALLER_URL} -o "$d/install.sh"; ` +
     'then echo download=ok; else echo download=failed; fi',
 ].join('; ')
 

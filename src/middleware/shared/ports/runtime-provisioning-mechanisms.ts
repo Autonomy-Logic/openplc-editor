@@ -15,6 +15,8 @@ export interface SshSessionOpenRequest {
   username: string
   password: string
   timeoutMs: number
+  keepaliveIntervalMs: number
+  keepaliveCountMax: number
   verifyHostKey: (keyBase64: string) => Promise<boolean>
   chooseAuth: (methodsLeft: string[] | null) => SshAuthChoice
 }
@@ -27,8 +29,14 @@ export interface SshExecResult {
   truncated: boolean
 }
 
+export interface SshExecOptions {
+  stdin?: string
+  maxOutputBytes: number
+  timeoutMs: number
+}
+
 export interface SshSession {
-  exec(command: string, options: { stdin?: string; maxOutputBytes: number }): Promise<SshExecResult>
+  exec(command: string, options: SshExecOptions): Promise<SshExecResult>
   close(): void
   onClosed(callback: () => void): Unsubscribe
 }

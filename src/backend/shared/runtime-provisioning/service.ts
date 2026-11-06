@@ -51,6 +51,16 @@ export const INSTALLER_START_POLL_LIMIT = 60
 
 export const INSTALLER_FOLLOW_MAX_MS = 3_600_000
 
+export const SSH_KEEPALIVE_INTERVAL_MS = 5_000
+
+export const SSH_KEEPALIVE_COUNT_MAX = 3
+
+export const EXEC_TIMEOUT_MS = 30_000
+
+export const PREPARE_INSTALLER_TIMEOUT_MS = 150_000
+
+export const START_COMMAND_TIMEOUT_MS = 150_000
+
 const EXEC_MAX_OUTPUT_BYTES = 2 * POLL_READ_BYTES
 
 export interface RuntimeProvisioningServiceState {
@@ -85,7 +95,6 @@ interface RunContext {
   phase: RuntimeProvisioningPhase
   cancellable: boolean
   account: Account
-  cancelRequested: boolean
   openFailure: OpenFailure | null
   passwordTried: boolean
   connection: Connection | null
@@ -143,7 +152,7 @@ function openFailureOutcome(failure: OpenFailure | null, target: string): Runtim
 }
 
 function stopped(context: RunContext): boolean {
-  return context.outcome !== null || context.cancelRequested
+  return context.outcome !== null
 }
 
 function chooseAuth(context: RunContext, methodsLeft: string[] | null): SshAuthChoice {
@@ -241,11 +250,16 @@ export function createRuntimeProvisioningService(
     checkpoint(context)
   }
 
-  async function exec(context: RunContext, session: SshSession, command: DeviceCommand): Promise<SshExecResult> {
+  async function exec(
+    context: RunContext,
+    session: SshSession,
+    command: DeviceCommand,
+    timeoutMs: number = EXEC_TIMEOUT_MS,
+  ): Promise<SshExecResult> {
     const built = buildExec(command, context.account)
     const options = built.sendsPassword
-      ? { stdin: `${context.credentials.password}\n`, maxOutputBytes: EXEC_MAX_OUTPUT_BYTES }
-      : { maxOutputBytes: EXEC_MAX_OUTPUT_BYTES }
+      ? { stdin: `${context.credentials.password}\n`, maxOutputBytes: EXEC_MAX_OUTPUT_BYTES, timeoutMs }
+      : { maxOutputBytes: EXEC_MAX_OUTPUT_BYTES, timeoutMs }
     const result = await session.exec(built.command, options)
     checkpoint(context)
     return result
@@ -299,13 +313,11 @@ export function createRuntimeProvisioningService(
     enterPhase(context, 'starting', true, 'start')
     checkpoint(context)
     enterPhase(context, 'starting', false)
-    const result = await exec(context, session, START_COMMANDS[target])
+    const result = await exec(context, session, START_COMMANDS[target], START_COMMAND_TIMEOUT_MS)
     if (result.exitCode !== 0) {
-      return {
-        kind: 'not-started',
-        operation: 'start',
-        lastLines: commandOutputLines(result, context.credentials.password),
-      }
+      const lastLines = commandOutputLines(result, context.credentials.password)
+      for (const message of lastLines) emit({ type: 'console', level: 'info', message })
+      return { kind: 'start-failed', lastLines }
     }
     return waitForRuntime(context, 'start', [])
   }
@@ -370,7 +382,7 @@ export function createRuntimeProvisioningService(
     context.operation = 'install'
     enterPhase(context, 'installing', true, 'install')
     const prepared = parsePrepareInstaller(
-      (await exec(context, session, PROVISIONING_COMMANDS.prepareInstaller)).stdout,
+      (await exec(context, session, PROVISIONING_COMMANDS.prepareInstaller, PREPARE_INSTALLER_TIMEOUT_MS)).stdout,
     )
     if (prepared.kind === 'download-failed')
       return { kind: 'download-failed', dockerPresent: runtime.docker !== 'absent' }
@@ -420,6 +432,8 @@ export function createRuntimeProvisioningService(
       username: context.credentials.username,
       password: context.credentials.password,
       timeoutMs: SSH_SESSION_TIMEOUT_MS,
+      keepaliveIntervalMs: SSH_KEEPALIVE_INTERVAL_MS,
+      keepaliveCountMax: SSH_KEEPALIVE_COUNT_MAX,
       verifyHostKey: (keyBase64) => verifyHostKey(context, fileState, keyBase64),
       chooseAuth: (methodsLeft) => chooseAuth(context, methodsLeft),
     })
@@ -440,7 +454,6 @@ export function createRuntimeProvisioningService(
       phase: 'connecting',
       cancellable: true,
       account: 'sudo',
-      cancelRequested: false,
       openFailure: null,
       passwordTried: false,
       connection: null,
@@ -452,7 +465,7 @@ export function createRuntimeProvisioningService(
     enterPhase(context, 'connecting', true)
     provision(context).then(
       (outcome) => settle(context, outcome),
-      () => settle(context, context.cancelRequested ? { kind: 'cancelled' } : { kind: 'unknown' }),
+      () => halt(context),
     )
   }
 
@@ -480,8 +493,7 @@ export function createRuntimeProvisioningService(
 
     cancel() {
       const context = active
-      if (context !== null && context.cancellable) context.cancelRequested = true
-      else if (context !== null) halt(context)
+      if (context !== null) settle(context, context.cancellable ? { kind: 'cancelled' } : { kind: 'unknown' })
       return Promise.resolve()
     },
 

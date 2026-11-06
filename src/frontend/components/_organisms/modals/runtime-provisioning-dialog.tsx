@@ -100,7 +100,9 @@ function outcomeFacts(view: EndedView): ProvisioningMessageFacts {
 }
 
 function lastLinesOf(outcome: RuntimeProvisioningOutcome): string[] {
-  if (outcome.kind === 'installer-failed') return outcome.lastLines.slice(-LAST_LINES_SHOWN)
+  if (outcome.kind === 'installer-failed' || outcome.kind === 'start-failed') {
+    return outcome.lastLines.slice(-LAST_LINES_SHOWN)
+  }
   if (outcome.kind === 'not-started' && outcome.operation === 'install') {
     return outcome.lastLines.slice(-LAST_LINES_SHOWN)
   }

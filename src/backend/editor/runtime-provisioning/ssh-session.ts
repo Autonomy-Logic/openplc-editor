@@ -1,5 +1,6 @@
 import type {
   SshAuthChoice,
+  SshExecOptions,
   SshExecResult,
   SshSession,
   SshSessionMechanism,
@@ -56,11 +57,7 @@ function collect(output: OutputBuffer, target: Uint8Array[], chunk: Uint8Array, 
   output.bytes += chunk.length
 }
 
-function runOnChannel(
-  channel: ClientChannel,
-  options: { stdin?: string; maxOutputBytes: number },
-  resolve: (result: SshExecResult) => void,
-): void {
+function runOnChannel(channel: ClientChannel, options: SshExecOptions, resolve: (result: SshExecResult) => void): void {
   const output: OutputBuffer = { stdout: [], stderr: [], bytes: 0, truncated: false }
   let exitCode: number | null = null
   channel.on('data', (chunk: Uint8Array) => collect(output, output.stdout, chunk, options.maxOutputBytes))
@@ -82,15 +79,45 @@ function runOnChannel(
   channel.end()
 }
 
+function execWithDeadline(client: Client, command: string, options: SshExecOptions): Promise<SshExecResult> {
+  return new Promise<SshExecResult>((resolve, reject) => {
+    let settled = false
+    let openChannel: ClientChannel | null = null
+    const deadline = setTimeout(() => {
+      if (settled) return
+      settled = true
+      openChannel?.close()
+      reject(new Error(`SSH command timed out after ${options.timeoutMs} ms`))
+    }, options.timeoutMs)
+    const finish = (): boolean => {
+      if (settled) return false
+      settled = true
+      clearTimeout(deadline)
+      return true
+    }
+    try {
+      client.exec(command, (error, channel) => {
+        if (error !== undefined) {
+          if (finish()) reject(error)
+        } else if (settled) {
+          channel.close()
+        } else {
+          openChannel = channel
+          runOnChannel(channel, options, (result) => {
+            if (finish()) resolve(result)
+          })
+        }
+      })
+    } catch (error) {
+      if (finish()) reject(error instanceof Error ? error : new Error(String(error)))
+    }
+  })
+}
+
 function createSession(client: Client): SshSession {
   return {
     exec(command, options) {
-      return new Promise<SshExecResult>((resolve, reject) => {
-        client.exec(command, (error, channel) => {
-          if (error !== undefined) reject(error)
-          else runOnChannel(channel, options, resolve)
-        })
-      })
+      return execWithDeadline(client, command, options)
     },
     close() {
       client.end()
@@ -128,6 +155,8 @@ export function createSshSessionMechanism(): SshSessionMechanism {
           port: request.port,
           username: request.username,
           readyTimeout: request.timeoutMs,
+          keepaliveInterval: request.keepaliveIntervalMs,
+          keepaliveCountMax: request.keepaliveCountMax,
           tryKeyboard: false,
           debug: undefined,
           hostVerifier: (key: Buffer, verify: VerifyCallback): void => {
