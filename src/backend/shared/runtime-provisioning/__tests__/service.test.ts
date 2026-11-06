@@ -1161,7 +1161,7 @@ describe('cancel', () => {
     await expect(harness.service.run(REQUEST)).resolves.toEqual({ kind: 'cancelled' })
     await cancelled
     expect(commandNames(harness.device).filter((name) => STATE_CHANGING.includes(name))).toEqual([])
-    expect(harness.device.sessionClosed()).toBe(true)
+    expect(authCalls(harness.device)).toEqual([])
     const cancelledEntries = [
       expectedAudit(harness.device, REQUEST, 'inspect', 'cancelled'),
       expectedAudit(harness.device, REQUEST, 'install', 'cancelled'),
