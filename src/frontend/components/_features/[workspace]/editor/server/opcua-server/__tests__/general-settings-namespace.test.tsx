@@ -21,6 +21,8 @@ const renderEditor = () => {
   act(() => {
     expect(store.getState().projectActions.createServer({ data: { name: SERVER, protocol: 'opcua' } }).ok).toBe(true)
     store.getState().projectActions.updateOpcUaAddressSpaceNamespace(SERVER, 'urn:openplc:opcua:namespace')
+    // The unsaved marker goes through the file slice, which opening the tab fills.
+    store.getState().fileActions.addFile({ name: SERVER, type: 'server', filePath: `/servers/${SERVER}` })
     store.getState().editorActions.setEditor(CreateServerEditor(SERVER, 'opcua'))
   })
   render(<OpcUaServerEditor />, { wrapper: createStoreWrapper(store) })

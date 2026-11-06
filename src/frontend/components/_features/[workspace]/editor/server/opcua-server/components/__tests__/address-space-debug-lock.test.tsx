@@ -100,7 +100,6 @@ const cardOf = (displayName: string): HTMLElement => {
   return card
 }
 
-
 const openDebugSession = (store: ReturnType<typeof createTestStore>) =>
   act(() => {
     store.getState().workspaceActions.setDebuggerVisible(true)
@@ -187,14 +186,6 @@ describe('OPC-UA Address Space during a debug session (TC12)', () => {
     const filter = screen.getByPlaceholderText<HTMLInputElement>('Filter variables...')
 
     expect(filter.matches(':disabled')).toBe(false)
-  })
-
-  it('should disable the Namespace URI field while the debugger is open', () => {
-    const store = renderTab([])
-
-    openDebugSession(store)
-
-    expect(screen.getByPlaceholderText<HTMLInputElement>('urn:openplc:opcua:namespace').matches(':disabled')).toBe(true)
   })
 
   it('should release the Address Space once the debug session is closed', () => {

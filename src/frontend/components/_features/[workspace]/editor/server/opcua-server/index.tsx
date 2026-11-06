@@ -56,7 +56,7 @@ export const OpcUaServerEditor = () => {
   const {
     editor,
     project,
-    projectActions: { updateOpcUaServerConfig },
+    projectActions: { updateOpcUaServerConfig, updateOpcUaAddressSpaceNamespace },
     sharedWorkspaceActions: { handleFileAndWorkspaceSavedState },
   } = useOpenPLCStore()
 
@@ -118,6 +118,22 @@ export const OpcUaServerEditor = () => {
     [localConfig, serverName, updateOpcUaServerConfig, handleFileAndWorkspaceSavedState],
   )
 
+  // The namespace lives in the address space, so it goes through its own store action.
+  const handleNamespaceUpdate = useCallback(
+    (namespaceUri: string) => {
+      if (!localConfig) return
+
+      setLocalConfig((prev) => {
+        if (!prev) return prev
+        return { ...prev, addressSpace: { ...prev.addressSpace, namespaceUri } }
+      })
+
+      updateOpcUaAddressSpaceNamespace(serverName, namespaceUri)
+      handleFileAndWorkspaceSavedState(serverName)
+    },
+    [localConfig, serverName, updateOpcUaAddressSpaceNamespace, handleFileAndWorkspaceSavedState],
+  )
+
   if (protocol !== 'opcua') {
     return (
       <div className='flex h-full w-full items-center justify-center'>
@@ -165,6 +181,7 @@ export const OpcUaServerEditor = () => {
               config={localConfig}
               onServerUpdate={handleServerSettingsUpdate}
               onCycleTimeUpdate={handleCycleTimeUpdate}
+              onNamespaceUpdate={handleNamespaceUpdate}
             />
           </EditingLockBoundary>
         </Tabs.Content>
@@ -234,9 +251,15 @@ interface GeneralSettingsTabProps {
   config: OpcUaServerConfig
   onServerUpdate: (updates: Partial<OpcUaServerConfig['server']>) => void
   onCycleTimeUpdate: (cycleTimeMs: number) => void
+  onNamespaceUpdate: (namespaceUri: string) => void
 }
 
-const GeneralSettingsTab = ({ config, onServerUpdate, onCycleTimeUpdate }: GeneralSettingsTabProps) => {
+const GeneralSettingsTab = ({
+  config,
+  onServerUpdate,
+  onCycleTimeUpdate,
+  onNamespaceUpdate,
+}: GeneralSettingsTabProps) => {
   // Local state for text inputs to allow typing before validation
   const [port, setPort] = useState(config.server.port.toString())
   const [cycleTime, setCycleTime] = useState(config.cycleTimeMs.toString())
@@ -244,6 +267,7 @@ const GeneralSettingsTab = ({ config, onServerUpdate, onCycleTimeUpdate }: Gener
   const [applicationUri, setApplicationUri] = useState(config.server.applicationUri)
   const [productUri, setProductUri] = useState(config.server.productUri)
   const [endpointPath, setEndpointPath] = useState(config.server.endpointPath)
+  const [namespaceUri, setNamespaceUri] = useState(config.addressSpace.namespaceUri)
 
   // Sync local state when config changes
   useEffect(() => {
@@ -253,6 +277,7 @@ const GeneralSettingsTab = ({ config, onServerUpdate, onCycleTimeUpdate }: Gener
     setApplicationUri(config.server.applicationUri)
     setProductUri(config.server.productUri)
     setEndpointPath(config.server.endpointPath)
+    setNamespaceUri(config.addressSpace.namespaceUri)
   }, [config])
 
   const handlePortBlur = useCallback(() => {
@@ -300,6 +325,12 @@ const GeneralSettingsTab = ({ config, onServerUpdate, onCycleTimeUpdate }: Gener
       onServerUpdate({ endpointPath })
     }
   }, [endpointPath, config.server.endpointPath, onServerUpdate])
+
+  const handleNamespaceUriBlur = useCallback(() => {
+    if (namespaceUri !== config.addressSpace.namespaceUri) {
+      onNamespaceUpdate(namespaceUri)
+    }
+  }, [namespaceUri, config.addressSpace.namespaceUri, onNamespaceUpdate])
 
   return (
     <div className='flex flex-col gap-6'>
@@ -406,6 +437,34 @@ const GeneralSettingsTab = ({ config, onServerUpdate, onCycleTimeUpdate }: Gener
               className={inputStyles}
             />
           </div>
+        </div>
+      </div>
+
+      {/* Namespace Configuration Section */}
+      <div className='flex flex-col gap-4 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'>
+        <h3 className='font-caption text-sm font-semibold text-neutral-950 dark:text-white'>Namespace Configuration</h3>
+
+        <div className='flex items-center gap-4'>
+          <Label
+            htmlFor='opcua-namespace-uri'
+            className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'
+          >
+            Namespace URI
+          </Label>
+          <div className='w-64'>
+            <InputWithRef
+              id='opcua-namespace-uri'
+              type='text'
+              value={namespaceUri}
+              onChange={(e) => setNamespaceUri(e.target.value)}
+              onBlur={handleNamespaceUriBlur}
+              placeholder='urn:openplc:opcua:namespace'
+              className={inputStyles}
+            />
+          </div>
+          <span className='text-xs text-neutral-600 dark:text-neutral-400'>
+            Unique namespace identifier for this server's address space
+          </span>
         </div>
       </div>
 

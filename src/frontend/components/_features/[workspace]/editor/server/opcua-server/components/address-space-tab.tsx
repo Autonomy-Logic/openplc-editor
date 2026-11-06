@@ -2,14 +2,13 @@ import { useOpenPLCStore } from '@root/frontend/store'
 import { findInstanceName } from '@root/frontend/utils/debug-variable-finder'
 import { isComplexTreeNode as isComplexType } from '@root/frontend/utils/opcua/node-defaults'
 import { isGlobalScopePou } from '@root/frontend/utils/opcua/resolve-indices'
-import { indexTree, treeIdForNode } from '@root/frontend/utils/opcua/tree-index'
+import { countTopLevelEntries, indexTree, treeIdForNode } from '@root/frontend/utils/opcua/tree-index'
 import type { VariableTreeNode } from '@root/frontend/utils/opcua/types'
 import type { OpcUaNodeConfig, OpcUaServerConfig } from '@root/middleware/shared/ports/types'
 import { useCallback, useMemo, useState } from 'react'
 
 import { useIsEditingLocked } from '../../../../../../../hooks/use-editing-lock'
 import { InputWithRef } from '../../../../../../_atoms/input'
-import { Label } from '../../../../../../_atoms/label'
 import { EditingLockBoundary } from '../../../../../../_molecules/editing-lock-boundary'
 import { findTreeNodeById, getSelectableDescendantIds, useProjectVariables } from '../hooks/use-project-variables'
 import { SelectedVariablesList } from './selected-variables-list'
@@ -22,12 +21,9 @@ interface AddressSpaceTabProps {
   onConfigChange: () => void
 }
 
-const inputStyles =
-  'h-[30px] w-full rounded-md border border-neutral-300 bg-white px-2 py-1 font-caption text-xs font-medium text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-
 export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressSpaceTabProps) => {
   const {
-    projectActions: { updateOpcUaAddressSpaceNamespace, addOpcUaNode, updateOpcUaNode, removeOpcUaNode },
+    projectActions: { addOpcUaNode, updateOpcUaNode, removeOpcUaNode },
   } = useOpenPLCStore()
 
   // Get all project variables for the tree
@@ -38,6 +34,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
   // Local state
   const isEditingLocked = useIsEditingLocked()
   const [filter, setFilter] = useState('')
+  const entryCounts = useMemo(() => countTopLevelEntries(projectVariables, filter), [projectVariables, filter])
   const [selectedVariableIds, setSelectedVariableIds] = useState<Set<string>>(() => {
     // Initialize with IDs of already configured nodes
     return new Set(config.addressSpace.nodes.map((n) => treeIdForNode(n, treeIndex)))
@@ -66,15 +63,6 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
   )
 
   // Handle namespace URI change
-  const handleNamespaceChange = useCallback(
-    (namespaceUri: string) => {
-      if (isEditingLocked) return
-      updateOpcUaAddressSpaceNamespace(serverName, namespaceUri)
-      onConfigChange()
-    },
-    [isEditingLocked, serverName, updateOpcUaAddressSpaceNamespace, onConfigChange],
-  )
-
   // Handle variable selection from tree
   const handleVariableSelect = useCallback(
     (node: VariableTreeNode) => {
@@ -225,29 +213,6 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
 
   return (
     <div className='flex h-full flex-col gap-4'>
-      {/* Header */}
-      <div className='flex flex-col gap-2'>
-        <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-          Select PLC variables to expose via OPC-UA. Variable indices are resolved automatically during project
-          compilation.
-        </p>
-      </div>
-
-      {/* Namespace URI */}
-      <EditingLockBoundary className='flex h-auto w-auto flex-col gap-2'>
-        <Label className='text-xs text-neutral-950 dark:text-white'>Namespace URI</Label>
-        <InputWithRef
-          type='text'
-          value={config.addressSpace.namespaceUri}
-          onChange={(e) => handleNamespaceChange(e.target.value)}
-          placeholder='urn:openplc:opcua:namespace'
-          className={inputStyles}
-        />
-        <span className='text-xs text-neutral-500 dark:text-neutral-400'>
-          Unique namespace identifier for your OPC-UA address space
-        </span>
-      </EditingLockBoundary>
-
       {/* Split Pane Layout */}
       <div className='flex flex-1 gap-4 overflow-hidden'>
         {/* Left Panel - Available Variables */}
@@ -257,7 +222,9 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
             <h3 className='font-caption text-sm font-semibold text-neutral-950 dark:text-white'>
               Available PLC Variables
             </h3>
-            <p className='text-xs text-neutral-500 dark:text-neutral-400'>Select variables to expose</p>
+            <p className='text-xs text-neutral-500 dark:text-neutral-400'>
+              {filter ? `${entryCounts.shown} of ${entryCounts.total} shown` : `${entryCounts.total} available`}
+            </p>
           </div>
 
           {/* Filter Input */}
