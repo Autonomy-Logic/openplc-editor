@@ -27,6 +27,7 @@ import { resolveAddressProducerCapabilities } from '@root/middleware/shared/util
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
+import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
 import { AdvancedTab } from './components/advanced-tab'
 import { RepositoryTab } from './components/repository-tab'
 import { ScanBusTab } from './components/scan-bus-tab'
@@ -651,33 +652,35 @@ const EtherCATEditor = () => {
           value='scan-bus'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <ScanBusTab
-            isConnectedToRuntime={isConnectedToRuntime}
-            serviceAvailable={serviceAvailable}
-            serviceMessage={serviceMessage}
-            interfaces={interfaces}
-            selectedInterface={selectedInterface}
-            onSelectInterface={setSelectedInterface}
-            isLoadingInterfaces={isLoadingInterfaces}
-            interfaceError={interfaceError}
-            isScanning={isScanning}
-            scanError={scanError}
-            scanTimeMs={scanTimeMs}
-            scanMessage={scanMessage}
-            scannedDevices={scannedDevices}
-            onScan={() => void scanDevices()}
-            deviceMatches={deviceMatches}
-            selectedScannedDevices={selectedScannedDevices}
-            onSelectScannedDevice={handleSelectScannedDevice}
-            onSelectAllScanned={handleSelectAllScanned}
-            onAddSelectedFromScan={() => void handleAddSelectedFromScan()}
-            isAdding={isAdding}
-            addProgress={addProgress}
-            configuredDevices={configuredDevices}
-            repository={repository}
-            onAddDeviceFromBrowser={(...args) => void handleAddDeviceFromBrowser(...args)}
-            onRemoveDevice={handleRemoveDevice}
-          />
+          <EditingLockBoundary className='contents'>
+            <ScanBusTab
+              isConnectedToRuntime={isConnectedToRuntime}
+              serviceAvailable={serviceAvailable}
+              serviceMessage={serviceMessage}
+              interfaces={interfaces}
+              selectedInterface={selectedInterface}
+              onSelectInterface={setSelectedInterface}
+              isLoadingInterfaces={isLoadingInterfaces}
+              interfaceError={interfaceError}
+              isScanning={isScanning}
+              scanError={scanError}
+              scanTimeMs={scanTimeMs}
+              scanMessage={scanMessage}
+              scannedDevices={scannedDevices}
+              onScan={() => void scanDevices()}
+              deviceMatches={deviceMatches}
+              selectedScannedDevices={selectedScannedDevices}
+              onSelectScannedDevice={handleSelectScannedDevice}
+              onSelectAllScanned={handleSelectAllScanned}
+              onAddSelectedFromScan={() => void handleAddSelectedFromScan()}
+              isAdding={isAdding}
+              addProgress={addProgress}
+              configuredDevices={configuredDevices}
+              repository={repository}
+              onAddDeviceFromBrowser={(...args) => void handleAddDeviceFromBrowser(...args)}
+              onRemoveDevice={handleRemoveDevice}
+            />
+          </EditingLockBoundary>
         </Tabs.Content>
 
         {/* Repository Tab */}
@@ -685,14 +688,16 @@ const EtherCATEditor = () => {
           value='repository'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <RepositoryTab
-            repository={repository}
-            onRepositoryChange={setRepository}
-            projectPath={projectPath}
-            isLoadingRepository={isLoadingRepository}
-            repositoryError={repositoryError}
-            onRetryRepository={handleRetryRepository}
-          />
+          <EditingLockBoundary className='contents'>
+            <RepositoryTab
+              repository={repository}
+              onRepositoryChange={setRepository}
+              projectPath={projectPath}
+              isLoadingRepository={isLoadingRepository}
+              repositoryError={repositoryError}
+              onRetryRepository={handleRetryRepository}
+            />
+          </EditingLockBoundary>
         </Tabs.Content>
 
         {/* Advanced Tab */}
@@ -700,7 +705,9 @@ const EtherCATEditor = () => {
           value='advanced'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <AdvancedTab masterConfig={masterConfig} onUpdateMasterConfig={handleUpdateMasterConfig} />
+          <EditingLockBoundary className='contents'>
+            <AdvancedTab masterConfig={masterConfig} onUpdateMasterConfig={handleUpdateMasterConfig} />
+          </EditingLockBoundary>
         </Tabs.Content>
       </Tabs.Root>
 
