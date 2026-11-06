@@ -2,16 +2,17 @@ import { createStoreWrapper, createTestStore } from '@root/frontend/store/testin
 import { act, render, screen } from '@testing-library/react'
 
 // Monaco cannot run in jsdom; the stub publishes the options the editor asks for.
-const MonacoStub = ({ options }: { options?: { readOnly?: boolean } }) => (
-  <div data-testid='monaco-stub' data-read-only={options?.readOnly === true ? 'true' : 'false'} />
-)
-
-vi.mock('@monaco-editor/react', () => ({
-  __esModule: true,
-  default: MonacoStub,
-  Editor: MonacoStub,
-  loader: { config: () => undefined, init: () => Promise.resolve(undefined) },
-}))
+vi.mock('@monaco-editor/react', () => {
+  const MonacoStub = ({ options }: { options?: { readOnly?: boolean } }) => (
+    <div data-testid='monaco-stub' data-read-only={options?.readOnly === true ? 'true' : 'false'} />
+  )
+  return {
+    __esModule: true,
+    default: MonacoStub,
+    Editor: MonacoStub,
+    loader: { config: () => undefined, init: () => Promise.resolve(undefined) },
+  }
+})
 
 import type { OpenPLCStore } from '@root/frontend/store'
 
