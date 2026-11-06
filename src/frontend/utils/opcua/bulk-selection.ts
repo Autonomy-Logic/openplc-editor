@@ -1,4 +1,4 @@
-import type { OpcUaNodeConfig } from '../../../middleware/shared/ports/types'
+import type { OpcUaNodeConfig, OpcUaSecurityProfile } from '../../../middleware/shared/ports/types'
 import { findInstanceName, type PLCInstanceMapping } from '../debug-variable-finder'
 import {
   buildDefaultNodeConfig,
@@ -109,4 +109,79 @@ export function planBulkAdd({
   }
 
   return { nodes, skipped }
+}
+
+export type BulkRemovePlan = {
+  /** Ids of the stored nodes the action removes. */
+  nodeIds: string[]
+}
+
+export type BulkRemoveInput = {
+  /** The groups to walk: the whole tree for Remove all, one group for a group untick. */
+  groups: readonly VariableTreeNode[]
+  index: TreeIndex
+  filter: string
+  existingNodes: readonly OpcUaNodeConfig[]
+}
+
+/**
+ * BR12: a group untick removes the nodes the group OWNS. A global the group
+ * only references belongs to the global scope and stays.
+ */
+export function planBulkRemove({ groups, index, filter, existingNodes }: BulkRemoveInput): BulkRemovePlan {
+  const owned = new Set<string>()
+
+  for (const group of groups) {
+    for (const entry of group.children ?? []) {
+      if (isHiddenByFilter(entry, filter)) continue
+      if (entry.pouName !== group.pouName) continue
+      owned.add(entry.id)
+    }
+  }
+
+  return {
+    nodeIds: existingNodes.filter((node) => owned.has(treeIdForNode(node, index))).map((node) => node.id),
+  }
+}
+
+/** The anonymous reach of a server, as the confirmation states it. */
+export type AnonymousAccess = {
+  role: 'Viewer' | 'Operator' | 'Engineer'
+  canWrite: boolean
+}
+
+const ROLE_RANK = { viewer: 0, operator: 1, engineer: 2 } as const
+const ROLE_LABEL = { viewer: 'Viewer', operator: 'Operator', engineer: 'Engineer' } as const
+
+/**
+ * BR16: the confirmation follows the PROFILE, not the server flag. Null when no
+ * enabled profile offers Anonymous, so no confirmation is asked.
+ */
+export function anonymousAccess(profiles: readonly OpcUaSecurityProfile[]): AnonymousAccess | null {
+  const anonymous = profiles.filter((profile) => profile.enabled && profile.authMethods.includes('Anonymous'))
+  if (anonymous.length === 0) return null
+
+  const mostPermissive = anonymous.reduce<keyof typeof ROLE_RANK>((worst, profile) => {
+    const role = profile.anonymousRole ?? 'viewer'
+    return ROLE_RANK[role] > ROLE_RANK[worst] ? role : worst
+  }, 'viewer')
+
+  return { role: ROLE_LABEL[mostPermissive], canWrite: mostPermissive === 'engineer' }
+}
+
+export function bulkConfirmationMessage({
+  count,
+  access,
+  serverEnabled,
+}: {
+  count: number
+  access: AnonymousAccess
+  serverEnabled: boolean
+}): string {
+  const subject = count === 1 ? '1 variable' : `${count} variables`
+  const object = count === 1 ? 'it' : 'them'
+  const verb = access.canWrite ? 'read and write' : 'read'
+  const disabled = serverEnabled ? '' : ' The server is currently disabled.'
+
+  return `Expose ${subject}? Anonymous clients can ${verb} ${object} (role ${access.role}).${disabled}`
 }
