@@ -128,6 +128,7 @@ class FakeApp extends EventEmitter {
 type DetachReason = Parameters<RuntimeProvisioningService['detach']>[0]
 
 interface Harness {
+  failRun: Error | null
   device: FakeDevice
   ipc: FakeIpcMain
   app: FakeApp
@@ -142,6 +143,7 @@ interface Harness {
 
 function setup(options: (harness: Harness) => FakeDeviceOptions = () => ({})): Harness {
   const harness: Harness = {
+    failRun: null,
     device: createFakeDevice(),
     ipc: new FakeIpcMain(),
     app: new FakeApp(),
@@ -164,6 +166,7 @@ function setup(options: (harness: Harness) => FakeDeviceOptions = () => ({})): H
     },
     run: (request) => {
       harness.runs.push(request)
+      if (harness.failRun !== null) return Promise.reject(harness.failRun)
       return real.run(request)
     },
     cancel: () => {
@@ -201,6 +204,29 @@ function expectedUnknownAudit(device: FakeDevice): string {
     endedAt: device.clock.current(),
     outcome: 'unknown',
   })
+}
+
+interface RunReply {
+  outcome: unknown
+  endToken: number
+}
+
+function runReply(value: unknown): RunReply {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(`the run reply is not an envelope: ${JSON.stringify(value)}`)
+  }
+  if (!('endToken' in value) || typeof value.endToken !== 'number') {
+    throw new Error(`the run reply carries no end token: ${JSON.stringify(value)}`)
+  }
+  return { outcome: 'outcome' in value ? value.outcome : undefined, endToken: value.endToken }
+}
+
+function envelope(outcome: object): { outcome: object; endToken: number } {
+  return { outcome, endToken: expect.any(Number) }
+}
+
+function runEnd(token: number): unknown[] {
+  return [{ type: 'run-end', token }]
 }
 
 afterEach(() => {
@@ -253,10 +279,9 @@ describe('runtime-provisioning:run validation (AS-05, AS-04, AS-07, M9)', () => 
   ])('accepts %s and returns the outcome of the service', async (_, payload) => {
     const { ipc, renderer, runs } = setup(() => ({ devicePassword: payload.password }))
 
-    await expect(ipc.invoke(RUN, renderer, payload)).resolves.toEqual({
-      kind: 'connected-ready',
-      operation: 'install',
-    })
+    await expect(ipc.invoke(RUN, renderer, payload)).resolves.toEqual(
+      envelope({ kind: 'connected-ready', operation: 'install' }),
+    )
     expect(runs).toEqual([payload])
   })
 
@@ -277,20 +302,81 @@ describe('runtime-provisioning:run validation (AS-05, AS-04, AS-07, M9)', () => 
   ])('rejects %s before any service call or connection', async (_, payload, field) => {
     const { ipc, renderer, runs, device } = setup()
 
-    await expect(ipc.invoke(RUN, renderer, payload)).resolves.toEqual({ kind: 'invalid-input', field })
+    await expect(ipc.invoke(RUN, renderer, payload)).resolves.toEqual(envelope({ kind: 'invalid-input', field }))
     expect(runs).toEqual([])
     expect(device.log).toEqual([])
   })
+
+  it.each([
+    ['port 0', { ...REQUEST, port: 0 }],
+    ['an extra field "command": "id"', { ...REQUEST, command: 'id' }],
+    ['no payload', undefined],
+  ])(
+    'sends the caller of a rejected %s exactly one end marker with its reply token, and no service event',
+    async (_, payload) => {
+      const { ipc, renderer, serviceEvents } = setup()
+
+      const reply = runReply(await ipc.invoke(RUN, renderer, payload))
+
+      expect(serviceEvents).toEqual([])
+      expect(renderer.provisioningEvents()).toEqual([runEnd(reply.endToken)])
+    },
+  )
 })
 
 describe('progress events', () => {
-  it('sends every service event, in order, to the renderer that started the run, one payload each', async () => {
+  it('sends every service event, in order, to the renderer that started the run, one payload each, then one end marker with the reply token', async () => {
     const { ipc, renderer, serviceEvents } = setup()
 
-    await ipc.invoke(RUN, renderer, REQUEST)
+    const reply = runReply(await ipc.invoke(RUN, renderer, REQUEST))
 
     expect(serviceEvents.length).toBeGreaterThan(0)
-    expect(renderer.provisioningEvents()).toEqual(serviceEvents.map((event) => [event]))
+    expect(serviceEvents[serviceEvents.length - 1]?.type).toBe('audit')
+    expect(renderer.provisioningEvents()).toEqual([...serviceEvents.map((event) => [event]), runEnd(reply.endToken)])
+  })
+
+  it('replies to an owned run with exactly the outcome and the end token', async () => {
+    const { ipc, renderer } = setup()
+
+    const reply = await ipc.invoke(RUN, renderer, REQUEST)
+
+    expect(reply).toEqual({
+      outcome: { kind: 'connected-ready', operation: 'install' },
+      endToken: runReply(reply).endToken,
+    })
+  })
+
+  it('gives every run invocation a new positive end token, increasing across invocations', async () => {
+    const busy: Promise<unknown>[] = []
+    const { ipc, renderer, other } = setup(
+      duringInspection((current) => {
+        if (busy.length === 0) busy.push(current.ipc.invoke(RUN, current.other, REQUEST))
+      }),
+    )
+
+    const invalid = runReply(await ipc.invoke(RUN, renderer, { ...REQUEST, port: 0 }))
+    const owned = runReply(await ipc.invoke(RUN, renderer, REQUEST))
+    const busyReply = runReply(await Promise.all(busy).then(([value]) => value))
+    const second = runReply(await ipc.invoke(RUN, other, REQUEST))
+    const tokens = [invalid.endToken, busyReply.endToken, owned.endToken, second.endToken]
+
+    expect(busyReply.outcome).toEqual({ kind: 'busy' })
+    for (const token of tokens) {
+      expect(Number.isSafeInteger(token)).toBe(true)
+      expect(token).toBeGreaterThan(0)
+    }
+    expect(new Set(tokens).size).toBe(tokens.length)
+    expect(invalid.endToken).toBeLessThan(owned.endToken)
+    expect(busyReply.endToken).toBeGreaterThan(owned.endToken)
+    expect(second.endToken).toBeGreaterThan(busyReply.endToken)
+  })
+
+  it('still sends the end marker, and passes the rejection on, when the service run rejects', async () => {
+    const harness = setup()
+    harness.failRun = new Error('service failed')
+
+    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).rejects.toThrow('service failed')
+    expect(harness.renderer.provisioningEvents()).toEqual([[{ type: 'run-end', token: expect.any(Number) }]])
   })
 
   it('sends nothing to a renderer that only probed', async () => {
@@ -322,7 +408,7 @@ describe('the run renderer going away (AC10.3, TC50)', () => {
   ])('detaches the run as renderer-gone when the renderer %s', async (_, goAway) => {
     const harness = setup(duringInspection(({ renderer }) => goAway(renderer)))
 
-    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual({ kind: 'unknown' })
+    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual(envelope({ kind: 'unknown' }))
     expect(harness.detaches).toEqual(['renderer-gone'])
     expect(auditWrites(harness.device)).toEqual([expectedUnknownAudit(harness.device)])
     expect(countOf(harness.device, 'open')).toBe(1)
@@ -332,10 +418,9 @@ describe('the run renderer going away (AC10.3, TC50)', () => {
   it('does not detach when only a sub-frame navigates', async () => {
     const harness = setup(duringInspection(({ renderer }) => renderer.navigate(false)))
 
-    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual({
-      kind: 'connected-ready',
-      operation: 'install',
-    })
+    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual(
+      envelope({ kind: 'connected-ready', operation: 'install' }),
+    )
     expect(harness.detaches).toEqual([])
   })
 
@@ -343,11 +428,19 @@ describe('the run renderer going away (AC10.3, TC50)', () => {
     const harness = setup(duringInspection(({ other }) => other.destroy()))
     await harness.ipc.invoke(PROBE, harness.other, { host: '192.168.1.50', port: 22 })
 
-    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual({
-      kind: 'connected-ready',
-      operation: 'install',
-    })
+    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual(
+      envelope({ kind: 'connected-ready', operation: 'install' }),
+    )
     expect(harness.detaches).toEqual([])
+  })
+
+  it('sends no end marker to a renderer destroyed during the run, and replies unknown with an end token', async () => {
+    const harness = setup(duringInspection(({ renderer }) => renderer.destroy()))
+
+    const reply = await harness.ipc.invoke(RUN, harness.renderer, REQUEST)
+
+    expect(reply).toEqual({ outcome: { kind: 'unknown' }, endToken: runReply(reply).endToken })
+    expect(harness.renderer.sentWhileDestroyed).toEqual([])
   })
 
   it('does not detach when the renderer goes away after the run ended', async () => {
@@ -365,7 +458,7 @@ describe('quitting the editor (AC10.3, TC50)', () => {
     const quits: { prevented: boolean }[] = []
     const harness = setup(duringInspection(({ app }) => quits.push(app.quit())))
 
-    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual({ kind: 'unknown' })
+    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual(envelope({ kind: 'unknown' }))
     expect(harness.detaches).toEqual(['quit'])
     expect(auditWrites(harness.device)).toEqual([expectedUnknownAudit(harness.device)])
     expect(countOf(harness.device, 'open')).toBe(1)
@@ -396,10 +489,9 @@ describe('quitting the editor (AC10.3, TC50)', () => {
       }),
     )
 
-    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual({
-      kind: 'connected-ready',
-      operation: 'install',
-    })
+    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual(
+      envelope({ kind: 'connected-ready', operation: 'install' }),
+    )
     expect(quits).toEqual([{ prevented: true }])
     expect(harness.detaches).toEqual([])
   })
@@ -415,7 +507,7 @@ describe('quitting the editor (AC10.3, TC50)', () => {
       }),
     )
 
-    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual({ kind: 'unknown' })
+    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual(envelope({ kind: 'unknown' }))
     expect(atPreventedQuit).toEqual([{ audits: 0, detaches: 0 }])
     expect(harness.detaches).toEqual(['quit'])
     expect(auditWrites(harness.device)).toEqual([expectedUnknownAudit(harness.device)])
@@ -423,7 +515,7 @@ describe('quitting the editor (AC10.3, TC50)', () => {
 
   it('changes nothing on a second will-quit once the operation ended', async () => {
     const harness = setup(duringInspection(({ app }) => app.emit('will-quit')))
-    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual({ kind: 'unknown' })
+    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual(envelope({ kind: 'unknown' }))
     const calls = harness.device.log.length
 
     harness.app.emit('will-quit')
@@ -452,11 +544,10 @@ describe('one operation at a time (AS-13a, M18, AC10.1)', () => {
       }),
     )
 
-    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual({
-      kind: 'connected-ready',
-      operation: 'install',
-    })
-    await expect(Promise.all(second)).resolves.toEqual([{ kind: 'busy' }, { kind: 'busy' }])
+    await expect(harness.ipc.invoke(RUN, harness.renderer, REQUEST)).resolves.toEqual(
+      envelope({ kind: 'connected-ready', operation: 'install' }),
+    )
+    await expect(Promise.all(second)).resolves.toEqual([envelope({ kind: 'busy' }), envelope({ kind: 'busy' })])
     expect(countOf(harness.device, 'open')).toBe(1)
     expect(auditWrites(harness.device)).toHaveLength(1)
   })
@@ -469,11 +560,16 @@ describe('one operation at a time (AS-13a, M18, AC10.1)', () => {
       }),
     )
 
-    await harness.ipc.invoke(RUN, harness.renderer, REQUEST)
-    await expect(Promise.all(busy)).resolves.toEqual([{ kind: 'busy' }])
+    const owned = runReply(await harness.ipc.invoke(RUN, harness.renderer, REQUEST))
+    const [busyValue] = await Promise.all(busy)
+    const busyReply = runReply(busyValue)
 
-    expect(harness.renderer.provisioningEvents()).toEqual(harness.serviceEvents.map((event) => [event]))
-    expect(harness.other.provisioningEvents()).toEqual([])
+    expect(busyReply.outcome).toEqual({ kind: 'busy' })
+    expect(harness.renderer.provisioningEvents()).toEqual([
+      ...harness.serviceEvents.map((event) => [event]),
+      runEnd(owned.endToken),
+    ])
+    expect(harness.other.provisioningEvents()).toEqual([runEnd(busyReply.endToken)])
   })
 })
 

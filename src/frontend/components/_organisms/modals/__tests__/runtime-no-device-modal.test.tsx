@@ -119,6 +119,12 @@ function missingLines(key: ProvisioningMessageKey, facts: Facts): string[] {
     .filter((line) => !text.includes(line))
 }
 
+function textColourClasses(element: Element): string[] {
+  return Array.from(element.classList)
+    .filter((name) => /^(dark:)?text-(white|black|neutral-\d+)$/.test(name))
+    .sort()
+}
+
 function enterPort(text: string): void {
   fireEvent.change(input('runtime-no-device-port-input'), { target: { value: text } })
 }
@@ -240,6 +246,17 @@ describe('"Try another SSH port"', () => {
 
     expect(disabledWhileChecking).toBe(true)
     expect(noDeviceState()).toEqual({ open: true, data: { host: DEVICE_IP, sshPort: 2222 } })
+  })
+})
+
+describe('the "Try another SSH port" label (AC08.3)', () => {
+  it('is dark in the light theme and white in the dark theme, like the other labels', () => {
+    openNoDevice()
+    renderModal()
+
+    const label = within(modal()).getByText('Try another SSH port', { selector: 'label' })
+
+    expect(textColourClasses(label)).toEqual(['dark:text-white', 'text-neutral-950'])
   })
 })
 

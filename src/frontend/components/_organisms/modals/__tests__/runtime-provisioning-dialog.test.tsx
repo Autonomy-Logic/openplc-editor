@@ -297,6 +297,12 @@ function deepestElementWith(container: HTMLElement, text: string): Element {
   return deepest
 }
 
+function textColourClasses(element: Element): string[] {
+  return Array.from(element.classList)
+    .filter((name) => /^(dark:)?text-(white|black|neutral-\d+)$/.test(name))
+    .sort()
+}
+
 function follows(first: Node, second: Node): boolean {
   return (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
 }
@@ -573,6 +579,20 @@ describe('the offer stage', () => {
 
     expect(missingLines('input-refused', { field: 'username' })).toEqual([])
   })
+})
+
+describe('the credential labels of the offer (AC02.1, AC08.3)', () => {
+  it.each(['Device username', 'Device password', 'SSH port'])(
+    'colours "%s" dark in the light theme and white in the dark theme, like the other labels',
+    (text) => {
+      actions().showOffer(DEVICE_IP, 22)
+      renderDialog()
+
+      const label = within(dialog()).getByText(text, { selector: 'label' })
+
+      expect(textColourClasses(label)).toEqual(['dark:text-white', 'text-neutral-950'])
+    },
+  )
 })
 
 describe('leaving the offer without accepting', () => {
