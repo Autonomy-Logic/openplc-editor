@@ -232,7 +232,10 @@ const OfferStage = ({ view, form, onFormChange, onSubmit, onDecline }: OfferStag
       <WhatWillBeDone />
       <form autoComplete='off' onSubmit={handleSubmit} className='flex w-full flex-col gap-4'>
         <div>
-          <Label htmlFor='runtime-provisioning-username' className='mb-2 block text-sm'>
+          <Label
+            htmlFor='runtime-provisioning-username'
+            className='mb-2 block text-sm text-neutral-950 dark:text-white'
+          >
             Device username
           </Label>
           <input
@@ -248,7 +251,10 @@ const OfferStage = ({ view, form, onFormChange, onSubmit, onDecline }: OfferStag
           />
         </div>
         <div>
-          <Label htmlFor='runtime-provisioning-password' className='mb-2 block text-sm'>
+          <Label
+            htmlFor='runtime-provisioning-password'
+            className='mb-2 block text-sm text-neutral-950 dark:text-white'
+          >
             Device password
           </Label>
           <input
@@ -262,7 +268,10 @@ const OfferStage = ({ view, form, onFormChange, onSubmit, onDecline }: OfferStag
           />
         </div>
         <div>
-          <Label htmlFor='runtime-provisioning-ssh-port' className='mb-2 block text-sm'>
+          <Label
+            htmlFor='runtime-provisioning-ssh-port'
+            className='mb-2 block text-sm text-neutral-950 dark:text-white'
+          >
             SSH port
           </Label>
           <input

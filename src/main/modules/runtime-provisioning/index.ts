@@ -6,6 +6,10 @@ import { logger } from '@root/backend/editor/services/logger-service'
 import type { RuntimeProvisioningService } from '@root/backend/shared/runtime-provisioning/service'
 import { createRuntimeProvisioningService } from '@root/backend/shared/runtime-provisioning/service'
 import type {
+  RuntimeProvisioningRunEnd,
+  RuntimeProvisioningRunReply,
+} from '@root/middleware/adapters/editor/runtime-provisioning-run-reply'
+import type {
   RuntimeProvisioningEvent,
   RuntimeProvisioningOutcome,
   SshProbeResult,
@@ -78,6 +82,7 @@ export function registerRuntimeProvisioning({
   service: RuntimeProvisioningService
 }): void {
   let runRenderer: ProvisioningRenderer | null = null
+  let lastEndToken = 0
 
   service.onEvent((event: RuntimeProvisioningEvent) => {
     const renderer = runRenderer
@@ -90,11 +95,13 @@ export function registerRuntimeProvisioning({
     return service.probeSsh(parsed.data)
   })
 
-  ipcMain.handle(RUN_CHANNEL, async (event, payload): Promise<RuntimeProvisioningOutcome> => {
+  const runInvocation = async (
+    renderer: ProvisioningRenderer,
+    payload: unknown,
+  ): Promise<RuntimeProvisioningOutcome> => {
     const validation = validateRunRequest(payload)
     if (!validation.ok) return { kind: 'invalid-input', field: validation.field }
     if (service.inspectState().active) return service.run(validation.request)
-    const renderer = event.sender
     runRenderer = renderer
     const stopWatching = watchRenderer(renderer, () => {
       if (runRenderer === renderer && service.inspectState().active) service.detach('renderer-gone')
@@ -104,6 +111,18 @@ export function registerRuntimeProvisioning({
     } finally {
       stopWatching()
       if (runRenderer === renderer) runRenderer = null
+    }
+  }
+
+  ipcMain.handle(RUN_CHANNEL, async (event, payload): Promise<RuntimeProvisioningRunReply> => {
+    lastEndToken += 1
+    const endToken = lastEndToken
+    const renderer = event.sender
+    try {
+      return { outcome: await runInvocation(renderer, payload), endToken }
+    } finally {
+      const runEnd: RuntimeProvisioningRunEnd = { type: 'run-end', token: endToken }
+      if (!renderer.isDestroyed()) renderer.send(EVENT_CHANNEL, runEnd)
     }
   })
 

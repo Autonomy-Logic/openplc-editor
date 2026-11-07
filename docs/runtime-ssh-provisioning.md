@@ -11,6 +11,15 @@ to log in to the device over SSH and install or start the runtime there.
   `src/frontend/services/runtime-provisioning/` (the run), the `runtimeProvisioning` store slice and the
   dialogs `runtime-provisioning-dialog.tsx` and `runtime-no-device-modal.tsx`.
 
+IPC: four channels, `runtime-provisioning:probe-ssh`, `runtime-provisioning:run` and
+`runtime-provisioning:cancel` (invoke) and `runtime-provisioning:event` (main to renderer). The
+`runtime-provisioning:run` reply is `{ outcome, endToken }`, and main sends `{ type: 'run-end', token }` on
+`runtime-provisioning:event` to the calling renderer after the run's last event. Electron does not keep an
+invoke reply in order with the event messages, so the editor adapter
+(`src/middleware/adapters/editor/runtime-provisioning-adapter.ts`, format in
+`runtime-provisioning-run-reply.ts`) resolves the run only once both have arrived: every installer line,
+console line and the audit entry are in the editor console before the dialog shows the ending.
+
 ## What it does
 
 1. The user presses Connect on the device Configuration screen, or answers "Yes" to the debugger's

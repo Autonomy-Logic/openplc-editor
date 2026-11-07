@@ -87,7 +87,7 @@ const RuntimeNoDeviceModal = () => {
           <MessageParagraphs message={message} />
         </div>
         <form autoComplete='off' onSubmit={(event) => void tryPort(event)} className='flex flex-col gap-2'>
-          <Label htmlFor='runtime-no-device-port-input' className='block text-sm'>
+          <Label htmlFor='runtime-no-device-port-input' className='block text-sm text-neutral-950 dark:text-white'>
             Try another SSH port
           </Label>
           <div className='flex gap-2'>
