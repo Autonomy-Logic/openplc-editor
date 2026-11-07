@@ -227,12 +227,13 @@ export class RuntimeProvisioningPage {
     return this.page.locator('body').innerText()
   }
 
-  /** Kills the app, which an open project would hold at its quit prompt, and deletes the profile and project. */
+  /** Kills the app with its child processes, which write into the profile, and deletes the profile and project. */
   async quit(): Promise<void> {
     const child = this.app.process()
     const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
     if (child.exitCode === null && child.signalCode === null) {
-      child.kill('SIGKILL')
+      if (process.platform === 'win32' || child.pid === undefined) child.kill('SIGKILL')
+      else process.kill(-child.pid, 'SIGKILL')
       await exited
     }
     rmSync(this.paths.root, { recursive: true, force: true })
