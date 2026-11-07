@@ -1,11 +1,3 @@
-/**
- * This module executes inside of electron's main process. You can start
- * electron renderer process from here and communicate with the other processes
- * through IPC.
- *
- * When running `npm run build` or `npm run build:main`, this file is compiled to
- * `./src/main.js` using webpack. This gives us some performance wins.
- */
 import { hasOpenEditSessions, releaseAllEditSessions } from '@root/backend/editor/edge-edit-sessions'
 import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, shell } from 'electron'
@@ -17,7 +9,6 @@ import { join, resolve } from 'path'
 
 import { ensureCliShimInstalled, shimStatePath } from '../backend/editor/cli-shim/first-run'
 import { CompilerModule } from '../backend/editor/compiler'
-// TODO: Refactor this type declaration
 import { MainIpcModuleConstructor } from '../backend/editor/contracts/types/modules/ipc/main'
 import { adoptProviderTokens } from '../backend/editor/edge-account/edge-account-service'
 import { edgeOAuthProviderFromUrl, runOAuthFlow } from '../backend/editor/edge-account/oauth-browser-flow'
@@ -39,7 +30,6 @@ import { createVendorDocumentHandler, leavesVendorDocument } from './modules/ven
 
 enableMapSet()
 
-// Must run before `ready`; `standard` + `secure` give the iframe a real URL base and a secure context.
 protocol.registerSchemesAsPrivileged([
   { scheme: VENDOR_DOCUMENT_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ])
@@ -51,7 +41,6 @@ export let splash: BrowserWindow | null = null
 
 let mainIpcModule: MainProcessBridge | undefined
 let packageManager: PackageManagerModule | undefined
-// One per process, not per window: macOS re-creates the window on activate.
 const updateService = createElectronUpdateService({
   getWindow: () => mainWindow,
   requestQuit: () => quitCoordinator.requestQuit(),
@@ -78,10 +67,8 @@ if (process.env.NODE_ENV === 'production') {
   void loadSourceMapSupport()
 }
 
-// Create the user service instance to initialize the user settings and history files.
 new UserService()
 
-// Retrieves the system information
 const systemInfo = platform()
 // The options to use when creating the titlebar. Type comes from electron.
 type OptTitlebar = {
@@ -101,7 +88,6 @@ const titlebarOptionsMap: Record<string, OptTitlebar> = {
     titlebarOverlay: false,
     frame: false,
   },
-  // Default for everything else (including other Unix variants)
   default: {
     titleBarStyle: 'default',
     titlebarOverlay: true,
@@ -133,7 +119,7 @@ const installExtensions = async () => {
   }
 }
 
-/** The browser has the user's attention; once the session is in, the editor asks for it back. */
+/** Brings the main window back to the front. */
 function bringMainWindowToFront(): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return
@@ -145,14 +131,12 @@ function bringMainWindowToFront(): void {
 
   mainWindow.show()
   mainWindow.focus()
-  // On macOS a window's `focus()` does not take the app back from another one; `steal` does.
   app.focus({ steal: true })
 }
 
 /**
- * A provider sign-in runs in the system browser and lands here, not in the renderer:
- * the tokens are adopted on this side, then the renderer is told there is a session to
- * read. It would otherwise learn of it only at its next focus.
+ * Handles a provider sign-in that lands from the system browser: adopts the tokens and tells the renderer there is a
+ * session to read.
  */
 async function completeProviderSignIn(provider: EdgeOAuthProviderId): Promise<void> {
   try {
@@ -182,26 +166,14 @@ async function completeProviderSignIn(provider: EdgeOAuthProviderId): Promise<vo
 }
 
 const createMainWindow = async () => {
-  // Check if the application is on debug method, install the extensions
   if (isDebug) {
     await installExtensions()
   }
-  // Create a string with the resources folder path based on app environment;
   const RESOURCES_PATH = app.isPackaged ? join(process.resourcesPath, 'assets') : join(__dirname, '../../assets')
 
-  /**
-   * Create a function that return the asset that the name was given;
-   */
   const getAssetPath = (...paths: string[]): string => join(RESOURCES_PATH, ...paths)
 
-  /**
-   * Get the window bounds from the store.
-   */
   const { bounds } = store.get('window')
-
-  /**
-   * Splash window configuration
-   */
 
   splash = new BrowserWindow({
     width: 580,
@@ -230,11 +202,6 @@ const createMainWindow = async () => {
 
   splash.on('closed', () => (splash = null))
 
-  /**
-   * Main window configuration
-   */
-
-  // Create the main window instance.
   mainWindow = new BrowserWindow({
     minWidth: 1124,
     minHeight: 628,
@@ -247,10 +214,8 @@ const createMainWindow = async () => {
     },
   })
 
-  // Load the Url or index.html file;
   void mainWindow.loadURL(resolveHtmlPath('index.html'))
 
-  // Save window bounds on resize, close, and move events
   const saveBounds = () => {
     store.set('window.bounds', mainWindow?.getBounds())
   }
@@ -259,10 +224,6 @@ const createMainWindow = async () => {
     mainWindow?.webContents.send('window-controls:toggle-maximized')
   }
 
-  /**
-   * -> Ready to show event (https://www.electronjs.org/docs/latest/api/browser-window#event-ready-to-show)
-   * Emitted when the web page has been rendered (while not being shown) and window can be displayed without a visual flash.
-   */
   mainWindow.once('ready-to-show', () => {
     if (!mainWindow) {
       throw new Error('"mainWindow" is not defined')
@@ -281,11 +242,6 @@ const createMainWindow = async () => {
     }, 3000)
   })
 
-  /**
-   * -> Close event (https://www.electronjs.org/docs/latest/api/browser-window#event-close)
-   * Emitted when the window is going to be closed. It's emitted before the beforeunload and unload event of the DOM.
-   * Calling event.preventDefault() will cancel the close.
-   */
   mainWindow.on('close', saveBounds)
   mainWindow.on('close', (event) => {
     logger.info('mainWindow close')
@@ -293,50 +249,27 @@ const createMainWindow = async () => {
     if (process.platform !== 'darwin') mainWindow?.webContents.send('window-controls:is-closing')
   })
 
-  /**
-   * -> Closed event (https://www.electronjs.org/docs/latest/api/browser-window#event-closed)
-   * Emitted when the window is closed. After you have received this event you should remove the reference to the window
-   * and avoid using it any more.
-   */
   mainWindow.on('closed', () => {
     logger.info('mainWindow closed')
     mainWindow = null
   })
 
-  /**
-   * -> Move event (https://www.electronjs.org/docs/latest/api/browser-window#event-move)
-   * Emitted when the window is being moved to a new position.
-   */
   mainWindow.on('move', saveBounds)
 
-  /**
-   * -> Maximize event (https://www.electronjs.org/docs/latest/api/browser-window#event-maximize)
-   * Emitted when the window is maximized.
-   */
   mainWindow.on('maximize', () => {
     isMaximizedWindow()
   })
 
-  /**
-   * -> Unmaximize event (https://www.electronjs.org/docs/latest/api/browser-window#event-unmaximize)
-   * Emitted when the window exits from a maximized state.
-   */
   mainWindow.on('unmaximize', () => {
     isMaximizedWindow()
   })
 
-  /**
-   * -> Resize event (https://www.electronjs.org/docs/latest/api/browser-window#event-resize)
-   */
-  // Emitted after the window has been resized.
   mainWindow.on('resize', saveBounds)
 
-  // Maximize the window if bounds are not set
   if (!bounds) {
     mainWindow.maximize()
   }
 
-  // Open devtools if the app is not packaged;
   if (isDebug) {
     mainWindow.webContents.openDevTools()
   }
@@ -345,10 +278,7 @@ const createMainWindow = async () => {
     if (!details.isMainFrame && leavesVendorDocument(details.frame?.url, details.url)) details.preventDefault()
   })
 
-  // Open urls in the user's browser
   mainWindow.webContents.setWindowOpenHandler((edata) => {
-    // A provider link reaches the system browser too, but through the OAuth flow, which
-    // is what listens for the browser to come back with the session.
     const provider = edgeOAuthProviderFromUrl(edata.url)
 
     if (provider) {
@@ -357,7 +287,6 @@ const createMainWindow = async () => {
       return { action: 'deny' }
     }
 
-    // Only web links leave the app: a `file:` or custom-scheme URL would run whatever the OS registers for it.
     if (isWebUrl(edata.url)) {
       void shell.openExternal(edata.url)
     } else {
@@ -367,29 +296,12 @@ const createMainWindow = async () => {
     return { action: 'deny' }
   })
 
-  /**
-   * Add event listeners...
-   */
-
-  // mainWindow.webContents.send('editor:getBaseTypes', _editorService.getBaseTypes())
-
-  // Handles the creation of the menu
   const menuBuilder = new MenuBuilder(mainWindow, updateService)
   void menuBuilder.buildMenu()
 
-  /**
-   * Creates a singleton instance for project service, which will be used across the entire application
-   */
   const projectService = new ProjectService(mainWindow)
 
-  /**
-   * Creates a singleton instance for POU service, which will be used across the entire application
-   */
   const pouService = new PouService()
-
-  /**
-   * Creates a singleton instance for compiler service, which will be used across the entire application
-   */
 
   const compilerModule = new CompilerModule()
 
@@ -410,28 +322,15 @@ const createMainWindow = async () => {
   mainIpcModule.setupMainIpcListener()
 }
 
-// Disable GPU Acceleration for Windows 7;
 if (release().startsWith('6.1')) app.disableHardwareAcceleration()
 
-// Set application name for Windows 10+ notifications;
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
-// Ensure only one instance of the application is running;
 if (!app.requestSingleInstanceLock()) {
   app.quit()
   process.exit(0)
 }
 
-/**
- * App event listeners
- */
-
-/**
- * -> Active event #MACOS (https://www.electronjs.org/docs/latest/api/app#event-activate-macos)
- * emitted when the application is activated. Various actions can trigger this event, such as launching the
- * application for the first time, attempting to re-launch the application when it's already running, or clicking on
- * the application's dock or taskbar icon.
- */
 app.on('activate', () => {
   if (mainWindow === null) {
     void createMainWindow()
@@ -440,21 +339,11 @@ app.on('activate', () => {
   }
 })
 
-/**
- * -> Before-quit event (https://www.electronjs.org/docs/latest/api/app#event-before-quit)
- * Emitted before the application starts closing its windows. Calling event.preventDefault() will prevent the default behavior,
- * which is terminating the application.
- */
 app.on('before-quit', (event) => {
   logger.info('before-quit')
   quitCoordinator.handleBeforeQuit(event)
 })
 
-/**
- * -> Will-quit event (https://www.electronjs.org/docs/latest/api/app#event-will-quit)
- * Emitted when all windows have been closed and the application will quit. Calling event.preventDefault() will prevent the default
- * behavior, which is terminating the application.
- */
 const EDIT_SESSION_RELEASE_BUDGET_MS = 1500
 let editSessionsReleased = false
 
@@ -471,43 +360,24 @@ app.on('will-quit', (event) => {
   ]).finally(() => app.quit())
 })
 
-/**
- * -> Quit event (https://www.electronjs.org/docs/latest/api/app#event-quit)
- */
-// Emitted when the application is quitting.
 app.on('quit', () => {
   logger.info('quit')
 })
 
-/**
- * -> Will-quit event (https://www.electronjs.org/docs/latest/api/app#event-will-quit)
- * If you do not subscribe to this event and all windows are closed, the default behavior is to quit the app; however, if you subscribe,
- * you control whether the app quits or not. If the user pressed Cmd + Q, or the developer called app.quit(), Electron will first try to
- * close all the windows and then emit the will-quit event, and in this case the window-all-closed event would not be emitted.
- */
-// --> Quit the app when all windows are closed except on macOS. There, it's common for applications and their menu bar to stay active;
 app.on('window-all-closed', () => {
   logger.info('window-all-closed')
-  // Respect the OSX convention of having the application in memory even
-  // after all windows have been closed
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
-/**
- * -> Second-instance event (https://www.electronjs.org/docs/latest/api/app#event-second-instance)
- */
-// Handle second instance of the app;
 app.on('second-instance', () => {
   if (mainWindow) {
-    // Focus on the main window if the user tried to open another
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.focus()
   }
 })
 
-// Create the main window when the app is ready;
 app
   .whenReady()
   .then(() => {
@@ -518,62 +388,34 @@ app
       createVendorDocumentHandler({ listPackages: () => packages.listInstalled() }),
     )
     void createMainWindow()
-    // Last session's cloud builds. The cloud is the source of truth for those
-    // projects, so nothing here survives a restart; best-effort, since a scratch
-    // directory that will not delete is no reason to refuse to start.
     void clearCloudBuildRoot().catch((error: unknown) =>
       logger.warn('Could not clear the cloud build scratch directory: ' + getErrorMessage(error)),
     )
-    // Put `openplc-cli` on PATH, once. After the window, so a slow filesystem
-    // never delays the app appearing, and best-effort: a convenience command
-    // failing to install is not a reason for the editor not to start.
     void installCliShimOnFirstRun()
-    // One check about a minute after launch, never blocking it; see modules/updater.
     updateService.start()
-    // Handle the app activation event;
     app.on('activate', () => {
-      // On macOS it's common to re-create a window in the app when the
-      // dock icon is clicked and there are no other windows open.
       if (mainWindow === null) void createMainWindow()
     })
   })
   .catch((err: unknown) => logger.error(getErrorMessage(err)))
 
 /**
- * Install the `openplc-cli` shim on first run.
- *
- * Only the disk-image / translocation case reaches the user: it is the one where
- * they have to act (move the app to Applications) and where silence would leave
- * them with a command that never appears and no reason why. Everything else goes
- * to the log — a PATH hint is useful but not worth a modal at launch.
+ * Install the `openplc-cli` shim on first run. Only the disk-image / translocation case is shown to the user;
+ * everything else goes to the log.
  */
 async function installCliShimOnFirstRun(): Promise<void> {
-  // PACKAGED ONLY, and the guard has to be here rather than assumed.
-  //
-  // The shim is generated with `leadingArgs: ['--cli']` and nothing else,
-  // because a packaged build dispatches on that marker inside its own binary. A
-  // DEV launch has no such binary: the shim came out as
-  // `exec .../node_modules/electron/dist/Electron --cli "$@"`, which starts
-  // Electron with no application to run — and Electron with no script HANGS
-  // rather than erroring. So `npm run dev` was quietly installing a command that
-  // never worked, over whichever working one was there before. Observed on a
-  // developer machine, not theorised.
   if (!app.isPackaged) return
 
   try {
     const outcome = await ensureCliShimInstalled({
       statePath: shimStatePath(app.getPath('userData')),
       appBinaryPath: process.execPath,
-      // A packaged build dispatches on `--cli` in its own binary; the GUI only
-      // runs first-run install when packaged-shaped, so the marker suffices.
       leadingArgs: ['--cli'],
       environment: {
         platform: process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux',
         home: homedir(),
         pathVariable: process.env.PATH ?? '',
         localAppData: process.env.LOCALAPPDATA,
-        // The AppImage runtime exports the path of the .AppImage FILE, which is
-        // stable; `process.execPath` is a per-launch mount point.
         appImagePath: process.env.APPIMAGE,
       },
       warn: (message) => {

@@ -3,26 +3,6 @@ import { createContext, type ReactNode, useContext } from 'react'
 import type { RuntimeProvisioningPort } from '../ports/runtime-provisioning-port'
 import type { PlatformPorts } from './types'
 
-/**
- * React context that provides platform port implementations to the component tree.
- *
- * Usage:
- *   // In a component:
- *   const { compiler, runtime, capabilities } = usePlatform()
- *   await compiler.compileProgram(args, onProgress)
- *   if (capabilities.isNativeApplication) { ... }
- *
- * Wiring:
- *   // At the app root (editor):
- *   <PlatformProvider ports={editorPorts}>
- *     <App />
- *   </PlatformProvider>
- *
- *   // At the app root (web):
- *   <PlatformProvider ports={webPorts}>
- *     <RouterProvider router={router} />
- *   </PlatformProvider>
- */
 const PlatformContext = createContext<PlatformPorts | null>(null)
 
 interface PlatformProviderProps {
@@ -34,11 +14,7 @@ export function PlatformProvider({ ports, children }: PlatformProviderProps) {
   return <PlatformContext.Provider value={ports}>{children}</PlatformContext.Provider>
 }
 
-/**
- * Hook to access platform ports from any component in the tree.
- * Throws if used outside a PlatformProvider — this is intentional
- * to catch wiring mistakes early during development.
- */
+/** Hook to access platform ports from any component in the tree. Throws if used outside a PlatformProvider. */
 export function usePlatform(): PlatformPorts {
   const context = useContext(PlatformContext)
   if (!context) {
@@ -127,13 +103,7 @@ export function useEtherCATDiagnostics() {
   return usePlatform().ethercatDiagnostics
 }
 
-/**
- * The Edge account port, or undefined on a platform that has no Edge account.
- *
- * Named `useEdgeAccount` here and re-exported as `useEdgeAccountPort` so it does
- * not collide with the `useEdgeAccount` hook in `frontend/hooks`, which is the
- * stateful consumer of this port rather than an accessor for it.
- */
+/** The Edge account port, or undefined on a platform that has no Edge account. Re-exported as `useEdgeAccountPort`. */
 export function useEdgeAccount() {
   return usePlatform().edgeAccount
 }

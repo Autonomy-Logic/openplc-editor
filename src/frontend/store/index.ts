@@ -2,7 +2,6 @@ import { enableMapSet } from 'immer'
 import { subscribeWithSelector } from 'zustand/middleware'
 import { createStore } from 'zustand/vanilla'
 
-// Enable Immer's MapSet plugin for Map/Set support in store state
 enableMapSet()
 
 import type { AIFeatureConfig } from '../../middleware/shared/ports/types'

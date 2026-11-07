@@ -56,7 +56,6 @@ describe('flow write-back scheduler', () => {
   const ladderBody = (pouName: string) =>
     store.getState().project.data.pous.find((p) => p.name === pouName)?.body.value as LadderFlowType | undefined
 
-  /** Create an LD program and give its flow one (valid) rung, marked updated. */
   const makeDirtyLadderPou = (name: string) => {
     store.getState().pouActions.create({ type: 'program', name, language: 'ld' })
     store.getState().ladderFlowActions.startLadderRung({
@@ -103,8 +102,6 @@ describe('flow write-back scheduler', () => {
       const body = ladderBody('Main')
       const flow = store.getState().ladderFlows.find((f) => f.name === 'Main')
       expect(body && 'updated' in body).toBe(false)
-      // By-reference persistence: the project copy and the live flow share
-      // the (immutable) rung objects instead of deep-cloning them.
       expect(body?.rungs[0]).toBe(flow?.rungs[0])
     })
 
@@ -124,7 +121,6 @@ describe('flow write-back scheduler', () => {
       scheduleFlowWriteBack(getState, 'Main', 'ld')
       vi.advanceTimersByTime(FLOW_WRITEBACK_DEBOUNCE_MS / 2)
 
-      // A second edit inside the window re-schedules: the first timer stands.
       store.getState().ladderFlowActions.startLadderRung({
         editorName: 'Main',
         rungId: 'rung_Main_2',
@@ -133,7 +129,6 @@ describe('flow write-back scheduler', () => {
       })
       scheduleFlowWriteBack(getState, 'Main', 'ld')
 
-      // Fires DEBOUNCE_MS after the FIRST schedule and picks up both edits.
       vi.advanceTimersByTime(FLOW_WRITEBACK_DEBOUNCE_MS / 2)
       expect(ladderBody('Main')?.rungs).toHaveLength(2)
     })
@@ -166,8 +161,6 @@ describe('flow write-back scheduler', () => {
 
     it('refuses to persist a flow that fails schema validation', () => {
       makeDirtyLadderPou('Main')
-      // Replace the flow with a malformed one (rung missing bounds/viewport).
-      // addLadderFlow resets `updated` on store, so re-flag it afterwards.
       store.getState().ladderFlowActions.addLadderFlow({
         name: 'Main',
         updated: true,
@@ -193,7 +186,6 @@ describe('flow write-back scheduler', () => {
       flushFlowWriteBacks(getState)
 
       expect(ladderBody('Main')?.rungs).toHaveLength(1)
-      // The timer was cancelled along with the flush — nothing fires later.
       const bodyAfterFlush = ladderBody('Main')
       vi.advanceTimersByTime(FLOW_WRITEBACK_DEBOUNCE_MS)
       expect(ladderBody('Main')).toBe(bodyAfterFlush)
@@ -250,7 +242,6 @@ describe('flow write-back scheduler', () => {
       const flow = store.getState().ladderFlows.find((f) => f.name === 'Main')
       store.getState().ladderFlowActions.setRungs({
         editorName: 'Main',
-        // `defaultBounds` is required by the schema — dropping it makes the flow invalid.
         rungs: (flow?.rungs ?? []).map(({ defaultBounds: _defaultBounds, ...rung }) => rung) as never,
       })
 
@@ -266,7 +257,6 @@ describe('flow write-back scheduler', () => {
       store.getState().fbdFlowActions.startFBDRung({ editorName: 'FbdMain' })
 
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      // `nodes` is required by the schema — dropping it makes the flow invalid.
       store.getState().fbdFlowActions.setRung({
         editorName: 'FbdMain',
         rung: { comment: '', edges: [], selectedNodes: [] } as never,

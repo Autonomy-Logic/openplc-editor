@@ -53,27 +53,17 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
   const caps = useCapabilities()
   const [showComponent, setShowComponent] = useState(true)
   const modals = useOpenPLCStore(useCallback((s) => s.modals, []))
-  // Narrowed once, not asserted three times. The store keeps every modal's data
-  // in one `unknown` slot, so what the save-changes dialog was handed has to be
-  // checked rather than declared -- an assertion here promised callbacks that
-  // may not be there, and (after this branch added a second one) a reason union
-  // narrower than what the dialog can actually pass.
   const saveChangesData = asSaveChangesModalData(modals?.['save-changes-project']?.data)
   const dataTypes = useOpenPLCStore(useCallback((s) => s.project.data.dataTypes, []))
   const { closeModal, onOpenChange } = useOpenPLCStore(useCallback((s) => s.modalActions, []))
   const OS = useOpenPLCStore(useCallback((s) => s.workspace.systemConfigs.OS, []))
   const { setSystemConfigs, setRecent } = useOpenPLCStore(useCallback((s) => s.workspaceActions, []))
 
-  // Theme initialization - the theme port adapter owns reading the stored
-  // preference (cross-app cookie → localStorage → OS) and applying the
-  // <html> class; here we only seed the Monaco light/dark flag. The retro
-  // 'nineties' skin is light-based, so shouldUseDarkMode stays false for it.
   const themePort = useTheme()
   useEffect(() => {
     setSystemConfigs({ shouldUseDarkMode: themePort.getCurrentTheme() === 'dark' })
   }, [themePort, setSystemConfigs])
 
-  // System initialization
   useEffect(() => {
     const initSystem = async () => {
       try {
@@ -97,7 +87,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
     void initSystem()
   }, [system, projectPort, setSystemConfigs, setRecent])
 
-  // Resolution check (web: hides UI below minimum size; harmless on editor)
   useEffect(() => {
     const handleResize = () => {
       const { innerWidth: width, innerHeight: height } = window
@@ -110,7 +99,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
 
   const showTitleBar = !caps.isNativeApplication || OS !== 'linux'
 
-  // A newer editor is out (desktop only: the web has no update port).
   const appUpdate = useAppUpdate()
   const update = useAppUpdateStatus()
   const banner = appUpdate && update.state !== 'none' ? update : null
@@ -132,7 +120,6 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
         <main
           className={cn(
             'absolute bottom-0 left-0 right-0 flex overflow-hidden',
-            // Below the title bar, and below the update banner (h-7) while it shows.
             showTitleBar
               ? banner
                 ? 'top-[calc(var(--oplc-title-bar-height)+1.75rem)]'

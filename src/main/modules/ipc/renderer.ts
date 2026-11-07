@@ -87,8 +87,7 @@ type EsiFileOutcome<T> = { ok: true; value: T } | { ok: false; error: string }
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
-// Registers an IPC listener and hands back a per-listener unsubscribe: `removeAllListeners(channel)`
-// would drop sibling subscribers on the same channel, so every `on`-style method routes through here.
+// Registers an IPC listener and returns a per-listener unsubscribe.
 const subscribe = (channel: string, callback: IpcRendererCallbacks): (() => void) => {
   const listener: IpcRendererCallbacks = (event, ...args) => callback(event, ...args)
   ipcRenderer.on(channel, listener)
@@ -97,8 +96,7 @@ const subscribe = (channel: string, callback: IpcRendererCallbacks): (() => void
   }
 }
 
-// What an `edge-ai:*` channel answers, read off the main-process function behind it — these bridge
-// methods are pass-throughs, so restating the payload shape would be a second, driftable copy.
+// What an `edge-ai:*` channel answers, read off the main-process function behind it.
 type EdgeAiReply<Fn extends (...args: never[]) => unknown> = Promise<Awaited<ReturnType<Fn>>>
 
 // Data posted through the MessagePort by the compiler module. `compileError` carries strucpp's
@@ -110,18 +108,13 @@ type CompilerPortMessage = {
   simulatorFirmwarePath?: string
   plcStatus?: string
   closePort?: boolean
-  // The build's verdict, from the pipeline's exit code rather than error-log presence. It must keep being forwarded, or `compileProgramFlow` silently falls back to its `hasError` heuristic.
+  // The build's verdict, from the pipeline's exit code.
   success?: boolean
   /** Final structured outcome of a library build; set only on `compileLibrary`'s close-port message. */
   libraryBuildResult?: import('@root/middleware/shared/ports/types').CompileLibraryResult
 }
 
-/**
- * A bridge for communication between the renderer process and the main process in an Electron application.
- * Provides various methods for handling project creation, opening, saving, and other operations.
- */
 const rendererProcessBridge = {
-  // ===================== PROJECT METHODS =====================
   aboutAccelerator: (callback: IpcRendererCallbacks) => subscribe('website:about-accelerator', callback),
   aboutModalAccelerator: (callback: IpcRendererCallbacks) => subscribe('about:open-accelerator', callback),
   closeProjectAccelerator: (callback: IpcRendererCallbacks) =>
@@ -175,7 +168,6 @@ const rendererProcessBridge = {
   openDiagnosticsAccelerator: (callback: IpcRendererCallbacks) =>
     subscribe('workspace:open-diagnostics-accelerator', callback),
 
-  // ===================== POU METHODS =====================
   createPouFile: (props: CreatePouFileProps): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:create', props),
   deletePouFile: (filePath: string): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:delete', filePath),
   renamePouFile: (data: {
@@ -184,11 +176,9 @@ const rendererProcessBridge = {
     fileContent?: unknown
   }): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:rename', data),
 
-  // ===================== EDIT METHODS =====================
   handleUndoRequest: (callback: IpcRendererCallbacks) => subscribe('edit:undo-request', callback),
   handleRedoRequest: (callback: IpcRendererCallbacks) => subscribe('edit:redo-request', callback),
 
-  // ===================== APP & SYSTEM METHODS =====================
   getRecent: (): Promise<string[]> => ipcRenderer.invoke('app:store-get'),
   getStoreValue: (key: string) => ipcRenderer.invoke('app:store-get', key),
   getSystemInfo: (): Promise<{
@@ -197,9 +187,6 @@ const rendererProcessBridge = {
     prefersDarkMode: boolean
     isWindowMaximized: boolean
   }> => ipcRenderer.invoke('system:get-system-info'),
-  // Typed as `unknown[]` so the IPC layer stays free of strucpp type imports; the LibraryPort
-  // consumer narrows the parsed archives to `StlibArchiveDTO[]`.
-  // ===================== LIBRARY MANAGER METHODS =====================
   loadAllLibraries: (): Promise<unknown[]> => ipcRenderer.invoke('libraries:load-all'),
   listInstalledLibraries: (): Promise<
     Array<{
@@ -220,7 +207,6 @@ const rendererProcessBridge = {
   > => ipcRenderer.invoke('libraries:install-from-file'),
   uninstallLibrary: (name: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('libraries:uninstall', name),
-  // ----- Public-library catalog (autonomy-edge) -----
   queryPublicCatalog: (
     args: ListPublicLibrariesArgs,
   ): Promise<{ success: true; data: ListPublicLibrariesResponse } | { success: false; error: string }> =>
@@ -236,9 +222,6 @@ const rendererProcessBridge = {
       error?: string
     }>
   }> => ipcRenderer.invoke('catalog:install-many', libraries),
-  // Every call crosses to the main process because the desktop holds its own session:
-  // the renderer is not on Edge's origin, so it can neither inherit the shared-domain
-  // cookie the web editor uses nor issue the request itself.
   edgeAccountFetchUser: (): Promise<EdgeUserRead> => ipcRenderer.invoke('edge-account:fetch-user'),
   edgeAccountFetchPlanCaption: (): Promise<string | null> => ipcRenderer.invoke('edge-account:fetch-plan-caption'),
   edgeAccountSignIn: (email: string, password: string): Promise<EdgeSignInOutcome> =>
@@ -272,7 +255,6 @@ const rendererProcessBridge = {
   edgeUploadListFolders: (): Promise<CloudFoldersResult> => ipcRenderer.invoke('edge-upload:list-folders'),
   edgeUploadProject: (params: UploadProjectParams): Promise<UploadProjectResult> =>
     ipcRenderer.invoke('edge-upload:project', params),
-  // A result union rather than a thrown error: a typed error class does not survive IPC, so the adapter rebuilds the real error on the other side.
   edgeVcListBranches: (projectId: string): Promise<VersionControlResult<{ branches: Branch[] }>> =>
     ipcRenderer.invoke('edge-vc:list-branches', projectId),
   edgeVcCreateBranch: (projectId: string, name: string): Promise<VersionControlResult<{ branch: Branch }>> =>
@@ -359,9 +341,6 @@ const rendererProcessBridge = {
   ): EdgeAiReply<typeof listConversations> => ipcRenderer.invoke('edge-ai:conversations-list', options),
   edgeAiGetConversation: (conversationId: string): EdgeAiReply<typeof getConversation> =>
     ipcRenderer.invoke('edge-ai:conversations-get', conversationId),
-  // The bodies are `Record<string, unknown>` rather than the module's `unknown`:
-  // main refuses anything that is not an object, so the looser type would only
-  // promise a caller something the channel then turns down.
   edgeAiCreateConversation: (body: Record<string, unknown>): EdgeAiReply<typeof createConversation> =>
     ipcRenderer.invoke('edge-ai:conversations-create', body),
   edgeAiRenameConversation: (
@@ -371,8 +350,7 @@ const rendererProcessBridge = {
   edgeAiDeleteConversation: (conversationId: string): EdgeAiReply<typeof deleteConversation> =>
     ipcRenderer.invoke('edge-ai:conversations-delete', conversationId),
 
-  // `invoke` is request/response, so a streamed answer is a handshake: this call opens the request
-  // and returns the id every event below carries — the only way to abort it or tell concurrent answers apart.
+  // Opens a streamed request and returns the id every event below carries.
   edgeAiStreamStart: (request: {
     kind: 'chat' | 'completion'
     body: Record<string, unknown>
@@ -380,8 +358,7 @@ const rendererProcessBridge = {
   /** Cancels the upstream request. No further event follows, and aborting a finished stream is a no-op. */
   edgeAiStreamAbort: (streamId: string): Promise<EdgeAiResult<null>> =>
     ipcRenderer.invoke('edge-ai:stream-abort', streamId),
-  // One frame of the answer, structured (not just text): a `tool_use` frame is how the model asks
-  // to act on the project, and flattening it to prose here would hide tool calls from the agentic loop.
+  // One structured frame of the answer, `tool_use` frames included.
   onEdgeAiStreamEvent: (callback: (payload: { streamId: string; event: AISSEEvent }) => void): (() => void) => {
     const listener = (_event: unknown, payload: { streamId: string; event: AISSEEvent }) => callback(payload)
     ipcRenderer.on('edge-ai:event', listener)
@@ -393,7 +370,7 @@ const rendererProcessBridge = {
     ipcRenderer.on('edge-ai:end', listener)
     return () => ipcRenderer.removeListener('edge-ai:end', listener)
   },
-  // `failure` is the same union the non-streaming channels answer with, so the sign-in prompt, offline notice and ACU-exhaustion modal come from one discriminant.
+  // Stream failure, in the same `failure` union the non-streaming channels answer with.
   onEdgeAiStreamError: (callback: (payload: { streamId: string; failure: EdgeAiFailure }) => void): (() => void) => {
     const listener = (_event: unknown, payload: { streamId: string; failure: EdgeAiFailure }) => callback(payload)
     ipcRenderer.on('edge-ai:error', listener)
@@ -450,7 +427,6 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('project:delete', projectPath),
   setStoreValue: (key: string, val: string) => ipcRenderer.send('app:store-set', key, val),
 
-  // ===================== WINDOW CONTROLS =====================
   closeWindow: () => ipcRenderer.send('window-controls:closed'),
   handleCloseOrHideWindow: () => ipcRenderer.send('window-controls:close'),
   handleCloseOrHideWindowAccelerator: () =>
@@ -464,12 +440,10 @@ const rendererProcessBridge = {
   reloadWindow: () => ipcRenderer.send('window:reload'),
   windowIsClosing: (callback: IpcRendererCallbacks) => subscribe('window-controls:is-closing', callback),
 
-  // ===================== THEME =====================
   handleUpdateTheme: (callback: IpcRendererCallbacks) => subscribe('system:update-theme', callback),
   winHandleUpdateTheme: (theme?: 'light' | 'dark' | 'nineties') => ipcRenderer.send('system:update-theme', theme),
   winGetTheme: (): Promise<'light' | 'dark' | 'nineties' | null> => ipcRenderer.invoke('system:get-theme'),
 
-  // ===================== COMPILER/BUILD METHODS =====================
   runCompileProgram: (compileProgramArgs: CompileProgramIpcArgs, callback: (args: CompilerPortMessage) => void) => {
     const { port1: rendererProcessPort, port2: mainProcessPort } = new MessageChannel()
     ipcRenderer.postMessage('compiler:run-compile-program', compileProgramArgs, [mainProcessPort])
@@ -479,7 +453,6 @@ const rendererProcessBridge = {
         closePort: true,
       }),
     )
-    // Set up the renderer process port to listen for messages from the main process
   },
 
   runDebugCompilation: (compileArgs: Array<string | PLCProjectData>, callback: (args: CompilerPortMessage) => void) => {
@@ -502,7 +475,6 @@ const rendererProcessBridge = {
 
   exportProjectRequest: (callback: IpcRendererCallbacks) => subscribe('compiler:export-project-request', callback),
 
-  // ===================== HARDWARE METHODS =====================
   getAvailableBoards: (): Promise<
     Map<
       string,
@@ -538,7 +510,6 @@ const rendererProcessBridge = {
   refreshCommunicationPorts: (): Promise<{ address: string; boardName?: string; manufacturer?: string }[]> =>
     ipcRenderer.invoke('hardware:refresh-communication-ports'),
 
-  // ===================== PACKAGE MANAGER METHODS =====================
   importPackageFromFile: (): Promise<{
     success: boolean
     canceled?: boolean
@@ -579,7 +550,6 @@ const rendererProcessBridge = {
     return () => ipcRenderer.removeListener('packages:boards-updated', listener)
   },
 
-  // ===================== UTILITY METHODS =====================
   getPreviewImage: (image: string, packagePath?: string): Promise<string> =>
     ipcRenderer.invoke('util:get-preview-image', image, packagePath),
   log: (level: 'info' | 'error', message: string) => ipcRenderer.send('util:log', { level, message }),
@@ -635,8 +605,8 @@ const rendererProcessBridge = {
 
   debuggerDisconnect: (): Promise<{ success: boolean }> => ipcRenderer.invoke('debugger:disconnect'),
 
-  // Persistent device connection (D72): try the ordered candidates and HOLD the
-  // first that answers, returning how the kept channel classified.
+  // Persistent device connection: try the ordered candidates and hold the first that answers, returning how the kept
+  // channel classified.
   deviceConnect: (
     candidates: DebugConnectionConfig[],
   ): Promise<{
@@ -660,18 +630,15 @@ const rendererProcessBridge = {
   deviceReleaseSerialPort: (port: string | null | undefined): Promise<{ released: boolean }> =>
     ipcRenderer.invoke('device:release-serial-port', port),
 
-  // VPP licensing over the HELD link. `read` is local-only (read + verify) and
-  // cheap; `refresh` may reach the network and write, which is why they are
-  // separate channels and neither is part of `device:connect`.
+  // VPP licensing over the held link: `read` is local-only (read + verify); `refresh` may reach the network and write.
   deviceReadLicense: (request: DeviceLicenseRequest): Promise<DeviceLicenseReport> =>
     ipcRenderer.invoke('device:read-license', request),
 
   deviceRefreshLicense: (request: DeviceLicenseRequest): Promise<DeviceLicenseReport> =>
     ipcRenderer.invoke('device:refresh-license', request),
 
-  // Diagnostic trace of the device connection (candidate attempts, poll verdicts,
-  // which connection served each command), mirrored into the editor console so it
-  // can be read and copied while reproducing a problem.
+  // Diagnostic trace of the device connection (candidate attempts, poll verdicts, which connection served each
+  // command), mirrored into the editor console.
   onDeviceLinkLog: (callback: (message: string) => void): (() => void) => {
     const listener = (_event: unknown, message: string) => callback(message)
     ipcRenderer.on('device:link-log', listener)
@@ -685,11 +652,7 @@ const rendererProcessBridge = {
     return () => ipcRenderer.removeListener('device:connection-status', listener)
   },
 
-  /**
-   * Subscribe to run/stop state pushed from the held device link. Emitted on
-   * every liveness tick (FC 0x46 carries the state), so a switch flipped by hand
-   * at the panel surfaces within one interval without any extra traffic.
-   */
+  /** Subscribe to run/stop state pushed from the held device link on every liveness tick. */
   onDevicePlcState: (
     callback: (payload: { port: string; plcState?: number; switchPosition?: number }) => void,
   ): (() => void) => {
@@ -699,7 +662,6 @@ const rendererProcessBridge = {
     return () => ipcRenderer.removeListener('device:plc-state', listener)
   },
 
-  // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<UsersInfoResult> =>
     ipcRenderer.invoke('runtime:get-users-info', ipAddress),
   runtimeGetCapabilities: (
@@ -761,10 +723,6 @@ const rendererProcessBridge = {
   runtimeStopPlc: (ipAddress: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('runtime:stop-plc', ipAddress),
 
-  // ===================== BOOTLOADER (RTOP-283) =====================
-  // The bootloader is a separate service on port 8445 with its own session.
-  // Results are the client's discriminated union, so a caller checks `success`
-  // and shows `error` verbatim -- its messages are written for a person.
   bootloaderGetCapabilities: (
     ipAddress: string,
     options?: BootloaderCapabilitiesOptions,
@@ -816,8 +774,7 @@ const rendererProcessBridge = {
     durationMs?: number
   }): Promise<{ success: boolean; devices?: DiscoveredRuntimeDevice[]; error?: string }> =>
     ipcRenderer.invoke('runtime:discover-devices', opts),
-  // Returns a path, never the archive: those are untrusted device bytes, and the safety checks on
-  // writing them live beside the write in the main process.
+  // Returns a path to the unpacked project, never the archive.
   runtimeRetrieveProject: (
     ipAddress: string,
   ): Promise<{
@@ -843,7 +800,6 @@ const rendererProcessBridge = {
     return () => ipcRenderer.removeListener('runtime:token-refreshed', callback)
   },
 
-  // ===================== ETHERCAT DISCOVERY METHODS =====================
   etherCATGetInterfaces: (
     ipAddress: string,
   ): Promise<{ success: boolean; data?: NetworkInterface[]; error?: string }> =>
@@ -889,9 +845,6 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; data?: EtherCATRuntimeStatusResponse; error?: string }> =>
     ipcRenderer.invoke('ethercat:get-runtime-status', ipAddress),
 
-  // ===================== ESI REPOSITORY METHODS =====================
-  // ESI repository mechanisms: the shared port runs the parser in the main process and
-  // keeps files in the project's devices/esi folder through these.
   esiParse: <T extends EsiParseOp>(request: T): Promise<EsiParseResult<T>> => ipcRenderer.invoke('esi:parse', request),
   esiFileRead: (projectPath: string, name: string): Promise<EsiFileOutcome<string | null>> =>
     ipcRenderer.invoke('esi:file-read', projectPath, name),
@@ -902,7 +855,6 @@ const rendererProcessBridge = {
   esiFileList: (projectPath: string): Promise<EsiFileOutcome<string[]>> =>
     ipcRenderer.invoke('esi:file-list', projectPath),
 
-  // ===================== SIMULATOR METHODS =====================
   simulatorLoadFirmware: (hexPath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('simulator:load-firmware', hexPath),
   simulatorStop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('simulator:stop'),
@@ -913,7 +865,6 @@ const rendererProcessBridge = {
     return () => ipcRenderer.removeListener('simulator:stopped', listener)
   },
 
-  // ===================== FILE WATCHER METHODS =====================
   fileWatchStart: (filePath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('file:watch-start', filePath),
   fileWatchStop: (filePath: string): Promise<{ success: boolean }> => ipcRenderer.invoke('file:watch-stop', filePath),
