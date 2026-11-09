@@ -36,6 +36,14 @@ const renderEditor = () => {
 
 const addButton = () => screen.getByLabelText<HTMLButtonElement>('Add table row button')
 
+const firstGlobalName = () => store.getState().project.data.configurations.resource.globalVariables[0]?.name
+
+const addVariable = () => fireEvent.click(addButton())
+
+const startEditingName = () => fireEvent.click(screen.getByText('GlobalVar'))
+
+const nameInput = () => screen.queryByDisplayValue('GlobalVar')
+
 describe('global variables editor during a debug session (TC11)', () => {
   beforeEach(() => {
     store = createTestStore()
@@ -75,5 +83,51 @@ describe('global variables editor during a debug session (TC11)', () => {
     closeDebugSession()
 
     expect(addButton().disabled).toBe(false)
+  })
+})
+
+describe('the global variables table cells during a debug session (TC11)', () => {
+  beforeEach(() => {
+    store = createTestStore()
+  })
+
+  it('should open the name cell for editing while no debug session is open', () => {
+    renderEditor()
+    addVariable()
+
+    startEditingName()
+
+    expect(nameInput()).not.toBeNull()
+  })
+
+  it('should keep the name cell closed while the debugger is open', () => {
+    renderEditor()
+    addVariable()
+
+    openDebugSession()
+    startEditingName()
+
+    expect(nameInput()).toBeNull()
+  })
+
+  it('should leave the stored name untouched when the locked name cell is clicked', () => {
+    renderEditor()
+    addVariable()
+
+    openDebugSession()
+    startEditingName()
+
+    expect(firstGlobalName()).toBe('GlobalVar')
+  })
+
+  it('should open the name cell again once the debug session is closed', () => {
+    renderEditor()
+    addVariable()
+
+    openDebugSession()
+    closeDebugSession()
+    startEditingName()
+
+    expect(nameInput()).not.toBeNull()
   })
 })
