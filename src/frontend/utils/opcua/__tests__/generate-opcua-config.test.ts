@@ -683,6 +683,21 @@ describe('validateOpcUaConfig', () => {
     expect(result.errors).toEqual([])
   })
 
+  it('accepts a specific interface IPv4 bind address', () => {
+    const cfg = baseServerConfig()
+    cfg.server.bindAddress = '192.168.1.10'
+    const result = validateOpcUaConfig(cfg, debugMapJson([]), instances)
+    expect(result.valid).toBe(true)
+  })
+
+  it.each(['', 'eth0', '192.168.1.300'])('reports an invalid bind address %p', (bindAddress) => {
+    const cfg = baseServerConfig()
+    cfg.server.bindAddress = bindAddress
+    const result = validateOpcUaConfig(cfg, debugMapJson([]), instances)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.includes('not a valid IPv4 address'))).toBe(true)
+  })
+
   it('reports error when no security profiles enabled', () => {
     const cfg = baseServerConfig()
     cfg.securityProfiles[0].enabled = false

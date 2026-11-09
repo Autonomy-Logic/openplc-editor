@@ -5,6 +5,16 @@
  * for the OpenPLC Runtime.
  */
 
+export {
+  ALL_INTERFACES_ADDRESS,
+  type BindAddressMode,
+  type BindAddressSuggestion,
+  buildBindAddressSuggestions,
+  getBindAddressMode,
+  isValidIpv4Address,
+  LOCALHOST_ADDRESS,
+  SPECIFIC_INTERFACE_MODE,
+} from './bind-address'
 export type {
   ResolvedOpcUaConfig,
   RuntimeAddressSpace,
