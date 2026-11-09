@@ -46,8 +46,15 @@ jobs:
           OPENPLC_E2E_DEBUG_SEAM: '1'
           NODE_OPTIONS: --max-old-space-size=4096
 
+      # `main.ts` picks the preload with `app.isPackaged`, and a suite launching
+      # `release/app/dist/main/main.js` is not packaged, so it looks here instead.
+      - name: Place the preload where a non-packaged app looks for it
+        run: |
+          mkdir -p release/app/configs/dll
+          cp release/app/dist/main/preload.js release/app/configs/dll/preload.js
+
       - name: Run the debug lock specs
-        run: xvfb-run --auto-servernum npx playwright test debug-
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1600x1000x24" npx playwright test debug-
         env:
           NODE_ENV: production
 
