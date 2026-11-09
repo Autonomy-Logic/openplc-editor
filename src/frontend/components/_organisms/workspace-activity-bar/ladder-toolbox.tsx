@@ -62,7 +62,7 @@ export const LadderToolbox = () => {
       event.dataTransfer.setDragImage(dragImage, 16, 16)
 
       // Clean up after drag starts
-      setTimeout(() => document.body.removeChild(dragImage), 0)
+      setTimeout(() => dragImage.remove(), 0)
     }
   }
 

@@ -1,13 +1,8 @@
 import type { OpcUaNodeConfig, OpcUaSecurityProfile } from '../../../middleware/shared/ports/types'
 import { findInstanceName, type PLCInstanceMapping } from '../debug-variable-finder'
-import {
-  buildDefaultNodeConfig,
-  firstValidationFailure,
-  isComplexTreeNode,
-  type NodeSkipReason,
-} from './node-defaults'
+import { buildDefaultNodeConfig, firstValidationFailure, isComplexTreeNode, type NodeSkipReason } from './node-defaults'
 import { isGlobalScopePou } from './resolve-indices'
-import { isHiddenByFilter, type TreeIndex, treeIdForNode } from './tree-index'
+import { isHiddenByFilter, treeIdForNode, type TreeIndex } from './tree-index'
 import type { VariableTreeNode } from './types'
 
 /** How many entries each reason skipped. A reason with no entry is absent, not zero. */
@@ -54,14 +49,7 @@ const filterHidesPartOf = (entry: VariableTreeNode, filter: string): boolean => 
  * the others are left out. The caller writes the nodes in one batch and reports
  * the skips in one toast.
  */
-export function planBulkAdd({
-  tree,
-  index,
-  filter,
-  existingNodes,
-  instances,
-  createId,
-}: BulkAddInput): BulkAddPlan {
+export function planBulkAdd({ tree, index, filter, existingNodes, instances, createId }: BulkAddInput): BulkAddPlan {
   const nodes: OpcUaNodeConfig[] = []
   const skipped: SkipReport = {}
 

@@ -8,7 +8,8 @@ on:
 jobs:
   debug-lock-e2e:
     name: Debug Lock E2E (Electron)
-    runs-on: ubuntu-latest
+    # Pinned: Playwright has no browser build for ubuntu 26.04, which ubuntu-latest now resolves to.
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

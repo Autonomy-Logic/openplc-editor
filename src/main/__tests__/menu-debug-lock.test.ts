@@ -77,7 +77,6 @@ afterAll(() => setPlatform(originalPlatform))
 
 beforeEach(() => jest.clearAllMocks())
 
-
 /** The four native items AC18 names. */
 const EDITING_ITEMS = [
   'menu:edit.submenu.undo',

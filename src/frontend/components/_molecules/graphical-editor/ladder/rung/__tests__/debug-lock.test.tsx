@@ -11,9 +11,14 @@ import { RungHeader } from '../header'
 let store: OpenPLCStore
 
 const render = (ui: ReactElement) =>
-  rtlRender(<GraphicalEditorActiveProvider pouName='main' isActive>{ui}</GraphicalEditorActiveProvider>, {
-    wrapper: createStoreWrapper(store),
-  })
+  rtlRender(
+    <GraphicalEditorActiveProvider pouName='main' isActive>
+      {ui}
+    </GraphicalEditorActiveProvider>,
+    {
+      wrapper: createStoreWrapper(store),
+    },
+  )
 
 const openDebugSession = () =>
   act(() => {

@@ -149,9 +149,7 @@ describe('planning a bulk add (TC41, TC43 to TC47)', () => {
   })
 
   it('should skip an instance one of whose members has its own node (TC45)', () => {
-    const existing: OpcUaNodeConfig[] = [
-      buildDefaultNodeConfig(member('main', 'Man', 'Liga'), () => 'own-member'),
-    ]
+    const existing: OpcUaNodeConfig[] = [buildDefaultNodeConfig(member('main', 'Man', 'Liga'), () => 'own-member')]
 
     const result = plan({ existingNodes: existing })
 

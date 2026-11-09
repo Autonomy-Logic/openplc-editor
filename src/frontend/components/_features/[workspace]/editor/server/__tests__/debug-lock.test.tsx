@@ -40,7 +40,11 @@ describe('Modbus server editor during a debug session (TC11)', () => {
     seedBoard()
     expect(
       store.getState().projectActions.createServer({
-        data: { name: 'MB1', protocol: 'modbus-tcp', modbusSlaveConfig: { enabled: true, transports: ['tcp'], networkInterface: '0.0.0.0', port: 502 } },
+        data: {
+          name: 'MB1',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: { enabled: true, transports: ['tcp'], networkInterface: '0.0.0.0', port: 502 },
+        },
       }).ok,
     ).toBe(true)
     store.getState().editorActions.setEditor(CreateServerEditor('MB1', 'modbus-tcp'))

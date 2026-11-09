@@ -18,8 +18,7 @@ const variableRow = () => screen.getAllByRole('row')[2]
 
 const debugToggle = () => within(variableRow()).getByLabelText<HTMLButtonElement>('Toggle debug for this variable')
 
-const variableInStore = () =>
-  store.getState().project.data.pous.find((p) => p.name === 'main')?.interface?.variables[0]
+const variableInStore = () => store.getState().project.data.pous.find((p) => p.name === 'main')?.interface?.variables[0]
 
 const renderWithOneVariable = () => {
   expect(store.getState().pouActions.create({ type: 'program', name: 'main', language: 'ld' }).ok).toBe(true)
