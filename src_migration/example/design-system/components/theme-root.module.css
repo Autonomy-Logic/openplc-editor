@@ -1,0 +1,69 @@
+/* Semantic tokens. Components use only these names; a theme changes values, never component code. */
+.root {
+  --surface-workspace: #f3f6f9;
+  --surface-panel: #ffffff;
+  --surface-raised: #f7f9fb;
+  --text-primary: #17293a;
+  --text-muted: #5a6d7e;
+  --text-on-action: #ffffff;
+  --border-subtle: #d6e0e9;
+  --action-primary: #176599;
+  --action-primary-hover: #12507a;
+  --action-danger: #b3261e;
+  --status-error: #b3261e;
+  --status-warning: #8a5a00;
+  --status-busy: #176599;
+  --focus-ring: #4b9dd0;
+  --space-control: 8px;
+  --space-section: 16px;
+  --control-height: 32px;
+  --radius-control: 4px;
+  --font-ui: 'Avenir Next', Avenir, 'Segoe UI', system-ui, sans-serif;
+
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: var(--space-section);
+  color: var(--text-primary);
+  background: var(--surface-workspace);
+  font: 14px/1.5 var(--font-ui);
+}
+
+/* Explicit dark theme: overrides colour values only. */
+.root[data-theme='dark'] {
+  --surface-workspace: #10171e;
+  --surface-panel: #18222c;
+  --surface-raised: #1f2b36;
+  --text-primary: #e6edf3;
+  --text-muted: #9fb0bf;
+  --border-subtle: #2c3b48;
+  --action-primary: #4b9dd0;
+  --action-primary-hover: #6db2de;
+  --text-on-action: #0b1218;
+  --action-danger: #ef8a83;
+  --status-error: #ef8a83;
+  --status-warning: #e3b452;
+  --status-busy: #8cc5e7;
+
+  color-scheme: dark;
+}
+
+/* 'system' follows the operating system preference. */
+@media (prefers-color-scheme: dark) {
+  .root[data-theme='system'] {
+    --surface-workspace: #10171e;
+    --surface-panel: #18222c;
+    --surface-raised: #1f2b36;
+    --text-primary: #e6edf3;
+    --text-muted: #9fb0bf;
+    --border-subtle: #2c3b48;
+    --action-primary: #4b9dd0;
+    --action-primary-hover: #6db2de;
+    --text-on-action: #0b1218;
+    --action-danger: #ef8a83;
+    --status-error: #ef8a83;
+    --status-warning: #e3b452;
+    --status-busy: #8cc5e7;
+
+    color-scheme: dark;
+  }
+}
