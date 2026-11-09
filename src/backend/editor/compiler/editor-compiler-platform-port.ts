@@ -24,6 +24,11 @@
  * `middleware/adapters/web/`.
  */
 
+import {
+  ARDUINO_EXPORT_DIR,
+  planBuildTreeSync,
+  staticCandidates,
+} from '@root/backend/shared/compile/steps/plan-build-tree-sync'
 import { deployReachedDevice, deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { probeRuntimeVersion } from '@root/backend/shared/library/probe-runtime-version'
 import {
@@ -57,10 +62,59 @@ import type {
   UploadRuntimeV4Args,
 } from '@root/middleware/shared/ports/compiler-platform-port'
 import { createHash } from 'crypto'
-import { promises as fs } from 'fs'
+import { type Dirent, promises as fs } from 'fs'
 import { dirname, join } from 'path'
 
 import type { CompilerModule } from './compiler-module'
+
+/** Every file under `root` as a POSIX path relative to it, skipping arduino-cli's export folder. */
+async function listBuildFolder(root: string, relDir = ''): Promise<string[]> {
+  let entries: Dirent[]
+  try {
+    entries = await fs.readdir(join(root, relDir), { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const paths: string[] = []
+  for (const entry of entries) {
+    const relPath = relDir === '' ? entry.name : `${relDir}/${entry.name}`
+    if (entry.isDirectory()) {
+      if (`${relPath}/` === ARDUINO_EXPORT_DIR) continue
+      paths.push(...(await listBuildFolder(root, relPath)))
+    } else {
+      paths.push(relPath)
+    }
+  }
+  return paths
+}
+
+/** Apply `planBuildTreeSync` to the build folder at `root`. */
+export async function syncBuildFolder(
+  root: string,
+  desired: Record<string, string>,
+  staticFiles: Record<string, string>,
+): Promise<void> {
+  const existingPaths = await listBuildFolder(root)
+  const present = new Set(existingPaths)
+  const existingContents: Record<string, string> = {}
+  for (const path of staticCandidates(desired, staticFiles)) {
+    if (!present.has(path)) continue
+    try {
+      existingContents[path] = await fs.readFile(join(root, path), 'utf-8')
+    } catch {
+      // Unreadable: left out, so the plan rewrites it.
+    }
+  }
+  const plan = planBuildTreeSync({ desired, staticFiles, existingPaths, existingContents })
+  await Promise.all(plan.remove.map((path) => fs.rm(join(root, path), { force: true })))
+  await Promise.all(
+    plan.write.map(async (path) => {
+      const absPath = join(root, path)
+      await fs.mkdir(dirname(absPath), { recursive: true })
+      await fs.writeFile(absPath, desired[path], 'utf-8')
+    }),
+  )
+}
 
 /**
  * Subset of `CompilerModule` the port adapter calls into.  Declared
@@ -99,6 +153,10 @@ export interface EditorCompilerPlatformPortContext {
   /** Whether the user requested a clean rebuild (drives arduino-cli's
    *  `--clean` flag). */
   cleanBuild: boolean
+  /** The editor's static firmware resources at their build-folder paths, so
+   *  `compileArduino` rewrites them only when they changed. Absent: every
+   *  file is written. */
+  staticFirmwareFiles?: Record<string, string>
   /** Bridge methods for runtime API calls (compile-status poll, etc.). */
   mainProcessBridge: {
     makeRuntimeApiRequest: <T = void>(
@@ -306,18 +364,10 @@ export function createEditorCompilerPlatformPort(
      */
     async compileArduino(args: CompileArduinoArgs, log: PlatformLog): Promise<CompileArduinoResult> {
       try {
-        // Materialise every entry in the in-memory file map under
-        // the project's build directory.  Editor's existing flow
-        // wrote these files in scattered places throughout the
-        // compile pipeline; doing it here once preserves the same
-        // on-disk layout arduino-cli expects.
-        await Promise.all(
-          Object.entries(args.files).map(async ([relPath, content]) => {
-            const absPath = join(context.compilationPath, relPath)
-            await fs.mkdir(dirname(absPath), { recursive: true })
-            await fs.writeFile(absPath, content, 'utf-8')
-          }),
-        )
+        // Bring the build folder up to the in-memory file map without
+        // touching unchanged static files, so arduino-cli reuses what it
+        // compiled before.
+        await syncBuildFolder(context.compilationPath, args.files, context.staticFirmwareFiles ?? {})
 
         // Invoke the existing handler — it spawns arduino-cli compile
         // with the per-board hals entry's flags.  The canonical

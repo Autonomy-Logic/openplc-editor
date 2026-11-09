@@ -14,6 +14,7 @@ import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
+import { shouldWipeBuildFolder } from '@root/backend/shared/compile/steps/plan-build-tree-sync'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
 
 import { execRecipeArgv } from './recipe-exec'
@@ -667,14 +668,17 @@ class CompilerModule {
   async createBasicDirectories(
     projectFolderPath: string,
     boardTarget: string,
+    wipe: boolean,
   ): Promise<MethodsResult<string | string[]>> {
     let result: MethodsResult<string | string[]> = { success: false }
     const buildDirectory = join(projectFolderPath, 'build')
     const boardDirectory = join(buildDirectory, boardTarget)
     const sourceDirectory = join(boardDirectory, 'src')
 
-    // Clean the board directory to remove stale files from previous builds
-    await fs.rm(boardDirectory, { recursive: true, force: true })
+    // A kept folder is brought up to date file by file in compileArduino (planBuildTreeSync).
+    if (wipe) {
+      await fs.rm(boardDirectory, { recursive: true, force: true })
+    }
 
     // Recreate the directories
     const results = await Promise.all([
@@ -2419,7 +2423,11 @@ class CompilerModule {
     // up front so the platform port methods that write to disk (transpile,
     // compile) have somewhere to land.
     try {
-      await this.createBasicDirectories(normalizedProjectPath, boardTarget)
+      await this.createBasicDirectories(
+        normalizedProjectPath,
+        boardTarget,
+        shouldWipeBuildFolder({ cleanBuild: cleanBuild ?? false, isRuntimeV3, isRuntimeV4 }),
+      )
       _mainProcessPort.postMessage({
         logLevel: 'info',
         message: 'Directories for compilation source files created.',
@@ -2436,6 +2444,7 @@ class CompilerModule {
 
     // --- Resolve pipeline inputs ---
     let firmwareSkeleton: Record<string, string>
+    let staticFirmwareFiles: Record<string, string> = {}
     let strucppRuntimeHeaders: Record<string, string>
     let devicePinMapping: DevicePin[]
     let libraryArchives: unknown[]
@@ -2457,6 +2466,8 @@ class CompilerModule {
       strucppRuntimeHeaders = isRuntimeV4 ? await this.loadStrucppRuntimeHeaders() : {}
       if (!isRuntimeV4) {
         const v4Layout = await this.loadStrucppRuntimeHeaders()
+        // The editor's own resources at their build paths, before any board or project file is merged in.
+        staticFirmwareFiles = mergeStrucppRuntimeIntoSkeleton({ firmwareSkeleton, strucppRuntimeHeaders: v4Layout })
         // Board-specific HAL adapter — defines `hardwareInit`,
         // `updateInputBuffers`, `updateOutputBuffers` that the
         // strucpp-generated `Baremetal.ino` + `arduino_runtime_glue.cpp`
@@ -2681,6 +2692,7 @@ class CompilerModule {
         boardCore,
         boardHalsContent: halsContent[boardTarget],
         cleanBuild: cleanBuild ?? false,
+        staticFirmwareFiles,
         mainProcessBridge,
         compressSourceFolder: (folderPath: string) => this.compressSourceFolder(folderPath),
         // The source project stored on the device beside the artifacts.
@@ -3114,7 +3126,8 @@ class CompilerModule {
     }
 
     try {
-      await this.createBasicDirectories(normalizedProjectPath, boardTarget)
+      // The debug flow writes its files outside planBuildTreeSync, so it still starts from an empty folder.
+      await this.createBasicDirectories(normalizedProjectPath, boardTarget, true)
       _mainProcessPort.postMessage({
         logLevel: 'info',
         message: 'Directories for compilation source files created.',
