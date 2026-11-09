@@ -1,5 +1,6 @@
 import * as Tabs from '@radix-ui/react-tabs'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
+import { useIsEditingLocked } from '@root/frontend/hooks/use-editing-lock'
 import { useEthercatAliasEdit } from '@root/frontend/hooks/use-ethercat-alias-edit'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
@@ -16,6 +17,7 @@ import { useEsi } from '@root/middleware/shared/providers/platform-context'
 import { resolveEsiModule } from '@root/middleware/shared/utils/ethercat'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
 import { ChannelMappingsSection, SdoParametersSection } from './components/device-configuration-form'
 import { ProcessDataTab } from './components/process-data-tab'
 
@@ -74,6 +76,7 @@ const EtherCATModuleEditor = ({ busName, deviceId, moduleId }: EtherCATModuleEdi
   const commitAliasEdit = useEthercatAliasEdit()
   const { project, projectActions, workspaceActions } = useOpenPLCStore()
   const esi = useEsi()
+  const isEditingLocked = useIsEditingLocked()
 
   const [activeTab, setActiveTab] = useState<ModuleDetailTab>('channel-mappings')
   const [esiModule, setEsiModule] = useState<ESIModule | null>(null)
@@ -107,7 +110,7 @@ const EtherCATModuleEditor = ({ busName, deviceId, moduleId }: EtherCATModuleEdi
 
   const syncModuleToStore = useCallback(
     (next: ConfiguredEtherCATModule) => {
-      if (!device) return
+      if (!device || isEditingLocked) return
       const nextModules = (device.modules ?? []).map((m) => (m.id === moduleId ? next : m))
       const nextDevices = configuredDevices.map((d) => (d.id === deviceId ? { ...d, modules: nextModules } : d))
       projectActions.updateEthercatConfig(busName, { masterConfig, devices: nextDevices })
@@ -121,6 +124,7 @@ const EtherCATModuleEditor = ({ busName, deviceId, moduleId }: EtherCATModuleEdi
       device,
       deviceId,
       deviceName,
+      isEditingLocked,
       masterConfig,
       moduleId,
       projectActions,
@@ -259,15 +263,17 @@ const EtherCATModuleEditor = ({ busName, deviceId, moduleId }: EtherCATModuleEdi
           value='channel-mappings'
           className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
         >
-          <div className='flex-1 overflow-auto p-4'>
-            <ChannelMappingsSection
-              isLoading={false}
-              loadError={null}
-              channels={channels}
-              mappings={module.channelMappings}
-              onAliasChange={handleAliasChange}
-            />
-          </div>
+          <EditingLockBoundary className='contents'>
+            <div className='flex-1 overflow-auto p-4'>
+              <ChannelMappingsSection
+                isLoading={false}
+                loadError={null}
+                channels={channels}
+                mappings={module.channelMappings}
+                onAliasChange={handleAliasChange}
+              />
+            </div>
+          </EditingLockBoundary>
         </Tabs.Content>
 
         <Tabs.Content
@@ -316,29 +322,33 @@ const EtherCATModuleEditor = ({ busName, deviceId, moduleId }: EtherCATModuleEdi
           value='process-data'
           className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
         >
-          <div className='flex-1 overflow-auto p-4'>
-            <ProcessDataTab
-              rxPdos={module.rxPdos ?? []}
-              txPdos={module.txPdos ?? []}
-              pdoAssignAvailable={pdoAssignAvailable}
-              onUpdatePdoAssigned={handleUpdatePdoAssigned}
-            />
-          </div>
+          <EditingLockBoundary className='contents'>
+            <div className='flex-1 overflow-auto p-4'>
+              <ProcessDataTab
+                rxPdos={module.rxPdos ?? []}
+                txPdos={module.txPdos ?? []}
+                pdoAssignAvailable={pdoAssignAvailable}
+                onUpdatePdoAssigned={handleUpdatePdoAssigned}
+              />
+            </div>
+          </EditingLockBoundary>
         </Tabs.Content>
 
         <Tabs.Content
           value='startup-params'
           className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
         >
-          <div className='flex-1 overflow-auto p-4'>
-            <SdoParametersSection
-              isLoading={isLoadingEsi}
-              loadError={esiError}
-              sdoConfigurations={module.sdoConfigurations}
-              coeObjects={coeObjects}
-              onUpdateSdoConfigurations={handleUpdateSdoConfigurations}
-            />
-          </div>
+          <EditingLockBoundary className='contents'>
+            <div className='flex-1 overflow-auto p-4'>
+              <SdoParametersSection
+                isLoading={isLoadingEsi}
+                loadError={esiError}
+                sdoConfigurations={module.sdoConfigurations}
+                coeObjects={coeObjects}
+                onUpdateSdoConfigurations={handleUpdateSdoConfigurations}
+              />
+            </div>
+          </EditingLockBoundary>
         </Tabs.Content>
       </Tabs.Root>
     </div>
