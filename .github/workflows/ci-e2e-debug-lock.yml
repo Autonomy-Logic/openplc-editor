@@ -33,6 +33,14 @@ jobs:
       - name: Install the Electron binary
         run: node node_modules/electron/install.js
 
+      # Ubuntu 24.04 blocks the unprivileged user namespace Electron's zygote
+      # needs, so it falls back to the setuid sandbox binary.
+      - name: Prepare the Electron sandbox
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+          ldd node_modules/electron/dist/electron | grep 'not found' || echo 'every shared library resolves'
+
       - name: Resolve Playwright version
         id: playwright
         run: echo "version=$(node -p "require('./package.json').devDependencies['@playwright/test'].replace(/^[^0-9]*/, '')")" >> "$GITHUB_OUTPUT"
