@@ -25,6 +25,30 @@ export interface EditorLike {
 // POU Sanitization
 // ---------------------------------------------------------------------------
 
+/** The raw variables text of an open POU editor in code display, or `undefined` when there is none. */
+export function codeViewBuffer(editor: EditorLike | undefined): string | undefined {
+  if (
+    editor &&
+    (editor.type === 'plc-textual' || editor.type === 'plc-graphical') &&
+    editor.variable &&
+    editor.variable.display === 'code' &&
+    editor.variable.code != null
+  ) {
+    return editor.variable.code
+  }
+  return undefined
+}
+
+/**
+ * Whether the POU holds declaration text that the variables model has not taken in: a code-view
+ * buffer the user has typed and not committed, or text the loader could not parse at all.
+ */
+export function hasUnappliedVariablesText(pou: PLCPou, editor: EditorLike | undefined): boolean {
+  if (pou.variablesTextUnparsed === true) return true
+  const buffer = codeViewBuffer(editor)
+  return buffer !== undefined && buffer !== pou.variablesText
+}
+
 /**
  * Prepare a POU for serialization to disk:
  *
@@ -43,21 +67,16 @@ export interface EditorLike {
  */
 export function sanitizePou(pou: PLCPou, editor: EditorLike | undefined, context: TypeContext = {}): PLCPou {
   const next: PLCPou = pou
+  const buffer = codeViewBuffer(editor)
 
-  if (
-    editor &&
-    (editor.type === 'plc-textual' || editor.type === 'plc-graphical') &&
-    editor.variable &&
-    editor.variable.display === 'code' &&
-    editor.variable.code != null
-  ) {
+  if (buffer !== undefined) {
     // The live buffer is the user's most recent statement of what they want,
     // including edits they have typed but not committed. It is taken verbatim
     // and NOT reconciled below: the model has not caught up with it yet by
     // definition, and "reconciling" would delete what they just typed.
     // No cast: `variablesText` is a field of `PLCPou`, so an intersection here
     // would only hide a rename of it from the compiler.
-    return stripGraphicalSelections({ ...next, variablesText: editor.variable.code })
+    return stripGraphicalSelections({ ...next, variablesText: buffer })
   }
 
   return stripGraphicalSelections(reconcileVariablesTextForSave(next, context))

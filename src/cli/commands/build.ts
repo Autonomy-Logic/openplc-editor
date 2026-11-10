@@ -18,9 +18,14 @@ import { join } from 'node:path'
 import { HardwareModule } from '@root/backend/editor/hardware'
 import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
 import type { OpenPLCStore } from '@root/frontend/store'
+import { buildTypeContext } from '@root/frontend/utils/generate-iec-string-to-variables'
 import { compileProgramFlow } from '@root/middleware/adapters/editor/compile-program-flow'
 import type { CompileProgressEvent } from '@root/middleware/shared/ports/types'
 import { evaluatePreBuildPlcGate } from '@root/middleware/shared/utils/build-gate/pre-build-plc-gate'
+import {
+  evaluateVariablesTextGate,
+  variablesTextGateStateFor,
+} from '@root/middleware/shared/utils/build-gate/variables-text-gate'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 
 import { boolFlag, type ParsedArgs, stringFlag } from '../args'
@@ -117,6 +122,21 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
   }
   const project = loaded.project
   for (const warning of project.warnings) reporter.progress(`warning: ${warning}`)
+
+  // The same gate the four GUI compile entries run, before the target lookup.
+  {
+    const state = store.getState()
+    const verdict = evaluateVariablesTextGate(
+      variablesTextGateStateFor({
+        pous: state.project.data.pous,
+        editorFor: () => undefined,
+        context: buildTypeContext(state.project.data.pous, state.project.data.dataTypes, state.libraries),
+      }),
+    )
+    if (verdict.kind === 'refuse') {
+      return reporter.failure({ code: ErrorCode.ProjectInvalid, message: verdict.reason }, ExitCode.CompileFailed)
+    }
+  }
 
   // The port dropdown and the address field, from argv.
   applyConnectionOverrides(store, { port: request.port, host: request.host })
