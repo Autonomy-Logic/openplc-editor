@@ -13,7 +13,11 @@ import {
 } from '@root/backend/shared/packages/arduino-dependencies'
 import type { StartupNotice } from '@root/middleware/shared/ports/types'
 
-import { type ArduinoCliSpawner, installArduinoDependencies, queryInstalledArduinoState } from './arduino-dependency-installer'
+import {
+  type ArduinoCliSpawner,
+  installArduinoDependencies,
+  queryInstalledArduinoState,
+} from './arduino-dependency-installer'
 import type { StartupDependencyGate } from './vpp-dependency-service'
 
 export class StartupDependencyCheck implements StartupDependencyGate {

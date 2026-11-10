@@ -355,7 +355,11 @@ class MainProcessBridge implements MainIpcModule {
     this.startupDependencies.setNoticeListener(() =>
       this.mainWindow?.webContents?.send('packages:startup-notices-available'),
     )
-    this.vppDependencies = new VppDependencyService(this.packageManagerModule, spawnArduinoCli, this.startupDependencies)
+    this.vppDependencies = new VppDependencyService(
+      this.packageManagerModule,
+      spawnArduinoCli,
+      this.startupDependencies,
+    )
     this.hardwareModule = hardwareModule
     this.quitCoordinator = quitCoordinator
     this.mainWindow?.webContents?.on('render-process-gone', () => {
