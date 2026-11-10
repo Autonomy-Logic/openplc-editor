@@ -1,6 +1,6 @@
 import { raiseRecordedMtime, shouldReportExternalChange } from '@root/backend/shared/utils/file-watch/own-write'
 
-/** The platform mechanisms the registry drives. No decision lives here. */
+/** The platform mechanisms the registry drives. */
 export interface FileWatchMechanisms {
   watchFile(path: string, onChange: (curr: { mtimeMs: number }, prev: { mtimeMs: number }) => void): void
   unwatchFile(path: string): void

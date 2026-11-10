@@ -172,8 +172,7 @@ const declarationStartIndex = (content: string, keywordIndex: number): number =>
 
 /**
  * Start of the first content after the POU header, comments included, or `keywordIndex` when the
- * header shares its line. It is where an unterminated declaration section begins, so a comment
- * written above the block is kept instead of belonging to neither the declarations nor the body.
+ * header shares its line. Where an unterminated declaration section begins.
  */
 const unterminatedSectionStart = (content: string, bodyStartIndex: number, keywordIndex: number): number => {
   const offset = content.slice(bodyStartIndex).search(/\S/)

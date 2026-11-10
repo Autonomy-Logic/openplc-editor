@@ -8,7 +8,6 @@ import { parseVariableDeclarations, type TypeContext } from '../../../../fronten
 import { codeViewBuffer, type EditorLike } from '../../../../frontend/utils/save-project'
 import type { PLCPou } from '../../ports/types'
 
-/** One POU's declaration text, and where it came from. */
 export interface VariablesTextGateEntry {
   pouName: string
   text: string

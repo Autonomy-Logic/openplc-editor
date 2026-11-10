@@ -1,9 +1,5 @@
-/**
- * The rule a polling file watcher applies to tell a change made outside the app from one the app
- * made itself. Pure, so the desktop watcher holds no decision of its own.
- */
+/** The rule a polling file watcher applies to tell a change made outside the app from its own. */
 
-/** Whether a poll saw a change the app did not make. */
 export function shouldReportExternalChange(mtimes: {
   prevMtimeMs: number
   currMtimeMs: number

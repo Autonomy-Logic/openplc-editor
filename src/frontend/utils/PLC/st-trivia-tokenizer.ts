@@ -2,9 +2,6 @@
  * Splits a line of Structured Text into comment, string and source spans, with the compiler's own
  * rules: block comments nest at any depth, a line comment runs to the end of the line, and a string
  * literal ends only at an unescaped quote, where IEC escapes with a dollar sign or a doubled quote.
- *
- * One linear pass and a depth counter, no stack and no backtracking regular expression, so a deeply
- * nested or very long line costs the same per character as any other.
  */
 
 export interface StTriviaState {
