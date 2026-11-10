@@ -1074,3 +1074,103 @@ describe('graphical POU holding a native library block', () => {
     })
   })
 })
+
+describe('parseProjectFiles — a VAR block without END_VAR', () => {
+  let consoleSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    consoleSpy.mockRestore()
+  })
+
+  /** Parses a project holding the one POU file given. */
+  const parseOne = (relativePath: string, content: string) =>
+    parseProjectFiles(
+      '/p',
+      makeProjectJson(),
+      makeDeviceConfig(),
+      makePinMapping(),
+      [{ relativePath, content }],
+      [],
+      [],
+    )
+
+  const unterminatedSt = 'PROGRAM main\nVAR\n  a : INT;\n  b : BOOL;\n\na := 1;\nEND_PROGRAM\n'
+
+  it('keeps an ST POU without END_VAR in the project, marked unparsed', () => {
+    const result = parseOne('pous/programs/main.st', unterminatedSt)
+
+    expect(result.projectData.pous).toHaveLength(1)
+    expect(result.projectData.pous[0]).toMatchObject({ name: 'main', variablesTextUnparsed: true })
+  })
+
+  it('keeps the declarations of an ST POU without END_VAR as its raw variables text', () => {
+    const [pou] = parseOne('pous/programs/main.st', unterminatedSt).projectData.pous
+
+    expect(pou.variablesText).not.toBe('VAR\nEND_VAR')
+    expect(pou.variablesText).toContain('VAR\n  a : INT;\n  b : BOOL;')
+  })
+
+  it('never moves the declarations of an ST POU without END_VAR into the body', () => {
+    const [pou] = parseOne('pous/programs/main.st', unterminatedSt).projectData.pous
+
+    expect(pou.body).toEqual({ language: 'st', value: '' })
+  })
+
+  it('warns about an ST POU without END_VAR, naming the POU and its path', () => {
+    const result = parseOne('pous/programs/main.st', unterminatedSt)
+
+    expect(result.warnings).toEqual([expect.stringContaining('POU "main" (pous/programs/main.st)')])
+  })
+
+  it('reports the missing END_VAR and its line in the warning', () => {
+    const result = parseOne('pous/programs/main.st', unterminatedSt)
+
+    expect(result.warnings?.[0]).toMatch(/Parse error on line 2: .*END_VAR/)
+  })
+
+  it('keeps a Python POU without END_VAR with its declarations as text and an empty body', () => {
+    const content = 'PROGRAM py\nVAR\n  a : INT;\nprint(a)\nEND_PROGRAM\n'
+    const [pou] = parseOne('pous/programs/py.py', content).projectData.pous
+
+    expect(pou).toMatchObject({
+      name: 'py',
+      variablesTextUnparsed: true,
+      variablesText: 'VAR\n  a : INT;\nprint(a)',
+      body: { language: 'python', value: '' },
+    })
+  })
+
+  it('opens an LD POU without END_VAR recovered, keeping its valid JSON body', () => {
+    const result = parseOne(
+      'pous/programs/LdMain.ld',
+      'PROGRAM LdMain\nVAR\n  a : BOOL;\n\n{ "rungs": [] }\nEND_PROGRAM\n',
+    )
+
+    expect(result.fatalErrors).toBeUndefined()
+    expect(result.projectData.pous).toHaveLength(1)
+    expect(result.projectData.pous[0]).toMatchObject({
+      name: 'LdMain',
+      variablesTextUnparsed: true,
+      variablesText: 'VAR\n  a : BOOL;',
+      body: { language: 'ld', value: { rungs: [] } },
+    })
+  })
+
+  it('leaves a well-formed POU parsed, unmarked and without a warning', () => {
+    const result = parseOne(
+      'pous/programs/main.st',
+      'PROGRAM main\nVAR\n  a : INT;\nEND_VAR\n\na := 1;\n\nEND_PROGRAM\n',
+    )
+
+    expect(result.warnings).toBeUndefined()
+    expect(result.projectData.pous[0].variablesTextUnparsed).toBeUndefined()
+    expect(result.projectData.pous[0]).toMatchObject({
+      variablesText: 'VAR\n  a : INT;\nEND_VAR',
+      body: { language: 'st', value: 'a := 1;' },
+    })
+  })
+})

@@ -1,12 +1,24 @@
 import * as iecStringModule from '../../generate-iec-string-to-variables'
 import {
   detectLanguageFromExtension,
+  extractVariablesSection,
   findGraphicalBodyStartIndex,
   findLastEndVarIndex,
+  matchPouHeader,
   parseGraphicalPouFromString,
   parseHybridPouFromString,
   parseTextualPouFromString,
 } from '../pou-text-parser'
+
+/** The message of the error `run` throws, or `PARSED OK` when it returns. */
+const messageOf = (run: () => unknown): string => {
+  try {
+    run()
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+  return 'PARSED OK'
+}
 
 // ---------------------------------------------------------------------------
 // findLastEndVarIndex
@@ -155,18 +167,12 @@ END_PROGRAM`
     expect(result.interface?.variables.length).toBe(2)
   })
 
-  it('handles VAR keyword present but no END_VAR (body starts after declaration)', () => {
-    // VAR keyword found but no matching END_VAR -- bodyStartIndex stays at declaration length
-    // Body includes everything from declaration to END_PROGRAM
+  it('reports a VAR block without END_VAR as a parse error on the VAR line', () => {
     const content = `PROGRAM Main
 VAR x : INT;
 x := 1;
 END_PROGRAM`
-    const result = parseTextualPouFromString(content, 'st', 'program')
-    expect(result.name).toBe('Main')
-    expect(result.interface?.variables).toEqual([])
-    // Body includes the VAR line since there was no END_VAR
-    expect(result.body.value as string).toContain('VAR x : INT;')
+    expect(() => parseTextualPouFromString(content, 'st', 'program')).toThrow(/Parse error on line 2: .*END_VAR/)
   })
 
   // -------------------------------------------------------------------------
@@ -273,14 +279,12 @@ END_PROGRAM`
     expect(result.interface?.variables).toEqual([])
   })
 
-  it('handles VAR keyword present but no END_VAR', () => {
+  it('reports a VAR block without END_VAR as a parse error on the VAR line', () => {
     const content = `PROGRAM Main
 VAR x : INT;
 code here
 END_PROGRAM`
-    const result = parseHybridPouFromString(content, 'python', 'program')
-    expect(result.name).toBe('Main')
-    expect(result.interface?.variables).toEqual([])
+    expect(() => parseHybridPouFromString(content, 'python', 'program')).toThrow(/Parse error on line 2: .*END_VAR/)
   })
 
   // -------------------------------------------------------------------------
@@ -379,13 +383,14 @@ END_PROGRAM`
     expect(result.interface?.variables.length).toBe(2)
   })
 
-  it('handles VAR keyword present but no END_VAR (results in invalid JSON body)', () => {
-    // VAR found but no END_VAR means body includes the VAR line, which is invalid JSON
+  it('reports a VAR block without END_VAR as a parse error on the VAR line, not as invalid JSON', () => {
     const content = `PROGRAM Main
 VAR x : INT;
 {}
 END_PROGRAM`
-    expect(() => parseGraphicalPouFromString(content, 'ld', 'program')).toThrow('Invalid JSON')
+    const message = messageOf(() => parseGraphicalPouFromString(content, 'ld', 'program'))
+    expect(message).toMatch(/Parse error on line 2: .*END_VAR/)
+    expect(message).not.toContain('Invalid JSON')
   })
 
   // -------------------------------------------------------------------------
@@ -705,5 +710,267 @@ describe('extractVariablesSection and the POU header', () => {
 
     expect(pou.variablesText).toBe('VAR a : INT; END_VAR')
     expect(pou.interface?.variables.map((variable) => variable.name)).toEqual(['a'])
+  })
+})
+
+/** Options accepted by `extractVariablesSection`. */
+type SectionOptions = { boundAtGraphicalBody?: boolean; endKeyword?: string }
+
+/** The declaration section of `content`, scanned from the end of its POU header. */
+const sectionOf = (content: string, pouType: string, options: SectionOptions = {}): unknown => {
+  const header = matchPouHeader(content, pouType)
+  if (!header) throw new Error(`no ${pouType} header in fixture`)
+  return extractVariablesSection(content, header.text.length, options)
+}
+
+describe('extractVariablesSection kinds', () => {
+  it('reports a VAR block that never reaches END_VAR as unterminated, ending before the last END_PROGRAM', () => {
+    const content = 'PROGRAM main\nVAR\n  a : INT;\n\na := 1;\nEND_PROGRAM\n'
+
+    expect(sectionOf(content, 'program', { endKeyword: 'END_PROGRAM' })).toEqual({
+      kind: 'unterminated',
+      text: 'VAR\n  a : INT;\n\na := 1;',
+      bodyStartIndex: content.lastIndexOf('END_PROGRAM'),
+      line: 2,
+    })
+  })
+
+  it.each([
+    [
+      'a VAR block on its own line',
+      'PROGRAM main\nVAR\n  a : INT;\nEND_VAR\n\na := 1;\nEND_PROGRAM\n',
+      'VAR\n  a : INT;\nEND_VAR',
+    ],
+    [
+      'an indented VAR block',
+      'PROGRAM main\n    VAR\n      a : INT;\n    END_VAR\n  a := 1;\nEND_PROGRAM\n',
+      '    VAR\n      a : INT;\n    END_VAR',
+    ],
+    [
+      'a header sharing the VAR line',
+      'PROGRAM main VAR\n  a : INT;\nEND_VAR\n  a := 1;\nEND_PROGRAM\n',
+      'VAR\n  a : INT;\nEND_VAR',
+    ],
+    ['a POU on one line', 'PROGRAM main VAR a : INT; END_VAR a := 1; END_PROGRAM\n', 'VAR a : INT; END_VAR'],
+    [
+      'two blocks',
+      'PROGRAM main\nVAR_INPUT\n  a : INT;\nEND_VAR\nVAR_OUTPUT\n  b : INT;\nEND_VAR\n\nb := a;\nEND_PROGRAM\n',
+      'VAR_INPUT\n  a : INT;\nEND_VAR\nVAR_OUTPUT\n  b : INT;\nEND_VAR',
+    ],
+  ])('keeps %s declared, from the VAR line to the last END_VAR', (_label, content, text) => {
+    expect(sectionOf(content, 'program', { endKeyword: 'END_PROGRAM' })).toEqual({
+      kind: 'declared',
+      text,
+      bodyStartIndex: content.lastIndexOf('END_VAR') + 'END_VAR'.length,
+    })
+  })
+
+  it('reports a POU with no VAR keyword as none, with the body starting after the header', () => {
+    expect(sectionOf('PROGRAM main\n\na := 1;\nEND_PROGRAM\n', 'program', { endKeyword: 'END_PROGRAM' })).toEqual({
+      kind: 'none',
+      text: '',
+      bodyStartIndex: 'PROGRAM main'.length,
+    })
+  })
+
+  it.each([
+    ['block', 'PROGRAM p\n(* uses VAR x *)\nx := 1;\nEND_PROGRAM'],
+    ['line', 'PROGRAM p\n// VAR is not declared here\nx := 1;\nEND_PROGRAM'],
+  ])('reports a body-only POU whose %s comment holds the word VAR as none', (_label, content) => {
+    expect(sectionOf(content, 'program', { endKeyword: 'END_PROGRAM' })).toEqual({
+      kind: 'none',
+      text: '',
+      bodyStartIndex: 'PROGRAM p'.length,
+    })
+  })
+
+  it('skips comments between the header and an unterminated VAR, and reports the VAR line', () => {
+    const content = 'PROGRAM main\n(* locals *)\n// counters\nVAR\n  a : INT;\na := 1;\nEND_PROGRAM\n'
+
+    expect(sectionOf(content, 'program', { endKeyword: 'END_PROGRAM' })).toEqual({
+      kind: 'unterminated',
+      text: 'VAR\n  a : INT;\na := 1;',
+      bodyStartIndex: content.lastIndexOf('END_PROGRAM'),
+      line: 4,
+    })
+  })
+
+  it.each(['VAR', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT', 'VAR_EXTERNAL', 'VAR_TEMP', 'VAR_GLOBAL'])(
+    'reports an unterminated %s block',
+    (keyword) => {
+      const content = `FUNCTION_BLOCK fb\n${keyword}\n  a : INT;\nEND_FUNCTION_BLOCK\n`
+
+      expect(sectionOf(content, 'function-block', { endKeyword: 'END_FUNCTION_BLOCK' })).toEqual({
+        kind: 'unterminated',
+        text: `${keyword}\n  a : INT;`,
+        bodyStartIndex: content.lastIndexOf('END_FUNCTION_BLOCK'),
+        line: 2,
+      })
+    },
+  )
+
+  it('keeps the indentation of an unterminated VAR line', () => {
+    const content = 'PROGRAM main\n    VAR\n      a : INT;\n  a := 1;\nEND_PROGRAM\n'
+
+    expect(sectionOf(content, 'program', { endKeyword: 'END_PROGRAM' })).toEqual({
+      kind: 'unterminated',
+      text: '    VAR\n      a : INT;\n  a := 1;',
+      bodyStartIndex: content.lastIndexOf('END_PROGRAM'),
+      line: 2,
+    })
+  })
+
+  it('leaves a header sharing an unterminated VAR line out of the text', () => {
+    const content = 'PROGRAM main VAR\n  a : INT;\nEND_PROGRAM\n'
+
+    expect(sectionOf(content, 'program', { endKeyword: 'END_PROGRAM' })).toEqual({
+      kind: 'unterminated',
+      text: 'VAR\n  a : INT;',
+      bodyStartIndex: content.lastIndexOf('END_PROGRAM'),
+      line: 1,
+    })
+  })
+
+  it('ends an unterminated FUNCTION block before END_FUNCTION', () => {
+    const content = 'FUNCTION f : INT\nVAR_INPUT\n  a : INT;\nf := a;\nEND_FUNCTION\n'
+
+    expect(sectionOf(content, 'function', { endKeyword: 'END_FUNCTION' })).toEqual({
+      kind: 'unterminated',
+      text: 'VAR_INPUT\n  a : INT;\nf := a;',
+      bodyStartIndex: content.lastIndexOf('END_FUNCTION'),
+      line: 2,
+    })
+  })
+
+  it('ends an unterminated block at the last occurrence of the end keyword', () => {
+    const content = 'PROGRAM main\nVAR\n  a : INT; (* see END_PROGRAM *)\nEND_PROGRAM\n'
+
+    expect(sectionOf(content, 'program', { endKeyword: 'END_PROGRAM' })).toEqual({
+      kind: 'unterminated',
+      text: 'VAR\n  a : INT; (* see END_PROGRAM *)',
+      bodyStartIndex: content.lastIndexOf('END_PROGRAM'),
+      line: 2,
+    })
+  })
+
+  it('matches the end keyword case-insensitively', () => {
+    const content = 'PROGRAM main\nVAR\n  a : INT;\nend_program\n'
+
+    expect(sectionOf(content, 'program', { endKeyword: 'END_PROGRAM' })).toEqual({
+      kind: 'unterminated',
+      text: 'VAR\n  a : INT;',
+      bodyStartIndex: content.indexOf('end_program'),
+      line: 2,
+    })
+  })
+
+  it('runs an unterminated block to the end of the content when nothing bounds it', () => {
+    const content = 'PROGRAM main\nVAR\n  a : INT;\n\n'
+
+    expect(sectionOf(content, 'program')).toEqual({
+      kind: 'unterminated',
+      text: 'VAR\n  a : INT;',
+      bodyStartIndex: content.length,
+      line: 2,
+    })
+  })
+
+  it('stops an unterminated graphical block at the start of the JSON body', () => {
+    const content = 'PROGRAM main\nVAR\n  a : BOOL;\n\n{\n  "rungs": []\n}\nEND_PROGRAM\n'
+
+    expect(sectionOf(content, 'program', { boundAtGraphicalBody: true })).toEqual({
+      kind: 'unterminated',
+      text: 'VAR\n  a : BOOL;',
+      bodyStartIndex: content.indexOf('\n{\n') + 1,
+      line: 2,
+    })
+  })
+
+  it('ignores an END_VAR inside the JSON body of a graphical POU', () => {
+    const content =
+      'PROGRAM main\nVAR\n  a : BOOL;\n\n{\n  "rungs": [{ "src": "VAR x : INT; END_VAR" }]\n}\nEND_PROGRAM\n'
+
+    expect(sectionOf(content, 'program', { boundAtGraphicalBody: true })).toEqual({
+      kind: 'unterminated',
+      text: 'VAR\n  a : BOOL;',
+      bodyStartIndex: content.indexOf('\n{\n') + 1,
+      line: 2,
+    })
+  })
+
+  it('runs an unterminated graphical block to the end of the content when there is no JSON body', () => {
+    const content = 'PROGRAM main\nVAR\n  a : BOOL;\n'
+
+    expect(sectionOf(content, 'program', { boundAtGraphicalBody: true })).toEqual({
+      kind: 'unterminated',
+      text: 'VAR\n  a : BOOL;',
+      bodyStartIndex: content.length,
+      line: 2,
+    })
+  })
+})
+
+describe('a VAR block without END_VAR is a parse error', () => {
+  it('wraps the line-numbered error in the textual parser message', () => {
+    const content = 'PROGRAM main\nVAR\n  a : INT;\na := 1;\nEND_PROGRAM\n'
+
+    expect(() => parseTextualPouFromString(content, 'st', 'program')).toThrow(
+      'Failed to parse textual POU: Parse error on line 2: ',
+    )
+  })
+
+  it('counts the lines of the leading documentation in the reported line', () => {
+    const content = '(* Doc *)\n\nPROGRAM main\nVAR\n  a : INT;\nEND_PROGRAM\n'
+
+    expect(() => parseTextualPouFromString(content, 'st', 'program')).toThrow(/Parse error on line 4: .*END_VAR/)
+  })
+
+  it('reports the VAR line after comments that precede it', () => {
+    const content = 'PROGRAM main\n(* locals *)\n// counters\nVAR\n  a : INT;\na := 1;\nEND_PROGRAM\n'
+
+    expect(() => parseTextualPouFromString(content, 'st', 'program')).toThrow(/Parse error on line 4: .*END_VAR/)
+  })
+
+  it('reports an unterminated block in a FUNCTION', () => {
+    const content = 'FUNCTION f : INT\nVAR_INPUT\n  a : INT;\nf := a;\nEND_FUNCTION\n'
+
+    expect(() => parseTextualPouFromString(content, 'st', 'function')).toThrow(/Parse error on line 2: .*END_VAR/)
+  })
+
+  it('reports an unterminated block in a FUNCTION_BLOCK', () => {
+    const content = 'FUNCTION_BLOCK fb\nVAR\n  a : INT;\nEND_FUNCTION_BLOCK\n'
+
+    expect(() => parseTextualPouFromString(content, 'il', 'function-block')).toThrow(/Parse error on line 2: .*END_VAR/)
+  })
+
+  it('reports an unterminated block in a C++ POU', () => {
+    const content = 'PROGRAM main\nVAR\n  a : INT;\nvoid loop() {}\nEND_PROGRAM\n'
+
+    expect(() => parseHybridPouFromString(content, 'cpp', 'program')).toThrow(
+      /Failed to parse hybrid POU: Parse error on line 2: .*END_VAR/,
+    )
+  })
+
+  it('reports an unterminated block in an FBD POU whose JSON body is valid', () => {
+    const content =
+      'PROGRAM main\nVAR\n  a : BOOL;\n\n{\n  "name": "main",\n  "rung": { "nodes": [] }\n}\nEND_PROGRAM\n'
+
+    expect(() => parseGraphicalPouFromString(content, 'fbd', 'program')).toThrow(
+      /Failed to parse graphical POU: Parse error on line 2: .*END_VAR/,
+    )
+  })
+
+  it('reports an unterminated block in an LD POU whose JSON body carries its own END_VAR', () => {
+    const content =
+      'PROGRAM main\nVAR\n  a : BOOL;\n\n{\n  "rungs": [{ "src": "VAR x : INT; END_VAR" }]\n}\nEND_PROGRAM\n'
+
+    expect(() => parseGraphicalPouFromString(content, 'ld', 'program')).toThrow(/Parse error on line 2: .*END_VAR/)
+  })
+
+  it('still parses a body-only POU whose comment holds the word VAR', () => {
+    const pou = parseTextualPouFromString('PROGRAM p\n(* uses VAR x *)\nx := 1;\nEND_PROGRAM', 'st', 'program')
+
+    expect(pou.interface?.variables).toEqual([])
+    expect(pou.body.value).toBe('(* uses VAR x *)\nx := 1;')
   })
 })
