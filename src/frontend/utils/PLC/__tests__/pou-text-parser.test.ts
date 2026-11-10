@@ -784,14 +784,25 @@ describe('extractVariablesSection kinds', () => {
     })
   })
 
-  it('skips comments between the header and an unterminated VAR, and reports the VAR line', () => {
+  it('keeps comments between the header and an unterminated VAR, and reports the VAR line', () => {
     const content = 'PROGRAM main\n(* locals *)\n// counters\nVAR\n  a : INT;\na := 1;\nEND_PROGRAM\n'
 
     expect(sectionOf(content, 'program', { endKeyword: 'END_PROGRAM' })).toEqual({
       kind: 'unterminated',
-      text: 'VAR\n  a : INT;\na := 1;',
+      text: '(* locals *)\n// counters\nVAR\n  a : INT;\na := 1;',
       bodyStartIndex: content.lastIndexOf('END_PROGRAM'),
       line: 4,
+    })
+  })
+
+  it('keeps the indentation of a comment that opens an unterminated declaration section', () => {
+    const content = 'PROGRAM main\n  (* locals *)\n  VAR\n    a : INT;\nEND_PROGRAM\n'
+
+    expect(sectionOf(content, 'program', { endKeyword: 'END_PROGRAM' })).toEqual({
+      kind: 'unterminated',
+      text: '  (* locals *)\n  VAR\n    a : INT;',
+      bodyStartIndex: content.lastIndexOf('END_PROGRAM'),
+      line: 3,
     })
   })
 

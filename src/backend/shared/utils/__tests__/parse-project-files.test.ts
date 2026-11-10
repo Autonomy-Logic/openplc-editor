@@ -1160,6 +1160,16 @@ describe('parseProjectFiles — a VAR block without END_VAR', () => {
     })
   })
 
+  it('keeps a comment written above an unterminated VAR in the variables text', () => {
+    const [pou] = parseOne(
+      'pous/programs/main.st',
+      'PROGRAM main\n(* counters *)\nVAR\n  a : INT;\n\na := 1;\nEND_PROGRAM\n',
+    ).projectData.pous
+
+    expect(pou.variablesText).toBe('(* counters *)\nVAR\n  a : INT;\n\na := 1;')
+    expect(pou.body).toEqual({ language: 'st', value: '' })
+  })
+
   it('leaves a well-formed POU parsed, unmarked and without a warning', () => {
     const result = parseOne(
       'pous/programs/main.st',
