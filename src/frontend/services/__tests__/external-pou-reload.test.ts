@@ -42,6 +42,17 @@ function seedMain(): void {
   expect(store.getState().pouActions.create({ type: 'program', name: 'main', language: 'st' }).ok).toBe(true)
   store.getState().projectActions.updatePou({ name: 'main', content: { language: 'st', value: BODY } })
   store.getState().projectActions.setPouVariablesText('main', 'VAR\n  counter : INT;\n  marker : INT;\nEND_VAR', false)
+  store.getState().projectActions.setPouVariables({
+    pouName: 'main',
+    variables: ['counter', 'marker'].map((name) => ({
+      name,
+      class: 'local' as const,
+      type: { definition: 'base-type' as const, value: 'INT' },
+      location: '',
+      documentation: '',
+      debug: false,
+    })),
+  })
   store.getState().editorActions.addModel({
     type: 'plc-textual',
     meta: { name: 'main', path: '/pous/main', language: 'st', pouType: 'program' },
