@@ -118,6 +118,61 @@ describe('ProjectService.writeProjectFiles', () => {
     expect(writtenPaths()).not.toContain('/projects/demo/project.json')
   })
 
+  describe('the write observer', () => {
+    const observed = async (overrides: Partial<WriteProjectFiles> = {}) => {
+      const seen: string[] = []
+      const result = await service.writeProjectFiles(makeFiles(overrides), {
+        onFileWritten: (absolutePath) => seen.push(absolutePath.replace(/\\/g, '/')),
+      })
+      return { result, seen }
+    }
+
+    it('reports every file it wrote, project.json included, by absolute path', async () => {
+      const { result, seen } = await observed()
+
+      expect(result.success).toBe(true)
+      expect(seen.sort()).toEqual(
+        [
+          '/projects/demo/datatypes/Color.dt',
+          '/projects/demo/pous/programs/main.st',
+          '/projects/demo/project.json',
+        ].sort(),
+      )
+    })
+
+    it('says nothing about a deletion', async () => {
+      const { seen } = await observed({ deletions: ['pous/programs/gone.st'] })
+
+      expect(seen).not.toContain('/projects/demo/pous/programs/gone.st')
+    })
+
+    it('says nothing about a path refused as outside the project directory', async () => {
+      const { result, seen } = await observed({
+        pouFiles: [{ relativePath: '../../escape.st', content: 'PROGRAM escape\nEND_PROGRAM' }],
+      })
+
+      expect(result.success).toBe(false)
+      expect(seen).toEqual([])
+    })
+
+    it('says nothing about a write that rejected', async () => {
+      writeFile.mockImplementation((path: string) =>
+        String(path).endsWith('.st') ? Promise.reject(new Error('EACCES')) : Promise.resolve(undefined),
+      )
+
+      const { seen } = await observed()
+
+      expect(seen).not.toContain('/projects/demo/pous/programs/main.st')
+    })
+
+    it('writes the same files when no observer is given', async () => {
+      const result = await service.writeProjectFiles(makeFiles())
+
+      expect(result.success).toBe(true)
+      expect(writtenPaths()).toContain('/projects/demo/project.json')
+    })
+  })
+
   it('leaves project.json untouched when a POU write rejects', async () => {
     writeFile.mockImplementation((path: string) =>
       String(path).endsWith('.st') ? Promise.reject(new Error('EACCES')) : Promise.resolve(undefined),
