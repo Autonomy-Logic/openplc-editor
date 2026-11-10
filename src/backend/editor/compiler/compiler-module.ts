@@ -16,6 +16,7 @@ import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/g
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
 import { shouldWipeBuildFolder } from '@root/backend/shared/compile/steps/plan-build-tree-sync'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
+import { GLOBAL_ARDUINO_LIBRARIES } from '@root/backend/shared/packages/arduino-dependencies'
 
 import { execRecipeArgv } from './recipe-exec'
 // strucpp is loaded lazily because it uses ESM features (import.meta) that are
@@ -319,29 +320,7 @@ class CompilerModule {
    * in both. `#constructStrucppRuntimeDir` already asks this way.
    */
   static readonly DEVELOPMENT_MODE = !electronApp.isPackaged
-  // This will later be replaced by platform specific libraries
-  static readonly GLOBAL_LIBRARIES = [
-    'Arduino_EdgeControl',
-    'ArduinoJson',
-    'Arduino_MachineControl',
-    'ArduinoMqttClient',
-    'AVR_PWM',
-    'CAN',
-    'CONTROLLINO',
-    'DallasTemperature',
-    'Ethernet',
-    'megaAVR_PWM',
-    'OneWire',
-    'P1AM',
-    'Portenta_H7_PWM',
-    'PubSubClient',
-    'RP2040_PWM',
-    'SAMD_PWM',
-    'SAMDUE_PWM',
-    'STM32_CAN',
-    'STM32_PWM',
-    'WiFiNINA',
-  ]
+  static readonly GLOBAL_LIBRARIES: readonly string[] = GLOBAL_ARDUINO_LIBRARIES
 
   // Runtime API polling configuration (important-comment)
   // 20 minutes — large projects (50+ POUs) on a Pi 4 can take 10–15 min
@@ -528,6 +507,11 @@ class CompilerModule {
     } catch {
       return {}
     }
+  }
+
+  /** Starts arduino-cli with the editor's configuration file. */
+  spawnArduinoCli(args: string[]) {
+    return this.#executeArduinoCliCommand([...args, ...this.arduinoCliBaseParameters])
   }
 
   #executeArduinoCliCommand(args: string[]) {

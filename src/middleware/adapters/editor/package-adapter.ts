@@ -26,6 +26,7 @@ import type { PackagePort } from '../../shared/ports/package-port'
 import type {
   ImportResult,
   InstalledPackage,
+  PackageInstallProgress,
   PackageManifest,
   RemoteCatalog,
   Result,
@@ -96,10 +97,22 @@ export function createEditorPackageAdapter(): PackagePort {
       return window.bridge.listInstalledPackages()
     },
 
-    async uninstall(packageId: string): Promise<Result> {
+    async uninstall(packageId: string): Promise<Result<{ warning?: string }>> {
       const result = await window.bridge.uninstallPackage(packageId)
-      if (result.success) return { success: true } as Result
+      if (result.success) return result.warning ? { success: true, warning: result.warning } : { success: true }
       return { success: false, error: result.error ?? 'Uninstall failed' }
+    },
+
+    reinstall(packageId: string): Promise<ImportResult> {
+      return window.bridge.reinstallPackage(packageId)
+    },
+
+    cancelInstall(): void {
+      window.bridge.cancelPackageInstall()
+    },
+
+    onInstallProgress(callback: (progress: PackageInstallProgress) => void): Unsubscribe {
+      return window.bridge.onPackageInstallProgress(callback)
     },
 
     async getManifest(packageId: string): Promise<PackageManifest | null> {

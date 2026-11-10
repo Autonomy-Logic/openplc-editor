@@ -7,9 +7,9 @@
  * useless for a matrix run, which is the job this exists for: point a scratch
  * `--user-data` at nothing, install the packages under test, compile.
  *
- * `install` goes through the same `PackageManagerModule.importFromFile` the UI
- * calls, so the manifest schema check and the Ed25519 signature verification
- * happen here exactly as they do there. There is deliberately no flag to skip
+ * `install` goes through the same `VppDependencyService` the UI calls, so the
+ * manifest schema check, the Ed25519 signature verification and the installation
+ * of the package's arduino-cli cores and libraries happen here exactly as there. There is deliberately no flag to skip
  * them: a package the editor would refuse to install must not become installable
  * by scripting it.
  */
@@ -17,8 +17,11 @@
 import { readdir, stat } from 'node:fs/promises'
 import { extname, join, resolve } from 'node:path'
 
+import { CompilerModule } from '@root/backend/editor/compiler/compiler-module'
 import { HardwareModule } from '@root/backend/editor/hardware'
 import { PackageManagerModule } from '@root/backend/editor/package-manager'
+import { VppDependencyService } from '@root/backend/editor/package-manager/vpp-dependency-service'
+import type { PackageInstallProgress } from '@root/middleware/shared/ports/types'
 
 import type { ParsedArgs } from '../args'
 import { ErrorCode, ExitCode } from '../exit-codes'
@@ -82,12 +85,13 @@ async function runInstall(args: ParsedArgs, reporter: Reporter): Promise<CliResu
     )
   }
 
-  const manager = new PackageManagerModule()
+  const compiler = new CompilerModule()
+  const dependencies = new VppDependencyService(new PackageManagerModule(), (args) => compiler.spawnArduinoCli(args))
   const installed: { path: string; packageId?: string; devices?: string[] }[] = []
   const failed: { path: string; error: string }[] = []
 
   for (const path of paths) {
-    const result = await manager.importFromFile(path)
+    const result = await dependencies.importPackage(path, dependencyProgressPrinter(reporter))
     if (result.success) {
       installed.push({ path, packageId: result.packageId, devices: result.devices })
       reporter.progress(`  installed ${result.packageId ?? path}`)
@@ -114,6 +118,24 @@ async function runInstall(args: ParsedArgs, reporter: Reporter): Promise<CliResu
   }
 
   return reporter.success({ installed, failed }, () => `Installed ${installed.length} package(s).`)
+}
+
+/** One stderr line per dependency step, and one per archive as its download starts. */
+function dependencyProgressPrinter(reporter: Reporter): (progress: PackageInstallProgress) => void {
+  let lastStep = ''
+  const downloads = new Set<string>()
+  return (progress) => {
+    const step =
+      progress.total > 0 ? `  ${progress.label} (${progress.step} of ${progress.total})` : `  ${progress.label}`
+    if (step !== lastStep) {
+      lastStep = step
+      reporter.progress(step)
+    }
+    if (progress.download && !downloads.has(progress.download.item)) {
+      downloads.add(progress.download.item)
+      reporter.progress(`    downloading ${progress.download.item} (${progress.download.total})`)
+    }
+  }
 }
 
 async function runList(reporter: Reporter): Promise<CliResult> {

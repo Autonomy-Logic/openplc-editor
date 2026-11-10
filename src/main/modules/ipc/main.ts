@@ -112,7 +112,7 @@ import type {
   RuntimeUserRole,
   UpdateUserParams,
 } from '@root/middleware/shared/ports/runtime-port'
-import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
+import type { DebugConnectionConfig, PackageInstallProgress } from '@root/middleware/shared/ports/types'
 import type { VersionControlResult } from '@root/middleware/shared/ports/version-control-port'
 import { capabilitiesFromResponse } from '@root/middleware/shared/utils/build-gate/runtime-capabilities-response'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
@@ -151,6 +151,7 @@ import {
   resolveDeviceLicense,
 } from '../../../backend/editor/license/license-flow'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
+import { VppDependencyService } from '../../../backend/editor/package-manager/vpp-dependency-service'
 import { BootloaderApiClient } from '../../../backend/editor/runtime/bootloader-api-client'
 import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
 import { logger } from '../../../backend/editor/services'
@@ -316,6 +317,7 @@ class MainProcessBridge implements MainIpcModule {
   private simulatorModule = new SimulatorModule()
   // VPP package manager for board package operations
   private packageManagerModule: PackageManagerModule
+  private vppDependencies: VppDependencyService
   // System-wide IEC 61131-3 library pool (bundled + user-installed)
   private libraryManagerModule = new LibraryManagerModule()
   // Shared transport for public-catalog HTTP — re-used by the
@@ -346,6 +348,9 @@ class MainProcessBridge implements MainIpcModule {
     this.menuBuilder = menuBuilder
     this.pouService = pouService
     this.compilerModule = compilerModule
+    this.vppDependencies = new VppDependencyService(this.packageManagerModule, (args) =>
+      this.compilerModule.spawnArduinoCli(args),
+    )
     this.hardwareModule = hardwareModule
     this.quitCoordinator = quitCoordinator
     this.mainWindow?.webContents?.on('render-process-gone', () => {
@@ -993,6 +998,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('packages:install-from-url', this.handlePackagesInstallFromUrl)
     this.registerHandle('packages:list-installed', this.handlePackagesListInstalled)
     this.registerHandle('packages:uninstall', this.handlePackagesUninstall)
+    this.registerHandle('packages:reinstall', this.handlePackagesReinstall)
+    this.ipcMain.on('packages:cancel-install', this.handlePackagesCancelInstall)
     this.registerHandle('packages:get-manifest', this.handlePackagesGetManifest)
     this.registerHandle('packages:get-pin', this.handlePackagesGetPin)
     this.registerHandle('packages:verify-signatures', this.handlePackagesVerifySignatures)
@@ -2283,7 +2290,7 @@ class MainProcessBridge implements MainIpcModule {
     if (result.canceled || result.filePaths.length === 0) {
       return { success: false, canceled: true }
     }
-    const importResult = await this.packageManagerModule.importFromFile(result.filePaths[0])
+    const importResult = await this.vppDependencies.importPackage(result.filePaths[0], this.sendPackageInstallProgress)
     if (importResult.success) {
       this.mainWindow.webContents.send('packages:boards-updated')
     }
@@ -2308,7 +2315,7 @@ class MainProcessBridge implements MainIpcModule {
       const buffer = new Uint8Array(await response.arrayBuffer())
       tempPath = join(app.getPath('temp'), `openplc-vpp-${packageId}-${version}-${randomUUID()}.vpp`)
       await writeFile(tempPath, buffer)
-      const importResult = await this.packageManagerModule.importFromFile(tempPath)
+      const importResult = await this.vppDependencies.importPackage(tempPath, this.sendPackageInstallProgress)
       if (importResult.success) {
         this.mainWindow?.webContents.send('packages:boards-updated')
       }
@@ -2325,11 +2332,17 @@ class MainProcessBridge implements MainIpcModule {
   }
   handlePackagesListInstalled = async () => this.packageManagerModule.listInstalled()
   handlePackagesUninstall = async (_event: IpcMainInvokeEvent, packageId: string) => {
-    const result = this.packageManagerModule.uninstall(packageId)
+    const result = await this.vppDependencies.uninstall(packageId)
     if (result.success) {
       this.mainWindow?.webContents.send('packages:boards-updated')
     }
     return result
+  }
+  handlePackagesReinstall = async (_event: IpcMainInvokeEvent, packageId: string) =>
+    this.vppDependencies.reinstall(packageId, this.sendPackageInstallProgress)
+  handlePackagesCancelInstall = () => this.vppDependencies.cancel()
+  sendPackageInstallProgress = (progress: PackageInstallProgress) => {
+    this.mainWindow?.webContents.send('packages:install-progress', progress)
   }
   // Re-verify installed VPP signatures (invoked by the renderer when a project
   // opens) and return the ids removed. If anything was dropped, notify the

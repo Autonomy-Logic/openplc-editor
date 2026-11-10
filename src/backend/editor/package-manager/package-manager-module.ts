@@ -25,6 +25,9 @@ import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
 import type { ImportResult, InstalledPackage, PackageIntegrityResult, PackageManifest, PackageRegistry } from './types'
 
+/** Outcome of installing a package's arduino-cli dependencies. */
+export type PackageDependencyOutcome = { ok: true } | { ok: false; cancelled: boolean; error: string }
+
 /**
  * Enforce cryptographic signature verification on every import. Strict by
  * design. Flip to `false` ONLY for local/offline development with unsigned
@@ -43,7 +46,14 @@ class PackageManagerModule {
     mkdirSync(this.packagesDir, { recursive: true })
   }
 
-  async importFromFile(vppFilePath: string): Promise<ImportResult> {
+  /**
+   * Install a .vpp. @p installDependencies runs after the package is verified and
+   * before it replaces an installed version; a failure leaves that version in place.
+   */
+  async importFromFile(
+    vppFilePath: string,
+    installDependencies?: (manifest: PackageManifest) => Promise<PackageDependencyOutcome>,
+  ): Promise<ImportResult> {
     // mkdtempSync gives us a guaranteed-unique scratch directory per call
     // so two concurrent imports don't race on the same `_temp_import`
     // path and rmSync each other's extracted contents mid-flight. The
@@ -135,6 +145,13 @@ class PackageManagerModule {
         assertPathContained(this.packagesDir, targetDir, 'package install path')
       } catch (err) {
         return { success: false, error: err instanceof Error ? err.message : String(err) }
+      }
+
+      if (installDependencies) {
+        const dependencies = await installDependencies(manifest)
+        if (!dependencies.ok) {
+          return { success: false, canceled: dependencies.cancelled, error: dependencies.error }
+        }
       }
 
       if (existsSync(targetDir)) {

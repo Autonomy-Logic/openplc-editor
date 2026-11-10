@@ -42,9 +42,11 @@ interface CatalogBrowserProps {
    * need cascading edits; treat as "onInventoryChanged".
    */
   onInstalled: () => void
+  /** Shows the dependency installation progress of @p operation. */
+  trackInstall: <T>(operation: () => Promise<T>) => Promise<T>
 }
 
-const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps) => {
+const CatalogBrowser = ({ installedVersions, onInstalled, trackInstall }: CatalogBrowserProps) => {
   const packages = usePackages()
   const openModal = useOpenPLCStore((s) => s.modalActions.openModal)
 
@@ -93,10 +95,10 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
       if (!packages) return
       setBusyId(packageId)
       try {
-        const result = await packages.installFromRemote(packageId, version, downloadUrl)
+        const result = await trackInstall(() => packages.installFromRemote(packageId, version, downloadUrl))
         if (result.success) {
           onInstalled()
-        } else {
+        } else if (!result.canceled) {
           openModal('debugger-message', {
             type: 'error',
             title: 'Install failed',
@@ -110,7 +112,7 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
         setBusyId(null)
       }
     },
-    [packages, openModal, onInstalled],
+    [packages, openModal, onInstalled, trackInstall],
   )
 
   const handleUninstall = useCallback(
@@ -121,6 +123,15 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
         const result = await packages.uninstall(packageId)
         if (result.success) {
           onInstalled()
+          if (result.warning) {
+            openModal('debugger-message', {
+              type: 'warning',
+              title: 'Package uninstalled',
+              message: result.warning,
+              buttons: ['OK'],
+              onResponse: () => {},
+            })
+          }
         } else {
           openModal('debugger-message', {
             type: 'error',

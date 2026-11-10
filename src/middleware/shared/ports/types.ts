@@ -808,6 +808,18 @@ export interface InstalledPackage {
   devices: string[]
 }
 
+/** Progress of a board package's dependency installation (cores and libraries). */
+export interface PackageInstallProgress {
+  /** 1-based position of the running step; 0 while waiting. */
+  step: number
+  total: number
+  label: string
+  /** The archive being downloaded, with sizes as arduino-cli prints them. */
+  download?: { item: string; done: string; total: string; percent: number }
+  /** Set while the install waits for the start-up dependency check to finish. */
+  waiting?: boolean
+}
+
 export interface ImportResult {
   success: boolean
   canceled?: boolean
