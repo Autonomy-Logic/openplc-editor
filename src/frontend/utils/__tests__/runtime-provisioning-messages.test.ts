@@ -98,14 +98,29 @@ describe('provisioningMessage', () => {
     expect(message).toMatch(/try again later/i)
   })
 
-  it('names the target host and SSH port of the offer and says the runtime is not running', () => {
-    const message = text('offer', { host: HOST, sshPort: 2222 })
+  it('titles the offer "Install OpenPLC Runtime" and asks for the device login credentials for its IP address', () => {
+    expect(provisioningMessage('offer', { host: HOST, sshPort: 2222 })).toEqual({
+      title: 'Install OpenPLC Runtime',
+      body: `Enter your device login credentials to install OpenPLC Runtime on ${HOST}.`,
+    })
+  })
 
-    expect(message).toContain(HOST)
-    expect(message).toContain('2222')
-    expect(message).toMatch(/not running/i)
-    expect(message).toMatch(/install/i)
-    expect(message).toMatch(/start/i)
+  it('names a host name in the offer body as given', () => {
+    const { body } = provisioningMessage('offer', { host: 'plc-01.local', sshPort: 22 })
+
+    expect(body).toBe('Enter your device login credentials to install OpenPLC Runtime on plc-01.local.')
+  })
+
+  it('falls back to "the device" in the offer body when no host is known', () => {
+    const { body } = provisioningMessage('offer', { sshPort: 22 })
+
+    expect(body).toBe('Enter your device login credentials to install OpenPLC Runtime on the device.')
+  })
+
+  it('keeps the offer body on one line', () => {
+    const { body } = provisioningMessage('offer', { host: HOST, sshPort: 2222 })
+
+    expect(body).not.toContain('\n')
   })
 
   it('names the changed host key, says nothing was sent, and that clearing it is manual', () => {

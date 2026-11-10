@@ -418,13 +418,36 @@ describe('the provisioning dialog before an offer', () => {
 })
 
 describe('the offer stage', () => {
-  it('opens a dedicated dialog naming the host and SSH port, saying the runtime is not running (TC06, AS-16)', () => {
+  it('opens a dedicated "Install OpenPLC Runtime" dialog asking for the device login credentials for the host (TC06, AS-16)', () => {
     renderDialog()
 
     showOffer(DOCUMENTATION_HOST, 22)
+    const text = shownText()
 
     expect(missingLines('offer', { host: DOCUMENTATION_HOST, sshPort: 22 })).toEqual([])
-    expect(shownText()).toContain(DOCUMENTATION_HOST)
+    expect(text).toContain(DOCUMENTATION_HOST)
+    expect(text).toContain('Install OpenPLC Runtime')
+    expect(text).toContain(`Enter your device login credentials to install OpenPLC Runtime on ${DOCUMENTATION_HOST}.`)
+    expect(text).not.toContain('Install or start')
+    expect(text).not.toContain('is not running')
+  })
+
+  it('labels the submit button "Install"', () => {
+    actions().showOffer(DEVICE_IP, 22)
+    renderDialog()
+
+    const submit = button('runtime-provisioning-submit')
+
+    expect(submit.textContent?.trim()).toBe('Install')
+    expect(screen.getByRole('button', { name: 'Install' })).toBe(submit)
+    expect(screen.queryByRole('button', { name: 'Install or start' })).toBeNull()
+  })
+
+  it('keeps the Decline button labelled "Decline"', () => {
+    actions().showOffer(DEVICE_IP, 22)
+    renderDialog()
+
+    expect(button('runtime-provisioning-decline').textContent?.trim()).toBe('Decline')
   })
 
   it('is neither the runtime login dialog nor the first-user dialog (TC06)', () => {
