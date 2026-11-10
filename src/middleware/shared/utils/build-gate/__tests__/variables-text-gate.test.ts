@@ -59,7 +59,7 @@ describe('evaluateVariablesTextGate', () => {
     if (verdict.kind !== 'refuse') return
     expect(verdict.pouName).toBe('main')
     expect(typeof verdict.line).toBe('number')
-    expect(verdict.reason).toMatch(/Expected END_VAR/)
+    expect(verdict.reason).toMatch(/Expected `END_VAR`/)
     expect(verdict.reason.startsWith(`The variables of "main" do not parse: line ${verdict.line}: `)).toBe(true)
   })
 
@@ -82,7 +82,7 @@ describe('evaluateVariablesTextGate', () => {
 
     expect(verdict.kind).toBe('refuse')
     if (verdict.kind !== 'refuse') return
-    expect(verdict.reason).toMatch(/^The variables of "main" do not parse: line \d+: .*Expected END_VAR/)
+    expect(verdict.reason).toMatch(/^The variables of "main" do not parse: line \d+: .*Expected `END_VAR`/)
     expect(typeof verdict.line).toBe('number')
   })
 
