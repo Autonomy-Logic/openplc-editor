@@ -171,6 +171,16 @@ const declarationStartIndex = (content: string, keywordIndex: number): number =>
 }
 
 /**
+ * Start of the first content after the POU header, comments included, or `keywordIndex` when the
+ * header shares its line. It is where an unterminated declaration section begins, so a comment
+ * written above the block is kept instead of belonging to neither the declarations nor the body.
+ */
+const unterminatedSectionStart = (content: string, bodyStartIndex: number, keywordIndex: number): number => {
+  const offset = content.slice(bodyStartIndex).search(/\S/)
+  return declarationStartIndex(content, offset === -1 ? keywordIndex : bodyStartIndex + offset)
+}
+
+/**
  * Index of the VAR-family keyword that opens the content after the POU header, or -1 when the
  * first token there, past whitespace and comments, is anything else.
  */
@@ -234,8 +244,8 @@ const lineOfIndex = (content: string, index: number): number => {
  *
  * A closed section runs from the line of the first VAR-family keyword to the last `END_VAR`, kept
  * verbatim because it is written back to the file. A block that opens right after the header and
- * never reaches `END_VAR` is `unterminated`, bounded by `unterminatedSectionEnd`, and carries the
- * line of its keyword. `boundAtGraphicalBody` stops the `END_VAR` scan at the JSON body of a ladder
+ * never reaches `END_VAR` is `unterminated`, runs from the first content after the header to
+ * `unterminatedSectionEnd`, and carries the line of its keyword. `boundAtGraphicalBody` stops the `END_VAR` scan at the JSON body of a ladder
  * or FBD POU, for the reason spelled out on `findLastEndVarIndex`.
  */
 export const extractVariablesSection = (
@@ -266,7 +276,7 @@ export const extractVariablesSection = (
   const sectionEnd = unterminatedSectionEnd(content, keywordIndex, options)
   return {
     kind: 'unterminated',
-    text: content.slice(declarationStartIndex(content, keywordIndex), sectionEnd).trimEnd(),
+    text: content.slice(unterminatedSectionStart(content, bodyStartIndex, keywordIndex), sectionEnd).trimEnd(),
     bodyStartIndex: sectionEnd,
     line: lineOfIndex(content, keywordIndex),
   }
