@@ -73,7 +73,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Create the user service instance to initialize the user settings and history files.
-new UserService()
+const userService = new UserService()
 
 // Retrieves the system information
 const systemInfo = platform()
@@ -402,6 +402,8 @@ const createMainWindow = async () => {
     packageManagerModule: packageManager,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
+  // Needs the arduino-cli configuration the user service writes.
+  mainIpcModule.startDependencyCheck(userService.initialize())
 }
 
 // Disable GPU Acceleration for Windows 7;

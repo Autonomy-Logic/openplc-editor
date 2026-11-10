@@ -236,3 +236,27 @@ export function missingArduinoDependencyHint(
       : 'Open File > Board Package Manager..., select the board package and click Reinstall.'
   return `The board package for this device may not be fully installed. ${repair} Then build again.`
 }
+
+/** What the editor installs at startup when missing: the simulator's core and the global libraries. */
+export const STARTUP_ARDUINO_DEPENDENCIES: ArduinoDependencies = {
+  cores: [{ id: SIMULATOR_CORE }],
+  libraries: [...GLOBAL_ARDUINO_LIBRARIES],
+  gitLibraries: [],
+}
+
+/** The console line announcing what the startup check is about to install. */
+export function startupInstallNotice(steps: readonly DependencyStep[]): string {
+  const names = steps.map((step) =>
+    step.kind === 'core' ? step.core.id : step.kind === 'library' ? libraryName(step.name) : step.library.name,
+  )
+  return `Installing Arduino components every build needs: ${names.join(', ')}.`
+}
+
+/** The console warning when the startup check could not install what was missing. */
+export function startupInstallWarning(error: string): string {
+  return (
+    `Could not install the Arduino components every build needs (${error}). ` +
+    'Builds still run, but may fail on a missing library or, for the simulator, a missing core. ' +
+    'Restart the editor while connected to the internet to try again.'
+  )
+}

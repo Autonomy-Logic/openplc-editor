@@ -1,9 +1,11 @@
+import { GLOBAL_ARDUINO_LIBRARIES } from '@root/backend/shared/packages/arduino-dependencies'
 import type { ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 
 import type { DependencyInstallProgress } from '../arduino-dependency-installer'
 import { installArduinoDependencies, queryInstalledArduinoState } from '../arduino-dependency-installer'
 import type { PackageManagerModule } from '../package-manager-module'
+import { StartupDependencyCheck } from '../startup-dependency-check'
 import type { PackageManifest } from '../types'
 import { VppDependencyService } from '../vpp-dependency-service'
 
@@ -197,5 +199,62 @@ describe('VppDependencyService', () => {
     release()
     expect(await pending).toEqual(expect.objectContaining({ success: true }))
     expect(cli.calls.some((args) => args[0] === 'core' && args[1] === 'install')).toBe(true)
+  })
+})
+
+describe('StartupDependencyCheck', () => {
+  const everyGlobal = GLOBAL_ARDUINO_LIBRARIES.map((name) => ({ name, location: 'user' }))
+
+  it('only lists what is installed when nothing is missing', async () => {
+    const cli = fakeCli({ cores: { 'arduino:avr': '1.8.6' }, libraries: everyGlobal })
+    const check = new StartupDependencyCheck(cli.spawn)
+    check.start(Promise.resolve())
+    expect(check.isRunning()).toBe(true)
+    await check.whenDone()
+    expect(check.isRunning()).toBe(false)
+    expect(cli.calls.every((args) => args[1] === 'list')).toBe(true)
+    expect(check.takeNotices()).toEqual([])
+  })
+
+  it('installs a missing simulator core and global library, never updating installed ones', async () => {
+    const cli = fakeCli({ cores: {}, libraries: everyGlobal.filter((lib) => lib.name !== 'OneWire') })
+    const check = new StartupDependencyCheck(cli.spawn)
+    check.start(Promise.resolve())
+    await check.whenDone()
+    const installs = cli.calls.filter((args) => args[1] === 'install')
+    expect(installs).toEqual([
+      ['core', 'install', 'arduino:avr'],
+      ['lib', 'install', 'OneWire'],
+    ])
+    expect(cli.calls.some((args) => args.includes('upgrade') || args.includes('update-index'))).toBe(false)
+    const notices = check.takeNotices()
+    expect(notices.map((n) => n.level)).toEqual(['info', 'info'])
+    expect(notices[0].message).toContain('arduino:avr, OneWire')
+  })
+
+  it('keeps a warning for the console when the install fails offline', async () => {
+    const cli = fakeCli({ cores: {}, libraries: everyGlobal }, (args) => args[1] === 'install')
+    const check = new StartupDependencyCheck(cli.spawn)
+    const listener = jest.fn()
+    check.setNoticeListener(listener)
+    check.start(Promise.resolve())
+    await check.whenDone()
+    const notices = check.takeNotices()
+    expect(notices[notices.length - 1].level).toBe('warning')
+    expect(notices[notices.length - 1].message).toContain('Restart the editor while connected to the internet')
+    expect(listener).toHaveBeenCalled()
+    expect(check.takeNotices()).toEqual([])
+  })
+
+  it('waits for the configuration before running arduino-cli', async () => {
+    const cli = fakeCli({ cores: { 'arduino:avr': '1.8.6' }, libraries: everyGlobal })
+    const check = new StartupDependencyCheck(cli.spawn)
+    let release: () => void = () => undefined
+    check.start(new Promise<void>((resolve) => (release = resolve)))
+    await new Promise((r) => setTimeout(r, 5))
+    expect(cli.calls).toEqual([])
+    release()
+    await check.whenDone()
+    expect(cli.calls.length).toBeGreaterThan(0)
   })
 })

@@ -20,6 +20,7 @@ import type {
   PackageManifest,
   RemoteCatalog,
   Result,
+  StartupNotice,
   Unsubscribe,
 } from './types'
 import type { DeviceVpp } from './vpp-types'
@@ -81,6 +82,12 @@ export interface PackagePort {
 
   /** Subscribe to dependency-installation progress. Web: never fires. */
   onInstallProgress(callback: (progress: PackageInstallProgress) => void): Unsubscribe
+
+  /**
+   * Subscribe to the startup dependency check's console messages. Messages raised
+   * before anyone subscribed are delivered on subscription. Web: never fires.
+   */
+  onStartupNotices(callback: (notices: StartupNotice[]) => void): Unsubscribe
 
   /**
    * Get the full manifest of an installed package.

@@ -118,7 +118,7 @@ import { capabilitiesFromResponse } from '@root/middleware/shared/utils/build-ga
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
-import type { IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron'
+import type { IpcMainEvent, IpcMainInvokeEvent, MessagePortMain, WebContents } from 'electron'
 import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import { unlink, writeFile } from 'fs/promises'
@@ -151,6 +151,7 @@ import {
   resolveDeviceLicense,
 } from '../../../backend/editor/license/license-flow'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
+import { StartupDependencyCheck } from '../../../backend/editor/package-manager/startup-dependency-check'
 import { VppDependencyService } from '../../../backend/editor/package-manager/vpp-dependency-service'
 import { BootloaderApiClient } from '../../../backend/editor/runtime/bootloader-api-client'
 import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
@@ -318,6 +319,7 @@ class MainProcessBridge implements MainIpcModule {
   // VPP package manager for board package operations
   private packageManagerModule: PackageManagerModule
   private vppDependencies: VppDependencyService
+  private startupDependencies: StartupDependencyCheck
   // System-wide IEC 61131-3 library pool (bundled + user-installed)
   private libraryManagerModule = new LibraryManagerModule()
   // Shared transport for public-catalog HTTP — re-used by the
@@ -348,9 +350,12 @@ class MainProcessBridge implements MainIpcModule {
     this.menuBuilder = menuBuilder
     this.pouService = pouService
     this.compilerModule = compilerModule
-    this.vppDependencies = new VppDependencyService(this.packageManagerModule, (args) =>
-      this.compilerModule.spawnArduinoCli(args),
+    const spawnArduinoCli = (args: string[]) => this.compilerModule.spawnArduinoCli(args)
+    this.startupDependencies = new StartupDependencyCheck(spawnArduinoCli)
+    this.startupDependencies.setNoticeListener(() =>
+      this.mainWindow?.webContents?.send('packages:startup-notices-available'),
     )
+    this.vppDependencies = new VppDependencyService(this.packageManagerModule, spawnArduinoCli, this.startupDependencies)
     this.hardwareModule = hardwareModule
     this.quitCoordinator = quitCoordinator
     this.mainWindow?.webContents?.on('render-process-gone', () => {
@@ -999,6 +1004,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('packages:list-installed', this.handlePackagesListInstalled)
     this.registerHandle('packages:uninstall', this.handlePackagesUninstall)
     this.registerHandle('packages:reinstall', this.handlePackagesReinstall)
+    this.registerHandle('packages:take-startup-notices', this.handlePackagesTakeStartupNotices)
     this.ipcMain.on('packages:cancel-install', this.handlePackagesCancelInstall)
     this.registerHandle('packages:get-manifest', this.handlePackagesGetManifest)
     this.registerHandle('packages:get-pin', this.handlePackagesGetPin)
@@ -2203,9 +2209,14 @@ class MainProcessBridge implements MainIpcModule {
   handleAppQuit = () => this.quitCoordinator.confirmQuit()
 
   // Compiler service handlers
+  /** Starts the background install of the components every build needs, once @p ready settles. */
+  startDependencyCheck(ready: Promise<unknown>): void {
+    this.startupDependencies.start(ready)
+  }
+
   handleRunCompileProgram = (event: IpcMainEvent, args: CompileProgramIpcArgs) => {
     const mainProcessPort = event.ports[0]
-    void this.compilerModule.compileProgram(args, mainProcessPort, this).catch((error) => {
+    void this.#compileAfterStartupCheck(args, mainProcessPort).catch((error) => {
       mainProcessPort.postMessage({
         logLevel: 'error',
         message: `${getErrorMessage(error)}\nStopping compilation process.`,
@@ -2213,6 +2224,17 @@ class MainProcessBridge implements MainIpcModule {
       mainProcessPort.postMessage({ closePort: true })
       mainProcessPort.close()
     })
+  }
+
+  async #compileAfterStartupCheck(args: CompileProgramIpcArgs, port: MessagePortMain): Promise<void> {
+    if (this.startupDependencies.isRunning()) {
+      port.postMessage({
+        logLevel: 'info',
+        message: 'Waiting for the editor to finish installing the Arduino components every build needs...',
+      })
+      await this.startupDependencies.whenDone()
+    }
+    await this.compilerModule.compileProgram(args, port, this)
   }
 
   handleRunDebugCompilation = (event: IpcMainEvent, args: Array<string | PLCProjectData>) => {
@@ -2341,6 +2363,7 @@ class MainProcessBridge implements MainIpcModule {
   handlePackagesReinstall = async (_event: IpcMainInvokeEvent, packageId: string) =>
     this.vppDependencies.reinstall(packageId, this.sendPackageInstallProgress)
   handlePackagesCancelInstall = () => this.vppDependencies.cancel()
+  handlePackagesTakeStartupNotices = () => this.startupDependencies.takeNotices()
   sendPackageInstallProgress = (progress: PackageInstallProgress) => {
     this.mainWindow?.webContents.send('packages:install-progress', progress)
   }

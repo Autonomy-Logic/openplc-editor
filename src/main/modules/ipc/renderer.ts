@@ -56,7 +56,7 @@ import type {
   WhoAmIResult,
 } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
-import type { PackageInstallProgress, PLCProjectData } from '@root/middleware/shared/ports/types'
+import type { PackageInstallProgress, PLCProjectData, StartupNotice } from '@root/middleware/shared/ports/types'
 import type {
   Branch,
   BranchDiffWithBase,
@@ -560,6 +560,12 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; canceled?: boolean; packageId?: string; packageName?: string; error?: string }> =>
     ipcRenderer.invoke('packages:reinstall', packageId),
   cancelPackageInstall: (): void => ipcRenderer.send('packages:cancel-install'),
+  takeStartupNotices: (): Promise<StartupNotice[]> => ipcRenderer.invoke('packages:take-startup-notices'),
+  onStartupNoticesAvailable: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('packages:startup-notices-available', listener)
+    return () => ipcRenderer.removeListener('packages:startup-notices-available', listener)
+  },
   onPackageInstallProgress: (callback: (progress: PackageInstallProgress) => void) => {
     const listener = (_event: IpcRendererEvent, progress: PackageInstallProgress) => callback(progress)
     ipcRenderer.on('packages:install-progress', listener)

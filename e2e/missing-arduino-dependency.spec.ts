@@ -3,21 +3,30 @@
  * and the console ends with the hint to reinstall the board package.
  *
  * Needs a production build plus the preload copy (see "Electron e2e" in CLAUDE.md)
- * and the Arduino board package installed in the source user data folder.
+ * and the SLM-CPU-0 board package installed in the source user data folder.
  */
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
-import { ARDUINO_MEGA, missingPrerequisite, PROJECT_NAME, writeArduinoProject } from './helpers/arduino-build-project'
+import {
+  missingPrerequisite,
+  PROJECT_NAME,
+  SLM_CPU_0,
+  SOURCE_USER_DATA,
+  writeArduinoProject,
+} from './helpers/arduino-build-project'
 import { launch, quitApp } from './helpers/ethercat-project'
 
 test('a build with the board core missing installs nothing and points at Reinstall', async () => {
-  test.skip(missingPrerequisite(ARDUINO_MEGA) !== undefined, missingPrerequisite(ARDUINO_MEGA) ?? '')
+  test.skip(missingPrerequisite(SLM_CPU_0) !== undefined, missingPrerequisite(SLM_CPU_0) ?? '')
   test.setTimeout(300000)
-  const { userData } = writeArduinoProject('openplc-e2e-missing-core', ARDUINO_MEGA, 'empty')
+  const { userData } = writeArduinoProject('openplc-e2e-missing-core', SLM_CPU_0, 'empty')
   const data = join(userData, 'arduino', 'data')
+  // The startup check installs the simulator core here; reuse the download cache for it.
+  const cache = join(SOURCE_USER_DATA, 'arduino', 'data', 'staging')
+  if (existsSync(cache)) symlinkSync(cache, join(data, 'staging'))
   const { app, page } = await launch(userData)
   try {
     await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
@@ -29,9 +38,8 @@ test('a build with the board core missing installs nothing and points at Reinsta
     await expect(hint).toBeVisible({ timeout: 30000 })
     await expect(page.getByRole('button', { name: 'Build options' })).toBeEnabled({ timeout: 60000 })
 
-    // The build installed no core; arduino-cli only unpacks its own tools under packages/builtin.
-    const packages = join(data, 'packages')
-    expect((existsSync(packages) ? readdirSync(packages) : []).filter((vendor) => vendor !== 'builtin')).toEqual([])
+    // The build did not install the board's core.
+    expect(existsSync(join(data, 'packages', 'FACTS'))).toBe(false)
   } finally {
     await quitApp(app, page)
   }

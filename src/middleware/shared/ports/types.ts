@@ -820,6 +820,12 @@ export interface PackageInstallProgress {
   waiting?: boolean
 }
 
+/** A console message from the startup dependency check, kept until a console can show it. */
+export interface StartupNotice {
+  level: 'info' | 'warning'
+  message: string
+}
+
 export interface ImportResult {
   success: boolean
   canceled?: boolean

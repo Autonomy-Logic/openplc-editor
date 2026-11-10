@@ -30,6 +30,7 @@ import type {
   PackageManifest,
   RemoteCatalog,
   Result,
+  StartupNotice,
   Unsubscribe,
 } from '../../shared/ports/types'
 import { mockInstallFromRemote, mockListRemoteCatalog } from './remote-catalog-mock'
@@ -113,6 +114,16 @@ export function createEditorPackageAdapter(): PackagePort {
 
     onInstallProgress(callback: (progress: PackageInstallProgress) => void): Unsubscribe {
       return window.bridge.onPackageInstallProgress(callback)
+    },
+
+    onStartupNotices(callback: (notices: StartupNotice[]) => void): Unsubscribe {
+      const drain = () =>
+        void window.bridge.takeStartupNotices().then((notices) => {
+          if (notices.length > 0) callback(notices)
+        })
+      const unsubscribe = window.bridge.onStartupNoticesAvailable(drain)
+      drain()
+      return unsubscribe
     },
 
     async getManifest(packageId: string): Promise<PackageManifest | null> {
