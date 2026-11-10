@@ -94,10 +94,11 @@ test('"Try another SSH port" checks the port and opens the offer with only the g
   const screen = await RuntimeProvisioningPage.open(paths)
   try {
     await screen.reachOfferThroughPort(device.sshPort)
-    await expect(screen.dialog).toContainText('Install or start the OpenPLC Runtime')
+    await expect(screen.dialog).toContainText('Install OpenPLC Runtime')
     await expect(screen.dialog).toContainText(
-      `The OpenPLC Runtime is not running on ${PROVISIONING_HOST}, and an SSH server answered on port ${device.sshPort}.`,
+      `Enter your device login credentials to install OpenPLC Runtime on ${PROVISIONING_HOST}.`,
     )
+    await expect(screen.submit).toHaveText('Install')
     await expect(screen.dialog).toContainText('Device username')
     await expect(screen.dialog).not.toContainText('Login to OpenPLC Runtime')
     await expect(screen.dialog).not.toContainText('Create First User')

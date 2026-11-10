@@ -142,7 +142,7 @@ test('the debugger "Not Connected" offer opens the same flow and ends its reques
     await notConnected.getByRole('button', { name: 'Yes', exact: true }).click()
 
     await expect(screen.dialog).toBeVisible({ timeout: 15000 })
-    await expect(screen.dialog).toContainText('Install or start the OpenPLC Runtime')
+    await expect(screen.dialog).toContainText('Install OpenPLC Runtime')
     await expect(screen.sshPort).toHaveValue(String(device.sshPort))
     await expect(screen.page.getByText('Debugger session cancelled.')).toHaveCount(0)
     await expect(screen.page.getByText('Variables', { exact: true })).toHaveCount(0)
