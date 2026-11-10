@@ -3100,7 +3100,9 @@ class CompilerModule {
     }
 
     const debugResolver = await this.#createBoardInfoResolver()
-    const { boardRuntime } = debugResolver.resolve(boardTarget)
+    const { boardRuntime, isRuntimeV3, isRuntimeV4 } = debugResolver.resolve(boardTarget)
+    // Same rule as a normal build: an arduino-cli board keeps its build folder and the files it compiled.
+    const wipeBuildFolder = shouldWipeBuildFolder({ cleanBuild: false, isRuntimeV3, isRuntimeV4 })
     // Same reason as the compile path: a cloud project has no directory to build in.
     const normalizedProjectPath = resolveBuildWorkspace(projectPath.replace('project.json', ''))
     const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
@@ -3126,8 +3128,7 @@ class CompilerModule {
     }
 
     try {
-      // The debug flow writes its files outside planBuildTreeSync, so it still starts from an empty folder.
-      await this.createBasicDirectories(normalizedProjectPath, boardTarget, true)
+      await this.createBasicDirectories(normalizedProjectPath, boardTarget, wipeBuildFolder)
       _mainProcessPort.postMessage({
         logLevel: 'info',
         message: 'Directories for compilation source files created.',
@@ -3182,8 +3183,12 @@ class CompilerModule {
     _mainProcessPort.postMessage({ logLevel: 'info', message: `ST file generated at: ${programStPath}` })
 
     try {
-      await this.copyStaticFiles(compilationPath, boardRuntime)
-      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Static files copied successfully.' })
+      // The debug outputs need none of the firmware's static files; copying them over a kept
+      // folder would only give arduino-cli new timestamps to recompile.
+      if (wipeBuildFolder) {
+        await this.copyStaticFiles(compilationPath, boardRuntime)
+        _mainProcessPort.postMessage({ logLevel: 'info', message: 'Static files copied successfully.' })
+      }
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',
