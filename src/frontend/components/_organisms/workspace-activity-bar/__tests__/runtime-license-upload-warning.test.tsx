@@ -1,5 +1,5 @@
 /**
- * Every upload to an unlicensed runtime target ends with the GPLv3 disclaimer
+ * Every upload to an unlicensed runtime target or built-in board ends with the GPLv3 disclaimer
  * in the console, as a warning framed by rules of asterisks; nothing else does.
  */
 import type { OpenPLCStore } from '@root/frontend/store'
@@ -102,6 +102,49 @@ describe('Build and upload — runtime commercial licence warning', () => {
       expect(warnings()).not.toContain(commercialLicenseConsoleLines()[0])
       compileProgram.mockClear()
     }
+  })
+
+  it('warns after an upload to an unlicensed board whose link the upload dropped', async () => {
+    const ARDUINO = 'Arduino Uno'
+    const { deviceActions, workspaceActions, consoleActions } = store.getState()
+    deviceActions.setAvailableOptions({
+      availableBoards: new Map([[ARDUINO, { compiler: 'arduino-cli', core: 'arduino:avr', preview: '', specs: {} }]]),
+    })
+    deviceActions.setDeviceBoard(ARDUINO)
+    deviceActions.setCommunicationPort('/dev/ttyACM0')
+    deviceActions.setDeviceConnectionStatus('connected', '/dev/ttyACM0', 'rtu')
+    deviceActions.setRuntimeCommercialLicenseStatus('unlicensed')
+    workspaceActions.setCanEdit(false)
+    consoleActions.clearLogs()
+    compileProgram.mockImplementationOnce(() => {
+      store.getState().deviceActions.setRuntimeCommercialLicenseStatus(null)
+      return Promise.resolve({ success: true })
+    })
+
+    const ports: PlatformPorts = {
+      compiler: stubPort({ compileProgram }),
+      runtime: stubPort(),
+      debugger: stubPort(),
+      simulator: stubPort(),
+      project: stubPort(),
+      device: stubPort({
+        releaseSerialPort: () => Promise.resolve(true),
+        connect: () => Promise.resolve({ status: 'connected-with-firmware' }),
+      }),
+      orchestrator: stubPort(),
+      system: stubPort(),
+      window: stubPort(),
+      accelerator: stubPort(),
+      theme: stubPort(),
+      versionControl: stubPort(),
+      navigation: stubPort(),
+      library: stubPort(),
+      capabilities: EDITOR_CAPABILITIES,
+    }
+    render(<DefaultWorkspaceActivityBar />, { wrapper: createStoreWrapper(store, ports) })
+    chooseBuildOption('Build and upload')
+    const framed = commercialLicenseConsoleLines()
+    await waitFor(() => expect(warnings().slice(-framed.length)).toEqual(framed))
   })
 
   it('prints nothing for a compile-only build or a failed upload', async () => {

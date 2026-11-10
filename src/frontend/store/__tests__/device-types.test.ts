@@ -205,6 +205,8 @@ describe('Device slice types', () => {
         deviceLicense: { phase: 'idle', report: null, awaitingPurchaseUntil: null },
         runtimeCommercialLicense: {
           hardwareId: null,
+          boardDeviceId: null,
+          boardLicense: null,
           status: null,
           awaitingPurchaseUntil: null,
           checking: false,

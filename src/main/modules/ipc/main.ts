@@ -173,6 +173,11 @@ import {
   getPlcopenImportFilePath,
   getProjectPath,
 } from '../../../backend/editor/utils'
+import {
+  parseRuntimeLicenseDevKey,
+  RUNTIME_LICENSE_PRODUCT,
+  runtimeLicenseKeys,
+} from '../../../backend/shared/debug/runtime-license-verify'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import {
@@ -190,6 +195,15 @@ const EditSessionClientSchema = z.object({
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 
 const licenseField = (license: RuntimeCommercialLicense | undefined) => (license ? { license } : {})
+
+/** A request for the runtime product verifies the stored licence in full; `OPENPLC_RUNTIME_LICENSE_DEV_KEY` adds a key. */
+const licenseInput = (request: DeviceLicenseRequest) =>
+  request.packageId === RUNTIME_LICENSE_PRODUCT
+    ? {
+        ...request,
+        runtimeKeys: runtimeLicenseKeys(parseRuntimeLicenseDevKey(process.env.OPENPLC_RUNTIME_LICENSE_DEV_KEY)),
+      }
+    : request
 
 /** Why a channel could not be handed out. */
 interface ChannelUnavailable {
@@ -3040,7 +3054,7 @@ class MainProcessBridge implements MainIpcModule {
         const identity = await this.readLicenseIdentity(client)
         if ('error' in identity) return { outcome: checkFailedOutcome(identity) }
 
-        return await inspectDeviceLicense(client, { ...request, identity: identity.identity })
+        return await inspectDeviceLicense(client, { ...licenseInput(request), identity: identity.identity })
       } catch (error) {
         return { outcome: { state: 'check-failed', error: getErrorMessage(error) } }
       }
@@ -3072,7 +3086,7 @@ class MainProcessBridge implements MainIpcModule {
         const identity = await this.readLicenseIdentity(client)
         if ('error' in identity) return { outcome: checkFailedOutcome(identity) }
 
-        const report = await resolveDeviceLicense(client, { ...request, identity: identity.identity })
+        const report = await resolveDeviceLicense(client, { ...licenseInput(request), identity: identity.identity })
         // The license FCs are device traffic like any other: without noting them the
         // liveness poll can fall due mid-sequence and declare a healthy link lost.
         this.deviceSession.noteTraffic()

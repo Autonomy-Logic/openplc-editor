@@ -740,6 +740,7 @@ const Board = memo(function () {
                   <RuntimeCommercialLicenseStatus
                     status={runtimeLicense.status}
                     hardwareId={runtimeLicense.hardwareId}
+                    idLabel={runtimeLicense.idLabel}
                     buyUrl={runtimeLicense.buyUrl}
                     awaitingPurchase={runtimeLicense.awaitingPurchase}
                     onBuy={() => void runtimeLicense.buy()}
@@ -787,6 +788,16 @@ const Board = memo(function () {
                     onBuy={() => void licensing.buy()}
                     onRecheck={() => void licensing.refresh()}
                     onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
+                  />
+                ) : null}
+                {isConnected ? (
+                  <RuntimeCommercialLicenseStatus
+                    status={runtimeLicense.status}
+                    hardwareId={runtimeLicense.hardwareId}
+                    idLabel={runtimeLicense.idLabel}
+                    buyUrl={runtimeLicense.buyUrl}
+                    awaitingPurchase={runtimeLicense.awaitingPurchase}
+                    onBuy={() => void runtimeLicense.buy()}
                   />
                 ) : null}
               </DeviceConnectButton>
@@ -879,6 +890,16 @@ const Board = memo(function () {
                     onBuy={() => void licensing.buy()}
                     onRecheck={() => void licensing.refresh()}
                     onCancelPurchaseWatch={licensing.cancelPurchaseWatch}
+                  />
+                ) : null}
+                {isConnected ? (
+                  <RuntimeCommercialLicenseStatus
+                    status={runtimeLicense.status}
+                    hardwareId={runtimeLicense.hardwareId}
+                    idLabel={runtimeLicense.idLabel}
+                    buyUrl={runtimeLicense.buyUrl}
+                    awaitingPurchase={runtimeLicense.awaitingPurchase}
+                    onBuy={() => void runtimeLicense.buy()}
                   />
                 ) : null}
               </DeviceConnectButton>

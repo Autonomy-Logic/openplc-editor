@@ -129,6 +129,10 @@ export type RuntimeConnection = {
 export type RuntimeCommercialLicenseInfo = {
   /** Hardware ID the connected runtime reports (the host's in a vPLC), or null. */
   hardwareId: string | null
+  /** Device ID (32 hex) of the connected built-in board, derived from its 0x48 report, or null. */
+  boardDeviceId: string | null
+  /** Runtime licence the editor verified on the connected built-in board, or null when not known. */
+  boardLicense: RuntimeCommercialLicense | null
   /** Resolved status of the connected runtime target, or null while none is connected. */
   status: TargetCommercialLicenseStatus | null
   /** End (epoch ms) of the window in which a purchase started here is watched for, or null. */
@@ -323,6 +327,7 @@ export type DeviceActions = {
   setPlcSwitchPosition: (position: 'run' | 'stop' | null) => void
   setRuntimeLicense: (license: RuntimeCommercialLicense | null) => void
   setRuntimeHardwareId: (hardwareId: string | null) => void
+  setBoardRuntimeLicense: (board: { deviceId: string | null; license: RuntimeCommercialLicense | null }) => void
   setRuntimeCommercialLicenseStatus: (status: TargetCommercialLicenseStatus | null) => void
   setRuntimeLicensePurchaseWatch: (until: number | null) => void
   setRuntimeLicenseChecking: (checking: boolean) => void

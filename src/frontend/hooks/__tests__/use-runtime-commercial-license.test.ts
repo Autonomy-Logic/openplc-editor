@@ -1,3 +1,4 @@
+import type { DeviceLicenseReport, DevicePort } from '@root/middleware/shared/ports/device-port'
 import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { RuntimePort } from '@root/middleware/shared/ports/runtime-port'
 import type { BoardInfo, PackageManifest, RuntimeLicenseMode } from '@root/middleware/shared/ports/types'
@@ -7,11 +8,18 @@ import { act, renderHook } from '@testing-library/react'
 
 import type { OpenPLCStore } from '../../store'
 import { createStoreWrapper, createTestStore } from '../../store/testing'
-import { useRuntimeCommercialLicense, useRuntimeCommercialLicenseOwner } from '../use-runtime-commercial-license'
+import {
+  boardRuntimeLicense,
+  useRuntimeCommercialLicense,
+  useRuntimeCommercialLicenseOwner,
+} from '../use-runtime-commercial-license'
 
 const ID = `hw2:${'ab'.repeat(32)}`
 const RUNTIME_BOARD = 'OpenPLC Runtime v4'
 const VPP_BOARD = 'Vendor Board'
+const ARDUINO_BOARD = 'Arduino Uno'
+const SIMULATOR_BOARD = 'Simulator'
+const DEVICE_ID = 'c0'.repeat(16)
 
 const runtimeMock = {
   getHardwareId: jest.fn(),
@@ -23,6 +31,7 @@ const systemMock = {
   openExternalLink: jest.fn(),
 }
 const getManifest = jest.fn()
+const refreshLicense = jest.fn<Promise<DeviceLicenseReport>, [{ packageId: string }]>()
 
 function stubPort<T extends object>(overrides: Partial<T> = {}): T {
   return new Proxy(overrides as T, {
@@ -45,7 +54,7 @@ function buildPorts(): PlatformPorts {
     debugger: stubPort(),
     simulator: stubPort(),
     project: stubPort(),
-    device: stubPort(),
+    device: stubPort<DevicePort>({ refreshLicense: (request) => refreshLicense(request) }),
     orchestrator: stubPort(),
     system: stubPort({
       getEdgeFrontendUrl: () => systemMock.getEdgeFrontendUrl(),
@@ -74,7 +83,30 @@ const board = (vppPackageId?: string): BoardInfo =>
 const manifestWith = (runtimeLicense: RuntimeLicenseMode) =>
   ({ package: { id: 'com.example.board', runtimeLicense } }) as unknown as PackageManifest
 
+const baremetal = (compiler: 'arduino-cli' | 'simulator', vppPackageId?: string): BoardInfo =>
+  ({
+    compiler,
+    core: 'arduino:avr',
+    preview: '',
+    specs: {},
+    ...(vppPackageId ? { vpp: { packageId: vppPackageId } } : {}),
+  }) as BoardInfo
+
 let store: OpenPLCStore
+
+/** A built-in board on a held serial link. */
+function setupBoard(boardName = ARDUINO_BOARD) {
+  store = createTestStore()
+  const { deviceActions } = store.getState()
+  deviceActions.setAvailableOptions({
+    availableBoards: new Map([
+      [ARDUINO_BOARD, baremetal('arduino-cli', 'com.openplc.arduino')],
+      [SIMULATOR_BOARD, baremetal('simulator')],
+    ]),
+  })
+  deviceActions.setDeviceBoard(boardName)
+  deviceActions.setDeviceConnectionStatus('connected', '/dev/ttyACM0', 'rtu')
+}
 
 function setup(opts: { boardName?: string; license?: 'commercial' | 'gpl' | null } = {}) {
   store = createTestStore()
@@ -114,6 +146,10 @@ beforeEach(() => {
   runtimeMock.syncRuntimeLicenses.mockResolvedValue({ status: 'synced', hardwareId: ID, uploads: [] })
   systemMock.openExternalLink.mockResolvedValue({ success: true })
   getManifest.mockResolvedValue(null)
+  refreshLicense.mockResolvedValue({
+    deviceId: DEVICE_ID,
+    outcome: { state: 'unlicensed', entitlementChecked: true },
+  })
 })
 
 describe('useRuntimeCommercialLicenseOwner', () => {
@@ -275,5 +311,81 @@ describe('useRuntimeCommercialLicense', () => {
     await flush()
     expect(result.current.status).toBe('licensed')
     expect(result.current.awaitingPurchase).toBe(false)
+  })
+})
+
+describe('built-in boards', () => {
+  it('runs the board flow for the runtime product and shows the disclaimer when unlicensed', async () => {
+    getManifest.mockResolvedValue(manifestWith('user'))
+    setupBoard()
+    const { result } = renderOwner()
+    await flush()
+    expect(refreshLicense).toHaveBeenCalledWith({ packageId: 'com.autonomy.openplc-runtime' })
+    expect(runtimeMock.getHardwareId).not.toHaveBeenCalled()
+    expect(result.current.status).toBe('unlicensed')
+    expect(result.current.hardwareId).toBe(DEVICE_ID)
+    expect(result.current.idLabel).toBe('Device ID')
+    expect(result.current.buyUrl).toBe(
+      `https://edge.example.com/buy?vppId=com.autonomy.openplc-runtime&deviceId=${DEVICE_ID}`,
+    )
+    expect((dialog()?.data as DialogData).message).toBe(COMMERCIAL_LICENSE_DISCLAIMER)
+  })
+
+  it('shows nothing for a board whose runtime licence verifies', async () => {
+    getManifest.mockResolvedValue(manifestWith('user'))
+    refreshLicense.mockResolvedValue({ deviceId: DEVICE_ID, outcome: { state: 'licensed', how: 'already-stored' } })
+    setupBoard()
+    const { result } = renderOwner()
+    await flush()
+    expect(result.current.status).toBe('licensed')
+    expect(dialog()?.open ?? false).toBe(false)
+  })
+
+  it('does not run the flow on a vendor-paid VPP', async () => {
+    getManifest.mockResolvedValue(manifestWith('vendor'))
+    setupBoard()
+    const { result } = renderOwner()
+    await flush()
+    expect(refreshLicense).not.toHaveBeenCalled()
+    expect(result.current.status).toBe('licensed')
+  })
+
+  it('shows the dialog once per board across the link drop of an upload', async () => {
+    getManifest.mockResolvedValue(manifestWith('user'))
+    setupBoard()
+    renderOwner()
+    await flush()
+    act(() => store.getState().modalActions.closeModal())
+    act(() => store.getState().deviceActions.setDeviceConnectionStatus('disconnected', null))
+    await flush()
+    act(() => store.getState().deviceActions.setDeviceConnectionStatus('connected', '/dev/ttyACM0', 'rtu'))
+    await flush()
+    expect(refreshLicense).toHaveBeenCalledTimes(2)
+    expect(dialog()?.open ?? false).toBe(false)
+  })
+
+  it('shows nothing when the board check fails', async () => {
+    getManifest.mockResolvedValue(manifestWith('user'))
+    refreshLicense.mockResolvedValue({ outcome: { state: 'check-failed', error: 'no reply' } })
+    setupBoard()
+    const { result } = renderOwner()
+    await flush()
+    expect(result.current.status).toBe('unknown')
+    expect(dialog()?.open ?? false).toBe(false)
+  })
+
+  it('never runs for the simulator', async () => {
+    setupBoard(SIMULATOR_BOARD)
+    const { result } = renderOwner()
+    await flush()
+    expect(refreshLicense).not.toHaveBeenCalled()
+    expect(result.current.status).toBeNull()
+  })
+
+  it('maps board outcomes to a runtime licence', () => {
+    expect(boardRuntimeLicense({ state: 'licensed', how: 'activated' })).toBe('commercial')
+    expect(boardRuntimeLicense({ state: 'unlicensed', entitlementChecked: false })).toBe('gpl')
+    expect(boardRuntimeLicense({ state: 'unsupported' })).toBe('gpl')
+    expect(boardRuntimeLicense({ state: 'check-failed', error: 'x' })).toBeNull()
   })
 })

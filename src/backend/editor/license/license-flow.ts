@@ -15,6 +15,11 @@
 
 import type { DeviceLicenseReport, DeviceLicenseState } from '../../../middleware/shared/ports/device-port'
 import { crc32IsoHdlc, deserializeLicenseBlob, LIC_BLOB_SIZE, LIC_MAGIC_LE } from '../../shared/debug/license-blob'
+import {
+  type RuntimeLicenseKeys,
+  type RuntimeLicenseVerdict,
+  verifyRuntimeLicenseBlob,
+} from '../../shared/debug/runtime-license-verify'
 import type {
   DebugBoardIdProvisionResult,
   DebugDeviceIdResult,
@@ -105,6 +110,39 @@ export interface DeviceLicenseInput {
   identity: DeviceIdentity
   /** Reverse-domain VPP package id (`package.id`) from `resolveLicensingTarget`. */
   packageId: string
+  /**
+   * Set for the runtime licence of a built-in board: the stored blob is then
+   * verified in full, signature included, against these keys.
+   */
+  runtimeKeys?: RuntimeLicenseKeys
+}
+
+const RUNTIME_VERDICT_REASONS: Record<Exclude<RuntimeLicenseVerdict, { ok: true }>['reason'], string> = {
+  incomplete: 'The license stored on this device is incomplete.',
+  damaged: 'The license stored on this device is damaged.',
+  'not-a-license': 'The data stored on this device is not a license.',
+  format: 'The license stored on this device has a format this editor does not recognise.',
+  'other-device': 'The license stored on this device was issued for a different device.',
+  'other-product': 'The license stored on this device was issued for a different product.',
+  signature: 'The license stored on this device has a signature this editor does not accept.',
+}
+
+/** `verifyStoredLicenseBlob`, or the full runtime licence check when `input.runtimeKeys` is set. */
+async function verifyBlobFor(
+  blob: Uint8Array | undefined,
+  deviceIdHex: string,
+  input: { packageId: string; runtimeKeys?: RuntimeLicenseKeys },
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (!input.runtimeKeys) return verifyStoredLicenseBlob(blob, deviceIdHex, input.packageId)
+  if (!blob) return { ok: false, reason: RUNTIME_VERDICT_REASONS.incomplete }
+  const verdict = await verifyRuntimeLicenseBlob(blob, hexToBytes(deviceIdHex), input.runtimeKeys)
+  return verdict.ok ? verdict : { ok: false, reason: RUNTIME_VERDICT_REASONS[verdict.reason] }
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const out = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+  return out
 }
 
 /**
@@ -211,7 +249,7 @@ export async function resolveDeviceLicense(
     const stored = await readAndVerify(transport, deviceId, input)
     if (stored.kind !== 'absent') return { deviceId, outcome: stored.outcome }
 
-    return await recoverLicense(transport, { deviceId, packageId: input.packageId })
+    return await recoverLicense(transport, { deviceId, packageId: input.packageId, runtimeKeys: input.runtimeKeys })
   } catch (error) {
     return { deviceId, outcome: { state: 'check-failed', error: errorMessage(error) } }
   }
@@ -315,7 +353,7 @@ async function readAndVerify(
   }
 
   if (stored.status === LIC_STATUS_SUCCESS) {
-    const verdict = verifyStoredLicenseBlob(stored.blob, deviceId, input.packageId)
+    const verdict = await verifyBlobFor(stored.blob, deviceId, input)
     if (verdict.ok) return { kind: 'settled', outcome: { state: 'licensed', how: 'already-stored' } }
 
     // Deliberately NOT a failure: a stored blob that does not verify is the case
@@ -337,7 +375,7 @@ async function readAndVerify(
  */
 async function recoverLicense(
   transport: LicenseReadWritable,
-  input: { deviceId: string; packageId: string },
+  input: { deviceId: string; packageId: string; runtimeKeys?: RuntimeLicenseKeys },
 ): Promise<DeviceLicenseReport> {
   const { deviceId, packageId } = input
   const activation = await checkDeviceActivation({ deviceId, packageId })
@@ -392,10 +430,10 @@ async function recoverLicense(
     }
   }
 
-  const verdict = verifyStoredLicenseBlob(
+  const verdict = await verifyBlobFor(
     readBack.status === LIC_STATUS_SUCCESS ? readBack.blob : undefined,
     deviceId,
-    packageId,
+    input,
   )
   if (verdict.ok) return { deviceId, outcome: { state: 'licensed', how: 'activated' } }
 
