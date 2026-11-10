@@ -4,7 +4,9 @@ import {
   collectArduinoDependencies,
   coreIdFromPlatform,
   describeDependencyStep,
+  detectMissingArduinoDependency,
   GLOBAL_ARDUINO_LIBRARIES,
+  missingArduinoDependencyHint,
   parseArduinoCliProgress,
   planDependencyInstall,
   planDependencyRemoval,
@@ -146,5 +148,45 @@ describe('parseArduinoCliProgress', () => {
 
   it('returns null for output without a progress record', () => {
     expect(parseArduinoCliProgress('Downloading packages...\narduino:avr-gcc@7.3.0 downloaded\n')).toBeNull()
+  })
+})
+
+describe('detectMissingArduinoDependency', () => {
+  it('recognises a missing core', () => {
+    expect(
+      detectMissingArduinoDependency("Error during build: Platform 'FACTS:stm32' not found: platform not installed"),
+    ).toBe('platform')
+  })
+
+  it('recognises a missing header from gcc and from clang', () => {
+    expect(detectMissingArduinoDependency('a.cpp:3:10: fatal error: open62541.h: No such file or directory')).toBe(
+      'header',
+    )
+    expect(detectMissingArduinoDependency("a.cpp:3:10: fatal error: 'Settimino.h' file not found")).toBe('header')
+  })
+
+  it('ignores ordinary compile errors', () => {
+    expect(detectMissingArduinoDependency("a.cpp:12:5: error: 'foo' was not declared in this scope")).toBeNull()
+  })
+})
+
+describe('missingArduinoDependencyHint', () => {
+  it('sends the desktop user to Reinstall and the CLI user to packages install', () => {
+    expect(missingArduinoDependencyHint('platform', { simulator: false, surface: 'desktop' })).toContain(
+      'File > Board Package Manager...',
+    )
+    expect(missingArduinoDependencyHint('header', { simulator: false, surface: 'cli' })).toContain(
+      'openplc-cli packages install <file.vpp>',
+    )
+  })
+
+  it('names the simulator core instead of a board package for the simulator', () => {
+    const hint = missingArduinoDependencyHint('platform', { simulator: true, surface: 'desktop' })
+    expect(hint).toContain(SIMULATOR_CORE)
+    expect(hint).not.toContain('Board Package Manager')
+  })
+
+  it('returns null when nothing was missing', () => {
+    expect(missingArduinoDependencyHint(null, { simulator: false, surface: 'desktop' })).toBeNull()
   })
 })

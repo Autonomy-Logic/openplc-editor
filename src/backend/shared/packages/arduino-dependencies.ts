@@ -201,3 +201,38 @@ export function parseArduinoCliProgress(output: string): DownloadProgress | null
   }
   return null
 }
+
+/** What an arduino-cli build reported as missing: its core, or a header a library provides. */
+export type MissingArduinoDependency = 'platform' | 'header'
+
+/** Where the hint is shown, which decides how the user is told to repair the install. */
+export type DependencyHintSurface = 'desktop' | 'cli'
+
+const MISSING_PLATFORM = /Platform '[^']+' not found|platform not installed/i
+const MISSING_HEADER = /fatal error: [^\n]+?: No such file or directory|fatal error: '[^'\n]+' file not found/i
+
+/** Whether arduino-cli output shows a missing core or header, or null when it shows neither. */
+export function detectMissingArduinoDependency(output: string): MissingArduinoDependency | null {
+  if (MISSING_PLATFORM.test(output)) return 'platform'
+  if (MISSING_HEADER.test(output)) return 'header'
+  return null
+}
+
+/** The console hint for a build that failed on @p missing, or null when there is nothing to suggest. */
+export function missingArduinoDependencyHint(
+  missing: MissingArduinoDependency | null,
+  options: { simulator: boolean; surface: DependencyHintSurface },
+): string | null {
+  if (missing === null) return null
+  if (options.simulator) {
+    return (
+      `The simulator's Arduino core (${SIMULATOR_CORE}) or one of its libraries may be missing. ` +
+      'Start the OpenPLC Editor while connected to the internet so it can install them, then build again.'
+    )
+  }
+  const repair =
+    options.surface === 'cli'
+      ? 'Reinstall the board package with: openplc-cli packages install <file.vpp>'
+      : 'Open File > Board Package Manager..., select the board package and click Reinstall.'
+  return `The board package for this device may not be fully installed. ${repair} Then build again.`
+}

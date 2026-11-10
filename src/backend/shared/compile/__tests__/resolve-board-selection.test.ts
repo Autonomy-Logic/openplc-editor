@@ -241,9 +241,7 @@ describe('resolveBoardSelection', () => {
   })
 
   it('carries target.boardManagerUrl through to boardEntry', () => {
-    // A VPP whose core is not in arduino-cli's built-in index must surface
-    // its vendor index here, or the pipeline has nothing to hand to
-    // `installArduinoCore` and the install fails with "Platform not found".
+    // A VPP whose core is not in arduino-cli's built-in index carries its vendor index here.
     const boardManagerUrl =
       'https://apps.industrialshields.com/main/arduino/boards/package_industrialshields_index.json'
     const pkg: InstalledPackage = {

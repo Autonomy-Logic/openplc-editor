@@ -4,10 +4,7 @@
  * v3 is the legacy target that ingests a single `program.st` (not a v4
  * zip) and recompiles it on-device with MatIEC.  The pipeline must
  * therefore short-circuit to `uploadRuntimeV3` BEFORE any arduino-cli
- * step (core/lib install, firmware bundle, compile) — a regression
- * where the v3 branch sat after `installArduinoCore` made every v3
- * build die with "invalid empty core argument" (v3 has no Arduino
- * core).  These tests lock that ordering in.
+ * step (firmware bundle, compile).  These tests lock that ordering in.
  *
  * Kept in a separate file from `pipeline.test.ts` (which is stale from
  * the XML→JSON-transpiler migration and references the removed
@@ -55,8 +52,6 @@ function makePort(overrides: Partial<CompilerPlatformPort> = {}): jest.Mocked<Co
   return {
     computeMd5: jest.fn().mockResolvedValue('a'.repeat(32)),
     transpileToSt: jest.fn().mockResolvedValue({ ok: true, programSt: 'PROGRAM main\nEND_PROGRAM' }),
-    installArduinoCore: jest.fn().mockResolvedValue({ ok: true }),
-    installArduinoLib: jest.fn().mockResolvedValue({ ok: true }),
     compileArduino: jest.fn().mockResolvedValue({ ok: true, binary: new Uint8Array([1]) }),
     uploadRuntimeV4: jest.fn().mockResolvedValue({ ok: true }),
     uploadArduinoBoard: jest.fn().mockResolvedValue({ ok: true }),
@@ -125,8 +120,6 @@ describe('runCompilePipeline — Runtime v3 branch', () => {
 
     expect(result).toEqual({ success: true, md5: 'a'.repeat(32), uploaded: true })
     // The regression guard: v3 must never reach the Arduino path.
-    expect(port.installArduinoCore).not.toHaveBeenCalled()
-    expect(port.installArduinoLib).not.toHaveBeenCalled()
     expect(port.compileArduino).not.toHaveBeenCalled()
     expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
     // Strucpp still runs as an error-check before upload.
@@ -154,7 +147,7 @@ describe('runCompilePipeline — Runtime v3 branch', () => {
 
     expect(result).toEqual({ success: true, md5: 'a'.repeat(32), uploaded: false })
     expect(port.uploadRuntimeV3).not.toHaveBeenCalled()
-    expect(port.installArduinoCore).not.toHaveBeenCalled()
+    expect(port.compileArduino).not.toHaveBeenCalled()
   })
 
   it('warns and skips upload when no device context is configured', async () => {

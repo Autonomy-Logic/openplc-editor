@@ -77,7 +77,15 @@ export interface ArduinoProject {
   sketchDir: string
 }
 
-export function writeArduinoProject(name: string, fixture: BoardFixture): ArduinoProject {
+/**
+ * Writes a one-program project for @p fixture with its board package installed. `arduino`
+ * 'shared' borrows this machine's installed cores and libraries; 'empty' starts with none.
+ */
+export function writeArduinoProject(
+  name: string,
+  fixture: BoardFixture,
+  arduino: 'shared' | 'empty' = 'shared',
+): ArduinoProject {
   const root = join(realpathSync(tmpdir()), name)
   const project = join(root, 'project')
   const userData = join(root, 'userdata')
@@ -118,9 +126,13 @@ export function writeArduinoProject(name: string, fixture: BoardFixture): Arduin
   writeFileSync(join(project, 'pous', 'programs', 'main.st'), PROGRAM)
   writeFileSync(join(project, 'pous', 'function-blocks', 'extra_fb.st'), EXTRA_FB)
 
-  // Borrow the installed cores and libraries instead of downloading them again.
   mkdirSync(userData, { recursive: true })
-  symlinkSync(join(SOURCE_USER_DATA, 'arduino'), join(userData, 'arduino'))
+  if (arduino === 'shared') {
+    // Borrow the installed cores and libraries instead of downloading them again.
+    symlinkSync(join(SOURCE_USER_DATA, 'arduino'), join(userData, 'arduino'))
+  } else {
+    mkdirSync(join(userData, 'arduino', 'data'), { recursive: true })
+  }
 
   const packages = join(userData, 'packages')
   mkdirSync(packages, { recursive: true })

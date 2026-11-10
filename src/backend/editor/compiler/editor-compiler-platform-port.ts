@@ -46,8 +46,6 @@ import type {
   CompileArduinoArgs,
   CompileArduinoResult,
   CompilerPlatformPort,
-  InstallArduinoCoreArgs,
-  InstallArduinoLibArgs,
   MaterializeRuntimeV4BundleArgs,
   MaterializeRuntimeV4BundleResult,
   PackageVppPluginArgs,
@@ -125,8 +123,6 @@ export async function syncBuildFolder(
 export interface EditorCompilerHandlers {
   handleCompileArduinoProgram: CompilerModule['handleCompileArduinoProgram']
   handleUploadProgram: CompilerModule['handleUploadProgram']
-  handleCoreInstallation: CompilerModule['handleCoreInstallation']
-  handleLibraryInstallation: CompilerModule['handleLibraryInstallation']
   handleVendorPluginPackaging: CompilerModule['handleVendorPluginPackaging']
 }
 
@@ -280,69 +276,6 @@ export function createEditorCompilerPlatformPort(
         log(message, 'error')
       }
       return Promise.resolve(result)
-    },
-
-    /**
-     * Arduino-cli core install.  The existing
-     * `handleCoreInstallation` already takes a core id and a log
-     * callback — direct passthrough modulo the log-shape
-     * translation.
-     *
-     * `args.boardManagerUrl` (the VPP's `target.boardManagerUrl`) is
-     * forwarded so vendor cores outside arduino-cli's built-in index
-     * install automatically rather than failing with "Platform not
-     * found".  `handleCoreInstallation` refreshes the index against
-     * that URL before installing.
-     */
-    async installArduinoCore(args: InstallArduinoCoreArgs, log: PlatformLog): Promise<UploadResult> {
-      try {
-        await handlers.handleCoreInstallation(
-          args.coreId,
-          (chunk, level) => {
-            const message = typeof chunk === 'string' ? chunk : chunk.toString()
-            log(message, level ?? 'info')
-          },
-          args.coreVersion,
-          args.boardManagerUrl,
-        )
-        return { ok: true }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        log(`Arduino core install failed: ${message}`, 'error')
-        return { ok: false }
-      }
-    },
-
-    /**
-     * Arduino-cli library install.  Forwards `args.extraLibraries`
-     * (the per-board library list from `BoardBuildInfo`) to
-     * `handleLibraryInstallation`, which combines them with the
-     * editor's `GLOBAL_LIBRARIES` and runs `arduino-cli lib install`
-     * for whatever's missing.  `args.libId` is unused on this path —
-     * kept in the port shape for the legacy single-library callers.
-     */
-    async installArduinoLib(args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult> {
-      try {
-        await handlers.handleLibraryInstallation(
-          args.extraLibraries ?? [],
-          (chunk, level) => {
-            const message = typeof chunk === 'string' ? chunk : chunk.toString()
-            log(message, level ?? 'info')
-          },
-          args.thirdPartyLibraries ?? [],
-        )
-        return { ok: true }
-      } catch (error) {
-        // Reached only when the install machinery itself can't run
-        // (arduino-cli binary missing, spawn failure, etc.).  Non-
-        // zero `arduino-cli lib install` exits are warnings inside
-        // `handleLibraryInstallation` and don't throw.  Either way
-        // the build continues — arduino-cli compile is the source of
-        // truth for whether a required header can be found.
-        const message = error instanceof Error ? error.message : String(error)
-        log(`Warning: library install machinery failed: ${message}. Continuing build.`, 'warning')
-        return { ok: true }
-      }
     },
 
     /**
