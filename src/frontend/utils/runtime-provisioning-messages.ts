@@ -149,8 +149,8 @@ function deviceMessage(key: DeviceMessageKey, facts: ProvisioningMessageFacts): 
       }
     case 'offer':
       return {
-        title: 'Install or start the OpenPLC Runtime',
-        body: `The OpenPLC Runtime is not running on ${host}, and an SSH server answered on ${sshPortName(facts)}. With your permission, the editor logs in over SSH with an operating-system account of the device and installs or starts the runtime.`,
+        title: 'Install OpenPLC Runtime',
+        body: `Enter your device login credentials to install OpenPLC Runtime on ${host}.`,
       }
     case 'debugger-request-ended':
       return {

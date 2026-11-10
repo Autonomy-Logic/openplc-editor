@@ -292,7 +292,7 @@ const OfferStage = ({ view, form, onFormChange, onSubmit, onDecline }: OfferStag
             disabled={form.username === '' || form.password === ''}
             className={PRIMARY_BUTTON_CLASS}
           >
-            Install or start
+            Install
           </button>
           <button
             type='button'
