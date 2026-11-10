@@ -38,7 +38,7 @@ interface WriteObserver {
 const projectService = {
   readRawProjectFiles: jest.fn(() => Promise.resolve({ success: true })),
   updateProjectHistory: jest.fn(() => Promise.resolve()),
-  openProjectByPath: jest.fn(),
+  openProjectByPath: jest.fn(() => Promise.resolve({ success: true, data: { meta: { path: '' } } })),
   writeProjectFiles: jest.fn((_files: unknown, _observer?: WriteObserver) => Promise.resolve({ success: true })),
   saveFile: jest.fn(() => Promise.resolve({ success: true })),
 }
@@ -87,6 +87,9 @@ beforeEach(async () => {
   mainPath = join(projectRoot, 'pous', 'programs', 'main.st')
   writeFileSync(mainPath, 'PROGRAM main\nEND_PROGRAM')
   writeFileSync(join(projectRoot, 'project.json'), '{}')
+  projectService.openProjectByPath.mockImplementation(() =>
+    Promise.resolve({ success: true, data: { meta: { path: projectRoot } } }),
+  )
   bridge = createBridge()
   await invoke('project:open-by-path', projectRoot)
 })
