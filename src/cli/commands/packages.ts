@@ -12,6 +12,9 @@
  * of the package's arduino-cli cores and libraries happen here exactly as there. There is deliberately no flag to skip
  * them: a package the editor would refuse to install must not become installable
  * by scripting it.
+ *
+ * It also installs the simulator's core and the global libraries when missing,
+ * which the GUI does at start-up and the CLI has no other step for.
  */
 
 import { readdir, stat } from 'node:fs/promises'
@@ -20,8 +23,11 @@ import { extname, join, resolve } from 'node:path'
 import { CompilerModule } from '@root/backend/editor/compiler/compiler-module'
 import { HardwareModule } from '@root/backend/editor/hardware'
 import { PackageManagerModule } from '@root/backend/editor/package-manager'
+import { installArduinoDependencies } from '@root/backend/editor/package-manager/arduino-dependency-installer'
 import { VppDependencyService } from '@root/backend/editor/package-manager/vpp-dependency-service'
+import { STARTUP_ARDUINO_DEPENDENCIES } from '@root/backend/shared/packages/arduino-dependencies'
 import type { PackageInstallProgress } from '@root/middleware/shared/ports/types'
+import { formatInstallStep } from '@root/middleware/shared/utils/package-install-step'
 
 import type { ParsedArgs } from '../args'
 import { ErrorCode, ExitCode } from '../exit-codes'
@@ -86,9 +92,23 @@ async function runInstall(args: ParsedArgs, reporter: Reporter): Promise<CliResu
   }
 
   const compiler = new CompilerModule()
-  const dependencies = new VppDependencyService(new PackageManagerModule(), (args) => compiler.spawnArduinoCli(args))
+  const spawnCli = (cliArgs: string[]) => compiler.spawnArduinoCli(cliArgs)
+  const dependencies = new VppDependencyService(new PackageManagerModule(), spawnCli)
   const installed: { path: string; packageId?: string; devices?: string[] }[] = []
   const failed: { path: string; error: string }[] = []
+
+  const common = await installArduinoDependencies(
+    STARTUP_ARDUINO_DEPENDENCIES,
+    spawnCli,
+    dependencyProgressPrinter(reporter),
+    { keepGoing: true },
+  )
+  if (!common.ok) {
+    reporter.progress(
+      `  warning: could not install the simulator core and global libraries (${common.error}). ` +
+        'Builds that need them will fail; run this command again while connected to the internet.',
+    )
+  }
 
   for (const path of paths) {
     const result = await dependencies.importPackage(path, dependencyProgressPrinter(reporter))
@@ -125,8 +145,7 @@ function dependencyProgressPrinter(reporter: Reporter): (progress: PackageInstal
   let lastStep = ''
   const downloads = new Set<string>()
   return (progress) => {
-    const step =
-      progress.total > 0 ? `  ${progress.label} (${progress.step} of ${progress.total})` : `  ${progress.label}`
+    const step = `  ${formatInstallStep(progress)}`
     if (step !== lastStep) {
       lastStep = step
       reporter.progress(step)

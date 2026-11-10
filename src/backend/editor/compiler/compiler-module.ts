@@ -16,10 +16,7 @@ import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/g
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
 import { shouldWipeBuildFolder } from '@root/backend/shared/compile/steps/plan-build-tree-sync'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
-import {
-  type DependencyHintSurface,
-  GLOBAL_ARDUINO_LIBRARIES,
-} from '@root/backend/shared/packages/arduino-dependencies'
+import type { DependencyHintSurface } from '@root/backend/shared/packages/arduino-dependencies'
 
 import { execRecipeArgv } from './recipe-exec'
 // strucpp is loaded lazily because it uses ESM features (import.meta) that are
@@ -320,7 +317,6 @@ class CompilerModule {
    * in both. `#constructStrucppRuntimeDir` already asks this way.
    */
   static readonly DEVELOPMENT_MODE = !electronApp.isPackaged
-  static readonly GLOBAL_LIBRARIES: readonly string[] = GLOBAL_ARDUINO_LIBRARIES
 
   // Runtime API polling configuration (important-comment)
   // 20 minutes — large projects (50+ POUs) on a Pi 4 can take 10–15 min
@@ -330,7 +326,7 @@ class CompilerModule {
   static readonly COMPILATION_STATUS_TIMEOUT_MS = 20 * 60 * 1000
   static readonly COMPILATION_STATUS_POLL_INTERVAL_MS = 1000 // 1 second (important-comment)
 
-  /** How a build that fails on a missing core or library tells the user to repair it. */
+  /** How a build that fails on a missing core tells the user to repair it. */
   readonly dependencyHintSurface: DependencyHintSurface
 
   constructor(options: { dependencyHintSurface?: DependencyHintSurface } = {}) {

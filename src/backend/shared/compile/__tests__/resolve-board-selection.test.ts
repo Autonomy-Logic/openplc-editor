@@ -180,11 +180,9 @@ describe('resolveBoardSelection', () => {
     }
   })
 
-  it('maps a prebuilt arduino-hal VPP board: coreVersion + resolved precompiledLibraryDir', () => {
-    // Prebuilt mixed VPP: target.coreVersion (ABI-locked core) and
-    // hal.precompiledLibrary (vendor lib dir, resolved package-relative)
-    // must surface on boardEntry so the pipeline pins the core and passes
-    // the 2nd --library. The open hal.source integration layer stays.
+  it('maps a prebuilt arduino-hal VPP board: resolved precompiledLibraryDir', () => {
+    // hal.precompiledLibrary (vendor lib dir, resolved package-relative) must surface on
+    // boardEntry so the pipeline passes the 2nd --library. The open hal.source layer stays.
     const pkg: InstalledPackage = {
       packageId: 'com.automationdirect.p1am-prebuilt-test',
       version: '0.1.0',
@@ -233,63 +231,8 @@ describe('resolveBoardSelection', () => {
     if (result.ok) {
       expect(result.boardEntry.platform).toBe('FACTS:samd:P1AM-200')
       expect(result.boardEntry.core).toBe('FACTS:samd')
-      expect(result.boardEntry.coreVersion).toBe('1.7.13')
       // resolvePackageRelativePath fake joins as `${pkg.path}/${rel}`.
       expect(result.boardEntry.precompiledLibraryDir).toBe('/fake/packages/p1am/hal/arduino/lib')
-      expect(result.boardEntry.extra_libraries).toEqual(['P1AM'])
-    }
-  })
-
-  it('carries target.boardManagerUrl through to boardEntry', () => {
-    // A VPP whose core is not in arduino-cli's built-in index carries its vendor index here.
-    const boardManagerUrl =
-      'https://apps.industrialshields.com/main/arduino/boards/package_industrialshields_index.json'
-    const pkg: InstalledPackage = {
-      packageId: 'com.openplc.industrialshields',
-      version: '1.0.1',
-      installedAt: '2026-01-01T00:00:00.000Z',
-      path: '/fake/packages/industrialshields',
-      devices: ['esp32-plc-14-0-10v'],
-    }
-    const manifest: PackageManifest = {
-      formatVersion: '1.0',
-      package: {
-        id: 'com.openplc.industrialshields',
-        name: 'IndustrialShields PLCs',
-        version: '1.0.1',
-        vendor: { name: 'Industrial Shields', logo: 'l.png' },
-        description: 'd',
-      },
-      devices: [
-        {
-          id: 'esp32-plc-14-0-10v',
-          name: 'ESP32 PLC 14 0-10V',
-          preview: 'p.png',
-          target: {
-            type: 'arduino-cli',
-            core: 'industrialshields:esp32',
-            platform: 'industrialshields:esp32:plc14ios:cpu=plc14ios',
-            boardManagerUrl,
-          },
-          hal: {
-            type: 'arduino-hal',
-            source: 'hal/arduino/esp32plc.cpp',
-            define: 'ISPLC_ESP32_PLC_14_0_10V',
-          },
-        },
-      ],
-    }
-    const packageManager: PackageManagerPort = {
-      listInstalled: () => [pkg],
-      getInstalledPackageManifest: (id) => (id === pkg.packageId ? manifest : null),
-    }
-    const resolver = makeResolver({}, { packageManager })
-
-    const result = resolveBoardSelection(resolver, 'ESP32 PLC 14 0-10V')
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.boardEntry.core).toBe('industrialshields:esp32')
-      expect(result.boardEntry.boardManagerUrl).toBe(boardManagerUrl)
     }
   })
 })

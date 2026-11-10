@@ -1,8 +1,8 @@
 import { GLOBAL_ARDUINO_LIBRARIES } from '@root/backend/shared/packages/arduino-dependencies'
+import type { PackageInstallProgress } from '@root/middleware/shared/ports/types'
 import type { ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 
-import type { DependencyInstallProgress } from '../arduino-dependency-installer'
 import { installArduinoDependencies, queryInstalledArduinoState } from '../arduino-dependency-installer'
 import type { PackageManagerModule } from '../package-manager-module'
 import { StartupDependencyCheck } from '../startup-dependency-check'
@@ -75,7 +75,7 @@ function manifest(
 }
 
 describe('queryInstalledArduinoState', () => {
-  it('lists every library a build finds, and owns only the ones in the editor folder', async () => {
+  it('lists the editor and sketchbook libraries but not those bundled in a core, and owns only the editor ones', async () => {
     const cli = fakeCli({
       cores: { 'arduino:avr': '1.8.8' },
       libraries: [
@@ -86,7 +86,7 @@ describe('queryInstalledArduinoState', () => {
     })
     const state = await queryInstalledArduinoState(cli.spawn)
     expect(state.cores).toEqual({ 'arduino:avr': '1.8.8' })
-    expect([...state.libraries].sort()).toEqual(['Ethernet', 'EthernetENC', 'SPI'])
+    expect([...state.libraries].sort()).toEqual(['Ethernet', 'EthernetENC'])
     expect(state.ownedLibraries).toEqual(['EthernetENC'])
   })
 })
@@ -104,7 +104,7 @@ describe('installArduinoDependencies', () => {
       () => false,
       (args) => (args[1] === 'install' && args[0] === 'core' ? '\rarduino:tool@1 1.00 MiB / 2.00 MiB   50.00%' : ''),
     )
-    const progress: DependencyInstallProgress[] = []
+    const progress: PackageInstallProgress[] = []
     const result = await installArduinoDependencies(deps, cli.spawn, (p) => progress.push(p))
     expect(result).toEqual({ ok: true })
     expect(cli.calls.slice(2)).toEqual([
@@ -128,8 +128,19 @@ describe('installArduinoDependencies', () => {
     const cli = fakeCli({ cores: {}, libraries: [] })
     const controller = new AbortController()
     controller.abort()
-    const result = await installArduinoDependencies(deps, cli.spawn, () => undefined, controller.signal)
+    const result = await installArduinoDependencies(deps, cli.spawn, () => undefined, { signal: controller.signal })
     expect(result).toEqual({ ok: false, cancelled: true, error: 'Installation cancelled.' })
+  })
+
+  it('attempts every step with keepGoing and reports every failure', async () => {
+    const two = { cores: [], libraries: ['CAN', 'OneWire'], gitLibraries: [] }
+    const cli = fakeCli({ cores: {}, libraries: [] }, (args) => args[1] === 'install' && args[2] === 'CAN')
+    const result = await installArduinoDependencies(two, cli.spawn, () => undefined, { keepGoing: true })
+    expect(cli.calls.filter((args) => args[1] === 'install')).toEqual([
+      ['lib', 'install', 'CAN'],
+      ['lib', 'install', 'OneWire'],
+    ])
+    expect(result.ok === false && result.error).toMatch(/Installing library CAN failed/)
   })
 })
 
@@ -190,15 +201,62 @@ describe('VppDependencyService', () => {
     const gate = { isRunning: () => running, whenDone: () => done }
     const cli = fakeCli({ cores: {}, libraries: [] })
     const service = new VppDependencyService(packageManager([avrPackage], avrPackage), cli.spawn, gate)
-    const progress: DependencyInstallProgress[] = []
+    const progress: PackageInstallProgress[] = []
     const pending = service.reinstall('com.example.avr', (p) => progress.push(p))
     await new Promise((r) => setTimeout(r, 0))
-    expect(progress[0]?.waiting).toBe(true)
+    expect(progress[0]?.label).toBe('Waiting for the board dependency check to finish')
     expect(cli.calls).toEqual([])
     running = false
     release()
     expect(await pending).toEqual(expect.objectContaining({ success: true }))
     expect(cli.calls.some((args) => args[0] === 'core' && args[1] === 'install')).toBe(true)
+  })
+
+  it('installs a package that declares no arduino-cli dependency without arduino-cli or the start-up wait', async () => {
+    const runtimeOnly = {
+      package: { id: 'com.example.v4', name: 'v4', version: '1.0.0' },
+      devices: [{ id: 'v4', name: 'v4', preview: '', target: { type: 'runtime-v4' }, hal: { type: 'runtime-plugin' } }],
+    } as unknown as PackageManifest
+    const gate = { isRunning: () => true, whenDone: () => new Promise<void>(() => undefined) }
+    const cli = fakeCli({ cores: {}, libraries: [] })
+    const service = new VppDependencyService(packageManager([runtimeOnly], runtimeOnly), cli.spawn, gate)
+    expect(await service.reinstall('com.example.v4', () => undefined)).toEqual(
+      expect.objectContaining({ success: true }),
+    )
+    expect(cli.calls).toEqual([])
+  })
+
+  it('cancels at once while waiting for the start-up check', async () => {
+    const gate = { isRunning: () => true, whenDone: () => new Promise<void>(() => undefined) }
+    const cli = fakeCli({ cores: {}, libraries: [] })
+    const service = new VppDependencyService(packageManager([avrPackage], avrPackage), cli.spawn, gate)
+    const pending = service.reinstall('com.example.avr', () => undefined)
+    await new Promise((r) => setTimeout(r, 0))
+    service.cancel()
+    expect(await pending).toEqual(expect.objectContaining({ success: false, canceled: true }))
+    expect(cli.calls).toEqual([])
+  })
+
+  it('refuses an uninstall while an install runs, and reports removal progress', async () => {
+    let release: () => void = () => undefined
+    const done = new Promise<void>((resolve) => (release = resolve))
+    let running = true
+    const gate = { isRunning: () => running, whenDone: () => done }
+    const cli = fakeCli({
+      cores: { 'arduino:avr': '1.8.8', 'FACTS:samd': '1.7.13' },
+      libraries: [{ name: 'EthernetENC', location: 'user' }],
+    })
+    const service = new VppDependencyService(packageManager([avrPackage, samdPackage], samdPackage), cli.spawn, gate)
+    const install = service.reinstall('com.example.avr', () => undefined)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(await service.uninstall('com.example.samd')).toEqual(expect.objectContaining({ success: false }))
+    running = false
+    release()
+    await install
+    const progress: PackageInstallProgress[] = []
+    expect(await service.uninstall('com.example.samd', (p) => progress.push(p))).toEqual({ success: true })
+    expect(progress.every((p) => p.removing === true)).toBe(true)
+    expect(progress.map((p) => p.label)).toContain('Removing core FACTS:samd')
   })
 })
 

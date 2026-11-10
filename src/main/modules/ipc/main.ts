@@ -2358,7 +2358,7 @@ class MainProcessBridge implements MainIpcModule {
   }
   handlePackagesListInstalled = async () => this.packageManagerModule.listInstalled()
   handlePackagesUninstall = async (_event: IpcMainInvokeEvent, packageId: string) => {
-    const result = await this.vppDependencies.uninstall(packageId)
+    const result = await this.vppDependencies.uninstall(packageId, this.sendPackageInstallProgress)
     if (result.success) {
       this.mainWindow?.webContents.send('packages:boards-updated')
     }

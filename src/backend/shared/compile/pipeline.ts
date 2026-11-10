@@ -52,8 +52,8 @@ import { buildKnownPous, emitCompileErrorEvents } from '../library/program-build
 import { runProgramBuildPipeline } from '../library/program-build-pipeline'
 import {
   type DependencyHintSurface,
-  detectMissingArduinoDependency,
-  missingArduinoDependencyHint,
+  detectsMissingArduinoCore,
+  missingArduinoCoreHint,
 } from '../packages/arduino-dependencies'
 import type { DevicePin } from '../types/PLC/devices'
 // PLCProjectData is read from the schema-shape type (singular `configuration`)
@@ -124,12 +124,6 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
   /** Per-board #defines, fed through to `generateDefinesContent` as
    *  the `// Board defines` section. */
   define?: string | string[]
-  /** Per-board arduino-cli library list.  Sourced from `hals.json`
-   *  `extra_libraries` (static boards) and from VPP manifests'
-   *  `device.hal.extraArduinoLibraries` (installed VPP boards) — the
-   *  `BoardInfoResolver` collapses both onto the same key.  Installed
-   *  with the board package, not by the build. */
-  extra_libraries?: string[]
   /** Names of the device's configuration screens, and the physical transport it
    *  exposes. Forwarded from the VPP manifest so the pipeline can resolve the
    *  SAME Modbus profile the screen resolves — what the board can serve over is
@@ -145,17 +139,10 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
    *  prebuilt boards (the `source` HAL still compiles as the integration layer).
    *  Sourced from the VPP manifest `device.hal.precompiledLibrary`. */
   precompiledLibraryDir?: string
-  /** Exact Arduino core version a prebuilt arduino library is ABI-locked to,
-   *  installed with the board package. From the VPP manifest `target.coreVersion`. */
-  coreVersion?: string
   /** Upload transport for arduino-cli targets. Absent/"serial" (default):
    *  serial-port upload. "ethernet": network upload, with the device IP passed
    *  as arduino-cli's `--port`. From `target.uploadMethod`. */
   uploadMethod?: 'serial' | 'ethernet'
-  /** Vendor board-manager index (`package_<vendor>_index.json`).  From the
-   *  VPP manifest `target.boardManagerUrl` or hals.json `board_manager_url`.
-   *  Used when the board package installs its core. */
-  boardManagerUrl?: string
   /** Compiler / runtime identifier (`'arduino-cli' | 'openplc-compiler'
    *  | 'simulator'`).  Used by `resolveTargetCapabilities`'s
    *  preset lookup — without this the resolver can't pick the right
@@ -310,8 +297,8 @@ export interface RunCompilePipelineArgs {
    *  `resolveTargetCapabilities(boardEntry)`, keeping capability
    *  semantics in one place. */
   vendorScreenData?: Record<string, unknown>
-  /** Where to tell the user how to repair a missing core or library when arduino-cli
-   *  fails on one. Absent means no hint, for hosts that do not install them. */
+  /** Where to tell the user how to repair a missing core when arduino-cli fails on one.
+   *  Absent means no hint, for hosts that do not install cores. */
   dependencyHintSurface?: DependencyHintSurface
 }
 
@@ -1249,11 +1236,10 @@ async function runCompilePipelineInner(
     const failed = bailError(emit, 'arduino-compile', 'Arduino compilation failed', compileResult.errors)
     if (dependencyHintSurface) {
       const output = [...compileOutput, ...(compileResult.errors ?? []).map((e) => e.message)].join('\n')
-      const hint = missingArduinoDependencyHint(detectMissingArduinoDependency(output), {
-        simulator: isSimulator,
-        surface: dependencyHintSurface,
-      })
-      if (hint) emit({ stage: 'error', message: hint, level: 'error' })
+      if (detectsMissingArduinoCore(output)) {
+        const hint = missingArduinoCoreHint({ simulator: isSimulator, surface: dependencyHintSurface })
+        emit({ stage: 'error', message: hint, level: 'error' })
+      }
     }
     return failed
   }

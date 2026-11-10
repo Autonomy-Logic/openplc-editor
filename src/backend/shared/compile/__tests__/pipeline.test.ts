@@ -1502,7 +1502,7 @@ describe('runCompilePipeline — boardEntry shape variants', () => {
   })
 })
 
-describe('runCompilePipeline — missing core or library hint', () => {
+describe('runCompilePipeline — missing core hint', () => {
   const failWith = (message: string) =>
     makePort({
       compileArduino: jest.fn().mockResolvedValue({
@@ -1525,8 +1525,8 @@ describe('runCompilePipeline — missing core or library hint', () => {
     expect(events[events.length - 1].level).toBe('error')
   })
 
-  it('points the CLI user at packages install when a library header is missing', async () => {
-    const port = failWith('src/opcua.cpp:3:10: fatal error: open62541.h: No such file or directory')
+  it('points the CLI user at packages install when the board core is missing', async () => {
+    const port = failWith("Error during build: Platform 'FACTS:stm32' not found: platform not installed")
     const { events, emit } = captureEvents()
     await runCompilePipeline(
       makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli', dependencyHintSurface: 'cli' }),
@@ -1534,6 +1534,17 @@ describe('runCompilePipeline — missing core or library hint', () => {
       emit,
     )
     expect(lastMessage(events)).toContain('openplc-cli packages install <file.vpp>')
+  })
+
+  it("adds no hint for a missing header, which may be the user's own include", async () => {
+    const port = failWith('src/c_blocks_code.cpp:3:10: fatal error: NotInstalled.h: No such file or directory')
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli', dependencyHintSurface: 'desktop' }),
+      port,
+      emit,
+    )
+    expect(lastMessage(events)).toBe('Stopping compilation process.')
   })
 
   it('names the simulator core for a simulator build', async () => {
@@ -1544,7 +1555,7 @@ describe('runCompilePipeline — missing core or library hint', () => {
     expect(lastMessage(events)).not.toContain('Board Package Manager')
   })
 
-  it('adds no hint for a compile error that is not a missing dependency', async () => {
+  it('adds no hint for a compile error that is not a missing core', async () => {
     const port = failWith("src/generated.cpp:12:5: error: 'foo' was not declared in this scope")
     const { events, emit } = captureEvents()
     await runCompilePipeline(makeArgs({ dependencyHintSurface: 'desktop' }), port, emit)

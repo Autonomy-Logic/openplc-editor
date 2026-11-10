@@ -312,15 +312,8 @@ class UserService {
     await this.#checkIfLogFolderExists()
     await this.#checkIfUserHistoryFolderExists()
     await this.#checkIfArduinoCliConfigExists()
-    // The last step SHELLS OUT to arduino-cli, so it fails on a machine where it
-    // is not installed — and it is the least essential step here: it
-    // refreshes a cache of which cores arduino-cli has. Losing that
-    // degrades the install; it does not stop the editor, and it must not stop a
-    // command that never compiles anything (`--version`, `devices`, a debug
-    // session over websocket). The GUI already behaved this way by accident,
-    // its rejection swallowed by a fire-and-forget constructor; making it
-    // explicit is what lets the CLI await this call without inheriting a fatal
-    // dependency on a compiler toolchain it may not need.
+    // Shells out to arduino-cli to refresh the core list behind the board list's version
+    // label; must not be fatal for commands that never compile.
     await this.#tolerate('refresh the installed-core list', () => this.#checkIfArduinoCoreControlFileExists())
   }
 

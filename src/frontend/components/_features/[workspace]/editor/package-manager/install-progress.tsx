@@ -1,12 +1,15 @@
 /**
- * Progress of a board package's dependency installation: a hook that tracks the
- * running install, update or Reinstall, and the blocking modal that shows it.
+ * Progress of a board package's dependency installation or removal: a hook that
+ * tracks the running install, update, Reinstall or uninstall, and the blocking
+ * modal that shows it.
  */
 
 import type { PackageInstallProgress } from '@root/middleware/shared/ports/types'
 import { usePackages } from '@root/middleware/shared/providers/platform-context'
+import { formatInstallStep } from '@root/middleware/shared/utils/package-install-step'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import type { ModalActions } from '../../../../../store/slices/modal'
 import { Modal, ModalContent } from '../../../../_molecules/modal'
 
 export interface PackageInstallTracker {
@@ -55,22 +58,23 @@ export function PackageInstallProgressModal({ progress }: { progress: PackageIns
   }
 
   const percent = progress?.download?.percent
+  const removing = progress?.removing === true
   return (
     <Modal open={progress !== null}>
       <ModalContent
         className='flex h-fit w-[460px] select-none flex-col gap-4 rounded-lg p-6'
         onEscapeKeyDown={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
-        aria-label='Installing board package dependencies'
+        aria-label={removing ? 'Removing board package dependencies' : 'Installing board package dependencies'}
       >
-        <h2 className='text-lg font-medium text-neutral-950 dark:text-white'>Installing board package</h2>
+        <h2 className='text-lg font-medium text-neutral-950 dark:text-white'>
+          {removing ? 'Removing board package' : 'Installing board package'}
+        </h2>
         <p
           className='font-caption text-cp-sm text-neutral-850 dark:text-neutral-300'
           data-testid='package-install-step'
         >
-          {progress && progress.total > 0
-            ? `${progress.label} (${progress.step} of ${progress.total})`
-            : progress?.label}
+          {progress && formatInstallStep(progress)}
         </p>
         {progress?.download && (
           <div className='flex flex-col gap-1'>
@@ -82,17 +86,30 @@ export function PackageInstallProgressModal({ progress }: { progress: PackageIns
             </span>
           </div>
         )}
-        <div className='flex justify-end'>
-          <button
-            type='button'
-            onClick={cancel}
-            disabled={cancelling}
-            className='rounded-md bg-neutral-100 px-4 py-2 text-sm font-medium disabled:opacity-50 dark:bg-neutral-850 dark:text-neutral-100'
-          >
-            {cancelling ? 'Cancelling…' : 'Cancel'}
-          </button>
-        </div>
+        {!removing && (
+          <div className='flex justify-end'>
+            <button
+              type='button'
+              onClick={cancel}
+              disabled={cancelling}
+              className='rounded-md bg-neutral-100 px-4 py-2 text-sm font-medium disabled:opacity-50 dark:bg-neutral-850 dark:text-neutral-100'
+            >
+              {cancelling ? 'Cancelling…' : 'Cancel'}
+            </button>
+          </div>
+        )}
       </ModalContent>
     </Modal>
   )
+}
+
+/** Tells the user a package was uninstalled but some of its cores or libraries were not removed. */
+export function showUninstallWarning(openModal: ModalActions['openModal'], warning: string): void {
+  openModal('debugger-message', {
+    type: 'warning',
+    title: 'Package uninstalled',
+    message: warning,
+    buttons: ['OK'],
+    onResponse: () => {},
+  })
 }

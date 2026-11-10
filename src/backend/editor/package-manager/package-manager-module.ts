@@ -23,10 +23,8 @@ import { TRUSTED_PACKAGE_KEYS } from '../../shared/utils/vpp/trusted-keys'
 import { verifyPackageSignature } from '../../shared/utils/vpp/verify-package-signature'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
+import type { DependencyInstallResult } from './arduino-dependency-installer'
 import type { ImportResult, InstalledPackage, PackageIntegrityResult, PackageManifest, PackageRegistry } from './types'
-
-/** Outcome of installing a package's arduino-cli dependencies. */
-export type PackageDependencyOutcome = { ok: true } | { ok: false; cancelled: boolean; error: string }
 
 /**
  * Enforce cryptographic signature verification on every import. Strict by
@@ -52,7 +50,7 @@ class PackageManagerModule {
    */
   async importFromFile(
     vppFilePath: string,
-    installDependencies?: (manifest: PackageManifest) => Promise<PackageDependencyOutcome>,
+    installDependencies?: (manifest: PackageManifest) => Promise<DependencyInstallResult>,
   ): Promise<ImportResult> {
     // mkdtempSync gives us a guaranteed-unique scratch directory per call
     // so two concurrent imports don't race on the same `_temp_import`

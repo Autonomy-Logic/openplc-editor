@@ -808,16 +808,25 @@ export interface InstalledPackage {
   devices: string[]
 }
 
-/** Progress of a board package's dependency installation (cores and libraries). */
+/** An archive arduino-cli is downloading, with sizes as it prints them. */
+export interface PackageDownloadProgress {
+  /** The archive, e.g. `arduino:avr-gcc@7.3.0-atmel3.6.1-arduino5`. */
+  item: string
+  /** Bytes so far and total, e.g. `12.34 MiB`. */
+  done: string
+  total: string
+  percent: number
+}
+
+/** Progress of a board package's dependency installation or removal (cores and libraries). */
 export interface PackageInstallProgress {
   /** 1-based position of the running step; 0 while waiting. */
   step: number
   total: number
   label: string
-  /** The archive being downloaded, with sizes as arduino-cli prints them. */
-  download?: { item: string; done: string; total: string; percent: number }
-  /** Set while the install waits for the start-up dependency check to finish. */
-  waiting?: boolean
+  download?: PackageDownloadProgress
+  /** Set while an uninstall removes the package's cores and libraries, which cannot be cancelled. */
+  removing?: boolean
 }
 
 /** A console message from the startup dependency check, kept until a console can show it. */

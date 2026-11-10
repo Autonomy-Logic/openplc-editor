@@ -15,13 +15,13 @@ import type { TargetCapabilities } from '../../../middleware/shared/utils/target
 
 export interface ThirdPartyLibrary {
   /** `name` from the library's `library.properties`, which is what
-   *  `arduino-cli lib list` reports and what the installed-library cache is
-   *  keyed on. It must match exactly or the library looks perpetually missing. */
+   *  `arduino-cli lib list` reports. It must match exactly or the library
+   *  looks perpetually missing. */
   name: string
   /** Clone URL. No ref: the default branch is what production uses. */
   gitUrl: string
-  /** Shown in the compile log when the library is installed, so a user who sees
-   *  an unfamiliar download knows what asked for it. */
+  /** Shown in the install progress next to the library, so a user who sees an
+   *  unfamiliar download knows what asked for it. */
   reason: string
 }
 

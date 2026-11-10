@@ -4,9 +4,10 @@ import {
   collectArduinoDependencies,
   coreIdFromPlatform,
   describeDependencyStep,
-  detectMissingArduinoDependency,
+  dependencyStepName,
+  detectsMissingArduinoCore,
   GLOBAL_ARDUINO_LIBRARIES,
-  missingArduinoDependencyHint,
+  missingArduinoCoreHint,
   parseArduinoCliProgress,
   planDependencyInstall,
   planDependencyRemoval,
@@ -151,42 +152,57 @@ describe('parseArduinoCliProgress', () => {
   })
 })
 
-describe('detectMissingArduinoDependency', () => {
+describe('detectsMissingArduinoCore', () => {
   it('recognises a missing core', () => {
     expect(
-      detectMissingArduinoDependency("Error during build: Platform 'FACTS:stm32' not found: platform not installed"),
-    ).toBe('platform')
+      detectsMissingArduinoCore("Error during build: Platform 'FACTS:stm32' not found: platform not installed"),
+    ).toBe(true)
   })
 
-  it('recognises a missing header from gcc and from clang', () => {
-    expect(detectMissingArduinoDependency('a.cpp:3:10: fatal error: open62541.h: No such file or directory')).toBe(
-      'header',
-    )
-    expect(detectMissingArduinoDependency("a.cpp:3:10: fatal error: 'Settimino.h' file not found")).toBe('header')
+  it("ignores a missing header, which may be the user's own include", () => {
+    expect(
+      detectsMissingArduinoCore('c_blocks_code.cpp:3:10: fatal error: NotInstalled.h: No such file or directory'),
+    ).toBe(false)
+    expect(detectsMissingArduinoCore("a.cpp:3:10: fatal error: 'Settimino.h' file not found")).toBe(false)
   })
 
   it('ignores ordinary compile errors', () => {
-    expect(detectMissingArduinoDependency("a.cpp:12:5: error: 'foo' was not declared in this scope")).toBeNull()
+    expect(detectsMissingArduinoCore("a.cpp:12:5: error: 'foo' was not declared in this scope")).toBe(false)
   })
 })
 
-describe('missingArduinoDependencyHint', () => {
+describe('missingArduinoCoreHint', () => {
   it('sends the desktop user to Reinstall and the CLI user to packages install', () => {
-    expect(missingArduinoDependencyHint('platform', { simulator: false, surface: 'desktop' })).toContain(
+    expect(missingArduinoCoreHint({ simulator: false, surface: 'desktop' })).toContain(
       'File > Board Package Manager...',
     )
-    expect(missingArduinoDependencyHint('header', { simulator: false, surface: 'cli' })).toContain(
+    expect(missingArduinoCoreHint({ simulator: false, surface: 'cli' })).toContain(
       'openplc-cli packages install <file.vpp>',
     )
   })
 
-  it('names the simulator core instead of a board package for the simulator', () => {
-    const hint = missingArduinoDependencyHint('platform', { simulator: true, surface: 'desktop' })
-    expect(hint).toContain(SIMULATOR_CORE)
-    expect(hint).not.toContain('Board Package Manager')
+  it('names the simulator core and the repair for each surface', () => {
+    const desktop = missingArduinoCoreHint({ simulator: true, surface: 'desktop' })
+    expect(desktop).toContain(SIMULATOR_CORE)
+    expect(desktop).toContain('Start the OpenPLC Editor')
+    expect(desktop).not.toContain('Board Package Manager')
+    const cli = missingArduinoCoreHint({ simulator: true, surface: 'cli' })
+    expect(cli).toContain(SIMULATOR_CORE)
+    expect(cli).toContain('openplc-cli packages install')
+    expect(cli).not.toContain('Start the OpenPLC Editor')
+  })
+})
+
+describe('dependencyStepName', () => {
+  it('names the core, the index library without its version, and the git library', () => {
+    expect(dependencyStepName({ kind: 'core', core: { id: 'arduino:avr' } })).toBe('arduino:avr')
+    expect(dependencyStepName({ kind: 'library', name: 'P1AM@1.0.0' })).toBe('P1AM')
+    expect(dependencyStepName({ kind: 'git-library', library: OPEN62541_LIBRARY })).toBe('open62541')
   })
 
-  it('returns null when nothing was missing', () => {
-    expect(missingArduinoDependencyHint(null, { simulator: false, surface: 'desktop' })).toBeNull()
+  it('says what asked for a git library in its install label', () => {
+    expect(describeDependencyStep({ kind: 'git-library', library: OPEN62541_LIBRARY })).toBe(
+      'Installing library open62541 (OPC-UA server)',
+    )
   })
 })

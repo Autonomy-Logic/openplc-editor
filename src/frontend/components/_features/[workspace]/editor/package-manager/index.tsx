@@ -18,7 +18,7 @@ import { usePackages } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { CatalogBrowser } from './catalog-browser'
-import { PackageInstallProgressModal, usePackageInstallTracker } from './install-progress'
+import { PackageInstallProgressModal, showUninstallWarning, usePackageInstallTracker } from './install-progress'
 
 type ViewMode = 'installed' | 'catalog'
 
@@ -104,19 +104,11 @@ const PackageManagerEditor = () => {
 
   const handleUninstall = async () => {
     if (!selectedPackageId || !packages) return
-    const result = await packages.uninstall(selectedPackageId)
+    const result = await installTracker.track(() => packages.uninstall(selectedPackageId))
     if (result.success) {
       setSelectedPackageId(null)
       await refreshPackages()
-      if (result.warning) {
-        openModal('debugger-message', {
-          type: 'warning',
-          title: 'Package uninstalled',
-          message: result.warning,
-          buttons: ['OK'],
-          onResponse: () => {},
-        })
-      }
+      if (result.warning) showUninstallWarning(openModal, result.warning)
     } else {
       openModal('debugger-message', {
         type: 'error',

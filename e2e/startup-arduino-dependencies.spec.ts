@@ -57,6 +57,8 @@ test('missing simulator core and global libraries are installed once at startup,
   ;({ app, page } = await launch(userData))
   try {
     await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
+    // Let the start-up check finish its installed-state query, which takes a few seconds even when nothing is missing.
+    await page.waitForTimeout(5000)
     await buildAndWait(page, sketchDir, 'Build only')
     await expect(page.getByText(INSTALLING)).toHaveCount(0)
     await expect(page.getByText(/Waiting for the editor to finish installing/)).toHaveCount(0)

@@ -34,7 +34,9 @@ test('a build with the board core missing installs nothing and points at Reinsta
     await page.getByText('Build only', { exact: true }).click({ timeout: 15000 })
 
     await expect(page.getByText('Arduino compilation failed').first()).toBeVisible({ timeout: 240000 })
-    const hint = page.getByText(/may not be fully installed\. Open File > Board Package Manager\.\.\./).first()
+    const hint = page
+      .getByText(/core for this device is not installed\. Open File > Board Package Manager\.\.\./)
+      .first()
     await expect(hint).toBeVisible({ timeout: 30000 })
     await expect(page.getByRole('button', { name: 'Build options' })).toBeEnabled({ timeout: 60000 })
 

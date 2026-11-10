@@ -6,7 +6,7 @@
  * with arduino-cli; the web build has no local arduino-cli and never runs them.
  */
 
-import type { PackageManifest } from '../../../middleware/shared/ports/types'
+import type { PackageDownloadProgress, PackageManifest } from '../../../middleware/shared/ports/types'
 import { resolveTargetCapabilities } from '../../../middleware/shared/utils/target-capabilities'
 import { selectThirdPartyLibraries, type ThirdPartyLibrary } from '../compile/third-party-libraries'
 
@@ -177,23 +177,26 @@ export function describeDependencyStep(step: DependencyStep): string {
     case 'library':
       return `Installing library ${step.name}`
     case 'git-library':
-      return `Installing library ${step.library.name}`
+      return `Installing library ${step.library.name} (${step.library.reason})`
   }
 }
 
-export interface DownloadProgress {
-  /** The archive being downloaded, e.g. `arduino:avr-gcc@7.3.0-atmel3.6.1-arduino5`. */
-  item: string
-  /** Bytes so far and total, as arduino-cli prints them, e.g. `12.34 MiB`. */
-  done: string
-  total: string
-  percent: number
+/** The name of what @p step installs, e.g. `arduino:avr` or `Ethernet`. */
+export function dependencyStepName(step: DependencyStep): string {
+  switch (step.kind) {
+    case 'core':
+      return step.core.id
+    case 'library':
+      return libraryName(step.name)
+    case 'git-library':
+      return step.library.name
+  }
 }
 
 const PROGRESS_RECORD = /^(\S+)\s+([\d.]+\s*[KMGT]?i?B)\s*\/\s*([\d.]+\s*[KMGT]?i?B)\s+([\d.]+)%/
 
 /** The last download-progress record in a chunk of arduino-cli output, or null when there is none. */
-export function parseArduinoCliProgress(output: string): DownloadProgress | null {
+export function parseArduinoCliProgress(output: string): PackageDownloadProgress | null {
   const records = output.split(/[\r\n]+/)
   for (let index = records.length - 1; index >= 0; index--) {
     const match = PROGRESS_RECORD.exec(records[index].trim())
@@ -202,39 +205,30 @@ export function parseArduinoCliProgress(output: string): DownloadProgress | null
   return null
 }
 
-/** What an arduino-cli build reported as missing: its core, or a header a library provides. */
-export type MissingArduinoDependency = 'platform' | 'header'
-
 /** Where the hint is shown, which decides how the user is told to repair the install. */
 export type DependencyHintSurface = 'desktop' | 'cli'
 
-const MISSING_PLATFORM = /Platform '[^']+' not found|platform not installed/i
-const MISSING_HEADER = /fatal error: [^\n]+?: No such file or directory|fatal error: '[^'\n]+' file not found/i
+const MISSING_CORE = /Platform '[^']+' not found|platform not installed/i
 
-/** Whether arduino-cli output shows a missing core or header, or null when it shows neither. */
-export function detectMissingArduinoDependency(output: string): MissingArduinoDependency | null {
-  if (MISSING_PLATFORM.test(output)) return 'platform'
-  if (MISSING_HEADER.test(output)) return 'header'
-  return null
+/** Whether arduino-cli output shows that the board's core is not installed. */
+export function detectsMissingArduinoCore(output: string): boolean {
+  return MISSING_CORE.test(output)
 }
 
-/** The console hint for a build that failed on @p missing, or null when there is nothing to suggest. */
-export function missingArduinoDependencyHint(
-  missing: MissingArduinoDependency | null,
-  options: { simulator: boolean; surface: DependencyHintSurface },
-): string | null {
-  if (missing === null) return null
+/** The console hint for a build that failed because its core is not installed. */
+export function missingArduinoCoreHint(options: { simulator: boolean; surface: DependencyHintSurface }): string {
   if (options.simulator) {
-    return (
-      `The simulator's Arduino core (${SIMULATOR_CORE}) or one of its libraries may be missing. ` +
-      'Start the OpenPLC Editor while connected to the internet so it can install them, then build again.'
-    )
+    const repair =
+      options.surface === 'cli'
+        ? 'Run openplc-cli packages install <file.vpp> with any board package while connected to the internet; it also installs the simulator core.'
+        : 'Start the OpenPLC Editor while connected to the internet so it can install it.'
+    return `The simulator's Arduino core (${SIMULATOR_CORE}) is not installed. ${repair} Then build again.`
   }
   const repair =
     options.surface === 'cli'
       ? 'Reinstall the board package with: openplc-cli packages install <file.vpp>'
       : 'Open File > Board Package Manager..., select the board package and click Reinstall.'
-  return `The board package for this device may not be fully installed. ${repair} Then build again.`
+  return `The Arduino core for this device is not installed. ${repair} Then build again.`
 }
 
 /** What the editor installs at startup when missing: the simulator's core and the global libraries. */
@@ -246,10 +240,7 @@ export const STARTUP_ARDUINO_DEPENDENCIES: ArduinoDependencies = {
 
 /** The console line announcing what the startup check is about to install. */
 export function startupInstallNotice(steps: readonly DependencyStep[]): string {
-  const names = steps.map((step) =>
-    step.kind === 'core' ? step.core.id : step.kind === 'library' ? libraryName(step.name) : step.library.name,
-  )
-  return `Installing Arduino components every build needs: ${names.join(', ')}.`
+  return `Installing Arduino components every build needs: ${steps.map(dependencyStepName).join(', ')}.`
 }
 
 /** The console warning when the startup check could not install what was missing. */

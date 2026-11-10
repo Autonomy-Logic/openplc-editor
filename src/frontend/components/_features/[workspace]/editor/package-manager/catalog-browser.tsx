@@ -34,6 +34,8 @@ import type { RemoteCatalogEntry, RemoteVersionEntry } from '@root/middleware/sh
 import { usePackages } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { showUninstallWarning } from './install-progress'
+
 interface CatalogBrowserProps {
   installedVersions: Map<string, string>
   /**
@@ -120,18 +122,10 @@ const CatalogBrowser = ({ installedVersions, onInstalled, trackInstall }: Catalo
       if (!packages) return
       setBusyId(packageId)
       try {
-        const result = await packages.uninstall(packageId)
+        const result = await trackInstall(() => packages.uninstall(packageId))
         if (result.success) {
           onInstalled()
-          if (result.warning) {
-            openModal('debugger-message', {
-              type: 'warning',
-              title: 'Package uninstalled',
-              message: result.warning,
-              buttons: ['OK'],
-              onResponse: () => {},
-            })
-          }
+          if (result.warning) showUninstallWarning(openModal, result.warning)
         } else {
           openModal('debugger-message', {
             type: 'error',
@@ -145,7 +139,7 @@ const CatalogBrowser = ({ installedVersions, onInstalled, trackInstall }: Catalo
         setBusyId(null)
       }
     },
-    [packages, openModal, onInstalled],
+    [packages, openModal, onInstalled, trackInstall],
   )
 
   if (!packages) {

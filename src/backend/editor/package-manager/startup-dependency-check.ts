@@ -65,7 +65,9 @@ export class StartupDependencyCheck implements StartupDependencyGate {
     const steps = planDependencyInstall(STARTUP_ARDUINO_DEPENDENCIES, installed)
     if (steps.length === 0) return
     this.#notify('info', startupInstallNotice(steps))
-    const result = await installArduinoDependencies(STARTUP_ARDUINO_DEPENDENCIES, this.spawnCli, () => undefined)
+    const result = await installArduinoDependencies(STARTUP_ARDUINO_DEPENDENCIES, this.spawnCli, () => undefined, {
+      keepGoing: true,
+    })
     if (result.ok) this.#notify('info', 'Arduino components installed.')
     else this.#notify('warning', startupInstallWarning(result.error))
   }

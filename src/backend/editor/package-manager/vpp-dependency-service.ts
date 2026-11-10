@@ -9,18 +9,19 @@ import {
   collectArduinoDependencies,
   planDependencyRemoval,
 } from '@root/backend/shared/packages/arduino-dependencies'
+import type { PackageInstallProgress } from '@root/middleware/shared/ports/types'
 
 import {
   type ArduinoCliSpawner,
-  type DependencyInstallProgress,
+  type DependencyInstallResult,
   installArduinoDependencies,
   queryInstalledArduinoState,
   removeArduinoDependencies,
 } from './arduino-dependency-installer'
-import type { PackageDependencyOutcome, PackageManagerModule } from './package-manager-module'
+import type { PackageManagerModule } from './package-manager-module'
 import type { ImportResult, PackageManifest } from './types'
 
-export type DependencyProgressListener = (progress: DependencyInstallProgress) => void
+export type DependencyProgressListener = (progress: PackageInstallProgress) => void
 
 /** The background start-up dependency check, which installs and uninstalls wait for. */
 export interface StartupDependencyGate {
@@ -29,6 +30,21 @@ export interface StartupDependencyGate {
 }
 
 const NO_STARTUP_CHECK: StartupDependencyGate = { isRunning: () => false, whenDone: () => Promise.resolve() }
+
+const BUSY = 'Another board package installation or removal is running.'
+const WAITING = 'Waiting for the board dependency check to finish'
+
+function declaresNothing(dependencies: ArduinoDependencies): boolean {
+  return dependencies.cores.length + dependencies.libraries.length + dependencies.gitLibraries.length === 0
+}
+
+/** Resolves when @p signal aborts; never rejects. */
+function whenAborted(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) resolve()
+    else signal.addEventListener('abort', () => resolve(), { once: true })
+  })
+}
 
 export class VppDependencyService {
   #active: AbortController | null = null
@@ -61,25 +77,47 @@ export class VppDependencyService {
   /**
    * Uninstalls @p packageId, then removes the cores and libraries no other installed
    * package declares. A removal failure does not undo the uninstall; it comes back
-   * as a warning.
+   * as a warning. Runs alone: not while an install, Reinstall or other uninstall runs.
    */
-  async uninstall(packageId: string): Promise<{ success: boolean; error?: string; warning?: string }> {
-    const manifest = this.packageManager.getInstalledPackageManifest(packageId)
-    const result = this.packageManager.uninstall(packageId)
-    if (!result.success || !manifest) return result
+  async uninstall(
+    packageId: string,
+    onProgress: DependencyProgressListener = () => undefined,
+  ): Promise<{ success: boolean; error?: string; warning?: string }> {
+    if (this.#active) return { success: false, error: BUSY }
+    this.#active = new AbortController()
     try {
-      await this.startup.whenDone()
+      const manifest = this.packageManager.getInstalledPackageManifest(packageId)
+      const result = this.packageManager.uninstall(packageId)
+      if (!result.success || !manifest) return result
+      const removed = collectArduinoDependencies(manifest)
+      if (declaresNothing(removed)) return { success: true }
+      return await this.#removeDependencies(removed, onProgress)
+    } finally {
+      this.#active = null
+    }
+  }
+
+  async #removeDependencies(
+    removed: ArduinoDependencies,
+    onProgress: DependencyProgressListener,
+  ): Promise<{ success: boolean; warning?: string }> {
+    try {
+      if (this.startup.isRunning()) {
+        onProgress({ step: 0, total: 0, label: WAITING, removing: true })
+        await this.startup.whenDone()
+      }
+      onProgress({ step: 0, total: 0, label: "Removing the package's cores and libraries", removing: true })
       const remaining: ArduinoDependencies[] = this.packageManager
         .listInstalled()
         .map((pkg) => this.packageManager.getInstalledPackageManifest(pkg.packageId))
         .filter((other): other is PackageManifest => other !== null)
         .map(collectArduinoDependencies)
       const installed = await queryInstalledArduinoState(this.spawnCli)
-      const plan = planDependencyRemoval(collectArduinoDependencies(manifest), remaining, {
+      const plan = planDependencyRemoval(removed, remaining, {
         cores: installed.ownedCores,
         libraries: installed.ownedLibraries,
       })
-      const failures = await removeArduinoDependencies(plan, this.spawnCli)
+      const failures = await removeArduinoDependencies(plan, this.spawnCli, onProgress)
       if (failures.length > 0) return { success: true, warning: `Could not remove ${failures.join(', ')}.` }
       return { success: true }
     } catch (err) {
@@ -90,22 +128,19 @@ export class VppDependencyService {
     }
   }
 
-  async #install(manifest: PackageManifest, onProgress: DependencyProgressListener): Promise<PackageDependencyOutcome> {
-    if (this.#active) return { ok: false, cancelled: false, error: 'Another board package installation is running.' }
+  async #install(manifest: PackageManifest, onProgress: DependencyProgressListener): Promise<DependencyInstallResult> {
+    const dependencies = collectArduinoDependencies(manifest)
+    if (declaresNothing(dependencies)) return { ok: true }
+    if (this.#active) return { ok: false, cancelled: false, error: BUSY }
     const controller = new AbortController()
     this.#active = controller
     try {
       if (this.startup.isRunning()) {
-        onProgress({ step: 0, total: 0, label: 'Waiting for the board dependency check to finish', waiting: true })
-        await this.startup.whenDone()
+        onProgress({ step: 0, total: 0, label: WAITING })
+        await Promise.race([this.startup.whenDone(), whenAborted(controller.signal)])
       }
       if (controller.signal.aborted) return { ok: false, cancelled: true, error: 'Installation cancelled.' }
-      return await installArduinoDependencies(
-        collectArduinoDependencies(manifest),
-        this.spawnCli,
-        onProgress,
-        controller.signal,
-      )
+      return await installArduinoDependencies(dependencies, this.spawnCli, onProgress, { signal: controller.signal })
     } finally {
       this.#active = null
     }
