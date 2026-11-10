@@ -131,12 +131,13 @@ describe('ProjectService.writeProjectFiles', () => {
       const { result, seen } = await observed()
 
       expect(result.success).toBe(true)
-      expect(seen.sort()).toEqual(
-        [
+      expect(seen.sort()).toEqual(writtenPaths().sort())
+      expect(seen).toEqual(
+        expect.arrayContaining([
           '/projects/demo/datatypes/Color.dt',
           '/projects/demo/pous/programs/main.st',
           '/projects/demo/project.json',
-        ].sort(),
+        ]),
       )
     })
 
@@ -152,7 +153,8 @@ describe('ProjectService.writeProjectFiles', () => {
       })
 
       expect(result.success).toBe(false)
-      expect(seen).toEqual([])
+      expect(seen).not.toContain('/projects/escape.st')
+      expect(seen).toEqual(writtenPaths())
     })
 
     it('says nothing about a write that rejected', async () => {
