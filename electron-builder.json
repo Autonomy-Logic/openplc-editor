@@ -26,6 +26,10 @@
       "from": "./node_modules/@yowasp/clang",
       "to": "./yowasp-clang",
       "filter": ["package.json", "README.md", "gen/**"]
+    },
+    {
+      "from": "./third-party-licenses/yowasp-clang/LICENSE.txt",
+      "to": "./yowasp-clang/LICENSE.txt"
     }
   ],
   "mac": {
