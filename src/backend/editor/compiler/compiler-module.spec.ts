@@ -135,8 +135,6 @@ describe('CompilerModule', () => {
     expect(typeof CompilerModule.HOST_PLATFORM).toBe('string')
     expect(['x64', 'arm64', 'ia32', 'arm']).toContain(CompilerModule.HOST_ARCHITECTURE)
     expect(typeof CompilerModule.DEVELOPMENT_MODE).toBe('boolean')
-    expect(Array.isArray(CompilerModule.GLOBAL_LIBRARIES)).toBe(true)
-    expect(CompilerModule.GLOBAL_LIBRARIES.length).toBeGreaterThan(0)
   })
 
   it('should initialize directory and binary paths', () => {

@@ -18,6 +18,7 @@ import { usePackages } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { CatalogBrowser } from './catalog-browser'
+import { PackageInstallProgressModal, showUninstallWarning, usePackageInstallTracker } from './install-progress'
 
 type ViewMode = 'installed' | 'catalog'
 
@@ -29,6 +30,7 @@ const PackageManagerEditor = () => {
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null)
   const [selectedManifest, setSelectedManifest] = useState<PackageManifest | null>(null)
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
+  const installTracker = usePackageInstallTracker()
 
   const refreshPackages = useCallback(async () => {
     if (!packages) return
@@ -60,7 +62,7 @@ const PackageManagerEditor = () => {
   const handleImportFromFile = async () => {
     if (!packages) return
     setIsPopoverOpen(false)
-    const result = await packages.importFromFile()
+    const result = await installTracker.track(() => packages.importFromFile())
     if (result.success) {
       await refreshPackages()
       if (result.packageId) {
@@ -86,12 +88,35 @@ const PackageManagerEditor = () => {
     setViewMode('catalog')
   }
 
+  const handleReinstall = async () => {
+    if (!selectedPackageId || !packages) return
+    const result = await installTracker.track(() => packages.reinstall(selectedPackageId))
+    if (result.success && result.installed === 0) {
+      openModal('debugger-message', {
+        type: 'info',
+        title: 'Nothing to install',
+        message: 'Every core and library this package needs is already installed.',
+        buttons: ['OK'],
+        onResponse: () => {},
+      })
+    } else if (!result.success && !result.canceled) {
+      openModal('debugger-message', {
+        type: 'error',
+        title: 'Package reinstall failed',
+        message: result.error ?? 'Unknown error',
+        buttons: ['OK'],
+        onResponse: () => {},
+      })
+    }
+  }
+
   const handleUninstall = async () => {
     if (!selectedPackageId || !packages) return
-    const result = await packages.uninstall(selectedPackageId)
+    const result = await installTracker.track(() => packages.uninstall(selectedPackageId))
     if (result.success) {
       setSelectedPackageId(null)
       await refreshPackages()
+      if (result.warning) showUninstallWarning(openModal, result.warning)
     } else {
       openModal('debugger-message', {
         type: 'error',
@@ -164,7 +189,7 @@ const PackageManagerEditor = () => {
                   type='button'
                   aria-label='Remove package'
                   onClick={() => void handleUninstall()}
-                  disabled={!selectedPackageId}
+                  disabled={!selectedPackageId || installTracker.busy}
                   className='rounded-md p-1 hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
                 >
                   <MinusIcon className='!stroke-brand' />
@@ -217,9 +242,19 @@ const PackageManagerEditor = () => {
           <div className='flex w-1/2 min-w-[325px] flex-col gap-4 overflow-y-auto p-4'>
             {selectedManifest ? (
               <>
-                <h2 className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
-                  {selectedManifest.package.name}
-                </h2>
+                <div className='flex items-center justify-between gap-2'>
+                  <h2 className='select-none text-lg font-medium text-neutral-950 dark:text-white'>
+                    {selectedManifest.package.name}
+                  </h2>
+                  <button
+                    type='button'
+                    onClick={() => void handleReinstall()}
+                    disabled={installTracker.busy}
+                    className='rounded-md border border-neutral-200 px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900'
+                  >
+                    Reinstall
+                  </button>
+                </div>
                 <div className='flex flex-col gap-3'>
                   <DetailRow label='Version' value={selectedManifest.package.version} />
                   <DetailRow label='Vendor' value={selectedManifest.package.vendor.name} />
@@ -261,8 +296,13 @@ const PackageManagerEditor = () => {
           </div>
         </div>
       ) : (
-        <CatalogBrowser installedVersions={installedVersions} onInstalled={() => void refreshPackages()} />
+        <CatalogBrowser
+          installedVersions={installedVersions}
+          onInstalled={() => void refreshPackages()}
+          trackInstall={installTracker.track}
+        />
       )}
+      <PackageInstallProgressModal progress={installTracker.progress} />
     </div>
   )
 }

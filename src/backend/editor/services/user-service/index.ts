@@ -301,27 +301,6 @@ class UserService {
     await rm(pathToLegacyHals, { recursive: true, force: true })
   }
 
-  async #checkIfArduinoLibraryControlFileExists() {
-    const pathToRuntimeFolder = join(app.getPath('userData'), 'User', 'Runtime')
-    const pathToArduinoLibraryControlFile = join(pathToRuntimeFolder, 'arduino-library-control.json')
-
-    const { stderr, stdout } = await this.#executeArduinoCliCommand('lib list --json')
-    if (stderr) {
-      console.error(`Error listing libraries: ${String(stderr)}`)
-      return
-    }
-
-    const libraryListOutput = JSON.parse(stdout) as ArduinoListOutput['library']
-
-    const installedLibrariesFromListOutput = libraryListOutput.installed_libraries.map(({ library }) => ({
-      [library.name]: library.version,
-    }))
-
-    await UserService.createDirectoryIfNotExists(pathToRuntimeFolder)
-    await writeFile(pathToArduinoLibraryControlFile, JSON.stringify(installedLibrariesFromListOutput, null, 2), {
-      flag: 'w',
-    })
-  }
   /**
    * Initializes user settings and history by checking the relevant folders and files.
    * This method should be called during the application startup process.
@@ -333,17 +312,7 @@ class UserService {
     await this.#checkIfLogFolderExists()
     await this.#checkIfUserHistoryFolderExists()
     await this.#checkIfArduinoCliConfigExists()
-    // The last two SHELL OUT to arduino-cli, so they fail on a machine where it
-    // is not installed — and they are the least essential steps here: they
-    // refresh a cache of which cores and libraries arduino-cli has. Losing that
-    // degrades the install; it does not stop the editor, and it must not stop a
-    // command that never compiles anything (`--version`, `devices`, a debug
-    // session over websocket). The GUI already behaved this way by accident,
-    // its rejection swallowed by a fire-and-forget constructor; making it
-    // explicit is what lets the CLI await this call without inheriting a fatal
-    // dependency on a compiler toolchain it may not need.
     await this.#tolerate('refresh the installed-core list', () => this.#checkIfArduinoCoreControlFileExists())
-    await this.#tolerate('refresh the installed-library list', () => this.#checkIfArduinoLibraryControlFileExists())
   }
 
   /** Run a non-essential scaffolding step; report a failure without raising it. */
