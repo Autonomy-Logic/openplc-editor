@@ -247,4 +247,29 @@ describe('createEditorPackageAdapter', () => {
       expect(await adapter.verifyInstalledSignatures()).toEqual([])
     })
   })
+
+  describe('onStartupNotices', () => {
+    it('passes queued notices to the callback', async () => {
+      const notices = [{ level: 'info', message: 'Arduino components installed.' }]
+      window.bridge.takeStartupNotices = jest.fn().mockResolvedValue(notices)
+      window.bridge.onStartupNoticesAvailable = jest.fn().mockImplementation(() => jest.fn())
+      const cb = jest.fn()
+      adapter.onStartupNotices(cb)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(cb).toHaveBeenCalledWith(notices)
+    })
+
+    it('swallows a failed drain instead of leaving an unhandled rejection', async () => {
+      window.bridge.takeStartupNotices = jest.fn().mockRejectedValue(new Error('window reloading'))
+      window.bridge.onStartupNoticesAvailable = jest.fn().mockImplementation(() => jest.fn())
+      const unhandled = jest.fn()
+      process.on('unhandledRejection', unhandled)
+      const cb = jest.fn()
+      adapter.onStartupNotices(cb)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      process.off('unhandledRejection', unhandled)
+      expect(unhandled).not.toHaveBeenCalled()
+      expect(cb).not.toHaveBeenCalled()
+    })
+  })
 })

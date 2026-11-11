@@ -14,6 +14,10 @@ import { adoptProviderTokens } from '../backend/editor/edge-account/edge-account
 import { edgeOAuthProviderFromUrl, runOAuthFlow } from '../backend/editor/edge-account/oauth-browser-flow'
 import { HardwareModule } from '../backend/editor/hardware'
 import { PackageManagerModule } from '../backend/editor/package-manager'
+import {
+  type ArduinoDependencyServices,
+  createArduinoDependencyServices,
+} from '../backend/editor/package-manager/vpp-dependency-service'
 import { clearCloudBuildRoot } from '../backend/editor/project/cloud-build-workspace'
 import { logger, PouService, ProjectService, UserService } from '../backend/editor/services'
 import { resolveHtmlPath } from '../backend/editor/utils'
@@ -41,6 +45,8 @@ export let splash: BrowserWindow | null = null
 
 let mainIpcModule: MainProcessBridge | undefined
 let packageManager: PackageManagerModule | undefined
+let arduinoDependencies: ArduinoDependencyServices | undefined
+// One per process, not per window: macOS re-creates the window on activate.
 const updateService = createElectronUpdateService({
   getWindow: () => mainWindow,
   requestQuit: () => quitCoordinator.requestQuit(),
@@ -67,7 +73,7 @@ if (process.env.NODE_ENV === 'production') {
   void loadSourceMapSupport()
 }
 
-new UserService()
+const userService = new UserService()
 
 const systemInfo = platform()
 // The options to use when creating the titlebar. Type comes from electron.
@@ -307,6 +313,10 @@ const createMainWindow = async () => {
 
   const hardwareModule = new HardwareModule()
 
+  const firstWindow = arduinoDependencies === undefined
+  const packages = (packageManager ??= new PackageManagerModule())
+  arduinoDependencies ??= createArduinoDependencyServices(packages, (args) => compilerModule.spawnArduinoCli(args))
+
   mainIpcModule = new MainProcessBridge({
     mainWindow,
     ipcMain,
@@ -317,9 +327,11 @@ const createMainWindow = async () => {
     compilerModule,
     hardwareModule,
     quitCoordinator,
-    packageManagerModule: packageManager,
+    packageManagerModule: packages,
+    arduinoDependencies,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
+  if (firstWindow) arduinoDependencies.startup.start(userService.initialize())
 }
 
 if (release().startsWith('6.1')) app.disableHardwareAcceleration()

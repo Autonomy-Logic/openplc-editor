@@ -34,6 +34,8 @@ import type { RemoteCatalogEntry, RemoteVersionEntry } from '@root/middleware/sh
 import { usePackages } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { showUninstallWarning } from './install-progress'
+
 interface CatalogBrowserProps {
   installedVersions: Map<string, string>
   /**
@@ -42,9 +44,11 @@ interface CatalogBrowserProps {
    * need cascading edits; treat as "onInventoryChanged".
    */
   onInstalled: () => void
+  /** Shows the dependency installation progress of @p operation. */
+  trackInstall: <T>(operation: () => Promise<T>) => Promise<T>
 }
 
-const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps) => {
+const CatalogBrowser = ({ installedVersions, onInstalled, trackInstall }: CatalogBrowserProps) => {
   const packages = usePackages()
   const openModal = useOpenPLCStore((s) => s.modalActions.openModal)
 
@@ -93,10 +97,10 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
       if (!packages) return
       setBusyId(packageId)
       try {
-        const result = await packages.installFromRemote(packageId, version, downloadUrl)
+        const result = await trackInstall(() => packages.installFromRemote(packageId, version, downloadUrl))
         if (result.success) {
           onInstalled()
-        } else {
+        } else if (!result.canceled) {
           openModal('debugger-message', {
             type: 'error',
             title: 'Install failed',
@@ -110,7 +114,7 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
         setBusyId(null)
       }
     },
-    [packages, openModal, onInstalled],
+    [packages, openModal, onInstalled, trackInstall],
   )
 
   const handleUninstall = useCallback(
@@ -118,9 +122,10 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
       if (!packages) return
       setBusyId(packageId)
       try {
-        const result = await packages.uninstall(packageId)
+        const result = await trackInstall(() => packages.uninstall(packageId))
         if (result.success) {
           onInstalled()
+          if (result.warning) showUninstallWarning(openModal, result.warning)
         } else {
           openModal('debugger-message', {
             type: 'error',
@@ -134,7 +139,7 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
         setBusyId(null)
       }
     },
-    [packages, openModal, onInstalled],
+    [packages, openModal, onInstalled, trackInstall],
   )
 
   if (!packages) {
