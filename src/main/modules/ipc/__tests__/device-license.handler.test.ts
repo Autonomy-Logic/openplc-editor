@@ -11,6 +11,8 @@
  * declare a healthy link lost mid-sequence.
  */
 
+import { deriveDeviceId } from '../../../../backend/editor/license/device-identity'
+import { serializeLicenseBlob } from '../../../../backend/shared/debug/license-blob'
 import MainProcessBridge from '../main'
 
 jest.mock('electron', () => ({
@@ -446,5 +448,114 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
 
     expect(result.outcome).toEqual({ state: 'check-failed', error: 'Unknown function code' })
     expect(licenseFlow.resolveDeviceLicense).not.toHaveBeenCalled()
+  })
+})
+
+describe('licence backup across an upload (baremetal)', () => {
+  const PORT = '/dev/cu.usbmodem1'
+  const GENERATED = Uint8Array.from({ length: 16 }, (_, i) => 0x10 + i)
+  const BLOB = serializeLicenseBlob({
+    magic: 0,
+    fmtVersion: 1,
+    keyId: 7,
+    deviceId: Uint8Array.from(Buffer.from(deriveDeviceId(GENERATED), 'hex')),
+    productId: new Uint8Array(8).fill(0x33),
+    signature: new Uint8Array(64).fill(0x55),
+    crc32: 0,
+  })
+
+  function holdLink(bridge: ReturnType<typeof createBridge>, link: { transport: string; descriptor: string } | null) {
+    const session = (
+      bridge as unknown as {
+        deviceSession: { getLink: () => unknown; releaseSerialPort: (port: string | null | undefined) => boolean }
+      }
+    ).deviceSession
+    jest.spyOn(session, 'getLink').mockReturnValue(link)
+    jest.spyOn(session, 'releaseSerialPort').mockReturnValue(true)
+  }
+
+  /** The board before the upload: generated ID and a licence bound to it. */
+  function licensedBoard() {
+    return {
+      getDeviceId: jest.fn(() =>
+        Promise.resolve({ success: true, sources: [{ kind: 'generated', bytes: GENERATED }] }),
+      ),
+      readLicense: jest.fn(() => Promise.resolve({ success: true, status: 0x7e, blob: BLOB })),
+      writeLicense: jest.fn(),
+    }
+  }
+
+  /** The board after an upload that erased everything; it stores whatever ID it is given. */
+  function wipedBoard() {
+    let id: Uint8Array | null = null
+    return {
+      getDeviceId: jest.fn(() =>
+        Promise.resolve({ success: true, sources: id ? [{ kind: 'generated', bytes: id }] : [] }),
+      ),
+      provisionBoardId: jest.fn((next: Uint8Array) => {
+        id = next
+        return Promise.resolve({ success: true, status: 0x7e })
+      }),
+      readLicense: jest.fn(() => Promise.resolve({ success: true, status: 0x83, empty: true })),
+      writeLicense: jest.fn(() => Promise.resolve({ success: true, status: 0x7e })),
+    }
+  }
+
+  beforeEach(() => {
+    licenseFlow.resolveDeviceLicense.mockResolvedValue({ outcome: { state: 'licensed', how: 'already-stored' } })
+  })
+
+  it('writes the same board ID and licence back on the first link after the upload, once', async () => {
+    const bridge = createBridge()
+    holdLink(bridge, { transport: 'rtu', descriptor: PORT })
+    holdClient(bridge, licensedBoard())
+
+    expect(await bridge.handleDeviceReleaseSerialPort({} as never, PORT)).toEqual({ released: true })
+
+    const after = wipedBoard()
+    holdClient(bridge, after)
+    await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
+
+    expect(after.provisionBoardId).toHaveBeenCalledWith(GENERATED)
+    expect(after.writeLicense).toHaveBeenCalledWith(BLOB)
+    expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(after, {
+      ...REQUEST,
+      identity: { kind: 'anchor', anchor: GENERATED },
+    })
+
+    const next = wipedBoard()
+    holdClient(bridge, next)
+    await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
+
+    expect(next.provisionBoardId).toHaveBeenCalledTimes(1)
+    expect(next.provisionBoardId.mock.calls[0][0]).not.toEqual(GENERATED)
+    expect(next.writeLicense).not.toHaveBeenCalled()
+  })
+
+  it('does not apply the backup to a link on another port', async () => {
+    const bridge = createBridge()
+    holdLink(bridge, { transport: 'rtu', descriptor: PORT })
+    holdClient(bridge, licensedBoard())
+    await bridge.handleDeviceReleaseSerialPort({} as never, PORT)
+
+    holdLink(bridge, { transport: 'rtu', descriptor: '/dev/cu.other' })
+    const other = wipedBoard()
+    holdClient(bridge, other)
+    await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
+
+    expect(other.provisionBoardId.mock.calls[0][0]).not.toEqual(GENERATED)
+    expect(other.writeLicense).not.toHaveBeenCalled()
+  })
+
+  it('takes no backup when the held link is not the serial port being released', async () => {
+    const bridge = createBridge()
+    const board = licensedBoard()
+    holdLink(bridge, { transport: 'tcp', descriptor: '192.168.0.10:502' })
+    holdClient(bridge, board)
+
+    await bridge.handleDeviceReleaseSerialPort({} as never, PORT)
+
+    expect(board.getDeviceId).not.toHaveBeenCalled()
+    expect(board.readLicense).not.toHaveBeenCalled()
   })
 })

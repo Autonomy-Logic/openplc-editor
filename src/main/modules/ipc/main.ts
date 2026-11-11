@@ -152,7 +152,13 @@ import {
 } from '../../../backend/editor/hardware/device-session-manager'
 import { type DiscoveredRuntime, discoverRuntimes } from '../../../backend/editor/hardware/discover-runtimes'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
-import { generateBoardId } from '../../../backend/editor/license/device-identity'
+import {
+  type BoardLicenceBackup,
+  restoreBoardLicence,
+  takeBoardLicenceBackup,
+  usableBoardBackup,
+} from '../../../backend/editor/license/board-licence-backup'
+import { deriveDeviceId, generateBoardId } from '../../../backend/editor/license/device-identity'
 import {
   type DeviceIdentity,
   identityFromSources,
@@ -2774,7 +2780,29 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     port: string | null | undefined,
   ): Promise<{ released: boolean }> => {
+    await this.backUpBoardLicence(port)
     return { released: this.deviceSession.releaseSerialPort(port) }
+  }
+
+  /** Generated ID and licence of the board on the released port, for `readLicenseIdentity` after the upload. */
+  private boardLicenceBackup: BoardLicenceBackup | null = null
+
+  private async backUpBoardLicence(port: string | null | undefined): Promise<void> {
+    this.boardLicenceBackup = null
+    const link = this.deviceSession.getLink()
+    const client = this.deviceClient()
+    if (!link || link.transport !== 'rtu' || !client) return
+    if (port !== undefined && port !== null && link.descriptor !== String(port)) return
+    try {
+      this.boardLicenceBackup = await takeBoardLicenceBackup(client, link.descriptor)
+      const backup = this.boardLicenceBackup
+      if (backup) {
+        const kept = [backup.generatedId && 'board ID', backup.blob && 'licence'].filter(Boolean).join(' and ')
+        this.traceDeviceLink(`release ${link.descriptor}: backed up ${kept}`)
+      }
+    } catch (error) {
+      this.traceDeviceLink(`release ${link.descriptor}: backup skipped — ${getErrorMessage(error)}`)
+    }
   }
 
   /** The CONTROL channel's client (run/stop, status). */
@@ -2972,11 +3000,22 @@ class MainProcessBridge implements MainIpcModule {
     // Exactly one of the two exists on any real channel; narrowed on the channel rather
     // than the reply, so each branch statically knows which kind it holds.
     if (client.getDeviceId) {
-      const read = await readBoardIdSources(client, generateBoardId)
+      const backup = usableBoardBackup(this.boardLicenceBackup, this.deviceSession.getLink()?.descriptor)
+      const read = await readBoardIdSources(client, () => backup?.generatedId ?? generateBoardId())
       const bad = settle(read)
       if (bad) return bad
       const identity = identityFromSources(read.sources ?? [])
       if ('error' in identity) return { error: identity.error, retryable: false } as const
+      if (backup && identity.anchor.length > 0) {
+        this.boardLicenceBackup = null
+        try {
+          if (await restoreBoardLicence(client, backup, deriveDeviceId(identity.anchor))) {
+            this.traceDeviceLink('restored the licence backed up before the upload')
+          }
+        } catch (error) {
+          this.traceDeviceLink(`licence restore skipped — ${getErrorMessage(error)}`)
+        }
+      }
       return { identity }
     }
 
