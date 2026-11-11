@@ -40,11 +40,13 @@ class FakeWorker implements ClangWorkerHandle {
 
 class FakeMechanism implements ClangWorkerMechanism {
   workers: FakeWorker[] = []
+  loads = 0
   constructor(
-    private readonly autoReady = true,
+    public autoReady = true,
     private readonly missing: Error | null = null,
   ) {}
   load(): Promise<void> {
+    this.loads++
     return this.missing ? Promise.reject(this.missing) : Promise.resolve()
   }
   spawn(): ClangWorkerHandle {
@@ -101,32 +103,50 @@ describe('parseClangWorkerReply', () => {
 })
 
 describe('ClangWorkerPool', () => {
-  it('starts its workers once and resolves when all are ready', async () => {
+  const pool = (mechanism: FakeMechanism, maxWorkers = 2, deadlines: { load?: number; job?: number } = {}) =>
+    new ClangWorkerPool(mechanism, { maxWorkers, loadDeadlineMs: deadlines.load, jobDeadlineMs: deadlines.job })
+
+  it('loads the toolchain once and starts with one worker', async () => {
     const mechanism = new FakeMechanism()
-    const pool = new ClangWorkerPool(mechanism, 3)
-    await Promise.all([pool.prepare(), pool.prepare()])
-    expect(mechanism.workers).toHaveLength(3)
+    const p = pool(mechanism, 4)
+    await Promise.all([p.prepare(), p.prepare()])
+    expect(mechanism.loads).toBe(1)
+    expect(mechanism.workers).toHaveLength(1)
+    expect(p.concurrency).toBe(4)
   })
 
-  it('sends each job to the worker with the fewest pending and resolves with its result', async () => {
+  it('reuses an idle worker instead of starting another', async () => {
     const mechanism = new FakeMechanism()
-    const pool = new ClangWorkerPool(mechanism, 2)
-    const first = pool.run(job)
-    const second = pool.run(job)
+    const p = pool(mechanism, 4)
+    const first = p.run(job)
     await flush()
+    const [w] = mechanism.workers
+    w.answer(w.posted[0].id)
+    await first
+    const second = p.run(job)
+    await flush()
+    w.answer(w.posted[1].id)
+    await second
+    expect(mechanism.workers).toHaveLength(1)
+  })
+
+  it('adds a worker when every worker is busy, up to the maximum', async () => {
+    const mechanism = new FakeMechanism()
+    const p = pool(mechanism, 2)
+    const runs = [p.run(job), p.run(job), p.run(job)]
+    await flush()
+    expect(mechanism.workers).toHaveLength(2)
     const [a, b] = mechanism.workers
-    expect(a.posted).toHaveLength(1)
-    expect(b.posted).toHaveLength(1)
-    a.answer(a.posted[0].id)
-    b.answer(b.posted[0].id, 1)
-    await expect(first).resolves.toEqual({ exitCode: 0, stderr: '', tree: {} })
-    await expect(second).resolves.toMatchObject({ exitCode: 1 })
+    expect(a.posted.length + b.posted.length).toBe(3)
+    expect(b.posted.length).toBeGreaterThan(0)
+    for (const w of [a, b]) for (const m of w.posted) w.answer(m.id)
+    await expect(Promise.all(runs)).resolves.toHaveLength(3)
   })
 
   it('rejects a job the worker reports it could not run, and ignores unknown replies', async () => {
     const mechanism = new FakeMechanism()
-    const pool = new ClangWorkerPool(mechanism, 1)
-    const run = pool.run(job)
+    const p = pool(mechanism, 1)
+    const run = p.run(job)
     await flush()
     const [w] = mechanism.workers
     w.send('noise')
@@ -135,52 +155,90 @@ describe('ClangWorkerPool', () => {
     await expect(run).rejects.toThrow('out of memory')
   })
 
-  it('fails prepare when the toolchain is missing, without starting workers', async () => {
+  it('fails prepare when the toolchain files cannot be loaded, without starting workers', async () => {
     const mechanism = new FakeMechanism(true, new Error('bundle.js not found'))
-    const pool = new ClangWorkerPool(mechanism, 2)
-    await expect(pool.prepare()).rejects.toThrow('bundle.js not found')
+    await expect(pool(mechanism).prepare()).rejects.toThrow('bundle.js not found')
     expect(mechanism.workers).toHaveLength(0)
   })
 
-  it('fails prepare when a worker stops while loading, does not replace it, and can try again', async () => {
+  it('fails prepare when the first worker fails while loading, terminates it, and can try again', async () => {
     const mechanism = new FakeMechanism(false)
-    const pool = new ClangWorkerPool(mechanism, 1)
-    const prepare = pool.prepare()
+    const p = pool(mechanism, 1)
+    const prepare = p.prepare()
     await flush()
     mechanism.workers[0].fail('cannot load')
     mechanism.workers[0].fail('exit code 1')
     await expect(prepare).rejects.toThrow('The compiler worker stopped (cannot load).')
-    expect(mechanism.workers).toHaveLength(1)
     expect(mechanism.workers[0].terminated).toBe(true)
 
-    const retry = pool.prepare()
+    const retry = p.prepare()
     await flush()
     mechanism.workers[1].send({ type: 'ready' })
     await expect(retry).resolves.toBeUndefined()
   })
 
-  it('fails the jobs of a worker that stops after loading and replaces it', async () => {
+  it('fails prepare when the first worker does not load in time', async () => {
+    const mechanism = new FakeMechanism(false)
+    await expect(pool(mechanism, 1, { load: 20 }).prepare()).rejects.toThrow(
+      'The compiler worker stopped (it did not load within 0 s).',
+    )
+    expect(mechanism.workers[0].terminated).toBe(true)
+  })
+
+  it('fails the jobs of a worker that stops, terminates it, and starts a fresh one for the next job', async () => {
     const mechanism = new FakeMechanism()
-    const pool = new ClangWorkerPool(mechanism, 1)
-    const run = pool.run(job)
+    const p = pool(mechanism, 1)
+    const run = p.run(job)
     await flush()
     mechanism.workers[0].fail('exit code 3')
     await expect(run).rejects.toThrow('The compiler worker stopped (exit code 3).')
-    expect(mechanism.workers).toHaveLength(2)
+    expect(mechanism.workers[0].terminated).toBe(true)
 
-    const next = pool.run(job)
+    const next = p.run(job)
     await flush()
-    const replacement = mechanism.workers[1]
-    replacement.answer(replacement.posted[0].id)
+    expect(mechanism.workers).toHaveLength(2)
+    const fresh = mechanism.workers[1]
+    fresh.answer(fresh.posted[0].id)
     await expect(next).resolves.toMatchObject({ exitCode: 0 })
+  })
+
+  it('rejects jobs sent to a new worker that fails while loading, and drops it', async () => {
+    const mechanism = new FakeMechanism()
+    const p = pool(mechanism, 1)
+    const first = p.run(job)
+    await flush()
+    mechanism.workers[0].fail('exit code 3')
+    await expect(first).rejects.toThrow('exit code 3')
+
+    mechanism.autoReady = false
+    const second = p.run(job)
+    await flush()
+    mechanism.workers[1].fail('out of memory while loading')
+    await expect(second).rejects.toThrow('The compiler worker stopped (out of memory while loading).')
+    expect(mechanism.workers[1].terminated).toBe(true)
+
+    mechanism.autoReady = true
+    const third = p.run(job)
+    await flush()
+    expect(mechanism.workers).toHaveLength(3)
+    mechanism.workers[2].answer(mechanism.workers[2].posted[0].id)
+    await expect(third).resolves.toMatchObject({ exitCode: 0 })
+  })
+
+  it('fails a job that runs past its deadline and terminates its worker', async () => {
+    const mechanism = new FakeMechanism()
+    const p = pool(mechanism, 1, { job: 20 })
+    const run = p.run(job)
+    await expect(run).rejects.toThrow('The compiler worker stopped (a job ran longer than 0 s).')
+    expect(mechanism.workers[0].terminated).toBe(true)
   })
 
   it('terminate stops the workers and fails pending jobs', async () => {
     const mechanism = new FakeMechanism()
-    const pool = new ClangWorkerPool(mechanism, 1)
-    const run = pool.run(job)
+    const p = pool(mechanism, 1)
+    const run = p.run(job)
     await flush()
-    await pool.terminate()
+    await p.terminate()
     await expect(run).rejects.toThrow('The compiler was stopped.')
     expect(mechanism.workers[0].terminated).toBe(true)
   })

@@ -1,19 +1,19 @@
 import { describe, expect, it } from '@jest/globals'
 
-import { compileToWasm } from '../compile-to-wasm'
+import { type CachedWasmObject, compileToWasm } from '../compile-to-wasm'
 import { parseWasmCompileRequest } from '../parse-wasm-compile-request'
 import { createWasmCompileService } from '../wasm-compile-service'
 import { BoundedWasmObjectCache } from '../wasm-object-cache'
 import { FakeRunner } from './fixtures/fake-runner'
 
-const bytes = (n: number): Uint8Array => new Uint8Array(n)
+const bytes = (n: number): CachedWasmObject => ({ object: new Uint8Array(n), dependencies: [['a.c', 'digest']] })
 
 describe('BoundedWasmObjectCache', () => {
-  it('stores and returns objects', () => {
+  it('stores and returns objects with their dependencies', () => {
     const cache = new BoundedWasmObjectCache(100)
-    const object = bytes(10)
-    cache.set('a', object)
-    expect(cache.get('a')).toBe(object)
+    const entry = bytes(10)
+    cache.set('a', entry)
+    expect(cache.get('a')).toBe(entry)
     expect(cache.get('missing')).toBeUndefined()
     expect(cache.size).toBe(1)
     expect(cache.totalBytes).toBe(10)

@@ -14,7 +14,8 @@ import type {
 } from '@root/middleware/shared/ports/wasm-toolchain-types'
 
 import { ContentHash } from './content-hash'
-import { filesToTree, isFileBytes, readTreeFile } from './file-tree'
+import { parseDependencyFile } from './dependency-file'
+import { filesToTree, filesTreeProblem, isFileBytes, readTreeFile, toolchainPathProblem } from './file-tree'
 
 export type {
   WasmCompileRequest,
@@ -27,11 +28,19 @@ export type {
 
 export const WASM_TARGET = 'wasm32-wasip1'
 export const DEFAULT_WASM_OUTPUT = 'module.wasm'
+/** Where the compile step writes objects and dependency files; request files may not use it. */
+const WORK_DIR = '__objects'
 
-/** Compiled objects of a session, keyed by everything that decides their content. A `Map` qualifies. */
+/** A compiled object and the content digest of every request file it was built from. */
+export interface CachedWasmObject {
+  object: Uint8Array
+  dependencies: Array<[path: string, digest: string]>
+}
+
+/** Compiled objects of a session, keyed by unit and flags; an entry is valid while its dependencies are unchanged. */
 export interface WasmObjectCache {
-  get(key: string): Uint8Array | undefined
-  set(key: string, object: Uint8Array): unknown
+  get(key: string): CachedWasmObject | undefined
+  set(key: string, entry: CachedWasmObject): unknown
 }
 
 export interface WasmCompileOptions {
@@ -44,6 +53,7 @@ interface PlannedUnit {
   unit: WasmCompileUnit
   argv: string[]
   object: string
+  dependencyFile: string
   key: string
   size: number
 }
@@ -58,44 +68,45 @@ const reportStderr = (report: Report, stderr: string, level: WasmDiagnostic['lev
 
 function validate(request: WasmCompileRequest): string | null {
   if (request.units.length === 0) return 'Nothing to compile: no translation units were given.'
+  for (const path of Object.keys(request.files)) {
+    if (path === WORK_DIR || path.startsWith(`${WORK_DIR}/`)) return `File path '${path}' is reserved for the compiler.`
+  }
+  const treeProblem = filesTreeProblem(request.files)
+  if (treeProblem !== null) return treeProblem
   const seen = new Set<string>()
   for (const { source } of request.units) {
     if (seen.has(source)) return `Translation unit '${source}' is listed more than once.`
     seen.add(source)
     if (request.files[source] === undefined) return `Translation unit '${source}' is not among the input files.`
   }
+  const output = request.output ?? DEFAULT_WASM_OUTPUT
+  const outputProblem = toolchainPathProblem(output)
+  if (outputProblem !== null) return outputProblem
+  if (output === WORK_DIR || output.startsWith(`${WORK_DIR}/`))
+    return `Output path '${output}' is reserved for the compiler.`
   return null
 }
 
 function planUnits(request: WasmCompileRequest): PlannedUnit[] {
-  const unitSources = new Set(request.units.map((u) => u.source))
-  // Every non-unit input can be included by any unit, so all of them go into every key.
-  const inputs = new ContentHash()
-  for (const path of Object.keys(request.files).sort()) {
-    if (unitSources.has(path)) continue
-    inputs.update(path).update(request.files[path])
-  }
-  const inputsDigest = inputs.digest()
-
+  // A file added or removed can change which header an include finds, so the set of names is part of every key.
+  const names = new ContentHash().update(Object.keys(request.files).sort().join('\u0000')).digest()
   return request.units.map((unit, index) => {
-    const object = `__objects/${index}.o`
-    const argv = [
-      unit.language === 'c' ? 'clang' : 'clang++',
+    const object = `${WORK_DIR}/${index}.o`
+    const dependencyFile = `${WORK_DIR}/${index}.d`
+    const flags = [
       `--target=${WASM_TARGET}`,
       ...(unit.language === 'c' ? (request.cFlags ?? []) : (request.cxxFlags ?? [])),
       ...(unit.flags ?? []),
-      '-c',
-      unit.source,
-      '-o',
-      object,
     ]
+    const compiler = unit.language === 'c' ? 'clang' : 'clang++'
+    const argv = [compiler, ...flags, '-MD', '-MF', dependencyFile, '-c', unit.source, '-o', object]
     const key = new ContentHash()
-      .update(argv.filter((a) => a !== object).join('\u0000'))
+      .update(compiler)
+      .update(flags.join('\u0000'))
       .update(unit.source)
-      .update(request.files[unit.source])
-      .update(inputsDigest)
+      .update(names)
       .digest()
-    return { unit, argv, object, key, size: sizeOf(request.files[unit.source]) }
+    return { unit, argv, object, dependencyFile, key, size: sizeOf(request.files[unit.source]) }
   })
 }
 
@@ -126,9 +137,44 @@ async function runLimited<T>(items: T[], limit: number, work: (item: T) => Promi
   await Promise.all(lanes)
 }
 
+/** Content digests of request files, each computed at most once per build and only when needed. */
+function digestsOf(files: WasmToolchainFiles): (path: string) => string | undefined {
+  const digests = new Map<string, string>()
+  return (path) => {
+    const content = files[path]
+    if (content === undefined) return undefined
+    let digest = digests.get(path)
+    if (digest === undefined) {
+      digest = new ContentHash().update(content).digest()
+      digests.set(path, digest)
+    }
+    return digest
+  }
+}
+
+/** The request files an object was built from, with their digests; `null` when clang's list cannot be read. */
+function dependenciesOf(
+  result: WasmClangJobResult,
+  plan: PlannedUnit,
+  digestOf: (path: string) => string | undefined,
+): Array<[string, string]> | null {
+  const raw = readTreeFile(result.tree, plan.dependencyFile)
+  if (raw === undefined) return null
+  const paths = parseDependencyFile(typeof raw === 'string' ? raw : new TextDecoder().decode(raw))
+  if (paths === null || !paths.includes(plan.unit.source)) return null
+  const dependencies: Array<[string, string]> = []
+  for (const path of new Set(paths)) {
+    // Toolchain headers (absolute paths) come with the toolchain and change only with it.
+    const digest = digestOf(path)
+    if (digest !== undefined) dependencies.push([path, digest])
+  }
+  return dependencies
+}
+
 /**
  * Compiles C and C++ translation units to objects with clang running as WebAssembly, then links them into one
- * WebAssembly module. Objects of unchanged units come from `cache`. Diagnostics go to `log`.
+ * WebAssembly module. An object comes from `cache` while every file it was built from is unchanged.
+ * Diagnostics go to `log` and to the result.
  */
 export async function compileToWasm(
   request: WasmCompileRequest,
@@ -151,14 +197,15 @@ export async function compileToWasm(
   const compileStart = performance.now()
   const tree = filesToTree(request.files)
   const planned = planUnits(request)
+  const digestOf = digestsOf(request.files)
   const objects = new Map<string, Uint8Array>()
   const failures: string[] = []
 
   const pending: PlannedUnit[] = []
   for (const p of planned) {
     const hit = cache?.get(p.key)
-    if (hit) {
-      objects.set(p.object, hit)
+    if (hit && hit.dependencies.every(([path, digest]) => digestOf(path) === digest)) {
+      objects.set(p.object, hit.object)
       stats.cached++
     } else {
       pending.push(p)
@@ -172,7 +219,8 @@ export async function compileToWasm(
     const object = result.exitCode === 0 ? readTreeFile(result.tree, p.object) : undefined
     if (isFileBytes(object)) {
       objects.set(p.object, object)
-      cache?.set(p.key, object)
+      const dependencies = dependenciesOf(result, p, digestOf)
+      if (dependencies) cache?.set(p.key, { object, dependencies })
       reportStderr(report, result.stderr, 'warning')
       return
     }

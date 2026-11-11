@@ -2,7 +2,7 @@
  * The in-editor WebAssembly toolchain on the desktop.
  *
  * The editor loads clang while the splash is up and only then shows the main window; the renderer compiles
- * through the CompilerPort bridge and gets a module back. A toolchain that cannot load keeps the splash up with
+ * through its CompilerPort and gets a module back. A toolchain that cannot load keeps the splash up with
  * the reason and a Quit button.
  *
  * Running needs a production build plus the preload copy; see "Electron e2e" in CLAUDE.md.
@@ -15,6 +15,8 @@ import { join } from 'node:path'
 
 import type { ElectronApplication, Page } from '@playwright/test'
 import { _electron as electron, expect, test } from '@playwright/test'
+
+import { compileThroughPort, runAnswer } from './helpers/compiler-port'
 
 const ROOT = join(realpathSync(tmpdir()), 'openplc-e2e-wasm-toolchain')
 const MAIN = join(__dirname, '..', 'release', 'app', 'dist', 'main', 'main.js')
@@ -72,48 +74,38 @@ const REQUEST = {
 test.describe('WebAssembly toolchain (desktop)', () => {
   test.setTimeout(180000)
 
-  const compilesThroughTheBridge = async (app: ElectronApplication): Promise<void> => {
+  const compilesThroughThePort = async (app: ElectronApplication): Promise<void> => {
     const page = await windowByUrl(app, 'index.html')
     await expect.poll(() => mainWindowShown(app), { timeout: 120000 }).toBe(true)
 
-    const first = await page.evaluate(async (request) => {
-      const result = await window.bridge.wasmToolchainCompile(request)
-      return {
-        ok: result.ok,
-        cached: result.stats.cached,
-        wasm: result.ok ? Array.from(result.wasm) : [],
-        diagnostics: result.diagnostics,
-      }
-    }, REQUEST)
-    expect(first.diagnostics).toEqual([])
+    const first = await compileThroughPort(page, REQUEST)
+    expect(first.messages).toEqual([])
     expect(first.ok).toBe(true)
-    const { instance } = await WebAssembly.instantiate(new Uint8Array(first.wasm), {
-      wasi_snapshot_preview1: new Proxy({}, { get: () => () => 0 }),
-    })
-    const answer = instance.exports.answer
-    expect(typeof answer === 'function' ? answer() : undefined).toBe(42)
+    expect(await runAnswer(first.wasm)).toBe(42)
 
-    const again = await page.evaluate(async (request) => {
-      const result = await window.bridge.wasmToolchainCompile(request)
-      return { ok: result.ok, cached: result.stats.cached }
-    }, REQUEST)
-    expect(again).toEqual({ ok: true, cached: 2 })
+    const again = await compileThroughPort(page, REQUEST)
+    expect(again).toMatchObject({ ok: true, cached: 2 })
 
-    const broken = await page.evaluate(async () => {
-      const result = await window.bridge.wasmToolchainCompile({
-        files: { 'x.c': 'int f( {' },
-        units: [{ source: 'x.c', language: 'c' }],
-      })
-      return { ok: result.ok, messages: result.diagnostics.map((d) => d.message) }
+    const broken = await compileThroughPort(page, {
+      files: { 'x.c': 'int f( {' },
+      units: [{ source: 'x.c', language: 'c' }],
     })
     expect(broken.ok).toBe(false)
     expect(broken.messages.some((m) => m.includes('x.c:1:'))).toBe(true)
+
+    // A path that would reach object internals in the main process comes back as a diagnostic.
+    const invalid = await compileThroughPort(page, {
+      files: { '__proto__/x.c': 'int x;' },
+      units: [{ source: '__proto__/x.c', language: 'c' }],
+    })
+    expect(invalid.ok).toBe(false)
+    expect(invalid.messages).toEqual(["Invalid toolchain file path '__proto__/x.c': '__proto__' is not allowed."])
   }
 
-  test('shows the editor once clang is loaded and compiles through the bridge', async () => {
+  test('shows the editor once clang is loaded and compiles through the CompilerPort', async () => {
     const app = await launch('ready')
     try {
-      await compilesThroughTheBridge(app)
+      await compilesThroughThePort(app)
     } finally {
       app.process().kill('SIGKILL')
     }
@@ -127,7 +119,7 @@ test.describe('WebAssembly toolchain (desktop)', () => {
     mkdirSync(cwd, { recursive: true })
     const app = await launch('packaged-run', cwd, PACKAGED_APP)
     try {
-      await compilesThroughTheBridge(app)
+      await compilesThroughThePort(app)
     } finally {
       app.process().kill('SIGKILL')
     }

@@ -414,26 +414,34 @@ It is inert in the editor (no orchestrator devices) and kept so the shared surfa
 
 clang, lld and libc++ run inside the editor as WebAssembly (`@yowasp/clang`, pinned to an exact version in
 `package.json`); no native compiler is involved. `CompilerPort.compileToWasm(request)` compiles C and C++
-translation units into one module and returns its bytes and the compiler's diagnostics. The logic is shared and
-byte-identical with openplc-web, in `src/backend/shared/wasm-toolchain/`: compile and link, a per-unit object cache
-for the session (256 MB), the worker pool, the worker host, and the check of requests that cross a boundary.
-`compileStrucppToWasm` lays out STruC++ output with its runtime headers.
+translation units into one module and returns its bytes and the compiler's diagnostics; a bad request comes back
+as diagnostics too, never as a rejection. The logic is shared and byte-identical with openplc-web, in
+`src/backend/shared/wasm-toolchain/`: compile and link, the worker pool, the worker host, and the check of requests
+that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its runtime headers.
+
+- **Object cache:** per unit, for the session (256 MB, least recently used first). Each object is kept with the
+  request files clang says it read (`-MD`), and reused while they are unchanged and no file was added or removed.
+- **Worker pool:** starts with one worker and adds one, up to `clangWorkerCount` (four at most), when every worker
+  is busy. A worker that fails, does not load within 120 s, or runs a job past 120 s is terminated and dropped,
+  and its jobs fail.
 
 - **Desktop:** up to four worker threads (`src/backend/editor/wasm-toolchain/`); the worker is its own webpack
   entry, `clang-worker.js`, built next to `main.js`. The renderer reaches it over the `wasm-toolchain:compile` IPC
   channel.
 - **Startup:** the toolchain loads while the splash is up, and the main window appears only once it is ready. If it
-  cannot load, the splash shows the reason with a Quit button. The CLI loads it on its first WebAssembly compile.
-- **Packaging:** the package ships as the extra resource `yowasp-clang`, outside the asar archive, with its licence. The `allow-jit`
+  cannot load, the splash shows the reason with a Quit button.
+- **CLI:** no `openplc-cli` command compiles to WebAssembly yet, so the CLI never loads the toolchain. The service
+  loads it on first use, which is how a future CLI command will get it.
+- **Packaging:** the package ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
   entitlement in `assets/entitlements.mac.plist` lets it run under the hardened runtime.
 - **Running a module** is the caller's job. Instantiating one in the renderer needs `'wasm-unsafe-eval'` in the
   renderer CSP (`src/index.ejs`), which is not there today.
 
 **Updating the toolchain:** change the exact `@yowasp/clang` version in `package.json` in both repos (with both
 lockfiles, `pnpm-lock.yaml` included on the web), then run `e2e/wasm-toolchain.spec.ts` in both repos, including
-the packaged-app case (`E2E_PACKAGED_APP`). The npm package carries no licence file, so its Apache-2.0 text lives in
-`third-party-licenses/yowasp-clang/` (in both repos) and ships next to the toolchain; check it against the upstream
-repository when the version changes.
+the packaged-app case (`E2E_PACKAGED_APP`). The npm package carries no licence files, so the texts for YoWASP, LLVM and
+wasi-libc live in `third-party-licenses/yowasp-clang/` (in both repos, with their sources in its README)
+and ship next to the toolchain; refresh them from the commits the new release was built from.
 
 ### Debugging
 

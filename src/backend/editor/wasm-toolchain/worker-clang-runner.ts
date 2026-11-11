@@ -36,9 +36,9 @@ export function createThreadClangWorkerMechanism(paths: WorkerClangRunnerPaths):
   }
 }
 
-/** Runs clang in a pool of worker threads, each with its own copy of the toolchain loaded. */
+/** Runs clang in a pool of up to `maxWorkers` worker threads, each with its own copy of the toolchain loaded. */
 export class WorkerClangRunner extends ClangWorkerPool {
-  constructor(paths: WorkerClangRunnerPaths, concurrency: number = clangWorkerCount(availableParallelism())) {
-    super(createThreadClangWorkerMechanism(paths), concurrency)
+  constructor(paths: WorkerClangRunnerPaths, maxWorkers: number = clangWorkerCount(availableParallelism())) {
+    super(createThreadClangWorkerMechanism(paths), { maxWorkers })
   }
 }

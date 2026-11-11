@@ -97,6 +97,72 @@ export async function decodeToolchainResource(bytes: Uint8Array, compressed: boo
   return new Uint8Array(await new Response(inflated).arrayBuffer())
 }
 
+/** How long a download may go without receiving any bytes before it counts as stalled. */
+export const DOWNLOAD_STALL_MS = 30_000
+
+/** Opens a download; the platform's transport, given a signal that aborts it. */
+export type OpenDownload = (url: string, signal: AbortSignal) => Promise<Response>
+
+/**
+ * Downloads `url` with no limit on total time: it fails only when no bytes arrive for `stallMs`, so a slow but
+ * moving download always finishes.
+ */
+export async function downloadWithStallLimit(
+  url: string,
+  open: OpenDownload,
+  stallMs: number = DOWNLOAD_STALL_MS,
+): Promise<Uint8Array> {
+  const controller = new AbortController()
+  const stallError = new Error(`Download of ${url} stalled: no data for ${Math.round(stallMs / 1000)} s.`)
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let onStall: () => void = () => undefined
+  // Rejects when nothing arrives for `stallMs`; every wait races it, so a transport that ignores the abort cannot hang.
+  const stalled = new Promise<never>((_resolve, reject) => {
+    onStall = () => {
+      controller.abort()
+      reject(stallError)
+    }
+  })
+  stalled.catch(() => undefined)
+  const arm = () => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(onStall, stallMs)
+  }
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
+  arm()
+  try {
+    const response = await Promise.race([open(url, controller.signal), stalled])
+    if (!response.ok) throw new Error(`Could not download ${url} (HTTP ${response.status}).`)
+    if (!response.body) return new Uint8Array(await Promise.race([response.arrayBuffer(), stalled]))
+    arm()
+    reader = response.body.getReader()
+    const chunks: Uint8Array[] = []
+    let total = 0
+    for (;;) {
+      const { done, value } = await Promise.race([reader.read(), stalled])
+      if (done) break
+      chunks.push(value)
+      total += value.byteLength
+      arm()
+    }
+    const bytes = new Uint8Array(total)
+    let offset = 0
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset)
+      offset += chunk.byteLength
+    }
+    return bytes
+  } catch (error) {
+    if (controller.signal.aborted) {
+      void reader?.cancel().catch(() => undefined)
+      throw stallError
+    }
+    throw error
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 /** One toolchain resource: the name `bundle.js` asks for, and where it is stored. */
 export interface ToolchainResourceLocation {
   name: string
@@ -107,11 +173,13 @@ export interface ToolchainResourceLocation {
 export async function loadToolchainResources(
   resources: ToolchainResourceLocation[],
   compressed: boolean,
-  download: (url: string) => Promise<Uint8Array>,
+  open: OpenDownload,
+  stallMs: number = DOWNLOAD_STALL_MS,
 ): Promise<Record<string, Uint8Array>> {
   const entries = await Promise.all(
     resources.map(
-      async ({ name, url }) => [name, await decodeToolchainResource(await download(url), compressed)] as const,
+      async ({ name, url }) =>
+        [name, await decodeToolchainResource(await downloadWithStallLimit(url, open, stallMs), compressed)] as const,
     ),
   )
   return Object.fromEntries(entries)

@@ -1,11 +1,11 @@
-import type { WasmObjectCache } from './compile-to-wasm'
+import type { CachedWasmObject, WasmObjectCache } from './compile-to-wasm'
 
 /**
  * Session cache of compiled objects, bounded by total bytes. The least recently used objects go first, so the
  * units that keep being reused, such as runtime and library sources, stay.
  */
 export class BoundedWasmObjectCache implements WasmObjectCache {
-  private readonly entries = new Map<string, Uint8Array>()
+  private readonly entries = new Map<string, CachedWasmObject>()
   private bytes = 0
 
   constructor(readonly maxBytes: number) {}
@@ -18,28 +18,28 @@ export class BoundedWasmObjectCache implements WasmObjectCache {
     return this.bytes
   }
 
-  get(key: string): Uint8Array | undefined {
-    const object = this.entries.get(key)
-    if (object === undefined) return undefined
+  get(key: string): CachedWasmObject | undefined {
+    const entry = this.entries.get(key)
+    if (entry === undefined) return undefined
     // Re-insert so iteration order is least recently used first.
     this.entries.delete(key)
-    this.entries.set(key, object)
-    return object
+    this.entries.set(key, entry)
+    return entry
   }
 
-  set(key: string, object: Uint8Array): this {
+  set(key: string, entry: CachedWasmObject): this {
     const previous = this.entries.get(key)
     if (previous !== undefined) {
       this.entries.delete(key)
-      this.bytes -= previous.byteLength
+      this.bytes -= previous.object.byteLength
     }
-    if (object.byteLength > this.maxBytes) return this
-    this.entries.set(key, object)
-    this.bytes += object.byteLength
+    if (entry.object.byteLength > this.maxBytes) return this
+    this.entries.set(key, entry)
+    this.bytes += entry.object.byteLength
     for (const [oldestKey, oldest] of this.entries) {
       if (this.bytes <= this.maxBytes) break
       this.entries.delete(oldestKey)
-      this.bytes -= oldest.byteLength
+      this.bytes -= oldest.object.byteLength
     }
     return this
   }

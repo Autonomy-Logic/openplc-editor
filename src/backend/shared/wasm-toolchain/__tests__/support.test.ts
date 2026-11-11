@@ -1,7 +1,8 @@
 import { describe, expect, it } from '@jest/globals'
 
 import { ContentHash } from '../content-hash'
-import { filesToTree, readTreeFile } from '../file-tree'
+import { parseDependencyFile } from '../dependency-file'
+import { filesToTree, filesTreeProblem, readTreeFile, toolchainPathProblem } from '../file-tree'
 import { prepareWasmToolchain } from '../prepare-toolchain'
 import { FakeRunner } from './fixtures/fake-runner'
 
@@ -19,6 +20,25 @@ describe('filesToTree / readTreeFile', () => {
 
   it.each(['', '/abs.c', 'a//b.c', '../up.c', 'a/./b.c'])('rejects the path %j', (path) => {
     expect(() => filesToTree({ [path]: 'x' })).toThrow('Invalid toolchain file path')
+  })
+
+  it.each(['__proto__/x.c', 'a/constructor', 'prototype/b.h'])('refuses the object-internal path %j', (path) => {
+    expect(() => filesToTree({ [path]: 'x' })).toThrow('is not allowed')
+    expect(toolchainPathProblem(path)).toContain('is not allowed')
+    expect(({} as Record<string, unknown>).x).toBeUndefined()
+  })
+
+  it('builds directories without a prototype, so file names cannot reach object internals', () => {
+    const tree = filesToTree({ 'a/toString': 'x' })
+    expect(readTreeFile(tree, 'a/toString')).toBe('x')
+    expect(readTreeFile(tree, 'a/hasOwnProperty')).toBeUndefined()
+    expect(readTreeFile(filesToTree({}), 'toString')).toBeUndefined()
+  })
+
+  it('reports why files cannot form a tree, without throwing', () => {
+    expect(filesTreeProblem({ 'a.c': 'x' })).toBeNull()
+    expect(filesTreeProblem({ '../a.c': 'x' })).toContain("Invalid toolchain file path '../a.c'")
+    expect(readTreeFile(filesToTree({ 'a.c': 'x' }), '../a.c')).toBeUndefined()
   })
 
   it('rejects a path that goes through a file or onto a directory', () => {
@@ -61,5 +81,25 @@ describe('prepareWasmToolchain', () => {
       ok: false,
       message: 'The WebAssembly compiler could not be loaded: llvm.core.wasm not found',
     })
+  })
+})
+
+describe('parseDependencyFile', () => {
+  it('reads a multi-line rule, normalising paths and keeping absolute ones', () => {
+    const text = '__objects/0.o: app/main.cpp ./core/core.h \\\n  app/../lib/x.h /usr/include/stdio.h\n'
+    expect(parseDependencyFile(text)).toEqual(['app/main.cpp', 'core/core.h', 'lib/x.h', '/usr/include/stdio.h'])
+  })
+
+  it('keeps escaped spaces inside names', () => {
+    expect(parseDependencyFile('o.o: my\\ file.c other.h')).toEqual(['my file.c', 'other.h'])
+  })
+
+  it('handles Windows line continuations and a rule with no dependencies', () => {
+    expect(parseDependencyFile('o.o: a.c \\\r\n b.h')).toEqual(['a.c', 'b.h'])
+    expect(parseDependencyFile('o.o:')).toEqual([])
+  })
+
+  it('returns null for text that is not a rule', () => {
+    expect(parseDependencyFile('not a rule')).toBeNull()
   })
 })
