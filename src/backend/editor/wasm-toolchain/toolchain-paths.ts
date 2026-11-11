@@ -6,20 +6,19 @@ export interface ToolchainLocation {
   isPackaged: boolean
   resourcesPath: string
   cwd: string
+  /** The directory of the built main process, which also holds the built `clang-worker.js`. */
+  mainDir: string
 }
 
 /**
- * Where the worker script and the clang package live. A packaged app ships both as extra resources outside the
- * asar archive; anything else runs from the repository.
+ * Where the clang worker and the clang package live. The worker is built next to the main process; a packaged
+ * app ships the clang package as an extra resource outside the asar archive, anything else uses the repository's.
  */
 export function resolveWasmToolchainPaths(location: ToolchainLocation): WorkerClangRunnerPaths {
-  return location.isPackaged
-    ? {
-        workerScript: join(location.resourcesPath, 'sources', 'wasm-toolchain', 'clang-worker.mjs'),
-        toolchainDir: join(location.resourcesPath, 'yowasp-clang'),
-      }
-    : {
-        workerScript: join(location.cwd, 'resources', 'sources', 'wasm-toolchain', 'clang-worker.mjs'),
-        toolchainDir: join(location.cwd, 'node_modules', '@yowasp', 'clang'),
-      }
+  return {
+    workerScript: join(location.mainDir, 'clang-worker.js'),
+    toolchainDir: location.isPackaged
+      ? join(location.resourcesPath, 'yowasp-clang')
+      : join(location.cwd, 'node_modules', '@yowasp', 'clang'),
+  }
 }

@@ -60,5 +60,9 @@ export default {
   // build that starts differently from the shipped one is a dev build that can
   // pass while the product hangs. Costs `--cli` on every dev invocation, which
   // is what the packaged binary needs anyway.
-  entry: { 'openplc-cli.dev': `${webpackPaths.srcPath}/main/entry.ts` },
+  entry: {
+    'openplc-cli.dev': `${webpackPaths.srcPath}/main/entry.ts`,
+    // Next to the dev CLI, where the WebAssembly toolchain looks for its worker.
+    'clang-worker': `${webpackPaths.srcPath}/backend/editor/wasm-toolchain/clang-worker.ts`,
+  },
 }

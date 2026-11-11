@@ -33,3 +33,29 @@ export interface WasmClangRunner {
   /** Runs one job. Rejects only when the job could not be run at all, never for a compile error. */
   run(job: WasmClangJob): Promise<WasmClangJobResult>
 }
+
+/** A message the pool sends a clang worker: run one job. */
+export interface ClangWorkerJobMessage {
+  id: number
+  argv: string[]
+  tree: WasmToolchainTree
+}
+
+/** One clang worker, as a platform starts it: a thread, a Web Worker. */
+export interface ClangWorkerHandle {
+  post(message: ClangWorkerJobMessage): void
+  /** Every message the worker sends, unchecked. */
+  onMessage(listener: (raw: unknown) => void): void
+  /** The worker failed or stopped; `reason` says how. */
+  onFailure(listener: (reason: string) => void): void
+  terminate(): Promise<unknown> | void
+}
+
+export interface ClangWorkerMechanism {
+  /**
+   * Gets the toolchain's files ready before any worker starts: checks they are there (desktop) or downloads them
+   * (web). Rejects with the reason when it cannot.
+   */
+  load(): Promise<void>
+  spawn(): ClangWorkerHandle
+}

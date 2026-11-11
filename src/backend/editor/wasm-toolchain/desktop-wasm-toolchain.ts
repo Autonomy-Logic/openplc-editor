@@ -17,6 +17,7 @@ export function getDesktopWasmCompileService(): WasmCompileService {
         isPackaged: app.isPackaged,
         resourcesPath: process.resourcesPath,
         cwd: process.cwd(),
+        mainDir: __dirname,
       }),
     ),
   )

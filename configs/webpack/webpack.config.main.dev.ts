@@ -52,6 +52,8 @@ const configuration: webpack.Configuration = {
   entry: {
     main: join(srcMainPath, 'main.ts'),
     preload: join(srcMainPath, 'modules/preload/preload.ts'),
+    // Started as a worker thread by the WebAssembly toolchain; see backend/editor/wasm-toolchain.
+    'clang-worker': join(srcPath, 'backend/editor/wasm-toolchain/clang-worker.ts'),
   },
 
   output: {
