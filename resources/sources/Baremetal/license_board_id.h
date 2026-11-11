@@ -17,12 +17,13 @@ extern "C" {
 
 #define LIC_BOARD_ID_SIZE 16u
 
+/* Board-ID status: UNSUPPORTED means no slot on this board, TAKEN that it already has an ID, INVALID a wrong length or one repeated byte. */
 typedef enum {
     LIC_BOARD_ID_OK = 0,
-    LIC_BOARD_ID_UNSUPPORTED = 1, /* no slot on this board (weak default) */
+    LIC_BOARD_ID_UNSUPPORTED = 1,
     LIC_BOARD_ID_IO_ERROR = 2,
-    LIC_BOARD_ID_TAKEN = 3,       /* the board already has an ID */
-    LIC_BOARD_ID_INVALID = 4,     /* wrong length, or one repeated byte */
+    LIC_BOARD_ID_TAKEN = 3,
+    LIC_BOARD_ID_INVALID = 4,
 } lic_board_id_status_t;
 
 /* VPP hook. Copies the stored ID into `out`; returns LIC_BOARD_ID_SIZE, or 0 when none is stored or `cap` is too small. */

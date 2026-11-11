@@ -58,6 +58,11 @@ export interface RuntimeCommercialLicenseView {
   checking: boolean
 }
 
+/**
+ * Commercial licence status of the connected runtime or built-in board. A board's delivery waits for its
+ * VPP manifest; the no-licence dialog shows once per runtime connection and once per board until restart;
+ * a purchase is watched until the licence reaches the target.
+ */
 export function useRuntimeCommercialLicense(): RuntimeCommercialLicenseView {
   const system = useSystem()
   const status = useOpenPLCStore((state) => state.runtimeCommercialLicense.status)
@@ -103,7 +108,6 @@ export function useRuntimeCommercialLicenseOwner(): void {
     state.deviceAvailableOptions.availableBoards.get(state.deviceDefinitions.configuration.deviceBoard),
   )
   const isBoardTarget = !!boardInfo && !isOpenPLCRuntimeTarget(boardInfo) && !isSimulatorTarget(boardInfo)
-  // A REST runtime session also reports 'connected', with no control transport.
   const linkConnected = useOpenPLCStore(
     (state) => state.deviceConnection.status === 'connected' && state.deviceConnection.transport !== null,
   )
@@ -192,7 +196,6 @@ export function useRuntimeCommercialLicenseOwner(): void {
   const deliverRef = useRef(deliverToRuntime)
   deliverRef.current = target === 'board' ? deliverToBoard : deliverToRuntime
 
-  // A board waits for its manifest, since the VPP decides whether its flow runs.
   const deliveryKey =
     target === 'runtime' ? 'runtime' : target === 'board' && mode !== null ? `board:${packageId ?? ''}:${mode}` : null
 
@@ -233,8 +236,6 @@ export function useRuntimeCommercialLicenseOwner(): void {
     }
   }, [resolved, store])
 
-  // Once per runtime connection; once per board until restart, as an upload drops and restores
-  // the board link. A dismissal holds until restart.
   const shownForRef = useRef<string | null>(null)
   const boardsShownRef = useRef(new Set<string>())
   useEffect(() => {
@@ -261,7 +262,6 @@ export function useRuntimeCommercialLicenseOwner(): void {
     })
   }, [delivered, status, hardwareId, target, buy, store])
 
-  // A purchase made in the browser reaches the target without another connect.
   useEffect(() => {
     if (awaitingPurchaseUntil === null) return
     if (status === 'licensed' || !connected) {

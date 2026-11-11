@@ -115,7 +115,8 @@ enum {
     MB_FC_PLC_SET_STATE       = 0x4B, // Set the runtime run/stop state
     MB_FC_REBOOT_BOOTLOADER   = 0x4C, // Reboot the device into its firmware bootloader (magic-guarded)
     MB_FC_GET_LOCK_STATE      = 0x4D, // Read the device's programming-lock state (read-only)
-    MB_FC_PROVISION_BOARD_ID  = 0x4E, // Store a generated board ID once (write-once)
+    // Store a generated board ID once (write-once).
+    MB_FC_PROVISION_BOARD_ID  = 0x4E,
 };
 
 //Exception Codes

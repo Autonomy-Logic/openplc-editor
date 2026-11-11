@@ -164,7 +164,6 @@ void setup()
     // read RUN and start immediately, as they always have.
     runtime_init_plc_state();
 
-    // Hand the stored licence to the gate; a paid VPP verifies it, the weak default ignores it.
     {
         uint8_t lic_blob[LIC_BLOB_SIZE] = {0};
         size_t  lic_len = 0;

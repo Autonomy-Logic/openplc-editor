@@ -39,7 +39,7 @@ void rebootToBootloader(const uint8_t *magic);
 // side-effect free (unlike 0x4C, which raises the unlock prompt on the device),
 // so the editor can poll it while waiting for the user to unlock.
 void getLockState(void);
-// FC 0x4E -- store a generated board ID once. `id` points at the 16 payload bytes.
+// FC 0x4E -- store a generated board ID once. `id` points at the 16 payload bytes; the frame carries a CRC on RTU.
 void debugProvisionBoardId(const uint8_t *id);
 
 #endif

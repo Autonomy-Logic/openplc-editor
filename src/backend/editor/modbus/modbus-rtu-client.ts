@@ -626,7 +626,7 @@ export class ModbusRtuClient implements DeviceModbusTransport {
     }
   }
 
-  /** FC 0x4E. Stores a generated board ID once; the board refuses it when it already has one. */
+  /** FC 0x4E. Stores a generated board ID once; the board refuses it when it already has one. The reply PDU starts at offset 7. */
   async provisionBoardId(id: Uint8Array): Promise<DebugBoardIdProvisionResult> {
     try {
       const pdu = buildProvisionBoardIdRequest(id)
@@ -637,7 +637,6 @@ export class ModbusRtuClient implements DeviceModbusTransport {
         return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
       }
 
-      // Strip the 6-byte TCP-compat padding; the pure PDU starts at offset 7.
       return parseProvisionBoardIdResponse(Uint8Array.prototype.slice.call(response, 7))
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }
