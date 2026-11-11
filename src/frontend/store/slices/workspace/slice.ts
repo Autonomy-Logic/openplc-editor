@@ -51,6 +51,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
     debugHarness: null,
     debugLocalMd5: null,
     debugGraphList: [],
+    debugTagTableKeys: [],
     debugDataStale: false,
     debugMd5Mismatch: null,
     debugTargetEndian: 'le',
@@ -172,6 +173,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugHarness = null
           workspace.debugLocalMd5 = null
           workspace.debugGraphList = []
+          workspace.debugTagTableKeys = []
           workspace.debugDataStale = false
           workspace.debugMd5Mismatch = null
           workspace.debugTargetEndian = 'le'
@@ -367,6 +369,13 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
         }),
       )
     },
+    setDebugTagTableKeys: (keys: string[]) => {
+      setState(
+        produce(({ workspace }: WorkspaceSlice) => {
+          workspace.debugTagTableKeys = keys
+        }),
+      )
+    },
     setDebugDataStale: (stale: boolean) => {
       setState(
         produce(({ workspace }: WorkspaceSlice) => {
@@ -406,6 +415,7 @@ const createWorkspaceSlice: StateCreator<WorkspaceSlice, [], [], WorkspaceSlice>
           workspace.debugHarness = null
           workspace.debugLocalMd5 = null
           workspace.debugGraphList = []
+          workspace.debugTagTableKeys = []
           workspace.debugDataStale = false
           workspace.debugMd5Mismatch = null
           workspace.debugTargetEndian = 'le'

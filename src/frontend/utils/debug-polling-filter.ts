@@ -10,6 +10,7 @@
  * 4. Diagram-visible variables (LD/FBD contacts, coils, variable nodes, block outputs)
  * 5. Source-visible variables (ST/IL — regex-matched against source text)
  * 6. Expanded nested children (only when parent hierarchy is expanded)
+ * 7. Tags the debugger tag table currently shows
  *
  * Diagram/source scan results are cached per {pouName, language, fbContext}
  * since the editor is read-only during debug — no recomputation needed
@@ -31,6 +32,7 @@ export interface DebugPollingState {
     debugForcedVariables: Map<string, unknown>
     debugExpandedNodes: Map<string, boolean>
     debugGraphList: string[]
+    debugTagTableKeys: string[]
     fbSelectedInstance: Map<string, string>
     fbDebugInstances: Map<string, FbInstanceInfo[]>
     /** Generated program the session is running, when it runs one the
@@ -84,6 +86,7 @@ export function buildActiveIndexSet(
     debugForcedVariables,
     debugExpandedNodes,
     debugGraphList,
+    debugTagTableKeys,
     fbSelectedInstance,
     fbDebugInstances,
     debugHarness,
@@ -139,6 +142,13 @@ export function buildActiveIndexSet(
   // 3. Graph-listed variables
   // -----------------------------------------------------------------------
   for (const compositeKey of debugGraphList) {
+    activeKeys.add(compositeKey)
+  }
+
+  // -----------------------------------------------------------------------
+  // 3b. Tags the tag table shows
+  // -----------------------------------------------------------------------
+  for (const compositeKey of debugTagTableKeys) {
     activeKeys.add(compositeKey)
   }
 
