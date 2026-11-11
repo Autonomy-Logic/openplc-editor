@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { type Dirent, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 
 import { type ElectronApplication, expect, type Locator, type Page } from '@playwright/test'
 
@@ -83,23 +83,53 @@ export function hostKeyFilePath(paths: ProvisioningPaths): string {
   return join(paths.userData, 'ssh-known-hosts.json')
 }
 
-/** Every file the editor wrote for this profile and project, read as text, for credential searches. */
-export function profileTexts(paths: ProvisioningPaths): string {
-  const files = [
-    join(paths.userData, 'logs', 'combined.log'),
-    hostKeyFilePath(paths),
-    join(paths.project, 'project.json'),
-    join(paths.project, 'devices', 'configuration.json'),
-  ]
-  return files
-    .map((file) => {
-      try {
-        return readFileSync(file, 'utf-8')
-      } catch {
-        return ''
-      }
+/** The editor's combined log of the profile, or an empty string before the editor writes it. */
+export function editorLogText(paths: ProvisioningPaths): string {
+  const bytes = readIfPresent(join(paths.userData, 'logs', 'combined.log'))
+  return bytes === null ? '' : bytes.toString('utf-8')
+}
+
+/** True when @p error is a file system error for a path that does not exist. */
+function isMissing(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+}
+
+/** The bytes of @p file, or null when it no longer exists. */
+function readIfPresent(file: string): Buffer | null {
+  try {
+    return readFileSync(file)
+  } catch (error) {
+    if (isMissing(error)) return null
+    throw error
+  }
+}
+
+/** Every regular file under @p dir, recursively, without following symbolic links. */
+function filesUnder(dir: string): string[] {
+  let entries: Dirent[]
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+  } catch (error) {
+    if (isMissing(error)) return []
+    throw error
+  }
+  return entries.flatMap((entry) => {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) return filesUnder(path)
+    return entry.isFile() ? [path] : []
+  })
+}
+
+/** Paths, relative to the profile root, of every file under userData or the project folder whose bytes hold @p secret in UTF-8 or UTF-16LE. */
+export function filesHolding(paths: ProvisioningPaths, secret: string): string[] {
+  const needles = [Buffer.from(secret, 'utf-8'), Buffer.from(secret, 'utf16le')]
+  return [paths.userData, paths.project]
+    .flatMap(filesUnder)
+    .filter((file) => {
+      const bytes = readIfPresent(file)
+      return bytes !== null && needles.some((needle) => bytes.includes(needle))
     })
-    .join('\n')
+    .map((file) => relative(paths.root, file))
 }
 
 /** The Device Configuration screen of a Runtime v4 project, with the runtime provisioning dialogs. */
@@ -220,6 +250,38 @@ export class RuntimeProvisioningPage {
     await this.username.fill(username)
     await this.password.fill(password)
     await this.submit.click()
+  }
+
+  /** Writes @p marker to the window's Local Storage and IndexedDB, then has every Electron session flush its storage to disk. */
+  async plantStorageMarker(marker: string): Promise<void> {
+    await this.page.evaluate(async (value) => {
+      localStorage.setItem('e2e-storage-marker', value)
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('e2e-storage-marker', 1)
+        request.onupgradeneeded = () => request.result.createObjectStore('marker')
+        request.onerror = () => reject(request.error ?? new Error('IndexedDB open failed'))
+        request.onsuccess = () => {
+          const database = request.result
+          const transaction = database.transaction('marker', 'readwrite')
+          transaction.objectStore('marker').put(value, 'value')
+          transaction.oncomplete = () => {
+            database.close()
+            resolve()
+          }
+          transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB write failed'))
+        }
+      })
+    }, marker)
+    await this.app.evaluate(async ({ BrowserWindow, session }) => {
+      const sessions = new Set([
+        session.defaultSession,
+        ...BrowserWindow.getAllWindows().map((w) => w.webContents.session),
+      ])
+      for (const each of sessions) {
+        each.flushStorageData()
+        await each.cookies.flushStore()
+      }
+    })
   }
 
   /** Text of the whole window; the editor console is part of it while its panel shows. */

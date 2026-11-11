@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
+import { relative, sep } from 'node:path'
 
 import { expect, test } from '@playwright/test'
 import { utils } from 'ssh2'
@@ -17,8 +19,9 @@ import {
   startFakeRuntime,
 } from './helpers/fake-provisioning-device'
 import {
+  editorLogText,
+  filesHolding,
   hostKeyFilePath,
-  profileTexts,
   type ProvisioningPaths,
   RuntimeProvisioningPage,
   writeProvisioningProject,
@@ -77,7 +80,17 @@ function auditEntry(device: FakeDevice, operation: string, outcome: string): Reg
   )
 }
 
-/** Asserts @p count audit entries for the operation in the editor log, and no credential in the log or the window. */
+/** Asserts the storage marker reached the Local Storage and IndexedDB files on disk, so the credential search sees flushed storage. */
+async function expectStorageFlushed(screen: RuntimeProvisioningPage, paths: ProvisioningPaths): Promise<void> {
+  const marker = `e2e-storage-marker-${randomUUID()}`
+  await screen.plantStorageMarker(marker)
+  const userData = relative(paths.root, paths.userData)
+  await expect
+    .poll(() => filesHolding(paths, marker).map((file) => relative(userData, file).split(sep)[0]))
+    .toEqual(expect.arrayContaining(['IndexedDB', 'Local Storage']))
+}
+
+/** Asserts @p count audit entries for the operation in the editor log, and no credential in the window or any profile or project file. */
 async function expectAudit(
   screen: RuntimeProvisioningPage,
   paths: ProvisioningPaths,
@@ -90,14 +103,17 @@ async function expectAudit(
   await expect
     .poll(
       () =>
-        profileTexts(paths)
+        editorLogText(paths)
           .split('\n')
           .filter((line) => entry.test(line)).length,
     )
     .toBe(count)
-  const texts = `${await screen.bodyText()}\n${profileTexts(paths)}`
-  expect(texts).not.toContain(DEVICE_PASSWORD)
-  expect(texts).not.toContain(DEVICE_USER)
+  const windowText = await screen.bodyText()
+  expect(windowText).not.toContain(DEVICE_PASSWORD)
+  expect(windowText).not.toContain(DEVICE_USER)
+  await expectStorageFlushed(screen, paths)
+  expect(filesHolding(paths, DEVICE_PASSWORD)).toEqual([])
+  expect(filesHolding(paths, DEVICE_USER)).toEqual([])
 }
 
 /** Waits until the device received the command that starts the installer. */
