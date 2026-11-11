@@ -455,6 +455,13 @@ export interface PLCProjectLibraryRef {
   version: string
 }
 
+/** Named subset of the debugger's tag table, saved with the project. */
+export interface PLCMonitorView {
+  name: string
+  /** Composite keys of the tags the view holds, as the debug tree builds them. */
+  entries: string[]
+}
+
 export interface PLCProjectData {
   dataTypes: PLCDataType[]
   /** Optional on the wire so projects saved before GVLs existed still parse; absent reads as `[]`. */
@@ -477,6 +484,8 @@ export interface PLCProjectData {
     global?: string[]
     pous?: Record<string, string[]>
   }
+  /** Debugger tag-table views; absent reads as `[]`. */
+  monitorViews?: PLCMonitorView[]
   /** Project-scope opaque data a VPP screen owns under its (packageId, screenId) key. */
   vppExtensions?: Record<string, Record<string, unknown>>
 }

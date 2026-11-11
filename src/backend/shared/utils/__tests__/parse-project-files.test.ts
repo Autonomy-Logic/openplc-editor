@@ -849,6 +849,19 @@ describe('parseProjectFiles — configuration fallback', () => {
     expect(result.projectData.configurations.resource.tasks).toEqual([])
   })
 
+  it('reads the debugger tag-table views from project data', () => {
+    const projectJson = makeProjectJson({
+      monitorViews: [{ name: 'Motors', entries: ['main:motor'] }],
+    })
+    const result = parseProjectFiles('/p', projectJson, makeDeviceConfig(), makePinMapping(), [], [], [])
+    expect(result.projectData.monitorViews).toEqual([{ name: 'Motors', entries: ['main:motor'] }])
+  })
+
+  it('leaves the views undefined for a project saved before they existed', () => {
+    const result = parseProjectFiles('/p', makeProjectJson({}), makeDeviceConfig(), makePinMapping(), [], [], [])
+    expect(result.projectData.monitorViews).toBeUndefined()
+  })
+
   it('reads debugVariables from project data', () => {
     const projectJson = makeProjectJson({
       debugVariables: { global: ['g1'], pous: { P1: ['v1'] } },

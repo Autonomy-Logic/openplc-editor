@@ -22,6 +22,7 @@ import type {
   PLCDataType,
   PLCGlobalVariableList,
   PLCInstance,
+  PLCMonitorView,
   PLCPou,
   PLCRemoteDevice,
   PLCServer,
@@ -79,6 +80,8 @@ export interface ParsedProjectData {
      *  on disk — the manifest editor seeds a template on first edit. */
     libraryManifest?: string
     debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
+    /** Debugger tag-table views; absent in a project saved before they existed. */
+    monitorViews?: PLCMonitorView[]
     /** VPP extension payloads keyed by (packageId, screenId). Opaque to the parser. */
     vppExtensions?: Record<string, Record<string, unknown>>
   }
@@ -598,6 +601,7 @@ export function parseProjectFiles(
       libraries: (data.libraries as ParsedProjectData['projectData']['libraries']) ?? [],
       ...(metaType === 'plc-library' ? { libraryManifest } : {}),
       debugVariables: data.debugVariables as ParsedProjectData['projectData']['debugVariables'],
+      ...(data.monitorViews ? { monitorViews: data.monitorViews as PLCMonitorView[] } : {}),
       ...(data.vppExtensions
         ? { vppExtensions: data.vppExtensions as ParsedProjectData['projectData']['vppExtensions'] }
         : {}),

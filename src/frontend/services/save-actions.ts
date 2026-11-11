@@ -75,6 +75,8 @@ function buildProjectJsonContent(state: StoreState): string {
     ? Object.fromEntries(Object.entries(rawVppExtensions).filter(([, screens]) => Object.keys(screens).length > 0))
     : undefined
   const hasVppExtensions = prunedVppExtensions !== undefined && Object.keys(prunedVppExtensions).length > 0
+  // A project that never opened a debugger view stays byte-identical with its baseline shape.
+  const monitorViews = project.data.monitorViews ?? []
   return JSON.stringify(
     {
       meta: { name: project.meta.name, type: metaType },
@@ -87,6 +89,7 @@ function buildProjectJsonContent(state: StoreState): string {
         configuration: project.data.configurations,
         libraries,
         debugVariables,
+        ...(monitorViews.length > 0 ? { monitorViews } : {}),
         ...(hasVppExtensions ? { vppExtensions: prunedVppExtensions } : {}),
       },
     },
