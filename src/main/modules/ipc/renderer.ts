@@ -68,6 +68,7 @@ import type {
   Stash,
   VersionControlResult,
 } from '@root/middleware/shared/ports/version-control-port'
+import type { WasmCompileRequest, WasmCompileResult } from '@root/middleware/shared/ports/wasm-toolchain-types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
@@ -585,6 +586,10 @@ const rendererProcessBridge = {
     ipcRenderer.on('packages:boards-updated', listener)
     return () => ipcRenderer.removeListener('packages:boards-updated', listener)
   },
+
+  // ===================== WEBASSEMBLY TOOLCHAIN =====================
+  wasmToolchainCompile: (request: WasmCompileRequest): Promise<WasmCompileResult> =>
+    ipcRenderer.invoke('wasm-toolchain:compile', request),
 
   // ===================== UTILITY METHODS =====================
   getPreviewImage: (image: string, packagePath?: string): Promise<string> =>

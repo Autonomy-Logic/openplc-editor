@@ -1,7 +1,7 @@
 import type { WasmToolchainTree } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
+import type { WasmToolchainFiles } from '@root/middleware/shared/ports/wasm-toolchain-types'
 
-/** Files keyed by relative path (`dir/file.cpp`). */
-export type WasmToolchainFiles = Record<string, string | Uint8Array>
+export type { WasmToolchainFiles }
 
 type TreeNode = string | Uint8Array | WasmToolchainTree | undefined
 

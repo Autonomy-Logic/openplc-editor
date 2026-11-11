@@ -27,6 +27,7 @@ import type {
   PLCProjectData,
   Unsubscribe,
 } from './types'
+import type { WasmCompileRequest, WasmCompileResult } from './wasm-toolchain-types'
 
 export interface CompileProgramArgs {
   projectData: PLCProjectData
@@ -104,6 +105,12 @@ export interface CompilerPort {
     args: CompileLibraryArgs,
     onProgress: (event: CompileProgressEvent) => void,
   ): Promise<CompileLibraryResult>
+
+  /**
+   * Compile C and C++ sources to one WebAssembly module with the toolchain loaded at editor start. Objects of
+   * unchanged sources are reused within the session. Compiler output comes back in `diagnostics`.
+   */
+  compileToWasm(request: WasmCompileRequest): Promise<WasmCompileResult>
 
   /**
    * Subscribe to compilation output logs (stdout/stderr streaming).

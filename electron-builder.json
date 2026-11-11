@@ -21,6 +21,11 @@
     {
       "from": "./node_modules/strucpp/libs",
       "to": "./strucpp/libs"
+    },
+    {
+      "from": "./node_modules/@yowasp/clang",
+      "to": "./yowasp-clang",
+      "filter": ["package.json", "README.md", "gen/**"]
     }
   ],
   "mac": {

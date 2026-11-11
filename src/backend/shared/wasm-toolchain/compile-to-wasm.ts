@@ -4,56 +4,41 @@ import type {
   WasmClangJobResult,
   WasmClangRunner,
 } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
+import type {
+  WasmCompileRequest,
+  WasmCompileResult,
+  WasmCompileStats,
+  WasmCompileUnit,
+  WasmDiagnostic,
+  WasmToolchainFiles,
+} from '@root/middleware/shared/ports/wasm-toolchain-types'
 
 import { ContentHash } from './content-hash'
-import { filesToTree, isFileBytes, readTreeFile, type WasmToolchainFiles } from './file-tree'
+import { filesToTree, isFileBytes, readTreeFile } from './file-tree'
+
+export type {
+  WasmCompileRequest,
+  WasmCompileResult,
+  WasmCompileStats,
+  WasmCompileUnit,
+  WasmDiagnostic,
+  WasmUnitLanguage,
+} from '@root/middleware/shared/ports/wasm-toolchain-types'
 
 export const WASM_TARGET = 'wasm32-wasip1'
 export const DEFAULT_WASM_OUTPUT = 'module.wasm'
 
-export type WasmUnitLanguage = 'c' | 'c++'
-
-/** One translation unit: a file in `files` compiled to one object. */
-export interface WasmCompileUnit {
-  source: string
-  language: WasmUnitLanguage
-  /** Flags for this unit only, after the language flags. */
-  flags?: string[]
+/** Compiled objects of a session, keyed by everything that decides their content. A `Map` qualifies. */
+export interface WasmObjectCache {
+  get(key: string): Uint8Array | undefined
+  set(key: string, object: Uint8Array): unknown
 }
-
-export interface WasmCompileRequest {
-  /** Sources, headers and any other input, keyed by relative path. */
-  files: WasmToolchainFiles
-  units: WasmCompileUnit[]
-  /** Flags for every C unit. */
-  cFlags?: string[]
-  /** Flags for every C++ unit. */
-  cxxFlags?: string[]
-  /** Flags for the link step, for example `-mexec-model=reactor`. */
-  linkFlags?: string[]
-  /** Path of the linked module. Defaults to `module.wasm`. */
-  output?: string
-}
-
-/** Compiled objects of a session, keyed by everything that decides their content. */
-export type WasmObjectCache = Map<string, Uint8Array>
 
 export interface WasmCompileOptions {
   runner: WasmClangRunner
   cache?: WasmObjectCache
   log?: PlatformLog
 }
-
-export interface WasmCompileStats {
-  units: number
-  cached: number
-  compileMs: number
-  linkMs: number
-}
-
-export type WasmCompileResult =
-  | { ok: true; wasm: Uint8Array; stats: WasmCompileStats }
-  | { ok: false; error: string; stats: WasmCompileStats }
 
 interface PlannedUnit {
   unit: WasmCompileUnit
@@ -65,9 +50,10 @@ interface PlannedUnit {
 
 const sizeOf = (content: string | Uint8Array | undefined): number => content?.length ?? 0
 
-const logStderr = (log: PlatformLog | undefined, stderr: string, level: 'warning' | 'error'): void => {
-  if (!log) return
-  for (const line of stderr.split('\n')) if (line.trim() !== '') log(line, level)
+type Report = (message: string, level: WasmDiagnostic['level']) => void
+
+const reportStderr = (report: Report, stderr: string, level: WasmDiagnostic['level']): void => {
+  for (const line of stderr.split('\n')) if (line.trim() !== '') report(line, level)
 }
 
 function validate(request: WasmCompileRequest): string | null {
@@ -150,11 +136,17 @@ export async function compileToWasm(
 ): Promise<WasmCompileResult> {
   const { runner, cache, log } = options
   const stats: WasmCompileStats = { units: request.units.length, cached: 0, compileMs: 0, linkMs: 0 }
-  const invalid = validate(request)
-  if (invalid) {
-    log?.(invalid, 'error')
-    return { ok: false, error: invalid, stats }
+  const diagnostics: WasmDiagnostic[] = []
+  const report: Report = (message, level) => {
+    diagnostics.push({ message, level })
+    log?.(message, level)
   }
+  const fail = (error: string): WasmCompileResult => {
+    report(error, 'error')
+    return { ok: false, error, stats, diagnostics }
+  }
+  const invalid = validate(request)
+  if (invalid) return fail(invalid)
 
   const compileStart = performance.now()
   const tree = filesToTree(request.files)
@@ -181,18 +173,16 @@ export async function compileToWasm(
     if (isFileBytes(object)) {
       objects.set(p.object, object)
       cache?.set(p.key, object)
-      logStderr(log, result.stderr, 'warning')
+      reportStderr(report, result.stderr, 'warning')
       return
     }
-    logStderr(log, result.stderr, 'error')
+    reportStderr(report, result.stderr, 'error')
     failures.push(`${p.unit.source}: ${describeFailure(result.exitCode, 'no object')}`)
   })
   stats.compileMs = performance.now() - compileStart
 
   if (failures.length > 0) {
-    const error = `Compilation failed in ${failures.length} of ${planned.length} file(s): ${failures.join(' ')}`
-    log?.(error, 'error')
-    return { ok: false, error, stats }
+    return fail(`Compilation failed in ${failures.length} of ${planned.length} file(s): ${failures.join(' ')}`)
   }
 
   const output = request.output ?? DEFAULT_WASM_OUTPUT
@@ -217,11 +207,9 @@ export async function compileToWasm(
 
   const wasm = link.exitCode === 0 ? readTreeFile(link.tree, output) : undefined
   if (!isFileBytes(wasm)) {
-    logStderr(log, link.stderr, 'error')
-    const error = `Link failed: ${describeFailure(link.exitCode, `no '${output}'`)}`
-    log?.(error, 'error')
-    return { ok: false, error, stats }
+    reportStderr(report, link.stderr, 'error')
+    return fail(`Link failed: ${describeFailure(link.exitCode, `no '${output}'`)}`)
   }
-  logStderr(log, link.stderr, 'warning')
-  return { ok: true, wasm, stats }
+  reportStderr(report, link.stderr, 'warning')
+  return { ok: true, wasm, stats, diagnostics }
 }

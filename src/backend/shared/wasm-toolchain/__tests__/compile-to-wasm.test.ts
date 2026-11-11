@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals'
 
-import { compileToWasm, type WasmCompileRequest, type WasmObjectCache } from '../compile-to-wasm'
+import { compileToWasm, type WasmCompileRequest } from '../compile-to-wasm'
 import { FakeRunner } from './fixtures/fake-runner'
 
 const request = (overrides: Partial<WasmCompileRequest> = {}): WasmCompileRequest => ({
@@ -77,7 +77,7 @@ describe('compileToWasm', () => {
   })
 
   it('reuses cached objects for unchanged units and recompiles only the edited one', async () => {
-    const cache: WasmObjectCache = new Map()
+    const cache = new Map<string, Uint8Array>()
     const first = new FakeRunner()
     await compileToWasm(request(), { runner: first, cache })
     expect(cache.size).toBe(2)
@@ -93,7 +93,7 @@ describe('compileToWasm', () => {
   })
 
   it('recompiles every unit when a header changes', async () => {
-    const cache: WasmObjectCache = new Map()
+    const cache = new Map<string, Uint8Array>()
     await compileToWasm(request(), { runner: new FakeRunner(), cache })
     const runner = new FakeRunner()
     const changed = request()
@@ -104,7 +104,7 @@ describe('compileToWasm', () => {
   })
 
   it('recompiles a unit when its flags change', async () => {
-    const cache: WasmObjectCache = new Map()
+    const cache = new Map<string, Uint8Array>()
     await compileToWasm(request(), { runner: new FakeRunner(), cache })
     const result = await compileToWasm(request({ cxxFlags: ['-std=gnu++20'] }), { runner: new FakeRunner(), cache })
     expect(result.stats.cached).toBe(1)
@@ -150,7 +150,7 @@ describe('compileToWasm', () => {
   })
 
   it('does not cache the object of a failed unit', async () => {
-    const cache: WasmObjectCache = new Map()
+    const cache = new Map<string, Uint8Array>()
     const runner = new FakeRunner(2, (argv) => (argv.includes('core/core.c') ? { exitCode: 1 } : { exitCode: 0 }))
     await compileToWasm(request(), { runner, cache })
     expect(cache.size).toBe(1)

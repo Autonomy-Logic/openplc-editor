@@ -75,7 +75,12 @@ export async function compileStrucppToWasm(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     options.log?.(message, 'error')
-    return { ok: false, error: message, stats: { units: 0, cached: 0, compileMs: 0, linkMs: 0 } }
+    return {
+      ok: false,
+      error: message,
+      stats: { units: 0, cached: 0, compileMs: 0, linkMs: 0 },
+      diagnostics: [{ message, level: 'error' }],
+    }
   }
   return compileToWasm(compileRequest, options)
 }
