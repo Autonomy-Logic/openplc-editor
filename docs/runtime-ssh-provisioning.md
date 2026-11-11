@@ -152,11 +152,14 @@ is saved, and every later login to that host and port must present the same key.
 The keys are saved in `ssh-known-hosts.json`, in the editor's user data folder. It is the folder that
 also holds `logs/combined.log`:
 
-| OS      | File                                                                                                                 |
-| ------- | -------------------------------------------------------------------------------------------------------------------- |
-| Linux   | `~/.config/open-plc-editor/ssh-known-hosts.json` (`$XDG_CONFIG_HOME/open-plc-editor/` when `XDG_CONFIG_HOME` is set) |
-| macOS   | `~/Library/Application Support/open-plc-editor/ssh-known-hosts.json`                                                 |
-| Windows | `%APPDATA%\open-plc-editor\ssh-known-hosts.json` (`C:\Users\<user>\AppData\Roaming\open-plc-editor\`)                |
+| OS      | File                                                                                                                 | Packaged build |
+| ------- | -------------------------------------------------------------------------------------------------------------------- | -------------- |
+| Linux   | `~/.config/open-plc-editor/ssh-known-hosts.json` (`$XDG_CONFIG_HOME/open-plc-editor/` when `XDG_CONFIG_HOME` is set) | Checked        |
+| macOS   | `~/Library/Application Support/open-plc-editor/ssh-known-hosts.json`                                                 | Unverified     |
+| Windows | `%APPDATA%\open-plc-editor\ssh-known-hosts.json` (`C:\Users\<user>\AppData\Roaming\open-plc-editor\`)                | Unverified     |
+
+The macOS and Windows paths are Electron's default `userData` location on those systems and have not been
+checked on a packaged build yet; the Linux path was checked on a packaged build.
 
 The folder is Electron's `app.getPath('userData')`, named after the `name` of `release/app/package.json`
 (`open-plc-editor`), not after the product name.
@@ -229,19 +232,42 @@ The line holds no username, password or device output. It is written to the edit
 
 ## Test device
 
-The feature is validated on a Raspberry Pi 4.
+The feature was validated on a VirtualBox virtual machine running Ubuntu for amd64 (64-bit x86), with a
+bridged network adapter. Any device that meets "Device requirements" can be used. The refusal of an
+unsupported architecture was checked on a Raspberry Pi B+ (ARMv6, `armv6l`), which the editor refuses
+with "Unsupported device", with nothing changed on the device.
 
 ### Preparing it
 
-1. With Raspberry Pi Imager, write Raspberry Pi OS Lite (64-bit) to the SD card. In the customisation
-   settings, set a username and password and enable SSH with password authentication.
-2. Boot the board on the same network as the editor and note its IP address.
-3. Do not install any runtime. The board is then in the "no runtime" state.
+1. Create a VirtualBox virtual machine and install Ubuntu for amd64 on it.
+2. Set the virtual machine's network adapter to "Bridged Adapter", on the host interface that reaches the
+   editor's network, so the virtual machine gets an address on the same network as the editor. Note that
+   address, for example with `ip -br addr` on the virtual machine.
+3. Use an account with a password that can run commands with `sudo`.
+4. Enable an SSH server with password login. On Ubuntu, install it with `sudo apt install openssh-server`
+   when it is missing; `sudo sshd -T | grep -i passwordauthentication` must print
+   `passwordauthentication yes`.
+5. When a large image pull stalls on the virtual machine (a `docker pull`, or the installer's image pull,
+   stops making progress), turn off the offloads of its network interface:
+
+   ```sh
+   sudo ethtool -K <interface> tso off gso off gro off
+   ```
+
+   `<interface>` is the virtual machine's interface, listed by `ip -br link` (`enp0s3` on the validated
+   virtual machine). The setting is lost at reboot, so run it again after each boot. Without it, the
+   runtime image pull stalled and the editor ended the install with "Result unknown" after its 60-minute
+   limit.
+
+6. Do not install any runtime. The virtual machine is then in the "no runtime" state.
+
+A Raspberry Pi 4 can be used instead: write Raspberry Pi OS Lite (64-bit) with Raspberry Pi Imager,
+setting a username, a password and SSH with password authentication in the customisation settings.
 
 ### Reproducible states
 
-Run these on the board over SSH. Each one gives a state the editor must handle; test it with Connect on
-an "OpenPLC Runtime v4" target addressed to the board.
+Run these on the device over SSH. Each one gives a state the editor must handle; test it with Connect on
+an "OpenPLC Runtime v4" target addressed to the device.
 
 - **No runtime** (install path): remove any runtime the installer put there:
 
@@ -258,11 +284,21 @@ an "OpenPLC Runtime v4" target addressed to the board.
   sudo systemctl stop docker docker.socket
   ```
 
-- **Container install, bootloader stopped** (start path): after an install,
+- **Container install, bootloader and runtime stopped** (start path): after an install, stop the
+  bootloader first, then the runtime container, because a running bootloader restarts a stopped runtime
+  container:
 
   ```sh
   sudo docker stop openplc-bootloader
+  sudo docker stop openplc-runtime
   ```
+
+  Before pressing Connect, check from the editor's machine that port 8443 does not answer:
+  `curl -k --max-time 5 https://<device address>:8443/` must fail to connect, with no HTTP status. If
+  8443 still answers, the runtime is still running and Connect logs in to it with no offer. The
+  bootloader is created with `--restart always`, so after a reboot of the device or a restart of Docker
+  both containers come back and the two commands must be run again. Expected result: the editor starts
+  the bootloader, which starts the runtime, and the flow ends in the runtime login dialog.
 
 - **Native v4 service stopped** (start path): uninstall the container install first, then build the
   runtime from source and stop its service:
@@ -285,7 +321,7 @@ an "OpenPLC Runtime v4" target addressed to the board.
 
   Remove it afterwards with `sudo rm /etc/systemd/system/openplc.service && sudo systemctl daemon-reload`.
 
-- **Removing a host-key entry**: to reproduce the "Host key changed" warning, regenerate the board's host
+- **Removing a host-key entry**: to reproduce the "Host key changed" warning, regenerate the device's host
   keys (`sudo rm /etc/ssh/ssh_host_* && sudo dpkg-reconfigure openssh-server && sudo systemctl restart ssh`)
   after a first login from the editor. Then remove the entry by hand as described in "Removing one entry
   by hand", and check that the next login trusts the new key on first use.
