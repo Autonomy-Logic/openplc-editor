@@ -1,9 +1,3 @@
-/**
- * Progress of a board package's dependency installation or removal: a hook that
- * tracks the running install, update, Reinstall or uninstall, and the blocking
- * modal that shows it.
- */
-
 import type { PackageInstallProgress } from '@root/middleware/shared/ports/types'
 import { usePackages } from '@root/middleware/shared/providers/platform-context'
 import { formatInstallStep } from '@root/middleware/shared/utils/package-install-step'
@@ -15,6 +9,8 @@ import { Modal, ModalContent } from '../../../../_molecules/modal'
 export interface PackageInstallTracker {
   /** The latest progress of the running operation, or null when none reported yet. */
   progress: PackageInstallProgress | null
+  /** Whether an operation is running. */
+  busy: boolean
   /** Runs @p operation, showing its dependency progress until it settles. */
   track: <T>(operation: () => Promise<T>) => Promise<T>
 }
@@ -22,6 +18,7 @@ export interface PackageInstallTracker {
 export function usePackageInstallTracker(): PackageInstallTracker {
   const packages = usePackages()
   const [progress, setProgress] = useState<PackageInstallProgress | null>(null)
+  const [busy, setBusy] = useState(false)
   const running = useRef(0)
 
   useEffect(() => {
@@ -33,15 +30,19 @@ export function usePackageInstallTracker(): PackageInstallTracker {
 
   const track = useCallback(async <T,>(operation: () => Promise<T>): Promise<T> => {
     running.current += 1
+    setBusy(true)
     try {
       return await operation()
     } finally {
       running.current -= 1
-      if (running.current === 0) setProgress(null)
+      if (running.current === 0) {
+        setProgress(null)
+        setBusy(false)
+      }
     }
   }, [])
 
-  return { progress, track }
+  return { progress, busy, track }
 }
 
 export function PackageInstallProgressModal({ progress }: { progress: PackageInstallProgress | null }) {

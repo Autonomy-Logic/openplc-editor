@@ -55,7 +55,6 @@ export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: 
       ...(boardInfo.compilerFlags?.cxx_flags ? { cxx_flags: boardInfo.compilerFlags.cxx_flags } : {}),
       ...(boardInfo.compilerFlags?.ld_flags ? { ld_flags: boardInfo.compilerFlags.ld_flags } : {}),
       ...(boardInfo.maxDataSize !== undefined ? { max_data_size: boardInfo.maxDataSize } : {}),
-      // Prebuilt arduino-hal: the precompiled vendor library to link as a 2nd --library; absent for source boards.
       ...(boardInfo.precompiledLibraryDir ? { precompiledLibraryDir: boardInfo.precompiledLibraryDir } : {}),
       // Upload transport ("ethernet" for the LOGO! 8.2; serial otherwise).
       ...(boardInfo.uploadMethod ? { uploadMethod: boardInfo.uploadMethod } : {}),

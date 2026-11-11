@@ -1,9 +1,3 @@
-/**
- * Ties a board package's life cycle to its arduino-cli dependencies: install
- * them with the package, install what is missing on Reinstall, and remove what
- * no other package needs on uninstall. Decisions come from the shared plans.
- */
-
 import {
   type ArduinoDependencies,
   collectArduinoDependencies,
@@ -19,6 +13,7 @@ import {
   removeArduinoDependencies,
 } from './arduino-dependency-installer'
 import type { PackageManagerModule } from './package-manager-module'
+import { StartupDependencyCheck } from './startup-dependency-check'
 import type { ImportResult, PackageManifest } from './types'
 
 export type DependencyProgressListener = (progress: PackageInstallProgress) => void
@@ -33,6 +28,7 @@ const NO_STARTUP_CHECK: StartupDependencyGate = { isRunning: () => false, whenDo
 
 const BUSY = 'Another board package installation or removal is running.'
 const WAITING = 'Waiting for the board dependency check to finish'
+const CHECKING = 'Checking installed components'
 
 function declaresNothing(dependencies: ArduinoDependencies): boolean {
   return dependencies.cores.length + dependencies.libraries.length + dependencies.gitLibraries.length === 0
@@ -46,6 +42,10 @@ function whenAborted(signal: AbortSignal): Promise<void> {
   })
 }
 
+/**
+ * Installs a board package's arduino-cli cores and libraries with the package, installs
+ * what is missing on Reinstall, and removes what no other package needs on uninstall.
+ */
 export class VppDependencyService {
   #active: AbortController | null = null
 
@@ -69,9 +69,16 @@ export class VppDependencyService {
   async reinstall(packageId: string, onProgress: DependencyProgressListener): Promise<ImportResult> {
     const manifest = this.packageManager.getInstalledPackageManifest(packageId)
     if (!manifest) return { success: false, error: `Package ${packageId} is not installed` }
+    const rejection = this.packageManager.installedPackageRejectionReason(packageId)
+    if (rejection) {
+      return {
+        success: false,
+        error: `Package ${packageId} failed its signature check (${rejection}). Install it again from the catalog or its .vpp file.`,
+      }
+    }
     const outcome = await this.#install(manifest, onProgress)
     if (!outcome.ok) return { success: false, canceled: outcome.cancelled, error: outcome.error }
-    return { success: true, packageId, packageName: manifest.package.name }
+    return { success: true, packageId, packageName: manifest.package.name, installed: outcome.installed }
   }
 
   /**
@@ -87,8 +94,15 @@ export class VppDependencyService {
     this.#active = new AbortController()
     try {
       const manifest = this.packageManager.getInstalledPackageManifest(packageId)
+      const rejection = manifest ? this.packageManager.installedPackageRejectionReason(packageId) : null
       const result = this.packageManager.uninstall(packageId)
       if (!result.success || !manifest) return result
+      if (rejection) {
+        return {
+          success: true,
+          warning: `The package failed its signature check (${rejection}), so its cores and libraries were left installed.`,
+        }
+      }
       const removed = collectArduinoDependencies(manifest)
       if (declaresNothing(removed)) return { success: true }
       return await this.#removeDependencies(removed, onProgress)
@@ -130,7 +144,7 @@ export class VppDependencyService {
 
   async #install(manifest: PackageManifest, onProgress: DependencyProgressListener): Promise<DependencyInstallResult> {
     const dependencies = collectArduinoDependencies(manifest)
-    if (declaresNothing(dependencies)) return { ok: true }
+    if (declaresNothing(dependencies)) return { ok: true, installed: 0 }
     if (this.#active) return { ok: false, cancelled: false, error: BUSY }
     const controller = new AbortController()
     this.#active = controller
@@ -140,9 +154,25 @@ export class VppDependencyService {
         await Promise.race([this.startup.whenDone(), whenAborted(controller.signal)])
       }
       if (controller.signal.aborted) return { ok: false, cancelled: true, error: 'Installation cancelled.' }
+      onProgress({ step: 0, total: 0, label: CHECKING })
       return await installArduinoDependencies(dependencies, this.spawnCli, onProgress, { signal: controller.signal })
     } finally {
       this.#active = null
     }
   }
+}
+
+/** The start-up dependency check and the package dependency service, one pair per process. */
+export interface ArduinoDependencyServices {
+  startup: StartupDependencyCheck
+  packages: VppDependencyService
+}
+
+/** Creates the services; the caller starts the check with `startup.start`. */
+export function createArduinoDependencyServices(
+  packageManager: PackageManagerModule,
+  spawnCli: ArduinoCliSpawner,
+): ArduinoDependencyServices {
+  const startup = new StartupDependencyCheck(spawnCli)
+  return { startup, packages: new VppDependencyService(packageManager, spawnCli, startup) }
 }

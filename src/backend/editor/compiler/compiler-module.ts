@@ -600,7 +600,6 @@ class CompilerModule {
     const boardDirectory = join(buildDirectory, boardTarget)
     const sourceDirectory = join(boardDirectory, 'src')
 
-    // A kept folder is brought up to date file by file in compileArduino (planBuildTreeSync).
     if (wipe) {
       await fs.rm(boardDirectory, { recursive: true, force: true })
     }
@@ -2050,7 +2049,6 @@ class CompilerModule {
       strucppRuntimeHeaders = isRuntimeV4 ? await this.loadStrucppRuntimeHeaders() : {}
       if (!isRuntimeV4) {
         const v4Layout = await this.loadStrucppRuntimeHeaders()
-        // The editor's own resources at their build paths, before any board or project file is merged in.
         staticFirmwareFiles = mergeStrucppRuntimeIntoSkeleton({ firmwareSkeleton, strucppRuntimeHeaders: v4Layout })
         // Board-specific HAL adapter — defines `hardwareInit`,
         // `updateInputBuffers`, `updateOutputBuffers` that the
@@ -2684,7 +2682,6 @@ class CompilerModule {
 
     const debugResolver = await this.#createBoardInfoResolver()
     const { boardRuntime, isRuntimeV3, isRuntimeV4 } = debugResolver.resolve(boardTarget)
-    // Same rule as a normal build: an arduino-cli board keeps its build folder and the files it compiled.
     const wipeBuildFolder = shouldWipeBuildFolder({ cleanBuild: false, isRuntimeV3, isRuntimeV4 })
     // Same reason as the compile path: a cloud project has no directory to build in.
     const normalizedProjectPath = resolveBuildWorkspace(projectPath.replace('project.json', ''))
@@ -2766,8 +2763,6 @@ class CompilerModule {
     _mainProcessPort.postMessage({ logLevel: 'info', message: `ST file generated at: ${programStPath}` })
 
     try {
-      // The debug outputs need none of the firmware's static files; copying them over a kept
-      // folder would only give arduino-cli new timestamps to recompile.
       if (wipeBuildFolder) {
         await this.copyStaticFiles(compilationPath, boardRuntime)
         _mainProcessPort.postMessage({ logLevel: 'info', message: 'Static files copied successfully.' })

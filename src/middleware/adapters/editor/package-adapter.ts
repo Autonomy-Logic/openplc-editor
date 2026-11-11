@@ -118,9 +118,12 @@ export function createEditorPackageAdapter(): PackagePort {
 
     onStartupNotices(callback: (notices: StartupNotice[]) => void): Unsubscribe {
       const drain = () =>
-        void window.bridge.takeStartupNotices().then((notices) => {
-          if (notices.length > 0) callback(notices)
-        })
+        void window.bridge
+          .takeStartupNotices()
+          .then((notices) => {
+            if (notices.length > 0) callback(notices)
+          })
+          .catch(() => undefined)
       const unsubscribe = window.bridge.onStartupNoticesAvailable(drain)
       drain()
       return unsubscribe

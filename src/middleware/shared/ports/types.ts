@@ -842,6 +842,8 @@ export interface ImportResult {
   packageName?: string
   devices?: string[]
   error?: string
+  /** Reinstall only: how many cores and libraries were installed. */
+  installed?: number
 }
 
 export interface RemoteVersionEntry {

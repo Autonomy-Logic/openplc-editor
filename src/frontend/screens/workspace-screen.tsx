@@ -490,7 +490,6 @@ const WorkspaceScreen = () => {
     )
   }, [packagesPort, selectedDevice])
 
-  // Messages from the startup install of the components every build needs; queued until a console exists.
   useEffect(() => {
     if (!packagesPort) return
     return packagesPort.onStartupNotices((notices) => {

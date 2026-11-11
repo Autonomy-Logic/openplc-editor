@@ -1,12 +1,3 @@
-/**
- * Normal arduino-cli builds keep the board build folder, so arduino-cli reuses the core and
- * static runtime it compiled before; a POU deleted in the editor drops out of the next build;
- * Clean build starts from an empty folder and recompiles everything.
- *
- * Needs a production build plus the preload copy (see "Electron e2e" in CLAUDE.md), and the
- * board packages installed in this machine's editor profile, whose arduino-cli folder the
- * specs reuse (OPENPLC_E2E_SOURCE_USER_DATA overrides it).
- */
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -62,7 +53,6 @@ test('SLM-CPU-0: a rebuild or a debug session reuses the core and a deleted POU 
     expect(objectTimes(join(cache ?? '', 'libraries', 'SrcWrapper'))).toEqual(coreObjects)
     expect(linkMap(sketchDir)).toMatch(/EXTRA_FB/i)
 
-    // Starting a debug session compiles the debug map into the same folder without clearing it.
     const debugMap = join(buildDir, 'src', 'debug-map.json')
     const debugMapTime = mtimeOf(debugMap)
     expect(await runDebugCompile(app)).toMatch(/completed successfully/)
@@ -72,7 +62,6 @@ test('SLM-CPU-0: a rebuild or a debug session reuses the core and a deleted POU 
     expect(STATIC_FILES.map((file) => mtimeOf(join(buildDir, file)))).toEqual(staticTimes)
     expect(objectTimes(join(cache ?? '', 'libraries', 'SrcWrapper'))).toEqual(coreObjects)
 
-    // Delete the function block through the project tree.
     const leaf = page.locator('li', { hasText: /^extra_fb$/i }).first()
     await leaf.hover({ timeout: 30000 })
     await leaf.locator('button').last().click()
@@ -103,8 +92,6 @@ test('Arduino Mega: a rebuild keeps the static files and Clean build recompiles 
     await buildAndWait(page, sketchDir, 'Build only')
     expect(STATIC_FILES.map((file) => mtimeOf(join(buildDir, file)))).toEqual(staticTimes)
 
-    // AVR links a cached core archive on a normal build; Clean build compiles the core itself.
-    // No port is selected, so the upload after the build fails; only the build matters here.
     const beforeClean = Date.now()
     await buildAndWait(page, sketchDir, 'Clean build and upload')
     STATIC_FILES.forEach((file, index) => expect(mtimeOf(join(buildDir, file))).toBeGreaterThan(staticTimes[index]))

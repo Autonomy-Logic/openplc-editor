@@ -1,8 +1,3 @@
-/**
- * Setup for the arduino-cli build specs: a project for an installed board package, a profile
- * that reuses this machine's editor arduino-cli folder and board package (no downloads), and
- * readers for the build folder and arduino-cli's build cache.
- */
 import {
   copyFileSync,
   cpSync,
@@ -128,7 +123,6 @@ export function writeArduinoProject(
 
   mkdirSync(userData, { recursive: true })
   if (arduino === 'shared') {
-    // Borrow the installed cores and libraries instead of downloading them again.
     symlinkSync(join(SOURCE_USER_DATA, 'arduino'), join(userData, 'arduino'))
   } else {
     mkdirSync(join(userData, 'arduino', 'data'), { recursive: true })
@@ -239,7 +233,6 @@ export async function buildAndWait(page: Page, sketchDir: string, option: string
     await new Promise((r) => setTimeout(r, 1000))
   }
   if (mtimeOf(elfPath(sketchDir) ?? '') <= before) throw new Error(`no new firmware after "${option}"`)
-  // The build button is enabled again once the pipeline has finished.
   await expect(page.getByRole('button', { name: 'Build options' })).toBeEnabled({ timeout: 120000 })
 }
 

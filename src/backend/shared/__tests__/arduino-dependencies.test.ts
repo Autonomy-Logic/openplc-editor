@@ -9,6 +9,7 @@ import {
   GLOBAL_ARDUINO_LIBRARIES,
   missingArduinoCoreHint,
   parseArduinoCliProgress,
+  parseInstalledArduinoState,
   planDependencyInstall,
   planDependencyRemoval,
   SIMULATOR_CORE,
@@ -204,5 +205,47 @@ describe('dependencyStepName', () => {
     expect(describeDependencyStep({ kind: 'git-library', library: OPEN62541_LIBRARY })).toBe(
       'Installing library open62541 (OPC-UA server)',
     )
+  })
+})
+
+describe('parseInstalledArduinoState', () => {
+  const coreList = JSON.stringify({
+    platforms: [
+      { id: 'arduino:avr', installed_version: '1.8.6' },
+      { id: 'esp32:esp32', installed_version: '3.3.10', manually_installed: true },
+      { id: 'rp2040:rp2040' },
+    ],
+  })
+  const libList = JSON.stringify({
+    installed_libraries: [
+      { library: { name: 'EthernetENC', location: 'user' } },
+      { library: { name: 'Ethernet', location: 'ide' } },
+      { library: { name: 'SPI', location: 'platform' } },
+      { library: { location: 'user' } },
+      'not an entry',
+    ],
+  })
+
+  it('keeps usable libraries, owns only the editor folder, and skips cores without a version', () => {
+    expect(parseInstalledArduinoState(coreList, libList)).toEqual({
+      cores: { 'arduino:avr': '1.8.6', 'esp32:esp32': '3.3.10' },
+      ownedCores: { 'arduino:avr': '1.8.6' },
+      libraries: ['EthernetENC', 'Ethernet'],
+      ownedLibraries: ['EthernetENC'],
+    })
+  })
+
+  it('reads empty lists from the empty object arduino-cli prints when nothing is installed', () => {
+    expect(parseInstalledArduinoState('{}', '{}')).toEqual({
+      cores: {},
+      ownedCores: {},
+      libraries: [],
+      ownedLibraries: [],
+    })
+  })
+
+  it('throws on output that is not a JSON object', () => {
+    expect(() => parseInstalledArduinoState('Warning: x\n{}', '{}')).toThrow()
+    expect(() => parseInstalledArduinoState('[]', '{}')).toThrow('arduino-cli core list returned unexpected output')
   })
 })

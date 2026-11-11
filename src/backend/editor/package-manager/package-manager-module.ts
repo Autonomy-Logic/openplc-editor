@@ -259,6 +259,14 @@ class PackageManagerModule {
     return { ok: false, packageId: match.pkg.packageId, reason }
   }
 
+  /** Re-verifies the signature of the installed package @p packageId; null when valid, else the reason. */
+  installedPackageRejectionReason(packageId: string): string | null {
+    if (!REQUIRE_SIGNATURE) return null
+    const pkg = this.readRegistry().packages[packageId]
+    if (!pkg) return 'package is not installed'
+    return this.signatureRejectionReason(packageId, pkg.path)
+  }
+
   /**
    * Returns null when the installed package recorded at `packagePath` is
    * genuinely signed by a trusted key, or a short human-readable reason when it

@@ -91,7 +91,15 @@ const PackageManagerEditor = () => {
   const handleReinstall = async () => {
     if (!selectedPackageId || !packages) return
     const result = await installTracker.track(() => packages.reinstall(selectedPackageId))
-    if (!result.success && !result.canceled) {
+    if (result.success && result.installed === 0) {
+      openModal('debugger-message', {
+        type: 'info',
+        title: 'Nothing to install',
+        message: 'Every core and library this package needs is already installed.',
+        buttons: ['OK'],
+        onResponse: () => {},
+      })
+    } else if (!result.success && !result.canceled) {
       openModal('debugger-message', {
         type: 'error',
         title: 'Package reinstall failed',
@@ -181,7 +189,7 @@ const PackageManagerEditor = () => {
                   type='button'
                   aria-label='Remove package'
                   onClick={() => void handleUninstall()}
-                  disabled={!selectedPackageId}
+                  disabled={!selectedPackageId || installTracker.busy}
                   className='rounded-md p-1 hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
                 >
                   <MinusIcon className='!stroke-brand' />
@@ -241,7 +249,8 @@ const PackageManagerEditor = () => {
                   <button
                     type='button'
                     onClick={() => void handleReinstall()}
-                    className='rounded-md border border-neutral-200 px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900'
+                    disabled={installTracker.busy}
+                    className='rounded-md border border-neutral-200 px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900'
                   >
                     Reinstall
                   </button>

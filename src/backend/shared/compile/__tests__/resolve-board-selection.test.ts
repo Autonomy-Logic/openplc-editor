@@ -181,8 +181,6 @@ describe('resolveBoardSelection', () => {
   })
 
   it('maps a prebuilt arduino-hal VPP board: resolved precompiledLibraryDir', () => {
-    // hal.precompiledLibrary (vendor lib dir, resolved package-relative) must surface on
-    // boardEntry so the pipeline passes the 2nd --library. The open hal.source layer stays.
     const pkg: InstalledPackage = {
       packageId: 'com.automationdirect.p1am-prebuilt-test',
       version: '0.1.0',

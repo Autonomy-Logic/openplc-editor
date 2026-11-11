@@ -1,14 +1,3 @@
-/**
- * Installing a board package installs its arduino-cli core and libraries behind a
- * blocking progress modal; Reinstall installs only what is missing and can be
- * cancelled; uninstalling removes what no other package needs.
- *
- * Installs the signed SLM-CPU-0 package (FACTS:stm32 pinned core, open62541 and
- * Settimino git libraries) into an empty arduino-cli folder. Archives come from this
- * machine's arduino-cli download cache when present; index refreshes and the git
- * libraries need the network. Needs a production build plus the preload copy (see
- * "Electron e2e" in CLAUDE.md). OPENPLC_E2E_SLM_VPP overrides the package file.
- */
 import { existsSync, mkdirSync, rmSync, symlinkSync } from 'node:fs'
 import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -50,7 +39,6 @@ test('a board package installs, reinstalls and uninstalls its arduino-cli depend
       dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [file] })
     }, VPP)
     await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
-    // File > Board Package Manager... sends this event; repeat it until the workspace has subscribed.
     await expect
       .poll(
         async () => {
@@ -64,10 +52,8 @@ test('a board package installs, reinstalls and uninstalls its arduino-cli depend
       )
       .toBe(true)
 
-    // Install from file: the modal names each step, then the package is listed with its core in place.
     await page.getByRole('button', { name: 'Add package' }).click({ timeout: 30000 })
     await page.getByText('Add from file...', { exact: true }).click()
-    // open62541 and Settimino are steps too unless the Arduino sketchbook already has them.
     await expect(stepText(page)).toContainText(/Installing core FACTS:stm32 0\.1\.0 \(1 of [13]\)/, {
       timeout: 120000,
     })
@@ -76,20 +62,18 @@ test('a board package installs, reinstalls and uninstalls its arduino-cli depend
     expect(existsSync(join(core, '0.1.0'))).toBe(true)
     const ownsGitLibraries = existsSync(join(libraries, 'open62541'))
 
-    // Reinstall with nothing missing installs nothing.
     await listEntry(page).click()
     await page.getByRole('button', { name: 'Reinstall', exact: true }).click()
-    await page.waitForTimeout(5000)
+    await expect(page.getByText('Nothing to install', { exact: true })).toBeVisible({ timeout: 60000 })
+    await page.getByRole('button', { name: 'OK', exact: true }).click()
     await expect(stepText(page)).toBeHidden()
 
-    // Reinstall after the core went missing installs only the core.
     rmSync(core, { recursive: true, force: true })
     await page.getByRole('button', { name: 'Reinstall', exact: true }).click()
     await expect(stepText(page)).toContainText('Installing core FACTS:stm32 0.1.0 (1 of 1)', { timeout: 120000 })
     await waitForModalToClose(page)
     expect(existsSync(join(core, '0.1.0'))).toBe(true)
 
-    // Cancel stops a running Reinstall without an error, and the core stays missing.
     rmSync(core, { recursive: true, force: true })
     await page.getByRole('button', { name: 'Reinstall', exact: true }).click()
     await expect(stepText(page)).toContainText('Installing core FACTS:stm32', { timeout: 120000 })
@@ -98,13 +82,11 @@ test('a board package installs, reinstalls and uninstalls its arduino-cli depend
     await expect(page.getByText('Package reinstall failed')).toHaveCount(0)
     expect(existsSync(join(core, '0.1.0', 'platform.txt'))).toBe(false)
 
-    // Reinstall again repairs it.
     await page.getByRole('button', { name: 'Reinstall', exact: true }).click()
     await expect(stepText(page)).toContainText('Installing core FACTS:stm32 0.1.0 (1 of 1)', { timeout: 120000 })
     await waitForModalToClose(page)
     expect(existsSync(join(core, '0.1.0', 'platform.txt'))).toBe(true)
 
-    // Uninstall removes the core and the libraries no other package declares.
     await page.getByRole('button', { name: 'Remove package' }).click()
     await expect(listEntry(page)).toHaveCount(0, { timeout: 60000 })
     await expect.poll(() => existsSync(join(core, '0.1.0')), { timeout: 60000 }).toBe(false)

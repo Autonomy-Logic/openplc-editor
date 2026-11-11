@@ -1,11 +1,3 @@
-/**
- * The arduino-cli cores and libraries a board package (VPP) depends on, and the
- * decisions taken on them when the package is installed, reinstalled or removed.
- *
- * Pure: manifests and the installed state in, plans out. The editor runs the plans
- * with arduino-cli; the web build has no local arduino-cli and never runs them.
- */
-
 import type { PackageDownloadProgress, PackageManifest } from '../../../middleware/shared/ports/types'
 import { resolveTargetCapabilities } from '../../../middleware/shared/utils/target-capabilities'
 import { selectThirdPartyLibraries, type ThirdPartyLibrary } from '../compile/third-party-libraries'
@@ -57,6 +49,64 @@ export interface ArduinoDependencies {
 export interface InstalledArduinoState {
   cores: Readonly<Record<string, string>>
   libraries: readonly string[]
+}
+
+/** The installed state plus the cores and libraries in the editor's own folders, the only ones an uninstall removes. */
+export interface InstalledArduinoInventory extends InstalledArduinoState {
+  ownedCores: Readonly<Record<string, string>>
+  ownedLibraries: readonly string[]
+}
+
+/** Library locations a build of any board can use: the editor's own folder and the sketchbook. */
+const USABLE_LIBRARY_LOCATIONS = new Set(['user', 'ide'])
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function parseJsonObject(json: string, command: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(json)
+  if (!isRecord(parsed)) throw new Error(`arduino-cli ${command} returned unexpected output`)
+  return parsed
+}
+
+function listField(record: Record<string, unknown>, key: string): Record<string, unknown>[] {
+  const value = record[key]
+  return Array.isArray(value) ? value.filter(isRecord) : []
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key]
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+/**
+ * Reads the output of `arduino-cli core list --json` and `lib list --all --json`.
+ * `libraries` holds the libraries in the editor's folder (`user`) or the sketchbook
+ * (`ide`), not those bundled inside a core; `ownedCores` leaves out manually
+ * installed cores and `ownedLibraries` keeps only `user`. Throws on invalid JSON.
+ */
+export function parseInstalledArduinoState(coreListJson: string, libListJson: string): InstalledArduinoInventory {
+  const cores: Record<string, string> = {}
+  const ownedCores: Record<string, string> = {}
+  for (const platform of listField(parseJsonObject(coreListJson, 'core list'), 'platforms')) {
+    const id = stringField(platform, 'id')
+    const version = stringField(platform, 'installed_version')
+    if (!id || !version) continue
+    cores[id] = version
+    if (platform.manually_installed !== true) ownedCores[id] = version
+  }
+  const libraries = new Set<string>()
+  const ownedLibraries = new Set<string>()
+  for (const entry of listField(parseJsonObject(libListJson, 'lib list'), 'installed_libraries')) {
+    const library = isRecord(entry.library) ? entry.library : {}
+    const name = stringField(library, 'name')
+    const location = stringField(library, 'location') ?? ''
+    if (!name || !USABLE_LIBRARY_LOCATIONS.has(location)) continue
+    libraries.add(name)
+    if (location === 'user') ownedLibraries.add(name)
+  }
+  return { cores, ownedCores, libraries: [...libraries], ownedLibraries: [...ownedLibraries] }
 }
 
 export type DependencyStep =

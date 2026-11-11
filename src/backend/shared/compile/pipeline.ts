@@ -1001,10 +1001,7 @@ async function runCompilePipelineInner(
   }
 
   // ---------------------------------------------------------------------
-  // Step 4b: Runtime v3 branch — legacy target that ingests a single
-  // `program.st` (not a zip).  v3's on-device MatIEC recompiles the ST
-  // itself, so this MUST short-circuit BEFORE the arduino-cli path
-  // (firmware bundle, compile) — none of which apply to v3.
+  // Step 4b: Runtime v3 branch — uploads `program.st` and returns before the arduino-cli path.
   //
   // Strucpp already ran above purely as a correctness check; a strucpp
   // error bails before we get here, which is the desired behaviour
@@ -1044,10 +1041,7 @@ async function runCompilePipelineInner(
   }
 
   // ---------------------------------------------------------------------
-  // Step 4c: Arduino / Simulator path — generate defines.h, compose the
-  // firmware bundle, compile via arduino-cli. Cores and libraries are
-  // installed with the board package (and at editor startup for the
-  // simulator), never by a build.
+  // Step 4c: Arduino / Simulator path — defines.h, firmware bundle, arduino-cli compile.
   // ---------------------------------------------------------------------
   // Build defines.h using the shared content authoring step.
   const definesH = generateDefinesContent({

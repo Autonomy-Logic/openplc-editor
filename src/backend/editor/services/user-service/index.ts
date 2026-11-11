@@ -312,8 +312,6 @@ class UserService {
     await this.#checkIfLogFolderExists()
     await this.#checkIfUserHistoryFolderExists()
     await this.#checkIfArduinoCliConfigExists()
-    // Shells out to arduino-cli to refresh the core list behind the board list's version
-    // label; must not be fatal for commands that never compile.
     await this.#tolerate('refresh the installed-core list', () => this.#checkIfArduinoCoreControlFileExists())
   }
 

@@ -100,7 +100,7 @@ export async function syncBuildFolder(
     try {
       existingContents[path] = await fs.readFile(join(root, path), 'utf-8')
     } catch {
-      // Unreadable: left out, so the plan rewrites it.
+      continue
     }
   }
   const plan = planBuildTreeSync({ desired, staticFiles, existingPaths, existingContents })
@@ -297,9 +297,6 @@ export function createEditorCompilerPlatformPort(
      */
     async compileArduino(args: CompileArduinoArgs, log: PlatformLog): Promise<CompileArduinoResult> {
       try {
-        // Bring the build folder up to the in-memory file map without
-        // touching unchanged static files, so arduino-cli reuses what it
-        // compiled before.
         await syncBuildFolder(context.compilationPath, args.files, context.staticFirmwareFiles ?? {})
 
         // Invoke the existing handler — it spawns arduino-cli compile

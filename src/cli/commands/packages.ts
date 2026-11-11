@@ -7,14 +7,9 @@
  * useless for a matrix run, which is the job this exists for: point a scratch
  * `--user-data` at nothing, install the packages under test, compile.
  *
- * `install` goes through the same `VppDependencyService` the UI calls, so the
- * manifest schema check, the Ed25519 signature verification and the installation
- * of the package's arduino-cli cores and libraries happen here exactly as there. There is deliberately no flag to skip
- * them: a package the editor would refuse to install must not become installable
- * by scripting it.
- *
- * It also installs the simulator's core and the global libraries when missing,
- * which the GUI does at start-up and the CLI has no other step for.
+ * `install` runs the same `VppDependencyService` as the UI (schema, signature and
+ * dependency install), then installs the simulator's core and the global libraries
+ * when missing.
  */
 
 import { readdir, stat } from 'node:fs/promises'

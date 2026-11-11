@@ -151,8 +151,11 @@ import {
   resolveDeviceLicense,
 } from '../../../backend/editor/license/license-flow'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
-import { StartupDependencyCheck } from '../../../backend/editor/package-manager/startup-dependency-check'
-import { VppDependencyService } from '../../../backend/editor/package-manager/vpp-dependency-service'
+import type { StartupDependencyCheck } from '../../../backend/editor/package-manager/startup-dependency-check'
+import {
+  createArduinoDependencyServices,
+  type VppDependencyService,
+} from '../../../backend/editor/package-manager/vpp-dependency-service'
 import { BootloaderApiClient } from '../../../backend/editor/runtime/bootloader-api-client'
 import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
 import { logger } from '../../../backend/editor/services'
@@ -341,6 +344,7 @@ class MainProcessBridge implements MainIpcModule {
     hardwareModule,
     quitCoordinator,
     packageManagerModule,
+    arduinoDependencies,
   }: MainIpcModuleConstructor) {
     this.packageManagerModule = packageManagerModule ?? new PackageManagerModule()
     this.ipcMain = ipcMain
@@ -350,15 +354,13 @@ class MainProcessBridge implements MainIpcModule {
     this.menuBuilder = menuBuilder
     this.pouService = pouService
     this.compilerModule = compilerModule
-    const spawnArduinoCli = (args: string[]) => this.compilerModule.spawnArduinoCli(args)
-    this.startupDependencies = new StartupDependencyCheck(spawnArduinoCli)
+    const dependencies =
+      arduinoDependencies ??
+      createArduinoDependencyServices(this.packageManagerModule, (args) => this.compilerModule.spawnArduinoCli(args))
+    this.startupDependencies = dependencies.startup
+    this.vppDependencies = dependencies.packages
     this.startupDependencies.setNoticeListener(() =>
       this.mainWindow?.webContents?.send('packages:startup-notices-available'),
-    )
-    this.vppDependencies = new VppDependencyService(
-      this.packageManagerModule,
-      spawnArduinoCli,
-      this.startupDependencies,
     )
     this.hardwareModule = hardwareModule
     this.quitCoordinator = quitCoordinator
@@ -2213,11 +2215,6 @@ class MainProcessBridge implements MainIpcModule {
   handleAppQuit = () => this.quitCoordinator.confirmQuit()
 
   // Compiler service handlers
-  /** Starts the background install of the components every build needs, once @p ready settles. */
-  startDependencyCheck(ready: Promise<unknown>): void {
-    this.startupDependencies.start(ready)
-  }
-
   handleRunCompileProgram = (event: IpcMainEvent, args: CompileProgramIpcArgs) => {
     const mainProcessPort = event.ports[0]
     void this.#compileAfterStartupCheck(args, mainProcessPort).catch((error) => {

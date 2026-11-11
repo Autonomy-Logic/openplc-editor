@@ -1,14 +1,3 @@
-/**
- * At startup the editor installs the simulator's core and the global libraries
- * when they are missing (global libraries the Arduino sketchbook already has count as
- * installed); a build started meanwhile waits for it. Once installed,
- * a restart installs nothing. Offline, the console keeps a warning and builds
- * still run.
- *
- * Archives come from this machine's arduino-cli download cache when present;
- * the first test needs the network for the index and anything not cached.
- * Needs a production build plus the preload copy (see "Electron e2e" in CLAUDE.md).
- */
 import { existsSync, statSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -39,7 +28,6 @@ test('missing simulator core and global libraries are installed once at startup,
   try {
     await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
     await expect(page.getByText(new RegExp(`${INSTALLING}: arduino:avr[,.]`)).first()).toBeVisible({ timeout: 120000 })
-    // Started while the check runs, the build waits for it and then succeeds with the core it installed.
     await page.getByRole('button', { name: 'Build options' }).click({ timeout: 30000 })
     await page.getByText('Build only', { exact: true }).click({ timeout: 15000 })
     await expect(page.getByText(/Waiting for the editor to finish installing/).first()).toBeVisible({
@@ -52,12 +40,11 @@ test('missing simulator core and global libraries are installed once at startup,
     await quitApp(app, page)
   }
 
-  // Everything is present now: the restart installs nothing and the build runs at once.
   const avrTime = statSync(avr).mtimeMs
   ;({ app, page } = await launch(userData))
   try {
     await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
-    // Let the start-up check finish its installed-state query, which takes a few seconds even when nothing is missing.
+    // The start-up check's installed-state query takes a few seconds.
     await page.waitForTimeout(5000)
     await buildAndWait(page, sketchDir, 'Build only')
     await expect(page.getByText(INSTALLING)).toHaveCount(0)
@@ -72,7 +59,7 @@ test('offline, the startup check leaves a console warning and the build still ru
   test.skip(missingPrerequisite(ARDUINO_MEGA) !== undefined, missingPrerequisite(ARDUINO_MEGA) ?? '')
   test.setTimeout(600000)
   const { userData } = writeArduinoProject('openplc-e2e-startup-offline', ARDUINO_MEGA, 'empty')
-  // arduino-cli's own proxy setting; nothing listens on port 9, so every download fails as offline.
+  // Port 9 has no listener, so every arduino-cli download fails.
   const offline = { ARDUINO_NETWORK_PROXY: 'http://127.0.0.1:9' }
   const { app, page } = await launch(userData, offline)
   try {
@@ -82,7 +69,6 @@ test('offline, the startup check leaves a console warning and the build still ru
     })
     await page.getByRole('button', { name: 'Build options' }).click({ timeout: 30000 })
     await page.getByText('Build only', { exact: true }).click({ timeout: 15000 })
-    // The build is attempted and fails on the missing core with the repair hint.
     await expect(page.getByText('Arduino compilation failed').first()).toBeVisible({ timeout: 240000 })
   } finally {
     await quitApp(app, page)

@@ -1,19 +1,13 @@
-/**
- * Runs the shared arduino dependency plans with the editor's arduino-cli.
- *
- * The decisions (what to install, what may be removed) live in
- * `backend/shared/packages/arduino-dependencies`; this module only spawns
- * arduino-cli, reports progress and maps its output.
- */
-
 import {
   type ArduinoDependencies,
   type DependencyRemovalPlan,
   dependencyStepArgs,
   describeDependencyStep,
+  type InstalledArduinoInventory,
   type InstalledArduinoState,
   libraryName,
   parseArduinoCliProgress,
+  parseInstalledArduinoState,
   planDependencyInstall,
 } from '@root/backend/shared/packages/arduino-dependencies'
 import type { PackageInstallProgress } from '@root/middleware/shared/ports/types'
@@ -22,12 +16,14 @@ import type { ChildProcess } from 'child_process'
 /** Starts arduino-cli with @p args (the editor's `--config-file` already applied). */
 export type ArduinoCliSpawner = (args: string[]) => ChildProcess
 
-/** Outcome of installing a package's arduino-cli dependencies. */
-export type DependencyInstallResult = { ok: true } | { ok: false; cancelled: boolean; error: string }
+/** Outcome of installing a package's arduino-cli dependencies; `installed` counts the steps that ran. */
+export type DependencyInstallResult = { ok: true; installed: number } | { ok: false; cancelled: boolean; error: string }
 
 interface CliOutcome {
   code: number | null
+  /** stdout and stderr interleaved, for error messages. */
   output: string
+  stdout: string
 }
 
 function runCli(
@@ -39,67 +35,37 @@ function runCli(
   return new Promise((resolve) => {
     const child = spawnCli(args)
     let output = ''
+    let stdout = ''
     const collect = (data: Buffer) => {
       const text = data.toString()
       output += text
       onOutput?.(text)
+      return text
     }
-    child.stdout?.on('data', collect)
+    child.stdout?.on('data', (data: Buffer) => {
+      stdout += collect(data)
+    })
     child.stderr?.on('data', collect)
     const abort = () => child.kill()
     signal?.addEventListener('abort', abort, { once: true })
     child.on('error', (err) => {
       signal?.removeEventListener('abort', abort)
-      resolve({ code: -1, output: `${output}${err.message}` })
+      resolve({ code: -1, output: `${output}${err.message}`, stdout })
     })
     child.on('close', (code) => {
       signal?.removeEventListener('abort', abort)
-      resolve({ code, output })
+      resolve({ code, output, stdout })
     })
   })
 }
 
-interface CoreListJson {
-  platforms?: Array<{ id?: string; installed_version?: string; manually_installed?: boolean }>
-}
-
-interface LibListJson {
-  installed_libraries?: Array<{ library?: { name?: string; location?: string } }>
-}
-
-/** Library locations a build of any board can use: the editor's own folder and the sketchbook. */
-const USABLE_LIBRARY_LOCATIONS = new Set(['user', 'ide'])
-
-/**
- * What arduino-cli has installed. `cores` lists every core and `libraries` every library
- * in the editor's folder or the sketchbook (not those bundled inside a core, which only
- * that core's boards can use); `ownedCores` and `ownedLibraries` only what sits in the
- * editor's own folders, the only items an uninstall may remove (never the sketchbook's).
- */
-export async function queryInstalledArduinoState(
-  spawnCli: ArduinoCliSpawner,
-): Promise<InstalledArduinoState & { ownedCores: Record<string, string>; ownedLibraries: string[] }> {
-  const cores: Record<string, string> = {}
-  const ownedCores: Record<string, string> = {}
+/** What arduino-cli has installed, as `parseInstalledArduinoState` reads it. */
+export async function queryInstalledArduinoState(spawnCli: ArduinoCliSpawner): Promise<InstalledArduinoInventory> {
   const coreList = await runCli(spawnCli, ['core', 'list', '--json'])
   if (coreList.code !== 0) throw new Error(`arduino-cli core list failed: ${coreList.output.trim()}`)
-  for (const platform of (JSON.parse(coreList.output) as CoreListJson).platforms ?? []) {
-    if (!platform.id || !platform.installed_version) continue
-    cores[platform.id] = platform.installed_version
-    if (!platform.manually_installed) ownedCores[platform.id] = platform.installed_version
-  }
   const libList = await runCli(spawnCli, ['lib', 'list', '--all', '--json'])
   if (libList.code !== 0) throw new Error(`arduino-cli lib list failed: ${libList.output.trim()}`)
-  const libraries = new Set<string>()
-  const ownedLibraries = new Set<string>()
-  for (const entry of (JSON.parse(libList.output) as LibListJson).installed_libraries ?? []) {
-    const name = entry.library?.name
-    const location = entry.library?.location ?? ''
-    if (!name || !USABLE_LIBRARY_LOCATIONS.has(location)) continue
-    libraries.add(name)
-    if (location === 'user') ownedLibraries.add(name)
-  }
-  return { cores, ownedCores, libraries: [...libraries], ownedLibraries: [...ownedLibraries] }
+  return parseInstalledArduinoState(coreList.stdout, libList.stdout)
 }
 
 export interface InstallOptions {
@@ -156,7 +122,7 @@ export async function installArduinoDependencies(
     }
   }
   if (failures.length > 0) return { ok: false, cancelled: false, error: failures.join('; ') }
-  return { ok: true }
+  return { ok: true, installed: steps.length }
 }
 
 /** Removes the cores and libraries in @p plan; returns a message per item that could not be removed. */
