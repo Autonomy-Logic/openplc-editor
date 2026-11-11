@@ -1,18 +1,14 @@
 /**
  * Backup of a bare-metal board's generated ID and stored licence, taken over the
- * held link before an upload and written back on the first link after it when
+ * held link before an upload and written back on the reconnect after it when
  * the upload erased them.
  */
 
-import { crc32IsoHdlc, deserializeLicenseBlob, LIC_BLOB_SIZE, LIC_MAGIC_LE } from '../../shared/debug/license-blob'
-import type { DebugDeviceIdResult, DebugLicenseReadResult } from '../../shared/debug/types'
+import { LIC_STATUS_SUCCESS } from '../debug/license-blob'
+import type { DebugDeviceIdResult, DebugLicenseReadResult } from '../debug/types'
 import { deriveDeviceId } from './device-identity'
-import type { LicenseReadWritable } from './license-flow'
+import { checkLicenseBlobStructure, type LicenseReadWritable } from './license-flow'
 
-/** Status byte of a read-license (0x4A) reply that carries a blob. */
-const LIC_STATUS_SUCCESS = 0x7e
-/** Bytes covered by the blob's crc32. */
-const LIC_CRC_COVERAGE = 94
 /** How long a backup stays usable after it was taken. */
 export const BOARD_BACKUP_TTL_MS = 15 * 60 * 1000
 
@@ -33,21 +29,6 @@ export interface BoardBackupChannel {
   readLicense(): Promise<DebugLicenseReadResult>
 }
 
-function bytesToHex(bytes: Uint8Array): string {
-  let out = ''
-  for (const byte of bytes) out += byte.toString(16).padStart(2, '0')
-  return out
-}
-
-/** Magic, crc32 and device binding; the signature is checked when the restored blob is read back. */
-function blobBelongsTo(blob: Uint8Array | undefined, deviceId: string): blob is Uint8Array {
-  if (!blob || blob.length !== LIC_BLOB_SIZE) return false
-  const parsed = deserializeLicenseBlob(blob)
-  if (parsed.magic !== LIC_MAGIC_LE) return false
-  if (parsed.crc32 !== crc32IsoHdlc(blob.subarray(0, LIC_CRC_COVERAGE))) return false
-  return bytesToHex(parsed.deviceId) === deviceId
-}
-
 /**
  * Read the board's identity and stored licence. Returns null when the board has
  * no single ID source, or holds neither a generated ID nor a licence worth keeping.
@@ -62,28 +43,16 @@ export async function takeBoardLicenceBackup(
   const source = ids.sources[0]
   if (source.bytes.length === 0) return null
 
-  const deviceId = deriveDeviceId(source.bytes)
+  const deviceId = await deriveDeviceId(source.bytes)
   const generatedId = source.kind === 'generated' ? Uint8Array.from(source.bytes) : undefined
 
   const stored = await channel.readLicense()
-  const blob =
-    stored.success && stored.status === LIC_STATUS_SUCCESS && blobBelongsTo(stored.blob, deviceId)
-      ? Uint8Array.from(stored.blob)
-      : undefined
+  const structure =
+    stored.success && stored.status === LIC_STATUS_SUCCESS ? checkLicenseBlobStructure(stored.blob, deviceId) : null
+  const blob = structure?.ok ? Uint8Array.from(structure.blob) : undefined
 
   if (!generatedId && !blob) return null
   return { port, deviceId, generatedId, blob, takenAt: now }
-}
-
-/** The backup when it was taken on `port` and has not expired, else null. */
-export function usableBoardBackup(
-  backup: BoardLicenceBackup | null,
-  port: string | null | undefined,
-  now: number = Date.now(),
-): BoardLicenceBackup | null {
-  if (!backup || !port || backup.port !== port) return null
-  if (now - backup.takenAt > BOARD_BACKUP_TTL_MS) return null
-  return backup
 }
 
 /**
@@ -101,4 +70,55 @@ export async function restoreBoardLicence(
   if (!stored.success || !(stored.empty || stored.corrupt)) return false
   const write = await transport.writeLicense(backup.blob)
   return write.success && !write.unsupported
+}
+
+/**
+ * Holds one backup through an upload: armed at the port release, kept only when
+ * the upload succeeds, usable only on the next link, and dropped once used.
+ */
+export class BoardBackupHolder {
+  private backup: BoardLicenceBackup | null = null
+  private phase: 'armed' | 'uploaded' | 'linked' = 'armed'
+
+  /** Keep `backup` (or none, when null) for the upload that follows. */
+  arm(backup: BoardLicenceBackup | null): void {
+    this.backup = backup
+    this.phase = 'armed'
+  }
+
+  /** The upload's verdict; a failed build or upload drops the backup. */
+  uploadFinished(success: boolean): void {
+    if (!this.backup || this.phase !== 'armed') return
+    if (success) this.phase = 'uploaded'
+    else this.clear()
+  }
+
+  /** A link is opening; only the first one after a successful upload keeps the backup. */
+  linkOpened(): void {
+    if (this.backup && this.phase === 'uploaded') this.phase = 'linked'
+    else this.clear()
+  }
+
+  /** The link was closed on request. */
+  linkClosed(): void {
+    this.clear()
+  }
+
+  /** The backup when the current link is the reconnect on `port` and the TTL holds, else null. */
+  usable(port: string | null | undefined, now: number = Date.now()): BoardLicenceBackup | null {
+    const backup = this.backup
+    if (!backup || this.phase !== 'linked' || !port || backup.port !== port) return null
+    if (now - backup.takenAt > BOARD_BACKUP_TTL_MS) return null
+    return backup
+  }
+
+  /** Drop the backup after it was used. */
+  consume(): void {
+    this.clear()
+  }
+
+  private clear(): void {
+    this.backup = null
+    this.phase = 'armed'
+  }
 }

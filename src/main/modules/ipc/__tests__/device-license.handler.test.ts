@@ -11,8 +11,8 @@
  * declare a healthy link lost mid-sequence.
  */
 
-import { deriveDeviceId } from '../../../../backend/editor/license/device-identity'
 import { serializeLicenseBlob } from '../../../../backend/shared/debug/license-blob'
+import { deriveDeviceId } from '../../../../backend/shared/license/device-identity'
 import MainProcessBridge from '../main'
 
 jest.mock('electron', () => ({
@@ -41,20 +41,19 @@ jest.mock('../../../../backend/shared/simulator/simulator-module', () => ({
   SimulatorModule: jest.fn(() => ({ stop: jest.fn() })),
 }))
 
-jest.mock('../../../../backend/editor/license/license-flow', () => {
-  const actual = jest.requireActual<typeof import('../../../../backend/editor/license/license-flow')>(
-    '../../../../backend/editor/license/license-flow',
+jest.mock('../../../../backend/shared/license/license-flow', () => {
+  const actual = jest.requireActual<typeof import('../../../../backend/shared/license/license-flow')>(
+    '../../../../backend/shared/license/license-flow',
   )
   return {
-    identityFromSources: actual.identityFromSources,
-    readBoardIdSources: actual.readBoardIdSources,
+    ...actual,
     inspectDeviceLicense: jest.fn(),
     resolveDeviceLicense: jest.fn(),
   }
 })
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const licenseFlow = require('../../../../backend/editor/license/license-flow') as {
+const licenseFlow = require('../../../../backend/shared/license/license-flow') as {
   inspectDeviceLicense: jest.Mock
   resolveDeviceLicense: jest.Mock
 }
@@ -240,10 +239,11 @@ describe('device:refresh-license', () => {
 
     const result = await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
 
-    expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(client, {
-      ...REQUEST,
-      identity: { kind: 'anchor', anchor: ANCHOR },
-    })
+    expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(
+      client,
+      { ...REQUEST, identity: { kind: 'anchor', anchor: ANCHOR } },
+      expect.any(Function),
+    )
     expect(result.outcome).toEqual({ state: 'licensed', how: 'activated' })
     // Once for the anchor read, once after the sequence: the sequence spans an
     // HTTP round trip, which is long enough for the poll to fall due inside it.
@@ -371,10 +371,11 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
 
     const result = await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
 
-    expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(wsClient, {
-      ...REQUEST,
-      identity: { kind: 'anchor', anchor: ANCHOR },
-    })
+    expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(
+      wsClient,
+      { ...REQUEST, identity: { kind: 'anchor', anchor: ANCHOR } },
+      expect.any(Function),
+    )
     expect(result.outcome).toEqual({ state: 'licensed', how: 'activated' })
     expect(release).toHaveBeenCalledWith(expect.stringMatching(/^refresh license#\d+$/))
   })
@@ -454,14 +455,18 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
 describe('licence backup across an upload (baremetal)', () => {
   const PORT = '/dev/cu.usbmodem1'
   const GENERATED = Uint8Array.from({ length: 16 }, (_, i) => 0x10 + i)
-  const BLOB = serializeLicenseBlob({
-    magic: 0,
-    fmtVersion: 1,
-    keyId: 7,
-    deviceId: Uint8Array.from(Buffer.from(deriveDeviceId(GENERATED), 'hex')),
-    productId: new Uint8Array(8).fill(0x33),
-    signature: new Uint8Array(64).fill(0x55),
-    crc32: 0,
+  let BLOB: Uint8Array
+
+  beforeAll(async () => {
+    BLOB = serializeLicenseBlob({
+      magic: 0,
+      fmtVersion: 1,
+      keyId: 7,
+      deviceId: Uint8Array.from(Buffer.from(await deriveDeviceId(GENERATED), 'hex')),
+      productId: new Uint8Array(8).fill(0x33),
+      signature: new Uint8Array(64).fill(0x55),
+      crc32: 0,
+    })
   })
 
   function holdLink(bridge: ReturnType<typeof createBridge>, link: { transport: string; descriptor: string } | null) {
@@ -472,6 +477,26 @@ describe('licence backup across an upload (baremetal)', () => {
     ).deviceSession
     jest.spyOn(session, 'getLink').mockReturnValue(link)
     jest.spyOn(session, 'releaseSerialPort').mockReturnValue(true)
+  }
+
+  /** Run a build whose compile flow ends with `success` on its port. */
+  async function build(bridge: ReturnType<typeof createBridge>, success: boolean) {
+    const port = { postMessage: jest.fn(), close: jest.fn(), start: jest.fn() }
+    ;(bridge as unknown as { compilerModule: unknown }).compilerModule = {
+      compileProgram: (_args: unknown, channel: { postMessage: (message: unknown) => void }) => {
+        channel.postMessage({ logLevel: 'info', message: 'done' })
+        channel.postMessage({ closePort: true, success })
+        return Promise.resolve()
+      },
+    }
+    bridge.handleRunCompileProgram({ ports: [port] } as never, [] as never)
+    await Promise.resolve()
+    expect(port.postMessage).toHaveBeenLastCalledWith({ closePort: true, success }, undefined)
+  }
+
+  /** The renderer's reconnect after the upload; no candidates, so only the entry bookkeeping runs. */
+  async function connect(bridge: ReturnType<typeof createBridge>) {
+    await bridge.handleDeviceConnect({} as never, [])
   }
 
   /** The board before the upload: generated ID and a licence bound to it. */
@@ -501,50 +526,97 @@ describe('licence backup across an upload (baremetal)', () => {
     }
   }
 
+  /** Release the port holding a licensed board, as the build does before an upload. */
+  async function release(bridge: ReturnType<typeof createBridge>) {
+    holdLink(bridge, { transport: 'rtu', descriptor: PORT })
+    holdClient(bridge, licensedBoard())
+    expect(await bridge.handleDeviceReleaseSerialPort({} as never, PORT)).toEqual({ released: true })
+  }
+
+  /** Refresh on a wiped board on the held link; returns the board. */
+  async function refreshWiped(bridge: ReturnType<typeof createBridge>) {
+    const board = wipedBoard()
+    holdClient(bridge, board)
+    await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
+    return board
+  }
+
+  function expectFreshId(board: ReturnType<typeof wipedBoard>) {
+    expect(board.provisionBoardId).toHaveBeenCalledTimes(1)
+    expect(board.provisionBoardId.mock.calls[0][0]).not.toEqual(GENERATED)
+    expect(board.writeLicense).not.toHaveBeenCalled()
+  }
+
   beforeEach(() => {
     licenseFlow.resolveDeviceLicense.mockResolvedValue({ outcome: { state: 'licensed', how: 'already-stored' } })
   })
 
-  it('writes the same board ID and licence back on the first link after the upload, once', async () => {
+  it('writes the same board ID and licence back on the reconnect after a successful upload, once', async () => {
     const bridge = createBridge()
-    holdLink(bridge, { transport: 'rtu', descriptor: PORT })
-    holdClient(bridge, licensedBoard())
+    await release(bridge)
+    await build(bridge, true)
+    await connect(bridge)
 
-    expect(await bridge.handleDeviceReleaseSerialPort({} as never, PORT)).toEqual({ released: true })
-
-    const after = wipedBoard()
-    holdClient(bridge, after)
-    await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
+    const after = await refreshWiped(bridge)
 
     expect(after.provisionBoardId).toHaveBeenCalledWith(GENERATED)
     expect(after.writeLicense).toHaveBeenCalledWith(BLOB)
-    expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(after, {
-      ...REQUEST,
-      identity: { kind: 'anchor', anchor: GENERATED },
-    })
+    expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(
+      after,
+      { ...REQUEST, identity: { kind: 'anchor', anchor: GENERATED } },
+      expect.any(Function),
+    )
 
-    const next = wipedBoard()
-    holdClient(bridge, next)
-    await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
+    expectFreshId(await refreshWiped(bridge))
+  })
 
-    expect(next.provisionBoardId).toHaveBeenCalledTimes(1)
-    expect(next.provisionBoardId.mock.calls[0][0]).not.toEqual(GENERATED)
-    expect(next.writeLicense).not.toHaveBeenCalled()
+  it('drops the backup when the build or upload fails', async () => {
+    const bridge = createBridge()
+    await release(bridge)
+    await build(bridge, false)
+    await connect(bridge)
+
+    expectFreshId(await refreshWiped(bridge))
+  })
+
+  it('drops the backup on Disconnect', async () => {
+    const bridge = createBridge()
+    await release(bridge)
+    await build(bridge, true)
+    await bridge.handleDeviceDisconnect()
+    await connect(bridge)
+
+    expectFreshId(await refreshWiped(bridge))
+  })
+
+  it('drops the backup on a connect that does not follow a finished upload', async () => {
+    const bridge = createBridge()
+    await release(bridge)
+    await connect(bridge)
+    await build(bridge, true)
+    await connect(bridge)
+
+    expectFreshId(await refreshWiped(bridge))
+  })
+
+  it('drops the backup on a second connect after the upload', async () => {
+    const bridge = createBridge()
+    await release(bridge)
+    await build(bridge, true)
+    await connect(bridge)
+    await connect(bridge)
+
+    expectFreshId(await refreshWiped(bridge))
   })
 
   it('does not apply the backup to a link on another port', async () => {
     const bridge = createBridge()
-    holdLink(bridge, { transport: 'rtu', descriptor: PORT })
-    holdClient(bridge, licensedBoard())
-    await bridge.handleDeviceReleaseSerialPort({} as never, PORT)
-
+    await release(bridge)
+    await build(bridge, true)
+    await connect(bridge)
     holdLink(bridge, { transport: 'rtu', descriptor: '/dev/cu.other' })
-    const other = wipedBoard()
-    holdClient(bridge, other)
-    await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
 
-    expect(other.provisionBoardId.mock.calls[0][0]).not.toEqual(GENERATED)
-    expect(other.writeLicense).not.toHaveBeenCalled()
+    expectFreshId(await refreshWiped(bridge))
   })
 
   it('takes no backup when the held link is not the serial port being released', async () => {

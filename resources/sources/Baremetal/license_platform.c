@@ -3,10 +3,6 @@
 /*
 license_platform.c - Board anchor from the VPP hooks and the raw ID report. See license_platform.h.
 */
-#include "license_config.h"
-
-#if LIC_PLATFORM_ENABLED
-
 #include "license_platform.h"
 
 /* 0 for an ID of one repeated byte (all 00, all FF, blank slot), else 1. */
@@ -22,7 +18,7 @@ static int lic_id_acceptable(const uint8_t *id, size_t len)
 }
 
 /* Factory ID first; the generated board ID only when the HAL reports none. */
-size_t license_platform_anchor(uint8_t *out, size_t cap, uint8_t *kind)
+size_t license_board_anchor(uint8_t *out, size_t cap, uint8_t *kind)
 {
     uint8_t id[LIC_BOARD_ID_SIZE];
     size_t n;
@@ -57,7 +53,7 @@ size_t license_id_report(uint8_t *out, size_t cap)
     if (out == NULL || cap < LIC_ID_REPORT_MAX)
         return 0u;
 
-    n = license_platform_anchor(&out[LIC_ID_REPORT_HEADER], LIC_ANCHOR_MAX, &kind);
+    n = license_board_anchor(&out[LIC_ID_REPORT_HEADER], LIC_ANCHOR_MAX, &kind);
     if (n == 0u) {
         out[0] = 0u;
         return 1u;
@@ -98,5 +94,3 @@ lic_board_id_status_t license_board_id_provision(const uint8_t *id, size_t len)
     }
     return LIC_BOARD_ID_OK;
 }
-
-#endif /* LIC_PLATFORM_ENABLED */

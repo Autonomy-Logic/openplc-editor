@@ -5,30 +5,36 @@
  * Runs over an ALREADY-CONNECTED transport — it neither connects nor
  * disconnects. The caller holds the link open, so classification, the on-device
  * read (0x4A), the backend call and the write (0x49) all happen over a SINGLE
- * port open. Pure orchestration over the transport plus the activation client, so
- * it is unit-testable with mocks, and it never throws: every failure resolves to
- * an outcome.
- *
- * Lives under `backend/editor` rather than the byte-identical `backend/shared`
- * surface because it depends on `deriveDeviceId`, which needs `node:crypto`.
+ * port open. Pure orchestration over the transport plus an injected activation
+ * call, so it is unit-testable with fakes, and it never throws: every failure
+ * resolves to an outcome.
  */
 
 import type { DeviceLicenseReport, DeviceLicenseState } from '../../../middleware/shared/ports/device-port'
-import { crc32IsoHdlc, deserializeLicenseBlob, LIC_BLOB_SIZE, LIC_MAGIC_LE } from '../../shared/debug/license-blob'
+import {
+  bytesToHex,
+  crc32IsoHdlc,
+  deserializeLicenseBlob,
+  hexToBytes,
+  LIC_BLOB_SIZE,
+  LIC_CRC_COVERAGE,
+  LIC_MAGIC_LE,
+  LIC_STATUS_SUCCESS,
+  LIC_STATUS_UNSUPPORTED,
+} from '../debug/license-blob'
 import {
   type RuntimeLicenseKeys,
   type RuntimeLicenseVerdict,
   verifyRuntimeLicenseBlob,
-} from '../../shared/debug/runtime-license-verify'
+} from '../debug/runtime-license-verify'
 import type {
   DebugBoardIdProvisionResult,
   DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
   DeviceIdSource,
-} from '../../shared/debug/types'
+} from '../debug/types'
 import { deriveDeviceId, deriveVppId } from './device-identity'
-import { checkDeviceActivation } from './license-activation-client'
 
 /** Just enough of a transport to run the licensing FCs. */
 export interface LicenseReadWritable {
@@ -36,12 +42,37 @@ export interface LicenseReadWritable {
   writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult>
 }
 
-/** SUCCESS status byte of a read-license (0x4A) response = a stored license. */
-const LIC_STATUS_SUCCESS = 0x7e
-/** LIC_UNSUPPORTED status byte (no on-device storage backend). */
-const LIC_STATUS_UNSUPPORTED = 0x85
-/** crc32 covers `[payload || signature]` = offsets 0..93; it never covers itself. */
-const LIC_CRC_COVERAGE = 94
+/**
+ * Input to the activation call: exactly the two fields the wire accepts.
+ * The backend derives its own product and signing-key material from `packageId`.
+ */
+export interface DeviceActivationInput {
+  /** 16-byte device id, LOWERCASE hex (from `deriveDeviceId`). */
+  deviceId: string
+  /** VPP package id (e.g. `com.openplc.espressif-licensed`) — `package.id`. */
+  packageId: string
+}
+
+/**
+ * Result of an activation check. Transport and backend errors surface as
+ * `{ licensed: false, error }` rather than throwing.
+ *
+ * `reason` is the backend's business answer ("no purchase on record"); `error`
+ * means no answer was obtained (rate limit, no signer, unknown package, dropped
+ * connection). Callers keep them apart: only `reason` means "not licensed".
+ */
+export interface DeviceActivationResult {
+  licensed: boolean
+  /** License blob bytes (98 B) when `licensed` — ready to write via FC 0x49. */
+  license?: number[]
+  /** Backend-supplied reason (e.g. "no active subscription"). */
+  reason?: string
+  /** Populated on transport / backend failure (best-effort path). */
+  error?: string
+}
+
+/** Asks the backend for this device's licence; never throws. */
+export type DeviceActivation = (input: DeviceActivationInput) => Promise<DeviceActivationResult>
 
 /**
  * The outcome shape is the PORT's `DeviceLicenseState`, not a private one.
@@ -133,16 +164,10 @@ async function verifyBlobFor(
   deviceIdHex: string,
   input: { packageId: string; runtimeKeys?: RuntimeLicenseKeys },
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
-  if (!input.runtimeKeys) return verifyStoredLicenseBlob(blob, deviceIdHex, input.packageId)
+  if (!input.runtimeKeys) return await verifyStoredLicenseBlob(blob, deviceIdHex, input.packageId)
   if (!blob) return { ok: false, reason: RUNTIME_VERDICT_REASONS.incomplete }
   const verdict = await verifyRuntimeLicenseBlob(blob, hexToBytes(deviceIdHex), input.runtimeKeys)
   return verdict.ok ? verdict : { ok: false, reason: RUNTIME_VERDICT_REASONS[verdict.reason] }
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const out = new Uint8Array(hex.length / 2)
-  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
-  return out
 }
 
 /**
@@ -177,11 +202,28 @@ function hexToBytes(hex: string): Uint8Array {
  * with openplc-web and cross-pinned to the C struct by a golden vector. A
  * private re-implementation here is exactly the divergence this avoids.
  */
-export function verifyStoredLicenseBlob(
+export async function verifyStoredLicenseBlob(
   blob: Uint8Array | undefined,
   deviceIdHex: string,
   packageId: string | undefined,
-): { ok: true } | { ok: false; reason: string } {
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const structure = checkLicenseBlobStructure(blob, deviceIdHex)
+  if (!structure.ok) return structure
+  if (!packageId) return { ok: true }
+
+  const expectedProductId = await deriveVppId(packageId)
+  const blobProductId = bytesToHex(deserializeLicenseBlob(structure.blob).productId)
+  if (blobProductId !== expectedProductId) {
+    return { ok: false, reason: 'The license stored on this device was issued for a different VPP.' }
+  }
+  return { ok: true }
+}
+
+/** Length, magic, crc32 and device binding of a stored blob; no product or signature check. */
+export function checkLicenseBlobStructure(
+  blob: Uint8Array | undefined,
+  deviceIdHex: string,
+): { ok: true; blob: Uint8Array } | { ok: false; reason: string } {
   if (!blob || blob.length !== LIC_BLOB_SIZE) {
     // A 0x7E with no (or a short) blob is itself off-contract: the parser only
     // fills `blob` when the device sent all `len` bytes. Treat as unverified.
@@ -205,21 +247,7 @@ export function verifyStoredLicenseBlob(
     return { ok: false, reason: 'The license stored on this device was issued for a different device.' }
   }
 
-  if (packageId) {
-    const expectedProductId = deriveVppId(packageId)
-    const blobProductId = bytesToHex(parsed.productId)
-    if (blobProductId !== expectedProductId) {
-      return { ok: false, reason: 'The license stored on this device was issued for a different VPP.' }
-    }
-  }
-
-  return { ok: true }
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  let out = ''
-  for (const byte of bytes) out += byte.toString(16).padStart(2, '0')
-  return out
+  return { ok: true, blob }
 }
 
 /**
@@ -240,8 +268,9 @@ function bytesToHex(bytes: Uint8Array): string {
 export async function resolveDeviceLicense(
   transport: LicenseReadWritable,
   input: DeviceLicenseInput,
+  activate: DeviceActivation,
 ): Promise<DeviceLicenseReport> {
-  const identity = deriveIdentity(input.identity)
+  const identity = await deriveIdentity(input.identity)
   if ('outcome' in identity) return identity
   const { deviceId } = identity
 
@@ -249,7 +278,11 @@ export async function resolveDeviceLicense(
     const stored = await readAndVerify(transport, deviceId, input)
     if (stored.kind !== 'absent') return { deviceId, outcome: stored.outcome }
 
-    return await recoverLicense(transport, { deviceId, packageId: input.packageId, runtimeKeys: input.runtimeKeys })
+    return await recoverLicense(
+      transport,
+      { deviceId, packageId: input.packageId, runtimeKeys: input.runtimeKeys },
+      activate,
+    )
   } catch (error) {
     return { deviceId, outcome: { state: 'check-failed', error: errorMessage(error) } }
   }
@@ -271,7 +304,7 @@ export async function inspectDeviceLicense(
   transport: LicenseReadWritable,
   input: DeviceLicenseInput,
 ): Promise<DeviceLicenseReport> {
-  const identity = deriveIdentity(input.identity)
+  const identity = await deriveIdentity(input.identity)
   if ('outcome' in identity) return identity
   const { deviceId } = identity
 
@@ -298,7 +331,7 @@ export async function inspectDeviceLicense(
  * device id, so one purchase would license an entire fleet and a license issued
  * for one board would verify on all of them.
  */
-function deriveIdentity(identity: DeviceIdentity): { deviceId: string } | DeviceLicenseReport {
+async function deriveIdentity(identity: DeviceIdentity): Promise<{ deviceId: string } | DeviceLicenseReport> {
   if (identity.anchor.length === 0) {
     return {
       outcome: {
@@ -316,7 +349,7 @@ function deriveIdentity(identity: DeviceIdentity): { deviceId: string } | Device
     }
   }
 
-  return { deviceId: deriveDeviceId(identity.anchor) }
+  return { deviceId: await deriveDeviceId(identity.anchor) }
 }
 
 /**
@@ -376,14 +409,12 @@ async function readAndVerify(
 async function recoverLicense(
   transport: LicenseReadWritable,
   input: { deviceId: string; packageId: string; runtimeKeys?: RuntimeLicenseKeys },
+  activate: DeviceActivation,
 ): Promise<DeviceLicenseReport> {
   const { deviceId, packageId } = input
-  const activation = await checkDeviceActivation({ deviceId, packageId })
+  const activation = await activate({ deviceId, packageId })
 
   if (!activation.licensed) {
-    // A transport/backend failure is NOT the same as "no purchase on record".
-    // `checkDeviceActivation` already separates `reason` (business) from `error`
-    // (transport); honour the distinction instead of discarding it one layer up.
     if (activation.error) {
       return { deviceId, outcome: { state: 'check-failed', error: activation.error } }
     }

@@ -2,15 +2,8 @@
  * License-identity derivation helpers.
  *
  * Both identifiers are deterministic SHA-256 digests, truncated to a
- * fixed prefix and hex-encoded. They run in the Electron **main**
- * process during the licensing routine, so they use `node:crypto`
- * directly.
- *
- * This module lives under `backend/editor` (not the byte-identical
- * `backend/shared` surface): `backend/shared` must compile identically
- * for both openplc-editor and openplc-web and therefore cannot depend
- * on `node:crypto`. The derivation only ever runs main-side, so an
- * editor-only home is the correct boundary.
+ * fixed prefix and hex-encoded, computed with WebCrypto so the same code
+ * runs in the desktop main process and in the browser.
  *
  * CROSS-REPO CONTRACT. `deriveDeviceId` output is the PRIMARY KEY the
  * autonomy-edge backend stores a purchase and a license against, and it
@@ -21,7 +14,7 @@
  * nothing, and the board runs demo with no error saying why.
  */
 
-import { createHash, randomBytes } from 'node:crypto'
+import { bytesToHex } from '../debug/license-blob'
 
 /** Domain-separation prefix for the device-id digest. Mixed
  *  in as raw ASCII bytes ahead of the hardware anchor so the same anchor
@@ -55,18 +48,12 @@ const VPP_ID_BYTES = 8
  *     same normative set, in the same place the identity is decided.
  * Pinned by the "raw bytes ARE the identity" case in device-identity.test.ts.
  */
-export function deriveDeviceId(anchor: Uint8Array): string {
-  // Single contiguous buffer: <prefix ASCII bytes><anchor bytes>. Built as
-  // a plain Uint8Array (the prefix is ASCII, so its UTF-8 encoding is
-  // byte-for-byte the ASCII bytes) to hand `createHash` a plain Uint8Array.
+export async function deriveDeviceId(anchor: Uint8Array): Promise<string> {
   const prefix = Uint8Array.from(DEVICE_ID_PREFIX, (c) => c.charCodeAt(0))
   const input = new Uint8Array(prefix.length + anchor.length)
   input.set(prefix, 0)
   input.set(anchor, prefix.length)
-  return createHash('sha256')
-    .update(input)
-    .digest('hex')
-    .slice(0, DEVICE_ID_BYTES * 2)
+  return bytesToHex((await sha256(input)).subarray(0, DEVICE_ID_BYTES))
 }
 
 /**
@@ -76,12 +63,17 @@ export function deriveDeviceId(anchor: Uint8Array): string {
  * chars). Must match `product_id[8]` of the on-device license blob
  * so the firmware can bind a written license to its VPP.
  */
-export function deriveVppId(packageId: string): string {
-  // Hash the package id as its UTF-8 (== ASCII) bytes.
-  return createHash('sha256')
-    .update(packageId)
-    .digest('hex')
-    .slice(0, VPP_ID_BYTES * 2)
+export async function deriveVppId(packageId: string): Promise<string> {
+  return bytesToHex(await deriveVppIdBytes(packageId))
+}
+
+/** `deriveVppId` as the 8 raw bytes a blob's `productId` carries. */
+export async function deriveVppIdBytes(packageId: string): Promise<Uint8Array> {
+  return (await sha256(new TextEncoder().encode(packageId))).slice(0, VPP_ID_BYTES)
+}
+
+async function sha256(data: Uint8Array): Promise<Uint8Array> {
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', data))
 }
 
 /** Length of a generated board ID (LIC_BOARD_ID_SIZE in the firmware). */
@@ -93,7 +85,7 @@ const GENERATED_BOARD_ID_BYTES = 16
  */
 export function generateBoardId(): Uint8Array {
   for (;;) {
-    const id = Uint8Array.from(randomBytes(GENERATED_BOARD_ID_BYTES))
+    const id = crypto.getRandomValues(new Uint8Array(GENERATED_BOARD_ID_BYTES))
     if (id.some((b) => b !== id[0])) return id
   }
 }

@@ -1,16 +1,17 @@
 /**
  * @jest-environment node
  */
-import { serializeLicenseBlob } from '../../../shared/debug/license-blob'
-import type { DebugDeviceIdResult, DebugLicenseReadResult, DeviceIdSource } from '../../../shared/debug/types'
+import { createHash } from 'node:crypto'
+
+import { hexToBytes, serializeLicenseBlob } from '../../debug/license-blob'
+import type { DebugDeviceIdResult, DebugLicenseReadResult, DeviceIdSource } from '../../debug/types'
 import {
   BOARD_BACKUP_TTL_MS,
+  BoardBackupHolder,
   type BoardLicenceBackup,
   restoreBoardLicence,
   takeBoardLicenceBackup,
-  usableBoardBackup,
 } from '../board-licence-backup'
-import { deriveDeviceId } from '../device-identity'
 
 const LIC_SUCCESS = 0x7e
 const LIC_EMPTY = 0x83
@@ -20,8 +21,9 @@ const PORT = '/dev/cu.usbmodem1'
 const GENERATED = Uint8Array.from({ length: 16 }, (_, i) => 0x10 + i)
 const HARDWARE = Uint8Array.from({ length: 16 }, (_, i) => 0xa0 + i)
 
-function hexToBytes(hex: string): Uint8Array {
-  return Uint8Array.from(Buffer.from(hex, 'hex'))
+/** Reference derivation through node:crypto. */
+function deriveDeviceId(anchor: Uint8Array): string {
+  return createHash('sha256').update('openplc-dev-v1|').update(anchor).digest('hex').slice(0, 32)
 }
 
 function blobFor(anchor: Uint8Array): Uint8Array {
@@ -38,8 +40,8 @@ function blobFor(anchor: Uint8Array): Uint8Array {
 
 function channel(ids: DebugDeviceIdResult, stored: DebugLicenseReadResult) {
   return {
-    getDeviceId: jest.fn(() => Promise.resolve(ids)),
-    readLicense: jest.fn(() => Promise.resolve(stored)),
+    getDeviceId: vi.fn(() => Promise.resolve(ids)),
+    readLicense: vi.fn(() => Promise.resolve(stored)),
   }
 }
 
@@ -117,18 +119,74 @@ describe('takeBoardLicenceBackup', () => {
   })
 })
 
-describe('usableBoardBackup', () => {
+describe('BoardBackupHolder', () => {
   const backup: BoardLicenceBackup = { port: PORT, deviceId: 'x', blob: new Uint8Array(98), takenAt: 1000 }
 
-  it('returns the backup for the same port inside the time limit', () => {
-    expect(usableBoardBackup(backup, PORT, 1000 + BOARD_BACKUP_TTL_MS)).toBe(backup)
+  function uploadedAndLinked(): BoardBackupHolder {
+    const holder = new BoardBackupHolder()
+    holder.arm(backup)
+    holder.uploadFinished(true)
+    holder.linkOpened()
+    return holder
+  }
+
+  it('hands the backup out on the first link after a successful upload, for the same port and inside the TTL', () => {
+    expect(uploadedAndLinked().usable(PORT, 1000 + BOARD_BACKUP_TTL_MS)).toBe(backup)
   })
 
-  it('ignores another port, no port, or an expired backup', () => {
-    expect(usableBoardBackup(backup, '/dev/cu.other', 1000)).toBeNull()
-    expect(usableBoardBackup(backup, null, 1000)).toBeNull()
-    expect(usableBoardBackup(backup, PORT, 1001 + BOARD_BACKUP_TTL_MS)).toBeNull()
-    expect(usableBoardBackup(null, PORT, 1000)).toBeNull()
+  it('is not usable before the upload finished or before the link opened', () => {
+    const holder = new BoardBackupHolder()
+    holder.arm(backup)
+    expect(holder.usable(PORT, 1000)).toBeNull()
+    holder.uploadFinished(true)
+    expect(holder.usable(PORT, 1000)).toBeNull()
+  })
+
+  it('drops the backup when the upload fails', () => {
+    const holder = new BoardBackupHolder()
+    holder.arm(backup)
+    holder.uploadFinished(false)
+    holder.linkOpened()
+    expect(holder.usable(PORT, 1000)).toBeNull()
+  })
+
+  it('drops the backup on a link opened before the upload finished', () => {
+    const holder = new BoardBackupHolder()
+    holder.arm(backup)
+    holder.linkOpened()
+    holder.uploadFinished(true)
+    holder.linkOpened()
+    expect(holder.usable(PORT, 1000)).toBeNull()
+  })
+
+  it('drops the backup on a second link, on close and once consumed', () => {
+    const second = uploadedAndLinked()
+    second.linkOpened()
+    expect(second.usable(PORT, 1000)).toBeNull()
+
+    const closed = uploadedAndLinked()
+    closed.linkClosed()
+    expect(closed.usable(PORT, 1000)).toBeNull()
+
+    const used = uploadedAndLinked()
+    used.consume()
+    expect(used.usable(PORT, 1000)).toBeNull()
+  })
+
+  it('ignores another port, no port, or an expired backup without dropping it', () => {
+    const holder = uploadedAndLinked()
+    expect(holder.usable('/dev/cu.other', 1000)).toBeNull()
+    expect(holder.usable(null, 1000)).toBeNull()
+    expect(holder.usable(PORT, 1001 + BOARD_BACKUP_TTL_MS)).toBeNull()
+    expect(holder.usable(PORT, 1000)).toBe(backup)
+  })
+
+  it('arming with null drops a previous backup', () => {
+    const holder = uploadedAndLinked()
+    holder.arm(null)
+    holder.uploadFinished(true)
+    holder.linkOpened()
+    expect(holder.usable(PORT, 1000)).toBeNull()
   })
 })
 
@@ -139,8 +197,8 @@ describe('restoreBoardLicence', () => {
 
   function transport(stored: DebugLicenseReadResult) {
     return {
-      readLicense: jest.fn(() => Promise.resolve(stored)),
-      writeLicense: jest.fn(() => Promise.resolve({ success: true, status: LIC_SUCCESS })),
+      readLicense: vi.fn(() => Promise.resolve(stored)),
+      writeLicense: vi.fn(() => Promise.resolve({ success: true, status: LIC_SUCCESS })),
     }
   }
 

@@ -18,8 +18,10 @@ extern "C" {
 /* Longest anchor the report carries. */
 #define LIC_ANCHOR_MAX 64u
 
-#define LIC_ID_KIND_HARDWARE 1u  /* factory ID from hardwareUniqueId() */
-#define LIC_ID_KIND_GENERATED 2u /* ID the editor wrote into the board-ID slot */
+/* Factory ID from hardwareUniqueId(). */
+#define LIC_ID_KIND_HARDWARE 1u
+/* ID the editor wrote into the board-ID slot. */
+#define LIC_ID_KIND_GENERATED 2u
 
 /* [count] + one [kind][len] header. */
 #define LIC_ID_REPORT_HEADER 3u
@@ -33,7 +35,7 @@ size_t hardwareUniqueId(uint8_t *out, size_t cap);
  * factory ID, else the generated board ID. Returns its length, or 0 when the
  * board has neither; callers must treat 0 as a refusal.
  */
-size_t license_platform_anchor(uint8_t *out, size_t cap, uint8_t *kind);
+size_t license_board_anchor(uint8_t *out, size_t cap, uint8_t *kind);
 
 /**
  * Write the raw ID report into out: [count:u8], then [kind:u8][len:u8][bytes]

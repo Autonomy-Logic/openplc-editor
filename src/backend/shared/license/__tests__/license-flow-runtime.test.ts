@@ -3,26 +3,28 @@
  */
 import { createHash, generateKeyPairSync, type KeyObject, sign } from 'node:crypto'
 
-import { LIC_PAYLOAD_SIZE, serializeLicenseBlob } from '../../../shared/debug/license-blob'
-import { RUNTIME_LICENSE_PRODUCT } from '../../../shared/debug/runtime-license-verify'
-import type { DebugLicenseReadResult, DebugLicenseWriteResult } from '../../../shared/debug/types'
-import { deriveDeviceId, deriveVppId } from '../device-identity'
-import { inspectDeviceLicense, type LicenseReadWritable, resolveDeviceLicense } from '../license-flow'
+import { LIC_PAYLOAD_SIZE, serializeLicenseBlob } from '../../debug/license-blob'
+import { RUNTIME_LICENSE_PRODUCT } from '../../debug/runtime-license-verify'
+import type { DebugLicenseReadResult, DebugLicenseWriteResult } from '../../debug/types'
+import {
+  type DeviceActivationInput,
+  type DeviceActivationResult,
+  inspectDeviceLicense,
+  type LicenseReadWritable,
+  resolveDeviceLicense as resolveWith,
+} from '../license-flow'
 
-jest.mock('../license-activation-client', () => ({
-  checkDeviceActivation: jest.fn(),
-}))
+const checkDeviceActivation = vi.fn<Promise<DeviceActivationResult>, [DeviceActivationInput]>()
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { checkDeviceActivation } = require('../license-activation-client') as {
-  checkDeviceActivation: jest.Mock
+function resolveDeviceLicense(link: LicenseReadWritable, input: Parameters<typeof resolveWith>[1]) {
+  return resolveWith(link, input, checkDeviceActivation)
 }
 
 const LIC_SUCCESS = 0x7e
 const LIC_EMPTY = 0x83
 
 const ANCHOR = Uint8Array.from({ length: 16 }, (_, i) => 0xa0 + i)
-const DEVICE_ID_HEX = deriveDeviceId(ANCHOR)
+const DEVICE_ID_HEX = createHash('sha256').update('openplc-dev-v1|').update(ANCHOR).digest('hex').slice(0, 32)
 const DEVICE_ID = Uint8Array.from(Buffer.from(DEVICE_ID_HEX, 'hex'))
 const RUNTIME_PRODUCT_ID = Uint8Array.from(createHash('sha256').update(RUNTIME_LICENSE_PRODUCT).digest().subarray(0, 8))
 
@@ -112,7 +114,9 @@ describe('runtime licence on a built-in board', () => {
 
   it('refuses a licence for another board, or a VPP licence for this one', async () => {
     const otherBoard = issue({ deviceId: new Uint8Array(16).fill(0x42) })
-    const vppLicence = issue({ productId: Uint8Array.from(Buffer.from(deriveVppId('com.openplc.esp32plc'), 'hex')) })
+    const vppLicence = issue({
+      productId: Uint8Array.from(createHash('sha256').update('com.openplc.esp32plc').digest().subarray(0, 8)),
+    })
     for (const blob of [otherBoard, vppLicence]) {
       const t = transport({ reads: [{ success: true, status: LIC_SUCCESS, blob }] })
       const report = await inspectDeviceLicense(t, input)

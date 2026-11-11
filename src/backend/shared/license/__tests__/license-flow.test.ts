@@ -1,12 +1,18 @@
-import { serializeLicenseBlob } from '../../../shared/debug/license-blob'
+/**
+ * @jest-environment node
+ */
+import { createHash } from 'node:crypto'
+
+import { hexToBytes, serializeLicenseBlob } from '../../debug/license-blob'
 import type {
   DebugBoardIdProvisionResult,
   DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
-} from '../../../shared/debug/types'
-import { deriveDeviceId, deriveVppId } from '../device-identity'
+} from '../../debug/types'
 import {
+  type DeviceActivationInput,
+  type DeviceActivationResult,
   type DeviceIdentity,
   identityFromSources,
   inspectDeviceLicense,
@@ -16,13 +22,20 @@ import {
   verifyStoredLicenseBlob,
 } from '../license-flow'
 
-jest.mock('../license-activation-client', () => ({
-  checkDeviceActivation: jest.fn(),
-}))
+const checkDeviceActivation = vi.fn<Promise<DeviceActivationResult>, [DeviceActivationInput]>()
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { checkDeviceActivation } = require('../license-activation-client') as {
-  checkDeviceActivation: jest.Mock
+/** `resolveDeviceLicense` with the activation fake injected. */
+function resolve(link: LicenseReadWritable, input: Parameters<typeof resolveDeviceLicense>[1]) {
+  return resolveDeviceLicense(link, input, checkDeviceActivation)
+}
+
+/** Reference derivations through node:crypto, independent of the module under test. */
+function deriveDeviceId(anchor: Uint8Array): string {
+  return createHash('sha256').update('openplc-dev-v1|').update(anchor).digest('hex').slice(0, 32)
+}
+
+function deriveVppId(packageId: string): string {
+  return createHash('sha256').update(packageId).digest('hex').slice(0, 16)
 }
 
 const LIC_SUCCESS = 0x7e
@@ -33,12 +46,6 @@ const LIC_UNSUPPORTED = 0x85
 const ANCHOR = Uint8Array.from([0, 177, 140, 237])
 const PACKAGE_ID = 'com.openplc.espressif-licensed'
 const DEVICE_ID = deriveDeviceId(ANCHOR)
-
-function hexToBytes(hex: string): Uint8Array {
-  const out = new Uint8Array(hex.length / 2)
-  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
-  return out
-}
 
 /** A well-formed 98-byte blob for the given device + package. */
 function blobFor({ deviceId = DEVICE_ID, packageId = PACKAGE_ID }: { deviceId?: string; packageId?: string } = {}) {
@@ -79,11 +86,11 @@ function transport(script: {
 
 beforeEach(() => {
   checkDeviceActivation.mockReset()
-  jest.spyOn(console, 'warn').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 
 afterEach(() => {
-  jest.restoreAllMocks()
+  vi.restoreAllMocks()
 })
 
 // ---------------------------------------------------------------------------
@@ -91,16 +98,16 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('verifyStoredLicenseBlob', () => {
-  it('accepts a blob bound to this device and this package', () => {
-    expect(verifyStoredLicenseBlob(blobFor(), DEVICE_ID, PACKAGE_ID)).toEqual({ ok: true })
+  it('accepts a blob bound to this device and this package', async () => {
+    expect(await verifyStoredLicenseBlob(blobFor(), DEVICE_ID, PACKAGE_ID)).toEqual({ ok: true })
   })
 
-  it('rejects a blob bound to ANOTHER device (the clone case)', () => {
+  it('rejects a blob bound to ANOTHER device (the clone case)', async () => {
     // Valid bytes, wrong board. The device answers 0x7E for it and the closed
     // gate answers DEVICE_MISMATCH — believing the status byte here is what makes
     // the badge say "Licensed" on a board running demo.
     const other = deriveDeviceId(Uint8Array.from([9, 9, 9, 9]))
-    const verdict = verifyStoredLicenseBlob(blobFor({ deviceId: other }), DEVICE_ID, PACKAGE_ID)
+    const verdict = await verifyStoredLicenseBlob(blobFor({ deviceId: other }), DEVICE_ID, PACKAGE_ID)
 
     // The reason reaches the user verbatim, so it must not carry the two 32-hex
     // ids — it says WHICH device, not which bytes.
@@ -110,28 +117,32 @@ describe('verifyStoredLicenseBlob', () => {
     })
   })
 
-  it('rejects a blob issued for another VPP', () => {
-    const verdict = verifyStoredLicenseBlob(blobFor({ packageId: 'com.openplc.other-licensed' }), DEVICE_ID, PACKAGE_ID)
+  it('rejects a blob issued for another VPP', async () => {
+    const verdict = await verifyStoredLicenseBlob(
+      blobFor({ packageId: 'com.openplc.other-licensed' }),
+      DEVICE_ID,
+      PACKAGE_ID,
+    )
 
     expect(verdict.ok).toBe(false)
     if (!verdict.ok) expect(verdict.reason).toBe('The license stored on this device was issued for a different VPP.')
   })
 
-  it('rejects a blob whose crc32 does not cover its bytes (tampered or truncated in place)', () => {
+  it('rejects a blob whose crc32 does not cover its bytes (tampered or truncated in place)', async () => {
     const tampered = blobFor()
     tampered[40] ^= 0xff // flip a signature byte; the stored crc32 no longer matches
 
-    const verdict = verifyStoredLicenseBlob(tampered, DEVICE_ID, PACKAGE_ID)
+    const verdict = await verifyStoredLicenseBlob(tampered, DEVICE_ID, PACKAGE_ID)
 
     expect(verdict.ok).toBe(false)
     if (!verdict.ok) expect(verdict.reason).toBe('The license stored on this device is damaged.')
   })
 
-  it('rejects a blob that is not a license at all (no magic)', () => {
+  it('rejects a blob that is not a license at all (no magic)', async () => {
     const noMagic = blobFor()
     noMagic[0] = 0x00
 
-    const verdict = verifyStoredLicenseBlob(noMagic, DEVICE_ID, PACKAGE_ID)
+    const verdict = await verifyStoredLicenseBlob(noMagic, DEVICE_ID, PACKAGE_ID)
 
     expect(verdict.ok).toBe(false)
     // Magic is checked before the checksum, so the message names the real
@@ -140,21 +151,21 @@ describe('verifyStoredLicenseBlob', () => {
     if (!verdict.ok) expect(verdict.reason).toBe('The data stored on this device is not a license.')
   })
 
-  it('rejects a short or absent blob rather than parsing past the end', () => {
-    expect(verifyStoredLicenseBlob(undefined, DEVICE_ID, PACKAGE_ID)).toEqual({
+  it('rejects a short or absent blob rather than parsing past the end', async () => {
+    expect(await verifyStoredLicenseBlob(undefined, DEVICE_ID, PACKAGE_ID)).toEqual({
       ok: false,
       reason: 'The license stored on this device is incomplete.',
     })
-    expect(verifyStoredLicenseBlob(blobFor().subarray(0, 40), DEVICE_ID, PACKAGE_ID)).toEqual({
+    expect(await verifyStoredLicenseBlob(blobFor().subarray(0, 40), DEVICE_ID, PACKAGE_ID)).toEqual({
       ok: false,
       reason: 'The license stored on this device is incomplete.',
     })
   })
 
-  it('leaves productId unverified when no package id is known, rather than assuming it good', () => {
+  it('leaves productId unverified when no package id is known, rather than assuming it good', async () => {
     const foreign = blobFor({ packageId: 'com.openplc.other-licensed' })
 
-    expect(verifyStoredLicenseBlob(foreign, DEVICE_ID, undefined)).toEqual({ ok: true })
+    expect(await verifyStoredLicenseBlob(foreign, DEVICE_ID, undefined)).toEqual({ ok: true })
   })
 })
 
@@ -166,7 +177,7 @@ describe('resolveDeviceLicense', () => {
   it('reports an already-stored license without asking the backend', async () => {
     const link = transport({ reads: [{ success: true, status: LIC_SUCCESS, blob: blobFor() }] })
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: ANCHOR },
       packageId: PACKAGE_ID,
     })
@@ -186,7 +197,7 @@ describe('resolveDeviceLicense', () => {
       ],
     })
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: ANCHOR },
       packageId: PACKAGE_ID,
     })
@@ -212,7 +223,7 @@ describe('resolveDeviceLicense', () => {
       ],
     })
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: ANCHOR },
       packageId: PACKAGE_ID,
     })
@@ -225,7 +236,7 @@ describe('resolveDeviceLicense', () => {
     checkDeviceActivation.mockResolvedValue({ licensed: false, reason: 'no active subscription' })
     const link = transport({ reads: [{ success: true, status: LIC_EMPTY, empty: true }] })
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: ANCHOR },
       packageId: PACKAGE_ID,
     })
@@ -246,7 +257,7 @@ describe('resolveDeviceLicense', () => {
     checkDeviceActivation.mockResolvedValue({ licensed: false, error: 'Activation request failed: 429' })
     const link = transport({ reads: [{ success: true, status: LIC_EMPTY, empty: true }] })
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: ANCHOR },
       packageId: PACKAGE_ID,
     })
@@ -257,7 +268,7 @@ describe('resolveDeviceLicense', () => {
   it('reports unsupported when the device has no storage backend', async () => {
     const link = transport({ reads: [{ success: true, status: LIC_UNSUPPORTED, unsupported: true }] })
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: ANCHOR },
       packageId: PACKAGE_ID,
     })
@@ -271,7 +282,7 @@ describe('resolveDeviceLicense', () => {
     // would share one device id, so one purchase would license the whole fleet.
     const link = transport({ reads: [] })
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: new Uint8Array(0) },
       packageId: PACKAGE_ID,
     })
@@ -296,7 +307,7 @@ describe('resolveDeviceLicense', () => {
     expect(identity).toEqual({ kind: 'anchor', anchor: ANCHOR })
 
     const link = transport({ reads: [{ success: true, status: LIC_SUCCESS, blob: blobFor() }] })
-    const result = await resolveDeviceLicense(link, { identity: identity as DeviceIdentity, packageId: PACKAGE_ID })
+    const result = await resolve(link, { identity: identity as DeviceIdentity, packageId: PACKAGE_ID })
     expect(result.deviceId).toBe(DEVICE_ID)
   })
 
@@ -309,7 +320,7 @@ describe('resolveDeviceLicense', () => {
     expect(identity).toEqual({ kind: 'anchor', anchor: new Uint8Array(0) })
 
     const link = transport({ reads: [] })
-    const result = await resolveDeviceLicense(link, { identity: identity as DeviceIdentity, packageId: PACKAGE_ID })
+    const result = await resolve(link, { identity: identity as DeviceIdentity, packageId: PACKAGE_ID })
 
     expect(result.deviceId).toBeUndefined()
     expect(result.outcome.state).toBe('check-failed')
@@ -332,7 +343,7 @@ describe('resolveDeviceLicense', () => {
   it('reports check-failed when the device does not answer the read at all', async () => {
     const link = transport({ reads: [{ success: false, error: 'Request timeout' }] })
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: ANCHOR },
       packageId: PACKAGE_ID,
     })
@@ -353,7 +364,7 @@ describe('resolveDeviceLicense', () => {
       ],
     })
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: ANCHOR },
       packageId: PACKAGE_ID,
     })
@@ -373,7 +384,7 @@ describe('resolveDeviceLicense', () => {
       ],
     })
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: ANCHOR },
       packageId: PACKAGE_ID,
     })
@@ -391,7 +402,7 @@ describe('resolveDeviceLicense', () => {
       write: { success: true, status: LIC_UNSUPPORTED, unsupported: true },
     })
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: ANCHOR },
       packageId: PACKAGE_ID,
     })
@@ -406,7 +417,7 @@ describe('resolveDeviceLicense', () => {
       write: { success: false, error: 'ERROR_OUT_OF_MEMORY' },
     })
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: ANCHOR },
       packageId: PACKAGE_ID,
     })
@@ -418,7 +429,7 @@ describe('resolveDeviceLicense', () => {
     checkDeviceActivation.mockResolvedValue({ licensed: true })
     const link = transport({ reads: [{ success: true, status: LIC_EMPTY, empty: true }] })
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: ANCHOR },
       packageId: PACKAGE_ID,
     })
@@ -436,7 +447,7 @@ describe('resolveDeviceLicense', () => {
       writeLicense: () => Promise.resolve({ success: true }),
     }
 
-    const result = await resolveDeviceLicense(link, {
+    const result = await resolve(link, {
       identity: { kind: 'anchor', anchor: ANCHOR },
       packageId: PACKAGE_ID,
     })
@@ -555,9 +566,9 @@ describe('readBoardIdSources', () => {
     provision?: DebugBoardIdProvisionResult
     noProvision?: boolean
   }) {
-    const getDeviceId = jest.fn<Promise<DebugDeviceIdResult>, []>()
+    const getDeviceId = vi.fn<Promise<DebugDeviceIdResult>, []>()
     for (const r of opts.reads) getDeviceId.mockResolvedValueOnce(r)
-    const provisionBoardId = jest
+    const provisionBoardId = vi
       .fn<Promise<DebugBoardIdProvisionResult>, [Uint8Array]>()
       .mockResolvedValue(opts.provision ?? { success: true, status: 0x7e })
     return {

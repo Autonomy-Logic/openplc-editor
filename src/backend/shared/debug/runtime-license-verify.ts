@@ -12,17 +12,24 @@
  * browser. Byte-identical with openplc-web.
  */
 
-import { crc32IsoHdlc, deserializeLicenseBlob, LIC_BLOB_SIZE, LIC_MAGIC_LE, LIC_PAYLOAD_SIZE } from './license-blob'
+import { deriveVppIdBytes } from '../license/device-identity'
+import {
+  bytesEqual,
+  crc32IsoHdlc,
+  deserializeLicenseBlob,
+  hexToBytes,
+  LIC_BLOB_SIZE,
+  LIC_CRC_COVERAGE,
+  LIC_MAGIC_LE,
+  LIC_PAYLOAD_SIZE,
+} from './license-blob'
 
 /** Product the runtime licence is issued for. */
 export const RUNTIME_LICENSE_PRODUCT = 'com.autonomy.openplc-runtime'
 
 /** Blob format this verifier understands (`fmtVersion`). */
 const RUNTIME_LICENSE_FORMAT = 1
-/** crc32 covers `[payload || signature]`, offsets 0..93. */
-const CRC_COVERAGE = LIC_BLOB_SIZE - 4
 const DEVICE_ID_BYTES = 16
-const PRODUCT_ID_BYTES = 8
 const RAW_KEY_RE = /^[0-9a-f]{128}$/
 
 /**
@@ -68,8 +75,7 @@ export function runtimeLicenseKeys(devKey: { keyId: number; rawKeyHex: string } 
 
 /** `sha256(packageId)[:8]`, the product ID a blob carries. */
 export async function deriveProductIdBytes(packageId: string): Promise<Uint8Array> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(packageId))
-  return new Uint8Array(digest).slice(0, PRODUCT_ID_BYTES)
+  return deriveVppIdBytes(packageId)
 }
 
 /**
@@ -87,7 +93,7 @@ export async function verifyRuntimeLicenseBlob(
   if (blob.length !== LIC_BLOB_SIZE || deviceId.length !== DEVICE_ID_BYTES) return { ok: false, reason: 'incomplete' }
 
   const parsed = deserializeLicenseBlob(blob)
-  if (crc32IsoHdlc(blob.subarray(0, CRC_COVERAGE)) !== parsed.crc32) return { ok: false, reason: 'damaged' }
+  if (crc32IsoHdlc(blob.subarray(0, LIC_CRC_COVERAGE)) !== parsed.crc32) return { ok: false, reason: 'damaged' }
   if (parsed.magic !== LIC_MAGIC_LE) return { ok: false, reason: 'not-a-license' }
   if (parsed.fmtVersion !== RUNTIME_LICENSE_FORMAT) return { ok: false, reason: 'format' }
   if (!bytesEqual(parsed.deviceId, deviceId)) return { ok: false, reason: 'other-device' }
@@ -110,19 +116,6 @@ async function verifyP256(rawKeyHex: string, signature: Uint8Array, message: Uin
     const key = await crypto.subtle.importKey('raw', point, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify'])
     return await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, signature, message)
   } catch {
-    // Not a point on the curve (the all-zero reserved row included).
     return false
   }
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const out = new Uint8Array(hex.length / 2)
-  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
-  return out
-}
-
-function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
-  return true
 }

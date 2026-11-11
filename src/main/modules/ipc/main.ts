@@ -126,7 +126,7 @@ import {
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
-import type { IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron'
+import type { IpcMainEvent, IpcMainInvokeEvent, MessagePortMain, WebContents } from 'electron'
 import { app, dialog, nativeTheme, shell } from 'electron'
 import { readFile, realpathSync, stat, statSync, unwatchFile, watchFile } from 'fs'
 import { unlink, writeFile } from 'fs/promises'
@@ -152,21 +152,7 @@ import {
 } from '../../../backend/editor/hardware/device-session-manager'
 import { type DiscoveredRuntime, discoverRuntimes } from '../../../backend/editor/hardware/discover-runtimes'
 import { LibraryManagerModule } from '../../../backend/editor/library-manager'
-import {
-  type BoardLicenceBackup,
-  restoreBoardLicence,
-  takeBoardLicenceBackup,
-  usableBoardBackup,
-} from '../../../backend/editor/license/board-licence-backup'
-import { deriveDeviceId, generateBoardId } from '../../../backend/editor/license/device-identity'
-import {
-  type DeviceIdentity,
-  identityFromSources,
-  inspectDeviceLicense,
-  type LicenseReadWritable,
-  readBoardIdSources,
-  resolveDeviceLicense,
-} from '../../../backend/editor/license/license-flow'
+import { checkDeviceActivation } from '../../../backend/editor/license/license-activation-client'
 import { createRuntimeLicenseMechanisms } from '../../../backend/editor/license/runtime-license-mechanisms'
 import { PackageManagerModule } from '../../../backend/editor/package-manager'
 import { BootloaderApiClient } from '../../../backend/editor/runtime/bootloader-api-client'
@@ -184,6 +170,20 @@ import {
   RUNTIME_LICENSE_PRODUCT,
   runtimeLicenseKeys,
 } from '../../../backend/shared/debug/runtime-license-verify'
+import {
+  BoardBackupHolder,
+  restoreBoardLicence,
+  takeBoardLicenceBackup,
+} from '../../../backend/shared/license/board-licence-backup'
+import { deriveDeviceId, generateBoardId } from '../../../backend/shared/license/device-identity'
+import {
+  type DeviceIdentity,
+  identityFromSources,
+  inspectDeviceLicense,
+  type LicenseReadWritable,
+  readBoardIdSources,
+  resolveDeviceLicense,
+} from '../../../backend/shared/license/license-flow'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import {
@@ -237,6 +237,13 @@ type LicenseChannel = LicenseReadWritable &
  * implements them). Narrows the client itself rather than wrapping it, so the flow
  * keeps using the same object — and the same send mutex — every other caller holds.
  */
+/** The compile flow's last message on its port, which carries the build and upload verdict. */
+function isCompileVerdict(message: unknown): message is { closePort: true; success: boolean } {
+  if (typeof message !== 'object' || message === null) return false
+  const m = message as { closePort?: unknown; success?: unknown }
+  return m.closePort === true && typeof m.success === 'boolean'
+}
+
 function isLicenseChannel(client: DeviceDebugChannel): client is DeviceDebugChannel & LicenseChannel {
   return (
     (typeof client.getDeviceId === 'function' || typeof client.getAnchor === 'function') &&
@@ -2246,7 +2253,7 @@ class MainProcessBridge implements MainIpcModule {
 
   // Compiler service handlers
   handleRunCompileProgram = (event: IpcMainEvent, args: CompileProgramIpcArgs) => {
-    const mainProcessPort = event.ports[0]
+    const mainProcessPort = this.observeCompileVerdict(event.ports[0])
     void this.compilerModule.compileProgram(args, mainProcessPort, this).catch((error) => {
       mainProcessPort.postMessage({
         logLevel: 'error',
@@ -2254,6 +2261,23 @@ class MainProcessBridge implements MainIpcModule {
       })
       mainProcessPort.postMessage({ closePort: true })
       mainProcessPort.close()
+    })
+  }
+
+  /** `port` with its `{ closePort, success }` message also reported to the board licence backup. */
+  private observeCompileVerdict(port: MessagePortMain): MessagePortMain {
+    const holder = this.boardLicenceBackup
+    return new Proxy(port, {
+      get(target, prop, receiver) {
+        if (prop === 'postMessage') {
+          return (message: unknown, transfer?: MessagePortMain[]) => {
+            if (isCompileVerdict(message)) holder.uploadFinished(message.success)
+            target.postMessage(message, transfer)
+          }
+        }
+        const value: unknown = Reflect.get(target, prop, receiver)
+        return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
+      },
     })
   }
 
@@ -2785,17 +2809,17 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   /** Generated ID and licence of the board on the released port, for `readLicenseIdentity` after the upload. */
-  private boardLicenceBackup: BoardLicenceBackup | null = null
+  private readonly boardLicenceBackup = new BoardBackupHolder()
 
   private async backUpBoardLicence(port: string | null | undefined): Promise<void> {
-    this.boardLicenceBackup = null
+    this.boardLicenceBackup.arm(null)
     const link = this.deviceSession.getLink()
     const client = this.deviceClient()
     if (!link || link.transport !== 'rtu' || !client) return
     if (port !== undefined && port !== null && link.descriptor !== String(port)) return
     try {
-      this.boardLicenceBackup = await takeBoardLicenceBackup(client, link.descriptor)
-      const backup = this.boardLicenceBackup
+      const backup = await takeBoardLicenceBackup(client, link.descriptor)
+      this.boardLicenceBackup.arm(backup)
       if (backup) {
         const kept = [backup.generatedId && 'board ID', backup.blob && 'licence'].filter(Boolean).join(' and ')
         this.traceDeviceLink(`release ${link.descriptor}: backed up ${kept}`)
@@ -2914,6 +2938,7 @@ class MainProcessBridge implements MainIpcModule {
     _event: IpcMainInvokeEvent,
     candidates: DebugConnectionConfig[],
   ): Promise<DeviceProbeOutcome> => {
+    this.boardLicenceBackup.linkOpened()
     this.deviceLinkProbe = null
     // A new connection is a new story: let each command say which channel served
     // it again, since it may well be a different one this time.
@@ -2950,6 +2975,7 @@ class MainProcessBridge implements MainIpcModule {
 
   /** Close the held link (user pressed Disconnect). */
   handleDeviceDisconnect = async (): Promise<{ success: boolean }> => {
+    this.boardLicenceBackup.linkClosed()
     this.deviceSession.close()
     this.deviceLinkProbe = null
     this.tracedChannelUses.clear()
@@ -3000,16 +3026,16 @@ class MainProcessBridge implements MainIpcModule {
     // Exactly one of the two exists on any real channel; narrowed on the channel rather
     // than the reply, so each branch statically knows which kind it holds.
     if (client.getDeviceId) {
-      const backup = usableBoardBackup(this.boardLicenceBackup, this.deviceSession.getLink()?.descriptor)
+      const backup = this.boardLicenceBackup.usable(this.deviceSession.getLink()?.descriptor)
       const read = await readBoardIdSources(client, () => backup?.generatedId ?? generateBoardId())
       const bad = settle(read)
       if (bad) return bad
       const identity = identityFromSources(read.sources ?? [])
       if ('error' in identity) return { error: identity.error, retryable: false } as const
       if (backup && identity.anchor.length > 0) {
-        this.boardLicenceBackup = null
+        this.boardLicenceBackup.consume()
         try {
-          if (await restoreBoardLicence(client, backup, deriveDeviceId(identity.anchor))) {
+          if (await restoreBoardLicence(client, backup, await deriveDeviceId(identity.anchor))) {
             this.traceDeviceLink('restored the licence backed up before the upload')
           }
         } catch (error) {
@@ -3125,7 +3151,11 @@ class MainProcessBridge implements MainIpcModule {
         const identity = await this.readLicenseIdentity(client)
         if ('error' in identity) return { outcome: checkFailedOutcome(identity) }
 
-        const report = await resolveDeviceLicense(client, { ...licenseInput(request), identity: identity.identity })
+        const report = await resolveDeviceLicense(
+          client,
+          { ...licenseInput(request), identity: identity.identity },
+          checkDeviceActivation,
+        )
         // The license FCs are device traffic like any other: without noting them the
         // liveness poll can fall due mid-sequence and declare a healthy link lost.
         this.deviceSession.noteTraffic()
