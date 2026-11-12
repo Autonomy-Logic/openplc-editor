@@ -202,6 +202,8 @@ function stubProgramFor(project: PLCProject): PLCProject {
  * rest to compileStlib.
  */
 const STUB_SPLIT_FILENAME = `${STUB_PROGRAM_NAME}.st`
+const CONFIG_SPLIT_FILENAME = '_config.st'
+const GLOBALS_SPLIT_FILENAME = '_globals.st'
 
 // ---------------------------------------------------------------------------
 // Stage 1: pre-transpile (pure)
@@ -220,6 +222,7 @@ export interface PrepareXmlResult {
   /** Manifest the second stage reads, parsed here so a malformed
    *  manifest bails BEFORE the transpile step. */
   manifest: LibraryBuildManifest
+  declaredGlobals: string[]
 }
 
 export type PrepareXmlOutcome = PrepareXmlResult | { error: string }
@@ -246,7 +249,12 @@ export function prepareXmlForLibraryBuild(project: PLCProject, manifestJson: str
     language: p.data.language,
   }))
 
-  return { projectData: stubbed.data, knownPous, manifest: parsed.manifest }
+  const declaredGlobals = [
+    ...project.data.configuration.resource.globalVariables.map((variable) => variable.name),
+    ...(project.data.globalVariableLists ?? []).filter((list) => list.variables.length > 0).map((list) => list.name),
+  ]
+
+  return { projectData: stubbed.data, knownPous, manifest: parsed.manifest, declaredGlobals }
 }
 
 // ---------------------------------------------------------------------------
@@ -321,6 +329,7 @@ export interface LibraryBuildAux {
    *  bridge ST is filtered out of the strucpp input in exchange —
    *  see `LibraryNativeSource`. */
   nativeSources?: LibraryNativeSource[]
+  declaredGlobals?: string[]
 }
 
 /**
@@ -359,22 +368,30 @@ export function libraryBuildFromTranspiledSt(
   //   - `_config.st` (the transpiler's CONFIGURATION block references the
   //     stub program, which we've just removed — leaving it in
   //     causes strucpp to emit "Unknown program type 'MAIN'"
-  //     diagnostics).  Libraries don't carry configurations
-  //     anyway — they ship POUs + types for consumer projects to
-  //     instantiate.
+  //     diagnostics).
   //   - Every per-POU file whose source POU was originally a C/C++ or
   //     Python function block.  See `LibraryNativeSource`.
   //
-  // Keep `_types.st` and `_globals.st`: they may carry user-defined
-  // types and library-internal globals the POUs reference.
   // Drop the per-POU file for every native block; the authored source goes
   // to strucpp instead, below. See `LibraryNativeSource`.
-  const nativeStFilenames = new Set((aux?.nativeSources ?? []).map((n) => `${n.fileName.replace(/\.[^.]+$/, '')}.st`))
+  const nativeStFilenames = new Set((aux?.nativeSources ?? []).map((n) => `${nativeStem(n.fileName)}.st`))
+  const configSt = split.files.get(CONFIG_SPLIT_FILENAME)
+  const configGlobals = configSt === undefined ? null : configurationGlobalsSection(configSt)
+  const topLevelGlobals = split.files.get(GLOBALS_SPLIT_FILENAME)
   const sources: CompileStlibSource[] = []
   for (const [fileName, source] of split.files.entries()) {
     if (fileName === STUB_SPLIT_FILENAME) continue
-    if (fileName === '_config.st') continue
     if (nativeStFilenames.has(fileName)) continue
+    if (fileName === CONFIG_SPLIT_FILENAME) {
+      if (configGlobals !== null && topLevelGlobals === undefined) {
+        sources.push({ fileName: GLOBALS_SPLIT_FILENAME, source: configGlobals, category: 'globals' })
+      }
+      continue
+    }
+    if (fileName === GLOBALS_SPLIT_FILENAME && configGlobals !== null) {
+      sources.push({ fileName, source: `${source}\n${configGlobals}`, category: 'globals' })
+      continue
+    }
     sources.push({
       fileName,
       source,
@@ -389,7 +406,7 @@ export function libraryBuildFromTranspiledSt(
   // Native blocks count as real content: a library of nothing but C/C++ or
   // Python FBs is useful, and strucpp handles an ST-empty input set — it
   // recovers each block's interface from its ST header and emits no chunk.
-  const hasRealSources = sources.some((s) => s.fileName !== '_globals.st')
+  const hasRealSources = sources.some((s) => s.fileName !== GLOBALS_SPLIT_FILENAME)
   const nativeSources = aux?.nativeSources ?? []
   if (!hasRealSources && nativeSources.length === 0) {
     return {
@@ -421,6 +438,10 @@ export function libraryBuildFromTranspiledSt(
   // it here is the cleanest place to inject editor-side metadata
   // without introducing a second strucpp pass.
   if (compileRes.success && compileRes.archive) {
+    const undeclared = undeclaredExports(compileRes.archive, knownPous, aux)
+    if (undeclared.length > 0) {
+      return { success: false, archive: undefined, errors: undeclared }
+    }
     decorateArchive(compileRes.archive, manifest, aux)
   }
 
@@ -429,6 +450,56 @@ export function libraryBuildFromTranspiledSt(
     archive: compileRes.archive,
     errors: compileRes.errors ?? [],
   }
+}
+
+function nativeStem(fileName: string): string {
+  return fileName.replace(/\.[^.]+$/, '')
+}
+
+function configurationGlobalsSection(configSt: string): string | null {
+  const lines = configSt.split('\n')
+  const trimmed = lines.map((line) => line.trim())
+  const resourceIdx = trimmed.findIndex((line) => line.startsWith('RESOURCE'))
+  const limit = resourceIdx !== -1 ? resourceIdx : trimmed.findIndex((line) => line.startsWith('END_CONFIGURATION'))
+  const head = trimmed.slice(0, limit === -1 ? trimmed.length : limit)
+  const first = head.findIndex((line) => line.startsWith('VAR_GLOBAL'))
+  const last = head.lastIndexOf('END_VAR')
+  if (first === -1 || last < first) return null
+  return lines.slice(first, last + 1).join('\n') + '\n'
+}
+
+interface ExportedSymbols {
+  functions?: Array<{ name: string }>
+  functionBlocks?: Array<{ name: string }>
+  globals?: Array<{ name: string }>
+}
+
+function undeclaredExports(
+  archive: unknown,
+  knownPous: KnownPou[],
+  aux: LibraryBuildAux | undefined,
+): CompileStlibError[] {
+  const exported = (archive as { manifest?: ExportedSymbols }).manifest
+  if (!exported) return []
+
+  const declaredPous = new Set([
+    ...knownPous.filter((pou) => pou.name !== STUB_PROGRAM_NAME).map((pou) => pou.name.toLowerCase()),
+    ...(aux?.nativeSources ?? []).map((n) => nativeStem(n.fileName).toLowerCase()),
+  ])
+  const declaredGlobals = new Set((aux?.declaredGlobals ?? []).map((name) => name.toLowerCase()))
+
+  const checks: Array<[string, Array<{ name: string }> | undefined, Set<string>]> = [
+    ['function', exported.functions, declaredPous],
+    ['function block', exported.functionBlocks, declaredPous],
+    ['global', exported.globals, declaredGlobals],
+  ]
+  return checks.flatMap(([kind, entries, declared]) =>
+    (entries ?? [])
+      .filter((entry) => !declared.has(entry.name.toLowerCase()))
+      .map((entry) => ({
+        message: `Library build refused: the built library would export the ${kind} "${entry.name}", which the library project does not declare.`,
+      })),
+  )
 }
 
 /**
@@ -496,8 +567,8 @@ function decorateArchive(archive: unknown, manifest: LibraryBuildManifest, aux: 
  * Tag each split filename with the category strucpp uses for
  * grouping.  Inferred from the splitter's naming convention — see
  * `_types.st` / `_globals.st` in `split-program-st.ts`.  `_config.st`
- * is filtered out upstream (libraries don't carry configurations),
- * so it never reaches this helper and intentionally has no case.
+ * is filtered out upstream, so it never reaches this helper and
+ * intentionally has no case.
  */
 function inferCategory(fileName: string): string | undefined {
   if (fileName === '_types.st') return 'data-type'
