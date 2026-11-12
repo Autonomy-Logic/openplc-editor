@@ -113,7 +113,10 @@ const ProjectLibrariesTab = ({ installed }: ProjectLibrariesTabProps) => {
             className='shrink-0 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs dark:border-yellow-700 dark:bg-yellow-950/40'
           >
             <span className='font-medium text-yellow-800 dark:text-yellow-200'>Missing libraries:</span>
-            <ul className='mt-1 flex flex-col gap-0.5 text-yellow-700 dark:text-yellow-300'>
+            <ul
+              data-testid='missing-libraries-list'
+              className='mt-1 flex max-h-32 flex-col gap-0.5 overflow-y-auto text-yellow-700 dark:text-yellow-300'
+            >
               {missingLibraries.map((m) => (
                 <li
                   key={m.name}
