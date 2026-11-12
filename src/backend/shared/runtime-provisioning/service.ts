@@ -106,6 +106,7 @@ interface RunContext {
 const START_COMMANDS: Record<StartTarget, DeviceCommand> = {
   'docker-and-bootloader': PROVISIONING_COMMANDS.startDockerAndBootloader,
   bootloader: PROVISIONING_COMMANDS.startBootloader,
+  'bootloader-restart': PROVISIONING_COMMANDS.restartBootloader,
   'runtime-container': PROVISIONING_COMMANDS.startRuntimeContainer,
   'native-service': PROVISIONING_COMMANDS.startNativeService,
 }

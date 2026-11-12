@@ -19,7 +19,10 @@ export interface RuntimeFacts {
 
 export type DeviceClass =
   | { kind: 'v3-present' }
-  | { kind: 'start'; target: 'docker-and-bootloader' | 'bootloader' | 'runtime-container' | 'native-service' }
+  | {
+      kind: 'start'
+      target: 'docker-and-bootloader' | 'bootloader' | 'bootloader-restart' | 'runtime-container' | 'native-service'
+    }
   | { kind: 'already-running' }
   | { kind: 'install' }
 
@@ -136,6 +139,7 @@ export function archSupport(
 function classifyContainerInstall(facts: RuntimeFacts): DeviceClass {
   if (facts.docker !== 'active') return { kind: 'start', target: 'docker-and-bootloader' }
   if (facts.bootloader === 'stopped') return { kind: 'start', target: 'bootloader' }
+  if (facts.runtimeContainer === 'absent') return { kind: 'start', target: 'bootloader-restart' }
   if (facts.runtimeContainer !== 'running') return { kind: 'start', target: 'runtime-container' }
   return { kind: 'already-running' }
 }

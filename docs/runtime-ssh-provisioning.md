@@ -44,9 +44,11 @@ console line and the audit entry are in the editor console before the dialog sho
 8. Depending on what was found:
    - start: `systemctl start docker` then `docker start openplc-bootloader`, or
      `docker start openplc-bootloader`, or `docker start openplc-runtime`, or
-     `systemctl start openplc-runtime.service`. A start command that fails ends the operation at once
-     with "Runtime start failed" and its last lines, which also go to the editor console. The editor does
-     not wait for 8443;
+     `systemctl start openplc-runtime.service`, or `docker restart openplc-bootloader` when the bootloader
+     runs and the runtime container is missing. The bootloader recreates the runtime container when it
+     starts, downloading the runtime image only when it is not on the device. A start command that fails
+     ends the operation at once with "Runtime start failed" and its last lines, which also go to the editor
+     console. The editor does not wait for 8443;
    - install: the official installer is downloaded from `https://runtime.getedge.me` over HTTPS only,
      with `--connect-timeout 20 --max-time 120`, into a fresh `mktemp -d` folder. A download that fails or
      passes either limit gives "No internet access". The installer is then run detached with `setsid`, so
@@ -111,7 +113,8 @@ No SSH login, command or download happens before consent.
 
 The offer dialog lists what will be done on the device:
 
-- If an OpenPLC Runtime is already installed but stopped, what is stopped is started.
+- If an OpenPLC Runtime is already installed but stopped, what is stopped is started. If the bootloader is
+  running but the runtime container is missing, the bootloader is restarted, which recreates the container.
 - Otherwise:
   - A script is downloaded from runtime.getedge.me and run as administrator.
   - Docker is installed when missing and enabled at boot.
@@ -299,6 +302,23 @@ an "OpenPLC Runtime v4" target addressed to the device.
   bootloader is created with `--restart always`, so after a reboot of the device or a restart of Docker
   both containers come back and the two commands must be run again. Expected result: the editor starts
   the bootloader, which starts the runtime, and the flow ends in the runtime login dialog.
+
+- **Container install, runtime container removed** (bootloader restart path): after an install, remove
+  the runtime container, then block the bootloader's port 8445:
+
+  ```sh
+  sudo docker rm -f openplc-runtime
+  sudo iptables -I INPUT -p tcp --dport 8445 -j DROP
+  ```
+
+  With 8445 answering, the bootloader reports `starting` once the runtime container is removed and Connect
+  shows "Bootloader busy" with no offer; blocking 8445 makes the editor go on to SSH. Expected result: the
+  editor restarts the bootloader, the bootloader recreates the runtime container, and the flow ends in the
+  runtime login dialog (the runtime's data, including its users, is kept). Afterwards remove the rule:
+
+  ```sh
+  sudo iptables -D INPUT -p tcp --dport 8445 -j DROP
+  ```
 
 - **Native v4 service stopped** (start path): uninstall the container install first, then build the
   runtime from source and stop its service:

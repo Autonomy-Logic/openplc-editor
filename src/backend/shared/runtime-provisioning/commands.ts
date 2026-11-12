@@ -76,6 +76,7 @@ export const PROVISIONING_COMMANDS: {
   inspectRuntime: DeviceCommand
   startDockerAndBootloader: DeviceCommand
   startBootloader: DeviceCommand
+  restartBootloader: DeviceCommand
   startRuntimeContainer: DeviceCommand
   startNativeService: DeviceCommand
   prepareInstaller: DeviceCommand
@@ -89,6 +90,7 @@ export const PROVISIONING_COMMANDS: {
     elevated: true,
   },
   startBootloader: { command: `docker start ${BOOTLOADER_CONTAINER}`, elevated: true },
+  restartBootloader: { command: `docker restart ${BOOTLOADER_CONTAINER}`, elevated: true },
   startRuntimeContainer: { command: `docker start ${RUNTIME_CONTAINER}`, elevated: true },
   startNativeService: { command: `systemctl start ${NATIVE_UNIT}`, elevated: true },
   prepareInstaller: { command: PREPARE_INSTALLER, elevated: true },

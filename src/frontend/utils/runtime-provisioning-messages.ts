@@ -32,7 +32,8 @@ export interface ProvisioningMessage {
 }
 
 export const WHAT_WILL_BE_DONE: { ifInstalled: string; install: readonly string[] } = {
-  ifInstalled: 'If an OpenPLC Runtime is already installed but stopped, what is stopped is started.',
+  ifInstalled:
+    'If an OpenPLC Runtime is already installed but stopped, what is stopped is started. If the bootloader is running but the runtime container is missing, the bootloader is restarted, which recreates the container.',
   install: [
     'A script is downloaded from runtime.getedge.me and run as administrator.',
     'Docker is installed when missing and enabled at boot.',
