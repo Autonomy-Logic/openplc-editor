@@ -242,10 +242,11 @@ const lineOfIndex = (content: string, index: number): number => {
  * The POU's declaration section and where its body starts.
  *
  * A closed section runs from the line of the first VAR-family keyword to the last `END_VAR`, kept
- * verbatim because it is written back to the file. A block that opens right after the header and
- * never reaches `END_VAR` is `unterminated`, runs from the first content after the header to
- * `unterminatedSectionEnd`, and carries the line of its keyword. `boundAtGraphicalBody` stops the `END_VAR` scan at the JSON body of a ladder
- * or FBD POU, for the reason spelled out on `findLastEndVarIndex`.
+ * verbatim because it is written back to the file. A block that never reaches `END_VAR`, whether it
+ * opens right after the header or follows a closed block, is `unterminated`, ends at
+ * `unterminatedSectionEnd` and carries the line of its keyword. `boundAtGraphicalBody` stops the
+ * `END_VAR` scan at the JSON body of a ladder or FBD POU, for the reason spelled out on
+ * `findLastEndVarIndex`.
  */
 export const extractVariablesSection = (
   content: string,
@@ -262,10 +263,20 @@ export const extractVariablesSection = (
     graphicalBodyStart === -1 ? undefined : graphicalBodyStart,
   )
   if (lastEndVarIndex !== -1) {
+    const trailingKeywordIndex = leadingVarKeywordIndex(content, lastEndVarIndex)
+    if (trailingKeywordIndex === -1) {
+      return {
+        kind: 'declared',
+        text: content.slice(declarationStartIndex(content, varStartIndex), lastEndVarIndex),
+        bodyStartIndex: lastEndVarIndex,
+      }
+    }
+    const trailingSectionEnd = unterminatedSectionEnd(content, trailingKeywordIndex, options)
     return {
-      kind: 'declared',
-      text: content.slice(declarationStartIndex(content, varStartIndex), lastEndVarIndex),
-      bodyStartIndex: lastEndVarIndex,
+      kind: 'unterminated',
+      text: content.slice(declarationStartIndex(content, varStartIndex), trailingSectionEnd).trimEnd(),
+      bodyStartIndex: trailingSectionEnd,
+      line: lineOfIndex(content, trailingKeywordIndex),
     }
   }
 

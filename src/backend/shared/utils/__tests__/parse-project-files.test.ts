@@ -1160,6 +1160,26 @@ describe('parseProjectFiles — a VAR block without END_VAR', () => {
     })
   })
 
+  it('keeps a closed block followed by an unclosed one out of the body, marked unparsed', () => {
+    const [pou] = parseOne(
+      'pous/programs/main.st',
+      'PROGRAM main\nVAR\n  x : INT;\nEND_VAR\nVAR_TEMP\n  y : INT;\n\nx := y;\nEND_PROGRAM\n',
+    ).projectData.pous
+
+    expect(pou.variablesTextUnparsed).toBe(true)
+    expect(pou.variablesText).toContain('VAR_TEMP\n  y : INT;')
+    expect(pou.body).toEqual({ language: 'st', value: '' })
+  })
+
+  it('reports the line of the unclosed second block in the warning', () => {
+    const result = parseOne(
+      'pous/programs/main.st',
+      'PROGRAM main\nVAR\n  x : INT;\nEND_VAR\nVAR_TEMP\n  y : INT;\n\nx := y;\nEND_PROGRAM\n',
+    )
+
+    expect(result.warnings?.[0]).toMatch(/Parse error on line 5: .*END_VAR/)
+  })
+
   it('keeps a comment written above an unterminated VAR in the variables text', () => {
     const [pou] = parseOne(
       'pous/programs/main.st',

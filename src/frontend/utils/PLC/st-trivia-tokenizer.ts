@@ -33,6 +33,11 @@ export function tokenizeStTriviaLine(line: string, state: StTriviaState): StTriv
     const last = tokens[tokens.length - 1]
     if (last && last.scope === scope) return
     if (last && last.startIndex === startIndex) {
+      const previous = tokens[tokens.length - 2]
+      if (previous && previous.scope === scope) {
+        tokens.pop()
+        return
+      }
       last.scope = scope
       return
     }
@@ -103,6 +108,7 @@ export function tokenizeStTriviaLine(line: string, state: StTriviaState): StTriv
     index += 1
   }
 
+  while (line.length > 0 && tokens.length > 0 && tokens[tokens.length - 1].startIndex >= line.length) tokens.pop()
   if (tokens.length === 0) tokens.push({ startIndex: 0, scope: 'source' })
   if (tokens[0].startIndex !== 0) tokens.unshift({ startIndex: 0, scope: 'source' })
 

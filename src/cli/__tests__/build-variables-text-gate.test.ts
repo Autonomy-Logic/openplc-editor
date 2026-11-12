@@ -65,7 +65,17 @@ function writeProject(mainSt: string): string {
 
 interface Outcome {
   exitCode: number
-  document: { ok?: boolean; error?: { code?: string; message?: string } }
+  document: { error?: { code?: string; message?: string } }
+}
+
+function documentOf(text: string): Outcome['document'] {
+  const parsed: unknown = JSON.parse(text)
+  if (typeof parsed !== 'object' || parsed === null || !('error' in parsed)) return {}
+  const error: unknown = parsed.error
+  if (typeof error !== 'object' || error === null) return {}
+  const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : undefined
+  return { error: { code, message } }
 }
 
 async function build(projectPath: string): Promise<Outcome> {
@@ -84,8 +94,7 @@ async function build(projectPath: string): Promise<Outcome> {
     reporter,
     { withUpload: false },
   )
-  const parsed: unknown = JSON.parse(out.join(''))
-  return { exitCode: result.exitCode, document: parsed as Outcome['document'] }
+  return { exitCode: result.exitCode, document: documentOf(out.join('')) }
 }
 
 let consoleSpy: ReturnType<typeof vi.spyOn>

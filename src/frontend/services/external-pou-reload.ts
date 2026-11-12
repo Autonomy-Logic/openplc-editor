@@ -4,6 +4,9 @@ import type { OpenPLCStore } from '../store'
 import { parseHybridPouFromString, parseTextualPouFromString } from '../utils/PLC/pou-text-parser'
 import { hasUnappliedVariablesText } from '../utils/save-project'
 
+/** What asked for the reload: a watcher that saw the file change, or an editor mounting. */
+export type ExternalReloadTrigger = 'file-change' | 'editor-mount'
+
 export type ExternalBodyReloadOutcome =
   | { kind: 'apply'; body: string }
   | { kind: 'unchanged' }
@@ -17,7 +20,7 @@ export type ExternalBodyReloadOutcome =
  */
 export async function resolveExternalBodyReload(
   store: OpenPLCStore,
-  projectPort: ProjectPort,
+  projectPort: Pick<ProjectPort, 'readFileContent'>,
   args: { pouName: string; filePath: string; language: 'st' | 'il' | 'python' | 'cpp'; pouType: PouType },
 ): Promise<ExternalBodyReloadOutcome> {
   const state = store.getState()
@@ -51,10 +54,15 @@ export async function resolveExternalBodyReload(
   return body === current ? { kind: 'unchanged' } : { kind: 'apply', body }
 }
 
-/** The warning a reload that did not happen should show, or `null` when there is nothing to say. */
+/**
+ * The warning a reload that did not happen should show, or `null` when there is nothing to say.
+ * An `editor-mount` trigger never warns: it observed no change, so the file it names is unchanged.
+ */
 export function externalReloadWarning(
   outcome: ExternalBodyReloadOutcome,
+  trigger: ExternalReloadTrigger,
 ): { title: string; description: string } | null {
+  if (trigger === 'editor-mount') return null
   if (outcome.kind === 'skip-unapplied-variables') {
     return {
       title: 'File not reloaded',

@@ -1,24 +1,14 @@
 import Toaster from '@root/frontend/components/_features/[app]/toast/toaster'
 import { Console } from '@root/frontend/components/_organisms/console'
 import type { OpenPLCStore } from '@root/frontend/store'
-import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
+import { createStoreWrapper, createTestPorts, createTestStore } from '@root/frontend/store/testing'
 import { getMemoryState, toast } from '@root/frontend/utils/toast'
 import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { WriteProjectFiles } from '@root/middleware/shared/ports/project-port'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
-import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 import { DefaultWorkspaceActivityBar } from '../default'
-
-function stubPort<T extends object>(overrides: Partial<NoInfer<T>> = {}): T {
-  return new Proxy(overrides as T, {
-    get(target, prop, receiver) {
-      if (prop in target) return Reflect.get(target, prop, receiver)
-      return typeof prop === 'string' ? () => undefined : undefined
-    },
-  })
-}
 
 const UNCLOSED = 'VAR\n  bFirstScan : BOOL := TRUE; (* Executado (* ciclo 1 *)\n  Q1 AT %QX0.0 : BOOL;'
 const FIXED = 'VAR\n  bFirstScan : BOOL := TRUE; (* Executado (* ciclo 1 *) *)\n  Q1 AT %QX0.0 : BOOL;\nEND_VAR'
@@ -125,28 +115,17 @@ function renderBar(options: { canEdit: boolean; withConsole?: boolean }) {
   workspaceActions.setCanEdit(options.canEdit)
   consoleActions.clearLogs()
 
-  const ports: PlatformPorts = {
-    compiler: stubPort({ compileProgram, compileForDebug, compileLibrary }),
-    runtime: stubPort(),
-    debugger: stubPort({
+  const ports = createTestPorts({
+    capabilities: EDITOR_CAPABILITIES,
+    compiler: { compileProgram, compileForDebug, compileLibrary },
+    debugger: {
       readProgramMd5: () => Promise.resolve({ success: true, md5: 'local-md5' }),
       connect: () => Promise.resolve({ success: true }),
       verifyMd5: () => Promise.resolve({ success: true, match: false, targetMd5: 'device-md5' }),
       disconnect: () => Promise.resolve({ success: true }),
-    }),
-    simulator: stubPort(),
-    project: stubPort({ saveProject }),
-    device: stubPort(),
-    orchestrator: stubPort(),
-    system: stubPort(),
-    window: stubPort(),
-    accelerator: stubPort(),
-    theme: stubPort(),
-    versionControl: stubPort(),
-    navigation: stubPort(),
-    library: stubPort(),
-    capabilities: EDITOR_CAPABILITIES,
-  }
+    },
+    project: { saveProject },
+  })
   render(
     <>
       <DefaultWorkspaceActivityBar />

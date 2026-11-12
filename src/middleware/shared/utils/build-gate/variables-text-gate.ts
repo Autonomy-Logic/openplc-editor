@@ -1,9 +1,3 @@
-/**
- * The rule that decides whether a project may be compiled while a POU's declaration text does not
- * parse. A decision function in the shape of `pre-build-plc-gate`: state in, verdict out, no store,
- * no toast, no IPC, so the four GUI compiles and the headless CLI refuse in the same words.
- */
-
 import { parseVariableDeclarations, type TypeContext } from '../../../../frontend/utils/PLC/variable-declarations'
 import { codeViewBuffer, type EditorLike } from '../../../../frontend/utils/save-project'
 import type { PLCPou } from '../../ports/types'
@@ -49,7 +43,11 @@ export function variablesTextGateStateFor(args: {
   return { entries, context: args.context }
 }
 
-/** The first entry that does not parse refuses the build; an entry the loader rejected always does. */
+/**
+ * Whether a project may be compiled while a POU's declaration text does not parse: state in,
+ * verdict out. The first entry that does not parse refuses the build; an entry the loader rejected
+ * always does.
+ */
 export function evaluateVariablesTextGate(state: VariablesTextGateState): VariablesTextGateVerdict {
   for (const entry of state.entries) {
     const [error] = parseVariableDeclarations(entry.text, state.context).errors

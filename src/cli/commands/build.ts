@@ -123,7 +123,6 @@ async function executeBuild(store: OpenPLCStore, request: BuildRequest, reporter
   const project = loaded.project
   for (const warning of project.warnings) reporter.progress(`warning: ${warning}`)
 
-  // The same gate the four GUI compile entries run, before the target lookup.
   {
     const state = store.getState()
     const verdict = evaluateVariablesTextGate(

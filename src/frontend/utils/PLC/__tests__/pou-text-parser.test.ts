@@ -175,6 +175,34 @@ END_PROGRAM`
     expect(() => parseTextualPouFromString(content, 'st', 'program')).toThrow(/Parse error on line 2: .*END_VAR/)
   })
 
+  it('reports a second declaration block without END_VAR as a parse error on its own line', () => {
+    const content = `PROGRAM Main
+VAR
+  x : INT;
+END_VAR
+VAR_TEMP
+  y : INT;
+
+x := y;
+END_PROGRAM`
+    expect(() => parseTextualPouFromString(content, 'st', 'program')).toThrow(/Parse error on line 5: .*END_VAR/)
+  })
+
+  it('keeps a closed declaration block that is followed only by body statements', () => {
+    const content = `PROGRAM Main
+VAR
+  x : INT;
+END_VAR
+
+x := 1;
+END_PROGRAM`
+
+    const result = parseTextualPouFromString(content, 'st', 'program')
+
+    expect(result.interface?.variables.map((variable) => variable.name)).toEqual(['x'])
+    expect(result.body.value).toBe('x := 1;')
+  })
+
   // -------------------------------------------------------------------------
   // Error cases
   // -------------------------------------------------------------------------

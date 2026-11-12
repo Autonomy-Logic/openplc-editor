@@ -1,5 +1,4 @@
 /** The rule a polling file watcher applies to tell a change made outside the app from its own. */
-
 export function shouldReportExternalChange(mtimes: {
   prevMtimeMs: number
   currMtimeMs: number

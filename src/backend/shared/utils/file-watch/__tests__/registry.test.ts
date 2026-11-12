@@ -1,4 +1,5 @@
-import { FileWatchRegistry, type FileWatchMechanisms } from '../file-watch-registry'
+import type { FileWatchMechanisms } from '../../../../../middleware/shared/ports/file-watch-mechanisms'
+import { canonicalWatchKey, FileWatchRegistry } from '../registry'
 
 type PollCallback = (curr: { mtimeMs: number }, prev: { mtimeMs: number }) => void
 
@@ -17,8 +18,8 @@ interface Harness {
   poll(path: string, previousMtimeMs: number): void
 }
 
-/** Windows-shaped canonicalisation: one key per file whatever the separator or case. */
-const canonicalPath = (path: string) => path.replace(/\\/g, '/').toLowerCase()
+/** Production folding on a Windows key, with the separator pass `path.resolve` runs there. */
+const canonicalPath = (path: string) => canonicalWatchKey(path.replace(/\\/g, '/'), 'win32')
 
 function harness(): Harness {
   const mtimes = new Map<string, number>()
@@ -96,6 +97,19 @@ describe.each([
     h.poll(changedFile, changedFile === MAIN ? 2000 : 1000)
 
     expect(h.emitted).toEqual([changedFile])
+  })
+})
+
+describe('canonicalWatchKey', () => {
+  it.each([
+    ['win32', 'C:/Proj/Pous/Main.st', 'c:/proj/pous/main.st'],
+    ['darwin', '/Users/J/Proj/Main.st', '/users/j/proj/main.st'],
+  ])('folds case on %s, where one file answers to either spelling', (platform, resolvedPath, expected) => {
+    expect(canonicalWatchKey(resolvedPath, platform)).toBe(expected)
+  })
+
+  it('keeps case on linux, where two spellings are two files', () => {
+    expect(canonicalWatchKey('/home/j/Proj/Main.st', 'linux')).toBe('/home/j/Proj/Main.st')
   })
 })
 

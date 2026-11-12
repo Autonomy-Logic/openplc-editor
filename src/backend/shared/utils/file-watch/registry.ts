@@ -1,14 +1,14 @@
-import { raiseRecordedMtime, shouldReportExternalChange } from '@root/backend/shared/utils/file-watch/own-write'
+import type { FileWatchMechanisms } from '../../../../middleware/shared/ports/file-watch-mechanisms'
+import { raiseRecordedMtime, shouldReportExternalChange } from './own-write'
 
-/** The platform mechanisms the registry drives. */
-export interface FileWatchMechanisms {
-  watchFile(path: string, onChange: (curr: { mtimeMs: number }, prev: { mtimeMs: number }) => void): void
-  unwatchFile(path: string): void
-  stat(path: string): Promise<{ mtimeMs: number }>
-  statSync(path: string): { mtimeMs: number }
-  /** One key per file, whatever separator or case the path arrives in. */
-  canonicalPath(path: string): string
-  emitExternalChange(rendererPath: string): void
+const CASE_INSENSITIVE_PLATFORMS = ['win32', 'darwin']
+
+/**
+ * The watch key of a path already resolved by the platform: folded to lower case where the file
+ * system is case-insensitive, so one file never takes two entries.
+ */
+export function canonicalWatchKey(resolvedPath: string, platform: string): string {
+  return CASE_INSENSITIVE_PLATFORMS.includes(platform) ? resolvedPath.toLowerCase() : resolvedPath
 }
 
 interface WatchEntry {
@@ -73,7 +73,7 @@ export class FileWatchRegistry {
         this.mechanisms.statSync(entry.rendererPath).mtimeMs,
       )
     } catch {
-      /* The file may have been removed between the write and this read. */
+      return
     }
   }
 

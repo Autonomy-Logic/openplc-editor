@@ -27,14 +27,16 @@ const CHANGED = ON_DISK.replace('marker := 1;', 'marker := 9;')
 
 let store: OpenPLCStore
 
-function portReturning(answer: { success: boolean; content?: string }): { port: ProjectPort; reads: string[] } {
+type ReadPort = Pick<ProjectPort, 'readFileContent'>
+
+function portReturning(answer: { success: boolean; content?: string }): { port: ReadPort; reads: string[] } {
   const reads: string[] = []
-  const port = {
+  const port: ReadPort = {
     readFileContent: (filePath: string) => {
       reads.push(filePath)
       return Promise.resolve(answer)
     },
-  } as unknown as ProjectPort
+  }
   return { port, reads }
 }
 
@@ -60,7 +62,7 @@ function seedMain(): void {
   })
 }
 
-const reload = (port: ProjectPort) =>
+const reload = (port: ReadPort) =>
   resolveExternalBodyReload(store, port, {
     pouName: 'main',
     filePath: FILE_PATH,
@@ -154,7 +156,7 @@ describe('externalReloadWarning', () => {
     ['parse-failed', { kind: 'parse-failed', filePath: FILE_PATH, message: 'Parse error on line 3: boom' }],
     ['skip-unapplied-variables', { kind: 'skip-unapplied-variables', filePath: FILE_PATH }],
   ] as const)('names the file and says the editor kept its content, for %s', (_label, outcome) => {
-    const warning = externalReloadWarning(outcome)
+    const warning = externalReloadWarning(outcome, 'file-change')
 
     expect(warning).not.toBeNull()
     expect(warning?.title).toBe('File not reloaded')
@@ -163,18 +165,21 @@ describe('externalReloadWarning', () => {
   })
 
   it('carries the parse message in the description', () => {
-    const warning = externalReloadWarning({
-      kind: 'parse-failed',
-      filePath: FILE_PATH,
-      message: 'Parse error on line 3: boom',
-    })
+    const warning = externalReloadWarning(
+      {
+        kind: 'parse-failed',
+        filePath: FILE_PATH,
+        message: 'Parse error on line 3: boom',
+      },
+      'file-change',
+    )
 
     expect(warning?.description).toContain('Parse error on line 3: boom')
   })
 
   it('returns markup from the parse message verbatim, as a string', () => {
     const markup = '<img src=x onerror=alert(1)>'
-    const warning = externalReloadWarning({ kind: 'parse-failed', filePath: FILE_PATH, message: markup })
+    const warning = externalReloadWarning({ kind: 'parse-failed', filePath: FILE_PATH, message: markup }, 'file-change')
 
     expect(warning?.description).toContain(markup)
   })
@@ -184,6 +189,15 @@ describe('externalReloadWarning', () => {
     ['unchanged', { kind: 'unchanged' }],
     ['read-failed', { kind: 'read-failed', filePath: FILE_PATH }],
   ] as const)('has nothing to warn about for %s', (_label, outcome) => {
-    expect(externalReloadWarning(outcome)).toBeNull()
+    expect(externalReloadWarning(outcome, 'file-change')).toBeNull()
+  })
+
+  it.each([
+    ['parse-failed', { kind: 'parse-failed', filePath: FILE_PATH, message: 'Parse error on line 3: boom' }],
+    ['skip-unapplied-variables', { kind: 'skip-unapplied-variables', filePath: FILE_PATH }],
+    ['read-failed', { kind: 'read-failed', filePath: FILE_PATH }],
+    ['unchanged', { kind: 'unchanged' }],
+  ] as const)('stays silent on editor-mount, where no change was seen, for %s', (_label, outcome) => {
+    expect(externalReloadWarning(outcome, 'editor-mount')).toBeNull()
   })
 })

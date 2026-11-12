@@ -358,7 +358,7 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
           runWithoutDirtying(isSyncingModelRef, () => updatePou({ name, content: { language, value: outcome.body } }))
         }
 
-        const warning = externalReloadWarning(outcome)
+        const warning = externalReloadWarning(outcome, 'file-change')
         if (warning) {
           toast({ title: warning.title, description: warning.description, variant: 'warn' })
         }
@@ -850,11 +850,10 @@ const MonacoEditor = (props: monacoEditorProps): ReturnType<typeof PrimitiveEdit
 
           if (outcome.kind === 'apply') {
             setLocalText(outcome.body)
-            // Same as `reloadFromDisk`: the body came from disk, not from the user.
             runWithoutDirtying(isSyncingModelRef, () => updatePou({ name, content: { language, value: outcome.body } }))
           }
 
-          const warning = externalReloadWarning(outcome)
+          const warning = externalReloadWarning(outcome, 'editor-mount')
           if (warning) {
             toast({ title: warning.title, description: warning.description, variant: 'warn' })
           }

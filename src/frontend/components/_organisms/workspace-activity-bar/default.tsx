@@ -773,7 +773,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     canEdit,
     executeSave,
     refusedForVariablesText,
-    refusedForVariablesText,
     requestConsoleFollow,
   ])
 

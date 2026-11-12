@@ -139,6 +139,25 @@ describe('tokenizeStTriviaLine token shape', () => {
     }
   })
 
+  it('ends no token at or past the end of the line', () => {
+    const line = "s := 'a'"
+    const { tokens } = tokenizeStTriviaLine(line, INITIAL)
+
+    expect(tokens.every((token) => token.startIndex < line.length)).toBe(true)
+  })
+
+  it('merges two comments that touch into one token', () => {
+    const { tokens } = tokenizeStTriviaLine('(* a *)(* b *)', INITIAL)
+
+    expect(tokens).toEqual([{ startIndex: 0, scope: 'comment' }])
+  })
+
+  it('merges a string that touches the one before it', () => {
+    const { tokens } = tokenizeStTriviaLine("'a''b'", INITIAL)
+
+    expect(tokens).toEqual([{ startIndex: 0, scope: 'string' }])
+  })
+
   it('gives an empty line one source token', () => {
     expect(tokenizeStTriviaLine('', INITIAL).tokens).toEqual([{ startIndex: 0, scope: 'source' }])
   })

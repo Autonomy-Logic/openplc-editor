@@ -74,6 +74,7 @@ import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/l
 import type { SnapshotMetadata } from '@root/backend/shared/project/project-snapshot-archive'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
+import { canonicalWatchKey, FileWatchRegistry } from '@root/backend/shared/utils/file-watch/registry'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import type { CompileProgramIpcArgs } from '@root/middleware/adapters/editor/compile-program-flow'
 import type { CompileLibraryIpcArgs } from '@root/middleware/adapters/editor/compiler-adapter'
@@ -174,7 +175,6 @@ import {
   type PluginCommandOutcome,
 } from '../../../backend/shared/utils/vpp/screen-actions'
 import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
-import { FileWatchRegistry } from './file-watch-registry'
 
 const EditSessionClientSchema = z.object({
   kind: z.literal('desktop'),
@@ -323,7 +323,7 @@ class MainProcessBridge implements MainIpcModule {
     stat: (filePath) =>
       new Promise((res, rej) => stat(filePath, (err, stats) => (err ? rej(err) : res({ mtimeMs: stats.mtimeMs })))),
     statSync: (filePath) => ({ mtimeMs: statSync(filePath).mtimeMs }),
-    canonicalPath: (filePath) => resolve(filePath),
+    canonicalPath: (filePath) => canonicalWatchKey(resolve(filePath), process.platform),
     emitExternalChange: (filePath) => this.mainWindow?.webContents.send('file:external-change', { filePath }),
   })
   // avr8js ATmega2560 emulator instance for the built-in simulator
