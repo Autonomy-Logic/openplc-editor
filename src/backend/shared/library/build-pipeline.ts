@@ -470,10 +470,32 @@ function configurationGlobalsSection(configSt: string): string | null {
   return lines.slice(first, last + 1).join('\n') + '\n'
 }
 
-interface ExportedSymbols {
-  functions?: Array<{ name: string }>
-  functionBlocks?: Array<{ name: string }>
-  globals?: Array<{ name: string }>
+type ExportListKey = 'functions' | 'functionBlocks' | 'globals'
+
+type ArchivePart = 'archive' | 'manifest' | `manifest.${ExportListKey}`
+
+interface ExportedSymbol {
+  name: string
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isExportedSymbol(value: unknown): value is ExportedSymbol {
+  return isRecord(value) && typeof value.name === 'string'
+}
+
+function readExportList(value: unknown): ExportedSymbol[] | null {
+  if (value === undefined) return []
+  if (!Array.isArray(value) || !value.every(isExportedSymbol)) return null
+  return value
+}
+
+function malformedArchivePart(part: ArchivePart): CompileStlibError {
+  return {
+    message: `Library build refused: the built library has a malformed "${part}", so its exports cannot be checked.`,
+  }
 }
 
 function undeclaredExports(
@@ -481,8 +503,10 @@ function undeclaredExports(
   knownPous: KnownPou[],
   aux: LibraryBuildAux | undefined,
 ): CompileStlibError[] {
-  const exported = (archive as { manifest?: ExportedSymbols }).manifest
-  if (!exported) return []
+  if (!isRecord(archive)) return [malformedArchivePart('archive')]
+  const exported = archive.manifest
+  if (exported === undefined) return []
+  if (!isRecord(exported)) return [malformedArchivePart('manifest')]
 
   const declaredPous = new Set([
     ...knownPous.filter((pou) => pou.name !== STUB_PROGRAM_NAME).map((pou) => pou.name.toLowerCase()),
@@ -490,18 +514,28 @@ function undeclaredExports(
   ])
   const declaredGlobals = new Set((aux?.declaredGlobals ?? []).map((name) => name.toLowerCase()))
 
-  const checks: Array<[string, Array<{ name: string }> | undefined, Set<string>]> = [
-    ['function', exported.functions, declaredPous],
-    ['function block', exported.functionBlocks, declaredPous],
-    ['global', exported.globals, declaredGlobals],
+  const checks: Array<[ExportListKey, string, Set<string>]> = [
+    ['functions', 'function', declaredPous],
+    ['functionBlocks', 'function block', declaredPous],
+    ['globals', 'global', declaredGlobals],
   ]
-  return checks.flatMap(([kind, entries, declared]) =>
-    (entries ?? [])
-      .filter((entry) => !declared.has(entry.name.toLowerCase()))
-      .map((entry) => ({
-        message: `Library build refused: the built library would export the ${kind} "${entry.name}", which the library project does not declare.`,
-      })),
-  )
+  const malformed: CompileStlibError[] = []
+  const refused: CompileStlibError[] = []
+  for (const [key, kind, declared] of checks) {
+    const entries = readExportList(exported[key])
+    if (entries === null) {
+      malformed.push(malformedArchivePart(`manifest.${key}`))
+      continue
+    }
+    refused.push(
+      ...entries
+        .filter((entry) => !declared.has(entry.name.toLowerCase()))
+        .map((entry) => ({
+          message: `Library build refused: the built library would export the ${kind} "${entry.name}", which the library project does not declare.`,
+        })),
+    )
+  }
+  return malformed.length > 0 ? malformed : refused
 }
 
 /**
