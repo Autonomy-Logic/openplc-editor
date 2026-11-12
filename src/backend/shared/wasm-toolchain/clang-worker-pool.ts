@@ -77,17 +77,23 @@ interface Running extends Queued {
   timer: Timer
 }
 
+/** Where a worker is in its life: loading the toolchain, waiting for a job, running one, or out of the pool. */
+type SlotState =
+  | { kind: 'loading'; loadTimer: Timer }
+  | { kind: 'idle' }
+  | { kind: 'busy'; running: Running }
+  | { kind: 'failed' }
+
 interface Slot {
   handle: ClangWorkerHandle
   /** Settles once the worker has loaded, or with the reason it never will. */
   ready: Promise<void>
   markReady: () => void
   markFailed: (error: Error) => void
-  loaded: boolean
-  failed: boolean
-  running: Running | null
-  loadTimer: Timer | null
+  state: SlotState
 }
+
+const isLoaded = (slot: Slot): boolean => slot.state.kind === 'idle' || slot.state.kind === 'busy'
 
 const seconds = (ms: number): string => `${Math.round(ms / 1000)} s`
 
@@ -159,12 +165,12 @@ export class ClangWorkerPool implements WasmClangRunner {
   private dispatch(): void {
     for (const slot of this.slots) {
       if (this.queue.length === 0) return
-      if (slot.loaded && !slot.failed && slot.running === null) {
+      if (slot.state.kind === 'idle') {
         const next = this.queue.shift()
         if (next) this.hand(slot, next)
       }
     }
-    const loading = this.slots.filter((s) => !s.loaded && !s.failed).length
+    const loading = this.slots.filter((s) => s.state.kind === 'loading').length
     let missing = Math.min(this.queue.length - loading, this.concurrency - this.slots.length)
     for (; missing > 0; missing--) {
       try {
@@ -187,13 +193,13 @@ export class ClangWorkerPool implements WasmClangRunner {
       () => this.fail(slot, `a job ran longer than ${seconds(this.jobDeadlineMs)}`),
       this.jobDeadlineMs,
     )
-    slot.running = { ...queued, id, timer }
+    slot.state = { kind: 'busy', running: { ...queued, id, timer } }
     slot.handle.setBusy?.(true)
     try {
       slot.handle.post({ id, argv: queued.job.argv, tree: queued.job.tree })
     } catch (error) {
       clearTimeout(timer)
-      slot.running = null
+      if (slot.state.kind === 'busy') slot.state = { kind: 'idle' }
       slot.handle.setBusy?.(false)
       queued.reject(error instanceof Error ? error : new Error(String(error)))
       this.dispatch()
@@ -210,37 +216,28 @@ export class ClangWorkerPool implements WasmClangRunner {
       markFailed = reject
     })
     ready.catch(() => undefined)
-    const slot: Slot = {
-      handle,
-      ready,
-      markReady,
-      markFailed,
-      loaded: false,
-      failed: false,
-      running: null,
-      loadTimer: null,
-    }
-    this.slots.push(slot)
-    slot.loadTimer = setTimeout(
+    const loadTimer = setTimeout(
       () => this.fail(slot, `it did not load within ${seconds(this.loadDeadlineMs)}`),
       this.loadDeadlineMs,
     )
+    const slot: Slot = { handle, ready, markReady, markFailed, state: { kind: 'loading', loadTimer } }
+    this.slots.push(slot)
 
     handle.onMessage((raw) => {
       const reply = parseClangWorkerReply(raw)
-      if (!reply || slot.failed) return
+      if (!reply) return
       if (reply.type === 'ready') {
-        if (slot.loadTimer) clearTimeout(slot.loadTimer)
-        slot.loadTimer = null
-        slot.loaded = true
+        if (slot.state.kind !== 'loading') return
+        clearTimeout(slot.state.loadTimer)
+        slot.state = { kind: 'idle' }
         slot.markReady()
         this.dispatch()
         return
       }
-      const running = slot.running
-      if (!running || running.id !== reply.id) return
+      if (slot.state.kind !== 'busy' || slot.state.running.id !== reply.id) return
+      const running = slot.state.running
       clearTimeout(running.timer)
-      slot.running = null
+      slot.state = { kind: 'idle' }
       slot.handle.setBusy?.(false)
       if (reply.type === 'result') running.resolve(reply.result)
       else running.reject(new Error(reply.message))
@@ -256,28 +253,39 @@ export class ClangWorkerPool implements WasmClangRunner {
    * loaded worker is left, the waiting jobs fail as well instead of starting workers that would fail the same way.
    */
   private fail(slot: Slot, reason: string): void {
-    if (slot.failed) return
+    if (slot.state.kind === 'failed') return
     const error = new Error(`The compiler worker stopped (${reason}).`)
-    const wasLoaded = slot.loaded
+    const wasLoaded = isLoaded(slot)
     this.settle(slot, error)
     this.slots = this.slots.filter((s) => s !== slot)
     void Promise.resolve(slot.handle.terminate()).catch(() => undefined)
-    if (!wasLoaded && !this.slots.some((s) => s.loaded)) {
+    if (!wasLoaded && !this.slots.some(isLoaded)) {
       for (const waiting of this.queue.splice(0)) waiting.reject(error)
       return
     }
     this.dispatch()
   }
 
+  /** Marks a worker failed, stops its timer and fails the job it held. */
   private settle(slot: Slot, error: Error): void {
-    slot.failed = true
-    if (slot.loadTimer) clearTimeout(slot.loadTimer)
-    slot.loadTimer = null
+    const previous = slot.state
+    slot.state = { kind: 'failed' }
     slot.markFailed(error)
-    if (slot.running) {
-      clearTimeout(slot.running.timer)
-      slot.running.reject(error)
-      slot.running = null
+    switch (previous.kind) {
+      case 'loading':
+        clearTimeout(previous.loadTimer)
+        return
+      case 'busy':
+        clearTimeout(previous.running.timer)
+        previous.running.reject(error)
+        return
+      case 'idle':
+      case 'failed':
+        return
+      default: {
+        const unreachable: never = previous
+        return unreachable
+      }
     }
   }
 }
