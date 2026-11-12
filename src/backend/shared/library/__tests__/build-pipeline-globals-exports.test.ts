@@ -265,14 +265,14 @@ describe('libraryBuildFromTranspiledSt: undeclared exports', () => {
   ]
 
   const buildWithManifest = (
-    exported: Record<string, unknown> | undefined,
+    exported: Record<string, unknown>,
     aux?: AuxWithDeclaredGlobals,
     build: { programSt: string; knownPous: Parameters<typeof libraryBuildFromTranspiledSt>[1] } = {
       programSt,
       knownPous,
     },
   ) => {
-    const archive = exported === undefined ? { kind: 'no-manifest' } : { manifest: exported, dependencies: [] }
+    const archive = { manifest: exported, dependencies: [] }
     compileStlibMock.mockReturnValue({ success: true, archive })
     return { archive, result: libraryBuildFromTranspiledSt(build.programSt, build.knownPous, LIB_MANIFEST, aux) }
   }
@@ -356,12 +356,6 @@ describe('libraryBuildFromTranspiledSt: undeclared exports', () => {
 
     expect(result.errors).toEqual([])
     expect(result.success).toBe(true)
-  })
-
-  it('treats an archive without a manifest as exporting nothing', () => {
-    const { archive, result } = buildWithManifest(undefined)
-
-    expect(result).toEqual({ success: true, archive, errors: [] })
   })
 
   it('forwards only the strucpp errors when the compile itself fails', () => {
@@ -520,6 +514,21 @@ describe('libraryBuildFromTranspiledSt: malformed archive manifest', () => {
       rule: 'the archive is a string',
       archive: 'blob',
       expected: [malformed('archive')],
+    },
+    {
+      rule: 'the archive has no manifest key',
+      archive: { dependencies: [] },
+      expected: [malformed('manifest')],
+    },
+    {
+      rule: 'the manifest is undefined',
+      archive: withManifest(undefined),
+      expected: [malformed('manifest')],
+    },
+    {
+      rule: 'the archive is an empty object',
+      archive: {},
+      expected: [malformed('manifest')],
     },
   ])('refuses the build without throwing when $rule', ({ archive, expected }) => {
     const build = buildFor(archive)

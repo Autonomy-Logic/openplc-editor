@@ -427,7 +427,7 @@ describe('libraryBuildFromTranspiledSt', () => {
   })
 
   it('drops the stub program file and forwards the remaining POUs to compileStlib', () => {
-    const compileStlib = jest.fn().mockReturnValue({ success: true, archive: { kind: 'fake' } })
+    const compileStlib = jest.fn().mockReturnValue({ success: true, archive: { manifest: {}, dependencies: [] } })
     const strucpp = makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] })
     __setStrucppRuntimeForTests(strucpp)
 
@@ -446,7 +446,7 @@ describe('libraryBuildFromTranspiledSt', () => {
     )
 
     expect(res.success).toBe(true)
-    expect(res.archive).toEqual({ kind: 'fake' })
+    expect(res.archive).toEqual({ manifest: {}, dependencies: [] })
     expect(res.errors).toEqual([])
 
     const [sources, opts] = compileStlib.mock.calls[0]
@@ -776,9 +776,10 @@ describe('libraryBuildFromTranspiledSt', () => {
   it('coerces a missing strucpp errors field to an empty array', () => {
     __setStrucppRuntimeForTests(
       makeStrucppStub({
-        compileStlib: jest
-          .fn()
-          .mockReturnValue({ success: true, archive: {} }) as unknown as StrucppRuntime['compileStlib'],
+        compileStlib: jest.fn().mockReturnValue({
+          success: true,
+          archive: { manifest: {}, dependencies: [] },
+        }) as unknown as StrucppRuntime['compileStlib'],
       }),
     )
 
