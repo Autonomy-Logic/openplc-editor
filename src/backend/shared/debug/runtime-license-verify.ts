@@ -12,6 +12,8 @@
  * browser. Byte-identical with openplc-web.
  */
 
+import { RUNTIME_LICENSE_PRODUCT_ID } from '@root/middleware/shared/utils/licensing/runtime-license-sync'
+
 import { deriveVppIdBytes } from '../license/device-identity'
 import {
   bytesEqual,
@@ -23,9 +25,6 @@ import {
   LIC_MAGIC_LE,
   LIC_PAYLOAD_SIZE,
 } from './license-blob'
-
-/** Product the runtime licence is issued for. */
-export const RUNTIME_LICENSE_PRODUCT = 'com.autonomy.openplc-runtime'
 
 /** Blob format this verifier understands (`fmtVersion`). */
 const RUNTIME_LICENSE_FORMAT = 1
@@ -97,7 +96,7 @@ export async function verifyRuntimeLicenseBlob(
   if (parsed.magic !== LIC_MAGIC_LE) return { ok: false, reason: 'not-a-license' }
   if (parsed.fmtVersion !== RUNTIME_LICENSE_FORMAT) return { ok: false, reason: 'format' }
   if (!bytesEqual(parsed.deviceId, deviceId)) return { ok: false, reason: 'other-device' }
-  if (!bytesEqual(parsed.productId, await deriveProductIdBytes(RUNTIME_LICENSE_PRODUCT))) {
+  if (!bytesEqual(parsed.productId, await deriveProductIdBytes(RUNTIME_LICENSE_PRODUCT_ID))) {
     return { ok: false, reason: 'other-product' }
   }
 

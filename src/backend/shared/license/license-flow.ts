@@ -182,12 +182,18 @@ export function checkLicenseBlobStructure(
   return { ok: true, blob }
 }
 
-/** Resolve a board's licence: verify the stored one, else recover it from Edge, write it and re-verify. */
+/**
+ * Resolve a board's licence: verify the stored one, else recover it from Edge, write it and re-verify.
+ * For the runtime product, a licence that cannot be confirmed ends as `unlicensed`.
+ */
 export async function resolveDeviceLicense(
   transport: LicenseReadWritable,
   input: DeviceLicenseInput,
   activate: DeviceActivation,
 ): Promise<DeviceLicenseReport> {
+  if (input.runtimeKeys && input.identity.anchor.length === 0) {
+    return { outcome: { state: 'unlicensed', entitlementChecked: false, detail: 'This board reports no device ID.' } }
+  }
   const identity = await deriveIdentity(input.identity)
   if ('outcome' in identity) return identity
   const { deviceId } = identity
@@ -282,30 +288,32 @@ async function readAndVerify(
   return { kind: 'absent' }
 }
 
-/** Asks the backend for a licence and writes it, then reads it back and verifies it. */
+/** Asks the backend for a licence, verifies it and writes it; a runtime licence that cannot be verified ends as unlicensed. */
 async function recoverLicense(
   transport: LicenseReadWritable,
   input: { deviceId: string; packageId: string; runtimeKeys?: RuntimeLicenseKeys },
   activate: DeviceActivation,
 ): Promise<DeviceLicenseReport> {
   const { deviceId, packageId } = input
+  const notConfirmed = (error: string): DeviceLicenseReport =>
+    input.runtimeKeys
+      ? { deviceId, outcome: { state: 'unlicensed', entitlementChecked: false, detail: error } }
+      : { deviceId, outcome: { state: 'check-failed', error } }
+
   const activation = await activate({ deviceId, packageId })
 
   if (!activation.licensed) {
-    if (activation.error) {
-      return { deviceId, outcome: { state: 'check-failed', error: activation.error } }
-    }
+    if (activation.error) return notConfirmed(activation.error)
     return { deviceId, outcome: { state: 'unlicensed', entitlementChecked: true, backendReason: activation.reason } }
   }
 
-  if (!activation.license) {
-    return {
-      deviceId,
-      outcome: { state: 'check-failed', error: 'The license server reported a license but sent no license data.' },
-    }
-  }
+  if (!activation.license) return notConfirmed('The license server reported a license but sent no license data.')
 
-  const write = await transport.writeLicense(Uint8Array.from(activation.license))
+  const license = Uint8Array.from(activation.license)
+  const offered = await verifyBlobFor(license, deviceId, input)
+  if (!offered.ok) return notConfirmed(`The license server sent a license that does not verify. ${offered.reason}`)
+
+  const write = await transport.writeLicense(license)
 
   if (write.unsupported) {
     return { deviceId, outcome: { state: 'unsupported' } }
@@ -335,13 +343,7 @@ async function recoverLicense(
   )
   if (verdict.ok) return { deviceId, outcome: { state: 'licensed', how: 'activated' } }
 
-  return {
-    deviceId,
-    outcome: {
-      state: 'check-failed',
-      error: `The license was written but could not be confirmed on the device. ${verdict.reason}`,
-    },
-  }
+  return notConfirmed(`The license was written but could not be confirmed on the device. ${verdict.reason}`)
 }
 
 function errorMessage(error: unknown): string {

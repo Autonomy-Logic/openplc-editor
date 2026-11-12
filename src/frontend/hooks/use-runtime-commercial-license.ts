@@ -160,6 +160,8 @@ export function useRuntimeCommercialLicenseOwner(): void {
     deviceActions.setBoardRuntimeLicense({ deviceId: report.deviceId ?? null, license: boardRuntimeLicense(outcome) })
     if (outcome.state === 'check-failed') {
       consoleActions.addLog({ level: 'debug', message: `Runtime license check skipped: ${outcome.error}` })
+    } else if (outcome.state === 'unlicensed' && outcome.detail) {
+      consoleActions.addLog({ level: 'debug', message: `Runtime license not confirmed: ${outcome.detail}` })
     } else if (outcome.state === 'licensed' && outcome.how === 'activated') {
       consoleActions.addLog({ level: 'info', message: 'Commercial runtime license installed on the board.' })
     }

@@ -108,7 +108,7 @@ export type DeviceLicenseState =
    *               paid to pay again is the worst outcome this union exists to
    *               prevent.
    */
-  | { state: 'unlicensed'; entitlementChecked: boolean; backendReason?: string }
+  | { state: 'unlicensed'; entitlementChecked: boolean; backendReason?: string; detail?: string }
   /**
    * The running firmware reports no licence storage.
    *

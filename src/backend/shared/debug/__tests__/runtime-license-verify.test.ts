@@ -3,18 +3,21 @@
  */
 import { createHash, generateKeyPairSync, type KeyObject, sign } from 'node:crypto'
 
+import { RUNTIME_LICENSE_PRODUCT_ID } from '@root/middleware/shared/utils/licensing/runtime-license-sync'
+
 import { LIC_PAYLOAD_SIZE, serializeLicenseBlob } from '../license-blob'
 import {
   deriveProductIdBytes,
   parseRuntimeLicenseDevKey,
-  RUNTIME_LICENSE_PRODUCT,
   RUNTIME_LICENSE_TRUSTED_KEYS,
   runtimeLicenseKeys,
   verifyRuntimeLicenseBlob,
 } from '../runtime-license-verify'
 
 const DEVICE_ID = Uint8Array.from({ length: 16 }, (_, i) => 0x10 + i)
-const RUNTIME_PRODUCT_ID = Uint8Array.from(createHash('sha256').update(RUNTIME_LICENSE_PRODUCT).digest().subarray(0, 8))
+const RUNTIME_PRODUCT_ID = Uint8Array.from(
+  createHash('sha256').update(RUNTIME_LICENSE_PRODUCT_ID).digest().subarray(0, 8),
+)
 
 function rawPublicKeyHex(publicKey: KeyObject): string {
   const jwk = publicKey.export({ format: 'jwk' })
@@ -75,7 +78,7 @@ describe('verifyRuntimeLicenseBlob', () => {
   })
 
   it('derives the runtime product ID as sha256(product)[:8]', async () => {
-    expect(Array.from(await deriveProductIdBytes(RUNTIME_LICENSE_PRODUCT))).toEqual(Array.from(RUNTIME_PRODUCT_ID))
+    expect(Array.from(await deriveProductIdBytes(RUNTIME_LICENSE_PRODUCT_ID))).toEqual(Array.from(RUNTIME_PRODUCT_ID))
   })
 
   it('refuses a licence for another board', async () => {

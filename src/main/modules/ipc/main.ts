@@ -123,6 +123,7 @@ import {
   type RuntimeCommercialLicense,
   syncRuntimeLicenses,
 } from '@root/middleware/shared/utils/licensing'
+import { RUNTIME_LICENSE_PRODUCT_ID } from '@root/middleware/shared/utils/licensing/runtime-license-sync'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
@@ -165,11 +166,7 @@ import {
   getPlcopenImportFilePath,
   getProjectPath,
 } from '../../../backend/editor/utils'
-import {
-  parseRuntimeLicenseDevKey,
-  RUNTIME_LICENSE_PRODUCT,
-  runtimeLicenseKeys,
-} from '../../../backend/shared/debug/runtime-license-verify'
+import { parseRuntimeLicenseDevKey, runtimeLicenseKeys } from '../../../backend/shared/debug/runtime-license-verify'
 import {
   BoardBackupHolder,
   restoreBoardLicence,
@@ -204,7 +201,7 @@ const licenseField = (license: RuntimeCommercialLicense | undefined) => (license
 
 /** A request for the runtime product verifies the stored licence in full; `OPENPLC_RUNTIME_LICENSE_DEV_KEY` adds a key. */
 const licenseInput = (request: DeviceLicenseRequest) =>
-  request.packageId === RUNTIME_LICENSE_PRODUCT
+  request.packageId === RUNTIME_LICENSE_PRODUCT_ID
     ? {
         ...request,
         runtimeKeys: runtimeLicenseKeys(parseRuntimeLicenseDevKey(process.env.OPENPLC_RUNTIME_LICENSE_DEV_KEY)),
