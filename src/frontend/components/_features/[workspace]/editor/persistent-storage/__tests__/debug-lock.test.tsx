@@ -1,7 +1,3 @@
-/**
- * The Persistent Storage screen owns no control a debug session keeps
- * available, so the editor host locks it whole through EditingLockBoundary.
- */
 import { EditingLockBoundary } from '@root/frontend/components/_molecules/editing-lock-boundary'
 import type { OpenPLCStore } from '@root/frontend/store'
 import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'

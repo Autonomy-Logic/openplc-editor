@@ -1,8 +1,5 @@
 /**
- * DOPE-670 - the debug-mode lock, end to end, through the test-only seam.
- *
- * Covers TC01 to TC04 (the ladder toolbox sources and the rung actions), TC24 and
- * TC25 (the online frame) and TC26 (every control comes back) in the desktop build.
+ * The debug-mode lock in the desktop build, driven through the test-only seam.
  *
  * Needs a production build made with OPENPLC_E2E_DEBUG_SEAM=1, as the seam is
  * absent from a plain build; see "Electron e2e" in CLAUDE.md.
@@ -156,7 +153,6 @@ test.describe('the debug-mode lock through the test-only seam', () => {
       await expect(createRung).toBeEnabled()
       await expect(frame).toHaveCount(0)
     } finally {
-      // `app.close()` hangs with a project open: the quit confirmation holds it.
       app.process().kill('SIGKILL')
     }
   })

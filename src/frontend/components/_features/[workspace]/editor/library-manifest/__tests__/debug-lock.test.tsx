@@ -1,7 +1,6 @@
 import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import { act, render, screen } from '@testing-library/react'
 
-// Monaco cannot run in jsdom; the stub publishes the options the editor asks for.
 vi.mock('@monaco-editor/react', () => {
   const MonacoStub = ({ options }: { options?: { readOnly?: boolean } }) => (
     <div data-testid='monaco-stub' data-read-only={options?.readOnly === true ? 'true' : 'false'} />

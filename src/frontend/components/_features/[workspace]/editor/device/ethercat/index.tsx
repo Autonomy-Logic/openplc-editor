@@ -5,6 +5,7 @@ import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-da
 import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
+import { useIsEditingLocked } from '@root/frontend/hooks/use-editing-lock'
 import type { OpenPLCStore } from '@root/frontend/store'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { elementNameCollision } from '@root/frontend/store/slices/shared/name-collision'
@@ -119,6 +120,7 @@ const EtherCATEditor = () => {
   } = useOpenPLCStore()
   const runtime = useRuntime()
   const esi = useEsi()
+  const isEditingLocked = useIsEditingLocked()
 
   const deviceName = editor.type === 'plc-remote-device' ? editor.meta.name : ''
   const projectPath = project.meta.path
@@ -168,17 +170,19 @@ const EtherCATEditor = () => {
 
   const syncDevicesToStore = useCallback(
     (devices: ConfiguredEtherCATDevice[]) => {
+      if (isEditingLocked) return
       projectActions.updateEthercatConfig(deviceName, {
         masterConfig: readEthercatConfig()?.masterConfig ?? masterConfig,
         devices,
       })
       workspaceActions.setEditingState('unsaved')
     },
-    [deviceName, projectActions, readEthercatConfig, masterConfig, workspaceActions],
+    [deviceName, projectActions, readEthercatConfig, masterConfig, workspaceActions, isEditingLocked],
   )
 
   const handleUpdateMasterConfig = useCallback(
     (updates: Partial<EtherCATMasterConfig>) => {
+      if (isEditingLocked) return
       const newMasterConfig = { ...masterConfig, ...updates }
       projectActions.updateEthercatConfig(deviceName, {
         masterConfig: newMasterConfig,
@@ -186,7 +190,7 @@ const EtherCATEditor = () => {
       })
       workspaceActions.setEditingState('unsaved')
     },
-    [deviceName, projectActions, masterConfig, configuredDevices, workspaceActions],
+    [deviceName, projectActions, masterConfig, configuredDevices, workspaceActions, isEditingLocked],
   )
 
   // Network interfaces state
@@ -280,7 +284,7 @@ const EtherCATEditor = () => {
         if (fetchedInterfaces.length > 0) {
           _setSelectedInterface((prev) => {
             const next = prev && names.has(prev) ? prev : fetchedInterfaces[0].name
-            handleUpdateMasterConfig({ networkInterface: next })
+            if (next !== masterConfig.networkInterface) handleUpdateMasterConfig({ networkInterface: next })
             return next
           })
         } else {

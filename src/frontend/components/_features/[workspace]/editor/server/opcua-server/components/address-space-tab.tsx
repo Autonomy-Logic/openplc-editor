@@ -4,17 +4,18 @@ import { newUuid } from '@root/frontend/utils/new-uuid'
 import {
   anonymousAccess,
   bulkConfirmationMessage,
+  exposableChildren,
   planBulkAdd,
   planBulkRemove,
   type SkipReport,
 } from '@root/frontend/utils/opcua/bulk-selection'
 import { isComplexTreeNode as isComplexType } from '@root/frontend/utils/opcua/node-defaults'
 import { isGlobalScopePou } from '@root/frontend/utils/opcua/resolve-indices'
-import { countTopLevelEntries, indexTree, isHiddenByFilter, treeIdForNode } from '@root/frontend/utils/opcua/tree-index'
+import { countTopLevelEntries, indexTree, treeIdForNode } from '@root/frontend/utils/opcua/tree-index'
 import type { VariableTreeNode } from '@root/frontend/utils/opcua/types'
 import { toast } from '@root/frontend/utils/toast'
 import type { OpcUaNodeConfig, OpcUaServerConfig } from '@root/middleware/shared/ports/types'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useIsEditingLocked } from '../../../../../../../hooks/use-editing-lock'
 import { InputWithRef } from '../../../../../../_atoms/input'
@@ -30,7 +31,7 @@ interface AddressSpaceTabProps {
   onConfigChange: () => void
 }
 
-/** FR49: one toast after a bulk action, with a line per reason. Nothing to report shows nothing. */
+/** The line a bulk action reports for each reason an entry was skipped. */
 const SKIP_REASON_TEXT: Record<keyof SkipReport, string> = {
   'member-has-node': 'skipped: a member already has its own node',
   'filter-hides-part': 'skipped: only some members match the filter',
@@ -104,7 +105,12 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
         addOpcUaNodes(serverName, nodes)
         setSelectedVariableIds((prev) => {
           const next = new Set(prev)
-          for (const node of nodes) next.add(treeIdForNode(node, treeIndex))
+          for (const node of nodes) {
+            const treeId = treeIdForNode(node, treeIndex)
+            next.add(treeId)
+            const entry = treeIndex.get(treeId)
+            if (entry) for (const id of getSelectableDescendantIds(entry)) next.add(id)
+          }
           return next
         })
         onConfigChange()
@@ -117,15 +123,18 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
   const applyBulkRemove = useCallback(
     (nodeIds: string[]) => {
       if (nodeIds.length === 0) return
+      const doomed = new Set(nodeIds)
       const removed = new Set(
-        config.addressSpace.nodes
-          .filter((node) => nodeIds.includes(node.id))
-          .map((node) => treeIdForNode(node, treeIndex)),
+        config.addressSpace.nodes.filter((node) => doomed.has(node.id)).map((node) => treeIdForNode(node, treeIndex)),
       )
       removeOpcUaNodes(serverName, nodeIds)
       setSelectedVariableIds((prev) => {
         const next = new Set(prev)
-        for (const id of removed) next.delete(id)
+        for (const id of removed) {
+          next.delete(id)
+          const entry = treeIndex.get(id)
+          if (entry) for (const descendant of getSelectableDescendantIds(entry)) next.delete(descendant)
+        }
         return next
       })
       onConfigChange()
@@ -146,7 +155,6 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
         createId: newUuid,
       })
 
-      // BR25: a confirmation only for an action that really exposes something.
       const access = anonymousAccess(config.securityProfiles)
       if (access && plan.nodes.length > 0) {
         setPendingBulk({
@@ -177,7 +185,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
   )
 
   const runBulkRemove = useCallback(
-    (groups: VariableTreeNode[]) => {
+    (groups: VariableTreeNode[], everyGroup = false) => {
       if (isEditingLocked) return
 
       const plan = planBulkRemove({
@@ -185,6 +193,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
         index: treeIndex,
         filter,
         existingNodes: config.addressSpace.nodes,
+        everyGroup,
       })
       if (plan.nodeIds.length === 0) return
 
@@ -199,28 +208,44 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
 
   const handleSelectAll = useCallback(() => runBulkAdd(projectVariables), [runBulkAdd, projectVariables])
 
-  const handleRemoveAll = useCallback(() => runBulkRemove(projectVariables), [runBulkRemove, projectVariables])
+  const handleRemoveAll = useCallback(() => runBulkRemove(projectVariables, true), [runBulkRemove, projectVariables])
 
-  /** A group whose visible children are all exposed is unticked; otherwise it is ticked. */
+  const isGroupFullyExposed = useCallback(
+    (group: VariableTreeNode) => {
+      const relevant = exposableChildren({
+        group,
+        index: treeIndex,
+        filter,
+        existingNodes: config.addressSpace.nodes,
+      })
+      return relevant.length > 0 && relevant.every((child) => selectedVariableIds.has(child.id))
+    },
+    [treeIndex, filter, config.addressSpace.nodes, selectedVariableIds],
+  )
+
+  /** A group whose exposable children are all exposed is unticked; otherwise it is ticked. */
   const handleSelectGroup = useCallback(
     (group: VariableTreeNode) => {
-      const visible = (group.children ?? []).filter((child) => !isHiddenByFilter(child, filter))
-      const allExposed = visible.length > 0 && visible.every((child) => selectedVariableIds.has(child.id))
-      if (allExposed) {
+      if (isGroupFullyExposed(group)) {
         runBulkRemove([group])
         return
       }
       runBulkAdd([group])
     },
-    [filter, selectedVariableIds, runBulkAdd, runBulkRemove],
+    [isGroupFullyExposed, runBulkAdd, runBulkRemove],
   )
 
+  useEffect(() => {
+    if (isEditingLocked) setPendingBulk(null)
+  }, [isEditingLocked])
+
   const confirmPendingBulk = useCallback(() => {
+    if (isEditingLocked) return
     if (!pendingBulk) return
     if (pendingBulk.kind === 'add') applyBulkAdd(pendingBulk.nodes, pendingBulk.skipped)
     else applyBulkRemove(pendingBulk.nodeIds)
     setPendingBulk(null)
-  }, [pendingBulk, applyBulkAdd, applyBulkRemove])
+  }, [isEditingLocked, pendingBulk, applyBulkAdd, applyBulkRemove])
 
   // Handle variable selection from tree
   const handleVariableSelect = useCallback(
@@ -412,6 +437,7 @@ export const AddressSpaceTab = ({ config, serverName, onConfigChange }: AddressS
               selectedIds={selectedVariableIds}
               onSelect={handleVariableSelect}
               onSelectGroup={handleSelectGroup}
+              isGroupFullyExposed={isGroupFullyExposed}
               filter={filter}
             />
           </EditingLockBoundary>

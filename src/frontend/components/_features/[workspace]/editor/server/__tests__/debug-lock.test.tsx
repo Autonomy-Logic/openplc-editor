@@ -81,6 +81,7 @@ describe('S7comm server editor during a debug session (TC11)', () => {
   })
 
   const serverConfigSection = () => screen.getByRole('button', { name: 'Server Configuration' })
+  const plcIdentitySection = () => screen.getByRole('button', { name: 'PLC Identity' })
   const fields = () =>
     Array.from(screen.getByLabelText('Server content container').querySelectorAll<HTMLInputElement>('input'))
 
@@ -96,12 +97,18 @@ describe('S7comm server editor during a debug session (TC11)', () => {
     expect(fields().every((field) => field.matches(':disabled'))).toBe(true)
   })
 
-  it('should keep the section expander usable while the debugger is open (BR03)', () => {
+  it('should leave a collapsed section expander enabled while the debugger is open (BR03)', () => {
     openDebugSession()
-    fireEvent.click(serverConfigSection())
-    fireEvent.click(serverConfigSection())
 
-    expect(fields().length).toBeGreaterThan(0)
+    expect(plcIdentitySection().matches(':disabled')).toBe(false)
+  })
+
+  it('should expand a collapsed section on one click while the debugger is open (BR03)', () => {
+    openDebugSession()
+
+    fireEvent.click(plcIdentitySection())
+
+    expect(screen.getByText('PLC Name')).toBeTruthy()
   })
 
   it('should release the fields once the debug session is closed', () => {

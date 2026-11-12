@@ -452,6 +452,7 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
   }
 
   const handleDiscard = async () => {
+    if (isEditingLocked) return
     if (!versionControl) return
     // No write permission ⇒ skip the doomed backend discard and warn.
     if (!canEdit) {
@@ -489,6 +490,7 @@ export function ChangesSection({ projectId }: ChangesSectionProps) {
   }
 
   const handleStash = async (stashMessage: string) => {
+    if (isEditingLocked) return
     if (!versionControl) return
     // No write permission ⇒ skip the doomed backend stash and warn.
     if (!canEdit) {

@@ -230,7 +230,6 @@ function AppContent() {
     setMenuProjectOpen(projectPath !== '')
   }, [projectPath])
 
-  // The native menu is the only one on macOS and Linux, so the lock has to reach it.
   const isEditingLocked = useOpenPLCStore(selectIsEditingLocked)
   useEffect(() => {
     setMenuDebuggerActive(isEditingLocked)

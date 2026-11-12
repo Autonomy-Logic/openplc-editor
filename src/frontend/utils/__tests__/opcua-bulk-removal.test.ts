@@ -190,3 +190,46 @@ describe('the bulk confirmation message (TC58, TC75)', () => {
     expect(message).toBe('Expose 1 variable? Anonymous clients can read it (role Viewer).')
   })
 })
+
+describe('planning Remove all', () => {
+  const complexEntry = (pouName: string, name: string, members: string[]): VariableTreeNode => ({
+    id: `${pouName}-${name}`,
+    name,
+    type: 'variable',
+    pouName,
+    variablePath: name,
+    isSelectable: true,
+    children: members.map((member) => ({
+      id: `${pouName}-${name}.${member}`,
+      name: member,
+      type: 'variable' as const,
+      pouName,
+      variablePath: `${name}.${member}`,
+      isSelectable: true,
+    })),
+  })
+
+  it('should remove a node whose variable is gone from the tree', () => {
+    const result = planBulkRemove({
+      groups: tree(),
+      index: indexTree(tree()),
+      filter: '',
+      existingNodes: [...exposed(), node('orphan', 'main', 'DELETED')],
+      everyGroup: true,
+    })
+
+    expect(result.nodeIds).toContain('orphan')
+  })
+
+  it('should remove a member node under an exposed instance', () => {
+    const withMember = [group('main', 'main', [complexEntry('main', 'fb1', ['x'])])]
+    const result = planBulkRemove({
+      groups: withMember,
+      index: indexTree(withMember),
+      filter: '',
+      existingNodes: [node('m1', 'main', 'fb1.x')],
+    })
+
+    expect(result.nodeIds).toEqual(['m1'])
+  })
+})

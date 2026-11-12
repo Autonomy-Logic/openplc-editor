@@ -1,13 +1,16 @@
 import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import type { FBDRungState } from '@root/frontend/store/slices/fbd'
 import { act, render } from '@testing-library/react'
-import { useRef } from 'react'
+import { useCallback, useRef } from 'react'
 
 import type { OpenPLCStore } from '@root/frontend/store'
 
+import { GraphicalEditorActiveProvider } from '../../../../../_features/[workspace]/editor/graphical/active-context'
 import { useFBDClipboard } from '../useCopyPaste'
 
 let store: OpenPLCStore
+
+const POU_NAME = 'fbd-pou'
 
 const openDebugSession = () =>
   act(() => {
@@ -39,6 +42,9 @@ const Harness = () => {
   const viewportRef = useRef<HTMLDivElement>(null)
   const mousePositionRef = useRef({ x: 0, y: 0 })
   const insideViewportRef = useRef(true)
+  const handleDeleteNodes = useCallback((nodes: { id: string }[]) => {
+    deleted.push(nodes.length)
+  }, [])
 
   useFBDClipboard({
     mousePositionRef,
@@ -46,7 +52,7 @@ const Harness = () => {
     reactFlowInstance: null,
     rung,
     viewportRef,
-    handleDeleteNodes: (nodes) => deleted.push(nodes.length),
+    handleDeleteNodes,
   })
 
   return <div ref={viewportRef} data-testid='fbd-viewport' />
@@ -67,10 +73,25 @@ const fireClipboard = (type: 'cut' | 'copy' | 'paste', target: EventTarget, stor
   })
 }
 
+const pastePayload = () =>
+  new Map<string, string>([
+    ['fbd:nodes', JSON.stringify({ language: 'fbd', content: { nodes: [node('pasted')], edges: [] } })],
+  ])
+
+const pastedNodeCount = () => store.getState().fbdFlows.find((flow) => flow.name === POU_NAME)?.rung.nodes.length ?? 0
+
 const renderHarness = () => {
   store = createTestStore()
   deleted = []
-  const { getByTestId } = render(<Harness />, { wrapper: createStoreWrapper(store) })
+  act(() => {
+    store.getState().fbdFlowActions.addFBDFlow({ name: POU_NAME, updated: false, rung })
+  })
+  const { getByTestId } = render(
+    <GraphicalEditorActiveProvider pouName={POU_NAME} isActive={true}>
+      <Harness />
+    </GraphicalEditorActiveProvider>,
+    { wrapper: createStoreWrapper(store) },
+  )
   return getByTestId('fbd-viewport')
 }
 
@@ -122,5 +143,32 @@ describe('FBD cut and paste during a debug session (TC17)', () => {
     fireClipboard('cut', viewport, stored)
 
     expect(stored.has('fbd:nodes')).toBe(true)
+  })
+
+  it('should paste the clipboard nodes while no debug session is open', () => {
+    const viewport = renderHarness()
+
+    fireClipboard('paste', viewport, pastePayload())
+
+    expect(pastedNodeCount()).toBe(3)
+  })
+
+  it('should paste nothing when the debug session opens after the editor mounted', () => {
+    const viewport = renderHarness()
+    openDebugSession()
+
+    fireClipboard('paste', viewport, pastePayload())
+
+    expect(pastedNodeCount()).toBe(2)
+  })
+
+  it('should paste again once the debug session is closed', () => {
+    const viewport = renderHarness()
+    openDebugSession()
+    closeDebugSession()
+
+    fireClipboard('paste', viewport, pastePayload())
+
+    expect(pastedNodeCount()).toBe(3)
   })
 })

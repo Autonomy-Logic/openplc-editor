@@ -5,7 +5,7 @@ import type {
   OpcUaServerConfig,
   PLCVariable,
 } from '@root/middleware/shared/ports/types'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 
 vi.mock('@root/frontend/utils/toast', () => ({ toast: () => undefined }))
 
@@ -285,5 +285,32 @@ describe('the anonymous-access confirmation (TC58, TC61, TC62, TC75, TC79)', () 
     fireEvent.click(tickOf('main'))
 
     expect(screen.getByText('Expose 3 variables? Anonymous clients can read them (role Viewer).')).toBeTruthy()
+  })
+})
+
+describe('a bulk confirmation while a debug session starts', () => {
+  const openDebugSession = () =>
+    act(() => {
+      store.getState().workspaceActions.setDebuggerVisible(true)
+    })
+
+  it('should drop the pending confirmation', () => {
+    renderTab({ nodes: ALL_THREE })
+    fireEvent.click(button('Remove all'))
+
+    openDebugSession()
+
+    expect(screen.queryByRole('alertdialog', { name: /confirm the bulk action/i })).toBeNull()
+  })
+
+  it('should remove nothing when Confirm is pressed after the session starts', () => {
+    renderTab({ nodes: ALL_THREE })
+    fireEvent.click(button('Remove all'))
+
+    openDebugSession()
+    const stillThere = screen.queryByRole('button', { name: 'Confirm' })
+    if (stillThere) fireEvent.click(stillThere)
+
+    expect(storedNodes()).toHaveLength(3)
   })
 })

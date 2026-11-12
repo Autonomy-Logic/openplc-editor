@@ -77,3 +77,11 @@ describe('the Namespace URI in General Settings (TC30 to TC33)', () => {
     expect(storedNamespace()).toBe('urn:openplc:opcua:namespace')
   })
 })
+
+describe('the General Settings namespace section', () => {
+  it('should show exactly one Namespace Configuration heading', () => {
+    renderEditor()
+
+    expect(screen.getAllByText('Namespace Configuration')).toHaveLength(1)
+  })
+})

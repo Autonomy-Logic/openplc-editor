@@ -26,6 +26,7 @@
 import { MagnifierIcon } from '@root/frontend/assets/icons/interface/Magnifier'
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
+import { useIsEditingLocked } from '@root/frontend/hooks/use-editing-lock'
 import { useOpenPLCStore } from '@root/frontend/store'
 import type { InstalledLibrary } from '@root/middleware/shared/ports/library-types'
 import { useMemo, useState } from 'react'
@@ -172,6 +173,7 @@ function SearchBar({ value, onChange }: { value: string; onChange: (v: string) =
         type='text'
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        data-editing-lock-exempt
         placeholder='Search libraries…'
         className='w-full bg-transparent font-caption text-xs text-neutral-950 placeholder:text-neutral-400 focus:outline-none dark:text-white dark:placeholder:text-neutral-500'
       />
@@ -202,6 +204,7 @@ function LibraryRow({
   onAction?: () => void
   actionTitle?: string
 }) {
+  const isEditingLocked = useIsEditingLocked()
   return (
     <div className='group flex items-center justify-between gap-2 border-b border-neutral-100 px-2 py-2 last:border-b-0 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900'>
       <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
@@ -219,7 +222,8 @@ function LibraryRow({
           aria-label={actionTitle ?? 'Add to project'}
           title={actionTitle ?? 'Add to project'}
           onClick={onAction}
-          className='shrink-0 rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+          disabled={isEditingLocked}
+          className='shrink-0 rounded-md p-1 hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-neutral-800'
         >
           <PlusIcon className='!stroke-brand' />
         </button>
@@ -230,7 +234,8 @@ function LibraryRow({
           aria-label={actionTitle ?? 'Remove from project'}
           title={actionTitle ?? 'Remove from project'}
           onClick={onAction}
-          className='shrink-0 rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+          disabled={isEditingLocked}
+          className='shrink-0 rounded-md p-1 hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-neutral-800'
         >
           <MinusIcon className='!stroke-brand' />
         </button>

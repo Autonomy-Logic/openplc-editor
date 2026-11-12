@@ -8,6 +8,7 @@ import { CreateEditorObjectFromTab } from '../../../../../../store/slices/tabs/u
 import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
+import { NavigationButton } from '../../../../../_atoms/navigation-button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import { FieldHelpIcon, TooltipProvider } from '../../../../../_atoms/tooltip'
 import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
@@ -107,15 +108,20 @@ const Group = ({
         </span>
         {action ? (
           <div className='flex items-center gap-1.5'>
-            <button
-              type='button'
-              disabled={!action.screen}
-              onClick={() => action.screen && action.onOpen(action.screen)}
-              className={groupActionStyles}
-            >
-              {action.label}
-              <span aria-hidden='true'>&#8599;</span>
-            </button>
+            {action.screen ? (
+              <NavigationButton
+                onClick={() => action.screen && action.onOpen(action.screen)}
+                className={groupActionStyles}
+              >
+                {action.label}
+                <span aria-hidden='true'>&#8599;</span>
+              </NavigationButton>
+            ) : (
+              <button type='button' disabled className={groupActionStyles}>
+                {action.label}
+                <span aria-hidden='true'>&#8599;</span>
+              </button>
+            )}
             {action.screen ? null : <FieldHelpIcon text={action.reason} />}
           </div>
         ) : null}
@@ -558,17 +564,15 @@ const ModbusServerEditor = () => {
                      *  that sets it. Only where such a page exists -- otherwise
                      *  there is nowhere to go and it stays a plain disabled field. */}
                     {!baudRateEditable && rtuAvailable && boardSerialScreen ? (
-                      <button
-                        type='button'
-                        disabled={!enabled}
-                        onClick={() => openVppScreen(boardSerialScreen)}
+                      <NavigationButton
+                        onClick={() => enabled && openVppScreen(boardSerialScreen)}
                         className={boardValueStyles}
                       >
                         <span>{baudRate}</span>
                         <span className='font-normal text-neutral-600 dark:text-neutral-500'>
                           set by the board <span aria-hidden='true'>&#8599;</span>
                         </span>
-                      </button>
+                      </NavigationButton>
                     ) : (
                       <Select
                         value={baudRate}

@@ -130,7 +130,7 @@ export const useFBDClipboard = ({
       })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rung, handleDeleteNodes],
+    [rung, handleDeleteNodes, isEditingLocked],
   )
 
   /**
@@ -224,7 +224,7 @@ export const useFBDClipboard = ({
       })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isActive, reactFlowInstance, fbdFlowActions, rung],
+    [isActive, reactFlowInstance, fbdFlowActions, rung, isEditingLocked],
   )
 
   useEffect(() => {

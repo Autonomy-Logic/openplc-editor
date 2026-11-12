@@ -1,5 +1,6 @@
 import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
+import type { ProjectPort } from '@root/middleware/shared/ports/project-port'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 
@@ -43,6 +44,7 @@ const ports: PlatformPorts = {
 }
 
 let store: OpenPLCStore
+let saveReadmeCalls = 0
 
 const openDebugSession = () =>
   act(() => {
@@ -56,8 +58,20 @@ const closeDebugSession = () =>
 
 const draftField = () => screen.queryByPlaceholderText<HTMLTextAreaElement>('Write your README in markdown...')
 
+const commitButton = () => screen.queryByRole('button', { name: /commit changes/i })
+
+const editButton = () => screen.queryByRole('button', { name: /^edit$/i })
+
+const deleteButton = () => screen.queryByRole('button', { name: /delete readme/i })
+
 const openReadme = () => {
   store = createTestStore()
+  saveReadmeCalls = 0
+  const saveReadme: NonNullable<ProjectPort['saveReadme']> = () => {
+    saveReadmeCalls += 1
+    return Promise.resolve({ success: true })
+  }
+  ports.project = stubPort<ProjectPort>({ saveReadme })
   act(() => {
     store.getState().workspaceActions.setCanEdit(true)
     store.getState().readmeActions.commitSaved('# Tank')
@@ -99,6 +113,35 @@ describe('project README during a debug session (TC16)', () => {
     if (field) fireEvent.change(field, { target: { value: 'draft' } })
 
     expect(store.getState().readme.draftContent).toBe('# Tank')
+  })
+
+  it('should hide Edit and Delete while the debugger is open', () => {
+    openReadme()
+
+    openDebugSession()
+
+    expect(editButton()).toBeNull()
+    expect(deleteButton()).toBeNull()
+  })
+
+  it('should disable Commit changes while the debugger is open', () => {
+    openReadme()
+    startEditing()
+
+    openDebugSession()
+
+    expect(commitButton()?.matches(':disabled')).toBe(true)
+  })
+
+  it('should not write the README when a commit is attempted while the debugger is open', () => {
+    openReadme()
+    startEditing()
+
+    openDebugSession()
+    const commit = commitButton()
+    if (commit) fireEvent.click(commit)
+
+    expect(saveReadmeCalls).toBe(0)
   })
 
   it('should release the draft once the debug session is closed', () => {

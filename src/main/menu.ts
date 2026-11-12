@@ -21,7 +21,7 @@ export default class MenuBuilder {
   private projectService: ProjectService
   private updates: UpdateService | undefined
   private projectOpen = false
-  /** AC18: while a debug session is open the project is read-only, so the editing items go with it. */
+  /** Whether a debug session is open, which makes the editing menu items read-only. */
   private debuggerActive = false
   private readonly handleDevelopmentContextMenu = (_: Electron.Event, props: Electron.ContextMenuParams): void => {
     if (!this.hasLiveWindow()) return

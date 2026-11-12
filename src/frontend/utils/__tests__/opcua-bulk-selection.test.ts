@@ -285,3 +285,30 @@ describe('planning a group tick (TC50, TC51)', () => {
     expect(nodeIds(result.nodes)).toEqual(['PLC.main.TANK_ALARM', 'PLC.main.TANK_LEVEL'])
   })
 })
+
+describe('planning a bulk add with a legacy member node', () => {
+  it('should skip the parent of a member node saved under the POU that declared it', () => {
+    const legacyMember: OpcUaNodeConfig = {
+      ...buildDefaultNodeConfig(member('main', 'extStruct', 'a'), () => 'legacy'),
+      pouName: 'main',
+      variablePath: 'extStruct.a',
+    }
+    const tree = [
+      group('main', 'main', [
+        entry(GLOBAL_SCOPE_POU, 'extStruct', { type: 'structure' }, [member(GLOBAL_SCOPE_POU, 'extStruct', 'a')]),
+      ]),
+    ]
+
+    const result = planBulkAdd({
+      tree,
+      index: indexTree(tree),
+      filter: '',
+      existingNodes: [legacyMember],
+      instances,
+      createId,
+    })
+
+    expect(result.nodes).toHaveLength(0)
+    expect(result.skipped['member-has-node']).toBe(1)
+  })
+})

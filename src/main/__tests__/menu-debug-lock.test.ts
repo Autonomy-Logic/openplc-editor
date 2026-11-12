@@ -77,7 +77,7 @@ afterAll(() => setPlatform(originalPlatform))
 
 beforeEach(() => jest.clearAllMocks())
 
-/** The four native items AC18 names. */
+/** The native menu items the lock disables. */
 const EDITING_ITEMS = [
   'menu:edit.submenu.undo',
   'menu:edit.submenu.redo',

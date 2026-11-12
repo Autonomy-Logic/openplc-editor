@@ -8,6 +8,7 @@ interface VariableTreeProps {
   selectedIds: Set<string>
   onSelect: (node: VariableTreeNode) => void
   onSelectGroup: (group: VariableTreeNode) => void
+  isGroupFullyExposed: (group: VariableTreeNode) => boolean
   filter?: string
 }
 
@@ -83,6 +84,7 @@ interface TreeNodeRowProps {
   onToggleExpand: (nodeId: string) => void
   onSelect: (node: VariableTreeNode) => void
   onSelectGroup: (group: VariableTreeNode) => void
+  isGroupFullyExposed: (group: VariableTreeNode) => boolean
   filter?: string
 }
 
@@ -94,6 +96,7 @@ const TreeNodeRow = ({
   onToggleExpand,
   onSelect,
   onSelectGroup,
+  isGroupFullyExposed,
   filter,
 }: TreeNodeRowProps) => {
   const hasChildren = node.children && node.children.length > 0
@@ -103,7 +106,7 @@ const TreeNodeRow = ({
 
   // Check if any children are selected (for indeterminate state)
   const hasSelectedChildren = hasChildren && node.children!.some((child) => checkAnySelected(child, selectedIds))
-  const everyChildSelected = Boolean(hasChildren) && (node.children ?? []).every((child) => selectedIds.has(child.id))
+  const everyChildSelected = isGroupRow && isGroupFullyExposed(node)
 
   // Filter match
   const matchesFilter = !filter || node.name.toLowerCase().includes(filter.toLowerCase())
@@ -137,7 +140,6 @@ const TreeNodeRow = ({
           <div className='w-4' />
         )}
 
-        {/* Selection tick: an entry opens its modal, a group row exposes its visible children. */}
         {node.isSelectable || isGroupRow ? (
           <Checkbox
             checked={isSelected || (isGroupRow && everyChildSelected)}
@@ -180,6 +182,7 @@ const TreeNodeRow = ({
               onToggleExpand={onToggleExpand}
               onSelect={onSelect}
               onSelectGroup={onSelectGroup}
+              isGroupFullyExposed={isGroupFullyExposed}
               filter={filter}
             />
           ))}
@@ -207,7 +210,14 @@ const checkFilterMatch = (node: VariableTreeNode, filter: string): boolean => {
   return false
 }
 
-export const VariableTree = ({ nodes, selectedIds, onSelect, onSelectGroup, filter }: VariableTreeProps) => {
+export const VariableTree = ({
+  nodes,
+  selectedIds,
+  onSelect,
+  onSelectGroup,
+  isGroupFullyExposed,
+  filter,
+}: VariableTreeProps) => {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
     // Auto-expand top-level nodes
     return new Set(nodes.map((n) => n.id))
@@ -247,6 +257,7 @@ export const VariableTree = ({ nodes, selectedIds, onSelect, onSelectGroup, filt
           onToggleExpand={handleToggleExpand}
           onSelect={onSelect}
           onSelectGroup={onSelectGroup}
+          isGroupFullyExposed={isGroupFullyExposed}
           filter={filter}
         />
       ))}

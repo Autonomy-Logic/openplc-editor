@@ -1,6 +1,6 @@
 import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 
-/** The bright green of the runtime's online mode, as in GitHub #536. */
+/** The bright green of the runtime's online mode. */
 export const DEBUG_SESSION_FRAME_COLOR = '#22c55e'
 
 const DebugSessionFrame = () => {

@@ -118,7 +118,6 @@ export const OpcUaServerEditor = () => {
     [localConfig, serverName, updateOpcUaServerConfig, handleFileAndWorkspaceSavedState],
   )
 
-  // The namespace lives in the address space, so it goes through its own store action.
   const handleNamespaceUpdate = useCallback(
     (namespaceUri: string) => {
       if (!localConfig) return
@@ -440,7 +439,6 @@ const GeneralSettingsTab = ({
         </div>
       </div>
 
-      {/* Namespace Configuration Section */}
       <div className='flex flex-col gap-4 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'>
         <h3 className='font-caption text-sm font-semibold text-neutral-950 dark:text-white'>Namespace Configuration</h3>
 
@@ -529,27 +527,6 @@ const GeneralSettingsTab = ({
             Update frequency for OPC-UA variables (10-10000ms)
           </span>
         </div>
-      </div>
-
-      {/* Namespace Configuration Section */}
-      <div className='flex flex-col gap-4 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900'>
-        <h3 className='font-caption text-sm font-semibold text-neutral-950 dark:text-white'>Namespace Configuration</h3>
-
-        {/* Namespace URI */}
-        <div className='flex items-center gap-4'>
-          <Label className='w-32 whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Namespace URI</Label>
-          <div className='w-80'>
-            <InputWithRef
-              type='text'
-              value={config.addressSpace.namespaceUri}
-              readOnly
-              className={cn(inputStyles, 'bg-neutral-50 dark:bg-neutral-900')}
-            />
-          </div>
-        </div>
-        <p className='text-xs text-neutral-500 dark:text-neutral-400'>
-          The namespace URI for OpenPLC variables in the OPC-UA address space
-        </p>
       </div>
     </div>
   )

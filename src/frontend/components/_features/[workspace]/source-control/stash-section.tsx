@@ -82,6 +82,7 @@ export function StashSection({ projectId }: StashSectionProps) {
   }, [projectId, projectPort, sharedWorkspaceActions, versionControl, versionControlActions])
 
   const handleApplyOrPop = async (stash: Stash, pop: boolean) => {
+    if (isEditingLocked) return
     if (!versionControl || busyRef) return
     // No write permission ⇒ skip the doomed backend write and warn.
     if (!canEdit) {
@@ -111,6 +112,7 @@ export function StashSection({ projectId }: StashSectionProps) {
   }
 
   const handleDrop = async () => {
+    if (isEditingLocked) return
     if (!versionControl || !dropTarget) return
     // No write permission ⇒ skip the doomed backend write and warn.
     if (!canEdit) {

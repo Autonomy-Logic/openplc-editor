@@ -75,7 +75,7 @@ const ProjectReadmeModal = () => {
     }
   }, [isOpen])
 
-  const canEdit = projectCanEdit && savedContent !== undefined
+  const canEdit = projectCanEdit && savedContent !== undefined && !isEditingLocked
 
   const handleStartEdit = (defaultContent?: string) => {
     beginEdit(defaultContent)
@@ -90,6 +90,7 @@ const ProjectReadmeModal = () => {
   }
 
   const handleSave = async () => {
+    if (isEditingLocked) return
     if (!projectId || !projectPort.saveReadme) return
     setStatus('saving', null)
     const result = await projectPort.saveReadme(projectId, draftContent, {
@@ -105,6 +106,7 @@ const ProjectReadmeModal = () => {
   }
 
   const handleConfirmDelete = async () => {
+    if (isEditingLocked) return
     if (!projectId || !projectPort.saveReadme) return
     setStatus('deleting', null)
     const result = await projectPort.saveReadme(projectId, null, {
@@ -174,6 +176,7 @@ const ProjectReadmeModal = () => {
           <DeleteMode
             deleteCommitMessage={deleteCommitMessage}
             isPending={isPending}
+            isReadOnly={isEditingLocked}
             error={error}
             onCommitMessageChange={setDeleteCommitMessage}
             onConfirm={handleConfirmDelete}
@@ -345,7 +348,7 @@ function EditMode({
           </button>
           <button
             onClick={onSave}
-            disabled={isPending}
+            disabled={isPending || isReadOnly}
             className='cursor-pointer rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-medium disabled:cursor-not-allowed disabled:opacity-50'
           >
             {isPending ? 'Committing...' : 'Commit changes'}
@@ -363,6 +366,7 @@ function EditMode({
 function DeleteMode({
   deleteCommitMessage,
   isPending,
+  isReadOnly,
   error,
   onCommitMessageChange,
   onConfirm,
@@ -370,6 +374,7 @@ function DeleteMode({
 }: {
   deleteCommitMessage: string
   isPending: boolean
+  isReadOnly: boolean
   error: string | null
   onCommitMessageChange: (message: string) => void
   onConfirm: () => void
@@ -412,7 +417,7 @@ function DeleteMode({
           </button>
           <button
             onClick={onConfirm}
-            disabled={isPending}
+            disabled={isPending || isReadOnly}
             className='cursor-pointer rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50'
           >
             {isPending ? 'Deleting...' : 'Delete README'}

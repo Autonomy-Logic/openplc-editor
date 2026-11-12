@@ -3,9 +3,12 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import type { OpenPLCStore } from '@root/frontend/store'
 import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import type { ConfiguredEtherCATDevice, ConfiguredEtherCATModule } from '@root/middleware/shared/ports/esi-types'
+import type { EsiPort } from '@root/middleware/shared/ports/esi-port'
+import type { RuntimePort } from '@root/middleware/shared/ports/runtime-port'
 import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
 
+import { EtherCATEditor } from '../index'
 import { EtherCATDeviceEditor } from '../ethercat-device-editor'
 import { EtherCATModuleEditor } from '../ethercat-module-editor'
 
@@ -185,5 +188,46 @@ describe('the EtherCAT module editor during a debug session (TC11)', () => {
     const fieldset = panel.querySelector('fieldset')
 
     expect(fieldset?.hasAttribute('disabled')).toBe(true)
+  })
+})
+
+describe('the EtherCAT bus editor during a debug session (TC11)', () => {
+  const connectedPorts: PlatformPorts = {
+    ...ports,
+    runtime: stubPort<RuntimePort>({
+      getNetworkInterfaces: () => Promise.resolve({ success: true, data: [{ name: 'enp1s0', description: 'enp1s0' }] }),
+    }),
+    esi: stubPort<EsiPort>(),
+  }
+
+  const storedInterface = () =>
+    store.getState().project.data.remoteDevices?.find((d) => d.name === BUS)?.ethercatConfig?.masterConfig
+      ?.networkInterface
+
+  const renderBus = async () => {
+    store = createTestStore()
+    seedStore()
+    act(() => {
+      store.getState().editorActions.setEditor({ type: 'plc-remote-device', meta: { name: BUS, protocol: 'ethercat' } })
+      store.getState().deviceActions.setRuntimeConnectionStatus('connected')
+      store.getState().workspaceActions.setEditingState('saved')
+      store.getState().workspaceActions.setDebuggerVisible(true)
+    })
+    render(<EtherCATEditor />, { wrapper: createStoreWrapper(store, connectedPorts) })
+    await act(async () => {
+      await Promise.resolve()
+    })
+  }
+
+  it('should keep the stored network interface while the debugger is open', async () => {
+    await renderBus()
+
+    expect(storedInterface()).toBe('eth0')
+  })
+
+  it('should leave the project saved while the debugger is open', async () => {
+    await renderBus()
+
+    expect(store.getState().workspace.editingState).not.toBe('unsaved')
   })
 })

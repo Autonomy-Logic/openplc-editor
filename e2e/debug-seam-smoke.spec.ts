@@ -1,5 +1,5 @@
 /**
- * DOPE-670 - the test-only debug seam opens a debug session without a PLC.
+ * The test-only debug seam opens a debug session without a PLC.
  *
  * Needs a build made with OPENPLC_E2E_DEBUG_SEAM=1; `npm run test:e2e` sets it.
  */

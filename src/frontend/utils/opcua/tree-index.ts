@@ -16,9 +16,8 @@ export function indexTree(tree: readonly VariableTreeNode[]): TreeIndex {
 }
 
 /**
- * A VAR_EXTERNAL used to be saved under the POU that declared it and is now
- * attributed to the global scope, so both spellings have to land on the same
- * tree entry. Only ever widens: a node whose own id is in the tree keeps it.
+ * The tree entry of a node, with a VAR_EXTERNAL spelled under its POU and under the global scope
+ * landing on the same entry. Only ever widens: a node whose own id is in the tree keeps it.
  */
 export function treeIdForNode(node: { pouName: string; variablePath: string }, index: TreeIndex): string {
   const own = `${node.pouName}-${node.variablePath}`
@@ -49,10 +48,7 @@ export type TopLevelEntryCounts = {
   shown: number
 }
 
-/**
- * BR09: an entry is a child of a group row, counted once across the groups
- * that reference it, and a group row is not an entry of its own.
- */
+/** The entries of each group row, counted once across the groups that reference them. */
 export function countTopLevelEntries(tree: readonly VariableTreeNode[], filter: string): TopLevelEntryCounts {
   const total = new Set<string>()
   const shown = new Set<string>()

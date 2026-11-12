@@ -43,8 +43,8 @@ function VppScreenHost({ section }: VppScreenHostProps) {
     const plcModel = createProjectPlcModel(store)
     const transport = createIframeTransport(iframe)
     const relay = createHostRelayHandler({ store, plcModel, packageId, screenId })
-    const session = installHostQueryHandler(transport, (method: HostRelayMethod, args: unknown[]) =>
-      Promise.resolve(relay(method, args)),
+    const session = installHostQueryHandler(transport, async (method: HostRelayMethod, args: unknown[]) =>
+      relay(method, args),
     )
     // Push PLC-model changes to the guest so it can refresh its variable list without polling.
     const unsubscribeModel = plcModel.onModelChanged(() => {

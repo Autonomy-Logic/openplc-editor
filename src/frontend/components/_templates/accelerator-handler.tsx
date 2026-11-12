@@ -26,7 +26,7 @@ const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?
 // The native menu disables project-only items on the start screen; this covers a keypress that beats the rebuild.
 const hasOpenProject = (store: OpenPLCStore) => store.getState().project.meta.path !== ''
 
-/** AC04: an editing accelerator does nothing, and says nothing, while the debugger is active. */
+/** Whether editing accelerators are refused because a debug session is open. */
 const isEditingLocked = (store: OpenPLCStore) => selectIsEditingLocked(store.getState())
 
 const AcceleratorHandler = () => {

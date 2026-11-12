@@ -67,8 +67,10 @@ const closeDebugSession = () =>
 
 const controls = () =>
   Array.from(container.querySelectorAll<HTMLElement>('input, select, textarea, button')).filter(
-    (control) => control.closest('[role="tablist"]') === null,
+    (control) => control.closest('[role="tablist"]') === null && control.dataset.editingLockExempt === undefined,
   )
+
+const navigationControls = () => Array.from(container.querySelectorAll<HTMLElement>('[data-editing-lock-exempt]'))
 
 const someControlIsLive = () => controls().some((control) => !control.matches(':disabled'))
 const everyControlIsLocked = () => controls().every((control) => control.matches(':disabled'))
@@ -157,11 +159,20 @@ describe('remote device editor during a debug session (TC11)', () => {
     expect(someControlIsLive()).toBe(true)
   })
 
-  it('should lock every control while the debugger is open', () => {
+  it('should lock every editing control while the debugger is open', () => {
     openDebugSession()
 
     expect(controls().length).toBeGreaterThan(0)
     expect(everyControlIsLocked()).toBe(true)
+  })
+
+  it('should keep the navigation controls usable while the debugger is open', () => {
+    const before = navigationControls().map((control) => control.matches(':disabled'))
+
+    openDebugSession()
+
+    expect(before.length).toBeGreaterThan(0)
+    expect(navigationControls().map((control) => control.matches(':disabled'))).toEqual(before)
   })
 })
 
@@ -194,7 +205,6 @@ describe('EtherCAT editor during a debug session (TC11)', () => {
     expect(someControlIsLive()).toBe(true)
   })
 
-  /** Scan and Add are disabled without a runtime, so the mark is what proves the whole tab is held. */
   it('should put the open tab of the bus editor behind the lock while the debugger is open', () => {
     expect(container.querySelectorAll('[data-editing-locked="true"]')).toHaveLength(0)
 

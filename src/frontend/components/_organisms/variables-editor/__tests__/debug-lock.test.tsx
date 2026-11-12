@@ -41,7 +41,7 @@ const renderProgram = () => {
   render(<VariablesEditor name='main' />)
 }
 
-describe('variables editor action bar during a debug session (DOPE-786)', () => {
+describe('variables editor action bar during a debug session', () => {
   beforeEach(() => {
     store = createTestStore()
   })

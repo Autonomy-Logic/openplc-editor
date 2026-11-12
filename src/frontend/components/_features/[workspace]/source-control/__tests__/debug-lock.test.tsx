@@ -11,6 +11,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import type { OpenPLCStore } from '@root/frontend/store'
 
+import { BranchStatusBar } from '../../branches/branch-status-bar'
 import { BranchSwitcherPopover } from '../../branches/branch-switcher-popover'
 import { ChangesSection } from '../changes-section'
 import { StashSection } from '../stash-section'
@@ -55,10 +56,37 @@ const branches: Branch[] = [
   },
 ]
 
+const calls: string[] = []
+
 const versionControl = stubPort<VersionControlPort>({
   getChanges: () => Promise.resolve({ changes: [change], hasChanges: true }),
   listStashes: () => Promise.resolve({ stashes: [stash] }),
   listBranches: () => Promise.resolve({ branches }),
+  discardChanges: () => {
+    calls.push('discardChanges')
+    return Promise.resolve()
+  },
+  createStash: () => {
+    calls.push('createStash')
+    return Promise.resolve({ stash })
+  },
+  applyStash: () => {
+    calls.push('applyStash')
+    return Promise.resolve({ message: 'applied' })
+  },
+  popStash: () => {
+    calls.push('popStash')
+    return Promise.resolve({ message: 'popped' })
+  },
+  dropStash: () => {
+    calls.push('dropStash')
+    return Promise.resolve()
+  },
+  previewSwitchCarry: () => Promise.resolve({ conflicts: [] }),
+  switchBranch: () => {
+    calls.push('switchBranch')
+    return Promise.resolve({ message: 'switched', branch: 'feature-x' })
+  },
 })
 
 const ports: PlatformPorts = {
@@ -95,6 +123,7 @@ const button = (name: string | RegExp) => screen.getByRole<HTMLButtonElement>('b
 
 const renderSection = async (ui: React.ReactElement, settled: () => void) => {
   store = createTestStore()
+  calls.length = 0
   act(() => {
     store.getState().workspaceActions.setCanEdit(true)
   })
@@ -132,6 +161,26 @@ describe('pending changes during a debug session (TC15, TC74)', () => {
     openDebugSession()
 
     expect(button(/^commit$/i).disabled).toBe(false)
+  })
+
+  it('should discard nothing when the confirmation is confirmed after the session starts', async () => {
+    await renderChanges()
+    fireEvent.click(button('Discard'))
+
+    openDebugSession()
+    fireEvent.click(button(/discard changes/i))
+
+    await waitFor(() => expect(calls).toEqual([]))
+  })
+
+  it('should stash nothing when the confirmation is confirmed after the session starts', async () => {
+    await renderChanges()
+    fireEvent.click(button('Stash'))
+
+    openDebugSession()
+    fireEvent.click(button(/stash changes/i))
+
+    await waitFor(() => expect(calls).toEqual([]))
   })
 
   it('should release Discard and Stash once the debug session is closed', async () => {
@@ -172,6 +221,25 @@ describe('the stash list during a debug session (TC15)', () => {
     openDebugSession()
 
     expect(screen.getByText('work in progress')).toBeTruthy()
+  })
+
+  it('should apply nothing when Apply is pressed after the session starts', async () => {
+    await renderStashes()
+
+    openDebugSession()
+    fireEvent.click(button('Apply'))
+
+    await waitFor(() => expect(calls).toEqual([]))
+  })
+
+  it('should drop nothing when the drop confirmation is confirmed after the session starts', async () => {
+    await renderStashes()
+    fireEvent.click(button(/delete this stash/i))
+
+    openDebugSession()
+    fireEvent.click(button(/drop stash/i))
+
+    await waitFor(() => expect(calls).toEqual([]))
   })
 
   it('should release Apply once the debug session is closed', async () => {
@@ -242,5 +310,35 @@ describe('the branch switcher during a debug session (TC15)', () => {
     fireEvent.click(screen.getByText('feature-x'))
 
     expect(switched).toEqual(['feature-x'])
+  })
+})
+
+describe('the unsaved-changes switch confirmation during a debug session', () => {
+  const renderStatusBar = async () => {
+    localStorage.clear()
+    await renderSection(<BranchStatusBar projectId='/projects/tank' />, () => {
+      expect(screen.getByText('development')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByText('development'))
+    await waitFor(() => expect(screen.getByText('feature-x')).toBeTruthy())
+    fireEvent.click(screen.getByText('feature-x'))
+    await waitFor(() => expect(button(/discard & switch/i)).toBeTruthy())
+  }
+
+  it('should switch the branch while no debug session is open', async () => {
+    await renderStatusBar()
+
+    fireEvent.click(button(/discard & switch/i))
+
+    await waitFor(() => expect(calls).toEqual(['switchBranch']))
+  })
+
+  it('should switch no branch when the confirmation is confirmed after the session starts', async () => {
+    await renderStatusBar()
+
+    openDebugSession()
+    fireEvent.click(button(/discard & switch/i))
+
+    await waitFor(() => expect(calls).toEqual([]))
   })
 })

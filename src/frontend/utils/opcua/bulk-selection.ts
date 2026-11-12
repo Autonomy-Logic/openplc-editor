@@ -28,14 +28,9 @@ const countSkip = (report: SkipReport, reason: NodeSkipReason): void => {
   report[reason] = (report[reason] ?? 0) + 1
 }
 
-/**
- * An FB instance or struct is exposed whole, so a member holding a node of its
- * own would be exposed twice; the parent is skipped instead (BR10).
- */
-const aMemberHasItsOwnNode = (entry: VariableTreeNode, exposedPaths: ReadonlySet<string>): boolean =>
-  (entry.children ?? []).some(
-    (child) => exposedPaths.has(`${child.pouName}:${child.variablePath}`) || aMemberHasItsOwnNode(child, exposedPaths),
-  )
+/** Whether a member of this entry already holds a node of its own. */
+const aMemberHasItsOwnNode = (entry: VariableTreeNode, exposedIds: ReadonlySet<string>): boolean =>
+  (entry.children ?? []).some((child) => exposedIds.has(child.id) || aMemberHasItsOwnNode(child, exposedIds))
 
 /** The filter hides part of a complex entry when the entry matches only through some of its members. */
 const filterHidesPartOf = (entry: VariableTreeNode, filter: string): boolean => {
@@ -54,13 +49,11 @@ export function planBulkAdd({ tree, index, filter, existingNodes, instances, cre
   const skipped: SkipReport = {}
 
   const exposedIds = new Set(existingNodes.map((node) => treeIdForNode(node, index)))
-  const exposedPaths = new Set(existingNodes.map((node) => `${node.pouName}:${node.variablePath}`))
   const takenNodeIdsLower = new Set(existingNodes.map((node) => node.nodeId.trim().toLowerCase()))
   const planned = new Set<string>()
 
   for (const group of tree) {
     for (const entry of group.children ?? []) {
-      // An entry already exposed, or one the filter hides, is outside the action (BR18).
       if (exposedIds.has(entry.id) || planned.has(entry.id)) continue
       if (isHiddenByFilter(entry, filter)) continue
 
@@ -70,7 +63,7 @@ export function planBulkAdd({ tree, index, filter, existingNodes, instances, cre
         continue
       }
 
-      if (aMemberHasItsOwnNode(entry, exposedPaths)) {
+      if (aMemberHasItsOwnNode(entry, exposedIds)) {
         countSkip(skipped, 'member-has-node')
         planned.add(entry.id)
         continue
@@ -99,6 +92,37 @@ export function planBulkAdd({ tree, index, filter, existingNodes, instances, cre
   return { nodes, skipped }
 }
 
+/**
+ * The visible children of a group a bulk add could expose: already exposed entries and the ones
+ * the planner does not always skip. An entry it always skips is neutral, so a group holding only
+ * such entries can still read as fully exposed.
+ */
+export function exposableChildren({
+  group,
+  index,
+  filter,
+  existingNodes,
+}: {
+  group: VariableTreeNode
+  index: TreeIndex
+  filter: string
+  existingNodes: readonly OpcUaNodeConfig[]
+}): VariableTreeNode[] {
+  const exposedIds = new Set(existingNodes.map((node) => treeIdForNode(node, index)))
+  const takenNodeIdsLower = new Set(existingNodes.map((node) => node.nodeId.trim().toLowerCase()))
+
+  return (group.children ?? []).filter((entry) => {
+    if (isHiddenByFilter(entry, filter)) return false
+    if (exposedIds.has(entry.id)) return true
+    if (aMemberHasItsOwnNode(entry, exposedIds)) return false
+    if (filterHidesPartOf(entry, filter)) return false
+    return !firstValidationFailure(
+      buildDefaultNodeConfig(entry, () => 'probe'),
+      takenNodeIdsLower,
+    )
+  })
+}
+
 export type BulkRemovePlan = {
   /** Ids of the stored nodes the action removes. */
   nodeIds: string[]
@@ -110,20 +134,26 @@ export type BulkRemoveInput = {
   index: TreeIndex
   filter: string
   existingNodes: readonly OpcUaNodeConfig[]
+  /** True for Remove all: every stored node goes, including the ones no longer in the tree. */
+  everyGroup?: boolean
 }
 
-/**
- * BR12: a group untick removes the nodes the group OWNS. A global the group
- * only references belongs to the global scope and stays.
- */
-export function planBulkRemove({ groups, index, filter, existingNodes }: BulkRemoveInput): BulkRemovePlan {
+const idsOf = (entry: VariableTreeNode): string[] => [
+  entry.id,
+  ...(entry.children ?? []).flatMap((child) => idsOf(child)),
+]
+
+/** The nodes a group untick removes: the ones the group owns, not the globals it references. */
+export function planBulkRemove({ groups, index, filter, existingNodes, everyGroup }: BulkRemoveInput): BulkRemovePlan {
+  if (everyGroup && !filter) return { nodeIds: existingNodes.map((node) => node.id) }
+
   const owned = new Set<string>()
 
   for (const group of groups) {
     for (const entry of group.children ?? []) {
       if (isHiddenByFilter(entry, filter)) continue
       if (entry.pouName !== group.pouName) continue
-      owned.add(entry.id)
+      for (const id of idsOf(entry)) owned.add(id)
     }
   }
 
@@ -141,10 +171,7 @@ export type AnonymousAccess = {
 const ROLE_RANK = { viewer: 0, operator: 1, engineer: 2 } as const
 const ROLE_LABEL = { viewer: 'Viewer', operator: 'Operator', engineer: 'Engineer' } as const
 
-/**
- * BR16: the confirmation follows the PROFILE, not the server flag. Null when no
- * enabled profile offers Anonymous, so no confirmation is asked.
- */
+/** The anonymous access an enabled security profile offers, or null when none does. */
 export function anonymousAccess(profiles: readonly OpcUaSecurityProfile[]): AnonymousAccess | null {
   const anonymous = profiles.filter((profile) => profile.enabled && profile.authMethods.includes('Anonymous'))
   if (anonymous.length === 0) return null

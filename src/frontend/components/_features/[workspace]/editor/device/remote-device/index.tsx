@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
+import { useIsEditingLocked } from '../../../../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
@@ -432,6 +433,7 @@ type IOGroupRowProps = {
 }
 
 const IOGroupRow = ({ ioGroup, isExpanded, onToggleExpand, onEdit, onDelete, onUpdateAlias }: IOGroupRowProps) => {
+  const isEditingLocked = useIsEditingLocked()
   const firstIOPoint = ioGroup.ioPoints?.[0]
   const groupType = firstIOPoint?.type || '-'
   // The full span, not just the first point: this is what makes a size change
@@ -475,7 +477,8 @@ const IOGroupRow = ({ ioGroup, isExpanded, onToggleExpand, onEdit, onDelete, onU
             <button
               type='button'
               onClick={onEdit}
-              className='rounded p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200'
+              disabled={isEditingLocked}
+              className='rounded p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200'
               title='Edit'
               aria-label={`Edit ${ioGroup.name}`}
             >
@@ -484,7 +487,8 @@ const IOGroupRow = ({ ioGroup, isExpanded, onToggleExpand, onEdit, onDelete, onU
             <button
               type='button'
               onClick={onDelete}
-              className='rounded p-1 text-neutral-500 hover:bg-red-100 hover:text-red-600 dark:text-neutral-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
+              disabled={isEditingLocked}
+              className='rounded p-1 text-neutral-500 hover:bg-red-100 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
               title='Delete'
               aria-label={`Delete ${ioGroup.name}`}
             >
@@ -513,6 +517,7 @@ type IOPointRowProps = {
 }
 
 const IOPointRow = ({ ioPoint, offset, onUpdateAlias }: IOPointRowProps) => {
+  const isEditingLocked = useIsEditingLocked()
   const [alias, setAlias] = useState(ioPoint.alias || '')
 
   const handleBlur = () => {
@@ -542,6 +547,7 @@ const IOPointRow = ({ ioPoint, offset, onUpdateAlias }: IOPointRowProps) => {
           value={alias}
           onChange={(e) => setAlias(e.target.value)}
           onBlur={handleBlur}
+          disabled={isEditingLocked}
           placeholder='Alias'
           className='h-6 w-full rounded border border-neutral-200 bg-white px-1 text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
         />
@@ -555,6 +561,7 @@ const RemoteDeviceEditor = () => {
   const { editor, project, projectActions, sharedWorkspaceActions, runtimeConnection, consoleActions } =
     useOpenPLCStore()
   const runtime = useRuntime()
+  const isEditingLocked = useIsEditingLocked()
 
   const deviceName = editor.type === 'plc-remote-device' ? editor.meta.name : ''
   const protocol = editor.type === 'plc-remote-device' ? editor.meta.protocol : ''
@@ -634,12 +641,13 @@ const RemoteDeviceEditor = () => {
   // stored config has none — keeping disk in sync with what's displayed
   // and fixing projects saved before the serial port was pre-filled.
   useEffect(() => {
+    if (isEditingLocked) return
     const config = remoteDevice?.modbusTcpConfig
     if (config && (config.transport ?? 'tcp') === 'rtu' && !config.serialPort) {
       projectActions.updateRemoteDeviceConfig(deviceName, { serialPort: DEFAULT_SERIAL_PORT })
       sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     }
-  }, [remoteDevice, deviceName, projectActions, sharedWorkspaceActions])
+  }, [remoteDevice, deviceName, projectActions, sharedWorkspaceActions, isEditingLocked])
 
   const ioGroups = useMemo(
     () => remoteDevice?.modbusTcpConfig?.ioGroups || [],
@@ -1105,139 +1113,145 @@ const RemoteDeviceEditor = () => {
             />
           </div>
         </div>
+      </EditingLockBoundary>
 
-        <div className='flex flex-1 flex-col overflow-hidden'>
-          <div className='mb-2 flex items-center justify-between'>
-            <h3 className='text-sm font-medium text-neutral-950 dark:text-neutral-100'>IO Tag Mapping</h3>
-            <div className='flex items-center gap-1'>
-              <input
-                ref={importInputRef}
-                type='file'
-                data-testid='io-group-import-input'
-                accept='.csv,.json,text/csv,application/json'
-                onChange={(e) => void handleImportFileSelected(e)}
-                className='hidden'
-                aria-hidden
-                tabIndex={-1}
-              />
-              <button
-                type='button'
-                id='import-io-groups-button'
-                data-testid='io-group-import-button'
-                onClick={() => importInputRef.current?.click()}
-                className={TOOLBAR_BUTTON_CLASS}
-                title='Import IO groups from a CSV or JSON file'
-              >
-                <Upload className='h-3.5 w-3.5' />
-                Import
-              </button>
-              <DropdownMenu.Root>
-                <DropdownMenu.Trigger asChild disabled={ioGroups.length === 0}>
-                  <button
-                    type='button'
-                    id='export-io-groups-button'
-                    data-testid='io-group-export-button'
-                    className={TOOLBAR_BUTTON_CLASS}
-                    title={ioGroups.length === 0 ? 'Add IO groups to enable export' : 'Export IO groups'}
-                  >
-                    <Download className='h-3.5 w-3.5' />
-                    Export
-                  </button>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Portal>
-                  <DropdownMenu.Content
-                    align='end'
-                    sideOffset={4}
-                    className='z-[60] min-w-[120px] overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
-                  >
-                    {(['csv', 'json'] as const).map((format) => (
-                      <DropdownMenu.Item
-                        key={format}
-                        data-testid={`io-group-export-${format}`}
-                        onSelect={() => handleExport(format)}
-                        className='flex cursor-pointer select-none items-center px-3 py-1.5 text-xs font-medium text-neutral-850 outline-none hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900 dark:data-[highlighted]:bg-neutral-900'
-                      >
-                        {format === 'csv' ? 'CSV (.csv)' : 'JSON (.json)'}
-                      </DropdownMenu.Item>
-                    ))}
-                  </DropdownMenu.Content>
-                </DropdownMenu.Portal>
-              </DropdownMenu.Root>
-              <TableActions
-                actions={[
-                  {
-                    ariaLabel: 'Add IO Group',
-                    onClick: handleOpenAddModal,
-                    icon: <PlusIcon className='h-4 w-4 stroke-brand' />,
-                    id: 'add-io-group-button',
-                  },
-                ]}
-                buttonProps={{
-                  className:
-                    'rounded-md p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed',
-                }}
-              />
-            </div>
-          </div>
-
-          <div className='flex-1 overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-800'>
-            <TooltipProvider>
-              <table className='w-full table-fixed'>
-                <thead className='sticky top-0 bg-neutral-100 dark:bg-neutral-900'>
-                  <tr>
-                    <th className='w-8 px-2 py-2'></th>
-                    <th className='w-[14%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                      Name
-                    </th>
-                    <th className='w-[18%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                      Type
-                    </th>
-                    <th className='w-[15%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                      Address
-                    </th>
-                    <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                      Offset
-                    </th>
-                    <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                      Length
-                    </th>
-                    <th className='w-[17%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                      Function Code
-                    </th>
-                    <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                      Alias
-                    </th>
-                    <th className='w-20 px-2 py-2 text-right text-xs font-medium text-neutral-700 dark:text-neutral-300'>
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ioGroups.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
-                        No IO groups configured. Click the + button to add one, or Import a CSV / JSON file.
-                      </td>
-                    </tr>
-                  ) : (
-                    ioGroups.map((ioGroup: ModbusIOGroup) => (
-                      <IOGroupRow
-                        key={ioGroup.id}
-                        ioGroup={ioGroup}
-                        isExpanded={expandedGroups.has(ioGroup.id)}
-                        onToggleExpand={() => handleToggleExpand(ioGroup.id)}
-                        onEdit={() => handleOpenEditModal(ioGroup.id)}
-                        onDelete={() => handleDeleteIOGroup(ioGroup.id)}
-                        onUpdateAlias={(ioPointId, alias) => handleUpdateAlias(ioGroup.id, ioPointId, alias)}
-                      />
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </TooltipProvider>
+      <div className='flex flex-1 flex-col overflow-hidden'>
+        <div className='mb-2 flex items-center justify-between'>
+          <h3 className='text-sm font-medium text-neutral-950 dark:text-neutral-100'>IO Tag Mapping</h3>
+          <div className='flex items-center gap-1'>
+            <input
+              ref={importInputRef}
+              type='file'
+              data-testid='io-group-import-input'
+              disabled={isEditingLocked}
+              accept='.csv,.json,text/csv,application/json'
+              onChange={(e) => void handleImportFileSelected(e)}
+              className='hidden'
+              aria-hidden
+              tabIndex={-1}
+            />
+            <button
+              type='button'
+              id='import-io-groups-button'
+              data-testid='io-group-import-button'
+              disabled={isEditingLocked}
+              onClick={() => importInputRef.current?.click()}
+              className={TOOLBAR_BUTTON_CLASS}
+              title='Import IO groups from a CSV or JSON file'
+            >
+              <Upload className='h-3.5 w-3.5' />
+              Import
+            </button>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild disabled={ioGroups.length === 0}>
+                <button
+                  type='button'
+                  id='export-io-groups-button'
+                  data-editing-lock-exempt
+                  data-testid='io-group-export-button'
+                  className={TOOLBAR_BUTTON_CLASS}
+                  title={ioGroups.length === 0 ? 'Add IO groups to enable export' : 'Export IO groups'}
+                >
+                  <Download className='h-3.5 w-3.5' />
+                  Export
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  align='end'
+                  sideOffset={4}
+                  className='z-[60] min-w-[120px] overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg dark:border-brand-medium-dark dark:bg-neutral-950'
+                >
+                  {(['csv', 'json'] as const).map((format) => (
+                    <DropdownMenu.Item
+                      key={format}
+                      data-testid={`io-group-export-${format}`}
+                      onSelect={() => handleExport(format)}
+                      className='flex cursor-pointer select-none items-center px-3 py-1.5 text-xs font-medium text-neutral-850 outline-none hover:bg-neutral-100 data-[highlighted]:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900 dark:data-[highlighted]:bg-neutral-900'
+                    >
+                      {format === 'csv' ? 'CSV (.csv)' : 'JSON (.json)'}
+                    </DropdownMenu.Item>
+                  ))}
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+            <TableActions
+              actions={[
+                {
+                  ariaLabel: 'Add IO Group',
+                  disabled: isEditingLocked,
+                  onClick: handleOpenAddModal,
+                  icon: <PlusIcon className='h-4 w-4 stroke-brand' />,
+                  id: 'add-io-group-button',
+                },
+              ]}
+              buttonProps={{
+                className:
+                  'rounded-md p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed',
+              }}
+            />
           </div>
         </div>
 
+        <div className='flex-1 overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-800'>
+          <TooltipProvider>
+            <table className='w-full table-fixed'>
+              <thead className='sticky top-0 bg-neutral-100 dark:bg-neutral-900'>
+                <tr>
+                  <th className='w-8 px-2 py-2'></th>
+                  <th className='w-[14%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Name
+                  </th>
+                  <th className='w-[18%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Type
+                  </th>
+                  <th className='w-[15%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Address
+                  </th>
+                  <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Offset
+                  </th>
+                  <th className='w-[7%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Length
+                  </th>
+                  <th className='w-[17%] px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Function Code
+                  </th>
+                  <th className='px-2 py-2 text-left text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Alias
+                  </th>
+                  <th className='w-20 px-2 py-2 text-right text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {ioGroups.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className='px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400'>
+                      No IO groups configured. Click the + button to add one, or Import a CSV / JSON file.
+                    </td>
+                  </tr>
+                ) : (
+                  ioGroups.map((ioGroup: ModbusIOGroup) => (
+                    <IOGroupRow
+                      key={ioGroup.id}
+                      ioGroup={ioGroup}
+                      isExpanded={expandedGroups.has(ioGroup.id)}
+                      onToggleExpand={() => handleToggleExpand(ioGroup.id)}
+                      onEdit={() => handleOpenEditModal(ioGroup.id)}
+                      onDelete={() => handleDeleteIOGroup(ioGroup.id)}
+                      onUpdateAlias={(ioPointId, alias) => handleUpdateAlias(ioGroup.id, ioPointId, alias)}
+                    />
+                  ))
+                )}
+              </tbody>
+            </table>
+          </TooltipProvider>
+        </div>
+      </div>
+
+      <EditingLockBoundary className='contents'>
         <IOGroupModal
           isOpen={isModalOpen}
           onClose={handleCloseModal}

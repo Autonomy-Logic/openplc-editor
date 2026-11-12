@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 
 import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
+import { editorLockPolicy } from '../../../store/slices/editor/lock-policy'
+import type { EditorModel } from '../../../store/slices/editor/types'
 import { cn } from '../../../utils/cn'
 
 type EditingLockBoundaryProps = {
@@ -22,4 +24,8 @@ const EditingLockBoundary = ({ children, className }: EditingLockBoundaryProps) 
   )
 }
 
-export { EditingLockBoundary }
+/** Wraps an editor the policy marks `host-locked`, and leaves every other policy untouched. */
+const HostLockBoundary = ({ type, children }: { type: EditorModel['type']; children: ReactNode }) =>
+  editorLockPolicy(type) === 'host-locked' ? <EditingLockBoundary>{children}</EditingLockBoundary> : <>{children}</>
+
+export { EditingLockBoundary, HostLockBoundary }
