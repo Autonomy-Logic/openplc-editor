@@ -47,7 +47,23 @@ describe('WorkerClangRunner thread mechanism', () => {
     const runner = track(new WorkerClangRunner({ workerScript: fixture('echo-worker.mjs'), toolchainDir }, 2))
     await runner.prepare()
     const result = await runner.run({ argv: ['clang', '-c', 'a.c'], tree: { 'a.c': 'int a;' } })
-    expect(result).toEqual({ exitCode: 0, stderr: 'clang -c a.c', tree: { 'a.c': 'int a;' } })
+    expect(result).toEqual({ exitCode: 0, stderr: 'clang -c a.c', stdout: '', tree: { 'a.c': 'int a;' } })
+  })
+
+  it('holds the worker thread only while it runs a job', async () => {
+    // Node 22 lists the handles keeping the process alive; the installed @types/node predates the method.
+    const activeResources: unknown = Reflect.get(process, 'getActiveResourcesInfo')
+    const workers = (): number => {
+      const list: unknown = typeof activeResources === 'function' ? activeResources.call(process) : []
+      return Array.isArray(list) ? list.filter((r) => r === 'Worker' || r === 'MessagePort').length : 0
+    }
+    expect(typeof activeResources).toBe('function')
+    const before = workers()
+    const runner = track(new WorkerClangRunner({ workerScript: fixture('echo-worker.mjs'), toolchainDir }, 1))
+    await runner.prepare()
+    expect(workers()).toBe(before)
+    await runner.run({ argv: ['clang', '--version'], tree: {} })
+    expect(workers()).toBe(before)
   })
 
   it('rejects prepare when the worker cannot load, and can try again', async () => {

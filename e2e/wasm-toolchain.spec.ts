@@ -9,9 +9,9 @@
  * Opt-in: E2E_PACKAGED_APP, the executable of a packaged build (`npm run package`), also runs the compile case
  * against that build, where clang ships as an extra resource outside the asar archive.
  */
-import { mkdirSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import type { ElectronApplication, Page } from '@playwright/test'
 import { _electron as electron, expect, test } from '@playwright/test'
@@ -20,7 +20,8 @@ import { compileThroughPort, runAnswer } from './helpers/compiler-port'
 
 const ROOT = join(realpathSync(tmpdir()), 'openplc-e2e-wasm-toolchain')
 const MAIN = join(__dirname, '..', 'release', 'app', 'dist', 'main', 'main.js')
-const PACKAGED_APP = process.env.E2E_PACKAGED_APP ?? ''
+// Resolved before launching from another directory, so a repository-relative path works too.
+const PACKAGED_APP = process.env.E2E_PACKAGED_APP ? resolve(__dirname, '..', process.env.E2E_PACKAGED_APP) : ''
 
 function launch(slug: string, cwd?: string, executablePath?: string): Promise<ElectronApplication> {
   const userData = join(ROOT, slug, 'userdata')
@@ -120,6 +121,18 @@ test.describe('WebAssembly toolchain (desktop)', () => {
     const app = await launch('packaged-run', cwd, PACKAGED_APP)
     try {
       await compilesThroughThePort(app)
+      // The licence texts the toolchain's npm package lacks ship next to it.
+      const resourcesPath = await app.evaluate(() => process.resourcesPath)
+      const licenses = join(resourcesPath, 'yowasp-clang', 'licenses')
+      for (const file of [
+        'LICENSE.txt',
+        'llvm-project/LICENSE.TXT',
+        'llvm-project/libcxx/LICENSE.TXT',
+        'wasi-libc/LICENSE',
+        'wasi-libc/libc-top-half/musl/COPYRIGHT',
+      ]) {
+        expect(existsSync(join(licenses, file)), file).toBe(true)
+      }
     } finally {
       app.process().kill('SIGKILL')
     }

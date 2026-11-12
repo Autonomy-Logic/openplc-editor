@@ -28,8 +28,10 @@ export type {
 
 export const WASM_TARGET = 'wasm32-wasip1'
 export const DEFAULT_WASM_OUTPUT = 'module.wasm'
-/** Where the compile step writes objects and dependency files; request files may not use it. */
+/** Where the compile step writes objects, dependency files and the linked module; request files may not use it. */
 const WORK_DIR = '__objects'
+/** The link always writes here, a directory that exists, whatever the request names its module. */
+const LINK_OUTPUT = `${WORK_DIR}/module.wasm`
 
 /** A compiled object and the content digest of every request file it was built from. */
 export interface CachedWasmObject {
@@ -122,7 +124,7 @@ async function runSafely(runner: WasmClangRunner, job: WasmClangJob): Promise<Wa
   try {
     return await runner.run(job)
   } catch (error) {
-    return { exitCode: -1, stderr: error instanceof Error ? error.message : String(error), tree: {} }
+    return { exitCode: -1, stderr: error instanceof Error ? error.message : String(error), stdout: '', tree: {} }
   }
 }
 
@@ -165,8 +167,11 @@ function dependenciesOf(
   const dependencies: Array<[string, string]> = []
   for (const path of new Set(paths)) {
     // Toolchain headers (absolute paths) come with the toolchain and change only with it.
+    if (path.startsWith('/')) continue
     const digest = digestOf(path)
-    if (digest !== undefined) dependencies.push([path, digest])
+    // A relative path that names no request file means the list cannot be trusted; such an object is not cached.
+    if (digest === undefined) return null
+    dependencies.push([path, digest])
   }
   return dependencies
 }
@@ -247,13 +252,13 @@ export async function compileToWasm(
       ...planned.map((p) => p.object),
       ...(request.linkFlags ?? []),
       '-o',
-      output,
+      LINK_OUTPUT,
     ],
     tree: filesToTree(linkFiles),
   })
   stats.linkMs = performance.now() - linkStart
 
-  const wasm = link.exitCode === 0 ? readTreeFile(link.tree, output) : undefined
+  const wasm = link.exitCode === 0 ? readTreeFile(link.tree, LINK_OUTPUT) : undefined
   if (!isFileBytes(wasm)) {
     reportStderr(report, link.stderr, 'error')
     return fail(`Link failed: ${describeFailure(link.exitCode, `no '${output}'`)}`)

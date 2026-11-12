@@ -21,8 +21,6 @@ export function createThreadClangWorkerMechanism(paths: WorkerClangRunnerPaths):
     load: () => access(bundlePath),
     spawn: (): ClangWorkerHandle => {
       const worker = new Worker(paths.workerScript, { workerData: { bundleUrl: pathToFileURL(bundlePath).href } })
-      // A pool of idle workers must not keep a command-line run alive.
-      worker.unref()
       return {
         post: (message) => worker.postMessage(message),
         onMessage: (listener) => worker.on('message', listener),
@@ -30,6 +28,8 @@ export function createThreadClangWorkerMechanism(paths: WorkerClangRunnerPaths):
           worker.on('error', (error) => listener(error.message))
           worker.on('exit', (code) => listener(`exit code ${code}`))
         },
+        // Held only while it runs a job: an idle pool must not keep a command-line run alive, a busy one must.
+        setBusy: (busy) => (busy ? worker.ref() : worker.unref()),
         terminate: () => worker.terminate(),
       }
     },

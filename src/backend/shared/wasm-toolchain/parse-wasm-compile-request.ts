@@ -4,6 +4,8 @@ import type {
   WasmToolchainFiles,
 } from '@root/middleware/shared/ports/wasm-toolchain-types'
 
+import { toolchainPathProblem } from './file-tree'
+
 export type ParsedWasmCompileRequest = { ok: true; request: WasmCompileRequest } | { ok: false; error: string }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -19,8 +21,12 @@ const optionalFlags = (value: unknown, field: string): string[] | undefined | st
 
 function parseFiles(value: unknown): WasmToolchainFiles | string {
   if (!isRecord(value)) return "'files' must be an object of path to content."
+  // No prototype, so a key such as `__proto__` is stored as a key, then refused below, never applied.
   const files: WasmToolchainFiles = {}
+  Object.setPrototypeOf(files, null)
   for (const [path, content] of Object.entries(value)) {
+    const problem = toolchainPathProblem(path)
+    if (problem !== null) return problem
     if (typeof content === 'string') files[path] = content
     else if (ArrayBuffer.isView(content))
       files[path] = new Uint8Array(content.buffer, content.byteOffset, content.byteLength)

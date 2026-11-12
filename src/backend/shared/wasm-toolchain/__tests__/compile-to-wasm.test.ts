@@ -61,7 +61,7 @@ describe('compileToWasm', () => {
       '__objects/1.o',
       '-mexec-model=reactor',
       '-o',
-      'module.wasm',
+      '__objects/module.wasm',
     ])
     // The link step sees the objects the compile steps produced.
     expect(FakeRunner.text(link.tree, '__objects/0.o')).toContain('core/core.c')
@@ -75,11 +75,11 @@ describe('compileToWasm', () => {
     for (const job of runner.jobs.slice(0, 2)) expect(FakeRunner.text(job.tree, 'core/core.h')).toBe('int core(void);')
   })
 
-  it('writes the module to the requested output path', async () => {
+  it('links into its own work folder whatever the module is called, so a nested name needs no folder', async () => {
     const runner = new FakeRunner()
     const result = await compileToWasm(request({ output: 'out/preview.wasm' }), { runner })
     expect(result.ok).toBe(true)
-    expect(runner.jobs[2].argv.slice(-2)).toEqual(['-o', 'out/preview.wasm'])
+    expect(runner.jobs[2].argv.slice(-2)).toEqual(['-o', '__objects/module.wasm'])
   })
 
   const compiledSources = (runner: FakeRunner): string[] =>
@@ -148,6 +148,14 @@ describe('compileToWasm', () => {
     await compileToWasm(request(), { runner: new FakeRunner(), cache })
     const result = await compileToWasm(request({ cxxFlags: ['-std=gnu++20'] }), { runner: new FakeRunner(), cache })
     expect(result.stats.cached).toBe(1)
+  })
+
+  it('does not cache an object whose dependency list names a file it was not given', async () => {
+    const cache = new Map<string, CachedWasmObject>()
+    await compileToWasm(request(), { runner: runnerWithIncludes({ 'app/main.cpp': ['app/config\\#1.h'] }), cache })
+    expect([...cache.values()].map((e) => e.dependencies.map(([p]) => p).sort())).toEqual([
+      ['core/core.c', 'core/core.h'],
+    ])
   })
 
   it.each(['missing', 'garbage'] as const)('does not cache an object whose dependency file is %s', async (kind) => {

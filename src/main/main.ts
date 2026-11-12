@@ -276,19 +276,24 @@ const createMainWindow = async () => {
       mainWindow.minimize()
     }
     const minimumSplash = new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 3000))
-    void Promise.all([minimumSplash, getDesktopWasmCompileService().prepare()]).then(([, toolchain]) => {
-      if (splash === null) {
-        mainWindow?.destroy()
-        return
-      }
-      if (!toolchain.ok) {
-        showStartupFailure(toolchain.message)
-        return
-      }
-      logger.info(`WebAssembly toolchain ready in ${Math.round(toolchain.ms)} ms`)
-      splash.close()
-      mainWindow?.show()
-    })
+    void Promise.all([minimumSplash, getDesktopWasmCompileService().prepare()])
+      .then(([, toolchain]) => {
+        if (splash === null) {
+          mainWindow?.destroy()
+          return
+        }
+        if (!toolchain.ok) {
+          showStartupFailure(toolchain.message)
+          return
+        }
+        logger.info(`WebAssembly toolchain ready in ${Math.round(toolchain.ms)} ms`)
+        splash.close()
+        mainWindow?.show()
+      })
+      .catch((error: unknown) => {
+        // Anything unexpected while opening the editor is shown on the splash rather than lost.
+        showStartupFailure('The editor could not open: ' + getErrorMessage(error))
+      })
   })
 
   /** Keeps the splash up with the reason the editor cannot start; closing it quits. */
@@ -549,7 +554,9 @@ app
       createVendorDocumentHandler({ listPackages: () => packages.listInstalled() }),
     )
     // Loads the WebAssembly toolchain while the windows come up; the splash waits for it.
-    void getDesktopWasmCompileService().prepare()
+    getDesktopWasmCompileService()
+      .prepare()
+      .catch((error: unknown) => logger.error('WebAssembly toolchain: ' + getErrorMessage(error)))
     void createMainWindow()
     // Last session's cloud builds. The cloud is the source of truth for those
     // projects, so nothing here survives a restart; best-effort, since a scratch

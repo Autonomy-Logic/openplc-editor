@@ -12,11 +12,18 @@ import { ClangWorkerPool, clangWorkerCount, parseClangWorkerReply } from '../cla
 class FakeWorker implements ClangWorkerHandle {
   posted: ClangWorkerJobMessage[] = []
   terminated = false
+  busy: boolean[] = []
+  postError: Error | null = null
+  terminateError: Error | null = null
   private messageListeners: Array<(raw: unknown) => void> = []
   private failureListeners: Array<(reason: string) => void> = []
 
   post(message: ClangWorkerJobMessage): void {
+    if (this.postError) throw this.postError
     this.posted.push(message)
+  }
+  setBusy(busy: boolean): void {
+    this.busy.push(busy)
   }
   onMessage(listener: (raw: unknown) => void): void {
     this.messageListeners.push(listener)
@@ -24,8 +31,9 @@ class FakeWorker implements ClangWorkerHandle {
   onFailure(listener: (reason: string) => void): void {
     this.failureListeners.push(listener)
   }
-  terminate(): void {
+  terminate(): Promise<void> {
     this.terminated = true
+    return this.terminateError ? Promise.reject(this.terminateError) : Promise.resolve()
   }
   send(raw: unknown): void {
     for (const l of this.messageListeners) l(raw)
@@ -34,7 +42,7 @@ class FakeWorker implements ClangWorkerHandle {
     for (const l of this.failureListeners) l(reason)
   }
   answer(id: number, exitCode = 0): void {
-    this.send({ type: 'result', id, result: { exitCode, stderr: '', tree: {} } })
+    this.send({ type: 'result', id, result: { exitCode, stderr: '', stdout: '', tree: {} } })
   }
 }
 
@@ -82,10 +90,12 @@ describe('parseClangWorkerReply', () => {
       id: 1,
       message: 'm',
     })
-    expect(parseClangWorkerReply({ type: 'result', id: 2, result: { exitCode: 1, stderr: 's', tree: {} } })).toEqual({
+    expect(
+      parseClangWorkerReply({ type: 'result', id: 2, result: { exitCode: 1, stderr: 's', stdout: 'o', tree: {} } }),
+    ).toEqual({
       type: 'result',
       id: 2,
-      result: { exitCode: 1, stderr: 's', tree: {} },
+      result: { exitCode: 1, stderr: 's', stdout: 'o', tree: {} },
     })
   })
 
@@ -94,8 +104,9 @@ describe('parseClangWorkerReply', () => {
     'ready',
     { type: 'result' },
     { type: 'error', id: 1 },
-    { type: 'result', id: 1, result: { exitCode: '0', stderr: '', tree: {} } },
-    { type: 'result', id: 1, result: { exitCode: 0, stderr: '', tree: new Uint8Array(1) } },
+    { type: 'result', id: 1, result: { exitCode: '0', stderr: '', stdout: '', tree: {} } },
+    { type: 'result', id: 1, result: { exitCode: 0, stderr: '', tree: {} } },
+    { type: 'result', id: 1, result: { exitCode: 0, stderr: '', stdout: '', tree: new Uint8Array(1) } },
     { type: 'other', id: 1 },
   ])('rejects %j', (value) => {
     expect(parseClangWorkerReply(value)).toBeNull()
@@ -130,17 +141,67 @@ describe('ClangWorkerPool', () => {
     expect(mechanism.workers).toHaveLength(1)
   })
 
-  it('adds a worker when every worker is busy, up to the maximum', async () => {
+  it('adds a worker while jobs wait, up to the maximum, and runs one job per worker', async () => {
     const mechanism = new FakeMechanism()
     const p = pool(mechanism, 2)
     const runs = [p.run(job), p.run(job), p.run(job)]
     await flush()
     expect(mechanism.workers).toHaveLength(2)
     const [a, b] = mechanism.workers
-    expect(a.posted.length + b.posted.length).toBe(3)
-    expect(b.posted.length).toBeGreaterThan(0)
-    for (const w of [a, b]) for (const m of w.posted) w.answer(m.id)
+    expect(a.posted).toHaveLength(1)
+    expect(b.posted).toHaveLength(1)
+
+    // The third job waits in the pool and goes to the first worker that frees up.
+    a.answer(a.posted[0].id)
+    await flush()
+    expect(a.posted).toHaveLength(2)
+    expect(b.posted).toHaveLength(1)
+    a.answer(a.posted[1].id)
+    b.answer(b.posted[0].id)
     await expect(Promise.all(runs)).resolves.toHaveLength(3)
+  })
+
+  it("starts a waiting job's deadline when a worker takes it, not when it was queued", async () => {
+    const mechanism = new FakeMechanism()
+    const p = pool(mechanism, 1, { job: 60 })
+    const first = p.run(job)
+    const second = p.run(job)
+    await flush()
+    const [w] = mechanism.workers
+    await new Promise((r) => setTimeout(r, 40))
+    w.answer(w.posted[0].id)
+    await first
+    await new Promise((r) => setTimeout(r, 40))
+    // 80 ms after it was queued, but only 40 ms after the worker took it.
+    w.answer(w.posted[1].id)
+    await expect(second).resolves.toMatchObject({ exitCode: 0 })
+    expect(w.terminated).toBe(false)
+  })
+
+  it('tells the worker when it is busy and when it is idle', async () => {
+    const mechanism = new FakeMechanism()
+    const p = pool(mechanism, 1)
+    const run = p.run(job)
+    await flush()
+    const [w] = mechanism.workers
+    w.answer(w.posted[0].id)
+    await run
+    expect(w.busy).toEqual([false, true, false])
+  })
+
+  it('fails only the job a worker could not be handed, and keeps the worker', async () => {
+    const mechanism = new FakeMechanism()
+    const p = pool(mechanism, 1)
+    await p.prepare()
+    const [w] = mechanism.workers
+    w.postError = new Error('could not clone the job')
+    await expect(p.run(job)).rejects.toThrow('could not clone the job')
+    w.postError = null
+    const next = p.run(job)
+    await flush()
+    w.answer(w.posted[0].id)
+    await expect(next).resolves.toMatchObject({ exitCode: 0 })
+    expect(mechanism.workers).toHaveLength(1)
   })
 
   it('rejects a job the worker reports it could not run, and ignores unknown replies', async () => {
@@ -177,6 +238,16 @@ describe('ClangWorkerPool', () => {
     await expect(retry).resolves.toBeUndefined()
   })
 
+  it('keeps the reason loading failed when stopping the workers also fails', async () => {
+    const mechanism = new FakeMechanism(false)
+    const p = pool(mechanism, 1)
+    const prepare = p.prepare()
+    await flush()
+    mechanism.workers[0].terminateError = new Error('terminate failed')
+    mechanism.workers[0].fail('cannot load')
+    await expect(prepare).rejects.toThrow('The compiler worker stopped (cannot load).')
+  })
+
   it('fails prepare when the first worker does not load in time', async () => {
     const mechanism = new FakeMechanism(false)
     await expect(pool(mechanism, 1, { load: 20 }).prepare()).rejects.toThrow(
@@ -202,7 +273,7 @@ describe('ClangWorkerPool', () => {
     await expect(next).resolves.toMatchObject({ exitCode: 0 })
   })
 
-  it('rejects jobs sent to a new worker that fails while loading, and drops it', async () => {
+  it('fails waiting jobs when a new worker fails while loading and no loaded worker is left', async () => {
     const mechanism = new FakeMechanism()
     const p = pool(mechanism, 1)
     const first = p.run(job)
