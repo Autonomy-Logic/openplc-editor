@@ -167,6 +167,7 @@ import {
   getPlcopenImportFilePath,
   getProjectPath,
 } from '../../../backend/editor/utils'
+import { getDesktopWasmCompileService } from '../../../backend/editor/wasm-toolchain/desktop-wasm-toolchain'
 import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import {
@@ -174,6 +175,7 @@ import {
   PLUGIN_COMMAND_TIMEOUT_MS,
   type PluginCommandOutcome,
 } from '../../../backend/shared/utils/vpp/screen-actions'
+import type { WasmCompileResult } from '../../../middleware/shared/ports/wasm-toolchain-types'
 import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
 
 const EditSessionClientSchema = z.object({
@@ -1029,6 +1031,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('util:get-preview-image', this.handleUtilGetPreviewImage)
     this.ipcMain.on('util:log', this.handleUtilLog)
     this.registerHandle('util:read-debug-file', this.handleReadDebugFile)
+
+    this.registerHandle('wasm-toolchain:compile', this.handleWasmToolchainCompile)
 
     // ===================== DEBUGGER =====================
     this.registerHandle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
@@ -2385,6 +2389,9 @@ class MainProcessBridge implements MainIpcModule {
     this.packageManagerModule.getPackagePin(packageId)
 
   // Utility handlers
+  handleWasmToolchainCompile = (_event: IpcMainInvokeEvent, request: unknown): Promise<WasmCompileResult> =>
+    getDesktopWasmCompileService().compileRequest(request)
+
   handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string, packagePath?: string) =>
     this.hardwareModule.getBoardImagePreview(image, packagePath)
   handleUtilLog = (_: IpcMainEvent, { level, message }: { level: 'info' | 'error'; message: string }) => {
