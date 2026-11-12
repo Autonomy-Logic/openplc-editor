@@ -13,7 +13,8 @@
  *     project enables follow, each with an inline "−" affordance to
  *     pull them back out.  A missing-libraries callout sits above
  *     the list when `project.libraries` references libraries not
- *     present in the system pool.
+ *     present in the system pool; each entry has a "−" affordance
+ *     that removes the reference from the project.
  *
  * The dual-card transfer shape mirrors the EtherCAT module-selection
  * UX so users move between the two managers without relearning the
@@ -108,18 +109,37 @@ const ProjectLibrariesTab = ({ installed }: ProjectLibrariesTabProps) => {
         }
       >
         {missingLibraries.length > 0 && (
-          <div className='shrink-0 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs dark:border-yellow-700 dark:bg-yellow-950/40'>
+          <div
+            data-testid='missing-libraries-callout'
+            className='shrink-0 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs dark:border-yellow-700 dark:bg-yellow-950/40'
+          >
             <span className='font-medium text-yellow-800 dark:text-yellow-200'>Missing libraries:</span>
-            <ul className='mt-1 list-inside list-disc text-yellow-700 dark:text-yellow-300'>
+            <ul className='mt-1 flex flex-col gap-0.5 text-yellow-700 dark:text-yellow-300'>
               {missingLibraries.map((m) => (
-                <li key={m.name}>
-                  {m.name}
-                  {m.version ? ` (v${m.version})` : ''}
+                <li
+                  key={m.name}
+                  data-testid={`missing-library-row-${m.name}`}
+                  className='flex items-center justify-between gap-2'
+                >
+                  <span className='min-w-0 truncate'>
+                    {m.name}
+                    {m.version ? ` (v${m.version})` : ''}
+                  </span>
+                  <button
+                    type='button'
+                    aria-label={`Remove ${m.name} from project`}
+                    title='Remove from project'
+                    data-testid={`missing-library-remove-${m.name}`}
+                    onClick={() => disableLibrary(m.name)}
+                    className='shrink-0 rounded-md p-0.5 hover:bg-yellow-100 dark:hover:bg-yellow-900/40'
+                  >
+                    <MinusIcon className='!stroke-brand' />
+                  </button>
                 </li>
               ))}
             </ul>
             <p className='mt-1 text-yellow-700 dark:text-yellow-300'>
-              Install them on the System Libraries tab to make them available to this project.
+              Install them on the System Libraries tab, or remove them from this project.
             </p>
           </div>
         )}

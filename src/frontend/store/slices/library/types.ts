@@ -56,8 +56,9 @@ export type LibraryActions = {
    */
   ensureLibrariesForTypes: (typeNames: readonly string[]) => void
   /**
-   * Remove a system library from the current project.  No-op for
-   * canonical libraries.  Drops the row from `state.project.libraries`.
+   * Remove a library from the current project.  No-op for
+   * canonical libraries.  Drops the row from `state.project.libraries`
+   * and clears its entry from `missingLibraries`.
    */
   disableLibrary: (name: string) => void
   /**
