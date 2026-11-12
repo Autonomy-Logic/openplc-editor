@@ -13,6 +13,7 @@ import { createLadderFlowSlice } from '../slices/ladder/slice'
 import { createLibrarySlice } from '../slices/library/slice'
 import { createModalSlice } from '../slices/modal/slice'
 import { createProjectSlice } from '../slices/project/slice'
+import { createRuntimeProvisioningSlice } from '../slices/runtime-provisioning/slice'
 import { createSearchSlice } from '../slices/search/slice'
 import { createSharedSlice } from '../slices/shared/slice'
 import type { SharedRootState } from '../slices/shared/types'
@@ -37,6 +38,7 @@ function makeStore() {
     ...createHistorySlice(...args),
     ...createVersionControlSlice(...args),
     ...createAISlice(...args),
+    ...createRuntimeProvisioningSlice(...args),
     ...createSharedSlice(...args),
   }))
 }
@@ -75,7 +77,6 @@ describe('createSharedSlice', () => {
         expect(state.tabs[0].name).toBe('Main')
         expect(state.selectedTab).toBe('Main')
 
-        // A program is never registered as a library block (excluded from libraries.user).
         expect(state.libraries.user).toHaveLength(0)
       })
 
@@ -118,7 +119,6 @@ describe('createSharedSlice', () => {
         expect(state.project.data.pous).toHaveLength(3)
         expect(state.tabs).toHaveLength(3)
         expect(Object.keys(state.files)).toHaveLength(3)
-        // Two, not three: the program is excluded from the library.
         expect(state.libraries.user.map((library) => library.name)).toEqual(['Func1', 'FB1'])
       })
 
@@ -205,7 +205,6 @@ describe('createSharedSlice', () => {
         expect(state.files['NewName']).toBeDefined()
         expect(state.files['OldName']).toBeUndefined()
         expect(state.tabs[0].name).toBe('NewName')
-        // The POU here is a program, so it never entered `libraries.user`.
         expect(state.libraries.user).toHaveLength(0)
       })
 
@@ -299,7 +298,6 @@ describe('createSharedSlice', () => {
         expect(copyPou).toBeDefined()
         expect(copyPou!.body.language).toBe('ld')
 
-        // The duplicate must also seed ladderFlows so the editor renders.
         const flow = store.getState().ladderFlows.find((f) => f.name === 'LdCopy')
         expect(flow).toBeDefined()
       })
@@ -365,7 +363,6 @@ describe('createSharedSlice', () => {
         const copyPou = store.getState().project.data.pous.find((p) => p.name === 'FnNoRetCopy')
         expect(copyPou).toBeDefined()
         expect(copyPou!.pouType).toBe('function')
-        // Falls back to 'BOOL' because source had no returnType
         expect(copyPou!.interface?.returnType).toBe('BOOL')
       })
 
@@ -561,7 +558,6 @@ describe('createSharedSlice', () => {
       })
 
       it('rejects a case-only rename of the type itself', async () => {
-        // Case-only rename would delete and recreate the same file on case-folding filesystems.
         const result = await store.getState().datatypeActions.rename('OldDT', 'olddt')
         expect(result.ok).toBe(false)
         expect(result.message).toBe('Data type name already exists')
@@ -645,7 +641,6 @@ describe('createSharedSlice', () => {
         store.getState().workspaceActions.setEditingState('saved')
       })
 
-      // Active editor or stored model, same preference order the propagation sync uses.
       const getVariableView = (name: string) => {
         const state = store.getState()
         const model = state.editor.meta.name === name ? state.editor : state.editorActions.getEditorFromEditors(name)
@@ -731,7 +726,6 @@ describe('createSharedSlice', () => {
         expect(result).toEqual({ ok: false, cancelled: true, message: 'Rename cancelled' })
         const after = store.getState()
         expect(after.pendingDatatypeRename).toBeNull()
-        // Same object references — no slice was written at all.
         expect(after.project).toBe(before.project)
         expect(after.files).toBe(before.files)
         expect(after.tabs).toBe(before.tabs)
@@ -752,7 +746,6 @@ describe('createSharedSlice', () => {
 
         expect(result.ok).toBe(true)
         expect(store.getState().pendingDatatypeRename).toBeNull()
-        // References untouched — there was nothing to propagate.
         const variables = store.getState().project.data.pous[0].interface?.variables ?? []
         expect(variables[0].type.value).toBe('OldDT')
       })
@@ -778,7 +771,6 @@ describe('createSharedSlice', () => {
 
         expect(second.ok).toBe(false)
         expect(second.message).toBe('Another data type change is awaiting confirmation')
-        // The first request's resolver is untouched and still completes.
         expect(store.getState().pendingDatatypeRename).toBe(pendingBefore)
         store.getState().datatypeActions.respondToPendingRename(true)
         const result = await first
@@ -809,7 +801,6 @@ describe('createSharedSlice', () => {
       })
 
       it('regenerates the buffer of a stored (non-active) POU model', async () => {
-        // Make something else the active editor so Main only lives in editors[].
         store.getState().datatypeActions.create({ name: 'Scratch', derivation: 'structure' })
         expect(store.getState().editor.meta.name).toBe('Scratch')
         store.getState().editorActions.updateModelVariablesForName('Main', {
@@ -991,7 +982,6 @@ describe('createSharedSlice', () => {
         store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
 
         expect(store.getState().pendingDatatypeRename).toBeNull()
-        // Without the resolver being fired, this await would never settle.
         await expect(rename).resolves.toEqual({
           ok: false,
           cancelled: true,
@@ -1010,7 +1000,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // duplicate
     describe('duplicate', () => {
       beforeEach(() => {
         store.getState().datatypeActions.create({ name: 'SourceDT', derivation: 'array' })
@@ -1120,7 +1109,6 @@ describe('createSharedSlice', () => {
         expect(store.getState().project.data.pous[0].name).toBe('Pump')
       })
 
-      // Guards against `updatePouName` queueing the POU's own file for deletion.
       it('treats a rename onto the exact same name as a no-op', () => {
         seedPou('Pump')
         const result = store.getState().pouActions.rename('Pump', 'Pump')
@@ -1179,7 +1167,6 @@ describe('createSharedSlice', () => {
     })
 
     describe('globalVariableListActions', () => {
-      // `GVL`'s generated struct name `GVL_TYPE` may already be another list's instance name.
       it('refuses a create whose derived type name another list already holds', () => {
         seedList('GVL_TYPE')
         const result = store.getState().globalVariableListActions.create('GVL')
@@ -1209,7 +1196,6 @@ describe('createSharedSlice', () => {
         expect(result.message).toBe('"Pump" is already the name of a POU')
       })
 
-      // An unreadable .dt is echoed back verbatim on save, so its type stays in the build.
       describe('with an unreadable datatypes/GVL_TYPE.dt on disk', () => {
         const seedGhostTypeFile = () =>
           store
@@ -1248,7 +1234,6 @@ describe('createSharedSlice', () => {
       })
     })
 
-    // Bundled library symbols are reserved before the user creates anything.
     describe('against library symbols', () => {
       const librarySymbol = (name: string, type: 'function' | 'function-block') => ({
         name,
@@ -1369,7 +1354,6 @@ describe('createSharedSlice', () => {
         })
       })
 
-      // The gate is entry-point only: an existing project with a colliding name still opens.
       it('still opens a project that already carries a colliding name', () => {
         const projectData: PLCProjectData = {
           dataTypes: [],
@@ -1396,8 +1380,6 @@ describe('createSharedSlice', () => {
   })
 
   describe('serverActions', () => {
-    // The protocol is a parameter because only one server of each may be
-    // created, so a test needing two has to reach for a second protocol.
     function addServer(name: string, protocol: 'modbus-tcp' | 's7comm' = 'modbus-tcp') {
       store.getState().projectActions.createServer({
         data: { name, protocol },
@@ -1484,8 +1466,6 @@ describe('createSharedSlice', () => {
       })
 
       it('returns error when new name already exists', () => {
-        // Names are unique across protocols, so the collision stands even
-        // though the two servers are of different ones.
         addServer('ExistingServer', 's7comm')
         const result = store.getState().serverActions.rename('OldServer', 'ExistingServer')
         expect(result.ok).toBe(false)
@@ -1902,8 +1882,6 @@ describe('createSharedSlice', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
         store.getState().pouActions.create({ type: 'program', name: 'Graphical', language: 'ld' })
         store.getState().snapshotActions.pushToHistory('Graphical', snapshot1)
-        // `rungs` entries without `defaultBounds` fail the ladder schema, so the
-        // body stays stale and a snapshot here would pair it with a fresh flow.
         store.getState().ladderFlowActions.addLadderFlow({
           name: 'Graphical',
           updated: true,
@@ -1911,7 +1889,6 @@ describe('createSharedSlice', () => {
         } as unknown as LadderFlowType)
         store.getState().ladderFlowActions.setFlowUpdated({ editorName: 'Graphical', updated: true })
 
-        // `false` is what drives the "History unavailable" toast in the UI.
         expect(store.getState().snapshotActions.undo('Graphical')).toBe(false)
         expect(store.getState().snapshotActions.redo('Graphical')).toBe(false)
 
@@ -2003,7 +1980,6 @@ describe('createSharedSlice', () => {
 
       it('does nothing if POU does not exist in project', () => {
         store.getState().snapshotActions.pushToHistory('Ghost', snapshot1)
-        // Undo early-returns after reading the last past entry but before popping it.
         store.getState().snapshotActions.undo('Ghost')
         expect(store.getState().undoRedo['Ghost'].past).toHaveLength(1)
       })
@@ -2093,7 +2069,7 @@ describe('createSharedSlice', () => {
 
         const history = store.getState().undoRedo['Main']
         expect(history.future).toHaveLength(0)
-        expect(history.past).toHaveLength(2) // snapshotA + current state saved
+        expect(history.past).toHaveLength(2)
 
         const pou = store.getState().project.data.pous.find((p) => p.name === 'Main')
         expect(pou!.body.value).toBe(store.getState().undoRedo['Main'].future.length === 0 ? pou!.body.value : 'body-B')
@@ -2140,7 +2116,6 @@ describe('createSharedSlice', () => {
       it('does nothing if POU does not exist for redo', () => {
         store.getState().snapshotActions.pushToHistory('Ghost', snapshot1)
         store.getState().snapshotActions.undo('Ghost')
-        // Ghost has no POU, so undo early-returns before modifying history
         expect(store.getState().undoRedo['Ghost'].past).toHaveLength(1)
       })
 
@@ -2149,7 +2124,6 @@ describe('createSharedSlice', () => {
         store.getState().snapshotActions.undo('Main')
         expect(store.getState().undoRedo['Main'].future).toHaveLength(1)
         store.getState().pouActions.delete('Main')
-        // Redo early-returns before popping future, since the POU no longer exists.
         store.getState().snapshotActions.redo('Main')
         expect(store.getState().undoRedo['Main'].future).toHaveLength(1)
       })
@@ -2319,7 +2293,6 @@ describe('createSharedSlice', () => {
 
         store.getState().snapshotActions.undo('Palette')
 
-        // Name stays pinned to the current key so already-rekeyed tabs/files/editors don't desync.
         const dataType = store.getState().project.data.dataTypes.find((d) => d.name === 'Palette')
         expect(dataType).toEqual({ ...initial, name: 'Palette' })
       })
@@ -2430,7 +2403,6 @@ describe('createSharedSlice', () => {
       })
 
       it('selects a diff-viewer next tab with a null project-tree leaf', () => {
-        // A diff-viewer tab has no project-tree leaf, so its leaf type must be null when active.
         store.getState().tabsActions.updateTabs({
           name: 'Diff: pous/programs/Main.st',
           elementType: { type: 'diff-viewer', filePath: 'pous/programs/Main.st' },
@@ -2444,8 +2416,6 @@ describe('createSharedSlice', () => {
       })
 
       it('selects a diagnostics next tab with a null project-tree leaf', () => {
-        // Same as the diff viewer: the developer diagnostics tab has no
-        // project element behind it, so there is no leaf to highlight.
         store.getState().tabsActions.updateTabs({
           name: 'I/O Image Diagnostics',
           path: '/diagnostics',
@@ -2460,8 +2430,6 @@ describe('createSharedSlice', () => {
       })
 
       it('does not resurrect the closed model in editors[]', () => {
-        // forceCloseFile must remove the active model from editors[] before setEditor runs
-        // for the next tab, or the closed model reappears on the next focus switch.
         store.getState().pouActions.create({ type: 'program', name: 'A', language: 'st' })
         store.getState().pouActions.create({ type: 'program', name: 'B', language: 'st' })
         store.getState().editorActions.setEditor(store.getState().editorActions.getEditorFromEditors('A')!)
@@ -2487,7 +2455,6 @@ describe('createSharedSlice', () => {
         })
 
         expect(store.getState().project.meta.name).toBe('Irrigation Controller')
-        // Ephemeral: points the next Save at Save As instead of a scratch dir the app prunes.
         expect(store.getState().workspace.isEphemeralProject).toBe(true)
       })
     })
@@ -2631,9 +2598,7 @@ describe('createSharedSlice', () => {
         }
       }
 
-      // DOPE-442
       describe('a project saved before 4.3.0', () => {
-        /** A board whose Modbus lived in the VPP screen sections. */
         const legacyBoard = {
           deviceConfiguration: {
             deviceBoard: 'ESP32',
@@ -2646,9 +2611,6 @@ describe('createSharedSlice', () => {
         }
 
         it('opens with no Modbus server and leaves the old sections untouched', () => {
-          // 4.3.0 does not carry configuration forward. Nothing is promoted,
-          // nothing is rewritten, and the project is not dirtied on open -- the
-          // user creates the server again, and until then no Modbus is compiled.
           const data = { ...makeMinimalProjectResponse(), ...legacyBoard }
           store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
 
@@ -2669,13 +2631,9 @@ describe('createSharedSlice', () => {
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
 
         const state = store.getState()
-        // `meta.path` is what moves the desktop app off the start screen to show the Console.
         expect(state.project.meta.path).toBe('/test/path')
-        // No content: a blank canvas would look like a legitimate empty diagram.
         expect(state.project.data.pous).toHaveLength(0)
-        // Read-only, so no save can write that emptiness over the real file.
         expect(state.workspace.canEdit).toBe(false)
-        // And the reason is on the Console, as an error rather than a warning.
         const errors = state.logs.filter((log) => log.level === 'error')
         expect(errors.some((log) => log.message.includes('pous/programs/main.ld'))).toBe(true)
         expect(errors.some((log) => log.message.includes('read-only'))).toBe(true)
@@ -2728,7 +2686,6 @@ describe('createSharedSlice', () => {
           ...makeMinimalProjectResponse(),
           unparsedDataTypeFiles: [
             { relativePath: 'datatypes/Broken.dt', content: 'TYPE\nBroken : STRUCT\ngarbage\nEND_TYPE\n' },
-            // No name to derive — skipped rather than registered under ''.
             { relativePath: '', content: 'orphan' },
           ],
         }
@@ -2757,7 +2714,6 @@ describe('createSharedSlice', () => {
         const withCollisions = {
           ...data,
           unparsedDataTypeFiles: [
-            // Case-insensitive: the filesystem folds case, the registry doesn't.
             { relativePath: 'datatypes/MAIN.dt', content: 'TYPE\ngarbage\nEND_TYPE\n' },
             { relativePath: 'datatypes/colors.dt', content: 'TYPE\ngarbage\nEND_TYPE\n' },
           ],
@@ -2770,7 +2726,6 @@ describe('createSharedSlice', () => {
         expect(state.editors.every((editor) => editor.type !== 'plc-datatype')).toBe(true)
         expect(state.files['MAIN']).toBeUndefined()
         expect(state.files['colors']).toBeUndefined()
-        // Still preserved, so the next save echoes both files back verbatim.
         expect(state.unparsedDataTypeFiles).toHaveLength(2)
       })
 
@@ -3012,8 +2967,6 @@ describe('createSharedSlice', () => {
           body: { language: 'st' as const, value: '' },
           documentation: '',
           variablesText: 'VAR\n  unparseable_stuff;\nEND_VAR',
-          // The loader marks a POU whose declarations it could not parse; the
-          // code view is for those, not for every POU that carries its text.
           variablesTextUnparsed: true,
         }
         data.projectData.pous.push(pouWithText)
@@ -3029,8 +2982,6 @@ describe('createSharedSlice', () => {
       })
 
       it('delivers the raw variable text to the auto-opened main POU (issue #904)', () => {
-        // setEditor early-returns on the already-active editor, so the raw text must flow
-        // through updateModelVariablesForName instead.
         const rawText = 'VAR_OUTPUT\n  Q1 : BOOL AT %QX0.0;\nEND_VAR'
         const data = makeMinimalProjectResponse()
         const unparseableMain = {
@@ -3094,7 +3045,6 @@ describe('createSharedSlice', () => {
       })
 
       it('keeps workspace.canEdit=true when backend canEdit is true', () => {
-        // Pre-seed denied so we observe the reset path, not just the default.
         store.getState().workspaceActions.setCanEdit(false)
         const data = { ...makeMinimalProjectResponse(), canEdit: true }
         store.getState().sharedWorkspaceActions.handleOpenProjectResponse(data)
@@ -3184,7 +3134,7 @@ describe('createSharedSlice', () => {
         store.getState().snapshotActions.markSaved('P1')
 
         const history = store.getState().undoRedo['P1']
-        expect(history.savedAtDepth).toBe(2) // past length = 2
+        expect(history.savedAtDepth).toBe(2)
       })
 
       it('does nothing for non-existent POU history', () => {
@@ -3231,7 +3181,6 @@ describe('createSharedSlice', () => {
         store.getState().snapshotActions.undo('Main')
         expect(store.getState().undoRedo['Main'].past).toHaveLength(1)
 
-        // savedAtDepth (3) > past.length (1) after this push, so it is nullified.
         store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'new' })
         expect(store.getState().undoRedo['Main'].savedAtDepth).toBeNull()
       })
@@ -3245,7 +3194,6 @@ describe('createSharedSlice', () => {
           store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: `v${i}` })
         }
 
-        // 55 entries > 50 max shifts savedAtDepth by 5: 1 - 5 = -4 -> null.
         expect(store.getState().undoRedo['P1'].savedAtDepth).toBeNull()
       })
 
@@ -3256,7 +3204,6 @@ describe('createSharedSlice', () => {
         store.getState().snapshotActions.markSaved('P1')
         expect(store.getState().undoRedo['P1'].savedAtDepth).toBe(48)
 
-        // 51 total, only the 51st causes a shift: savedAtDepth = 48 - 1 = 47.
         store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'a' })
         store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'b' })
         store.getState().snapshotActions.pushToHistory('P1', { variables: [], body: 'c' })
@@ -3412,7 +3359,6 @@ describe('createSharedSlice', () => {
         store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
         store.getState().fileActions.updateFile({ name: 'Main', saved: true })
 
-        // savedAtDepth is pinned at 1; undoing from past.length 2 back to 1 must re-mark saved.
         store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v1' })
         store.getState().snapshotActions.markSaved('Main')
 
@@ -3430,7 +3376,6 @@ describe('createSharedSlice', () => {
         store.getState().pouActions.create({ type: 'program', name: 'Main', language: 'st' })
         store.getState().fileActions.updateFile({ name: 'Main', saved: true })
 
-        // savedAtDepth is pinned at 2; redoing from past.length 1 back to 2 must re-mark saved.
         store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v1' })
         store.getState().snapshotActions.pushToHistory('Main', { variables: [], body: 'v2' })
 

@@ -16,6 +16,7 @@ import type { PackagePort } from '../ports/package-port'
 import type { PlatformCapabilities } from '../ports/platform-capabilities'
 import type { ProjectPort } from '../ports/project-port'
 import type { RuntimePort } from '../ports/runtime-port'
+import type { RuntimeProvisioningPort } from '../ports/runtime-provisioning-port'
 import type { SimulatorPort } from '../ports/simulator-port'
 import type { StlibSourcePort } from '../ports/stlib-source-port'
 import type { SystemPort } from '../ports/system-port'
@@ -49,8 +50,9 @@ export interface PlatformPorts {
   // Gate on `capabilities.hasEdgeAccount`, not on presence: autonomy-node has no Edge account API.
   edgeAccount?: EdgeAccountPort
   editSession?: EditSessionPort
-  // Desktop only: the notice that a newer editor is out. Absent on web, which is deployed rather than installed.
+  // Desktop only: the notice that a newer editor is out. Absent on web.
   appUpdate?: AppUpdatePort
+  runtimeProvisioning?: RuntimeProvisioningPort
   // Required when `capabilities.hasStLSP` is true.
   stlibSource?: StlibSourcePort
 }

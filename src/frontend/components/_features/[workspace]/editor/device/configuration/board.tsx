@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import { describeVppPinDrift, type VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
+import type { RuntimeProvisioningOperation } from '@root/middleware/shared/ports/runtime-provisioning-port'
 import { useCapabilities, useDevice, usePackages } from '@root/middleware/shared/providers/platform-context'
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
@@ -13,8 +14,10 @@ import { useDeviceConnect } from '../../../../../../hooks/use-device-connect'
 import { useDeviceLicense } from '../../../../../../hooks/use-device-license'
 import { useRuntimeConnect } from '../../../../../../hooks/use-runtime-connect'
 import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
+import { reopenProvisioningDialog } from '../../../../../../services/runtime-provisioning'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
-import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
+import type { ConnectionStatus, RuntimeConnection } from '../../../../../../store/slices/device/types'
+import type { RuntimeProvisioningView } from '../../../../../../store/slices/runtime-provisioning/types'
 import { cn } from '../../../../../../utils/cn'
 import { isEthernetUploadTarget, isOpenPLCRuntimeTarget, isSimulatorTarget } from '../../../../../../utils/device'
 import { explainLicenseOutcome } from '../../../../../../utils/license-outcome-dialog'
@@ -28,6 +31,39 @@ import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../..
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 import { DeviceLicenseStatus } from './components/device-license-status'
 import { PinMappingTable } from './components/pin-mapping-table'
+
+type RuntimeConnectActivity = {
+  label: string
+  onClick: () => void
+}
+
+const RUNNING_OPERATION_LABELS: Record<RuntimeProvisioningOperation, string> = {
+  install: 'Installing runtime...',
+  start: 'Starting runtime...',
+}
+
+const PREPARING_RUNTIME_LABEL = 'Preparing runtime...'
+const SHOW_RESULT_LABEL = 'Show result'
+
+function runtimeProvisioningActivity(
+  view: RuntimeProvisioningView,
+  connectionStatus: ConnectionStatus,
+  reopenDialog: () => void,
+): RuntimeConnectActivity | undefined {
+  if (view.stage === 'running') {
+    const label = view.operation === null ? PREPARING_RUNTIME_LABEL : RUNNING_OPERATION_LABELS[view.operation]
+    return { label, onClick: reopenDialog }
+  }
+  const showsResult =
+    view.stage === 'ended' &&
+    view.outcome.kind !== 'connected-ready' &&
+    !view.acknowledged &&
+    connectionStatus !== 'connected'
+  if (showsResult) {
+    return { label: SHOW_RESULT_LABEL, onClick: reopenDialog }
+  }
+  return undefined
+}
 
 const Board = memo(function () {
   const store = useOpenPLCStoreApi()
@@ -56,11 +92,6 @@ const Board = memo(function () {
 
   const currentBoardInfo = availableBoards.get(deviceBoard)
 
-  // CONNECT flow (D72): open the device channel, classify it, and drive the
-  // flash follow-up when nothing answered the debug protocol. `deviceLinkStatus`
-  // mirrors the MAIN process's session — it flips to 'connected' for a held
-  // serial/TCP link and for a runtime (REST) session alike, so it is the one
-  // signal that a session actually exists, whatever the medium.
   const {
     connect: connectDevice,
     disconnect: disconnectDevice,
@@ -68,20 +99,11 @@ const Board = memo(function () {
     status: deviceLinkStatus,
   } = useDeviceConnect(currentBoardInfo)
 
-  // VPP licensing. Inert for every board whose VPP is not sold licensed, which is
-  // every built-in board — `isLicensable` gates the whole affordance. This mount
-  // OWNS the purchase watch: `useDeviceConnect` above holds a second instance of
-  // the hook, and without a single owner both would poll on every watch tick.
   const licensing = useDeviceLicense(currentBoardInfo, { ownsWatch: true })
 
-  // Whether this target exposes the GPIO pin-mapping table. Arduino boards
-  // enable it via their preset; runtime-v4 GPIO boards (e.g. the Raspberry
-  // Pi HAL) opt in with `capabilities.pinMapping` in their VPP manifest.
   const pinMappingEnabled = resolveTargetCapabilities(currentBoardInfo).pinMapping
 
   const runtimeIpAddress = useOpenPLCStore((state) => state.deviceDefinitions.configuration.runtimeIpAddress || '')
-  // Read from the same place the connection resolver reads it, so the button and
-  // the resolution never disagree about whether a network path exists.
   const modbusTcpConfigured = useOpenPLCStore(
     (state) =>
       (
@@ -92,6 +114,7 @@ const Board = memo(function () {
       )['modbus_tcp']?.['enabled'] === true,
   )
   const connectionStatus = useOpenPLCStore((state) => state.runtimeConnection.connectionStatus)
+  const provisioningView = useOpenPLCStore((state) => state.runtimeProvisioning.view)
   const setRuntimeIpAddress = useOpenPLCStore((state) => state.deviceActions.setRuntimeIpAddress)
   const setVppPackagePin = useOpenPLCStore((state) => state.deviceActions.setVppPackagePin)
   const recordedPins = useOpenPLCStore(
@@ -99,8 +122,6 @@ const Board = memo(function () {
   )
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
   const plcStatus = useOpenPLCStore((state): RuntimeConnection['plcStatus'] => state.runtimeConnection.plcStatus)
-  // The vPLC the board list is being offered for. Null on every target that is
-  // not an orchestrator device, which the gate reads as "do not gate".
   const selectedDevice = useOpenPLCStore(
     (state): RuntimeConnection['selectedDevice'] => state.runtimeConnection.selectedDevice,
   )
@@ -110,10 +131,6 @@ const Board = memo(function () {
   const [pinDrift, setPinDrift] = useState<string | null>(null)
   const [formattedBoardState, setFormattedBoardState] = useState('')
   const [showPythonWarning, setShowPythonWarning] = useState(false)
-  // Human-readable label of the function-block kind(s) the target can't
-  // host (e.g. "Python", "C/C++", "C/C++ and Python") — drives the
-  // warning modal's copy so the same dialog serves Arduino (Python only)
-  // and Runtime v3 (neither C/C++ nor Python).
   const [unsupportedBlocksLabel, setUnsupportedBlocksLabel] = useState('Python')
   const [showV4FeaturesWarning, setShowV4FeaturesWarning] = useState(false)
   const [v4FeaturesAffected, setV4FeaturesAffected] = useState<{ hasServers: boolean; hasRemoteDevices: boolean }>({
@@ -127,21 +144,6 @@ const Board = memo(function () {
   const [deviceSearchTerm, setDeviceSearchTerm] = useState('')
   const deviceSearchInputRef = useRef<HTMLInputElement>(null)
 
-  /**
-   * Boards grouped by vendor.  VPP-installed boards come from
-   * `info.vpp.vendor`; built-in OpenPLC targets (Simulator + Runtime
-   * v3/v4) have no `vpp` field and bucket under "OpenPLC".  The
-   * outer order keeps `OpenPLC` first (always-installed), followed
-   * by VPP vendors alphabetically; boards within a group keep the
-   * Map's insertion order (already sorted by `orderBoardsByVppGroup`
-   * on the main side).
-   *
-   * Search filter applies case-insensitively against the board's
-   * display name AND its vendor heading — typing "ardu" surfaces
-   * every Arduino board even when the group heading is what the
-   * user is targeting.  Empty groups are pruned so the dropdown
-   * doesn't render a header with no children below it.
-   */
   const groupedBoards = useMemo(() => {
     type BoardInfo = NonNullable<ReturnType<typeof availableBoards.get>>
     const groups = new Map<string, Array<{ board: string; data: BoardInfo }>>()
@@ -181,12 +183,6 @@ const Board = memo(function () {
     const checkedElement = selectRef.current?.querySelector('[data-state="checked"]')
     if (!checkedElement) return
 
-    // When the checked item lives inside a vendor group, scroll the
-    // whole group container into view so the heading above the item
-    // stays on screen.  Without this, `block: 'start'` aligns the
-    // item's top edge with the viewport's top, hiding the vendor
-    // heading the item sits under.  Non-grouped selects (e.g. the
-    // communication-port picker) keep the per-item scroll.
     const groupContainer = checkedElement.closest('[data-board-group]')
     if (groupContainer) {
       groupContainer.scrollIntoView({ block: 'start' })
@@ -209,36 +205,15 @@ const Board = memo(function () {
     handleDeviceValueAtFirstRender()
   }, [])
 
-  // The project's board can stop being resolvable underneath it: on web the
-  // board list is the selected vPLC's package, so switching to a vPLC that
-  // runs another package takes those boards away. Keep the name showing as the
-  // selection rather than falling back to a placeholder — a board that vanishes
-  // silently reads as lost work, and the build refuses with the reason anyway.
   const boardIsUnavailable = deviceBoard !== '' && currentBoardInfo === undefined
   useEffect(() => {
     if (boardIsUnavailable) setFormattedBoardState(deviceBoard)
   }, [boardIsUnavailable, deviceBoard])
 
-  // A target switch no longer needs to touch program variables: their
-  // `location` holds a stable alias name (resolved at compile) or a literal
-  // address — neither changes with the board. Producer address recompaction
-  // for the new target is handled by `setDeviceBoard → recalculateIecAddresses`.
-
   useEffect(() => {
     scrollToSelectedOption(deviceSelectRef, deviceSelectIsOpen)
   }, [deviceSelectIsOpen])
 
-  // Keep focus on the search input as the user types.  Radix Select
-  // falls back to focusing the SelectContent listbox whenever the
-  // currently-focused SelectItem unmounts — which happens every
-  // time the user's typing filters the selected board out of the
-  // visible list, pulling focus off the search input.  Refocus
-  // through `queueMicrotask` (synchronously refocusing inside a
-  // focusout handler is disallowed in some browsers; microtasks
-  // run after the current task but before paint).  Gated on a
-  // non-empty search term so the initial open still lets Radix
-  // focus the currently-selected item — what the scroll-to-
-  // selected effect keys off.
   useEffect(() => {
     if (!deviceSelectIsOpen) return
     const input = deviceSearchInputRef.current
@@ -264,11 +239,6 @@ const Board = memo(function () {
     void fetchPreviewImage()
   }, [deviceBoard, device, availableBoards])
 
-  // Pin the vendor package the moment a VPP board is selected, and compare it
-  // with what is installed whenever the board or the package set changes. The
-  // pin is what lets the editor say the package moved underneath a program
-  // that was laid out against the old one — a mismatch the device would
-  // otherwise only show as wrong I/O.
   const vppPackageId = availableBoards.get(deviceBoard)?.vpp?.packageId
   const targetVpp = selectedDevice?.vpp
   useEffect(() => {
@@ -277,17 +247,11 @@ const Board = memo(function () {
       return
     }
     let cancelled = false
-    // The vPLC's own binding is authoritative: the host decided which bytes
-    // that vPLC runs, and the browser's copy is only what it managed to fetch.
-    // Fall back to the loaded package when no vPLC is the target — the desktop,
-    // and a host that reports no binding.
     const authoritative =
       targetVpp !== undefined ? Promise.resolve<VppPackagePin | null>(targetVpp) : packages.getPackagePin(vppPackageId)
     void authoritative.then((installed) => {
       if (cancelled) return
       const recorded = recordedPins?.[deviceBoard]
-      // First time on this board: record what it is being authored against
-      // rather than warning about a pin that was never taken.
       if (!recorded && installed) {
         setVppPackagePin(deviceBoard, installed)
         setPinDrift(null)
@@ -318,7 +282,6 @@ const Board = memo(function () {
           setAvailableOptions({ availableCommunicationPorts: ports })
         }
       } catch (error: unknown) {
-        // TODO: Add a toast notification for error and for success
         console.error(error)
       } finally {
         setIsRefreshingPorts(false)
@@ -370,12 +333,6 @@ const Board = memo(function () {
       )
       const hasCppFunctionBlocks = pous.some((pou) => pou.pouType === 'function-block' && pou.body.language === 'cpp')
 
-      // OpenPLC Runtime v3 can host neither C/C++ nor Python function
-      // blocks: both lower to strucpp `{external ...}` inline-C that v3's
-      // MatIEC toolchain can't compile.  Other targets are gated per
-      // capability (Arduino: no Python; v4 / simulator: both fine).  Warn
-      // on switch — same soft prompt Arduino shows for Python — and let
-      // the user proceed (compilation will fail on the device if they do).
       const isRuntimeV3Target = normalizedBoard === 'OpenPLC Runtime v3'
       const pythonUnsupported = (!targetCaps.pythonFunctionBlocks || isRuntimeV3Target) && hasPythonFunctionBlocks
       const cppUnsupported = isRuntimeV3Target && hasCppFunctionBlocks
@@ -390,8 +347,6 @@ const Board = memo(function () {
         return
       }
 
-      // Warn when the new target can't host the servers or remote-device
-      // I/O the project currently has configured.
       const hasServers = servers && servers.length > 0
       const hasRemoteDevices = remoteDevices && remoteDevices.length > 0
       const targetCantHostServers = !targetCaps.modbusTcpServer && !targetCaps.opcuaServer && !targetCaps.s7Server
@@ -425,43 +380,15 @@ const Board = memo(function () {
   )
   const handleRowClick = (row: HTMLTableRowElement) => setCurrentSelectedPinTableRow(parseInt(row.id))
 
-  // The runtime CONNECT lives in `useRuntimeConnect` so the debugger's
-  // offer-to-connect runs the same one. Keeping a second copy here is how the
-  // two would drift -- the version gate, the login/first-user choice and the
-  // licence teardown all have to behave identically wherever connect is
-  // invoked from.
   const { toggle: handleConnectToRuntime } = useRuntimeConnect()
+  const runtimeActivity = useMemo(
+    () => runtimeProvisioningActivity(provisioningView, connectionStatus, () => reopenProvisioningDialog(store)),
+    [provisioningView, connectionStatus, store],
+  )
 
-  // Timing and EtherCAT stats polling now belongs to the Runtime Status screen
-  // (RTOP-283), which is where those statistics are displayed. Polling for them
-  // here would fetch data nobody is looking at, and would leave Runtime Status
-  // with nothing to show when opened on its own.
-
-  // Settle the licence for a RUNTIME target once its session is up — once per
-  // session PER BOARD.
-  //
-  // The serial flow settles it INSIDE `connect()`: one held link, awaited, so
-  // the user cannot race the sequence. A runtime target has no such moment in
-  // the renderer — login opens the session MAIN-side (useDeviceConnectionMonitor
-  // reacts to the REST login and calls `openRuntimeSession`), and the device
-  // link status flipping to 'connected' is the announcement that it exists.
-  // Keying on the REST login alone would race that IPC call; keying on BOTH
-  // means the licence FCs only ever run against an established session, over
-  // the debug WebSocket the main process acquires per call.
-  //
-  // The ref holds the BOARD the settle ran for, not a boolean: a board switch
-  // over a live session (confirm-device-switch allows it) clears the report via
-  // resetDeviceLicense, and a boolean ref would leave the new board unchecked
-  // and badge-less until a manual reconnect (review 2026-08-20). A ref, not
-  // state: the re-render caused by the report landing must not re-run the flow.
   const runtimeLicenseSettledForRef = useRef<string | null>(null)
   useEffect(() => {
     if (!isOpenPLCRuntimeTarget(currentBoardInfo) || !licensing.isLicensable) return
-    // A platform whose device port cannot carry the licensing calls has nothing
-    // to settle — STRUCTURAL inertness, not incidental: on openplc-web nothing
-    // publishes a device link today, but the day one is published this gate is
-    // what keeps a capability the platform never had from popping error dialogs
-    // (web review 2026-08-20, finding 1).
     if (!device.refreshLicense) return
     if (connectionStatus !== 'connected' || deviceLinkStatus !== 'connected') {
       runtimeLicenseSettledForRef.current = null
@@ -469,27 +396,13 @@ const Board = memo(function () {
     }
     if (runtimeLicenseSettledForRef.current === deviceBoard) return
     runtimeLicenseSettledForRef.current = deviceBoard
-    // Cleanup guard: `refresh` can take seconds (device read + backend round
-    // trip). A dialog for a screen the user already left is noise at best and
-    // a modal over an unrelated screen at worst.
     let cancelled = false
     void licensing.refresh().then((report) => {
       if (cancelled || !report) return
       explainLicenseOutcome(report, {
         openModal,
         buy: licensing.buy,
-        // AUTO flow: a check-failed outcome stays on the badge instead of
-        // opening an error modal the user did not ask for — the loudest case
-        // it suppresses is a runtime that predates the licence FCs, where
-        // every connect would otherwise open "License Check Failed" on a
-        // working device. User-initiated paths (serial connect, the badge's
-        // own retry) keep the dialog.
         quietCheckFailed: true,
-        // A retry re-runs the flow and explains the NEW outcome, so a transient
-        // failure or a purchase completed in the browser resolves in place.
-        // NO quietCheckFailed here: a retry CLICK is user-initiated — the user
-        // asked a question, and silence would read as success (review
-        // 2026-08-20, E3). Only the unprompted auto-settle above stays quiet.
         retry: async () => {
           const next = await licensing.refresh()
           if (next && !cancelled) {
@@ -501,13 +414,6 @@ const Board = memo(function () {
     return () => {
       cancelled = true
     }
-    // Deps are the STABLE fields, never the `licensing` object (review
-    // 2026-08-20, E4): the hook returns a fresh literal each render, and
-    // `refresh()` itself flips `phase` in the store — an object dep re-ran this
-    // effect mid-flight and its cleanup set `cancelled` on the very run that
-    // started the refresh, so the report never reached the dialog. `refresh`
-    // and `buy` are useCallback'd on inputs that do not change during the
-    // flight (`buy`'s `report?.deviceId` only moves after the resolve).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     connectionStatus,
@@ -540,9 +446,6 @@ const Board = memo(function () {
               onValueChange={handleSetDeviceBoard}
               onOpenChange={(open) => {
                 setDeviceSelectIsOpen(open)
-                // Reset the filter every time the dropdown closes so
-                // reopening starts with the full list (and the
-                // previously-selected item visible without scrolling).
                 if (!open) setDeviceSearchTerm('')
               }}
             >
@@ -560,20 +463,8 @@ const Board = memo(function () {
                 align='center'
                 side='bottom'
                 viewportRef={deviceSelectRef}
-                // Disable Radix's typeahead so it doesn't fight the
-                // search box below for keystrokes — that fight was
-                // surfacing as focus loss on the first character
-                // that didn't match the currently-selected device.
                 disableTypeahead
               >
-                {/*
-                  Search field — `sticky top-0` keeps it pinned while
-                  the list scrolls.  Shares the rounded text-field
-                  styling with the variable-type dropdown via the
-                  shared `DropdownSearchInput` atom (which also stops
-                  Radix Select's typeahead from intercepting
-                  keystrokes).
-                */}
                 <DropdownSearchInput
                   ref={deviceSearchInputRef}
                   value={deviceSearchTerm}
@@ -619,11 +510,6 @@ const Board = memo(function () {
                       {boards.map(({ board, data }) => {
                         const showVersion = !isSimulatorTarget(data) && data.coreVersion
                         const formattedBoard = `${board}${showVersion ? ` [${data.coreVersion}]` : ''}`
-                        // The RULE lives in `evaluateVppBackplaneGate`, shared with
-                        // the deploy pre-check, so the list and the build refuse the
-                        // same boards with the same words. A refused board stays
-                        // listed and carries its explanation — hiding it would read
-                        // as "this package is not installed".
                         const gate = evaluateVppBackplaneGate(
                           vppGateStateFor({
                             board: data,
@@ -714,13 +600,11 @@ const Board = memo(function () {
                 status={connectionStatus}
                 onConnect={handleConnectToRuntime}
                 onDisconnect={handleConnectToRuntime}
+                activity={runtimeActivity}
               >
                 {connectionStatus === 'connected' && plcStatus && (
                   <span className='text-xs text-neutral-600 dark:text-neutral-400'>PLC: {plcStatus}</span>
                 )}
-                {/* Same affordance as the serial connect row below: renders
-                    nothing at all unless this board's VPP is sold licensed AND a
-                    check has landed, so a plain runtime's row is unchanged. */}
                 {licensing.isLicensable ? (
                   <DeviceLicenseStatus
                     report={licensing.report}
@@ -735,9 +619,6 @@ const Board = memo(function () {
               </DeviceConnectButton>
             </>
           ) : isEthernetUploadTarget(currentBoardInfo) ? (
-            // Baremetal board programmed over Ethernet (e.g. Siemens LOGO! 8.2):
-            // a device-IP target + Search like a runtime board, but the baremetal
-            // Connect (Modbus TCP), not the v4 REST connect.
             <>
               <div id='device-ip-address-field' className='flex w-full items-center justify-start gap-1'>
                 <Label className='whitespace-pre text-xs text-neutral-950 dark:text-white'>IP Address</Label>
@@ -808,8 +689,6 @@ const Board = memo(function () {
                     viewportRef={communicationSelectRef}
                   >
                     {availableCommunicationPorts.map((port) => {
-                      // Label by the OS-canonical port path (COM5 / /dev/ttyUSB0 /
-                      // /dev/tty.usbserial-*); the chip/vendor name rides as a hover hint.
                       const { label, title } = serialPortDisplay(port)
                       return (
                         <SelectItem
@@ -845,18 +724,10 @@ const Board = memo(function () {
                 status={deviceLinkStatus}
                 onConnect={connectDevice}
                 onDisconnect={disconnectDevice}
-                // A missing port only blocks Connect when serial is the ONLY way in.
-                // With Modbus TCP enabled the connection can still be made over the
-                // network, so the button stays live and resolution reports the real
-                // reason if that path is not usable either.
                 {...(!isConnected && !communicationPort && !modbusTcpConfigured
                   ? { blockedReason: 'Select a communication port first' }
                   : {})}
               >
-                {/* Licensing sits in the connect row because it answers an adjacent
-                    question about the same device -- but it renders nothing at all
-                    unless this board's VPP is sold licensed AND a check has landed,
-                    so a free board's row is unchanged. */}
                 {licensing.isLicensable ? (
                   <DeviceLicenseStatus
                     report={licensing.report}
@@ -904,16 +775,6 @@ const Board = memo(function () {
         </div>
       )}
       {(() => {
-        // Only draw the divider when there's actually content below it, which
-        // now means the pin mapping table and nothing else. Pin mapping renders
-        // for any non-simulator target that declares the pinMapping capability
-        // (Arduino boards, and runtime-v4 GPIO VPP boards like the Raspberry Pi).
-        //
-        // A connected runtime target used to draw the divider too, for the stats
-        // panels that sat below it. Those moved to the Runtime Status screen (see
-        // the polling comment above) and the condition stayed, so connecting to a
-        // runtime target with no pin mapping drew a rule across the screen with
-        // nothing underneath it.
         const isSim = isSimulatorTarget(currentBoardInfo)
         const showDivider = !isSim && pinMappingEnabled
         return showDivider ? <hr id='container-split' className='h-[1px] w-full self-stretch bg-brand-light' /> : null

@@ -1,31 +1,3 @@
-/**
- * The editor's client for the OpenPLC Runtime v3/v4 REST API.
- *
- * Lifted verbatim out of `MainProcessBridge`, whose handlers now delegate here,
- * so the desktop GUI and the headless CLI make the SAME calls. It was not a
- * hypothetical concern: while the CLI briefly carried its own copy of this
- * layer it drifted within hours — it POSTed to `/api/start-plc` (the runtime
- * answers GET, and replies to a POST with `{"PostRequestError":"Unknown
- * argument"}`) and it read HTTP 200 as success, missing that the runtime
- * reports refusal in the BODY (`START:ERROR_SWITCH_STOP` when a physical mode
- * switch gates it, `COMMAND:BUSY` while a previous program is still
- * unloading). Both bugs are invisible until you have real hardware in front of
- * you, which is exactly the class of bug a second implementation produces.
- *
- * What it owns:
- *   - one `RuntimeTokenManager`, so every call (GET, POST, PUT/DELETE and the
- *     multipart program upload) self-heals identically when the 15-minute JWT
- *     expires;
- *   - the TLS posture (`getRuntimeHttpsOptions`), since real runtimes ship a
- *     self-signed certificate generated at install time;
- *   - the endpoint vocabulary and each route's success semantics.
- *
- * The address is per-call rather than per-instance because a single editor
- * session talks to whichever runtime the user points it at, while the token
- * authority needs one address to re-authenticate against — `setAddress` records
- * that at login.
- */
-
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import https from 'node:https'
 
@@ -34,30 +6,20 @@ import type { PlcControlResult } from '@root/backend/shared/debug/types'
 import { SNAPSHOT_LIMITS } from '@root/backend/shared/project/project-snapshot-archive'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
 import { getErrorMessage } from '@root/frontend/utils/get-error-message'
+import type { UsersInfoRawFacts, UsersInfoResult } from '@root/middleware/shared/ports/runtime-port'
 import {
   createRuntimeTokenManager,
   type RuntimeTokenManager,
 } from '@root/middleware/shared/runtime-auth/runtime-token-manager'
+import { usersInfoFromFacts } from '@root/middleware/shared/utils/runtime-provisioning'
 import { z } from 'zod'
 
-/** The runtime's HTTPS API port. Also the debug WebSocket's port. */
 export const RUNTIME_API_PORT = 8443
 
 export type RuntimeApiResult<T> = { success: true; data?: T } | { success: false; error: string }
 
-/**
- * The runtime's own responses, validated rather than asserted.
- *
- * These are HTTP bodies from a device on the network — the definition of data
- * this process does not control. `JSON.parse(...) as T` claimed a shape without
- * checking it, so a runtime answering `{}` (or an error page, or a future
- * version with a renamed field) produced `undefined` where a string was
- * promised, and the failure surfaced somewhere else entirely as
- * "cannot read property of undefined".
- */
 const LoginResponseSchema = z.object({ access_token: z.string() })
 
-/** Both `/api/status`-shaped endpoints; every field optional, as the runtime sends them. */
 const PlcStatusResponseSchema = z.object({
   status: z.string().optional(),
   switchPosition: z.string().optional(),
@@ -70,31 +32,9 @@ const ProjectSnapshotBodySchema = z.object({
 
 type ProjectSnapshotBody = z.infer<typeof ProjectSnapshotBodySchema>
 
-/**
- * Turn a failed snapshot fetch into something a user can act on.
- *
- * The two interesting outcomes are indistinguishable from a transport error in
- * the raw text: a device with nothing stored (404) and an account without the
- * privilege to read it (403). Both are real answers, and reporting either as a
- * broken connection sends people looking for a network problem that is not
- * there.
- */
-/**
- * The largest stored-project response this editor will read.
- *
- * The device caps the archive it stores at `SNAPSHOT_LIMITS.maxTotalBytes` and
- * hands it back as base64 inside JSON, which is 4 bytes on the wire for every 3
- * stored. This is that, plus room for the surrounding document -- enough for
- * any archive a runtime should have accepted, and a bound on one that returns
- * more than it should.
- */
 const MAX_SNAPSHOT_RESPONSE_BYTES = Math.ceil(SNAPSHOT_LIMITS.maxTotalBytes * (4 / 3)) + 1024 * 1024
 
 function describeSnapshotFetchFailure(raw: string, statusCode?: number): string {
-  // Status codes, not the runtime's English. Matching on the body text meant any
-  // rewording on the device -- including the translation this product will
-  // eventually want -- silently degraded both of these back to raw transport
-  // text, with nothing failing to say so.
   if (statusCode === 403) {
     return 'This account is not an administrator on that device. Only administrators can retrieve a stored project.'
   }
@@ -104,14 +44,7 @@ function describeSnapshotFetchFailure(raw: string, statusCode?: number): string 
   return raw
 }
 
-/**
- * One header value, whatever the wire gave us.
- *
- * `IncomingHttpHeaders` values are `string | string[] | undefined`: a header sent
- * twice arrives as an array, and asserting it to `string` meant the runtime
- * version was reported as a comma-joined array — read as a version, compared as
- * a version, and wrong.
- */
+/** The first value of a header that arrives as a string, an array or `undefined`. */
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {
   if (typeof value === 'string') return value
   if (Array.isArray(value)) return value[0]
@@ -127,13 +60,7 @@ function parseJsonOrNull(raw: string): unknown {
   }
 }
 
-/**
- * The reason an upload was refused, or null when it was accepted.
- *
- * The runtime refuses with HTTP 200 and a non-empty `UploadFileFail`, so the
- * status code alone reads a refusal as success. The reason is returned as the
- * runtime sent it. A body that does not parse is not a refusal.
- */
+/** The reason an upload was refused, or null when it was accepted. A body that does not parse is not a refusal. */
 export function readUploadRefusal(responseBody: string): string | null {
   const parsed = parseJsonOrNull(responseBody)
   if (typeof parsed !== 'object' || parsed === null) return null
@@ -146,29 +73,31 @@ function asBytes(buffer: Buffer): Uint8Array {
   return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
 }
 
-/**
- * Make a value safe to interpolate into a multipart header.
- *
- * A `"` closes the quoted string early and a CR or LF ends the header line, so
- * either one turns the rest of the filename into attacker-or-accident-controlled
- * header content and corrupts the body the runtime tries to parse. Stripped
- * rather than rejected: the filename is a label on a bundle we are already
- * committed to sending, and failing an upload over a punctuation mark would be
- * the worse outcome.
- */
+/** Replaces CR, LF, `"` and `\` with `_` so a value is safe to interpolate into a multipart header. */
 function headerSafe(value: string): string {
   return value.replace(/[\r\n"\\]/g, '_')
 }
 
+/** Raised by `httpRequest` when its own connection timer fires. */
+class RuntimeConnectionTimeoutError extends Error {
+  constructor() {
+    super('Connection timeout')
+    this.name = 'RuntimeConnectionTimeoutError'
+  }
+}
+
+/** The string `code` of a Node request error, when it carries one. */
+function errorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined
+  return typeof error.code === 'string' ? error.code : undefined
+}
+
 export class RuntimeApiClient {
   private readonly RUNTIME_API_PORT = RUNTIME_API_PORT
-  private readonly RUNTIME_CONNECTION_TIMEOUT_MS = 5000 // 5 seconds (important-comment)
-  private readonly RUNTIME_LOGIN_TIMEOUT_MS = 15000 // 15 seconds
+  private readonly RUNTIME_CONNECTION_TIMEOUT_MS = 5000
+  private readonly RUNTIME_LOGIN_TIMEOUT_MS = 15000
 
-  /**
-   * Address of the runtime this session is authenticated against. Captured at
-   * login so the token authority can re-authenticate against the same device.
-   */
+  /** Address of the runtime this session is authenticated against. */
   private runtimeIp: string | null = null
 
   /**
@@ -192,10 +121,7 @@ export class RuntimeApiClient {
     return this.runtimeIp
   }
 
-  /**
-   * Log in and adopt the session, so later calls can self-heal on expiry.
-   * The one place that turns credentials into a live session.
-   */
+  /** Log in and adopt the session. */
   async login(
     ipAddress: string,
     username: string,
@@ -210,37 +136,40 @@ export class RuntimeApiClient {
   }
 
   /**
-   * Does this runtime have any user account yet?
-   *
-   * A freshly installed runtime has none, and answers `/api/get-users-info` with
-   * 404 — which is not an error, it is the bootstrap state. `createUser` is
-   * allowed unauthenticated in exactly that state.
-   *
-   * The runtime version rides along in a response header, and it is the only
-   * place it is available before logging in.
+   * Whether this runtime has any user account yet (a 404 means none), with the runtime version read from a response
+   * header.
    */
-  async getUsersInfo(address: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> {
+  async getUsersInfo(address: string): Promise<UsersInfoResult> {
+    return usersInfoFromFacts(await this.getUsersInfoFacts(address))
+  }
+
+  /**
+   * The raw outcome of `GET /api/get-users-info`: the response as received, or
+   * the request error with its Node `code` and whether this client's own
+   * connection timer fired.
+   */
+  async getUsersInfoFacts(address: string): Promise<UsersInfoRawFacts> {
     try {
       const res = await this.httpRequest({ method: 'GET', url: this.runtimeUrl(address, '/api/get-users-info') })
-      const runtimeVersion = firstHeaderValue(res.headers['x-openplc-runtime-version'])
-
-      if (res.statusCode === 404) return { hasUsers: false, runtimeVersion }
-      if (res.statusCode === 200) return { hasUsers: true, runtimeVersion }
-      return { hasUsers: false, error: res.data || `Unexpected status: ${res.statusCode}`, runtimeVersion }
+      return {
+        kind: 'response',
+        statusCode: res.statusCode,
+        body: res.data,
+        runtimeVersion: firstHeaderValue(res.headers['x-openplc-runtime-version']),
+      }
     } catch (error) {
-      return { hasUsers: false, error: getErrorMessage(error) }
+      return {
+        kind: 'error',
+        code: errorCode(error),
+        message: getErrorMessage(error),
+        timedOut: error instanceof RuntimeConnectionTimeoutError,
+      }
     }
   }
 
   /**
-   * Create a user account.
-   *
-   * Two different operations behind one route, and the runtime treats them
-   * differently: with no session this is the FIRST-USER bootstrap, which the
-   * runtime allows unauthenticated and always makes an admin (so `role` is
-   * ignored); with a session it is an admin adding an account, which must be
-   * authenticated and goes through the token authority so an expired token
-   * self-heals.
+   * Create a user account: the unauthenticated first-user bootstrap with no session, otherwise an authenticated request
+   * through the token authority.
    */
   async createUser(
     address: string,
@@ -285,8 +214,7 @@ export class RuntimeApiClient {
     body?: string
     headers?: Record<string, string>
     timeoutMs?: number
-    /** Refuse a response larger than this, in bytes. Omitted means unbounded,
-     *  which is fine for the small JSON every other endpoint returns. */
+    /** Refuse a response larger than this, in bytes. Omitted means unbounded. */
     maxResponseBytes?: number
   }): Promise<{ statusCode: number; data: string; headers: IncomingHttpHeaders }> {
     return new Promise((resolve, reject) => {
@@ -315,11 +243,6 @@ export class RuntimeApiClient {
         res.on('data', (chunk: Buffer) => {
           if (refused) return
           received += chunk.length
-          // Stop reading rather than buffering whatever the device sends. The
-          // stored-project endpoint can legitimately return a hundred megabytes
-          // of base64, and a device that returns more than it should -- broken,
-          // or not the device we think it is -- would otherwise be allowed to
-          // grow this string until the editor runs out of memory.
           if (options.maxResponseBytes !== undefined && received > options.maxResponseBytes) {
             refused = true
             req.destroy()
@@ -333,10 +256,21 @@ export class RuntimeApiClient {
           resolve({ statusCode: res.statusCode ?? 0, data, headers: res.headers })
         })
       })
-      req.setTimeout(options.timeoutMs ?? this.RUNTIME_CONNECTION_TIMEOUT_MS, () => {
+      const timeoutMs = options.timeoutMs ?? this.RUNTIME_CONNECTION_TIMEOUT_MS
+      const onTimeout = () => {
         req.destroy()
-        reject(new Error('Connection timeout'))
+        reject(new RuntimeConnectionTimeoutError())
+      }
+      const handshakeTimer = setTimeout(onTimeout, timeoutMs)
+      req.on('socket', (socket) => {
+        if (req.reusedSocket) {
+          clearTimeout(handshakeTimer)
+          return
+        }
+        socket.once('secureConnect', () => clearTimeout(handshakeTimer))
       })
+      req.on('close', () => clearTimeout(handshakeTimer))
+      req.setTimeout(timeoutMs, onTimeout)
       req.on('error', (error: Error) => {
         reject(error)
       })
@@ -365,8 +299,6 @@ export class RuntimeApiClient {
         timeoutMs: this.RUNTIME_LOGIN_TIMEOUT_MS,
       })
       if (res.statusCode === 200) {
-        // `safeParse` on the parsed JSON: a 200 with a body this code does not
-        // recognise is a failed login, not a session with an undefined token.
         const parsed = LoginResponseSchema.safeParse(parseJsonOrNull(res.data))
         if (!parsed.success) return { success: false, error: 'Invalid response format' }
         return { success: true, accessToken: parsed.data.access_token }
@@ -410,7 +342,6 @@ export class RuntimeApiClient {
     responseParser?: (data: string) => T,
     maxResponseBytes?: number,
   ): Promise<{ success: true; data?: T } | { success: false; error: string; statusCode?: number }> {
-    // The token authority owns the live token + refresh.
     type Raw = { success: true; data?: T } | { success: false; error: string; statusCode?: number }
     const url = this.runtimeUrl(ipAddress, endpoint)
     const result = await this.tokens.withAuth<Raw>(
@@ -430,9 +361,6 @@ export class RuntimeApiClient {
       },
       (r) => !r.success && this.isTokenExpiredError(r.statusCode, r.error),
     )
-    // The status code travels with the failure: callers that need to tell a
-    // real answer (403, 404) from a broken connection cannot do it from the
-    // body text without matching the runtime's English.
     return result.success ? result : { success: false, error: result.error, statusCode: result.statusCode }
   }
 
@@ -446,7 +374,6 @@ export class RuntimeApiClient {
     responseParser: (data: string) => T,
     timeoutMs?: number,
   ): Promise<{ success: true; data: T } | { success: false; error: string }> {
-    // Token + refresh owned by the authority.
     type PostResult = { success: true; data: T } | { success: false; error: string; statusCode?: number }
 
     const doRequest = (token: string): Promise<PostResult> => {
@@ -477,8 +404,6 @@ export class RuntimeApiClient {
                   resolve({ success: false, error: err instanceof Error ? err.message : 'Invalid response format' })
                 }
               } else {
-                // Propagate HTTP status so the caller can detect 401/403 for
-                // token-refresh without relying on brittle message parsing.
                 resolve({
                   success: false,
                   error: data || `Unexpected status: ${res.statusCode}`,
@@ -512,12 +437,8 @@ export class RuntimeApiClient {
   }
 
   /**
-   * Authenticated PUT/DELETE against the runtime API, going through the token
-   * authority. Unlike the GET/POST helpers this retries only on 401 (a genuine
-   * expired token): the user-management endpoints use 403 as a legitimate
-   * business response (e.g. "current password incorrect", "admin required"),
-   * so retrying on 403 would trigger a pointless re-authentication. Any 2xx is
-   * success; the raw body is returned so callers can surface error messages.
+   * Authenticated PUT/DELETE through the token authority, retried only on 401. Any 2xx is success; returns the raw
+   * body.
    */
   makeRuntimeApiMutation(
     method: 'POST' | 'PUT' | 'DELETE',
@@ -577,19 +498,7 @@ export class RuntimeApiClient {
       .then((r) => (r.success ? { success: true, data: r.data } : { success: false, error: r.error }))
   }
 
-  /**
-   * Fetch the stored source project.
-   *
-   * Admin only on the device: the archive is not encrypted there, so that role
-   * check is the whole of the access control rather than a layer behind one. A
-   * non-admin account gets a 403, which is a real answer and not a transport
-   * failure — the caller says so rather than reporting a broken connection.
-   *
-   * The body is base64 in JSON rather than a binary download because
-   * openplc-web reaches devices through the orchestrator's HTTP proxy, which
-   * decodes as JSON or falls back to text. Editor and web therefore read the
-   * same shape off the same endpoint.
-   */
+  /** Fetch the stored source project, base64 in JSON. A 403 is returned as an answer, not as a transport failure. */
   async retrieveProjectSnapshot(
     ipAddress: string,
   ): Promise<{ success: true; archive: Buffer; projectName: string } | { success: false; error: string }> {
@@ -607,22 +516,14 @@ export class RuntimeApiClient {
       return { success: false, error: 'The device sent an unreadable project archive' }
     }
 
-    // No try/catch here: `Buffer.from(x, 'base64')` does not throw. It drops
-    // characters outside the alphabet and returns whatever decodes, so a catch
-    // documented a check that was not happening. A corrupt or truncated archive
-    // is caught where it can actually be recognised -- `parseProjectSnapshot`,
-    // which fails on it as an unreadable archive.
     const archive = Buffer.from(result.data.contentBase64, 'base64')
 
     return { success: true, archive, projectName: result.data.projectName }
   }
 
   /**
-   * Upload a compiled program (multipart) to the runtime, going through the
-   * token authority so an expired token is transparently refreshed and the
-   * upload retried — the same self-healing every other runtime call gets. This
-   * is the path that previously had no refresh, so a long session's upload 401'd
-   * while status polling kept working.
+   * Upload a compiled program (multipart) to the runtime through the token authority, which refreshes an expired token
+   * and retries.
    */
   makeRuntimeApiUpload(opts: {
     ipAddress: string
@@ -630,15 +531,9 @@ export class RuntimeApiClient {
     filename: string
     contentType: string
     cleanBuild: boolean
-    /** Optional source-project archive, stored on the device so the project can
-     *  be retrieved later. Its own multipart part rather than something inside
-     *  `program.zip`: in there the runtime would extract it into
-     *  `core/generated` and hand it to the compiler. A runtime without snapshot
-     *  support ignores the extra parts, so sending them is always safe. */
+    /** Optional source-project archive, sent as its own multipart part and stored on the device. */
     snapshotBuffer?: Buffer
-    /** JSON metadata describing `snapshotBuffer`. The runtime never opens the
-     *  archive, so this is the only thing it can report about the stored
-     *  project — the two travel together or not at all. */
+    /** JSON metadata describing `snapshotBuffer`. */
     snapshotMetadata?: string
     onUploadAccepted?: (responseBody: string) => void
   }): Promise<{ success: true; data: string } | { success: false; error: string }> {
@@ -650,9 +545,6 @@ export class RuntimeApiClient {
         `Content-Type: ${headerSafe(opts.contentType)}\r\n\r\n`,
     )
 
-    // Both parts or neither. A snapshot the device cannot describe is one it
-    // refuses anyway, and it would surface as a warning the user then has to
-    // make sense of.
     const snapshotBuffer = opts.snapshotBuffer
     const snapshotMetadata = opts.snapshotMetadata
     const snapshotParts: Uint8Array[] =
@@ -678,11 +570,6 @@ export class RuntimeApiClient {
         : []
 
     const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
-    // `Buffer.concat` is typed as taking `Uint8Array`s, and this project's
-    // TS/@types/node pairing does not accept a `Buffer` there (their iterator
-    // types differ). A zero-copy view over the same memory satisfies the
-    // signature honestly — the previous `as unknown as` hid the mismatch, and
-    // copying a firmware bundle to appease a type would be worse than both.
     const reqBody = Buffer.concat([asBytes(header), asBytes(opts.fileBuffer), ...snapshotParts, asBytes(footer)])
     const path = opts.cleanBuild ? '/api/upload-file?clean=1' : '/api/upload-file'
 
@@ -724,11 +611,6 @@ export class RuntimeApiClient {
     return this.tokens
       .withAuth<UploadResult>(
         (token) => doRequest(token),
-        // STATUS CODE ONLY for an upload. `isTokenExpiredError` also returns true
-        // for any body containing "token" / "expired" / "unauthorized", and a
-        // retried upload is not idempotent — a runtime that rejected a bundle for
-        // an unrelated reason mentioning one of those words would get the program
-        // sent twice.
         (r) => !r.success && (r.statusCode === 401 || r.statusCode === 403),
       )
       .then((result) => {
@@ -742,14 +624,7 @@ export class RuntimeApiClient {
       })
   }
 
-  /**
-   * One authenticated GET whose body carries a `status` string.
-   *
-   * `start-plc`, `stop-plc` and `status` were three copies of this eight-line
-   * body differing only in the endpoint. The runtime answers all three the same
-   * way — HTTP 200 with the outcome in `status` — so there is one shape to
-   * implement, not three to keep in step.
-   */
+  /** One authenticated GET whose body carries a `status` string. */
   private async statusCommand(
     address: string,
     endpoint: string,
@@ -758,8 +633,6 @@ export class RuntimeApiClient {
       const result = await this.makeRuntimeApiRequest<z.infer<typeof PlcStatusResponseSchema>>(
         address,
         endpoint,
-        // An unrecognised body reads as "no status", which the caller already
-        // handles — every field here is optional on purpose.
         (data: string) => PlcStatusResponseSchema.safeParse(parseJsonOrNull(data)).data ?? {},
       )
       if (!result.success) return { success: false, error: result.error }
@@ -774,20 +647,13 @@ export class RuntimeApiClient {
   }
 
   /**
-   * Start the PLC.
-   *
-   * The body is parsed because the runtime answers `COMMAND:BUSY` while it is
-   * still unloading a previous program after an upload, and callers drive a
-   * retry loop on that. See `backend/shared/library/start-plc-after-build.ts`.
+   * Start the PLC and return the parsed `status`, which is `COMMAND:BUSY` while a previous program is still unloading.
    */
   startPlc(address: string): Promise<{ success: boolean; status?: string; error?: string }> {
     return this.statusCommand(address, '/api/start-plc')
   }
 
-  /**
-   * Stop the PLC. GET, like `startPlc` — see this module's docblock for why the
-   * verb and the body-vs-status distinction both matter.
-   */
+  /** Stop the PLC with a GET request. */
   stopPlc(address: string): Promise<{ success: boolean; status?: string; error?: string }> {
     return this.statusCommand(address, '/api/stop-plc')
   }
@@ -798,13 +664,8 @@ export class RuntimeApiClient {
   }
 
   /**
-   * Run/stop over the REST control channel, reported in the same shape the
-   * Modbus path returns — so callers handle one result type, not two.
-   *
-   * `ERROR_SWITCH_STOP` in the runtime's reply is its way of saying the hardware
-   * mode switch refused a start, which is exactly what `refusedBySwitch` means
-   * on the Modbus side (FC 0x4b status 0x86). This is also why HTTP 200 cannot
-   * be read as success on these routes.
+   * Run/stop over the REST control channel, in the Modbus path's result shape. `ERROR_SWITCH_STOP` maps to
+   * `refusedBySwitch`.
    */
   async setPlcState(address: string, action: 'run' | 'stop'): Promise<PlcControlResult> {
     const result = action === 'run' ? await this.startPlc(address) : await this.stopPlc(address)
@@ -813,8 +674,6 @@ export class RuntimeApiClient {
     const status = result.status ?? ''
     if (status.includes('ERROR_SWITCH_STOP')) return { success: false, refusedBySwitch: true }
 
-    // The runtime settles into the new state on its next scan; report the state
-    // the command asked for so a caller can reflect it without a second round trip.
     return { success: true, state: action === 'run' ? PlcRuntimeState.RUNNING : PlcRuntimeState.STOPPED }
   }
 }

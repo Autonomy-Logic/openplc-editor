@@ -1,6 +1,6 @@
 import type { OpenPLCStore } from '../../../../frontend/store'
 import { createTestStore } from '../../../../frontend/store/testing'
-import type { RuntimePort } from '../../../shared/ports/runtime-port'
+import type { RuntimePort, UsersInfoResult } from '../../../shared/ports/runtime-port'
 import { createEditorRuntimeAdapter } from '../runtime-adapter'
 
 let adapter: RuntimePort
@@ -31,8 +31,6 @@ beforeEach(() => {
       data: { status: 'SUCCESS', logs: [], exit_code: 0 },
     }),
     runtimeClearCredentials: jest.fn().mockResolvedValue({ success: true }),
-    // The bootloader surface (RTOP-283). A separate service on the device
-    // with its own session, reached over the same IPC bridge.
     bootloaderGetCapabilities: jest.fn().mockResolvedValue({
       success: true,
       data: { service: 'openplc-bootloader', state: 'healthy', recovery: false },
@@ -68,10 +66,6 @@ beforeEach(() => {
   adapter = createEditorRuntimeAdapter(store, () => mockIpAddress)
 })
 
-// ---------------------------------------------------------------------------
-// login
-// ---------------------------------------------------------------------------
-
 describe('login', () => {
   it('delegates to bridge with IP and credentials', async () => {
     const result = await adapter.login({ username: 'admin', password: 'secret' })
@@ -82,8 +76,6 @@ describe('login', () => {
 
   it('marks the session active on success (token lives in main)', async () => {
     await adapter.login({ username: 'admin', password: 'secret' })
-    // The renderer no longer passes a token; main owns it. Login flips the
-    // session-active flag the debugger readiness check relies on.
     expect(adapter.isReadyForDebug!()).toBe(true)
     await adapter.getStatus()
     expect(window.bridge.runtimeGetStatus).toHaveBeenCalledWith('192.168.1.100', undefined)
@@ -110,10 +102,6 @@ describe('login', () => {
     expect(result).toEqual({ success: false, error: 'IPC failed' })
   })
 })
-
-// ---------------------------------------------------------------------------
-// createUser
-// ---------------------------------------------------------------------------
 
 describe('createUser', () => {
   it('delegates to bridge with IP and credentials (no role forwards undefined)', async () => {
@@ -143,10 +131,6 @@ describe('createUser', () => {
     expect(result).toEqual({ success: false, error: 'Connection refused' })
   })
 })
-
-// ---------------------------------------------------------------------------
-// listUsers / whoAmI / updateUser / deleteUser
-// ---------------------------------------------------------------------------
 
 describe('listUsers', () => {
   it('delegates to bridge with IP', async () => {
@@ -229,10 +213,6 @@ describe('deleteUser', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// getUsersInfo
-// ---------------------------------------------------------------------------
-
 describe('getUsersInfo', () => {
   it('delegates to bridge with IP', async () => {
     const result = await adapter.getUsersInfo()
@@ -254,11 +234,18 @@ describe('getUsersInfo', () => {
 
     expect(result).toEqual({ hasUsers: false, error: 'Timeout' })
   })
-})
 
-// ---------------------------------------------------------------------------
-// getStatus
-// ---------------------------------------------------------------------------
+  it('hands the transport failure kind from the bridge through unchanged', async () => {
+    const refused: UsersInfoResult = {
+      hasUsers: false,
+      error: 'connect ECONNREFUSED 192.168.1.100:8443',
+      failure: 'refused',
+    }
+    jest.mocked(window.bridge.runtimeGetUsersInfo).mockResolvedValue(refused)
+
+    await expect(adapter.getUsersInfo()).resolves.toStrictEqual(refused)
+  })
+})
 
 describe('getStatus', () => {
   it('delegates to bridge with IP, token, and includeStats', async () => {
@@ -290,10 +277,6 @@ describe('getStatus', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// startPlc
-// ---------------------------------------------------------------------------
-
 describe('startPlc', () => {
   it('delegates to bridge with IP and token', async () => {
     await adapter.login({ username: 'admin', password: 'secret' })
@@ -318,10 +301,6 @@ describe('startPlc', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// stopPlc
-// ---------------------------------------------------------------------------
-
 describe('stopPlc', () => {
   it('delegates to bridge with IP and token', async () => {
     await adapter.login({ username: 'admin', password: 'secret' })
@@ -345,10 +324,6 @@ describe('stopPlc', () => {
     expect(result).toEqual({ success: false, error: 'PLC error' })
   })
 })
-
-// ---------------------------------------------------------------------------
-// getLogs
-// ---------------------------------------------------------------------------
 
 describe('getLogs', () => {
   it('delegates to bridge with IP, token, and minId', async () => {
@@ -380,10 +355,6 @@ describe('getLogs', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// getSerialPorts
-// ---------------------------------------------------------------------------
-
 describe('getSerialPorts', () => {
   it('delegates to bridge with IP and token', async () => {
     const ports = [{ device: '/dev/ttyUSB0', description: 'USB Serial' }]
@@ -411,10 +382,6 @@ describe('getSerialPorts', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// getCompilationStatus
-// ---------------------------------------------------------------------------
-
 describe('getCompilationStatus', () => {
   it('delegates to bridge with IP and token', async () => {
     await adapter.login({ username: 'admin', password: 'secret' })
@@ -439,10 +406,6 @@ describe('getCompilationStatus', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// clearCredentials
-// ---------------------------------------------------------------------------
-
 describe('clearCredentials', () => {
   it('clears internal JWT and delegates to bridge', async () => {
     await adapter.login({ username: 'admin', password: 'secret' })
@@ -451,15 +414,10 @@ describe('clearCredentials', () => {
     expect(window.bridge.runtimeClearCredentials).toHaveBeenCalled()
     expect(result).toEqual({ success: true })
 
-    // Subsequent calls should use empty token
     await adapter.getStatus()
     expect(window.bridge.runtimeGetStatus).toHaveBeenCalledWith('192.168.1.100', undefined)
   })
 })
-
-// ---------------------------------------------------------------------------
-// onTokenRefreshed
-// ---------------------------------------------------------------------------
 
 describe('onTokenRefreshed', () => {
   it('subscribes to bridge token refresh events', () => {
@@ -474,8 +432,6 @@ describe('onTokenRefreshed', () => {
   })
 
   it('forwards the refreshed token from main to the callback', () => {
-    // The token lives in the main process now; the adapter only relays the
-    // refresh notification so the renderer store flag can track it.
     let bridgeHandler: ((_event: unknown, newToken: string) => void) | null = null
     ;(window.bridge.onRuntimeTokenRefreshed as jest.Mock).mockImplementation(
       (handler: (_event: unknown, newToken: string) => void) => {
@@ -493,10 +449,6 @@ describe('onTokenRefreshed', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// IP address getter reactivity
-// ---------------------------------------------------------------------------
-
 describe('IP address getter', () => {
   it('reads IP address dynamically on each call', async () => {
     mockIpAddress = '10.0.0.1'
@@ -508,14 +460,6 @@ describe('IP address getter', () => {
     expect(window.bridge.runtimeGetUsersInfo).toHaveBeenCalledWith('10.0.0.2')
   })
 })
-
-// ---------------------------------------------------------------------------
-// isReadyForDebug
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// discoverDevices / onDeviceDiscovered
-// ---------------------------------------------------------------------------
 
 describe('discoverDevices', () => {
   it('delegates to bridge with options', async () => {
@@ -561,10 +505,6 @@ describe('onDeviceDiscovered', () => {
     expect(unsub).toBe(unsubscribe)
   })
 })
-
-// ---------------------------------------------------------------------------
-// EtherCAT discovery methods — thin bridge delegators (no token; main owns it)
-// ---------------------------------------------------------------------------
 
 describe('EtherCAT discovery methods', () => {
   const cases: Array<{
@@ -650,10 +590,6 @@ describe('isReadyForDebug', () => {
   })
 })
 
-// ---------------------------------------------------------------------------
-// stored source project
-// ---------------------------------------------------------------------------
-
 describe('installRetrievedLibraries', () => {
   it('delegates to bridge with the project path and the names to install', async () => {
     const result = await adapter.installRetrievedLibraries!({ projectName: 'Demo', payload: '/projects/demo' }, [
@@ -665,8 +601,6 @@ describe('installRetrievedLibraries', () => {
   })
 
   it('reports the failure in the shape the caller renders, not as a thrown error', async () => {
-    // The caller lists failures per library, so a whole-call failure still has
-    // to arrive as one -- an empty name with the reason attached.
     ;(window.bridge.runtimeInstallRetrievedLibraries as jest.Mock).mockRejectedValue(new Error('install failed'))
     const result = await adapter.installRetrievedLibraries!({ projectName: 'Demo', payload: '/projects/demo' }, [
       'oscat-basic',
@@ -679,14 +613,6 @@ describe('installRetrievedLibraries', () => {
     })
   })
 })
-
-// ---------------------------------------------------------------------------
-// the shared retrieve picker's desktop half
-// ---------------------------------------------------------------------------
-//
-// The picker is one component for both platforms. What these translate is the
-// desktop's answer to "which devices, and how do I address them": a LAN scan,
-// keyed by address.
 
 describe('listRetrievableDevices', () => {
   it('maps LAN replies into the shape the picker reads', async () => {
@@ -718,9 +644,6 @@ describe('listRetrievableDevices', () => {
   })
 
   it('marks every listed device as having answered', async () => {
-    // On this platform a device is only in the list because it replied to the
-    // scan, so "stores nothing" is always a real answer here -- unlike web,
-    // where the device list and the scan are separate facts.
     ;(window.bridge.runtimeDiscoverDevices as jest.Mock).mockResolvedValue({
       success: true,
       devices: [{ ipAddress: '192.168.1.51', hostname: '' }],
@@ -748,8 +671,6 @@ describe('listRetrievableDevices', () => {
 
 describe('connectedRetrievableDeviceKey', () => {
   it('is empty until a session actually exists', async () => {
-    // A configured address is not a session. Without this the picker would skip
-    // asking for credentials for a device nobody has signed in to.
     expect(adapter.connectedRetrievableDeviceKey!()).toBe('')
 
     await adapter.login({ username: 'admin', password: 'secret' })
@@ -783,8 +704,6 @@ describe('fetchRetrievableProject', () => {
   })
 
   it('reports a failed IPC call rather than throwing at the caller', async () => {
-    // The fetch itself is an internal of this method now rather than a port
-    // method of its own, so this is where its error handling is exercised.
     ;(window.bridge.runtimeRetrieveProject as jest.Mock).mockRejectedValue(new Error('retrieve failed'))
 
     const result = await adapter.fetchRetrievableProject!(device)
@@ -806,8 +725,6 @@ describe('fetchRetrievableProject', () => {
 
 describe('onRetrievableDeviceFound', () => {
   it('translates each streamed reply as it arrives', () => {
-    // The LAN scan answers progressively, so rows appear while it is still
-    // running rather than all at once when it ends.
     let emit: ((event: unknown, device: unknown) => void) | undefined
     const unsubscribe = jest.fn()
     ;(window.bridge.onRuntimeDeviceDiscovered as jest.Mock).mockImplementation((handler) => {
@@ -838,8 +755,6 @@ describe('onRetrievableDeviceFound', () => {
 
 describe('selectRetrievableDevice', () => {
   it('moves the target address the adapter authenticates against', async () => {
-    // This has to happen before the login, not with it: the adapter reads its
-    // target from the store to know which device to sign in to.
     adapter.selectRetrievableDevice!({ key: '192.168.1.77', name: '192.168.1.77', answeredScan: true })
 
     expect(store.getState().deviceDefinitions.configuration.runtimeIpAddress).toBe('192.168.1.77')
@@ -847,14 +762,9 @@ describe('selectRetrievableDevice', () => {
 })
 
 describe('the bootloader surface', () => {
-  // Every method is a thin pass-through to the IPC bridge, so what is worth
-  // pinning is that each one reaches the right channel with the device address
-  // the adapter was given -- and that a thrown bridge error becomes the
-  // port's failure union rather than escaping to the caller.
-
   it('reaches the bridge for each call, with the selected device address', async () => {
     await adapter.bootloader.getCapabilities()
-    expect(window.bridge.bootloaderGetCapabilities).toHaveBeenCalledWith(mockIpAddress)
+    expect(jest.mocked(window.bridge.bootloaderGetCapabilities).mock.calls).toEqual([[mockIpAddress]])
 
     await adapter.bootloader.login('op', 'op')
     expect(window.bridge.bootloaderLogin).toHaveBeenCalledWith(mockIpAddress, 'op', 'op')
@@ -881,6 +791,15 @@ describe('the bootloader surface', () => {
     expect(window.bridge.bootloaderClearSession).toHaveBeenCalledWith(mockIpAddress)
   })
 
+  it('hands the capability options to the bridge unchanged', async () => {
+    const options = { timeoutMs: 2500 }
+
+    await adapter.bootloader.getCapabilities(options)
+
+    expect(window.bridge.bootloaderGetCapabilities).toHaveBeenCalledWith(mockIpAddress, options)
+    expect(jest.mocked(window.bridge.bootloaderGetCapabilities).mock.calls[0]?.at(1)).toBe(options)
+  })
+
   it('returns what the bridge returns', async () => {
     const result = await adapter.bootloader.getDeviceInfo()
     expect(result.success).toBe(true)
@@ -889,9 +808,6 @@ describe('the bootloader surface', () => {
   })
 
   it('turns a bridge failure into the port failure union', async () => {
-    // A dead IPC channel must not throw past the adapter: every caller in the
-    // Runtime Status screen branches on `success`, and an exception there
-    // would take the screen down instead of showing "no bootloader".
     ;(window.bridge.bootloaderGetCapabilities as jest.Mock).mockRejectedValue(new Error('ipc gone'))
 
     const result = await adapter.bootloader.getCapabilities()
