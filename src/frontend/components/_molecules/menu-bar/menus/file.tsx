@@ -2,6 +2,7 @@ import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { useEffect, useState } from 'react'
 
 import { useAppUpdate, useCapabilities, useProject } from '../../../../../middleware/shared/providers'
+import { useIsEditingLocked } from '../../../../hooks/use-editing-lock'
 import { useHandleRemoveTab } from '../../../../hooks/use-remove-tab'
 import { i18n } from '../../../../locales/i18n'
 import { executeExportPlcopen } from '../../../../services/export-actions'
@@ -16,6 +17,7 @@ export const FileMenu = () => {
   const projectPort = useProject()
   const capabilities = useCapabilities()
   const appUpdate = useAppUpdate()
+  const isEditingLocked = useIsEditingLocked()
   const [autoCheck, setAutoCheck] = useState(false)
   const {
     project,
@@ -140,7 +142,14 @@ export const FileMenu = () => {
                 </MenuPrimitive.Item>
               )}
               {capabilities.hasProjectImport && (
-                <MenuPrimitive.Item className={ITEM} onClick={() => openModal('confirm-plcopen-import')}>
+                <MenuPrimitive.Item
+                  className={ITEM}
+                  disabled={isEditingLocked}
+                  onClick={() => {
+                    if (isEditingLocked) return
+                    openModal('confirm-plcopen-import')
+                  }}
+                >
                   <span>{i18n.t('menu:file.submenu.importFromPLCOpenXml')}</span>
                 </MenuPrimitive.Item>
               )}

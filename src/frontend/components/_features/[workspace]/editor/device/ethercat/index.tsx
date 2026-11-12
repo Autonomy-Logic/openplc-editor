@@ -5,6 +5,7 @@ import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-da
 import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
+import { useIsEditingLocked } from '@root/frontend/hooks/use-editing-lock'
 import type { OpenPLCStore } from '@root/frontend/store'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { elementNameCollision } from '@root/frontend/store/slices/shared/name-collision'
@@ -27,6 +28,7 @@ import { resolveAddressProducerCapabilities } from '@root/middleware/shared/util
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
+import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
 import { AdvancedTab } from './components/advanced-tab'
 import { RepositoryTab } from './components/repository-tab'
 import { ScanBusTab } from './components/scan-bus-tab'
@@ -118,6 +120,7 @@ const EtherCATEditor = () => {
   } = useOpenPLCStore()
   const runtime = useRuntime()
   const esi = useEsi()
+  const isEditingLocked = useIsEditingLocked()
 
   const deviceName = editor.type === 'plc-remote-device' ? editor.meta.name : ''
   const projectPath = project.meta.path
@@ -167,17 +170,19 @@ const EtherCATEditor = () => {
 
   const syncDevicesToStore = useCallback(
     (devices: ConfiguredEtherCATDevice[]) => {
+      if (isEditingLocked) return
       projectActions.updateEthercatConfig(deviceName, {
         masterConfig: readEthercatConfig()?.masterConfig ?? masterConfig,
         devices,
       })
       workspaceActions.setEditingState('unsaved')
     },
-    [deviceName, projectActions, readEthercatConfig, masterConfig, workspaceActions],
+    [deviceName, projectActions, readEthercatConfig, masterConfig, workspaceActions, isEditingLocked],
   )
 
   const handleUpdateMasterConfig = useCallback(
     (updates: Partial<EtherCATMasterConfig>) => {
+      if (isEditingLocked) return
       const newMasterConfig = { ...masterConfig, ...updates }
       projectActions.updateEthercatConfig(deviceName, {
         masterConfig: newMasterConfig,
@@ -185,7 +190,7 @@ const EtherCATEditor = () => {
       })
       workspaceActions.setEditingState('unsaved')
     },
-    [deviceName, projectActions, masterConfig, configuredDevices, workspaceActions],
+    [deviceName, projectActions, masterConfig, configuredDevices, workspaceActions, isEditingLocked],
   )
 
   // Network interfaces state
@@ -279,7 +284,7 @@ const EtherCATEditor = () => {
         if (fetchedInterfaces.length > 0) {
           _setSelectedInterface((prev) => {
             const next = prev && names.has(prev) ? prev : fetchedInterfaces[0].name
-            handleUpdateMasterConfig({ networkInterface: next })
+            if (next !== masterConfig.networkInterface) handleUpdateMasterConfig({ networkInterface: next })
             return next
           })
         } else {
@@ -651,33 +656,35 @@ const EtherCATEditor = () => {
           value='scan-bus'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <ScanBusTab
-            isConnectedToRuntime={isConnectedToRuntime}
-            serviceAvailable={serviceAvailable}
-            serviceMessage={serviceMessage}
-            interfaces={interfaces}
-            selectedInterface={selectedInterface}
-            onSelectInterface={setSelectedInterface}
-            isLoadingInterfaces={isLoadingInterfaces}
-            interfaceError={interfaceError}
-            isScanning={isScanning}
-            scanError={scanError}
-            scanTimeMs={scanTimeMs}
-            scanMessage={scanMessage}
-            scannedDevices={scannedDevices}
-            onScan={() => void scanDevices()}
-            deviceMatches={deviceMatches}
-            selectedScannedDevices={selectedScannedDevices}
-            onSelectScannedDevice={handleSelectScannedDevice}
-            onSelectAllScanned={handleSelectAllScanned}
-            onAddSelectedFromScan={() => void handleAddSelectedFromScan()}
-            isAdding={isAdding}
-            addProgress={addProgress}
-            configuredDevices={configuredDevices}
-            repository={repository}
-            onAddDeviceFromBrowser={(...args) => void handleAddDeviceFromBrowser(...args)}
-            onRemoveDevice={handleRemoveDevice}
-          />
+          <EditingLockBoundary className='contents'>
+            <ScanBusTab
+              isConnectedToRuntime={isConnectedToRuntime}
+              serviceAvailable={serviceAvailable}
+              serviceMessage={serviceMessage}
+              interfaces={interfaces}
+              selectedInterface={selectedInterface}
+              onSelectInterface={setSelectedInterface}
+              isLoadingInterfaces={isLoadingInterfaces}
+              interfaceError={interfaceError}
+              isScanning={isScanning}
+              scanError={scanError}
+              scanTimeMs={scanTimeMs}
+              scanMessage={scanMessage}
+              scannedDevices={scannedDevices}
+              onScan={() => void scanDevices()}
+              deviceMatches={deviceMatches}
+              selectedScannedDevices={selectedScannedDevices}
+              onSelectScannedDevice={handleSelectScannedDevice}
+              onSelectAllScanned={handleSelectAllScanned}
+              onAddSelectedFromScan={() => void handleAddSelectedFromScan()}
+              isAdding={isAdding}
+              addProgress={addProgress}
+              configuredDevices={configuredDevices}
+              repository={repository}
+              onAddDeviceFromBrowser={(...args) => void handleAddDeviceFromBrowser(...args)}
+              onRemoveDevice={handleRemoveDevice}
+            />
+          </EditingLockBoundary>
         </Tabs.Content>
 
         {/* Repository Tab */}
@@ -685,14 +692,16 @@ const EtherCATEditor = () => {
           value='repository'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <RepositoryTab
-            repository={repository}
-            onRepositoryChange={setRepository}
-            projectPath={projectPath}
-            isLoadingRepository={isLoadingRepository}
-            repositoryError={repositoryError}
-            onRetryRepository={handleRetryRepository}
-          />
+          <EditingLockBoundary className='contents'>
+            <RepositoryTab
+              repository={repository}
+              onRepositoryChange={setRepository}
+              projectPath={projectPath}
+              isLoadingRepository={isLoadingRepository}
+              repositoryError={repositoryError}
+              onRetryRepository={handleRetryRepository}
+            />
+          </EditingLockBoundary>
         </Tabs.Content>
 
         {/* Advanced Tab */}
@@ -700,7 +709,9 @@ const EtherCATEditor = () => {
           value='advanced'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <AdvancedTab masterConfig={masterConfig} onUpdateMasterConfig={handleUpdateMasterConfig} />
+          <EditingLockBoundary className='contents'>
+            <AdvancedTab masterConfig={masterConfig} onUpdateMasterConfig={handleUpdateMasterConfig} />
+          </EditingLockBoundary>
         </Tabs.Content>
       </Tabs.Root>
 

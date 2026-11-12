@@ -1,3 +1,4 @@
+import { NavigationButton } from '@root/frontend/components/_atoms/navigation-button'
 import type { ReactNode } from 'react'
 
 import { slotRowClassName } from './slot-list-helpers'
@@ -30,9 +31,8 @@ function SlotSelectButton({
   onSelect,
 }: SlotSelectButtonProps) {
   return (
-    <button
-      type='button'
-      aria-selected={isSelected}
+    <NavigationButton
+      ariaSelected={isSelected}
       onClick={onSelect}
       className='flex min-w-0 flex-1 flex-col gap-0.5 px-2 py-2 text-left'
     >
@@ -53,7 +53,7 @@ function SlotSelectButton({
         {moduleName ?? 'Empty'}
       </span>
       {subtitle && <span className='truncate text-[11px] text-neutral-500 dark:text-neutral-400'>{subtitle}</span>}
-    </button>
+    </NavigationButton>
   )
 }
 

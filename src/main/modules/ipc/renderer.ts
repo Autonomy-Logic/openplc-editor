@@ -69,6 +69,7 @@ import type {
   Stash,
   VersionControlResult,
 } from '@root/middleware/shared/ports/version-control-port'
+import type { WasmCompileRequest, WasmCompileResult } from '@root/middleware/shared/ports/wasm-toolchain-types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
@@ -437,6 +438,7 @@ const rendererProcessBridge = {
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
   rebuildMenu: () => ipcRenderer.send('window:rebuild-menu'),
   setMenuProjectOpen: (open: boolean) => ipcRenderer.send('window:project-open', open),
+  setMenuDebuggerActive: (active: boolean) => ipcRenderer.send('window:debugger-active', active),
   reloadWindow: () => ipcRenderer.send('window:reload'),
   windowIsClosing: (callback: IpcRendererCallbacks) => subscribe('window-controls:is-closing', callback),
 
@@ -565,6 +567,9 @@ const rendererProcessBridge = {
     ipcRenderer.on('packages:boards-updated', listener)
     return () => ipcRenderer.removeListener('packages:boards-updated', listener)
   },
+
+  wasmToolchainCompile: (request: WasmCompileRequest): Promise<WasmCompileResult> =>
+    ipcRenderer.invoke('wasm-toolchain:compile', request),
 
   getPreviewImage: (image: string, packagePath?: string): Promise<string> =>
     ipcRenderer.invoke('util:get-preview-image', image, packagePath),
