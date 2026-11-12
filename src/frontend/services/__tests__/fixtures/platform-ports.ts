@@ -49,6 +49,7 @@ function compilerPort(log: PortCallLog): CompilerPort {
   return {
     compileProgram: () => rejects(log, 'compiler.compileProgram'),
     compileForDebug: () => rejects(log, 'compiler.compileForDebug'),
+    compileToWasm: () => rejects(log, 'compiler.compileToWasm'),
   }
 }
 
