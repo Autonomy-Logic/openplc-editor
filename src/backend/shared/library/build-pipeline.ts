@@ -204,6 +204,8 @@ function stubProgramFor(project: PLCProject): PLCProject {
 const STUB_SPLIT_FILENAME = `${STUB_PROGRAM_NAME}.st`
 const CONFIG_SPLIT_FILENAME = '_config.st'
 const GLOBALS_SPLIT_FILENAME = '_globals.st'
+const RESOURCE_HEADER = /^RESOURCE\s+\S+\s+ON\b/i
+const END_CONFIGURATION_LINE = /^END_CONFIGURATION\b/i
 
 // ---------------------------------------------------------------------------
 // Stage 1: pre-transpile (pure)
@@ -459,8 +461,8 @@ function nativeStem(fileName: string): string {
 function configurationGlobalsSection(configSt: string): string | null {
   const lines = configSt.split('\n')
   const trimmed = lines.map((line) => line.trim())
-  const resourceIdx = trimmed.findIndex((line) => line.startsWith('RESOURCE'))
-  const limit = resourceIdx !== -1 ? resourceIdx : trimmed.findIndex((line) => line.startsWith('END_CONFIGURATION'))
+  const resourceIdx = trimmed.findIndex((line) => RESOURCE_HEADER.test(line))
+  const limit = resourceIdx !== -1 ? resourceIdx : trimmed.findIndex((line) => END_CONFIGURATION_LINE.test(line))
   const head = trimmed.slice(0, limit === -1 ? trimmed.length : limit)
   const first = head.findIndex((line) => line.startsWith('VAR_GLOBAL'))
   const last = head.lastIndexOf('END_VAR')
