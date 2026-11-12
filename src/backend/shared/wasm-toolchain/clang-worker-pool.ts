@@ -161,7 +161,19 @@ export class ClangWorkerPool implements WasmClangRunner {
     }
     const loading = this.slots.filter((s) => !s.loaded && !s.failed).length
     let missing = Math.min(this.queue.length - loading, this.concurrency - this.slots.length)
-    for (; missing > 0; missing--) this.spawn()
+    for (; missing > 0; missing--) {
+      try {
+        this.spawn()
+      } catch (error) {
+        // Jobs wait for the workers still in the pool; with none left, nothing would ever take them.
+        if (this.slots.length === 0) {
+          const reason = error instanceof Error ? error.message : String(error)
+          const failure = new Error(`The compiler worker could not be started (${reason}).`)
+          for (const waiting of this.queue.splice(0)) waiting.reject(failure)
+        }
+        return
+      }
+    }
   }
 
   private hand(slot: Slot, queued: Queued): void {

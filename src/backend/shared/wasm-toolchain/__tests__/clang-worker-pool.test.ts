@@ -49,6 +49,7 @@ class FakeWorker implements ClangWorkerHandle {
 class FakeMechanism implements ClangWorkerMechanism {
   workers: FakeWorker[] = []
   loads = 0
+  spawnError: Error | null = null
   constructor(
     public autoReady = true,
     private readonly missing: Error | null = null,
@@ -58,6 +59,7 @@ class FakeMechanism implements ClangWorkerMechanism {
     return this.missing ? Promise.reject(this.missing) : Promise.resolve()
   }
   spawn(): ClangWorkerHandle {
+    if (this.spawnError) throw this.spawnError
     const worker = new FakeWorker()
     this.workers.push(worker)
     if (this.autoReady) queueMicrotask(() => worker.send({ type: 'ready' }))
@@ -293,6 +295,44 @@ describe('ClangWorkerPool', () => {
     await flush()
     expect(mechanism.workers).toHaveLength(3)
     mechanism.workers[2].answer(mechanism.workers[2].posted[0].id)
+    await expect(third).resolves.toMatchObject({ exitCode: 0 })
+  })
+
+  it('keeps waiting jobs for the loaded worker when another worker cannot be started', async () => {
+    const mechanism = new FakeMechanism()
+    const p = pool(mechanism, 2)
+    const first = p.run(job)
+    await flush()
+    mechanism.spawnError = new Error('blocked by policy')
+    const second = p.run(job)
+    await flush()
+    expect(mechanism.workers).toHaveLength(1)
+
+    const worker = mechanism.workers[0]
+    worker.answer(worker.posted[0].id)
+    await expect(first).resolves.toMatchObject({ exitCode: 0 })
+    await flush()
+    worker.answer(worker.posted[1].id)
+    await expect(second).resolves.toMatchObject({ exitCode: 0 })
+  })
+
+  it('fails waiting jobs when a worker cannot be started and none is left, and recovers later', async () => {
+    const mechanism = new FakeMechanism()
+    const p = pool(mechanism, 1)
+    const first = p.run(job)
+    await flush()
+    mechanism.workers[0].fail('exit code 3')
+    await expect(first).rejects.toThrow('exit code 3')
+
+    mechanism.spawnError = new Error('blocked by policy')
+    await expect(p.run(job)).rejects.toThrow('The compiler worker could not be started (blocked by policy).')
+
+    mechanism.spawnError = null
+    const third = p.run(job)
+    await flush()
+    const fresh = mechanism.workers[1]
+    expect(fresh.posted).toHaveLength(1)
+    fresh.answer(fresh.posted[0].id)
     await expect(third).resolves.toMatchObject({ exitCode: 0 })
   })
 
