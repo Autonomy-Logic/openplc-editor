@@ -231,12 +231,6 @@ type LicenseChannel = LicenseReadWritable &
     | { getAnchor(): Promise<DebugAnchorResult>; getDeviceId?: never }
   )
 
-/**
- * Whether a debug channel can carry the licensing flow: the two licence FCs plus one of
- * the two identity reads (both optional on `DeviceDebugChannel`, since not every medium
- * implements them). Narrows the client itself rather than wrapping it, so the flow
- * keeps using the same object — and the same send mutex — every other caller holds.
- */
 /** The compile flow's last message on its port, which carries the build and upload verdict. */
 function isCompileVerdict(message: unknown): message is { closePort: true; success: boolean } {
   if (typeof message !== 'object' || message === null) return false
@@ -244,6 +238,7 @@ function isCompileVerdict(message: unknown): message is { closePort: true; succe
   return m.closePort === true && typeof m.success === 'boolean'
 }
 
+/** Whether a debug channel carries the licence FCs and one identity read; narrows the client itself. */
 function isLicenseChannel(client: DeviceDebugChannel): client is DeviceDebugChannel & LicenseChannel {
   return (
     (typeof client.getDeviceId === 'function' || typeof client.getAnchor === 'function') &&

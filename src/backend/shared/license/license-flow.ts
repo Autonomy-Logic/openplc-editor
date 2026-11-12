@@ -1,13 +1,6 @@
 /**
- * The VPP licensing machine: read what the device holds, decide whether to
- * believe it, and recover from the backend when it is absent or wrong.
- *
- * Runs over an ALREADY-CONNECTED transport — it neither connects nor
- * disconnects. The caller holds the link open, so classification, the on-device
- * read (0x4A), the backend call and the write (0x49) all happen over a SINGLE
- * port open. Pure orchestration over the transport plus an injected activation
- * call, so it is unit-testable with fakes, and it never throws: every failure
- * resolves to an outcome.
+ * Licence flow over a connected transport: read the stored licence (0x4A), verify it,
+ * and when it is absent or invalid ask Edge and write the result (0x49). Never throws.
  */
 
 import type { DeviceLicenseReport, DeviceLicenseState } from '../../../middleware/shared/ports/device-port'
@@ -42,10 +35,7 @@ export interface LicenseReadWritable {
   writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult>
 }
 
-/**
- * Input to the activation call: exactly the two fields the wire accepts.
- * The backend derives its own product and signing-key material from `packageId`.
- */
+/** Activation request body. */
 export interface DeviceActivationInput {
   /** 16-byte device id, LOWERCASE hex (from `deriveDeviceId`). */
   deviceId: string
@@ -53,14 +43,7 @@ export interface DeviceActivationInput {
   packageId: string
 }
 
-/**
- * Result of an activation check. Transport and backend errors surface as
- * `{ licensed: false, error }` rather than throwing.
- *
- * `reason` is the backend's business answer ("no purchase on record"); `error`
- * means no answer was obtained (rate limit, no signer, unknown package, dropped
- * connection). Callers keep them apart: only `reason` means "not licensed".
- */
+/** Activation result: `reason` is Edge's answer, `error` means no answer was obtained. */
 export interface DeviceActivationResult {
   licensed: boolean
   /** License blob bytes (98 B) when `licensed` — ready to write via FC 0x49. */
@@ -74,29 +57,12 @@ export interface DeviceActivationResult {
 /** Asks the backend for this device's licence; never throws. */
 export type DeviceActivation = (input: DeviceActivationInput) => Promise<DeviceActivationResult>
 
-/**
- * The outcome shape is the PORT's `DeviceLicenseState`, not a private one.
- *
- * Deliberately not a second type mapped at the IPC boundary: the union's whole
- * value is that `unlicensed` (the backend says there is no purchase) and
- * `check-failed` (we could not find out) cannot be collapsed into each other, and
- * a hand-written mapper between two near-identical unions is exactly where that
- * distinction gets quietly lost. One type, one meaning, all the way to the badge.
- */
 export type { DeviceLicenseReport, DeviceLicenseState }
 
-/**
- * The raw anchor FC 0x48 answered, from which the editor derives the device_id
- * (`deriveDeviceId`): a bare-metal board's single ID source, or a runtime-v4
- * target's device-tree serial.
- */
+/** Raw anchor from FC 0x48, hashed by `deriveDeviceId`. */
 export type DeviceIdentity = { kind: 'anchor'; anchor: Uint8Array }
 
-/**
- * The identity of a bare-metal board from its FC 0x48 sources, or an error.
- * No source gives an empty anchor, which `deriveIdentity` refuses; several
- * sources need a derivation version this editor does not have.
- */
+/** Board identity from its FC 0x48 sources: none gives an empty anchor; several are not supported. */
 export function identityFromSources(sources: readonly DeviceIdSource[]): DeviceIdentity | { error: string } {
   if (sources.length > 1) {
     return {
@@ -170,38 +136,7 @@ async function verifyBlobFor(
   return verdict.ok ? verdict : { ok: false, reason: RUNTIME_VERDICT_REASONS[verdict.reason] }
 }
 
-/**
- * Verify a blob the device handed back on 0x4A: magic, crc32, `deviceId` and
- * `productId`.
- *
- * WHY THIS EXISTS. The `0x7E` status byte does NOT mean "the stored license is
- * good" — the two targets disagree about what it means. Bare metal validates
- * magic + crc32 inside its store read; the Linux runtime checks ONLY that the
- * file is 98 bytes long. So on a Pi a blob cloned from another board, or one
- * half-written, answers `0x7E`. A caller that believed it would report
- * `already-licensed` and NEVER ASK THE BACKEND — skipping the one automatic
- * repair path there is. The closed license-core then refuses the blob and the
- * board runs demo, stopping actuation two hours in, while the badge says
- * "Licensed".
- *
- * WHAT IT PROVES AND WHAT IT DOES NOT. It proves the bytes are a well-formed
- * license FOR THIS DEVICE AND THIS VPP: length, magic, crc32 over 0..93, the
- * 16-byte `deviceId` equal to the id derived from the anchor we just read, and
- * the 8-byte `productId` equal to the id derived from this package. It does NOT
- * verify the ECDSA signature or the `keyId`, so it cannot say the closed gate
- * will run FULL — only the license-core can. Anything asserted in the UI must
- * stay inside that boundary, which is why the badge says "Licensed" (possession)
- * and never "Full mode" (execution).
- *
- * `productId` is checked only when a `packageId` is known; without one there is
- * nothing to compare against and the field is left unverified rather than
- * assumed good.
- *
- * Built on the shared `license-blob.ts` (`deserializeLicenseBlob`,
- * `crc32IsoHdlc`) rather than a second parser: that module is byte-identical
- * with openplc-web and cross-pinned to the C struct by a golden vector. A
- * private re-implementation here is exactly the divergence this avoids.
- */
+/** Checks length, magic, crc32, device ID and, when `packageId` is set, product ID; not the signature. */
 export async function verifyStoredLicenseBlob(
   blob: Uint8Array | undefined,
   deviceIdHex: string,
@@ -225,8 +160,6 @@ export function checkLicenseBlobStructure(
   deviceIdHex: string,
 ): { ok: true; blob: Uint8Array } | { ok: false; reason: string } {
   if (!blob || blob.length !== LIC_BLOB_SIZE) {
-    // A 0x7E with no (or a short) blob is itself off-contract: the parser only
-    // fills `blob` when the device sent all `len` bytes. Treat as unverified.
     return { ok: false, reason: 'The license stored on this device is incomplete.' }
   }
 
@@ -243,28 +176,13 @@ export function checkLicenseBlobStructure(
 
   const blobDeviceId = bytesToHex(parsed.deviceId)
   if (blobDeviceId !== deviceIdHex) {
-    // The clone case: valid bytes, wrong board. The gate answers DEVICE_MISMATCH.
     return { ok: false, reason: 'The license stored on this device was issued for a different device.' }
   }
 
   return { ok: true, blob }
 }
 
-/**
- * Run the licensing step for a licensable board over a live link.
- *
- * The caller has already decided the board is licensable
- * (`resolveLicensingTarget`) and already read its anchor while classifying the
- * link, so no round trip is repeated here.
- *
- * Sequence:
- *   1. Derive `deviceId` from the anchor. No anchor -> `check-failed`.
- *   2. Read 0x4A. `LIC_UNSUPPORTED` -> `unsupported`.
- *   3. If a blob came back, VERIFY it. Good -> `licensed / already-stored`.
- *      Bad -> fall through to recovery, which is the only automatic repair.
- *   4. Ask the backend. No entitlement -> `unlicensed`. Failure -> `check-failed`.
- *   5. Write 0x49, then RE-READ and re-verify. Never trust the write.
- */
+/** Resolve a board's licence: verify the stored one, else recover it from Edge, write it and re-verify. */
 export async function resolveDeviceLicense(
   transport: LicenseReadWritable,
   input: DeviceLicenseInput,
@@ -288,18 +206,7 @@ export async function resolveDeviceLicense(
   }
 }
 
-/**
- * Read what the device is holding and verify it — WITHOUT contacting the backend.
- *
- * Answers "is this board licensed right now?", which is the question the badge
- * asks. Cheap enough for a screen open or a poll, because it is one Modbus frame
- * and some arithmetic.
- *
- * Note what it CANNOT say: `unlicensed` here always carries
- * `entitlementChecked: false`, because nobody has asked whether a purchase
- * exists. A caller that rendered that as "buy a license" would be guessing —
- * offer a refresh instead.
- */
+/** Verify the stored licence without contacting Edge; `unlicensed` here has `entitlementChecked: false`. */
 export async function inspectDeviceLicense(
   transport: LicenseReadWritable,
   input: DeviceLicenseInput,
@@ -319,28 +226,12 @@ export async function inspectDeviceLicense(
   }
 }
 
-/**
- * Derive the licensing identity, or explain why there is none.
- *
- * An identity of zero bytes is a REAL reply, not a failure: a board with no ID
- * source answers count 0, and the link classifier correctly counts that as
- * "firmware present".
- *
- * It is fatal HERE, and must be caught before deriving anything, because
- * `sha256(prefix || <nothing>)` is a CONSTANT: every such board would share one
- * device id, so one purchase would license an entire fleet and a license issued
- * for one board would verify on all of them.
- */
+/** Device ID from the anchor; an empty anchor is refused because its digest would be shared by every such board. */
 async function deriveIdentity(identity: DeviceIdentity): Promise<{ deviceId: string } | DeviceLicenseReport> {
   if (identity.anchor.length === 0) {
     return {
       outcome: {
         state: 'check-failed',
-        // Since the packages gate refuses `isLicensable` on silicon the
-        // license-core cannot read, a licensable board answering nothing is a
-        // FIRMWARE that was built without licensing support — which a rebuild
-        // does fix. Says that, instead of naming license-core at a user who has
-        // no way to act on the word.
         error:
           'This board did not report an identity a license can be issued for. ' +
           'Its firmware was built without licensing support, so rebuild and upload the program to this board.',
@@ -352,14 +243,7 @@ async function deriveIdentity(identity: DeviceIdentity): Promise<{ deviceId: str
   return { deviceId: await deriveDeviceId(identity.anchor) }
 }
 
-/**
- * The read-and-verify step both entry points share.
- *
- * `absent` is not an outcome: it means "the device holds nothing usable", and what
- * that IMPLIES differs between the two callers — a refresh recovers from it, an
- * inspect can only report it. Returning a marker instead of an outcome is what
- * keeps that decision at the call site instead of buried here.
- */
+/** Stored licence verdict; `absent` means nothing usable is stored. */
 type StoredLicenseVerdict =
   | { kind: 'settled'; outcome: DeviceLicenseState }
   | { kind: 'absent'; detail?: { backendReason?: string } }
@@ -389,10 +273,6 @@ async function readAndVerify(
     const verdict = await verifyBlobFor(stored.blob, deviceId, input)
     if (verdict.ok) return { kind: 'settled', outcome: { state: 'licensed', how: 'already-stored' } }
 
-    // Deliberately NOT a failure: a stored blob that does not verify is the case
-    // recovery exists for (a clone, a half-written file, a licence for another
-    // VPP). Treating it as absent is the only automatic way this board gets a
-    // good one. Logged because it is worth seeing in the console.
     console.warn(
       `[license] the device reported a stored license but it did not verify (${verdict.reason}) — ` +
         'treating it as absent.',
@@ -402,10 +282,7 @@ async function readAndVerify(
   return { kind: 'absent' }
 }
 
-/**
- * Ask the backend for a license and write it. Reached when the device holds
- * nothing usable — empty, corrupt, or a blob that failed verification.
- */
+/** Asks the backend for a licence and writes it, then reads it back and verifies it. */
 async function recoverLicense(
   transport: LicenseReadWritable,
   input: { deviceId: string; packageId: string; runtimeKeys?: RuntimeLicenseKeys },
@@ -418,15 +295,10 @@ async function recoverLicense(
     if (activation.error) {
       return { deviceId, outcome: { state: 'check-failed', error: activation.error } }
     }
-    // The backend WAS asked and said no. `entitlementChecked: true` is what earns
-    // the UI the right to offer a purchase.
     return { deviceId, outcome: { state: 'unlicensed', entitlementChecked: true, backendReason: activation.reason } }
   }
 
   if (!activation.license) {
-    // Licensed on the backend's word but no blob to write. Nothing to store, and
-    // nothing we can assert about the device — the board will run demo, so say we
-    // could not confirm rather than claiming either state.
     return {
       deviceId,
       outcome: { state: 'check-failed', error: 'The license server reported a license but sent no license data.' },
@@ -445,11 +317,6 @@ async function recoverLicense(
     }
   }
 
-  // RE-READ; do not trust the write. 0x49 only STORES bytes: no target checks
-  // magic, crc32, `deviceId` or `productId` on write. So `write.success` alone
-  // says nothing about what the board now holds, and asserting possession from it
-  // means a blob truncated in flight, or signed for another device, reads as
-  // "Licensed" while the board runs demo.
   const readBack = await transport.readLicense()
   if (!readBack.success) {
     return {
