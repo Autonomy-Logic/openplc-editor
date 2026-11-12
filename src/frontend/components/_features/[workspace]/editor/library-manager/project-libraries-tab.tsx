@@ -181,7 +181,7 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
         <h3 className='select-none font-caption text-sm font-semibold text-neutral-950 dark:text-white'>{title}</h3>
         {subtitle && <p className='mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400'>{subtitle}</p>}
       </div>
-      <div className='flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3'>{children}</div>
+      <div className='flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3'>{children}</div>
     </div>
   )
 }
