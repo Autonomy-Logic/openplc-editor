@@ -67,6 +67,7 @@ npm run format           # Prettier formatting
 npm run test             # Jest with coverage (enforced thresholds)
 npm run test:watch       # Jest watch mode (no coverage)
 npm run test:e2e         # Playwright E2E tests
+npm run test:hmi-core    # HMI C core: golden scenes (gcc, clang, WebAssembly), unit tests, sanitized fuzzing
 
 npm run validate:arch    # Architecture layer dependency validation
 ```
@@ -459,6 +460,9 @@ and ship next to the toolchain; refresh them from the commits the new release wa
   per-file isolation, where such a mock would leak).
 - **Coverage:** per-directory floors are in `jest.config.json` (`coverageThreshold`).
 - **End-to-end:** Playwright specs in `e2e/` drive the built Electron app through `_electron.launch`; run them as described in "Electron e2e (Playwright)" above. No CI workflow runs them.
+- **HMI C core:** `resources/sources/hmi/` (mirrored to openplc-web `src/assets/firmware/hmi/`) is tested by
+  `tests/hmi-core/run.mjs` (`npm run test:hmi-core`, CI job `ci-hmi-core.yml`), not by Jest; see
+  `resources/sources/hmi/README.md`.
 - **Manual:** the developer's manual test is required for every demand.
 
 ## Code Style
