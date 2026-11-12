@@ -21,6 +21,8 @@ export interface WasmClangJobResult {
   exitCode: number
   /** Everything clang wrote to stderr. */
   stderr: string
+  /** Everything clang wrote to stdout. */
+  stdout: string
   /** The working directory after the run, with the files clang wrote. Empty when it failed. */
   tree: WasmToolchainTree
 }
@@ -48,6 +50,11 @@ export interface ClangWorkerHandle {
   onMessage(listener: (raw: unknown) => void): void
   /** The worker failed or stopped; `reason` says how. */
   onFailure(listener: (reason: string) => void): void
+  /**
+   * Whether the worker is running a job. A platform where an idle worker would keep the process alive (a Node
+   * thread) lets it go while idle; others ignore it.
+   */
+  setBusy?(busy: boolean): void
   terminate(): Promise<unknown> | void
 }
 

@@ -28,8 +28,10 @@ export type {
 
 export const WASM_TARGET = 'wasm32-wasip1'
 export const DEFAULT_WASM_OUTPUT = 'module.wasm'
-/** Where the compile step writes objects and dependency files; request files may not use it. */
+/** Where the compile step writes objects, dependency files and the linked module; request files may not use it. */
 const WORK_DIR = '__objects'
+/** The link always writes here, a directory that exists, whatever the request names its module. */
+const LINK_OUTPUT = `${WORK_DIR}/module.wasm`
 
 /** A compiled object and the content digest of every request file it was built from. */
 export interface CachedWasmObject {
@@ -87,8 +89,11 @@ function validate(request: WasmCompileRequest): string | null {
   return null
 }
 
+/**
+ * Plans one compile job per unit. A unit's cache key covers the compiler, its flags, its source path and the set of
+ * request file names, since adding or removing a file can change which header an include finds.
+ */
 function planUnits(request: WasmCompileRequest): PlannedUnit[] {
-  // A file added or removed can change which header an include finds, so the set of names is part of every key.
   const names = new ContentHash().update(Object.keys(request.files).sort().join('\u0000')).digest()
   return request.units.map((unit, index) => {
     const object = `${WORK_DIR}/${index}.o`
@@ -122,7 +127,7 @@ async function runSafely(runner: WasmClangRunner, job: WasmClangJob): Promise<Wa
   try {
     return await runner.run(job)
   } catch (error) {
-    return { exitCode: -1, stderr: error instanceof Error ? error.message : String(error), tree: {} }
+    return { exitCode: -1, stderr: error instanceof Error ? error.message : String(error), stdout: '', tree: {} }
   }
 }
 
@@ -152,7 +157,10 @@ function digestsOf(files: WasmToolchainFiles): (path: string) => string | undefi
   }
 }
 
-/** The request files an object was built from, with their digests; `null` when clang's list cannot be read. */
+/**
+ * The request files an object was built from, with their digests; `null` when clang's list cannot be read or names
+ * a relative path that is not a request file. Absolute paths are toolchain headers and are left out.
+ */
 function dependenciesOf(
   result: WasmClangJobResult,
   plan: PlannedUnit,
@@ -164,16 +172,18 @@ function dependenciesOf(
   if (paths === null || !paths.includes(plan.unit.source)) return null
   const dependencies: Array<[string, string]> = []
   for (const path of new Set(paths)) {
-    // Toolchain headers (absolute paths) come with the toolchain and change only with it.
+    if (path.startsWith('/')) continue
     const digest = digestOf(path)
-    if (digest !== undefined) dependencies.push([path, digest])
+    if (digest === undefined) return null
+    dependencies.push([path, digest])
   }
   return dependencies
 }
 
 /**
  * Compiles C and C++ translation units to objects with clang running as WebAssembly, then links them into one
- * WebAssembly module. An object comes from `cache` while every file it was built from is unchanged.
+ * WebAssembly module. An object comes from `cache` while every file it was built from is unchanged. Units are
+ * compiled largest first.
  * Diagnostics go to `log` and to the result.
  */
 export async function compileToWasm(
@@ -211,7 +221,6 @@ export async function compileToWasm(
       pending.push(p)
     }
   }
-  // Largest units first, so the slowest one does not start last.
   pending.sort((x, y) => y.size - x.size)
 
   await runLimited(pending, runner.concurrency, async (p) => {
@@ -247,13 +256,13 @@ export async function compileToWasm(
       ...planned.map((p) => p.object),
       ...(request.linkFlags ?? []),
       '-o',
-      output,
+      LINK_OUTPUT,
     ],
     tree: filesToTree(linkFiles),
   })
   stats.linkMs = performance.now() - linkStart
 
-  const wasm = link.exitCode === 0 ? readTreeFile(link.tree, output) : undefined
+  const wasm = link.exitCode === 0 ? readTreeFile(link.tree, LINK_OUTPUT) : undefined
   if (!isFileBytes(wasm)) {
     reportStderr(report, link.stderr, 'error')
     return fail(`Link failed: ${describeFailure(link.exitCode, `no '${output}'`)}`)

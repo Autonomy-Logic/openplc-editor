@@ -215,7 +215,6 @@ const createMainWindow = async () => {
     },
   })
 
-  // A production build emits splash.html next to main.js, also when it runs unpackaged (e2e); dev serves the source.
   const builtSplashPath = resolve(__dirname, '../main/splash.html')
   const splashPath =
     app.isPackaged || existsSync(builtSplashPath)
@@ -276,19 +275,23 @@ const createMainWindow = async () => {
       mainWindow.minimize()
     }
     const minimumSplash = new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 3000))
-    void Promise.all([minimumSplash, getDesktopWasmCompileService().prepare()]).then(([, toolchain]) => {
-      if (splash === null) {
-        mainWindow?.destroy()
-        return
-      }
-      if (!toolchain.ok) {
-        showStartupFailure(toolchain.message)
-        return
-      }
-      logger.info(`WebAssembly toolchain ready in ${Math.round(toolchain.ms)} ms`)
-      splash.close()
-      mainWindow?.show()
-    })
+    void Promise.all([minimumSplash, getDesktopWasmCompileService().prepare()])
+      .then(([, toolchain]) => {
+        if (splash === null) {
+          mainWindow?.destroy()
+          return
+        }
+        if (!toolchain.ok) {
+          showStartupFailure(toolchain.message)
+          return
+        }
+        logger.info(`WebAssembly toolchain ready in ${Math.round(toolchain.ms)} ms`)
+        splash.close()
+        mainWindow?.show()
+      })
+      .catch((error: unknown) => {
+        showStartupFailure('The editor could not open: ' + getErrorMessage(error))
+      })
   })
 
   /** Keeps the splash up with the reason the editor cannot start; closing it quits. */
@@ -548,8 +551,9 @@ app
       VENDOR_DOCUMENT_SCHEME,
       createVendorDocumentHandler({ listPackages: () => packages.listInstalled() }),
     )
-    // Loads the WebAssembly toolchain while the windows come up; the splash waits for it.
-    void getDesktopWasmCompileService().prepare()
+    getDesktopWasmCompileService()
+      .prepare()
+      .catch((error: unknown) => logger.error('WebAssembly toolchain: ' + getErrorMessage(error)))
     void createMainWindow()
     // Last session's cloud builds. The cloud is the source of truth for those
     // projects, so nothing here survives a restart; best-effort, since a scratch

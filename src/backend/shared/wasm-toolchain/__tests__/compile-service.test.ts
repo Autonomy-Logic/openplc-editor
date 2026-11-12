@@ -106,7 +106,7 @@ describe('compileToWasm diagnostics', () => {
 })
 
 describe('parseWasmCompileRequest', () => {
-  it('accepts a full request, with bytes from another realm', () => {
+  it('accepts a full request, with any byte view', () => {
     const view = new DataView(new ArrayBuffer(4), 1, 2)
     const parsed = parseWasmCompileRequest({
       files: { 'a.c': 'int a;', 'blob.bin': view },
@@ -119,15 +119,25 @@ describe('parseWasmCompileRequest', () => {
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) return
     expect(parsed.request.units).toEqual([{ source: 'a.c', language: 'c', flags: ['-O2'] }])
-    expect(parsed.request.files['blob.bin']).toBeInstanceOf(Uint8Array)
-    expect((parsed.request.files['blob.bin'] as Uint8Array).byteLength).toBe(2)
+    const blob = parsed.request.files['blob.bin']
+    expect(blob).toBeInstanceOf(Uint8Array)
+    expect(ArrayBuffer.isView(blob) && blob.byteLength).toBe(2)
     expect(parsed.request).toMatchObject({ cFlags: ['-std=c99'], cxxFlags: [], linkFlags: ['-mexec-model=reactor'] })
     expect(parsed.request.output).toBe('out.wasm')
   })
 
+  it('refuses an own __proto__ key instead of applying it', () => {
+    const files: unknown = JSON.parse('{"__proto__": "int x;"}')
+    expect(parseWasmCompileRequest({ files, units: [] })).toEqual({
+      ok: false,
+      error: "Invalid toolchain file path '__proto__': '__proto__' is not allowed.",
+    })
+  })
+
   it('leaves optional fields out when absent', () => {
     const parsed = parseWasmCompileRequest({ files: {}, units: [{ source: 'a.c', language: 'c++' }] })
-    expect(parsed).toEqual({ ok: true, request: { files: {}, units: [{ source: 'a.c', language: 'c++' }] } })
+    expect(parsed).toMatchObject({ ok: true, request: { units: [{ source: 'a.c', language: 'c++' }] } })
+    if (parsed.ok) expect(Object.keys(parsed.request)).toEqual(['files', 'units'])
   })
 
   it.each([

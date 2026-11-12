@@ -3,9 +3,12 @@
  * @jest-environment node
  * @vitest-environment node
  */
+import { runInNewContext } from 'node:vm'
+
 import { describe, expect, it } from '@jest/globals'
 
 import { decodeToolchainResource, downloadWithStallLimit, loadToolchainResources } from '../clang-worker-host'
+import { parseWasmCompileRequest } from '../parse-wasm-compile-request'
 
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text)
 
@@ -67,6 +70,19 @@ describe('downloadWithStallLimit', () => {
     expect(aborted).toBe(true)
   })
 
+  it('fails a stream that sends only empty chunks', async () => {
+    let reads = 0
+    const body = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        await new Promise((r) => setTimeout(r, 5))
+        reads++
+        controller.enqueue(new Uint8Array(0))
+      },
+    })
+    await expect(downloadWithStallLimit('u', () => Promise.resolve(new Response(body)), 40)).rejects.toThrow('stalled')
+    expect(reads).toBeGreaterThan(2)
+  })
+
   it('fails a request that never answers', async () => {
     const open = (_url: string, signal: AbortSignal) =>
       new Promise<Response>((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('aborted'))))
@@ -102,5 +118,17 @@ describe('loadToolchainResources', () => {
     await expect(
       loadToolchainResources([{ name: 'a.wasm', url: 'u' }], true, () => Promise.reject(new Error('network down'))),
     ).rejects.toThrow('network down')
+  })
+})
+
+describe('parseWasmCompileRequest across realms', () => {
+  it('accepts bytes made in another realm, as a worker or IPC hands them over', () => {
+    const view: unknown = runInNewContext('new DataView(new ArrayBuffer(4), 1, 2)')
+    expect(view instanceof DataView).toBe(false)
+    const parsed = parseWasmCompileRequest({ files: { 'blob.bin': view }, units: [] })
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const bytes = parsed.request.files['blob.bin']
+    expect(ArrayBuffer.isView(bytes) && bytes.byteLength).toBe(2)
   })
 })

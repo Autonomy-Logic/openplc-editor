@@ -62,7 +62,6 @@ export default {
   // is what the packaged binary needs anyway.
   entry: {
     'openplc-cli.dev': `${webpackPaths.srcPath}/main/entry.ts`,
-    // Next to the dev CLI, where the WebAssembly toolchain looks for its worker.
     'clang-worker': `${webpackPaths.srcPath}/backend/editor/wasm-toolchain/clang-worker.ts`,
   },
 }

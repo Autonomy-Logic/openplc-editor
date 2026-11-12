@@ -55,7 +55,7 @@ export class FakeRunner implements WasmClangRunner {
       }
     }
     const tree: WasmToolchainTree = filesToTree(files)
-    return { exitCode: outcome.exitCode, stderr: outcome.stderr ?? '', tree }
+    return { exitCode: outcome.exitCode, stderr: outcome.stderr ?? '', stdout: '', tree }
   }
 
   /** Text of a file a job had in its working directory. */

@@ -18,7 +18,10 @@ class Exit extends Error {
   }
 }
 
-type Behaviour = (args: string[], options: { stderr: (b: Uint8Array | null) => void }) => WasmToolchainTree | Error
+type Behaviour = (
+  args: string[],
+  options: { stderr: (b: Uint8Array | null) => void; stdout: (b: Uint8Array | null) => void },
+) => WasmToolchainTree | Error
 
 /** A stand-in for the `@yowasp/clang` module. */
 function fakeClang(
@@ -53,15 +56,21 @@ function memoryPort(): ClangWorkerPort & { replies: ClangWorkerReply[]; deliver:
 const settle = () => new Promise((r) => setTimeout(r, 0))
 
 describe('runClangJob', () => {
-  it('returns the output tree and everything written to stderr', async () => {
+  it('returns the output tree, and stderr and stdout each in their own field', async () => {
     const clang = fakeClang((_args, options) => {
       options.stderr(encode('warn'))
       options.stderr(null)
+      options.stdout(encode('clang version 22\n'))
       options.stderr(encode('ing\n'))
       return { 'a.o': new Uint8Array([7]) }
     })
     const result = await runClangJob(clang, ['clang', '-c', 'a.c'], { 'a.c': 'x' })
-    expect(result).toEqual({ exitCode: 0, stderr: 'warning\n', tree: { 'a.o': new Uint8Array([7]) } })
+    expect(result).toEqual({
+      exitCode: 0,
+      stderr: 'warning\n',
+      stdout: 'clang version 22\n',
+      tree: { 'a.o': new Uint8Array([7]) },
+    })
     expect(clang.calls).toEqual([['clang', '-c', 'a.c']])
   })
 
@@ -73,6 +82,7 @@ describe('runClangJob', () => {
     expect(await runClangJob(clang, ['clang', '-c', 'a.c'], {})).toEqual({
       exitCode: 1,
       stderr: 'a.c:1:1: error: x\n',
+      stdout: '',
       tree: {},
     })
   })
@@ -97,7 +107,11 @@ describe('serveClangWorker', () => {
     await settle()
     expect(port.replies).toEqual([
       { type: 'ready' },
-      { type: 'result', id: 4, result: { exitCode: 0, stderr: '', tree: { 'out.o': new Uint8Array([1]) } } },
+      {
+        type: 'result',
+        id: 4,
+        result: { exitCode: 0, stderr: '', stdout: '', tree: { 'out.o': new Uint8Array([1]) } },
+      },
     ])
   })
 

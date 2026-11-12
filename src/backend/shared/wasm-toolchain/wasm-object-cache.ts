@@ -18,10 +18,10 @@ export class BoundedWasmObjectCache implements WasmObjectCache {
     return this.bytes
   }
 
+  /** Returns the entry for `key` and marks it most recently used. */
   get(key: string): CachedWasmObject | undefined {
     const entry = this.entries.get(key)
     if (entry === undefined) return undefined
-    // Re-insert so iteration order is least recently used first.
     this.entries.delete(key)
     this.entries.set(key, entry)
     return entry

@@ -38,28 +38,33 @@ export const isClangWorkerJob = (value: unknown): value is ClangWorkerJobMessage
   isRecord(value.tree) &&
   !ArrayBuffer.isView(value.tree)
 
-/** Runs one clang invocation; a non-zero exit is a result, anything else that goes wrong rejects. */
+/**
+ * Runs one clang invocation; a non-zero exit is a result, anything else that goes wrong rejects. `argv` starts with
+ * the tool name (`clang` or `clang++`), as argv[0] would.
+ */
 export async function runClangJob(
   clang: YowaspClang,
   argv: string[],
   tree: WasmToolchainTree,
 ): Promise<WasmClangJobResult> {
   let stderr = ''
-  const decoder = new TextDecoder()
-  const sink = (bytes: Uint8Array | null) => {
-    if (bytes) stderr += decoder.decode(bytes, { stream: true })
-  }
+  let stdout = ''
+  const errors = new TextDecoder()
+  const output = new TextDecoder()
   try {
-    // runClang takes the tool name (`clang` or `clang++`) as its first argument, as argv[0] would be.
     const out = await clang.runClang(argv, tree, {
-      stdout: sink,
-      stderr: sink,
+      stdout: (bytes) => {
+        if (bytes) stdout += output.decode(bytes, { stream: true })
+      },
+      stderr: (bytes) => {
+        if (bytes) stderr += errors.decode(bytes, { stream: true })
+      },
       decodeASCII: false,
       fetchProgress: () => undefined,
     })
-    return { exitCode: 0, stderr, tree: out }
+    return { exitCode: 0, stderr, stdout, tree: out }
   } catch (error) {
-    if (error instanceof clang.Exit) return { exitCode: error.code, stderr, tree: {} }
+    if (error instanceof clang.Exit) return { exitCode: error.code, stderr, stdout, tree: {} }
     throw error
   }
 }
@@ -105,7 +110,8 @@ export type OpenDownload = (url: string, signal: AbortSignal) => Promise<Respons
 
 /**
  * Downloads `url` with no limit on total time: it fails only when no bytes arrive for `stallMs`, so a slow but
- * moving download always finishes.
+ * moving download always finishes. Empty chunks are not progress. Every wait races the stall, so a transport that
+ * ignores the abort cannot hang it.
  */
 export async function downloadWithStallLimit(
   url: string,
@@ -116,7 +122,6 @@ export async function downloadWithStallLimit(
   const stallError = new Error(`Download of ${url} stalled: no data for ${Math.round(stallMs / 1000)} s.`)
   let timer: ReturnType<typeof setTimeout> | null = null
   let onStall: () => void = () => undefined
-  // Rejects when nothing arrives for `stallMs`; every wait races it, so a transport that ignores the abort cannot hang.
   const stalled = new Promise<never>((_resolve, reject) => {
     onStall = () => {
       controller.abort()
@@ -141,6 +146,7 @@ export async function downloadWithStallLimit(
     for (;;) {
       const { done, value } = await Promise.race([reader.read(), stalled])
       if (done) break
+      if (value.byteLength === 0) continue
       chunks.push(value)
       total += value.byteLength
       arm()

@@ -25,7 +25,7 @@ describe('filesToTree / readTreeFile', () => {
   it.each(['__proto__/x.c', 'a/constructor', 'prototype/b.h'])('refuses the object-internal path %j', (path) => {
     expect(() => filesToTree({ [path]: 'x' })).toThrow('is not allowed')
     expect(toolchainPathProblem(path)).toContain('is not allowed')
-    expect(({} as Record<string, unknown>).x).toBeUndefined()
+    expect(Reflect.get({}, 'x')).toBeUndefined()
   })
 
   it('builds directories without a prototype, so file names cannot reach object internals', () => {
@@ -90,8 +90,13 @@ describe('parseDependencyFile', () => {
     expect(parseDependencyFile(text)).toEqual(['app/main.cpp', 'core/core.h', 'lib/x.h', '/usr/include/stdio.h'])
   })
 
-  it('keeps escaped spaces inside names', () => {
-    expect(parseDependencyFile('o.o: my\\ file.c other.h')).toEqual(['my file.c', 'other.h'])
+  it('decodes the escapes clang writes in names', () => {
+    expect(parseDependencyFile('o.o: my\\ file.c config\\#1.h cost$$.h back\\\\\\ slash.h')).toEqual([
+      'my file.c',
+      'config#1.h',
+      'cost$.h',
+      'back\\ slash.h',
+    ])
   })
 
   it('handles Windows line continuations and a rule with no dependencies', () => {

@@ -9,9 +9,9 @@
  * Opt-in: E2E_PACKAGED_APP, the executable of a packaged build (`npm run package`), also runs the compile case
  * against that build, where clang ships as an extra resource outside the asar archive.
  */
-import { mkdirSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import type { ElectronApplication, Page } from '@playwright/test'
 import { _electron as electron, expect, test } from '@playwright/test'
@@ -20,7 +20,8 @@ import { compileThroughPort, runAnswer } from './helpers/compiler-port'
 
 const ROOT = join(realpathSync(tmpdir()), 'openplc-e2e-wasm-toolchain')
 const MAIN = join(__dirname, '..', 'release', 'app', 'dist', 'main', 'main.js')
-const PACKAGED_APP = process.env.E2E_PACKAGED_APP ?? ''
+// Resolved before launching from another directory, so a repository-relative path works too.
+const PACKAGED_APP = process.env.E2E_PACKAGED_APP ? resolve(__dirname, '..', process.env.E2E_PACKAGED_APP) : ''
 
 function launch(slug: string, cwd?: string, executablePath?: string): Promise<ElectronApplication> {
   const userData = join(ROOT, slug, 'userdata')
@@ -31,7 +32,6 @@ function launch(slug: string, cwd?: string, executablePath?: string): Promise<El
       ? { executablePath, args: [`--user-data-dir=${userData}`] }
       : { args: [MAIN, `--user-data-dir=${userData}`] }),
     cwd,
-    // NOT development: `resolveHtmlPath` would point the window at the webpack dev server.
     env: { ...process.env, NODE_ENV: 'production' },
   })
 }
@@ -93,7 +93,6 @@ test.describe('WebAssembly toolchain (desktop)', () => {
     expect(broken.ok).toBe(false)
     expect(broken.messages.some((m) => m.includes('x.c:1:'))).toBe(true)
 
-    // A path that would reach object internals in the main process comes back as a diagnostic.
     const invalid = await compileThroughPort(page, {
       files: { '__proto__/x.c': 'int x;' },
       units: [{ source: '__proto__/x.c', language: 'c' }],
@@ -113,20 +112,29 @@ test.describe('WebAssembly toolchain (desktop)', () => {
 
   test('compiles in a packaged build', async () => {
     test.skip(PACKAGED_APP === '', 'Set E2E_PACKAGED_APP to a packaged build to run this case.')
-    // Started from an empty directory, so only the packaged resources can provide clang.
     const cwd = join(ROOT, 'packaged', 'cwd')
     rmSync(join(ROOT, 'packaged'), { recursive: true, force: true })
     mkdirSync(cwd, { recursive: true })
     const app = await launch('packaged-run', cwd, PACKAGED_APP)
     try {
       await compilesThroughThePort(app)
+      const resourcesPath = await app.evaluate(() => process.resourcesPath)
+      const licenses = join(resourcesPath, 'yowasp-clang', 'licenses')
+      for (const file of [
+        'LICENSE.txt',
+        'llvm-project/LICENSE.TXT',
+        'llvm-project/libcxx/LICENSE.TXT',
+        'wasi-libc/LICENSE',
+        'wasi-libc/libc-top-half/musl/COPYRIGHT',
+      ]) {
+        expect(existsSync(join(licenses, file)), file).toBe(true)
+      }
     } finally {
       app.process().kill('SIGKILL')
     }
   })
 
   test('keeps the splash up with the reason when clang cannot load, and Quit closes the app', async () => {
-    // Started from an empty directory, the editor finds no toolchain next to it.
     const cwd = join(ROOT, 'missing', 'cwd')
     rmSync(join(ROOT, 'missing'), { recursive: true, force: true })
     mkdirSync(cwd, { recursive: true })
