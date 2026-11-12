@@ -14,7 +14,9 @@ import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
+import { shouldWipeBuildFolder } from '@root/backend/shared/compile/steps/plan-build-tree-sync'
 import { resolveBoardSelection } from '@root/backend/shared/compile/steps/resolve-board-selection'
+import type { DependencyHintSurface } from '@root/backend/shared/packages/arduino-dependencies'
 
 import { execRecipeArgv } from './recipe-exec'
 // strucpp is loaded lazily because it uses ESM features (import.meta) that are
@@ -178,7 +180,7 @@ import { getErrorMessage } from '@root/frontend/utils/get-error-message'
 import { app as electronApp } from 'electron'
 import JSZip from 'jszip'
 
-import type { ThirdPartyLibraryRequest } from '../../../middleware/shared/ports/compiler-platform-port'
+import type { VppScreenConfigInputs } from '../../../middleware/shared/ports/compiler-platform-port'
 import type { PersistentStorageSettings, PlatformOption } from '../../../middleware/shared/ports/types'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
@@ -186,7 +188,7 @@ import { persistentStorageSchema } from '../../shared/types/PLC/devices/configur
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
-import type { ArduinoCoreControl, CompileProgressChannel, HalsFile } from './types'
+import type { CompileProgressChannel, HalsFile } from './types'
 
 interface MethodsResult<T> {
   success: boolean
@@ -315,29 +317,6 @@ class CompilerModule {
    * in both. `#constructStrucppRuntimeDir` already asks this way.
    */
   static readonly DEVELOPMENT_MODE = !electronApp.isPackaged
-  // This will later be replaced by platform specific libraries
-  static readonly GLOBAL_LIBRARIES = [
-    'Arduino_EdgeControl',
-    'ArduinoJson',
-    'Arduino_MachineControl',
-    'ArduinoMqttClient',
-    'AVR_PWM',
-    'CAN',
-    'CONTROLLINO',
-    'DallasTemperature',
-    'Ethernet',
-    'megaAVR_PWM',
-    'OneWire',
-    'P1AM',
-    'Portenta_H7_PWM',
-    'PubSubClient',
-    'RP2040_PWM',
-    'SAMD_PWM',
-    'SAMDUE_PWM',
-    'STM32_CAN',
-    'STM32_PWM',
-    'WiFiNINA',
-  ]
 
   // Runtime API polling configuration (important-comment)
   // 20 minutes — large projects (50+ POUs) on a Pi 4 can take 10–15 min
@@ -347,7 +326,11 @@ class CompilerModule {
   static readonly COMPILATION_STATUS_TIMEOUT_MS = 20 * 60 * 1000
   static readonly COMPILATION_STATUS_POLL_INTERVAL_MS = 1000 // 1 second (important-comment)
 
-  constructor() {
+  /** How a build that fails on a missing core tells the user to repair it. */
+  readonly dependencyHintSurface: DependencyHintSurface
+
+  constructor(options: { dependencyHintSurface?: DependencyHintSurface } = {}) {
+    this.dependencyHintSurface = options.dependencyHintSurface ?? 'desktop'
     this.binaryDirectoryPath = this.#constructBinaryDirectoryPath()
     this.sourceDirectoryPath = this.#constructSourceDirectoryPath()
 
@@ -526,6 +509,11 @@ class CompilerModule {
     }
   }
 
+  /** Starts arduino-cli with the editor's configuration file. */
+  spawnArduinoCli(args: string[]) {
+    return this.#executeArduinoCliCommand([...args, ...this.arduinoCliBaseParameters])
+  }
+
   #executeArduinoCliCommand(args: string[]) {
     let arduinoCliBinaryPath = this.arduinoCliBinaryPath
     if (CompilerModule.HOST_PLATFORM === 'win32') {
@@ -594,65 +582,6 @@ class CompilerModule {
     }
   }
 
-  async getArduinoInstalledCores() {
-    const coreControlFilePath = join(electronApp.getPath('userData'), 'User', 'Runtime', 'arduino-core-control.json')
-    const coreControlFileContent = await CompilerModule.readJSONFile<ArduinoCoreControl>(coreControlFilePath)
-    return coreControlFileContent
-  }
-
-  /** Where the installed-library cache lives. Written once at startup from
-   *  `arduino-cli lib list`, and kept current by `recordLibrariesInstalled`. */
-  static libraryControlFilePath(): string {
-    return join(electronApp.getPath('userData'), 'User', 'Runtime', 'arduino-library-control.json')
-  }
-
-  /**
-   * Which libraries arduino-cli has, according to the cache.
-   *
-   * `null` means "unknown", not "none": the startup refresh that writes this
-   * file tolerates failure, so it can be absent or stale. Reading that as an
-   * empty list makes every library look missing and re-runs
-   * `arduino-cli lib install` for all of them on every compile.
-   */
-  async getArduinoInstalledLibraries(): Promise<string[] | null> {
-    try {
-      const content = await CompilerModule.readJSONFile<Array<Record<string, string>>>(
-        CompilerModule.libraryControlFilePath(),
-      )
-      if (!Array.isArray(content)) return null
-      return content.map((lib) => Object.keys(lib)[0]).filter((name): name is string => typeof name === 'string')
-    } catch {
-      // Missing or corrupt: "I do not know", see above.
-      return null
-    }
-  }
-
-  /**
-   * Add names to the installed-library cache after a successful install, so a
-   * library installed during a compile is not reinstalled on the next one.
-   */
-  async recordLibrariesInstalled(names: string[]): Promise<void> {
-    if (names.length === 0) return
-    const path = CompilerModule.libraryControlFilePath()
-    let entries: Array<Record<string, string>> = []
-    try {
-      const existing = await CompilerModule.readJSONFile<Array<Record<string, string>>>(path)
-      if (Array.isArray(existing)) entries = existing
-    } catch {
-      // No cache yet; start one rather than losing the fact we just installed.
-    }
-    const known = new Set(entries.map((lib) => Object.keys(lib)[0]))
-    for (const name of names) {
-      if (!known.has(name)) entries.push({ [name]: 'installed' })
-    }
-    try {
-      await writeFile(path, JSON.stringify(entries, null, 2), { flag: 'w' })
-    } catch (err) {
-      // Best-effort: a cache we could not update costs time, not correctness.
-      console.warn(`Could not update the installed-library cache: ${getErrorMessage(err)}`)
-    }
-  }
-
   // ++ =========================== Defines.h methods ==========================++
   async createMD5Hash(content: string): Promise<string> {
     const crypto = await import('node:crypto')
@@ -664,14 +593,16 @@ class CompilerModule {
   async createBasicDirectories(
     projectFolderPath: string,
     boardTarget: string,
+    wipe: boolean,
   ): Promise<MethodsResult<string | string[]>> {
     let result: MethodsResult<string | string[]> = { success: false }
     const buildDirectory = join(projectFolderPath, 'build')
     const boardDirectory = join(buildDirectory, boardTarget)
     const sourceDirectory = join(boardDirectory, 'src')
 
-    // Clean the board directory to remove stale files from previous builds
-    await fs.rm(boardDirectory, { recursive: true, force: true })
+    if (wipe) {
+      await fs.rm(boardDirectory, { recursive: true, force: true })
+    }
 
     // Recreate the directories
     const results = await Promise.all([
@@ -999,347 +930,6 @@ class CompilerModule {
   // STruC++ generates located variable descriptors (locatedVars[]) in the C++ output,
   // and the Arduino sketch walks them dynamically for I/O binding.
   // The debugger will be redesigned in Phase 4.
-
-  /**
-   * `arduino-cli core update-index` — refetch the platform indexes.
-   *
-   * Required before installing a core that lives in a third-party index:
-   * passing `--additional-urls` to `core install` alone is not enough,
-   * because the CLI resolves the platform against its *cached* index and
-   * reports "Platform not found" until that cache has seen the vendor URL.
-   *
-   * `additionalUrls` is forwarded so the refresh covers the vendor index
-   * as well as the ones configured in `arduino-cli.yaml`.
-   */
-  async handleCoreUpdateIndex(handleOutputData: HandleOutputDataCallback, additionalUrls?: string) {
-    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      let binaryPath = this.arduinoCliBinaryPath
-      const [flag, configFilePath] = this.arduinoCliBaseParameters
-
-      if (CompilerModule.HOST_PLATFORM === 'win32') {
-        // INFO: On Windows, we need to add the .exe extension to the binary path.
-        binaryPath += '.exe'
-      }
-      const executeCommand = spawn(binaryPath, [
-        'core',
-        'update-index',
-        ...(additionalUrls ? ['--additional-urls', additionalUrls] : []),
-        flag,
-        configFilePath,
-      ])
-
-      let stderrData = ''
-
-      executeCommand.stdout?.on('data', (data: Buffer) => {
-        handleOutputData(data)
-      })
-      executeCommand.stderr?.on('data', (data: Buffer) => {
-        stderrData += data.toString()
-      })
-      executeCommand.on('close', (code) => {
-        if (code === 0) {
-          resolve({
-            success: true,
-          })
-        } else {
-          reject(new Error(`Arduino CLI process exited with code ${code}\n${stderrData}`))
-        }
-      })
-    })
-  }
-
-  /**
-   * Install the Arduino core a board needs, pulling it from a vendor
-   * board-manager index when the board declares one.
-   *
-   * `boardManagerUrl` comes from the VPP manifest (`target.boardManagerUrl`)
-   * or hals.json (`board_manager_url`).  Cores outside arduino-cli's
-   * built-in index — `industrialshields:esp32`, for example — are
-   * unresolvable without it, and the install dies with
-   * "Platform '<id>' not found" (exit 7).  When one is supplied we refresh
-   * the index against that URL first, then install with the same
-   * `--additional-urls`; both steps are needed, since `core install`
-   * resolves against the cached index.
-   */
-  async handleCoreInstallation(
-    boardCore: string | null,
-    handleOutputData: (chunk: Buffer | string, logLevel?: 'info' | 'error') => void,
-    coreVersion?: string,
-    boardManagerUrl?: string,
-  ) {
-    if (boardCore === null) return
-
-    const isCoreInstalled = Object.keys(await this.getArduinoInstalledCores()).some((core) => core === boardCore)
-    // Without a pinned version, any installed version is fine — skip the install.
-    // With a pinned version (prebuilt arduino libraries are ABI-locked to it),
-    // always run `core install <id>@<version>`: arduino-cli installs exactly that
-    // version and fails if it does not exist, pinning the core to the version
-    // the precompiled library was built against.
-    if (!coreVersion && isCoreInstalled) {
-      handleOutputData(`Core ${boardCore} is already installed.`, 'info')
-      return
-    }
-
-    const coreRef = coreVersion ? `${boardCore}@${coreVersion}` : boardCore
-    if (coreVersion) {
-      handleOutputData(`Installing pinned core ${coreRef} (required by a prebuilt library)...`, 'info')
-    }
-
-    // Refresh the platform index against the vendor URL before installing.
-    // Non-fatal: a transient network failure here should not mask the far
-    // more useful error that `core install` produces a moment later.
-    if (boardManagerUrl) {
-      handleOutputData(`Using vendor board index: ${boardManagerUrl}`, 'info')
-      try {
-        // `handleCoreUpdateIndex` logs at the wider 'info' | 'warning' |
-        // 'error' level set; this callback only accepts 'info' | 'error',
-        // so fold 'warning' down to 'info'.
-        await this.handleCoreUpdateIndex(
-          (chunk, level) => handleOutputData(chunk, level === 'error' ? 'error' : 'info'),
-          boardManagerUrl,
-        )
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        handleOutputData(`Warning: could not refresh the board index (${message}). Continuing.`, 'info')
-      }
-    }
-
-    let binaryPath = this.arduinoCliBinaryPath
-
-    if (CompilerModule.HOST_PLATFORM === 'win32') {
-      // INFO: On Windows, we need to add the .exe extension to the binary path.
-      binaryPath += '.exe'
-    }
-    return new Promise<MethodsResult<string | Buffer>>((resolve, reject) => {
-      const executeCommand = spawn(binaryPath, [
-        'core',
-        'install',
-        coreRef,
-        ...(boardManagerUrl ? ['--additional-urls', boardManagerUrl] : []),
-        ...this.arduinoCliBaseParameters,
-      ])
-
-      let stderrData = ''
-
-      executeCommand.stdout?.on('data', (data: Buffer) => {
-        handleOutputData(data)
-      })
-      executeCommand.stderr?.on('data', (data: Buffer) => {
-        stderrData += data.toString()
-      })
-      executeCommand.on('close', (code) => {
-        if (code === 0) {
-          resolve({
-            success: true,
-          })
-        } else {
-          reject(new Error(`Arduino CLI process exited with code ${code}\n${stderrData}`))
-        }
-      })
-    })
-  }
-
-  /**
-   * Install every arduino-cli library the selected board needs.
-   *
-   * Inputs are layered:
-   *   - `GLOBAL_LIBRARIES`     — always-on libs that pre-date the
-   *                              per-board contract (DallasTemperature,
-   *                              OneWire, etc.).  Will shrink over time
-   *                              as boards take ownership of their own
-   *                              dependencies via `extra_libraries`.
-   *   - `extraLibraries`       — per-board libs forwarded from the
-   *                              `BoardBuildInfo.extraArduinoLibraries`
-   *                              field.  Sourced from `hals.json`
-   *                              `extra_libraries` (static boards) or
-   *                              the VPP manifest's `hal.extraArduinoLibraries`
-   *                              (installed VPP boards).  Keeps board-
-   *                              specific deps (Arduino_Opta_Blueprint
-   *                              for the Opta, P1AM for the P1AM board)
-   *                              out of every user's install footprint.
-   *
-   * Failure contract: this method does NOT throw on a non-zero
-   * `arduino-cli lib install` exit.  Install is opportunistic — the
-   * library the user needs may already be available from another
-   * source the editor doesn't manage (system-wide install, user
-   * sketchbook, custom library path).  We log a warning that names
-   * the libs we couldn't install + arduino-cli's stderr, then
-   * resolve cleanly so the build continues.  The downstream
-   * `arduino-cli compile` step is the source of truth: if a required
-   * library is genuinely unresolvable, compile fails with a precise
-   * "header not found" error pointing at the file that needed it.
-   */
-  async handleLibraryInstallation(
-    extraLibraries: string[],
-    handleOutputData: HandleOutputDataCallback,
-    thirdPartyLibraries: ThirdPartyLibraryRequest[] = [],
-  ) {
-    const requiredLibraries = Array.from(new Set([...CompilerModule.GLOBAL_LIBRARIES, ...extraLibraries]))
-
-    if (extraLibraries.length > 0) {
-      handleOutputData(`Per-board libraries: ${extraLibraries.join(', ')}`, 'info')
-    }
-
-    const installedLibraries = await this.getArduinoInstalledLibraries()
-
-    // `null` is "the cache could not be read", not "nothing is installed".
-    // When we genuinely do not know, rebuild the cache from arduino-cli once
-    // rather than guessing: one spawn now, against one per build forever.
-    const known = installedLibraries ?? (await this.refreshInstalledLibraryCache(handleOutputData))
-
-    const missingLibraries = requiredLibraries.filter((lib) => !known.includes(lib))
-    const missingThirdParty = thirdPartyLibraries.filter((lib) => !known.includes(lib.name))
-
-    // Git-url libraries first: they are the ones a target genuinely cannot
-    // compile without, and installing them is a clone rather than an index lookup.
-    if (missingThirdParty.length > 0) {
-      await this.installThirdPartyLibraries(missingThirdParty, handleOutputData)
-    }
-
-    if (missingLibraries.length === 0) {
-      handleOutputData(`All required libraries are already installed.`, 'info')
-      return
-    }
-
-    let binaryPath = this.arduinoCliBinaryPath
-    if (CompilerModule.HOST_PLATFORM === 'win32') {
-      // INFO: On Windows, we need to add the .exe extension to the binary path.
-      binaryPath += '.exe'
-    }
-
-    handleOutputData(`Installing missing libraries: ${missingLibraries.join(', ')}`, 'info')
-
-    // The promise never rejects — install failures are caught inside
-    // the close handler and converted to warnings, so `reject` is
-    // intentionally unused (underscore-prefixed to satisfy the
-    // unused-vars rule).
-    return new Promise<MethodsResult<string | Buffer>>((resolve, _reject) => {
-      const executeCommand = spawn(binaryPath, [
-        'lib',
-        'install',
-        ...missingLibraries,
-        ...this.arduinoCliBaseParameters,
-      ])
-
-      let stderrData = ''
-
-      executeCommand.stdout?.on('data', (data: Buffer) => {
-        handleOutputData(data)
-      })
-      executeCommand.stderr?.on('data', (data: Buffer) => {
-        stderrData += data.toString()
-      })
-      executeCommand.on('close', (code) => {
-        if (code === 0) {
-          handleOutputData(`All libraries installed!`, 'info')
-          // Record them, or the cache still says "missing" and the next compile
-          // reinstalls the same set.
-          void this.recordLibrariesInstalled(missingLibraries)
-          resolve({ success: true })
-        } else {
-          // Soft failure: warn with the libraries we could not install and
-          // arduino-cli's stderr, then resolve cleanly. If one is genuinely
-          // required the compile fails with a precise header-not-found error;
-          // if it is available from a non-managed source the warning is benign.
-          const trimmedStderr = stderrData.trim()
-          handleOutputData(
-            `Warning: arduino-cli lib install exited with code ${code} for: ${missingLibraries.join(', ')}. ` +
-              `Continuing build — these libraries may already be available from another source.` +
-              (trimmedStderr ? `\n${trimmedStderr}` : ''),
-            'warning',
-          )
-          resolve({ success: true })
-        }
-      })
-    })
-  }
-
-  /**
-   * Rebuild the installed-library cache from arduino-cli. Only called when the
-   * cache could not be read at all.
-   */
-  async refreshInstalledLibraryCache(handleOutputData: HandleOutputDataCallback): Promise<string[]> {
-    let binaryPath = this.arduinoCliBinaryPath
-    if (CompilerModule.HOST_PLATFORM === 'win32') binaryPath += '.exe'
-
-    return new Promise<string[]>((resolve) => {
-      const child = spawn(binaryPath, ['lib', 'list', '--json', ...this.arduinoCliBaseParameters])
-      let stdout = ''
-      child.stdout?.on('data', (data: Buffer) => {
-        stdout += data.toString()
-      })
-      child.on('error', () => resolve([]))
-      child.on('close', () => {
-        try {
-          const parsed = JSON.parse(stdout) as { installed_libraries?: Array<{ library?: { name?: string } }> }
-          const names = (parsed.installed_libraries ?? [])
-            .map((entry) => entry.library?.name)
-            .filter((name): name is string => typeof name === 'string')
-          void this.recordLibrariesInstalled(names)
-          resolve(names)
-        } catch {
-          handleOutputData('Could not read the installed-library list; assuming none are installed.', 'warning')
-          resolve([])
-        }
-      })
-    })
-  }
-
-  /**
-   * Install libraries that are not in the Arduino index, by git URL.
-   *
-   * Needs `library.enable_unsafe_install` in the editor's arduino-cli.yaml,
-   * which is scoped to the editor's own config file, so it does not loosen a
-   * user's own arduino-cli or the Arduino IDE. No ref is pinned: the library's
-   * default branch is what production uses.
-   */
-  async installThirdPartyLibraries(
-    libraries: ThirdPartyLibraryRequest[],
-    handleOutputData: HandleOutputDataCallback,
-  ): Promise<void> {
-    let binaryPath = this.arduinoCliBinaryPath
-    if (CompilerModule.HOST_PLATFORM === 'win32') binaryPath += '.exe'
-
-    for (const library of libraries) {
-      handleOutputData(`Installing ${library.name} (${library.reason}) from ${library.gitUrl}...`, 'info')
-
-      const ok = await new Promise<boolean>((resolve) => {
-        const child = spawn(binaryPath, [
-          'lib',
-          'install',
-          '--git-url',
-          library.gitUrl,
-          ...this.arduinoCliBaseParameters,
-        ])
-        let stderrData = ''
-        child.stdout?.on('data', (data: Buffer) => handleOutputData(data))
-        child.stderr?.on('data', (data: Buffer) => {
-          stderrData += data.toString()
-        })
-        child.on('error', () => resolve(false))
-        child.on('close', (code) => {
-          if (code === 0) {
-            resolve(true)
-          } else {
-            // Soft failure, as with index libraries: the compile step is the
-            // source of truth and fails with a header-not-found that names the file.
-            handleOutputData(
-              `Warning: could not install ${library.name} from ${library.gitUrl} (exit ${code}). ` +
-                `Continuing — the compile will fail with a missing header if it was genuinely needed.` +
-                (stderrData.trim() ? `\n${stderrData.trim()}` : ''),
-              'warning',
-            )
-            resolve(false)
-          }
-        })
-      })
-
-      if (ok) {
-        handleOutputData(`${library.name} installed.`, 'info')
-        await this.recordLibrariesInstalled([library.name])
-      }
-    }
-  }
 
   // handlePatchGeneratedFiles is no longer needed.
   // STruC++ generates clean C++ files (generated.cpp + generated.hpp) that don't require
@@ -1834,6 +1424,7 @@ class CompilerModule {
     boardTarget: string,
     normalizedProjectPath: string,
     sourceTargetFolderPath: string,
+    screenConfigInputs: VppScreenConfigInputs,
     handleOutputData: HandleOutputDataCallback,
   ): Promise<void> {
     // Second gate, deliberately re-run here rather than trusted from
@@ -2101,6 +1692,8 @@ class CompilerModule {
           installed: readInstalledPin(match.pkg.packageId),
         },
         sha256Hex: (bytes) => createHash('sha256').update(bytes).digest('hex'),
+        packageId: match.pkg.packageId,
+        screenConfigInputs,
       })
 
       for (const warning of built.warnings) handleOutputData(warning, 'info')
@@ -2413,7 +2006,11 @@ class CompilerModule {
     // up front so the platform port methods that write to disk (transpile,
     // compile) have somewhere to land.
     try {
-      await this.createBasicDirectories(normalizedProjectPath, boardTarget)
+      await this.createBasicDirectories(
+        normalizedProjectPath,
+        boardTarget,
+        shouldWipeBuildFolder({ cleanBuild: cleanBuild ?? false, isRuntimeV3, isRuntimeV4 }),
+      )
       _mainProcessPort.postMessage({
         logLevel: 'info',
         message: 'Directories for compilation source files created.',
@@ -2430,6 +2027,7 @@ class CompilerModule {
 
     // --- Resolve pipeline inputs ---
     let firmwareSkeleton: Record<string, string>
+    let staticFirmwareFiles: Record<string, string> = {}
     let strucppRuntimeHeaders: Record<string, string>
     let devicePinMapping: DevicePin[]
     let libraryArchives: unknown[]
@@ -2451,6 +2049,7 @@ class CompilerModule {
       strucppRuntimeHeaders = isRuntimeV4 ? await this.loadStrucppRuntimeHeaders() : {}
       if (!isRuntimeV4) {
         const v4Layout = await this.loadStrucppRuntimeHeaders()
+        staticFirmwareFiles = mergeStrucppRuntimeIntoSkeleton({ firmwareSkeleton, strucppRuntimeHeaders: v4Layout })
         // Board-specific HAL adapter — defines `hardwareInit`,
         // `updateInputBuffers`, `updateOutputBuffers` that the
         // strucpp-generated `Baremetal.ino` + `arduino_runtime_glue.cpp`
@@ -2554,7 +2153,7 @@ class CompilerModule {
               logLevel: 'warning',
               message:
                 `Could not read license-store backend at ${licenseStoreFile}: ${getErrorMessage(lsErr)}. ` +
-                'This board will report that it cannot store a licence.',
+                'This board will report that it cannot store a license.',
             })
           }
         }
@@ -2568,7 +2167,7 @@ class CompilerModule {
             message:
               `Board "${boardTarget}" belongs to a licensed VPP but its manifest declares no ` +
               '`hal.licenseStore`. Every licensed VPP needs one, so this is a packaging fault: the ' +
-              'firmware will link the weak default and report that its licence storage is missing.',
+              'firmware will link the weak default and report that its license storage is missing.',
           })
         }
 
@@ -2663,8 +2262,6 @@ class CompilerModule {
       {
         handleCompileArduinoProgram: this.handleCompileArduinoProgram.bind(this),
         handleUploadProgram: this.handleUploadProgram.bind(this),
-        handleCoreInstallation: this.handleCoreInstallation.bind(this),
-        handleLibraryInstallation: this.handleLibraryInstallation.bind(this),
         handleVendorPluginPackaging: this.handleVendorPluginPackaging.bind(this),
       },
       {
@@ -2675,6 +2272,7 @@ class CompilerModule {
         boardCore,
         boardHalsContent: halsContent[boardTarget],
         cleanBuild: cleanBuild ?? false,
+        staticFirmwareFiles,
         mainProcessBridge,
         compressSourceFolder: (folderPath: string) => this.compressSourceFolder(folderPath),
         // The source project stored on the device beside the artifacts.
@@ -2972,6 +2570,7 @@ class CompilerModule {
         // `frontend/data/` — which build is running is a fact about the
         // host app, not about the compile.
         editorVersion: APP_VERSION,
+        dependencyHintSurface: this.dependencyHintSurface,
       },
       platformPort,
       (event) => {
@@ -3082,7 +2681,8 @@ class CompilerModule {
     }
 
     const debugResolver = await this.#createBoardInfoResolver()
-    const { boardRuntime } = debugResolver.resolve(boardTarget)
+    const { boardRuntime, isRuntimeV3, isRuntimeV4 } = debugResolver.resolve(boardTarget)
+    const wipeBuildFolder = shouldWipeBuildFolder({ cleanBuild: false, isRuntimeV3, isRuntimeV4 })
     // Same reason as the compile path: a cloud project has no directory to build in.
     const normalizedProjectPath = resolveBuildWorkspace(projectPath.replace('project.json', ''))
     const compilationPath = join(normalizedProjectPath, 'build', boardTarget)
@@ -3108,7 +2708,7 @@ class CompilerModule {
     }
 
     try {
-      await this.createBasicDirectories(normalizedProjectPath, boardTarget)
+      await this.createBasicDirectories(normalizedProjectPath, boardTarget, wipeBuildFolder)
       _mainProcessPort.postMessage({
         logLevel: 'info',
         message: 'Directories for compilation source files created.',
@@ -3163,8 +2763,10 @@ class CompilerModule {
     _mainProcessPort.postMessage({ logLevel: 'info', message: `ST file generated at: ${programStPath}` })
 
     try {
-      await this.copyStaticFiles(compilationPath, boardRuntime)
-      _mainProcessPort.postMessage({ logLevel: 'info', message: 'Static files copied successfully.' })
+      if (wipeBuildFolder) {
+        await this.copyStaticFiles(compilationPath, boardRuntime)
+        _mainProcessPort.postMessage({ logLevel: 'info', message: 'Static files copied successfully.' })
+      }
     } catch (error) {
       _mainProcessPort.postMessage({
         logLevel: 'error',

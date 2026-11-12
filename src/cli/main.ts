@@ -104,7 +104,7 @@ Credentials (upload, debug)
   or OPENPLC_CREDENTIALS / OPENPLC_USER + OPENPLC_PASSWORD (keeps them out of shell history)
 
 Paths
-  --user-data <dir>  override the editor state directory (arduino-cli config, licence store,
+  --user-data <dir>  override the editor state directory (arduino-cli config, license store,
                      installed VPP packages). Defaults to the same directory the GUI uses.
 
 Output

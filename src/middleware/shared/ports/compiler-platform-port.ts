@@ -16,10 +16,6 @@
  *     `/api/upload`, web pipes through the orchestrator
  *     (WebRTC data channel with HTTP fallback).
  *
- * Plus the supporting Arduino-CLI lifecycle calls on editor that
- * the web platform's pre-provisioned compiler image makes redundant:
- * `installArduinoCore` and `installArduinoLib` are no-ops on web.
- *
  * Each method on this port takes the same canonical arguments
  * regardless of platform and returns the same canonical result
  * shape.  The pipeline orchestrator is fully platform-agnostic —
@@ -28,14 +24,12 @@
  * once and wires it into its `compiler-adapter.ts`.
  *
  * Editor-canonical contract: web's no-op implementations of
- * `installArduinoCore` / `installArduinoLib` / `uploadArduinoBoard`
- * / `uploadRuntimeV3` MUST resolve to `{ ok: true }` so the
+ * `uploadArduinoBoard` / `uploadRuntimeV3` MUST resolve to `{ ok: true }` so the
  * pipeline's ordering and downstream steps run identically on both
  * platforms.  Web simply skips work that's already handled
  * server-side, but the pipeline never knows.
  */
 
-import type { ExportableVariable } from './plc-model-port'
 import type { PLCProjectData, StructuredCompileError } from './types'
 
 /**
@@ -204,67 +198,6 @@ export interface UploadRuntimeV3Args {
   context: PlatformDeviceContext
 }
 
-/** Arduino-CLI core install (editor-only.  Web's adapter MUST
- *  no-op with `{ ok: true }` — web's compiler-service backend
- *  ships with every core preinstalled). */
-export interface InstallArduinoCoreArgs {
-  /** Core identifier (e.g. `arduino:avr`).  Editor invokes
-   *  `arduino-cli core install <id>`. */
-  coreId: string
-  /** Optional exact core version (e.g. `1.8.8`).  When set, the editor runs
-   *  `core install <id>@<version>`, which installs exactly that version and
-   *  fails if it is unavailable — required for prebuilt arduino-hal boards
-   *  whose precompiled `.a` is ABI-locked to that core version. */
-  coreVersion?: string
-  /** Optional third-party board-manager index URL (e.g. a vendor's
-   *  `package_<vendor>_index.json`).  Sourced from the VPP manifest's
-   *  `target.boardManagerUrl` (or `board_manager_url` in hals.json) and
-   *  forwarded to arduino-cli as `--additional-urls`.
-   *
-   *  Cores outside arduino-cli's built-in index are invisible without it:
-   *  `core install industrialshields:esp32` fails with "Platform not found"
-   *  unless the vendor index is supplied AND `core update-index` has been
-   *  run against it.  The editor does both; web ignores this field. */
-  boardManagerUrl?: string
-}
-
-/** Arduino-CLI library install (editor-only.  Same no-op
- *  contract as core install for web). */
-/** A library installed from a git URL rather than the Arduino index.
- *  Mirrors `ThirdPartyLibrary` in backend/shared/compile/third-party-libraries.ts,
- *  restated here so the port does not depend on a backend module. */
-export interface ThirdPartyLibraryRequest {
-  name: string
-  gitUrl: string
-  reason: string
-}
-
-export interface InstallArduinoLibArgs {
-  /** Legacy single-library id (kept for the placeholder call sites
-   *  that pre-date `extraLibraries`).  Empty string when the caller
-   *  is driving the install entirely from `extraLibraries`. */
-  libId: string
-  /** Libraries this target needs that are not in the Arduino index, installed
-   *  with `lib install --git-url`. Selected from the target's CAPABILITIES —
-   *  a board that cannot host an OPC-UA server never downloads the OPC-UA
-   *  stack. Web no-ops: its compile service pre-installs everything. */
-  thirdPartyLibraries?: ThirdPartyLibraryRequest[]
-  /** Per-board library list.  Sourced from the selected board's
-   *  `hals.json` `extra_libraries` (static boards) or its VPP
-   *  manifest `hal.extraArduinoLibraries` (VPP boards) — both feed
-   *  the same `BoardBuildInfo.extraArduinoLibraries` field.  The
-   *  editor adapter installs each name via `arduino-cli lib install`;
-   *  web no-ops (its compile-service backend pre-installs every lib).
-   *
-   *  A library declared here that arduino-cli can't resolve MUST
-   *  fail the install so the build aborts before generating a sketch
-   *  that won't link.  Per-device libs are the source of truth: if
-   *  the Opta package declares `Arduino_Opta_Blueprint` and
-   *  arduino-cli can't find it, the user needs to know now, not
-   *  during the arduino-cli compile step. */
-  extraLibraries?: string[]
-}
-
 /** Runtime-version probe (used for the v4 strucpp-compatibility
  *  gate that aborts uploads to a pre-4.1.0 runtime).  Editor: GETs
  *  the device's unauthenticated `/api/version`.  Web: queries the
@@ -320,33 +253,18 @@ export type RuntimeV4Bundle = Record<string, string | Uint8Array>
 export interface PackageVppPluginArgs {
   /** Selected board name, looked up against installed VPP packages. */
   boardTarget: string
+  /** Compile outputs the device's `hal.screenConfigs` are generated from; passed to the shared builder untouched. */
+  screenConfigInputs: VppScreenConfigInputs
 }
 
-export interface CollectVppScreenRuntimeArtifactsArgs {
-  /** Selected board (device id) in the VPP manifest, e.g. `uc20-m3000`. */
-  deviceId: string
-  /** Opaque VPP extensions persisted in the project, keyed by (packageId, screenId). */
+/** What the compile pipeline knows about the program, for the configs a VPP device declares for its screens. */
+export interface VppScreenConfigInputs {
+  /** `project.data.vppExtensions`, keyed by package id, then by storage id. */
   vppExtensions: Record<string, Record<string, unknown>>
-  /** PLC model snapshot the emitter can read via `input.model.exportableVariables`. */
-  exportableVariables: ReadonlyArray<ExportableVariable>
-  /** Address resolver provided to the emitter so it can look up IEC addresses by qualifier.
-   *  Hardware VPPs (Modbus master, EtherCAT, Weidmüller HAL) consume this to pin exports to a
-   *  located variable backed by the device's I/O. */
-  addressByQualifier: Record<string, string>
-  /** STruC++ `debug-map.json` content for this compile. Publisher VPPs (Data Hub, OPC-UA-like
-   *  bridges) consume this through `model.resolveDebugEntry` to export any program variable,
-   *  not just located ones. Empty when the compile produced no debug map. */
+  /** STruC++ `debug-map.json` of this compile; empty when none was produced. */
   debugMapContent: string
-  /** Program instances from the project's configuration/resource. Needed to build the
-   *  STruC++ debug path from a `<pou>.<var>` qualifier the same way the OPC-UA resolver does. */
-  instances: ReadonlyArray<{ name: string; task: string; program: string }>
-}
-
-export interface CollectVppScreenRuntimeArtifactsResult {
-  /** Files to merge into the runtime-v4 bundle (`conf/data-hub.json` etc.). */
-  files: RuntimeV4Bundle
-  /** Non-fatal messages — the pipeline logs these but does not abort. */
-  errors?: string[]
+  /** Program instances of the resource, to turn `<POU>.<var>` into a debug path. */
+  instances: ReadonlyArray<{ name: string; program: string }>
 }
 
 export interface PackageVppPluginResult {
@@ -413,14 +331,6 @@ export interface CompilerPlatformPort {
   /** Step 3 of the editor pipeline.  Transpile project IR to ST. */
   transpileToSt(args: TranspileToStArgs, log: PlatformLog): Promise<TranspileToStResult>
 
-  /** Step 5 of the editor pipeline.  Arduino-CLI core install.
-   *  Web returns `{ ok: true }` immediately. */
-  installArduinoCore(args: InstallArduinoCoreArgs, log: PlatformLog): Promise<UploadResult>
-
-  /** Step 9 of the editor pipeline.  Arduino-CLI library install.
-   *  Web returns `{ ok: true }` immediately. */
-  installArduinoLib(args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult>
-
   /** Step 12 of the editor pipeline.  Arduino-CLI compile. */
   compileArduino(args: CompileArduinoArgs, log: PlatformLog): Promise<CompileArduinoResult>
 
@@ -449,19 +359,6 @@ export interface CompilerPlatformPort {
    *  remote VPP packages).  The pipeline calls this between
    *  `composeRuntimeV4Bundle` and `uploadRuntimeV4`. */
   packageVppPlugin(args: PackageVppPluginArgs, log: PlatformLog): Promise<PackageVppPluginResult>
-
-  /**
-   * Materialize files emitted by VPP screen runtime emitters. Called right after
-   * `packageVppPlugin`. Looks up each `(packageId, screenId)` in `vppExtensions`, runs the
-   * declared emitter JS from the installed package in a sandboxed `vm.Script`, and returns the
-   * files to merge at `conf/*.json` paths. Optional on the port because web has no way to run
-   * emitters without downloading the package: it may omit this method and the pipeline treats
-   * that as a no-op.
-   */
-  collectVppScreenRuntimeArtifacts?(
-    args: CollectVppScreenRuntimeArtifactsArgs,
-    log: PlatformLog,
-  ): Promise<CollectVppScreenRuntimeArtifactsResult>
 
   /**
    * Persist a composed runtime-v4 bundle to the platform's build location.
