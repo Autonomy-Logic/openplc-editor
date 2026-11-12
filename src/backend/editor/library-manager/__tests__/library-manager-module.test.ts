@@ -26,37 +26,33 @@ jest.mock('electron', () => ({
 // the pure `strucpp` entry, so that's the module-id we target.
 // Returns deterministic archives with a known shape so the test can
 // pin downstream behaviour without pulling in the real (ESM) package.
-jest.mock(
-  'strucpp',
-  () => ({
-    importCodesysLibraryFromBytes: jest.fn(async (bytes: Uint8Array) => ({
-      success: true,
-      sources: [{ fileName: 'mock.st', source: `(* imported from ${bytes.byteLength}-byte buffer *)` }],
-      globalConstants: { STRING_LENGTH: 254 },
-    })),
-    compileStlib: jest.fn((_sources: unknown, options: { name: string; version: string; namespace: string }) => ({
-      success: true,
-      archive: {
-        manifest: {
-          name: options.name,
-          version: options.version,
-          namespace: options.namespace,
-          description: 'mock codesys-imported library',
-          isBuiltin: false,
-          functions: [],
-          functionBlocks: [],
-          types: [],
-        },
+jest.mock('strucpp', () => ({
+  importCodesysLibraryFromBytes: jest.fn(async (bytes: Uint8Array) => ({
+    success: true,
+    sources: [{ fileName: 'mock.st', source: `(* imported from ${bytes.byteLength}-byte buffer *)` }],
+    globalConstants: { STRING_LENGTH: 254 },
+  })),
+  compileStlib: jest.fn((_sources: unknown, options: { name: string; version: string; namespace: string }) => ({
+    success: true,
+    archive: {
+      manifest: {
+        name: options.name,
+        version: options.version,
+        namespace: options.namespace,
+        description: 'mock codesys-imported library',
+        isBuiltin: false,
+        functions: [],
+        functionBlocks: [],
+        types: [],
       },
-    })),
-    // Passthrough: real strucpp parses + validates the archive shape;
-    // the mock just JSON.parses so the install path exercises the
-    // same code without pulling in the ESM package.  Malformed input
-    // throws, matching production behaviour.
-    loadStlibFromString: jest.fn((text: string) => JSON.parse(text)),
-  }),
-  { virtual: true },
-)
+    },
+  })),
+  // Passthrough: real strucpp parses + validates the archive shape;
+  // the mock just JSON.parses so the install path exercises the
+  // same code without pulling in the ESM package.  Malformed input
+  // throws, matching production behaviour.
+  loadStlibFromString: jest.fn((text: string) => JSON.parse(text)),
+}))
 
 import type { PublicLibrary } from '../../../../middleware/shared/ports/public-catalog-types'
 import { LibraryManagerModule } from '../library-manager-module'
