@@ -1186,6 +1186,88 @@ describe('libraryBuildFromTranspiledSt: undeclared exports', () => {
     expect(res.success).toBe(false)
     expect(res.errors).toEqual(compileErrors)
   })
+
+  describe('an export counts as declared only by a declaration of its own kind', () => {
+    const FOO_PROGRAM = 'PROGRAM Foo\n  VAR a : INT; END_VAR\n  a := 1;\nEND_PROGRAM\n'
+    const withFooProgram = {
+      programSt: FOO_PROGRAM + '\n' + STUB_MAIN,
+      knownPous: [
+        { name: 'Foo', kind: 'PROGRAM' as const },
+        { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' as const },
+      ],
+    }
+    const onlyStub = { programSt: STUB_MAIN, knownPous: [{ name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' as const }] }
+    const cppScale = {
+      fileName: 'Cpp_Scale.cpp',
+      source: 'FUNCTION_BLOCK CPP_SCALE\nVAR_INPUT a : INT; END_VAR\nvoid setup() {}\nEND_FUNCTION_BLOCK\n',
+    }
+
+    it.each([
+      {
+        rule: 'a function named after a declared program',
+        exported: { functions: [{ name: 'FOO' }] },
+        aux: undefined,
+        build: withFooProgram,
+        expected: refusal('function', 'FOO'),
+      },
+      {
+        rule: 'a function block named after a declared program',
+        exported: { functionBlocks: [{ name: 'FOO' }] },
+        aux: undefined,
+        build: withFooProgram,
+        expected: refusal('function block', 'FOO'),
+      },
+      {
+        rule: 'a function block named after a declared function',
+        exported: { functionBlocks: [{ name: 'ADD2' }] },
+        aux: undefined,
+        build: undefined,
+        expected: refusal('function block', 'ADD2'),
+      },
+      {
+        rule: 'a function named after a declared function block',
+        exported: { functions: [{ name: 'TANK' }] },
+        aux: undefined,
+        build: undefined,
+        expected: refusal('function', 'TANK'),
+      },
+      {
+        rule: 'a function named after a native source file',
+        exported: { functions: [{ name: 'CPP_SCALE' }] },
+        aux: { nativeSources: [cppScale] },
+        build: onlyStub,
+        expected: refusal('function', 'CPP_SCALE'),
+      },
+    ])('refuses $rule, with no archive', ({ exported, aux, build, expected }) => {
+      const { result } = buildWithManifest(exported, aux, build)
+
+      expect(result.errors.map((e) => e.message)).toEqual([expected])
+      expect(result.success).toBe(false)
+      expect(result.archive).toBeUndefined()
+    })
+
+    it('keeps the decorated archive when every export is declared as its own kind next to a program', () => {
+      const { archive, result } = buildWithManifest(
+        {
+          functions: [{ name: 'ADD2' }],
+          functionBlocks: [{ name: 'TANK' }, { name: 'CPP_SCALE' }],
+          globals: [{ name: 'GAIN', type: 'INT' }],
+        },
+        { nativeSources: [cppScale], declaredGlobals: ['Gain'] },
+        {
+          programSt: ADD2_FN + '\n' + TANK_FB + '\n' + FOO_PROGRAM + '\n' + STUB_MAIN,
+          knownPous: [
+            { name: 'Add2', kind: 'FUNCTION' },
+            { name: 'Tank', kind: 'FUNCTION_BLOCK' },
+            { name: 'Foo', kind: 'PROGRAM' },
+            { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
+          ],
+        },
+      )
+
+      expect(result).toEqual({ success: true, archive, errors: [] })
+    })
+  })
 })
 
 const malformed = (

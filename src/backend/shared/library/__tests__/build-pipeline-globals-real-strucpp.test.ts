@@ -406,6 +406,99 @@ describe('code hidden in a global initial value does not ship as library code', 
   })
 })
 
+describe('a function hidden in a global initial value under a declared program name does not ship', () => {
+  const FOO_PROGRAM: ProjectData['pous'][number] = {
+    type: 'program',
+    data: {
+      name: 'FOO',
+      language: 'st',
+      variables: [pouVariable('a', 'INT', 'local')],
+      body: { language: 'st', value: 'a := 1;' },
+      documentation: '',
+    },
+  }
+
+  const ADD2_FUNCTION: ProjectData['pous'][number] = {
+    type: 'function',
+    data: {
+      name: 'ADD2',
+      language: 'st',
+      returnType: 'INT',
+      variables: [pouVariable('a', 'INT', 'input')],
+      body: { language: 'st', value: 'ADD2 := a + 2;' },
+      documentation: '',
+    },
+  }
+
+  const fooLibrary = (gain: string, b: string): LibraryBuildResult =>
+    buildLibrary(
+      'foo_lib',
+      libraryData({
+        pous: [SCALE_FB, FOO_PROGRAM],
+        configuration: {
+          resource: {
+            tasks: [],
+            instances: [],
+            globalVariables: [
+              globalVariable('Gain', 'INT', { initialValue: gain }),
+              globalVariable('B', 'INT', { initialValue: b }),
+            ],
+          },
+        },
+      }),
+    )
+
+  const payload =
+    '1;\nEND_VAR\nFUNCTION FOO : INT\n  VAR_INPUT i : INT; END_VAR\n  FOO := i * 100;\nEND_FUNCTION\nVAR_GLOBAL\n  B : INT := (*'
+
+  it('builds plain initial values, exporting no function, the function block SCALE and the globals GAIN and B', () => {
+    const archive = archiveOf(fooLibrary('1', '0'))
+
+    expect({
+      functions: namesOf(archive.manifest.functions),
+      functionBlocks: namesOf(archive.manifest.functionBlocks),
+      globals: namesOf(archive.manifest.globals).sort(),
+    }).toEqual({ functions: [], functionBlocks: ['SCALE'], globals: ['B', 'GAIN'] })
+  })
+
+  it('refuses the payload with exactly one error naming the undeclared function FOO', () => {
+    const result = fooLibrary(payload, '*) 0')
+
+    expect(result.errors.map((error) => error.message)).toEqual([refusal('function', 'FOO')])
+  })
+
+  it('produces no library archive for the payload', () => {
+    const result = fooLibrary(payload, '*) 0')
+
+    expect(result.success).toBe(false)
+    expect(result.archive).toBeUndefined()
+  })
+
+  it('builds a library declaring a function, a function block, a program and a global', () => {
+    const archive = archiveOf(
+      buildLibrary(
+        'mixed_lib',
+        libraryData({
+          pous: [SCALE_FB, ADD2_FUNCTION, FOO_PROGRAM],
+          configuration: {
+            resource: {
+              tasks: [],
+              instances: [],
+              globalVariables: [globalVariable('Gain', 'INT', { initialValue: '1' })],
+            },
+          },
+        }),
+      ),
+    )
+
+    expect({
+      functions: namesOf(archive.manifest.functions),
+      functionBlocks: namesOf(archive.manifest.functionBlocks),
+      globals: namesOf(archive.manifest.globals),
+    }).toEqual({ functions: ['ADD2'], functionBlocks: ['SCALE'], globals: ['GAIN'] })
+  })
+})
+
 describe('a library built on a dependency library', () => {
   it('builds and exports only its own symbols', () => {
     const dependency = archiveOf(
