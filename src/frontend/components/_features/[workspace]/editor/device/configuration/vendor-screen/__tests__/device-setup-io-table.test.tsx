@@ -143,7 +143,9 @@ function renderScreen() {
 }
 
 function slotButton(slot: number): HTMLElement {
-  const button = screen.getByText(`Slot ${slot}`, { selector: 'button span' }).closest('button')
+  const button = screen
+    .getByText(`Slot ${slot}`, { selector: '[role="button"] span' })
+    .closest<HTMLElement>('[role="button"]')
   if (!button) throw new Error(`no list item for slot ${slot}`)
   return button
 }
@@ -314,7 +316,7 @@ describe('io-table section with source device-setup', () => {
 
     for (const slot of [1, 2]) {
       selectSlot(slot)
-      for (const button of Array.from(container.querySelectorAll('button'))) fireEvent.click(button)
+      for (const button of Array.from(container.querySelectorAll('button, [role="button"]'))) fireEvent.click(button)
       for (const select of Array.from(container.querySelectorAll('select'))) {
         fireEvent.change(select, { target: { value: '' } })
       }
@@ -470,7 +472,7 @@ describe('io-table section with source device-setup', () => {
       notifyDroppedAliases(applied.dropped)
     })
 
-    expect(screen.queryByText('Slot 2', { selector: 'button span' })).toBeNull()
+    expect(screen.queryByText('Slot 2', { selector: '[role="button"] span' })).toBeNull()
     expect(aliasInput(kept.channelName, kept.slot).value).toBe('kept_alias')
     expect(screen.queryByDisplayValue('dropped_alias')).toBeNull()
     expect(getMemoryState().toasts[0]?.description).toMatch(/dropped_alias/)

@@ -3,6 +3,7 @@ import type { editor as MonacoEditor } from 'monaco-editor'
 import * as monaco from 'monaco-editor'
 import { useEffect, useRef, useState } from 'react'
 
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { pouVarsUri } from '../../../services/st-lsp/types'
 
 interface VariablesCodeEditorProps {
@@ -73,6 +74,7 @@ const VariablesCodeEditor = ({
   language = 'st',
   readOnly = false,
 }: VariablesCodeEditorProps) => {
+  const isEditingLocked = useIsEditingLocked()
   const resolvedModelUri = modelUri ?? (pouName ? pouVarsUri(pouName) : undefined)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -160,7 +162,7 @@ const VariablesCodeEditor = ({
         onMount={handleEditorDidMount}
         onChange={(value) => onCodeChange(value ?? '')}
         options={{
-          readOnly,
+          readOnly: readOnly || isEditingLocked,
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
           wordWrap: 'on',

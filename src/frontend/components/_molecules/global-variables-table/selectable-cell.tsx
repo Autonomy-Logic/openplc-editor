@@ -7,6 +7,7 @@ import { baseTypeEnum } from '../../../../middleware/shared/ports'
 import type { PLCGlobalVariable, PLCVariable } from '../../../../middleware/shared/ports/types'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../store'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
@@ -45,8 +46,10 @@ const SelectableTypeCell = ({
   row: { index },
   column: { id },
   table,
-  editable = true,
+  editable: editableProp = true,
 }: ISelectableCellProps) => {
+  const isEditingLocked = useIsEditingLocked()
+  const editable = editableProp && !isEditingLocked
   const {
     project: {
       data: { dataTypes, pous },
@@ -372,8 +375,10 @@ const SelectableClassCell = ({
   row: { index },
   column: { id },
   table,
-  editable = true,
+  editable: editableProp = true,
 }: ISelectableCellProps) => {
+  const isEditingLocked = useIsEditingLocked()
+  const editable = editableProp && !isEditingLocked
   const initialValue = getValue()
 
   const [cellValue, setCellValue] = useState(initialValue)
@@ -434,7 +439,11 @@ const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }
   }, [initialValue])
 
   return (
-    <button className='flex h-full w-full cursor-pointer items-center justify-center' onClick={onClick}>
+    <button
+      aria-label='Toggle debug for this variable'
+      className='flex h-full w-full cursor-pointer items-center justify-center'
+      onClick={onClick}
+    >
       <DebuggerIcon variant={cellValue ? 'default' : 'muted'} />
     </button>
   )

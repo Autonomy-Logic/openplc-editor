@@ -1,6 +1,7 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
 import { useEffect } from 'react'
 
+import { useIsEditingLocked } from '../../../../hooks/use-editing-lock'
 import { useHandleRemoveTab } from '../../../../hooks/use-remove-tab'
 import { i18n } from '../../../../locales/i18n'
 import { useOpenPLCStore } from '../../../../store'
@@ -13,6 +14,7 @@ export const EditMenu = () => {
     modalActions: { openModal },
   } = useOpenPLCStore()
   const { setSelectedTab } = useHandleRemoveTab()
+  const isEditingLocked = useIsEditingLocked()
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
   useEffect(() => {
@@ -27,6 +29,7 @@ export const EditMenu = () => {
   }
 
   const handleConfirmDeleteElement = () => {
+    if (isEditingLocked) return
     openModal('confirm-delete-element', null)
   }
 
@@ -79,7 +82,7 @@ export const EditMenu = () => {
             <span>{i18n.t('menu:edit.submenu.selectAll')}</span>
             <span className={ACCELERATOR}>{'Ctrl + A'}</span>
           </MenuPrimitive.Item>
-          <MenuPrimitive.Item className={ITEM} onClick={handleConfirmDeleteElement}>
+          <MenuPrimitive.Item className={ITEM} disabled={isEditingLocked} onClick={handleConfirmDeleteElement}>
             <span>{i18n.t('menu:edit.submenu.deletePou')}</span>
             <span className={ACCELERATOR}>{'Ctrl + Shift + Delete'}</span>
           </MenuPrimitive.Item>

@@ -33,7 +33,7 @@
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "test": "jest --collectCoverage --maxWorkers=2",
     "test:watch": "jest --watch --no-coverage",
-    "test:e2e": "npm run build && npx playwright test",
+    "test:e2e": "cross-env OPENPLC_E2E_DEBUG_SEAM=1 npm run build && npx playwright test",
     "validate:arch": "npx tsx src/__architecture__/validate.ts",
     "prepare": "husky"
   },

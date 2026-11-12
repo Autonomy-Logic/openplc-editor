@@ -1008,6 +1008,7 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.on('window:reload', this.handleWindowReload)
     this.ipcMain.on('window:rebuild-menu', this.handleWindowRebuildMenu)
     this.ipcMain.on('window:project-open', this.handleWindowProjectOpen)
+    this.ipcMain.on('window:debugger-active', this.handleWindowDebuggerActive)
 
     // ===================== HARDWARE =====================
     this.registerHandle('hardware:get-available-communication-ports', this.handleHardwareGetAvailableCommunicationPorts)
@@ -2296,6 +2297,13 @@ class MainProcessBridge implements MainIpcModule {
     if (typeof open !== 'boolean') return
     if (!open) this.currentProjectPath = null
     void this.menuBuilder.setProjectOpen(open).catch((error) => {
+      logger.error('Error rebuilding application menu:', error)
+    })
+  }
+
+  handleWindowDebuggerActive = (_event: IpcMainEvent, active: unknown) => {
+    if (typeof active !== 'boolean') return
+    void this.menuBuilder.setDebuggerActive(active).catch((error) => {
       logger.error('Error rebuilding application menu:', error)
     })
   }

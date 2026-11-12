@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 
 import type { NetworkInterface } from '@root/middleware/shared/ports/ethercat-types'
 
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
 import { InterfaceSelector } from '../interface-selector'
 
 const interfaces: NetworkInterface[] = [
@@ -20,6 +21,7 @@ const renderSelector = (overrides?: Partial<React.ComponentProps<typeof Interfac
       error={null}
       {...overrides}
     />,
+    { wrapper: createStoreWrapper(createTestStore()) },
   )
 
 // Radix DropdownMenu's trigger opens on Enter — drive it with a keydown so the
