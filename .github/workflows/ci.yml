@@ -19,6 +19,9 @@ jobs:
   unit-tests:
     uses: ./.github/workflows/ci-unit-tests.yml
 
+  hmi-core:
+    uses: ./.github/workflows/ci-hmi-core.yml
+
   format:
     needs: [architecture, build-check, lint]
     uses: ./.github/workflows/ci-format.yml

@@ -10,8 +10,8 @@ Surfaces checked (same src-relative path in both repos):
 
 Mapped surfaces (different path per repo, compared BOTH WAYS within the
 mapped base, minus declared desktop-only trees — see MAPPED_SURFACES):
-  - bare-metal-runtime  (editor: resources/sources/{arduino,Baremetal};
-                         web:    src/assets/firmware/{arduino,Baremetal})
+  - bare-metal-runtime  (editor: resources/sources/{arduino,Baremetal,hmi};
+                         web:    src/assets/firmware/{arduino,Baremetal,hmi})
 
 Every program file in these surfaces must be byte-identical across both
 repos. Test files (`__tests__/` directories, `*.test.ts(x)`, `*.spec.ts(x)`)
@@ -77,8 +77,9 @@ MAPPED_SURFACES = [
         "web": "src/assets/firmware",
         # Only the C/C++ runtime sources are shared; the web bundle also keeps
         # its own bundler glue here (e.g. an index.ts that imports the sources
-        # as strings) which the editor does not have.
-        "exts": [".cpp", ".hpp", ".c", ".h", ".ino"],
+        # as strings) which the editor does not have. Fonts and notices travel
+        # with the HMI core sources.
+        "exts": [".cpp", ".hpp", ".c", ".h", ".ino", ".ttf", ".txt", ".md"],
         # Editor-only by design. Each is a desktop-compile concern the web
         # bundle (AVR8js simulator) has no use for:
         "editor_only_prefixes": [
