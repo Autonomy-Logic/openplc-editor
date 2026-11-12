@@ -122,10 +122,13 @@ export function writeEthercatProject(
   return { project, userData }
 }
 
-export async function launch(userData: string): Promise<{ app: ElectronApplication; page: Page }> {
+export async function launch(
+  userData: string,
+  env: Record<string, string> = {},
+): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [join(__dirname, '..', '..', 'release', 'app', 'dist', 'main', 'main.js'), `--user-data-dir=${userData}`],
-    env: { ...process.env, NODE_ENV: 'production' },
+    env: { ...process.env, NODE_ENV: 'production', ...env },
   })
   // The app opens a splash window first; pick the real one by URL.
   const deadline = Date.now() + 60000
