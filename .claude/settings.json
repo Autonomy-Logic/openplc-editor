@@ -1,8 +1,6 @@
 {
   "permissions": {
-    "ask": [
-      "Bash(git worktree remove:*)"
-    ],
+    "ask": ["Bash(git worktree remove:*)"],
     "allow": [
       "Bash(npm run:*)",
       "Bash(npm test:*)",
@@ -24,6 +22,19 @@
       "Bash(gh run view:*)",
       "Bash(gh issue view:*)",
       "Bash(gh issue list:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/thin-adapter-guard.mjs\""
+          }
+        ]
+      }
     ]
   }
 }
