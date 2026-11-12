@@ -28,28 +28,24 @@ describe('resolveVppPinDrift', () => {
     expect(describeVppPinDrift(PIN, null)).toContain('com.synergy-logic.slm-rp4 0.3.1')
   })
 
-  it('reports a version change', () => {
-    const drift = resolveVppPinDrift(PIN, { ...PIN, version: '0.4.0', contentHash: 'sha256:bbbb' })
+  it('reports a version change as moved, with no warning', () => {
+    const newer = { ...PIN, version: '0.4.0', contentHash: 'sha256:bbbb' }
 
-    expect(drift.kind).toBe('version-changed')
-    expect(describeVppPinDrift(PIN, { ...PIN, version: '0.4.0', contentHash: 'sha256:bbbb' })).toContain('0.4.0')
+    expect(resolveVppPinDrift(PIN, newer)).toEqual({ kind: 'moved' })
+    expect(describeVppPinDrift(PIN, newer)).toBeNull()
   })
 
-  it('catches a republish under the same version, which a version check would miss', () => {
+  it('reports a republish under the same version as moved, with no warning', () => {
     const republished = { ...PIN, contentHash: 'sha256:cccc' }
 
-    const drift = resolveVppPinDrift(PIN, republished)
-
-    expect(drift.kind).toBe('content-changed')
-    expect(describeVppPinDrift(PIN, republished)).toContain('republished')
+    expect(resolveVppPinDrift(PIN, republished)).toEqual({ kind: 'moved' })
+    expect(describeVppPinDrift(PIN, republished)).toBeNull()
   })
 
-  it('reports a different package entirely', () => {
+  it('reports a different package as moved, with no warning', () => {
     const other = { packageId: 'com.other.vendor', version: '1.0.0', contentHash: 'sha256:dddd' }
 
-    const drift = resolveVppPinDrift(PIN, other)
-
-    expect(drift.kind).toBe('package-replaced')
-    expect(describeVppPinDrift(PIN, other)).toContain('com.other.vendor')
+    expect(resolveVppPinDrift(PIN, other)).toEqual({ kind: 'moved' })
+    expect(describeVppPinDrift(PIN, other)).toBeNull()
   })
 })

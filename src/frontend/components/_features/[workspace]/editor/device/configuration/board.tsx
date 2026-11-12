@@ -264,11 +264,8 @@ const Board = memo(function () {
     void fetchPreviewImage()
   }, [deviceBoard, device, availableBoards])
 
-  // Pin the vendor package the moment a VPP board is selected, and compare it
-  // with what is installed whenever the board or the package set changes. The
-  // pin is what lets the editor say the package moved underneath a program
-  // that was laid out against the old one — a mismatch the device would
-  // otherwise only show as wrong I/O.
+  // Pin the board to the installed vendor package whenever the board or the
+  // package set changes. Only a pinned package that is not installed is reported.
   const vppPackageId = availableBoards.get(deviceBoard)?.vpp?.packageId
   const targetVpp = selectedDevice?.vpp
   useEffect(() => {
@@ -285,15 +282,13 @@ const Board = memo(function () {
       targetVpp !== undefined ? Promise.resolve<VppPackagePin | null>(targetVpp) : packages.getPackagePin(vppPackageId)
     void authoritative.then((installed) => {
       if (cancelled) return
-      const recorded = recordedPins?.[deviceBoard]
-      // First time on this board: record what it is being authored against
-      // rather than warning about a pin that was never taken.
-      if (!recorded && installed) {
+      if (installed) {
+        // No-op when the recorded pin already matches.
         setVppPackagePin(deviceBoard, installed)
         setPinDrift(null)
         return
       }
-      setPinDrift(describeVppPinDrift(recorded, installed))
+      setPinDrift(describeVppPinDrift(recordedPins?.[deviceBoard], null))
     })
     return () => {
       cancelled = true

@@ -111,9 +111,7 @@ export async function buildVppPluginFiles(args: BuildVppPluginFilesArgs): Promis
     errors,
   })
 
-  // Said here rather than only at authoring: a package can move between the
-  // last time the board screen was open and the upload, and this is the last
-  // point before the driver is built on the device.
+  // Reports only a pinned package that is not installed; a changed package is re-pinned on the board screen.
   if (args.pin) {
     const drift = describeVppPinDrift(args.pin.recorded, args.pin.installed)
     if (drift) warnings.push(drift)
