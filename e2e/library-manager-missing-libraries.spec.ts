@@ -14,7 +14,6 @@ type Paths = { project: string; userData: string }
 const GHOST = { name: 'ghost-lib', version: '1.0.0' }
 const OTHER_GHOST = { name: 'other-ghost', version: '2.0.0' }
 
-/** Writes a one-program project referencing @p libraries and a profile that lists it, with no user library installed. */
 function writeFixture(slug: string, libraries: LibraryRef[]): Paths {
   const root = join(ROOT, slug)
   const project = join(root, 'project')
@@ -78,7 +77,6 @@ function writeFixture(slug: string, libraries: LibraryRef[]): Paths {
   return { project, userData }
 }
 
-/** Launches the built app on @p userData and returns its main window, skipping the splash. */
 async function launch({ userData }: Paths): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [join(__dirname, '..', 'release', 'app', 'dist', 'main', 'main.js'), `--user-data-dir=${userData}`],
@@ -97,7 +95,6 @@ async function launch({ userData }: Paths): Promise<{ app: ElectronApplication; 
   throw new Error('main window never appeared')
 }
 
-/** Sends the save accelerator the native menu sends on Ctrl+S, which Playwright's keyboard never reaches. */
 const save = (app: ElectronApplication) =>
   app.evaluate(({ BrowserWindow }) => {
     const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))

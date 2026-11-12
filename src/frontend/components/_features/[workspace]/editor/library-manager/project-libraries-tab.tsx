@@ -13,8 +13,7 @@
  *     project enables follow, each with an inline "−" affordance to
  *     pull them back out.  A missing-libraries callout sits above
  *     the list when `project.libraries` references libraries not
- *     present in the system pool; each entry has a "−" affordance
- *     that removes the reference from the project.
+ *     present in the system pool.
  *
  * The dual-card transfer shape mirrors the EtherCAT module-selection
  * UX so users move between the two managers without relearning the
