@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { ElectronApplication, Page } from '@playwright/test'
+import type { ElectronApplication, Locator, Page } from '@playwright/test'
 import { _electron as electron, expect, test } from '@playwright/test'
 
 const ROOT = join(realpathSync(tmpdir()), 'openplc-e2e-missing-libraries')
@@ -13,6 +13,11 @@ type Paths = { project: string; userData: string }
 
 const GHOST = { name: 'ghost-lib', version: '1.0.0' }
 const OTHER_GHOST = { name: 'other-ghost', version: '2.0.0' }
+const MANY_MISSING = Array.from({ length: 30 }, (_, i) => ({
+  name: `ghost-${String(i).padStart(2, '0')}`,
+  version: '1.0.0',
+}))
+const HINT = 'Install them on the System Libraries tab, or remove them from this project.'
 
 function writeFixture(slug: string, libraries: LibraryRef[]): Paths {
   const root = join(ROOT, slug)
@@ -129,6 +134,30 @@ async function withApp(paths: Paths, run: (app: ElectronApplication, page: Page)
   }
 }
 
+async function isHittable(target: Locator): Promise<boolean> {
+  return target.evaluate((el) => {
+    const box = el.getBoundingClientRect()
+    const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+    return hit !== null && el.contains(hit)
+  })
+}
+
+async function centreOf(target: Locator): Promise<{ x: number; y: number }> {
+  const box = await target.boundingBox()
+  if (!box) throw new Error('the target has no bounding box')
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+}
+
+async function wheelUntilHittable(page: Page, at: { x: number; y: number }, target: Locator): Promise<void> {
+  await page.mouse.move(at.x, at.y)
+  for (let step = 0; step < 40 && !(await isHittable(target)); step += 1) {
+    const before = await target.evaluate((el) => el.getBoundingClientRect().y)
+    await page.mouse.wheel(0, 20)
+    await expect.poll(() => target.evaluate((el) => el.getBoundingClientRect().y)).not.toBe(before)
+  }
+  expect(await isHittable(target)).toBe(true)
+}
+
 test.describe('Library Manager, missing libraries callout', () => {
   test.setTimeout(120000)
 
@@ -192,6 +221,53 @@ test.describe('Library Manager, missing libraries callout', () => {
       await expect(page.getByRole('tab', { name: 'Project Libraries' })).toHaveAttribute('data-state', 'active')
       await expect(page.getByRole('dialog')).toHaveCount(0)
       await expect(page.getByTestId('missing-libraries-callout')).toHaveCount(0)
+    })
+  })
+
+  test('every missing library and the hint can be reached with the mouse wheel in the default window', async () => {
+    const paths = writeFixture('reach-many', MANY_MISSING)
+    await withApp(paths, async (_app, page) => {
+      await openProjectLibrariesFromMissingModal(page)
+
+      const callout = page.getByTestId('missing-libraries-callout')
+      const list = page.getByTestId('missing-libraries-list')
+      const lastRemove = page.getByTestId('missing-library-remove-ghost-29')
+      const firstRemove = page.getByTestId('missing-library-remove-ghost-00')
+      const hint = callout.getByText(HINT, { exact: true })
+      await expect(list.getByRole('listitem')).toHaveCount(30)
+      expect(await isHittable(lastRemove)).toBe(false)
+
+      const calloutBox = await callout.boundingBox()
+      const listBox = await list.boundingBox()
+      if (!calloutBox || !listBox) throw new Error('the missing libraries callout has no bounding box')
+      const label = { x: calloutBox.x + 30, y: calloutBox.y + 10 }
+      const overList = { x: listBox.x + listBox.width / 2, y: listBox.y + 10 }
+
+      await page.mouse.move(overList.x, overList.y)
+      await page.mouse.wheel(0, 2000)
+      await expect.poll(() => list.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThan(1)
+
+      await wheelUntilHittable(page, label, lastRemove)
+      const lastCentre = await centreOf(lastRemove)
+      await page.mouse.click(lastCentre.x, lastCentre.y)
+      await expect(page.getByTestId('missing-library-row-ghost-29')).toHaveCount(0)
+      await expect(list.getByRole('listitem')).toHaveCount(29)
+
+      await wheelUntilHittable(page, label, hint)
+
+      const hintCentre = await centreOf(hint)
+      await page.mouse.move(hintCentre.x, hintCentre.y)
+      await page.mouse.wheel(0, -2000)
+      await expect.poll(async () => (await callout.boundingBox())?.y).toBe(calloutBox.y)
+      await page.mouse.move(overList.x, overList.y)
+      await page.mouse.wheel(0, -2000)
+      await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBe(0)
+
+      expect(await isHittable(firstRemove)).toBe(true)
+      const firstCentre = await centreOf(firstRemove)
+      await page.mouse.click(firstCentre.x, firstCentre.y)
+      await expect(page.getByTestId('missing-library-row-ghost-00')).toHaveCount(0)
+      await expect(list.getByRole('listitem')).toHaveCount(28)
     })
   })
 })
