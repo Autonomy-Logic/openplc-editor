@@ -508,15 +508,18 @@ function undeclaredExports(
   if (exported === undefined) return []
   if (!isRecord(exported)) return [malformedArchivePart('manifest')]
 
-  const declaredPous = new Set([
-    ...knownPous.filter((pou) => pou.name !== STUB_PROGRAM_NAME).map((pou) => pou.name.toLowerCase()),
+  const declaredFunctions = new Set(
+    knownPous.filter((pou) => pou.kind === 'FUNCTION').map((pou) => pou.name.toLowerCase()),
+  )
+  const declaredFunctionBlocks = new Set([
+    ...knownPous.filter((pou) => pou.kind === 'FUNCTION_BLOCK').map((pou) => pou.name.toLowerCase()),
     ...(aux?.nativeSources ?? []).map((n) => nativeStem(n.fileName).toLowerCase()),
   ])
   const declaredGlobals = new Set((aux?.declaredGlobals ?? []).map((name) => name.toLowerCase()))
 
   const checks: Array<[ExportListKey, string, Set<string>]> = [
-    ['functions', 'function', declaredPous],
-    ['functionBlocks', 'function block', declaredPous],
+    ['functions', 'function', declaredFunctions],
+    ['functionBlocks', 'function block', declaredFunctionBlocks],
     ['globals', 'global', declaredGlobals],
   ]
   const malformed: CompileStlibError[] = []
