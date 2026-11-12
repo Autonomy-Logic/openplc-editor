@@ -170,6 +170,11 @@ echo "$BUILD" | jq -r '.buildDirectory'
 own D-Bus complaints go to `stderr`. Gate on the exit code — 4 is a compile
 error, 5 a connection problem, 7 the device refusing — rather than on log text.
 
+A POU whose variables could not be parsed stops the run before the target is even
+looked up: the command exits 4 with `"code": "project_invalid"` and a message
+naming the POU and, when the declarations hold a syntax error, its line. Fix the
+declarations in the editor's variables code view and run the command again.
+
 ### First run on a clean machine
 
 The CLI creates the editor's user-data scaffolding itself (settings, history, the
