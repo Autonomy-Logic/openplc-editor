@@ -92,6 +92,7 @@ async function launch({ userData }: Paths): Promise<{ app: ElectronApplication; 
     }
     await app.waitForEvent('window', { timeout: 1000 }).catch(() => undefined)
   }
+  await app.close()
   throw new Error('main window never appeared')
 }
 

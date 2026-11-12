@@ -98,6 +98,16 @@ describe('Project Libraries tab, missing libraries callout', () => {
     ).not.toBeNull()
   })
 
+  it('bounds the missing list with a vertical scroll that holds every missing entry', () => {
+    renderTab()
+
+    const list = screen.getByTestId('missing-libraries-list')
+    const classes = list.className.split(/\s+/)
+    expect(classes).toEqual(expect.arrayContaining(['max-h-32', 'overflow-y-auto']))
+    expect(within(list).queryByTestId('missing-library-row-ghost-lib')).not.toBeNull()
+    expect(within(list).queryByTestId('missing-library-row-other-ghost')).not.toBeNull()
+  })
+
   it('keeps the remove action of an enabled library as it was', () => {
     renderTab()
 
