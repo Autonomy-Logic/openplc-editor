@@ -145,6 +145,7 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
           produce((state: LibrarySlice) => {
             mutateProjectRefs(state, (refs) => refs.filter((r) => r.name !== name))
             state.enabledLibraries = state.enabledLibraries.filter((n) => n !== name)
+            state.missingLibraries = state.missingLibraries.filter((m) => m.name !== name)
           }),
         )
       },
