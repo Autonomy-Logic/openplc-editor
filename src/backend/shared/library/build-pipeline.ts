@@ -505,7 +505,6 @@ function undeclaredExports(
 ): CompileStlibError[] {
   if (!isRecord(archive)) return [malformedArchivePart('archive')]
   const exported = archive.manifest
-  if (exported === undefined) return [malformedArchivePart('manifest')]
   if (!isRecord(exported)) return [malformedArchivePart('manifest')]
 
   const declaredFunctions = new Set(
