@@ -491,6 +491,13 @@ const WorkspaceScreen = () => {
     )
   }, [packagesPort, selectedDevice])
 
+  useEffect(() => {
+    if (!packagesPort) return
+    return packagesPort.onStartupNotices((notices) => {
+      for (const notice of notices) addLog({ level: notice.level, message: notice.message })
+    })
+  }, [packagesPort, addLog])
+
   // Re-verifies installed VPP package signatures on project open and drops any that fail (blocks a
   // locally-crafted/unsigned .vpp bypassing the signed import flow). No-op on web (`packagesPort` is undefined).
   useEffect(() => {

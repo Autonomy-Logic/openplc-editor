@@ -56,7 +56,7 @@ import type {
   WhoAmIResult,
 } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
-import type { PLCProjectData } from '@root/middleware/shared/ports/types'
+import type { PackageInstallProgress, PLCProjectData, StartupNotice } from '@root/middleware/shared/ports/types'
 import type {
   Branch,
   BranchDiffWithBase,
@@ -554,8 +554,24 @@ const rendererProcessBridge = {
   listInstalledPackages: (): Promise<
     Array<{ packageId: string; version: string; installedAt: string; path: string; devices: string[] }>
   > => ipcRenderer.invoke('packages:list-installed'),
-  uninstallPackage: (packageId: string): Promise<{ success: boolean; error?: string }> =>
+  uninstallPackage: (packageId: string): Promise<{ success: boolean; error?: string; warning?: string }> =>
     ipcRenderer.invoke('packages:uninstall', packageId),
+  reinstallPackage: (
+    packageId: string,
+  ): Promise<{ success: boolean; canceled?: boolean; packageId?: string; packageName?: string; error?: string }> =>
+    ipcRenderer.invoke('packages:reinstall', packageId),
+  cancelPackageInstall: (): void => ipcRenderer.send('packages:cancel-install'),
+  takeStartupNotices: (): Promise<StartupNotice[]> => ipcRenderer.invoke('packages:take-startup-notices'),
+  onStartupNoticesAvailable: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('packages:startup-notices-available', listener)
+    return () => ipcRenderer.removeListener('packages:startup-notices-available', listener)
+  },
+  onPackageInstallProgress: (callback: (progress: PackageInstallProgress) => void) => {
+    const listener = (_event: IpcRendererEvent, progress: PackageInstallProgress) => callback(progress)
+    ipcRenderer.on('packages:install-progress', listener)
+    return () => ipcRenderer.removeListener('packages:install-progress', listener)
+  },
   getPackageManifest: (packageId: string): Promise<unknown> => ipcRenderer.invoke('packages:get-manifest', packageId),
   getPackagePin: (packageId: string): Promise<{ packageId: string; version: string; contentHash: string } | null> =>
     ipcRenderer.invoke('packages:get-pin', packageId),
