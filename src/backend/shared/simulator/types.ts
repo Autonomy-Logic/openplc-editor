@@ -17,6 +17,8 @@ export enum ModbusFunctionCode {
    *  which already reports the state — there is deliberately no second FC for
    *  querying it. */
   PLC_SET_STATE = 0x4b,
+  /** Store a generated board ID once, on a board without a factory ID. */
+  PROVISION_BOARD_ID = 0x4e,
 }
 
 export enum ModbusDebugResponse {
@@ -42,6 +44,8 @@ export enum ModbusDebugResponse {
    *  what keeps an older editor build, or an OPC-UA client, from writing
    *  through to it. */
   READ_ONLY = 0x87,
+  /** PROVISION_BOARD_ID only: the board already has an ID (factory or stored). */
+  BOARD_ID_TAKEN = 0x88,
 }
 
 /** Runtime states reported by DEBUG_GET_STATUS and PLC_SET_STATE (and by

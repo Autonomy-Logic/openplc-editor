@@ -26,6 +26,24 @@ describe('RuntimeCommercialLicenseStatus', () => {
     expect(onBuy).toHaveBeenCalledTimes(1)
   })
 
+  it("labels a built-in board's ID as its device ID", () => {
+    const deviceId = 'c0'.repeat(16)
+    render(
+      <RuntimeCommercialLicenseStatus
+        status='unlicensed'
+        hardwareId={deviceId}
+        idLabel='Device ID'
+        buyUrl={`https://edge.example.com/buy?vppId=com.autonomy.openplc-runtime&deviceId=${deviceId}`}
+        awaitingPurchase={false}
+        onBuy={jest.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Runtime license status' }))
+    expect(screen.getByText('Device ID')).toBeTruthy()
+    expect(screen.queryByText('Hardware ID')).toBeNull()
+    expect(screen.getByText(deviceId)).toBeTruthy()
+  })
+
   it('shows a commercial licence without a purchase link', () => {
     render(
       <RuntimeCommercialLicenseStatus

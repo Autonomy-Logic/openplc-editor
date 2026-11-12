@@ -1,5 +1,5 @@
 /**
- * Commercial licence of the connected runtime, next to "Connected" on the
+ * Commercial licence of the connected runtime or built-in board, next to "Connected" on the
  * device screen: "Commercial license" or "GPLv3", with the disclaimer, the
  * hardware ID and the purchase link in a popover. Renders nothing while the
  * status is unknown or a paid VPP's own licence flow is speaking.
@@ -16,11 +16,12 @@ import { ShieldLicensedIcon, ShieldUnlicensedIcon } from './device-license-statu
 type RuntimeCommercialLicenseStatusProps = Pick<
   RuntimeCommercialLicenseView,
   'status' | 'hardwareId' | 'buyUrl' | 'awaitingPurchase'
-> & { onBuy: () => void }
+> & { onBuy: () => void; idLabel?: RuntimeCommercialLicenseView['idLabel'] }
 
 export function RuntimeCommercialLicenseStatus({
   status,
   hardwareId,
+  idLabel = 'Hardware ID',
   buyUrl,
   awaitingPurchase,
   onBuy,
@@ -72,7 +73,7 @@ export function RuntimeCommercialLicenseStatus({
 
           {hardwareId ? (
             <div className='flex flex-col gap-1'>
-              <span className='font-caption text-cp-xs text-neutral-500 dark:text-neutral-500'>Hardware ID</span>
+              <span className='font-caption text-cp-xs text-neutral-500 dark:text-neutral-500'>{idLabel}</span>
               <div className='flex items-start gap-2'>
                 <code className='min-w-0 break-all font-mono text-cp-xs text-neutral-700 dark:text-neutral-300'>
                   {hardwareId}

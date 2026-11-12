@@ -11,6 +11,8 @@
  * declare a healthy link lost mid-sequence.
  */
 
+import { serializeLicenseBlob } from '../../../../backend/shared/debug/license-blob'
+import { deriveDeviceId } from '../../../../backend/shared/license/device-identity'
 import MainProcessBridge from '../main'
 
 jest.mock('electron', () => ({
@@ -39,13 +41,19 @@ jest.mock('../../../../backend/shared/simulator/simulator-module', () => ({
   SimulatorModule: jest.fn(() => ({ stop: jest.fn() })),
 }))
 
-jest.mock('../../../../backend/editor/license/license-flow', () => ({
-  inspectDeviceLicense: jest.fn(),
-  resolveDeviceLicense: jest.fn(),
-}))
+jest.mock('../../../../backend/shared/license/license-flow', () => {
+  const actual = jest.requireActual<typeof import('../../../../backend/shared/license/license-flow')>(
+    '../../../../backend/shared/license/license-flow',
+  )
+  return {
+    ...actual,
+    inspectDeviceLicense: jest.fn(),
+    resolveDeviceLicense: jest.fn(),
+  }
+})
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const licenseFlow = require('../../../../backend/editor/license/license-flow') as {
+const licenseFlow = require('../../../../backend/shared/license/license-flow') as {
   inspectDeviceLicense: jest.Mock
   resolveDeviceLicense: jest.Mock
 }
@@ -77,10 +85,10 @@ function holdClient(
   return jest.spyOn(session, 'noteTraffic')
 }
 
-/** Baremetal half of the union: the board reports an id its closed core derived. */
+/** Baremetal: the board reports its raw ID sources. */
 function deviceIdClient(overrides: Partial<{ getDeviceId: jest.Mock }> = {}) {
   return {
-    getDeviceId: jest.fn(() => Promise.resolve({ success: true, deviceId: ANCHOR })),
+    getDeviceId: jest.fn(() => Promise.resolve({ success: true, sources: [{ kind: 'hardware', bytes: ANCHOR }] })),
     readLicense: jest.fn(),
     writeLicense: jest.fn(),
     ...overrides,
@@ -161,7 +169,7 @@ describe('device:read-license', () => {
     expect(client.getDeviceId).toHaveBeenCalledTimes(1)
     expect(licenseFlow.inspectDeviceLicense).toHaveBeenCalledWith(client, {
       ...REQUEST,
-      identity: { kind: 'device-id', deviceId: ANCHOR },
+      identity: { kind: 'anchor', anchor: ANCHOR },
     })
     expect(result).toEqual({ deviceId: 'abc', outcome: { state: 'licensed', how: 'already-stored' } })
     // The board-id read is device traffic; not noting it lets the liveness poll
@@ -193,7 +201,7 @@ describe('device:read-license', () => {
   })
 
   it('passes an empty identity through rather than inventing one', async () => {
-    // A board answering id_len = 0 is a real reply; the flow is the layer that
+    // A board answering count 0 is a real reply; the flow is the layer that
     // knows it cannot be licensed, and it must get the chance to say so.
     const bridge = createBridge()
     const client = deviceIdClient({ getDeviceId: jest.fn(() => Promise.resolve({ success: true })) })
@@ -204,7 +212,7 @@ describe('device:read-license', () => {
 
     expect(licenseFlow.inspectDeviceLicense).toHaveBeenCalledWith(client, {
       ...REQUEST,
-      identity: { kind: 'device-id', deviceId: new Uint8Array(0) },
+      identity: { kind: 'anchor', anchor: new Uint8Array(0) },
     })
   })
 
@@ -231,10 +239,11 @@ describe('device:refresh-license', () => {
 
     const result = await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
 
-    expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(client, {
-      ...REQUEST,
-      identity: { kind: 'device-id', deviceId: ANCHOR },
-    })
+    expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(
+      client,
+      { ...REQUEST, identity: { kind: 'anchor', anchor: ANCHOR } },
+      expect.any(Function),
+    )
     expect(result.outcome).toEqual({ state: 'licensed', how: 'activated' })
     // Once for the anchor read, once after the sequence: the sequence spans an
     // HTTP round trip, which is long enough for the poll to fall due inside it.
@@ -344,9 +353,7 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
     // serialising this traffic with everyone else's.
     expect(licenseFlow.inspectDeviceLicense).toHaveBeenCalledWith(wsClient, {
       ...REQUEST,
-      // kind: 'anchor' is the assertion that matters here: this is the path
-      // where the editor still derives, and a regression to 'device-id' would
-      // mean the runtime's raw serial being published as an identity.
+      // The runtime's raw serial reaches the flow as an anchor to derive from.
       identity: { kind: 'anchor', anchor: ANCHOR },
     })
     expect(result.outcome).toEqual({ state: 'licensed', how: 'already-stored' })
@@ -364,10 +371,11 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
 
     const result = await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
 
-    expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(wsClient, {
-      ...REQUEST,
-      identity: { kind: 'anchor', anchor: ANCHOR },
-    })
+    expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(
+      wsClient,
+      { ...REQUEST, identity: { kind: 'anchor', anchor: ANCHOR } },
+      expect.any(Function),
+    )
     expect(result.outcome).toEqual({ state: 'licensed', how: 'activated' })
     expect(release).toHaveBeenCalledWith(expect.stringMatching(/^refresh license#\d+$/))
   })
@@ -441,5 +449,185 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
 
     expect(result.outcome).toEqual({ state: 'check-failed', error: 'Unknown function code' })
     expect(licenseFlow.resolveDeviceLicense).not.toHaveBeenCalled()
+  })
+})
+
+describe('licence backup across an upload (baremetal)', () => {
+  const PORT = '/dev/cu.usbmodem1'
+  const GENERATED = Uint8Array.from({ length: 16 }, (_, i) => 0x10 + i)
+  let BLOB: Uint8Array
+
+  beforeAll(async () => {
+    BLOB = serializeLicenseBlob({
+      magic: 0,
+      fmtVersion: 1,
+      keyId: 7,
+      deviceId: Uint8Array.from(Buffer.from(await deriveDeviceId(GENERATED), 'hex')),
+      productId: new Uint8Array(8).fill(0x33),
+      signature: new Uint8Array(64).fill(0x55),
+      crc32: 0,
+    })
+  })
+
+  function holdLink(bridge: ReturnType<typeof createBridge>, link: { transport: string; descriptor: string } | null) {
+    const session = (
+      bridge as unknown as {
+        deviceSession: { getLink: () => unknown; releaseSerialPort: (port: string | null | undefined) => boolean }
+      }
+    ).deviceSession
+    jest.spyOn(session, 'getLink').mockReturnValue(link)
+    jest.spyOn(session, 'releaseSerialPort').mockReturnValue(true)
+  }
+
+  /** Run a build whose compile flow ends with `success` on its port. */
+  async function build(bridge: ReturnType<typeof createBridge>, success: boolean) {
+    const port = { postMessage: jest.fn(), close: jest.fn(), start: jest.fn() }
+    ;(bridge as unknown as { compilerModule: unknown }).compilerModule = {
+      compileProgram: (_args: unknown, channel: { postMessage: (message: unknown) => void }) => {
+        channel.postMessage({ logLevel: 'info', message: 'done' })
+        channel.postMessage({ closePort: true, success })
+        return Promise.resolve()
+      },
+    }
+    bridge.handleRunCompileProgram({ ports: [port] } as never, [] as never)
+    await Promise.resolve()
+    expect(port.postMessage.mock.calls.at(-1)).toEqual([{ closePort: true, success }])
+  }
+
+  /** The renderer's reconnect after the upload; no candidates, so only the entry bookkeeping runs. */
+  async function connect(bridge: ReturnType<typeof createBridge>) {
+    await bridge.handleDeviceConnect({} as never, [])
+  }
+
+  /** The board before the upload: generated ID and a licence bound to it. */
+  function licensedBoard() {
+    return {
+      getDeviceId: jest.fn(() =>
+        Promise.resolve({ success: true, sources: [{ kind: 'generated', bytes: GENERATED }] }),
+      ),
+      readLicense: jest.fn(() => Promise.resolve({ success: true, status: 0x7e, blob: BLOB })),
+      writeLicense: jest.fn(),
+    }
+  }
+
+  /** The board after an upload that erased everything; it stores whatever ID it is given. */
+  function wipedBoard() {
+    let id: Uint8Array | null = null
+    return {
+      getDeviceId: jest.fn(() =>
+        Promise.resolve({ success: true, sources: id ? [{ kind: 'generated', bytes: id }] : [] }),
+      ),
+      provisionBoardId: jest.fn((next: Uint8Array) => {
+        id = next
+        return Promise.resolve({ success: true, status: 0x7e })
+      }),
+      readLicense: jest.fn(() => Promise.resolve({ success: true, status: 0x83, empty: true })),
+      writeLicense: jest.fn(() => Promise.resolve({ success: true, status: 0x7e })),
+    }
+  }
+
+  /** Release the port holding a licensed board, as the build does before an upload. */
+  async function release(bridge: ReturnType<typeof createBridge>) {
+    holdLink(bridge, { transport: 'rtu', descriptor: PORT })
+    holdClient(bridge, licensedBoard())
+    expect(await bridge.handleDeviceReleaseSerialPort({} as never, PORT)).toEqual({ released: true })
+  }
+
+  /** Refresh on a wiped board on the held link; returns the board. */
+  async function refreshWiped(bridge: ReturnType<typeof createBridge>) {
+    const board = wipedBoard()
+    holdClient(bridge, board)
+    await bridge.handleDeviceRefreshLicense({} as never, REQUEST)
+    return board
+  }
+
+  function expectFreshId(board: ReturnType<typeof wipedBoard>) {
+    expect(board.provisionBoardId).toHaveBeenCalledTimes(1)
+    expect(board.provisionBoardId.mock.calls[0][0]).not.toEqual(GENERATED)
+    expect(board.writeLicense).not.toHaveBeenCalled()
+  }
+
+  beforeEach(() => {
+    licenseFlow.resolveDeviceLicense.mockResolvedValue({ outcome: { state: 'licensed', how: 'already-stored' } })
+  })
+
+  it('writes the same board ID and licence back on the reconnect after a successful upload, once', async () => {
+    const bridge = createBridge()
+    await release(bridge)
+    await build(bridge, true)
+    await connect(bridge)
+
+    const after = await refreshWiped(bridge)
+
+    expect(after.provisionBoardId).toHaveBeenCalledWith(GENERATED)
+    expect(after.writeLicense).toHaveBeenCalledWith(BLOB)
+    expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledWith(
+      after,
+      { ...REQUEST, identity: { kind: 'anchor', anchor: GENERATED } },
+      expect.any(Function),
+    )
+
+    expectFreshId(await refreshWiped(bridge))
+  })
+
+  it('drops the backup when the build or upload fails', async () => {
+    const bridge = createBridge()
+    await release(bridge)
+    await build(bridge, false)
+    await connect(bridge)
+
+    expectFreshId(await refreshWiped(bridge))
+  })
+
+  it('drops the backup on Disconnect', async () => {
+    const bridge = createBridge()
+    await release(bridge)
+    await build(bridge, true)
+    await bridge.handleDeviceDisconnect()
+    await connect(bridge)
+
+    expectFreshId(await refreshWiped(bridge))
+  })
+
+  it('drops the backup on a connect that does not follow a finished upload', async () => {
+    const bridge = createBridge()
+    await release(bridge)
+    await connect(bridge)
+    await build(bridge, true)
+    await connect(bridge)
+
+    expectFreshId(await refreshWiped(bridge))
+  })
+
+  it('drops the backup on a second connect after the upload', async () => {
+    const bridge = createBridge()
+    await release(bridge)
+    await build(bridge, true)
+    await connect(bridge)
+    await connect(bridge)
+
+    expectFreshId(await refreshWiped(bridge))
+  })
+
+  it('does not apply the backup to a link on another port', async () => {
+    const bridge = createBridge()
+    await release(bridge)
+    await build(bridge, true)
+    await connect(bridge)
+    holdLink(bridge, { transport: 'rtu', descriptor: '/dev/cu.other' })
+
+    expectFreshId(await refreshWiped(bridge))
+  })
+
+  it('takes no backup when the held link is not the serial port being released', async () => {
+    const bridge = createBridge()
+    const board = licensedBoard()
+    holdLink(bridge, { transport: 'tcp', descriptor: '192.168.0.10:502' })
+    holdClient(bridge, board)
+
+    await bridge.handleDeviceReleaseSerialPort({} as never, PORT)
+
+    expect(board.getDeviceId).not.toHaveBeenCalled()
+    expect(board.readLicense).not.toHaveBeenCalled()
   })
 })

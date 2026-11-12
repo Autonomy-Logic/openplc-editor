@@ -59,21 +59,15 @@ export interface DebugVersionResult {
 }
 
 /**
- * WHY THERE ARE TWO OF THESE AND NOT ONE (DOPE-589). FC 0x48 answers a
- * different KIND of value depending on the platform, and one shared type would
- * make the field name a lie on one of them:
+ * FC 0x48 answers a raw identity on both platforms, in two frame shapes, so
+ * there are two result types:
  *
- *   - bare metal answers the DERIVED device_id. The closed license-core reads
- *     the silicon and derives it internally (`license_gate_device_id`), so the
- *     raw factory serial never leaves the artifact and the open firmware links
- *     no unique-id library at all;
- *   - runtime-v4 answers the RAW anchor, its device-tree serial, and the
- *     editor derives the device_id from it in TypeScript.
+ *   - bare metal answers a list of ID sources, each tagged hardware (the
+ *     silicon's factory ID) or generated (the ID the editor wrote into the
+ *     board-ID slot);
+ *   - runtime-v4 answers one raw anchor, its device-tree serial.
  *
- * The licensing flow takes the union (`DeviceIdentity` in license-flow.ts) so
- * the compiler makes every caller say which one it holds. Collapsing them back
- * into one field is how a derived id gets hashed a second time, or a raw serial
- * gets published as an identity.
+ * The editor derives the device_id from the raw bytes in both cases.
  *
  * `unsupported` (status LIC_UNSUPPORTED, 0x85) means the target answered that
  * it has NO identity to license against - a runtime-v4 host with no
@@ -82,19 +76,25 @@ export interface DebugVersionResult {
  * (no retry nag) instead of an endlessly retryable check-failed.
  */
 
+/** Kind of one bare-metal ID source (LIC_ID_KIND_* in license_platform.h). */
+export type DeviceIdSourceKind = 'hardware' | 'generated'
+
+export interface DeviceIdSource {
+  kind: DeviceIdSourceKind
+  bytes: Uint8Array
+}
+
 /**
- * Bare-metal identity read (FC 0x48). `deviceId` is the 16-byte derived
- * device_id, or EMPTY when the board has no identity a licence can be bound to
- * (no license-core linked, or an architecture the closed reader refuses).
+ * Bare-metal identity read (FC 0x48): the board's raw ID sources, EMPTY when
+ * the board has no identity a licence can be bound to.
  *
- * An empty id is a SUCCESS reply and must stay one: `device-probe` reads the
- * successful reply, not the bytes, as proof that firmware is running.
+ * An empty list is a SUCCESS reply and must stay one: `device-probe` reads the
+ * successful reply, not the sources, as proof that firmware is running.
  */
 export interface DebugDeviceIdResult {
   success: boolean
   unsupported?: boolean
-  deviceId?: Uint8Array
-  deviceIdHex?: string
+  sources?: DeviceIdSource[]
   error?: string
 }
 
@@ -127,6 +127,19 @@ export interface DebugAnchorResult {
 export interface DebugLicenseWriteResult {
   success: boolean
   status?: number
+  unsupported?: boolean
+  error?: string
+}
+
+/**
+ * Result of a board-ID provisioning call (FC 0x4E). `taken`: the board already
+ * has an ID and kept it. `unsupported`: the board has no slot for a generated
+ * ID. Both are device states (`success: true`), not transport failures.
+ */
+export interface DebugBoardIdProvisionResult {
+  success: boolean
+  status?: number
+  taken?: boolean
   unsupported?: boolean
   error?: string
 }
@@ -195,13 +208,12 @@ export interface DeviceChannelTransport {
   connect(): Promise<void>
   disconnect(): void
   /** Identity read (FC 0x48), one function code with two medium-specific
-   *  meanings, hence two methods (DOPE-589).
+   *  frames, hence two methods.
    *
-   *  `getDeviceId` is the BAREMETAL read: the closed license-core derives the
-   *  device_id inside the artifact and the firmware reports it, so nothing on
-   *  this side hashes anything. It doubles as the readiness probe that says
-   *  whether an OpenPLC firmware is answering at all - which is why a
-   *  SUCCESSFUL reply matters and an empty id does not fail it.
+   *  `getDeviceId` is the BAREMETAL read: the firmware reports its raw ID
+   *  sources and the editor derives the device_id from them. It doubles as the
+   *  readiness probe that says whether an OpenPLC firmware is answering at all -
+   *  which is why a SUCCESSFUL reply matters and an empty report does not fail it.
    *
    *  `getAnchor` is the RUNTIME-V4 read: the runtime answers 0x48 at the
    *  webserver level with the raw device-tree anchor and the editor derives the
@@ -233,6 +245,8 @@ export interface DeviceChannelTransport {
   /** Store a VPP license blob (FC 0x49). Optional for the same reason as
    *  `readLicense`. Storing does not validate — read back to confirm. */
   writeLicense?(blob: Uint8Array): Promise<DebugLicenseWriteResult>
+  /** Store a generated board ID once (FC 0x4E). Baremetal only. */
+  provisionBoardId?(id: Uint8Array): Promise<DebugBoardIdProvisionResult>
   /** Hand the channel a fresh auth token mid-session. Only media that
    *  authenticate per command need it — the runtime-v4 WebSocket, whose server
    *  re-verifies the JWT on every debug_command (openplc-runtime#169): without
@@ -309,14 +323,14 @@ export interface DeviceModbusTransport
   getDeviceId(): Promise<DebugDeviceIdResult>
   /** Never on this medium. Declared rather than merely absent so the XOR in
    *  `LicenseChannel` (main.ts) can be a type-level guarantee instead of a
-   *  comment: baremetal answers 0x48 with a derived id, and a Modbus client
-   *  that grew a `getAnchor` would be reporting a raw serial the editor would
-   *  then hash a second time. */
+   *  comment: baremetal answers 0x48 with the multi-source frame, which only
+   *  `getDeviceId` parses. */
   getAnchor?: never
   getStatus(): Promise<DebugStatusResult>
   setPlcState(state: PlcRuntimeState.RUNNING | PlcRuntimeState.STOPPED): Promise<PlcControlResult>
   readLicense(): Promise<DebugLicenseReadResult>
   writeLicense(blob: Uint8Array): Promise<DebugLicenseWriteResult>
+  provisionBoardId(id: Uint8Array): Promise<DebugBoardIdProvisionResult>
   /**
    * The two payload-carrying operations, restated for the main process.
    *

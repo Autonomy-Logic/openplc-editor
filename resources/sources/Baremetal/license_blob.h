@@ -53,8 +53,8 @@ typedef struct __attribute__((packed)) {
 #define LIC_MAGIC_LE      0x434C504Fu   /* bytes 4F 50 4C 43 */
 #define LIC_BLOB_SIZE     98u
 #define LIC_PAYLOAD_SIZE  30u
-/* Width of the `device_id` field, and therefore of the identity anything
- * reports for this board (`license_gate_device_id`). It lives here, with the
+/* Width of the `device_id` field, and therefore of the device identity
+ * derived for this board. It lives here, with the
  * layout, because it is a property of the BLOB: the verifier memcmp's exactly
  * this many bytes at LIC_OFF_DEVICE_ID. The static assert at the bottom binds
  * the two so they cannot drift. */

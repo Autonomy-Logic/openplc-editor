@@ -478,6 +478,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       // A connection over Modbus TCP is untouched, so debugging and run/stop keep
       // working across the upload; disconnecting unconditionally used to throw it
       // away. `released` also tells us whether to reconnect afterwards.
+      const licenseStatusBeforeUpload = store.getState().runtimeCommercialLicense.status
       let serialWasReleased = false
       if (willUpload && store.getState().deviceConnection.status === 'connected') {
         try {
@@ -559,8 +560,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           addLog({ level: 'error', message: result.error ?? 'Compilation failed' })
         }
 
-        // Set only for a connected runtime target; null for every other target.
-        if (doUpload && result.success && store.getState().runtimeCommercialLicense.status === 'unlicensed') {
+        const licenseStatus = store.getState().runtimeCommercialLicense.status ?? licenseStatusBeforeUpload
+        if (doUpload && result.success && licenseStatus === 'unlicensed') {
           for (const line of commercialLicenseConsoleLines()) addLog({ level: 'warning', message: line })
         }
 

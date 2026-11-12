@@ -4,16 +4,19 @@ import {
   buildGetDeviceIdRequest,
   buildGetStatusRequest,
   buildPlcSetStateRequest,
+  buildProvisionBoardIdRequest,
   buildReadLicenseRequest,
   buildWriteLicenseRequest,
   isGetListOverflowException,
   parseGetDeviceIdResponse,
   parseGetStatusResponse,
   parsePlcSetStateResponse,
+  parseProvisionBoardIdResponse,
   parseReadLicenseResponse,
   parseWriteLicenseResponse,
 } from '@root/backend/shared/debug/modbus-pdu'
 import type {
+  DebugBoardIdProvisionResult,
   DebugDeviceIdResult,
   DebugLicenseReadResult,
   DebugLicenseWriteResult,
@@ -623,6 +626,23 @@ export class ModbusRtuClient implements DeviceModbusTransport {
     }
   }
 
+  /** FC 0x4E. Stores a generated board ID once; the board refuses it when it already has one. The reply PDU starts at offset 7. */
+  async provisionBoardId(id: Uint8Array): Promise<DebugBoardIdProvisionResult> {
+    try {
+      const pdu = buildProvisionBoardIdRequest(id)
+      const request = this.assembleRequest(ModbusFunctionCode.PROVISION_BOARD_ID, Buffer.from(pdu.subarray(1)))
+      const response = await this.sendRequest(request)
+
+      if (response.length < 9) {
+        return { success: false, error: `Invalid response: too short (${response.length} bytes, need at least 9)` }
+      }
+
+      return parseProvisionBoardIdResponse(Uint8Array.prototype.slice.call(response, 7))
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  }
+
   /**
    * FC 0x4A — read the stored license blob back. Uses the size-aware framing: a
    * 98-byte blob does not arrive inside one idle window at low baud rates, and the
@@ -659,7 +679,7 @@ export class ModbusRtuClient implements DeviceModbusTransport {
   /**
    * FC 0x48 DEBUG_GET_DEVICE_ID. Bare `[FC]` PDU (no payload). Response offsets
    * account for the 6-byte TCP-compat padding sendRequestImpl prepends, so the
-   * pure PDU `[FC][status][id_len:u8][id_bytes...]` starts at offset 7 — hand it
+   * pure PDU `[FC][status][count:u8][sources...]` starts at offset 7 — hand it
    * to the shared parseGetDeviceIdResponse rather than parsing inline.
    */
   async getDeviceId(): Promise<DebugDeviceIdResult> {

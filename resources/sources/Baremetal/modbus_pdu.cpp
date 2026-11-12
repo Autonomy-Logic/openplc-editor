@@ -54,6 +54,8 @@ int32_t mb_pdu_request_len(const uint8_t *f, uint16_t n)
             return 8;                                   // [id][fc][magic:4][crc:2]
         case MB_FC_GET_LOCK_STATE:
             return 4;                                   // [id][fc][crc:2]
+        case MB_FC_PROVISION_BOARD_ID:
+            return 20;
         default:
             return -1;                                  // not one of our function codes
     }
@@ -86,16 +88,10 @@ bool mb_pdu_skips_crc(uint8_t fc)
 // mb_pdu_skips_crc() on purpose: that set answers "does this frame carry a CRC",
 // this one answers "is this the editor talking", and MB_FC_PLC_SET_STATE belongs
 // to the second but not the first.
+// Range 0x41..0x4E: every editor code, 0x4C and 0x4D included, is answered on the editor's id and refused on the server's.
 bool mb_pdu_is_editor_fc(uint8_t fc)
 {
-    // The whole debug range, 0x41..0x4D. Reboot-to-bootloader (0x4C) and
-    // lock-state (0x4D) are part of the editor's package like every other code
-    // here, so they get the same treatment on both sides of the id split: they
-    // must be answerable on the editor's private id, and they must be REFUSED
-    // on the Modbus server's public one. Leaving them out of the range did both
-    // wrongs at once -- unreachable where they belong, reachable where they do
-    // not -- which is why this ends at GET_LOCK_STATE and not at PLC_SET_STATE.
-    return fc >= MB_FC_DEBUG_INFO && fc <= MB_FC_GET_LOCK_STATE;
+    return fc >= MB_FC_DEBUG_INFO && fc <= MB_FC_PROVISION_BOARD_ID;
 }
 
 void process_mbpacket()
@@ -266,6 +262,10 @@ void process_mbpacket()
             // PDU: [FC] -- read-only, so no magic guard. The editor polls this
             // while it waits for the user to clear a programming lock.
             getLockState();
+        break;
+
+        case MB_FC_PROVISION_BOARD_ID:
+            debugProvisionBoardId(&mb_frame[2]);
         break;
 
         default:
