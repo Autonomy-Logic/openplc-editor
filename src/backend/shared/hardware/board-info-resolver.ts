@@ -128,7 +128,7 @@ export interface BoardBuildInfo {
    *  treat the toolchain as the runtime identifier (editor's
    *  pre-migration `boardRuntime` variable). */
   boardRuntime: string
-  /** `true` when this is the in-browser avr8js simulator target.
+  /** `true` when this is the OpenPLC Simulator target.
    *  Derived from `compiler === 'simulator'`. */
   isSimulator: boolean
   /** `true` when this is the legacy `'OpenPLC Runtime v3'` daemon.

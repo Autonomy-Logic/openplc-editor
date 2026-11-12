@@ -137,7 +137,7 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
       // this function's job and nothing else's. `stopSession()` deliberately
       // does not do it (see its docstring: a debug session is not the owner of
       // the thing it talks to), so with this call missing "Stop" ended the
-      // debug session, logged "Simulator stopped." and left the avr8js loop
+      // debug session, logged "Simulator stopped." and left the simulator's scan loop
       // running — re-scheduling itself and burning a core for the rest of the
       // session, unreachable because the button had flipped back to "Start".
       //

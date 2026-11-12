@@ -63,5 +63,6 @@ export default {
   entry: {
     'openplc-cli.dev': `${webpackPaths.srcPath}/main/entry.ts`,
     'clang-worker': `${webpackPaths.srcPath}/backend/editor/wasm-toolchain/clang-worker.ts`,
+    'simulator-worker': `${webpackPaths.srcPath}/backend/editor/simulator/simulator-worker.ts`,
   },
 }

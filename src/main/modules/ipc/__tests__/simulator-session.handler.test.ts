@@ -37,17 +37,20 @@ jest.mock('../../../../backend/editor/services', () => ({
 }))
 jest.mock('../../../../backend/editor/utils', () => ({ getOpenProjectPath: jest.fn(), getProjectPath: jest.fn() }))
 
-const simulatorModule = { loadAndRun: jest.fn(), stop: jest.fn(), isRunning: jest.fn(() => true) }
-jest.mock('../../../../backend/shared/simulator/simulator-module', () => ({
-  SimulatorModule: jest.fn(() => simulatorModule),
+const simulatorModule = {
+  loadAndRun: jest.fn<Promise<void>, [Uint8Array]>(),
+  stop: jest.fn(),
+  isRunning: jest.fn(() => true),
+  onStopped: null,
+}
+jest.mock('../../../../backend/editor/simulator/desktop-simulator', () => ({
+  createDesktopSimulator: jest.fn(() => simulatorModule),
 }))
 
-// The handler reads the hex off disk before it starts anything. Stubbing the read
-// to SUCCEED is what lets a test put the throw where the leak actually was —
-// after `loadAndRun` has marked the emulator running. A failing read throws
-// before that and proves nothing about it.
-const readFile = jest.fn<Promise<string>, [string, string?]>()
-jest.mock('fs/promises', () => ({ readFile: (...args: [string, string?]) => readFile(...args) }))
+// The handler reads the module off disk before it starts anything. Stubbing the read
+// to succeed lets a test fail the start itself.
+const readFile = jest.fn<Promise<Uint8Array>, [string]>()
+jest.mock('fs/promises', () => ({ readFile: (...args: [string]) => readFile(...args) }))
 
 type Bridge = MainProcessBridge
 
@@ -82,7 +85,7 @@ beforeEach(() => {
   simulatorModule.loadAndRun.mockReset()
   simulatorModule.stop.mockReset()
   simulatorModule.isRunning.mockReset().mockReturnValue(true)
-  readFile.mockReset().mockResolvedValue(':00000001FF')
+  readFile.mockReset().mockResolvedValue(new Uint8Array([0, 97, 115, 109]))
 })
 
 afterEach(() => {
@@ -144,24 +147,16 @@ describe('window:reload', () => {
 })
 
 describe('simulator:load-firmware', () => {
-  it('stops the emulator and closes the session when the start throws AFTER it is running', async () => {
+  it('stops the simulator and closes the session when the module does not start', async () => {
     const bridge = createBridge()
     const close = holdLink(bridge, 'simulator')
+    simulatorModule.loadAndRun.mockRejectedValue(new Error('The simulator module does not export sim_loop.'))
 
-    // The leak this covers: `loadAndRun` marks the emulator running before it
-    // finishes wiring, so a throw from that point on left one running with no
-    // session behind it. The read must succeed for the throw to land there —
-    // throwing on the read instead would exercise a path where the emulator was
-    // never started, and would stay green even if this leak came back.
-    simulatorModule.loadAndRun.mockImplementation(() => {
-      throw new Error('avr8js refused the hex')
-    })
-
-    const result = await bridge.handleSimulatorLoadFirmware({} as never, '/tmp/simulator.hex')
+    const result = await bridge.handleSimulatorLoadFirmware({} as never, '/tmp/simulator.wasm')
 
     expect(readFile).toHaveBeenCalledTimes(1)
     expect(simulatorModule.loadAndRun).toHaveBeenCalledTimes(1)
-    expect(result).toEqual({ success: false, error: 'avr8js refused the hex' })
+    expect(result).toEqual({ success: false, error: 'The simulator module does not export sim_loop.' })
     expect(simulatorModule.stop).toHaveBeenCalledTimes(1)
     expect(close).toHaveBeenCalledTimes(1)
   })
@@ -171,7 +166,7 @@ describe('simulator:load-firmware', () => {
     const close = holdLink(bridge, 'simulator')
     readFile.mockRejectedValue(new Error('ENOENT'))
 
-    const result = await bridge.handleSimulatorLoadFirmware({} as never, '/nonexistent/simulator.hex')
+    const result = await bridge.handleSimulatorLoadFirmware({} as never, '/nonexistent/simulator.wasm')
 
     // Nothing was started, so there is nothing to leak — but the cleanup still
     // has to be harmless, because the catch cannot tell the two apart.

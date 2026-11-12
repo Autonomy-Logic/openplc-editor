@@ -289,8 +289,7 @@ export function createEditorCompilerPlatformPort(
      * existing `handleCompileArduinoProgram`.
      *
      * When a `Baremetal.ino.hex` exists under the FQBN build folder
-     * we read it back into the result `binary` field — the simulator
-     * path needs it in memory to hand to avr8js.  Non-AVR cores
+     * we read it back into the result `binary` field.  Non-AVR cores
      * (RP2040 → `.uf2`, ESP32 / mbed → `.bin`) don't produce a `.hex`
      * and don't need an in-memory binary: arduino-cli's separate
      * `upload` step finds the right artefact on disk under whatever
@@ -300,7 +299,23 @@ export function createEditorCompilerPlatformPort(
      * a non-empty binary and it bails there with a clearer error if
      * .hex is somehow missing on AVR.
      */
-    compileToWasm(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult> {
+    async compileToWasm(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult> {
+      const textFiles: Record<string, string> = {}
+      for (const [path, content] of Object.entries(request.files)) {
+        if (typeof content === 'string') textFiles[path] = content
+      }
+      try {
+        await syncBuildFolder(context.compilationPath, textFiles, context.staticFirmwareFiles ?? {})
+      } catch (error) {
+        const message = `Could not write the build folder: ${error instanceof Error ? error.message : String(error)}`
+        log(message, 'error')
+        return {
+          ok: false,
+          error: message,
+          stats: { units: 0, cached: 0, compileMs: 0, linkMs: 0 },
+          diagnostics: [{ message, level: 'error' }],
+        }
+      }
       return context.wasmCompileService.compile(request, log)
     },
 

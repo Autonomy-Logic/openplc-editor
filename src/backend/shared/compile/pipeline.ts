@@ -174,7 +174,7 @@ export interface RunCompilePipelineArgs {
    *  Simulator'`, `'OpenPLC Runtime v4 (RPi)'`, `'Arduino Mega 2560'`). */
   boardTarget: string
   /** Runtime identifier from the matching `hals.json` entry:
-   *  `'simulator'` (avr8js), `'arduino-cli'` (direct Arduino board),
+   *  `'simulator'` (OpenPLC Simulator), `'arduino-cli'` (direct Arduino board),
    *  `'openplc-compiler'` (runtime v4 vPLC). */
   boardRuntime: string
   /** Resolved `hals.json` entry for `boardTarget`.  Carries the
@@ -309,11 +309,10 @@ export interface RunCompilePipelineResult {
   /** Structured strucpp diagnostics from this run.  Carries
    *  the per-error events the renderer's navigation keys off. */
   errors?: StructuredCompileError[]
-  /** Compiled firmware bytes when the pipeline reached the
-   *  arduino-cli compile step successfully.  `undefined` when the
-   *  pipeline targeted runtime v4 (no arduino-cli step) or failed
-   *  before compile.  Caller decides what to do with these bytes
-   *  (editor: write to `Baremetal.ino.hex`; web: feed avr8js). */
+  /** Compiled firmware: the WebAssembly module for the simulator, the
+   *  arduino-cli output for a board when it produced a `.hex`.
+   *  `undefined` when the pipeline targeted runtime v4 or failed
+   *  before compile. */
   binary?: Uint8Array
   /** MD5 of the strucpp-compiled `program.st`.  Echoed back so
    *  callers can use it as a cache key (defines.h PROGRAM_MD5
@@ -364,10 +363,11 @@ function bailError(
  *   - Runtime v4 (openplc-compiler runtime): preprocess → ST →
  *     strucpp → confs → composeRuntimeV4Bundle → version check →
  *     uploadRuntimeV4.
- *   - Simulator (avr8js):                   preprocess → ST →
- *     strucpp → defines → composeFirmwareBundle → compileArduino →
- *     return hex.
- *   - Arduino direct (physical board):     same as simulator, then
+ *   - Simulator:                            preprocess → ST →
+ *     strucpp → defines → composeFirmwareBundle → compileToWasm →
+ *     return the module.
+ *   - Arduino direct (physical board):     preprocess → ST → strucpp →
+ *     defines → composeFirmwareBundle → compileArduino, then
  *     uploadArduinoBoard.
  *   - Runtime v3 (legacy):                  preprocess → ST →
  *     strucpp → embed c-blocks → uploadRuntimeV3.

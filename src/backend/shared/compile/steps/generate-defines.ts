@@ -207,8 +207,8 @@ export interface GenerateDefinesInput {
  *      the board declares none.
  *   2. `#define PROGRAM_MD5 "<md5>"` — always.
  *   3. `// Comms Configuration` (simulator-only) — fixed Modbus RTU
- *      over emulated USART0 so avr8js's serial bridge can drive
- *      Modbus traffic into the running emulator.
+ *      on `Serial`, the simulator's serial line the debugger
+ *      talks over.
  *   4. `// IO Config` — PINMASK_{DIN,AIN,DOUT,AOUT} + NUM_* derived
  *      from `devicePinMapping`.
  *
@@ -274,8 +274,8 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
   DEFINES_CONTENT += `\n\n`
 
   // 4. Comms Configuration.  Two sources, mutually exclusive:
-  //      - Simulator: fixed RTU-over-USART0 macros the avr8js
-  //        emulator's serial bridge keys off.  Always emitted on
+  //      - Simulator: fixed RTU macros on the simulator's serial
+  //        line, which the debugger talks over.  Always emitted on
   //        simulator targets regardless of vppModbusState.
   //      - Arduino-family baremetal: emitted from the persisted
   //        VPP Modbus screen state via `generateModbusDefines()`.

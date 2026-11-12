@@ -1,21 +1,21 @@
-import { SimulatorModule } from './simulator-module'
+import type { UartSimulator } from './wasm-simulator-module'
 
 /**
  * A virtual serial port that mimics the `serialport` npm package's event-based API.
- * Routes bytes through SimulatorModule's UART bridge, allowing the existing
- * ModbusRtuClient to communicate with the avr8js emulator unchanged.
+ * Routes bytes through the simulator's serial line, so the existing
+ * ModbusRtuClient talks to the WebAssembly simulator unchanged.
  *
  * Uses manual listener arrays instead of Node.js EventEmitter for browser compatibility.
  */
 export class VirtualSerialPort {
   public isOpen = false
-  private simulator: SimulatorModule
+  private simulator: UartSimulator
 
   private dataListeners: ((data: Uint8Array) => void)[] = []
   private openListeners: (() => void)[] = []
   private errorListeners: ((err: Error) => void)[] = []
 
-  constructor(simulator: SimulatorModule) {
+  constructor(simulator: UartSimulator) {
     this.simulator = simulator
   }
 

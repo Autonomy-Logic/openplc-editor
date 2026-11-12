@@ -38,8 +38,8 @@ jest.mock('../../../../backend/editor/utils', () => ({
   getOpenProjectPath: jest.fn(),
   getProjectPath: jest.fn(),
 }))
-jest.mock('../../../../backend/shared/simulator/simulator-module', () => ({
-  SimulatorModule: jest.fn(() => ({ stop: jest.fn() })),
+jest.mock('../../../../backend/editor/simulator/desktop-simulator', () => ({
+  createDesktopSimulator: jest.fn(() => ({ stop: jest.fn(), isRunning: jest.fn(() => false) })),
 }))
 
 import { cloudBuildRoot } from '@root/backend/editor/project/cloud-build-workspace'

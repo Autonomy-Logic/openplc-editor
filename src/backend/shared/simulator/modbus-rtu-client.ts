@@ -37,7 +37,11 @@ interface ModbusRtuClientOptions {
   slaveId: number
   timeout: number
   serialPort: SerialPortLike
+  /** How long to wait after the port opens before the first request; a board's bootloader needs the default. */
+  readyDelayMs?: number
 }
+
+const DEFAULT_READY_DELAY_MS = 2500
 
 const MD5_REQUEST_MAX_RETRIES = 3
 const MD5_REQUEST_RETRY_DELAY_MS = 500
@@ -89,6 +93,7 @@ export class ModbusRtuClient {
   private timeout: number
   private serialPort: SerialPortLike | null = null
   private injectedSerialPort: SerialPortLike
+  private readonly readyDelayMs: number
 
   private static readonly CRC_HI_TABLE = [
     0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80, 0x41, 0x01, 0xc0, 0x80, 0x41, 0x00, 0xc1, 0x81, 0x40, 0x01, 0xc0, 0x80,
@@ -128,6 +133,7 @@ export class ModbusRtuClient {
     this.slaveId = options.slaveId
     this.timeout = options.timeout
     this.injectedSerialPort = options.serialPort
+    this.readyDelayMs = options.readyDelayMs ?? DEFAULT_READY_DELAY_MS
   }
 
   private calculateCrc(buffer: Uint8Array): number {
@@ -165,7 +171,7 @@ export class ModbusRtuClient {
         // Matches ARDUINO_BOOTLOADER_DELAY_MS in the editor's ModbusRtuClient.
         setTimeout(() => {
           resolve()
-        }, 2500)
+        }, this.readyDelayMs)
       })
       this.serialPort!.once('error', (err: unknown) => reject(err instanceof Error ? err : new Error(String(err))))
       this.serialPort!.open()

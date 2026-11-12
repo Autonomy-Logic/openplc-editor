@@ -1,0 +1,112 @@
+{
+  "md5": "fe3845fc1babc413455ceb7a5ee596bf",
+  "retainBlobSize": 18,
+  "leaves": [
+    {
+      "arrayIdx": 0,
+      "elemIdx": 0,
+      "path": "INSTANCE0.COUNTER",
+      "type": "DINT",
+      "size": 4
+    },
+    {
+      "arrayIdx": 0,
+      "elemIdx": 1,
+      "path": "INSTANCE0.TIMER.IN",
+      "type": "BOOL",
+      "size": 1
+    },
+    {
+      "arrayIdx": 0,
+      "elemIdx": 2,
+      "path": "INSTANCE0.TIMER.PT",
+      "type": "TIME",
+      "size": 8
+    },
+    {
+      "arrayIdx": 0,
+      "elemIdx": 3,
+      "path": "INSTANCE0.TIMER.Q",
+      "type": "BOOL",
+      "size": 1
+    },
+    {
+      "arrayIdx": 0,
+      "elemIdx": 4,
+      "path": "INSTANCE0.TIMER.ET",
+      "type": "TIME",
+      "size": 8
+    },
+    {
+      "arrayIdx": 0,
+      "elemIdx": 5,
+      "path": "INSTANCE0.FIRED",
+      "type": "BOOL",
+      "size": 1
+    },
+    {
+      "arrayIdx": 0,
+      "elemIdx": 6,
+      "path": "INSTANCE0.FIRED_AT_SCAN",
+      "type": "DINT",
+      "size": 4
+    },
+    {
+      "arrayIdx": 0,
+      "elemIdx": 7,
+      "path": "INSTANCE0.FORCE_ME",
+      "type": "BOOL",
+      "size": 1
+    },
+    {
+      "arrayIdx": 0,
+      "elemIdx": 8,
+      "path": "INSTANCE0.MIRROR",
+      "type": "BOOL",
+      "size": 1
+    },
+    {
+      "arrayIdx": 0,
+      "elemIdx": 9,
+      "path": "INSTANCE0.BIG[0]",
+      "type": "DINT",
+      "size": 4
+    },
+    {
+      "arrayIdx": 2,
+      "elemIdx": 4008,
+      "path": "INSTANCE0.BIG[19999]",
+      "type": "DINT",
+      "size": 4
+    },
+    {
+      "arrayIdx": 2,
+      "elemIdx": 4009,
+      "path": "INSTANCE0.IN_COPY",
+      "type": "INT",
+      "size": 2
+    },
+    {
+      "arrayIdx": 2,
+      "elemIdx": 4010,
+      "path": "INSTANCE0.OUT_Q",
+      "type": "BOOL",
+      "size": 1
+    },
+    {
+      "arrayIdx": 2,
+      "elemIdx": 4011,
+      "path": "INSTANCE0.IN_W",
+      "type": "INT",
+      "size": 2
+    },
+    {
+      "arrayIdx": 2,
+      "elemIdx": 4012,
+      "path": "INSTANCE0.KEPT",
+      "type": "DINT",
+      "size": 4,
+      "retain": true
+    }
+  ]
+}

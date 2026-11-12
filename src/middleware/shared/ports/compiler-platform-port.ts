@@ -129,11 +129,9 @@ export interface CompileArduinoArgs {
 
 export interface CompileArduinoResult {
   ok: boolean
-  /** Compiled firmware bytes (`.hex` for AVR).  Editor: read from
+  /** Compiled firmware bytes when the core produces a `.hex`.  Editor: read from
    *  the build output directory.  Web: base64-decoded from the
-   *  server response.  Caller decides whether to write to disk
-   *  (editor: stores the path; web: holds in memory and hands to
-   *  the simulator). */
+   *  server response. */
   binary?: Uint8Array
   errors?: StructuredCompileError[]
 }
@@ -168,8 +166,8 @@ export interface UploadResult {
 
 /** Arduino direct-upload (editor-only, used for non-simulator
  *  Arduino targets).  Web's adapter MUST no-op this with
- *  `{ ok: true }` — web only targets the simulator (avr8js, no
- *  device upload step) or runtime v4 (handled separately). */
+ *  `{ ok: true }` — web only targets the simulator (no device
+ *  upload step) or runtime v4 (handled separately). */
 export interface UploadArduinoBoardArgs {
   /** Path arduino-cli reads the compiled artefacts from.  Editor:
    *  the build output dir.  Web: ignored (no-op). */

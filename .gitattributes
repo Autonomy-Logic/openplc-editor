@@ -10,6 +10,7 @@
 *.ttf   binary
 *.woff  binary
 *.woff2 binary
+*.wasm  binary
 
 ##########################
 # Identification for binary files used as compilers/transpilers

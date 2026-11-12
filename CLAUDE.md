@@ -224,7 +224,7 @@ The codebase uses **dependency inversion** via port interfaces. Frontend code ne
 | `CompilerPort` | PLC compilation pipeline |
 | `RuntimePort` | Remote PLC runtime control (login, start/stop, status) |
 | `DebuggerPort` | Debug protocol (read/write variables, MD5 verification) |
-| `SimulatorPort` | Built-in AVR simulator |
+| `SimulatorPort` | Built-in OpenPLC Simulator (WebAssembly) |
 | `ProjectPort` | Project CRUD operations |
 | `DevicePort` | Board discovery, serial ports |
 | `OrchestratorPort` | Device fleet management (web-only) |
@@ -465,7 +465,12 @@ and ship next to the toolchain; refresh them from the commits the new release wa
 
 - **Protocol:** Custom Modbus PDU: function codes 0x41-0x45 for variable read/write, and 0x46-0x4D for status, version, licensing, run/stop state, bootloader reboot and lock state (`resources/sources/Baremetal/modbus_types.h`)
 - **Transports:** Modbus TCP, Modbus RTU, WebSocket, or virtual serial (simulator)
-- **Simulator:** AVR8JS emulator (`src/backend/shared/simulator/`) emulates ATmega2560
+- **Simulator:** the project's WebAssembly module (`src/backend/shared/simulator/`): `WasmSimulatorModule` runs it
+  with simulated time (one scan period per scan, never ahead of the wall clock, in steps of at most 10 ms so the
+  serial service runs between scans), in a worker thread (`ThreadedSimulator` + `serveSimulatorThread`; desktop entry
+  `src/backend/editor/simulator/simulator-worker.ts`, built as `simulator-worker.js`). The debugger's Modbus RTU client
+  talks to it through `VirtualSerialPort`. Test fixtures, and how to rebuild them, are in
+  `src/backend/shared/simulator/__tests__/fixtures/README.md`.
 - **Flow:** Compile with debug symbols (.dbg file + MD5) -> connect debugger -> poll variables
 
 ## Testing
@@ -510,7 +515,6 @@ and ship next to the toolchain; refresh them from the commits the new release wa
 - **Tailwind CSS 3** + **Radix UI** for styling
 - **Zod** for schema validation
 - **i18next** for internationalization
-- **avr8js** for Arduino simulation
 - **Axios** for HTTP requests
 - **Socket.io** for real-time communication
 - **Winston** for structured logging (main process)
