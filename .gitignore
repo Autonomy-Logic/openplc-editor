@@ -82,6 +82,8 @@ playwright-report
 # Development build of the headless CLI (see webpack.config.cli.dev.ts)
 openplc-cli.dev.js
 openplc-cli.dev.js.map
+/clang-worker.js
+/clang-worker.js.map
 
 # Local scratch script for transpiling a project outside the app. Untracked on
 # purpose (8d3dc446c) and listed here because a broad `git add -A` has twice put

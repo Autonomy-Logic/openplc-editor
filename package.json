@@ -134,6 +134,7 @@
     "@types/source-map-support": "^0.5.10",
     "@types/uuid": "^9.0.7",
     "@types/webpack-bundle-analyzer": "^4.6.0",
+    "@yowasp/clang": "22.0.0-git20542-10",
     "autoprefixer": "^10.4.16",
     "browserslist-config-erb": "^0.0.3",
     "chalk": "^4.1.2",
