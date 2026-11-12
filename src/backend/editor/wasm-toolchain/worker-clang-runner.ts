@@ -14,7 +14,7 @@ export interface WorkerClangRunnerPaths {
   toolchainDir: string
 }
 
-/** Desktop mechanism: each clang worker is a Node worker thread. */
+/** Desktop mechanism: each clang worker is a Node worker thread, which holds the process only while it runs a job. */
 export function createThreadClangWorkerMechanism(paths: WorkerClangRunnerPaths): ClangWorkerMechanism {
   const bundlePath = join(paths.toolchainDir, 'gen', 'bundle.js')
   return {
@@ -28,7 +28,6 @@ export function createThreadClangWorkerMechanism(paths: WorkerClangRunnerPaths):
           worker.on('error', (error) => listener(error.message))
           worker.on('exit', (code) => listener(`exit code ${code}`))
         },
-        // Held only while it runs a job: an idle pool must not keep a command-line run alive, a busy one must.
         setBusy: (busy) => (busy ? worker.ref() : worker.unref()),
         terminate: () => worker.terminate(),
       }

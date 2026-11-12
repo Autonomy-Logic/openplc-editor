@@ -89,8 +89,11 @@ function validate(request: WasmCompileRequest): string | null {
   return null
 }
 
+/**
+ * Plans one compile job per unit. A unit's cache key covers the compiler, its flags, its source path and the set of
+ * request file names, since adding or removing a file can change which header an include finds.
+ */
 function planUnits(request: WasmCompileRequest): PlannedUnit[] {
-  // A file added or removed can change which header an include finds, so the set of names is part of every key.
   const names = new ContentHash().update(Object.keys(request.files).sort().join('\u0000')).digest()
   return request.units.map((unit, index) => {
     const object = `${WORK_DIR}/${index}.o`
@@ -154,7 +157,10 @@ function digestsOf(files: WasmToolchainFiles): (path: string) => string | undefi
   }
 }
 
-/** The request files an object was built from, with their digests; `null` when clang's list cannot be read. */
+/**
+ * The request files an object was built from, with their digests; `null` when clang's list cannot be read or names
+ * a relative path that is not a request file. Absolute paths are toolchain headers and are left out.
+ */
 function dependenciesOf(
   result: WasmClangJobResult,
   plan: PlannedUnit,
@@ -166,10 +172,8 @@ function dependenciesOf(
   if (paths === null || !paths.includes(plan.unit.source)) return null
   const dependencies: Array<[string, string]> = []
   for (const path of new Set(paths)) {
-    // Toolchain headers (absolute paths) come with the toolchain and change only with it.
     if (path.startsWith('/')) continue
     const digest = digestOf(path)
-    // A relative path that names no request file means the list cannot be trusted; such an object is not cached.
     if (digest === undefined) return null
     dependencies.push([path, digest])
   }
@@ -178,7 +182,8 @@ function dependenciesOf(
 
 /**
  * Compiles C and C++ translation units to objects with clang running as WebAssembly, then links them into one
- * WebAssembly module. An object comes from `cache` while every file it was built from is unchanged.
+ * WebAssembly module. An object comes from `cache` while every file it was built from is unchanged. Units are
+ * compiled largest first.
  * Diagnostics go to `log` and to the result.
  */
 export async function compileToWasm(
@@ -216,7 +221,6 @@ export async function compileToWasm(
       pending.push(p)
     }
   }
-  // Largest units first, so the slowest one does not start last.
   pending.sort((x, y) => y.size - x.size)
 
   await runLimited(pending, runner.concurrency, async (p) => {

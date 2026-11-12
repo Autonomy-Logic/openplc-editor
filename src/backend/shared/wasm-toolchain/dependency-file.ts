@@ -1,6 +1,7 @@
 /**
  * Reads the dependency file clang writes with `-MD -MF <file>`: a Makefile rule, `object: source header ...`,
- * continued over lines with a trailing backslash, with `\ `, `\#` and `$$` escaping a space, `#` and `$` in names.
+ * continued over lines with a trailing backslash, with `\ `, `\#`, `\\` and `$$` escaping a space, `#`, a backslash and
+ * `$` in names.
  */
 
 /** Normalises a path clang printed: drops `./`, folds `dir/..`, and leaves absolute paths absolute. */
@@ -30,11 +31,9 @@ export function parseDependencyFile(text: string): string[] | null {
     const c = rest[i]
     const next = rest[i + 1]
     if (c === '\\' && (next === ' ' || next === '#' || next === '\\')) {
-      // clang escapes a space, `#` and a backslash before them with a backslash.
       current += next
       i++
     } else if (c === '$' && next === '$') {
-      // ... and writes `$` as `$$`.
       current += '$'
       i++
     } else if (/\s/.test(c)) {

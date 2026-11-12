@@ -153,7 +153,6 @@ describe('ClangWorkerPool', () => {
     expect(a.posted).toHaveLength(1)
     expect(b.posted).toHaveLength(1)
 
-    // The third job waits in the pool and goes to the first worker that frees up.
     a.answer(a.posted[0].id)
     await flush()
     expect(a.posted).toHaveLength(2)
@@ -174,7 +173,6 @@ describe('ClangWorkerPool', () => {
     w.answer(w.posted[0].id)
     await first
     await new Promise((r) => setTimeout(r, 40))
-    // 80 ms after it was queued, but only 40 ms after the worker took it.
     w.answer(w.posted[1].id)
     await expect(second).resolves.toMatchObject({ exitCode: 0 })
     expect(w.terminated).toBe(false)

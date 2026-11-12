@@ -587,7 +587,6 @@ const rendererProcessBridge = {
     return () => ipcRenderer.removeListener('packages:boards-updated', listener)
   },
 
-  // ===================== WEBASSEMBLY TOOLCHAIN =====================
   wasmToolchainCompile: (request: WasmCompileRequest): Promise<WasmCompileResult> =>
     ipcRenderer.invoke('wasm-toolchain:compile', request),
 

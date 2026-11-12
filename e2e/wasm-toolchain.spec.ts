@@ -32,7 +32,6 @@ function launch(slug: string, cwd?: string, executablePath?: string): Promise<El
       ? { executablePath, args: [`--user-data-dir=${userData}`] }
       : { args: [MAIN, `--user-data-dir=${userData}`] }),
     cwd,
-    // NOT development: `resolveHtmlPath` would point the window at the webpack dev server.
     env: { ...process.env, NODE_ENV: 'production' },
   })
 }
@@ -94,7 +93,6 @@ test.describe('WebAssembly toolchain (desktop)', () => {
     expect(broken.ok).toBe(false)
     expect(broken.messages.some((m) => m.includes('x.c:1:'))).toBe(true)
 
-    // A path that would reach object internals in the main process comes back as a diagnostic.
     const invalid = await compileThroughPort(page, {
       files: { '__proto__/x.c': 'int x;' },
       units: [{ source: '__proto__/x.c', language: 'c' }],
@@ -114,14 +112,12 @@ test.describe('WebAssembly toolchain (desktop)', () => {
 
   test('compiles in a packaged build', async () => {
     test.skip(PACKAGED_APP === '', 'Set E2E_PACKAGED_APP to a packaged build to run this case.')
-    // Started from an empty directory, so only the packaged resources can provide clang.
     const cwd = join(ROOT, 'packaged', 'cwd')
     rmSync(join(ROOT, 'packaged'), { recursive: true, force: true })
     mkdirSync(cwd, { recursive: true })
     const app = await launch('packaged-run', cwd, PACKAGED_APP)
     try {
       await compilesThroughThePort(app)
-      // The licence texts the toolchain's npm package lacks ship next to it.
       const resourcesPath = await app.evaluate(() => process.resourcesPath)
       const licenses = join(resourcesPath, 'yowasp-clang', 'licenses')
       for (const file of [
@@ -139,7 +135,6 @@ test.describe('WebAssembly toolchain (desktop)', () => {
   })
 
   test('keeps the splash up with the reason when clang cannot load, and Quit closes the app', async () => {
-    // Started from an empty directory, the editor finds no toolchain next to it.
     const cwd = join(ROOT, 'missing', 'cwd')
     rmSync(join(ROOT, 'missing'), { recursive: true, force: true })
     mkdirSync(cwd, { recursive: true })

@@ -63,7 +63,6 @@ describe('compileToWasm', () => {
       '-o',
       '__objects/module.wasm',
     ])
-    // The link step sees the objects the compile steps produced.
     expect(FakeRunner.text(link.tree, '__objects/0.o')).toContain('core/core.c')
     expect(FakeRunner.text(link.tree, '__objects/1.o')).toContain('app/main.cpp')
     if (result.ok) expect(decode(result.wasm)).toBe(link.argv.join(' '))
@@ -85,7 +84,6 @@ describe('compileToWasm', () => {
   const compiledSources = (runner: FakeRunner): string[] =>
     runner.jobs.filter((j) => j.argv.includes('-c')).map((j) => j.argv[j.argv.indexOf('-c') + 1])
 
-  // core/core.c includes core/core.h; app/main.cpp includes nothing of the request's.
   const includes = { 'core/core.c': ['./core/core.h'] }
   const runnerWithIncludes = (extra: Record<string, string[]> = {}) =>
     new FakeRunner(2, undefined, null, { ...includes, ...extra })

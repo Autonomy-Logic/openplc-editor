@@ -115,11 +115,13 @@ export class ClangWorkerPool implements WasmClangRunner {
     this.jobDeadlineMs = options.jobDeadlineMs ?? JOB_DEADLINE_MS
   }
 
-  /** Gets the toolchain's files ready and starts the first worker; resolves once it has loaded. */
+  /**
+   * Gets the toolchain's files ready and starts the first worker; resolves once it has loaded. On failure it stops
+   * every worker and rejects with the reason loading failed, also when stopping them fails too.
+   */
   prepare(): Promise<void> {
     this.prepared ??= this.start().catch(async (error: unknown) => {
       this.prepared = null
-      // Cleanup must not hide why loading failed.
       await this.terminate().catch(() => undefined)
       throw error
     })
@@ -150,7 +152,10 @@ export class ClangWorkerPool implements WasmClangRunner {
     await this.spawn().ready
   }
 
-  /** Hands waiting jobs to free workers, and starts more workers while jobs still wait. */
+  /**
+   * Hands waiting jobs to free workers, and starts more workers while jobs still wait. When a worker cannot be
+   * started and no worker is left in the pool, the waiting jobs fail.
+   */
   private dispatch(): void {
     for (const slot of this.slots) {
       if (this.queue.length === 0) return
@@ -165,7 +170,6 @@ export class ClangWorkerPool implements WasmClangRunner {
       try {
         this.spawn()
       } catch (error) {
-        // Jobs wait for the workers still in the pool; with none left, nothing would ever take them.
         if (this.slots.length === 0) {
           const reason = error instanceof Error ? error.message : String(error)
           const failure = new Error(`The compiler worker could not be started (${reason}).`)
@@ -176,6 +180,7 @@ export class ClangWorkerPool implements WasmClangRunner {
     }
   }
 
+  /** Gives a job to an idle worker. If the job cannot be posted, only that job fails and the worker stays. */
   private hand(slot: Slot, queued: Queued): void {
     const id = this.nextId++
     const timer = setTimeout(
@@ -187,7 +192,6 @@ export class ClangWorkerPool implements WasmClangRunner {
     try {
       slot.handle.post({ id, argv: queued.job.argv, tree: queued.job.tree })
     } catch (error) {
-      // Only this job could not be handed over; the worker itself is fine.
       clearTimeout(timer)
       slot.running = null
       slot.handle.setBusy?.(false)
@@ -196,6 +200,7 @@ export class ClangWorkerPool implements WasmClangRunner {
     }
   }
 
+  /** Starts a worker, marked idle so it does not keep the process alive until it is handed a job. */
   private spawn(): Slot {
     const handle = this.mechanism.spawn()
     let markReady: () => void = () => undefined
@@ -242,12 +247,14 @@ export class ClangWorkerPool implements WasmClangRunner {
       this.dispatch()
     })
     handle.onFailure((reason) => this.fail(slot, reason))
-    // Idle until it is handed a job, so an idle pool never keeps the process alive.
     handle.setBusy?.(false)
     return slot
   }
 
-  /** Takes a worker out of the pool for good: it is terminated and the job it held fails. */
+  /**
+   * Takes a worker out of the pool for good: it is terminated and the job it held fails. When it never loaded and no
+   * loaded worker is left, the waiting jobs fail as well instead of starting workers that would fail the same way.
+   */
   private fail(slot: Slot, reason: string): void {
     if (slot.failed) return
     const error = new Error(`The compiler worker stopped (${reason}).`)
@@ -255,8 +262,6 @@ export class ClangWorkerPool implements WasmClangRunner {
     this.settle(slot, error)
     this.slots = this.slots.filter((s) => s !== slot)
     void Promise.resolve(slot.handle.terminate()).catch(() => undefined)
-    // A worker that never loaded is likely to fail again: when no loaded worker is left, fail the waiting jobs
-    // rather than start more workers that would fail the same way.
     if (!wasLoaded && !this.slots.some((s) => s.loaded)) {
       for (const waiting of this.queue.splice(0)) waiting.reject(error)
       return

@@ -41,7 +41,6 @@ describe('resolveWasmToolchainPaths', () => {
   })
 })
 
-// Real worker threads with stand-in worker scripts; the real clang runs in the end-to-end tests.
 describe('WorkerClangRunner thread mechanism', () => {
   it('runs a job on a worker thread and returns its reply', async () => {
     const runner = track(new WorkerClangRunner({ workerScript: fixture('echo-worker.mjs'), toolchainDir }, 2))
@@ -51,7 +50,6 @@ describe('WorkerClangRunner thread mechanism', () => {
   })
 
   it('holds the worker thread only while it runs a job', async () => {
-    // Node 22 lists the handles keeping the process alive; the installed @types/node predates the method.
     const activeResources: unknown = Reflect.get(process, 'getActiveResourcesInfo')
     const workers = (): number => {
       const list: unknown = typeof activeResources === 'function' ? activeResources.call(process) : []
@@ -85,7 +83,6 @@ describe('WorkerClangRunner thread mechanism', () => {
     await expect(runner.run({ argv: ['clang', '--version'], tree: {} })).rejects.toThrow(
       'The compiler worker stopped (exit code 3).',
     )
-    // The replacement worker takes the next job, and stops on it the same way.
     await expect(runner.run({ argv: ['clang', '--version'], tree: {} })).rejects.toThrow('exit code 3')
   })
 })

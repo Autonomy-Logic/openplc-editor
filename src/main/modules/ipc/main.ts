@@ -1023,7 +1023,6 @@ class MainProcessBridge implements MainIpcModule {
     this.ipcMain.on('util:log', this.handleUtilLog)
     this.registerHandle('util:read-debug-file', this.handleReadDebugFile)
 
-    // ===================== WEBASSEMBLY TOOLCHAIN =====================
     this.registerHandle('wasm-toolchain:compile', this.handleWasmToolchainCompile)
 
     // ===================== DEBUGGER =====================

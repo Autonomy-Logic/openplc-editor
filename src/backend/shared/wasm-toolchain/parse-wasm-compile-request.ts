@@ -19,9 +19,9 @@ const optionalFlags = (value: unknown, field: string): string[] | undefined | st
   return isStringArray(value) ? value : `'${field}' must be a list of strings.`
 }
 
+/** Copies the files into an object with no prototype, so a key such as `__proto__` stays a key and is refused. */
 function parseFiles(value: unknown): WasmToolchainFiles | string {
   if (!isRecord(value)) return "'files' must be an object of path to content."
-  // No prototype, so a key such as `__proto__` is stored as a key, then refused below, never applied.
   const files: WasmToolchainFiles = {}
   Object.setPrototypeOf(files, null)
   for (const [path, content] of Object.entries(value)) {

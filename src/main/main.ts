@@ -215,7 +215,6 @@ const createMainWindow = async () => {
     },
   })
 
-  // A production build emits splash.html next to main.js, also when it runs unpackaged (e2e); dev serves the source.
   const builtSplashPath = resolve(__dirname, '../main/splash.html')
   const splashPath =
     app.isPackaged || existsSync(builtSplashPath)
@@ -291,7 +290,6 @@ const createMainWindow = async () => {
         mainWindow?.show()
       })
       .catch((error: unknown) => {
-        // Anything unexpected while opening the editor is shown on the splash rather than lost.
         showStartupFailure('The editor could not open: ' + getErrorMessage(error))
       })
   })
@@ -553,7 +551,6 @@ app
       VENDOR_DOCUMENT_SCHEME,
       createVendorDocumentHandler({ listPackages: () => packages.listInstalled() }),
     )
-    // Loads the WebAssembly toolchain while the windows come up; the splash waits for it.
     getDesktopWasmCompileService()
       .prepare()
       .catch((error: unknown) => logger.error('WebAssembly toolchain: ' + getErrorMessage(error)))
