@@ -491,7 +491,7 @@ describe('licence backup across an upload (baremetal)', () => {
     }
     bridge.handleRunCompileProgram({ ports: [port] } as never, [] as never)
     await Promise.resolve()
-    expect(port.postMessage).toHaveBeenLastCalledWith({ closePort: true, success }, undefined)
+    expect(port.postMessage.mock.calls.at(-1)).toEqual([{ closePort: true, success }])
   }
 
   /** The renderer's reconnect after the upload; no candidates, so only the entry bookkeeping runs. */

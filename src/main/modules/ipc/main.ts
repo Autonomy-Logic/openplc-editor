@@ -2268,14 +2268,14 @@ class MainProcessBridge implements MainIpcModule {
   private observeCompileVerdict(port: MessagePortMain): MessagePortMain {
     const holder = this.boardLicenceBackup
     return new Proxy(port, {
-      get(target, prop, receiver) {
+      get(target, prop) {
         if (prop === 'postMessage') {
-          return (message: unknown, transfer?: MessagePortMain[]) => {
-            if (isCompileVerdict(message)) holder.uploadFinished(message.success)
-            target.postMessage(message, transfer)
+          return (...args: Parameters<MessagePortMain['postMessage']>) => {
+            if (isCompileVerdict(args[0])) holder.uploadFinished(args[0].success)
+            target.postMessage(...args)
           }
         }
-        const value: unknown = Reflect.get(target, prop, receiver)
+        const value: unknown = Reflect.get(target, prop)
         return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
       },
     })
