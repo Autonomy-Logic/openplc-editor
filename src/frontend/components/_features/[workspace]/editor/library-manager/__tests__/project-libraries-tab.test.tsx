@@ -108,6 +108,18 @@ describe('Project Libraries tab, missing libraries callout', () => {
     expect(within(list).queryByTestId('missing-library-row-other-ghost')).not.toBeNull()
   })
 
+  it('lets the card body scroll vertically so the whole callout stays reachable', () => {
+    renderTab()
+
+    const callout = screen.getByTestId('missing-libraries-callout')
+    const body = callout.parentElement
+    if (body === null) throw new Error('missing-libraries-callout has no parent card body')
+    const bodyClasses = body.className.split(/\s+/)
+    expect(bodyClasses).toEqual(expect.arrayContaining(['overflow-y-auto', 'min-h-0', 'flex-1', 'flex-col']))
+    expect(bodyClasses).not.toContain('overflow-hidden')
+    expect(callout.className.split(/\s+/)).toContain('shrink-0')
+  })
+
   it('keeps the remove action of an enabled library as it was', () => {
     renderTab()
 
