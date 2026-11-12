@@ -64,7 +64,8 @@ function seenBefore(sessionId, path) {
   const file = join(dir, `${String(sessionId).replace(/[^A-Za-z0-9_-]/g, '_')}.json`)
   let seen = []
   try {
-    if (existsSync(file)) seen = JSON.parse(readFileSync(file, 'utf-8'))
+    const stored = existsSync(file) ? JSON.parse(readFileSync(file, 'utf-8')) : []
+    if (Array.isArray(stored)) seen = stored
   } catch {
     seen = []
   }
