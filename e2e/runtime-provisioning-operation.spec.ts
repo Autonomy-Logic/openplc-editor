@@ -249,6 +249,46 @@ test('a stopped runtime is started, not reinstalled, and the runtime login follo
   }
 })
 
+test('a running bootloader with no runtime container is restarted, and the runtime login follows', async () => {
+  test.setTimeout(180000)
+  const address = await provisioningAddress()
+  const started: { runtime: FakeHttpsEndpoint | null } = { runtime: null }
+  const device = await startFakeDevice(
+    freshDeviceProfile({
+      runtime: { docker: 'active', bootloader: 'running', runtimeContainer: 'absent', native: 'absent', v3: 'none' },
+      onStartCommand: async () => {
+        started.runtime = await startFakeRuntime(address, true)
+      },
+    }),
+  )
+  const paths = writeProvisioningProject('restart-bootloader', PROVISIONING_HOST)
+  const screen = await RuntimeProvisioningPage.open(paths)
+  try {
+    await screen.reachOfferThroughPort(device.sshPort)
+    await screen.whatWillBeDone.getByRole('button').click()
+    await expect(screen.whatWillBeDone).toContainText(
+      'If the bootloader is running but the runtime container is missing, the bootloader is restarted, which recreates the container.',
+    )
+    await screen.submitCredentials(DEVICE_USER, DEVICE_PASSWORD)
+
+    await expect(screen.toast('Runtime ready')).toBeVisible({ timeout: 30000 })
+    await expect(screen.toast('Runtime ready')).toContainText(
+      `The OpenPLC Runtime was started on ${PROVISIONING_HOST} and answers.`,
+    )
+    await expect(screen.messageDialog('Login to OpenPLC Runtime')).toBeVisible({ timeout: 15000 })
+    await expect(screen.dialog).toBeHidden()
+    expect(commandKinds(device)).toEqual(['probe-system', 'privilege-check', 'inspect-runtime', 'restart-bootloader'])
+    expect(device.execs[3].command).toBe(`${SUDO_PREFIX}'exec </dev/null; docker restart openplc-bootloader'`)
+    expect(device.execs.some((exec) => exec.command.includes('docker start'))).toBe(false)
+    expectSudoDiscipline(device)
+    await expectAudit(screen, paths, device, 'start', 'success')
+  } finally {
+    await screen.quit()
+    await started.runtime?.close()
+    await device.close()
+  }
+})
+
 test('a rejected login asks again in the same operation, then a v3 runtime ends it with nothing changed', async () => {
   test.setTimeout(180000)
   const device = await startFakeDevice(

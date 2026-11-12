@@ -18,6 +18,7 @@ export type CommandKind =
   | 'privilege-check'
   | 'inspect-runtime'
   | 'start-native-service'
+  | 'restart-bootloader'
   | 'start-other'
   | 'prepare-installer'
   | 'start-installer'
@@ -111,6 +112,7 @@ export function commandKind(command: string): CommandKind {
   if (command.includes('exit=%s')) return 'poll-installer'
   if (command.includes('command -v docker') && command.includes('docker=yes')) return 'docker-present'
   if (command.includes('systemctl start openplc-runtime.service')) return 'start-native-service'
+  if (command.includes('docker restart openplc-bootloader')) return 'restart-bootloader'
   if (command.includes('docker start') || command.includes('systemctl start')) return 'start-other'
   if (command.endsWith("/bin/true'") || command.endsWith('/bin/true')) return 'privilege-check'
   return 'unknown'
@@ -208,6 +210,7 @@ export async function startFakeDevice(profile: DeviceProfile): Promise<FakeDevic
       case 'inspect-runtime':
         return answer(stream, runtimeLines(profile), 0)
       case 'start-native-service':
+      case 'restart-bootloader':
       case 'start-other':
         await profile.onStartCommand()
         return answer(stream, '', 0)
