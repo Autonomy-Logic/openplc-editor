@@ -124,6 +124,7 @@ describe('PROVISIONING_COMMANDS', () => {
         'inspectRuntime',
         'startDockerAndBootloader',
         'startBootloader',
+        'restartBootloader',
         'startRuntimeContainer',
         'startNativeService',
         'prepareInstaller',
@@ -141,6 +142,7 @@ describe('PROVISIONING_COMMANDS', () => {
       inspectRuntime: true,
       startDockerAndBootloader: true,
       startBootloader: true,
+      restartBootloader: true,
       startRuntimeContainer: true,
       startNativeService: true,
       prepareInstaller: true,
@@ -223,6 +225,26 @@ describe('PROVISIONING_COMMANDS', () => {
     expect(command).toContain('docker start openplc-bootloader')
     expect(command).not.toContain('systemctl')
     expect(command).not.toContain('docker start openplc-runtime')
+  })
+
+  it('restarts only the bootloader container, as administrator', () => {
+    expect(PROVISIONING_COMMANDS.restartBootloader).toEqual({
+      command: 'docker restart openplc-bootloader',
+      elevated: true,
+    })
+  })
+
+  it('restarts the bootloader without naming the runtime, a service, a start, a pull, a removal or the installer', () => {
+    const { command } = PROVISIONING_COMMANDS.restartBootloader
+    const forbidden = [
+      'openplc-runtime',
+      'systemctl',
+      'docker start',
+      ...FORBIDDEN_IN_START.filter((fragment) => fragment !== 'restart'),
+    ]
+    for (const fragment of forbidden) {
+      expect(command).not.toContain(fragment)
+    }
   })
 
   it('starts only the runtime container, never the bootloader', () => {
@@ -381,6 +403,17 @@ describe('buildExec', () => {
 
     expect(buildExec(probe, 'sudo')).toEqual({
       command: `${STDIN_FROM_DEV_NULL}${probe.command}`,
+      sendsPassword: false,
+    })
+  })
+
+  it('sends the bootloader restart through sudo with the password on stdin, and directly for root', () => {
+    expect(buildExec(PROVISIONING_COMMANDS.restartBootloader, 'sudo')).toEqual({
+      command: "/usr/bin/sudo -S -k -p '' sh -c 'exec </dev/null; docker restart openplc-bootloader'",
+      sendsPassword: true,
+    })
+    expect(buildExec(PROVISIONING_COMMANDS.restartBootloader, 'root')).toEqual({
+      command: 'exec </dev/null; docker restart openplc-bootloader',
       sendsPassword: false,
     })
   })

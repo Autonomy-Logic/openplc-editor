@@ -337,6 +337,22 @@ describe('WHAT_WILL_BE_DONE', () => {
     expect(WHAT_WILL_BE_DONE.ifInstalled).toMatch(/start/i)
   })
 
+  it('starts the installed case with the stopped-runtime sentence unchanged', () => {
+    expect(
+      WHAT_WILL_BE_DONE.ifInstalled.startsWith(
+        'If an OpenPLC Runtime is already installed but stopped, what is stopped is started.',
+      ),
+    ).toBe(true)
+  })
+
+  it('says the bootloader is restarted when the runtime container is missing', () => {
+    expect(WHAT_WILL_BE_DONE.ifInstalled).toBe(
+      'If an OpenPLC Runtime is already installed but stopped, what is stopped is started. ' +
+        'If the bootloader is running but the runtime container is missing, the bootloader is restarted, ' +
+        'which recreates the container.',
+    )
+  })
+
   it('lists the five install steps', () => {
     expect(WHAT_WILL_BE_DONE.install).toHaveLength(5)
   })

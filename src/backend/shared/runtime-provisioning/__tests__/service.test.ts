@@ -86,6 +86,7 @@ const IDLE_STATE = { active: false, target: null, phase: null, operation: null, 
 const STATE_CHANGING: RecordedCommandName[] = [
   'startDockerAndBootloader',
   'startBootloader',
+  'restartBootloader',
   'startRuntimeContainer',
   'startNativeService',
   'startInstaller',
@@ -403,6 +404,7 @@ describe('SSH keepalive and device command deadlines (F22, AC10.3, BR26)', () =>
     ['startRuntimeContainer', { docker: 'active', bootloader: 'running', runtimeContainer: 'stopped' }],
     ['startDockerAndBootloader', { docker: 'inactive', bootloader: 'stopped', runtimeContainer: 'stopped' }],
     ['startBootloader', { docker: 'active', bootloader: 'stopped', runtimeContainer: 'stopped' }],
+    ['restartBootloader', { docker: 'active', bootloader: 'running', runtimeContainer: 'absent' }],
     ['startNativeService', { native: 'inactive' }],
   ] satisfies [RecordedCommandName, RuntimeFactsInput][])(
     'gives the start command %s 150 s and the inspection commands 30 s (TC32)',
@@ -920,6 +922,11 @@ describe('start an installed runtime', () => {
       { native: 'inactive' },
       'startNativeService',
     ],
+    [
+      'the bootloader, by a restart, when the bootloader runs and the runtime container is missing',
+      { docker: 'active', bootloader: 'running', runtimeContainer: 'absent' },
+      'restartBootloader',
+    ],
   ] satisfies [string, RuntimeFactsInput, RecordedCommandName][])(
     'starts %s and nothing else',
     async (_, facts, started) => {
@@ -1030,6 +1037,113 @@ describe('start an installed runtime', () => {
       await expect(service.run(REQUEST)).resolves.toEqual(expected)
     },
   )
+})
+
+describe('restart the bootloader when the runtime container is missing', () => {
+  const RUNTIME_CONTAINER_MISSING = runtimeOutput({
+    docker: 'active',
+    bootloader: 'running',
+    runtimeContainer: 'absent',
+  })
+
+  it('restarts only the bootloader, as administrator with the password on stdin, and connects (start)', async () => {
+    const { device, service } = setup({ runtime: RUNTIME_CONTAINER_MISSING })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'connected-ready', operation: 'start' })
+    expect(namesAfterInspection(device)).toEqual(['restartBootloader'])
+    const restart = execCalls(device).filter((call) => call.name === 'restartBootloader')
+    expect(restart).toEqual([
+      expect.objectContaining({
+        command: buildExec(PROVISIONING_COMMANDS.restartBootloader, 'sudo').command,
+        sudo: true,
+        stdin: `${PASSWORD}\n`,
+      }),
+    ])
+    expect(auditWrites(device)).toEqual([expectedAudit(device, REQUEST, 'start', 'success')])
+  })
+
+  it('never starts the runtime container, another start target or the installer', async () => {
+    const { device, service } = setup({ runtime: RUNTIME_CONTAINER_MISSING })
+
+    await service.run(REQUEST)
+
+    const sent = commandNames(device)
+    for (const name of [
+      'startRuntimeContainer',
+      'startBootloader',
+      'startDockerAndBootloader',
+      'startNativeService',
+      'prepareInstaller',
+      'startInstaller',
+      'pollInstaller',
+    ] satisfies RecordedCommandName[]) {
+      expect(sent).not.toContain(name)
+    }
+  })
+
+  it('reports a failed restart as start-failed with its scrubbed lines, in the console before the audit, without waiting', async () => {
+    const { device, service } = setup({
+      runtime: RUNTIME_CONTAINER_MISSING,
+      commands: {
+        restartBootloader: {
+          exitCode: 1,
+          stdout: 'restarting openplc-bootloader\n',
+          stderr: `Error response from daemon: Cannot restart container openplc-bootloader\nsudo echoed ${PASSWORD}\n`,
+        },
+      },
+    })
+    const lastLines = [
+      'restarting openplc-bootloader',
+      'Error response from daemon: Cannot restart container openplc-bootloader',
+      `sudo echoed ${PASSWORD_MASK}`,
+    ]
+
+    const outcome = await service.run(REQUEST)
+
+    expect(outcome).toEqual({ kind: 'start-failed', lastLines })
+    expect(JSON.stringify(events(device))).not.toContain(PASSWORD)
+    expect(checkCalls(device)).toEqual([])
+    expect(events(device).filter((event) => event.type === 'console' || event.type === 'audit')).toEqual([
+      ...lastLines.map((message) => ({ type: 'console', level: 'info', message })),
+      { type: 'audit', line: expectedAudit(device, REQUEST, 'start', 'failure') },
+    ])
+  })
+
+  it('reports not started with no lines when 8443 never answers after the restart', async () => {
+    const { device, service } = setup({ runtime: RUNTIME_CONTAINER_MISSING, runtimeAnswersAfterMs: null })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'not-started', operation: 'start', lastLines: [] })
+    expect(namesAfterInspection(device)).toEqual(['restartBootloader'])
+  })
+
+  it('ends unknown with no wait when the restart passes its deadline', async () => {
+    const { device, service } = setup({
+      runtime: RUNTIME_CONTAINER_MISSING,
+      commands: { restartBootloader: { rejectWith: 'SSH command timed out after 150000 ms' } },
+    })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({ kind: 'unknown' })
+    expect(checkCalls(device)).toEqual([])
+    expect(auditWrites(device)).toEqual([expectedAudit(device, REQUEST, 'start', 'unknown')])
+  })
+
+  it('ends unknown when cancelled once the restart was sent', async () => {
+    let cancelled: Promise<void> = Promise.resolve()
+    const harness: Harness = setup({
+      runtime: RUNTIME_CONTAINER_MISSING,
+      commands: {
+        restartBootloader: () => {
+          cancelled = harness.service.cancel()
+          return { stdout: 'openplc-bootloader\n' }
+        },
+      },
+    })
+
+    await expect(harness.service.run(REQUEST)).resolves.toEqual({ kind: 'unknown' })
+    await cancelled
+    expect(namesAfterInspection(harness.device)).toEqual(['restartBootloader'])
+    expect(checkCalls(harness.device)).toEqual([])
+  })
 })
 
 describe('waiting for the runtime', () => {

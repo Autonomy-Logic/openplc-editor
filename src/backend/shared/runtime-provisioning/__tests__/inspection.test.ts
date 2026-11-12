@@ -253,7 +253,17 @@ describe('classifyRuntime', () => {
     [
       'the bootloader running with no runtime container',
       { docker: 'active', bootloader: 'running', runtimeContainer: 'absent' },
-      { kind: 'start', target: 'runtime-container' },
+      { kind: 'start', target: 'bootloader-restart' },
+    ],
+    [
+      'a stopped bootloader with no runtime container',
+      { docker: 'active', bootloader: 'stopped', runtimeContainer: 'absent' },
+      { kind: 'start', target: 'bootloader' },
+    ],
+    [
+      'Docker stopped with the bootloader recorded running and no runtime container',
+      { docker: 'inactive', bootloader: 'running', runtimeContainer: 'absent' },
+      { kind: 'start', target: 'docker-and-bootloader' },
     ],
     [
       'a container install fully running',

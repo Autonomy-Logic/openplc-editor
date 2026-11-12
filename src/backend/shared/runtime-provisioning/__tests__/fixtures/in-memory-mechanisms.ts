@@ -32,6 +32,7 @@ export type FixedCommandName =
   | 'startNativeService'
   | 'prepareInstaller'
   | 'dockerPresent'
+  | 'restartBootloader'
 
 export const FIXED_COMMAND_NAMES: readonly FixedCommandName[] = [
   'probeSystem',
@@ -43,6 +44,7 @@ export const FIXED_COMMAND_NAMES: readonly FixedCommandName[] = [
   'startNativeService',
   'prepareInstaller',
   'dockerPresent',
+  'restartBootloader',
 ]
 
 export type ScriptedCommandName = FixedCommandName | 'startInstaller'
@@ -334,6 +336,7 @@ export function createFakeDevice(options: FakeDeviceOptions = {}): FakeDevice {
     inspectRuntime: { stdout: options.runtime ?? runtimeOutput() },
     startDockerAndBootloader: { exitCode: 0 },
     startBootloader: { stdout: 'openplc-bootloader\n' },
+    restartBootloader: { stdout: 'openplc-bootloader\n' },
     startRuntimeContainer: { stdout: 'openplc-runtime\n' },
     startNativeService: { exitCode: 0 },
     prepareInstaller: { stdout: `dir=${installerDir}\ndownload=ok\n` },
