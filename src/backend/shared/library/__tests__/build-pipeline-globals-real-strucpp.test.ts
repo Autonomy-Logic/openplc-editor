@@ -227,6 +227,46 @@ describe('library globals against the real strucpp', () => {
   })
 })
 
+describe('library globals whose names start with RESOURCE against the real strucpp', () => {
+  const resourceNamedLibrary = (): LibraryBuildResult =>
+    buildLibrary(
+      'level_lib',
+      libraryData({
+        pous: [
+          functionBlock(
+            'LEVEL_READER',
+            [pouVariable('Level', 'INT', 'local'), pouVariable('RESOURCE_LEVEL', 'INT', 'external')],
+            'Level := RESOURCE_LEVEL;',
+          ),
+        ],
+        globalVariableLists: [
+          { name: 'RESOURCES', variables: [{ ...globalVariable('Cmd', 'BOOL'), class: 'global' as const }] },
+        ],
+        configuration: {
+          resource: { tasks: [], instances: [], globalVariables: [globalVariable('RESOURCE_LEVEL', 'INT')] },
+        },
+      }),
+    )
+
+  it('builds the library whose function block reads RESOURCE_LEVEL and exports both globals', () => {
+    const archive = archiveOf(resourceNamedLibrary())
+
+    expect(namesOf(archive.manifest.globals).sort()).toEqual(['RESOURCES', 'RESOURCE_LEVEL'])
+  })
+
+  it('lets a consumer program read RESOURCES.Cmd and RESOURCE_LEVEL from the library', () => {
+    const archive = archiveOf(resourceNamedLibrary())
+
+    const consumer = compileConsumer(
+      consumerProgram('    b : BOOL;\n    i : INT;\n', '  b := RESOURCES.Cmd;\n  i := RESOURCE_LEVEL;\n'),
+      archive,
+    )
+
+    expect(consumer.errors.map((error) => error.message)).toEqual([])
+    expect(consumer.success).toBe(true)
+  })
+})
+
 describe('a library global keeps its qualifier in the shipped library', () => {
   const qualifiedLibrary = (): BuiltArchive =>
     archiveOf(

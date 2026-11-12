@@ -967,6 +967,89 @@ describe('libraryBuildFromTranspiledSt: library globals', () => {
     expect(names.slice(0, -1).sort()).toEqual(['PlainSt.st', '_globals.st'])
     expect(names.slice(-1)).toEqual(['CppBlk.cpp'])
   })
+
+  const keywordNamedGlobals = [
+    {
+      rule: 'a plain block whose second global is named RESOURCE_LEVEL',
+      programSt:
+        TANK_FB +
+        '\n' +
+        STUB_MAIN +
+        transpiledConfiguration('  VAR_GLOBAL\n    MotorCmd : BOOL;\n    RESOURCE_LEVEL : INT;\n  END_VAR\n'),
+      expected: ['VAR_GLOBAL', 'MotorCmd : BOOL;', 'RESOURCE_LEVEL : INT;', 'END_VAR'],
+    },
+    {
+      rule: 'a GVL global named RESOURCES',
+      programSt:
+        TANK_FB +
+        '\n' +
+        STUB_MAIN +
+        transpiledConfiguration('  VAR_GLOBAL\n    RESOURCES : RESOURCES_TYPE;\n  END_VAR\n'),
+      expected: ['VAR_GLOBAL', 'RESOURCES : RESOURCES_TYPE;', 'END_VAR'],
+    },
+    {
+      rule: 'a CONSTANT block holding RESOURCE_MAX between the plain and RETAIN blocks',
+      programSt:
+        TANK_FB +
+        '\n' +
+        STUB_MAIN +
+        transpiledConfiguration(
+          '  VAR_GLOBAL\n' +
+            '    MotorCmd : BOOL;\n' +
+            '  END_VAR\n' +
+            '  VAR_GLOBAL CONSTANT\n' +
+            '    RESOURCE_MAX : INT := 5;\n' +
+            '  END_VAR\n' +
+            '  VAR_GLOBAL RETAIN\n' +
+            '    Counter : DINT;\n' +
+            '  END_VAR\n',
+        ),
+      expected: [
+        'VAR_GLOBAL',
+        'MotorCmd : BOOL;',
+        'END_VAR',
+        'VAR_GLOBAL CONSTANT',
+        'RESOURCE_MAX : INT := 5;',
+        'END_VAR',
+        'VAR_GLOBAL RETAIN',
+        'Counter : DINT;',
+        'END_VAR',
+      ],
+    },
+    {
+      rule: 'a configuration without a resource whose global is named END_CONFIGURATION_FLAG',
+      programSt:
+        TANK_FB +
+        '\n' +
+        STUB_MAIN +
+        '\nCONFIGURATION Config0\n' +
+        '  VAR_GLOBAL\n' +
+        '    END_CONFIGURATION_FLAG : BOOL;\n' +
+        '  END_VAR\n' +
+        'END_CONFIGURATION\n',
+      expected: ['VAR_GLOBAL', 'END_CONFIGURATION_FLAG : BOOL;', 'END_VAR'],
+    },
+  ]
+
+  it.each(keywordNamedGlobals)('ships every global of $rule in `_globals.st`', ({ programSt, expected }) => {
+    const input = compileStlibInputFor(programSt, TANK_POUS)
+
+    const globals = input.find((s) => s.fileName === '_globals.st')
+    expect(globals?.category).toBe('globals')
+    expect(trimmedLines(globals?.source ?? '')).toEqual(expected)
+  })
+
+  it.each(keywordNamedGlobals)(
+    'ships no configuration line, no `_config.st` and no stub for $rule',
+    ({ programSt }) => {
+      const input = compileStlibInputFor(programSt, TANK_POUS)
+
+      expect(input.map((s) => s.fileName).sort()).toEqual(['Tank.st', '_globals.st'])
+      const configurationLine = /^(CONFIGURATION|END_CONFIGURATION|END_RESOURCE|TASK|PROGRAM)\b|^RESOURCE\s+\S+\s+ON\b/i
+      const globals = input.find((s) => s.fileName === '_globals.st')
+      expect(trimmedLines(globals?.source ?? '').filter((line) => configurationLine.test(line))).toEqual([])
+    },
+  )
 })
 
 const refusal = (kind: 'function' | 'function block' | 'global', name: string): string =>
