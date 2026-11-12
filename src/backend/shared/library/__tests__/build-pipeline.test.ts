@@ -1187,3 +1187,106 @@ describe('libraryBuildFromTranspiledSt: undeclared exports', () => {
     expect(res.errors).toEqual(compileErrors)
   })
 })
+
+const malformed = (
+  part: 'archive' | 'manifest' | 'manifest.functions' | 'manifest.functionBlocks' | 'manifest.globals',
+): string => `Library build refused: the built library has a malformed "${part}", so its exports cannot be checked.`
+
+describe('libraryBuildFromTranspiledSt: malformed archive manifest', () => {
+  const programSt = ADD2_FN + '\n' + TANK_FB + '\n' + STUB_MAIN
+  const knownPous = [
+    { name: 'Add2', kind: 'FUNCTION' as const },
+    { name: 'Tank', kind: 'FUNCTION_BLOCK' as const },
+    { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' as const },
+  ]
+
+  const buildFor = (archive: unknown) => {
+    __setStrucppRuntimeForTests(
+      makeStrucppStub({
+        compileStlib: jest
+          .fn()
+          .mockReturnValue({ success: true, archive }) as unknown as StrucppRuntime['compileStlib'],
+      }),
+    )
+    return () => libraryBuildFromTranspiledSt(programSt, knownPous, LIB_MANIFEST)
+  }
+
+  const withManifest = (manifest: unknown) => ({ manifest, dependencies: [] })
+
+  it.each([
+    {
+      rule: 'manifest.functions is a string',
+      archive: withManifest({ functions: 'ADD2' }),
+      expected: [malformed('manifest.functions')],
+    },
+    {
+      rule: 'manifest.functionBlocks is an object',
+      archive: withManifest({ functionBlocks: { name: 'TANK' } }),
+      expected: [malformed('manifest.functionBlocks')],
+    },
+    {
+      rule: 'manifest.globals is null',
+      archive: withManifest({ globals: null }),
+      expected: [malformed('manifest.globals')],
+    },
+    {
+      rule: 'a manifest.globals entry has a numeric name',
+      archive: withManifest({ globals: [{ name: 42, type: 'INT' }] }),
+      expected: [malformed('manifest.globals')],
+    },
+    {
+      rule: 'a manifest.functionBlocks entry is null',
+      archive: withManifest({ functionBlocks: [null] }),
+      expected: [malformed('manifest.functionBlocks')],
+    },
+    {
+      rule: 'the manifest is a string',
+      archive: withManifest('x'),
+      expected: [malformed('manifest')],
+    },
+    {
+      rule: 'the manifest is null',
+      archive: withManifest(null),
+      expected: [malformed('manifest')],
+    },
+    {
+      rule: 'the archive is a string',
+      archive: 'blob',
+      expected: [malformed('archive')],
+    },
+  ])('refuses the build without throwing when $rule', ({ archive, expected }) => {
+    const build = buildFor(archive)
+
+    expect(build).not.toThrow()
+    const result = build()
+    expect(result.success).toBe(false)
+    expect(result.archive).toBeUndefined()
+    expect(result.errors.map((e) => e.message)).toEqual(expected)
+  })
+
+  it('reports every malformed list in order and no undeclared export of that archive', () => {
+    const build = buildFor(withManifest({ functions: 'x', functionBlocks: [{ name: 'EVIL' }], globals: null }))
+
+    expect(build).not.toThrow()
+    const result = build()
+    expect(result.success).toBe(false)
+    expect(result.archive).toBeUndefined()
+    expect(result.errors.map((e) => e.message)).toEqual([
+      malformed('manifest.functions'),
+      malformed('manifest.globals'),
+    ])
+  })
+
+  it('does not read manifest.types when the export lists are well formed', () => {
+    const archive = withManifest({
+      functions: [{ name: 'ADD2' }],
+      functionBlocks: [{ name: 'TANK' }],
+      globals: [],
+      types: 'x',
+    })
+    const build = buildFor(archive)
+
+    expect(build).not.toThrow()
+    expect(build()).toEqual({ success: true, archive, errors: [] })
+  })
+})
