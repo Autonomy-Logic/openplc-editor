@@ -776,6 +776,34 @@ describe('project.json libraries', () => {
     // The declared version wins: the save fills gaps, it does not rewrite choices.
     expect(parsed.data.libraries).toEqual([{ name: 'demo-utils', version: '1.0.0' }])
   })
+
+  describe('after a missing library is removed from the project', () => {
+    const savedRefs = () =>
+      (
+        JSON.parse(buildAllProjectFileContentsPure(store)['project.json']) as {
+          data: { libraries: { name: string; version: string }[] }
+        }
+      ).data.libraries
+
+    beforeEach(() => {
+      const actions = store.getState().libraryActions
+      actions.setProjectLibraries([
+        { name: 'demo-utils', version: '2.1.0' },
+        { name: 'ghost-lib', version: '1.0.0' },
+      ])
+      actions.disableLibrary('ghost-lib')
+    })
+
+    it('leaves the removed library out of project.json', () => {
+      expect(savedRefs()).toEqual([{ name: 'demo-utils', version: '2.1.0' }])
+    })
+
+    it('reports nothing missing when the saved list is loaded again', () => {
+      store.getState().libraryActions.setProjectLibraries(savedRefs())
+
+      expect(store.getState().missingLibraries).toEqual([])
+    })
+  })
 })
 
 /**
