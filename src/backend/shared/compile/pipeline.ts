@@ -63,6 +63,7 @@ import type { DevicePin } from '../types/PLC/devices'
 // in the architectural plan.
 import type { PLCProjectData } from '../types/PLC/open-plc'
 import { materialiseOpcUaCredentials } from './opcua-credentials'
+import { buildSimulatorWasmRequest } from './steps/build-simulator-wasm-request'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
 import {
   computeIoImage,
@@ -103,6 +104,7 @@ export interface PipelineProgressEvent {
     | 'runtime-v4-bundle'
     | 'embed-c-blocks'
     | 'arduino-compile'
+    | 'simulator-compile'
     | 'runtime-version'
     | 'upload'
     | 'done'
@@ -1195,6 +1197,8 @@ async function runCompilePipelineInner(
     firmwareSkeleton,
   })
 
+  if (isSimulator) return compileSimulatorModule(firmwareFiles, port, emit, md5)
+
   // Build arduino-cli argv via the shared helper.  Same input/output
   // on both platforms.  `boardEntry` carries `platform` / `core` /
   // `c_flags` / etc. straight from `hals.json`.
@@ -1231,31 +1235,11 @@ async function runCompilePipelineInner(
     if (dependencyHintSurface) {
       const output = [...compileOutput, ...(compileResult.errors ?? []).map((e) => e.message)].join('\n')
       if (detectsMissingArduinoCore(output)) {
-        const hint = missingArduinoCoreHint({ simulator: isSimulator, surface: dependencyHintSurface })
+        const hint = missingArduinoCoreHint({ surface: dependencyHintSurface })
         emit({ stage: 'error', message: hint, level: 'error' })
       }
     }
     return failed
-  }
-
-  // Simulator: avr8js needs the Intel HEX bytes in memory.  The
-  // editor adapter reads `Baremetal.ino.hex` off disk for AVR builds;
-  // if it's missing here the compile silently succeeded but produced
-  // no .hex, which would crash the simulator loader downstream.
-  // Surface a precise error instead.  Non-simulator branches don't
-  // require `binary` — arduino-cli's upload step finds whatever
-  // artefact the core produced (.uf2 / .bin / .hex) on disk directly.
-  if (isSimulator) {
-    if (!compileResult.binary) {
-      return bailError(
-        emit,
-        'arduino-compile',
-        'Simulator build did not produce a .hex artefact.',
-        compileResult.errors,
-      )
-    }
-    emit({ stage: 'done', message: 'Simulator firmware ready', level: 'info' })
-    return { success: true, md5, binary: compileResult.binary, uploaded: false }
   }
 
   // Compile-only: skip the physical upload step.
@@ -1302,3 +1286,25 @@ async function runCompilePipelineInner(
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/** The simulator build: the composed firmware files compiled to one WebAssembly module, with no arduino-cli. */
+async function compileSimulatorModule(
+  firmwareFiles: Record<string, string>,
+  port: CompilerPlatformPort,
+  emit: (event: PipelineProgressEvent) => void,
+  md5: string,
+): Promise<RunCompilePipelineResult> {
+  const built = buildSimulatorWasmRequest(firmwareFiles)
+  if (!built.ok) return bailError(emit, 'simulator-compile', built.error)
+  emit({ stage: 'simulator-compile', message: 'Compiling the simulator module...', level: 'info' })
+  const result = await port.compileToWasm(built.request, makePlatformLog(emit, 'simulator-compile'))
+  if (!result.ok) return bailError(emit, 'simulator-compile', 'Simulator compilation failed.')
+  const { units, cached, compileMs, linkMs } = result.stats
+  emit({
+    stage: 'simulator-compile',
+    message: `Simulator module compiled: ${units} files (${cached} reused) in ${Math.round(compileMs)} ms, linked in ${Math.round(linkMs)} ms.`,
+    level: 'info',
+  })
+  emit({ stage: 'done', message: 'Simulator firmware ready', level: 'info' })
+  return { success: true, md5, binary: result.wasm, uploaded: false }
+}

@@ -151,8 +151,8 @@ export interface GenerateDefinesInput {
   /** Runtime identifier from `hals.json` (`'simulator'` /
    *  `'arduino-cli'` / `'openplc-compiler'`).  Only `'simulator'`
    *  changes the output here — it adds the SIMULATOR_MODE +
-   *  fixed-Modbus block, which the avr8js emulator's serial
-   *  bridge keys off.  Real Arduino targets emit comms defines
+   *  fixed-Modbus block the simulator's debugger serial port
+   *  keys off, and drops every pin.  Real Arduino targets emit comms defines
    *  via VPP packages instead. */
   boardRuntime: string
   /** Persisted VPP Modbus screen state, sourced from
@@ -334,10 +334,11 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
   //    the iteration order of the input array; callers are
   //    expected to have sorted by address.
   DEFINES_CONTENT += '//IO Config\n'
-  const digitalInputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalInput')
-  const analogInputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogInput')
-  const digitalOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'digitalOutput')
-  const analogOutputPins = devicePinMapping.filter((pin) => pin.pinType === 'analogOutput')
+  const pins = boardRuntime === 'simulator' ? [] : devicePinMapping
+  const digitalInputPins = pins.filter((pin) => pin.pinType === 'digitalInput')
+  const analogInputPins = pins.filter((pin) => pin.pinType === 'analogInput')
+  const digitalOutputPins = pins.filter((pin) => pin.pinType === 'digitalOutput')
+  const analogOutputPins = pins.filter((pin) => pin.pinType === 'analogOutput')
 
   DEFINES_CONTENT += `#define PINMASK_DIN ${digitalInputPins.map(({ pin }) => pin).join(', ')}\n`
   DEFINES_CONTENT += `#define PINMASK_AIN ${analogInputPins.map(({ pin }) => pin).join(', ')}\n`

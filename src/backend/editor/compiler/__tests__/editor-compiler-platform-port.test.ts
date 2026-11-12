@@ -150,6 +150,7 @@ describe('createEditorCompilerPlatformPort', () => {
         makeRuntimeApiUpload: jest.fn(),
       },
       compressSourceFolder: jest.fn(),
+      wasmCompileService: { compile: jest.fn() },
       pollTimeoutMs: 1000,
       pollIntervalMs: 10,
       startTimeoutMs: 1000,
@@ -165,6 +166,22 @@ describe('createEditorCompilerPlatformPort', () => {
     const md5 = await port.computeMd5('hello world')
     // crypto.createHash('md5').update('hello world').digest('hex')
     expect(md5).toBe('5eb63bbbe01eeed093cb22bb8f5acdc3')
+  })
+
+  it('compileToWasm hands the request and the log to the injected compile service', async () => {
+    const result = {
+      ok: true as const,
+      wasm: new Uint8Array([0, 97, 115, 109]),
+      stats: { units: 1, cached: 0, compileMs: 1, linkMs: 1 },
+      diagnostics: [],
+    }
+    const compile = jest.fn().mockResolvedValue(result)
+    const port = createEditorCompilerPlatformPort(makeHandlers(), makeContext({ wasmCompileService: { compile } }))
+    const request = { files: { 'a.cpp': 'int a;' }, units: [{ source: 'a.cpp', language: 'c++' as const }] }
+    const log = jest.fn()
+
+    await expect(port.compileToWasm(request, log)).resolves.toBe(result)
+    expect(compile).toHaveBeenCalledWith(request, log)
   })
 
   // ---- uploadArduinoBoard — port wiring (regression for issue #5) ----

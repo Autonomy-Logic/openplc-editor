@@ -479,7 +479,7 @@ describe('generateDefinesContent — process image', () => {
 })
 
 describe('generateDefinesContent — full output snapshot', () => {
-  it('produces the canonical defines.h for a typical simulator project', () => {
+  it('produces the canonical defines.h for a typical simulator project, with no pins whatever the mapping says', () => {
     const out = generateDefinesContent({
       boardEntry: { define: ['__AVR_ATmega2560__'] },
       devicePinMapping: [
@@ -510,13 +510,13 @@ describe('generateDefinesContent — full output snapshot', () => {
         '',
         '',
         '//IO Config',
-        '#define PINMASK_DIN 2, 3',
+        '#define PINMASK_DIN ',
         '#define PINMASK_AIN ',
-        '#define PINMASK_DOUT 13',
+        '#define PINMASK_DOUT ',
         '#define PINMASK_AOUT ',
-        '#define NUM_DISCRETE_INPUT 2',
+        '#define NUM_DISCRETE_INPUT 0',
         '#define NUM_ANALOG_INPUT 0',
-        '#define NUM_DISCRETE_OUTPUT 1',
+        '#define NUM_DISCRETE_OUTPUT 0',
         '#define NUM_ANALOG_OUTPUT 0',
         '',
         '',

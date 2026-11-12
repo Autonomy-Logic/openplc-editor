@@ -8,8 +8,7 @@
  * `--user-data` at nothing, install the packages under test, compile.
  *
  * `install` runs the same `VppDependencyService` as the UI (schema, signature and
- * dependency install), then installs the simulator's core and the global libraries
- * when missing.
+ * dependency install), then installs the global libraries when missing.
  */
 
 import { readdir, stat } from 'node:fs/promises'
@@ -100,7 +99,7 @@ async function runInstall(args: ParsedArgs, reporter: Reporter): Promise<CliResu
   )
   if (!common.ok) {
     reporter.progress(
-      `  warning: could not install the simulator core and global libraries (${common.error}). ` +
+      `  warning: could not install the global libraries (${common.error}). ` +
         'Builds that need them will fail; run this command again while connected to the internet.',
     )
   }

@@ -1,4 +1,4 @@
-import { existsSync, statSync, symlinkSync } from 'node:fs'
+import { existsSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
@@ -15,19 +15,20 @@ import { launch, quitApp } from './helpers/ethercat-project'
 
 const INSTALLING = 'Installing Arduino components every build needs'
 
-test('missing simulator core and global libraries are installed once at startup, and a build waits', async () => {
+test('missing global libraries are installed once at startup, without the simulator core, and a build waits', async () => {
   test.skip(missingPrerequisite(ARDUINO_MEGA) !== undefined, missingPrerequisite(ARDUINO_MEGA) ?? '')
   test.setTimeout(1800000)
   const { userData, sketchDir } = writeArduinoProject('openplc-e2e-startup-deps', ARDUINO_MEGA, 'empty')
   const data = join(userData, 'arduino', 'data')
   const cache = join(SOURCE_USER_DATA, 'arduino', 'data', 'staging')
   if (existsSync(cache)) symlinkSync(cache, join(data, 'staging'))
-  const avr = join(data, 'packages', 'arduino', 'hardware', 'avr')
 
   let { app, page } = await launch(userData)
   try {
     await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
-    await expect(page.getByText(new RegExp(`${INSTALLING}: arduino:avr[,.]`)).first()).toBeVisible({ timeout: 120000 })
+    const notice = page.getByText(new RegExp(`${INSTALLING}: `)).first()
+    await expect(notice).toBeVisible({ timeout: 120000 })
+    await expect(notice).not.toContainText('arduino:avr')
     await page.getByRole('button', { name: 'Build options' }).click({ timeout: 30000 })
     await page.getByText('Build only', { exact: true }).click({ timeout: 15000 })
     await expect(page.getByText(/Waiting for the editor to finish installing/).first()).toBeVisible({
@@ -35,12 +36,10 @@ test('missing simulator core and global libraries are installed once at startup,
     })
     await expect(page.getByText('Arduino components installed.').first()).toBeVisible({ timeout: 1500000 })
     await expect(page.getByRole('button', { name: 'Build options' })).toBeEnabled({ timeout: 600000 })
-    expect(existsSync(avr)).toBe(true)
   } finally {
     await quitApp(app, page)
   }
 
-  const avrTime = statSync(avr).mtimeMs
   ;({ app, page } = await launch(userData))
   try {
     await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
@@ -49,7 +48,6 @@ test('missing simulator core and global libraries are installed once at startup,
     await buildAndWait(page, sketchDir, 'Build only')
     await expect(page.getByText(INSTALLING)).toHaveCount(0)
     await expect(page.getByText(/Waiting for the editor to finish installing/)).toHaveCount(0)
-    expect(statSync(avr).mtimeMs).toBe(avrTime)
   } finally {
     await quitApp(app, page)
   }

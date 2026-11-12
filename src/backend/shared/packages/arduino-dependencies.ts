@@ -2,9 +2,6 @@ import type { PackageDownloadProgress, PackageManifest } from '../../../middlewa
 import { resolveTargetCapabilities } from '../../../middleware/shared/utils/target-capabilities'
 import { selectThirdPartyLibraries, type ThirdPartyLibrary } from '../compile/third-party-libraries'
 
-/** The core the built-in simulator compiles with; no package provides it. */
-export const SIMULATOR_CORE = 'arduino:avr'
-
 /** Libraries installed for every arduino-cli target, independent of any package. */
 export const GLOBAL_ARDUINO_LIBRARIES: readonly string[] = [
   'Arduino_EdgeControl',
@@ -177,15 +174,14 @@ export function planDependencyInstall(
 
 /**
  * What uninstalling a package may remove: its cores and libraries that no package
- * in @p remaining declares, that are installed, and that are neither the
- * simulator's core nor a global library.
+ * in @p remaining declares, that are installed, and that are not global libraries.
  */
 export function planDependencyRemoval(
   removed: ArduinoDependencies,
   remaining: readonly ArduinoDependencies[],
   installed: InstalledArduinoState,
 ): DependencyRemovalPlan {
-  const keptCores = new Set([SIMULATOR_CORE, ...remaining.flatMap((deps) => deps.cores.map((core) => core.id))])
+  const keptCores = new Set(remaining.flatMap((deps) => deps.cores.map((core) => core.id)))
   const keptLibraries = new Set([
     ...GLOBAL_ARDUINO_LIBRARIES,
     ...remaining.flatMap((deps) => [...deps.libraries.map(libraryName), ...deps.gitLibraries.map((l) => l.name)]),
@@ -266,14 +262,7 @@ export function detectsMissingArduinoCore(output: string): boolean {
 }
 
 /** The console hint for a build that failed because its core is not installed. */
-export function missingArduinoCoreHint(options: { simulator: boolean; surface: DependencyHintSurface }): string {
-  if (options.simulator) {
-    const repair =
-      options.surface === 'cli'
-        ? 'Run openplc-cli packages install <file.vpp> with any board package while connected to the internet; it also installs the simulator core.'
-        : 'Start the OpenPLC Editor while connected to the internet so it can install it.'
-    return `The simulator's Arduino core (${SIMULATOR_CORE}) is not installed. ${repair} Then build again.`
-  }
+export function missingArduinoCoreHint(options: { surface: DependencyHintSurface }): string {
   const repair =
     options.surface === 'cli'
       ? 'Reinstall the board package with: openplc-cli packages install <file.vpp>'
@@ -281,9 +270,9 @@ export function missingArduinoCoreHint(options: { simulator: boolean; surface: D
   return `The Arduino core for this device is not installed. ${repair} Then build again.`
 }
 
-/** What the editor installs at startup when missing: the simulator's core and the global libraries. */
+/** What the editor installs at startup when missing: the global libraries. Board cores come with their packages. */
 export const STARTUP_ARDUINO_DEPENDENCIES: ArduinoDependencies = {
-  cores: [{ id: SIMULATOR_CORE }],
+  cores: [],
   libraries: [...GLOBAL_ARDUINO_LIBRARIES],
   gitLibraries: [],
 }
@@ -297,7 +286,7 @@ export function startupInstallNotice(steps: readonly DependencyStep[]): string {
 export function startupInstallWarning(error: string): string {
   return (
     `Could not install the Arduino components every build needs (${error}). ` +
-    'Builds still run, but may fail on a missing library or, for the simulator, a missing core. ' +
+    'Builds still run, but may fail on a missing library. ' +
     'Restart the editor while connected to the internet to try again.'
   )
 }

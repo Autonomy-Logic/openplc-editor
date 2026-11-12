@@ -40,6 +40,7 @@ import {
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
+import type { WasmCompileService } from '@root/backend/shared/wasm-toolchain/wasm-compile-service'
 import type {
   CheckRuntimeVersionArgs,
   CheckRuntimeVersionResult,
@@ -59,6 +60,7 @@ import type {
   UploadRuntimeV3Args,
   UploadRuntimeV4Args,
 } from '@root/middleware/shared/ports/compiler-platform-port'
+import type { WasmCompileRequest, WasmCompileResult } from '@root/middleware/shared/ports/wasm-toolchain-types'
 import { createHash } from 'crypto'
 import { type Dirent, promises as fs } from 'fs'
 import { dirname, join } from 'path'
@@ -207,6 +209,9 @@ export interface EditorCompilerPlatformPortContext {
    * floor known", which the pipeline treats as no constraint.
    */
   getVppRuntimeFloor?: (boardTarget: string) => string | null
+  /** The process's WebAssembly toolchain, which builds the simulator. Injected for the same reason as
+   *  `getVppRuntimeFloor`: the desktop toolchain module needs Electron at load. */
+  wasmCompileService: Pick<WasmCompileService, 'compile'>
   /** Timeout for the post-upload compile-status poll. */
   pollTimeoutMs: number
   /** Interval for the post-upload compile-status poll. */
@@ -295,6 +300,10 @@ export function createEditorCompilerPlatformPort(
      * a non-empty binary and it bails there with a clearer error if
      * .hex is somehow missing on AVR.
      */
+    compileToWasm(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult> {
+      return context.wasmCompileService.compile(request, log)
+    },
+
     async compileArduino(args: CompileArduinoArgs, log: PlatformLog): Promise<CompileArduinoResult> {
       try {
         await syncBuildFolder(context.compilationPath, args.files, context.staticFirmwareFiles ?? {})

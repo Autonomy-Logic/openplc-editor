@@ -31,6 +31,7 @@
  */
 
 import type { PLCProjectData, StructuredCompileError } from './types'
+import type { WasmCompileRequest, WasmCompileResult } from './wasm-toolchain-types'
 
 /**
  * Canonical progress callback the pipeline passes to every port
@@ -333,6 +334,10 @@ export interface CompilerPlatformPort {
 
   /** Step 12 of the editor pipeline.  Arduino-CLI compile. */
   compileArduino(args: CompileArduinoArgs, log: PlatformLog): Promise<CompileArduinoResult>
+
+  /** Compiles a request with the in-editor WebAssembly toolchain; the simulator build uses it in place of
+   *  arduino-cli.  Both platforms run the same shared compile service, so the request and result are the same. */
+  compileToWasm(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult>
 
   /** Step 13a of the editor pipeline (runtime v4 path).  Upload
    *  the strucpp bundle. */

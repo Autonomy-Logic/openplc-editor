@@ -376,6 +376,7 @@ PLCProjectData -> Preprocess POUs -> ST transpiler (in-process) -> strucpp -> C+
                                                     defines.h (pins, Modbus, MD5)
                                                                            |
                                                     Arduino CLI / openplc-compiler -> firmware
+                                                    WebAssembly toolchain -> simulator.wasm (OpenPLC Simulator)
 ```
 
 Structured Text is generated in-process by the TS transpiler
@@ -435,12 +436,24 @@ that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its r
   channel.
 - **Startup:** the toolchain loads while the splash is up, and the main window appears only once it is ready. If it
   cannot load, the splash shows the reason with a Quit button.
-- **CLI:** no `openplc-cli` command compiles to WebAssembly yet, so the CLI never loads the toolchain. The service
-  loads it on first use, which is how a future CLI command will get it.
+- **CLI:** the toolchain loads on first use, so only `openplc-cli compile` for the OpenPLC Simulator loads it.
 - **Packaging:** the package ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
   entitlement in `assets/entitlements.mac.plist` lets it run under the hardened runtime.
 - **Running a module** is the caller's job. Instantiating one in the renderer needs `'wasm-unsafe-eval'` in the
   renderer CSP (`src/index.ejs`), which is not there today.
+
+**Simulator build.** The OpenPLC Simulator target builds with this toolchain, not arduino-cli: the pipeline's
+simulator branch (`compileSimulatorModule` in `src/backend/shared/compile/pipeline.ts`) turns the composed firmware
+files into one request (`steps/build-simulator-wasm-request.ts`) and calls `CompilerPlatformPort.compileToWasm`. The
+sketch becomes `examples/Baremetal/Baremetal.cpp` with `Arduino.h` included and Arduino-style prototypes
+(`steps/ino-prototypes.ts`); the network stack and the Modbus TCP, OPC UA and S7 units are left out, Modbus RTU stays
+for the debugger. The firmware skeleton carries `resources/sources/wasm-sim/`: the host shim `sim_main.cpp`, a stub `Arduino.h` and the
+ArduinoCore-API (LGPL-2.1, commit `0f4e57ea`, licence in `wasm-sim/core/`). The module is a reactor that imports
+`env.host_clock_us` and `env.host_uart_write` and exports `sim_setup`, `sim_loop`, `sim_uart_receive` and
+`sim_scan_period_us`; time moves only when the host advances it. The simulator has no pins: its `defines.h` declares
+none and `resources/sources/hal/simulator.cpp` does no I/O. No Arduino core is installed for it.
+The desktop writes the module to `<build>/OpenPLC Simulator/simulator.wasm`. The editor builds the simulator only
+from Play; `e2e/wasm-simulator-build.spec.ts` builds through `openplc-cli compile`.
 
 **Updating the toolchain:** change the exact `@yowasp/clang` version in `package.json` in both repos (with both
 lockfiles, `pnpm-lock.yaml` included on the web), then run `e2e/wasm-toolchain.spec.ts` in both repos, including
