@@ -173,6 +173,17 @@ static void extremes(void) {
     hmi_text(20, 190, "still drawn", -1, 16, HMI_FONT_BOLD, HMI_ALIGN_LEFT, 0xFFFFFF);
 }
 
+/* Every size from 7 to 40 lu with sub-pixel pen positions: the float text path, sensitive to FMA. */
+static void text_sweep(void) {
+    hmi_clear(0xFFFFFF);
+    int32_t y = 2;
+    for (int32_t size = 7; size <= 40; size++) {
+        int font = size % 2 ? HMI_FONT_BOLD : HMI_FONT_REGULAR;
+        hmi_text(3 + size % 5, y, "Wavy 0.5 gjq AVT \xC3\x84\xC3\xB6 1/3", -1, size, font, HMI_ALIGN_LEFT, 0x101010);
+        y += size * 5 / 8 + 1;
+    }
+}
+
 static void wide_poly(void) {
     hmi_clear(0xFFFFFF);
     hmi_poly_begin(0x3050A0);
@@ -192,6 +203,8 @@ static const scene_t k_scenes[] = {
     {"text", 340, 280, 256, 0, 0, text},
     {"text_2x", 340, 280, 512, 0, 0, text},
     {"text_1_25x", 340, 280, 320, 3, 2, text},
+    {"text_sweep_1_14x", 420, 560, 293, 0, 0, text_sweep},
+    {"text_sweep_1_71x", 420, 560, 437, 1, 3, text_sweep},
     {"themes", 340, 245, 256, 0, 0, themes},
     {"frames", 340, 310, 256, 0, 0, frames},
     {"extremes", 340, 220, 256, 0, 0, extremes},

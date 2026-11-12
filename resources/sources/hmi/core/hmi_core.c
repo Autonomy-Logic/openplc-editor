@@ -554,7 +554,7 @@ static void copy_text(char *dst, int cap, const char *src, int len) {
     if (!src) len = 0;
     else if (len < 0) len = (int)strlen(src);
     if (len > cap - 1) len = hmi_utf8_clip(src, len, cap - 1);
-    if (len > 0) memcpy(dst, src, (size_t)len);
+    if (len > 0) memmove(dst, src, (size_t)len); /* src may be dst: hmi_kbd_set_text(hmi_kbd_text(), n) */
     dst[len] = 0;
 }
 

@@ -1,5 +1,5 @@
 /**
- * The fonts the HMI may load (BR45): bundled with OpenPLC, pinned by SHA-256. Ids match `enum hmi_font` in the C
+ * The only fonts the HMI may load: bundled with OpenPLC, pinned by SHA-256. Ids match `enum hmi_font` in the C
  * core (`resources/sources/hmi/core/hmi_core.h`); the files live in `resources/sources/hmi/fonts/`.
  *
  * Each face comes in two variants with the same outlines, advances and kerning for the characters they share:

@@ -3425,6 +3425,8 @@ static void stbtt__rasterize_sorted_edges(stbtt__bitmap *result, stbtt__edge *e,
       scanline = (float *) STBTT_malloc((result->w*2+1) * sizeof(float), userdata);
    else
       scanline = scanline_data;
+   if (scanline == NULL)
+      return;
 
    scanline2 = scanline + result->w;
 

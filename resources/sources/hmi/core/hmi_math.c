@@ -1,5 +1,4 @@
 /* HMI core: integer trigonometry, the ellipse table and number formatting. */
-#include <stdio.h>
 #include <string.h>
 
 #include "hmi_internal.h"
@@ -88,53 +87,81 @@ int hmi_format_int(char *buf, int size, int32_t v) {
     return out;
 }
 
+/* Prints the magnitude in limbs (little-endian 32-bit words) in decimal, most significant digit first. */
+static int put_decimal(char *tmp, uint32_t limbs[4]) {
+    int len = 0;
+    char rev[48];
+    do {
+        uint64_t rem = 0;
+        for (int i = 3; i >= 0; i--) {
+            uint64_t cur = (rem << 32) | limbs[i];
+            limbs[i] = (uint32_t)(cur / 10u);
+            rem = cur % 10u;
+        }
+        rev[len++] = (char)('0' + (int)rem);
+    } while (limbs[0] | limbs[1] | limbs[2] | limbs[3]);
+    for (int i = 0; i < len; i++) tmp[i] = rev[len - 1 - i];
+    return len;
+}
+
+static int emit(char *buf, int size, const char *s, int n) {
+    int out = n < size - 1 ? n : size - 1;
+    memcpy(buf, s, (size_t)out);
+    buf[out] = 0;
+    return out;
+}
+
 int hmi_format_real(char *buf, int size, float v, int d) {
     static const uint32_t k_pow10[7] = {1u, 10u, 100u, 1000u, 10000u, 100000u, 1000000u};
-    if (!buf || size < 2) {
-        if (buf && size == 1) buf[0] = 0;
-        return 0;
-    }
+    if (!buf || size < 1) return 0;
     if (d < 0) d = 0;
     if (d > 6) d = 6;
     uint32_t bits;
     memcpy(&bits, &v, sizeof bits);
     int neg = (bits >> 31) != 0; /* sign bit, so -0.0 prints "-0" as printf does */
-    float a = neg ? -v : v;
-    /* NaN, infinities, |v| >= 2^32 and magnitudes below 2^-16 (not exact in Q40) go through printf. */
-    if (!(a < 4294967296.0f) || (a != 0.0f && a < 1.0f / 65536.0f)) {
-        int n = snprintf(buf, (size_t)size, "%.*f", d, (double)v);
-        if (n < 0) {
-            buf[0] = 0;
-            return 0;
+    uint32_t exp = (bits >> 23) & 0xFFu, mant = bits & 0x7FFFFFu;
+    if (exp == 0xFFu) return mant ? emit(buf, size, "NaN", 3) : neg ? emit(buf, size, "-Inf", 4) : emit(buf, size, "Inf", 3);
+    /* v = m * 2^k exactly, m < 2^24. */
+    uint32_t m = exp ? (mant | 0x800000u) : mant;
+    int k = exp ? (int)exp - 150 : -149;
+    uint32_t ip[4] = {0, 0, 0, 0}; /* integer part, up to 128 bits */
+    uint64_t frac = 0;              /* fraction scaled by 10^d, rounded half to even */
+    if (k >= 0) {
+        /* m << k across the limbs (k <= 104). */
+        int word = k / 32, shift = k % 32;
+        ip[word] = m << shift;
+        if (shift && word + 1 < 4) ip[word + 1] = m >> (32 - shift);
+    } else {
+        int s = -k;
+        uint32_t whole = s < 32 ? m >> s : 0;
+        uint64_t rest = s < 32 ? (m & ((1u << s) - 1u)) : m; /* fraction bits, value rest / 2^s */
+        ip[0] = whole;
+        uint64_t num = rest * k_pow10[d];                    /* < 2^44 */
+        uint64_t q = s < 64 ? num >> s : 0;
+        uint64_t rem = s < 64 ? num & ((((uint64_t)1) << s) - 1u) : num;
+        /* half = 2^(s-1); s >= 64 leaves num < half. */
+        if (s < 64) {
+            uint64_t half = ((uint64_t)1) << (s - 1);
+            uint64_t last = d > 0 ? q : whole;
+            if (rem > half || (rem == half && (last & 1u))) q++;
         }
-        return n < size ? n : size - 1;
+        if (q >= k_pow10[d]) {
+            q -= k_pow10[d];
+            ip[0]++; /* whole < 2^24: no carry into the next limb */
+        }
+        frac = q;
     }
-    uint32_t ip = (uint32_t)a;
-    float f = a - (float)ip;                         /* exact */
-    uint64_t fq = (uint64_t)(f * 1099511627776.0f); /* f in Q40, exact for a >= 2^-16 */
-    uint64_t prod = fq * k_pow10[d];
-    uint64_t frac = prod >> 40, rem = prod & ((1ull << 40) - 1), half = 1ull << 39;
-    uint64_t last = d > 0 ? frac : ip;
-    if (rem > half || (rem == half && (last & 1u))) frac++; /* round half to even on the exact value */
-    if (frac >= k_pow10[d]) {
-        frac -= k_pow10[d];
-        ip++;
-    }
-    char tmp[32];
+    char tmp[64];
     int len = 0;
-    for (int i = 0; i < d; i++) {
-        tmp[len++] = (char)('0' + (int)(frac % 10u));
-        frac /= 10u;
+    if (neg) tmp[len++] = '-';
+    len += put_decimal(tmp + len, ip);
+    if (d > 0) {
+        tmp[len++] = '.';
+        for (int i = d - 1; i >= 0; i--) {
+            tmp[len + i] = (char)('0' + (int)(frac % 10u));
+            frac /= 10u;
+        }
+        len += d;
     }
-    if (d > 0) tmp[len++] = '.';
-    uint64_t n = ip;
-    do {
-        tmp[len++] = (char)('0' + (int)(n % 10u));
-        n /= 10u;
-    } while (n > 0);
-    if (neg) tmp[len++] = '-'; /* as printf: -0.001 with 2 decimals is "-0.00" */
-    int out = 0;
-    while (len > 0 && out < size - 1) buf[out++] = tmp[--len];
-    buf[out] = 0;
-    return out;
+    return emit(buf, size, tmp, len);
 }

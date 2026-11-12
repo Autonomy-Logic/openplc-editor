@@ -58,7 +58,7 @@ static inline void hmi_wr_u32(uint8_t *p, uint32_t v) {
 extern const unsigned char *const hmi_font_table[HMI_FONTS];
 
 /** Text advance in font units, before scaling; also returns the face's units per em. 0 when no face is built in. */
-int32_t hmi_text_units(int font, const char *s, int len, int32_t *units_per_em);
+int64_t hmi_text_units(int font, const char *s, int len, int32_t *units_per_em);
 
 /** Decodes one UTF-8 code point at s[*i] and advances *i; an invalid byte decodes as itself (Latin-1). */
 int hmi_utf8_next(const unsigned char *s, int len, int *i);

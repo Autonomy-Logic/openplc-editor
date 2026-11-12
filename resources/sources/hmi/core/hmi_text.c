@@ -1,5 +1,9 @@
 /* HMI core: fonts, text metrics, the glyph cache and text drawing. Fonts come only from the generated table. */
-/* Float results must match on every target: no fused multiply-add (glyph rasterization is float). */
+/* Float results must match on every target: no fused multiply-add. clang honours this pragma only without
+ * -ffp-contract=fast, so builds must pass -ffp-contract=off. */
+#if defined(__FAST_MATH__)
+#error "the HMI core must not be built with -ffast-math: text pixels would differ between targets"
+#endif
 #if defined(__clang__)
 #pragma STDC FP_CONTRACT OFF
 #elif defined(__GNUC__)
@@ -9,6 +13,25 @@
 #include <string.h>
 
 #include "hmi_internal.h"
+
+/* stb_truetype allocations go through here, so a glyph whose rasterization ran out of memory is never drawn or cached. */
+static int g_alloc_failed;
+#ifdef HMI_TEST_ALLOC_FAIL
+int hmi_test_alloc_fail; /* test builds: allocations fail while non-zero */
+#endif
+static void *stb_alloc(size_t n) {
+#ifdef HMI_TEST_ALLOC_FAIL
+    if (hmi_test_alloc_fail) {
+        g_alloc_failed = 1;
+        return NULL;
+    }
+#endif
+    void *p = malloc(n);
+    if (!p) g_alloc_failed = 1;
+    return p;
+}
+#define STBTT_malloc(x, u) ((void)(u), stb_alloc(x))
+#define STBTT_free(x, u) ((void)(u), free(x))
 
 /* stb_truetype allocates edges in blocks of this many; small blocks fit the fragmented heap of microcontrollers. */
 #ifndef STBTT_HHEAP_CHUNK
@@ -94,19 +117,23 @@ static stbtt_fontinfo *face(int font) {
 
 static int32_t units_per_em(const stbtt_fontinfo *f) { return ttUSHORT(f->data + f->head + 18); }
 
+/* units * size_q4 / upem rounded to nearest and saturated; units is clamped to 32 bits so the product fits. */
 static int32_t scale_units(int64_t units, int32_t size_q4, int32_t upem) {
     if (upem <= 0) return 0;
+    if (units > INT32_MAX) units = INT32_MAX;
+    if (units < INT32_MIN) units = INT32_MIN;
     int64_t w = units * size_q4;
-    return (int32_t)(w >= 0 ? (w + upem / 2) / upem : -((-w + upem / 2) / upem));
+    int64_t q = w >= 0 ? (w + upem / 2) / upem : -((-w + upem / 2) / upem);
+    return (int32_t)(q > INT32_MAX ? INT32_MAX : q < INT32_MIN ? INT32_MIN : q);
 }
 
-int32_t hmi_text_units(int font, const char *s, int len, int32_t *upem) {
+int64_t hmi_text_units(int font, const char *s, int len, int32_t *upem) {
     stbtt_fontinfo *f = face(font);
     if (upem) *upem = f ? units_per_em(f) : 0;
     if (!f || !s || len <= 0) return 0;
     const unsigned char *u = (const unsigned char *)s;
     int i = 0, prev = 0;
-    int32_t units = 0;
+    int64_t units = 0;
     while (i < len) {
         int cp = hmi_utf8_next(u, len, &i);
         int adv, lsb;
@@ -120,7 +147,7 @@ int32_t hmi_text_units(int font, const char *s, int len, int32_t *upem) {
 
 int32_t hmi_font_text_width_q4(int font, const char *s, int len, int32_t size_q4) {
     int32_t upem;
-    int32_t units = hmi_text_units(font, s, len, &upem);
+    int64_t units = hmi_text_units(font, s, len, &upem);
     return scale_units(units, size_q4, upem);
 }
 
@@ -191,6 +218,13 @@ static int gc_ready(void) {
     return 1;
 }
 
+#ifdef HMI_TEST_ALLOC_FAIL
+void hmi_test_glyph_cache_clear(void);
+void hmi_test_glyph_cache_clear(void) {
+    if (g_gc_arena) gc_clear();
+}
+#endif
+
 static const uint8_t *scratch_glyph(stbtt_fontinfo *f, int cp, float scale, float sx, float sy, int gw, int gh) {
     int need = gw * gh;
     if (need > g_scratch_cap) {
@@ -199,8 +233,9 @@ static const uint8_t *scratch_glyph(stbtt_fontinfo *f, int cp, float scale, floa
         g_scratch = p;
         g_scratch_cap = need;
     }
+    g_alloc_failed = 0;
     stbtt_MakeCodepointBitmapSubpixel(f, g_scratch, gw, gh, gw, scale, scale, sx, sy, cp);
-    return g_scratch;
+    return g_alloc_failed ? NULL : g_scratch;
 }
 
 /* The gw x gh coverage bitmap of a glyph, from the cache or freshly rasterized; NULL when memory is short. */
@@ -215,7 +250,9 @@ static const uint8_t *glyph(stbtt_fontinfo *f, int font, int cp, float scale, fl
             gc_entry_t *e = &g_gc[(h + (uint32_t)probe) % GC_SLOTS];
             if (e->off < 0) {
                 uint8_t *bm = g_gc_arena + g_gc_used;
+                g_alloc_failed = 0;
                 stbtt_MakeCodepointBitmapSubpixel(f, bm, gw, gh, gw, scale, scale, sx, sy, cp);
+                if (g_alloc_failed) return NULL; /* incomplete bitmap: not cached, not drawn */
                 memcpy(e->key, k, sizeof k);
                 e->off = g_gc_used;
                 g_gc_used += need;
@@ -245,6 +282,12 @@ void hmi_raster_text(hmi_raster_ctx_t *c, const uint8_t *p) {
     float dev = (float)c->scale_q8 / 256.0f;                       /* device pixels per lu */
     float scale_px = scale_lu * dev;
     if (!(scale_px > 0.0f)) return;
+    /* A face whose em box exceeds the drawable glyph size draws nothing; stopping here also keeps stb's float to
+     * int box conversions in range. */
+    int bx0, by0, bx1, by1;
+    stbtt_GetFontBoundingBox(f, &bx0, &by0, &bx1, &by1);
+    float extent = (float)((bx1 - bx0) > (by1 - by0) ? (bx1 - bx0) : (by1 - by0));
+    if (!(extent * scale_px <= (float)GLYPH_MAX_SIDE)) return;
     int ascent, descent, gap;
     stbtt_GetFontVMetrics(f, &ascent, &descent, &gap);
 

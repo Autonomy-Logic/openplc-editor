@@ -91,9 +91,20 @@ static void test_format_real(void) {
                                      99.995f, 123456.789f, 4294967040.0f, 4294967296.0f, 1e20f, -1e20f, 3.4e38f};
     for (size_t i = 0; i < sizeof k_values / sizeof k_values[0]; i++)
         for (int d = 0; d <= 6; d++) check_real(k_values[i], d);
-    check_real(NAN, 2);
-    check_real(INFINITY, 1);
-    check_real(-INFINITY, 0);
+    static const float k_edges[] = {1e-7f, 1e-30f, 1.4e-45f, 1.17549435e-38f, 7.62939453e-6f, 1.52587891e-5f,
+                                    0.5e-6f, 4.9999998e-7f, 9.5e-7f, 1e25f, 3.4028235e38f, -3.4028235e38f, 16777217.0f,
+                                    0.05f, 0.15f, 0.25f, 0.35f, 2.5e-6f, 1099511627776.0f};
+    for (size_t i = 0; i < sizeof k_edges / sizeof k_edges[0]; i++)
+        for (int d = 0; d <= 6; d++) check_real(k_edges[i], d);
+    char s[16];
+    hmi_format_real(s, sizeof s, NAN, 2);
+    CHECK(strcmp(s, "NaN") == 0);
+    hmi_format_real(s, sizeof s, -NAN, 2);
+    CHECK(strcmp(s, "NaN") == 0);
+    hmi_format_real(s, sizeof s, INFINITY, 1);
+    CHECK(strcmp(s, "Inf") == 0);
+    hmi_format_real(s, sizeof s, -INFINITY, 0);
+    CHECK(strcmp(s, "-Inf") == 0);
     uint32_t x = 12345;
     for (int i = 0; i < 200000; i++) {
         x ^= x << 13;
@@ -102,11 +113,13 @@ static void test_format_real(void) {
         float v;
         uint32_t bits = x;
         memcpy(&v, &bits, sizeof v);
-        if (isnan(v)) continue;
+        if (isnan(v) || isinf(v)) continue;
         check_real(v, (int)(x % 7));
         check_real((float)(int32_t)x / 1000.0f, (int)((x >> 3) % 7));
     }
     char b[4];
+    CHECK_EQ(hmi_format_real(b, sizeof b, 3.4e38f, 0), 3);
+    CHECK(strcmp(b, "339") == 0); /* 3.4e38f is 339999995...e38 */
     CHECK_EQ(hmi_format_real(b, sizeof b, 123.456f, 2), 3);
     CHECK(strcmp(b, "123") == 0);
     CHECK_EQ(hmi_format_real(b, 1, 1.0f, 0), 0);
@@ -369,6 +382,9 @@ static void test_keys_and_pages(void) {
     }
     hmi_kbd_set_text(big, 400);
     CHECK_EQ(strlen(hmi_kbd_text()), 254);
+    hmi_kbd_set_text("abcdef", -1);
+    hmi_kbd_set_text(hmi_kbd_text(), 3); /* the source is the destination */
+    CHECK(strcmp(hmi_kbd_text(), "abc") == 0);
 
     CHECK_EQ(hmi_page(), 0);
     CHECK_EQ(hmi_page_back(), 0);
@@ -463,6 +479,16 @@ static void test_text(void) {
         CHECK(hmi_font_line_height_q4(HMI_FONT_REGULAR, 320) > 320);
     }
     if (have_bold && have_regular) CHECK(w_bold > w_reg);
+    /* Widths saturate instead of overflowing. */
+    if (have_regular) {
+        CHECK_EQ(hmi_text_width("WW", -1, 1 << 27, HMI_FONT_REGULAR), 134217728);
+        CHECK_EQ(hmi_font_text_width_q4(HMI_FONT_REGULAR, "WW", 2, INT32_MAX), INT32_MAX);
+        int n = 2000000;
+        char *many = (char *)malloc((size_t)n);
+        memset(many, 'W', (size_t)n);
+        CHECK_EQ(hmi_text_width(many, n, 1000, HMI_FONT_REGULAR), 134217728);
+        free(many);
+    }
     if (!have_bold && have_regular) CHECK_EQ(w_bold, w_reg); /* missing face falls back */
     if (!have_regular && !have_bold) {
         CHECK_EQ(w_reg, 0);
@@ -494,6 +520,59 @@ static void test_text(void) {
     CHECK_EQ(hmi_utf8_clip("abc\xC3\xA9", 5, 4), 3);
     CHECK_EQ(hmi_utf8_clip("abc\xC3\xA9", 5, 5), 5);
     CHECK_EQ(hmi_utf8_clip("abc", 3, 0), 0);
+}
+
+/* ---- text under memory pressure and at extreme scales ---- */
+
+extern int hmi_test_alloc_fail;
+void hmi_test_glyph_cache_clear(void);
+
+/* Renders one line of text at size lu and 2x density into px (200 x 80 px). */
+static void render_text_line(int32_t size, uint8_t *px) {
+    hmi_core_init(100, 40);
+    hmi_frame_begin();
+    hmi_clear(0xFFFFFF);
+    hmi_text(2, 0, "Hag", -1, size, HMI_FONT_REGULAR, HMI_ALIGN_LEFT, 0x000000);
+    size_t len;
+    const uint8_t *dl = hmi_frame_end(&len);
+    CHECK_EQ(hmi_raster_render(dl, len, px, 200, 80, 200, 0, 80, 512, 0, 0), HMI_RASTER_OK);
+}
+
+static int all_white(const uint8_t *px, size_t n) {
+    for (size_t i = 0; i < n; i++)
+        if (px[i] != 255) return 0;
+    return 1;
+}
+
+static void test_text_failures(void) {
+    if (hmi_font_table[HMI_FONT_REGULAR] == NULL && hmi_font_table[HMI_FONT_BOLD] == NULL) return;
+    static uint8_t ref[200 * 80 * 4], px[200 * 80 * 4];
+    /* 12 lu glyphs go through the glyph cache; 36 lu glyphs (wider than 64 px at 2x, about 140 px tall) through the
+     * scratch buffer and stb_truetype's heap scanline. */
+    static const int32_t k_sizes[] = {12, 36};
+    for (size_t i = 0; i < 2; i++) {
+        render_text_line(k_sizes[i], ref);
+        CHECK(!all_white(ref, sizeof ref));
+        hmi_test_glyph_cache_clear();
+        hmi_test_alloc_fail = 1;
+        render_text_line(k_sizes[i], px);
+        hmi_test_alloc_fail = 0;
+        CHECK(all_white(px, sizeof px)); /* nothing drawn when the glyph could not be rasterized */
+        render_text_line(k_sizes[i], px);
+        CHECK(memcmp(px, ref, sizeof px) == 0); /* and nothing incomplete was cached */
+    }
+    /* A face too large to draw is skipped before stb converts its boxes to int (no overflow). */
+    hmi_core_init(100, 40);
+    hmi_frame_begin();
+    hmi_text(0, -121503744, "W", -1, 134217727, HMI_FONT_REGULAR, HMI_ALIGN_LEFT, 0);
+    size_t len;
+    const uint8_t *dl = hmi_frame_end(&len);
+    uint8_t *big = (uint8_t *)calloc(64 * 64 * 4, 1);
+    CHECK_EQ(hmi_raster_render(dl, len, big, 64, 64, 64, 0, 64, 32768, 0, 0), HMI_RASTER_OK);
+    int untouched = 1;
+    for (size_t i = 0; i < 64 * 64 * 4; i++) untouched &= big[i] == 0;
+    CHECK(untouched);
+    free(big);
 }
 
 /* ---- rasterizer: arguments, malformed lists, hashes, deadlines ---- */
@@ -620,6 +699,7 @@ int main(void) {
     test_themes();
     test_sessions();
     test_text();
+    test_text_failures();
     test_raster();
     printf("unit: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures != 0;

@@ -2,7 +2,7 @@ name: CI - HMI Core
 
 on:
   workflow_dispatch:
-  # Called from `ci.yml` on every pull request.
+  # Called from `ci.yml` on pull requests to main and development; can also be started by hand.
   workflow_call:
 
 jobs:

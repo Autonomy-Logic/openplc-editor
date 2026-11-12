@@ -187,8 +187,9 @@ int32_t hmi_cos(int32_t deg, int32_t amp);
 /** Writes v in decimal into buf (NUL terminated, at most size - 1 characters); returns the length. */
 int hmi_format_int(char *buf, int size, int32_t v);
 /**
- * Writes v with d decimals (0..6) into buf like printf "%.*f", rounding half to even, using integer arithmetic for
- * |v| < 2^32. Returns the length.
+ * Writes v with d decimals (0..6) into buf (NUL terminated, at most size - 1 characters) exactly as printf "%.*f"
+ * prints a finite value, rounding half to even, with integer arithmetic only. NaN and infinities print as "NaN",
+ * "Inf" and "-Inf". Returns the length.
  */
 int hmi_format_real(char *buf, int size, float v, int d);
 

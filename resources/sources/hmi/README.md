@@ -25,9 +25,11 @@ screens use, in the project's font variant). Text is rasterized from the TrueTyp
 
 ## Rules that keep the output identical everywhere
 
-- Geometry, colors and text widths are integers. Floats are used only by stb_truetype's glyph rasterization and for
-  formatting values that do not fit the integer formatter.
-- No fused multiply-add: `-ffp-contract=off` in every build (also set by pragma in `hmi_text.c`).
+- Geometry, colors and text widths are integers. Floats are used only for text: glyph placement (pen and baseline in
+  `hmi_raster_text`) and stb_truetype's glyph rasterization. Number formatting is exact integer arithmetic.
+- No fused multiply-add: every build must pass `-ffp-contract=off`. The pragma in `hmi_text.c` protects gcc builds
+  only; clang ignores it under `-ffp-contract=fast`, and the text scenes in `tests/hmi-core` fail when that happens.
+  `-ffast-math` is refused at compile time.
 - Trigonometry comes from constant integer tables.
 - Device coordinates are clamped to +-131072 pixels, so every per-pixel product fits 64 bits.
 

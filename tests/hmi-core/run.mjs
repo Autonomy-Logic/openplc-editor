@@ -22,7 +22,15 @@ const ROOT = join(HERE, '..', '..')
 const CORE = join(ROOT, 'resources', 'sources', 'hmi', 'core')
 const CORE_SOURCES = ['hmi_core.c', 'hmi_theme.c', 'hmi_math.c', 'hmi_raster.c', 'hmi_text.c']
 const CFLAGS = ['-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', '-ffp-contract=off']
-const SANITIZE = ['-O1', '-g', '-fsanitize=address,undefined', '-fno-sanitize-recover=all', '-fno-omit-frame-pointer']
+const SANITIZE = [
+  '-O1',
+  '-g',
+  '-fsanitize=address,undefined,float-cast-overflow',
+  '-fno-sanitize-recover=all',
+  '-fno-omit-frame-pointer',
+]
+/* Unit builds may force stb_truetype allocations to fail. */
+const UNIT_DEFINES = ['-DHMI_TEST_ALLOC_FAIL']
 /* Font tables: [variant, faces]. Unit tests run with each; scenes with the two complete ones. */
 const TABLES = [
   ['full', 'all'],
@@ -101,12 +109,13 @@ function wasmTree(tables) {
   return { core, tests }
 }
 
-async function wasmBuild(tree, sources, out) {
+async function wasmBuild(tree, sources, out, flags = []) {
   const { runClang } = await import('@yowasp/clang')
   const args = [
     'clang',
     '--target=wasm32-wasip1',
     ...CFLAGS,
+    ...flags,
     '-Icore',
     ...CORE_SOURCES.map((s) => `core/${s}`),
     ...sources,
@@ -180,7 +189,7 @@ async function main() {
       for (const [variant, faces] of TABLES)
         units[key(variant, faces)] = nativeBuild(
           cc,
-          CFLAGS,
+          [...CFLAGS, ...UNIT_DEFINES],
           [join(HERE, 'unit.c'), tables[key(variant, faces)]],
           join(work, `unit_${name}_${key(variant, faces)}`),
         )
@@ -201,6 +210,7 @@ async function main() {
           tree,
           ['tests/unit.c', `tests/fonts_${key(variant, faces)}.c`],
           join(work, `unit_${key(variant, faces)}.wasm`),
+          UNIT_DEFINES,
         )
       targets.push({ name: 'wasm32', scenes, units })
     }
@@ -256,12 +266,53 @@ async function main() {
       }
     }
 
+    /* FMA guard: where a compiler can fuse the text code, a -ffp-contract=fast build must fail the golden check. */
+    if (reference !== null) {
+      const expected = reference
+        .split('\n')
+        .filter((l) => l.startsWith('full '))
+        .map((l) => l.slice(5))
+        .join('\n')
+      for (const cc of opts.cc) {
+        const asm = run(cc, [
+          '-std=c11',
+          '-O2',
+          '-ffp-contract=fast',
+          `-I${CORE}`,
+          '-S',
+          '-o',
+          '-',
+          join(CORE, 'hmi_text.c'),
+        ])
+        const fused = (must(asm, `${cc} -S hmi_text.c`).match(/\b(v?f(n?)m(add|sub)|fmla|fmls)\w*/g) ?? []).length
+        if (fused === 0) {
+          console.log(`${basename(cc)} FMA guard: no fused operations on this target or compiler`)
+          continue
+        }
+        const fast = nativeBuild(
+          cc,
+          ['-std=c11', '-O2', '-ffp-contract=fast'],
+          [join(HERE, 'scenes.c'), tables[key('full', 'all')]],
+          join(work, `scenes_fast_${basename(cc)}`),
+        )
+        const r = runTarget(fast)
+        if (r.status === 0 && r.stdout.trim() === expected.trim())
+          fail(
+            `${basename(cc)}: a build with ${fused} fused operations matches golden.txt; the scenes cannot detect FMA`,
+          )
+        else
+          console.log(
+            `${basename(cc)} FMA guard: a -ffp-contract=fast build (${fused} fused operations) fails the golden check`,
+          )
+      }
+    }
+
     if (opts.sanitize) {
       const cc = opts.cc[0]
       const unit = nativeBuild(
         cc,
-        ['-std=c11', ...SANITIZE, '-Wall', '-Wextra', '-Werror'],
-        [join(HERE, 'unit.c'), tables[key('compact', 'all')]],
+        ['-std=c11', ...SANITIZE, ...UNIT_DEFINES, '-Wall', '-Wextra', '-Werror'],
+        [join(HERE, 'unit.c'), tables[key('full', 'all')]],
         join(work, 'unit_san'),
       )
       const r = runTarget(unit)
