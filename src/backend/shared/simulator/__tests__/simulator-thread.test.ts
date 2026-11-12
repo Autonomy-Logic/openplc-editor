@@ -197,8 +197,11 @@ describe('ThreadedSimulator with serveSimulatorThread', () => {
     send({ type: 'start', module: fixtureModule() })
     send({ type: 'start', module: fixtureModule() })
     send({ type: 'stop' })
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(channel.posted.filter((message) => parseSimulatorThreadReply(message)?.type === 'started')).toHaveLength(2)
+    const started = (): number =>
+      channel.posted.filter((message) => parseSimulatorThreadReply(message)?.type === 'started').length
+    const deadline = Date.now() + 10000
+    while (started() < 2 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(started()).toBe(2)
   })
 })
 

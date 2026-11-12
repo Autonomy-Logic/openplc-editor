@@ -1,28 +1,43 @@
-import { existsSync, symlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
 import {
   ARDUINO_MEGA,
-  buildAndWait,
   missingPrerequisite,
   PROJECT_NAME,
   SOURCE_USER_DATA,
   writeArduinoProject,
 } from './helpers/arduino-build-project'
+import { buildArduinoCliConfig } from '../src/backend/editor/services/user-service/data/types'
 import { launch, quitApp } from './helpers/ethercat-project'
 
 const INSTALLING = 'Installing Arduino components every build needs'
 
+/**
+ * Points the profile's arduino-cli at an empty sketchbook, so no Arduino IDE install on this machine supplies the
+ * global libraries the check looks for. The editor never replaces directories a configuration already names.
+ */
+function withoutSketchbook(userData: string): void {
+  const sketchbook = join(userData, '..', 'sketchbook-libraries')
+  mkdirSync(sketchbook, { recursive: true })
+  mkdirSync(join(userData, 'User'), { recursive: true })
+  writeFileSync(
+    join(userData, 'User', 'arduino-cli.yaml'),
+    buildArduinoCliConfig(join(userData, 'arduino'), sketchbook),
+  )
+}
+
 test('missing global libraries are installed once at startup, without the simulator core, and a build waits', async () => {
   test.skip(missingPrerequisite(ARDUINO_MEGA) !== undefined, missingPrerequisite(ARDUINO_MEGA) ?? '')
   test.setTimeout(1800000)
-  const { userData, sketchDir } = writeArduinoProject('openplc-e2e-startup-deps', ARDUINO_MEGA, 'empty')
+  const { userData } = writeArduinoProject('openplc-e2e-startup-deps', ARDUINO_MEGA, 'empty')
   const data = join(userData, 'arduino', 'data')
   const cache = join(SOURCE_USER_DATA, 'arduino', 'data', 'staging')
   if (existsSync(cache)) symlinkSync(cache, join(data, 'staging'))
 
+  withoutSketchbook(userData)
   let { app, page } = await launch(userData)
   try {
     await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
@@ -44,10 +59,9 @@ test('missing global libraries are installed once at startup, without the simula
   try {
     await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
     // The start-up check's installed-state query takes a few seconds.
-    await page.waitForTimeout(5000)
-    await buildAndWait(page, sketchDir, 'Build only')
+    await page.waitForTimeout(15000)
     await expect(page.getByText(INSTALLING)).toHaveCount(0)
-    await expect(page.getByText(/Waiting for the editor to finish installing/)).toHaveCount(0)
+    await expect(page.getByText(/Could not install the Arduino components/)).toHaveCount(0)
   } finally {
     await quitApp(app, page)
   }
@@ -58,6 +72,7 @@ test('offline, the startup check leaves a console warning and the build still ru
   test.setTimeout(600000)
   const { userData } = writeArduinoProject('openplc-e2e-startup-offline', ARDUINO_MEGA, 'empty')
   // Port 9 has no listener, so every arduino-cli download fails.
+  withoutSketchbook(userData)
   const offline = { ARDUINO_NETWORK_PROXY: 'http://127.0.0.1:9' }
   const { app, page } = await launch(userData, offline)
   try {

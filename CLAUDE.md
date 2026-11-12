@@ -506,7 +506,7 @@ and ship next to the toolchain; refresh them from the commits the new release wa
 
 ## Key Technologies
 
-- **Electron 35** / **React 18** / **TypeScript** (target ES2022)
+- **Electron 37** (the last line that still runs on macOS 11) / **React 18** / **TypeScript** (target ES2022)
 - **Webpack** (not Vite) with separate main/renderer/preload configs
 - **Zustand 5** + **Immer** for state management
 - **Monaco Editor** for code editing (ST, IL, Python, C++)
