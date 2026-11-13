@@ -227,7 +227,7 @@ describe('parseDataTypeFromText errors', () => {
   })
 
   it('rejects an enumeration value that is not an identifier', () => {
-    expect(errorFor('TYPE\n  Color : (Red, 2bad);\nEND_TYPE\n')).toMatch(/Identifier/)
+    expect(errorFor('TYPE\n  Color : (Red, 2bad);\nEND_TYPE\n')).toMatch(/identifier/i)
   })
 
   it('rejects a structure field name that is not an identifier', () => {

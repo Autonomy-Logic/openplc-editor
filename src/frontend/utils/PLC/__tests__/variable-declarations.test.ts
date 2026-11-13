@@ -523,4 +523,13 @@ describe('the two refined messages', () => {
     expect(message).not.toMatch(/length is not supported on STRING/)
     expect(message).not.toMatch(/Unknown variable block qualifier/)
   })
+
+  it.each([
+    { label: 'a string literal', text: "VAR\n  s : STRING := 'use: STRING[5]';\nEND_VAR" },
+    { label: 'a comment', text: 'VAR\n  s : STRING; (* not a STRING[10] *)\nEND_VAR' },
+  ])('accepts a valid block whose only STRING length sits in $label', ({ text }) => {
+    const result = parseVariableDeclarations(text, context)
+    expect(result.errors).toEqual([])
+    expect(result.variables.map((v) => v.name)).toEqual(['s'])
+  })
 })
