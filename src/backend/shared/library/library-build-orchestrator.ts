@@ -133,7 +133,7 @@ export async function runLibraryBuildPipeline(
   if ('error' in stage1) {
     return fail(emit, stage1.error)
   }
-  const { projectData: stubbedData, knownPous, manifest } = stage1
+  const { projectData: stubbedData, knownPous, manifest, declaredGlobals } = stage1
   emit({ message: `Manifest OK — building "${manifest.name}" v${manifest.version}.`, level: 'info' })
 
   // -------------------------------------------------------------------------
@@ -249,6 +249,7 @@ export async function runLibraryBuildPipeline(
     dependencyArchives: depArchives,
     dependencyRefs: enabledLibraryRefs,
     nativeSources,
+    declaredGlobals,
   })
   if (!stage5.success) {
     for (const err of stage5.errors) {

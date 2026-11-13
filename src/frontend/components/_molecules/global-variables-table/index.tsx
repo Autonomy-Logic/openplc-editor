@@ -14,25 +14,7 @@ import { SelectableDebugCell, SelectableTypeCell } from './selectable-cell'
 
 const columnHelper = createColumnHelper<PLCGlobalVariable>()
 
-/**
- * The columns, built per table rather than shared as one constant.
- *
- * Two tables use these: the Resource globals and a Global Variable List's members. They
- * differ in exactly two ways, so those are the options — everything else, including every
- * cell, is the same code in both, which is the point of building them here.
- *
- * `includeDebug` is off for a list: nothing collects a list member into the debugger's
- * variable set, so the toggle would render a watch that never happens.
- *
- * `includeLocation` is off for a list for the same reason — an address on a list member does
- * not drive anything. The compiler shape a list becomes is a STRUCT, and `AT %QX0.0` on a
- * struct member is accepted and then silently discarded, producing no located mapping, so
- * the serializers deliberately omit it (see `global-variable-list-serializer`). An address a
- * project arrives with is still kept on the member and still written back on export to
- * CODESYS; what is withheld is the editing affordance for a binding openplc cannot honour.
- *
- * `skipReferenceImpact` is on for a list: see the prop's note on the name cell.
- */
+/** Builds the global variables table columns; the options drop the debug and location columns and skip the reference impact handling. */
 const buildColumns = ({
   includeDebug = true,
   includeLocation = true,
@@ -74,7 +56,7 @@ const buildColumns = ({
     size: 300,
     minSize: 80,
     maxSize: 300,
-    cell: SelectableTypeCell,
+    cell: (props) => <SelectableTypeCell {...props} skipReferenceImpact={skipReferenceImpact} />,
   }),
   ...(includeLocation
     ? [
@@ -158,13 +140,7 @@ const GlobalVariablesTable = ({ tableData, selectedRow, handleRowClick }: PLCVar
   )
 }
 
-/**
- * A Global Variable List's members, as a table.
- *
- * Same table and same cells as the Resource globals above — a member is a variable in the
- * same sense a resource global is — with the writes going to the list instead, through the
- * `global-variable-list` scope on the shared variable actions.
- */
+/** A Global Variable List's members as a table, written through the `global-variable-list` scope of the variable actions. */
 const GlobalVariableListTable = ({
   listName,
   tableData,

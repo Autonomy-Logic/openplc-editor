@@ -6,6 +6,7 @@ import { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { MinusIcon } from '../../../assets/icons/interface/Minus'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
 import { StickArrowIcon } from '../../../assets/icons/interface/StickArrow'
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import type { VariablesTable as VariablesTableType } from '../../../store/slices/editor'
 import { selectEditorForPou } from '../../../store/slices/editor/utils'
@@ -86,6 +87,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
   // preference + hidden-snapshot fallback can't drift between the
   // textual and graphical multi-mount paths.
   const editor = useOpenPLCStore((s) => selectEditorForPou(s, propName))
+  const isEditingLocked = useIsEditingLocked()
   const {
     ladderFlows,
     ladderFlowActions: { updateNode, updateNodes },
@@ -93,7 +95,6 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
     fbdFlowActions: { updateNode: updateFBDNode, updateNodes: updateFBDNodes },
     workspace: {
       systemConfigs: { shouldUseDarkMode },
-      isDebuggerVisible,
     },
     workspaceActions: { removeDebugVariable },
     project: {
@@ -550,6 +551,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
   const handleDescriptionChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     event.preventDefault()
     event.stopPropagation()
+    if (isEditingLocked) return
     // This runs on blur: leaving the field without typing is not an edit.
     if (event.target.value === (pou?.documentation ?? '')) return
     updatePouDocumentation(editor.meta.name, event.target.value)
@@ -559,6 +561,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
   const handleDescriptionValueChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     event.preventDefault()
     event.stopPropagation()
+    if (isEditingLocked) return
     setPouDescription(event.target.value)
   }
 
@@ -1171,7 +1174,8 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
                   onBlur={handleDescriptionChange}
                   value={pouDescription}
                   onChange={handleDescriptionValueChange}
-                  className='h-full w-full rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none dark:border-neutral-850 dark:text-neutral-300'
+                  disabled={isEditingLocked}
+                  className='h-full w-full rounded-lg border border-neutral-500 bg-inherit p-2 font-caption text-cp-sm font-normal text-neutral-850 focus:border-brand focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-850 dark:text-neutral-300'
                 />
               </div>
 
@@ -1226,14 +1230,14 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
                     {
                       ariaLabel: 'Add table row button',
                       onClick: handleCreateVariable,
-                      disabled: isDebuggerVisible,
+                      disabled: isEditingLocked,
                       icon: <PlusIcon className='!stroke-brand' />,
                       id: 'add-variable-button',
                     },
                     {
                       ariaLabel: 'Remove table row button',
                       onClick: handleRemoveVariable,
-                      disabled: isDebuggerVisible || parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED,
+                      disabled: isEditingLocked || parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED,
                       icon: <MinusIcon />,
                       id: 'remove-variable-button',
                     },
@@ -1241,7 +1245,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
                       ariaLabel: 'Move table row up button',
                       onClick: () => handleRearrangeVariables(-1),
                       disabled:
-                        isDebuggerVisible ||
+                        isEditingLocked ||
                         parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
                         parseInt(editorVariables.selectedRow) === 0,
                       icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
@@ -1251,7 +1255,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
                       ariaLabel: 'Move table row down button',
                       onClick: () => handleRearrangeVariables(1),
                       disabled:
-                        isDebuggerVisible ||
+                        isEditingLocked ||
                         parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
                         parseInt(editorVariables.selectedRow) === tableData.length - 1,
                       icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,
@@ -1286,13 +1290,14 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
                   {
                     ariaLabel: 'Add table row button',
                     onClick: handleCreateVariable,
+                    disabled: isEditingLocked,
                     icon: <PlusIcon className='!stroke-brand' />,
                     id: 'add-variable-button',
                   },
                   {
                     ariaLabel: 'Remove table row button',
                     onClick: handleRemoveVariable,
-                    disabled: parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED,
+                    disabled: isEditingLocked || parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED,
                     icon: <MinusIcon />,
                     id: 'remove-variable-button',
                   },
@@ -1300,6 +1305,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
                     ariaLabel: 'Move table row up button',
                     onClick: () => handleRearrangeVariables(-1),
                     disabled:
+                      isEditingLocked ||
                       parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
                       parseInt(editorVariables.selectedRow) === 0,
                     icon: <StickArrowIcon direction='up' className='stroke-[#0464FB]' />,
@@ -1309,6 +1315,7 @@ const VariablesEditor = ({ name: propName, isActive: _isActive = true }: Variabl
                     ariaLabel: 'Move table row down button',
                     onClick: () => handleRearrangeVariables(1),
                     disabled:
+                      isEditingLocked ||
                       parseInt(editorVariables.selectedRow) === ROWS_NOT_SELECTED ||
                       parseInt(editorVariables.selectedRow) === tableData.length - 1,
                     icon: <StickArrowIcon direction='down' className='stroke-[#0464FB]' />,

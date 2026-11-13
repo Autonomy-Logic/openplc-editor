@@ -5,6 +5,10 @@ import {
   requiredRuntimeFeatures,
   runtimeCapabilityStateFor,
 } from '@root/middleware/shared/utils/build-gate/runtime-capability-gate'
+import {
+  evaluateVariablesTextGate,
+  variablesTextGateStateFor,
+} from '@root/middleware/shared/utils/build-gate/variables-text-gate'
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { composeLibraryDebugHarness } from '@root/middleware/shared/utils/library-debug/compose-library-debug-harness'
 import { commercialLicenseConsoleLines, demoModeConsoleLines } from '@root/middleware/shared/utils/licensing'
@@ -46,6 +50,7 @@ import { cn } from '../../../utils/cn'
 import { logCompilerEvent } from '../../../utils/debugger-session'
 import { isOpenPLCRuntimeTarget } from '../../../utils/device'
 import { onDeviceFlashRequest } from '../../../utils/device-connect-events'
+import { buildTypeContext } from '../../../utils/generate-iec-string-to-variables'
 import { getErrorMessage } from '../../../utils/get-error-message'
 import { type BuildOption, BuildOptionsPopover } from '../../_features/[workspace]/build-options'
 import { BuildLibraryButton } from '../../_molecules/workspace-activity-bar/default/build-library'
@@ -264,6 +269,26 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     }
   }, [isSimulatorBoard, isDebuggerVisible, simulator, addLog, store])
 
+  /**
+   * True when a POU's declaration text does not parse, after logging and showing the refusal.
+   * Runs after the pre-build save, so the text the user typed is on disk before the build stops.
+   */
+  const refusedForVariablesText = useCallback((): boolean => {
+    const state = store.getState()
+    const verdict = evaluateVariablesTextGate(
+      variablesTextGateStateFor({
+        pous: state.project.data.pous,
+        editorFor: (pouName) => state.editorActions.getEditorFromEditors(pouName) ?? undefined,
+        context: buildTypeContext(state.project.data.pous, state.project.data.dataTypes, state.libraries),
+      }),
+    )
+    if (verdict.kind !== 'refuse') return false
+
+    addLog({ level: 'error', message: `Build refused: ${verdict.reason}` })
+    toast({ title: 'Build refused', description: verdict.reason, variant: 'fail' })
+    return true
+  }, [addLog, store])
+
   const executeSave = useCallback(async (): Promise<boolean> => {
     // 'pre-build', not a user save: the compiler reads source from disk, so
     // this flush has to run even for a project retrieved from a device that has
@@ -349,6 +374,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         const saved = await executeSave()
         if (!saved) return false
       }
+
+      if (refusedForVariablesText()) return false
 
       setIsCompiling(true)
 
@@ -664,6 +691,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       addLog,
       isCompiling,
       executeSave,
+      refusedForVariablesText,
       canEdit,
       jwtToken,
       runtime,
@@ -707,6 +735,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     const saved = await executeSave()
     if (!saved) return
 
+    if (refusedForVariablesText()) return
+
     if (!compiler.compileLibrary) {
       addLog({
         level: 'error',
@@ -740,7 +770,17 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     } finally {
       setIsCompiling(false)
     }
-  }, [compiler, projectData, projectMeta, addLog, isCompiling, canEdit, executeSave, requestConsoleFollow])
+  }, [
+    compiler,
+    projectData,
+    projectMeta,
+    addLog,
+    isCompiling,
+    canEdit,
+    executeSave,
+    refusedForVariablesText,
+    requestConsoleFollow,
+  ])
 
   // ---------------------------------------------------------------------------
   // Debug Library — run the library's blocks on the simulator
@@ -772,6 +812,8 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       const saved = await executeSave()
       if (!saved) return
     }
+
+    if (refusedForVariablesText()) return
 
     const harness = composeLibraryDebugHarness(store.getState().project.data)
 
@@ -852,6 +894,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     isCompiling,
     canEdit,
     executeSave,
+    refusedForVariablesText,
     requestConsoleFollow,
     simulatorRun,
     simulatorRunning,
@@ -1208,6 +1251,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         }
       }
 
+      if (refusedForVariablesText()) {
+        setIsDebuggerProcessing(false)
+        return
+      }
+
       // Re-read once a connect below has brought the session up: on web the board
       // only becomes the runtime's once that connection is established.
       let boardTarget = devDefs.configuration.deviceBoard
@@ -1397,6 +1445,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     isDebuggerProcessing,
     canEdit,
     executeSave,
+    refusedForVariablesText,
     addLog,
     currentBoardInfo,
     store,

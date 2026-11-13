@@ -1,3 +1,4 @@
+import { NavigationButton } from '@root/frontend/components/_atoms/navigation-button'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { getSectionPersistenceKey, isDeviceSetupIoTable } from '@root/frontend/utils/vpp/persistence-keys'
@@ -301,8 +302,7 @@ function ManifestIoTable({ section, moduleSystem }: IoTableLayoutProps) {
 
         return (
           <div key={slot} className='overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700'>
-            <button
-              type='button'
+            <NavigationButton
               onClick={() => toggleSlot(slot)}
               className='flex w-full items-center justify-between bg-neutral-50 px-4 py-2.5 text-left hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-850'
             >
@@ -325,7 +325,7 @@ function ManifestIoTable({ section, moduleSystem }: IoTableLayoutProps) {
               <span className='font-caption text-cp-sm text-neutral-500 dark:text-neutral-400'>
                 {ioSummary.join(' / ')}
               </span>
-            </button>
+            </NavigationButton>
 
             {isExpanded && (
               <table className='w-full text-left'>

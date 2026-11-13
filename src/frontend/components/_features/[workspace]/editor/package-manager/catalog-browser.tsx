@@ -28,11 +28,14 @@ import { MagnifierIcon } from '@root/frontend/assets/icons/interface/Magnifier'
 import { RefreshIcon } from '@root/frontend/assets/icons/interface/Refresh'
 import { TrashCanIcon } from '@root/frontend/assets/icons/interface/TrashCan'
 import { APP_VERSION } from '@root/frontend/data/constants/app-version'
+import { useIsEditingLocked } from '@root/frontend/hooks/use-editing-lock'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { compareSemver, isCompatibleEditorVersion } from '@root/frontend/utils/semver'
 import type { RemoteCatalogEntry, RemoteVersionEntry } from '@root/middleware/shared/ports/types'
 import { usePackages } from '@root/middleware/shared/providers/platform-context'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+
+import { showUninstallWarning } from './install-progress'
 
 interface CatalogBrowserProps {
   installedVersions: Map<string, string>
@@ -42,9 +45,11 @@ interface CatalogBrowserProps {
    * need cascading edits; treat as "onInventoryChanged".
    */
   onInstalled: () => void
+  /** Shows the dependency installation progress of @p operation. */
+  trackInstall: <T>(operation: () => Promise<T>) => Promise<T>
 }
 
-const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps) => {
+const CatalogBrowser = ({ installedVersions, onInstalled, trackInstall }: CatalogBrowserProps) => {
   const packages = usePackages()
   const openModal = useOpenPLCStore((s) => s.modalActions.openModal)
 
@@ -93,10 +98,10 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
       if (!packages) return
       setBusyId(packageId)
       try {
-        const result = await packages.installFromRemote(packageId, version, downloadUrl)
+        const result = await trackInstall(() => packages.installFromRemote(packageId, version, downloadUrl))
         if (result.success) {
           onInstalled()
-        } else {
+        } else if (!result.canceled) {
           openModal('debugger-message', {
             type: 'error',
             title: 'Install failed',
@@ -110,7 +115,7 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
         setBusyId(null)
       }
     },
-    [packages, openModal, onInstalled],
+    [packages, openModal, onInstalled, trackInstall],
   )
 
   const handleUninstall = useCallback(
@@ -118,9 +123,10 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
       if (!packages) return
       setBusyId(packageId)
       try {
-        const result = await packages.uninstall(packageId)
+        const result = await trackInstall(() => packages.uninstall(packageId))
         if (result.success) {
           onInstalled()
+          if (result.warning) showUninstallWarning(openModal, result.warning)
         } else {
           openModal('debugger-message', {
             type: 'error',
@@ -134,7 +140,7 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
         setBusyId(null)
       }
     },
-    [packages, openModal, onInstalled],
+    [packages, openModal, onInstalled, trackInstall],
   )
 
   if (!packages) {
@@ -158,6 +164,7 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
             type='text'
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            data-editing-lock-exempt
             placeholder='Search packages by name, vendor, or tag...'
             className='w-full rounded-md border border-neutral-200 bg-white py-2 pl-10 pr-3 font-caption text-cp-sm text-neutral-950 placeholder:text-neutral-400 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand dark:border-neutral-700 dark:bg-neutral-950 dark:text-white dark:placeholder:text-neutral-500'
             aria-label='Search remote catalog'
@@ -167,6 +174,7 @@ const CatalogBrowser = ({ installedVersions, onInstalled }: CatalogBrowserProps)
           type='button'
           aria-label='Refresh catalog'
           onClick={() => void fetchCatalog()}
+          data-editing-lock-exempt
           disabled={isLoading}
           title='Refresh catalog'
           className='rounded-md p-2 hover:bg-neutral-100 disabled:opacity-30 dark:hover:bg-neutral-900'
@@ -366,6 +374,7 @@ const ActionMenuButton = ({
   onInstall,
   onUninstall,
 }: ActionMenuButtonProps) => {
+  const isEditingLocked = useIsEditingLocked()
   const triggerStyleByKind: Record<TriggerKind, string> = {
     install: 'border border-brand bg-brand text-white hover:bg-brand-medium',
     update: 'border border-brand bg-brand text-white hover:bg-brand-medium',
@@ -377,7 +386,7 @@ const ActionMenuButton = ({
   return (
     <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
       <DropdownMenu.Root>
-        <DropdownMenu.Trigger asChild disabled={isBusy}>
+        <DropdownMenu.Trigger asChild disabled={isBusy || isEditingLocked}>
           <button
             type='button'
             className={`flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 font-caption text-[11px] font-medium transition-colors disabled:opacity-60 ${triggerStyleByKind[triggerState.kind]}`}

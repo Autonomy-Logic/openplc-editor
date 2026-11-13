@@ -13,10 +13,12 @@ vpp-doc://<packageId>/<path inside the package>
 - Handler: `src/main/modules/vendor-document/serve.ts`.
 - URL builder: `buildVendorDocumentUrl` in `src/middleware/shared/vendor-document/document-url.ts`,
   exposed to the UI as `DevicePort.getVendorDocumentUrl(packageId, relPath)`.
-- Web host: the adapter returns `<Edge API base>/devices/<vPLC id>/vpp/files/<relPath>`, the Edge
-  route next to the vPLC's archive route, only for the selected vPLC's own package and only when
-  `VITE_VPP_DOCUMENT_ROUTE_ENABLED=true`. Otherwise, and always on the Node host, it returns `null`
-  and the screen says the configurator is not available in this host yet.
+- Web host (Edge and Node): the adapter returns the app's static `vendor-frame/loader.html#<nonce>`
+  under the host's base path. The loader receives the document's files from the vPLC package the
+  browser already downloaded and verified (`/devices/<id>/vpp/archive` on Edge,
+  `/vplcs/<id>/vpp/archive` on Node), so no host serves package files. It returns `null` for any
+  package but the selected vPLC's own and for an invalid path, and the screen then says the
+  configurator is not available in this host yet.
 - Supported bundle: Weidmüller Device Editor 3.5.22 (u-OS 2.2 and later). The screen JSON records it
   in `bundleVersion`; the relay protocol version (`RELAY_PROTOCOL_VERSION`) must match the packaged
   `relay.js` or the screen refuses the bundle.

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 
 import { useOpenPLCStore } from '../../../../../store'
+import { EditingLockBoundary } from '../../../../_molecules/editing-lock-boundary'
 import { DeviceConfigurationEditor } from './configuration'
 import { DeviceOrchestratorsEditor } from './orchestrators'
 import { RuntimeStatusEditor } from './runtime-status'
@@ -24,9 +25,17 @@ const DeviceEditor = () => {
 
   return (
     <div aria-label='Device content container' className='h-full w-full overflow-hidden'>
-      {derivation === 'orchestrators' && <DeviceOrchestratorsEditor />}
+      {derivation === 'orchestrators' && (
+        <EditingLockBoundary>
+          <DeviceOrchestratorsEditor />
+        </EditingLockBoundary>
+      )}
       {derivation === 'runtime-status' && <RuntimeStatusEditor />}
-      {derivation !== 'orchestrators' && derivation !== 'runtime-status' && <DeviceConfigurationEditor />}
+      {derivation !== 'orchestrators' && derivation !== 'runtime-status' && (
+        <EditingLockBoundary>
+          <DeviceConfigurationEditor />
+        </EditingLockBoundary>
+      )}
     </div>
   )
 }

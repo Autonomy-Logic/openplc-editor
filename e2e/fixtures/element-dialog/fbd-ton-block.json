@@ -1,0 +1,245 @@
+{
+  "id": "BLOCK",
+  "type": "block",
+  "position": {
+    "x": 200,
+    "y": 100
+  },
+  "data": {
+    "handles": [
+      {
+        "glbPosition": {
+          "x": 200,
+          "y": 148
+        },
+        "relPosition": {
+          "x": 0,
+          "y": 48
+        },
+        "id": "IN",
+        "position": "left",
+        "type": "target",
+        "style": {
+          "top": 48,
+          "left": 0
+        }
+      },
+      {
+        "glbPosition": {
+          "x": 200,
+          "y": 196
+        },
+        "relPosition": {
+          "x": 0,
+          "y": 96
+        },
+        "id": "PT",
+        "position": "left",
+        "type": "target",
+        "style": {
+          "top": 96,
+          "left": 0
+        }
+      },
+      {
+        "glbPosition": {
+          "x": 260,
+          "y": 148
+        },
+        "relPosition": {
+          "x": 60,
+          "y": 48
+        },
+        "id": "Q",
+        "position": "right",
+        "type": "source",
+        "style": {
+          "top": 48,
+          "right": 0
+        }
+      },
+      {
+        "glbPosition": {
+          "x": 260,
+          "y": 196
+        },
+        "relPosition": {
+          "x": 60,
+          "y": 96
+        },
+        "id": "ET",
+        "position": "right",
+        "type": "source",
+        "style": {
+          "top": 96,
+          "right": 0
+        }
+      }
+    ],
+    "inputHandles": [
+      {
+        "glbPosition": {
+          "x": 200,
+          "y": 148
+        },
+        "relPosition": {
+          "x": 0,
+          "y": 48
+        },
+        "id": "IN",
+        "position": "left",
+        "type": "target",
+        "style": {
+          "top": 48,
+          "left": 0
+        }
+      },
+      {
+        "glbPosition": {
+          "x": 200,
+          "y": 196
+        },
+        "relPosition": {
+          "x": 0,
+          "y": 96
+        },
+        "id": "PT",
+        "position": "left",
+        "type": "target",
+        "style": {
+          "top": 96,
+          "left": 0
+        }
+      }
+    ],
+    "outputHandles": [
+      {
+        "glbPosition": {
+          "x": 260,
+          "y": 148
+        },
+        "relPosition": {
+          "x": 60,
+          "y": 48
+        },
+        "id": "Q",
+        "position": "right",
+        "type": "source",
+        "style": {
+          "top": 48,
+          "right": 0
+        }
+      },
+      {
+        "glbPosition": {
+          "x": 260,
+          "y": 196
+        },
+        "relPosition": {
+          "x": 60,
+          "y": 96
+        },
+        "id": "ET",
+        "position": "right",
+        "type": "source",
+        "style": {
+          "top": 96,
+          "right": 0
+        }
+      }
+    ],
+    "inputConnector": {
+      "glbPosition": {
+        "x": 200,
+        "y": 148
+      },
+      "relPosition": {
+        "x": 0,
+        "y": 48
+      },
+      "id": "IN",
+      "position": "left",
+      "type": "target",
+      "style": {
+        "top": 48,
+        "left": 0
+      }
+    },
+    "outputConnector": {
+      "glbPosition": {
+        "x": 260,
+        "y": 148
+      },
+      "relPosition": {
+        "x": 60,
+        "y": 48
+      },
+      "id": "Q",
+      "position": "right",
+      "type": "source",
+      "style": {
+        "top": 48,
+        "right": 0
+      }
+    },
+    "numericId": "1001",
+    "variant": {
+      "name": "TON",
+      "type": "function-block",
+      "language": "st",
+      "variables": [
+        {
+          "name": "IN",
+          "class": "input",
+          "type": {
+            "definition": "base-type",
+            "value": "BOOL"
+          }
+        },
+        {
+          "name": "PT",
+          "class": "input",
+          "type": {
+            "definition": "base-type",
+            "value": "TIME"
+          }
+        },
+        {
+          "name": "Q",
+          "class": "output",
+          "type": {
+            "definition": "base-type",
+            "value": "BOOL"
+          }
+        },
+        {
+          "name": "ET",
+          "class": "output",
+          "type": {
+            "definition": "base-type",
+            "value": "TIME"
+          }
+        }
+      ],
+      "body": "",
+      "documentation": "The on-delay timer can be used to delay setting an output true, for fixed period after an input becomes true."
+    },
+    "variable": {
+      "name": "TON0"
+    },
+    "executionOrder": 0,
+    "executionControl": false,
+    "draggable": true,
+    "selectable": true,
+    "deletable": true
+  },
+  "width": 60,
+  "height": 120,
+  "measured": {
+    "width": 60,
+    "height": 120
+  },
+  "draggable": true,
+  "selectable": true,
+  "selected": false
+}
