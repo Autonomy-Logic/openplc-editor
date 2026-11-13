@@ -44,12 +44,13 @@ export function writeRuntimeDevice(projectPath: string): void {
   writeFileSync(join(projectPath, 'devices', 'pin-mapping.json'), '{}')
 }
 
-/** Kills the app process and waits for it to exit. */
+/** Kills the app's process group, so the tools it spawned stop writing to its profile, and waits for the app to exit. */
 export async function shutdown(app: ElectronApplication): Promise<void> {
   const proc = app.process()
-  if (proc.exitCode !== null) return
+  if (proc.exitCode !== null || proc.signalCode !== null) return
   const exited = new Promise((resolve) => proc.once('exit', resolve))
-  proc.kill('SIGKILL')
+  if (process.platform === 'win32' || proc.pid === undefined) proc.kill('SIGKILL')
+  else process.kill(-proc.pid, 'SIGKILL')
   await exited
 }
 

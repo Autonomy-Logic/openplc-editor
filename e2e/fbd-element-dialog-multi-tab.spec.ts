@@ -138,6 +138,7 @@ test.afterEach(() => {
 
 test.afterAll(async () => {
   if (app) await shutdown(app)
+  rmSync(ROOT, { recursive: true, force: true, maxRetries: 10 })
 })
 
 for (const pou of POUS) {

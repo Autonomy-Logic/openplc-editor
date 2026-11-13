@@ -155,8 +155,10 @@ async function openTypeMenu(name: string): Promise<void> {
 
 async function pickBaseType(name: string, baseType: string): Promise<void> {
   await openTypeMenu(name)
-  await page.getByRole('menuitem', { name: 'Base Type' }).hover()
-  await page.getByRole('menuitem', { name: baseType, exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Base Type' }).click()
+  const item = page.getByRole('menuitem', { name: baseType, exact: true })
+  await expect(item, 'the Base Type submenu is open').toBeVisible()
+  await item.click()
 }
 
 const arrayDialog = () => page.getByRole('dialog').filter({ hasText: 'Array type definition' })
@@ -210,6 +212,7 @@ test.afterEach(() => {
 
 test.afterAll(async () => {
   if (app) await shutdown(app)
+  rmSync(ROOT, { recursive: true, force: true, maxRetries: 10 })
 })
 
 test('an array set from the GVL table is saved on the GVL member and not on the Resource global of the same row', async () => {
