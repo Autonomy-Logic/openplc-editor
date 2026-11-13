@@ -173,13 +173,22 @@ function signed(overrides: Record<string, unknown> = {}, key: KeyObject = signer
 }
 
 /** A runtime that stores what it is given and reports it, plus an Edge that returns `edge`. */
-function fakeTarget(opts: { stored?: unknown[]; edge?: unknown[]; hardwareId?: string | null; storeOnPost?: boolean }) {
+function fakeTarget(opts: {
+  stored?: unknown[]
+  edge?: unknown[]
+  hardwareId?: string | null
+  storeOnPost?: boolean
+  source?: 'device' | 'orchestrator'
+}) {
   const stored = [...(opts.stored ?? [])]
   const hardwareId = opts.hardwareId === undefined ? ID : opts.hardwareId
   return {
     stored,
     ...mechanisms({
-      runtimeGet: async () => ({ status: 200, body: { hardwareId, source: 'device', licenses: stored } }),
+      runtimeGet: async () => ({
+        status: 200,
+        body: { hardwareId, source: opts.source ?? 'device', licenses: stored },
+      }),
       runtimePost: async (_path, json) => {
         if (opts.storeOnPost !== false) stored.push(json)
         return { status: 200, body: { orderId: (json as { order_id: string }).order_id } }
@@ -194,7 +203,7 @@ describe('readRuntimeLicenseReport', () => {
     const { m, calls } = fakeTarget({ stored: [licence()] })
     await expect(readRuntimeLicenseReport(m)).resolves.toEqual({
       ok: true,
-      report: { hardwareId: ID, licenses: [licence()] },
+      report: { hardwareId: ID, source: 'device', licenses: [licence()] },
     })
     expect(calls).toEqual([{ kind: 'runtimeGet', path: '/api/runtime-license' }])
   })
@@ -258,13 +267,35 @@ describe('syncRuntimeLicenses', () => {
     })
   })
 
-  it('stays GPLv3 when the upload is stored but the runtime does not report it (vPLC without a seat)', async () => {
-    const { m } = fakeTarget({ edge: [signed()], storeOnPost: false })
-    await expect(syncRuntimeLicenses(m, KEYS)).resolves.toMatchObject({
+  const noWait = async () => undefined
+
+  it('stays GPLv3 on a device when the upload is not reported back, without rechecking', async () => {
+    const target = fakeTarget({ edge: [signed()], storeOnPost: false })
+    const waits: number[] = []
+    await expect(syncRuntimeLicenses(target.m, KEYS, async (ms) => void waits.push(ms))).resolves.toMatchObject({
       status: 'synced',
       license: 'gpl',
       uploads: [{ orderId: 'cmv0a1b2c3d4e5f6g7h8i9j0', stored: true }],
     })
+    expect(waits).toEqual([])
+    expect(target.calls.filter((c) => c.kind === 'runtimeGet')).toHaveLength(2)
+  })
+
+  it('in a vPLC, rechecks after an upload until the seat licence appears', async () => {
+    const target = fakeTarget({ edge: [signed()], storeOnPost: false, source: 'orchestrator' })
+    const waits: number[] = []
+    const result = syncRuntimeLicenses(target.m, KEYS, async (ms) => {
+      waits.push(ms)
+      if (waits.length === 2) target.stored.push(signed())
+    })
+    await expect(result).resolves.toMatchObject({ status: 'synced', license: 'commercial' })
+    expect(waits).toEqual([2000, 2000])
+  })
+
+  it('in a vPLC, gives up as GPLv3 after the rechecks when no seat is assigned', async () => {
+    const target = fakeTarget({ edge: [signed()], storeOnPost: false, source: 'orchestrator' })
+    await expect(syncRuntimeLicenses(target.m, KEYS, noWait)).resolves.toMatchObject({ license: 'gpl' })
+    expect(target.calls.filter((c) => c.kind === 'runtimeGet')).toHaveLength(5)
   })
 
   it('is GPLv3 with the reason when Edge cannot be reached, and uploads nothing', async () => {

@@ -149,63 +149,70 @@ export function useRuntimeCommercialLicenseOwner(): void {
     }
   }, [packageId, packages])
 
-  const deliverToBoard = useCallback(async () => {
-    const { deviceActions, consoleActions } = store.getState()
-    if (mode !== 'user' || !device.refreshLicense) {
-      deviceActions.setBoardRuntimeLicense({ deviceId: null, license: null })
-      return
-    }
-    const report = await device.refreshLicense({ packageId: BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID })
-    const { outcome } = report
-    deviceActions.setBoardRuntimeLicense({ deviceId: report.deviceId ?? null, license: boardRuntimeLicense(outcome) })
-    if (outcome.state === 'check-failed') {
-      consoleActions.addLog({ level: 'debug', message: `Runtime license check skipped: ${outcome.error}` })
-    } else if (outcome.state === 'unlicensed' && outcome.detail) {
-      consoleActions.addLog({ level: 'debug', message: `Runtime license not confirmed: ${outcome.detail}` })
-    } else if (outcome.state === 'licensed' && outcome.how === 'activated') {
-      consoleActions.addLog({ level: 'info', message: 'Commercial runtime license installed on the board.' })
-    }
-  }, [device, mode, store])
+  const deliverToBoard = useCallback(
+    async (isCurrent: () => boolean) => {
+      const { deviceActions, consoleActions } = store.getState()
+      if (mode !== 'user' || !device.refreshLicense) {
+        deviceActions.setBoardRuntimeLicense({ deviceId: null, license: null })
+        return
+      }
+      const report = await device.refreshLicense({ packageId: BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID })
+      if (!isCurrent()) return
+      const { outcome } = report
+      deviceActions.setBoardRuntimeLicense({ deviceId: report.deviceId ?? null, license: boardRuntimeLicense(outcome) })
+      if (outcome.state === 'check-failed') {
+        consoleActions.addLog({ level: 'debug', message: `Runtime license check skipped: ${outcome.error}` })
+      } else if (outcome.state === 'unlicensed' && outcome.detail) {
+        consoleActions.addLog({ level: 'debug', message: `Runtime license not confirmed: ${outcome.detail}` })
+      } else if (outcome.state === 'licensed' && outcome.how === 'activated') {
+        consoleActions.addLog({ level: 'info', message: 'Commercial runtime license installed on the board.' })
+      }
+    },
+    [device, mode, store],
+  )
 
-  const deliverToRuntime = useCallback(async () => {
-    const { deviceActions, consoleActions } = store.getState()
-    const result = await runtime.syncRuntimeLicenses?.()
-    if (!result) {
-      const id = await runtime.getHardwareId?.()
-      deviceActions.setRuntimeHardwareId(id?.success ? id.hardwareId : null)
-      return
-    }
-    if (result.status === 'failed') {
-      deviceActions.setRuntimeHardwareId(null)
-      deviceActions.setRuntimeLicense(null)
-      consoleActions.addLog({ level: 'debug', message: `Runtime license check skipped: ${result.error}` })
-      return
-    }
-    if (result.status === 'no-hardware-id') {
-      deviceActions.setRuntimeHardwareId(null)
-      deviceActions.setRuntimeLicense('gpl')
-      consoleActions.addLog({
-        level: 'debug',
-        message: 'Runtime license not confirmed: the runtime reports no hardware ID.',
-      })
-      return
-    }
-    deviceActions.setRuntimeHardwareId(result.hardwareId)
-    deviceActions.setRuntimeLicense(result.license)
-    if (result.detail) {
-      consoleActions.addLog({ level: 'debug', message: `Runtime license not confirmed: ${result.detail}` })
-    }
-    for (const upload of result.uploads) {
-      consoleActions.addLog(
-        upload.stored
-          ? { level: 'info', message: `Commercial runtime license ${upload.orderId} installed on the target.` }
-          : {
-              level: 'debug',
-              message: `Runtime license ${upload.orderId} not installed: ${upload.error ?? 'refused'}`,
-            },
-      )
-    }
-  }, [runtime, store])
+  const deliverToRuntime = useCallback(
+    async (isCurrent: () => boolean) => {
+      const { deviceActions, consoleActions } = store.getState()
+      const result = await runtime.syncRuntimeLicenses?.()
+      if (!isCurrent()) return
+      if (!result) {
+        const id = await runtime.getHardwareId?.()
+        if (isCurrent()) deviceActions.setRuntimeHardwareId(id?.success ? id.hardwareId : null)
+        return
+      }
+      // A failed check keeps what the last successful one found.
+      if (result.status === 'failed') {
+        consoleActions.addLog({ level: 'debug', message: `Runtime license check skipped: ${result.error}` })
+        return
+      }
+      if (result.status === 'no-hardware-id') {
+        deviceActions.setRuntimeHardwareId(null)
+        deviceActions.setRuntimeLicense('gpl')
+        consoleActions.addLog({
+          level: 'debug',
+          message: 'Runtime license not confirmed: the runtime reports no hardware ID.',
+        })
+        return
+      }
+      deviceActions.setRuntimeHardwareId(result.hardwareId)
+      deviceActions.setRuntimeLicense(result.license)
+      if (result.detail) {
+        consoleActions.addLog({ level: 'debug', message: `Runtime license not confirmed: ${result.detail}` })
+      }
+      for (const upload of result.uploads) {
+        consoleActions.addLog(
+          upload.stored
+            ? { level: 'info', message: `Commercial runtime license ${upload.orderId} installed on the target.` }
+            : {
+                level: 'debug',
+                message: `Runtime license ${upload.orderId} not installed: ${upload.error ?? 'refused'}`,
+              },
+        )
+      }
+    },
+    [runtime, store],
+  )
 
   const deliverRef = useRef(deliverToRuntime)
   deliverRef.current = target === 'board' ? deliverToBoard : deliverToRuntime
@@ -220,17 +227,21 @@ export function useRuntimeCommercialLicenseOwner(): void {
     setDelivered(false)
     if (deliveryKey === null) {
       deviceActions.setRuntimeHardwareId(null)
+      deviceActions.setRuntimeLicense(null)
       deviceActions.setBoardRuntimeLicense({ deviceId: null, license: null })
       deviceActions.setRuntimeLicenseChecking(false)
       return
     }
     let cancelled = false
+    if (deliveryKey === 'runtime') deviceActions.setRuntimeLicense(null)
     deviceActions.setRuntimeLicenseChecking(true)
-    void deliverRef.current().finally(() => {
-      if (cancelled) return
-      setDelivered(true)
-      store.getState().deviceActions.setRuntimeLicenseChecking(false)
-    })
+    void deliverRef
+      .current(() => !cancelled)
+      .finally(() => {
+        if (cancelled) return
+        setDelivered(true)
+        store.getState().deviceActions.setRuntimeLicenseChecking(false)
+      })
     return () => {
       cancelled = true
     }
@@ -282,14 +293,25 @@ export function useRuntimeCommercialLicenseOwner(): void {
       store.getState().deviceActions.setRuntimeLicensePurchaseWatch(null)
       return
     }
+    let stopped = false
+    let inFlight = false
     const tick = () => {
       if (Date.now() >= awaitingPurchaseUntil) {
         store.getState().deviceActions.setRuntimeLicensePurchaseWatch(null)
         return
       }
-      void deliverRef.current()
+      if (inFlight) return
+      inFlight = true
+      void deliverRef
+        .current(() => !stopped)
+        .finally(() => {
+          inFlight = false
+        })
     }
     const timer = setInterval(tick, PURCHASE_POLL_INTERVAL_MS)
-    return () => clearInterval(timer)
+    return () => {
+      stopped = true
+      clearInterval(timer)
+    }
   }, [awaitingPurchaseUntil, status, connected, store])
 }

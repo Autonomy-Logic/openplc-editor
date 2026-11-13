@@ -310,6 +310,54 @@ describe('runtime without a hardware ID', () => {
   })
 })
 
+describe('runtime licence across connections', () => {
+  it('clears the licence on disconnect', async () => {
+    setup({ license: 'commercial' })
+    renderOwner()
+    await flush()
+    expect(store.getState().runtimeConnection.license).toBe('commercial')
+    act(() => store.getState().deviceActions.setRuntimeConnectionStatus('disconnected'))
+    await flush()
+    expect(store.getState().runtimeConnection.license).toBeNull()
+  })
+
+  it('drops a check that finishes after its connection is gone', async () => {
+    setup()
+    let finish: (value: unknown) => void = () => undefined
+    runtimeMock.syncRuntimeLicenses.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    renderOwner()
+    await flush()
+    act(() => store.getState().deviceActions.setRuntimeConnectionStatus('disconnected'))
+    await flush()
+    await act(async () => finish(synced('commercial')))
+    await flush()
+    expect(store.getState().runtimeConnection.license).toBeNull()
+    expect(store.getState().runtimeCommercialLicense.hardwareId).toBeNull()
+  })
+})
+
+describe('purchase watch', () => {
+  afterEach(() => jest.useRealTimers())
+
+  it('never overlaps checks and keeps the hardware ID when one fails', async () => {
+    setup({ license: 'gpl' })
+    const { result } = renderOwner()
+    await flush()
+    jest.useFakeTimers()
+    await act(async () => result.current.buy())
+    let finish: (value: unknown) => void = () => undefined
+    runtimeMock.syncRuntimeLicenses.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    const before = runtimeMock.syncRuntimeLicenses.mock.calls.length
+    await act(async () => jest.advanceTimersByTime(20_000))
+    await act(async () => jest.advanceTimersByTime(20_000))
+    expect(runtimeMock.syncRuntimeLicenses.mock.calls.length).toBe(before + 1)
+    await act(async () => finish({ status: 'failed', error: 'Edge timeout' }))
+    await flush()
+    expect(result.current.hardwareId).toBe(ID)
+    expect(result.current.buyUrl).not.toBeNull()
+  })
+})
+
 describe('useRuntimeCommercialLicense', () => {
   it('opens the purchase page for the hardware ID and watches for the licence', async () => {
     setup({ license: 'gpl' })

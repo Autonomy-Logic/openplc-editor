@@ -52,12 +52,12 @@ export function parseRuntimeLicenseDevKey(value: string | undefined): RuntimeLic
   return { keyId, rawKeyHex }
 }
 
-/** `keys` plus an optional development key; the development key wins its slot. */
+/** `keys` plus an optional development key; a development key never replaces a shipped key. */
 export function withRuntimeLicenseDevKey(
   keys: RuntimeLicenseKeys,
   devKey: RuntimeLicenseDevKey | null,
 ): RuntimeLicenseKeys {
-  if (!devKey) return keys
+  if (!devKey || Object.prototype.hasOwnProperty.call(keys, devKey.keyId)) return keys
   return { ...keys, [devKey.keyId]: devKey.rawKeyHex }
 }
 

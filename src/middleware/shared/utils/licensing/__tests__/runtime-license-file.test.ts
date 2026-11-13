@@ -149,6 +149,12 @@ describe('runtime licence keys', () => {
     expect(parseRuntimeLicenseDevKey(`1:${hex.slice(2)}`)).toBeNull()
   })
 
+  it('never lets a development key replace a shipped key', () => {
+    expect(withRuntimeLicenseDevKey(LINUX_RUNTIME_LICENSE_KEYS, { keyId: 0, rawKeyHex: hex })).toBe(
+      LINUX_RUNTIME_LICENSE_KEYS,
+    )
+  })
+
   it('adds a development key without changing the shipped table', () => {
     expect(withRuntimeLicenseDevKey(LINUX_RUNTIME_LICENSE_KEYS, null)).toBe(LINUX_RUNTIME_LICENSE_KEYS)
     const keys = withRuntimeLicenseDevKey(LINUX_RUNTIME_LICENSE_KEYS, { keyId: 9, rawKeyHex: hex })
