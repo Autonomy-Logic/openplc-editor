@@ -1,3 +1,5 @@
+import type { Node } from '@xyflow/react'
+
 import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../store'
 import { cn } from '../../../utils/cn'
@@ -70,12 +72,17 @@ export const LadderToolbox = () => {
     if (isEditingLocked) return
 
     const allNodesToRemove = flow?.rungs.flatMap((rung) => resolveSelectedNodes(rung)) || []
+    const remainingRungs: Array<{ nodes: Node[] }> = []
 
     flow?.rungs.forEach((rung) => {
       const selectedNodes = resolveSelectedNodes(rung)
-      if (selectedNodes.length === 0) return
+      if (selectedNodes.length === 0) {
+        remainingRungs.push(rung)
+        return
+      }
 
       const { nodes: newNodes, edges: newEdges } = removeElements({ ...rung }, selectedNodes)
+      remainingRungs.push({ nodes: newNodes })
       ladderFlowActions.setNodes({ editorName: editor.meta.name, rungId: rung.id, nodes: newNodes })
       ladderFlowActions.setEdges({ editorName: editor.meta.name, rungId: rung.id, edges: newEdges })
       ladderFlowActions.setSelectedNodes({
@@ -86,10 +93,9 @@ export const LadderToolbox = () => {
     })
 
     if (pou && allNodesToRemove.length > 0) {
-      const allRungs = flow?.rungs || []
       const allVariables = pou.interface?.variables || []
 
-      const variablesToDelete = getFunctionBlockVariablesToCleanup(allNodesToRemove, allRungs, allVariables)
+      const variablesToDelete = getFunctionBlockVariablesToCleanup(allNodesToRemove, remainingRungs, allVariables)
 
       variablesToDelete.forEach((variableName) => {
         const variableIndex = allVariables.findIndex((v) => v.name.toLowerCase() === variableName.toLowerCase())

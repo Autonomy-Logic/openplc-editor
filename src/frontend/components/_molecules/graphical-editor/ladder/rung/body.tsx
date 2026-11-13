@@ -490,29 +490,22 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
       if (pouRef) variables = [...(pouRef.interface?.variables ?? [])] as PLCVariable[]
 
       const currentFlow = ladderFlows.find((f) => f.name === pouName)
-      const allRungs = currentFlow?.rungs ?? []
-      const variablesToCleanup = getFunctionBlockVariablesToCleanup(blockNodes, allRungs, variables)
+      const allRungs = (currentFlow?.rungs ?? []).map((flowRung) =>
+        flowRung.id === rungLocal.id ? { ...flowRung, nodes: newNodes } : flowRung,
+      )
+      const variablesToCleanup = getFunctionBlockVariablesToCleanup(nodes, allRungs, variables)
 
       variablesToCleanup.forEach((variableName) => {
+        const variableIndex = variables.findIndex(
+          (variable) => variable.name.toLowerCase() === variableName.toLowerCase(),
+        )
+
         deleteVariable({
           variableName,
           scope: 'local',
           associatedPou: pouName,
         })
-      })
 
-      blockNodes.forEach((blockNode) => {
-        const variableData = (blockNode.data as BasicNodeData)?.variable
-        const variableIndex = variables.findIndex((variable) => variable.id === variableData?.id)
-
-        if (variableIndex !== -1) {
-          deleteVariable({
-            variableId: (blockNode.data as BasicNodeData).variable.id,
-            scope: 'local',
-            associatedPou: pouName,
-          })
-          variables.splice(variableIndex, 1)
-        }
         if (
           editor.type === 'plc-graphical' &&
           editor.variable.display === 'table' &&

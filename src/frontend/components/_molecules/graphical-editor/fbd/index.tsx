@@ -553,7 +553,8 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
 
       if (pouRef && nodes.length > 0) {
         const allVariables = pouRef.interface?.variables ?? []
-        const allRungs = [rung]
+        const currentRung = store.getState().fbdFlows.find((flow) => flow.name === pouName)?.rung ?? rung
+        const allRungs = [currentRung]
 
         const variablesToDelete = getFunctionBlockVariablesToCleanup(nodes, allRungs, allVariables)
 
