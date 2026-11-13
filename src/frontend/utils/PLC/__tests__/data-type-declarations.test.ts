@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (c) 2026 Autonomy®
-/**
- * Tests for the `.dt` text parser — the inverse of
- * `serializeDataTypeToText`.  The core invariant is the round-trip:
- * `parse(serialize(x))` must deep-equal `x` for every shape the
- * visual editor can build.  Everything else is error reporting.
- */
 import type { PLCDataType } from '../../../../middleware/shared/ports/types'
 import { serializeDataTypeToText } from '../data-type-serializer'
 import { parseDataTypeFromText } from '../data-type-declarations'
@@ -142,9 +136,6 @@ describe('parseDataTypeFromText tolerance', () => {
 })
 
 describe('an enumeration with no members yet', () => {
-  // `E : ();` is what the UI produces the moment a user adds an enumeration and
-  // before they type a value into it. STruC++ refuses it — correctly, it cannot
-  // compile — so the editor accepts it as work in progress.
   it('is accepted while it is being written', () => {
     const result = parseDataTypeFromText('TYPE State : (); END_TYPE', 'State')
     expect(result.error).toBeUndefined()
@@ -152,9 +143,6 @@ describe('an enumeration with no members yet', () => {
   })
 
   it('is still held to the name its file claims', () => {
-    // This path used to return before the name check, so `datatypes/Foo.dt`
-    // holding `TYPE Bar : (); END_TYPE` loaded as `Bar` — and the next save
-    // wrote the type back under a name the tree never showed.
     const result = parseDataTypeFromText('TYPE Bar : (); END_TYPE', 'Foo')
     expect(result.dataType).toBeUndefined()
     expect(result.error).toContain('does not match the expected name')
@@ -166,13 +154,6 @@ describe('an enumeration with no members yet', () => {
 })
 
 describe('parseDataTypeFromText errors', () => {
-  // These used to assert hand-written hints ("missing END_STRUCT", "invalid
-  // enumeration value"). The parser is STruC++ now, so the wording is the
-  // compiler's (DOPE-650) — which is the point: the editor reports what the
-  // build would report, rather than a second opinion that could disagree with
-  // it. What matters is that each input is still refused, and that the message
-  // names the token the user has to look at.
-
   const errorFor = (source: string): string => {
     const result = parseDataTypeFromText(source)
     expect(result.dataType).toBeUndefined()
@@ -243,9 +224,6 @@ describe('parseDataTypeFromText errors', () => {
   })
 
   it('refuses an alias type, which the editor model cannot represent', () => {
-    // `MyInt : INT;` is legal IEC but the editor knows only structures,
-    // enumerations and arrays. Saying so beats inventing a one-field structure
-    // the user never wrote.
     expect(errorFor('TYPE\n  MyInt : INT;\nEND_TYPE\n')).toMatch(/alias for another type/)
   })
 })

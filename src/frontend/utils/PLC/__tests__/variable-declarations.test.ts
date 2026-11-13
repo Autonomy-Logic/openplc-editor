@@ -1,18 +1,3 @@
-/**
- * Reading declarations with STruC++ (DOPE-650).
- *
- * The contract is that the editor and the compiler agree about what a
- * declaration is, because they are now the same parser. These tests pin the
- * mapping from its AST to the editor's model, and specifically cover every
- * input that a hand-written parser got wrong before it:
- *
- *   - `STRING := 'http://x'` — the scanner's comment pass ate the line at `//`
- *   - `STRING := 'a;b'` — the scanner cut the declaration inside the literal
- *   - `a : BOOL; b : INT;` — the scanner silently dropped `b`
- *   - `AT Motor Start` — the regex absorbed it into the type
- *   - `x : My Type;` — the regex invented a data type with that name
- */
-
 import { normalizeOneVariablePerLine, parseVariableDeclarations } from '../variable-declarations'
 
 const BASE_TYPES = new Set([
@@ -130,8 +115,6 @@ describe('locations', () => {
   })
 
   it('reads an alias, keeping the spelling the user typed', () => {
-    // The AST folds identifier case, so this comes from the source span. Losing
-    // it would rename `Motor_Start` to `MOTOR_START` on the next save.
     expect(one('m : BOOL AT Motor_Start;').location).toBe('Motor_Start')
   })
 
@@ -181,8 +164,6 @@ describe('documentation, which the AST does not carry', () => {
   })
 
   it('does not take a comment on the following line', () => {
-    // A section header above a declaration describes the section, not the
-    // variable under it.
     const variables = variablesOf('VAR\n  a : INT;\n  (* --- timers --- *)\n  t : INT;\nEND_VAR')
     expect(variables.map((v) => v.documentation)).toEqual(['', ''])
   })
@@ -224,9 +205,6 @@ describe('blocks, classes and qualifiers', () => {
   it.each([
     ['VAR CONSTANT', 'constant'],
     ['VAR RETAIN', 'retain'],
-    // PERSISTENT folds into retain, as it always has: this toolchain does not
-    // keep values across a download, so the honest mapping is the weaker
-    // guarantee the two share. STruC++ folds it the same way.
     ['VAR PERSISTENT', 'retain'],
     ['VAR RETAIN PERSISTENT', 'retain'],
   ])('maps the qualifier on %s to %s', (header, expectedFlag) => {
@@ -269,8 +247,6 @@ describe('spans address the caller source', () => {
     const at = (span: { start: number; end: number }) => source.slice(span.start, span.end)
 
     const { location, initialValue, documentation } = declaration.fields
-    // Narrowed rather than asserted: an absent span is a real failure of the
-    // parser, and `!` would report it as an unreadable TypeError instead.
     if (!location || !initialValue || !documentation) throw new Error('declaration is missing an optional span')
 
     expect(at(declaration.fields.name)).toBe('counter')
@@ -318,8 +294,6 @@ describe('errors', () => {
 
 describe('errors a user can act on', () => {
   it('names a bad VAR qualifier, on the line it is written', () => {
-    // STruC++ resynchronises after the bad token and reports against the NEXT
-    // line — the one line in the block with nothing wrong with it.
     const [error] = parseVariableDeclarations('VAR FOO\n  a : INT;\nEND_VAR', context).errors
     expect(error.message).toBe(
       'Unknown variable block qualifier "FOO". Expected CONSTANT, RETAIN, NON_RETAIN or PERSISTENT.',
@@ -353,8 +327,6 @@ describe('errors a user can act on', () => {
 
 describe('a whole POU is recognised behind its documentation', () => {
   it('does not wrap a POU that opens with a block comment', () => {
-    // Wrapping it produced a POU nested in a POU, which STruC++ rejects — so a
-    // documented POU came back with no variables at all.
     const source = '(* documentation *)\nPROGRAM Main\nVAR\n  a : INT;\nEND_VAR\n;\nEND_PROGRAM'
     const result = parseVariableDeclarations(source, context)
     expect(result.errors).toEqual([])
@@ -368,8 +340,6 @@ describe('a whole POU is recognised behind its documentation', () => {
 })
 
 describe('block comments nest', () => {
-  // `(* a (* b *) c *)` is ONE comment and STruC++ reads it that way, so a scan
-  // that stopped at the first `*)` reported a truncated comment.
   it('reads a trailing comment that contains another comment', () => {
     const result = parseVariableDeclarations('VAR\n  x : INT; (* outer (* inner *) tail *)\nEND_VAR', context)
     expect(result.errors).toEqual([])
@@ -385,9 +355,6 @@ describe('block comments nest', () => {
 })
 
 describe('a whole POU of any kind', () => {
-  // `isWholePou` accepts all three keywords, but only a PROGRAM landed in the
-  // AST branch that was read: a whole FUNCTION_BLOCK came back with no errors
-  // and no variables, a POU that silently declared nothing.
   it('reads the declarations of a FUNCTION_BLOCK', () => {
     const source = 'FUNCTION_BLOCK FB\nVAR\n  a : INT;\nEND_VAR\n;\nEND_FUNCTION_BLOCK'
     const result = parseVariableDeclarations(source, context)
@@ -405,9 +372,6 @@ describe('a whole POU of any kind', () => {
 
 describe('normalizeOneVariablePerLine', () => {
   it('splits two declarations that share a line', () => {
-    // The other way a line gets crowded. Normalising only `a, b : INT;` left
-    // this form sharing one line span, and the deletion pass works in lines —
-    // so deleting `a` from the table took `b` with it.
     expect(normalizeOneVariablePerLine('VAR\n  a : INT; b : INT;\nEND_VAR', context)).toBe(
       'VAR\n  a : INT;\n  b : INT;\nEND_VAR',
     )
@@ -419,19 +383,12 @@ describe('normalizeOneVariablePerLine', () => {
     )
   })
 
-  // One comment ends the line, so it belongs to ONE declaration: the first on
-  // that line, which is the one the user wrote it after. Handing it to every
-  // declaration on the line showed the same note in two rows of the table and
-  // queued two edits over one span.
   it('gives a shared line\u2019s comment to the first declaration on it', () => {
     expect(normalizeOneVariablePerLine('VAR\n  a : INT; b : INT; (* about a *)\nEND_VAR', context)).toBe(
       'VAR\n  a : INT; (* about a *)\n  b : INT;\nEND_VAR',
     )
   })
 
-  // The Documentation column is the comment at the end of a line, so two
-  // variables sharing a line have one comment between them. The short form is
-  // accepted and rewritten rather than refused.
   it('splits a multi-name declaration', () => {
     expect(normalizeOneVariablePerLine('VAR\n  a, b : INT;\nEND_VAR', context)).toBe(
       'VAR\n  a : INT;\n  b : INT;\nEND_VAR',
@@ -467,12 +424,6 @@ describe('normalizeOneVariablePerLine', () => {
   })
 })
 
-/**
- * Two messages are rewritten before they reach the user, because the compiler's own
- * wording is right for a compiler and wrong for a declaration editor. Both rewrites
- * are recognisers, and a recogniser that matches too much replaces a real error with
- * a wrong one — which is worse than not rewriting at all.
- */
 describe('the two refined messages', () => {
   const firstError = (text: string) => parseVariableDeclarations(text, context).errors[0]?.message
 
@@ -492,8 +443,6 @@ describe('the two refined messages', () => {
     { label: 'the block is written on one line', text: 'VAR a : BOOL END_VAR' },
     { label: 'the block is empty and on one line', text: 'VAR END_VAR\nVAR\n  a : ;\nEND_VAR' },
   ])('does not read a declaration as a qualifier — $label', ({ text }) => {
-    // The header regex once matched `VAR_INPUT x : BOOL;` too, and reported `x` as a
-    // bad qualifier — burying whatever the real error on the line was.
     expect(firstError(text)).not.toMatch(/Unknown variable block qualifier/)
   })
 
@@ -507,9 +456,6 @@ describe('the two refined messages', () => {
     expect(firstError('VAR\n  a : ; (* not a STRING[10] *)\nEND_VAR')).not.toMatch(/length is not supported on STRING/)
   })
 
-  // Both recognisers read the source with its comments and strings blanked, not
-  // line by line with a regex: a comment that spans lines was only half removed,
-  // and nothing at all protected a literal.
   it.each([
     {
       label: 'a STRING length inside a string literal',
