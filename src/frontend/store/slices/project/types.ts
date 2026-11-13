@@ -396,6 +396,8 @@ export type ProjectActions = {
   addOpcUaNode: (name: string, node: OpcUaNodeConfig) => ProjectResponse
   updateOpcUaNode: (name: string, nodeId: string, updates: Partial<OpcUaNodeConfig>) => ProjectResponse
   removeOpcUaNode: (name: string, nodeId: string) => ProjectResponse
+  addOpcUaNodes: (name: string, nodes: OpcUaNodeConfig[]) => ProjectResponse
+  removeOpcUaNodes: (name: string, nodeIds: string[]) => ProjectResponse
 
   // Remote devices
   createRemoteDevice: (dto: RemoteDeviceDTO) => ProjectResponse

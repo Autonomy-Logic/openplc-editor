@@ -21,6 +21,8 @@ jobs:
 
   hmi-core:
     uses: ./.github/workflows/ci-hmi-core.yml
+  debug-lock-e2e:
+    uses: ./.github/workflows/ci-e2e-debug-lock.yml
 
   format:
     needs: [architecture, build-check, lint]

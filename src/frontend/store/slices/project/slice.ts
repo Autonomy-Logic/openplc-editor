@@ -2418,6 +2418,40 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
       return ok()
     },
+    addOpcUaNodes: (name, nodes) => {
+      const server = getState().project.data.servers?.find((s) => s.name === name)
+      if (!server?.opcuaServerConfig) return fail('OPC-UA server not found')
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          const target = slice.project.data.servers?.find((s) => s.name === name)
+          if (!target?.opcuaServerConfig) return
+          const taken = new Set(target.opcuaServerConfig.addressSpace.nodes.map((n) => n.id))
+          for (const node of nodes) {
+            if (taken.has(node.id)) continue
+            taken.add(node.id)
+            target.opcuaServerConfig.addressSpace.nodes.push(node)
+          }
+        }),
+      )
+      return ok()
+    },
+    removeOpcUaNodes: (name, nodeIds) => {
+      const server = getState().project.data.servers?.find((s) => s.name === name)
+      if (!server?.opcuaServerConfig) return fail('OPC-UA server not found')
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          const target = slice.project.data.servers?.find((s) => s.name === name)
+          if (!target?.opcuaServerConfig) return
+          const doomed = new Set(nodeIds)
+          target.opcuaServerConfig.addressSpace.nodes = target.opcuaServerConfig.addressSpace.nodes.filter(
+            (n) => !doomed.has(n.id),
+          )
+        }),
+      )
+      return ok()
+    },
 
     // -----------------------------------------------------------------------
     // Remote devices

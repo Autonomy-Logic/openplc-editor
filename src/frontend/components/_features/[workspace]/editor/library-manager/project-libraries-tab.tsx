@@ -26,6 +26,7 @@
 import { MagnifierIcon } from '@root/frontend/assets/icons/interface/Magnifier'
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
+import { useIsEditingLocked } from '@root/frontend/hooks/use-editing-lock'
 import { useOpenPLCStore } from '@root/frontend/store'
 import type { InstalledLibrary } from '@root/middleware/shared/ports/library-types'
 import { useMemo, useState } from 'react'
@@ -108,18 +109,40 @@ const ProjectLibrariesTab = ({ installed }: ProjectLibrariesTabProps) => {
         }
       >
         {missingLibraries.length > 0 && (
-          <div className='shrink-0 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs dark:border-yellow-700 dark:bg-yellow-950/40'>
+          <div
+            data-testid='missing-libraries-callout'
+            className='shrink-0 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs dark:border-yellow-700 dark:bg-yellow-950/40'
+          >
             <span className='font-medium text-yellow-800 dark:text-yellow-200'>Missing libraries:</span>
-            <ul className='mt-1 list-inside list-disc text-yellow-700 dark:text-yellow-300'>
+            <ul
+              data-testid='missing-libraries-list'
+              className='mt-1 flex max-h-32 flex-col gap-0.5 overflow-y-auto text-yellow-700 dark:text-yellow-300'
+            >
               {missingLibraries.map((m) => (
-                <li key={m.name}>
-                  {m.name}
-                  {m.version ? ` (v${m.version})` : ''}
+                <li
+                  key={m.name}
+                  data-testid={`missing-library-row-${m.name}`}
+                  className='flex items-center justify-between gap-2'
+                >
+                  <span className='min-w-0 truncate'>
+                    {m.name}
+                    {m.version ? ` (v${m.version})` : ''}
+                  </span>
+                  <button
+                    type='button'
+                    aria-label={`Remove ${m.name} from project`}
+                    title='Remove from project'
+                    data-testid={`missing-library-remove-${m.name}`}
+                    onClick={() => disableLibrary(m.name)}
+                    className='shrink-0 rounded-md p-0.5 hover:bg-yellow-100 dark:hover:bg-yellow-900/40'
+                  >
+                    <MinusIcon className='!stroke-brand' />
+                  </button>
                 </li>
               ))}
             </ul>
             <p className='mt-1 text-yellow-700 dark:text-yellow-300'>
-              Install them on the System Libraries tab to make them available to this project.
+              Install them on the System Libraries tab, or remove them from this project.
             </p>
           </div>
         )}
@@ -159,7 +182,7 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
         <h3 className='select-none font-caption text-sm font-semibold text-neutral-950 dark:text-white'>{title}</h3>
         {subtitle && <p className='mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400'>{subtitle}</p>}
       </div>
-      <div className='flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3'>{children}</div>
+      <div className='flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3'>{children}</div>
     </div>
   )
 }
@@ -172,6 +195,7 @@ function SearchBar({ value, onChange }: { value: string; onChange: (v: string) =
         type='text'
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        data-editing-lock-exempt
         placeholder='Search libraries…'
         className='w-full bg-transparent font-caption text-xs text-neutral-950 placeholder:text-neutral-400 focus:outline-none dark:text-white dark:placeholder:text-neutral-500'
       />
@@ -202,6 +226,7 @@ function LibraryRow({
   onAction?: () => void
   actionTitle?: string
 }) {
+  const isEditingLocked = useIsEditingLocked()
   return (
     <div className='group flex items-center justify-between gap-2 border-b border-neutral-100 px-2 py-2 last:border-b-0 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900'>
       <div className='flex min-w-0 flex-1 flex-col gap-0.5'>
@@ -219,7 +244,8 @@ function LibraryRow({
           aria-label={actionTitle ?? 'Add to project'}
           title={actionTitle ?? 'Add to project'}
           onClick={onAction}
-          className='shrink-0 rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+          disabled={isEditingLocked}
+          className='shrink-0 rounded-md p-1 hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-neutral-800'
         >
           <PlusIcon className='!stroke-brand' />
         </button>
@@ -230,7 +256,8 @@ function LibraryRow({
           aria-label={actionTitle ?? 'Remove from project'}
           title={actionTitle ?? 'Remove from project'}
           onClick={onAction}
-          className='shrink-0 rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+          disabled={isEditingLocked}
+          className='shrink-0 rounded-md p-1 hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-neutral-800'
         >
           <MinusIcon className='!stroke-brand' />
         </button>

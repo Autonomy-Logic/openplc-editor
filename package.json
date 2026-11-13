@@ -1,7 +1,7 @@
 {
   "name": "open-plc-editor",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
-  "version": "4.3.4",
+  "version": "4.3.5",
   "license": "GPL-3.0-only",
   "author": {
     "name": "Autonomy Logic"
@@ -33,7 +33,7 @@
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "test": "jest --collectCoverage --maxWorkers=2",
     "test:watch": "jest --watch --no-coverage",
-    "test:e2e": "npm run build && npx playwright test",
+    "test:e2e": "cross-env OPENPLC_E2E_DEBUG_SEAM=1 npm run build && npx playwright test",
     "test:hmi-core": "node tests/hmi-core/run.mjs --cc \"gcc clang\" --sanitize",
     "test:hmi-lib": "node tests/hmi-lib/run.mjs --cc \"gcc clang\" --sanitize",
     "test:hmi-unit": "node tests/hmi-unit/run.mjs --cc \"gcc clang\" --sanitize",

@@ -8,6 +8,7 @@ import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
+import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
 import { DuplicateProtocolNotice } from '../duplicate-protocol-notice'
 
 type S7CommUIDataBlock = S7CommDataBlock
@@ -107,7 +108,9 @@ const AccordionContent = forwardRef<HTMLDivElement, AccordionPrimitive.Accordion
       {...props}
       ref={forwardedRef}
     >
-      <div className='p-3'>{children}</div>
+      <EditingLockBoundary className='contents'>
+        <div className='p-3'>{children}</div>
+      </EditingLockBoundary>
     </AccordionPrimitive.Content>
   ),
 )

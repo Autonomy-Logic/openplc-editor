@@ -1,4 +1,5 @@
-import type { OpcUaNodeConfig } from '@root/middleware/shared/ports/types'
+import type { OpcUaFieldConfig, OpcUaNodeConfig } from '@root/middleware/shared/ports/types'
+import { useState } from 'react'
 
 interface SelectedVariablesListProps {
   nodes: OpcUaNodeConfig[]
@@ -25,7 +26,36 @@ const formatPermissions = (permissions: OpcUaNodeConfig['permissions']): string 
   return `V:${permissions.viewer} O:${permissions.operator} E:${permissions.engineer}`
 }
 
+const MemberList = ({ fields, depth = 0 }: { fields: OpcUaFieldConfig[]; depth?: number }) => (
+  <ul className='flex flex-col gap-1'>
+    {fields.map((field) => (
+      <li key={field.fieldPath} className='flex flex-col gap-1' style={{ paddingLeft: `${depth * 12}px` }}>
+        <div className='flex items-center gap-2'>
+          <span className='font-caption text-xs font-medium text-neutral-800 dark:text-neutral-200'>
+            {field.displayName}
+          </span>
+          <span className='font-caption text-xs text-neutral-500 dark:text-neutral-500'>{field.fieldPath}</span>
+          {field.datatype && (
+            <span className='font-caption text-xs text-neutral-500 dark:text-neutral-500'>{field.datatype}</span>
+          )}
+          <span className='font-caption text-xs text-neutral-500 dark:text-neutral-500'>
+            {formatPermissions(field.permissions)}
+          </span>
+        </div>
+        {field.fields && field.fields.length > 0 && <MemberList fields={field.fields} depth={depth + 1} />}
+      </li>
+    ))}
+  </ul>
+)
+
 export const SelectedVariablesList = ({ nodes, missingNodeIds, onEdit, onRemove }: SelectedVariablesListProps) => {
+  const [expandedIds, setExpandedIds] = useState<ReadonlyArray<string>>([])
+
+  const toggleExpanded = (nodeId: string) =>
+    setExpandedIds((current) =>
+      current.includes(nodeId) ? current.filter((id) => id !== nodeId) : [...current, nodeId],
+    )
+
   if (nodes.length === 0) {
     return (
       <div className='flex h-full items-center justify-center p-4'>
@@ -40,6 +70,8 @@ export const SelectedVariablesList = ({ nodes, missingNodeIds, onEdit, onRemove 
     <div className='flex flex-col gap-2 overflow-y-auto'>
       {nodes.map((node) => {
         const isMissing = missingNodeIds?.has(node.id) ?? false
+        const members = node.fields ?? []
+        const isExpanded = expandedIds.includes(node.id)
         return (
           <div
             key={node.id}
@@ -53,6 +85,18 @@ export const SelectedVariablesList = ({ nodes, missingNodeIds, onEdit, onRemove 
             {/* Header row with icon, name, and actions */}
             <div className='flex items-start justify-between'>
               <div className='flex items-start gap-2'>
+                {members.length > 0 && (
+                  <button
+                    type='button'
+                    aria-label={`Members of ${node.displayName}`}
+                    aria-expanded={isExpanded}
+                    onClick={() => toggleExpanded(node.id)}
+                    className='mt-0.5 flex h-4 w-4 items-center justify-center rounded text-xs font-bold text-neutral-600 hover:bg-neutral-100 disabled:cursor-not-allowed dark:text-neutral-300 dark:hover:bg-neutral-800'
+                  >
+                    {isExpanded ? '-' : '+'}
+                  </button>
+                )}
+
                 {/* Node Icon */}
                 <div className='mt-0.5'>
                   <NodeTypeIcon nodeType={node.nodeType} />
@@ -105,6 +149,7 @@ export const SelectedVariablesList = ({ nodes, missingNodeIds, onEdit, onRemove 
                   variable is restored.
                 </p>
               )}
+              {isExpanded && members.length > 0 && <MemberList fields={members} />}
             </div>
           </div>
         )

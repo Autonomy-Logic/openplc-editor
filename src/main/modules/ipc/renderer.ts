@@ -453,6 +453,7 @@ const rendererProcessBridge = {
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
   rebuildMenu: () => ipcRenderer.send('window:rebuild-menu'),
   setMenuProjectOpen: (open: boolean) => ipcRenderer.send('window:project-open', open),
+  setMenuDebuggerActive: (active: boolean) => ipcRenderer.send('window:debugger-active', active),
   reloadWindow: () => ipcRenderer.send('window:reload'),
   windowIsClosing: (callback: IpcRendererCallbacks) => subscribe('window-controls:is-closing', callback),
 

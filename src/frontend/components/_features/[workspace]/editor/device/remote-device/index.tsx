@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { PlusIcon } from '../../../../../../assets/icons/interface/Plus'
+import { useIsEditingLocked } from '../../../../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../../../../store'
 import { cn } from '../../../../../../utils/cn'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
@@ -38,6 +39,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../..
 import TableActions from '../../../../../_atoms/table-actions'
 import { TooltipProvider } from '../../../../../_atoms/tooltip'
 import { TruncatedText } from '../../../../../_atoms/truncated-text'
+import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../_molecules/modal'
 import { toast } from '../../../../[app]/toast/use-toast'
 import { ImportIOGroupsModal, type IOGroupImportMode, type IOGroupImportPreview } from './import-io-groups-modal'
@@ -431,6 +433,7 @@ type IOGroupRowProps = {
 }
 
 const IOGroupRow = ({ ioGroup, isExpanded, onToggleExpand, onEdit, onDelete, onUpdateAlias }: IOGroupRowProps) => {
+  const isEditingLocked = useIsEditingLocked()
   const firstIOPoint = ioGroup.ioPoints?.[0]
   const groupType = firstIOPoint?.type || '-'
   // The full span, not just the first point: this is what makes a size change
@@ -474,7 +477,8 @@ const IOGroupRow = ({ ioGroup, isExpanded, onToggleExpand, onEdit, onDelete, onU
             <button
               type='button'
               onClick={onEdit}
-              className='rounded p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200'
+              disabled={isEditingLocked}
+              className='rounded p-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200'
               title='Edit'
               aria-label={`Edit ${ioGroup.name}`}
             >
@@ -483,7 +487,8 @@ const IOGroupRow = ({ ioGroup, isExpanded, onToggleExpand, onEdit, onDelete, onU
             <button
               type='button'
               onClick={onDelete}
-              className='rounded p-1 text-neutral-500 hover:bg-red-100 hover:text-red-600 dark:text-neutral-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
+              disabled={isEditingLocked}
+              className='rounded p-1 text-neutral-500 hover:bg-red-100 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-red-900/30 dark:hover:text-red-400'
               title='Delete'
               aria-label={`Delete ${ioGroup.name}`}
             >
@@ -512,6 +517,7 @@ type IOPointRowProps = {
 }
 
 const IOPointRow = ({ ioPoint, offset, onUpdateAlias }: IOPointRowProps) => {
+  const isEditingLocked = useIsEditingLocked()
   const [alias, setAlias] = useState(ioPoint.alias || '')
 
   const handleBlur = () => {
@@ -541,6 +547,7 @@ const IOPointRow = ({ ioPoint, offset, onUpdateAlias }: IOPointRowProps) => {
           value={alias}
           onChange={(e) => setAlias(e.target.value)}
           onBlur={handleBlur}
+          disabled={isEditingLocked}
           placeholder='Alias'
           className='h-6 w-full rounded border border-neutral-200 bg-white px-1 text-xs text-neutral-700 outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
         />
@@ -554,6 +561,7 @@ const RemoteDeviceEditor = () => {
   const { editor, project, projectActions, sharedWorkspaceActions, runtimeConnection, consoleActions } =
     useOpenPLCStore()
   const runtime = useRuntime()
+  const isEditingLocked = useIsEditingLocked()
 
   const deviceName = editor.type === 'plc-remote-device' ? editor.meta.name : ''
   const protocol = editor.type === 'plc-remote-device' ? editor.meta.protocol : ''
@@ -633,12 +641,13 @@ const RemoteDeviceEditor = () => {
   // stored config has none — keeping disk in sync with what's displayed
   // and fixing projects saved before the serial port was pre-filled.
   useEffect(() => {
+    if (isEditingLocked) return
     const config = remoteDevice?.modbusTcpConfig
     if (config && (config.transport ?? 'tcp') === 'rtu' && !config.serialPort) {
       projectActions.updateRemoteDeviceConfig(deviceName, { serialPort: DEFAULT_SERIAL_PORT })
       sharedWorkspaceActions.handleFileAndWorkspaceSavedState(deviceName)
     }
-  }, [remoteDevice, deviceName, projectActions, sharedWorkspaceActions])
+  }, [remoteDevice, deviceName, projectActions, sharedWorkspaceActions, isEditingLocked])
 
   const ioGroups = useMemo(
     () => remoteDevice?.modbusTcpConfig?.ioGroups || [],
@@ -956,153 +965,155 @@ const RemoteDeviceEditor = () => {
         </p>
       </div>
 
-      <div className='mb-6 flex flex-wrap gap-6'>
-        {/* Transport Type Selector */}
-        <div className='flex items-center gap-2'>
-          <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Transport</Label>
-          <Select value={transport} onValueChange={(v) => handleTransportChange(v as 'tcp' | 'rtu')}>
-            <SelectTrigger withIndicator placeholder='Select transport' className={selectTriggerStyles} />
-            <SelectContent className={selectContentStyles}>
-              {TRANSPORT_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
-                  <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                    {option.label}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <EditingLockBoundary className='contents'>
+        <div className='mb-6 flex flex-wrap gap-6'>
+          {/* Transport Type Selector */}
+          <div className='flex items-center gap-2'>
+            <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Transport</Label>
+            <Select value={transport} onValueChange={(v) => handleTransportChange(v as 'tcp' | 'rtu')}>
+              <SelectTrigger withIndicator placeholder='Select transport' className={selectTriggerStyles} />
+              <SelectContent className={selectContentStyles}>
+                {TRANSPORT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
+                    <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                      {option.label}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* TCP-specific fields */}
-        {transport === 'tcp' && (
-          <>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>IP Address</Label>
-              <InputWithRef
-                value={host}
-                onChange={(e) => setHost(e.target.value)}
-                onBlur={handleHostBlur}
-                placeholder='127.0.0.1'
-                className={inputStyles}
-              />
-            </div>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Port</Label>
-              <InputWithRef
-                type='number'
-                value={port}
-                onChange={(e) => setPort(e.target.value)}
-                onBlur={handlePortBlur}
-                placeholder='502'
-                className={inputStyles}
-              />
-            </div>
-          </>
-        )}
+          {/* TCP-specific fields */}
+          {transport === 'tcp' && (
+            <>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>IP Address</Label>
+                <InputWithRef
+                  value={host}
+                  onChange={(e) => setHost(e.target.value)}
+                  onBlur={handleHostBlur}
+                  placeholder='127.0.0.1'
+                  className={inputStyles}
+                />
+              </div>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Port</Label>
+                <InputWithRef
+                  type='number'
+                  value={port}
+                  onChange={(e) => setPort(e.target.value)}
+                  onBlur={handlePortBlur}
+                  placeholder='502'
+                  className={inputStyles}
+                />
+              </div>
+            </>
+          )}
 
-        {/* RTU-specific fields */}
-        {transport === 'rtu' && (
-          <>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Serial Port</Label>
-              <SerialPortCombobox
-                value={serialPort}
-                onValueChange={handleSerialPortChange}
-                options={serialPortOptions}
-                isLoading={isLoadingSerialPorts}
-                placeholder='/dev/ttyUSB0'
-              />
-            </div>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Baud Rate</Label>
-              <Select value={baudRate} onValueChange={handleBaudRateChange}>
-                <SelectTrigger withIndicator placeholder='Select baud rate' className={selectTriggerStyles} />
-                <SelectContent className={selectContentStyles}>
-                  {BAUD_RATE_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
-                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                        {option.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Parity</Label>
-              <Select value={parity} onValueChange={(v) => handleParityChange(v as 'N' | 'E' | 'O')}>
-                <SelectTrigger withIndicator placeholder='Select parity' className={selectTriggerStyles} />
-                <SelectContent className={selectContentStyles}>
-                  {PARITY_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
-                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                        {option.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Stop Bits</Label>
-              <Select value={stopBits} onValueChange={handleStopBitsChange}>
-                <SelectTrigger withIndicator placeholder='Select stop bits' className={selectTriggerStyles} />
-                <SelectContent className={selectContentStyles}>
-                  {STOP_BITS_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
-                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                        {option.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className='flex items-center gap-2'>
-              <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Data Bits</Label>
-              <Select value={dataBits} onValueChange={handleDataBitsChange}>
-                <SelectTrigger withIndicator placeholder='Select data bits' className={selectTriggerStyles} />
-                <SelectContent className={selectContentStyles}>
-                  {DATA_BITS_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
-                      <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                        {option.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </>
-        )}
+          {/* RTU-specific fields */}
+          {transport === 'rtu' && (
+            <>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Serial Port</Label>
+                <SerialPortCombobox
+                  value={serialPort}
+                  onValueChange={handleSerialPortChange}
+                  options={serialPortOptions}
+                  isLoading={isLoadingSerialPorts}
+                  placeholder='/dev/ttyUSB0'
+                />
+              </div>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Baud Rate</Label>
+                <Select value={baudRate} onValueChange={handleBaudRateChange}>
+                  <SelectTrigger withIndicator placeholder='Select baud rate' className={selectTriggerStyles} />
+                  <SelectContent className={selectContentStyles}>
+                    {BAUD_RATE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {option.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Parity</Label>
+                <Select value={parity} onValueChange={(v) => handleParityChange(v as 'N' | 'E' | 'O')}>
+                  <SelectTrigger withIndicator placeholder='Select parity' className={selectTriggerStyles} />
+                  <SelectContent className={selectContentStyles}>
+                    {PARITY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {option.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Stop Bits</Label>
+                <Select value={stopBits} onValueChange={handleStopBitsChange}>
+                  <SelectTrigger withIndicator placeholder='Select stop bits' className={selectTriggerStyles} />
+                  <SelectContent className={selectContentStyles}>
+                    {STOP_BITS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {option.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className='flex items-center gap-2'>
+                <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Data Bits</Label>
+                <Select value={dataBits} onValueChange={handleDataBitsChange}>
+                  <SelectTrigger withIndicator placeholder='Select data bits' className={selectTriggerStyles} />
+                  <SelectContent className={selectContentStyles}>
+                    {DATA_BITS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
+                        <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                          {option.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
 
-        {/* Common fields - Timeout and Slave ID */}
-        <div className='flex items-center gap-2'>
-          <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Timeout (ms)</Label>
-          <InputWithRef
-            type='number'
-            value={timeout}
-            onChange={(e) => setTimeout(e.target.value)}
-            onBlur={handleTimeoutBlur}
-            placeholder='1000'
-            className={inputStyles}
-          />
+          {/* Common fields - Timeout and Slave ID */}
+          <div className='flex items-center gap-2'>
+            <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Timeout (ms)</Label>
+            <InputWithRef
+              type='number'
+              value={timeout}
+              onChange={(e) => setTimeout(e.target.value)}
+              onBlur={handleTimeoutBlur}
+              placeholder='1000'
+              className={inputStyles}
+            />
+          </div>
+          <div className='flex items-center gap-2'>
+            <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Slave ID</Label>
+            <InputWithRef
+              type='number'
+              value={slaveId}
+              onChange={(e) => setSlaveId(e.target.value)}
+              onBlur={handleSlaveIdBlur}
+              placeholder='1'
+              min={transport === 'rtu' ? SLAVE_ID_RTU_MIN : SLAVE_ID_TCP_MIN}
+              max={transport === 'rtu' ? SLAVE_ID_RTU_MAX : SLAVE_ID_TCP_MAX}
+              className={inputStyles}
+            />
+          </div>
         </div>
-        <div className='flex items-center gap-2'>
-          <Label className='whitespace-nowrap text-xs text-neutral-950 dark:text-white'>Slave ID</Label>
-          <InputWithRef
-            type='number'
-            value={slaveId}
-            onChange={(e) => setSlaveId(e.target.value)}
-            onBlur={handleSlaveIdBlur}
-            placeholder='1'
-            min={transport === 'rtu' ? SLAVE_ID_RTU_MIN : SLAVE_ID_TCP_MIN}
-            max={transport === 'rtu' ? SLAVE_ID_RTU_MAX : SLAVE_ID_TCP_MAX}
-            className={inputStyles}
-          />
-        </div>
-      </div>
+      </EditingLockBoundary>
 
       <div className='flex flex-1 flex-col overflow-hidden'>
         <div className='mb-2 flex items-center justify-between'>
@@ -1112,6 +1123,7 @@ const RemoteDeviceEditor = () => {
               ref={importInputRef}
               type='file'
               data-testid='io-group-import-input'
+              disabled={isEditingLocked}
               accept='.csv,.json,text/csv,application/json'
               onChange={(e) => void handleImportFileSelected(e)}
               className='hidden'
@@ -1122,6 +1134,7 @@ const RemoteDeviceEditor = () => {
               type='button'
               id='import-io-groups-button'
               data-testid='io-group-import-button'
+              disabled={isEditingLocked}
               onClick={() => importInputRef.current?.click()}
               className={TOOLBAR_BUTTON_CLASS}
               title='Import IO groups from a CSV or JSON file'
@@ -1134,6 +1147,7 @@ const RemoteDeviceEditor = () => {
                 <button
                   type='button'
                   id='export-io-groups-button'
+                  data-editing-lock-exempt
                   data-testid='io-group-export-button'
                   className={TOOLBAR_BUTTON_CLASS}
                   title={ioGroups.length === 0 ? 'Add IO groups to enable export' : 'Export IO groups'}
@@ -1165,6 +1179,7 @@ const RemoteDeviceEditor = () => {
               actions={[
                 {
                   ariaLabel: 'Add IO Group',
+                  disabled: isEditingLocked,
                   onClick: handleOpenAddModal,
                   icon: <PlusIcon className='h-4 w-4 stroke-brand' />,
                   id: 'add-io-group-button',
@@ -1236,20 +1251,22 @@ const RemoteDeviceEditor = () => {
         </div>
       </div>
 
-      <IOGroupModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onSubmit={handleSubmitIOGroup}
-        editingGroup={editingGroup}
-        otherGroupNames={ioGroups.filter((g) => g.id !== editingGroup?.id).map((g) => g.name)}
-      />
+      <EditingLockBoundary className='contents'>
+        <IOGroupModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          onSubmit={handleSubmitIOGroup}
+          editingGroup={editingGroup}
+          otherGroupNames={ioGroups.filter((g) => g.id !== editingGroup?.id).map((g) => g.name)}
+        />
 
-      <ImportIOGroupsModal
-        preview={importPreview}
-        existingGroupNames={ioGroups.map((g) => g.name)}
-        onClose={() => setImportPreview(null)}
-        onConfirm={handleConfirmImport}
-      />
+        <ImportIOGroupsModal
+          preview={importPreview}
+          existingGroupNames={ioGroups.map((g) => g.name)}
+          onClose={() => setImportPreview(null)}
+          onConfirm={handleConfirmImport}
+        />
+      </EditingLockBoundary>
     </div>
   )
 }
