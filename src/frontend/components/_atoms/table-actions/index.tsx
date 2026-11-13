@@ -1,5 +1,6 @@
 import React, { ButtonHTMLAttributes, ReactNode } from 'react'
 
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { cn } from '../../../utils/cn'
 import { TableActionButton } from '../buttons/tables-actions'
 
@@ -18,6 +19,8 @@ type TableActionsProps = {
 }
 
 const TableActions: React.FC<TableActionsProps> = ({ actions, buttonProps, className }) => {
+  const isEditingLocked = useIsEditingLocked()
+
   return (
     <div className={cn(className, 'flex cursor-pointer gap-2')}>
       {actions.map((action, index) => (
@@ -25,7 +28,7 @@ const TableActions: React.FC<TableActionsProps> = ({ actions, buttonProps, class
           key={index}
           aria-label={action.ariaLabel}
           onClick={action.onClick}
-          disabled={action.disabled}
+          disabled={action.disabled || isEditingLocked}
           id={action.id}
           {...buttonProps}
         >

@@ -1,13 +1,14 @@
 import { ChevronDownIcon, ChevronRightIcon } from '@radix-ui/react-icons'
 import { cn } from '@root/frontend/utils/cn'
+import type { VariableTreeNode } from '@root/frontend/utils/opcua/types'
 import { useCallback, useState } from 'react'
-
-import type { VariableTreeNode } from '../hooks/use-project-variables'
 
 interface VariableTreeProps {
   nodes: VariableTreeNode[]
   selectedIds: Set<string>
   onSelect: (node: VariableTreeNode) => void
+  onSelectGroup: (group: VariableTreeNode) => void
+  isGroupFullyExposed: (group: VariableTreeNode) => boolean
   filter?: string
 }
 
@@ -55,6 +56,8 @@ const Checkbox = ({
 }) => (
   <button
     type='button'
+    aria-label='Toggle selection'
+    aria-pressed={checked}
     onClick={(e) => {
       e.stopPropagation()
       onChange()
@@ -80,16 +83,30 @@ interface TreeNodeRowProps {
   expandedIds: Set<string>
   onToggleExpand: (nodeId: string) => void
   onSelect: (node: VariableTreeNode) => void
+  onSelectGroup: (group: VariableTreeNode) => void
+  isGroupFullyExposed: (group: VariableTreeNode) => boolean
   filter?: string
 }
 
-const TreeNodeRow = ({ node, depth, selectedIds, expandedIds, onToggleExpand, onSelect, filter }: TreeNodeRowProps) => {
+const TreeNodeRow = ({
+  node,
+  depth,
+  selectedIds,
+  expandedIds,
+  onToggleExpand,
+  onSelect,
+  onSelectGroup,
+  isGroupFullyExposed,
+  filter,
+}: TreeNodeRowProps) => {
   const hasChildren = node.children && node.children.length > 0
   const isExpanded = expandedIds.has(node.id)
   const isSelected = selectedIds.has(node.id)
+  const isGroupRow = !node.isSelectable && (node.type === 'program' || node.type === 'global')
 
   // Check if any children are selected (for indeterminate state)
   const hasSelectedChildren = hasChildren && node.children!.some((child) => checkAnySelected(child, selectedIds))
+  const everyChildSelected = isGroupRow && isGroupFullyExposed(node)
 
   // Filter match
   const matchesFilter = !filter || node.name.toLowerCase().includes(filter.toLowerCase())
@@ -123,12 +140,11 @@ const TreeNodeRow = ({ node, depth, selectedIds, expandedIds, onToggleExpand, on
           <div className='w-4' />
         )}
 
-        {/* Selection checkbox (only for selectable nodes) */}
-        {node.isSelectable ? (
+        {node.isSelectable || isGroupRow ? (
           <Checkbox
-            checked={isSelected}
+            checked={isSelected || (isGroupRow && everyChildSelected)}
             indeterminate={!isSelected && hasSelectedChildren}
-            onChange={() => onSelect(node)}
+            onChange={() => (isGroupRow ? onSelectGroup(node) : onSelect(node))}
           />
         ) : (
           <div className='w-4' />
@@ -165,6 +181,8 @@ const TreeNodeRow = ({ node, depth, selectedIds, expandedIds, onToggleExpand, on
               expandedIds={expandedIds}
               onToggleExpand={onToggleExpand}
               onSelect={onSelect}
+              onSelectGroup={onSelectGroup}
+              isGroupFullyExposed={isGroupFullyExposed}
               filter={filter}
             />
           ))}
@@ -192,7 +210,14 @@ const checkFilterMatch = (node: VariableTreeNode, filter: string): boolean => {
   return false
 }
 
-export const VariableTree = ({ nodes, selectedIds, onSelect, filter }: VariableTreeProps) => {
+export const VariableTree = ({
+  nodes,
+  selectedIds,
+  onSelect,
+  onSelectGroup,
+  isGroupFullyExposed,
+  filter,
+}: VariableTreeProps) => {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
     // Auto-expand top-level nodes
     return new Set(nodes.map((n) => n.id))
@@ -231,6 +256,8 @@ export const VariableTree = ({ nodes, selectedIds, onSelect, filter }: VariableT
           expandedIds={expandedIds}
           onToggleExpand={handleToggleExpand}
           onSelect={onSelect}
+          onSelectGroup={onSelectGroup}
+          isGroupFullyExposed={isGroupFullyExposed}
           filter={filter}
         />
       ))}

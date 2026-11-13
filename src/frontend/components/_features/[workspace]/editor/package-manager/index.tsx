@@ -12,6 +12,7 @@
 import * as Popover from '@radix-ui/react-popover'
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
+import { useIsEditingLocked } from '@root/frontend/hooks/use-editing-lock'
 import { useOpenPLCStore } from '@root/frontend/store'
 import type { InstalledPackage, PackageManifest } from '@root/middleware/shared/ports/types'
 import { usePackages } from '@root/middleware/shared/providers/platform-context'
@@ -24,6 +25,7 @@ type ViewMode = 'installed' | 'catalog'
 
 const PackageManagerEditor = () => {
   const packages = usePackages()
+  const isEditingLocked = useIsEditingLocked()
   const openModal = useOpenPLCStore((s) => s.modalActions.openModal)
   const [viewMode, setViewMode] = useState<ViewMode>('installed')
   const [installedPackages, setInstalledPackages] = useState<InstalledPackage[]>([])
@@ -139,7 +141,10 @@ const PackageManagerEditor = () => {
   return (
     <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
       {/* Top tab strip — Installed | Browse Catalog */}
-      <div className='flex shrink-0 items-center gap-1 border-b border-neutral-200 px-4 dark:border-neutral-800'>
+      <div
+        role='tablist'
+        className='flex shrink-0 items-center gap-1 border-b border-neutral-200 px-4 dark:border-neutral-800'
+      >
         <ViewTab label='Installed' isActive={viewMode === 'installed'} onClick={() => setViewMode('installed')} />
         <ViewTab label='Browse Catalog' isActive={viewMode === 'catalog'} onClick={() => setViewMode('catalog')} />
       </div>
@@ -156,7 +161,8 @@ const PackageManagerEditor = () => {
                     <button
                       type='button'
                       aria-label='Add package'
-                      className='rounded-md p-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                      disabled={isEditingLocked}
+                      className='rounded-md p-1 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-neutral-900'
                     >
                       <PlusIcon className='!stroke-brand' />
                     </button>
@@ -170,6 +176,7 @@ const PackageManagerEditor = () => {
                       <button
                         type='button'
                         onClick={() => void handleImportFromFile()}
+                        disabled={isEditingLocked}
                         className='flex w-full items-center rounded-md px-3 py-2 text-left font-caption text-cp-sm font-medium text-neutral-850 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-850'
                       >
                         Add from file...
@@ -177,6 +184,7 @@ const PackageManagerEditor = () => {
                       <button
                         type='button'
                         onClick={handleSwitchToCatalog}
+                        disabled={isEditingLocked}
                         className='flex w-full items-center rounded-md px-3 py-2 text-left font-caption text-cp-sm font-medium text-neutral-850 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-850'
                       >
                         Add from catalog...
@@ -189,8 +197,8 @@ const PackageManagerEditor = () => {
                   type='button'
                   aria-label='Remove package'
                   onClick={() => void handleUninstall()}
-                  disabled={!selectedPackageId || installTracker.busy}
-                  className='rounded-md p-1 hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
+                  disabled={!selectedPackageId || isEditingLocked || installTracker.busy}
+                  className='rounded-md p-1 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-neutral-900'
                 >
                   <MinusIcon className='!stroke-brand' />
                 </button>
@@ -210,6 +218,7 @@ const PackageManagerEditor = () => {
                       key={pkg.packageId}
                       type='button'
                       onClick={() => setSelectedPackageId(pkg.packageId)}
+                      data-editing-lock-exempt
                       aria-selected={isSelected}
                       className={`flex w-full cursor-pointer items-center justify-between border-b border-neutral-100 px-3 py-2 text-left last:border-b-0 dark:border-neutral-800 ${
                         isSelected
@@ -249,7 +258,7 @@ const PackageManagerEditor = () => {
                   <button
                     type='button'
                     onClick={() => void handleReinstall()}
-                    disabled={installTracker.busy}
+                    disabled={installTracker.busy || isEditingLocked}
                     className='rounded-md border border-neutral-200 px-3 py-1 font-caption text-cp-sm font-medium text-neutral-850 hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-900'
                   >
                     Reinstall
@@ -311,8 +320,9 @@ function ViewTab({ label, isActive, onClick }: { label: string; isActive: boolea
   return (
     <button
       type='button'
+      role='tab'
       onClick={onClick}
-      aria-pressed={isActive}
+      aria-selected={isActive}
       className={`-mb-px border-b-2 px-3 py-2.5 font-caption text-cp-sm font-medium transition-colors ${
         isActive
           ? 'border-brand text-brand'

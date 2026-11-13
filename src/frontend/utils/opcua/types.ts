@@ -48,3 +48,26 @@ export interface ResolvedField {
   /** Nested fields for complex types (FB instances, nested structs) */
   fields?: ResolvedField[]
 }
+
+/** A row of the Address Space variable tree. */
+export interface VariableTreeNode {
+  id: string
+  name: string
+  type: 'program' | 'function_block' | 'global' | 'variable' | 'structure' | 'array'
+  variableType?: string
+  children?: VariableTreeNode[]
+  pouName: string
+  variablePath: string
+  isSelectable: boolean
+  isExpanded?: boolean
+  variableClass?: string
+  arrayInfo?: {
+    dimensions: string[]
+    elementType: string
+    totalLength: number
+  }
+  structureInfo?: {
+    structTypeName: string
+    fieldCount: number
+  }
+}

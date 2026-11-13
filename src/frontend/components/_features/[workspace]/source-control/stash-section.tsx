@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { PendingChange, Stash } from '../../../../../middleware/shared/ports/version-control-port'
 import { StashConflictError } from '../../../../../middleware/shared/ports/version-control-port'
 import { useProject, useVersionControl } from '../../../../../middleware/shared/providers'
+import { useIsEditingLocked } from '../../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../../store'
 import { notifyNoWritePermission } from '../../../../utils/notify-no-write-permission'
 import { isSystemFile } from '../../../../utils/system-files'
@@ -33,6 +34,7 @@ export function StashSection({ projectId }: StashSectionProps) {
   const projectPort = useProject()
   const { versionControlActions, sharedWorkspaceActions } = useOpenPLCStore()
   const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
+  const isEditingLocked = useIsEditingLocked()
 
   const [stashes, setStashes] = useState<Stash[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -80,6 +82,7 @@ export function StashSection({ projectId }: StashSectionProps) {
   }, [projectId, projectPort, sharedWorkspaceActions, versionControl, versionControlActions])
 
   const handleApplyOrPop = async (stash: Stash, pop: boolean) => {
+    if (isEditingLocked) return
     if (!versionControl || busyRef) return
     // No write permission ⇒ skip the doomed backend write and warn.
     if (!canEdit) {
@@ -109,6 +112,7 @@ export function StashSection({ projectId }: StashSectionProps) {
   }
 
   const handleDrop = async () => {
+    if (isEditingLocked) return
     if (!versionControl || !dropTarget) return
     // No write permission ⇒ skip the doomed backend write and warn.
     if (!canEdit) {
@@ -177,7 +181,7 @@ export function StashSection({ projectId }: StashSectionProps) {
                   <div className='mt-2 flex items-center gap-1.5 pl-5'>
                     <button
                       onClick={() => void handleApplyOrPop(stash, false)}
-                      disabled={isBusy || busyRef !== null}
+                      disabled={isBusy || busyRef !== null || isEditingLocked}
                       title='Apply this stash and keep it on the stack'
                       className='cursor-pointer rounded-md bg-neutral-100 px-2 py-1 text-[11px] font-medium text-neutral-700 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-blue-900/30 dark:hover:text-blue-400'
                     >
@@ -185,7 +189,7 @@ export function StashSection({ projectId }: StashSectionProps) {
                     </button>
                     <button
                       onClick={() => void handleApplyOrPop(stash, true)}
-                      disabled={isBusy || busyRef !== null}
+                      disabled={isBusy || busyRef !== null || isEditingLocked}
                       title='Apply this stash and remove it from the stack'
                       className='flex cursor-pointer items-center gap-1 rounded-md bg-blue-500 px-2 py-1 text-[11px] font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50'
                     >
@@ -194,7 +198,7 @@ export function StashSection({ projectId }: StashSectionProps) {
                     </button>
                     <button
                       onClick={() => setDropTarget(stash)}
-                      disabled={busyRef !== null}
+                      disabled={busyRef !== null || isEditingLocked}
                       title='Delete this stash without applying'
                       className='ml-auto cursor-pointer rounded-md p-1 text-neutral-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-red-900/30 dark:hover:text-red-400'
                     >
