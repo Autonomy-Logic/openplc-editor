@@ -300,6 +300,7 @@ FUNCTION_BLOCK HmiRuntime
     StartPage : DINT;
     Current : DINT := -1;
     Keyboard : HmiKeyboard;
+    Denied : ARRAY[0..63] OF BOOL;
   END_VAR
 
   (* Adds a screen; its page number is the order of the calls, from 0. Returns -1 when full. *)
@@ -313,6 +314,36 @@ FUNCTION_BLOCK HmiRuntime
     NextId := Screen^.Setup(NextId);
     AddScreen := Count;
     Count := Count + 1;
+  END_METHOD
+  (* Whether the viewer may open page Page; every page is allowed until denied. *)
+  METHOD SetAccess : BOOL
+    VAR_INPUT Page : DINT; Allowed : BOOL; END_VAR
+    IF Page >= 0 AND Page < 64 THEN
+      Denied[Page] := NOT Allowed;
+      SetAccess := TRUE;
+    END_IF;
+  END_METHOD
+  METHOD INTERNAL CanShow : BOOL
+    VAR_INPUT Page : DINT; END_VAR
+    CanShow := Page >= 0 AND Page < Count;
+    IF CanShow THEN
+      CanShow := NOT Denied[Page];
+    END_IF;
+  END_METHOD
+  (* The start page when allowed, else the first allowed page in project order; -1 when none is. *)
+  METHOD INTERNAL Entry : DINT
+    VAR p : DINT; END_VAR
+    Entry := -1;
+    IF CanShow(StartPage) THEN
+      Entry := StartPage;
+      RETURN;
+    END_IF;
+    FOR p := 0 TO Count - 1 DO
+      IF CanShow(p) THEN
+        Entry := p;
+        RETURN;
+      END_IF;
+    END_FOR;
   END_METHOD
   (* Page a viewer starts on. *)
   METHOD SetStart : BOOL
@@ -331,10 +362,10 @@ FUNCTION_BLOCK HmiRuntime
     {external hmi_theme_define(THEME.get(), TOKEN.get(), (uint32_t)RGB.get()); }
     SetThemeColor := TRUE;
   END_METHOD
-  (* Shows page Page from the next frame; FALSE when there is no such page. *)
+  (* Shows page Page from the next frame; FALSE when there is no such page or the viewer may not open it. *)
   METHOD Show : BOOL
     VAR_INPUT Page : DINT; END_VAR
-    IF Page >= 0 AND Page < Count THEN
+    IF CanShow(Page) THEN
       SetPage(Page);
       Show := TRUE;
     END_IF;
@@ -362,7 +393,7 @@ FUNCTION_BLOCK HmiRuntime
     SetShown := TRUE;
   END_METHOD
   (* Starts the viewer's frame: keyboard, page changes, the screen's input and write-back. Returns the page whose
-     screen body runs next, -1 when there are no screens. *)
+     screen body runs next, -1 when there is no screen the viewer may open. *)
   METHOD BeginFrame : DINT
     VAR page, shown : DINT; END_VAR
     Current := -1;
@@ -372,8 +403,11 @@ FUNCTION_BLOCK HmiRuntime
     END_IF;
     shown := Shown();
     page := CurrentPage();
-    IF shown < 0 OR page < 0 OR page >= Count THEN
-      page := LIMIT(0, StartPage, Count - 1);
+    IF shown < 0 OR NOT CanShow(page) THEN
+      page := Entry();
+      IF page < 0 THEN
+        RETURN;
+      END_IF;
       ResetPage(page);
     END_IF;
     Screens[page]^.ApplyTheme();
@@ -393,6 +427,10 @@ FUNCTION_BLOCK HmiRuntime
   METHOD EndFrame : BOOL
     IF Current < 0 THEN
       HMI_Clear(COLOR.Background);
+      IF Count > 0 THEN
+        HMI_TextBox(0, 0, HMI_ScreenW(), HMI_ScreenH(), 'No screens for your role', 16, HMI_FONT#Regular,
+          HMI_ALIGN#Center, HMI_VALIGN#Middle, COLOR.TextMuted);
+      END_IF;
       RETURN;
     END_IF;
     Screens[Current]^.RunDraw();

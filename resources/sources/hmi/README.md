@@ -15,6 +15,7 @@ and produce the same pixels on each. This folder is mirrored byte for byte in op
 | `core/hmi_raster.c` | Rasterizer, band hashes, deadlines |
 | `core/hmi_text.c` | Fonts, text metrics, glyph cache, text drawing |
 | `core/third_party/` | stb_truetype (see its README) |
+| `unit/` | The interface of a generated HMI unit (`hmi_unit.h`) and its preview setters (`hmi_preview.h`) |
 | `fonts/` | The vetted fonts: OpenPLC Sans (default, ASCII and Latin-1) and Liberation Sans (full); see its README |
 
 ## Building
@@ -40,6 +41,13 @@ widgets, the on-screen keyboard, the screen base and the runtime the generated g
 `src/backend/shared/hmi/lib/` (shared surface) and is compiled by STruC++ as its own library; its `{external}` code
 includes `hmi_core.h`.
 
+## Generated unit
+
+`unit/hmi_unit.h` is what a generated HMI unit gives the host that runs it: one program instance per viewer with its
+role, the tag table with read and write accessors for the PLC variables screens use, and the project's frame period,
+panel PIN and relock time. `unit/hmi_preview.h` adds the live property setters only the editor's preview links. The
+editor's generator (`src/backend/shared/hmi/unit/`) writes the unit.
+
 ## Tests (in openplc-editor)
 
 `npm run test:hmi-core` (or `node tests/hmi-core/run.mjs`, see the options at the top of that file) builds the
@@ -50,3 +58,7 @@ against `tests/hmi-core/golden.txt` with both font variants, and runs the fuzzer
 
 `npm run test:hmi-lib` (`tests/hmi-lib/run.mjs`) compiles the library and test screens with STruC++, builds them with
 this core on gcc and clang, drives scripted input and checks every frame against `tests/hmi-lib/golden.txt`.
+
+`npm run test:hmi-unit` (`tests/hmi-unit/run.mjs`) generates a sample project's unit, builds it with this core and a
+C host that uses only `unit/hmi_unit.h` and `unit/hmi_preview.h`, and checks its frames, writes, navigation and role
+grid against `tests/hmi-unit/golden.txt`.

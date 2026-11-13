@@ -42,6 +42,8 @@
  *     (bytes-in; the caller reads the file or upload).
  *   - `loadStlibFromString` — `.stlib` archive parser (text-in;
  *     the caller reads the file or fetches the URL).
+ *   - `parse` — the ST parser, for tools that read declarations
+ *     (HMI screens and widget blocks).
  *
  * Every entry pulls its signature through `typeof import('strucpp')[k]`
  * so adding a parameter on the strucpp side surfaces as a compile
@@ -55,6 +57,7 @@ export interface StrucppRuntime {
   compileStlib: (typeof import('strucpp'))['compileStlib']
   importCodesysLibraryFromBytes: (typeof import('strucpp'))['importCodesysLibraryFromBytes']
   loadStlibFromString: (typeof import('strucpp'))['loadStlibFromString']
+  parse: (typeof import('strucpp'))['parse']
 }
 
 let cached: StrucppRuntime | null = null
