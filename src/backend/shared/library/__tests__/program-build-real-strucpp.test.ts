@@ -1,12 +1,3 @@
-/**
- * `runProgramBuildPipeline` against the REAL strucpp and the bundled libraries.
- *
- * Proves the installed compiler is the one `binary-versions.json` pins, and that
- * the shared program build accepts the language features of that compiler.
- *
- * Requires the pinned strucpp in `node_modules`.
- */
-
 import { readFileSync } from 'fs'
 import { join } from 'path'
 

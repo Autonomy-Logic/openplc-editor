@@ -13,6 +13,7 @@
  *   - `x : My Type;` — the regex invented a data type with that name
  */
 
+import { DEBUG_STRING_CAP } from '../../variable-sizes'
 import { normalizeOneVariablePerLine, parseVariableDeclarations } from '../variable-declarations'
 
 const BASE_TYPES = new Set([
@@ -531,5 +532,81 @@ describe('the two refined messages', () => {
     const result = parseVariableDeclarations(text, context)
     expect(result.errors).toEqual([])
     expect(result.variables.map((v) => v.name)).toEqual(['s'])
+  })
+})
+
+/** The exact refusal of a declared length on `keyword`. */
+const lengthRefusal = (keyword: 'STRING' | 'WSTRING') =>
+  `A declared length is not supported on ${keyword} — use plain ${keyword}, which carries up to ${DEBUG_STRING_CAP} characters.`
+
+/** The span of the whole 1-based `line` of `source`. */
+const lineSpan = (source: string, line: number) => {
+  const lines = source.split('\n')
+  const start = lines.slice(0, line - 1).reduce((sum, text) => sum + text.length + 1, 0)
+  return { start, end: start + lines[line - 1].length }
+}
+
+describe('a declared STRING length is refused in every form the parser accepts', () => {
+  it.each([
+    { label: 'after REF_TO', source: 'VAR\n  p : REF_TO STRING[5];\nEND_VAR', keyword: 'STRING', line: 2 },
+    { label: 'after REFERENCE TO', source: 'VAR\n  p : REFERENCE TO STRING[5];\nEND_VAR', keyword: 'STRING', line: 2 },
+    { label: 'after POINTER TO', source: 'VAR\n  p : POINTER TO WSTRING[5];\nEND_VAR', keyword: 'WSTRING', line: 2 },
+    {
+      label: 'as an array element with no space before OF',
+      source: 'VAR\n  a : ARRAY[0..1]OF STRING[5];\nEND_VAR',
+      keyword: 'STRING',
+      line: 2,
+    },
+    {
+      label: 'as the element of an array behind POINTER TO',
+      source: 'VAR\n  p : POINTER TO ARRAY[0..1] OF STRING[5];\nEND_VAR',
+      keyword: 'STRING',
+      line: 2,
+    },
+    {
+      label: 'on the line after the colon',
+      source: 'VAR\n  s :\n    STRING[20];\nEND_VAR',
+      keyword: 'STRING',
+      line: 3,
+    },
+    {
+      label: 'as an array element on the line after the array bounds',
+      source: 'VAR\n  a : ARRAY[0..1]\n    OF WSTRING[5];\nEND_VAR',
+      keyword: 'WSTRING',
+      line: 3,
+    },
+  ] as const)('refuses it $label, on the line of the keyword', ({ source, keyword, line }) => {
+    expect(parseVariableDeclarations(source, context)).toEqual({
+      blocks: [],
+      variables: [],
+      errors: [{ message: lengthRefusal(keyword), line, span: lineSpan(source, line) }],
+    })
+  })
+
+  it('reports only the first offending declaration in source order', () => {
+    const source = 'VAR\n  a : INT;\n  p : REF_TO STRING[5];\n  s : STRING[7];\nEND_VAR'
+    expect(parseVariableDeclarations(source, context).errors).toEqual([
+      { message: lengthRefusal('STRING'), line: 3, span: lineSpan(source, 3) },
+    ])
+  })
+
+  it.each([
+    { label: 'a plain STRING behind REF_TO', source: 'VAR\n  p : REF_TO STRING;\nEND_VAR', names: ['p'] },
+    { label: 'a parenthesised STRING length', source: 'VAR\n  s : STRING(20);\nEND_VAR', names: ['s'] },
+    { label: 'a plain STRING on the line after the colon', source: 'VAR\n  s :\n    STRING;\nEND_VAR', names: ['s'] },
+    {
+      label: 'a STRING length only in a comment spanning lines',
+      source: 'VAR\n  p : REF_TO STRING; (* REF_TO STRING[5]\n  spans *)\n  q : INT;\nEND_VAR',
+      names: ['p', 'q'],
+    },
+    {
+      label: 'a STRING length only in a string literal',
+      source: "VAR\n  s : STRING := 'REF_TO STRING[5]';\nEND_VAR",
+      names: ['s'],
+    },
+  ])('loads $label with no error', ({ source, names }) => {
+    const result = parseVariableDeclarations(source, context)
+    expect(result.errors).toEqual([])
+    expect(result.variables.map((v) => v.name)).toEqual(names)
   })
 })
