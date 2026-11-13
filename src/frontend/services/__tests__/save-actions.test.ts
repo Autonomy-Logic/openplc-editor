@@ -325,6 +325,54 @@ describe('save-actions', () => {
       expect(fileSaved('Healthy')).toBe(true)
     })
 
+    describe('HMI persistence', () => {
+      const savedFiles = (port: ProjectPort) => vi.mocked(port.saveProject).mock.calls[0][0]
+
+      it('writes screens, widget blocks and HMI Settings, and queues a deleted screen', async () => {
+        const { hmiActions } = store.getState()
+        hmiActions.create('screen', 'Overview')
+        hmiActions.create('screen', 'Old')
+        hmiActions.create('widget', 'Badge')
+        store.getState().hmiActions.delete('screen', 'Old')
+
+        const projectPort = makeProjectPort()
+        await executeSaveProject(store, projectPort, capabilities)
+
+        expect(savedFiles(projectPort).hmiFiles.map((f) => f.relativePath)).toEqual([
+          'hmi/Overview.st',
+          'hmi/widgets/Badge.st',
+          'hmi/settings.json',
+        ])
+        expect(savedFiles(projectPort).deletions).toContain('hmi/Old.st')
+        expect(store.getState().files['Overview'].saved).toBe(true)
+      })
+
+      it('writes no HMI files for a project without an HMI', async () => {
+        const projectPort = makeProjectPort()
+        await executeSaveProject(store, projectPort, capabilities)
+        expect(savedFiles(projectPort).hmiFiles).toEqual([])
+      })
+
+      it('saves one screen with HMI Settings, and never project.json for it', async () => {
+        store.getState().hmiActions.create('screen', 'Overview')
+        const projectPort = makeProjectPort()
+        const result = await executeSaveFile(store, 'Overview', projectPort, capabilities)
+        expect(result.success).toBe(true)
+        const paths = vi.mocked(projectPort.saveFile).mock.calls.map(([path]) => path)
+        expect(paths.map((p) => p.replace(/^.*\/hmi\//, 'hmi/'))).toEqual(['hmi/Overview.st', 'hmi/settings.json'])
+        expect(store.getState().files['Overview'].saved).toBe(true)
+      })
+
+      it('reverts a screen to its file on disk', async () => {
+        store.getState().hmiActions.create('screen', 'Overview')
+        const projectPort = makeProjectPort()
+        vi.mocked(projectPort.readFileContent).mockResolvedValue({ success: true, content: 'ON DISK' })
+        const result = await reloadFileFromDisk(store, 'Overview', projectPort)
+        expect(result.success).toBe(true)
+        expect(store.getState().project.data.hmi?.screens[0].source).toBe('ON DISK')
+      })
+    })
+
     describe('.dt persistence', () => {
       const savedFiles = (port: ProjectPort) => vi.mocked(port.saveProject).mock.calls[0][0]
 

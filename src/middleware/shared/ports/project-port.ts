@@ -63,6 +63,8 @@ export interface WriteProjectFiles {
   remoteDeviceFiles: RawProjectFile[]
   /** `datatypes/<Name>.dt`, one ST `TYPE…END_TYPE` declaration per file. */
   dataTypeFiles: RawProjectFile[]
+  /** `hmi/<Name>.st`, `hmi/widgets/<Name>.st` and `hmi/settings.json`. */
+  hmiFiles: RawProjectFile[]
   /** Relative paths to delete from disk (e.g. 'pous/programs/OldPou.st') */
   deletions: string[]
 }
@@ -83,6 +85,7 @@ export const WriteProjectFilesSchema = z.object({
   serverFiles: z.array(RawProjectFileSchema),
   remoteDeviceFiles: z.array(RawProjectFileSchema),
   dataTypeFiles: z.array(RawProjectFileSchema),
+  hmiFiles: z.array(RawProjectFileSchema),
   deletions: z.array(z.string()),
 }) satisfies z.ZodType<WriteProjectFiles>
 
@@ -140,6 +143,8 @@ export interface RawProjectFiles {
     remoteDeviceFiles: RawProjectFile[]
     /** One ST `TYPE…END_TYPE` declaration each. Empty on projects that predate the format. */
     dataTypeFiles: RawProjectFile[]
+    /** HMI files (see `src/middleware/shared/utils/hmi/project-files.ts`); empty when the project has no HMI. */
+    hmiFiles: RawProjectFile[]
     /** See {@link ProjectResponse.data.canEdit}. */
     canEdit?: boolean
     /** See {@link ProjectResponse.data.autoSaveOnBuild}. */

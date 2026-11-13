@@ -3,6 +3,12 @@ import { StateCreator } from 'zustand'
 
 import type { PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
 import { isValidIecIdentifier, removeModuleAndCompact } from '../../../../middleware/shared/utils/ethercat'
+import { newHmiScreenSource, newHmiWidgetSource } from '../../../../middleware/shared/utils/hmi/project-files'
+import {
+  findHmiReferences,
+  type HmiElementKind,
+  renameBlockHeader,
+} from '../../../../middleware/shared/utils/hmi/references'
 import { describeAliasRename } from '../../../../middleware/shared/utils/iec-address/normalize-aliases'
 import { findAllReferencesToDataType } from '../../../utils/data-type-references'
 import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
@@ -25,8 +31,11 @@ import type { TabsProps } from '../tabs'
 import {
   CreateEditorObjectFromTab,
   CreateGlobalVariableListEditor,
+  CreateHmiEditor,
+  CreateHmiSettingsEditor,
   CreateRemoteDeviceEditor,
   CreateServerEditor,
+  HMI_SETTINGS_TAB_NAME,
   LIBRARY_MANIFEST_TAB_NAME,
 } from '../tabs/utils'
 import { cancelFlowWriteBacks, flushFlowWriteBacks } from './flow-writeback'
@@ -41,6 +50,20 @@ import {
 } from './utils'
 
 const MAX_HISTORY_SIZE = 50
+
+const hmiNameKind = (kind: HmiElementKind): 'hmi-screen' | 'hmi-widget' =>
+  kind === 'screen' ? 'hmi-screen' : 'hmi-widget'
+
+/** Registers a screen or widget block's file entry when new, and opens its tab. */
+function openHmiTab(state: SharedRootState, kind: HmiElementKind, name: string, isNew: boolean): void {
+  const type = kind === 'screen' ? 'hmi-screen' : 'hmi-widget'
+  const model = CreateHmiEditor(name, kind)
+  state.editorActions.addModel(model)
+  if (isNew) state.fileActions.addFile({ name, type, filePath: name, isNew: true })
+  state.tabsActions.updateTabs({ name, elementType: { type } })
+  state.tabsActions.setSelectedTab(name)
+  state.editorActions.setEditor(model)
+}
 
 function deleteElement(
   state: SharedRootState,
@@ -205,6 +228,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   undoRedo: {},
   pendingDatatypeRename: null,
   pendingDatatypeDelete: null,
+  pendingHmiRename: null,
 
   pouActions: {
     create: ({ type, name, language }) => {
@@ -599,6 +623,102 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     },
   },
 
+  hmiActions: {
+    create: (kind, name) => {
+      const state = getState()
+      const collision = elementNameCollision(state, name, hmiNameKind(kind))
+      if (collision) return { ok: false, message: collision }
+      const nameCheck = validateElementName(name)
+      if (!nameCheck.ok) return nameCheck
+
+      const hadHmi = state.project.data.hmi !== undefined
+      state.projectActions.createHmiElement(
+        kind,
+        name,
+        kind === 'screen' ? newHmiScreenSource(name) : newHmiWidgetSource(name),
+      )
+      if (!hadHmi) {
+        state.fileActions.addFile({
+          name: HMI_SETTINGS_TAB_NAME,
+          type: 'hmi-settings',
+          filePath: HMI_SETTINGS_TAB_NAME,
+          isNew: true,
+        })
+        state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(HMI_SETTINGS_TAB_NAME)
+      }
+      openHmiTab(getState(), kind, name, true)
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(name)
+      return { ok: true }
+    },
+
+    deleteRequest: (kind, name) => {
+      getState().modalActions.openModal('confirm-delete-element', {
+        name,
+        elementType: kind === 'screen' ? 'hmi-screen' : 'hmi-widget',
+      })
+    },
+
+    delete: (kind, name) => deleteElement(getState(), name, (n) => getState().projectActions.deleteHmiElement(kind, n)),
+
+    rename: async (kind, oldName, newName) => {
+      const state = getState()
+      if (oldName === newName) return { ok: true }
+      const collision = elementNameCollision(state, newName, hmiNameKind(kind), oldName)
+      if (collision) return { ok: false, message: collision }
+      const nameCheck = validateElementName(newName)
+      if (!nameCheck.ok) return nameCheck
+
+      const impact = findHmiReferences(kind, oldName, state.project.data.hmi)
+      if (impact.totalReferences > 0) {
+        if (getState().pendingHmiRename) return { ok: false, message: 'Another HMI rename is awaiting confirmation' }
+        const renameReferences = await new Promise<boolean | null>((resolve) => {
+          setState({ pendingHmiRename: { kind, oldName, newName, impact, resolve } })
+        })
+        if (renameReferences === null) return { ok: false, cancelled: true, message: 'Rename cancelled' }
+        if (renameReferences) {
+          getState().projectActions.propagateHmiRename(kind, oldName, newName)
+          for (const element of new Set(impact.references.map((r) => r.element)))
+            getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(element)
+        }
+      }
+      return renameElement(getState(), oldName, newName, (o, n) =>
+        getState().projectActions.renameHmiElement(kind, o, n),
+      )
+    },
+
+    respondToPendingRename: (renameReferences) => {
+      const pending = getState().pendingHmiRename
+      if (!pending) return
+      setState({ pendingHmiRename: null })
+      pending.resolve(renameReferences)
+    },
+
+    duplicate: (kind, sourceName, newName) => {
+      const state = getState()
+      const list = kind === 'screen' ? state.project.data.hmi?.screens : state.project.data.hmi?.widgets
+      const source = list?.find((f) => f.name === sourceName)
+      if (!source) return { ok: false, message: `${kind === 'screen' ? 'Screen' : 'Widget block'} not found` }
+      const collision = elementNameCollision(state, newName, hmiNameKind(kind))
+      if (collision) return { ok: false, message: collision }
+      const nameCheck = validateElementName(newName)
+      if (!nameCheck.ok) return nameCheck
+      state.projectActions.createHmiElement(kind, newName, renameBlockHeader(source.source, sourceName, newName))
+      openHmiTab(getState(), kind, newName, true)
+      state.sharedWorkspaceActions.handleFileAndWorkspaceSavedState(newName)
+      return { ok: true }
+    },
+
+    openSettings: () => {
+      const state = getState()
+      if (!state.project.data.hmi) return
+      const model = CreateHmiSettingsEditor()
+      state.editorActions.addModel(model)
+      state.tabsActions.updateTabs({ name: HMI_SETTINGS_TAB_NAME, elementType: { type: 'hmi-settings' } })
+      state.tabsActions.setSelectedTab(HMI_SETTINGS_TAB_NAME)
+      state.editorActions.setEditor(model)
+    },
+  },
+
   serverActions: {
     create: ({ name, protocol }) => {
       const state = getState()
@@ -962,8 +1082,10 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // A confirmation parked against the closing project must not answer for the next
       // one, and a dropped rename resolver would strand its caller's await forever.
       const pendingRename = getState().pendingDatatypeRename
-      setState({ pendingDatatypeRename: null, pendingDatatypeDelete: null })
+      const pendingHmiRename = getState().pendingHmiRename
+      setState({ pendingDatatypeRename: null, pendingDatatypeDelete: null, pendingHmiRename: null })
       pendingRename?.resolve(false)
+      pendingHmiRename?.resolve(null)
       getState().editorActions.clearEditor()
       getState().tabsActions.clearTabs()
       getState().libraryActions.clearUserLibraries()
@@ -1012,6 +1134,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             globalVariableLists: [],
             servers: [],
             remoteDevices: [],
+            hmi: undefined,
             configurations: { resource: { tasks: [], instances: [], globalVariables: [] } },
           },
         })
@@ -1386,6 +1509,16 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             }
           }
         })
+      }
+      const hmi = data.projectData.hmi
+      if (hmi) {
+        hmi.screens.forEach((s) => {
+          files[s.name] = { type: 'hmi-screen', filePath: s.name, saved: true }
+        })
+        hmi.widgets.forEach((w) => {
+          files[w.name] = { type: 'hmi-widget', filePath: w.name, saved: true }
+        })
+        files[HMI_SETTINGS_TAB_NAME] = { type: 'hmi-settings', filePath: HMI_SETTINGS_TAB_NAME, saved: true }
       }
       files['Resource'] = { type: 'resource', filePath: 'Resource', saved: true }
       files['Configuration'] = { type: 'device', filePath: 'Configuration', saved: true }

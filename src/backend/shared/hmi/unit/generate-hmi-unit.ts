@@ -7,6 +7,7 @@
  * hosts keep in step with the PLC. `Element.Value := <variable>;` on a two-way widget also writes the operator's
  * change back to the variable, converted to its type.
  */
+import { hmiReservedName } from '@root/middleware/shared/utils/hmi/reserved-names'
 import {
   HMI_BUILTIN_THEMES,
   HMI_ROLES,
@@ -219,23 +220,6 @@ export function numericWriteBack(from: string, to: string, value: string): { exp
   const hi = srcHi < dstHi ? srcHi : dstHi
   return { expr: `${from}_TO_${to}(LIMIT(${lo}, ${value}, ${hi}))` }
 }
-/** Names the generated glue declares; screens and widget blocks may not take them. */
-const RESERVED = [
-  'HMI_SCREEN',
-  'HMI_SHOW',
-  'HMI_CURRENTSCREEN',
-  'HMIMAIN',
-  'HMICONFIG',
-  'HMIRESOURCE',
-  'HMITASK',
-  'HMIINSTANCE',
-  'GVL',
-  'HMI_GLUE',
-  'HMI_TAGS',
-  'HMI_MAIN',
-]
-/** Prefixes of generated names: internals and theme constants. */
-const RESERVED_PREFIXES = ['HMI__', 'HMI_THEME_']
 
 interface TagType {
   /** Upper-case elementary name, or STRING. */
@@ -709,7 +693,7 @@ function checkNames(input: HmiUnitInput, library: ReadonlySet<string>, d: Diagno
     for (const f of files) {
       const key = f.name.toUpperCase()
       if (!IDENTIFIER.test(f.name)) d.error(f.name, `${kind} name '${f.name}' is not an identifier`)
-      else if (library.has(key) || RESERVED.includes(key) || RESERVED_PREFIXES.some((p) => key.startsWith(p)))
+      else if (library.has(key) || hmiReservedName(f.name) !== null)
         d.error(f.name, `${kind} name '${f.name}' is taken by the HMI library`)
       else if (project.has(key)) d.error(f.name, `${kind} name '${f.name}' is taken by a POU or data type`)
       else if (seen.has(key)) d.error(f.name, `${kind} name '${f.name}' is used twice`)

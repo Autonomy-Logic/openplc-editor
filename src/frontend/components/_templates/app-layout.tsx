@@ -12,6 +12,7 @@ import { ProjectModal } from '../_features/[start]/new-project/project-modal'
 import { AIConsentModal } from '../_features/[workspace]/editor/monaco/ai-consent-modal'
 import { DataTypeDeleteImpactModal } from '../_molecules/rename-impact-modal/data-type-delete-impact-modal'
 import { DataTypeRenameImpactModal } from '../_molecules/rename-impact-modal/data-type-rename-impact-modal'
+import { HmiRenameImpactModal } from '../_molecules/rename-impact-modal/hmi-rename-impact-modal'
 import AboutModal from '../_organisms/about-modal'
 import {
   RetrieveProjectModal,
@@ -168,6 +169,7 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
             <ConfirmDeleteProjectModal isOpen={modals['confirm-delete-project'].open} />
           )}
           <DataTypeRenameImpactModal />
+          <HmiRenameImpactModal />
           <DataTypeDeleteImpactModal />
           {modals?.['confirm-plcopen-import']?.open === true && (
             <ConfirmPlcopenImportModal isOpen={modals['confirm-plcopen-import'].open} />

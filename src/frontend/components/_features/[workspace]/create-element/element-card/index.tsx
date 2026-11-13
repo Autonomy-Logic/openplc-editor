@@ -23,7 +23,16 @@ import { useToast } from '../../../[app]/toast/use-toast'
 import { validatePouOrDataTypeName } from '../hooks/use-name-validation'
 
 type ElementCardProps = {
-  target: 'function' | 'function-block' | 'program' | 'data-type' | 'global-variable-list' | 'server' | 'remote-device'
+  target:
+    | 'function'
+    | 'function-block'
+    | 'program'
+    | 'data-type'
+    | 'global-variable-list'
+    | 'server'
+    | 'remote-device'
+    | 'hmi-screen'
+    | 'hmi-widget'
   closeContainer: Dispatch<SetStateAction<boolean>>
 }
 
@@ -40,6 +49,16 @@ type CreateDataTypeFormProps = {
 
 type CreateGlobalVariableListFormProps = {
   name: string
+}
+
+type CreateHmiFormProps = {
+  name: string
+}
+
+/** Labels startCase would spell wrong. */
+const TARGET_LABELS: Partial<Record<ElementCardProps['target'], string>> = {
+  'hmi-screen': 'HMI Screen',
+  'hmi-widget': 'HMI Widget',
 }
 
 type CreateServerFormProps = {
@@ -136,7 +155,15 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
   } = useForm<CreateRemoteDeviceFormProps>()
 
   const {
+    register: hmiRegister,
+    handleSubmit: handleSubmitHmi,
+    setError: hmiSetError,
+    formState: { errors: hmiErrors },
+  } = useForm<CreateHmiFormProps>()
+
+  const {
     pouActions: { create },
+    hmiActions: { create: createHmi },
     datatypeActions: { create: createDatatype },
     globalVariableListActions: { create: createGlobalVariableList },
     serverActions: { create: createServer },
@@ -210,6 +237,22 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
       description: `${data.name} has been created`,
       variant: 'default',
     })
+    closeContainer((prev) => !prev)
+    setIsOpen(false)
+  }
+
+  const handleCreateHmi: SubmitHandler<CreateHmiFormProps> = (data) => {
+    const kind = target === 'hmi-widget' ? 'widget' : 'screen'
+    const created = createHmi(kind, data.name)
+    if (!created.ok) {
+      hmiSetError('name', { type: 'already-exists', message: created.message })
+      toast({
+        title: kind === 'screen' ? 'Screen not created' : 'Widget block not created',
+        description: created.message ?? "You can't use this name.",
+        variant: 'fail',
+      })
+      return
+    }
     closeContainer((prev) => !prev)
     setIsOpen(false)
   }
@@ -292,7 +335,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
         >
           {CreatePouSources[target]}
           <p className='my-[2px] flex-1 whitespace-nowrap text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
-            {startCase(target)}
+            {TARGET_LABELS[target] ?? startCase(target)}
           </p>
           <ArrowIcon size='md' direction='right' />
         </div>
@@ -418,6 +461,64 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                         className={cn(
                           'h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium',
                         )}
+                      >
+                        Create
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </>
+            ) : target === 'hmi-screen' || target === 'hmi-widget' ? (
+              <>
+                <div id='hmi-card-label-container' className='flex h-8 w-full flex-col items-center justify-between'>
+                  <div className='flex w-full select-none items-center gap-2'>
+                    {CreatePouSources[target]}
+                    <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
+                      {TARGET_LABELS[target]}
+                    </p>
+                  </div>
+                  <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
+                </div>
+                <div id='hmi-card-form'>
+                  <form
+                    onSubmit={handleSubmitHmi(handleCreateHmi)}
+                    className='flex h-fit w-full select-none flex-col gap-3'
+                  >
+                    <div id='hmi-name-form-container' className='flex w-full flex-col'>
+                      <label
+                        id='hmi-name-label'
+                        htmlFor='hmi-name'
+                        className='flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'
+                      >
+                        Name:
+                        {hmiErrors.name?.type === 'required' && <span className='text-red-500'>*</span>}
+                      </label>
+                      <InputWithRef
+                        {...hmiRegister('name', { required: true })}
+                        id='hmi-name'
+                        type='text'
+                        placeholder={target === 'hmi-screen' ? 'Overview' : 'TankBadge'}
+                        className='mb-1 mt-[6px] h-[30px] w-full rounded-md border border-neutral-100 bg-white px-2 py-2 text-cp-sm font-medium text-neutral-850 outline-none dark:border-brand-medium-dark dark:bg-neutral-950 dark:text-neutral-300'
+                      />
+                      {hmiErrors.name?.type === 'already-exists' && (
+                        <span className='flex-1 text-start font-caption text-cp-xs font-normal text-red-500 opacity-65'>
+                          * {hmiErrors.name.message ?? 'this name is taken'}
+                        </span>
+                      )}
+                    </div>
+                    <div id='form-button-container' className='flex w-full justify-between'>
+                      <Popover.Close asChild>
+                        <button
+                          type='button'
+                          className='h-7 w-[88px] rounded-md bg-neutral-100 font-caption text-cp-sm font-medium  !text-neutral-1000 hover:bg-neutral-200 dark:bg-white dark:hover:bg-neutral-100'
+                          onClick={handleCancelCreateElement}
+                        >
+                          Cancel
+                        </button>
+                      </Popover.Close>
+                      <button
+                        type='submit'
+                        className='h-7 w-[88px] rounded-md bg-brand font-caption text-cp-sm font-medium !text-white hover:bg-brand-medium-dark focus:bg-brand-medium'
                       >
                         Create
                       </button>

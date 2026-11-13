@@ -1,4 +1,5 @@
 import type { VppPackagePin } from '../../../backend/shared/types/PLC/devices/configuration'
+import type { ProjectHmi } from '../utils/hmi/project-files'
 import type { ConfiguredEtherCATDevice } from './esi-types'
 
 /** Default `T` is `unknown`, not `void`: TS 5.5+ collapses `{ success: true } & void` to `never`. */
@@ -479,6 +480,8 @@ export interface PLCProjectData {
   }
   /** Project-scope opaque data a VPP screen owns under its (packageId, screenId) key. */
   vppExtensions?: Record<string, Record<string, unknown>>
+  /** Absent when the project has no `hmi/` folder. */
+  hmi?: ProjectHmi
 }
 
 /** Alias used by Monaco completion providers */
@@ -534,6 +537,8 @@ export interface ProjectCapabilities {
   /** Show the runtime-connection status and Start/Stop controls. */
   hasRuntimeControls: boolean
   hasLibraryManifest: boolean
+  /** Show the HMI branch and the + menu's HMI Screen and HMI Widget entries. */
+  hasHmi: boolean
 }
 
 export function projectCapabilities(
@@ -554,6 +559,7 @@ export function projectCapabilities(
       hasDebugger: false,
       hasRuntimeControls: false,
       hasLibraryManifest: true,
+      hasHmi: false,
     }
   }
   return {
@@ -570,6 +576,7 @@ export function projectCapabilities(
     hasDebugger: true,
     hasRuntimeControls: true,
     hasLibraryManifest: false,
+    hasHmi: true,
   }
 }
 

@@ -15,7 +15,7 @@ import {
   parseTextualPouFromString,
   POU_END_KEYWORDS,
 } from '../../../frontend/utils/PLC/pou-text-parser'
-import type { RawProjectFile } from '../../../middleware/shared/ports/project-port'
+import type { RawProjectFile, RawProjectFiles } from '../../../middleware/shared/ports/project-port'
 import type {
   DeviceConfiguration,
   DevicePin,
@@ -28,6 +28,7 @@ import type {
   PLCTask,
   PLCVariable,
 } from '../../../middleware/shared/ports/types'
+import { type ProjectHmi, readHmiFiles } from '../../../middleware/shared/utils/hmi/project-files'
 import { deviceConfigurationSchema, pinMappingFileSchema } from '../types/PLC/devices'
 import { PLCProjectSchema, PLCRemoteDeviceSchema, PLCServerSchema } from '../types/PLC/open-plc'
 import { getDefaultSchemaValues } from './default-zod-schema-values'
@@ -81,6 +82,8 @@ export interface ParsedProjectData {
     debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
     /** VPP extension payloads keyed by (packageId, screenId). Opaque to the parser. */
     vppExtensions?: Record<string, Record<string, unknown>>
+    /** Absent when the project has no `hmi/` folder. */
+    hmi?: ProjectHmi
   }
   /** POUs that could not be parsed at all — non-empty means the project must NOT open with
    *  content (see `UnrecoverablePouError`); distinct from recoverable `warnings`. */
@@ -406,6 +409,7 @@ function deduplicatePouFiles(pouFiles: RawProjectFile[]): RawProjectFile[] {
 /**
  * @param pouFiles - Raw POU files (.st, .il, .ld, .fbd, .py, .cpp, .json)
  * @param dataTypeFiles - When present, wins over the legacy `project.json` `data.dataTypes` field
+ * @param hmiFiles - `hmi/` files; library projects have no HMI and ignore them
  */
 export function parseProjectFiles(
   projectPath: string,
@@ -417,6 +421,7 @@ export function parseProjectFiles(
   remoteDeviceFiles: RawProjectFile[],
   libraryManifest: string = '',
   dataTypeFiles: RawProjectFile[] = [],
+  hmiFiles: RawProjectFile[] = [],
 ): ParsedProjectData {
   const warnings: string[] = []
   const fatalErrors: string[] = []
@@ -587,6 +592,9 @@ export function parseProjectFiles(
     warnings.push(`Data type "${dt.name}" in project.json has an invalid name and was skipped.`)
   }
 
+  const hmiRead = metaType === 'plc-library' ? { warnings: [] } : readHmiFiles(hmiFiles)
+  warnings.push(...hmiRead.warnings)
+
   return {
     meta,
     projectData: {
@@ -604,6 +612,7 @@ export function parseProjectFiles(
       ...(data.vppExtensions
         ? { vppExtensions: data.vppExtensions as ParsedProjectData['projectData']['vppExtensions'] }
         : {}),
+      ...(hmiRead.hmi ? { hmi: hmiRead.hmi } : {}),
     },
     deviceConfiguration,
     devicePinMapping,
@@ -612,4 +621,20 @@ export function parseProjectFiles(
     ...(unparsedDataTypeFiles.length > 0 ? { unparsedDataTypeFiles } : {}),
     ...(dataTypeFiles.length === 0 && legacyDataTypes.length > 0 ? { dataTypesNeedMigration: true } : {}),
   }
+}
+
+/** Parses a project as a platform read it, every file category included. */
+export function parseRawProjectFiles(raw: NonNullable<RawProjectFiles['data']>): ParsedProjectData {
+  return parseProjectFiles(
+    raw.projectPath,
+    raw.projectJson,
+    raw.deviceConfig,
+    raw.pinMapping,
+    raw.pouFiles,
+    raw.serverFiles,
+    raw.remoteDeviceFiles,
+    raw.libraryManifest,
+    raw.dataTypeFiles,
+    raw.hmiFiles,
+  )
 }

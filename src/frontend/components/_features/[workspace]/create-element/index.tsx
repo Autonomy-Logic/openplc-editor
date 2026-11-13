@@ -16,6 +16,8 @@ type CreatePLCElementType =
   | 'global-variable-list'
   | 'server'
   | 'remote-device'
+  | 'hmi-screen'
+  | 'hmi-widget'
 
 const CreatePLCElement = () => {
   const {
@@ -40,7 +42,17 @@ const CreatePLCElement = () => {
   // keeps already-configured devices visible, creation is refused outright.
   const targetCaps = useTargetCapabilities()
   const CreatePLCElementTypes: CreatePLCElementType[] = (
-    ['function', 'function-block', 'program', 'data-type', 'global-variable-list', 'server', 'remote-device'] as const
+    [
+      'function',
+      'function-block',
+      'program',
+      'data-type',
+      'global-variable-list',
+      'server',
+      'remote-device',
+      'hmi-screen',
+      'hmi-widget',
+    ] as const
   ).filter((target) => {
     switch (target) {
       case 'program':
@@ -49,6 +61,9 @@ const CreatePLCElement = () => {
         return projectCaps.hasServers
       case 'remote-device':
         return projectCaps.hasRemoteDevices && (targetCaps.modbusTcpRemote || targetCaps.ethercat)
+      case 'hmi-screen':
+      case 'hmi-widget':
+        return projectCaps.hasHmi
       default:
         // function / function-block / data-type / global-variable-list — always available.
         return true

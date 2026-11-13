@@ -1,5 +1,7 @@
 import type { StlibArchive } from 'strucpp'
 
+import { HMI_LIBRARY_NAMES, hmiReservedName } from '../../../../../middleware/shared/utils/hmi/reserved-names'
+
 import { __setStrucppRuntimeForTests, loadStrucpp, type StrucppRuntime } from '../../../library/strucpp-runtime'
 import {
   buildStandardWidgets,
@@ -132,5 +134,23 @@ FUNCTION_BLOCK Main EXTENDS HmiScreen
   METHOD PROTECTED OVERRIDE OnShow : BOOL B.Value := TRUE; OnShow := TRUE; END_METHOD
 END_FUNCTION_BLOCK`),
     ).toEqual([])
+  })
+})
+
+describe('reserved HMI names', () => {
+  it('list exactly what the library declares', () => {
+    const build = buildStandardWidgets()
+    if (!build.ok) throw new Error('library does not compile')
+    const m = build.archive.manifest
+    const declared = [...m.functions, ...m.functionBlocks, ...m.types, ...(m.globals ?? []), ...(m.interfaces ?? [])]
+      .map((x) => x.displayName ?? x.name)
+      .sort()
+    expect([...HMI_LIBRARY_NAMES].sort()).toEqual(declared)
+  })
+
+  it('refuse library and generated names in any case, and generated prefixes', () => {
+    for (const name of ['HmiButton', 'hmibutton', 'COLOR', 'HMI_Show', 'hmi_main', 'HMI__Request', 'HMI_THEME_Brand'])
+      expect(hmiReservedName(name)).toBe(`"${name}" is taken by the HMI library`)
+    for (const name of ['Overview', 'HmiButtonPanel', 'MyColor']) expect(hmiReservedName(name)).toBeNull()
   })
 })

@@ -41,6 +41,11 @@ function projectFiles(overrides: Partial<WriteProjectFiles> = {}): WriteProjectF
     ],
     serverFiles: [{ relativePath: 'devices/servers/modbus.json', content: '{"port":502}' }],
     remoteDeviceFiles: [{ relativePath: 'devices/remote/plc2.json', content: '{"ip":"10.0.0.2"}' }],
+    hmiFiles: [
+      { relativePath: 'hmi/Overview.st', content: 'FUNCTION_BLOCK Overview EXTENDS HmiScreen END_FUNCTION_BLOCK' },
+      { relativePath: 'hmi/widgets/Badge.st', content: 'FUNCTION_BLOCK Badge EXTENDS HmiLamp END_FUNCTION_BLOCK' },
+      { relativePath: 'hmi/settings.json', content: '{}' },
+    ],
     dataTypeFiles: [{ relativePath: 'datatypes/Color.dt', content: 'TYPE Color END_TYPE' }],
     deletions: [],
     ...overrides,
@@ -80,6 +85,22 @@ describe('round trip', () => {
     expect(restored.serverFiles).toEqual(original.serverFiles)
     expect(restored.remoteDeviceFiles).toEqual(original.remoteDeviceFiles)
     expect(restored.dataTypeFiles).toEqual(original.dataTypeFiles)
+    expect(restored.hmiFiles).toEqual(expect.arrayContaining(original.hmiFiles))
+    expect(restored.hmiFiles).toHaveLength(original.hmiFiles.length)
+  })
+
+  it('keeps only HMI files a project can hold, whatever a device sends', async () => {
+    const files = writeProjectFilesToMap(projectFiles())
+    files.set('hmi/not a name.st', 'X')
+    files.set('hmi/widgets/deeper/W.st', 'X')
+    files.set('hmi/notes.txt', 'X')
+    const { archive } = await build({ files })
+    const restored = toWriteProjectFiles(await parseProjectSnapshot(archive), '/dest')
+    expect(restored.hmiFiles.map((f) => f.relativePath).sort()).toEqual([
+      'hmi/Overview.st',
+      'hmi/settings.json',
+      'hmi/widgets/Badge.st',
+    ])
   })
 
   it('writes into the destination the caller chose, not the one the archive came from', async () => {

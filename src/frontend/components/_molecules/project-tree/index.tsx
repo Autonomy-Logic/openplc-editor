@@ -18,6 +18,8 @@ import { FBDIcon } from '../../../assets/icons/project/FBD'
 import { FunctionIcon } from '../../../assets/icons/project/Function'
 import { FunctionBlockIcon } from '../../../assets/icons/project/FunctionBlock'
 import { GlobalVariableListIcon } from '../../../assets/icons/project/GlobalVariableList'
+import { HmiScreenIcon } from '../../../assets/icons/project/HmiScreen'
+import { HmiWidgetIcon } from '../../../assets/icons/project/HmiWidget'
 import { ILIcon } from '../../../assets/icons/project/IL'
 import { LDIcon } from '../../../assets/icons/project/LD'
 import { LibraryManifestIcon } from '../../../assets/icons/project/LibraryManifest'
@@ -98,6 +100,7 @@ type ProjectTreeBranchProps = ComponentPropsWithoutRef<'li'> & {
     | 'device'
     | 'server'
     | 'remote-device'
+    | 'hmi'
   children?: ReactNode
 }
 
@@ -114,11 +117,12 @@ const BranchSources = {
   device: { BranchIcon: DeviceIcon, label: 'Device' },
   server: { BranchIcon: ServerIcon, label: 'Servers' },
   'remote-device': { BranchIcon: RemoteDeviceIcon, label: 'Remote Devices' },
+  hmi: { BranchIcon: HmiScreenIcon, label: 'HMI' },
 }
 const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranchProps) => {
   const {
     project: {
-      data: { pous, dataTypes, globalVariableLists, servers, remoteDevices },
+      data: { pous, dataTypes, globalVariableLists, servers, remoteDevices, hmi },
     },
     fileActions: { getFile },
   } = useOpenPLCStore()
@@ -131,7 +135,8 @@ const ProjectTreeBranch = ({ branchTarget, children, ...res }: ProjectTreeBranch
     (branchTarget === 'data-type' && dataTypes.length > 0) ||
     (branchTarget === 'global-variable-list' && (globalVariableLists?.length ?? 0) > 0) ||
     (branchTarget === 'server' && servers !== undefined && servers.length > 0) ||
-    (branchTarget === 'remote-device' && remoteDevices !== undefined && remoteDevices.length > 0)
+    (branchTarget === 'remote-device' && remoteDevices !== undefined && remoteDevices.length > 0) ||
+    (branchTarget === 'hmi' && hmi !== undefined)
   useEffect(() => setBranchIsOpen(hasAssociatedPou), [hasAssociatedPou])
 
   const { file: associatedFile } = getFile({ name: label || '' })
@@ -472,6 +477,9 @@ type IProjectTreeLeafProps = ComponentPropsWithoutRef<'li'> & {
     | 'libraryManifest'
     | 'userManagement'
     | 'persistentStorage'
+    | 'hmiScreen'
+    | 'hmiWidget'
+    | 'hmiSettings'
   leafType: WorkspaceProjectTreeLeafType
   label?: string
   /**
@@ -519,6 +527,9 @@ const LeafSources = {
   libraryManifest: { LeafIcon: LibraryManifestIcon },
   userManagement: { LeafIcon: UsersIcon },
   persistentStorage: { LeafIcon: ConfigIcon },
+  hmiScreen: { LeafIcon: HmiScreenIcon },
+  hmiWidget: { LeafIcon: HmiWidgetIcon },
+  hmiSettings: { LeafIcon: ConfigIcon },
 }
 const ProjectTreeLeaf = ({
   leafLang,
@@ -556,6 +567,7 @@ const ProjectTreeLeaf = ({
       deleteModule: deleteEthercatModule,
       rename: renameEthercatDevice,
     },
+    hmiActions: { deleteRequest: deleteHmiRequest, rename: renameHmi, duplicate: duplicateHmi },
     fileActions: { getFile },
   } = useOpenPLCStore()
 
@@ -577,6 +589,7 @@ const ProjectTreeLeaf = ({
   // module, not the parent coupler — the module leaf carries `moduleId` for
   // exactly that reason.
   const isEthercatModule = useMemo(() => leafType === 'ethercat-module', [leafType])
+  const hmiKind = leafLang === 'hmiScreen' ? 'screen' : leafLang === 'hmiWidget' ? 'widget' : undefined
 
   const { LeafIcon } = LeafSources[leafLang]
   const { file: associatedFile } = getFile({ name: label || '' })
@@ -604,10 +617,18 @@ const ProjectTreeLeaf = ({
     // Keep this list in step with the dispatch below — a type handled there but
     // missing here bails out at the guard, which makes its branch dead code and
     // the tree's own Rename entry a no-op.
-    if (!isAPou && !isDatatype && !isGlobalVariableList && !isServer && !isRemoteDevice && !isEthercatDevice) {
+    if (
+      !isAPou &&
+      !isDatatype &&
+      !isGlobalVariableList &&
+      !isServer &&
+      !isRemoteDevice &&
+      !isEthercatDevice &&
+      !hmiKind
+    ) {
       toast({
         title: 'Error',
-        description: 'Only POU, datatype, global variable list, server, or remote device files can be renamed.',
+        description: 'Only POU, datatype, global variable list, server, remote device or HMI files can be renamed.',
         variant: 'fail',
       })
       return
@@ -658,6 +679,15 @@ const ProjectTreeLeaf = ({
       return
     }
 
+    if (hmiKind) {
+      void renameHmi(hmiKind, label, newLabel)
+        .then((res) => {
+          if (!res.ok) reportFailedRename(res)
+        })
+        .catch(() => reportFailedRename({}))
+      return
+    }
+
     if (isGlobalVariableList) {
       const res = renameGlobalVariableList(label, newLabel)
       if (!res.ok) reportFailedRename(res)
@@ -694,6 +724,7 @@ const ProjectTreeLeaf = ({
     if (isDatatype) return 'data-type'
     if (isGlobalVariableList) return 'global-variable-list'
     if (isServer) return 'server'
+    if (hmiKind) return hmiKind === 'screen' ? 'hmi-screen' : 'hmi-widget'
     return 'remote-device'
   }
 
@@ -715,10 +746,10 @@ const ProjectTreeLeaf = ({
   }
 
   const handleDuplicateFile = () => {
-    if (!isAPou && !isDatatype && !isGlobalVariableList && !isServer && !isRemoteDevice) {
+    if (!isAPou && !isDatatype && !isGlobalVariableList && !isServer && !isRemoteDevice && !hmiKind) {
       toast({
         title: 'Error',
-        description: 'Only POU, datatype, global variable list, server, or remote device files can be duplicated.',
+        description: 'Only POU, datatype, global variable list, server, remote device or HMI files can be duplicated.',
         variant: 'fail',
       })
       return
@@ -744,6 +775,7 @@ const ProjectTreeLeaf = ({
       if (isDatatype) return duplicateDatatype(label, copyName)
       if (isGlobalVariableList) return duplicateGlobalVariableList(label, copyName)
       if (isServer) return duplicateServer(label, copyName)
+      if (hmiKind) return duplicateHmi(hmiKind, label, copyName)
       return duplicateRemoteDevice(label, copyName)
     })()
 
@@ -764,11 +796,12 @@ const ProjectTreeLeaf = ({
       !isServer &&
       !isRemoteDevice &&
       !isEthercatDevice &&
-      !isEthercatModule
+      !isEthercatModule &&
+      !hmiKind
     ) {
       toast({
         title: 'Error',
-        description: 'Only POU, datatype, global variable list, server, or remote device files can be deleted.',
+        description: 'Only POU, datatype, global variable list, server, remote device or HMI files can be deleted.',
         variant: 'fail',
       })
       return
@@ -800,6 +833,11 @@ const ProjectTreeLeaf = ({
 
     if (isServer) {
       deleteServerRequest(label)
+      return
+    }
+
+    if (hmiKind) {
+      deleteHmiRequest(hmiKind, label)
       return
     }
 
@@ -876,7 +914,10 @@ const ProjectTreeLeaf = ({
           value={newLabel}
           onChange={(e) => setNewLabel(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') void handleRenameFile(newLabel.trim() || '')
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              void handleRenameFile(newLabel.trim() || '')
+            }
             if (e.key === 'Escape') setIsEditing(false)
           }}
           onBlur={(_e) => void handleRenameFile(newLabel || '')}
@@ -889,7 +930,7 @@ const ProjectTreeLeaf = ({
             name === label && 'font-medium text-neutral-1000 dark:text-white',
             isUnsaved(associatedFile) && 'italic',
           )}
-          onDoubleClick={() => !isDebuggerVisible && setIsEditing(true)}
+          onDoubleClick={() => !isDebuggerVisible && leafLang !== 'hmiSettings' && setIsEditing(true)}
         >
           <HighlightedText text={handleLabel(label) || ''} searchQuery={highlightQuery} />
         </span>
@@ -898,7 +939,8 @@ const ProjectTreeLeaf = ({
       {leafLang === 'devPin' ||
       leafLang === 'devConfig' ||
       leafLang === 'userManagement' ||
-      leafLang === 'persistentStorage' ? null : (
+      leafLang === 'persistentStorage' ||
+      leafLang === 'hmiSettings' ? null : (
         <Popover.Root open={isPopoverOpen && !isDebuggerVisible} onOpenChange={setPopoverOpen}>
           <Popover.Trigger
             disabled={isDebuggerVisible}

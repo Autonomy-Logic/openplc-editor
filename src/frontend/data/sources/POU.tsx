@@ -4,6 +4,8 @@ import { FBDIcon } from '../../assets/icons/project/FBD'
 import { FunctionIcon } from '../../assets/icons/project/Function'
 import { FunctionBlockIcon } from '../../assets/icons/project/FunctionBlock'
 import { GlobalVariableListIcon } from '../../assets/icons/project/GlobalVariableList'
+import { HmiScreenIcon } from '../../assets/icons/project/HmiScreen'
+import { HmiWidgetIcon } from '../../assets/icons/project/HmiWidget'
 import { ILIcon } from '../../assets/icons/project/IL'
 import { LDIcon } from '../../assets/icons/project/LD'
 import { ProgramIcon } from '../../assets/icons/project/Program'
@@ -52,6 +54,8 @@ const CreatePouSources = {
   'global-variable-list': <GlobalVariableListIcon size='sm' />,
   server: <ServerIcon size='sm' />,
   'remote-device': <RemoteDeviceIcon size='sm' />,
+  'hmi-screen': <HmiScreenIcon size='sm' />,
+  'hmi-widget': <HmiWidgetIcon size='sm' />,
 }
 
 export { CreatePouSources, PouLanguageSources }
