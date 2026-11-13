@@ -296,7 +296,7 @@ const DebugTagTable = ({ onForceVariable }: DebugTagTableProps) => {
       </div>
 
       <div className='h-full overflow-auto'>
-        <table className='w-full border-collapse whitespace-nowrap'>
+        <table aria-label='Debug tag table' className='w-full border-collapse whitespace-nowrap'>
           <thead className='sticky top-0 bg-white dark:bg-neutral-900'>
             <tr className='border-b border-neutral-200 dark:border-neutral-800'>
               <th className={columnClass}>Name</th>
