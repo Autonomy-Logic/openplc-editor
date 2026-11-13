@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 import { promisify } from 'node:util'
@@ -8,6 +8,7 @@ import { app as electronApp } from 'electron'
 import { produce } from 'immer'
 import { SerialPort as NodeSerialPort } from 'serialport'
 
+import { boardHardwareFromManifestDevice } from '../../../middleware/shared/utils/board-hardware/from-manifest-device'
 import { readHalsFile } from '../../shared/firmware/hals-loader'
 import { type BoardBuildInfo, BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { resolveConfigTemplatePluginName } from '../../shared/utils/vpp/build-vpp-plugin-files'
@@ -204,6 +205,14 @@ class HardwareModule {
    */
   async getBoardBuildInfo(boardName: string): Promise<BoardBuildInfo> {
     const halsContent = await readHalsFile<HalsFile>()
+    const resolvePackageRelativePath = (pkgPath: string, relPath: string): string => {
+      const root = pathResolve(pkgPath)
+      const candidate = pathResolve(root, relPath)
+      if (candidate !== root && !candidate.startsWith(root + pathSep)) {
+        throw new Error(`Path "${relPath}" escapes package directory ${pkgPath}`)
+      }
+      return candidate
+    }
     const resolver = new BoardInfoResolver({
       halsContent,
       packageManager: new PackageManagerModule(),
@@ -215,14 +224,8 @@ class HardwareModule {
       // Editor security-check: VPP-package-relative paths must resolve
       // inside the package's root directory.  Web's adapter will pick
       // its own scheme when VPP-on-web lands.
-      resolvePackageRelativePath: (pkgPath, relPath) => {
-        const root = pathResolve(pkgPath)
-        const candidate = pathResolve(root, relPath)
-        if (candidate !== root && !candidate.startsWith(root + pathSep)) {
-          throw new Error(`Path "${relPath}" escapes package directory ${pkgPath}`)
-        }
-        return candidate
-      },
+      resolvePackageRelativePath,
+      readPackageFile: (pkg, relPath) => readFileSync(resolvePackageRelativePath(pkg.path, relPath), 'utf-8'),
     })
     return resolver.resolve(boardName)
   }
@@ -385,9 +388,7 @@ class HardwareModule {
                   }
                 : null,
             },
-            ...(device.serialPorts ? { serialPorts: device.serialPorts } : {}),
-            ...(device.defaultSerial ? { defaultSerial: device.defaultSerial } : {}),
-            ...(device.networkInterfaces ? { networkInterfaces: device.networkInterfaces } : {}),
+            ...boardHardwareFromManifestDevice(device),
             ...(device.debug ? { debug: device.debug } : {}),
           })
         }

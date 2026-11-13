@@ -30,6 +30,8 @@ import type {
   PinPullSpec,
   PlatformOption,
 } from '../../../middleware/shared/ports/types'
+import { boardHardwareFromManifestDevice } from '../../../middleware/shared/utils/board-hardware/from-manifest-device'
+import { findSerialScreenName, isRs485PerUartAware } from '../../../middleware/shared/utils/modbus-master-profile'
 import { classifyBoardRuntime } from '../../../middleware/shared/utils/target-capabilities/runtime-kind'
 import type { TargetCapabilities } from '../../../middleware/shared/utils/target-capabilities/types'
 import { findVppDeviceByBoardName } from './find-vpp-device'
@@ -112,6 +114,9 @@ export interface BoardInfoResolverConfig {
    *  lands on web, at which point its adapter overrides with
    *  whatever its package-storage scheme requires. */
   resolvePackageRelativePath: (packagePath: string, relPath: string) => string
+  /** Text of a file inside an installed package, at a package-relative path; throws when it cannot be read.
+   *  Absent → no package screen is read, so a device is per-UART aware only through `rs485FixedPins`. */
+  readPackageFile?: (pkg: InstalledPackage, relPath: string) => string
 }
 
 /**
@@ -233,6 +238,10 @@ export interface BoardBuildInfo {
   defaultSerial?: string
   /** TCP carriers the board can bring up, from `networkInterfaces`. */
   networkInterfaces?: string[]
+  /** RS-485 enable pin the package fixes per UART, from `rs485FixedPins`. */
+  rs485FixedPins?: Record<string, string>
+  /** True when the device's Serial screen has a `uart-pin-map` field or the device declares `rs485FixedPins`. */
+  perUartAware: boolean
   /** Per-pin pull-up/pull-down rules, from `defaults.pins.pull`. */
   pinPull?: PinPullSpec
 
@@ -281,6 +290,7 @@ export class BoardInfoResolver {
     const info: Omit<BoardBuildInfo, 'boardRuntime' | 'isSimulator' | 'isRuntimeV3' | 'isRuntimeV4'> = {
       source: 'hals',
       compiler: entry.compiler,
+      perUartAware: false,
     }
     if (entry.core) info.core = entry.core
     if (entry.platform) info.platform = entry.platform
@@ -308,12 +318,18 @@ export class BoardInfoResolver {
     pkg: InstalledPackage,
     manifest: PackageManifest,
   ): Omit<BoardBuildInfo, 'boardRuntime' | 'isSimulator' | 'isRuntimeV3' | 'isRuntimeV4'> {
+    const hardware = boardHardwareFromManifestDevice(device)
     const info: Omit<BoardBuildInfo, 'boardRuntime' | 'isSimulator' | 'isRuntimeV3' | 'isRuntimeV4'> = {
       source: 'vpp',
       compiler: this.#mapTargetTypeToCompiler(device.target.type),
       vppPackageId: manifest.package.id,
       vppDeviceId: device.id,
       vppPackagePath: pkg.path,
+      ...hardware,
+      perUartAware: isRs485PerUartAware({
+        rs485FixedPins: hardware.rs485FixedPins,
+        serialScreen: hardware.rs485FixedPins ? undefined : this.#readSerialScreen(device, pkg),
+      }),
     }
     if (device.target.core) info.core = device.target.core
     if (device.target.platform) info.platform = device.target.platform
@@ -329,9 +345,6 @@ export class BoardInfoResolver {
     // compile side never received them, so the emitter had no way to know what
     // the board can actually serve over.
     if (device.screens) info.vppScreenNames = Object.keys(device.screens)
-    if (device.serialPorts) info.serialPorts = device.serialPorts
-    if (device.defaultSerial) info.defaultSerial = device.defaultSerial
-    if (device.networkInterfaces) info.networkInterfaces = device.networkInterfaces
     if (device.defaults?.pins?.pull) info.pinPull = device.defaults.pins.pull
 
     const resolveRel = this.config.resolvePackageRelativePath
@@ -368,6 +381,18 @@ export class BoardInfoResolver {
     }
     if (device.debug) info.debug = device.debug
     return info
+  }
+
+  /** Parsed Serial screen definition of `device`, or `undefined` when it ships none or it cannot be read. */
+  #readSerialScreen(device: PackageManifest['devices'][number], pkg: InstalledPackage): unknown {
+    const read = this.config.readPackageFile
+    const screenName = findSerialScreenName(device.screens)
+    if (!read || !device.screens || screenName === undefined) return undefined
+    try {
+      return JSON.parse(read(pkg, device.screens[screenName])) as unknown
+    } catch {
+      return undefined
+    }
   }
 
   /** Add runtime-classification flags + `boardRuntime` mirror on

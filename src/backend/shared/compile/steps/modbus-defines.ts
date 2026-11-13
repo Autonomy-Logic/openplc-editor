@@ -32,10 +32,15 @@
  */
 
 import {
+  LEGACY_RS485_BOARD,
+  resolveRs485Pins,
+  type Rs485Board,
+  rs485PinOf,
+} from '../../../../middleware/shared/utils/modbus-master-profile'
+import {
   DEFAULT_SERIAL_BAUD,
   isDefaultPort,
   resolveDefaultPortBaud,
-  resolveRs485Pin,
   resolveRtuPort,
   resolveServerBaud,
   resolveServerSlaveId,
@@ -59,6 +64,8 @@ export interface VppModbusScreenState {
     baud_rate?: string
     enable_rs485_en_pin?: boolean
     rs485_en_pin?: string
+    /** RS-485 enable pin per UART; once present, the legacy pair above is ignored. */
+    rs485_en_pins?: Record<string, string>
   }
   /** Network section — Ethernet/Wi-Fi config lifted out of modbus_tcp by the
    *  screen split. Its `enabled` gates the TCP transport: a project that
@@ -185,14 +192,7 @@ export function narrowModbusTransports(
  * quietly disagreeing with the firmware is the failure this area keeps
  * producing.
  */
-export {
-  DEFAULT_SERIAL_BAUD,
-  isDefaultPort,
-  resolveDefaultPortBaud,
-  resolveRs485Pin,
-  resolveRtuPort,
-  resolveServerSlaveId,
-}
+export { DEFAULT_SERIAL_BAUD, isDefaultPort, resolveDefaultPortBaud, resolveRtuPort, resolveServerSlaveId }
 
 /**
  * Slave id the always-on debugger answers on, and therefore the one the editor
@@ -298,6 +298,8 @@ export function generateModbusDefines(
   /** The board's `networkInterfaces`, so an unstated carrier can fall back to
    *  the one the board actually has rather than to Ethernet. */
   networkInterfaces?: string[],
+  /** The board's UARTs, fixed RS-485 pins and per-UART awareness. Absent → legacy board. */
+  rs485Board: Rs485Board = LEGACY_RS485_BOARD,
 ): string {
   const net = state.network ?? {}
 
@@ -363,8 +365,8 @@ export function generateModbusDefines(
     } else {
       lines.push('#define MBSERIAL_ON_SECONDARY')
     }
-    const rs485Pin = resolveRs485Pin(state)
-    if (rs485Pin) {
+    const rs485Pin = rs485PinOf(resolveRs485Pins(state, rs485Board, iface), iface)
+    if (rs485Pin !== undefined) {
       lines.push(`#define MBSERIAL_TXPIN ${rs485Pin}`)
     }
     lines.push('#define MBSERIAL')

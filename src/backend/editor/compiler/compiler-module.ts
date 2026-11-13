@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import crypto, { createHash } from 'node:crypto'
-import { existsSync, promises as fs } from 'node:fs'
+import { existsSync, promises as fs, readFileSync } from 'node:fs'
 import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import https from 'node:https'
@@ -357,18 +357,20 @@ class CompilerModule {
    */
   async #createBoardInfoResolver(): Promise<BoardInfoResolver> {
     const halsContent = await readHalsFile<HalsFile>()
+    const resolvePackageRelativePath = (pkgPath: string, relPath: string): string => {
+      const root = pathResolve(pkgPath)
+      const candidate = pathResolve(root, relPath)
+      if (candidate !== root && !candidate.startsWith(root + pathSep)) {
+        throw new Error(`Path "${relPath}" escapes package directory ${pkgPath}`)
+      }
+      return candidate
+    }
     return new BoardInfoResolver({
       halsContent,
       packageManager: new PackageManagerModule(),
       resolveHalSourcePath: (rel) => join(this.sourceDirectoryPath, 'hal', rel),
-      resolvePackageRelativePath: (pkgPath, relPath) => {
-        const root = pathResolve(pkgPath)
-        const candidate = pathResolve(root, relPath)
-        if (candidate !== root && !candidate.startsWith(root + pathSep)) {
-          throw new Error(`Path "${relPath}" escapes package directory ${pkgPath}`)
-        }
-        return candidate
-      },
+      resolvePackageRelativePath,
+      readPackageFile: (pkg, relPath) => readFileSync(resolvePackageRelativePath(pkg.path, relPath), 'utf-8'),
     })
   }
 

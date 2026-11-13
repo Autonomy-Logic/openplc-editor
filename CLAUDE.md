@@ -399,6 +399,17 @@ exactly one slave, so `selectModbusServer` refuses a build with more than one
 enabled server. `DEBUG_BAUD` comes from `screens.serial.baud_rate` and
 `DEBUG_SLAVE` is the constant 1.
 
+The RS-485 enable pin is per UART. `resolveRs485Pins`
+(`src/middleware/shared/utils/modbus-master-profile/rs485-pins.ts`) is the one source for the Serial
+screen and for `MBSERIAL_TXPIN` (the pin of the RTU server's UART): on a per-UART aware board
+(`BoardBuildInfo.perUartAware`: its Serial screen has a `uart-pin-map` field or the device declares
+`rs485FixedPins`) the package's fixed pins win, then `serial.rs485_en_pins`, then a 4.3.x project's
+`rs485_en_pin` on the RTU server's UART until `rs485_en_pins` is first written, when the store drops the
+legacy pair; a legacy board puts `rs485_en_pin` on the RTU server's UART. Only pins matching
+`^[A-Z]{0,2}\d{1,3}$` reach `defines.h` and `vpp_config.h`. Board hardware fields (`serialPorts`,
+`defaultSerial`, `networkInterfaces`, `rs485FixedPins`) come from `boardHardwareFromManifestDevice`
+(`src/middleware/shared/utils/board-hardware/from-manifest-device.ts`) on both platforms.
+
 With one UART for both (no `MBSERIAL_ON_SECONDARY`), the firmware answers two ids on it, routed by
 function code (`handle_serial_port` in `resources/sources/Baremetal/modbus_serial.cpp`): the editor's id
 (`MB_EDITOR_SLAVE`, equal to `DEBUG_SLAVE`) carries only the editor function codes 0x41-0x4D

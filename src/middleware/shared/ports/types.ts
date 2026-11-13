@@ -630,6 +630,8 @@ export interface BoardInfo {
   defaultSerial?: string
   /** TCP carriers this board can bring up. Absent → every carrier stays on offer; declared only to REMOVE one the firmware can't serve. */
   networkInterfaces?: string[]
+  /** RS-485 enable pin the package fixes per UART. A UART listed here shows no RS-485 pin on the Serial screen. */
+  rs485FixedPins?: Record<string, string>
   /** Debug-channel resolver spec from hals.json/VPP manifest. Absent → "Debugging Not Available". */
   debug?: import('./debug-spec-types').DebugSpec
 }
@@ -785,6 +787,8 @@ export interface PackageManifest {
     defaultSerial?: string
     /** Surfaced onto `BoardInfo.networkInterfaces`. Declared only to REMOVE a carrier the firmware can't serve. */
     networkInterfaces?: string[]
+    /** RS-485 enable pin the package fixes per UART, e.g. `{ Serial3: 'PA14' }`. Surfaced onto `BoardInfo.rs485FixedPins`. */
+    rs485FixedPins?: Record<string, string>
     /** Absence means no debug channel is declared. */
     debug?: import('./debug-spec-types').DebugSpec
     /** Merged over the preset the editor derives from the target type. */

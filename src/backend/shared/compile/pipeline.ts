@@ -132,6 +132,10 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
   serialPorts?: string[]
   defaultSerial?: string
   networkInterfaces?: string[]
+  /** RS-485 enable pin the package fixes per UART, from the manifest's `rs485FixedPins`. */
+  rs485FixedPins?: Record<string, string>
+  /** True when the board takes RS-485 pins per UART (`BoardBuildInfo.perUartAware`). Absent → legacy board. */
+  perUartAware?: boolean
   /** The manifest's `defaults.pins.pull`, forwarded to `generateDefinesContent` for `PINPULL_DIN`. */
   pinPull?: import('../../../middleware/shared/ports/types').PinPullSpec
   /** Prebuilt arduino-hal (provisioning="prebuilt"): the precompiled Arduino
@@ -1056,6 +1060,11 @@ async function runCompilePipelineInner(
     // too. Harmless only for as long as every package declares `Serial`.
     ...(boardEntry.defaultSerial ? { defaultSerial: boardEntry.defaultSerial } : {}),
     ...(boardEntry.networkInterfaces ? { networkInterfaces: boardEntry.networkInterfaces } : {}),
+    rs485Board: {
+      ...(boardEntry.serialPorts ? { serialPorts: boardEntry.serialPorts } : {}),
+      ...(boardEntry.rs485FixedPins ? { rs485FixedPins: boardEntry.rs485FixedPins } : {}),
+      perUartAware: boardEntry.perUartAware === true,
+    },
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
     // Only for a target we actually size. Runtime v3 and the simulator keep
     // openplc.h's own fallbacks, so their defines.h is unchanged.

@@ -73,6 +73,8 @@ export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: 
       ...(boardInfo.serialPorts ? { serialPorts: boardInfo.serialPorts } : {}),
       ...(boardInfo.defaultSerial ? { defaultSerial: boardInfo.defaultSerial } : {}),
       ...(boardInfo.networkInterfaces ? { networkInterfaces: boardInfo.networkInterfaces } : {}),
+      ...(boardInfo.rs485FixedPins ? { rs485FixedPins: boardInfo.rs485FixedPins } : {}),
+      perUartAware: boardInfo.perUartAware,
       ...(boardInfo.pinPull ? { pinPull: boardInfo.pinPull } : {}),
       ...(boardInfo.source === 'vpp' ? { vpp: true } : {}),
       ...(boardInfo.capabilities ? { capabilities: boardInfo.capabilities } : {}),

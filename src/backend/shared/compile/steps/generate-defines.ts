@@ -19,6 +19,7 @@
 
 import type { PinPullSpec } from '../../../../middleware/shared/ports/types'
 import { IMAGE_TABLES } from '../../../../middleware/shared/utils/io-image/tables'
+import type { Rs485Board } from '../../../../middleware/shared/utils/modbus-master-profile'
 import { PIN_PULL_CODES, resolveEffectivePinPull } from '../../../../middleware/shared/utils/pin-pull'
 import type { DevicePin } from '../../types/PLC/devices'
 import type { IoImageSizes } from './compute-io-image'
@@ -185,6 +186,9 @@ export interface GenerateDefinesInput {
    *  so a project that never picked a carrier compiles for the one the
    *  board has instead of assuming Ethernet. */
   networkInterfaces?: string[]
+  /** The board's UARTs, fixed RS-485 pins and per-UART awareness, forwarded to `generateModbusDefines`
+   *  for `MBSERIAL_TXPIN`. Absent → legacy board. */
+  rs485Board?: Rs485Board
   /** Bytes the program's retain blob occupies (`debugMap.retainBlobSize`);
    *  absent or 0 when the program retains nothing.
    *
@@ -226,6 +230,7 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     modbusServer,
     defaultSerial,
     networkInterfaces,
+    rs485Board,
     retainBlobSize,
     imageSizes,
     pinPull,
@@ -298,7 +303,13 @@ export function generateDefinesContent(input: GenerateDefinesInput): string {
     DEFINES_CONTENT += '#define MODBUS_ENABLED\n'
     DEFINES_CONTENT += `\n\n`
   } else if (boardRuntime !== 'openplc-compiler' && vppModbusState) {
-    const modbusBlock = generateModbusDefines(vppModbusState, defaultSerial, modbusServer, networkInterfaces)
+    const modbusBlock = generateModbusDefines(
+      vppModbusState,
+      defaultSerial,
+      modbusServer,
+      networkInterfaces,
+      rs485Board,
+    )
     if (modbusBlock.length > 0) {
       DEFINES_CONTENT += modbusBlock
       DEFINES_CONTENT += '\n\n'

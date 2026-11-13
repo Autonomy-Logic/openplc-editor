@@ -33,6 +33,12 @@
  * (next to `defines.h`). Mirrors the style of `generate-defines.ts`.
  */
 
+import {
+  isValidRs485Pin,
+  RS485_PINS_KEY,
+  SERIAL_SCREEN_STATE_KEY,
+} from '../../../../middleware/shared/utils/modbus-master-profile'
+
 export interface GenerateVppConfigInput {
   /** `DeviceConfiguration.vendorScreenData` from the project model.
    *  Top-level keys are persistence keys (one per screen section).
@@ -70,10 +76,11 @@ export function generateVppConfigContent(input: GenerateVppConfigInput): string 
     // — same input bytes produce the same output bytes, important for
     // the editor's "compile didn't change" cache and for cross-repo
     // byte-diff hygiene.
-    const keys = Object.keys(vendorScreenData).sort()
+    const screenData = withValidRs485Pins(vendorScreenData)
+    const keys = Object.keys(screenData).sort()
     for (const key of keys) {
       const prefix = `VPP_${sanitize(key, true)}`
-      walk(vendorScreenData[key], prefix, lines)
+      walk(screenData[key], prefix, lines)
     }
     if (lines[lines.length - 1] !== '') lines.push('')
   }
@@ -81,6 +88,28 @@ export function generateVppConfigContent(input: GenerateVppConfigInput): string 
   lines.push('#endif // VPP_CONFIG_H')
   lines.push('')
   return lines.join('\n')
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+/**
+ * `vendorScreenData` with the Serial screen's RS-485 pins limited to values matching the pin pattern:
+ * invalid entries of `rs485_en_pins` are dropped, and `rs485_en_pin` is dropped unless empty or valid.
+ */
+function withValidRs485Pins(vendorScreenData: Record<string, unknown>): Record<string, unknown> {
+  const serial = vendorScreenData[SERIAL_SCREEN_STATE_KEY]
+  if (!isRecord(serial)) return vendorScreenData
+
+  const next: Record<string, unknown> = { ...serial }
+  const legacyPin = next['rs485_en_pin']
+  if (legacyPin !== undefined && legacyPin !== '' && !isValidRs485Pin(legacyPin)) delete next['rs485_en_pin']
+  const pins = next[RS485_PINS_KEY]
+  if (isRecord(pins)) {
+    next[RS485_PINS_KEY] = Object.fromEntries(Object.entries(pins).filter(([, pin]) => isValidRs485Pin(pin)))
+  }
+  return { ...vendorScreenData, [SERIAL_SCREEN_STATE_KEY]: next }
 }
 
 /**

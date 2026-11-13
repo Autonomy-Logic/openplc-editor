@@ -33,6 +33,8 @@ export interface SerialBaudScreenState {
     baud_rate?: string
     enable_rs485_en_pin?: boolean
     rs485_en_pin?: string
+    /** RS-485 enable pin per UART, written by the Serial screen's `uart-pin-map` field. */
+    rs485_en_pins?: Record<string, string>
   }
 }
 
@@ -90,18 +92,6 @@ export function resolveServerSlaveId(serverSlaveId: number | undefined): number 
 }
 
 /**
- * The RS-485 driver-enable pin, or `null` when the board drives none.
- *
- * The package's, through the Serial screen: it is a property of the transceiver
- * wired to that UART, not of whatever protocol happens to be speaking on it.
- */
-export function resolveRs485Pin(state: SerialBaudScreenState): string | null {
-  if (state.serial?.enable_rs485_en_pin !== true) return null
-  const pin = state.serial.rs485_en_pin?.trim()
-  return pin ? pin : null
-}
-
-/**
  * Speed of the UART the Modbus server answers on.
  *
  * On the default port there is nothing to decide: one UART has one speed, the
@@ -122,6 +112,14 @@ export function resolveServerBaud(args: {
   // and either fails to compile or opens a dead line the screen confirms as good.
   if (typeof serverBaud === 'number' && Number.isInteger(serverBaud) && serverBaud > 0) return String(serverBaud)
   return DEFAULT_SERIAL_BAUD
+}
+
+/** The string entries of an RS-485 pin map, or `undefined` when `value` is not an object. */
+export function readRs485PinMap(value: unknown): Record<string, string> | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  )
 }
 
 /**
@@ -150,6 +148,7 @@ export function readSerialBaudState(raw: Record<string, unknown> | undefined | n
       baud_rate: text('baud_rate'),
       enable_rs485_en_pin: flag('enable_rs485_en_pin'),
       rs485_en_pin: text('rs485_en_pin'),
+      rs485_en_pins: readRs485PinMap(read('rs485_en_pins')),
     },
   }
 }

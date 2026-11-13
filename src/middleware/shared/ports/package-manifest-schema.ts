@@ -121,7 +121,7 @@ export const PackageManifestSchema = z
       .array(
         z
           .object({
-            // Only `boardManagerUrl` and `uploadMethod` are declared; everything
+            // Only `boardManagerUrl`, `uploadMethod` and `rs485FixedPins` are declared; everything
             // else on a device — and on `target` itself — still flows through
             // untouched.
             //
@@ -140,6 +140,7 @@ export const PackageManifestSchema = z
               })
               .passthrough()
               .optional(),
+            rs485FixedPins: z.record(z.string(), z.string()).optional(),
           })
           .passthrough(),
       )
