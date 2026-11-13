@@ -2,8 +2,8 @@
  * Element dialogs with more than one ladder POU open.
  *
  * Every open ladder tab keeps its editor mounted. With two of them, each POU's element dialogs must still
- * render once and apply their change: the contact dialog saves a new modifier, and the block dialog saves
- * execution control switched on.
+ * render once and apply their change: the contact and coil dialogs save a new modifier, and the block dialog
+ * saves execution control switched on.
  *
  * Needs a production build plus the preload copy; see "Electron e2e" in CLAUDE.md.
  */
@@ -69,7 +69,7 @@ function ladderBody(pou: string): string {
 }
 
 function writeFixture(): void {
-  rmSync(ROOT, { recursive: true, force: true })
+  rmSync(ROOT, { recursive: true, force: true, maxRetries: 10 })
   mkdirSync(join(FIXTURE, 'pous', 'programs'), { recursive: true })
   mkdirSync(join(FIXTURE, 'devices'), { recursive: true })
   writeFileSync(
@@ -244,12 +244,34 @@ for (const pou of POUS) {
 
     const title = page.getByText('Edit Contact Values', { exact: true })
     await expect(title.first()).toBeVisible()
+    await expect(title, 'one contact dialog renders').toHaveCount(1)
     await clickTop(page, page.getByText('negated', { exact: true }))
     await clickTop(page, page.locator('button', { hasText: /^Confirm$/ }))
     await expect(title, 'Confirm applies the change and closes the dialog').toHaveCount(0)
 
     await expectSaved(
       () => savedNodes(pou)?.find((n) => n.type === 'contact' && n.data.variable?.name === 'Motor')?.data.variant,
+      'negated',
+    )
+  })
+
+  test(`with two ladder tabs open, the coil dialog of ${pou} applies a new modifier`, async () => {
+    await page.getByText(pou, { exact: true }).first().click()
+    const coil = page.locator('.react-flow__node-coil:visible').filter({ hasText: 'Lamp' })
+    await expect(coil).toHaveCount(1)
+    const box = await coil.boundingBox()
+    if (!box) throw new Error('coil has no box')
+    await coil.dblclick({ position: { x: box.width / 2, y: box.height - 4 } })
+
+    const title = page.getByText('Edit Coil Values', { exact: true })
+    await expect(title.first()).toBeVisible()
+    await expect(title, 'one coil dialog renders').toHaveCount(1)
+    await clickTop(page, page.getByText('negated', { exact: true }))
+    await clickTop(page, page.locator('button', { hasText: /^Confirm$/ }))
+    await expect(title, 'Confirm applies the change and closes the dialog').toHaveCount(0)
+
+    await expectSaved(
+      () => savedNodes(pou)?.find((n) => n.type === 'coil' && n.data.variable?.name === 'Lamp')?.data.variant,
       'negated',
     )
   })
@@ -262,6 +284,7 @@ for (const pou of POUS) {
 
     const title = page.getByText('Block Properties', { exact: true })
     await expect(title.first()).toBeVisible()
+    await expect(title, 'one Block Properties dialog renders').toHaveCount(1)
     await clickTop(page, page.locator('[id="executionControlSwitch"]'))
     await clickTop(page, page.locator('button', { hasText: /^Ok$/ }))
     await expect(title, 'Ok applies the change and closes the dialog').toHaveCount(0)
