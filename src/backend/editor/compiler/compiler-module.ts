@@ -1965,7 +1965,6 @@ class CompilerModule {
     _mainProcessPort.postMessage({ message: this.getHostHardwareInfo() })
 
     const hasServers = projectData.servers && projectData.servers.length > 0
-    const hasRemoteDevices = projectData.remoteDevices && projectData.remoteDevices.length > 0
     // Baremetal serves Modbus too since 4.3.0, so the warning is for the targets
     // that genuinely ignore a server. `openplc-compiler` is the Runtime v3
     // toolchain, which ships no Modbus slave; the simulator has one but takes
@@ -1976,12 +1975,6 @@ class CompilerModule {
       _mainProcessPort.postMessage({
         logLevel: 'warning',
         message: `Warning: Your project contains Modbus Server configurations, but the selected target (${boardTarget}) does not support this feature. The server configurations will be ignored during compilation.`,
-      })
-    }
-    if (!isRuntimeV4 && hasRemoteDevices) {
-      _mainProcessPort.postMessage({
-        logLevel: 'warning',
-        message: `Warning: Your project contains Remote IO configurations, but the selected target (${boardTarget}) does not support this feature. Remote IO is only supported on OpenPLC Runtime v4. The remote device configurations will be ignored during compilation.`,
       })
     }
 

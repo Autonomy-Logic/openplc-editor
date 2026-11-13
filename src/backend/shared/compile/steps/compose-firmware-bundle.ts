@@ -86,6 +86,11 @@ export interface ComposeFirmwareBundleInput {
    *  `#include "s7comm_config.h"` unconditionally and compile to nothing on
    *  every target that has no server. */
   s7commConfigH?: string
+  /** Generated `modbus_master_config.h`, on the same contract: the firmware skeleton
+   *  ships a stub with `MB_MASTER_ENABLED 0`, so the master translation units
+   *  `#include "modbus_master_config.h"` unconditionally and compile to nothing
+   *  on every target that runs no master. */
+  modbusMasterConfigH?: string
   /** Firmware skeleton: the bundled set of base files arduino-cli
    *  needs but the user doesn't see (`Baremetal.ino`, the Arduino
    *  HAL, strucpp runtime headers, simulator HAL adapter).  Each
@@ -156,7 +161,16 @@ const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
  * has C/C++ POUs — otherwise the static baseline stays.
  */
 export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, string> {
-  const { strucppFiles, cBlocks, definesH, vppConfigH, opcuaConfigH, s7commConfigH, firmwareSkeleton } = input
+  const {
+    strucppFiles,
+    cBlocks,
+    definesH,
+    vppConfigH,
+    opcuaConfigH,
+    s7commConfigH,
+    modbusMasterConfigH,
+    firmwareSkeleton,
+  } = input
 
   // Skeleton first (every Baremetal.ino, arduino HAL, strucpp
   // runtime header, etc.).  Subsequent overwrites replace specific
@@ -224,6 +238,10 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
   // s7comm_config.h — identical contract.
   if (s7commConfigH !== undefined) {
     files['src/s7comm_config.h'] = s7commConfigH
+  }
+
+  if (modbusMasterConfigH !== undefined) {
+    files['src/modbus_master_config.h'] = modbusMasterConfigH
   }
 
   // OpenPLCUserLib.h stub — Baremetal.ino unconditionally

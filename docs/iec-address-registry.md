@@ -184,8 +184,12 @@ address pool, `activeKindsFor` and the variable-location dropdown use). The
 creation menu narrows the Modbus half to `canHostModbusMaster` of the Modbus
 master profile, which also drops a baremetal board with no TCP master and no
 UART besides the debugger's. Devices already configured stay **visible** on a target that
-can't host them, because the board-switch warning promises they are "disabled
-during compilation", not removed; only creating a new one is refused.
+can't host them; only creating a new one is refused. On Runtime v3 and the
+Simulator the board-switch warning says they are "disabled during compilation",
+and the build warns and ignores them. On a baremetal board the build is refused
+while a device is one the board cannot run (`checkModbusMaster`), and the
+board-switch dialog says so: the device stays in the project until it is fixed
+or removed.
 
 ## 6. Aliases and variable binding
 

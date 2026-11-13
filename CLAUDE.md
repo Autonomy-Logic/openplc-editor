@@ -421,6 +421,16 @@ both, and a build without the debugger (`MB_EDITOR_SLAVE` undefined) uses the se
 With `MBSERIAL_ON_SECONDARY`, the default UART answers only `DEBUG_SLAVE` and the secondary UART only
 `MBSERIAL_SLAVE`.
 
+The Modbus master (remote devices) reaches baremetal firmware as `src/modbus_master_config.h`, never
+through `defines.h`. `generateModbusMasterHeader` (`src/frontend/utils/modbus-master/generate-modbus-master-header.ts`)
+writes `static const` endpoint, bus, device, group and point tables against the record types of
+`resources/sources/arduino/modbus_master_types.h`: one endpoint per `endpointKey` (IPv4 octets and port,
+smallest timeout, the devices' common Reconnect), one bus per board UART (smallest timeout, the RS-485 pin from
+`resolveRs485Pins`). It validates every value itself with `modbus-master-profile/fields.ts` and returns issues
+instead of a header; device and group names appear only inside comments. The pipeline generates it only on
+baremetal for a project with Modbus remote devices; every other build keeps the skeleton stub
+`resources/sources/arduino/modbus_master_config.h` (`MB_MASTER_ENABLED 0`).
+
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 
 **Pre-build gates.** `evaluateVppBackplaneGate`
@@ -430,6 +440,16 @@ host whose vPLCs provide the vendor boards; the vPLC reports `backplaneAccess: f
 is `null` or differs from the board's. In `src/frontend/components/_organisms/workspace-activity-bar/default.tsx`,
 `handleBuild` runs it before `evaluatePreBuildPlcGate`, and `handleMd5Verification` runs it before offering an upload.
 It is inert in the editor (no orchestrator devices) and kept so the shared surface stays byte-identical with openplc-web.
+
+`checkModbusMaster` (`src/middleware/shared/utils/modbus-master-profile/checks.ts`) runs in the pipeline's
+`validate` stage on every build, GUI and CLI alike: its errors stop the build, its warnings go to the console.
+Runtime v3 only warns that remote devices are ignored. The Simulator refuses devices on one endpoint that disagree
+on Reconnect and devices on one serial port that disagree on line settings, and warns that it ignores remote
+devices. Runtime v4 also refuses a transport it does not offer. Baremetal also refuses an RTU device on the
+debugger's or the Modbus RTU server's UART, a host that is not IPv4, a UART the board lacks, TCP without the
+network (`OPLC_NET_ENABLED`, `isBuildNetworkEnabled`), a field out of range and a bad RS-485 pin, and warns when
+the TCP endpoints exceed the board's `networkSockets`. Switching to a baremetal board that cannot run a device
+opens a dialog saying it stays in the project and the build is refused until it is fixed or removed.
 
 ### WebAssembly toolchain
 

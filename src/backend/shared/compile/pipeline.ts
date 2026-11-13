@@ -20,6 +20,7 @@
  * `emit` callback (progress events).  No disk I/O, no globals.
  */
 
+import { generateModbusMasterHeader } from '../../../frontend/utils/modbus-master/generate-modbus-master-header'
 import { buildOpcUaRuntimeConfig, generateOpcUaHeaderContent } from '../../../frontend/utils/opcua'
 import type { S7CommSlaveConfigLike } from '../../../frontend/utils/s7comm'
 import { generateS7CommHeaderContent } from '../../../frontend/utils/s7comm'
@@ -33,6 +34,15 @@ import type {
 } from '../../../middleware/shared/ports/compiler-platform-port'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
+import {
+  checkModbusMaster,
+  isModbusRemoteDevice,
+  type MasterIssue,
+  type MasterTarget,
+  resolveModbusMasterProfile,
+  resolveRs485Pins,
+  type Rs485Board,
+} from '../../../middleware/shared/utils/modbus-master-profile'
 import { resolveModbusServerProfile } from '../../../middleware/shared/utils/modbus-server-profile'
 import {
   DEFAULT_S7_PROFILE,
@@ -79,7 +89,12 @@ import { generateDefinesContent } from './steps/generate-defines'
 import { generateImageConf } from './steps/generate-image-conf'
 import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
-import { narrowModbusTransports, selectModbusServer } from './steps/modbus-defines'
+import {
+  isBuildNetworkEnabled,
+  narrowModbusTransports,
+  resolveServedRtuUart,
+  selectModbusServer,
+} from './steps/modbus-defines'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
 
 // ---------------------------------------------------------------------------
@@ -352,6 +367,19 @@ function bailError(
   emit({ stage, message, level: 'error' })
   emit({ stage: 'error', message: 'Stopping compilation process.', level: 'error' })
   return { success: false, errors }
+}
+
+/** Emits every error of `issues` at `stage`, then stops the pipeline on the last one. */
+function bailIssues(
+  emit: (event: PipelineProgressEvent) => void,
+  stage: PipelineProgressEvent['stage'],
+  issues: MasterIssue[],
+): RunCompilePipelineResult {
+  const errors = issues.filter((issue) => issue.severity === 'error')
+  for (const issue of errors.slice(0, -1)) {
+    emit({ stage, message: issue.message, level: 'error' })
+  }
+  return bailError(emit, stage, errors[errors.length - 1]?.message ?? 'Stopping compilation process.')
 }
 
 // ---------------------------------------------------------------------------
@@ -646,6 +674,69 @@ async function runCompilePipelineInner(
           })
         }
       })
+
+  const masterTarget: MasterTarget = isRuntimeV3
+    ? 'runtime-v3'
+    : isSimulator
+      ? 'simulator'
+      : isRuntimeV4
+        ? 'runtime-v4'
+        : 'baremetal'
+  const masterProfile = resolveModbusMasterProfile(
+    {
+      ...(boardEntry.compiler ? { compiler: boardEntry.compiler } : {}),
+      ...(boardEntry.serialPorts ? { serialPorts: boardEntry.serialPorts } : {}),
+      ...(boardEntry.defaultSerial ? { defaultSerial: boardEntry.defaultSerial } : {}),
+    },
+    targetCapabilities,
+  )
+  const rs485Board: Rs485Board = {
+    ...(boardEntry.serialPorts ? { serialPorts: boardEntry.serialPorts } : {}),
+    ...(boardEntry.rs485FixedPins ? { rs485FixedPins: boardEntry.rs485FixedPins } : {}),
+    perUartAware: boardEntry.perUartAware === true,
+  }
+  const remoteDevices = processedData.remoteDevices ?? []
+  const rtuServerUart =
+    masterTarget === 'baremetal' ? resolveServedRtuUart(modbusServer, boardEntry.defaultSerial) : null
+  const rs485Pins =
+    masterTarget === 'baremetal' ? resolveRs485Pins(vppModbusState ?? {}, rs485Board, rtuServerUart) : {}
+  const masterIssues = checkModbusMaster({
+    devices: remoteDevices,
+    profile: masterProfile,
+    board: {
+      ...(boardEntry.serialPorts ? { serialPorts: boardEntry.serialPorts } : {}),
+      ...(boardEntry.defaultSerial ? { defaultSerial: boardEntry.defaultSerial } : {}),
+      rs485Pins,
+    },
+    rtuServerUart,
+    networkEnabled:
+      masterTarget !== 'baremetal' ||
+      (vppModbusState !== undefined && isBuildNetworkEnabled(vppModbusState, modbusServer)),
+    target: masterTarget,
+    hasRemoteDevices: remoteDevices.length > 0,
+    boardTarget,
+  })
+  for (const issue of masterIssues) {
+    if (issue.severity === 'warning') emit({ stage: 'validate', message: issue.message, level: 'warning' })
+  }
+  if (masterIssues.some((issue) => issue.severity === 'error')) {
+    return bailIssues(emit, 'validate', masterIssues)
+  }
+
+  let modbusMasterConfigH: string | undefined
+  if (masterTarget === 'baremetal' && masterProfile.runsDevices && remoteDevices.some(isModbusRemoteDevice)) {
+    const generated = generateModbusMasterHeader({
+      devices: remoteDevices,
+      profile: masterProfile,
+      board: {
+        ...(boardEntry.serialPorts ? { serialPorts: boardEntry.serialPorts } : {}),
+        ...(boardEntry.defaultSerial ? { defaultSerial: boardEntry.defaultSerial } : {}),
+      },
+      rs485Pins,
+    })
+    if (!generated.ok) return bailIssues(emit, 'validate', generated.issues)
+    modbusMasterConfigH = generated.header
+  }
 
   // ---------------------------------------------------------------------
   // Step 1: Transpile the project IR straight to Structured Text via
@@ -1060,11 +1151,7 @@ async function runCompilePipelineInner(
     // too. Harmless only for as long as every package declares `Serial`.
     ...(boardEntry.defaultSerial ? { defaultSerial: boardEntry.defaultSerial } : {}),
     ...(boardEntry.networkInterfaces ? { networkInterfaces: boardEntry.networkInterfaces } : {}),
-    rs485Board: {
-      ...(boardEntry.serialPorts ? { serialPorts: boardEntry.serialPorts } : {}),
-      ...(boardEntry.rs485FixedPins ? { rs485FixedPins: boardEntry.rs485FixedPins } : {}),
-      perUartAware: boardEntry.perUartAware === true,
-    },
+    rs485Board,
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
     // Only for a target we actually size. Runtime v3 and the simulator keep
     // openplc.h's own fallbacks, so their defines.h is unchanged.
@@ -1201,6 +1288,7 @@ async function runCompilePipelineInner(
     vppConfigH,
     opcuaConfigH,
     s7commConfigH,
+    modbusMasterConfigH,
     firmwareSkeleton,
   })
 

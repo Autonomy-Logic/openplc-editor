@@ -1,10 +1,43 @@
 export {
+  checkModbusMaster,
+  type CheckModbusMasterInput,
+  devicesBaremetalCannotRun,
+  lineSettingConflicts,
+  type MasterBoard,
+  type MasterTarget,
+  reconnectConflicts,
+  remoteIoWarning,
+  transportIssues,
+  unrunnableDeviceIssues,
+} from './checks'
+export {
   createDefaultRemoteDeviceConfig,
   DEFAULT_REMOTE_DEVICE_HOST,
   DEFAULT_REMOTE_DEVICE_PORT,
   firstBoardRtuPort,
 } from './default-config'
 export { endpointKey } from './endpoint'
+export {
+  DEFAULT_RTU_LINE,
+  DEFAULT_SLAVE_ID,
+  deviceFieldIssues,
+  hostOf,
+  imageOfFunctionCode,
+  isModbusRemoteDevice,
+  type MasterImage,
+  type MasterIssue,
+  type MasterPointAddress,
+  type ModbusRemoteDevice,
+  parseGroupOffset,
+  parseIpv4,
+  parsePointAddress,
+  quotedList,
+  rs485PinIssues,
+  rtuLineOf,
+  slaveIdOf,
+  tcpPortOf,
+  transportOf,
+} from './fields'
 export {
   canHostModbusMaster,
   type ModbusMasterBoardInfoLike,

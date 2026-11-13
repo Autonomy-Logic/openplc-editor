@@ -277,6 +277,28 @@ function resolveTcpInterface(stated: string | undefined, declared: string[] | un
  *  before the port became the server's to state. */
 const BAREMETAL_DEFAULT_TCP_PORT = 502
 
+/** The transports the project's server serves: none when there is no server or it is disabled. */
+function servedTransports(server: ModbusServerCompileConfig | undefined): ('rtu' | 'tcp')[] {
+  return server && server.enabled !== false ? (server.transports ?? []) : []
+}
+
+/**
+ * Whether a baremetal build brings the network up (`OPLC_NET_ENABLED`): the Network screen is
+ * explicitly on, or the server serves TCP and the screen is not explicitly off.
+ */
+export function isBuildNetworkEnabled(state: VppModbusScreenState, server?: ModbusServerCompileConfig): boolean {
+  const enabled = state.network?.enabled
+  return enabled === true || (servedTransports(server).includes('tcp') && enabled !== false)
+}
+
+/** UART the project's server answers Modbus RTU on (`MBSERIAL_IFACE`), or `null` when it serves no RTU. */
+export function resolveServedRtuUart(
+  server: ModbusServerCompileConfig | undefined,
+  defaultSerial: string = 'Serial',
+): string | null {
+  return servedTransports(server).includes('rtu') ? resolveRtuPort(server?.serialPort, defaultSerial) : null
+}
+
 /**
  * Build the `//Comms Configuration` block. Returns an empty string when
  * neither RTU nor TCP is enabled so `defines.h` stays clean for boards
@@ -306,7 +328,7 @@ export function generateModbusDefines(
   // The project's server is the only thing that says what is served. No server,
   // no Modbus: 4.3.0 does not read a pre-4.3.0 project's `modbus_rtu` section,
   // so a project from before it has to create its server again.
-  const served = server && server.enabled !== false ? (server.transports ?? []) : []
+  const served = servedTransports(server)
   const rtuOn = served.includes('rtu')
   // Modbus TCP needs a network, and after the screen split the network is a
   // section of its own with its own switch. Serving TCP over a network the
@@ -374,7 +396,7 @@ export function generateModbusDefines(
 
   // The link itself: emitted whenever the network is up, whether or not Modbus
   // is the thing being served over it.
-  if (netOn || tcpOn) {
+  if (isBuildNetworkEnabled(state, server)) {
     // Network config comes from the `network` section the package ships.
     //
     // MBTCP_MAC / MBTCP_IP / MBTCP_DNS / MBTCP_GATEWAY / MBTCP_SUBNET are
