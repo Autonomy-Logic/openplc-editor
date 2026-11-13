@@ -37,6 +37,7 @@ import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
 import { useStableCallback } from '../../../../hooks/use-stable-callback'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import type { FBDRungState } from '../../../../store/slices/fbd'
+import { graphicalElementModalFor } from '../../../../store/slices/modal'
 import { cn } from '../../../../utils/cn'
 import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
 import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/get-function-block-variables-to-cleanup'
@@ -228,6 +229,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   const deleteVariable = useOpenPLCStore((state) => state.projectActions.deleteVariable)
   const { closeModal, openModal } = useOpenPLCStore((state) => state.modalActions)
   const blockElementModal = useOpenPLCStore((state) => state.modals['block-fbd-element'])
+  const blockElement = graphicalElementModalFor(blockElementModal, pouName)
   const pous = useOpenPLCStore((state) => state.project.data.pous)
   const hasProgramInstance = useOpenPLCStore((state) =>
     state.project.data.configurations.resource.instances.some((instance) => instance.program === pouName),
@@ -777,7 +779,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     const modalToOpen = node.type === 'block' && 'block-fbd-element'
     if (!modalToOpen) return
 
-    openModal(modalToOpen, node)
+    openModal(modalToOpen, { pouName, node })
   }
 
   const onDelete = useStableCallback(({ nodes, edges }: { nodes: FlowNode[]; edges: FlowEdge[] }) => {
@@ -897,10 +899,10 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
           proOptions: PRO_OPTIONS,
         }}
       />
-      {blockElementModal?.open && (
+      {blockElement && (
         <BlockElement
           onClose={handleModalClose}
-          selectedNode={blockElementModal.data as BlockNode<object>}
+          selectedNode={blockElement.node as BlockNode<object>}
           isOpen={blockElementModal.open}
         />
       )}

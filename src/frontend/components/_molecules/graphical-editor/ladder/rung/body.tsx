@@ -609,7 +609,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
             : undefined
     if (!modalToOpen) return
 
-    openModal(modalToOpen, node)
+    openModal(modalToOpen, { pouName, node })
   }
 
   const onNodesDelete = useStableCallback((nodes: FlowNode[]) => {

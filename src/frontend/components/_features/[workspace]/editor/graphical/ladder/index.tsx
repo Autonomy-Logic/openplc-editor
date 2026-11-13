@@ -24,6 +24,7 @@ import { usePouSnapshot } from '../../../../../../hooks/use-pou-snapshot'
 import { ladderSelectors } from '../../../../../../hooks/use-store-selectors'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import { RungLadderState } from '../../../../../../store/slices/ladder'
+import { graphicalElementModalFor } from '../../../../../../store/slices/modal'
 import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { cn } from '../../../../../../utils/cn'
 import { hasLegacyInOutOutputHandle } from '../../../../../../utils/graphical/in-out-pin-rules'
@@ -59,6 +60,9 @@ export default function LadderEditor() {
   const closeModal = useOpenPLCStore((state) => state.modalActions.closeModal)
   const userLibraries = useOpenPLCStore((state) => state.libraries.user)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
+  const blockElement = graphicalElementModalFor(blockElementModal, pouName)
+  const contactElement = graphicalElementModalFor(contactElementModal, pouName)
+  const coilElement = graphicalElementModalFor(coilElementModal, pouName)
 
   const { captureAndPush } = usePouSnapshot()
   const placement = useGraphicalPlacement()
@@ -301,24 +305,24 @@ export default function LadderEditor() {
         </DndContext>
         <CreateRung onClick={handleAddNewRung} />
         <Portal.Root>
-          {blockElementModal?.open && (
+          {blockElement && (
             <BlockElement
               onClose={handleModalClose}
-              selectedNode={blockElementModal.data as BlockNode<BlockVariant>}
+              selectedNode={blockElement.node as BlockNode<BlockVariant>}
               isOpen={blockElementModal.open}
             />
           )}
-          {contactElementModal?.open && (
+          {contactElement && (
             <ContactElement
               onClose={handleModalClose}
-              node={contactElementModal.data as ContactNode}
+              node={contactElement.node as ContactNode}
               isOpen={contactElementModal.open}
             />
           )}
-          {coilElementModal?.open && (
+          {coilElement && (
             <CoilElement
               onClose={handleModalClose}
-              node={coilElementModal.data as CoilNode}
+              node={coilElement.node as CoilNode}
               isOpen={coilElementModal.open}
             />
           )}

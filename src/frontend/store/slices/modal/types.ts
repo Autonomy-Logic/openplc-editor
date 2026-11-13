@@ -1,3 +1,5 @@
+import type { Node } from '@xyflow/react'
+
 import type { PLCVariable, VariableClass } from '../../../../middleware/shared/ports/types'
 
 // ---------------------------------------------------------------------------
@@ -87,6 +89,9 @@ export type CreateGraphicalVariableModalData = {
    */
   onCancel?: () => void
 }
+
+/** Payload of the graphical element dialogs: the node and the POU whose editor owns it. */
+export type GraphicalElementModalData = { pouName: string; node: Node }
 
 export type ModalsState = Record<ModalTypes, { open: boolean; data: unknown }>
 
