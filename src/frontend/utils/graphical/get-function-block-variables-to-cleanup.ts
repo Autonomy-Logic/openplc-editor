@@ -11,7 +11,7 @@ const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\
 
 const expressionReferencesVariable = (expression: unknown, variableName: string): boolean => {
   if (typeof expression !== 'string' || expression === '') return false
-  return new RegExp(`(?<![A-Za-z0-9_.])${escapeRegExp(variableName)}(?![A-Za-z0-9_])`, 'i').test(expression)
+  return new RegExp(`(?:^|[^A-Za-z0-9_.])${escapeRegExp(variableName)}(?![A-Za-z0-9_])`, 'i').test(expression)
 }
 
 /**
