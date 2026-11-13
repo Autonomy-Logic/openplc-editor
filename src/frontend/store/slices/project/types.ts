@@ -280,7 +280,6 @@ export type ProjectActions = {
   /** Rewrite the code view's buffer from the list. No-op when that view isn't open. */
   regenerateGlobalVariableListText: (name: string) => void
 
-  // HMI
   /** Adds a screen or widget block; the first one starts the project's HMI with default settings. */
   createHmiElement: (kind: HmiElementKind, name: string, source: string) => void
   /** Removes it and queues its file for deletion. */

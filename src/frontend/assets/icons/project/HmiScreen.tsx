@@ -12,7 +12,7 @@ const sizeClasses = {
   lg: 'w-12 h-12',
 }
 
-/** An operator screen: a display showing a level bar and a lamp. */
+/** An HMI screen: a panel with a gauge, in the project tree's icon style. */
 export const HmiScreenIcon = (props: IHmiScreenIconProps) => {
   const { className, size = 'sm', ...res } = props
   return (
@@ -24,12 +24,11 @@ export const HmiScreenIcon = (props: IHmiScreenIconProps) => {
       className={cn(`${sizeClasses[size]}`, className)}
       {...res}
     >
-      <rect x='3' y='5' width='22' height='15' rx='2' fill='#023C97' />
-      <rect x='7' y='12' width='4' height='5' rx='1' fill='#B4D0FE' />
-      <rect x='7' y='9' width='4' height='3' rx='1' fill='#B4D0FE' opacity='0.4' />
-      <circle cx='18' cy='12.5' r='3' fill='#B4D0FE' />
-      <path d='M10 24H18' stroke='#023C97' strokeWidth='2' strokeLinecap='round' />
-      <path d='M14 20V24' stroke='#023C97' strokeWidth='2' />
+      <rect x='2.5' y='4' width='23' height='16' rx='3.5' fill='#023C97' />
+      <path d='M8 15.5a4 4 0 0 1 8 0' stroke='#B4D0FE' strokeWidth='1.8' strokeLinecap='round' />
+      <path d='M12 15.5l2-2.6' stroke='#B4D0FE' strokeWidth='1.6' strokeLinecap='round' />
+      <rect x='18' y='8.5' width='3' height='7' rx='1' fill='#B4D0FE' opacity='0.7' />
+      <path d='M10 24h8M14 20v4' stroke='#023C97' strokeWidth='1.8' strokeLinecap='round' />
     </svg>
   )
 }

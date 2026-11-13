@@ -62,7 +62,7 @@ describe('HMI references', () => {
     )
   })
 
-  it('finds navigation to a screen and its HMI Settings entries, but not its own file', () => {
+  it('finds navigation to a screen and its HMI Settings entries', () => {
     const impact = findHmiReferences('screen', 'Details', hmi())
     expect(impact.references).toEqual([
       { element: 'Main', kind: 'screen', line: 4 },
@@ -84,6 +84,35 @@ describe('HMI references', () => {
     )
     expect(widgets.widgets[1].source).toBe('FUNCTION_BLOCK BigBadge EXTENDS Lamp2 END_FUNCTION_BLOCK')
     expect(widgets.widgets[0].source).toBe(hmi().widgets[0].source)
+  })
+
+  it('finds and renames a screen navigating to itself, but not its own header', () => {
+    const own = {
+      ...hmi(),
+      screens: [
+        {
+          name: 'Nav',
+          source: 'FUNCTION_BLOCK Nav EXTENDS HmiScreen\n  HMI_Show(HMI_SCREEN#Nav);\nEND_FUNCTION_BLOCK',
+        },
+      ],
+    }
+    expect(findHmiReferences('screen', 'Nav', own).references).toEqual([{ element: 'Nav', kind: 'screen', line: 2 }])
+    expect(renameHmiReferences('screen', 'Nav', 'Home', own).screens[0].source).toBe(
+      'FUNCTION_BLOCK Nav EXTENDS HmiScreen\n  HMI_Show(HMI_SCREEN#Home);\nEND_FUNCTION_BLOCK',
+    )
+  })
+
+  it('finds a widget block typed through REF_TO or by itself, never a CASE label of the same name', () => {
+    const source =
+      'FUNCTION_BLOCK Badge EXTENDS HmiElement\n  VAR r : REF_TO Badge; n : Badge := (); END_VAR\n  CASE m OF Badge: x := 1; END_CASE;\nEND_FUNCTION_BLOCK'
+    const own = { ...hmi(), screens: [], widgets: [{ name: 'Badge', source }] }
+    expect(findHmiReferences('widget', 'Badge', own).references).toEqual([
+      { element: 'Badge', kind: 'widget', line: 2 },
+      { element: 'Badge', kind: 'widget', line: 2 },
+    ])
+    expect(renameHmiReferences('widget', 'Badge', 'Lamp2', own).widgets[0].source).toBe(
+      'FUNCTION_BLOCK Badge EXTENDS HmiElement\n  VAR r : REF_TO Lamp2; n : Lamp2 := (); END_VAR\n  CASE m OF Badge: x := 1; END_CASE;\nEND_FUNCTION_BLOCK',
+    )
   })
 
   it('leaves settings that did not validate untouched', () => {

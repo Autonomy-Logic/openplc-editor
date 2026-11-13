@@ -89,7 +89,6 @@ const HmiCodeEditor = ({ name, kind }: HmiCodeEditorProps) => {
           readOnly: isDebuggerVisible,
           renderWhitespace: 'selection',
           scrollBeyondLastLine: false,
-          // Its debounced highlighter can throw on teardown; nothing here needs it.
           occurrencesHighlight: 'off',
         }}
       />

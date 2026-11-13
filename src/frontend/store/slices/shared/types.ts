@@ -150,8 +150,11 @@ export type HmiActions = {
    * rename while one awaits the modal is refused.
    */
   rename: (kind: HmiElementKind, oldName: string, newName: string) => Promise<SharedResponse>
-  /** Answers the pending rename's impact modal: `true` renames the references, `false` keeps them. */
-  respondToPendingRename: (renameReferences: boolean) => void
+  /**
+   * Answers the pending rename's impact modal: `true` renames the references, `false` keeps them, `null` cancels the
+   * rename.
+   */
+  respondToPendingRename: (renameReferences: boolean | null) => void
   duplicate: (kind: HmiElementKind, sourceName: string, newName: string) => SharedResponse
   /** Opens the HMI Settings tab. */
   openSettings: () => void

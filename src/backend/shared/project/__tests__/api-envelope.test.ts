@@ -663,6 +663,44 @@ describe('HMI files in the envelope', () => {
     expect(Object.entries(merged)).toContainEqual(['README.md', 'r'])
   })
 
+  it('keeps the hmi files the project model does not hold, and drops the ones it removed', () => {
+    const existing: IncomingApiProjectFiles = {
+      'project.json': '{"meta":{"name":"p","type":"plc-project"}}',
+      hmi: {
+        'Main.st': 'M',
+        'Gone.st': 'G',
+        'notes.json': 'n',
+        '1st.st': 'x',
+        'settings.json': '{}',
+        widgets: { 'W.st': 'w', 'Old.st': 'o', 'readme.txt': 'r' },
+      },
+    }
+    const generated: ApiProjectFiles = {
+      'project.json': '{"meta":{"name":"p","type":"plc-project"}}',
+      devices: {},
+      pous: {},
+      hmi: { 'Main.st': 'M2', 'settings.json': '{"a":1}', widgets: { 'W.st': 'w2' } },
+    }
+    expect(mergeEnvelopeOverExisting(existing, generated).hmi).toEqual({
+      'Main.st': 'M2',
+      'notes.json': 'n',
+      '1st.st': 'x',
+      'settings.json': '{"a":1}',
+      widgets: { 'W.st': 'w2', 'readme.txt': 'r' },
+    })
+    const emptied = mergeEnvelopeOverExisting({ hmi: { 'Main.st': 'M' } }, { ...generated, hmi: undefined })
+    expect(emptied.hmi).toBeUndefined()
+  })
+
+  it("keeps a library project's hmi folder as it is, since a library does not model it", () => {
+    const hmi = { 'Main.st': 'M', widgets: { 'W.st': 'w' } }
+    const merged = mergeEnvelopeOverExisting(
+      { 'project.json': '{"meta":{"name":"l","type":"plc-library"}}', hmi },
+      { 'project.json': '{"meta":{"name":"l","type":"plc-library"}}', devices: {}, pous: {} },
+    )
+    expect(merged.hmi).toEqual(hmi)
+  })
+
   it('refuses an hmi container whose files are not text', () => {
     expect(ApiProjectFilesSchema.safeParse({ hmi: { 'Main.st': 1 } }).success).toBe(false)
   })

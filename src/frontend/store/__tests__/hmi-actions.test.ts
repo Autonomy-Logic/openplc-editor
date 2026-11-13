@@ -14,7 +14,7 @@ const source = (kind: 'screen' | 'widget', name: string) =>
   (kind === 'screen' ? hmi()?.screens : hmi()?.widgets)?.find((f) => f.name === name)?.source
 
 /** Resolves once the pending rename's modal is up, then answers it. */
-async function answerRename(rename: Promise<unknown>, answer: boolean) {
+async function answerRename(rename: Promise<unknown>, answer: boolean | null) {
   await Promise.resolve()
   expect(store.getState().pendingHmiRename).not.toBeNull()
   store.getState().hmiActions.respondToPendingRename(answer)
@@ -105,7 +105,35 @@ describe('HMI actions', () => {
     const rename = store.getState().hmiActions.rename('widget', 'Badge', 'Lamp2')
     await Promise.resolve()
     store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
-    await expect(rename).resolves.toEqual({ ok: false, message: 'Rename cancelled' })
+    await expect(rename).resolves.toEqual({ ok: false, cancelled: true, message: 'Rename cancelled' })
+  })
+
+  it('renames nothing when the rename is cancelled from the impact modal', async () => {
+    const { hmiActions } = store.getState()
+    hmiActions.create('widget', 'Badge')
+    hmiActions.create('screen', 'Overview')
+    store.getState().projectActions.updateHmiSource('screen', 'Overview', 'VAR b : Badge; END_VAR')
+    const cancelled = await answerRename(store.getState().hmiActions.rename('widget', 'Badge', 'Lamp2'), null)
+    expect(cancelled).toEqual({ ok: false, cancelled: true, message: 'Rename cancelled' })
+    expect(source('widget', 'Badge')).toMatch(/^FUNCTION_BLOCK Badge /)
+    expect(source('widget', 'Lamp2')).toBeUndefined()
+    expect(source('screen', 'Overview')).toBe('VAR b : Badge; END_VAR')
+    expect(store.getState().pendingHmiRename).toBeNull()
+  })
+
+  it('asks before renaming a screen that navigates to itself, and renames its header and navigation', async () => {
+    const { hmiActions, projectActions } = store.getState()
+    hmiActions.create('screen', 'Nav')
+    projectActions.updateHmiSource(
+      'screen',
+      'Nav',
+      'FUNCTION_BLOCK Nav EXTENDS HmiScreen\n  HMI_Show(HMI_SCREEN#Nav);\nEND_FUNCTION_BLOCK\n',
+    )
+    const renamed = await answerRename(store.getState().hmiActions.rename('screen', 'Nav', 'Home'), true)
+    expect(renamed).toEqual({ ok: true })
+    expect(source('screen', 'Home')).toBe(
+      'FUNCTION_BLOCK Home EXTENDS HmiScreen\n  HMI_Show(HMI_SCREEN#Home);\nEND_FUNCTION_BLOCK\n',
+    )
   })
 
   it('deletes an element and queues its file, and duplicates one under a new header', () => {

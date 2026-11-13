@@ -523,7 +523,6 @@ const Project = () => {
             </ProjectTreeBranch>
           )}
 
-          {/* HMI branch: HMI Settings, screens in project order, then widget blocks. */}
           {projectCaps.hasHmi && hmi && (
             <ProjectTreeBranch branchTarget='hmi'>
               <ProjectTreeLeaf

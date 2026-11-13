@@ -3,8 +3,8 @@ import { RenameImpactModal } from '.'
 
 /**
  * Store-driven host for renaming a referenced screen or widget block: `hmiActions.rename` parks the question in
- * `pendingHmiRename`. Confirming renames the references too; declining renames only the element and leaves the
- * references for the build to report.
+ * `pendingHmiRename`. Confirming renames the references too; "Rename only" leaves them for the build to report;
+ * cancelling or closing renames nothing.
  */
 export const HmiRenameImpactModal = () => {
   const pending = useOpenPLCStore((s) => s.pendingHmiRename)
@@ -21,9 +21,15 @@ export const HmiRenameImpactModal = () => {
       impact={pending.impact}
       affectedListLabel='Affected files:'
       byKindLabel='By kind:'
-      cancelDescription='The references keep the old name; the next build reports each of them'
+      alternative={{
+        label: 'Rename only',
+        description: 'The references keep the old name; the next build reports each of them',
+        onChoose: () => respondToPendingRename(false),
+      }}
+      cancelLabel='Cancel rename'
+      cancelDescription='Nothing is renamed'
       onConfirm={() => respondToPendingRename(true)}
-      onCancel={() => respondToPendingRename(false)}
+      onCancel={() => respondToPendingRename(null)}
     />
   )
 }

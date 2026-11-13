@@ -143,11 +143,9 @@ const save = (app: ElectronApplication) =>
     win?.webContents.send('project:save-accelerator')
   })
 
+/** A project tree leaf; tabs and breadcrumbs show the same names, so only the tree's leaf rows count. */
 const leaf = (page: Page, name: string) =>
-  page
-    .locator('li')
-    .filter({ has: page.getByText(new RegExp(`^(\\* )?${name}$`)) })
-    .last()
+  page.locator('li.group').filter({ has: page.getByText(new RegExp(`^(\\* )?${name}$`)) })
 
 /** Monaco renders spaces as non-breaking spaces. */
 const editorText = async (page: Page) =>
@@ -195,6 +193,17 @@ test.describe('HMI project model', () => {
       await save(app)
       await waitFor(page, 'Badge on disk', async () => existsSync(hmiFile('widgets', 'Badge.st')))
       expect(readFileSync(hmiFile('widgets', 'Badge.st'), 'utf-8')).toMatch(/^FUNCTION_BLOCK Badge EXTENDS HmiElement/)
+
+      // Cancelling the impact dialog renames nothing and reports no failure.
+      await leaf(page, 'Overview').locator('span').first().dblclick()
+      await page.keyboard.press('ControlOrMeta+A')
+      await page.keyboard.type('Start')
+      await page.keyboard.press('Enter')
+      await page.getByRole('button', { name: 'Cancel rename' }).click({ timeout: 10000 })
+      await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 10000 })
+      await waitFor(page, 'the cancelled rename', async () => (await leaf(page, 'Overview').count()) > 0)
+      expect(await leaf(page, 'Start').count()).toBe(0)
+      expect(await page.getByText('Rename failed').count()).toBe(0)
 
       // Renaming a referenced screen asks, and confirming renames the navigation and HMI Settings too.
       await leaf(page, 'Overview').locator('span').first().dblclick()

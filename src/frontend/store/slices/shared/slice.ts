@@ -674,7 +674,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         const renameReferences = await new Promise<boolean | null>((resolve) => {
           setState({ pendingHmiRename: { kind, oldName, newName, impact, resolve } })
         })
-        if (renameReferences === null) return { ok: false, message: 'Rename cancelled' }
+        if (renameReferences === null) return { ok: false, cancelled: true, message: 'Rename cancelled' }
         if (renameReferences) {
           getState().projectActions.propagateHmiRename(kind, oldName, newName)
           for (const element of new Set(impact.references.map((r) => r.element)))

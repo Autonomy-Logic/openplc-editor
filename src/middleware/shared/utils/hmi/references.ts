@@ -51,12 +51,15 @@ export function maskStComments(source: string): string {
 
 const escape = (name: string): string => name.replace(/[^A-Za-z0-9_]/g, '')
 
-/** Matches of `name` as a reference of the given kind; group 1 is everything before the name. */
+/**
+ * Matches of `name` as a reference of the given kind; group 1 is everything before the name. A widget block is a type,
+ * so a name followed by a single `:` is a CASE label, not a use.
+ */
 function referencePattern(kind: HmiElementKind, name: string): RegExp {
   const n = escape(name)
   return kind === 'screen'
     ? new RegExp(`(\\bHMI_SCREEN\\s*#\\s*)(${n})\\b`, 'gi')
-    : new RegExp(`(:\\s*|\\b(?:OF|TO|EXTENDS)\\s+)(${n})\\b`, 'gi')
+    : new RegExp(`(:\\s*|\\b(?:OF|TO|REF_TO|EXTENDS)\\s+)(${n})\\b(?!\\s*:(?!=))`, 'gi')
 }
 
 /** Offsets of the referenced name in a source. */
@@ -89,7 +92,7 @@ function sameName(a: string, b: string): boolean {
   return a.toUpperCase() === b.toUpperCase()
 }
 
-/** References to a screen or widget block elsewhere in the HMI; its own file does not count. */
+/** References to a screen or widget block across the HMI, its own file included; its declaration header is not one. */
 export function findHmiReferences(
   kind: HmiElementKind,
   name: string,
@@ -101,7 +104,6 @@ export function findHmiReferences(
     ...(hmi?.widgets ?? []).map((f) => ({ ...f, kind: 'widget' as const })),
   ]
   for (const file of files) {
-    if (file.kind === kind && sameName(file.name, name)) continue
     for (const offset of referenceOffsets(file.source, kind, name))
       references.push({ element: file.name, kind: file.kind, line: lineAt(file.source, offset) })
   }
@@ -120,22 +122,21 @@ export function findHmiReferences(
   return { totalReferences: references.length, byPou, byEditorType, references }
 }
 
-/** The HMI with every reference to a screen or widget block renamed; the element itself is left to the caller. */
+/** The HMI with every reference to a screen or widget block renamed; the element's own header is left to the caller. */
 export function renameHmiReferences(
   kind: HmiElementKind,
   oldName: string,
   newName: string,
   hmi: ProjectHmi,
 ): ProjectHmi {
-  const rename = <T extends { name: string; source: string }>(file: T, fileKind: HmiElementKind): T => {
-    if (fileKind === kind && sameName(file.name, oldName)) return file
+  const rename = <T extends { name: string; source: string }>(file: T): T => {
     const offsets = referenceOffsets(file.source, kind, oldName)
     return offsets.length === 0 ? file : { ...file, source: replaceAt(file.source, offsets, oldName.length, newName) }
   }
   const next: ProjectHmi = {
     ...hmi,
-    screens: hmi.screens.map((f) => rename(f, 'screen')),
-    widgets: hmi.widgets.map((f) => rename(f, 'widget')),
+    screens: hmi.screens.map(rename),
+    widgets: hmi.widgets.map(rename),
   }
   if (kind === 'screen' && hmi.unparsedSettings === undefined) {
     const roles = Object.fromEntries(
