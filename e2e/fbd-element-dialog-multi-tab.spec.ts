@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -29,7 +29,7 @@ const fbdFlowSchema = z.object({
   }),
 })
 
-const ROOT = join(realpathSync(tmpdir()), 'openplc-e2e-fbd-element-dialog')
+const ROOT = mkdtempSync(join(realpathSync(tmpdir()), 'openplc-e2e-fbd-element-dialog-'))
 const FIXTURE = join(ROOT, 'project')
 const USER_DATA = join(ROOT, 'userdata')
 const PROJECT_NAME = 'fbd-dialogs'

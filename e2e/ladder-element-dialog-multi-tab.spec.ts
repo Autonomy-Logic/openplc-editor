@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -19,7 +19,7 @@ const ladderFlowSchema = z.object({
   rungs: z.array(z.object({ nodes: z.array(nodeSchema) }).passthrough()),
 })
 
-const ROOT = join(realpathSync(tmpdir()), 'openplc-e2e-ladder-element-dialog')
+const ROOT = mkdtempSync(join(realpathSync(tmpdir()), 'openplc-e2e-ladder-element-dialog-'))
 const FIXTURE = join(ROOT, 'project')
 const USER_DATA = join(ROOT, 'userdata')
 const PROJECT_NAME = 'ladder-dialogs'

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -15,7 +15,7 @@ import {
   writeRuntimeDevice,
 } from './helpers/electron-editor'
 
-const ROOT = join(realpathSync(tmpdir()), 'openplc-e2e-gvl-type-cell')
+const ROOT = mkdtempSync(join(realpathSync(tmpdir()), 'openplc-e2e-gvl-type-cell-'))
 const FIXTURE = join(ROOT, 'project')
 const USER_DATA = join(ROOT, 'userdata')
 const PROJECT_NAME = 'gvl-type-cell'
