@@ -5,6 +5,7 @@ import { join } from 'node:path'
 
 import type { ElectronApplication, Page } from '@playwright/test'
 import { _electron as electron, expect, test } from '@playwright/test'
+import { z } from 'zod'
 
 import {
   bundleGuestScripts,
@@ -37,9 +38,11 @@ const INSTALLED_HASH = contentHashOfPayload(SIGNATURE_PAYLOAD, (bytes) =>
   createHash('sha256').update(bytes).digest('hex'),
 )
 
-type DeviceConfiguration = {
-  vppPackagePinsByBoard?: Record<string, { packageId: string; version: string; contentHash: string }>
-}
+const deviceConfigurationSchema = z.object({
+  vppPackagePinsByBoard: z
+    .record(z.string(), z.object({ packageId: z.string(), version: z.string(), contentHash: z.string() }))
+    .optional(),
+})
 
 function writeFixture(): void {
   rmSync(FIXTURE, { recursive: true, force: true })
@@ -151,10 +154,9 @@ async function shutdown(app: ElectronApplication): Promise<void> {
 /** Undefined while a save is still writing the file. */
 const recordedPin = () => {
   try {
-    const config = JSON.parse(
-      readFileSync(join(FIXTURE, 'devices', 'configuration.json'), 'utf-8'),
-    ) as DeviceConfiguration
-    return config.vppPackagePinsByBoard?.[FIXTURE_BOARD]
+    const raw: unknown = JSON.parse(readFileSync(join(FIXTURE, 'devices', 'configuration.json'), 'utf-8'))
+    const config = deviceConfigurationSchema.safeParse(raw)
+    return config.success ? config.data.vppPackagePinsByBoard?.[FIXTURE_BOARD] : undefined
   } catch {
     return undefined
   }
