@@ -44,7 +44,7 @@ export interface HmiBlockModel {
 export type HmiBlockParse = { ok: true; model: HmiBlockModel } | { ok: false; errors: string[] }
 
 /** Offsets of line starts, for turning 1-based inclusive spans into string offsets. */
-class SourceText {
+export class SourceText {
   private readonly starts: number[] = [0]
 
   constructor(readonly text: string) {

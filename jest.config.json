@@ -107,6 +107,12 @@
       "lines": 80,
       "statements": 80
     },
+    "src/backend/shared/hmi/designer/": {
+      "branches": 80,
+      "functions": 80,
+      "lines": 80,
+      "statements": 80
+    },
     "src/middleware/shared/utils/hmi/": {
       "branches": 80,
       "functions": 80,
