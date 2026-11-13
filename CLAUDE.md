@@ -449,8 +449,8 @@ that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its r
 - **CLI:** the toolchain loads on first use, so only an OpenPLC Simulator build (`compile` for it, or `simulate`) loads it.
 - **Packaging:** the package ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
   entitlement in `assets/entitlements.mac.plist` lets it run under the hardened runtime.
-- **Running a module** is the caller's job. Instantiating one in the renderer needs `'wasm-unsafe-eval'` in the
-  renderer CSP (`src/index.ejs`), which is not there today.
+- **Running a module** happens in main-process worker threads (the simulator, Python), never in the renderer: the
+  renderer CSP (`src/index.ejs`) has no `'wasm-unsafe-eval'`.
 
 **Simulator build.** The OpenPLC Simulator target builds with this toolchain, not arduino-cli: the pipeline's
 simulator branch (`compileSimulatorModule` in `src/backend/shared/compile/pipeline.ts`) turns the composed firmware
