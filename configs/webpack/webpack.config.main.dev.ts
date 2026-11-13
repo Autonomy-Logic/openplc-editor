@@ -52,6 +52,7 @@ const configuration: webpack.Configuration = {
   entry: {
     main: join(srcMainPath, 'main.ts'),
     preload: join(srcMainPath, 'modules/preload/preload.ts'),
+    'clang-worker': join(srcPath, 'backend/editor/wasm-toolchain/clang-worker.ts'),
   },
 
   output: {

@@ -23,6 +23,7 @@ import { TRUSTED_PACKAGE_KEYS } from '../../shared/utils/vpp/trusted-keys'
 import { verifyPackageSignature } from '../../shared/utils/vpp/verify-package-signature'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
+import type { DependencyInstallResult } from './arduino-dependency-installer'
 import type { ImportResult, InstalledPackage, PackageIntegrityResult, PackageManifest, PackageRegistry } from './types'
 
 /**
@@ -43,7 +44,14 @@ class PackageManagerModule {
     mkdirSync(this.packagesDir, { recursive: true })
   }
 
-  async importFromFile(vppFilePath: string): Promise<ImportResult> {
+  /**
+   * Install a .vpp. @p installDependencies runs after the package is verified and
+   * before it replaces an installed version; a failure leaves that version in place.
+   */
+  async importFromFile(
+    vppFilePath: string,
+    installDependencies?: (manifest: PackageManifest) => Promise<DependencyInstallResult>,
+  ): Promise<ImportResult> {
     // mkdtempSync gives us a guaranteed-unique scratch directory per call
     // so two concurrent imports don't race on the same `_temp_import`
     // path and rmSync each other's extracted contents mid-flight. The
@@ -135,6 +143,13 @@ class PackageManagerModule {
         assertPathContained(this.packagesDir, targetDir, 'package install path')
       } catch (err) {
         return { success: false, error: err instanceof Error ? err.message : String(err) }
+      }
+
+      if (installDependencies) {
+        const dependencies = await installDependencies(manifest)
+        if (!dependencies.ok) {
+          return { success: false, canceled: dependencies.cancelled, error: dependencies.error }
+        }
       }
 
       if (existsSync(targetDir)) {
@@ -242,6 +257,14 @@ class PackageManagerModule {
     if (!reason) return { ok: true }
 
     return { ok: false, packageId: match.pkg.packageId, reason }
+  }
+
+  /** Re-verifies the signature of the installed package @p packageId; null when valid, else the reason. */
+  installedPackageRejectionReason(packageId: string): string | null {
+    if (!REQUIRE_SIGNATURE) return null
+    const pkg = this.readRegistry().packages[packageId]
+    if (!pkg) return 'package is not installed'
+    return this.signatureRejectionReason(packageId, pkg.path)
   }
 
   /**

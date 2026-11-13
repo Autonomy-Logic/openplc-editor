@@ -1,7 +1,7 @@
 {
   "name": "open-plc-editor",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
-  "version": "4.3.4",
+  "version": "4.3.5",
   "license": "GPL-3.0-only",
   "author": {
     "name": "Autonomy Logic"
@@ -33,7 +33,7 @@
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "test": "jest --collectCoverage --maxWorkers=2",
     "test:watch": "jest --watch --no-coverage",
-    "test:e2e": "npm run build && npx playwright test",
+    "test:e2e": "cross-env OPENPLC_E2E_DEBUG_SEAM=1 npm run build && npx playwright test",
     "validate:arch": "npx tsx src/__architecture__/validate.ts",
     "prepare": "husky"
   },
@@ -134,6 +134,7 @@
     "@types/source-map-support": "^0.5.10",
     "@types/uuid": "^9.0.7",
     "@types/webpack-bundle-analyzer": "^4.6.0",
+    "@yowasp/clang": "22.0.0-git20542-10",
     "autoprefixer": "^10.4.16",
     "browserslist-config-erb": "^0.0.3",
     "chalk": "^4.1.2",

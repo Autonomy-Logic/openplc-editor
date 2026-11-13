@@ -7,18 +7,22 @@
  * useless for a matrix run, which is the job this exists for: point a scratch
  * `--user-data` at nothing, install the packages under test, compile.
  *
- * `install` goes through the same `PackageManagerModule.importFromFile` the UI
- * calls, so the manifest schema check and the Ed25519 signature verification
- * happen here exactly as they do there. There is deliberately no flag to skip
- * them: a package the editor would refuse to install must not become installable
- * by scripting it.
+ * `install` runs the same `VppDependencyService` as the UI (schema, signature and
+ * dependency install), then installs the simulator's core and the global libraries
+ * when missing.
  */
 
 import { readdir, stat } from 'node:fs/promises'
 import { extname, join, resolve } from 'node:path'
 
+import { CompilerModule } from '@root/backend/editor/compiler/compiler-module'
 import { HardwareModule } from '@root/backend/editor/hardware'
 import { PackageManagerModule } from '@root/backend/editor/package-manager'
+import { installArduinoDependencies } from '@root/backend/editor/package-manager/arduino-dependency-installer'
+import { VppDependencyService } from '@root/backend/editor/package-manager/vpp-dependency-service'
+import { STARTUP_ARDUINO_DEPENDENCIES } from '@root/backend/shared/packages/arduino-dependencies'
+import type { PackageInstallProgress } from '@root/middleware/shared/ports/types'
+import { formatInstallStep } from '@root/middleware/shared/utils/package-install-step'
 
 import type { ParsedArgs } from '../args'
 import { ErrorCode, ExitCode } from '../exit-codes'
@@ -82,12 +86,27 @@ async function runInstall(args: ParsedArgs, reporter: Reporter): Promise<CliResu
     )
   }
 
-  const manager = new PackageManagerModule()
+  const compiler = new CompilerModule()
+  const spawnCli = (cliArgs: string[]) => compiler.spawnArduinoCli(cliArgs)
+  const dependencies = new VppDependencyService(new PackageManagerModule(), spawnCli)
   const installed: { path: string; packageId?: string; devices?: string[] }[] = []
   const failed: { path: string; error: string }[] = []
 
+  const common = await installArduinoDependencies(
+    STARTUP_ARDUINO_DEPENDENCIES,
+    spawnCli,
+    dependencyProgressPrinter(reporter),
+    { keepGoing: true },
+  )
+  if (!common.ok) {
+    reporter.progress(
+      `  warning: could not install the simulator core and global libraries (${common.error}). ` +
+        'Builds that need them will fail; run this command again while connected to the internet.',
+    )
+  }
+
   for (const path of paths) {
-    const result = await manager.importFromFile(path)
+    const result = await dependencies.importPackage(path, dependencyProgressPrinter(reporter))
     if (result.success) {
       installed.push({ path, packageId: result.packageId, devices: result.devices })
       reporter.progress(`  installed ${result.packageId ?? path}`)
@@ -114,6 +133,23 @@ async function runInstall(args: ParsedArgs, reporter: Reporter): Promise<CliResu
   }
 
   return reporter.success({ installed, failed }, () => `Installed ${installed.length} package(s).`)
+}
+
+/** One stderr line per dependency step, and one per archive as its download starts. */
+function dependencyProgressPrinter(reporter: Reporter): (progress: PackageInstallProgress) => void {
+  let lastStep = ''
+  const downloads = new Set<string>()
+  return (progress) => {
+    const step = `  ${formatInstallStep(progress)}`
+    if (step !== lastStep) {
+      lastStep = step
+      reporter.progress(step)
+    }
+    if (progress.download && !downloads.has(progress.download.item)) {
+      downloads.add(progress.download.item)
+      reporter.progress(`    downloading ${progress.download.item} (${progress.download.total})`)
+    }
+  }
 }
 
 async function runList(reporter: Reporter): Promise<CliResult> {

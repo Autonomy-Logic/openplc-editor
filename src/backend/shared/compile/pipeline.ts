@@ -31,7 +31,6 @@ import type {
   PlatformLog,
   RuntimeV4Bundle,
 } from '../../../middleware/shared/ports/compiler-platform-port'
-import type { ExportableVariable } from '../../../middleware/shared/ports/plc-model-port'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
 import { resolveModbusServerProfile } from '../../../middleware/shared/utils/modbus-server-profile'
@@ -51,6 +50,11 @@ import {
 } from '../firmware/runtime-version-gate'
 import { buildKnownPous, emitCompileErrorEvents } from '../library/program-build-helpers'
 import { runProgramBuildPipeline } from '../library/program-build-pipeline'
+import {
+  type DependencyHintSurface,
+  detectsMissingArduinoCore,
+  missingArduinoCoreHint,
+} from '../packages/arduino-dependencies'
 import type { DevicePin } from '../types/PLC/devices'
 // PLCProjectData is read from the schema-shape type (singular `configuration`)
 // because that's the runtime shape the editor's pipeline operates on.
@@ -77,18 +81,6 @@ import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { narrowModbusTransports, selectModbusServer } from './steps/modbus-defines'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
-import { selectThirdPartyLibraries } from './third-party-libraries'
-
-// Variable classes that are inherently read-only to the Data Hub provider.
-const PIPELINE_READ_ONLY_VARIABLE_CLASSES = new Set<string>(['input', 'external', 'temp'])
-
-/** Mirror of `project-plc-model`'s `isVariableWritable`, kept on the pipeline side where the
- *  schema-shape POU variables are iterated. VAR_INPUT / VAR_EXTERNAL / VAR_TEMP and VAR_CONSTANT
- *  are RO regardless of the Data Hub picker's RW toggle. */
-function pipelineIsVariableWritable(variable: { class?: string; flag?: string }): boolean {
-  if (variable.flag === 'constant') return false
-  return !PIPELINE_READ_ONLY_VARIABLE_CLASSES.has(variable.class ?? 'local')
-}
 
 // ---------------------------------------------------------------------------
 // Public contract
@@ -110,8 +102,6 @@ export interface PipelineProgressEvent {
     | 'firmware-bundle'
     | 'runtime-v4-bundle'
     | 'embed-c-blocks'
-    | 'core-install'
-    | 'lib-install'
     | 'arduino-compile'
     | 'runtime-version'
     | 'upload'
@@ -134,19 +124,6 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
   /** Per-board #defines, fed through to `generateDefinesContent` as
    *  the `// Board defines` section. */
   define?: string | string[]
-  /** Per-board arduino-cli library list.  Sourced from `hals.json`
-   *  `extra_libraries` (static boards) and from VPP manifests'
-   *  `device.hal.extraArduinoLibraries` (installed VPP boards) — the
-   *  `BoardInfoResolver` collapses both onto the same key.  The
-   *  pipeline forwards these into `installArduinoLib`, which on the
-   *  editor runs `arduino-cli lib install <name>` and on the web
-   *  no-ops (compile-service backend pre-installs every library).
-   *
-   *  Per-board libs are the contract: a board that needs the
-   *  `Arduino_Opta_Blueprint` library declares it here, and the
-   *  install fires only when that board is selected.  Boards that
-   *  don't need a specific library never download it. */
-  extra_libraries?: string[]
   /** Names of the device's configuration screens, and the physical transport it
    *  exposes. Forwarded from the VPP manifest so the pipeline can resolve the
    *  SAME Modbus profile the screen resolves — what the board can serve over is
@@ -162,18 +139,10 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
    *  prebuilt boards (the `source` HAL still compiles as the integration layer).
    *  Sourced from the VPP manifest `device.hal.precompiledLibrary`. */
   precompiledLibraryDir?: string
-  /** Exact Arduino core version to install/verify before linking a prebuilt
-   *  arduino library (ABI-locked). From the VPP manifest `target.coreVersion`. */
-  coreVersion?: string
   /** Upload transport for arduino-cli targets. Absent/"serial" (default):
    *  serial-port upload. "ethernet": network upload, with the device IP passed
    *  as arduino-cli's `--port`. From `target.uploadMethod`. */
   uploadMethod?: 'serial' | 'ethernet'
-  /** Vendor board-manager index (`package_<vendor>_index.json`).  From the
-   *  VPP manifest `target.boardManagerUrl` or hals.json `board_manager_url`.
-   *  Forwarded to `installArduinoCore`, which passes it to arduino-cli as
-   *  `--additional-urls` so cores outside the built-in index resolve. */
-  boardManagerUrl?: string
   /** Compiler / runtime identifier (`'arduino-cli' | 'openplc-compiler'
    *  | 'simulator'`).  Used by `resolveTargetCapabilities`'s
    *  preset lookup — without this the resolver can't pick the right
@@ -328,6 +297,9 @@ export interface RunCompilePipelineArgs {
    *  `resolveTargetCapabilities(boardEntry)`, keeping capability
    *  semantics in one place. */
   vendorScreenData?: Record<string, unknown>
+  /** Where to tell the user how to repair a missing core when arduino-cli fails on one.
+   *  Absent means no hint, for hosts that do not install cores. */
+  dependencyHintSurface?: DependencyHintSurface
 }
 
 export interface RunCompilePipelineResult {
@@ -391,8 +363,8 @@ function bailError(
  *     strucpp → confs → composeRuntimeV4Bundle → version check →
  *     uploadRuntimeV4.
  *   - Simulator (avr8js):                   preprocess → ST →
- *     strucpp → defines → composeFirmwareBundle → installCore/Lib
- *     (no-op on web) → compileArduino → return hex.
+ *     strucpp → defines → composeFirmwareBundle → compileArduino →
+ *     return hex.
  *   - Arduino direct (physical board):     same as simulator, then
  *     uploadArduinoBoard.
  *   - Runtime v3 (legacy):                  preprocess → ST →
@@ -451,6 +423,7 @@ async function runCompilePipelineInner(
     targetHidesPersistentStorage,
     vendorScreenData,
     editorVersion,
+    dependencyHintSurface,
   } = args
 
   // Resolve the board's effective capabilities from `boardEntry`.
@@ -847,7 +820,15 @@ async function runCompilePipelineInner(
     // map and the bundle is unchanged.  Without this, programs
     // upload but the runtime runs as a generic v4 with no physical
     // I/O — the diagnostic surface for that failure is silence.
-    const vppResult = await port.packageVppPlugin({ boardTarget }, makePlatformLog(emit, 'runtime-v4-bundle'))
+    const instances = (projectData.configuration?.resource?.instances ?? []).map((inst) => ({
+      name: inst.name,
+      program: inst.program,
+    }))
+    const vppExtensions = projectData.vppExtensions ?? {}
+    const vppResult = await port.packageVppPlugin(
+      { boardTarget, screenConfigInputs: { vppExtensions, debugMapContent: debugMapJson, instances } },
+      makePlatformLog(emit, 'runtime-v4-bundle'),
+    )
     if (vppResult.errors && vppResult.errors.length > 0) {
       return bailError(emit, 'runtime-v4-bundle', 'VPP plugin packaging failed.', vppResult.errors)
     }
@@ -859,76 +840,6 @@ async function runCompilePipelineInner(
         message: `Merged ${vppFileCount} VPP plugin file(s) into bundle (bundle now ${Object.keys(bundle).length} files)`,
         level: 'info',
       })
-    }
-
-    // VPP screen runtime emitters. Pulls `vppExtensions` from the project, calls each
-    // installed VPP's declared emitter JS in a sandbox, merges the resulting `conf/*.json` files
-    // into the bundle. Optional on the port; web omits it and we skip the stage.
-    const vppExtensionsRaw = (projectData as { vppExtensions?: Record<string, Record<string, unknown>> }).vppExtensions
-    if (port.collectVppScreenRuntimeArtifacts && vppExtensionsRaw && Object.keys(vppExtensionsRaw).length > 0) {
-      const exportableVariables: ExportableVariable[] = []
-      const addressByQualifier: Record<string, string> = {}
-      for (const entry of projectData.pous ?? []) {
-        if (entry.type !== 'program') continue
-        const pou = entry.data
-        for (const variable of pou.variables ?? []) {
-          const qualifier = `${pou.name}.${variable.name}`
-          const typeValue = variable.type?.value ?? ''
-          exportableVariables.push({
-            qualifier,
-            scope: { kind: 'program', programName: pou.name },
-            variable: variable.name,
-            type: typeValue.toUpperCase(),
-            isWritable: pipelineIsVariableWritable(variable),
-          })
-          addressByQualifier[qualifier] = variable.location ?? ''
-        }
-      }
-      const globals = projectData.configuration?.resource?.globalVariables ?? []
-      for (const g of globals) {
-        const qualifier = `GVL.${g.name}`
-        const typeValue = g.type?.value ?? ''
-        exportableVariables.push({
-          qualifier,
-          scope: { kind: 'gvl', listName: 'GVL' },
-          variable: g.name,
-          type: typeValue.toUpperCase(),
-          isWritable: pipelineIsVariableWritable(g),
-        })
-        addressByQualifier[qualifier] = g.location ?? ''
-      }
-      const vppInstances = (projectData.configuration?.resource?.instances ?? []).map(
-        (inst: { name: string; task: string; program: string }) => ({
-          name: inst.name,
-          task: inst.task,
-          program: inst.program,
-        }),
-      )
-      const screenRes = await port.collectVppScreenRuntimeArtifacts(
-        {
-          deviceId: boardTarget,
-          vppExtensions: vppExtensionsRaw,
-          exportableVariables,
-          addressByQualifier,
-          debugMapContent: debugMapJson,
-          instances: vppInstances,
-        },
-        makePlatformLog(emit, 'runtime-v4-bundle'),
-      )
-      if (screenRes.errors && screenRes.errors.length > 0) {
-        for (const message of screenRes.errors) {
-          emit({ stage: 'runtime-v4-bundle', message: `VPP screen emitter: ${message}`, level: 'warning' })
-        }
-      }
-      const screenCount = Object.keys(screenRes.files).length
-      if (screenCount > 0) {
-        Object.assign(bundle, screenRes.files)
-        emit({
-          stage: 'runtime-v4-bundle',
-          message: `Merged ${screenCount} VPP screen artifact(s) into bundle (bundle now ${Object.keys(bundle).length} files)`,
-          level: 'info',
-        })
-      }
     }
 
     // Persistent storage (RETAIN) settings travel with the program, exactly as
@@ -1090,13 +1001,7 @@ async function runCompilePipelineInner(
   }
 
   // ---------------------------------------------------------------------
-  // Step 4b: Runtime v3 branch — legacy target that ingests a single
-  // `program.st` (not a zip).  v3's on-device MatIEC recompiles the ST
-  // itself, so this MUST short-circuit BEFORE the arduino-cli path
-  // (core/lib install, firmware bundle, compile) — none of which apply
-  // to v3.  (Placing it after `installArduinoCore` was the bug: v3 has
-  // no Arduino core, so the install ran with an empty FQBN and aborted
-  // the build before the upload was ever reached.)
+  // Step 4b: Runtime v3 branch — uploads `program.st` and returns before the arduino-cli path.
   //
   // Strucpp already ran above purely as a correctness check; a strucpp
   // error bails before we get here, which is the desired behaviour
@@ -1136,65 +1041,8 @@ async function runCompilePipelineInner(
   }
 
   // ---------------------------------------------------------------------
-  // Step 4c: Arduino / Simulator path — install core + lib (no-op on
-  // web), generate defines.h, compose firmware bundle, compile via
-  // arduino-cli.
+  // Step 4c: Arduino / Simulator path — defines.h, firmware bundle, arduino-cli compile.
   // ---------------------------------------------------------------------
-  emit({ stage: 'core-install', message: 'Installing Arduino core...', level: 'info' })
-  const coreInstall = await port.installArduinoCore(
-    {
-      coreId: typeof boardEntry.platform === 'string' ? deriveArduinoCoreFromPlatform(boardEntry.platform) : '',
-      // Pin the exact core version for prebuilt arduino libraries (ABI-locked).
-      ...(boardEntry.coreVersion ? { coreVersion: boardEntry.coreVersion } : {}),
-      // Vendor board-manager index for cores outside arduino-cli's built-in
-      // list.  Resolved from the VPP manifest's `target.boardManagerUrl`; the
-      // editor turns it into `--additional-urls` (and refreshes the index)
-      // so the core can be auto-installed instead of erroring out with
-      // "Platform not found".
-      ...(boardEntry.boardManagerUrl ? { boardManagerUrl: boardEntry.boardManagerUrl } : {}),
-    },
-    makePlatformLog(emit, 'core-install'),
-  )
-  if (!coreInstall.ok) {
-    return bailError(emit, 'core-install', 'Failed to install Arduino core.', coreInstall.errors)
-  }
-
-  // Library install — forward the per-board `extra_libraries` list so
-  // boards that need a specific lib (Arduino_Opta_Blueprint for the
-  // Opta, P1AM for the P1AM board, etc.) get installed when that
-  // board is selected, and boards that don't never download it.
-  //
-  // Install is opportunistic: the editor adapter warns and continues
-  // on `arduino-cli lib install` failure because the library may
-  // already be available from another source the editor doesn't
-  // manage (sketchbook, system-wide install, custom library path).
-  // arduino-cli compile is the source of truth — if a required
-  // header truly can't be resolved, it fails with a precise message
-  // pointing at the file that needed it.  Web's adapter no-ops
-  // entirely (its compile-service backend pre-installs every
-  // library).  Either way `ok` should be true here; the defensive
-  // `!ok` branch below warns and continues if an adapter ever
-  // returns false.
-  emit({ stage: 'lib-install', message: 'Installing Arduino libraries...', level: 'info' })
-  const libInstall = await port.installArduinoLib(
-    {
-      libId: '',
-      extraLibraries: boardEntry.extra_libraries ?? [],
-      // Capability-driven, not board-name-driven: a target gets the OPC-UA stack
-      // because it declares `opcuaServer`.
-      thirdPartyLibraries: selectThirdPartyLibraries(targetCapabilities),
-    },
-    makePlatformLog(emit, 'lib-install'),
-  )
-  if (!libInstall.ok) {
-    emit({
-      stage: 'lib-install',
-      message:
-        'Warning: library install reported a failure. Continuing — arduino-cli compile will surface any genuinely missing headers.',
-      level: 'warning',
-    })
-  }
-
   // Build defines.h using the shared content authoring step.
   const definesH = generateDefinesContent({
     boardEntry,
@@ -1363,9 +1211,14 @@ async function runCompilePipelineInner(
   // Run arduino-cli compile.  Editor: spawns the binary.  Web: HTTP
   // POST.  Both consume the same `files` map + `argv`.
   emit({ stage: 'arduino-compile', message: 'Compiling Arduino firmware...', level: 'info' })
+  const compileOutput: string[] = []
+  const compileLog = makePlatformLog(emit, 'arduino-compile')
   const compileResult = await port.compileArduino(
     { files: firmwareFiles, argv: arduinoArgs, parallel: arduinoCliParallel },
-    makePlatformLog(emit, 'arduino-compile'),
+    (message, level) => {
+      compileOutput.push(message)
+      compileLog(message, level)
+    },
   )
   if (!compileResult.ok) {
     if (compileResult.errors && compileResult.errors.length > 0) {
@@ -1374,7 +1227,15 @@ async function runCompilePipelineInner(
         (msg, level, compileError) => emit({ stage: 'arduino-compile', message: msg, level, compileError }),
       )
     }
-    return bailError(emit, 'arduino-compile', 'Arduino compilation failed', compileResult.errors)
+    const failed = bailError(emit, 'arduino-compile', 'Arduino compilation failed', compileResult.errors)
+    if (dependencyHintSurface) {
+      const output = [...compileOutput, ...(compileResult.errors ?? []).map((e) => e.message)].join('\n')
+      if (detectsMissingArduinoCore(output)) {
+        const hint = missingArduinoCoreHint({ simulator: isSimulator, surface: dependencyHintSurface })
+        emit({ stage: 'error', message: hint, level: 'error' })
+      }
+    }
+    return failed
   }
 
   // Simulator: avr8js needs the Intel HEX bytes in memory.  The
@@ -1441,19 +1302,3 @@ async function runCompilePipelineInner(
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Derive the arduino-cli core id from a fully-qualified board name.
- *
- *   `'arduino:avr:mega'` → `'arduino:avr'`
- *   `'arduino:samd:zero'` → `'arduino:samd'`
- *
- * Used to pass the core id to `port.installArduinoCore`.  On web
- * (where install is a no-op) this never actually drives anything;
- * on editor it gates arduino-cli's lazy install.
- */
-function deriveArduinoCoreFromPlatform(platform: string): string {
-  const parts = platform.split(':')
-  if (parts.length < 2) return ''
-  return `${parts[0]}:${parts[1]}`
-}

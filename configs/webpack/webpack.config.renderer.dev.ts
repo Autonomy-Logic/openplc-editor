@@ -170,6 +170,7 @@ const configuration: webpack.Configuration = {
       // Same mechanism for the Edge WEB app (`/buy` license page), a different origin;
       // falls back to the host in system-adapter.ts, e.g. OPENPLC_EDGE_WEB_URL=http://localhost:5173.
       OPENPLC_EDGE_WEB_URL: '',
+      OPENPLC_E2E_DEBUG_SEAM: '',
     }),
 
     new webpack.DefinePlugin({

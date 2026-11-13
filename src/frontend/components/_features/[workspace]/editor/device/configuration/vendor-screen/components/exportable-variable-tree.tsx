@@ -1,5 +1,6 @@
 import { ChevronDownIcon, ChevronRightIcon } from '@radix-ui/react-icons'
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
+import { NavigationButton } from '@root/frontend/components/_atoms/navigation-button'
 import type { ExportableVariable } from '@root/middleware/shared/vendor-document/protocol'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -100,14 +101,13 @@ export function ExportableVariableTree({
         return (
           <li key={group.key} className='flex flex-col'>
             <div className='flex items-center gap-2 rounded px-1 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800'>
-              <button
-                type='button'
-                aria-label={open ? `Collapse ${group.label}` : `Expand ${group.label}`}
+              <NavigationButton
+                ariaLabel={open ? `Collapse ${group.label}` : `Expand ${group.label}`}
                 className='flex h-4 w-4 items-center justify-center text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200'
                 onClick={() => toggleExpand(group.key)}
               >
                 {open ? <ChevronDownIcon className='h-3.5 w-3.5' /> : <ChevronRightIcon className='h-3.5 w-3.5' />}
-              </button>
+              </NavigationButton>
               <Checkbox
                 aria-label={`Select all variables in ${group.label}`}
                 checked={state === 'all' ? true : state === 'some' ? 'indeterminate' : false}

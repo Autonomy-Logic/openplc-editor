@@ -20,6 +20,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { useProject } from '../../../../middleware/shared/providers'
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../store'
 import { Modal, ModalContent, ModalTitle } from '../../_molecules/modal'
 
@@ -55,6 +56,7 @@ const ProjectReadmeModal = () => {
   const commitSaved = useOpenPLCStore((s) => s.readmeActions.commitSaved)
 
   const projectCanEdit = useOpenPLCStore((s) => s.workspace.canEdit)
+  const isEditingLocked = useIsEditingLocked()
   const projectId = useOpenPLCStore((s) => s.project.meta.path)
   const projectName = useOpenPLCStore((s) => s.project.meta.name)
   const projectPort = useProject()
@@ -73,7 +75,7 @@ const ProjectReadmeModal = () => {
     }
   }, [isOpen])
 
-  const canEdit = projectCanEdit && savedContent !== undefined
+  const canEdit = projectCanEdit && savedContent !== undefined && !isEditingLocked
 
   const handleStartEdit = (defaultContent?: string) => {
     beginEdit(defaultContent)
@@ -88,6 +90,7 @@ const ProjectReadmeModal = () => {
   }
 
   const handleSave = async () => {
+    if (isEditingLocked) return
     if (!projectId || !projectPort.saveReadme) return
     setStatus('saving', null)
     const result = await projectPort.saveReadme(projectId, draftContent, {
@@ -103,6 +106,7 @@ const ProjectReadmeModal = () => {
   }
 
   const handleConfirmDelete = async () => {
+    if (isEditingLocked) return
     if (!projectId || !projectPort.saveReadme) return
     setStatus('deleting', null)
     const result = await projectPort.saveReadme(projectId, null, {
@@ -160,6 +164,7 @@ const ProjectReadmeModal = () => {
             error={error}
             isCreate={savedContent == null}
             onDraftChange={setDraft}
+            isReadOnly={isEditingLocked}
             onCommitMessageChange={setCommitMessage}
             onTabChange={setActiveTab}
             onSave={handleSave}
@@ -171,6 +176,7 @@ const ProjectReadmeModal = () => {
           <DeleteMode
             deleteCommitMessage={deleteCommitMessage}
             isPending={isPending}
+            isReadOnly={isEditingLocked}
             error={error}
             onCommitMessageChange={setDeleteCommitMessage}
             onConfirm={handleConfirmDelete}
@@ -263,6 +269,7 @@ function EditMode({
   error,
   isCreate,
   onDraftChange,
+  isReadOnly,
   onCommitMessageChange,
   onTabChange,
   onSave,
@@ -275,6 +282,7 @@ function EditMode({
   error: string | null
   isCreate: boolean
   onDraftChange: (content: string) => void
+  isReadOnly: boolean
   onCommitMessageChange: (message: string) => void
   onTabChange: (tab: 'edit' | 'preview') => void
   onSave: () => void
@@ -294,7 +302,11 @@ function EditMode({
       {activeTab === 'edit' ? (
         <textarea
           value={draftContent}
-          onChange={(e) => onDraftChange(e.target.value)}
+          onChange={(e) => {
+            if (isReadOnly) return
+            onDraftChange(e.target.value)
+          }}
+          readOnly={isReadOnly}
           placeholder='Write your README in markdown...'
           spellCheck={false}
           className='max-h-[60vh] min-h-[260px] w-full resize-y rounded-lg border border-neutral-200 bg-white p-3 font-mono text-sm leading-relaxed text-neutral-1000 outline-none focus:border-brand dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100'
@@ -336,7 +348,7 @@ function EditMode({
           </button>
           <button
             onClick={onSave}
-            disabled={isPending}
+            disabled={isPending || isReadOnly}
             className='cursor-pointer rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-medium disabled:cursor-not-allowed disabled:opacity-50'
           >
             {isPending ? 'Committing...' : 'Commit changes'}
@@ -354,6 +366,7 @@ function EditMode({
 function DeleteMode({
   deleteCommitMessage,
   isPending,
+  isReadOnly,
   error,
   onCommitMessageChange,
   onConfirm,
@@ -361,6 +374,7 @@ function DeleteMode({
 }: {
   deleteCommitMessage: string
   isPending: boolean
+  isReadOnly: boolean
   error: string | null
   onCommitMessageChange: (message: string) => void
   onConfirm: () => void
@@ -403,7 +417,7 @@ function DeleteMode({
           </button>
           <button
             onClick={onConfirm}
-            disabled={isPending}
+            disabled={isPending || isReadOnly}
             className='cursor-pointer rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50'
           >
             {isPending ? 'Deleting...' : 'Delete README'}

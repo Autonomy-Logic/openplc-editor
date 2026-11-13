@@ -42,6 +42,7 @@ import { VendorScreenTabs } from '../components/_features/[workspace]/editor/ven
 import { GlobalVariableListEditor } from '../components/_features/[workspace]/global-variable-list'
 import { Search } from '../components/_features/[workspace]/search'
 import { SourceControlPanel } from '../components/_features/[workspace]/source-control'
+import { HostLockBoundary } from '../components/_molecules/editing-lock-boundary'
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import { Console as ConsoleComponent } from '../components/_organisms/console'
 import { ConsoleFilters } from '../components/_organisms/console/filters'
@@ -490,6 +491,13 @@ const WorkspaceScreen = () => {
     )
   }, [packagesPort, selectedDevice])
 
+  useEffect(() => {
+    if (!packagesPort) return
+    return packagesPort.onStartupNotices((notices) => {
+      for (const notice of notices) addLog({ level: notice.level, message: notice.message })
+    })
+  }, [packagesPort, addLog])
+
   // Re-verifies installed VPP package signatures on project open and drops any that fail (blocks a
   // locally-crafted/unsigned .vpp bypassing the signed import flow). No-op on web (`packagesPort` is undefined).
   useEffect(() => {
@@ -625,8 +633,16 @@ const WorkspaceScreen = () => {
                         {editor['type'] === 'plc-diagnostics' && <DiagnosticsEditor />}
                         {editor['type'] === 'plc-package-manager' && <PackageManagerEditor />}
                         {editor['type'] === 'plc-library-manager' && <LibraryManagerEditor />}
-                        {editor['type'] === 'plc-user-management' && <UserManagementEditor />}
-                        {editor['type'] === 'plc-persistent-storage' && <PersistentStorageEditor />}
+                        {editor['type'] === 'plc-user-management' && (
+                          <HostLockBoundary type={editor['type']}>
+                            <UserManagementEditor />
+                          </HostLockBoundary>
+                        )}
+                        {editor['type'] === 'plc-persistent-storage' && (
+                          <HostLockBoundary type={editor['type']}>
+                            <PersistentStorageEditor />
+                          </HostLockBoundary>
+                        )}
                         {editor['type'] === 'plc-library-manifest' && <LibraryManifestEditor />}
                         {editor['type'] === 'diff-viewer' && <DiffViewerEditor />}
 

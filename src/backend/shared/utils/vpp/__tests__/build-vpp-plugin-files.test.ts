@@ -261,7 +261,24 @@ describe('buildVppPluginFiles', () => {
     expect(({} as Record<string, unknown>).pollutedToo).toBeUndefined()
   })
 
-  it('warns at pack time when the installed package moved since the project pinned it', async () => {
+  it('says nothing at pack time when the installed package moved since the project pinned it', async () => {
+    const result = await buildVppPluginFiles({
+      device: makeDevice(),
+      packageFiles: makePackageFiles(),
+      packageSignature: SIGNATURE,
+      vendorScreenData: {},
+      pin: {
+        recorded: { packageId: 'com.synergy-logic.slm-rp4', version: '0.3.0', contentHash: 'sha256:old' },
+        installed: { packageId: 'com.synergy-logic.slm-rp4', version: '0.3.1', contentHash: 'sha256:new' },
+      },
+      sha256Hex,
+    })
+
+    expect(result.warnings).toEqual([])
+    expect(Object.keys(result.files)).toContain('vpp_plugins.conf')
+  })
+
+  it('warns at pack time when the pinned package is not installed', async () => {
     const result = await buildVppPluginFiles({
       device: makeDevice(),
       packageFiles: makePackageFiles(),
@@ -269,15 +286,12 @@ describe('buildVppPluginFiles', () => {
       vendorScreenData: {},
       pin: {
         recorded: { packageId: 'com.synergy-logic.slm-rp4', version: '0.3.1', contentHash: 'sha256:old' },
-        installed: { packageId: 'com.synergy-logic.slm-rp4', version: '0.3.1', contentHash: 'sha256:new' },
+        installed: null,
       },
       sha256Hex,
     })
 
-    // Warned, not refused: the user may have meant to rebuild against the new
-    // package, and the bundle is still coherent.
-    expect(result.warnings.join('\n')).toContain('republished')
-    expect(Object.keys(result.files)).toContain('vpp_plugins.conf')
+    expect(result.warnings.join('\n')).toContain('is not installed')
   })
 
   it('says nothing at pack time for a project that predates pinning', async () => {
@@ -379,5 +393,52 @@ describe('buildVppPluginFiles', () => {
       expect(result.errors).toEqual(['Slot 1: di-2 is not in the package catalogue, so its I/O cannot be mapped'])
       expect(result.files).toEqual({})
     })
+  })
+})
+
+describe('buildVppPluginFiles: hal.screenConfigs', () => {
+  const screenDevice = (screenConfigs: unknown): VppDevice =>
+    makeDevice({
+      hal: {
+        type: 'runtime-v4',
+        pluginEntry: 'hal/plugin/main.cpp',
+        configTemplate: 'hal/plugin/config_template.json',
+        screenConfigs,
+      },
+    } as Partial<VppDevice>)
+  const screenConfigInputs = {
+    vppExtensions: { 'com.synergy-logic.slm-rp4': { 'data-hub': { enabled: false } } },
+    debugMapContent: '',
+    instances: [],
+  }
+
+  it('writes each declared screen config next to the plugin config', async () => {
+    const result = await buildVppPluginFiles({
+      device: screenDevice([{ storageId: 'data-hub', format: 'variable-exports', file: 'data-hub' }]),
+      packageFiles: makePackageFiles(),
+      packageSignature: SIGNATURE,
+      vendorScreenData: {},
+      sha256Hex,
+      packageId: 'com.synergy-logic.slm-rp4',
+      screenConfigInputs,
+    })
+
+    expect(result.errors).toEqual([])
+    expect(JSON.parse(read(result.files, 'conf/synergy.data-hub.json'))).toEqual({ enabled: false })
+  })
+
+  it('stops the build on a malformed declaration', async () => {
+    const result = await buildVppPluginFiles({
+      device: screenDevice([{ storageId: 'data-hub', format: 'js-emitter', file: 'data-hub' }]),
+      packageFiles: makePackageFiles(),
+      packageSignature: SIGNATURE,
+      vendorScreenData: {},
+      sha256Hex,
+      packageId: 'com.synergy-logic.slm-rp4',
+      screenConfigInputs,
+    })
+
+    expect(result.errors).toEqual(['hal.screenConfigs[0].format must be one of: variable-exports'])
+    expect(Object.keys(result.files)).not.toContain('conf/synergy.data-hub.json')
   })
 })
