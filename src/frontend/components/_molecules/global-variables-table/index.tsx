@@ -74,7 +74,7 @@ const buildColumns = ({
     size: 300,
     minSize: 80,
     maxSize: 300,
-    cell: SelectableTypeCell,
+    cell: (props) => <SelectableTypeCell {...props} skipReferenceImpact={skipReferenceImpact} />,
   }),
   ...(includeLocation
     ? [
