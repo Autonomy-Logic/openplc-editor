@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import type { Node } from '@xyflow/react'
 
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
@@ -246,5 +249,66 @@ describe('getFunctionBlockVariablesToCleanup with a user-defined function block'
     } as unknown as PLCVariable
 
     expect(getFunctionBlockVariablesToCleanup([removedBlock], [{ nodes: [] }], [instance])).toEqual(['MyFB0'])
+  })
+})
+
+describe('get-function-block-variables-to-cleanup source', () => {
+  it('uses no regular expression lookbehind', () => {
+    const source = readFileSync(join(__dirname, '../get-function-block-variables-to-cleanup.ts'), 'utf-8')
+    const linesWithLookbehind = source.split('\n').filter((line) => /\(\?<[=!]/.test(line))
+
+    expect(linesWithLookbehind).toEqual([])
+  })
+})
+
+describe('in a runtime whose regular expressions reject lookbehind', () => {
+  const NativeRegExp = globalThis.RegExp
+  const removedBlock = makeBlockNode('block-1', 'TON0', 'function-block')
+  const instance = makeVariable('TON0', 'derived')
+
+  beforeEach(() => {
+    globalThis.RegExp = new Proxy(NativeRegExp, {
+      construct(target, [pattern, flags]: [RegExp | string, string | undefined]) {
+        const source = pattern instanceof NativeRegExp ? pattern.source : String(pattern)
+        if (source.includes('(?<=') || source.includes('(?<!')) {
+          throw new SyntaxError(`Invalid regular expression: /${source}/: Invalid group`)
+        }
+        return new target(pattern, flags)
+      },
+    })
+  })
+
+  afterEach(() => {
+    globalThis.RegExp = NativeRegExp
+  })
+
+  it('reports the instance in use when a contact reads TON0.Q, without throwing', () => {
+    const rungs = [{ nodes: [makeVariableNode('contact-1', 'contact', 'TON0.Q')] }]
+
+    expect(isFunctionBlockVariableInUse('TON0', rungs)).toBe(true)
+  })
+
+  it.each(['NOT ton0.Q', '(TON0.Q)'])('treats %s as a reference to the instance', (expression) => {
+    const rungs = [{ nodes: [makeVariableNode('contact-1', 'contact', expression)] }]
+
+    expect(isFunctionBlockVariableInUse('TON0', rungs)).toBe(true)
+  })
+
+  it.each(['X.TON0', 'MyTON0', 'TON01'])('does not treat %s as a reference to the instance', (expression) => {
+    const rungs = [{ nodes: [makeVariableNode('contact-1', 'contact', expression)] }]
+
+    expect(isFunctionBlockVariableInUse('TON0', rungs)).toBe(false)
+  })
+
+  it('keeps the instance of a deleted TON block while a contact in another rung reads TON0.Q', () => {
+    const rungs = [{ nodes: [removedBlock] }, { nodes: [makeVariableNode('contact-1', 'contact', 'TON0.Q')] }]
+
+    expect(getFunctionBlockVariablesToCleanup([removedBlock], rungs, [instance])).toEqual([])
+  })
+
+  it('removes the instance of a deleted TON block that nothing else references', () => {
+    const rungs = [{ nodes: [removedBlock] }, { nodes: [makeVariableNode('contact-1', 'contact', 'x')] }]
+
+    expect(getFunctionBlockVariablesToCleanup([removedBlock], rungs, [instance])).toEqual(['TON0'])
   })
 })
