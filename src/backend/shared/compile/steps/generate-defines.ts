@@ -14,7 +14,7 @@
  * Pure function: no fs I/O, no DOM, no global state.  Caller writes
  * the returned string to `defines.h` at the platform-appropriate
  * location (editor: `build/<target>/src/defines.h`; web: bundled
- * into the in-memory file map sent to `/compile-arduino`).
+ * into the in-memory file map of the build request).
  */
 
 import type { PinPullSpec } from '../../../../middleware/shared/ports/types'

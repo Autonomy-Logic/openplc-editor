@@ -113,17 +113,16 @@ export interface CompileArduinoArgs {
    *  `examples/Baremetal/Baremetal.ino`, `src/generated.cpp`,
    *  `src/c_blocks.h`, `examples/Baremetal/c_blocks_code.cpp`,
    *  `src/defines.h`, and the bundled firmware skeleton + strucpp
-   *  runtime headers.  On editor: written to disk before
-   *  arduino-cli runs.  On web: POSTed in the request body. */
+   *  runtime headers.  Written to disk before arduino-cli runs; no
+   *  web target builds with arduino-cli. */
   files: Record<string, string>
   /** Argv suffix for arduino-cli compile (after the `compile`
    *  subcommand).  Comes from the shared `buildArduinoCliCompileArgs`
    *  helper. */
   argv: string[]
-  /** When `false`, arduino-cli is invoked with `--jobs 1` (web
-   *  default — backend runs many clients in sandboxes, so saturating
-   *  cores would starve concurrents).  When `true`, arduino-cli
-   *  defaults to `--jobs 0` (editor default — uses every core). */
+  /** When `false`, arduino-cli is invoked with `--jobs 1`.  When
+   *  `true`, arduino-cli defaults to `--jobs 0` (editor default — uses
+   *  every core). */
   parallel: boolean
 }
 
