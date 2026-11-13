@@ -13,7 +13,6 @@
  *   - `x : My Type;` — the regex invented a data type with that name
  */
 
-import { DEBUG_STRING_CAP } from '../../variable-sizes'
 import { normalizeOneVariablePerLine, parseVariableDeclarations } from '../variable-declarations'
 
 const BASE_TYPES = new Set([
@@ -328,15 +327,16 @@ describe('errors a user can act on', () => {
     expect(error.line).toBe(1)
   })
 
-  it('explains a declared STRING length instead of pointing at the bracket', () => {
-    const [error] = parseVariableDeclarations('VAR\n  s : STRING[20];\nEND_VAR', context).errors
-    expect(error.message).toContain('A declared length is not supported on STRING')
-    expect(error.line).toBe(2)
+  it('accepts a declared STRING length as the type written', () => {
+    const variable = one('s : STRING[20];')
+    expect(variable.name).toBe('s')
+    expect(variable.type.value).toContain('STRING[20]')
   })
 
-  it('explains it for a WSTRING inside an array too', () => {
-    const [error] = parseVariableDeclarations('VAR\n  s : ARRAY [0..3] OF WSTRING[20];\nEND_VAR', context).errors
-    expect(error.message).toContain('A declared length is not supported on WSTRING')
+  it('accepts a declared WSTRING length inside an array too', () => {
+    const variable = one('s : ARRAY [0..3] OF WSTRING[20];')
+    expect(variable.name).toBe('s')
+    expect(variable.type.value).toContain('WSTRING[20]')
   })
 
   it('leaves a legal qualifier and a qualifier named in a comment alone', () => {
@@ -497,8 +497,10 @@ describe('the two refined messages', () => {
     expect(firstError(text)).not.toMatch(/Unknown variable block qualifier/)
   })
 
-  it('explains that a declared STRING length is not supported', () => {
-    expect(firstError('VAR\n  a : STRING[10];\nEND_VAR')).toMatch(/length is not supported on STRING/)
+  it('accepts a declared STRING length instead of refining it into an error', () => {
+    const result = parseVariableDeclarations('VAR\n  a : STRING[10];\nEND_VAR', context)
+    expect(result.errors).toEqual([])
+    expect(result.variables.map((v) => [v.name, v.type.value])).toEqual([['a', 'STRING[10]']])
   })
 
   it('does not fire the STRING rewrite on prose mentioning it', () => {
@@ -535,59 +537,62 @@ describe('the two refined messages', () => {
   })
 })
 
-/** The exact refusal of a declared length on `keyword`. */
-const lengthRefusal = (keyword: 'STRING' | 'WSTRING') =>
-  `A declared length is not supported on ${keyword} — use plain ${keyword}, which carries up to ${DEBUG_STRING_CAP} characters.`
-
-/** The span of the whole 1-based `line` of `source`. */
-const lineSpan = (source: string, line: number) => {
-  const lines = source.split('\n')
-  const start = lines.slice(0, line - 1).reduce((sum, text) => sum + text.length + 1, 0)
-  return { start, end: start + lines[line - 1].length }
-}
-
-describe('a declared STRING length is refused in every form the parser accepts', () => {
+describe('a declared STRING length loads like any other declaration', () => {
   it.each([
-    { label: 'after REF_TO', source: 'VAR\n  p : REF_TO STRING[5];\nEND_VAR', keyword: 'STRING', line: 2 },
-    { label: 'after REFERENCE TO', source: 'VAR\n  p : REFERENCE TO STRING[5];\nEND_VAR', keyword: 'STRING', line: 2 },
-    { label: 'after POINTER TO', source: 'VAR\n  p : POINTER TO WSTRING[5];\nEND_VAR', keyword: 'WSTRING', line: 2 },
+    { label: 'after REF_TO', source: 'VAR\n  p : REF_TO STRING[5];\nEND_VAR', name: 'p', type: 'STRING[5]' },
+    {
+      label: 'after REFERENCE TO',
+      source: 'VAR\n  p : REFERENCE TO STRING[5];\nEND_VAR',
+      name: 'p',
+      type: 'STRING[5]',
+    },
+    { label: 'after POINTER TO', source: 'VAR\n  p : POINTER TO WSTRING[5];\nEND_VAR', name: 'p', type: 'WSTRING[5]' },
     {
       label: 'as an array element with no space before OF',
       source: 'VAR\n  a : ARRAY[0..1]OF STRING[5];\nEND_VAR',
-      keyword: 'STRING',
-      line: 2,
+      name: 'a',
+      type: 'STRING[5]',
     },
     {
       label: 'as the element of an array behind POINTER TO',
       source: 'VAR\n  p : POINTER TO ARRAY[0..1] OF STRING[5];\nEND_VAR',
-      keyword: 'STRING',
-      line: 2,
+      name: 'p',
+      type: 'STRING[5]',
     },
     {
       label: 'on the line after the colon',
       source: 'VAR\n  s :\n    STRING[20];\nEND_VAR',
-      keyword: 'STRING',
-      line: 3,
+      name: 's',
+      type: 'STRING[20]',
     },
     {
       label: 'as an array element on the line after the array bounds',
       source: 'VAR\n  a : ARRAY[0..1]\n    OF WSTRING[5];\nEND_VAR',
-      keyword: 'WSTRING',
-      line: 3,
+      name: 'a',
+      type: 'WSTRING[5]',
     },
-  ] as const)('refuses it $label, on the line of the keyword', ({ source, keyword, line }) => {
-    expect(parseVariableDeclarations(source, context)).toEqual({
-      blocks: [],
-      variables: [],
-      errors: [{ message: lengthRefusal(keyword), line, span: lineSpan(source, line) }],
-    })
+  ])('loads it $label, with the length in its type', ({ source, name, type }) => {
+    const result = parseVariableDeclarations(source, context)
+    expect(result.errors).toEqual([])
+    expect(result.variables.map((v) => v.name)).toEqual([name])
+    expect(result.variables[0].type.value).toContain(type)
   })
 
-  it('reports only the first offending declaration in source order', () => {
-    const source = 'VAR\n  a : INT;\n  p : REF_TO STRING[5];\n  s : STRING[7];\nEND_VAR'
-    expect(parseVariableDeclarations(source, context).errors).toEqual([
-      { message: lengthRefusal('STRING'), line: 3, span: lineSpan(source, 3) },
-    ])
+  it('returns every declaration of a block in source order', () => {
+    const result = parseVariableDeclarations(
+      'VAR\n  a : INT;\n  p : REF_TO STRING[5];\n  s : STRING[7];\nEND_VAR',
+      context,
+    )
+    expect(result.errors).toEqual([])
+    expect(result.variables.map((v) => v.name)).toEqual(['a', 'p', 's'])
+  })
+
+  it("keeps the parser's own report for an error beside a declared STRING length", () => {
+    const lineAndMessage = (source: string) =>
+      parseVariableDeclarations(source, context).errors.map(({ message, line }) => ({ message, line }))
+    const withLength = lineAndMessage('VAR\n  s : STRING[10];\n  b : ;\nEND_VAR')
+    expect(withLength.length).toBeGreaterThan(0)
+    expect(withLength).toEqual(lineAndMessage('VAR\n  s : STRING;\n  b : ;\nEND_VAR'))
   })
 
   it.each([
