@@ -490,7 +490,10 @@ class ProjectService {
    * hand-maintained twin lists drifting when a new file category
    * (like `library.json`) gets added.
    */
-  async writeProjectFiles(files: WriteProjectFiles): Promise<IProjectServiceResponse> {
+  async writeProjectFiles(
+    files: WriteProjectFiles,
+    observer?: { onFileWritten(absolutePath: string): void },
+  ): Promise<IProjectServiceResponse> {
     const { projectPath, deletions } = files
 
     if (!projectPath) {
@@ -534,6 +537,7 @@ class ProjectService {
         }
         await promises.mkdir(dirname(filePath), { recursive: true })
         await promises.writeFile(filePath, entry.content, 'utf-8')
+        observer?.onFileWritten(filePath)
       }
 
       // `project.json` goes last, on its own. It is the index that declares

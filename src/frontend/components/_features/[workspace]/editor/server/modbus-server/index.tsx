@@ -8,8 +8,10 @@ import { CreateEditorObjectFromTab } from '../../../../../../store/slices/tabs/u
 import { cn } from '../../../../../../utils/cn'
 import { InputWithRef } from '../../../../../_atoms/input'
 import { Label } from '../../../../../_atoms/label'
+import { NavigationButton } from '../../../../../_atoms/navigation-button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
 import { FieldHelpIcon, TooltipProvider } from '../../../../../_atoms/tooltip'
+import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
 import { DuplicateProtocolNotice } from '../duplicate-protocol-notice'
 import { AddressMappingReference } from './address-mapping-reference'
 
@@ -106,15 +108,20 @@ const Group = ({
         </span>
         {action ? (
           <div className='flex items-center gap-1.5'>
-            <button
-              type='button'
-              disabled={!action.screen}
-              onClick={() => action.screen && action.onOpen(action.screen)}
-              className={groupActionStyles}
-            >
-              {action.label}
-              <span aria-hidden='true'>&#8599;</span>
-            </button>
+            {action.screen ? (
+              <NavigationButton
+                onClick={() => action.screen && action.onOpen(action.screen)}
+                className={groupActionStyles}
+              >
+                {action.label}
+                <span aria-hidden='true'>&#8599;</span>
+              </NavigationButton>
+            ) : (
+              <button type='button' disabled className={groupActionStyles}>
+                {action.label}
+                <span aria-hidden='true'>&#8599;</span>
+              </button>
+            )}
             {action.screen ? null : <FieldHelpIcon text={action.reason} />}
           </div>
         ) : null}
@@ -463,267 +470,267 @@ const ModbusServerEditor = () => {
         </div>
 
         <div className='flex flex-1 flex-col gap-6 overflow-auto'>
-          <DuplicateProtocolNotice name={serverName} protocol={protocol} />
+          <EditingLockBoundary className='contents'>
+            <DuplicateProtocolNotice name={serverName} protocol={protocol} />
 
-          <Panel title='Modbus Server'>
-            {/* One screen for every target. What a target cannot configure comes
-             * through disabled with the reason, rather than absent: a control
-             * that disappears makes the user wonder whether the feature exists
-             * at all, and two targets whose screens differ in shape cannot be
-             * compared. */}
-            <Group>
-              <Row label='Enabled' hint={enabled ? 'Serving.' : 'Not serving. Settings are kept.'}>
-                <Toggle checked={enabled} onChange={actions.setEnabled} label='Enable Modbus server' />
-              </Row>
+            <Panel title='Modbus Server'>
+              {/* One screen for every target. What a target cannot configure comes
+               * through disabled with the reason, rather than absent: a control
+               * that disappears makes the user wonder whether the feature exists
+               * at all, and two targets whose screens differ in shape cannot be
+               * compared. */}
+              <Group>
+                <Row label='Enabled' hint={enabled ? 'Serving.' : 'Not serving. Settings are kept.'}>
+                  <Toggle checked={enabled} onChange={actions.setEnabled} label='Enable Modbus server' />
+                </Row>
 
-              <Row label='Transport' hint={transportHint}>
-                <div className='w-64'>
-                  <Select value={transportChoiceValue} onValueChange={onTransportChange} disabled={!enabled}>
-                    <SelectTrigger withIndicator placeholder='Select transport' className={selectTriggerStyles} />
-                    <SelectContent className={selectContentStyles}>
-                      {TRANSPORT_CHOICES.map((choice) => (
-                        <SelectItem
-                          key={choice.value}
-                          value={choice.value}
-                          disabled={!choice.transports.every((t) => profile.transports.includes(t))}
-                          className={selectItemStyles}
-                        >
-                          <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                            {choice.label}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </Row>
-            </Group>
-
-            <Group
-              name='Serial line'
-              action={{
-                label: 'Board serial settings',
-                screen: profile.vppScreens.serial,
-                reason: noBoardPage('serial'),
-                onOpen: openVppScreen,
-              }}
-            >
-              <Row
-                label='Serial Port'
-                hint={
-                  !rtuAvailable
-                    ? 'RTU only.'
-                    : rtuOnEditorPort
-                      ? 'Shared with the editor connection. One at a time.'
-                      : 'A UART of its own.'
-                }
-              >
-                <div className='w-64'>
-                  <Select
-                    value={serialPort || profile.defaultSerial}
-                    onValueChange={actions.setSerialPort}
-                    disabled={!enabled || !rtuAvailable || profile.serialPorts.length === 0}
-                  >
-                    <SelectTrigger withIndicator placeholder='Select serial port' className={selectTriggerStyles} />
-                    <SelectContent className={selectContentStyles}>
-                      {(profile.serialPorts.length > 0 ? profile.serialPorts : [profile.defaultSerial]).map(
-                        (option) => (
-                          <SelectItem key={option} value={option} className={selectItemStyles}>
-                            <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                              {option}
-                            </span>
-                          </SelectItem>
-                        ),
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </Row>
-
-              <Row
-                label='Baud Rate'
-                hint={
-                  !rtuAvailable
-                    ? 'RTU only.'
-                    : baudRateEditable
-                      ? 'Speed of this UART. Takes effect on the next upload.'
-                      : 'Set by the board: this is the editor line, and one UART has one speed.'
-                }
-              >
-                <div className='w-64'>
-                  {/* On the default UART the value is the board's, so the control
-                   *  stops being a dead dropdown and becomes the way to the page
-                   *  that sets it. Only where such a page exists -- otherwise
-                   *  there is nowhere to go and it stays a plain disabled field. */}
-                  {!baudRateEditable && rtuAvailable && boardSerialScreen ? (
-                    <button
-                      type='button'
-                      disabled={!enabled}
-                      onClick={() => openVppScreen(boardSerialScreen)}
-                      className={boardValueStyles}
-                    >
-                      <span>{baudRate}</span>
-                      <span className='font-normal text-neutral-600 dark:text-neutral-500'>
-                        set by the board <span aria-hidden='true'>&#8599;</span>
-                      </span>
-                    </button>
-                  ) : (
-                    <Select
-                      value={baudRate}
-                      onValueChange={(value) => actions.setBaudRate(Number(value))}
-                      disabled={!enabled || !rtuAvailable || !baudRateEditable}
-                    >
-                      <SelectTrigger withIndicator placeholder='Select baud rate' className={selectTriggerStyles} />
+                <Row label='Transport' hint={transportHint}>
+                  <div className='w-64'>
+                    <Select value={transportChoiceValue} onValueChange={onTransportChange} disabled={!enabled}>
+                      <SelectTrigger withIndicator placeholder='Select transport' className={selectTriggerStyles} />
                       <SelectContent className={selectContentStyles}>
-                        {BAUD_RATE_OPTIONS.map((option) => (
-                          <SelectItem key={option} value={option} className={selectItemStyles}>
+                        {TRANSPORT_CHOICES.map((choice) => (
+                          <SelectItem
+                            key={choice.value}
+                            value={choice.value}
+                            disabled={!choice.transports.every((t) => profile.transports.includes(t))}
+                            className={selectItemStyles}
+                          >
                             <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                              {option}
+                              {choice.label}
                             </span>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  )}
-                </div>
-              </Row>
+                  </div>
+                </Row>
+              </Group>
 
-              <Row
-                label='Slave ID'
-                hint={
-                  !rtuAvailable
-                    ? 'RTU only. TCP addresses by IP.'
-                    : `${MIN_SLAVE_ID}-${MAX_SLAVE_ID}. Takes effect on the next upload.`
-                }
+              <Group
+                name='Serial line'
+                action={{
+                  label: 'Board serial settings',
+                  screen: profile.vppScreens.serial,
+                  reason: noBoardPage('serial'),
+                  onOpen: openVppScreen,
+                }}
               >
-                <div className='w-24'>
-                  <InputWithRef
-                    type='number'
-                    aria-label='Slave ID'
-                    value={slaveIdText}
-                    onChange={(e) => setSlaveIdText(e.target.value)}
-                    onBlur={commitSlaveId}
-                    min={MIN_SLAVE_ID}
-                    max={MAX_SLAVE_ID}
-                    disabled={!enabled || !rtuAvailable}
-                    className={inputStyles}
-                  />
-                </div>
-              </Row>
-            </Group>
+                <Row
+                  label='Serial Port'
+                  hint={
+                    !rtuAvailable
+                      ? 'RTU only.'
+                      : rtuOnEditorPort
+                        ? 'Shared with the editor connection. One at a time.'
+                        : 'A UART of its own.'
+                  }
+                >
+                  <div className='w-64'>
+                    <Select
+                      value={serialPort || profile.defaultSerial}
+                      onValueChange={actions.setSerialPort}
+                      disabled={!enabled || !rtuAvailable || profile.serialPorts.length === 0}
+                    >
+                      <SelectTrigger withIndicator placeholder='Select serial port' className={selectTriggerStyles} />
+                      <SelectContent className={selectContentStyles}>
+                        {(profile.serialPorts.length > 0 ? profile.serialPorts : [profile.defaultSerial]).map(
+                          (option) => (
+                            <SelectItem key={option} value={option} className={selectItemStyles}>
+                              <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                                {option}
+                              </span>
+                            </SelectItem>
+                          ),
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </Row>
 
-            <Group
-              name='Network'
-              action={{
-                label: 'Board network settings',
-                screen: profile.vppScreens.network,
-                reason: noBoardPage('network'),
-                onOpen: openVppScreen,
-              }}
-            >
-              <Row
-                label='Network Interface'
-                hint={profile.configurableBindAddress ? undefined : 'This board has one interface.'}
-              >
-                <div className='w-64'>
-                  <Select
-                    value={bindAddress}
-                    onValueChange={actions.setBindAddress}
-                    disabled={!enabled || !profile.configurableBindAddress}
-                  >
-                    <SelectTrigger
-                      withIndicator
-                      placeholder='Select network interface'
-                      className={selectTriggerStyles}
+                <Row
+                  label='Baud Rate'
+                  hint={
+                    !rtuAvailable
+                      ? 'RTU only.'
+                      : baudRateEditable
+                        ? 'Speed of this UART. Takes effect on the next upload.'
+                        : 'Set by the board: this is the editor line, and one UART has one speed.'
+                  }
+                >
+                  <div className='w-64'>
+                    {/* On the default UART the value is the board's, so the control
+                     *  stops being a dead dropdown and becomes the way to the page
+                     *  that sets it. Only where such a page exists -- otherwise
+                     *  there is nowhere to go and it stays a plain disabled field. */}
+                    {!baudRateEditable && rtuAvailable && boardSerialScreen ? (
+                      <NavigationButton
+                        onClick={() => enabled && openVppScreen(boardSerialScreen)}
+                        className={boardValueStyles}
+                      >
+                        <span>{baudRate}</span>
+                        <span className='font-normal text-neutral-600 dark:text-neutral-500'>
+                          set by the board <span aria-hidden='true'>&#8599;</span>
+                        </span>
+                      </NavigationButton>
+                    ) : (
+                      <Select
+                        value={baudRate}
+                        onValueChange={(value) => actions.setBaudRate(Number(value))}
+                        disabled={!enabled || !rtuAvailable || !baudRateEditable}
+                      >
+                        <SelectTrigger withIndicator placeholder='Select baud rate' className={selectTriggerStyles} />
+                        <SelectContent className={selectContentStyles}>
+                          {BAUD_RATE_OPTIONS.map((option) => (
+                            <SelectItem key={option} value={option} className={selectItemStyles}>
+                              <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                                {option}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                </Row>
+
+                <Row
+                  label='Slave ID'
+                  hint={
+                    !rtuAvailable
+                      ? 'RTU only. TCP addresses by IP.'
+                      : `${MIN_SLAVE_ID}-${MAX_SLAVE_ID}. Takes effect on the next upload.`
+                  }
+                >
+                  <div className='w-24'>
+                    <InputWithRef
+                      type='number'
+                      aria-label='Slave ID'
+                      value={slaveIdText}
+                      onChange={(e) => setSlaveIdText(e.target.value)}
+                      onBlur={commitSlaveId}
+                      min={MIN_SLAVE_ID}
+                      max={MAX_SLAVE_ID}
+                      disabled={!enabled || !rtuAvailable}
+                      className={inputStyles}
                     />
-                    <SelectContent className={selectContentStyles}>
-                      {BIND_ADDRESS_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
-                          <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
-                            {option.label}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </Row>
+                  </div>
+                </Row>
+              </Group>
 
-              <Row label='Port' hint={profile.configurablePort ? 'Default 502.' : 'Fixed by the firmware.'}>
-                <div className='w-64'>
-                  <InputWithRef
-                    type='number'
-                    aria-label='Port'
-                    value={portText}
-                    onChange={(e) => setPortText(e.target.value)}
-                    onBlur={commitPort}
-                    placeholder='502'
-                    min='1'
-                    max='65535'
-                    disabled={!enabled || !profile.configurablePort}
-                    className={inputStyles}
-                  />
-                </div>
-              </Row>
-            </Group>
-          </Panel>
+              <Group
+                name='Network'
+                action={{
+                  label: 'Board network settings',
+                  screen: profile.vppScreens.network,
+                  reason: noBoardPage('network'),
+                  onOpen: openVppScreen,
+                }}
+              >
+                <Row
+                  label='Network Interface'
+                  hint={profile.configurableBindAddress ? undefined : 'This board has one interface.'}
+                >
+                  <div className='w-64'>
+                    <Select
+                      value={bindAddress}
+                      onValueChange={actions.setBindAddress}
+                      disabled={!enabled || !profile.configurableBindAddress}
+                    >
+                      <SelectTrigger
+                        withIndicator
+                        placeholder='Select network interface'
+                        className={selectTriggerStyles}
+                      />
+                      <SelectContent className={selectContentStyles}>
+                        {BIND_ADDRESS_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value} className={selectItemStyles}>
+                            <span className='text-start font-caption text-xs font-normal text-neutral-700 dark:text-neutral-100'>
+                              {option.label}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </Row>
 
-          <Panel title='Buffer Mapping'>
-            {profile.configurableBuffers && (
-              <p className='text-xs text-neutral-600 dark:text-neutral-400'>
-                How many addresses each IEC segment gets. A field left empty follows the I/O image — the greyed number
-                is what this project sizes it to. Type a number to ask for more than that, or 0 to publish none of it.
-                Clearing the field follows the image again.
-              </p>
+                <Row label='Port' hint={profile.configurablePort ? 'Default 502.' : 'Fixed by the firmware.'}>
+                  <div className='w-64'>
+                    <InputWithRef
+                      type='number'
+                      aria-label='Port'
+                      value={portText}
+                      onChange={(e) => setPortText(e.target.value)}
+                      onBlur={commitPort}
+                      placeholder='502'
+                      min='1'
+                      max='65535'
+                      disabled={!enabled || !profile.configurablePort}
+                      className={inputStyles}
+                    />
+                  </div>
+                </Row>
+              </Group>
+            </Panel>
+
+            <Panel title='Buffer Mapping'>
+              {profile.configurableBuffers && (
+                <p className='text-xs text-neutral-600 dark:text-neutral-400'>
+                  How many addresses each IEC segment gets. A field left empty follows the I/O image — the greyed number
+                  is what this project sizes it to. Type a number to ask for more than that, or 0 to publish none of it.
+                  Clearing the field follows the image again.
+                </p>
+              )}
+
+              <div className='grid gap-4 sm:grid-cols-2'>
+                {visibleBlocks.map((block) => (
+                  <BufferBlock key={block} title={block}>
+                    {allSegments
+                      .filter((segment) => SEGMENT_META[segment].block === block)
+                      .map((segment) => {
+                        const meta = SEGMENT_META[segment]
+                        // A segment the target has no storage for is shown, sized
+                        // zero, with the reason -- not hidden. Hiding it made two
+                        // targets' screens differ in shape, and left the user with
+                        // no way to tell "this board has no %MX" from "the editor
+                        // forgot about %MX".
+                        const absent = !profile.segments.includes(segment)
+                        return (
+                          <BufferInput
+                            key={segment}
+                            label={`%${segment}`}
+                            // A segment the project does not pin shows NOTHING,
+                            // with the count it would get as the placeholder.
+                            // Showing the derived number as a value is what made
+                            // 1024 look like a setting the project carried.
+                            value={
+                              absent
+                                ? '0'
+                                : (countText[segment] ?? (pinnedSegments.has(segment) ? String(buffers[segment]) : ''))
+                            }
+                            placeholder={absent ? undefined : String(buffers[segment])}
+                            onChange={(value) => setCountText((prev) => ({ ...prev, [segment]: value }))}
+                            onBlur={() => commitCount(segment)}
+                            max={profile.maxCounts?.[segment] ?? meta.max}
+                            description={absent ? `${meta.description} — not on this target.` : meta.description}
+                            readOnly={!profile.configurableBuffers || absent}
+                          />
+                        )
+                      })}
+                  </BufferBlock>
+                ))}
+              </div>
+            </Panel>
+
+            {/* Which Modbus address each IEC segment answers on, recomputed from
+             *  the buffer sizes above. A segment the target does not have arrives
+             *  here sized 0, which the reference renders as an empty range rather
+             *  than a row promising addresses that do not exist. */}
+            {(profile.configurableBuffers || profile.derivedCounts) && (
+              <AddressMappingReference bufferMapping={bufferMapping} />
             )}
-
-            <div className='grid gap-4 sm:grid-cols-2'>
-              {visibleBlocks.map((block) => (
-                <BufferBlock key={block} title={block}>
-                  {allSegments
-                    .filter((segment) => SEGMENT_META[segment].block === block)
-                    .map((segment) => {
-                      const meta = SEGMENT_META[segment]
-                      // A segment the target has no storage for is shown, sized
-                      // zero, with the reason -- not hidden. Hiding it made two
-                      // targets' screens differ in shape, and left the user with
-                      // no way to tell "this board has no %MX" from "the editor
-                      // forgot about %MX".
-                      const absent = !profile.segments.includes(segment)
-                      return (
-                        <BufferInput
-                          key={segment}
-                          label={`%${segment}`}
-                          // A segment the project does not pin shows NOTHING,
-                          // with the count it would get as the placeholder.
-                          // Showing the derived number as a value is what made
-                          // 1024 look like a setting the project carried.
-                          value={
-                            absent
-                              ? '0'
-                              : (countText[segment] ?? (pinnedSegments.has(segment) ? String(buffers[segment]) : ''))
-                          }
-                          placeholder={absent ? undefined : String(buffers[segment])}
-                          onChange={(value) => setCountText((prev) => ({ ...prev, [segment]: value }))}
-                          onBlur={() => commitCount(segment)}
-                          max={profile.maxCounts?.[segment] ?? meta.max}
-                          description={absent ? `${meta.description} — not on this target.` : meta.description}
-                          readOnly={!profile.configurableBuffers || absent}
-                        />
-                      )
-                    })}
-                </BufferBlock>
-              ))}
-            </div>
-          </Panel>
-
-          {/* Which Modbus address each IEC segment answers on, recomputed from
-           *  the buffer sizes above. A segment the target does not have arrives
-           *  here sized 0, which the reference renders as an empty range rather
-           *  than a row promising addresses that do not exist. */}
-          {(profile.configurableBuffers || profile.derivedCounts) && (
-            <AddressMappingReference bufferMapping={bufferMapping} />
-          )}
+          </EditingLockBoundary>
         </div>
       </div>
     </TooltipProvider>

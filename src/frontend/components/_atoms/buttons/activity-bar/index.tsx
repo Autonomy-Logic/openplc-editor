@@ -14,7 +14,10 @@ const ActivityBarButton = forwardRef<HTMLButtonElement, IActivityBarButtonProps>
     <button
       ref={ref}
       type='button'
-      className={cn('flex h-8 w-full cursor-pointer items-center justify-center', className)}
+      className={cn(
+        'flex h-8 w-full cursor-pointer items-center justify-center disabled:cursor-not-allowed',
+        className,
+      )}
       {...res}
     >
       <div

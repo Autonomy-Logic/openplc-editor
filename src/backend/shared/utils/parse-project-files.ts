@@ -179,16 +179,19 @@ function createFallbackPou(content: string, language: string, pouType: string, p
   const { documentation, remainingContent } = extractDocumentation(content)
 
   const header = matchPouHeader(remainingContent, pouType)
-  const section = extractVariablesSection(remainingContent, header ? header.text.length : 0, {
-    boundAtGraphicalBody: language === 'ld' || language === 'fbd',
-  })
+  const endKeyword = POU_END_KEYWORDS[pouType]
+  const isGraphical = language === 'ld' || language === 'fbd'
+  const section = extractVariablesSection(
+    remainingContent,
+    header ? header.text.length : 0,
+    isGraphical ? { boundAtGraphicalBody: true } : { endKeyword },
+  )
   // An empty block, not an empty string: this text is what the code view opens
   // on, and it has to be something the user can add a declaration to.
-  const variablesText = section.text === '' ? 'VAR\nEND_VAR' : section.text
+  const variablesText = section.kind === 'none' ? 'VAR\nEND_VAR' : section.text
   const bodyStartIndex = section.bodyStartIndex
 
   // 2. Extract body content
-  const endKeyword = POU_END_KEYWORDS[pouType]
   let bodyValue: unknown
 
   if (language === 'ld' || language === 'fbd') {

@@ -1,5 +1,6 @@
 import * as Tabs from '@radix-ui/react-tabs'
 import { useDeviceConfiguration } from '@root/frontend/hooks/use-device-configuration'
+import { useIsEditingLocked } from '@root/frontend/hooks/use-editing-lock'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import type {
@@ -19,6 +20,7 @@ import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
 import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
 import { Cia402AxisTab } from './components/cia402-axis-tab'
 import { CouplerDiagnosticsTab } from './components/coupler-diagnostics-tab'
 import {
@@ -82,6 +84,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
   const { editor, project, projectActions, workspaceActions } = useOpenPLCStore()
   const vendorScreenData = useOpenPLCStore((s) => s.deviceDefinitions.configuration.vendorScreenData)
   const esi = useEsi()
+  const isEditingLocked = useIsEditingLocked()
 
   const fallbackBusName = editor.type === 'plc-ethercat-device' ? editor.meta.busName : ''
   const fallbackDeviceId = editor.type === 'plc-ethercat-device' ? editor.meta.deviceId : ''
@@ -185,6 +188,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
 
   const syncDevicesToStore = useCallback(
     (devices: ConfiguredEtherCATDevice[]) => {
+      if (isEditingLocked) return
       // `updateEthercatConfig` reallocates addresses through the central
       // registry and cascades any alias rename onto bound variables' names.
       projectActions.updateEthercatConfig(busName, { masterConfig, devices })
@@ -196,7 +200,7 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
         workspaceActions.setEditingState('unsaved')
       }
     },
-    [busName, projectActions, masterConfig, deviceName],
+    [busName, isEditingLocked, projectActions, masterConfig, deviceName],
   )
 
   const handleUpdateDevice = useCallback(
@@ -475,9 +479,11 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
             value='axis'
             className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
           >
-            <div className='flex-1 overflow-auto p-4'>
-              <Cia402AxisTab device={device} onUpdate={handleUpdateCia402} />
-            </div>
+            <EditingLockBoundary className='contents'>
+              <div className='flex-1 overflow-auto p-4'>
+                <Cia402AxisTab device={device} onUpdate={handleUpdateCia402} />
+              </div>
+            </EditingLockBoundary>
           </Tabs.Content>
         )}
 
@@ -535,11 +541,13 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           value='configuration'
           className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
         >
-          <div className='flex-1 overflow-auto p-4'>
-            <div className='flex flex-col gap-5'>
-              <DeviceConfigurationForm config={device.config} updateConfig={updateConfig} />
+          <EditingLockBoundary className='contents'>
+            <div className='flex-1 overflow-auto p-4'>
+              <div className='flex flex-col gap-5'>
+                <DeviceConfigurationForm config={device.config} updateConfig={updateConfig} />
+              </div>
             </div>
-          </div>
+          </EditingLockBoundary>
         </Tabs.Content>
 
         {/* Process Data (Simple / Expert) */}
@@ -547,18 +555,20 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           value='process-data'
           className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
         >
-          <div className='flex-1 overflow-auto p-4'>
-            <ProcessDataTab
-              rxPdos={device.rxPdos ?? []}
-              txPdos={device.txPdos ?? []}
-              pdoAssignAvailable={device.config.coeFlags?.pdoAssign === true}
-              coeFlags={device.config.coeFlags}
-              alternativeSmMappings={alternativeSmMappings}
-              onUpdatePdoAssigned={handleUpdatePdoAssigned}
-              onUpdatePdoEntries={handleUpdatePdoEntries}
-              onUpdateCoeFlags={handleUpdateCoeFlags}
-            />
-          </div>
+          <EditingLockBoundary className='contents'>
+            <div className='flex-1 overflow-auto p-4'>
+              <ProcessDataTab
+                rxPdos={device.rxPdos ?? []}
+                txPdos={device.txPdos ?? []}
+                pdoAssignAvailable={device.config.coeFlags?.pdoAssign === true}
+                coeFlags={device.config.coeFlags}
+                alternativeSmMappings={alternativeSmMappings}
+                onUpdatePdoAssigned={handleUpdatePdoAssigned}
+                onUpdatePdoEntries={handleUpdatePdoEntries}
+                onUpdateCoeFlags={handleUpdateCoeFlags}
+              />
+            </div>
+          </EditingLockBoundary>
         </Tabs.Content>
 
         {/* Modules (modular coupler only). ModulesTab owns its own inner
@@ -570,15 +580,17 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
             value='modules'
             className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
           >
-            <div className='flex min-h-0 flex-1 flex-col overflow-hidden p-4'>
-              <ModulesTab
-                device={device}
-                busName={busName}
-                repository={repository}
-                onUpdateModules={handleUpdateModules}
-                externalUsedAddresses={externalAddresses}
-              />
-            </div>
+            <EditingLockBoundary className='contents'>
+              <div className='flex min-h-0 flex-1 flex-col overflow-hidden p-4'>
+                <ModulesTab
+                  device={device}
+                  busName={busName}
+                  repository={repository}
+                  onUpdateModules={handleUpdateModules}
+                  externalUsedAddresses={externalAddresses}
+                />
+              </div>
+            </EditingLockBoundary>
           </Tabs.Content>
         )}
 
@@ -599,15 +611,17 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
           value='startup-params'
           className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
         >
-          <div className='flex min-h-0 flex-1 flex-col overflow-auto p-4'>
-            <SdoParametersSection
-              isLoading={isLoadingChannels}
-              loadError={channelLoadError}
-              sdoConfigurations={device.sdoConfigurations}
-              coeObjects={coeObjects}
-              onUpdateSdoConfigurations={handleUpdateSdoConfigurations}
-            />
-          </div>
+          <EditingLockBoundary className='contents'>
+            <div className='flex min-h-0 flex-1 flex-col overflow-auto p-4'>
+              <SdoParametersSection
+                isLoading={isLoadingChannels}
+                loadError={channelLoadError}
+                sdoConfigurations={device.sdoConfigurations}
+                coeObjects={coeObjects}
+                onUpdateSdoConfigurations={handleUpdateSdoConfigurations}
+              />
+            </div>
+          </EditingLockBoundary>
         </Tabs.Content>
 
         {/* Channel Mappings Tab — hidden for SoftMotion drives (their PDO
@@ -617,15 +631,17 @@ const EtherCATDeviceEditor = ({ busName: propBusName, deviceId: propDeviceId }: 
             value='channel-mappings'
             className='flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden'
           >
-            <div className='flex min-h-0 flex-1 flex-col overflow-auto p-4'>
-              <ChannelMappingsSection
-                isLoading={isLoadingChannels}
-                loadError={channelLoadError}
-                channels={channels}
-                mappings={channelMappings}
-                onAliasChange={handleAliasChange}
-              />
-            </div>
+            <EditingLockBoundary className='contents'>
+              <div className='flex min-h-0 flex-1 flex-col overflow-auto p-4'>
+                <ChannelMappingsSection
+                  isLoading={isLoadingChannels}
+                  loadError={channelLoadError}
+                  channels={channels}
+                  mappings={channelMappings}
+                  onAliasChange={handleAliasChange}
+                />
+              </div>
+            </EditingLockBoundary>
           </Tabs.Content>
         )}
       </Tabs.Root>

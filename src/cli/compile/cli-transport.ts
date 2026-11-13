@@ -40,7 +40,7 @@ export function createCliCompileTransport(runtime: RuntimeApiClient | null): Com
         onClose: () => onMessage({ closePort: true }),
       })
 
-      void new CompilerModule()
+      void new CompilerModule({ dependencyHintSurface: 'cli' })
         .compileProgram(compileArgs, channel, createHeadlessCompileBridge(runtime))
         .catch((error: unknown) => {
           onMessage({ logLevel: 'error', message: error instanceof Error ? error.message : String(error) })

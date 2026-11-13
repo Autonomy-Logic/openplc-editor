@@ -39,14 +39,10 @@ jest.mock('electron', () => ({
 
 // Mock strucpp — `loadStrucpp` runs at module load via
 // `strucpp-runtime.ts`, and we don't need it for these tests.
-jest.mock(
-  'strucpp',
-  () => ({
-    compileStlib: jest.fn(),
-    loadStlibFromString: jest.fn((text: string) => JSON.parse(text)),
-  }),
-  { virtual: true },
-)
+jest.mock('strucpp', () => ({
+  compileStlib: jest.fn(),
+  loadStlibFromString: jest.fn((text: string) => JSON.parse(text)),
+}))
 
 import { CompilerModule } from '../compiler-module'
 
