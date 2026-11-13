@@ -341,6 +341,41 @@ static void test_pointer(void) {
         hmi_elem_bounds_in(5, 300, 100, 50, 50, 0);
         frame(NULL);
     }
+
+    /* An element recorded under a frame clip (a scaled diagram) owns the pointer only inside that clip. */
+    struct {
+        int32_t x, y, owner;
+    } clipped[] = {{102, 105, 1}, {103, 105, 1}, {104, 105, 0}, {106, 105, 2}, {64, 105, 3}, {100, 96, 1}};
+    for (size_t i = 0; i < sizeof clipped / sizeof clipped[0]; i++) {
+        hmi_core_init(400, 300);
+        hmi_frame_begin();
+        hmi_frame_set(65536, 0, 0, 1, 0, 0, 104 * 16, 300 * 16);
+        hmi_elem_bounds_in(1, 100, 100, 10, 10, 1); /* partly outside the clip */
+        hmi_elem_bounds_in(3, 60, 100, 10, 10, 1);
+        hmi_frame_reset();
+        hmi_elem_bounds_in(2, 114, 100, 10, 10, 1); /* outside the clip; touch areas overlap 1's */
+        frame(NULL);
+        hmi_input_pointer(HMI_PTR_MOVE, clipped[i].x * 16, clipped[i].y * 16);
+        hmi_frame_begin();
+        CHECK_EQ(hmi_ptr_owner(), clipped[i].owner);
+        frame(NULL);
+    }
+
+    /* More distinct clips than the table holds: the extra entries are kept for designers but take no input. */
+    hmi_core_init(400, 300);
+    hmi_frame_begin();
+    for (int32_t i = 0; i <= HMI_BOUNDS_CLIPS_MAX; i++) {
+        hmi_frame_set(65536, 0, 0, 1, i * 16, 0, 20 * 16, 300 * 16);
+        hmi_elem_bounds_in(i + 1, i + 2, 0, 4, 4, 1);
+    }
+    hmi_frame_reset();
+    CHECK(hmi_frame_status() & HMI_STATUS_BOUNDS_FULL);
+    CHECK_EQ(hmi_bounds_count(), HMI_BOUNDS_CLIPS_MAX + 1);
+    frame(NULL);
+    hmi_input_pointer(HMI_PTR_MOVE, (HMI_BOUNDS_CLIPS_MAX + 3) * 16, 2 * 16);
+    hmi_frame_begin();
+    CHECK_EQ(hmi_ptr_owner(), HMI_BOUNDS_CLIPS_MAX);
+    frame(NULL);
 }
 
 /* ---- keys, keyboard, pages ---- */
@@ -394,6 +429,21 @@ static void test_keys_and_pages(void) {
     while (hmi_page_back()) backs++;
     CHECK_EQ(backs, 8);
     CHECK_EQ(hmi_page(), 2);
+
+    hmi_set_page(5);
+    hmi_page_reset(4);
+    CHECK_EQ(hmi_page(), 4);
+    CHECK_EQ(hmi_page_back(), 0);
+    CHECK_EQ(hmi_page(), 4);
+    hmi_page_reset(2); /* test_sessions reads the default session's page */
+
+    CHECK_EQ(hmi_page_shown(), -1);
+    hmi_page_set_shown(2);
+    CHECK_EQ(hmi_page_shown(), 2);
+    hmi_page_set_shown(0);
+    CHECK_EQ(hmi_page_shown(), 0);
+    hmi_page_set_shown(-5);
+    CHECK_EQ(hmi_page_shown(), -1);
 }
 
 /* ---- themes and colors ---- */
@@ -433,10 +483,12 @@ static void test_sessions(void) {
     hmi_session_use(a);
     hmi_core_init(100, 50);
     hmi_set_page(3);
+    hmi_page_set_shown(3);
     hmi_theme_use(1);
     hmi_session_use(b);
     hmi_core_init(200, 80);
     CHECK_EQ(hmi_page(), 0);
+    CHECK_EQ(hmi_page_shown(), -1);
     CHECK_EQ(hmi_theme_current(), 0);
     CHECK_EQ(hmi_screen_w(), 200);
     hmi_frame_begin();

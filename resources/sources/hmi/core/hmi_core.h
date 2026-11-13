@@ -236,7 +236,8 @@ void hmi_ptr_consume(void);
 int hmi_ptr_consumed(void);
 /**
  * Id of the input element that owns the pointer this frame, from the previous frame's bounds: the last-drawn one
- * whose bounds contain the pointer, else the nearest one whose touch area contains it; 0 = none.
+ * whose bounds contain the pointer, else the nearest one whose touch area contains it; 0 = none. An element recorded
+ * under a frame clip owns the pointer only inside that clip.
  */
 int32_t hmi_ptr_owner(void);
 
@@ -272,8 +273,14 @@ int hmi_kbd_take(int32_t owner);
 int32_t hmi_page(void);
 /** Shows another page, remembering the current one for hmi_page_back (8 levels). */
 void hmi_set_page(int32_t page);
+/** Shows a page and forgets the history, as when a session starts. */
+void hmi_page_reset(int32_t page);
 /** Back to the previous page; returns 0 when there is none. */
 int hmi_page_back(void);
+/** Page whose screen the session last showed (see hmi_page_set_shown), -1 before the first. */
+int32_t hmi_page_shown(void);
+/** Records the page whose screen the session shows, so screens learn when they are shown and hidden. */
+void hmi_page_set_shown(int32_t page);
 
 /* ------------------------------------------------------------------------------------------------------------ */
 /* Rasterizer (not thread safe: glyph cache and scratch buffers are shared)                                    */

@@ -27,6 +27,10 @@
 #ifndef HMI_BOUNDS_MAX
 #define HMI_BOUNDS_MAX 512
 #endif
+/* Distinct frame clips per frame that bounds can refer to (scaled diagrams); entries past it take no input. */
+#ifndef HMI_BOUNDS_CLIPS_MAX
+#define HMI_BOUNDS_CLIPS_MAX 16
+#endif
 
 /* Fixed payload sizes in bytes (opcode excluded), shared by the recorder and the rasterizer. */
 #define HMI_PAYLOAD_CLEAR 4u

@@ -44,6 +44,7 @@
     "src/backend/shared/print/__tests__/fixtures/",
     "src/backend/shared/ethercat/__tests__/fixtures/",
     "src/backend/shared/wasm-toolchain/__tests__/fixtures/",
+    "src/backend/shared/hmi/unit/__tests__/fixtures/",
     "src/backend/editor/wasm-toolchain/__tests__/fixtures/"
   ],
   "transformIgnorePatterns": [
@@ -92,6 +93,24 @@
       "functions": 97,
       "lines": 95,
       "statements": 95
+    },
+    "src/backend/shared/hmi/unit/": {
+      "branches": 80,
+      "functions": 80,
+      "lines": 80,
+      "statements": 80
+    },
+    "src/middleware/shared/utils/hmi/": {
+      "branches": 80,
+      "functions": 80,
+      "lines": 80,
+      "statements": 80
+    },
+    "src/backend/shared/hmi/lib/": {
+      "branches": 80,
+      "functions": 80,
+      "lines": 80,
+      "statements": 80
     },
     "src/backend/shared/": {
       "branches": 0,

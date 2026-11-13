@@ -68,6 +68,8 @@ npm run test             # Jest with coverage (enforced thresholds)
 npm run test:watch       # Jest watch mode (no coverage)
 npm run test:e2e         # Playwright E2E tests
 npm run test:hmi-core    # HMI C core: golden scenes (gcc, clang, WebAssembly), unit tests, sanitized fuzzing
+npm run test:hmi-lib     # HMI widget library: headless frames of test screens (gcc, clang, sanitizers) against golden.txt
+npm run test:hmi-unit    # HMI unit generator: a sample project's unit run by a C host (gcc, clang, sanitizers)
 
 npm run validate:arch    # Architecture layer dependency validation
 ```
@@ -468,6 +470,14 @@ and ship next to the toolchain; refresh them from the commits the new release wa
 - **HMI C core:** `resources/sources/hmi/` (mirrored to openplc-web `src/assets/firmware/hmi/`) is tested by
   `tests/hmi-core/run.mjs` (`npm run test:hmi-core`, CI job `ci-hmi-core.yml`), not by Jest; see
   `resources/sources/hmi/README.md`.
+- **HMI widget library:** StandardWidgets, the ST library screens are built from, lives as TS string modules in
+  `src/backend/shared/hmi/lib/` (compiled to a `.stlib` by `build-standard-widgets.ts`; catalogue in
+  `widget-catalog.ts`, tested by Jest). `tests/hmi-lib/run.mjs` (`npm run test:hmi-lib`, same CI job) renders test
+  screens headless with the C core and needs STruC++ installed.
+- **HMI unit generator:** `src/backend/shared/hmi/unit/` turns screens, widget blocks and HMI Settings
+  (`src/middleware/shared/utils/hmi/settings.ts`) into the HMI unit: C++ in namespace `hmi` plus the C glue hosts
+  link (`resources/sources/hmi/unit/hmi_unit.h`; preview setters in `hmi_preview.h`). `tests/hmi-unit/run.mjs`
+  (`npm run test:hmi-unit`, same CI job) builds a sample project's unit and runs it from a C host.
 - **Manual:** the developer's manual test is required for every demand.
 
 ## Code Style
