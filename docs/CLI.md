@@ -9,6 +9,7 @@ a parallel implementation.
 | ----------------------------- | ---------------------------------- |
 | Build                         | `openplc-cli compile <project>`    |
 | Build & Upload                | `openplc-cli upload <project>`     |
+| Play on the OpenPLC Simulator | `openplc-cli simulate <project>`   |
 | Search / serial-port dropdown | `openplc-cli devices`              |
 | Debug                         | `openplc-cli debug open …`         |
 | Start / Stop                  | `openplc-cli debug start` / `stop` |
@@ -255,6 +256,32 @@ device-specific reasons — an FQBN option, a vendor HAL, a package flag — whi
 every other board on the same core passed. And it is not a unit test; nothing in
 the jest suite compiles anything, which is why this exists.
 
+## Simulating
+
+```sh
+openplc-cli simulate <project> [--clean]
+```
+
+Play on the OpenPLC Simulator, without a window. The project is built for the
+simulator whatever board it remembers, then run with its Python blocks: one
+interpreter per block instance, prepared before the PLC starts, as on Play. The
+run's Console, the program's lines and every Python block's prefixed with its
+name, is printed until Ctrl+C (or SIGTERM), which stops the PLC and every block
+and exits 0. Ctrl+C before the run has started (during the build or the Python
+preparation) exits 130 (`interrupted`).
+
+- Human mode prints a block's stdout on stdout and its stderr on stderr. JSON
+  mode prints both on stderr and keeps stdout for the result, which carries
+  `project`, `target`, `pythonBlocks` and `ranMs`.
+- The toolchain and the Python runtime load on first need: a project with no
+  Python block never loads Python. A runtime that cannot load ends the command
+  with its reason: exit 4 (`compile_failed`) for the toolchain, exit 7
+  (`simulator_failed`) for Python.
+- A block that raises keeps its last outputs and the run goes on, as on Play. A
+  run that stops on its own (the module traps) exits 7 with the reason.
+
+There is no debugger attached; use the editor's Play for watch and force.
+
 ## Output contract
 
 Machine-readable when stdout is not a terminal, human-readable when it is;
@@ -280,6 +307,7 @@ Machine-readable when stdout is not a terminal, human-readable when it is;
 | 6    | auth — credentials refused                             |
 | 7    | target error — the device reported failure             |
 | 8    | timeout                                                |
+| 130  | interrupted — Ctrl+C before the command finished       |
 | 70   | internal — a bug in the CLI                            |
 
 ## Credentials

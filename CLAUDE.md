@@ -446,7 +446,7 @@ that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its r
   channel.
 - **Startup:** the toolchain loads while the splash is up, and the main window appears only once it is ready. If it
   cannot load, the splash shows the reason with a Quit button.
-- **CLI:** the toolchain loads on first use, so only `openplc-cli compile` for the OpenPLC Simulator loads it.
+- **CLI:** the toolchain loads on first use, so only an OpenPLC Simulator build (`compile` for it, or `simulate`) loads it.
 - **Packaging:** the package ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
   entitlement in `assets/entitlements.mac.plist` lets it run under the hardened runtime.
 - **Running a module** is the caller's job. Instantiating one in the renderer needs `'wasm-unsafe-eval'` in the
@@ -480,7 +480,8 @@ kills them all), the thread protocol and the Wasmer runtime. The module starts a
 `wasm-sim/sim_python.cpp` (`env.host_python_block`), force-included header `wasm-sim/stub/iec_python.h`. The runtime
 loads during the splash (startup fails on the splash if it cannot); interpreters for a project's blocks boot right
 after its module compiles, and the PLC starts once they are ready (not during the compile: on WebKit that stalls the
-in-browser compiler).
+in-browser compiler). `openplc-cli simulate` (`src/cli/commands/simulate.ts`) runs the same simulator and loads
+Python only for a project with Python blocks; a runtime that cannot load ends it with the reason and a non-zero exit.
 
 - **Assets:** the CPython package and the numpy wheel are pinned by sha256 in `python-runtime.json` and fetched at
   install time into `vendor/python-runtime/` (`npm run setup:python`, part of `postinstall`; never committed, the
@@ -489,7 +490,7 @@ in-browser compiler).
   nothing.
 - **Updating:** change the pins in `python-runtime.json` in both repos (and the exact `@wasmer/sdk` version with both
   lockfiles), run `setup:python -- --force`, refresh the licence texts, then run `e2e/python-blocks-play.spec.ts` in
-  both repos (WebKit included on the web).
+  both repos (WebKit included on the web) and `e2e/cli-simulate.spec.ts` in the editor.
 
 ### Debugging
 
