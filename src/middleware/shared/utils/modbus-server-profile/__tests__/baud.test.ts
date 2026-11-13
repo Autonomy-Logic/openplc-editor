@@ -13,11 +13,15 @@ import {
   isDefaultPort,
   readSerialBaudState,
   resolveDefaultPortBaud,
-  resolveRs485Pin,
   resolveRtuPort,
   resolveServerBaud,
   resolveServerSlaveId,
 } from '../baud'
+import { resolveRs485Pins } from '../../modbus-master-profile'
+
+/** A board with today's Serial screen, Modbus RTU server on the default UART. */
+const legacyPins = (state: Parameters<typeof resolveRs485Pins>[0]) =>
+  resolveRs485Pins(state, { serialPorts: ['Serial'], perUartAware: false }, 'Serial')
 
 describe('resolveDefaultPortBaud', () => {
   it("carries the package's value for the board's default UART", () => {
@@ -104,28 +108,13 @@ describe('resolveServerSlaveId', () => {
   })
 })
 
-describe('resolveRs485Pin', () => {
-  it('reports the pin only when the board declares the driver-enable is wired', () => {
-    // Without it the transceiver never asserts DE and the board receives every
-    // request and answers none -- silent, with no warning on any path.
-    expect(resolveRs485Pin({ serial: { enable_rs485_en_pin: true, rs485_en_pin: '17' } })).toBe('17')
-  })
-
-  it('reports nothing when it is off, unset, or enabled with no pin', () => {
-    expect(resolveRs485Pin({})).toBeNull()
-    expect(resolveRs485Pin({ serial: { rs485_en_pin: '17' } })).toBeNull()
-    expect(resolveRs485Pin({ serial: { enable_rs485_en_pin: false, rs485_en_pin: '17' } })).toBeNull()
-    expect(resolveRs485Pin({ serial: { enable_rs485_en_pin: true, rs485_en_pin: '' } })).toBeNull()
-  })
-})
-
 describe('readSerialBaudState', () => {
   it('narrows the Serial screen off raw persisted state', () => {
     const state = readSerialBaudState({
       serial: { baud_rate: '19200', enable_rs485_en_pin: true, rs485_en_pin: '17' },
     })
     expect(resolveDefaultPortBaud(state)).toBe('19200')
-    expect(resolveRs485Pin(state)).toBe('17')
+    expect(legacyPins(state)).toEqual({ Serial: '17' })
   })
 
   it('survives a project file whose values are the wrong type', () => {
@@ -133,7 +122,7 @@ describe('readSerialBaudState', () => {
     // otherwise put a bad baud rate on screen and into the build.
     const state = readSerialBaudState({ serial: { baud_rate: 19200, enable_rs485_en_pin: 'yes', rs485_en_pin: 17 } })
     expect(resolveDefaultPortBaud(state)).toBe(DEFAULT_SERIAL_BAUD)
-    expect(resolveRs485Pin(state)).toBeNull()
+    expect(legacyPins(state)).toEqual({})
   })
 
   it('survives a missing or malformed serial section', () => {
@@ -149,6 +138,6 @@ describe('readSerialBaudState', () => {
       modbus_rtu: { rtu_baud_rate: '9600', rtu_interface: 'Serial2', rtu_rs485_en_pin: '17' },
     })
     expect(resolveDefaultPortBaud(legacy)).toBe(DEFAULT_SERIAL_BAUD)
-    expect(resolveRs485Pin(legacy)).toBeNull()
+    expect(legacyPins(legacy)).toEqual({})
   })
 })
