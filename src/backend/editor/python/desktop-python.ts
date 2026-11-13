@@ -14,12 +14,19 @@ export function createThreadPythonMechanism(paths: PythonRuntimePaths): PythonTh
         workerData: { sdkEntry: paths.sdkEntry, pythonPackage: paths.pythonPackage, numpyWheel: paths.numpyWheel },
       })
       worker.unref()
+      let terminating = false
       return {
         post: (message) => worker.postMessage(message),
         onMessage: (listener) => worker.on('message', listener),
         onFailure: (listener) => {
           worker.on('error', (error) => listener(error.message))
-          worker.on('exit', (code) => listener(`the thread exited with code ${code}`))
+          worker.on('exit', (code) => {
+            if (!terminating) listener(`the thread exited with code ${code}`)
+          })
+        },
+        terminate: () => {
+          terminating = true
+          void worker.terminate()
         },
       }
     },

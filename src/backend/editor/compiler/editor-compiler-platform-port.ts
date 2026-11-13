@@ -283,22 +283,7 @@ export function createEditorCompilerPlatformPort(
       return Promise.resolve(result)
     },
 
-    /**
-     * Materialise the in-memory file map to disk under the project's
-     * build directory, then spawn `arduino-cli compile` via the
-     * existing `handleCompileArduinoProgram`.
-     *
-     * When a `Baremetal.ino.hex` exists under the FQBN build folder
-     * we read it back into the result `binary` field.  Non-AVR cores
-     * (RP2040 → `.uf2`, ESP32 / mbed → `.bin`) don't produce a `.hex`
-     * and don't need an in-memory binary: arduino-cli's separate
-     * `upload` step finds the right artefact on disk under whatever
-     * extension the core produced.  In that case we return
-     * `{ ok: true, binary: undefined }` and the shared pipeline
-     * proceeds — the simulator branch is the only one that requires
-     * a non-empty binary and it bails there with a clearer error if
-     * .hex is somehow missing on AVR.
-     */
+    /** Writes the request's text files to the build folder (the debugger reads the debug map there), then compiles. */
     async compileToWasm(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult> {
       const textFiles: Record<string, string> = {}
       for (const [path, content] of Object.entries(request.files)) {
@@ -319,6 +304,20 @@ export function createEditorCompilerPlatformPort(
       return context.wasmCompileService.compile(request, log)
     },
 
+    /**
+     * Materialise the in-memory file map to disk under the project's
+     * build directory, then spawn `arduino-cli compile` via the
+     * existing `handleCompileArduinoProgram`.
+     *
+     * When a `Baremetal.ino.hex` exists under the FQBN build folder
+     * we read it back into the result `binary` field.  Non-AVR cores
+     * (RP2040 → `.uf2`, ESP32 / mbed → `.bin`) don't produce a `.hex`
+     * and don't need an in-memory binary: arduino-cli's separate
+     * `upload` step finds the right artefact on disk under whatever
+     * extension the core produced.  In that case we return
+     * `{ ok: true, binary: undefined }` and the shared pipeline
+     * proceeds.
+     */
     async compileArduino(args: CompileArduinoArgs, log: PlatformLog): Promise<CompileArduinoResult> {
       try {
         await syncBuildFolder(context.compilationPath, args.files, context.staticFirmwareFiles ?? {})

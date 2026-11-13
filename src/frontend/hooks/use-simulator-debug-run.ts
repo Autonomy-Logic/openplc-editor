@@ -47,6 +47,8 @@ export interface UseSimulatorDebugRunArgs {
 }
 
 export interface UseSimulatorDebugRunReturn {
+  /** True from `launch` until the run has started or failed, and from `stop` until it has stopped. */
+  isBusy: boolean
   /** True while the emulator is running. */
   isRunning: boolean
   /**
@@ -84,6 +86,7 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
   const addLog = useOpenPLCStore((state) => state.consoleActions.addLog)
 
   const [isRunning, setIsRunning] = useState(false)
+  const [isBusy, setIsBusy] = useState(false)
 
   // Callers pass these as inline arrows, so their identity changes on every
   // render. Held in refs and read at call time so the subscription below and
@@ -113,11 +116,8 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
     return simulator.onLog((line, stream) => addLog({ level: stream === 'stderr' ? 'error' : 'info', message: line }))
   }, [simulator, addLog])
 
-  const launch = useCallback(
-    async (
-      firmwarePath: string,
-      options: { attachDebugger?: boolean; projectData?: PLCProjectData } = {},
-    ): Promise<boolean> => {
+  const start = useCallback(
+    async (firmwarePath: string, options: { attachDebugger?: boolean; projectData?: PLCProjectData }) => {
       const pythonBlocks = options.projectData ? countPythonBlockInstances(options.projectData) : 0
       if (pythonBlocks > 0) {
         // A failure here is reported, and the blocks then start on demand.
@@ -150,7 +150,23 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
     [simulator, debugSession, addLog],
   )
 
+  const launch = useCallback(
+    async (
+      firmwarePath: string,
+      options: { attachDebugger?: boolean; projectData?: PLCProjectData } = {},
+    ): Promise<boolean> => {
+      setIsBusy(true)
+      try {
+        return await start(firmwarePath, options)
+      } finally {
+        setIsBusy(false)
+      }
+    },
+    [start],
+  )
+
   const stop = useCallback(async (): Promise<void> => {
+    setIsBusy(true)
     try {
       // Two things end here, in this order, and the emulator's end is not
       // conditional on the debug session's.
@@ -185,8 +201,10 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
       addLog({ level: 'info', message: 'Simulator stopped.' })
     } catch (error: unknown) {
       addLog({ level: 'error', message: `Simulator control error: ${getErrorMessage(error)}` })
+    } finally {
+      setIsBusy(false)
     }
   }, [debugSession, simulator, addLog])
 
-  return { isRunning, launch, stop }
+  return { isBusy, isRunning, launch, stop }
 }

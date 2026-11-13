@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { parsePythonRuntimeManifest, type PinnedPythonFiles } from '@root/backend/shared/python/python-runtime-files'
+
 export interface PythonRuntimeLocation {
   isPackaged: boolean
   resourcesPath: string
@@ -17,22 +19,9 @@ export interface PythonRuntimePaths {
   numpyWheel: string
 }
 
-interface PinnedFiles {
-  python: string
-  numpy: string
-}
-
-const fileOf = (pins: unknown, key: string): string => {
-  const entry: unknown = typeof pins === 'object' && pins !== null ? Reflect.get(pins, key) : null
-  const file: unknown = typeof entry === 'object' && entry !== null ? Reflect.get(entry, 'file') : null
-  if (typeof file !== 'string') throw new Error(`python-runtime.json has no file for '${key}'.`)
-  return file
-}
-
 /** The file names `python-runtime.json` pins, which the install script downloads under those names. */
-export function readPinnedPythonFiles(manifestPath: string): PinnedFiles {
-  const pins: unknown = JSON.parse(readFileSync(manifestPath, 'utf8'))
-  return { python: fileOf(pins, 'python'), numpy: fileOf(pins, 'numpy') }
+export function readPinnedPythonFiles(manifestPath: string): PinnedPythonFiles {
+  return parsePythonRuntimeManifest(readFileSync(manifestPath, 'utf8'))
 }
 
 /**

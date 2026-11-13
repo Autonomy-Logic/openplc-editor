@@ -10,6 +10,8 @@ export interface PythonThreadHandle {
   onMessage(listener: (message: unknown) => void): void
   /** Called once when the thread ends without being asked to, with the reason. */
   onFailure(listener: (reason: string) => void): void
+  /** Ends the thread and everything running in it. */
+  terminate(): void
 }
 
 export interface PythonThreadMechanism {

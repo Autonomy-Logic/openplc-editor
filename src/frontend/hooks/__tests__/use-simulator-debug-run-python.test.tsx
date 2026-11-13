@@ -39,6 +39,7 @@ const pythonProject = (instances: number): PLCProjectData => ({
 function setUp(
   preparePython: (count: number) => Promise<void>,
   loadFirmware: () => Promise<{ success: boolean }> = () => Promise.resolve({ success: true }),
+  stop: () => Promise<{ success: boolean }> = () => Promise.resolve({ success: true }),
 ) {
   const store = createTestStore()
   let emit: (line: string, stream: 'stdout' | 'stderr') => void = () => undefined
@@ -52,9 +53,10 @@ function setUp(
       },
       preparePython,
       loadFirmware,
+      stop,
     },
   })
-  const debugSession = {} as UseDebugSessionReturn
+  const debugSession = { stopSession: () => Promise.resolve() } as unknown as UseDebugSessionReturn
   const { result } = renderHook(() => useSimulatorDebugRun({ debugSession }), {
     wrapper: createStoreWrapper(store, ports),
   })
@@ -89,6 +91,53 @@ describe('useSimulatorDebugRun and Python blocks', () => {
     await act(() => result.current.launch('module', { projectData: pythonProject(0) }))
     await act(() => result.current.launch('module'))
     expect(order).toEqual(['prepare 3', 'load', 'load', 'load'])
+  })
+
+  it('is busy from launch until the run has started, and from stop until it has stopped', async () => {
+    let releasePython: () => void = () => undefined
+    const preparing = new Promise<void>((resolve) => (releasePython = resolve))
+    let releaseStop: () => void = () => undefined
+    const stopping = new Promise<{ success: boolean }>((resolve) => (releaseStop = () => resolve({ success: true })))
+    const { result } = setUp(
+      () => preparing,
+      () => Promise.resolve({ success: true }),
+      () => stopping,
+    )
+    expect(result.current.isBusy).toBe(false)
+
+    let launched: Promise<boolean> = Promise.resolve(false)
+    act(() => {
+      launched = result.current.launch('module', { projectData: pythonProject(1) })
+    })
+    expect(result.current.isBusy).toBe(true)
+    await act(async () => {
+      releasePython()
+      await launched
+    })
+    expect(result.current.isBusy).toBe(false)
+    expect(result.current.isRunning).toBe(true)
+
+    let stopped: Promise<void> = Promise.resolve()
+    act(() => {
+      stopped = result.current.stop()
+    })
+    expect(result.current.isBusy).toBe(true)
+    await act(async () => {
+      releaseStop()
+      await stopped
+    })
+    expect(result.current.isBusy).toBe(false)
+    expect(result.current.isRunning).toBe(false)
+  })
+
+  it('is not busy after a launch that fails', async () => {
+    const { result } = setUp(
+      () => Promise.resolve(),
+      () => Promise.resolve({ success: false }),
+    )
+    await act(() => result.current.launch('module'))
+    expect(result.current.isBusy).toBe(false)
+    expect(result.current.isRunning).toBe(false)
   })
 
   it('reports interpreters that cannot be prepared and still starts the PLC', async () => {

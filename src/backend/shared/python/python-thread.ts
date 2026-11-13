@@ -260,9 +260,10 @@ export class ThreadedPythonRuntime implements PythonInterpreters {
     }
   }
 
-  /** Forgets a thread that died or never loaded, ending what ran in it. */
+  /** Ends a thread that died or never loaded, and what ran in it. */
   private lose(thread: PythonThreadHandle, reason: string): void {
     if (this.thread === thread) this.thread = null
+    thread.terminate()
     this.loading = null
     for (const pending of this.spawning.values()) pending.reject(new Error(reason))
     this.spawning.clear()

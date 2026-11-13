@@ -38,6 +38,7 @@ class EchoProcess implements PythonProcess {
 
 interface FakeThread extends PythonThreadHandle {
   crash(reason: string): void
+  terminated: boolean
 }
 
 /** A thread running `servePythonThread` in this process, with messages delivered asynchronously. */
@@ -67,6 +68,10 @@ function inMemoryThread(
         onFailure: (listener) => failures.push(listener),
         crash: (reason) => {
           for (const listener of failures) listener(reason)
+        },
+        terminated: false,
+        terminate: () => {
+          thread.terminated = true
         },
       }
       servePythonThread(channel, load)
@@ -137,8 +142,10 @@ describe('ThreadedPythonRuntime with servePythonThread', () => {
     })
     const runtime = new ThreadedPythonRuntime(mechanism)
     await expect(runtime.load()).rejects.toThrow('package missing')
+    expect(mechanism.threads[0].terminated).toBe(true)
     await expect(runtime.spawn()).resolves.toBeDefined()
     expect(mechanism.spawns).toBe(2)
+    expect(mechanism.threads[1].terminated).toBe(false)
   })
 
   it('rejects a spawn the runtime refuses', async () => {
@@ -156,6 +163,7 @@ describe('ThreadedPythonRuntime with servePythonThread', () => {
     process.onExit = (code) => exits.push(code)
     mechanism.threads[0].crash('out of memory')
     expect(exits).toEqual([{ kind: 'failed', reason: 'The Python thread stopped: out of memory' }])
+    expect(mechanism.threads[0].terminated).toBe(true)
 
     await runtime.load()
     expect(mechanism.spawns).toBe(2)
@@ -168,6 +176,7 @@ describe('ThreadedPythonRuntime with servePythonThread', () => {
     await next()
     mechanism.threads[0].crash('killed')
     await expect(loading).rejects.toThrow('The Python thread stopped: killed')
+    expect(mechanism.threads[0].terminated).toBe(true)
 
     const broken = new ThreadedPythonRuntime({ spawn: () => Promise.reject(new Error('no workers')) })
     await expect(broken.load()).rejects.toThrow('no workers')

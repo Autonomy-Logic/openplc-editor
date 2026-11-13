@@ -12,6 +12,7 @@
  * emit-event payloads.
  */
 
+import hals from '../../firmware/hals.json'
 import type { DevicePin } from '../../types/PLC/devices'
 import type { PLCProjectData } from '../../types/PLC/open-plc'
 import type {
@@ -612,6 +613,45 @@ describe('runCompilePipeline — I/O image gate', () => {
     const result = await runCompilePipeline(makeArgs({ projectData: twoServers, compileOnly: true }), port, emit)
 
     expect(result.success).toBe(true)
+  })
+
+  it('builds the simulator with enabled OPC-UA and S7 servers, which it ignores', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+    const withServers = {
+      ...projectDataFixture,
+      servers: [
+        {
+          name: 'OPCUA',
+          protocol: 'opcua',
+          opcuaServerConfig: {
+            server: { enabled: true, name: 'OpenPLC OPC UA Server', port: 4840, endpointPath: '/openplc/opcua' },
+            securityProfiles: [],
+            users: [],
+            addressSpace: { namespaceUri: 'urn:openplc:opcua:namespace', nodes: [] },
+          },
+        },
+        {
+          name: 'S7',
+          protocol: 's7comm',
+          s7commSlaveConfig: { server: { enabled: true, port: 102 }, dataBlocks: [] },
+        },
+      ],
+    } as unknown as PLCProjectData
+
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: withServers,
+        boardEntry: { ...makeArgs().boardEntry, compiler: hals['OpenPLC Simulator'].compiler },
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    const files = simulatorRequestFiles(port)
+    expect(String(files['src/opcua_config.h'] ?? '')).not.toContain('OPCUA_ENABLED 1')
+    expect(String(files['src/s7comm_config.h'] ?? '')).not.toContain('S7COMM_ENABLED 1')
   })
 
   it('composes a byte-identical bundle when the same project is compiled twice', async () => {

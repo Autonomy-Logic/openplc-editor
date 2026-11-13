@@ -70,6 +70,7 @@ import type {
   PlcControlResult,
 } from '@root/backend/shared/debug/types'
 import { runEsiParseOp } from '@root/backend/shared/ethercat/esi-parse-ops'
+import { buildNeedsArduinoComponents } from '@root/backend/shared/firmware/board-toolchain'
 import { getHalsFile } from '@root/backend/shared/firmware/hals-loader'
 import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/library/public-catalog-client'
 import type { SnapshotMetadata } from '@root/backend/shared/project/project-snapshot-archive'
@@ -2235,9 +2236,7 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   async #compileAfterStartupCheck(args: CompileProgramIpcArgs, port: MessagePortMain): Promise<void> {
-    const builtIn: Record<string, { compiler?: string } | undefined> = getHalsFile()
-    const usesArduinoCli = builtIn[args[1]]?.compiler !== 'simulator'
-    if (usesArduinoCli && this.startupDependencies.isRunning()) {
+    if (buildNeedsArduinoComponents(getHalsFile(), args[1]) && this.startupDependencies.isRunning()) {
       port.postMessage({
         logLevel: 'info',
         message: 'Waiting for the editor to finish installing the Arduino components every build needs...',
