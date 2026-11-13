@@ -200,7 +200,9 @@ export async function syncRuntimeLicenses(
   const rechecks = first.report.source === 'orchestrator' ? VPLC_SEAT_RECHECKS : 0
   for (let attempt = 0; ; attempt++) {
     const again = await readRuntimeLicenseReport(mechanisms)
-    if (!again.ok) return { status: 'synced', hardwareId, license: 'gpl', uploads, detail: again.error }
+    if (!again.ok) {
+      return { status: 'failed', error: `License uploaded, but the runtime could not be read back: ${again.error}` }
+    }
     if (await reportHasValidLicense(again.report, keys)) {
       return { status: 'synced', hardwareId, license: 'commercial', uploads }
     }

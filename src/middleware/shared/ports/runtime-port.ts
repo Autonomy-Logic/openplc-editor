@@ -151,7 +151,7 @@ export interface RuntimeLicenseUploadOutcome {
 
 /**
  * The runtime's commercial licence as the editor verified it, and the Edge licences it uploaded.
- * `detail` says why a licence could not be confirmed when Edge or the second read failed.
+ * `detail` says why a licence could not be confirmed when Edge could not be reached.
  */
 export type RuntimeLicenseSyncResult =
   | {

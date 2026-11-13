@@ -200,8 +200,17 @@ const EditSessionClientSchema = z.object({
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 
 /** Runtime licence keys of one product plus the `OPENPLC_RUNTIME_LICENSE_DEV_KEY` development key, if set. */
-const runtimeKeysWithDevKey = (keys: RuntimeLicenseKeys) =>
-  withRuntimeLicenseDevKey(keys, parseRuntimeLicenseDevKey(process.env.OPENPLC_RUNTIME_LICENSE_DEV_KEY))
+let devKeyCollisionWarned = false
+const runtimeKeysWithDevKey = (keys: RuntimeLicenseKeys) => {
+  const devKey = parseRuntimeLicenseDevKey(process.env.OPENPLC_RUNTIME_LICENSE_DEV_KEY)
+  if (devKey && Object.prototype.hasOwnProperty.call(keys, devKey.keyId) && !devKeyCollisionWarned) {
+    devKeyCollisionWarned = true
+    logger.warn(
+      `OPENPLC_RUNTIME_LICENSE_DEV_KEY ignored: key_id ${devKey.keyId} belongs to a shipped key; use another key_id.`,
+    )
+  }
+  return withRuntimeLicenseDevKey(keys, devKey)
+}
 
 /** A request for the baremetal runtime product verifies the stored licence in full. */
 const licenseInput = (request: DeviceLicenseRequest) =>

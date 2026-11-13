@@ -314,6 +314,20 @@ describe('syncRuntimeLicenses', () => {
     expect(offline.calls.some((c) => c.kind === 'runtimePost')).toBe(false)
   })
 
+  it('gives no status when the runtime cannot be read back after an upload', async () => {
+    const target = fakeTarget({ edge: [signed()] })
+    let reads = 0
+    const flaky = mechanisms({
+      runtimeGet: async (path) => (++reads === 1 ? target.m.runtimeGet(path) : { status: 503, body: '' }),
+      edgePost: (path, json) => target.m.edgePost(path, json as Record<string, unknown>),
+      runtimePost: (path, json) => target.m.runtimePost(path, json as Record<string, unknown>),
+    })
+    await expect(syncRuntimeLicenses(flaky.m, KEYS)).resolves.toEqual({
+      status: 'failed',
+      error: 'License uploaded, but the runtime could not be read back: Get runtime licenses failed: 503',
+    })
+  })
+
   it('reports no hardware ID, and a failed first read', async () => {
     const none = fakeTarget({ hardwareId: null })
     await expect(syncRuntimeLicenses(none.m, KEYS)).resolves.toEqual({ status: 'no-hardware-id' })
