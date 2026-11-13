@@ -23,6 +23,13 @@ const makeNonBlockNode = (id: string): Node => ({
   data: {},
 })
 
+const makeVariableNode = (id: string, type: string, expression: string): Node => ({
+  id,
+  type,
+  position: { x: 0, y: 0 },
+  data: { variable: { name: expression } },
+})
+
 const makeVariable = (name: string, definition: string): PLCVariable =>
   ({
     name,
@@ -148,5 +155,96 @@ describe('getFunctionBlockVariablesToCleanup', () => {
 
     const result = getFunctionBlockVariablesToCleanup(removedNodes, allRungs, allVariables)
     expect(result).toEqual(['MyFB'])
+  })
+})
+
+describe('getFunctionBlockVariablesToCleanup with the diagram still holding the removed nodes', () => {
+  it('returns the instance when the only block using it is the removed one, still present in the diagram', () => {
+    const removedBlock = makeBlockNode('block-1', 'TON0', 'function-block')
+    const staleRungs = [{ nodes: [removedBlock] }]
+
+    const result = getFunctionBlockVariablesToCleanup([removedBlock], staleRungs, [makeVariable('TON0', 'derived')])
+
+    expect(result).toEqual(['TON0'])
+  })
+
+  it('returns the instance when a removed contact on its output is also still present in the diagram', () => {
+    const removedBlock = makeBlockNode('block-1', 'TON0', 'function-block')
+    const removedContact = makeVariableNode('contact-1', 'contact', 'TON0.Q')
+    const staleRungs = [{ nodes: [removedBlock, removedContact] }]
+
+    const result = getFunctionBlockVariablesToCleanup([removedBlock, removedContact], staleRungs, [
+      makeVariable('TON0', 'derived'),
+    ])
+
+    expect(result).toEqual(['TON0'])
+  })
+
+  it('keeps the instance when another block with a different id still uses it', () => {
+    const removedBlock = makeBlockNode('block-1', 'TON0', 'function-block')
+    const otherBlock = makeBlockNode('block-2', 'TON0', 'function-block')
+
+    const result = getFunctionBlockVariablesToCleanup(
+      [removedBlock],
+      [{ nodes: [removedBlock, otherBlock] }],
+      [makeVariable('TON0', 'derived')],
+    )
+
+    expect(result).toEqual([])
+  })
+})
+
+describe('getFunctionBlockVariablesToCleanup with the instance referenced by an expression', () => {
+  const removedBlock = makeBlockNode('block-1', 'TON0', 'function-block')
+  const instance = makeVariable('TON0', 'derived')
+
+  it.each(['TON0', 'TON0.Q', 'ton0.ET', 'NOT TON0.Q', 'TON0.Q AND x', 'NOT ton0.Q'])(
+    'keeps the instance when a contact in another rung reads %s',
+    (expression) => {
+      const rungs = [{ nodes: [] }, { nodes: [makeVariableNode('contact-1', 'contact', expression)] }]
+
+      expect(getFunctionBlockVariablesToCleanup([removedBlock], rungs, [instance])).toEqual([])
+    },
+  )
+
+  it.each(['coil', 'variable', 'input-variable', 'output-variable', 'inout-variable'])(
+    'keeps the instance when one of its members is read by a %s node',
+    (nodeType) => {
+      const rungs = [{ nodes: [makeVariableNode('node-1', nodeType, 'TON0.ET')] }]
+
+      expect(getFunctionBlockVariablesToCleanup([removedBlock], rungs, [instance])).toEqual([])
+    },
+  )
+
+  it.each(['TON01', 'MyTON0', 'X.TON0', ''])(
+    'returns the instance when the only other node reads %p, which is not the instance',
+    (expression) => {
+      const rungs = [{ nodes: [makeVariableNode('contact-1', 'contact', expression)] }]
+
+      expect(getFunctionBlockVariablesToCleanup([removedBlock], rungs, [instance])).toEqual(['TON0'])
+    },
+  )
+
+  it('returns the instance when a block of a function variant carries the same name', () => {
+    const rungs = [{ nodes: [makeBlockNode('block-2', 'TON0', 'function')] }]
+
+    expect(getFunctionBlockVariablesToCleanup([removedBlock], rungs, [instance])).toEqual(['TON0'])
+  })
+})
+
+describe('getFunctionBlockVariablesToCleanup with a user-defined function block', () => {
+  it('returns the instance of a removed user function block that nothing references', () => {
+    const removedBlock: Node = {
+      id: 'block-1',
+      type: 'block',
+      position: { x: 0, y: 0 },
+      data: { variable: { name: 'MyFB0' }, variant: { name: 'MyFB', type: 'function-block' } },
+    }
+    const instance = {
+      name: 'MyFB0',
+      type: { definition: 'derived', value: 'MyFB' },
+    } as unknown as PLCVariable
+
+    expect(getFunctionBlockVariablesToCleanup([removedBlock], [{ nodes: [] }], [instance])).toEqual(['MyFB0'])
   })
 })
