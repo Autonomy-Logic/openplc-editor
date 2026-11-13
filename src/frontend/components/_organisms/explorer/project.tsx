@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 
 import { projectCapabilities } from '../../../../middleware/shared/ports/types'
 import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
+import { canHostModbusMaster } from '../../../../middleware/shared/utils/modbus-master-profile'
 import { FolderIcon } from '../../../assets/icons/interface/Folder'
 import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
+import { useModbusMasterProfile } from '../../../hooks/use-modbus-master-profile'
 import { useTargetCapabilities } from '../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../store'
 import type { TabsProps } from '../../../store/slices/tabs'
@@ -84,7 +86,8 @@ const Project = () => {
   // config), and the variable-location dropdown already hides their points
   // behind this exact predicate.
   const targetCaps = useTargetCapabilities()
-  const canHostRemoteIo = targetCaps.modbusTcpRemote || targetCaps.ethercat
+  const masterProfile = useModbusMasterProfile()
+  const canHostRemoteIo = canHostModbusMaster(masterProfile) || targetCaps.ethercat
 
   // Get VPP vendor screens from the currently selected board
   const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)

@@ -284,6 +284,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
       <Popover.Trigger
         onMouseEnter={handleMouseEnter}
         id={`create-${target}-trigger`}
+        data-testid={`create-${target}`}
         className='group rounded-md focus:bg-neutral-100 dark:focus:bg-neutral-900'
       >
         <div

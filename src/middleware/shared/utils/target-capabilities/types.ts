@@ -160,8 +160,14 @@ export interface TargetCapabilities {
   /** VPP module slots (e.g. SLM-RP4 backplane modules). */
   vppIo: boolean
 
-  /** Modbus TCP slave remote devices. */
-  modbusTcpRemote: boolean
+  /** The target runs a Modbus TCP master, so a remote device can poll a slave
+   *  over the network. On baremetal a VPP manifest raises it. */
+  modbusTcpMaster: boolean
+
+  /** The target runs a Modbus RTU master over a UART. On baremetal the family
+   *  can; the master profile narrows it to boards with a UART besides the
+   *  debugger's. Not declarable by a VPP manifest. */
+  modbusRtuMaster: boolean
 
   /** EtherCAT slaves. */
   ethercat: boolean
@@ -193,6 +199,10 @@ export interface TargetCapabilities {
 
   opcuaServer: boolean
   s7Server: boolean
+
+  /** Sockets the baremetal network stack can hold open at once, as the VPP
+   *  manifest declares them; `null` where nothing declares a count. */
+  networkSockets: number | null
 
   /** Baremetal OPC-UA server dimensions. Meaningful only where `opcuaServer` is
    *  true and the target compiles the baremetal runtime. Optional so a VPP
@@ -293,7 +303,8 @@ export interface TargetCapabilities {
 }
 
 /**
- * The four flags that decide which producers claim IEC addresses.
+ * The flags that decide which producers claim IEC addresses. Remote-device I/O
+ * is one producer driven by either Modbus master.
  *
  * Address-space code reads nothing else, so it takes this narrower type and a
  * full `TargetCapabilities` is assignable to it. The point of the narrowing is
@@ -302,7 +313,7 @@ export interface TargetCapabilities {
  */
 export type AddressProducerCapabilities = Pick<
   TargetCapabilities,
-  'pinMapping' | 'vppIo' | 'modbusTcpRemote' | 'ethercat'
+  'pinMapping' | 'vppIo' | 'modbusTcpMaster' | 'modbusRtuMaster' | 'ethercat'
 >
 
 /**

@@ -32,7 +32,8 @@ import type { AddressProducerCapabilities, OpcUaTargetProfile, S7TargetProfile, 
 export const ALL_ADDRESS_PRODUCERS_ACTIVE: AddressProducerCapabilities = {
   pinMapping: true,
   vppIo: true,
-  modbusTcpRemote: true,
+  modbusTcpMaster: true,
+  modbusRtuMaster: true,
   ethercat: true,
 }
 
@@ -131,7 +132,8 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   // Servers and remote IO are no-ops at the bytecode level but reported
   // available so projects authored for Runtime v4 don't get nagged
   // when the user simulates them.
-  modbusTcpRemote: true,
+  modbusTcpMaster: true,
+  modbusRtuMaster: true,
   ethercat: true,
   modbusTcpServer: true,
   // The Simulator runs no Modbus slave at all — the flags are UX, so a
@@ -141,6 +143,7 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
   modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
+  networkSockets: null,
   // RTU over the emulated virtual serial port the in-process simulator
   // exposes — not Modbus TCP.
   debuggerTransports: ['modbus-serial'],
@@ -161,12 +164,14 @@ export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
 export const RUNTIME_V3_CAPABILITIES: TargetCapabilities = {
   pinMapping: false,
   vppIo: false,
-  modbusTcpRemote: false,
+  modbusTcpMaster: false,
+  modbusRtuMaster: false,
   ethercat: false,
   modbusTcpServer: false,
   modbusRtuServer: false,
   opcuaServer: false,
   s7Server: false,
+  networkSockets: null,
   debuggerTransports: ['modbus-tcp'],
   pythonFunctionBlocks: true,
   arduinoApiCompletions: false,
@@ -192,7 +197,8 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   // "Plain" Runtime v4 has no VPP backplane. VPP boards (SLM-RP4 etc.)
   // override this to `true` in their manifests.
   vppIo: false,
-  modbusTcpRemote: true,
+  modbusTcpMaster: true,
+  modbusRtuMaster: true,
   ethercat: true,
   modbusTcpServer: true,
   // The Runtime v4 Modbus slave plugin is a TCP listener; there is no serial
@@ -201,6 +207,7 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   opcuaServer: true,
   s7Server: true,
   s7: RUNTIME_V4_S7_PROFILE,
+  networkSockets: null,
   debuggerTransports: ['websocket'],
   pythonFunctionBlocks: true,
   arduinoApiCompletions: false,
@@ -219,7 +226,8 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
 export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   pinMapping: true,
   vppIo: false,
-  modbusTcpRemote: false,
+  modbusTcpMaster: false,
+  modbusRtuMaster: true,
   ethercat: false,
   // The baremetal firmware serves both, gated by the VPP Modbus screen's
   // per-transport toggles. These read `false` until DOPE-442 because the
@@ -233,6 +241,7 @@ export const ARDUINO_CLI_CAPABILITIES: TargetCapabilities = {
   modbusRtuServer: true,
   opcuaServer: false,
   s7Server: false,
+  networkSockets: null,
   // Arduino targets speak RTU over USB always; some also speak TCP
   // via an ethernet shield. Both flagged available — the actual
   // user-facing protocol selector picks between them at debug time.

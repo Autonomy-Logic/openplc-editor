@@ -230,6 +230,8 @@ export interface ModbusRemoteTcpConfig {
   transport?: 'tcp' | 'rtu'
   host?: string
   port?: number
+  /** TCP only. Absent in projects saved before the option; read it through `resolveReconnect`. */
+  reconnect?: boolean
   serialPort?: string
   baudRate?: number
   parity?: ModbusParity

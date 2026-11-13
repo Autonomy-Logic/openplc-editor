@@ -1,3 +1,4 @@
+export { runsModbusMaster } from './modbus-master'
 export {
   ALL_ADDRESS_PRODUCERS_ACTIVE,
   ARDUINO_CLI_CAPABILITIES,

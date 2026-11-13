@@ -589,8 +589,9 @@ openplc-web). Pure functions, no IPC, no electron coupling.
 
 - **Address pool** (`address-pool.ts`): producer-only, target-scoped
   view of every claimed IEC address. Producers = pin mapping, VPP
-  module slots, Modbus TCP remote IO points, EtherCAT channel
-  mappings. Capability scoping comes from `target-capabilities` —
+  module slots, Modbus remote-device IO points (active when the target
+  runs the TCP or the RTU master), EtherCAT channel mappings.
+  Capability scoping comes from `target-capabilities` —
   switching targets activates / deactivates entire producers.
   - Reservation pass: pin-mapping (Arduino-style fixed addresses).
   - Allocation pass: every other producer in deterministic order.

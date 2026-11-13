@@ -2,7 +2,9 @@ import * as Popover from '@radix-ui/react-popover'
 import { useState } from 'react'
 
 import { projectCapabilities } from '../../../../../middleware/shared/ports/types'
+import { canHostModbusMaster } from '../../../../../middleware/shared/utils/modbus-master-profile'
 import { PlusIcon } from '../../../../assets/icons/interface/Plus'
+import { useModbusMasterProfile } from '../../../../hooks/use-modbus-master-profile'
 import { useTargetCapabilities } from '../../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../../store'
 import { cn } from '../../../../utils/cn'
@@ -39,6 +41,7 @@ const CreatePLCElement = () => {
   // hides them behind this same predicate). Unlike the tree branch, which
   // keeps already-configured devices visible, creation is refused outright.
   const targetCaps = useTargetCapabilities()
+  const masterProfile = useModbusMasterProfile()
   const CreatePLCElementTypes: CreatePLCElementType[] = (
     ['function', 'function-block', 'program', 'data-type', 'global-variable-list', 'server', 'remote-device'] as const
   ).filter((target) => {
@@ -48,7 +51,7 @@ const CreatePLCElement = () => {
       case 'server':
         return projectCaps.hasServers
       case 'remote-device':
-        return projectCaps.hasRemoteDevices && (targetCaps.modbusTcpRemote || targetCaps.ethercat)
+        return projectCaps.hasRemoteDevices && (canHostModbusMaster(masterProfile) || targetCaps.ethercat)
       default:
         // function / function-block / data-type / global-variable-list — always available.
         return true

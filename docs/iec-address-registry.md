@@ -179,8 +179,11 @@ producer's creation path is capability-gated in the UI, so "capability off"
 and "cannot author this producer" coincide. Remote devices reach that state
 through two predicates rather than one — the project type
 (`projectCaps.hasRemoteDevices`, false for libraries) and the target
-(`modbusTcpRemote || ethercat`, the same predicate the variable-location
-dropdown uses). Devices already configured stay **visible** on a target that
+(`modbusTcpMaster || modbusRtuMaster || ethercat`, the same predicate the
+address pool, `activeKindsFor` and the variable-location dropdown use). The
+creation menu narrows the Modbus half to `canHostModbusMaster` of the Modbus
+master profile, which also drops a baremetal board with no TCP master and no
+UART besides the debugger's. Devices already configured stay **visible** on a target that
 can't host them, because the board-switch warning promises they are "disabled
 during compilation", not removed; only creating a new one is refused.
 

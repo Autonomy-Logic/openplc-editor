@@ -37,7 +37,7 @@
  */
 
 import type { DevicePin, IoMappingEntry } from '../../middleware/shared/ports/types'
-import type { TargetCapabilities } from '../../middleware/shared/utils/target-capabilities'
+import { runsModbusMaster, type TargetCapabilities } from '../../middleware/shared/utils/target-capabilities'
 import {
   buildRemoteDeviceOptionGroups,
   buildVendorIoOptionGroups,
@@ -65,8 +65,8 @@ export interface BuildLocationDropdownOptionsInput {
   pins: DevicePin[]
   /** Modbus TCP slave / EtherCAT remote IO points, already flattened
    *  by `remoteDeviceSelectors.useRemoteDeviceIOPoints`. Honored only
-   *  when EITHER `capabilities.modbusTcpRemote` or
-   *  `capabilities.ethercat` is true. */
+   *  when EITHER Modbus master (`capabilities.modbusTcpMaster` or
+   *  `capabilities.modbusRtuMaster`) or `capabilities.ethercat` is true. */
   remoteIOPoints: RemoteDeviceIOPoint[]
   /** VPP module IO mappings from `vendorScreenData['io-mapping']`.
    *  Honored only when `capabilities.vppIo` is true. */
@@ -102,7 +102,7 @@ export function buildLocationDropdownOptions(input: BuildLocationDropdownOptions
   // the bucket when EITHER capability is on; the pool drops claims
   // the active target can't drive at sync time.
   const remoteGroups =
-    capabilities.modbusTcpRemote || capabilities.ethercat ? buildRemoteDeviceOptionGroups(cellId, remoteIOPoints) : []
+    runsModbusMaster(capabilities) || capabilities.ethercat ? buildRemoteDeviceOptionGroups(cellId, remoteIOPoints) : []
   const vendorGroups = capabilities.vppIo ? buildVendorIoOptionGroups(cellId, vendorIoEntries) : []
 
   return [

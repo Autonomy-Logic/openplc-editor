@@ -35,8 +35,11 @@ import type { AddressProducerCapabilities, OpcUaTargetProfile, S7TargetProfile, 
  * `Partial<TargetCapabilities>` makes the top-level keys optional but still
  * demands a complete `opcua` / `s7` profile, while the contract for both is
  * "declare only what you raise". The nested blocks have to be partial too.
+ *
+ * `modbusRtuMaster` is not declarable: it comes from the family preset and the
+ * master profile narrows it to the board's spare UARTs.
  */
-export type DeclaredCapabilities = Omit<Partial<TargetCapabilities>, 'opcua' | 's7'> & {
+export type DeclaredCapabilities = Omit<Partial<TargetCapabilities>, 'opcua' | 's7' | 'modbusRtuMaster'> & {
   opcua?: Partial<OpcUaTargetProfile>
   s7?: Partial<S7TargetProfile>
 }
@@ -62,12 +65,14 @@ export type BoardInfoLike = {
 const EMPTY_CAPABILITIES: TargetCapabilities = {
   pinMapping: false,
   vppIo: false,
-  modbusTcpRemote: false,
+  modbusTcpMaster: false,
+  modbusRtuMaster: false,
   ethercat: false,
   modbusTcpServer: false,
   modbusRtuServer: false,
   opcuaServer: false,
   s7Server: false,
+  networkSockets: null,
   debuggerTransports: [],
   pythonFunctionBlocks: false,
   arduinoApiCompletions: false,
@@ -184,9 +189,9 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
   return merged
 }
 
-/** The four fields that say a producer is active. A block naming none of them
- *  has not spoken about producers, whatever else it declares. */
-const ADDRESS_PRODUCER_KEYS = ['pinMapping', 'vppIo', 'modbusTcpRemote', 'ethercat'] as const
+/** The fields that say a producer is active. A block naming none of them has
+ *  not spoken about producers, whatever else it declares. */
+const ADDRESS_PRODUCER_KEYS = ['pinMapping', 'vppIo', 'modbusTcpMaster', 'modbusRtuMaster', 'ethercat'] as const
 
 /**
  * True when nothing in the board info says which producers are active.
@@ -203,7 +208,7 @@ const ADDRESS_PRODUCER_KEYS = ['pinMapping', 'vppIo', 'modbusTcpRemote', 'etherc
  */
 function saysNothingAboutProducers(boardInfo: BoardInfoLike | undefined): boolean {
   if (!boardInfo) return true
-  const declared = boardInfo.capabilities
+  const declared: Partial<AddressProducerCapabilities> | undefined = boardInfo.capabilities
   if (declared && ADDRESS_PRODUCER_KEYS.some((key) => declared[key] !== undefined)) return false
   return inferFromCompiler(boardInfo) === EMPTY_CAPABILITIES
 }

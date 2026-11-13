@@ -2,6 +2,7 @@
 import { describeMissingVppPackage, type VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
 import { useCapabilities, useDevice, usePackages } from '@root/middleware/shared/providers/platform-context'
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
+import { canHostModbusMaster, resolveModbusMasterProfile } from '@root/middleware/shared/utils/modbus-master-profile'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -387,7 +388,8 @@ const Board = memo(function () {
       const hasServers = servers && servers.length > 0
       const hasRemoteDevices = remoteDevices && remoteDevices.length > 0
       const targetCantHostServers = !targetCaps.modbusTcpServer && !targetCaps.opcuaServer && !targetCaps.s7Server
-      const targetCantHostRemoteIo = !targetCaps.modbusTcpRemote && !targetCaps.ethercat
+      const targetCantHostRemoteIo =
+        !canHostModbusMaster(resolveModbusMasterProfile(targetBoardInfo, targetCaps)) && !targetCaps.ethercat
 
       const losingServers = hasServers && targetCantHostServers
       const losingRemoteIo = hasRemoteDevices && targetCantHostRemoteIo

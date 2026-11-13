@@ -3,6 +3,7 @@ import type { StoreApi } from 'zustand'
 import { StateCreator } from 'zustand'
 
 import type {
+  BoardInfo,
   ModbusIOPoint,
   OpcUaServerConfig,
   PLCPou,
@@ -35,11 +36,16 @@ import {
   restoreAliasesFromMemory,
   unpinAllocatableChannels,
 } from '../../../../middleware/shared/utils/iec-address/registry'
-import type {
-  AddressProducerCapabilities,
-  BoardInfoLike,
+import {
+  createDefaultRemoteDeviceConfig,
+  type ModbusMasterProfile,
+  resolveModbusMasterProfile,
+} from '../../../../middleware/shared/utils/modbus-master-profile'
+import {
+  type AddressProducerCapabilities,
+  resolveAddressProducerCapabilities,
+  resolveTargetCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
-import { resolveAddressProducerCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
 import { buildTypeContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
@@ -327,8 +333,14 @@ function readVppEntries(live: ProjectSliceRoot): VppMappingEntry[] {
 /** The active target's BoardInfo, or `undefined` when the board id doesn't
  *  resolve — a VPP board whose package isn't installed, a project authored on
  *  another machine, or the catalogue not having loaded yet. */
-function resolveBoardInfo(live: ProjectSliceRoot): BoardInfoLike | undefined {
+function resolveBoardInfo(live: ProjectSliceRoot): BoardInfo | undefined {
   return live.deviceAvailableOptions.availableBoards.get(live.deviceDefinitions.configuration.deviceBoard ?? '')
+}
+
+/** The active target's Modbus master profile; the empty profile when the board does not resolve. */
+function resolveMasterProfile(live: ProjectSliceRoot): ModbusMasterProfile {
+  const boardInfo = resolveBoardInfo(live)
+  return resolveModbusMasterProfile(boardInfo, resolveTargetCapabilities(boardInfo))
 }
 
 /**
@@ -383,7 +395,7 @@ function warnIfTargetUnresolved(live: ProjectSliceRoot): void {
  * exactly how `allocateAddresses` reads a missing `activeKinds`.
  *
  * Only an UNRESOLVED target gets `undefined`. A resolved board that declares
- * `modbusTcpRemote: false` must still deactivate that kind, so its space frees
+ * neither Modbus master must still deactivate that kind, so its space frees
  * up and the still-active producers compact into it — that's the deliberate
  * target-switch behaviour documented on `activeKindsFor`, and the
  * empty Set an unresolved board used to produce is indistinguishable from it.
@@ -2397,7 +2409,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (!slice.project.data.remoteDevices) slice.project.data.remoteDevices = []
           const device = { ...dto.data }
           if (device.protocol === 'modbus-tcp' && !device.modbusTcpConfig) {
-            device.modbusTcpConfig = { host: '127.0.0.1', port: 502, slaveId: 1, timeout: 1000, ioGroups: [] }
+            device.modbusTcpConfig = createDefaultRemoteDeviceConfig(resolveMasterProfile(getState()))
           }
           slice.project.data.remoteDevices.push(device)
 
@@ -2449,6 +2461,7 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (config.transport !== undefined) device.modbusTcpConfig.transport = config.transport
           if (config.host !== undefined) device.modbusTcpConfig.host = config.host
           if (config.port !== undefined) device.modbusTcpConfig.port = config.port
+          if (config.reconnect !== undefined) device.modbusTcpConfig.reconnect = config.reconnect
           // RTU (serial) fields — previously dropped, so editing an RTU remote
           // device silently lost its serial settings on save.
           if (config.serialPort !== undefined) device.modbusTcpConfig.serialPort = config.serialPort
