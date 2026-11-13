@@ -40,15 +40,12 @@ export const LadderToolbox = () => {
     event.dataTransfer.setData('text/plain', iconType)
     event.dataTransfer.effectAllowed = 'move'
 
-    // Safari/WebKit: Create a visible drag image with better contrast
     const iconElement = event.currentTarget.firstElementChild as HTMLElement
     if (iconElement) {
-      // Get the button's background color to preserve theme (light/dark mode)
       const buttonElement = event.currentTarget.parentElement
       const computedStyle = buttonElement ? window.getComputedStyle(buttonElement) : null
       const bgColor = computedStyle?.backgroundColor || 'rgb(255, 255, 255)'
 
-      // Create a wrapper matching the button style
       const dragImage = document.createElement('div')
       dragImage.style.backgroundColor = bgColor
       dragImage.style.borderRadius = '6px'
@@ -57,15 +54,12 @@ export const LadderToolbox = () => {
       dragImage.style.position = 'absolute'
       dragImage.style.top = '-1000px'
 
-      // Clone the icon into the wrapper
       const iconClone = iconElement.cloneNode(true) as HTMLElement
       dragImage.appendChild(iconClone)
       document.body.appendChild(dragImage)
 
-      // Set as drag image (adjusted offset for smaller wrapper)
       event.dataTransfer.setDragImage(dragImage, 16, 16)
 
-      // Clean up after drag starts
       setTimeout(() => dragImage.remove(), 0)
     }
   }
