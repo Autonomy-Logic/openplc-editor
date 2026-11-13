@@ -248,18 +248,11 @@ describe('useRuntimePolling — runtime commercial licence', () => {
     connectRuntime()
   })
 
-  it('stores the licence the runtime reports', async () => {
-    mockRuntime.getStatus.mockResolvedValue({ success: true, status: 'RUNNING', license: 'gpl' })
-    renderPolling()
-    await flushAll()
-    expect(store.getState().runtimeConnection.license).toBe('gpl')
-  })
-
-  it('stores null when the runtime does not report one', async () => {
+  it('leaves the licence the editor verified alone while polling', async () => {
     store.getState().deviceActions.setRuntimeLicense('commercial')
     mockRuntime.getStatus.mockResolvedValue({ success: true, status: 'RUNNING' })
     renderPolling()
     await flushAll()
-    expect(store.getState().runtimeConnection.license).toBeNull()
+    expect(store.getState().runtimeConnection.license).toBe('commercial')
   })
 })

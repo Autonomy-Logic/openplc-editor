@@ -3,20 +3,17 @@
  */
 import { createHash, generateKeyPairSync, type KeyObject, sign } from 'node:crypto'
 
-import { RUNTIME_LICENSE_PRODUCT_ID } from '@root/middleware/shared/utils/licensing/runtime-license-sync'
+import {
+  BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID,
+  RUNTIME_LICENSE_PRODUCT_ID,
+} from '@root/middleware/shared/utils/licensing/runtime-license-keys'
 
 import { LIC_PAYLOAD_SIZE, serializeLicenseBlob } from '../license-blob'
-import {
-  deriveProductIdBytes,
-  parseRuntimeLicenseDevKey,
-  RUNTIME_LICENSE_TRUSTED_KEYS,
-  runtimeLicenseKeys,
-  verifyRuntimeLicenseBlob,
-} from '../runtime-license-verify'
+import { deriveProductIdBytes, verifyRuntimeLicenseBlob } from '../runtime-license-verify'
 
 const DEVICE_ID = Uint8Array.from({ length: 16 }, (_, i) => 0x10 + i)
 const RUNTIME_PRODUCT_ID = Uint8Array.from(
-  createHash('sha256').update(RUNTIME_LICENSE_PRODUCT_ID).digest().subarray(0, 8),
+  createHash('sha256').update(BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID).digest().subarray(0, 8),
 )
 
 function rawPublicKeyHex(publicKey: KeyObject): string {
@@ -73,12 +70,22 @@ function tamper(blob: Uint8Array, offset: number): Uint8Array {
 }
 
 describe('verifyRuntimeLicenseBlob', () => {
-  it('accepts a licence signed for this board and the runtime product', async () => {
+  it('accepts a licence signed for this board and the baremetal runtime product', async () => {
     await expect(verifyRuntimeLicenseBlob(issue({}), DEVICE_ID, KEYS)).resolves.toEqual({ ok: true })
   })
 
   it('derives the runtime product ID as sha256(product)[:8]', async () => {
-    expect(Array.from(await deriveProductIdBytes(RUNTIME_LICENSE_PRODUCT_ID))).toEqual(Array.from(RUNTIME_PRODUCT_ID))
+    expect(Array.from(await deriveProductIdBytes(BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID))).toEqual(
+      Array.from(RUNTIME_PRODUCT_ID),
+    )
+  })
+
+  it('refuses a licence for the Linux runtime product', async () => {
+    const linux = Uint8Array.from(createHash('sha256').update(RUNTIME_LICENSE_PRODUCT_ID).digest().subarray(0, 8))
+    await expect(verifyRuntimeLicenseBlob(issue({ productId: linux }), DEVICE_ID, KEYS)).resolves.toEqual({
+      ok: false,
+      reason: 'other-product',
+    })
   })
 
   it('refuses a licence for another board', async () => {
@@ -139,25 +146,5 @@ describe('verifyRuntimeLicenseBlob', () => {
       ok: false,
       reason: 'format',
     })
-  })
-})
-
-describe('runtime licence keys', () => {
-  const hex = 'ab'.repeat(64)
-
-  it('parses "<keyId>:<hex>" and nothing else', () => {
-    expect(parseRuntimeLicenseDevKey(`3:${hex.toUpperCase()}`)).toEqual({ keyId: 3, rawKeyHex: hex })
-    expect(parseRuntimeLicenseDevKey(undefined)).toBeNull()
-    expect(parseRuntimeLicenseDevKey(hex)).toBeNull()
-    expect(parseRuntimeLicenseDevKey(`x:${hex}`)).toBeNull()
-    expect(parseRuntimeLicenseDevKey(`256:${hex}`)).toBeNull()
-    expect(parseRuntimeLicenseDevKey(`1:${hex.slice(2)}`)).toBeNull()
-  })
-
-  it('adds a development key to the built-in table without changing it', () => {
-    expect(runtimeLicenseKeys(null)).toBe(RUNTIME_LICENSE_TRUSTED_KEYS)
-    const keys = runtimeLicenseKeys({ keyId: 9, rawKeyHex: hex })
-    expect(keys[9]).toBe(hex)
-    expect(RUNTIME_LICENSE_TRUSTED_KEYS[9]).toBeUndefined()
   })
 })

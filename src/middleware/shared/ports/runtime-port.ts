@@ -136,8 +136,6 @@ export interface RuntimeStatusResult {
    *  `'run'`, and runtimes older than this field omit it entirely — treat
    *  `undefined` as "no gating". */
   switchPosition?: 'run' | 'stop'
-  /** Commercial licence state of the runtime; absent on runtimes that do not report it. */
-  license?: RuntimeCommercialLicense
   error?: string
 }
 
@@ -151,9 +149,18 @@ export interface RuntimeLicenseUploadOutcome {
   error?: string
 }
 
-/** What the editor did with the Edge licences for a runtime's hardware ID. */
+/**
+ * The runtime's commercial licence as the editor verified it, and the Edge licences it uploaded.
+ * `detail` says why a licence could not be confirmed when Edge or the second read failed.
+ */
 export type RuntimeLicenseSyncResult =
-  | { status: 'synced'; hardwareId: string; uploads: RuntimeLicenseUploadOutcome[] }
+  | {
+      status: 'synced'
+      hardwareId: string
+      license: RuntimeCommercialLicense
+      uploads: RuntimeLicenseUploadOutcome[]
+      detail?: string
+    }
   | { status: 'no-hardware-id' }
   | { status: 'failed'; error: string }
 
@@ -410,9 +417,9 @@ export interface RuntimePort {
   getHardwareId?(): Promise<RuntimeHardwareIdResult>
 
   /**
-   * Fetch the commercial licences Edge holds for the runtime's hardware ID and
-   * upload each one to the runtime. Never throws; absent on platforms that do
-   * not deliver licences (vPLC seats come from the agent there).
+   * Verify the licences the runtime holds; when none is valid, fetch the ones Edge holds for its
+   * hardware ID, upload the valid ones and verify again. Never throws; absent on platforms that
+   * do not check runtime licences.
    */
   syncRuntimeLicenses?(): Promise<RuntimeLicenseSyncResult>
 

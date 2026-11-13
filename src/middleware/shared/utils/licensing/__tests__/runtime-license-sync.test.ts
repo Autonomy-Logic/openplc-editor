@@ -1,9 +1,16 @@
+/**
+ * @jest-environment node
+ */
+import { generateKeyPairSync, type KeyObject, sign } from 'node:crypto'
+
 import type { RawHttpReply, RuntimeLicenseMechanisms } from '../../../ports/runtime-license-mechanisms'
+import { canonicalRuntimeLicensePayload } from '../runtime-license-file'
+import { RUNTIME_LICENSE_PRODUCT_ID } from '../runtime-license-keys'
 import {
   lookupRuntimeLicenses,
   MAX_RUNTIME_LICENSE_BYTES,
   readRuntimeHardwareId,
-  RUNTIME_LICENSE_PRODUCT_ID,
+  readRuntimeLicenseReport,
   selectRuntimeLicenseFiles,
   syncRuntimeLicenses,
 } from '../runtime-license-sync'
@@ -147,64 +154,163 @@ describe('lookupRuntimeLicenses', () => {
   })
 })
 
-describe('syncRuntimeLicenses', () => {
-  const second = licence({ order_id: 'order_2' })
+function rawPublicKeyHex(publicKey: KeyObject): string {
+  const jwk = publicKey.export({ format: 'jwk' })
+  const hex = (b64: string | undefined) => Buffer.from(b64 ?? '', 'base64url').toString('hex')
+  return hex(jwk.x) + hex(jwk.y)
+}
 
-  it('uploads every licence Edge returns for the runtime ID, unchanged', async () => {
-    const { m, calls } = mechanisms({
-      edgePost: async () => ({ status: 200, body: envelope([licence(), second]) }),
-      runtimePost: async (_path, json) =>
-        (json as { order_id: string }).order_id === 'order_2'
-          ? { status: 400, body: '{"error":"Licence is for another hardware ID"}' }
-          : { status: 200, body: '{"license":"commercial"}' },
+const signer = generateKeyPairSync('ec', { namedCurve: 'P-256' })
+const forger = generateKeyPairSync('ec', { namedCurve: 'P-256' })
+const KEYS = { 0: rawPublicKeyHex(signer.publicKey) }
+
+/** A licence file as Edge issues it, signed with `key`. */
+function signed(overrides: Record<string, unknown> = {}, key: KeyObject = signer.privateKey): Record<string, unknown> {
+  const payload = { ...licence(overrides) }
+  delete payload.sig
+  const sig = sign('sha256', canonicalRuntimeLicensePayload(payload), { key, dsaEncoding: 'ieee-p1363' })
+  return { ...payload, sig: sig.toString('base64') }
+}
+
+/** A runtime that stores what it is given and reports it, plus an Edge that returns `edge`. */
+function fakeTarget(opts: { stored?: unknown[]; edge?: unknown[]; hardwareId?: string | null; storeOnPost?: boolean }) {
+  const stored = [...(opts.stored ?? [])]
+  const hardwareId = opts.hardwareId === undefined ? ID : opts.hardwareId
+  return {
+    stored,
+    ...mechanisms({
+      runtimeGet: async () => ({ status: 200, body: { hardwareId, source: 'device', licenses: stored } }),
+      runtimePost: async (_path, json) => {
+        if (opts.storeOnPost !== false) stored.push(json)
+        return { status: 200, body: { orderId: (json as { order_id: string }).order_id } }
+      },
+      edgePost: async () => ({ status: 200, body: envelope(opts.edge ?? []) }),
+    }),
+  }
+}
+
+describe('readRuntimeLicenseReport', () => {
+  it('reads the hardware ID and the licences as stored', async () => {
+    const { m, calls } = fakeTarget({ stored: [licence()] })
+    await expect(readRuntimeLicenseReport(m)).resolves.toEqual({
+      ok: true,
+      report: { hardwareId: ID, licenses: [licence()] },
     })
-    await expect(syncRuntimeLicenses(m)).resolves.toEqual({
-      status: 'synced',
-      hardwareId: ID,
-      uploads: [
-        { orderId: 'cmv0a1b2c3d4e5f6g7h8i9j0', stored: true },
-        { orderId: 'order_2', stored: false, error: 'Licence is for another hardware ID' },
-      ],
-    })
-    expect(calls.filter((c) => c.kind === 'runtimePost')).toEqual([
-      { kind: 'runtimePost', path: '/api/runtime-license', json: licence() },
-      { kind: 'runtimePost', path: '/api/runtime-license', json: second },
-    ])
+    expect(calls).toEqual([{ kind: 'runtimeGet', path: '/api/runtime-license' }])
   })
 
-  it('does nothing past the runtime when it has no hardware ID', async () => {
-    const { m, calls } = mechanisms({
-      runtimeGet: async () => ({ status: 200, body: '{"hardwareId":null,"source":null,"elements":[]}' }),
+  it('reports an older runtime without the endpoint, a malformed body and a transport failure', async () => {
+    const old = mechanisms({ runtimeGet: async () => ({ status: 405, body: '' }) })
+    await expect(readRuntimeLicenseReport(old.m)).resolves.toEqual({
+      ok: false,
+      error: 'Get runtime licenses failed: 405',
     })
-    await expect(syncRuntimeLicenses(m)).resolves.toEqual({ status: 'no-hardware-id' })
+    const junk = mechanisms({ runtimeGet: async () => ({ status: 200, body: { hardwareId: ID } }) })
+    await expect(readRuntimeLicenseReport(junk.m)).resolves.toMatchObject({ ok: false })
+    const down = mechanisms({ runtimeGet: () => Promise.reject(new Error('Connection timeout')) })
+    await expect(readRuntimeLicenseReport(down.m)).resolves.toEqual({ ok: false, error: 'Connection timeout' })
+  })
+})
+
+describe('syncRuntimeLicenses', () => {
+  it('is commercial from a valid stored licence without asking Edge', async () => {
+    const { m, calls } = fakeTarget({ stored: [licence({ sig: 'x' }), signed()] })
+    await expect(syncRuntimeLicenses(m, KEYS)).resolves.toEqual({
+      status: 'synced',
+      hardwareId: ID,
+      license: 'commercial',
+      uploads: [],
+    })
     expect(calls.map((c) => c.kind)).toEqual(['runtimeGet'])
   })
 
-  it('reports a failed hardware ID read or lookup and uploads nothing', async () => {
-    const noId = mechanisms({ runtimeGet: async () => ({ status: 404, body: '' }) })
-    await expect(syncRuntimeLicenses(noId.m)).resolves.toEqual({
-      status: 'failed',
-      error: 'Get hardware ID failed: 404',
+  it('uploads only the Edge licences that verify, then reads the runtime again', async () => {
+    const good = signed({ order_id: 'order_good' })
+    const forged = signed({ order_id: 'order_forged', seats: 1000 }, forger.privateKey)
+    const target = fakeTarget({ edge: [forged, good] })
+    await expect(syncRuntimeLicenses(target.m, KEYS)).resolves.toEqual({
+      status: 'synced',
+      hardwareId: ID,
+      license: 'commercial',
+      uploads: [
+        { orderId: 'order_forged', stored: false, error: 'its signature is not accepted' },
+        { orderId: 'order_good', stored: true },
+      ],
     })
+    expect(target.stored).toEqual([good])
+    expect(target.calls.map((c) => c.kind)).toEqual(['runtimeGet', 'edgePost', 'runtimePost', 'runtimeGet'])
+  })
 
-    const offline = mechanisms({ edgePost: () => Promise.reject(new Error('offline')) })
-    await expect(syncRuntimeLicenses(offline.m)).resolves.toEqual({ status: 'failed', error: 'offline' })
+  it('is GPLv3 for stored licences that do not verify: forged, edited, another device or product', async () => {
+    const stored = [
+      signed({}, forger.privateKey),
+      { ...signed(), seats: 50 },
+      signed({ hardware_id: OTHER_ID }),
+      { ...signed(), product: 'com.autonomy.openplc-runtime-baremetal' },
+      signed({ key_id: 3 }),
+    ]
+    const { m } = fakeTarget({ stored })
+    await expect(syncRuntimeLicenses(m, KEYS)).resolves.toEqual({
+      status: 'synced',
+      hardwareId: ID,
+      license: 'gpl',
+      uploads: [],
+    })
+  })
+
+  it('stays GPLv3 when the upload is stored but the runtime does not report it (vPLC without a seat)', async () => {
+    const { m } = fakeTarget({ edge: [signed()], storeOnPost: false })
+    await expect(syncRuntimeLicenses(m, KEYS)).resolves.toMatchObject({
+      status: 'synced',
+      license: 'gpl',
+      uploads: [{ orderId: 'cmv0a1b2c3d4e5f6g7h8i9j0', stored: true }],
+    })
+  })
+
+  it('is GPLv3 with the reason when Edge cannot be reached, and uploads nothing', async () => {
+    const target = fakeTarget({})
+    const offline = mechanisms({
+      runtimeGet: target.m.runtimeGet,
+      edgePost: () => Promise.reject(new Error('offline')),
+    })
+    await expect(syncRuntimeLicenses(offline.m, KEYS)).resolves.toEqual({
+      status: 'synced',
+      hardwareId: ID,
+      license: 'gpl',
+      uploads: [],
+      detail: 'offline',
+    })
     expect(offline.calls.some((c) => c.kind === 'runtimePost')).toBe(false)
   })
 
-  it('records a transport failure on one upload and keeps going', async () => {
+  it('reports no hardware ID, and a failed first read', async () => {
+    const none = fakeTarget({ hardwareId: null })
+    await expect(syncRuntimeLicenses(none.m, KEYS)).resolves.toEqual({ status: 'no-hardware-id' })
+    expect(none.calls.map((c) => c.kind)).toEqual(['runtimeGet'])
+
+    const old = mechanisms({ runtimeGet: async () => ({ status: 404, body: '' }) })
+    await expect(syncRuntimeLicenses(old.m, KEYS)).resolves.toEqual({
+      status: 'failed',
+      error: 'Get runtime licenses failed: 404',
+    })
+  })
+
+  it('records a refused or failed upload and keeps going', async () => {
     let first = true
-    const { m } = mechanisms({
-      edgePost: async () => ({ status: 200, body: envelope([licence(), second]) }),
-      runtimePost: async () => {
-        if (!first) return { status: 200, body: '{}' }
+    const target = fakeTarget({ edge: [signed(), signed({ order_id: 'order_2' })] })
+    const flaky = mechanisms({
+      runtimeGet: target.m.runtimeGet,
+      edgePost: (path, json) => target.m.edgePost(path, json as Record<string, unknown>),
+      runtimePost: async (path, json) => {
+        if (!first) return target.m.runtimePost(path, json as Record<string, unknown>)
         first = false
         throw new Error('socket hang up')
       },
     })
-    await expect(syncRuntimeLicenses(m)).resolves.toEqual({
+    await expect(syncRuntimeLicenses(flaky.m, KEYS)).resolves.toEqual({
       status: 'synced',
       hardwareId: ID,
+      license: 'commercial',
       uploads: [
         { orderId: 'cmv0a1b2c3d4e5f6g7h8i9j0', stored: false, error: 'socket hang up' },
         { orderId: 'order_2', stored: true },
