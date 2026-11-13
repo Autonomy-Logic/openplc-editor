@@ -26,6 +26,7 @@ import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
 import { useStableCallback } from '../../../../../hooks/use-stable-callback'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../store'
 import type { RungLadderState } from '../../../../../store/slices/ladder'
+import type { GraphicalElementModalData } from '../../../../../store/slices/modal'
 import { cn } from '../../../../../utils/cn'
 import { getLadderBlockType, isLadderBlockDrag } from '../../../../../utils/graphical/drag-detection'
 import { getFunctionBlockVariablesToCleanup } from '../../../../../utils/graphical/get-function-block-variables-to-cleanup'
@@ -609,7 +610,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
             : undefined
     if (!modalToOpen) return
 
-    openModal(modalToOpen, { pouName, node })
+    openModal(modalToOpen, { pouName, node } satisfies GraphicalElementModalData)
   }
 
   const onNodesDelete = useStableCallback((nodes: FlowNode[]) => {

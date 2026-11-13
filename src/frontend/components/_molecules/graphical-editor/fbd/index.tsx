@@ -37,7 +37,7 @@ import { usePouSnapshot } from '../../../../hooks/use-pou-snapshot'
 import { useStableCallback } from '../../../../hooks/use-stable-callback'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../store'
 import type { FBDRungState } from '../../../../store/slices/fbd'
-import { graphicalElementModalFor } from '../../../../store/slices/modal'
+import { type GraphicalElementModalData, graphicalElementModalFor } from '../../../../store/slices/modal'
 import { cn } from '../../../../utils/cn'
 import { getFbdBlockType, isFbdBlockDrag } from '../../../../utils/graphical/drag-detection'
 import { getFunctionBlockVariablesToCleanup } from '../../../../utils/graphical/get-function-block-variables-to-cleanup'
@@ -779,7 +779,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     const modalToOpen = node.type === 'block' && 'block-fbd-element'
     if (!modalToOpen) return
 
-    openModal(modalToOpen, { pouName, node })
+    openModal(modalToOpen, { pouName, node } satisfies GraphicalElementModalData)
   }
 
   const onDelete = useStableCallback(({ nodes, edges }: { nodes: FlowNode[]; edges: FlowEdge[] }) => {
