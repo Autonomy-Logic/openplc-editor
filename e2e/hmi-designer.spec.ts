@@ -1,0 +1,351 @@
+/**
+ * The HMI designer in the built app: a screen opens in the designer with its preview drawn by the real core; widgets
+ * are added from the palette, wired to PLC variables and edited in the inspector; code written in ST survives visual
+ * edits (TC01); a widget block appears in the palette and wires like a library widget (TC02); renaming a used widget
+ * block renames its uses or leaves them (TC26); undo covers both views.
+ *
+ * Running it needs a production build plus the preload at the path a NON-packaged app looks for it; see "Electron
+ * e2e" in CLAUDE.md. Every wait also reads the app's own error text and fails at once when the app reports one.
+ */
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import type { ElectronApplication, Page } from '@playwright/test'
+import { _electron as electron, expect, test } from '@playwright/test'
+
+const ROOT = join(realpathSync(tmpdir()), 'openplc-e2e-hmi-designer')
+const FIXTURE = join(ROOT, 'project')
+const USER_DATA = join(ROOT, 'userdata')
+const SHOTS = join(ROOT, 'shots')
+
+const OVERVIEW = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
+  VAR
+    (* keep this comment *)
+    Col : HmiStack := (Direction := HMI_DIRECTION#Column, Gap := 8, Padding := 8);
+    Title : HmiLabel := (Text := 'Overview', Parent := 'Col');
+    Level : HmiTank := (Caption := 'Level', Parent := 'Col', MaxValue := 10.0);
+  END_VAR
+  Level.Value := Main.Level;
+END_FUNCTION_BLOCK
+`
+const DETAILS = `FUNCTION_BLOCK Details EXTENDS HmiScreen
+  VAR
+    Back : HmiButton := (Text := 'Back');
+  END_VAR
+  IF Back.Clicked THEN HMI_Back(); END_IF;
+END_FUNCTION_BLOCK
+`
+const BADGE = `FUNCTION_BLOCK Badge EXTENDS HmiSwitch
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    HMI_FillRect(Left, Top, Width, Height, 4, SEL(Value, COLOR.Border, COLOR.Danger));
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+`
+
+const APP_FAILURES = [/Failed to open project/i, /Something went wrong/i, /could not be loaded/i]
+
+function writeFixture(): void {
+  rmSync(ROOT, { recursive: true, force: true })
+  mkdirSync(join(FIXTURE, 'devices'), { recursive: true })
+  mkdirSync(join(FIXTURE, 'pous', 'programs'), { recursive: true })
+  mkdirSync(join(FIXTURE, 'hmi', 'widgets'), { recursive: true })
+  mkdirSync(SHOTS, { recursive: true })
+  writeFileSync(
+    join(FIXTURE, 'project.json'),
+    JSON.stringify({
+      meta: { name: 'hmi-designer', type: 'plc-project' },
+      data: {
+        dataTypes: [],
+        pous: [],
+        configuration: {
+          resource: {
+            tasks: [{ name: 'task0', triggering: 'Cyclic', interval: 'T#20ms', priority: 1 }],
+            instances: [{ name: 'instance0', program: 'Main', task: 'task0' }],
+            globalVariables: [
+              {
+                name: 'Alarm',
+                type: { definition: 'base-type', value: 'BOOL' },
+                location: '',
+                documentation: '',
+                initialValue: 'TRUE',
+              },
+            ],
+          },
+        },
+        libraries: [],
+        debugVariables: { global: [], pous: {} },
+      },
+    }),
+  )
+  writeFileSync(
+    join(FIXTURE, 'devices', 'configuration.json'),
+    JSON.stringify({
+      deviceBoard: 'OpenPLC Runtime v4',
+      communicationPort: '',
+      runtimeIpAddress: '',
+      selectedPlatformOptions: {},
+    }),
+  )
+  writeFileSync(join(FIXTURE, 'devices', 'pin-mapping.json'), '{}')
+  writeFileSync(
+    join(FIXTURE, 'pous', 'programs', 'Main.st'),
+    'PROGRAM Main\n  VAR\n    Level : REAL := 6.5;\n    Running : BOOL;\n  END_VAR\n  Level := Level;\nEND_PROGRAM\n',
+  )
+  writeFileSync(join(FIXTURE, 'hmi', 'Overview.st'), OVERVIEW)
+  writeFileSync(join(FIXTURE, 'hmi', 'Details.st'), DETAILS)
+  writeFileSync(join(FIXTURE, 'hmi', 'widgets', 'Badge.st'), BADGE)
+  writeFileSync(join(FIXTURE, 'hmi', 'settings.json'), JSON.stringify({ startScreen: 'Overview' }))
+  const history = join(USER_DATA, 'User', 'History')
+  mkdirSync(history, { recursive: true })
+  writeFileSync(
+    join(history, 'projects.json'),
+    JSON.stringify([
+      {
+        name: 'hmi-designer',
+        path: FIXTURE,
+        projectFilePath: join(FIXTURE, 'project.json'),
+        createdAt: new Date().toISOString(),
+        lastOpenedAt: new Date().toISOString(),
+      },
+    ]),
+  )
+  writeFileSync(join(history, 'libraries.json'), '[]')
+  const runtime = join(USER_DATA, 'User', 'Runtime')
+  mkdirSync(runtime, { recursive: true })
+  writeFileSync(join(runtime, 'arduino-core-control.json'), '[]')
+  writeFileSync(join(runtime, 'arduino-library-control.json'), '[]')
+}
+
+async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
+  const app = await electron.launch({
+    args: [join(__dirname, '..', 'release', 'app', 'dist', 'main', 'main.js'), `--user-data-dir=${USER_DATA}`],
+    env: { ...process.env, NODE_ENV: 'production' },
+  })
+  const deadline = Date.now() + 60000
+  while (Date.now() < deadline) {
+    for (const w of app.windows()) {
+      try {
+        if (w.url().includes('index.html')) {
+          await w.waitForLoadState('domcontentloaded')
+          return { app, page: w }
+        }
+      } catch {
+        /* window is closing */
+      }
+    }
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  throw new Error('main window never appeared')
+}
+
+async function failIfAppReportedFailure(page: Page): Promise<void> {
+  const text = await page.locator('body').innerText()
+  const failure = APP_FAILURES.find((pattern) => pattern.test(text))
+  if (failure)
+    throw new Error(
+      `the app reported a failure: ${text
+        .split('\n')
+        .filter((l) => failure.test(l))
+        .join(' | ')}`,
+    )
+}
+
+async function waitFor(page: Page, what: string, check: () => Promise<boolean>, timeoutMs = 30000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    await failIfAppReportedFailure(page)
+    if (await check()) return
+    await page.waitForTimeout(250)
+  }
+  await page.screenshot({ path: join(SHOTS, 'timeout.png') })
+  const errors = await page.getByTestId('hmi-errors').allInnerTexts()
+  throw new Error(`timed out waiting for ${what}${errors.length ? `; designer errors: ${errors.join(' | ')}` : ''}`)
+}
+
+const leaf = (page: Page, name: string) =>
+  page.locator('li.group').filter({ has: page.getByText(new RegExp(`^(\\* )?${name}$`)) })
+
+const status = (page: Page) => page.getByTestId('hmi-status').innerText()
+
+const save = (app: ElectronApplication) =>
+  app.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))
+    win?.webContents.send('project:save-accelerator')
+  })
+
+const undo = (app: ElectronApplication) =>
+  app.evaluate(({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))
+    win?.webContents.send('edit:undo-request')
+  })
+
+/**
+ * Drags a palette item onto the canvas with the DOM's drag events: Playwright's own drag does not reach HTML5 drag and
+ * drop in an Electron window, while these run the same handlers a user's drag does.
+ */
+async function htmlDrag(page: Page, sourceTestId: string, x: number, y: number): Promise<void> {
+  await page.evaluate(
+    ({ source, x, y }) => {
+      const from = document.querySelector(`[data-testid="${source}"]`)
+      const to = document.querySelector('[data-testid="hmi-canvas-overlay"]')
+      if (!from || !to) throw new Error(`cannot drag ${source}`)
+      const rect = to.getBoundingClientRect()
+      const at = { clientX: rect.left + x, clientY: rect.top + y, bubbles: true, cancelable: true }
+      const dataTransfer = new DataTransfer()
+      from.dispatchEvent(new DragEvent('dragstart', { dataTransfer, bubbles: true }))
+      to.dispatchEvent(new DragEvent('dragenter', { ...at, dataTransfer }))
+      to.dispatchEvent(new DragEvent('dragover', { ...at, dataTransfer }))
+      to.dispatchEvent(new DragEvent('drop', { ...at, dataTransfer }))
+      from.dispatchEvent(new DragEvent('dragend', { dataTransfer, bubbles: true }))
+    },
+    { source: sourceTestId, x, y },
+  )
+}
+
+const overviewOnDisk = () => readFileSync(join(FIXTURE, 'hmi', 'Overview.st'), 'utf-8')
+
+/** The ST view's text: Monaco renders spaces as non-breaking spaces. */
+const codeText = async (page: Page) =>
+  (await page.locator('[data-testid="hmi-code-editor"] .view-lines:visible').innerText()).replace(/\u00a0/g, ' ')
+
+test.describe('HMI designer', () => {
+  test.setTimeout(180000)
+
+  test('designs a screen visually and in ST, on the real preview', async () => {
+    writeFixture()
+    const { app, page } = await launch()
+    try {
+      await page.getByText('hmi-designer', { exact: true }).first().click({ timeout: 30000 })
+      await waitFor(page, 'the HMI branch', async () => (await leaf(page, 'Overview').count()) > 0)
+      await leaf(page, 'Overview').click()
+      await expect(page.getByTestId('hmi-designer')).toBeVisible({ timeout: 15000 })
+      await waitFor(page, 'the preview', async () => (await status(page)).startsWith('Preview ready'), 60000)
+      await page.screenshot({ path: join(SHOTS, '01-opened.png') })
+      expect(overviewOnDisk()).toBe(OVERVIEW)
+      const builtMs = await status(page)
+
+      await waitFor(
+        page,
+        'the palette thumbnails',
+        async () =>
+          (await page.locator('[data-testid="hmi-palette-HmiLamp"] img').count()) > 0 &&
+          (await page.locator('[data-testid="hmi-palette-Badge"] img').count()) > 0,
+        60000,
+      )
+      await page.getByTestId('hmi-palette').screenshot({ path: join(SHOTS, '00-palette.png') })
+
+      await page.getByTestId('hmi-outline-Title').click()
+      await page.getByTestId('hmi-prop-Text').fill('Plant overview')
+      await page.getByTestId('hmi-prop-Text').press('Enter')
+      await page.waitForTimeout(400)
+      expect(await status(page)).toBe(builtMs)
+
+      const canvas = page.getByTestId('hmi-canvas-overlay')
+      await page.getByTestId('hmi-outline-Col').click()
+      const colBox = await page.getByTestId('hmi-selected-Col').boundingBox()
+      const canvasBox = await canvas.boundingBox()
+      if (!colBox || !canvasBox) throw new Error('the column is not on the canvas')
+      await htmlDrag(
+        page,
+        'hmi-palette-HmiLamp',
+        colBox.x - canvasBox.x + colBox.width / 2,
+        colBox.y - canvasBox.y + colBox.height - 3,
+      )
+      await expect(page.getByTestId('hmi-outline-Lamp1')).toBeVisible({ timeout: 10000 })
+      await waitFor(page, 'the rebuilt preview', async () => (await status(page)).startsWith('Preview ready'))
+      await page.getByTestId('hmi-palette-tab-variables').click()
+      await page.getByTestId('hmi-outline-Lamp1').click()
+      const lampBox = await page.getByTestId('hmi-selected-Lamp1').boundingBox()
+      const overlayBox = await canvas.boundingBox()
+      if (!lampBox || !overlayBox) throw new Error('the lamp is not on the canvas')
+      await htmlDrag(
+        page,
+        'hmi-variable-GVL.Alarm',
+        lampBox.x - overlayBox.x + lampBox.width / 2,
+        lampBox.y - overlayBox.y + lampBox.height / 2,
+      )
+      await expect(page.getByTestId('hmi-main-binding')).toContainText('GVL.Alarm', { timeout: 10000 })
+
+      const handle = await page.getByTestId('hmi-grow-right').boundingBox()
+      if (!handle) throw new Error('no grow handle')
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(handle.x + 60, handle.y + handle.height / 2, { steps: 5 })
+      await page.mouse.up()
+
+      await page.getByRole('button', { name: 'Code' }).click()
+      await waitFor(page, 'the code view', async () => (await codeText(page)).includes('FUNCTION_BLOCK Overview'))
+      await page.locator('[data-testid="hmi-code-editor"] .view-lines:visible').click()
+      await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowUp' : 'Control+Home')
+      for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowDown')
+      await page.keyboard.press('Home')
+      await page.keyboard.insertText('METHOD Extra : BOOL Extra := TRUE; END_METHOD ')
+      await waitFor(page, 'the method in the code', async () =>
+        (await codeText(page)).includes('END_VAR\n  METHOD Extra'),
+      )
+      await page.getByRole('button', { name: 'Designer' }).click()
+      await page.getByTestId('hmi-palette-tab-widgets').click()
+      await page.getByTestId('hmi-outline-Level').click()
+      await page.getByTestId('hmi-prop-MaxValue').fill('20.0')
+      await page.getByTestId('hmi-prop-MaxValue').press('Enter')
+
+      await expect(page.getByTestId('hmi-palette-Badge')).toBeVisible()
+      await page.getByTestId('hmi-outline-Col').click()
+      await page.getByTestId('hmi-palette-Badge').dblclick()
+      await expect(page.getByTestId('hmi-outline-Badge1')).toBeVisible({ timeout: 10000 })
+      await page.getByTestId('hmi-main-binding').click()
+      await page.getByRole('option', { name: /Main\.Running/ }).click()
+      await waitFor(
+        page,
+        'the preview with the widget block',
+        async () => (await status(page)).startsWith('Preview ready'),
+        60000,
+      )
+      await page.screenshot({ path: join(SHOTS, '02-designed.png') })
+
+      await undo(app)
+      await save(app)
+      await waitFor(page, 'the saved screen', async () => overviewOnDisk() !== OVERVIEW)
+      const saved = overviewOnDisk()
+      expect(saved).toContain('(* keep this comment *)')
+      expect(saved).toContain('METHOD Extra : BOOL')
+      expect(saved).toContain("Title : HmiLabel := (Text := 'Plant overview', Parent := 'Col'")
+      expect(saved).toContain('MaxValue := 20.0')
+      expect(saved).toMatch(/Lamp1 : HmiLamp := \(Parent := 'Col'[^)]*\);/)
+      expect(saved).toContain('Lamp1.Value := GVL.Alarm;')
+      expect(saved).toMatch(/PrefWidth := \d+/)
+      expect(saved).toContain("Badge1 : Badge := (Parent := 'Col');")
+      expect(saved).not.toContain('Badge1.Value := Main.Running;')
+
+      const renameLeaf = async (from: string, to: string, choice: RegExp) => {
+        await leaf(page, from).locator('span').first().dblclick()
+        await page.keyboard.press('ControlOrMeta+A')
+        await page.keyboard.type(to)
+        await page.keyboard.press('Enter')
+        await page.getByRole('button', { name: choice }).click({ timeout: 10000 })
+        await waitFor(page, `the ${to} leaf`, async () => (await leaf(page, to).count()) > 0)
+      }
+      await renameLeaf('Badge', 'Pill', /Yes, rename references/)
+      await save(app)
+      await waitFor(page, 'the renamed use on disk', async () => overviewOnDisk().includes('Badge1 : Pill'))
+      expect(readFileSync(join(FIXTURE, 'hmi', 'widgets', 'Pill.st'), 'utf-8')).toMatch(/^FUNCTION_BLOCK Pill EXTENDS/)
+      await page.getByTestId('hmi-preview-button').click()
+      await waitFor(page, 'the preview with the renamed block', async () =>
+        (await status(page)).startsWith('Preview ready'),
+      )
+
+      await renameLeaf('Pill', 'Chip', /Rename only/)
+      await page.getByTestId('hmi-preview-button').click()
+      await waitFor(page, 'the unresolved use reported', async () =>
+        /undefined type 'pill'/i.test((await page.getByTestId('hmi-errors').allInnerTexts()).join('\n')),
+      )
+      await save(app)
+      await waitFor(page, 'Chip on disk', async () => existsSync(join(FIXTURE, 'hmi', 'widgets', 'Chip.st')))
+      expect(overviewOnDisk()).toContain('Badge1 : Pill')
+    } finally {
+      app.process().kill('SIGKILL')
+    }
+  })
+})

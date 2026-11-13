@@ -1,6 +1,8 @@
 import { hmiSettingsSchema } from '../../../../../middleware/shared/utils/hmi/settings'
 import {
   generateHmiUnit,
+  HMI_GALLERY_SCREEN,
+  hmiGalleryWidget,
   type HmiUnitInput,
   type HmiUnitResult,
   numericWriteBack,
@@ -105,6 +107,23 @@ describe('HMI unit generator', () => {
     expect(source).toContain('Natural.Value := TRUE;')
     expect(result.preview.units.screens[WIDGET_PREVIEW_SCREEN]).toBeDefined()
     expect(generateHmiUnit(project).sources).not.toHaveProperty([`${WIDGET_PREVIEW_SCREEN}.st`])
+  })
+
+  it('draws every palette widget and widget block alone on the gallery screen, in place of the project screens', () => {
+    const project = sampleProject()
+    const result = generateHmiUnit({ ...project, gallery: true, resolve: undefined })
+    expect(messages(result)).toEqual([])
+    const shown = result.elementIds.flatMap((e) => {
+      const widget = hmiGalleryWidget(e.element)
+      return widget === null ? [] : [widget]
+    })
+    expect(shown).toEqual(expect.arrayContaining(['HmiLamp', 'HmiTank', 'HmiButton', 'Badge']))
+    expect(shown.some((w) => /^Hmi(Stack|Diagram|Pipe)$/.test(w))).toBe(false)
+    expect(new Set(result.elementIds.map((e) => e.screen))).toEqual(new Set([HMI_GALLERY_SCREEN]))
+    const source = Object.values(result.sources).find((t) => t.includes(`FUNCTION_BLOCK ${HMI_GALLERY_SCREEN}`))
+    expect(source).toContain("W_HmiLamp : HmiLamp := (Parent := 'HMI__R_HmiLamp', GrowAuto := FALSE);")
+    expect(source).toContain('W_HmiLamp.Value := TRUE;')
+    expect(hmiGalleryWidget('HMI__Column')).toBeNull()
   })
 
   it('refuses to preview a widget block the project does not have', () => {

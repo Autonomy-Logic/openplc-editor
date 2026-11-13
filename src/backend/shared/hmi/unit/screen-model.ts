@@ -2,8 +2,9 @@
  * What the HMI build reads from a screen or widget block, from the STruC++ parser's syntax tree: elements declared
  * with their initializer texts, bindings in the body, references to PLC variables and where generated methods go.
  */
-import type { FunctionBlockDeclaration, SourceSpan, Statement, VariableExpression } from 'strucpp'
+import type { FunctionBlockDeclaration, Statement, VariableExpression } from 'strucpp'
 
+import { SourceText } from '../../../../middleware/shared/utils/hmi/st-source-text'
 import { loadStrucpp } from '../../library/strucpp-runtime'
 
 /** An element: a VAR of a widget type. */
@@ -42,31 +43,6 @@ export interface HmiBlockModel {
 }
 
 export type HmiBlockParse = { ok: true; model: HmiBlockModel } | { ok: false; errors: string[] }
-
-/** Offsets of line starts, for turning 1-based inclusive spans into string offsets. */
-export class SourceText {
-  private readonly starts: number[] = [0]
-
-  constructor(readonly text: string) {
-    for (let i = 0; i < text.length; i++) if (text[i] === '\n') this.starts.push(i + 1)
-  }
-
-  offset(line: number, col: number): number {
-    return (this.starts[line - 1] ?? this.text.length) + col - 1
-  }
-
-  start(span: SourceSpan): number {
-    return this.offset(span.startLine, span.startCol)
-  }
-
-  end(span: SourceSpan): number {
-    return this.offset(span.endLine, span.endCol) + 1
-  }
-
-  slice(span: SourceSpan): string {
-    return this.text.slice(this.start(span), this.end(span))
-  }
-}
 
 function isVariableExpression(node: object): node is VariableExpression {
   return 'kind' in node && node.kind === 'VariableExpression'

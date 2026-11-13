@@ -1,5 +1,5 @@
-import { sampleProject } from '../../unit/__tests__/fixtures/sample-project'
-import { generateHmiUnit } from '../../unit/generate-hmi-unit'
+import { sampleProject } from '../../../../../../backend/shared/hmi/unit/__tests__/fixtures/sample-project'
+import { generateHmiUnit } from '../../../../../../backend/shared/hmi/unit/generate-hmi-unit'
 import { copyElements, parseDesignerClipboard, pasteElements } from '../designer-clipboard'
 import {
   addElement,
@@ -15,7 +15,7 @@ import {
   setTheme,
   stString,
 } from '../designer-edits'
-import { SourceHistory } from '../designer-history'
+import { emptyHistory, recordStep, redoStep, type SourceHistory, undoStep } from '../../source-history'
 import { type DesignerModel, parseDesignerBlock, stringLiteralValue } from '../designer-model'
 
 const isWidget = (type: string): boolean => /^(Hmi[A-Za-z]+|Badge)$/i.test(type)
@@ -366,26 +366,135 @@ describe('designer clipboard', () => {
 })
 
 describe('source history', () => {
+  /** Plays edits through the history, as the store does. */
+  class Session {
+    history: SourceHistory = emptyHistory()
+    constructor(public current: string) {}
+    edit(next: string, merge?: { key: string; at: number }, limit?: number) {
+      this.history = recordStep(this.history, this.current, next, merge, limit)
+      this.current = next
+    }
+    undo() {
+      const step = undoStep(this.history, this.current)
+      if (!step) return null
+      this.history = step.history
+      this.current = step.source
+      return step.source
+    }
+    redo() {
+      const step = redoStep(this.history, this.current)
+      if (!step) return null
+      this.history = step.history
+      this.current = step.source
+      return step.source
+    }
+  }
+
   it('undoes and redoes visual and code edits alike, and merges steps of one kind made close together', () => {
-    const history = new SourceHistory('a')
-    history.record('ab', { key: 'typing', at: 0 })
-    history.record('abc', { key: 'typing', at: 500 })
-    history.record('abcd')
-    history.record('abcd')
-    expect(history.undo()).toBe('abc')
-    expect(history.undo()).toBe('a')
-    expect(history.canUndo).toBe(false)
-    expect(history.undo()).toBeNull()
-    expect(history.redo()).toBe('abc')
-    history.record('x')
-    expect(history.canRedo).toBe(false)
-    expect(history.redo()).toBeNull()
-    expect(history.current).toBe('x')
+    const session = new Session('a')
+    session.edit('ab', { key: 'typing', at: 0 })
+    session.edit('abc', { key: 'typing', at: 500 })
+    session.edit('abcd')
+    session.edit('abcd')
+    expect(session.undo()).toBe('abc')
+    expect(session.undo()).toBe('a')
+    expect(session.history.past).toEqual([])
+    expect(session.undo()).toBeNull()
+    expect(session.redo()).toBe('abc')
+    session.edit('x')
+    expect(session.history.future).toEqual([])
+    expect(session.redo()).toBeNull()
+    expect(session.current).toBe('x')
   })
 
   it('keeps steps apart past the merge window, and keeps at most its limit', () => {
-    const history = new SourceHistory('0', 3)
-    for (let i = 1; i <= 5; i++) history.record(String(i), { key: 'typing', at: i * 5000 })
-    expect([history.undo(), history.undo(), history.undo(), history.undo()]).toEqual(['4', '3', '2', null])
+    const session = new Session('0')
+    for (let i = 1; i <= 5; i++) session.edit(String(i), { key: 'typing', at: i * 5000 }, 3)
+    expect([session.undo(), session.undo(), session.undo(), session.undo()]).toEqual(['4', '3', '2', null])
+  })
+})
+
+describe('designer edits that are refused', () => {
+  const model = parse(SCREEN)
+  const refused = (result: DesignerEdit): string => {
+    if (result.ok) throw new Error('the edit was applied')
+    return result.message
+  }
+
+  it('names the element an edit cannot find', () => {
+    expect(refused(setProperty(SCREEN, model, 'Nope', 'Caption', "'x'"))).toMatch(/Nope/)
+    expect(refused(removeProperty(SCREEN, model, 'Nope', 'Caption'))).toMatch(/Nope/)
+    expect(refused(deleteElements(SCREEN, model, ['Nope']))).toMatch(/Nope/)
+    expect(refused(moveElement(SCREEN, model, 'Nope', null, null))).toMatch(/Nope/)
+    expect(refused(renameElement(SCREEN, model, 'Nope', 'Other'))).toMatch(/Nope/)
+    expect(refused(setBinding(SCREEN, model, 'Nope', 'Value', 'Main.Level'))).toMatch(/Nope/)
+    expect(refused(setEvent(SCREEN, model, 'Nope', 'Clicked', 'Count := 0;'))).toMatch(/Nope/)
+  })
+
+  it('refuses a parent that is not an element, and a move inside the element itself', () => {
+    expect(refused(addElement(SCREEN, model, { type: 'HmiLamp', parent: 'Nope', before: null }))).toMatch(/Nope/)
+    expect(refused(moveElement(SCREEN, model, 'Level', 'Nope', null))).toMatch(/Nope/)
+    expect(refused(moveElement(SCREEN, model, 'Col', 'Level', null))).toMatch(/inside itself/)
+    expect(refused(moveElement(SCREEN, model, 'Col', 'Col', null))).toMatch(/inside itself/)
+  })
+
+  it('refuses names that are not identifiers or that the screen already has', () => {
+    expect(refused(addElement(SCREEN, model, { type: 'HmiLamp', parent: null, name: '1st' }))).toMatch(/1st/)
+    expect(refused(addElement(SCREEN, model, { type: 'HmiLamp', parent: null, name: 'Count' }))).toMatch(/Count/)
+    expect(refused(renameElement(SCREEN, model, 'Level', 'Run'))).toMatch(/Run/)
+  })
+
+  it('takes a valid stem for generated names and skips members the screen has', () => {
+    expect(nextElementName(model, '#!')).toBe('Element1')
+    expect(nextElementName(parse(SCREEN.replace('Count : INT;', 'Lamp1 : INT;')), 'Lamp')).toBe('Lamp2')
+  })
+
+  it('writes a first property as a new initializer, and declares into a new VAR block when the screen has none', () => {
+    expect(edited(setProperty(SCREEN, model, 'Next', 'Text', "'Go'"))).toContain("Next : HmiButton := (Text := 'Go');")
+    const bare = 'FUNCTION_BLOCK Bare EXTENDS HmiScreen\nEND_FUNCTION_BLOCK\n'
+    const added = edited(addElement(bare, parse(bare), { type: 'HmiLamp', parent: null }))
+    expect(added).toMatch(/VAR\n\s+Lamp1 : HmiLamp;\n\s*END_VAR/)
+    expect(parse(added).elements.map((e) => e.name)).toEqual(['Lamp1'])
+  })
+})
+
+describe('designer clipboard payloads', () => {
+  it('refuses payloads that are not a designer copy', () => {
+    for (const value of [
+      null,
+      'text',
+      { kind: 'openplc-hmi-elements' },
+      { kind: 'openplc-hmi-elements', elements: {}, bindings: [], events: [] },
+      {
+        kind: 'openplc-hmi-elements',
+        elements: [{ name: 1, type: 'HmiLamp', parent: null, props: [] }],
+        bindings: [],
+        events: [],
+      },
+      {
+        kind: 'openplc-hmi-elements',
+        elements: [{ name: 'A', type: 'HmiLamp', parent: null, props: {} }],
+        bindings: [],
+        events: [],
+      },
+      {
+        kind: 'openplc-hmi-elements',
+        elements: [{ name: 'A', type: 'HmiLamp', parent: null, props: [['Caption']] }],
+        bindings: [],
+        events: [],
+      },
+      {
+        kind: 'openplc-hmi-elements',
+        elements: [{ name: 'A', type: 'HmiLamp', parent: null, props: [] }],
+        bindings: [{ element: 'A', property: 'Value' }],
+        events: [],
+      },
+    ])
+      expect(parseDesignerClipboard(value)).toBeNull()
+  })
+
+  it('copies nothing that is locked to the code view', () => {
+    const locked = parse(SCREEN.replace('Next : HmiButton;', 'Next, Prev : HmiButton;'))
+    expect(copyElements(locked, ['Next'])).toBeNull()
   })
 })

@@ -17,6 +17,7 @@ import type { EditorSlice } from '../editor'
 import type { FBDFlowSlice } from '../fbd'
 import type { FileSlice } from '../file'
 import type { HistorySlice } from '../history'
+import type { HmiDesignerSlice } from '../hmi-designer'
 import type { LadderFlowSlice } from '../ladder'
 import type { LibrarySlice } from '../library'
 import type { ModalSlice } from '../modal'
@@ -27,6 +28,7 @@ import type { VersionControlSlice } from '../version-control'
 import type { WorkspaceSlice } from '../workspace'
 
 export type SharedRootState = AISlice &
+  HmiDesignerSlice &
   ProjectSlice &
   FileSlice &
   EditorSlice &

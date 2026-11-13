@@ -43,6 +43,8 @@ export interface HmiUnitInput extends HmiUnitSources {
    * test value on its main input. Product builds leave it out.
    */
   widgetPreview?: string
+  /** Preview only: one screen showing every palette widget at natural size, in place of the project's screens. */
+  gallery?: boolean
   /** Preview build: the libraries are emitted whole, so their code does not change with the screens. */
   preview?: boolean
   /** PLC debug-table address of a variable; absent when building without a PLC program (preview). */
@@ -707,18 +709,65 @@ function checkNames(input: HmiUnitInput, library: ReadonlySet<string>, d: Diagno
 }
 
 /** Builds and compiles the HMI unit. */
+/** The library archives and the widget catalogue a project's widget blocks give, with their errors. */
+export interface HmiWidgetLibrary {
+  archives: StlibArchive[]
+  catalog: HmiWidgetCatalog
+  errors: HmiDiagnostic[]
+}
+
+/**
+ * Compiles a project's widget blocks against StandardWidgets and builds the catalogue of both. Errors leave the
+ * catalogue with the library widgets only.
+ */
+export function compileHmiWidgets(widgets: readonly HmiSourceFile[], library: StlibArchive): HmiWidgetLibrary {
+  const strucpp = loadStrucpp()
+  const archives: StlibArchive[] = [library]
+  const errors: HmiDiagnostic[] = []
+  if (widgets.length > 0) {
+    const compiled = strucpp.compileStlib(
+      widgets.map((w) => ({ fileName: w.name, source: w.source })),
+      { name: 'project-widgets', version: '1.0.0', namespace: 'hmi_project_widgets', dependencies: [library] },
+    )
+    for (const e of compiled.errors) errors.push({ file: e.file ?? UNIT, message: e.message, line: e.line })
+    if (errors.length === 0)
+      archives.push(strucpp.loadStlibFromString(JSON.stringify(compiled.archive), 'project-widgets'))
+  }
+  const catalog = buildWidgetCatalog(archives.map((a) => a.manifest))
+  if (errors.length === 0)
+    for (const w of widgets)
+      if (!catalog.widgets.has(w.name.toUpperCase()))
+        errors.push({
+          file: w.name,
+          message: `${w.name} must be a FUNCTION_BLOCK that extends HmiElement or another widget`,
+        })
+  return { archives, catalog, errors }
+}
+
+/** The catalogue of StandardWidgets and a project's widget blocks, for the designer. */
+export function buildHmiWidgetCatalog(widgets: readonly HmiSourceFile[]): HmiWidgetLibrary {
+  const library = buildStandardWidgets()
+  if (!library.ok)
+    return {
+      archives: [],
+      catalog: buildWidgetCatalog([]),
+      errors: library.errors.map((e) => ({ file: UNIT, message: `StandardWidgets: ${e.message}`, line: e.line })),
+    }
+  return compileHmiWidgets(widgets, library.archive)
+}
+
 /** Name of the screen a widget preview adds; the HMI__ prefix is refused for project names. */
 export const WIDGET_PREVIEW_SCREEN = 'HMI__WidgetPreview'
 
 const PREVIEW_INTEGER_TYPES = new Set(['SINT', 'INT', 'DINT', 'LINT', 'USINT', 'UINT', 'UDINT', 'ULINT'])
 const PREVIEW_REAL_TYPES = new Set(['REAL', 'LREAL'])
 
-/** A value that shows a widget at work: TRUE, 60 % of its MaxValue (else 42), or its own name as text. */
+/** A value that shows a widget at work: TRUE, 60 % of its MaxValue (else 42), or its name without the Hmi prefix as text. */
 function previewTestValue(info: HmiWidgetInfo): string | undefined {
   const type = info.main?.direction === 'input' ? info.main.type.toUpperCase() : undefined
   if (type === undefined) return undefined
   if (type === 'BOOL') return 'TRUE'
-  if (type.startsWith('STRING')) return `'${info.name}'`
+  if (type.startsWith('STRING')) return `'${info.name.replace(/^Hmi/i, '')}'`
   const max = Number(info.properties.find((p) => p.name.toUpperCase() === 'MAXVALUE')?.defaultValue)
   const value = Number.isFinite(max) && max > 0 ? max * 0.6 : 42
   if (PREVIEW_REAL_TYPES.has(type)) return value.toFixed(1)
@@ -747,6 +796,47 @@ function widgetPreviewSource(info: HmiWidgetInfo): string {
   ].join('\n')
 }
 
+/** Name of the palette gallery's screen. */
+export const HMI_GALLERY_SCREEN = 'HMI__Gallery'
+const GALLERY_ELEMENT = 'W_'
+
+/** The widget a palette gallery element shows, or null for the gallery's own stacks. */
+export function hmiGalleryWidget(element: string): string | null {
+  return element.startsWith(GALLERY_ELEMENT) ? element.slice(GALLERY_ELEMENT.length) : null
+}
+
+/** The widgets the palette gallery draws: every palette widget and project widget block that is not a stack or a pipe. */
+function galleryWidgets(catalog: HmiWidgetCatalog, projectWidgets: readonly HmiSourceFile[]): HmiWidgetInfo[] {
+  const project = new Set(projectWidgets.map((w) => w.name.toUpperCase()))
+  return [...catalog.widgets.values()].filter(
+    (info) =>
+      (info.palette !== undefined || project.has(info.name.toUpperCase())) &&
+      !['HMISTACK', 'HMIDIAGRAM', 'HMIPIPE'].some((base) => isA(catalog, info.name, base)),
+  )
+}
+
+/** The palette gallery's screen: each widget alone in a row, at natural size, with its test value. */
+function gallerySource(widgets: readonly HmiWidgetInfo[]): string {
+  const declarations = widgets.flatMap((info) => [
+    `    HMI__R_${info.name} : HmiStack := (Parent := 'HMI__Column', Direction := HMI_DIRECTION#Row, GrowAuto := FALSE);`,
+    `    ${GALLERY_ELEMENT}${info.name} : ${info.name} := (Parent := 'HMI__R_${info.name}', GrowAuto := FALSE);`,
+  ])
+  const values = widgets.flatMap((info) => {
+    const value = previewTestValue(info)
+    return info.main && value !== undefined ? [`  ${GALLERY_ELEMENT}${info.name}.${info.main.name} := ${value};`] : []
+  })
+  return [
+    `FUNCTION_BLOCK ${HMI_GALLERY_SCREEN} EXTENDS HmiScreen`,
+    '  VAR',
+    '    HMI__Column : HmiStack := (Direction := HMI_DIRECTION#Column, Gap := 12, Padding := 8, GrowAuto := FALSE);',
+    ...declarations,
+    '  END_VAR',
+    ...values,
+    'END_FUNCTION_BLOCK',
+    '',
+  ].join('\n')
+}
+
 export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   const d = new Diagnostics()
   const result: HmiUnitResult = {
@@ -765,26 +855,17 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     for (const e of library.errors) d.error(UNIT, `StandardWidgets: ${e.message}`, e.line)
     return result
   }
-  if (input.screens.length === 0 && input.widgetPreview === undefined) d.error(UNIT, 'the project has no HMI screens')
+  if (input.screens.length === 0 && input.widgetPreview === undefined && !input.gallery)
+    d.error(UNIT, 'the project has no HMI screens')
   if (input.screens.length > SCREENS_MAX) d.error(UNIT, `${input.screens.length} screens; at most ${SCREENS_MAX}`)
   checkNames(input, libraryNames(library.archive), d)
   if (d.errors.length > 0) return result
 
   const strucpp = loadStrucpp()
-  const archives: StlibArchive[] = [library.archive]
-  if (input.widgets.length > 0) {
-    const compiled = strucpp.compileStlib(
-      input.widgets.map((w) => ({ fileName: w.name, source: w.source })),
-      { name: 'project-widgets', version: '1.0.0', namespace: 'hmi_project_widgets', dependencies: [library.archive] },
-    )
-    for (const e of compiled.errors) d.error(e.file ?? UNIT, e.message, e.line)
-    if (d.errors.length > 0) return result
-    archives.push(strucpp.loadStlibFromString(JSON.stringify(compiled.archive), 'project-widgets'))
-  }
-  const catalog = buildWidgetCatalog(archives.map((a) => a.manifest))
-  for (const w of input.widgets)
-    if (!catalog.widgets.has(w.name.toUpperCase()))
-      d.error(w.name, `${w.name} must be a FUNCTION_BLOCK that extends HmiElement or another widget`)
+  const widgetLibrary = compileHmiWidgets(input.widgets, library.archive)
+  for (const e of widgetLibrary.errors) d.error(e.file, e.message, e.line)
+  if (d.errors.length > 0) return result
+  const { archives, catalog } = widgetLibrary
 
   const screenBase = library.archive.manifest.functionBlocks.find((fb) => fb.name.toUpperCase() === 'HMISCREEN')
   const screenMembers = new Set(
@@ -796,7 +877,9 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   const pous = new Set([...input.plcVariables.map((v) => v.path.split('.')[0].toUpperCase()), 'GVL'])
   const tags = new Map<string, { variable: HmiPlcVariable; type: TagType }>()
   const plans: ScreenPlan[] = []
-  const screenFiles = [...input.screens]
+  const screenFiles = input.gallery
+    ? [{ name: HMI_GALLERY_SCREEN, source: gallerySource(galleryWidgets(catalog, input.widgets)) }]
+    : [...input.screens]
   if (input.widgetPreview !== undefined) {
     const widget = input.widgets.find((w) => w.name.toUpperCase() === input.widgetPreview?.toUpperCase())
     const info = widget ? catalog.widgets.get(widget.name.toUpperCase()) : undefined
@@ -840,7 +923,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   }
   for (const plan of plans) writeBacks(plan, catalog, tags, d)
   const start =
-    input.widgetPreview !== undefined
+    input.widgetPreview !== undefined || input.gallery
       ? plans.length - 1
       : input.settings.startScreen === ''
         ? 0

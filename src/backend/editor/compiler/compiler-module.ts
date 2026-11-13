@@ -469,8 +469,8 @@ class CompilerModule {
     // strucpp's runtime headers (`src/runtime/include/`) live in two
     // places depending on whether we're running dev or a packaged app:
     //
-    //   - **Dev** (`npm run dev`): read from the root install at
-    //     `node_modules/strucpp/src/runtime/include` — that's what
+    //   - **Dev** (`npm run dev`, or the built app started from the repository): read from the root install at
+    //     `node_modules/strucpp/src/runtime/include` under the working directory, as the sources are — that's what
     //     `scripts/download-binaries.ts` populates via `npm install
     //     <tarball> --no-save`.
     //
@@ -488,7 +488,7 @@ class CompilerModule {
     if (electronApp.isPackaged) {
       return join(process.resourcesPath, 'strucpp', 'runtime', 'include')
     }
-    return join(electronApp.getAppPath(), 'node_modules', 'strucpp', 'src', 'runtime', 'include')
+    return join(process.cwd(), 'node_modules', 'strucpp', 'src', 'runtime', 'include')
   }
 
   /**

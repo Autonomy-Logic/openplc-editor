@@ -377,6 +377,11 @@ const AcceleratorHandler = () => {
   useEffect(() => {
     const unsub = accelerator.onUndo(() => {
       if (!hasOpenProject(store) || isEditingLocked(store) || !meta?.name) return
+      const current = store.getState().editor
+      if (current.type === 'plc-hmi') {
+        store.getState().hmiDesignerActions.undo(current.meta.kind, current.meta.name)
+        return
+      }
       if (!undo(meta.name)) notifyStaleBody(meta.name)
     })
     return unsub
@@ -385,6 +390,11 @@ const AcceleratorHandler = () => {
   useEffect(() => {
     const unsub = accelerator.onRedo(() => {
       if (!hasOpenProject(store) || isEditingLocked(store) || !meta?.name) return
+      const current = store.getState().editor
+      if (current.type === 'plc-hmi') {
+        store.getState().hmiDesignerActions.redo(current.meta.kind, current.meta.name)
+        return
+      }
       if (!redo(meta.name)) notifyStaleBody(meta.name)
     })
     return unsub

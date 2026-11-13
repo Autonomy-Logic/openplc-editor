@@ -4,9 +4,9 @@
  * declarations and statements go, and every use of an identifier. Spans are offsets into the source, end exclusive.
  */
 import type { FunctionBlockDeclaration, SourceSpan, Statement, VarDeclaration, VariableExpression } from 'strucpp'
+import { parse } from 'strucpp'
 
-import { loadStrucpp } from '../../library/strucpp-runtime'
-import { SourceText } from '../unit/screen-model'
+import { SourceText } from '../st-source-text'
 
 export interface DesignerSpan {
   start: number
@@ -304,7 +304,7 @@ function modelOf(
 
 /** Reads a screen or widget block for the designer; the source must declare exactly one FUNCTION_BLOCK. */
 export function parseDesignerBlock(source: string, isWidgetType: (type: string) => boolean): DesignerParse {
-  const parsed = loadStrucpp().parse(source)
+  const parsed = parse(source)
   if (parsed.errors.length > 0 || !parsed.ast)
     return { ok: false, errors: parsed.errors.map((e) => ({ line: e.line, message: e.message })) }
   const unit = parsed.ast

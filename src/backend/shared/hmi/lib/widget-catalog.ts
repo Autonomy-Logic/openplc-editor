@@ -10,65 +10,26 @@
  */
 import type { LibraryFBEntry, LibraryManifest, LibraryTypeEntry } from 'strucpp'
 
+import type {
+  HmiPropertyGroup,
+  HmiPropertyKind,
+  HmiWidgetBinding,
+  HmiWidgetCatalog,
+  HmiWidgetInfo,
+  HmiWidgetOutput,
+  HmiWidgetProperty,
+} from '../../../../middleware/shared/ports/hmi-preview-types'
+
 type ManifestVar = LibraryFBEntry['inputs'][number]
 
-export type HmiPropertyGroup = 'data' | 'display' | 'layout'
-
-export type HmiPropertyKind = 'bool' | 'number' | 'string' | 'color' | 'enum' | 'elementRef' | 'other'
-
-export interface HmiWidgetProperty {
-  /** Name as written. */
-  name: string
-  /** Declared type, as written for library types. */
-  type: string
-  kind: HmiPropertyKind
-  group: HmiPropertyGroup
-  /** Default value as ST text. */
-  defaultValue?: string
-  /** Length of a STRING(n) property. */
-  maxLength?: number
-  /** Members of an enumerated property, as written. */
-  enumMembers?: readonly string[]
-  /** Block that declares the property. */
-  declaredBy: string
-}
-
-export interface HmiWidgetOutput {
-  name: string
-  type: string
-}
-
-export interface HmiWidgetBinding {
-  name: string
-  direction: 'input' | 'output'
-  type: string
-}
-
-export interface HmiWidgetInfo {
-  /** Name as written. */
-  name: string
-  /** Name of the manifest that declares it. */
-  library: string
-  /** Base block, as written. */
-  extends: string
-  /** Palette group, when the block declares one. */
-  palette?: string
-  /** Inputs, the base block's first. */
-  properties: readonly HmiWidgetProperty[]
-  outputs: readonly HmiWidgetOutput[]
-  /** What a variable dropped on the widget is wired to. */
-  main?: HmiWidgetBinding
-  /** The operator's change of the main input: `changed` is set for one frame with the value in `newValue`. */
-  twoWay?: { value: string; changed: string; newValue: string }
-  /** BOOL outputs set for one frame when something happens (Clicked). */
-  events: readonly string[]
-}
-
-export interface HmiWidgetCatalog {
-  /** Widgets by upper-case name. */
-  widgets: ReadonlyMap<string, HmiWidgetInfo>
-  /** Fields of the COLOR constant, as written: theme colors first, then fixed colors. */
-  colors: readonly string[]
+export type {
+  HmiPropertyGroup,
+  HmiPropertyKind,
+  HmiWidgetBinding,
+  HmiWidgetCatalog,
+  HmiWidgetInfo,
+  HmiWidgetOutput,
+  HmiWidgetProperty,
 }
 
 const BASE_ELEMENT = 'HMIELEMENT'

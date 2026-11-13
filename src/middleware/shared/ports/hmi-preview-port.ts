@@ -4,11 +4,15 @@
  * own mechanisms (`hmi-preview-mechanisms.ts`).
  */
 import type {
+  HmiCatalogResult,
   HmiPointerKind,
   HmiPreviewBuild,
   HmiPreviewFrame,
   HmiPreviewRequest,
   HmiPreviewSurface,
+  HmiSourceFile,
+  HmiThumbnailResult,
+  HmiUnitSources,
 } from './hmi-preview-types'
 
 /** Where a module starts: its logical screen size, the page it shows and whether bounds include ports. */
@@ -38,5 +42,12 @@ export interface HmiPreviewSession {
 
 export interface HmiPreviewPort {
   build(request: HmiPreviewRequest): Promise<HmiPreviewBuild>
+  /** The widgets screens can use: StandardWidgets and the project's widget blocks. */
+  catalog(widgets: readonly HmiSourceFile[]): Promise<HmiCatalogResult>
+  /** The palette's widgets drawn by the core with test values, `scale` device pixels per logical unit. */
+  thumbnails(
+    sources: Pick<HmiUnitSources, 'widgets' | 'settings' | 'projectNames'>,
+    scale: number,
+  ): Promise<HmiThumbnailResult>
   openSession(): HmiPreviewSession
 }

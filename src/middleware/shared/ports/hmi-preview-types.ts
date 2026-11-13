@@ -35,6 +35,8 @@ export interface HmiUnitSources {
 /** A preview build of the project's screens, or of one widget block when `widgetPreview` names it. */
 export interface HmiPreviewRequest extends HmiUnitSources {
   widgetPreview?: string
+  /** Builds the palette gallery, every widget on one screen at natural size, in place of the project's screens. */
+  gallery?: boolean
 }
 
 export interface HmiDiagnostic {
@@ -123,3 +125,83 @@ export type HmiPreviewRequestMessage =
 export type HmiPreviewReply =
   | { id: number; ok: true; frame?: HmiPreviewFrame; applied?: boolean }
   | { id: number; ok: false; error: string; fatal?: boolean }
+
+export type HmiPropertyGroup = 'data' | 'display' | 'layout'
+
+export type HmiPropertyKind = 'bool' | 'number' | 'string' | 'color' | 'enum' | 'elementRef' | 'other'
+
+export interface HmiWidgetProperty {
+  /** Name as written. */
+  name: string
+  /** Declared type, as written for library types. */
+  type: string
+  kind: HmiPropertyKind
+  group: HmiPropertyGroup
+  /** Default value as ST text. */
+  defaultValue?: string
+  /** Length of a STRING(n) property. */
+  maxLength?: number
+  /** Members of an enumerated property, as written. */
+  enumMembers?: readonly string[]
+  /** Block that declares the property. */
+  declaredBy: string
+}
+
+export interface HmiWidgetOutput {
+  name: string
+  type: string
+}
+
+export interface HmiWidgetBinding {
+  name: string
+  direction: 'input' | 'output'
+  type: string
+}
+
+export interface HmiWidgetInfo {
+  /** Name as written. */
+  name: string
+  /** Name of the manifest that declares it. */
+  library: string
+  /** Base block, as written. */
+  extends: string
+  /** Palette group, when the block declares one. */
+  palette?: string
+  /** Inputs, the base block's first. */
+  properties: readonly HmiWidgetProperty[]
+  outputs: readonly HmiWidgetOutput[]
+  /** What a variable dropped on the widget is wired to. */
+  main?: HmiWidgetBinding
+  /** The operator's change of the main input: `changed` is set for one frame with the value in `newValue`. */
+  twoWay?: { value: string; changed: string; newValue: string }
+  /** BOOL outputs set for one frame when something happens (Clicked). */
+  events: readonly string[]
+}
+
+export interface HmiWidgetCatalog {
+  /** Widgets by upper-case name. */
+  widgets: ReadonlyMap<string, HmiWidgetInfo>
+  /** Fields of the COLOR constant, as written: theme colors first, then fixed colors. */
+  colors: readonly string[]
+}
+
+/** A widget as the core draws it, cropped from the palette gallery, as RGBA bytes. */
+export interface HmiThumbnail {
+  /** Widget name as written. */
+  widget: string
+  width: number
+  height: number
+  rgba: Uint8ClampedArray
+}
+
+/** The palette's thumbnails; on errors, the thumbnails of the library widgets only, or none. */
+export interface HmiThumbnailResult {
+  thumbnails: HmiThumbnail[]
+  errors: HmiDiagnostic[]
+}
+
+/** The widget catalogue of a project, with its widget blocks' errors (the catalogue then has the library only). */
+export interface HmiCatalogResult {
+  catalog: HmiWidgetCatalog
+  errors: HmiDiagnostic[]
+}

@@ -495,7 +495,11 @@ and ship next to the toolchain; refresh them from the commits the new release wa
   (`npm run test:hmi-unit`, same CI job) builds a sample project's unit and runs it from a C host.
 - **HMI preview:** `src/backend/shared/hmi/preview/` builds screens and widget blocks with the WebAssembly toolchain
   and runs them in a Worker (`createHmiPreviewPort`; host `resources/sources/hmi/preview/`). `tests/hmi-preview/run.ts`
-  (`npm run test:hmi-preview`, same CI job) does it with the real toolchain and checks rebuild times.
+  (`npm run test:hmi-preview`, same CI job) does it with the real toolchain and checks rebuild times. The port also
+  draws the palette's thumbnails from a generated gallery screen (`hmi-thumbnails.ts`).
+- **HMI designer:** `src/frontend/components/_features/[workspace]/editor/hmi/designer/` edits a screen's ST as text
+  patches (`src/middleware/shared/utils/hmi/designer/`), with undo in the `hmiDesigner` store slice;
+  `e2e/hmi-designer.spec.ts` drives it on the real preview.
 - **Manual:** the developer's manual test is required for every demand.
 
 ## Code Style

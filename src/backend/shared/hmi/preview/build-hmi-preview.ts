@@ -12,7 +12,7 @@ import type {
 } from '../../../../middleware/shared/ports/wasm-toolchain-types'
 import { buildHmiFontTableSource, HmiFontError } from '../fonts/font-table-source'
 import { vettedHmiFont } from '../fonts/vetted-fonts'
-import { generateHmiUnit, type HmiPreview, WIDGET_PREVIEW_SCREEN } from '../unit/generate-hmi-unit'
+import { generateHmiUnit, HMI_GALLERY_SCREEN, type HmiPreview, WIDGET_PREVIEW_SCREEN } from '../unit/generate-hmi-unit'
 
 /** What the preview build reads besides the project: the files every preview compiles in. */
 export interface HmiPreviewResources {
@@ -131,7 +131,7 @@ export function buildHmiPreviewRequest(
 
 const UNIT = 'HMI'
 
-/** Builds the preview of a project's screens, or of one widget block when `input.widgetPreview` names it. */
+/** Builds the preview of a project's screens, of one widget block when `input.widgetPreview` names it, or the gallery. */
 export async function buildHmiPreview(
   input: HmiPreviewRequest,
   resources: HmiPreviewResources,
@@ -173,10 +173,9 @@ export async function buildHmiPreview(
       stats: result.stats,
     }
   }
-  const names = [
-    ...input.screens.map((s) => s.name),
-    ...(input.widgetPreview === undefined ? [] : [WIDGET_PREVIEW_SCREEN]),
-  ]
+  const names = input.gallery
+    ? [HMI_GALLERY_SCREEN]
+    : [...input.screens.map((s) => s.name), ...(input.widgetPreview === undefined ? [] : [WIDGET_PREVIEW_SCREEN])]
   return {
     ok: true,
     wasm: result.wasm,
