@@ -69,6 +69,7 @@ npm run test:watch       # Jest watch mode (no coverage)
 npm run test:e2e         # Playwright E2E tests
 
 npm run validate:arch    # Architecture layer dependency validation
+npm run bench:hostile-slave -- --scenario <name> ...   # Scripted Modbus slave for bench runs (scripts/bench/modbus-hostile-slave/README.md)
 ```
 
 ## Verify before pushing (CI parity)
