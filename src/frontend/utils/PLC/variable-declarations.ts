@@ -35,7 +35,6 @@ import { parse } from 'strucpp'
 
 import { baseTypeSchema } from '../../../middleware/shared/ports/plc-schemas'
 import type { PLCVariable } from '../../../middleware/shared/ports/types'
-import { DEBUG_STRING_CAP } from '../variable-sizes'
 
 /** Half-open character range `[start, end)` into the parsed source. */
 export interface Span {
@@ -214,9 +213,8 @@ export function stringLiteralEnd(source: string, open: number): number {
  *
  * For the passes that look for a keyword in the text rather than in the AST.
  * Stripping `(*…*)` line by line with a regex missed a comment that spans
- * lines, and nothing at all protected a string: `'use: STRING[5]'` made
- * `refineErrors` report a STRING-length error against a line that had none, in
- * place of the real error somewhere else in the block.
+ * lines, and nothing at all protected a string: a keyword inside a comment or
+ * a literal was read as one.
  */
 export function blankTrivia(source: string): string {
   const out = source.split('')
@@ -532,13 +530,10 @@ function readVarBlocks(ast: unknown): StrucppVarBlock[] | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Error refinement — two cases STruC++ reports accurately but unhelpfully
+// Error refinement — a case STruC++ reports accurately but unhelpfully
 // ---------------------------------------------------------------------------
 
 const BLOCK_QUALIFIERS = new Set(['CONSTANT', 'RETAIN', 'NON_RETAIN', 'PERSISTENT'])
-
-/** A declaration type that is a length-qualified STRING or WSTRING, directly or as an ARRAY element. */
-const LENGTH_QUALIFIED_STRING = /:\s*(?:ARRAY\s*\[[^\]]*\]\s+OF\s+)?(W?STRING)\s*\[/i
 
 /** The lines of `source` with trivia blanked, and a builder for an error spanning one 0-indexed line. */
 function lineErrors(source: string): { lines: string[]; at: (index: number, message: string) => ParseError } {
@@ -552,28 +547,6 @@ function lineErrors(source: string): { lines: string[]; at: (index: number, mess
   return { lines, at }
 }
 
-/** The message refusing a declared STRING or WSTRING length on `line`, or undefined when it declares none. */
-function lengthQualifiedMessage(line: string): string | undefined {
-  const match = LENGTH_QUALIFIED_STRING.exec(line)
-  if (!match) return undefined
-  const keyword = match[1].toUpperCase()
-  return `A declared length is not supported on ${keyword} — use plain ${keyword}, which carries up to ${DEBUG_STRING_CAP} characters.`
-}
-
-/**
- * The error for the first declaration in `source` that declares a STRING or
- * WSTRING length, or undefined when none does. Comments and string literals
- * are ignored.
- */
-function declaredStringLengthError(source: string): ParseError | undefined {
-  const { lines, at } = lineErrors(source)
-  for (let index = 0; index < lines.length; index++) {
-    const message = lengthQualifiedMessage(lines[index])
-    if (message !== undefined) return at(index, message)
-  }
-  return undefined
-}
-
 /**
  * Replace a raw parser error with the one the user can act on.
  *
@@ -582,18 +555,15 @@ function declaredStringLengthError(source: string): ParseError | undefined {
  * reported as `Expected Colon, found identifier A` against the NEXT line, which
  * is the one line in the block that has nothing wrong with it. The old regex
  * parser named the qualifier and pointed at the right line, and losing that was
- * a regression this restores. Both cases are recognised from the source, not
- * from the parser's wording, so a change in STruC++ phrasing cannot break them.
+ * a regression this restores. The qualifier is recognised from the source, not
+ * from the parser's wording, so a change in STruC++ phrasing cannot break it.
  *
- * Only two are handled, deliberately. They are the two the old parser had
- * specific messages for; everything else keeps STruC++'s own report.
+ * The source is read with comments and string literals blanked, so a keyword
+ * inside either is ignored. Only this case is handled; everything else keeps
+ * STruC++'s own report.
  */
 function refineErrors(source: string, errors: ParseError[]): ParseError[] {
   if (errors.length === 0) return errors
-  // Read from the text with its comments and strings blanked, not from the raw
-  // source: both recognisers below look for a keyword, and a keyword inside a
-  // comment or a literal is not one. Blanking preserves offsets and line
-  // breaks, so the spans reported still address the caller's own string.
   const { lines, at } = lineErrors(source)
 
   for (let index = 0; index < lines.length; index++) {
@@ -620,9 +590,6 @@ function refineErrors(source: string, errors: ParseError[]): ParseError[] {
         ),
       ]
     }
-
-    const lengthMessage = lengthQualifiedMessage(line)
-    if (lengthMessage !== undefined) return [at(index, lengthMessage)]
   }
 
   return errors
@@ -709,11 +676,6 @@ export function parseVariableDeclarations(source: string, context: TypeContext =
 
   if (errors.length > 0) {
     return { blocks: [], variables: [], errors: refineErrors(source, errors) }
-  }
-
-  const declaredLength = declaredStringLengthError(source)
-  if (declaredLength !== undefined) {
-    return { blocks: [], variables: [], errors: [declaredLength] }
   }
 
   const blocks: ParsedBlock[] = []
