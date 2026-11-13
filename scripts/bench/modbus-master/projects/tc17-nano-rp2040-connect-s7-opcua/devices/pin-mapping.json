@@ -1,0 +1,9 @@
+{
+  "Nano RP2040 Connect": [
+    {
+      "pin": "8",
+      "pinType": "digitalOutput",
+      "address": "%QX0.0"
+    }
+  ]
+}

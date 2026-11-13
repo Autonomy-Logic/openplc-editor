@@ -7,13 +7,21 @@
   `modbus_master_types.h` and a `HardwareSerial` stand-in, through
   `g++ -std=gnu++11 -fsyntax-only`. It needs `g++` on the host, so it is skipped unless
   `MB_MASTER_HOST_COMPILE=1` is set.
+- `firmware-master-sources.test.ts`: the master modules ship, name no network class (only `baremetal_net`
+  does), never touch `mb_frame`, and no firmware source resolves a host name or carries a pending-work marker.
+  Read as text; runs everywhere.
+- `firmware-master-gates.test.ts`: the build gates, through the host C preprocessor (`g++ -E`) with every
+  Arduino and network library header replaced by an empty stand-in. `baremetal_net.h` opens for a TCP master
+  and stays closed for an RTU-only master or the stub; a NINA board takes `WiFiNINA.h`; `Baremetal.ino` calls
+  `mb_master_task()` from `scheduler()` and `loop()` before the forces, maps the empty buffers for a master-only
+  build, and calls nothing of the master with the stub. Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
 
-Run the host compile locally from the repository root:
+Run the host checks locally from the repository root:
 
 ```sh
 # openplc-editor
-MB_MASTER_HOST_COMPILE=1 npx jest --config jest.config.json --no-coverage src/frontend/utils/modbus-master/__tests__/host-compile.test.ts
+MB_MASTER_HOST_COMPILE=1 npx jest --config jest.config.json --no-coverage src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts
 
 # openplc-web
-MB_MASTER_HOST_COMPILE=1 npx vitest run --config vitest.config.ts src/frontend/utils/modbus-master/__tests__/host-compile.test.ts
+MB_MASTER_HOST_COMPILE=1 npx vitest run --config vitest.config.ts src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts
 ```

@@ -1,0 +1,9 @@
+{
+  "Arduino Mega": [
+    {
+      "pin": "23",
+      "pinType": "digitalOutput",
+      "address": "%QX0.0"
+    }
+  ]
+}

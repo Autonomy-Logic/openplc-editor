@@ -1,0 +1,900 @@
+{
+  "name": "Slave",
+  "protocol": "modbus-tcp",
+  "modbusTcpConfig": {
+    "transport": "tcp",
+    "host": "192.168.1.50",
+    "port": 502,
+    "reconnect": true,
+    "timeout": 500,
+    "slaveId": 1,
+    "ioGroups": [
+      {
+        "id": "big",
+        "name": "big",
+        "functionCode": "3",
+        "cycleTime": 100,
+        "offset": "0",
+        "length": 125,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "big_0",
+            "name": "big_0",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW0",
+            "alias": "MB_BIG_0"
+          },
+          {
+            "id": "big_1",
+            "name": "big_1",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW1",
+            "alias": "MB_BIG_1"
+          },
+          {
+            "id": "big_2",
+            "name": "big_2",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW2",
+            "alias": "MB_BIG_2"
+          },
+          {
+            "id": "big_3",
+            "name": "big_3",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW3",
+            "alias": "MB_BIG_3"
+          },
+          {
+            "id": "big_4",
+            "name": "big_4",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW4",
+            "alias": "MB_BIG_4"
+          },
+          {
+            "id": "big_5",
+            "name": "big_5",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW5",
+            "alias": "MB_BIG_5"
+          },
+          {
+            "id": "big_6",
+            "name": "big_6",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW6",
+            "alias": "MB_BIG_6"
+          },
+          {
+            "id": "big_7",
+            "name": "big_7",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW7",
+            "alias": "MB_BIG_7"
+          },
+          {
+            "id": "big_8",
+            "name": "big_8",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW8",
+            "alias": "MB_BIG_8"
+          },
+          {
+            "id": "big_9",
+            "name": "big_9",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW9",
+            "alias": "MB_BIG_9"
+          },
+          {
+            "id": "big_10",
+            "name": "big_10",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW10",
+            "alias": "MB_BIG_10"
+          },
+          {
+            "id": "big_11",
+            "name": "big_11",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW11",
+            "alias": "MB_BIG_11"
+          },
+          {
+            "id": "big_12",
+            "name": "big_12",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW12",
+            "alias": "MB_BIG_12"
+          },
+          {
+            "id": "big_13",
+            "name": "big_13",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW13",
+            "alias": "MB_BIG_13"
+          },
+          {
+            "id": "big_14",
+            "name": "big_14",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW14",
+            "alias": "MB_BIG_14"
+          },
+          {
+            "id": "big_15",
+            "name": "big_15",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW15",
+            "alias": "MB_BIG_15"
+          },
+          {
+            "id": "big_16",
+            "name": "big_16",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW16",
+            "alias": "MB_BIG_16"
+          },
+          {
+            "id": "big_17",
+            "name": "big_17",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW17",
+            "alias": "MB_BIG_17"
+          },
+          {
+            "id": "big_18",
+            "name": "big_18",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW18",
+            "alias": "MB_BIG_18"
+          },
+          {
+            "id": "big_19",
+            "name": "big_19",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW19",
+            "alias": "MB_BIG_19"
+          },
+          {
+            "id": "big_20",
+            "name": "big_20",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW20",
+            "alias": "MB_BIG_20"
+          },
+          {
+            "id": "big_21",
+            "name": "big_21",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW21",
+            "alias": "MB_BIG_21"
+          },
+          {
+            "id": "big_22",
+            "name": "big_22",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW22",
+            "alias": "MB_BIG_22"
+          },
+          {
+            "id": "big_23",
+            "name": "big_23",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW23",
+            "alias": "MB_BIG_23"
+          },
+          {
+            "id": "big_24",
+            "name": "big_24",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW24",
+            "alias": "MB_BIG_24"
+          },
+          {
+            "id": "big_25",
+            "name": "big_25",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW25",
+            "alias": "MB_BIG_25"
+          },
+          {
+            "id": "big_26",
+            "name": "big_26",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW26",
+            "alias": "MB_BIG_26"
+          },
+          {
+            "id": "big_27",
+            "name": "big_27",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW27",
+            "alias": "MB_BIG_27"
+          },
+          {
+            "id": "big_28",
+            "name": "big_28",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW28",
+            "alias": "MB_BIG_28"
+          },
+          {
+            "id": "big_29",
+            "name": "big_29",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW29",
+            "alias": "MB_BIG_29"
+          },
+          {
+            "id": "big_30",
+            "name": "big_30",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW30",
+            "alias": "MB_BIG_30"
+          },
+          {
+            "id": "big_31",
+            "name": "big_31",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW31",
+            "alias": "MB_BIG_31"
+          },
+          {
+            "id": "big_32",
+            "name": "big_32",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW32",
+            "alias": "MB_BIG_32"
+          },
+          {
+            "id": "big_33",
+            "name": "big_33",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW33",
+            "alias": "MB_BIG_33"
+          },
+          {
+            "id": "big_34",
+            "name": "big_34",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW34",
+            "alias": "MB_BIG_34"
+          },
+          {
+            "id": "big_35",
+            "name": "big_35",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW35",
+            "alias": "MB_BIG_35"
+          },
+          {
+            "id": "big_36",
+            "name": "big_36",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW36",
+            "alias": "MB_BIG_36"
+          },
+          {
+            "id": "big_37",
+            "name": "big_37",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW37",
+            "alias": "MB_BIG_37"
+          },
+          {
+            "id": "big_38",
+            "name": "big_38",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW38",
+            "alias": "MB_BIG_38"
+          },
+          {
+            "id": "big_39",
+            "name": "big_39",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW39",
+            "alias": "MB_BIG_39"
+          },
+          {
+            "id": "big_40",
+            "name": "big_40",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW40",
+            "alias": "MB_BIG_40"
+          },
+          {
+            "id": "big_41",
+            "name": "big_41",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW41",
+            "alias": "MB_BIG_41"
+          },
+          {
+            "id": "big_42",
+            "name": "big_42",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW42",
+            "alias": "MB_BIG_42"
+          },
+          {
+            "id": "big_43",
+            "name": "big_43",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW43",
+            "alias": "MB_BIG_43"
+          },
+          {
+            "id": "big_44",
+            "name": "big_44",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW44",
+            "alias": "MB_BIG_44"
+          },
+          {
+            "id": "big_45",
+            "name": "big_45",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW45",
+            "alias": "MB_BIG_45"
+          },
+          {
+            "id": "big_46",
+            "name": "big_46",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW46",
+            "alias": "MB_BIG_46"
+          },
+          {
+            "id": "big_47",
+            "name": "big_47",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW47",
+            "alias": "MB_BIG_47"
+          },
+          {
+            "id": "big_48",
+            "name": "big_48",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW48",
+            "alias": "MB_BIG_48"
+          },
+          {
+            "id": "big_49",
+            "name": "big_49",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW49",
+            "alias": "MB_BIG_49"
+          },
+          {
+            "id": "big_50",
+            "name": "big_50",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW50",
+            "alias": "MB_BIG_50"
+          },
+          {
+            "id": "big_51",
+            "name": "big_51",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW51",
+            "alias": "MB_BIG_51"
+          },
+          {
+            "id": "big_52",
+            "name": "big_52",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW52",
+            "alias": "MB_BIG_52"
+          },
+          {
+            "id": "big_53",
+            "name": "big_53",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW53",
+            "alias": "MB_BIG_53"
+          },
+          {
+            "id": "big_54",
+            "name": "big_54",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW54",
+            "alias": "MB_BIG_54"
+          },
+          {
+            "id": "big_55",
+            "name": "big_55",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW55",
+            "alias": "MB_BIG_55"
+          },
+          {
+            "id": "big_56",
+            "name": "big_56",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW56",
+            "alias": "MB_BIG_56"
+          },
+          {
+            "id": "big_57",
+            "name": "big_57",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW57",
+            "alias": "MB_BIG_57"
+          },
+          {
+            "id": "big_58",
+            "name": "big_58",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW58",
+            "alias": "MB_BIG_58"
+          },
+          {
+            "id": "big_59",
+            "name": "big_59",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW59",
+            "alias": "MB_BIG_59"
+          },
+          {
+            "id": "big_60",
+            "name": "big_60",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW60",
+            "alias": "MB_BIG_60"
+          },
+          {
+            "id": "big_61",
+            "name": "big_61",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW61",
+            "alias": "MB_BIG_61"
+          },
+          {
+            "id": "big_62",
+            "name": "big_62",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW62",
+            "alias": "MB_BIG_62"
+          },
+          {
+            "id": "big_63",
+            "name": "big_63",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW63",
+            "alias": "MB_BIG_63"
+          },
+          {
+            "id": "big_64",
+            "name": "big_64",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW64",
+            "alias": "MB_BIG_64"
+          },
+          {
+            "id": "big_65",
+            "name": "big_65",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW65",
+            "alias": "MB_BIG_65"
+          },
+          {
+            "id": "big_66",
+            "name": "big_66",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW66",
+            "alias": "MB_BIG_66"
+          },
+          {
+            "id": "big_67",
+            "name": "big_67",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW67",
+            "alias": "MB_BIG_67"
+          },
+          {
+            "id": "big_68",
+            "name": "big_68",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW68",
+            "alias": "MB_BIG_68"
+          },
+          {
+            "id": "big_69",
+            "name": "big_69",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW69",
+            "alias": "MB_BIG_69"
+          },
+          {
+            "id": "big_70",
+            "name": "big_70",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW70",
+            "alias": "MB_BIG_70"
+          },
+          {
+            "id": "big_71",
+            "name": "big_71",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW71",
+            "alias": "MB_BIG_71"
+          },
+          {
+            "id": "big_72",
+            "name": "big_72",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW72",
+            "alias": "MB_BIG_72"
+          },
+          {
+            "id": "big_73",
+            "name": "big_73",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW73",
+            "alias": "MB_BIG_73"
+          },
+          {
+            "id": "big_74",
+            "name": "big_74",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW74",
+            "alias": "MB_BIG_74"
+          },
+          {
+            "id": "big_75",
+            "name": "big_75",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW75",
+            "alias": "MB_BIG_75"
+          },
+          {
+            "id": "big_76",
+            "name": "big_76",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW76",
+            "alias": "MB_BIG_76"
+          },
+          {
+            "id": "big_77",
+            "name": "big_77",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW77",
+            "alias": "MB_BIG_77"
+          },
+          {
+            "id": "big_78",
+            "name": "big_78",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW78",
+            "alias": "MB_BIG_78"
+          },
+          {
+            "id": "big_79",
+            "name": "big_79",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW79",
+            "alias": "MB_BIG_79"
+          },
+          {
+            "id": "big_80",
+            "name": "big_80",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW80",
+            "alias": "MB_BIG_80"
+          },
+          {
+            "id": "big_81",
+            "name": "big_81",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW81",
+            "alias": "MB_BIG_81"
+          },
+          {
+            "id": "big_82",
+            "name": "big_82",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW82",
+            "alias": "MB_BIG_82"
+          },
+          {
+            "id": "big_83",
+            "name": "big_83",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW83",
+            "alias": "MB_BIG_83"
+          },
+          {
+            "id": "big_84",
+            "name": "big_84",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW84",
+            "alias": "MB_BIG_84"
+          },
+          {
+            "id": "big_85",
+            "name": "big_85",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW85",
+            "alias": "MB_BIG_85"
+          },
+          {
+            "id": "big_86",
+            "name": "big_86",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW86",
+            "alias": "MB_BIG_86"
+          },
+          {
+            "id": "big_87",
+            "name": "big_87",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW87",
+            "alias": "MB_BIG_87"
+          },
+          {
+            "id": "big_88",
+            "name": "big_88",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW88",
+            "alias": "MB_BIG_88"
+          },
+          {
+            "id": "big_89",
+            "name": "big_89",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW89",
+            "alias": "MB_BIG_89"
+          },
+          {
+            "id": "big_90",
+            "name": "big_90",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW90",
+            "alias": "MB_BIG_90"
+          },
+          {
+            "id": "big_91",
+            "name": "big_91",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW91",
+            "alias": "MB_BIG_91"
+          },
+          {
+            "id": "big_92",
+            "name": "big_92",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW92",
+            "alias": "MB_BIG_92"
+          },
+          {
+            "id": "big_93",
+            "name": "big_93",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW93",
+            "alias": "MB_BIG_93"
+          },
+          {
+            "id": "big_94",
+            "name": "big_94",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW94",
+            "alias": "MB_BIG_94"
+          },
+          {
+            "id": "big_95",
+            "name": "big_95",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW95",
+            "alias": "MB_BIG_95"
+          },
+          {
+            "id": "big_96",
+            "name": "big_96",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW96",
+            "alias": "MB_BIG_96"
+          },
+          {
+            "id": "big_97",
+            "name": "big_97",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW97",
+            "alias": "MB_BIG_97"
+          },
+          {
+            "id": "big_98",
+            "name": "big_98",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW98",
+            "alias": "MB_BIG_98"
+          },
+          {
+            "id": "big_99",
+            "name": "big_99",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW99",
+            "alias": "MB_BIG_99"
+          },
+          {
+            "id": "big_100",
+            "name": "big_100",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW100",
+            "alias": "MB_BIG_100"
+          },
+          {
+            "id": "big_101",
+            "name": "big_101",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW101",
+            "alias": "MB_BIG_101"
+          },
+          {
+            "id": "big_102",
+            "name": "big_102",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW102",
+            "alias": "MB_BIG_102"
+          },
+          {
+            "id": "big_103",
+            "name": "big_103",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW103",
+            "alias": "MB_BIG_103"
+          },
+          {
+            "id": "big_104",
+            "name": "big_104",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW104",
+            "alias": "MB_BIG_104"
+          },
+          {
+            "id": "big_105",
+            "name": "big_105",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW105",
+            "alias": "MB_BIG_105"
+          },
+          {
+            "id": "big_106",
+            "name": "big_106",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW106",
+            "alias": "MB_BIG_106"
+          },
+          {
+            "id": "big_107",
+            "name": "big_107",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW107",
+            "alias": "MB_BIG_107"
+          },
+          {
+            "id": "big_108",
+            "name": "big_108",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW108",
+            "alias": "MB_BIG_108"
+          },
+          {
+            "id": "big_109",
+            "name": "big_109",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW109",
+            "alias": "MB_BIG_109"
+          },
+          {
+            "id": "big_110",
+            "name": "big_110",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW110",
+            "alias": "MB_BIG_110"
+          },
+          {
+            "id": "big_111",
+            "name": "big_111",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW111",
+            "alias": "MB_BIG_111"
+          },
+          {
+            "id": "big_112",
+            "name": "big_112",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW112",
+            "alias": "MB_BIG_112"
+          },
+          {
+            "id": "big_113",
+            "name": "big_113",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW113",
+            "alias": "MB_BIG_113"
+          },
+          {
+            "id": "big_114",
+            "name": "big_114",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW114",
+            "alias": "MB_BIG_114"
+          },
+          {
+            "id": "big_115",
+            "name": "big_115",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW115",
+            "alias": "MB_BIG_115"
+          },
+          {
+            "id": "big_116",
+            "name": "big_116",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW116",
+            "alias": "MB_BIG_116"
+          },
+          {
+            "id": "big_117",
+            "name": "big_117",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW117",
+            "alias": "MB_BIG_117"
+          },
+          {
+            "id": "big_118",
+            "name": "big_118",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW118",
+            "alias": "MB_BIG_118"
+          },
+          {
+            "id": "big_119",
+            "name": "big_119",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW119",
+            "alias": "MB_BIG_119"
+          },
+          {
+            "id": "big_120",
+            "name": "big_120",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW120",
+            "alias": "MB_BIG_120"
+          },
+          {
+            "id": "big_121",
+            "name": "big_121",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW121",
+            "alias": "MB_BIG_121"
+          },
+          {
+            "id": "big_122",
+            "name": "big_122",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW122",
+            "alias": "MB_BIG_122"
+          },
+          {
+            "id": "big_123",
+            "name": "big_123",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW123",
+            "alias": "MB_BIG_123"
+          },
+          {
+            "id": "big_124",
+            "name": "big_124",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW124",
+            "alias": "MB_BIG_124"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "OPCUA",
+  "protocol": "opcua",
+  "opcuaServerConfig": {
+    "server": {
+      "enabled": true,
+      "name": "OpenPLC OPC UA Server",
+      "applicationUri": "urn:openplc:opcua:server",
+      "productUri": "urn:openplc:runtime",
+      "bindAddress": "0.0.0.0",
+      "port": 4840,
+      "endpointPath": "/openplc/opcua"
+    },
+    "securityProfiles": [
+      {
+        "id": "default-insecure",
+        "name": "insecure",
+        "enabled": true,
+        "securityPolicy": "None",
+        "securityMode": "None",
+        "authMethods": [
+          "Anonymous"
+        ],
+        "anonymousRole": "viewer"
+      }
+    ],
+    "security": {
+      "serverCertificateStrategy": "auto_self_signed",
+      "serverCertificateCustom": null,
+      "serverPrivateKeyCustom": null,
+      "trustedClientCertificates": []
+    },
+    "users": [],
+    "cycleTimeMs": 100,
+    "addressSpace": {
+      "namespaceUri": "urn:openplc:opcua:namespace",
+      "nodes": []
+    }
+  }
+}

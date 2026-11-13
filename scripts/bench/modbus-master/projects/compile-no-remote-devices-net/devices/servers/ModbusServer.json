@@ -1,0 +1,12 @@
+{
+  "name": "ModbusServer",
+  "protocol": "modbus-tcp",
+  "modbusSlaveConfig": {
+    "enabled": true,
+    "transports": [
+      "tcp"
+    ],
+    "networkInterface": "0.0.0.0",
+    "port": 502
+  }
+}

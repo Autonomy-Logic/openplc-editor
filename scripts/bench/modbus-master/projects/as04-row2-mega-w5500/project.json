@@ -1,0 +1,62 @@
+{
+  "meta": {
+    "name": "as04-row2-mega-w5500",
+    "type": "plc-project"
+  },
+  "data": {
+    "dataTypes": [],
+    "pous": [],
+    "configuration": {
+      "resource": {
+        "tasks": [
+          {
+            "name": "task0",
+            "triggering": "Cyclic",
+            "interval": "T#20ms",
+            "priority": 1
+          }
+        ],
+        "instances": [
+          {
+            "name": "instance0",
+            "program": "main",
+            "task": "task0"
+          }
+        ],
+        "globalVariables": []
+      }
+    },
+    "libraries": [],
+    "debugVariables": {
+      "global": [],
+      "pous": {
+        "main": [
+          "scan_toggle",
+          "held_0",
+          "held_1",
+          "held_2",
+          "held_3",
+          "held_4",
+          "held_5",
+          "held_6",
+          "held_7",
+          "held_8",
+          "held_9",
+          "bad_steps",
+          "g1_0",
+          "g1_1",
+          "g1_2",
+          "g1_3",
+          "g1_4",
+          "g1_5",
+          "g1_6",
+          "g1_7",
+          "g1_8",
+          "g1_9",
+          "last",
+          "seen"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "name": "Slave",
+  "protocol": "modbus-tcp",
+  "modbusTcpConfig": {
+    "transport": "tcp",
+    "host": "192.168.1.50",
+    "port": 502,
+    "reconnect": true,
+    "timeout": 500,
+    "slaveId": 1,
+    "ioGroups": [
+      {
+        "id": "zero",
+        "name": "zero",
+        "functionCode": "3",
+        "cycleTime": 100,
+        "offset": "0",
+        "length": 2,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "zero_0",
+            "name": "zero_0",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW100",
+            "alias": "MB_ZERO_0"
+          },
+          {
+            "id": "zero_1",
+            "name": "zero_1",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW101",
+            "alias": "MB_ZERO_1"
+          }
+        ]
+      },
+      {
+        "id": "keep",
+        "name": "keep",
+        "functionCode": "3",
+        "cycleTime": 100,
+        "offset": "10",
+        "length": 2,
+        "errorHandling": "keep-last-value",
+        "ioPoints": [
+          {
+            "id": "keep_0",
+            "name": "keep_0",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW102",
+            "alias": "MB_KEEP_0"
+          },
+          {
+            "id": "keep_1",
+            "name": "keep_1",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW103",
+            "alias": "MB_KEEP_1"
+          }
+        ]
+      }
+    ]
+  }
+}

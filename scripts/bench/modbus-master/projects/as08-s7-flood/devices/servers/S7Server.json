@@ -1,0 +1,41 @@
+{
+  "name": "S7Server",
+  "protocol": "s7comm",
+  "s7commSlaveConfig": {
+    "server": {
+      "enabled": true,
+      "bindAddress": "0.0.0.0",
+      "port": 102,
+      "maxClients": 2,
+      "workIntervalMs": 100,
+      "sendTimeoutMs": 3000,
+      "recvTimeoutMs": 3000,
+      "pingTimeoutMs": 10000,
+      "pduSize": 240
+    },
+    "plcIdentity": {
+      "name": "OpenPLC Runtime",
+      "moduleType": "CPU 315-2 PN/DP",
+      "serialNumber": "S C-OPENPLC01",
+      "copyright": "OpenPLC Project",
+      "moduleName": "OpenPLC"
+    },
+    "dataBlocks": [
+      {
+        "dbNumber": 1,
+        "description": "QW0 to QW9",
+        "sizeBytes": 20,
+        "mapping": {
+          "type": "int_output",
+          "startBuffer": 0,
+          "bitAddressing": false
+        }
+      }
+    ],
+    "logging": {
+      "logConnections": true,
+      "logDataAccess": false,
+      "logErrors": true
+    }
+  }
+}
