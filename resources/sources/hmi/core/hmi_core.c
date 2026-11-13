@@ -34,7 +34,10 @@ struct hmi_session {
 
     int32_t bounds[HMI_BOUNDS_MAX * 5];
     uint8_t bounds_input[HMI_BOUNDS_MAX];
-    int bounds_n;
+    /* Frame clip each entry was recorded under: 0 = none, else 1 + index into bounds_clips. */
+    uint8_t bounds_clip[HMI_BOUNDS_MAX];
+    int32_t bounds_clips[HMI_BOUNDS_CLIPS_MAX][4];
+    int bounds_n, bounds_clips_n;
 
     int32_t poly[HMI_POLY_MAX][2]; /* Q4 local */
     int poly_n;
@@ -48,6 +51,7 @@ struct hmi_session {
     int32_t page;
     int32_t page_hist[PAGE_HISTORY];
     int page_hist_n;
+    int32_t page_shown_1; /* page last shown + 1; 0 = none yet */
     int32_t theme;
 
     /* Frame: screen_q4 = local_q4 * fk / 65536 + (fox, foy), clipped to (fcx, fcy, fcw, fch) when fclip. */
@@ -156,6 +160,7 @@ void hmi_frame_begin(void) {
     S->pressed = S->released = S->consumed = 0;
     int prev_bounds = S->bounds_n;
     S->bounds_n = 0;
+    S->bounds_clips_n = 0;
     hmi_frame_reset();
 
     /* At most one press or release per frame, so a quick tap is seen as both; moves apply in passing. */
@@ -185,6 +190,10 @@ void hmi_frame_begin(void) {
     int64_t px = S->px, py = S->py;
     for (int i = 0; i < prev_bounds; i++) {
         if (!S->bounds_input[i]) continue;
+        if (S->bounds_clip[i]) {
+            const int32_t *c = S->bounds_clips[S->bounds_clip[i] - 1];
+            if (px < c[0] || py < c[1] || px >= (int64_t)c[0] + c[2] || py >= (int64_t)c[1] + c[3]) continue;
+        }
         const int32_t *b = &S->bounds[i * 5];
         int64_t x0 = b[1], y0 = b[2], x1 = x0 + b[3], y1 = y0 + b[4];
         if (px >= x0 && px < x1 && py >= y0 && py < y1) {
@@ -535,6 +544,26 @@ void hmi_elem_bounds_in(int32_t id, int32_t x, int32_t y, int32_t w, int32_t h, 
         S->status |= HMI_STATUS_BOUNDS_FULL;
         return;
     }
+    S->bounds_clip[S->bounds_n] = 0;
+    if (S->fclip) {
+        int k = 0;
+        while (k < S->bounds_clips_n && !(S->bounds_clips[k][0] == S->fcx && S->bounds_clips[k][1] == S->fcy &&
+                                          S->bounds_clips[k][2] == S->fcw && S->bounds_clips[k][3] == S->fch))
+            k++;
+        if (k == S->bounds_clips_n && k < HMI_BOUNDS_CLIPS_MAX) {
+            S->bounds_clips[k][0] = S->fcx;
+            S->bounds_clips[k][1] = S->fcy;
+            S->bounds_clips[k][2] = S->fcw;
+            S->bounds_clips[k][3] = S->fch;
+            S->bounds_clips_n++;
+        }
+        if (k < S->bounds_clips_n) {
+            S->bounds_clip[S->bounds_n] = (uint8_t)(k + 1);
+        } else {
+            S->status |= HMI_STATUS_BOUNDS_FULL;
+            takes_input = 0;
+        }
+    }
     S->bounds_input[S->bounds_n] = (uint8_t)(takes_input != 0);
     int32_t *b = &S->bounds[S->bounds_n * 5];
     b[0] = id;
@@ -598,6 +627,14 @@ void hmi_set_page(int32_t page) {
     S->page_hist[S->page_hist_n++] = S->page;
     S->page = page;
 }
+
+void hmi_page_reset(int32_t page) {
+    S->page = page;
+    S->page_hist_n = 0;
+}
+
+int32_t hmi_page_shown(void) { return S->page_shown_1 - 1; }
+void hmi_page_set_shown(int32_t page) { S->page_shown_1 = page < 0 ? 0 : page + 1; }
 
 int hmi_page_back(void) {
     if (S->page_hist_n == 0) return 0;

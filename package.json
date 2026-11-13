@@ -35,6 +35,7 @@
     "test:watch": "jest --watch --no-coverage",
     "test:e2e": "npm run build && npx playwright test",
     "test:hmi-core": "node tests/hmi-core/run.mjs --cc \"gcc clang\" --sanitize",
+    "test:hmi-lib": "node tests/hmi-lib/run.mjs --cc \"gcc clang\"",
     "validate:arch": "npx tsx src/__architecture__/validate.ts",
     "prepare": "husky"
   },

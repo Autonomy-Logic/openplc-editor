@@ -21,7 +21,7 @@ and produce the same pixels on each. This folder is mirrored byte for byte in op
 
 Compile the five `core/*.c` files with `core/` on the include path and `-ffp-contract=off`, plus the font table the
 HMI build generates (`hmi_font_table`, from `src/backend/shared/hmi/fonts/font-table-source.ts`; only the faces the
-screens use, in the project's font variant). Text is rasterized from the TrueType outlines on every target. An optional `hmi_config.h` on the include path sets `HMI_DL_CAPACITY` and `HMI_BOUNDS_MAX`.
+screens use, in the project's font variant). Text is rasterized from the TrueType outlines on every target. An optional `hmi_config.h` on the include path sets `HMI_DL_CAPACITY`, `HMI_BOUNDS_MAX` and `HMI_BOUNDS_CLIPS_MAX`.
 
 ## Rules that keep the output identical everywhere
 
@@ -33,6 +33,13 @@ screens use, in the project's font variant). Text is rasterized from the TrueTyp
 - Trigonometry comes from constant integer tables.
 - Device coordinates are clamped to +-131072 pixels, so every per-pixel product fits 64 bits.
 
+## Widget library
+
+Screens are ST built on StandardWidgets, an ST library over these primitives: the element base, containers,
+widgets, the on-screen keyboard, the screen base and the runtime the generated glue drives. It lives in
+`src/backend/shared/hmi/lib/` (shared surface) and is compiled by STruC++ as its own library; its `{external}` code
+includes `hmi_core.h`.
+
 ## Tests (in openplc-editor)
 
 `npm run test:hmi-core` (or `node tests/hmi-core/run.mjs`, see the options at the top of that file) builds the
@@ -40,3 +47,6 @@ golden scenes and the unit tests with gcc, clang and WebAssembly (`-Wall -Wextra
 against `tests/hmi-core/golden.txt` with both font variants, and runs the fuzzer under AddressSanitizer and UndefinedBehaviorSanitizer.
 `--png <dir>` writes the scenes as images. After an intended rendering change, review the images and run with
 `--update`.
+
+`npm run test:hmi-lib` (`tests/hmi-lib/run.mjs`) compiles the library and test screens with STruC++, builds them with
+this core on gcc and clang, drives scripted input and checks every frame against `tests/hmi-lib/golden.txt`.

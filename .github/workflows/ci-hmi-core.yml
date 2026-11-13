@@ -7,7 +7,7 @@ on:
 
 jobs:
   hmi-core:
-    name: HMI Core (gcc, clang, WebAssembly, sanitizers)
+    name: HMI Core and widget library (gcc, clang, WebAssembly, sanitizers)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -27,3 +27,11 @@ jobs:
       # and the fuzzer under AddressSanitizer and UndefinedBehaviorSanitizer.
       - name: Test the HMI core
         run: node tests/hmi-core/run.mjs --cc "gcc clang" --sanitize --fuzz 100000
+
+      # The pinned STruC++ compiles the StandardWidgets library and the test screens.
+      - name: Install STruC++
+        run: npm run setup:strucpp
+
+      # Headless frames of the widget library on gcc and clang against golden.txt.
+      - name: Test the HMI widget library
+        run: node tests/hmi-lib/run.mjs --cc "gcc clang"
