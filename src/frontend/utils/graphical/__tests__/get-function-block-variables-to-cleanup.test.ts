@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import type { Node } from '@xyflow/react'
 
-import type { PLCVariable } from '../../../../middleware/shared/ports/types'
+import type { PLCVariable, VariableClass } from '../../../../middleware/shared/ports/types'
 import {
   getFunctionBlockVariablesToCleanup,
   isFunctionBlockVariableInUse,
@@ -36,8 +36,17 @@ const makeVariableNode = (id: string, type: string, expression: string): Node =>
 const makeVariable = (name: string, definition: string): PLCVariable =>
   ({
     name,
+    class: 'local',
     type: { definition, value: 'INT' },
   }) as unknown as PLCVariable
+
+const makeTonDeclaration = (name: string, variableClass?: VariableClass): PLCVariable => ({
+  name,
+  ...(variableClass ? { class: variableClass } : {}),
+  type: { definition: 'derived', value: 'TON' },
+  location: '',
+  documentation: '',
+})
 
 describe('isFunctionBlockVariableInUse', () => {
   it('returns true when a function-block node uses the variable', () => {
@@ -245,10 +254,43 @@ describe('getFunctionBlockVariablesToCleanup with a user-defined function block'
     }
     const instance = {
       name: 'MyFB0',
+      class: 'local',
       type: { definition: 'derived', value: 'MyFB' },
     } as unknown as PLCVariable
 
     expect(getFunctionBlockVariablesToCleanup([removedBlock], [{ nodes: [] }], [instance])).toEqual(['MyFB0'])
+  })
+})
+
+describe('getFunctionBlockVariablesToCleanup with the bound variable declared by the user in another class', () => {
+  const removedBlock = makeBlockNode('block-1', 'ExtTimer', 'function-block')
+
+  it.each<VariableClass>(['external', 'inOut', 'input', 'output', 'temp', 'global'])(
+    'keeps an unreferenced %s declaration bound to the removed TON block',
+    (variableClass) => {
+      const declarations = [makeTonDeclaration('ExtTimer', variableClass)]
+
+      expect(getFunctionBlockVariablesToCleanup([removedBlock], [{ nodes: [] }], declarations)).toEqual([])
+    },
+  )
+
+  it('keeps an unreferenced declaration with no class bound to the removed TON block', () => {
+    const declarations = [makeTonDeclaration('ExtTimer')]
+
+    expect(getFunctionBlockVariablesToCleanup([removedBlock], [{ nodes: [] }], declarations)).toEqual([])
+  })
+
+  it('returns the unreferenced local instance bound to the removed TON block', () => {
+    const declarations = [makeTonDeclaration('ExtTimer', 'local')]
+
+    expect(getFunctionBlockVariablesToCleanup([removedBlock], [{ nodes: [] }], declarations)).toEqual(['ExtTimer'])
+  })
+
+  it('returns the local instance and keeps the input declaration when both bound blocks are removed', () => {
+    const removedBlocks = [removedBlock, makeBlockNode('block-2', 'TON1', 'function-block')]
+    const declarations = [makeTonDeclaration('ExtTimer', 'input'), makeTonDeclaration('TON1', 'local')]
+
+    expect(getFunctionBlockVariablesToCleanup(removedBlocks, [{ nodes: [] }], declarations)).toEqual(['TON1'])
   })
 })
 
