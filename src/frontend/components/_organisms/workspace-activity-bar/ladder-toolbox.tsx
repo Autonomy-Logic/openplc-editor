@@ -1,6 +1,7 @@
 import type { Node } from '@xyflow/react'
 
 import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
+import { usePouSnapshot } from '../../../hooks/use-pou-snapshot'
 import { useOpenPLCStore } from '../../../store'
 import { cn } from '../../../utils/cn'
 import { getFunctionBlockVariablesToCleanup } from '../../../utils/graphical/get-function-block-variables-to-cleanup'
@@ -26,6 +27,7 @@ export const LadderToolbox = () => {
   } = useOpenPLCStore()
 
   const isEditingLocked = useIsEditingLocked()
+  const { captureAndPush } = usePouSnapshot()
 
   const editorName = editor.meta.name
   const pou = pous.find((pou) => pou.name === editorName)
@@ -72,6 +74,10 @@ export const LadderToolbox = () => {
     if (isEditingLocked) return
 
     const allNodesToRemove = flow?.rungs.flatMap((rung) => resolveSelectedNodes(rung)) || []
+    if (allNodesToRemove.length === 0) return
+
+    captureAndPush(editor.meta.name)
+
     const remainingRungs: Array<{ nodes: Node[] }> = []
 
     flow?.rungs.forEach((rung) => {
@@ -92,7 +98,7 @@ export const LadderToolbox = () => {
       })
     })
 
-    if (pou && allNodesToRemove.length > 0) {
+    if (pou) {
       const allVariables = pou.interface?.variables || []
 
       const variablesToDelete = getFunctionBlockVariablesToCleanup(allNodesToRemove, remainingRungs, allVariables)

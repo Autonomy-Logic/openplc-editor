@@ -78,7 +78,7 @@ export const getFunctionBlockVariablesToCleanup = (
   for (const variableName of variablesToCheck) {
     const variable = allVariables.find((v) => v.name.toLowerCase() === variableName.toLowerCase())
 
-    if (variable && variable.type.definition === 'derived') {
+    if (variable && variable.class === 'local' && variable.type.definition === 'derived') {
       if (!isFunctionBlockVariableInUse(variableName, remainingRungs)) {
         variablesToDelete.push(variableName)
       }
