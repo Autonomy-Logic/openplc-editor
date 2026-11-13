@@ -5,6 +5,11 @@
 
 import type { DeviceLicenseReport, DeviceLicenseState } from '../../../middleware/shared/ports/device-port'
 import {
+  BAREMETAL_RUNTIME_LICENSE_KEYS,
+  BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID,
+  type RuntimeLicenseKeys,
+} from '../../../middleware/shared/utils/licensing/runtime-license-keys'
+import {
   bytesToHex,
   crc32IsoHdlc,
   deserializeLicenseBlob,
@@ -15,11 +20,7 @@ import {
   LIC_STATUS_SUCCESS,
   LIC_STATUS_UNSUPPORTED,
 } from '../debug/license-blob'
-import {
-  type RuntimeLicenseKeys,
-  type RuntimeLicenseVerdict,
-  verifyRuntimeLicenseBlob,
-} from '../debug/runtime-license-verify'
+import { type RuntimeLicenseVerdict, verifyRuntimeLicenseBlob } from '../debug/runtime-license-verify'
 import type {
   DebugBoardIdProvisionResult,
   DebugDeviceIdResult,
@@ -108,8 +109,8 @@ export interface DeviceLicenseInput {
   /** Reverse-domain VPP package id (`package.id`) from `resolveLicensingTarget`. */
   packageId: string
   /**
-   * Set for the runtime licence of a built-in board: the stored blob is then
-   * verified in full, signature included, against these keys.
+   * Keys for the runtime licence of a built-in board, whose stored blob is verified in full,
+   * signature included. Defaults to `BAREMETAL_RUNTIME_LICENSE_KEYS` for that product.
    */
   runtimeKeys?: RuntimeLicenseKeys
 }
@@ -122,6 +123,12 @@ const RUNTIME_VERDICT_REASONS: Record<Exclude<RuntimeLicenseVerdict, { ok: true 
   'other-device': 'The license stored on this device was issued for a different device.',
   'other-product': 'The license stored on this device was issued for a different product.',
   signature: 'The license stored on this device has a signature this editor does not accept.',
+}
+
+/** `input` with `BAREMETAL_RUNTIME_LICENSE_KEYS` when it is for that product and names no keys. */
+function withDefaultRuntimeKeys(input: DeviceLicenseInput): DeviceLicenseInput {
+  if (input.runtimeKeys || input.packageId !== BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID) return input
+  return { ...input, runtimeKeys: BAREMETAL_RUNTIME_LICENSE_KEYS }
 }
 
 /** `verifyStoredLicenseBlob`, or the full runtime licence check when `input.runtimeKeys` is set. */
@@ -191,6 +198,7 @@ export async function resolveDeviceLicense(
   input: DeviceLicenseInput,
   activate: DeviceActivation,
 ): Promise<DeviceLicenseReport> {
+  input = withDefaultRuntimeKeys(input)
   if (input.runtimeKeys && input.identity.anchor.length === 0) {
     return { outcome: { state: 'unlicensed', entitlementChecked: false, detail: 'This board reports no device ID.' } }
   }
@@ -217,6 +225,7 @@ export async function inspectDeviceLicense(
   transport: LicenseReadWritable,
   input: DeviceLicenseInput,
 ): Promise<DeviceLicenseReport> {
+  input = withDefaultRuntimeKeys(input)
   const identity = await deriveIdentity(input.identity)
   if ('outcome' in identity) return identity
   const { deviceId } = identity

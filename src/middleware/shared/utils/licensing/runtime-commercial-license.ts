@@ -1,10 +1,9 @@
 /**
- * Parsing for the runtime commercial licence surface of OpenPLC Runtime v4:
- * the `license` key of `GET /api/status` and the body of `GET /api/hardware-id`.
- * Both come from the target, so every value is checked before it is used.
+ * Parsing for the hardware ID OpenPLC Runtime v4 reports on `GET /api/hardware-id`
+ * and `GET /api/runtime-license`. It comes from the target, so it is checked before use.
  */
 
-/** Commercial licence state reported by the runtime on `/api/status`. */
+/** Commercial licence state of a runtime, as the editor verified it. */
 export type RuntimeCommercialLicense = 'commercial' | 'gpl'
 
 /** Where the runtime's hardware ID comes from: its own hardware, or the host of a vPLC. */
@@ -18,17 +17,12 @@ export interface RuntimeHardwareId {
 
 const HARDWARE_ID_PATTERN = /^hw2:[0-9a-f]{64}$/
 
-/** The `license` value, or undefined for a missing or unknown one (runtimes that predate it). */
-export function parseRuntimeCommercialLicense(value: unknown): RuntimeCommercialLicense | undefined {
-  return value === 'commercial' || value === 'gpl' ? value : undefined
-}
-
 export function isRuntimeHardwareId(value: unknown): value is string {
   return typeof value === 'string' && HARDWARE_ID_PATTERN.test(value)
 }
 
 /**
- * The body of `GET /api/hardware-id`, or null when it is not that shape.
+ * The hardware ID in a `GET /api/hardware-id` or `GET /api/runtime-license` body, or null when it is not that shape.
  * A malformed ID is reported as no ID rather than passed on.
  */
 export function parseRuntimeHardwareId(body: unknown): RuntimeHardwareId | null {

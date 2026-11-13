@@ -120,7 +120,16 @@ function setup(opts: { boardName?: string; license?: 'commercial' | 'gpl' | null
   deviceActions.setDeviceBoard(opts.boardName ?? RUNTIME_BOARD)
   deviceActions.setRuntimeJwtToken('tok')
   deviceActions.setRuntimeConnectionStatus('connected')
-  deviceActions.setRuntimeLicense(opts.license === undefined ? 'gpl' : opts.license)
+  if (opts.license !== undefined) {
+    runtimeMock.syncRuntimeLicenses.mockResolvedValue(
+      opts.license === null ? { status: 'failed', error: 'no report' } : synced(opts.license),
+    )
+  }
+}
+
+/** What the editor's check of a runtime with hardware ID `ID` ends with. */
+function synced(license: 'commercial' | 'gpl', uploads: { orderId: string; stored: boolean }[] = []) {
+  return { status: 'synced', hardwareId: ID, license, uploads }
 }
 
 function renderOwner() {
@@ -143,7 +152,7 @@ const dialog = () => store.getState().modals['debugger-message']
 beforeEach(() => {
   jest.clearAllMocks()
   runtimeMock.getHardwareId.mockResolvedValue({ success: true, hardwareId: ID, source: 'device' })
-  runtimeMock.syncRuntimeLicenses.mockResolvedValue({ status: 'synced', hardwareId: ID, uploads: [] })
+  runtimeMock.syncRuntimeLicenses.mockResolvedValue(synced('gpl'))
   systemMock.openExternalLink.mockResolvedValue({ success: true })
   getManifest.mockResolvedValue(null)
   refreshLicense.mockResolvedValue({
@@ -153,12 +162,14 @@ beforeEach(() => {
 })
 
 describe('useRuntimeCommercialLicenseOwner', () => {
-  it('reads the hardware ID and delivers licences on connect', async () => {
+  it('checks the runtime licence on connect and takes the hardware ID from it', async () => {
     setup()
-    renderOwner()
+    const { result } = renderOwner()
     await flush()
-    expect(runtimeMock.getHardwareId).toHaveBeenCalledTimes(1)
     expect(runtimeMock.syncRuntimeLicenses).toHaveBeenCalledTimes(1)
+    expect(runtimeMock.getHardwareId).not.toHaveBeenCalled()
+    expect(result.current.hardwareId).toBe(ID)
+    expect(result.current.status).toBe('unlicensed')
     expect(store.getState().runtimeCommercialLicense.hardwareId).toBe(ID)
   })
 
@@ -211,7 +222,7 @@ describe('useRuntimeCommercialLicenseOwner', () => {
     expect(dialog()?.open ?? false).toBe(false)
   })
 
-  it('shows nothing for a runtime that does not report a licence', async () => {
+  it('shows nothing when the runtime licence could not be checked', async () => {
     setup({ license: null })
     const { result } = renderOwner()
     await flush()
@@ -252,42 +263,98 @@ describe('useRuntimeCommercialLicenseOwner', () => {
   })
 
   it('shows no dialog when the licence delivered on connect makes the runtime commercial', async () => {
-    runtimeMock.syncRuntimeLicenses.mockResolvedValue({
-      status: 'synced',
-      hardwareId: ID,
-      uploads: [{ orderId: 'order_1', stored: true }],
-    })
-    runtimeMock.getStatus.mockResolvedValue({ success: true, status: 'RUNNING', license: 'commercial' })
-    setup({ license: 'gpl' })
+    setup()
+    runtimeMock.syncRuntimeLicenses.mockResolvedValue(synced('commercial', [{ orderId: 'order_1', stored: true }]))
     const { result } = renderOwner()
     await flush()
-    expect(runtimeMock.getStatus).toHaveBeenCalled()
     expect(result.current.status).toBe('licensed')
     expect(dialog()?.open ?? false).toBe(false)
   })
 
   it('waits for the delivery before showing the dialog', async () => {
     let finish: (value: unknown) => void = () => undefined
+    setup()
     runtimeMock.syncRuntimeLicenses.mockReturnValue(new Promise((resolve) => (finish = resolve)))
-    setup({ license: 'gpl' })
     const { result } = renderOwner()
     await flush()
-    expect(result.current.status).toBe('unlicensed')
+    expect(result.current.status).toBe('unknown')
     expect(result.current.checking).toBe(true)
     expect(dialog()?.open ?? false).toBe(false)
-    await act(async () => finish({ status: 'synced', hardwareId: ID, uploads: [] }))
+    await act(async () => finish(synced('gpl')))
     await flush()
     expect(result.current.checking).toBe(false)
+    expect(result.current.status).toBe('unlicensed')
     expect(dialog()?.open).toBe(true)
   })
 
-  it('never blocks on a failed delivery', async () => {
+  it('never blocks on a failed check, and shows no status for it', async () => {
+    setup()
     runtimeMock.syncRuntimeLicenses.mockResolvedValue({ status: 'failed', error: 'offline' })
-    setup({ license: 'gpl' })
+    const { result } = renderOwner()
+    await flush()
+    expect(result.current.status).toBe('unknown')
+    expect(dialog()?.open ?? false).toBe(false)
+    expect(store.getState().modals['runtime-connection-lost']?.open ?? false).toBe(false)
+  })
+})
+
+describe('runtime without a hardware ID', () => {
+  it('is unlicensed with no dialog, since there is nothing to buy for', async () => {
+    setup()
+    runtimeMock.syncRuntimeLicenses.mockResolvedValue({ status: 'no-hardware-id' })
     const { result } = renderOwner()
     await flush()
     expect(result.current.status).toBe('unlicensed')
-    expect(store.getState().modals['runtime-connection-lost']?.open ?? false).toBe(false)
+    expect(result.current.hardwareId).toBeNull()
+    expect(dialog()?.open ?? false).toBe(false)
+  })
+})
+
+describe('runtime licence across connections', () => {
+  it('clears the licence on disconnect', async () => {
+    setup({ license: 'commercial' })
+    renderOwner()
+    await flush()
+    expect(store.getState().runtimeConnection.license).toBe('commercial')
+    act(() => store.getState().deviceActions.setRuntimeConnectionStatus('disconnected'))
+    await flush()
+    expect(store.getState().runtimeConnection.license).toBeNull()
+  })
+
+  it('drops a check that finishes after its connection is gone', async () => {
+    setup()
+    let finish: (value: unknown) => void = () => undefined
+    runtimeMock.syncRuntimeLicenses.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    renderOwner()
+    await flush()
+    act(() => store.getState().deviceActions.setRuntimeConnectionStatus('disconnected'))
+    await flush()
+    await act(async () => finish(synced('commercial')))
+    await flush()
+    expect(store.getState().runtimeConnection.license).toBeNull()
+    expect(store.getState().runtimeCommercialLicense.hardwareId).toBeNull()
+  })
+})
+
+describe('purchase watch', () => {
+  afterEach(() => jest.useRealTimers())
+
+  it('never overlaps checks and keeps the hardware ID when one fails', async () => {
+    setup({ license: 'gpl' })
+    const { result } = renderOwner()
+    await flush()
+    jest.useFakeTimers()
+    await act(async () => result.current.buy())
+    let finish: (value: unknown) => void = () => undefined
+    runtimeMock.syncRuntimeLicenses.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    const before = runtimeMock.syncRuntimeLicenses.mock.calls.length
+    await act(async () => jest.advanceTimersByTime(20_000))
+    await act(async () => jest.advanceTimersByTime(20_000))
+    expect(runtimeMock.syncRuntimeLicenses.mock.calls.length).toBe(before + 1)
+    await act(async () => finish({ status: 'failed', error: 'Edge timeout' }))
+    await flush()
+    expect(result.current.hardwareId).toBe(ID)
+    expect(result.current.buyUrl).not.toBeNull()
   })
 })
 
@@ -315,18 +382,18 @@ describe('useRuntimeCommercialLicense', () => {
 })
 
 describe('built-in boards', () => {
-  it('runs the board flow for the runtime product and shows the disclaimer when unlicensed', async () => {
+  it('runs the board flow for the baremetal runtime product and shows the disclaimer when unlicensed', async () => {
     getManifest.mockResolvedValue(manifestWith('user'))
     setupBoard()
     const { result } = renderOwner()
     await flush()
-    expect(refreshLicense).toHaveBeenCalledWith({ packageId: 'com.autonomy.openplc-runtime' })
+    expect(refreshLicense).toHaveBeenCalledWith({ packageId: 'com.autonomy.openplc-runtime-baremetal' })
     expect(runtimeMock.getHardwareId).not.toHaveBeenCalled()
     expect(result.current.status).toBe('unlicensed')
     expect(result.current.hardwareId).toBe(DEVICE_ID)
     expect(result.current.idLabel).toBe('Device ID')
     expect(result.current.buyUrl).toBe(
-      `https://edge.example.com/buy?vppId=com.autonomy.openplc-runtime&deviceId=${DEVICE_ID}`,
+      `https://edge.example.com/buy?vppId=com.autonomy.openplc-runtime-baremetal&deviceId=${DEVICE_ID}`,
     )
     expect((dialog()?.data as DialogData).message).toBe(COMMERCIAL_LICENSE_DISCLAIMER)
   })

@@ -1,23 +1,6 @@
-import {
-  isRuntimeHardwareId,
-  parseRuntimeCommercialLicense,
-  parseRuntimeHardwareId,
-} from '../runtime-commercial-license'
+import { isRuntimeHardwareId, parseRuntimeHardwareId } from '../runtime-commercial-license'
 
 const ID = `hw2:${'ab'.repeat(32)}`
-
-describe('parseRuntimeCommercialLicense', () => {
-  it('keeps the two values the runtime reports', () => {
-    expect(parseRuntimeCommercialLicense('commercial')).toBe('commercial')
-    expect(parseRuntimeCommercialLicense('gpl')).toBe('gpl')
-  })
-
-  it('treats a missing or unknown value as not reported', () => {
-    for (const value of [undefined, null, '', 'GPL', 'Commercial', 'mit', 1, true, {}, ['gpl']]) {
-      expect(parseRuntimeCommercialLicense(value)).toBeUndefined()
-    }
-  })
-})
 
 describe('isRuntimeHardwareId', () => {
   it('accepts hw2 followed by 64 lowercase hex', () => {

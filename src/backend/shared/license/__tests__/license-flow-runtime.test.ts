@@ -4,7 +4,7 @@
 import { createHash, generateKeyPairSync, type KeyObject, sign } from 'node:crypto'
 
 import { LIC_PAYLOAD_SIZE, serializeLicenseBlob } from '../../debug/license-blob'
-import { RUNTIME_LICENSE_PRODUCT_ID } from '@root/middleware/shared/utils/licensing/runtime-license-sync'
+import { BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID } from '@root/middleware/shared/utils/licensing/runtime-license-keys'
 import type { DebugLicenseReadResult, DebugLicenseWriteResult } from '../../debug/types'
 import {
   type DeviceActivationInput,
@@ -27,7 +27,7 @@ const ANCHOR = Uint8Array.from({ length: 16 }, (_, i) => 0xa0 + i)
 const DEVICE_ID_HEX = createHash('sha256').update('openplc-dev-v1|').update(ANCHOR).digest('hex').slice(0, 32)
 const DEVICE_ID = Uint8Array.from(Buffer.from(DEVICE_ID_HEX, 'hex'))
 const RUNTIME_PRODUCT_ID = Uint8Array.from(
-  createHash('sha256').update(RUNTIME_LICENSE_PRODUCT_ID).digest().subarray(0, 8),
+  createHash('sha256').update(BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID).digest().subarray(0, 8),
 )
 
 function rawPublicKeyHex(publicKey: KeyObject): string {
@@ -83,7 +83,7 @@ function transport(script: {
 
 const input = {
   identity: { kind: 'anchor' as const, anchor: ANCHOR },
-  packageId: RUNTIME_LICENSE_PRODUCT_ID,
+  packageId: BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID,
   runtimeKeys: KEYS,
 }
 
@@ -111,7 +111,7 @@ describe('runtime licence on a built-in board', () => {
     const report = await resolveDeviceLicense(t, input)
     expect(checkDeviceActivation).toHaveBeenCalledWith({
       deviceId: DEVICE_ID_HEX,
-      packageId: RUNTIME_LICENSE_PRODUCT_ID,
+      packageId: BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID,
     })
     expect(t.writes).toEqual([good])
     expect(report.outcome).toEqual({ state: 'licensed', how: 'activated' })
@@ -202,16 +202,17 @@ describe('runtime licence on a built-in board', () => {
     expect((await resolveDeviceLicense(unwritable, input)).outcome).toEqual({ state: 'check-failed', error: 'busy' })
   })
 
-  it('without runtime keys, an unreachable Edge stays check-failed', async () => {
+  it('for a VPP package, an unreachable Edge stays check-failed', async () => {
     checkDeviceActivation.mockResolvedValue({ licensed: false, error: 'Edge unreachable' })
     const t = transport({ reads: [{ success: true, status: LIC_EMPTY }] })
-    const report = await resolveDeviceLicense(t, { ...input, runtimeKeys: undefined })
+    const vpp = { ...input, packageId: 'com.openplc.espressif-licensed', runtimeKeys: undefined }
+    const report = await resolveDeviceLicense(t, vpp)
     expect(report.outcome).toEqual({ state: 'check-failed', error: 'Edge unreachable' })
   })
 
-  it('without runtime keys, keeps the VPP check, which does not look at the signature', async () => {
-    const t = transport({ reads: [{ success: true, status: LIC_SUCCESS, blob: issue({ key: other.privateKey }) }] })
+  it('with no keys given, checks the baremetal product against the shipped production keys', async () => {
+    const t = transport({ reads: [{ success: true, status: LIC_SUCCESS, blob: issue({}) }] })
     const report = await inspectDeviceLicense(t, { ...input, runtimeKeys: undefined })
-    expect(report.outcome).toEqual({ state: 'licensed', how: 'already-stored' })
+    expect(report.outcome).toMatchObject({ state: 'unlicensed', entitlementChecked: false })
   })
 })

@@ -1,15 +1,18 @@
 /**
- * Runtime commercial licence delivery, shared by every platform: read the
- * runtime's hardware ID, ask Edge for the licences bought for it and upload
- * each one to the runtime. Platforms supply only `RuntimeLicenseMechanisms`.
+ * Runtime commercial licence check for OpenPLC Runtime v4, shared by every
+ * platform: read the licences the runtime holds with its hardware ID, verify
+ * them here, and when none is valid ask Edge for the licences bought for that
+ * hardware ID, verify each one and upload the valid ones. The runtime checks no
+ * signature; the status comes from this verification. Platforms supply only
+ * `RuntimeLicenseMechanisms`.
  *
+ * `GET /api/runtime-license` answers `{ hardwareId, source, licenses }`; in a
+ * vPLC `licenses` holds only the seat licence orchestrator-agent assigned.
  * `POST {edge}/runtime-licenses/lookup` is public and rate-limited; it takes
  * `{ hardwareId }` and answers `{ hardwareId, seats, licenses }` inside the
- * `{ statusCode, data }` envelope. The runtime verifies every file it is given
- * (signature and hardware ID) before storing it, so the editor only forwards.
+ * `{ statusCode, data }` envelope.
  *
- * Best-effort throughout: nothing here throws, and a failure only means the
- * runtime keeps the licence state it already had.
+ * Best-effort throughout: nothing here throws.
  */
 
 import type { RawHttpReply, RuntimeLicenseMechanisms } from '../../ports/runtime-license-mechanisms'
@@ -18,9 +21,9 @@ import type {
   RuntimeLicenseSyncResult,
   RuntimeLicenseUploadOutcome,
 } from '../../ports/runtime-port'
-import { isRuntimeHardwareId, parseRuntimeHardwareId } from './runtime-commercial-license'
-
-export const RUNTIME_LICENSE_PRODUCT_ID = 'com.autonomy.openplc-runtime'
+import { isRuntimeHardwareId, parseRuntimeHardwareId, type RuntimeHardwareIdSource } from './runtime-commercial-license'
+import { type RuntimeLicenseFileVerdict, verifyRuntimeLicenseFile } from './runtime-license-file'
+import { RUNTIME_LICENSE_PRODUCT_ID, type RuntimeLicenseKeys } from './runtime-license-keys'
 
 /** The runtime refuses larger bodies. */
 export const MAX_RUNTIME_LICENSE_BYTES = 4096
@@ -28,6 +31,7 @@ export const MAX_RUNTIME_LICENSE_BYTES = 4096
 export const RUNTIME_LICENSE_LOOKUP_PATH = '/runtime-licenses/lookup'
 export const RUNTIME_HARDWARE_ID_PATH = '/api/hardware-id'
 export const RUNTIME_LICENSE_UPLOAD_PATH = '/api/runtime-license'
+export const RUNTIME_LICENSE_REPORT_PATH = '/api/runtime-license'
 
 const ORDER_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 
@@ -108,18 +112,103 @@ export async function uploadRuntimeLicense(
   }
 }
 
-/** Hardware ID, lookup, then one upload per licence file. Never throws. */
-export async function syncRuntimeLicenses(mechanisms: RuntimeLicenseMechanisms): Promise<RuntimeLicenseSyncResult> {
-  const id = await readRuntimeHardwareId(mechanisms)
-  if (!id.success) return { status: 'failed', error: id.error }
-  if (id.hardwareId === null) return { status: 'no-hardware-id' }
+/** What `GET /api/runtime-license` reported: the hardware ID and the licences, unverified. */
+export interface RuntimeLicenseReport {
+  hardwareId: string | null
+  /** `orchestrator` in a vPLC, where only the seat licence orchestrator-agent assigned is listed. */
+  source: RuntimeHardwareIdSource | null
+  licenses: unknown[]
+}
 
-  const found = await lookupRuntimeLicenses(mechanisms, id.hardwareId)
-  if (!found.ok) return { status: 'failed', error: found.error }
+/** How often, and how far apart, a vPLC is read again after an upload while its seat is assigned. */
+export const VPLC_SEAT_RECHECKS = 3
+export const VPLC_SEAT_RECHECK_MS = 2000
+
+/** Waits between vPLC rechecks; replaceable in tests. */
+export type Sleep = (ms: number) => Promise<void>
+const sleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+export type RuntimeLicenseReportResult = { ok: true; report: RuntimeLicenseReport } | { ok: false; error: string }
+
+/** The runtime's hardware ID and stored licences. Never throws. */
+export async function readRuntimeLicenseReport(
+  mechanisms: RuntimeLicenseMechanisms,
+): Promise<RuntimeLicenseReportResult> {
+  try {
+    const reply = await mechanisms.runtimeGet(RUNTIME_LICENSE_REPORT_PATH)
+    if (!isSuccess(reply)) return { ok: false, error: `Get runtime licenses failed: ${reply.status}` }
+    const body = bodyJson(reply)
+    const id = parseRuntimeHardwareId(body)
+    const { licenses } = (body ?? {}) as { licenses?: unknown }
+    if (!id || !Array.isArray(licenses)) {
+      return { ok: false, error: 'The runtime sent a license report the editor could not read.' }
+    }
+    return { ok: true, report: { hardwareId: id.hardwareId, source: id.source, licenses } }
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) }
+  }
+}
+
+/** True when any reported licence verifies for the reported hardware ID. */
+export async function reportHasValidLicense(report: RuntimeLicenseReport, keys: RuntimeLicenseKeys): Promise<boolean> {
+  if (report.hardwareId === null) return false
+  for (const license of report.licenses) {
+    if ((await verifyRuntimeLicenseFile(license, report.hardwareId, keys)).ok) return true
+  }
+  return false
+}
+
+const VERDICT_REASONS: Record<Exclude<RuntimeLicenseFileVerdict, { ok: true }>['reason'], string> = {
+  'not-a-license': 'not a runtime license file',
+  'other-product': 'it was issued for another product',
+  'other-device': 'it was issued for another hardware ID',
+  signature: 'its signature is not accepted',
+}
+
+/**
+ * Read the runtime's licences and verify them; when none is valid, look up Edge, verify each
+ * file and upload only the valid ones, then read the runtime again (in a vPLC up to
+ * `VPLC_SEAT_RECHECKS` more times, while orchestrator-agent assigns the seat). Never throws.
+ */
+export async function syncRuntimeLicenses(
+  mechanisms: RuntimeLicenseMechanisms,
+  keys: RuntimeLicenseKeys,
+  wait: Sleep = sleep,
+): Promise<RuntimeLicenseSyncResult> {
+  const first = await readRuntimeLicenseReport(mechanisms)
+  if (!first.ok) return { status: 'failed', error: first.error }
+  const { hardwareId } = first.report
+  if (hardwareId === null) return { status: 'no-hardware-id' }
+  if (await reportHasValidLicense(first.report, keys)) {
+    return { status: 'synced', hardwareId, license: 'commercial', uploads: [] }
+  }
+
+  const found = await lookupRuntimeLicenses(mechanisms, hardwareId)
+  if (!found.ok) return { status: 'synced', hardwareId, license: 'gpl', uploads: [], detail: found.error }
 
   const uploads: RuntimeLicenseUploadOutcome[] = []
-  for (const file of found.licenses) uploads.push(await uploadRuntimeLicense(mechanisms, file))
-  return { status: 'synced', hardwareId: id.hardwareId, uploads }
+  for (const file of found.licenses) {
+    const verdict = await verifyRuntimeLicenseFile(file.license, hardwareId, keys)
+    uploads.push(
+      verdict.ok
+        ? await uploadRuntimeLicense(mechanisms, file)
+        : { orderId: file.orderId, stored: false, error: VERDICT_REASONS[verdict.reason] },
+    )
+  }
+  if (!uploads.some((upload) => upload.stored)) return { status: 'synced', hardwareId, license: 'gpl', uploads }
+
+  const rechecks = first.report.source === 'orchestrator' ? VPLC_SEAT_RECHECKS : 0
+  for (let attempt = 0; ; attempt++) {
+    const again = await readRuntimeLicenseReport(mechanisms)
+    if (!again.ok) {
+      return { status: 'failed', error: `License uploaded, but the runtime could not be read back: ${again.error}` }
+    }
+    if (await reportHasValidLicense(again.report, keys)) {
+      return { status: 'synced', hardwareId, license: 'commercial', uploads }
+    }
+    if (attempt >= rechecks) return { status: 'synced', hardwareId, license: 'gpl', uploads }
+    await wait(VPLC_SEAT_RECHECK_MS)
+  }
 }
 
 function isSuccess(reply: RawHttpReply): boolean {

@@ -118,12 +118,15 @@ import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
 import type { VersionControlResult } from '@root/middleware/shared/ports/version-control-port'
 import { capabilitiesFromResponse } from '@root/middleware/shared/utils/build-gate/runtime-capabilities-response'
 import {
-  parseRuntimeCommercialLicense,
+  BAREMETAL_RUNTIME_LICENSE_KEYS,
+  BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID,
+  LINUX_RUNTIME_LICENSE_KEYS,
+  parseRuntimeLicenseDevKey,
   readRuntimeHardwareId,
-  type RuntimeCommercialLicense,
+  type RuntimeLicenseKeys,
   syncRuntimeLicenses,
+  withRuntimeLicenseDevKey,
 } from '@root/middleware/shared/utils/licensing'
-import { RUNTIME_LICENSE_PRODUCT_ID } from '@root/middleware/shared/utils/licensing/runtime-license-sync'
 import { CreatePouFileProps } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps } from '@root/types/IPC/project-service'
 import { randomUUID } from 'crypto'
@@ -166,7 +169,6 @@ import {
   getPlcopenImportFilePath,
   getProjectPath,
 } from '../../../backend/editor/utils'
-import { parseRuntimeLicenseDevKey, runtimeLicenseKeys } from '../../../backend/shared/debug/runtime-license-verify'
 import {
   BoardBackupHolder,
   restoreBoardLicence,
@@ -197,15 +199,23 @@ const EditSessionClientSchema = z.object({
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 
-const licenseField = (license: RuntimeCommercialLicense | undefined) => (license ? { license } : {})
+/** Runtime licence keys of one product plus the `OPENPLC_RUNTIME_LICENSE_DEV_KEY` development key, if set. */
+let devKeyCollisionWarned = false
+const runtimeKeysWithDevKey = (keys: RuntimeLicenseKeys) => {
+  const devKey = parseRuntimeLicenseDevKey(process.env.OPENPLC_RUNTIME_LICENSE_DEV_KEY)
+  if (devKey && Object.prototype.hasOwnProperty.call(keys, devKey.keyId) && !devKeyCollisionWarned) {
+    devKeyCollisionWarned = true
+    logger.warn(
+      `OPENPLC_RUNTIME_LICENSE_DEV_KEY ignored: key_id ${devKey.keyId} belongs to a shipped key; use another key_id.`,
+    )
+  }
+  return withRuntimeLicenseDevKey(keys, devKey)
+}
 
-/** A request for the runtime product verifies the stored licence in full; `OPENPLC_RUNTIME_LICENSE_DEV_KEY` adds a key. */
+/** A request for the baremetal runtime product verifies the stored licence in full. */
 const licenseInput = (request: DeviceLicenseRequest) =>
-  request.packageId === RUNTIME_LICENSE_PRODUCT_ID
-    ? {
-        ...request,
-        runtimeKeys: runtimeLicenseKeys(parseRuntimeLicenseDevKey(process.env.OPENPLC_RUNTIME_LICENSE_DEV_KEY)),
-      }
+  request.packageId === BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID
+    ? { ...request, runtimeKeys: runtimeKeysWithDevKey(BAREMETAL_RUNTIME_LICENSE_KEYS) }
     : request
 
 /** Why a channel could not be handed out. */
@@ -591,7 +601,6 @@ class MainProcessBridge implements MainIpcModule {
           status: result.data.status,
           timingStats,
           ...(result.data.switchPosition ? { switchPosition: result.data.switchPosition } : {}),
-          ...licenseField(parseRuntimeCommercialLicense(result.data.license)),
         }
       } else {
         return { success: false, error: !result.success ? result.error : 'Unknown error' }
@@ -605,7 +614,10 @@ class MainProcessBridge implements MainIpcModule {
     readRuntimeHardwareId(createRuntimeLicenseMechanisms(this.runtimeApi, ipAddress))
 
   handleRuntimeSyncLicenses = (_event: IpcMainInvokeEvent, ipAddress: string): Promise<RuntimeLicenseSyncResult> =>
-    syncRuntimeLicenses(createRuntimeLicenseMechanisms(this.runtimeApi, ipAddress))
+    syncRuntimeLicenses(
+      createRuntimeLicenseMechanisms(this.runtimeApi, ipAddress),
+      runtimeKeysWithDevKey(LINUX_RUNTIME_LICENSE_KEYS),
+    )
 
   handleRuntimeStartPlc = (_event: IpcMainInvokeEvent, ipAddress: string) => this.restStartPlc(ipAddress)
 
