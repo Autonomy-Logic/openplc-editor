@@ -1,13 +1,3 @@
-/**
- * A project pinned to an older version of its board's vendor package: opening the board screen
- * shows no pin-drift banner, and a save records the installed package as the new pin.
- *
- * Uses the vendor-configurator fixture package with a placeholder `signature.json`: the pin is read
- * from it, and each launch replaces the `packages:verify-signatures` handler with one that removes
- * nothing, so the placeholder is never checked.
- *
- * Needs a production build and the preload copy; see "Electron e2e" in CLAUDE.md.
- */
 import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -107,7 +97,6 @@ function writeFixture(): void {
   )
   writeFileSync(join(history, 'libraries.json'), '[]')
 
-  // A fresh profile has no Arduino control files, and without them the board list never loads.
   const runtime = join(USER_DATA, 'User', 'Runtime')
   mkdirSync(runtime, { recursive: true })
   writeFileSync(join(runtime, 'arduino-core-control.json'), '[]')
@@ -120,17 +109,14 @@ function writeFixture(): void {
 async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [join(__dirname, '..', 'release', 'app', 'dist', 'main', 'main.js'), `--user-data-dir=${USER_DATA}`],
-    // NOT development: `resolveHtmlPath` would point the window at the webpack dev server.
     env: { ...process.env, NODE_ENV: 'production' },
   })
-  // The app opens a splash window first; pick the real one by URL.
   const deadline = Date.now() + 60000
   while (Date.now() < deadline) {
     for (const w of app.windows()) {
       try {
         if (w.url().includes('index.html')) {
           await w.waitForLoadState('domcontentloaded')
-          // The project history comes over IPC, so once it shows, the bridge has registered its handlers.
           await w.getByText(PROJECT_NAME, { exact: true }).first().waitFor({ timeout: 30000 })
           await app.evaluate(({ ipcMain }) => {
             ipcMain.removeHandler('packages:verify-signatures')
@@ -138,9 +124,7 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
           })
           return { app, page: w }
         }
-      } catch {
-        /* window is closing; skip it */
-      }
+      } catch {}
     }
     await new Promise((r) => setTimeout(r, 500))
   }
@@ -194,7 +178,6 @@ test('a board pinned to an older package version re-pins on open, with no drift 
       timeout: 30000,
     })
 
-    // The re-pin marks the device configuration unsaved; saving writes the installed package.
     await expect
       .poll(
         async () => {

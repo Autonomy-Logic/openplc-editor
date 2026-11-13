@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import { describeVppPinDrift, type VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
+import { describeMissingVppPackage, type VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
 import { useCapabilities, useDevice, usePackages } from '@root/middleware/shared/providers/platform-context'
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
@@ -264,8 +264,6 @@ const Board = memo(function () {
     void fetchPreviewImage()
   }, [deviceBoard, device, availableBoards])
 
-  // Pin the board to the installed vendor package whenever the board or the
-  // package set changes. Only a pinned package that is not installed is reported.
   const vppPackageId = availableBoards.get(deviceBoard)?.vpp?.packageId
   const targetVpp = selectedDevice?.vpp
   useEffect(() => {
@@ -283,12 +281,11 @@ const Board = memo(function () {
     void authoritative.then((installed) => {
       if (cancelled) return
       if (installed) {
-        // No-op when the recorded pin already matches.
         setVppPackagePin(deviceBoard, installed)
         setPinDrift(null)
         return
       }
-      setPinDrift(describeVppPinDrift(recordedPins?.[deviceBoard], null))
+      setPinDrift(describeMissingVppPackage(recordedPins?.[deviceBoard], null))
     })
     return () => {
       cancelled = true
