@@ -9,8 +9,10 @@ export const OP = {
   call: 0x10,
   drop: 0x1a,
   localGet: 0x20,
+  i32Load8U: 0x2d,
   i32Store8: 0x3a,
   i32Store: 0x36,
+  i32Add: 0x6a,
   i32Const: 0x41,
   i64Const: 0x42,
 }

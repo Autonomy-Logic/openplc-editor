@@ -16,9 +16,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import type { PLCProjectData } from '../../middleware/shared/ports/types'
 import { useSimulator } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
 import { getErrorMessage } from '../utils/get-error-message'
+import { countPythonBlockInstances } from '../utils/python/count-python-block-instances'
 import type { UseDebugSessionReturn } from './useDebugSession'
 
 export interface UseSimulatorDebugRunArgs {
@@ -61,8 +63,17 @@ export interface UseSimulatorDebugRunReturn {
    * Note the asymmetry with `isRunning`: a failed ATTACH still leaves
    * the emulator running, so the caller's stop control stays live and
    * `stop()` remains the way to end it.
+   *
+   * With `projectData`, one Python interpreter per Python block instance
+   * is started first and the PLC starts once they are ready, so the
+   * blocks start with the first scan. They start after the compile, not
+   * during it: booting them while the in-browser compiler runs stalls it
+   * on WebKit.
    */
-  launch: (firmwarePath: string, options?: { attachDebugger?: boolean }) => Promise<boolean>
+  launch: (
+    firmwarePath: string,
+    options?: { attachDebugger?: boolean; projectData?: PLCProjectData },
+  ) => Promise<boolean>
   /** End the debug session (if any) and stop the emulator. */
   stop: () => Promise<void>
 }
@@ -97,8 +108,23 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
     })
   }, [simulator])
 
+  // The program's output and its Python blocks' reach the Console: stdout as information, stderr as errors.
+  useEffect(() => {
+    return simulator.onLog((line, stream) => addLog({ level: stream === 'stderr' ? 'error' : 'info', message: line }))
+  }, [simulator, addLog])
+
   const launch = useCallback(
-    async (firmwarePath: string, options: { attachDebugger?: boolean } = {}): Promise<boolean> => {
+    async (
+      firmwarePath: string,
+      options: { attachDebugger?: boolean; projectData?: PLCProjectData } = {},
+    ): Promise<boolean> => {
+      const pythonBlocks = options.projectData ? countPythonBlockInstances(options.projectData) : 0
+      if (pythonBlocks > 0) {
+        // A failure here is reported, and the blocks then start on demand.
+        await simulator.preparePython(pythonBlocks).catch((error: unknown) => {
+          addLog({ level: 'error', message: `Python could not be prepared: ${getErrorMessage(error)}` })
+        })
+      }
       const loadResult = await simulator.loadFirmware(firmwarePath)
       if (!loadResult.success) {
         addLog({ level: 'error', message: `Failed to start simulator: ${loadResult.error ?? 'Unknown error'}` })

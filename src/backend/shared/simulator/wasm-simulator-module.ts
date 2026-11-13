@@ -31,6 +31,34 @@ export interface UartSimulator {
   feedByte(byte: number): void
 }
 
+/** A Python function block the program started (`wasm-sim/sim_python.cpp`), with what its first exchange needs. */
+export interface SimulatorPythonBlock {
+  id: number
+  /** The block's POU name. */
+  name: string
+  /** The generated script, with the simulator's stdio exchange. */
+  script: string
+  /** The outputs the PLC holds once the starting scan has run, to seed the block with. */
+  outputSeed: Uint8Array
+}
+
+/** What a Python block host needs of a simulator run: the blocks it starts and their buffers. */
+export interface SimulatorPythonBus {
+  /** Called once per block, after the scan that started it. */
+  onPythonBlock: ((block: SimulatorPythonBlock) => void) | null
+  /** The block's current inputs, or `null` once the run or the block is gone. */
+  readPythonInput(id: number): Promise<Uint8Array | null>
+  /** Stores the block's outputs; the program reads them on its next scan. */
+  writePythonOutput(id: number, bytes: Uint8Array): void
+}
+
+interface PythonBlockBuffers {
+  inPointer: number
+  inSize: number
+  outPointer: number
+  outSize: number
+}
+
 /** The wall clock and timers the simulator paces itself with; `schedule` returns a function that cancels. */
 export interface SimulatorTimers {
   now(): number
@@ -88,8 +116,9 @@ function readExports(instance: WebAssembly.Instance): SimulatorExports {
 }
 
 /** One simulator run. `stop()` ends it for good; a new run takes a new instance. */
-export class WasmSimulatorModule implements UartSimulator {
+export class WasmSimulatorModule implements UartSimulator, SimulatorPythonBus {
   onUartByte: ((byte: number) => void) | null = null
+  onPythonBlock: ((block: SimulatorPythonBlock) => void) | null = null
   /** Text the program wrote to standard output or standard error, one line at a time. */
   onLog: ((line: string, stream: SimulatorLogStream) => void) | null = null
   /** Called once when the run ends on its own (a trap, an exit), with the reason. Not called by `stop()`. */
@@ -104,6 +133,9 @@ export class WasmSimulatorModule implements UartSimulator {
   private nextStepAt = 0
   private scans = 0
   private readonly pendingText: Record<SimulatorLogStream, string> = { stdout: '', stderr: '' }
+  private readonly pythonBlocks = new Map<number, PythonBlockBuffers>()
+  private startedBlocks: Array<Omit<SimulatorPythonBlock, 'outputSeed'>> = []
+  private pythonBlockCount = 0
 
   constructor(private readonly timers: SimulatorTimers = platformTimers) {}
 
@@ -116,6 +148,7 @@ export class WasmSimulatorModule implements UartSimulator {
     this.exports = exports
     exports.initialize()
     exports.setup()
+    this.announcePythonBlocks()
     const period = exports.scanPeriodUs()
     if (!Number.isFinite(period) || period <= 0) throw new Error('The simulator program reports no scan period.')
     this.periodUs = period
@@ -135,7 +168,20 @@ export class WasmSimulatorModule implements UartSimulator {
     this.cancelTimer?.()
     this.cancelTimer = null
     this.exports = null
+    this.pythonBlocks.clear()
+    this.startedBlocks = []
     this.flushText()
+  }
+
+  readPythonInput(id: number): Promise<Uint8Array | null> {
+    const block = this.pythonBlocks.get(id)
+    return Promise.resolve(block && this.exports ? this.bytesAt(block.inPointer, block.inSize) : null)
+  }
+
+  writePythonOutput(id: number, bytes: Uint8Array): void {
+    const block = this.pythonBlocks.get(id)
+    if (!block || !this.exports) return
+    new Uint8Array(this.memoryBuffer(), block.outPointer, block.outSize).set(bytes.subarray(0, block.outSize))
   }
 
   isRunning(): boolean {
@@ -176,6 +222,7 @@ export class WasmSimulatorModule implements UartSimulator {
       this.fail(error instanceof SimulatorExit ? error.message : `The simulator stopped: ${describe(error)}`)
       return
     }
+    this.announcePythonBlocks()
     if (!this.running) return
     const now = this.timers.now()
     this.nextStepAt = Math.max(now, this.nextStepAt) + this.nextStepUs() / 1000
@@ -206,8 +253,53 @@ export class WasmSimulatorModule implements UartSimulator {
           const bytes = this.bytesAt(pointer, length)
           for (const byte of bytes) this.onUartByte?.(byte)
         },
+        host_python_block: (
+          namePointer: number,
+          nameLength: number,
+          scriptPointer: number,
+          scriptLength: number,
+          inPointer: number,
+          inSize: number,
+          outPointer: number,
+          outSize: number,
+        ) =>
+          this.startPythonBlock(namePointer, nameLength, scriptPointer, scriptLength, {
+            inPointer,
+            inSize,
+            outPointer,
+            outSize,
+          }),
       },
       wasi_snapshot_preview1: wasi,
+    }
+  }
+
+  /** Records a block the program started; it is announced once the scan that started it ends. */
+  private startPythonBlock(
+    namePointer: number,
+    nameLength: number,
+    scriptPointer: number,
+    scriptLength: number,
+    buffers: PythonBlockBuffers,
+  ): number {
+    const id = ++this.pythonBlockCount
+    const decoder = new TextDecoder()
+    this.startedBlocks.push({
+      id,
+      name: decoder.decode(this.bytesAt(namePointer, nameLength)),
+      script: decoder.decode(this.bytesAt(scriptPointer, scriptLength)),
+    })
+    this.pythonBlocks.set(id, buffers)
+    return 0
+  }
+
+  private announcePythonBlocks(): void {
+    const started = this.startedBlocks
+    this.startedBlocks = []
+    for (const block of started) {
+      const buffers = this.pythonBlocks.get(block.id)
+      if (!buffers) continue
+      this.onPythonBlock?.({ ...block, outputSeed: this.bytesAt(buffers.outPointer, buffers.outSize) })
     }
   }
 

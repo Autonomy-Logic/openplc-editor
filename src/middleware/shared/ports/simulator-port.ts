@@ -16,6 +16,15 @@ export interface SimulatorPort {
    */
   loadFirmware(firmware: string): Promise<{ success: boolean; error?: string }>
 
+  /**
+   * Starts Python interpreters for `count` blocks ahead of the next run; resolves once they are ready, and the next
+   * `loadFirmware` also waits for them. Interpreters left over from earlier runs count.
+   */
+  preparePython(count: number): Promise<void>
+
+  /** Subscribes to the run's output: the program's lines and its Python blocks', with the stream each came on. */
+  onLog(callback: (line: string, stream: 'stdout' | 'stderr') => void): Unsubscribe
+
   /** Stop the simulator. */
   stop(): Promise<{ success: boolean }>
 

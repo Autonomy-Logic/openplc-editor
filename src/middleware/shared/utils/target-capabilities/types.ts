@@ -214,8 +214,8 @@ export interface TargetCapabilities {
   debuggerTransports: DebuggerTransport[]
 
   /** Python function blocks compile and run on the target (Runtime
-   *  v3 / v4 both support them natively; Simulator compiles them as
-   *  no-op stubs; Arduino-CLI targets reject them at build time). */
+   *  v3 / v4 and the Simulator run them; Arduino-CLI targets reject
+   *  them at build time). */
   pythonFunctionBlocks: boolean
 
   /** Monaco surfaces Arduino API completions when authoring C

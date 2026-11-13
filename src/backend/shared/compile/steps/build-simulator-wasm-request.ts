@@ -12,13 +12,17 @@ export const SIMULATOR_MODULE = 'simulator.wasm'
 const EXCLUDED_RUNTIME_UNIT = /^examples\/Baremetal\/(baremetal_net|modbus_tcp|opcua_[\w]+|s7comm_server)\.cpp$/
 const SUPPORT_UNITS = [
   `${SIMULATOR_SUPPORT_DIR}/sim_main.cpp`,
+  `${SIMULATOR_SUPPORT_DIR}/sim_python.cpp`,
   `${SIMULATOR_SUPPORT_DIR}/core/api/Common.cpp`,
   `${SIMULATOR_SUPPORT_DIR}/core/api/Print.cpp`,
   `${SIMULATOR_SUPPORT_DIR}/core/api/Stream.cpp`,
   `${SIMULATOR_SUPPORT_DIR}/core/api/String.cpp`,
 ]
 
-/** C++ flags for every unit: the dialect STruC++ generates for, the Arduino API include paths, no warnings. */
+/**
+ * C++ flags for every unit: the dialect STruC++ generates for, the Arduino API include paths, no warnings, and the
+ * Python block loader the generated stubs call, force-included as the runtime does.
+ */
 export const SIMULATOR_CXX_FLAGS = [
   '-std=gnu++17',
   '-O1',
@@ -28,6 +32,8 @@ export const SIMULATOR_CXX_FLAGS = [
   '-DARDUINO=10819',
   '-DARDUINO_ARCH_WASM',
   `-I${SIMULATOR_SUPPORT_DIR}/stub`,
+  '-include',
+  `${SIMULATOR_SUPPORT_DIR}/stub/iec_python.h`,
   `-I${SIMULATOR_SUPPORT_DIR}/core`,
   '-Isrc',
   '-Iexamples/Baremetal',

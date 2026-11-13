@@ -89,3 +89,6 @@ openplc-cli.dev.js.map
 # purpose (8d3dc446c) and listed here because a broad `git add -A` has twice put
 # it back into a feature branch's PR.
 scripts/dev-transpile-project.ts
+
+# Python runtime fetched at install time (python-runtime.json)
+vendor/python-runtime/

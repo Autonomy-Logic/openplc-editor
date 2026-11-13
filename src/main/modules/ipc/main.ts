@@ -1105,6 +1105,7 @@ class MainProcessBridge implements MainIpcModule {
     // ===================== SIMULATOR =====================
     this.registerHandle('simulator:load-firmware', this.handleSimulatorLoadFirmware)
     this.registerHandle('simulator:stop', this.handleSimulatorStop)
+    this.registerHandle('simulator:prepare-python', this.handleSimulatorPreparePython)
     this.registerHandle('simulator:is-running', this.handleSimulatorIsRunning)
 
     // ===================== FILE WATCHER =====================
@@ -3166,6 +3167,7 @@ class MainProcessBridge implements MainIpcModule {
       this.closeSimulatorSession()
       this.mainWindow?.webContents.send('simulator:stopped')
     }
+    simulator.onLog = (line, stream) => this.mainWindow?.webContents.send('simulator:log', line, stream)
     return simulator
   }
 
@@ -3466,6 +3468,12 @@ class MainProcessBridge implements MainIpcModule {
       this.stopSimulator()
       return { success: false, error: getErrorMessage(error) }
     }
+  }
+
+  /** Starts interpreters for the next run's Python blocks; resolves once they are ready. */
+  handleSimulatorPreparePython = (_event: IpcMainInvokeEvent, count: unknown): Promise<void> => {
+    if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) return Promise.resolve()
+    return this.simulator.preparePython(count)
   }
 
   /**

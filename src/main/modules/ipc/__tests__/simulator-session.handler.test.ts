@@ -41,7 +41,9 @@ const simulatorModule = {
   loadAndRun: jest.fn<Promise<void>, [Uint8Array]>(),
   stop: jest.fn(),
   isRunning: jest.fn(() => true),
+  preparePython: jest.fn<Promise<void>, [number]>(() => Promise.resolve()),
   onStopped: null,
+  onLog: null,
 }
 jest.mock('../../../../backend/editor/simulator/desktop-simulator', () => ({
   createDesktopSimulator: jest.fn(() => simulatorModule),
@@ -54,13 +56,13 @@ jest.mock('fs/promises', () => ({ readFile: (...args: [string]) => readFile(...a
 
 type Bridge = MainProcessBridge
 
-function createBridge(): Bridge {
+function createBridge(send: jest.Mock = jest.fn()): Bridge {
   return new MainProcessBridge({
     ipcMain: {},
     mainWindow: {
       isDestroyed: jest.fn(() => false),
       isMaximized: jest.fn(() => false),
-      webContents: { reload: jest.fn(), send: jest.fn(), on: jest.fn() },
+      webContents: { reload: jest.fn(), send, on: jest.fn() },
     },
     projectService: {},
     store: { get: jest.fn(() => undefined) },
@@ -174,5 +176,29 @@ describe('simulator:load-firmware', () => {
     expect(result.success).toBe(false)
     expect(simulatorModule.stop).toHaveBeenCalledTimes(1)
     expect(close).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('simulator:prepare-python', () => {
+  it('prepares the interpreters the renderer asks for, and ignores a count that is not one', async () => {
+    const bridge = createBridge()
+    simulatorModule.preparePython.mockClear()
+
+    await bridge.handleSimulatorPreparePython({} as never, 2)
+    await bridge.handleSimulatorPreparePython({} as never, -1)
+    await bridge.handleSimulatorPreparePython({} as never, '3')
+
+    expect(simulatorModule.preparePython.mock.calls).toEqual([[2]])
+  })
+})
+
+describe('simulator output', () => {
+  it('forwards the run output to the window', () => {
+    const send = jest.fn()
+    createBridge(send)
+    const onLog: unknown = Reflect.get(simulatorModule, 'onLog')
+    if (typeof onLog !== 'function') throw new Error('the simulator has no onLog')
+    onLog('[Block] hi', 'stdout')
+    expect(send).toHaveBeenCalledWith('simulator:log', '[Block] hi', 'stdout')
   })
 })

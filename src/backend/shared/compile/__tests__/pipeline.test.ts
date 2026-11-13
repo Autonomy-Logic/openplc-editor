@@ -120,6 +120,7 @@ const deviceContextFixture: PlatformDeviceContext = {
 
 const simulatorSupportFiles: Record<string, string> = {
   'wasm-sim/sim_main.cpp': '// shim',
+  'wasm-sim/sim_python.cpp': '// python blocks',
   'wasm-sim/core/api/Common.cpp': '// common',
   'wasm-sim/core/api/Print.cpp': '// print',
   'wasm-sim/core/api/Stream.cpp': '// stream',

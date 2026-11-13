@@ -7,6 +7,7 @@ import {
 
 const SUPPORT = {
   'wasm-sim/sim_main.cpp': '// shim',
+  'wasm-sim/sim_python.cpp': '// python blocks',
   'wasm-sim/stub/Arduino.h': '// arduino',
   'wasm-sim/core/api/Common.cpp': '// common',
   'wasm-sim/core/api/Print.cpp': '// print',
@@ -45,6 +46,7 @@ describe('buildSimulatorWasmRequest', () => {
       'src/arduino.cpp',
       'src/generated.cpp',
       'wasm-sim/sim_main.cpp',
+      'wasm-sim/sim_python.cpp',
       'wasm-sim/core/api/Common.cpp',
       'wasm-sim/core/api/Print.cpp',
       'wasm-sim/core/api/Stream.cpp',
@@ -90,6 +92,8 @@ describe('buildSimulatorWasmRequest', () => {
     expect(built.request.linkFlags).toEqual(SIMULATOR_LINK_FLAGS)
     expect(SIMULATOR_CXX_FLAGS).toEqual(expect.arrayContaining(['-std=gnu++17', '-Iwasm-sim/stub', '-Iwasm-sim/core']))
     expect(SIMULATOR_LINK_FLAGS).toContain('-mexec-model=reactor')
+    const include = SIMULATOR_CXX_FLAGS.indexOf('-include')
+    expect(SIMULATOR_CXX_FLAGS[include + 1]).toBe('wasm-sim/stub/iec_python.h')
   })
 
   it('compiles the project C/C++ blocks unit when the project has one', () => {

@@ -51,7 +51,8 @@ External contributors without Jira access follow CONTRIBUTING.md; GitHub Issues 
 **Package manager:** `npm` (not pnpm)
 
 ```bash
-npm install              # Install deps + download binaries + build DLL cache
+npm install              # Install deps + download binaries + Python runtime + build DLL cache
+npm run setup:python     # Fetch the pinned Python runtime into vendor/python-runtime/ (python-runtime.json)
 npm run dev              # Full dev mode (main + renderer + Electron, port 1313)
 npm run build            # Production build (main + renderer)
 npm run build:main       # Electron main process only
@@ -180,6 +181,15 @@ npx playwright test e2e/<spec>.ts --workers=1
 - **An unsigned fixture package is removed when a project opens.** A suite that installs one
   (`e2e/fixtures/vendor-configurator/`) replaces the `packages:verify-signatures` handler with a
   no-op once the bridge has registered it, as `e2e/vendor-configurator.spec.ts` does.
+
+**Never wait on a dead app.** Every wait for a build, a Play, a running simulator or a Console line must also
+read what the app shows and fail at once when it reports a failure: use `e2e/helpers/app-console.ts`
+(`waitForApp`, `waitForText`; identical in both repos) instead of polling a success condition alone. Most specs
+finish in under 3 minutes: set `test.setTimeout` near 180 s and each wait in tens of seconds, and run with
+`--global-timeout` (or in the background). Prove it with a negative control: break the fixture and expect a failure
+within seconds that quotes the Console. The Console is readable only while its tab is open; Play opens the debugger
+tab, so click the `Console` tab before reading block output.
+`launch()` (`e2e/helpers/ethercat-project.ts`) throws at once when the splash shows a startup failure.
 
 Every open tab keeps its Monaco editor mounted (hidden with `display: none`), so read
 body text from `.view-lines:visible`, never `.view-lines` alone.
@@ -460,6 +470,26 @@ lockfiles, `pnpm-lock.yaml` included on the web), then run `e2e/wasm-toolchain.s
 the packaged-app case (`E2E_PACKAGED_APP`). The npm package carries no licence files, so the texts for YoWASP, LLVM and
 wasi-libc live in `third-party-licenses/yowasp-clang/` (in both repos, with their sources in its README)
 and ship next to the toolchain; refresh them from the commits the new release was built from.
+
+**Python blocks in the simulator.** Each Python block instance runs in its own CPython 3.13 interpreter (WASIX build,
+run by the Wasmer SDK, no network), in one long-lived worker thread of the main process (`python-worker.js`, built next
+to `main.js`; `src/backend/editor/python/`). The logic is shared and byte-identical with openplc-web in
+`src/backend/shared/python/`: the block host (one interpreter per instance, the runtime's 100 ms exchange over the
+wrapper's stdio transport, Console lines prefixed `[Block]`, a block that ends or fails keeps its last outputs, Stop
+kills them all), the thread protocol and the Wasmer runtime. The module starts a block through
+`wasm-sim/sim_python.cpp` (`env.host_python_block`), force-included header `wasm-sim/stub/iec_python.h`. The runtime
+loads during the splash (startup fails on the splash if it cannot); interpreters for a project's blocks boot right
+after its module compiles, and the PLC starts once they are ready (not during the compile: on WebKit that stalls the
+in-browser compiler).
+
+- **Assets:** the CPython package and the numpy wheel are pinned by sha256 in `python-runtime.json` and fetched at
+  install time into `vendor/python-runtime/` (`npm run setup:python`, part of `postinstall`; never committed, the
+  package is 161 MB). A packaged app ships them, with the Wasmer SDK and the licences in
+  `third-party-licenses/python-runtime/`, as the extra resources `python-runtime` and `wasmer-sdk`; users download
+  nothing.
+- **Updating:** change the pins in `python-runtime.json` in both repos (and the exact `@wasmer/sdk` version with both
+  lockfiles), run `setup:python -- --force`, refresh the licence texts, then run `e2e/python-blocks-play.spec.ts` in
+  both repos (WebKit included on the web).
 
 ### Debugging
 

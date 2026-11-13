@@ -576,7 +576,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             if (event.firmwarePath && isSimulatorBoard) {
               const attachDebugger = pendingSimulatorDebugRef.current
               pendingSimulatorDebugRef.current = false
-              void simulatorRun.launch(event.firmwarePath, { attachDebugger })
+              void simulatorRun.launch(event.firmwarePath, { attachDebugger, projectData: freshProjectData })
             }
           },
         )
@@ -811,14 +811,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
     const harness = composeLibraryDebugHarness(store.getState().project.data)
 
-    for (const skip of harness.skipped) {
-      addLog({ level: 'warning', message: `${skip.pouName}: ${skip.reason}` })
-    }
     if (harness.blocks.length === 0) {
       addLog({
         level: 'error',
         message:
-          'Nothing to debug: this library has no function blocks the simulator can run. ' +
+          'Nothing to debug: this library has no function blocks. ' +
           'Add a function block — to exercise a function, write one that calls it.',
       })
       return
@@ -861,11 +858,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             // below. Without this the harness would stay installed with no
             // emulator behind it, and the watch list would keep showing a
             // generated program that is not running.
-            void simulatorRun.launch(event.firmwarePath, { attachDebugger: true }).then((launched) => {
-              if (!launched) {
-                store.getState().workspaceActions.setDebugHarness(null)
-              }
-            })
+            void simulatorRun
+              .launch(event.firmwarePath, { attachDebugger: true, projectData: harness.projectData })
+              .then((launched) => {
+                if (!launched) {
+                  store.getState().workspaceActions.setDebugHarness(null)
+                }
+              })
           }
         },
       )

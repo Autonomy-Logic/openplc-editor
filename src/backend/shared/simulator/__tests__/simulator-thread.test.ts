@@ -193,6 +193,8 @@ describe('ThreadedSimulator with serveSimulatorThread', () => {
     )
     const send = (message: unknown): void => channel.listener?.(message)
     send({ type: 'rx', bytes: new Uint8Array([1]) })
+    send({ type: 'python-read', request: 1, id: 1 })
+    send({ type: 'python-write', id: 1, bytes: new Uint8Array([1]) })
     send('nonsense')
     send({ type: 'start', module: fixtureModule() })
     send({ type: 'start', module: fixtureModule() })
@@ -202,6 +204,7 @@ describe('ThreadedSimulator with serveSimulatorThread', () => {
     const deadline = Date.now() + 10000
     while (started() < 2 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10))
     expect(started()).toBe(2)
+    expect(channel.posted).toContainEqual({ type: 'python-input', request: 1, bytes: null })
   })
 })
 
@@ -245,6 +248,18 @@ describe('simulator thread messages', () => {
     expect(parseSimulatorThreadRequest({ type: 'start', module: 'x' })).toBeNull()
     expect(parseSimulatorThreadRequest({ type: 'rx', bytes: new DataView(new ArrayBuffer(1)) })).toBeNull()
     expect(parseSimulatorThreadRequest(null)).toBeNull()
+    expect(parseSimulatorThreadRequest({ type: 'python-read', request: 3, id: 1 })).toEqual({
+      type: 'python-read',
+      request: 3,
+      id: 1,
+    })
+    expect(parseSimulatorThreadRequest({ type: 'python-write', id: 1, bytes: module })).toEqual({
+      type: 'python-write',
+      id: 1,
+      bytes: module,
+    })
+    expect(parseSimulatorThreadRequest({ type: 'python-read', request: -1, id: 1 })).toBeNull()
+    expect(parseSimulatorThreadRequest({ type: 'python-write', id: 1.5, bytes: module })).toBeNull()
   })
 
   it('accepts only well-formed replies', () => {
@@ -261,7 +276,21 @@ describe('simulator thread messages', () => {
       stream: 'stderr',
     })
     expect(parseSimulatorThreadReply({ type: 'stopped', reason: 'r' })).toEqual({ type: 'stopped', reason: 'r' })
+    const block = { id: 1, name: 'B', script: 's', outputSeed: bytes }
+    expect(parseSimulatorThreadReply({ type: 'python-block', ...block })).toEqual({ type: 'python-block', ...block })
+    expect(parseSimulatorThreadReply({ type: 'python-input', request: 2, bytes })).toEqual({
+      type: 'python-input',
+      request: 2,
+      bytes,
+    })
+    expect(parseSimulatorThreadReply({ type: 'python-input', request: 2, bytes: null })).toEqual({
+      type: 'python-input',
+      request: 2,
+      bytes: null,
+    })
     for (const bad of [
+      { type: 'python-block', ...block, script: 1 },
+      { type: 'python-input', request: 2, bytes: 'x' },
       { type: 'start-failed' },
       { type: 'tx', bytes: [1] },
       { type: 'log', line: 'a', stream: 'other' },

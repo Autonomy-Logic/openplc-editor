@@ -42,6 +42,14 @@ export function createEditorSimulatorAdapter(
       }
     },
 
+    preparePython(count: number): Promise<void> {
+      return window.bridge.simulatorPreparePython(count)
+    },
+
+    onLog(callback: (line: string, stream: 'stdout' | 'stderr') => void): Unsubscribe {
+      return window.bridge.onSimulatorLog(callback)
+    },
+
     async stop(): Promise<{ success: boolean }> {
       try {
         const result = await window.bridge.simulatorStop()
