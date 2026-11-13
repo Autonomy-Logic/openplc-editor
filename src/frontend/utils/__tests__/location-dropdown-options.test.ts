@@ -112,15 +112,15 @@ describe('buildLocationDropdownOptions', () => {
       expect(allOptionValues).toContain('slm-rp4-relay-1')
     })
 
-    it('drops remote-device IO points when both `modbusTcpRemote` and `ethercat` are disabled', () => {
-      // Arduino targets disable both. The remote point persists in the
-      // project but must not surface.
+    it('drops remote-device IO points when both Modbus masters and `ethercat` are disabled', () => {
+      // A target that can run neither master nor EtherCAT. The remote point
+      // persists in the project but must not surface.
       const groups = buildLocationDropdownOptions({
         cellId: 'loc-3',
         pins: [],
         remoteIOPoints: [REMOTE_POINT],
         vendorIoEntries: [],
-        capabilities: ARDUINO_CLI_CAPABILITIES,
+        capabilities: { ...ARDUINO_CLI_CAPABILITIES, modbusTcpMaster: false, modbusRtuMaster: false },
       })
 
       // Remote IO options carry the alias as their value.
@@ -128,7 +128,7 @@ describe('buildLocationDropdownOptions', () => {
       expect(allOptionValues).not.toContain('flow-sensor-alias')
     })
 
-    it('surfaces remote-device IO points when EITHER `modbusTcpRemote` OR `ethercat` is enabled', () => {
+    it('surfaces remote-device IO points when EITHER Modbus master OR `ethercat` is enabled', () => {
       // Both flags on the SLM-RP4 capability block — typical Runtime v4
       // setup. The point should appear.
       const groups = buildLocationDropdownOptions({
@@ -137,6 +137,32 @@ describe('buildLocationDropdownOptions', () => {
         remoteIOPoints: [REMOTE_POINT],
         vendorIoEntries: [],
         capabilities: SLM_RP4_CAPABILITIES,
+      })
+
+      const allOptionValues = groups.flatMap((g) => g.options.map((o) => o.value))
+      expect(allOptionValues).toContain('flow-sensor-alias')
+    })
+
+    it('surfaces remote-device IO points on a baremetal target, whose family can run an RTU master', () => {
+      const groups = buildLocationDropdownOptions({
+        cellId: 'loc-7',
+        pins: [],
+        remoteIOPoints: [REMOTE_POINT],
+        vendorIoEntries: [],
+        capabilities: ARDUINO_CLI_CAPABILITIES,
+      })
+
+      const allOptionValues = groups.flatMap((g) => g.options.map((o) => o.value))
+      expect(allOptionValues).toContain('flow-sensor-alias')
+    })
+
+    it('surfaces remote-device IO points on a target that runs only the TCP master', () => {
+      const groups = buildLocationDropdownOptions({
+        cellId: 'loc-8',
+        pins: [],
+        remoteIOPoints: [REMOTE_POINT],
+        vendorIoEntries: [],
+        capabilities: { ...RUNTIME_V3_CAPABILITIES, modbusTcpMaster: true },
       })
 
       const allOptionValues = groups.flatMap((g) => g.options.map((o) => o.value))
@@ -158,7 +184,7 @@ describe('buildLocationDropdownOptions', () => {
     })
 
     it('surfaces persisted remote/EtherCAT points on the simulator (mirrors v4 semantics for project compatibility)', () => {
-      // The simulator preset enables modbusTcpRemote + ethercat as
+      // The simulator preset enables both Modbus masters + ethercat as
       // no-ops at the bytecode level so v4-authored projects don't
       // get nagged when simulated. Pin-mapping stays off — the
       // simulator has no real hardware pins to drive.

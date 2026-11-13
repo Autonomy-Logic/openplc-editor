@@ -33,7 +33,7 @@ const RUNTIME_V4: BoardInfo = {
   capabilities: {
     pinMapping: false,
     vppIo: true,
-    modbusTcpRemote: true,
+    modbusTcpMaster: true,
     ethercat: true,
     modbusTcpServer: true,
     opcuaServer: true,

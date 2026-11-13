@@ -83,7 +83,7 @@ function seedAliasProducer(alias: string) {
           capabilities: {
             pinMapping: false,
             vppIo: false,
-            modbusTcpRemote: true,
+            modbusTcpMaster: true,
             ethercat: true,
             modbusTcpServer: true,
             opcuaServer: true,

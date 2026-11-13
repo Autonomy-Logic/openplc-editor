@@ -1,7 +1,7 @@
 /** X5 (the measuring half): the process image block F1 emits. */
 import { computeIoImage, IMAGE_AREAS_BAREMETAL } from '../steps/compute-io-image'
 
-const ALL = { pinMapping: true, vppIo: true, modbusTcpRemote: true, ethercat: true }
+const ALL = { pinMapping: true, vppIo: true, modbusTcpMaster: true, modbusRtuMaster: true, ethercat: true }
 const SERVERS = { modbusTcpServer: true, opcuaServer: false, s7Server: false }
 
 it('X5 — minimal project (8 DI, 8 DO, 4 %MW)', () => {

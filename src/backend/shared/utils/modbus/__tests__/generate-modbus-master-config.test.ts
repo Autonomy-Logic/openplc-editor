@@ -380,3 +380,52 @@ describe('generateModbusMasterConfig', () => {
     expect(generateModbusMasterConfig([device])).toBeNull()
   })
 })
+
+describe('generateModbusMasterConfig reconnect (Runtime v4)', () => {
+  const tcpWith = (reconnect: boolean | undefined): PLCRemoteDevice => {
+    const device = makeTcpDevice()
+    return { ...device, modbusTcpConfig: { ...device.modbusTcpConfig!, reconnect } }
+  }
+
+  const firstConfig = (devices: PLCRemoteDevice[]): Record<string, unknown> => {
+    const parsed = JSON.parse(generateModbusMasterConfig(devices)!) as Array<{ config: Record<string, unknown> }>
+    return parsed[0].config
+  }
+
+  it('emits reconnect true for a TCP device saved with Reconnect checked', () => {
+    expect(firstConfig([tcpWith(true)]).reconnect).toBe(true)
+  })
+
+  it('emits reconnect false for a TCP device saved with Reconnect unchecked', () => {
+    expect(firstConfig([tcpWith(false)]).reconnect).toBe(false)
+  })
+
+  it('emits reconnect true for a TCP device saved before the option existed', () => {
+    const config = firstConfig([makeTcpDevice()])
+    expect(config.reconnect).toBe(true)
+  })
+
+  it('treats a device with no transport as TCP and emits its reconnect', () => {
+    const device = tcpWith(false)
+    expect(device.modbusTcpConfig?.transport).toBeUndefined()
+    expect(firstConfig([device]).reconnect).toBe(false)
+  })
+
+  it('emits no reconnect key for an RTU device', () => {
+    expect(Object.keys(firstConfig([makeRtuDevice()]))).not.toContain('reconnect')
+  })
+
+  it('emits no reconnect key for an RTU device even when one is stored', () => {
+    const device = makeRtuDevice()
+    const stored: PLCRemoteDevice = { ...device, modbusTcpConfig: { ...device.modbusTcpConfig!, reconnect: true } }
+    expect(Object.keys(firstConfig([stored]))).not.toContain('reconnect')
+  })
+
+  it('emits each TCP device its own reconnect value', () => {
+    const second = { ...tcpWith(true), name: 'Device2' }
+    const parsed = JSON.parse(generateModbusMasterConfig([tcpWith(false), second])!) as Array<{
+      config: { reconnect?: boolean }
+    }>
+    expect(parsed.map((device) => device.config.reconnect)).toEqual([false, true])
+  })
+})

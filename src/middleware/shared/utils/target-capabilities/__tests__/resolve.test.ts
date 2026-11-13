@@ -13,7 +13,8 @@ describe('resolveTargetCapabilities', () => {
     const caps = resolveTargetCapabilities(undefined)
     expect(caps.pinMapping).toBe(false)
     expect(caps.vppIo).toBe(false)
-    expect(caps.modbusTcpRemote).toBe(false)
+    expect(caps.modbusTcpMaster).toBe(false)
+    expect(caps.modbusRtuMaster).toBe(false)
     expect(caps.debuggerTransports).toEqual([])
   })
 
@@ -84,7 +85,8 @@ describe('resolveTargetCapabilities', () => {
       capabilities: { vppIo: true },
     })
     expect(caps.vppIo).toBe(true)
-    expect(caps.modbusTcpRemote).toBe(RUNTIME_V4_CAPABILITIES.modbusTcpRemote)
+    expect(caps.modbusTcpMaster).toBe(RUNTIME_V4_CAPABILITIES.modbusTcpMaster)
+    expect(caps.modbusRtuMaster).toBe(RUNTIME_V4_CAPABILITIES.modbusRtuMaster)
     expect(caps.debuggerTransports).toEqual(RUNTIME_V4_CAPABILITIES.debuggerTransports)
   })
 
@@ -133,20 +135,22 @@ describe('resolveTargetCapabilities', () => {
     // no `compiler` field. Resolver must take the capabilities verbatim
     // over the empty-block baseline.
     const caps = resolveTargetCapabilities({
-      capabilities: { modbusTcpServer: true, modbusTcpRemote: true, debuggerTransports: ['websocket'] },
+      capabilities: { modbusTcpServer: true, modbusTcpMaster: true, debuggerTransports: ['websocket'] },
     })
     expect(caps.modbusTcpServer).toBe(true)
-    expect(caps.modbusTcpRemote).toBe(true)
+    expect(caps.modbusTcpMaster).toBe(true)
     expect(caps.debuggerTransports).toEqual(['websocket'])
     // Fields not declared remain false.
     expect(caps.pinMapping).toBe(false)
+    expect(caps.modbusRtuMaster).toBe(false)
   })
 })
 
 describe('preset shapes', () => {
   it('Simulator has the corrected matrix per the design discussion', () => {
     expect(SIMULATOR_CAPABILITIES.pinMapping).toBe(false)
-    expect(SIMULATOR_CAPABILITIES.modbusTcpRemote).toBe(true)
+    expect(SIMULATOR_CAPABILITIES.modbusTcpMaster).toBe(true)
+    expect(SIMULATOR_CAPABILITIES.modbusRtuMaster).toBe(true)
     expect(SIMULATOR_CAPABILITIES.ethercat).toBe(true)
     expect(SIMULATOR_CAPABILITIES.modbusTcpServer).toBe(true)
     expect(SIMULATOR_CAPABILITIES.opcuaServer).toBe(true)
@@ -160,7 +164,8 @@ describe('preset shapes', () => {
     expect(RUNTIME_V3_CAPABILITIES.modbusTcpServer).toBe(false)
     expect(RUNTIME_V3_CAPABILITIES.opcuaServer).toBe(false)
     expect(RUNTIME_V3_CAPABILITIES.s7Server).toBe(false)
-    expect(RUNTIME_V3_CAPABILITIES.modbusTcpRemote).toBe(false)
+    expect(RUNTIME_V3_CAPABILITIES.modbusTcpMaster).toBe(false)
+    expect(RUNTIME_V3_CAPABILITIES.modbusRtuMaster).toBe(false)
     expect(RUNTIME_V3_CAPABILITIES.ethercat).toBe(false)
     expect(RUNTIME_V3_CAPABILITIES.pythonFunctionBlocks).toBe(true)
     expect(RUNTIME_V3_CAPABILITIES.debuggerTransports).toEqual(['modbus-tcp'])
@@ -169,7 +174,8 @@ describe('preset shapes', () => {
   it('Runtime v4 has vppIo=false (plain) and full server / remote IO support', () => {
     expect(RUNTIME_V4_CAPABILITIES.vppIo).toBe(false)
     expect(RUNTIME_V4_CAPABILITIES.modbusTcpServer).toBe(true)
-    expect(RUNTIME_V4_CAPABILITIES.modbusTcpRemote).toBe(true)
+    expect(RUNTIME_V4_CAPABILITIES.modbusTcpMaster).toBe(true)
+    expect(RUNTIME_V4_CAPABILITIES.modbusRtuMaster).toBe(true)
     expect(RUNTIME_V4_CAPABILITIES.ethercat).toBe(true)
     expect(RUNTIME_V4_CAPABILITIES.s7Server).toBe(true)
     expect(RUNTIME_V4_CAPABILITIES.debuggerTransports).toEqual(['websocket'])
@@ -222,7 +228,7 @@ describe('resolveAddressProducerCapabilities', () => {
   it('lets the compiler answer when the block names no producer', () => {
     const caps = resolveAddressProducerCapabilities({ compiler: 'simulator', capabilities: { opcuaServer: true } })
     expect(caps.pinMapping).toBe(false)
-    expect(caps.modbusTcpRemote).toBe(true)
+    expect(caps.modbusTcpMaster).toBe(true)
   })
 
   it('treats a producer declared false as an answer, not as silence', () => {
@@ -236,11 +242,12 @@ describe('resolveAddressProducerCapabilities', () => {
     // still-active producers compact into it.
     const simulator = resolveAddressProducerCapabilities({ compiler: 'simulator' })
     expect(simulator.pinMapping).toBe(false)
-    expect(simulator.modbusTcpRemote).toBe(true)
+    expect(simulator.modbusTcpMaster).toBe(true)
 
     const arduino = resolveAddressProducerCapabilities({ compiler: 'arduino-cli' })
     expect(arduino.pinMapping).toBe(true)
-    expect(arduino.modbusTcpRemote).toBe(false)
+    expect(arduino.modbusTcpMaster).toBe(false)
+    expect(arduino.modbusRtuMaster).toBe(true)
   })
 
   it('honours an explicit capability block even with no compiler', () => {
@@ -292,5 +299,50 @@ describe('the S7 profile', () => {
     })
     expect(caps.opcua?.maxSessions).toBe(2)
     expect(caps.s7?.maxClients).toBe(2)
+  })
+})
+
+describe('the Modbus master capabilities', () => {
+  it('gives Runtime v4 both the TCP and the RTU master', () => {
+    const caps = resolveTargetCapabilities({ compiler: 'openplc-compiler' })
+    expect(caps.modbusTcpMaster).toBe(true)
+    expect(caps.modbusRtuMaster).toBe(true)
+  })
+
+  it('gives the Simulator both masters, for the screen only', () => {
+    const caps = resolveTargetCapabilities({ compiler: 'simulator' })
+    expect(caps.modbusTcpMaster).toBe(true)
+    expect(caps.modbusRtuMaster).toBe(true)
+  })
+
+  it('gives the Arduino family the RTU master and leaves TCP to the manifest', () => {
+    const caps = resolveTargetCapabilities({ compiler: 'arduino-cli' })
+    expect(caps.modbusTcpMaster).toBe(false)
+    expect(caps.modbusRtuMaster).toBe(true)
+  })
+
+  it('raises the TCP master on a baremetal board whose manifest declares it', () => {
+    const caps = resolveTargetCapabilities({ compiler: 'arduino-cli', capabilities: { modbusTcpMaster: true } })
+    expect(caps.modbusTcpMaster).toBe(true)
+    expect(caps.modbusRtuMaster).toBe(true)
+  })
+
+  it('takes the network socket count a manifest declares', () => {
+    const caps = resolveTargetCapabilities({
+      compiler: 'arduino-cli',
+      capabilities: { modbusTcpMaster: true, networkSockets: 4 },
+    })
+    expect(caps.networkSockets).toBe(4)
+  })
+
+  it('reports no socket count where nothing declares one', () => {
+    expect(resolveTargetCapabilities({ compiler: 'arduino-cli' }).networkSockets).toBeNull()
+    expect(resolveTargetCapabilities({ compiler: 'openplc-compiler' }).networkSockets).toBeNull()
+    expect(resolveTargetCapabilities(undefined).networkSockets).toBeNull()
+  })
+
+  it('activates both masters as address producers when the board is unresolved', () => {
+    expect(ALL_ADDRESS_PRODUCERS_ACTIVE.modbusTcpMaster).toBe(true)
+    expect(ALL_ADDRESS_PRODUCERS_ACTIVE.modbusRtuMaster).toBe(true)
   })
 })

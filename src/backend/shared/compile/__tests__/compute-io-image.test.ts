@@ -26,7 +26,8 @@ import {
 const ALL_ACTIVE: AddressProducerCapabilities = {
   pinMapping: true,
   vppIo: true,
-  modbusTcpRemote: true,
+  modbusTcpMaster: true,
+  modbusRtuMaster: true,
   ethercat: true,
 }
 

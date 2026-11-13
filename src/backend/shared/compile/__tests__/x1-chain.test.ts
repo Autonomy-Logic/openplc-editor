@@ -35,7 +35,7 @@ const RUNTIME_V4: BoardInfo = {
   capabilities: {
     pinMapping: false,
     vppIo: true,
-    modbusTcpRemote: true,
+    modbusTcpMaster: true,
     ethercat: true,
     modbusTcpServer: true,
     opcuaServer: true,
@@ -87,7 +87,13 @@ it('X1 — image.conf reflects the producers built through the store', () => {
   }
   const img = computeIoImage({
     projectData: forSizer as never,
-    capabilities: { pinMapping: false, vppIo: true, modbusTcpRemote: true, ethercat: true } as never,
+    capabilities: {
+      pinMapping: false,
+      vppIo: true,
+      modbusTcpMaster: true,
+      modbusRtuMaster: true,
+      ethercat: true,
+    } as never,
     serverCapabilities: { modbusTcpServer: true, opcuaServer: true, s7Server: true },
     areas: IMAGE_AREAS_RUNTIME_V4,
   })
