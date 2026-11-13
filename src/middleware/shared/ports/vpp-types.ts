@@ -52,8 +52,7 @@ export type VppInstallResult =
 
 /**
  * What a project records about the package its board came from, so authoring
- * and deploy can warn when the installed package has drifted from the one the
- * program was written against.
+ * and deploy can warn when that package is not installed.
  */
 export interface VppPackagePin {
   packageId: string

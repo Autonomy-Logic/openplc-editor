@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import { describeVppPinDrift, type VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
+import { describeMissingVppPackage, type VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
 import { useCapabilities, useDevice, usePackages } from '@root/middleware/shared/providers/platform-context'
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
@@ -264,11 +264,6 @@ const Board = memo(function () {
     void fetchPreviewImage()
   }, [deviceBoard, device, availableBoards])
 
-  // Pin the vendor package the moment a VPP board is selected, and compare it
-  // with what is installed whenever the board or the package set changes. The
-  // pin is what lets the editor say the package moved underneath a program
-  // that was laid out against the old one — a mismatch the device would
-  // otherwise only show as wrong I/O.
   const vppPackageId = availableBoards.get(deviceBoard)?.vpp?.packageId
   const targetVpp = selectedDevice?.vpp
   useEffect(() => {
@@ -285,15 +280,12 @@ const Board = memo(function () {
       targetVpp !== undefined ? Promise.resolve<VppPackagePin | null>(targetVpp) : packages.getPackagePin(vppPackageId)
     void authoritative.then((installed) => {
       if (cancelled) return
-      const recorded = recordedPins?.[deviceBoard]
-      // First time on this board: record what it is being authored against
-      // rather than warning about a pin that was never taken.
-      if (!recorded && installed) {
+      if (installed) {
         setVppPackagePin(deviceBoard, installed)
         setPinDrift(null)
         return
       }
-      setPinDrift(describeVppPinDrift(recorded, installed))
+      setPinDrift(describeMissingVppPackage(recordedPins?.[deviceBoard], null))
     })
     return () => {
       cancelled = true
