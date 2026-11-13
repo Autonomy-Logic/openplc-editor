@@ -72,8 +72,6 @@ const CONTROLS_CONFIG = { showInteractive: false }
 const PLACEMENT_SWALLOW_MS = 500
 const PLACEMENT_EXCLUDED_SELECTOR = '.react-flow__controls, .react-flow__minimap, .react-flow__panel'
 
-// --- Debug edge coloring ---
-
 type FBDDebugContext = {
   isFunctionBlockPou: boolean
   hasProgramInstance: boolean
@@ -219,9 +217,6 @@ const fbdEdgeStatesEqual = (previous: Map<string, boolean> | null, next: Map<str
 
 export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }: FBDProps) => {
   const store = useOpenPLCStoreApi()
-  // Bound POU + editor model — every multi-mounted FBDBody reads
-  // its OWN POU from the `GraphicalEditorActiveProvider` so cross-
-  // tab store mutations don't fire effects against the wrong flow.
   const pouName = useBoundPou()
   const editor = useBoundEditorModel()
   const updateModelVariables = useOpenPLCStore((state) => state.editorActions.updateModelVariables)
@@ -251,9 +246,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
   const armedElement = placement?.language === 'fbd' && !isDebuggerActive ? placement.armed : null
   const swallowUntilRef = useRef(0)
 
-  // Refs, not state: the values are only read inside the paste handler, and
-  // state here re-rendered the whole FBDBody on every pointer move over the
-  // canvas (~75 commits/s of pure overhead while idle).
   const insideViewportRef = useRef(false)
   const mousePositionRef = useRef<XYPosition>({ x: 0, y: 0 })
   useFBDClipboard({
@@ -281,8 +273,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     return false
   }, [editor])
 
-  // --- Debug edge coloring and node lockdown ---
-
   const debugEdgeStates = useMemo(
     () =>
       isDebuggerVisible
@@ -308,8 +298,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     ],
   )
 
-  // Identity-stable across polls that didn't change this flow's edge states,
-  // so styledEdges keeps its identity and the canvas skips re-render.
   const stableDebugEdgeStates = useContentStable(debugEdgeStates, fbdEdgeStatesEqual)
 
   const styledEdges = useMemo(() => {
@@ -372,9 +360,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
       return
     }
 
-    // Make node data mirror be the rung and not the rungLocal
-    // This is made because the rungLocal is a local copy and may not reflect the latest changes in the store
-    // And the store saves all the block data updates
     const isNodeLengthEqual = rungLocalCopy.nodes.length === rungClean.nodes.length
     const isNodeDataEqual =
       isNodeLengthEqual &&
@@ -405,26 +390,15 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     })
   }
 
-  /**
-   *  * FYI: This implementation came from https://www.developerway.com/posts/debouncing-in-react
-   */
-  // creating ref and initializing it with the sendRequest function
   const debounceUpdateRungRef = useRef(updateRungState)
   useEffect(() => {
-    // updating ref when state changes
-    // now, ref.current will have the latest sendRequest with access to the latest state
     debounceUpdateRungRef.current = updateRungState
   }, [dragging, rungLocal, rung])
-  // creating debounced callback only once - on mount
   const debouncedUpdateRungStateCallback = useMemo(() => {
-    // func will be created only once - on mount
     const func = () => {
-      // ref is mutable! ref.current is a reference to the latest sendRequest
       debounceUpdateRungRef.current?.()
     }
-    // debounce the func that was created once, but has access to the latest sendRequest
     return debounce(func, 200)
-    // no dependencies! never gets updated
   }, [])
 
   useEffect(() => {
@@ -436,9 +410,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     return () => debouncedUpdateRungStateCallback.cancel()
   }, [rungLocal])
 
-  /**
-   * Handle the addition of a new element by dropping it in the viewport
-   */
   const handleAddElementByDropping = (
     position: XYPosition,
     newNodeType: CustomFbdNodeTypes,
@@ -455,14 +426,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
         const libraryPou = libraries.system
           .find((Library) => Library.name === blockLibrary)
           ?.pous.find((p) => p.name === pouName)
-        // Copy the signature, not the library entry. That entry also carries
-        // `body` (the authored source, which for a native C/C++ or Python block
-        // is the entire file) and `language`, and passing the object straight
-        // through froze a copy of the library's source into every project that
-        // placed the block. Nothing ever reads either field back off a placed
-        // variant, and the embedded VAR ... END_VAR broke the POU parser badly
-        // enough that the project would not open (DOPE-592). The user-library
-        // branch below has always built a curated object this way.
         pouLibrary = libraryPou
           ? {
               name: libraryPou.name,
@@ -539,11 +502,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     })
   }
 
-  /**
-   * Handle the deletion of nodes and edges
-   * This function is called when the user presses the delete key
-   * It is used to remove the selected nodes and edges from the flow
-   */
   const handleOnDelete = (nodes: FlowNode[], edges: FlowEdge[]) => {
     captureAndPush(pouName)
 
@@ -589,16 +547,7 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     }
   }
 
-  /**
-   * Handle the connection of two nodes
-   * This function is called when the user connects two nodes
-   * It is used to update the local rung state
-   */
   const handleOnConnect = (connection: Connection) => {
-    // A VAR_IN_OUT pin takes exactly one variable. It is passed by reference, so a second
-    // wire would mean two variables aliasing the same parameter with no defined order —
-    // CODESYS refuses it too ("The 'X' pin internally contains more than one associated
-    // connection. This is not allowed.").
     const occupiedInOutPin = findOccupiedInOutPin(connection, rungLocal)
     if (occupiedInOutPin) {
       toast({
@@ -624,11 +573,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     })
   }
 
-  /**
-   * Handle the change of the nodes
-   * This function is called every time the nodes change
-   * It is used to update the local rung state
-   */
   const onNodesChange: OnNodesChange<FlowNode> = useStableCallback((changes) => {
     setRungLocal((newRung) => {
       let nodes = newRung.nodes
@@ -687,9 +631,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     setDragging(true)
   })
 
-  /**
-   * When the node drag stops, update the fbd rung state
-   */
   const onNodeDragStop = useStableCallback(
     (_e: globalThis.MouseEvent | globalThis.TouchEvent, _node: FlowNode, nodes: FlowNode[]) => {
       setDragging(false)
@@ -704,24 +645,14 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     },
   )
 
-  /**
-   * Handle the drag enter of the viewport
-   * This function is called when a dragged element enters the viewport
-   */
   const onDragEnterViewport = useStableCallback((event: DragEvent) => {
     event.preventDefault()
-    // Check if the dragged element is not an FBD block (cross-browser compatible)
     if (!isFbdBlockDrag(event.dataTransfer)) {
       return
     }
   })
 
-  /**
-   * Handle the drag leave of the viewport
-   * This function is called when a dragged element leaves the viewport
-   */
   const onDragLeaveViewport = useStableCallback((event: DragEvent) => {
-    // Check if the dragged element is a child of the flow viewport
     const { relatedTarget } = event
     if (
       !reactFlowViewportRef.current ||
@@ -732,30 +663,20 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     }
   })
 
-  /**
-   * Handle the drag over of the viewport
-   * This function is called when a dragged element is over the viewport
-   */
   const onDragOver = useStableCallback((event: DragEvent) => {
     if (!reactFlowInstance) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
   })
 
-  /**
-   * Handle the drop of the viewport
-   * This function is called when a dragged element is dropped in the viewport
-   */
   const onDrop = useStableCallback((event: DragEvent) => {
     event.preventDefault()
-    // Check if there is an FBD block in the dragged data (cross-browser compatible)
     const blockType = getFbdBlockType(event.dataTransfer)
 
     if (!blockType || !Object.keys(customNodeTypes).includes(blockType)) {
       return
     }
 
-    // Check if there is a library in the dragged data
     const library =
       event.dataTransfer.getData('application/library') === ''
         ? undefined
@@ -772,9 +693,6 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     handleAddElementByDropping(position, blockType as CustomFbdNodeTypes, library)
   })
 
-  /**
-   * Handle the double click of a node
-   */
   const handleNodeDoubleClick = (node: FlowNode) => {
     const modalToOpen = node.type === 'block' && 'block-fbd-element'
     if (!modalToOpen) return
@@ -792,24 +710,12 @@ export const FBDBody = ({ rung, nodeDivergences = [], isDebuggerActive = false }
     handleNodeDoubleClick(node)
   })
 
-  // Per-POU pattern id.  Without this, every <Background> SVG <pattern>
-  // shares the library default id="pattern"; SVG ids are document-scoped, so
-  // opening a second FBD POU makes its <rect fill="url(#pattern)"> resolve
-  // against the first instance's pattern and the grid disappears on the
-  // second editor.  Scoping by POU name keeps each grid independent.
   const backgroundConfig = useMemo(() => ({ id: `fbd-bg-${pouName}` }), [pouName])
 
-  /**
-   * Handle the close of the modal
-   */
   const handleModalClose = () => {
     closeModal()
   }
 
-  /**
-   * Click-to-place: a left click on the canvas inserts the armed element at the
-   * pointer; a click on the canvas controls cancels.
-   */
   const handlePlacementPointerDown = (event: ReactPointerEvent) => {
     if (!armedElement || !placement || event.button !== 0) return
     event.preventDefault()

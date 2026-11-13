@@ -1,12 +1,3 @@
-/**
- * Element dialogs with more than one ladder POU open.
- *
- * Every open ladder tab keeps its editor mounted. With two of them, each POU's element dialogs must still
- * render once and apply their change: the contact and coil dialogs save a new modifier, and the block dialog
- * saves execution control switched on.
- *
- * Needs a production build plus the preload copy; see "Electron e2e" in CLAUDE.md.
- */
 import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -154,14 +145,14 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
   throw new Error('main window never appeared')
 }
 
-/** Ctrl+S is a native menu accelerator, which Playwright's keyboard never reaches. */
+/** Sends the Save Project accelerator to the main window. */
 const save = (app: ElectronApplication) =>
   app.evaluate(({ BrowserWindow }) => {
     const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))
     win?.webContents.send('project:save-accelerator')
   })
 
-/** The quit confirmation holds every quit, so `app.close()` would hang. */
+/** Kills the app process and waits for it to exit. */
 async function shutdown(app: ElectronApplication): Promise<void> {
   const proc = app.process()
   if (proc.exitCode !== null) return

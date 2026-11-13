@@ -44,7 +44,7 @@ export function writeRuntimeDevice(projectPath: string): void {
   writeFileSync(join(projectPath, 'devices', 'pin-mapping.json'), '{}')
 }
 
-/** The quit confirmation holds every quit, so `app.close()` would hang. */
+/** Kills the app process and waits for it to exit. */
 export async function shutdown(app: ElectronApplication): Promise<void> {
   const proc = app.process()
   if (proc.exitCode !== null) return

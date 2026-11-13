@@ -1,8 +1,3 @@
-/**
- * Explain - This is a workaround to avoid the following error:
- * The ```@dnd-kit``` package is not correctly asserted by the lint tool.
- */
-
 import type { UniqueIdentifier } from '@dnd-kit/core'
 import {
   closestCenter,
@@ -44,12 +39,7 @@ const EMPTY_DIVERGENCES: string[] = []
 
 export default function LadderEditor() {
   const store = useOpenPLCStoreApi()
-  // Bound POU comes from the `GraphicalEditorActiveProvider` set up
-  // in the wrapper one level up.  Mirrors `FbdEditor` — see that
-  // file for the multi-mount rationale.
   const pouName = useBoundPou()
-  // Pou-scoped subscription: immer's structural sharing keeps this flow's
-  // identity stable when other POUs' flows (or unrelated slices) change.
   const flow = useOpenPLCStore((state) => state.ladderFlows.find((f) => f.name === pouName))
   const ladderFlowActions = useOpenPLCStore((state) => state.ladderFlowActions)
   const searchNodePosition = useOpenPLCStore((state) => state.searchNodePosition)
@@ -122,9 +112,6 @@ export default function LadderEditor() {
         const hasDivergence =
           originalInOut?.length !== currentVariables.length ||
           !originalInOut?.every((variable) => currentMap.has(formatVariable(variable))) ||
-          // The declarations can agree while the persisted GEOMETRY is stale: a rung saved
-          // before a VAR_IN_OUT pin became input-only still carries the pin's output side. The
-          // interface never changed, so the comparison above cannot see it.
           hasLegacyInOutOutputHandle(node)
 
         if (hasDivergence) {
@@ -162,13 +149,6 @@ export default function LadderEditor() {
     }
   }, [searchNodePosition])
 
-  /**
-   * Queue the flow → project JSON write-back. The scheduler debounces it
-   * (edits inside the window coalesce), persists the raw flow object, and
-   * clears the `updated` flag; save paths flush it so a save landing inside
-   * the window still serializes the fresh body. Validation and the DOPE-477
-   * raw-object policy live in store/slices/shared/flow-writeback.ts.
-   */
   useEffect(() => {
     if (!flowUpdated) return
     scheduleFlowWriteBack(store.getState, pouName, 'ld')
@@ -240,7 +220,6 @@ export default function LadderEditor() {
     }
 
     const auxRungs = [...(flow?.rungs || [])]
-    // Store the original state for recovery
     const originalRungs = [...auxRungs]
     const [removed] = auxRungs.splice(sourceIndex, 1)
     auxRungs.splice(destinationIndex, 0, removed)
@@ -250,16 +229,11 @@ export default function LadderEditor() {
       ladderFlowActions.setRungs({ editorName: pouName, rungs: auxRungs })
     } catch (error) {
       console.error('Failed to update rungs:', error)
-      // Recover the original state
       ladderFlowActions.setRungs({ editorName: pouName, rungs: originalRungs })
-      // Notify the user
       console.error('Failed to reorder rungs. The operation has been reverted.')
     }
   }
 
-  /**
-   * Handle the close of the modal
-   */
   const handleModalClose = () => {
     closeModal()
   }
