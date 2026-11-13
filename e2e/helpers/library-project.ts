@@ -64,13 +64,13 @@ function variable(fixture: GlobalVariableFixture, variableClass?: 'global'): Rec
   }
 }
 
-function freshRoot(name: string): string {
+export function freshRoot(name: string): string {
   const root = join(realpathSync(tmpdir()), name)
   rmSync(root, { recursive: true, force: true })
   return root
 }
 
-function writeProfile(userData: string, projectName: string, project: string): void {
+export function writeProfile(userData: string, projectName: string, project: string): void {
   const history = join(userData, 'User', 'History')
   mkdirSync(history, { recursive: true })
   writeFileSync(
@@ -95,7 +95,7 @@ function writeProfile(userData: string, projectName: string, project: string): v
   writeFileSync(join(runtime, 'arduino-library-control.json'), '[]')
 }
 
-function writeDevice(project: string): void {
+export function writeDevice(project: string): void {
   mkdirSync(join(project, 'devices'), { recursive: true })
   writeFileSync(
     join(project, 'devices', 'configuration.json'),
