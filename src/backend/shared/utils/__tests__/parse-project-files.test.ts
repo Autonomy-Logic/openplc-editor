@@ -1204,3 +1204,62 @@ describe('parseProjectFiles — a VAR block without END_VAR', () => {
     })
   })
 })
+
+describe('parseProjectFiles with HMI files', () => {
+  const screen = { relativePath: 'hmi/Main.st', content: 'FUNCTION_BLOCK Main EXTENDS HmiScreen END_FUNCTION_BLOCK' }
+  const settings = { relativePath: 'hmi/settings.json', content: '{"framePeriodMs": 50}' }
+
+  it('reads the HMI of a PLC project', () => {
+    const result = parseProjectFiles(
+      '/p',
+      makeProjectJson(),
+      makeDeviceConfig(),
+      makePinMapping(),
+      [],
+      [],
+      [],
+      '',
+      [],
+      [screen, settings],
+    )
+    expect(result.projectData.hmi?.screens).toEqual([{ name: 'Main', source: screen.content }])
+    expect(result.projectData.hmi?.settings.framePeriodMs).toBe(50)
+    expect(result.warnings).toBeUndefined()
+  })
+
+  it('has no HMI without HMI files, and reports a settings file it cannot read', () => {
+    const none = parseProjectFiles('/p', makeProjectJson(), makeDeviceConfig(), makePinMapping(), [], [], [])
+    expect(none.projectData.hmi).toBeUndefined()
+    const bad = parseProjectFiles(
+      '/p',
+      makeProjectJson(),
+      makeDeviceConfig(),
+      makePinMapping(),
+      [],
+      [],
+      [],
+      '',
+      [],
+      [{ relativePath: 'hmi/settings.json', content: 'nope' }],
+    )
+    expect(bad.projectData.hmi?.unparsedSettings).toBe('nope')
+    expect(bad.warnings).toEqual([expect.stringContaining('hmi/settings.json: it is not JSON')])
+  })
+
+  it('ignores HMI files in a library project', () => {
+    const library = JSON.stringify({ ...JSON.parse(makeProjectJson()), meta: { name: 'L', type: 'plc-library' } })
+    const result = parseProjectFiles(
+      '/p',
+      library,
+      makeDeviceConfig(),
+      makePinMapping(),
+      [],
+      [],
+      [],
+      '{}',
+      [],
+      [screen],
+    )
+    expect(result.projectData.hmi).toBeUndefined()
+  })
+})

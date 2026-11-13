@@ -1,3 +1,11 @@
+import {
+  HMI_SETTINGS_PATH,
+  hmiScreenPath,
+  hmiWidgetPath,
+  readHmiFiles,
+  writeHmiFiles,
+} from '@root/middleware/shared/utils/hmi/project-files'
+
 import type { PlatformCapabilities } from '../../middleware/shared/ports/platform-capabilities'
 import type {
   ProjectPort,
@@ -43,6 +51,7 @@ type ProjectFileCategory =
   | 'project-json'
   | 'library-manifest'
   | 'data-type'
+  | 'hmi'
 
 type ProjectFileSpec = {
   path: string
@@ -153,6 +162,10 @@ function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
       }
     }
 
+    for (const f of writeHmiFiles(project.data.hmi)) {
+      yield { path: f.relativePath, content: f.content, category: 'hmi' }
+    }
+
     yield {
       path: 'devices/configuration.json',
       content: JSON.stringify(deviceDefinitions.configuration, null, 2),
@@ -248,6 +261,19 @@ function serializeProjectFile(
   if (file.type === 'data-type') {
     const dt = project.data.dataTypes.find((d) => d.name === fileName)
     return dt ? [buildDataTypeSpec(dt)] : []
+  }
+
+  if (file.type === 'hmi-screen' || file.type === 'hmi-widget' || file.type === 'hmi-settings') {
+    const hmiFiles = writeHmiFiles(project.data.hmi)
+    const own =
+      file.type === 'hmi-screen'
+        ? hmiScreenPath(fileName)
+        : file.type === 'hmi-widget'
+          ? hmiWidgetPath(fileName)
+          : HMI_SETTINGS_PATH
+    return hmiFiles
+      .filter((f) => f.relativePath === own || f.relativePath === HMI_SETTINGS_PATH)
+      .map((f) => ({ path: f.relativePath, content: f.content, category: 'hmi' }))
   }
 
   // resource: lives in project.json
@@ -382,6 +408,7 @@ export async function executeSaveProject(
     const serverFiles: RawProjectFile[] = []
     const remoteDeviceFiles: RawProjectFile[] = []
     const dataTypeFiles: RawProjectFile[] = []
+    const hmiFiles: RawProjectFile[] = []
     let projectJson = ''
     // undefined means the iterator didn't yield it: the backend skips the write instead of truncating the on-disk
     // copy to an empty string.
@@ -404,6 +431,9 @@ export async function executeSaveProject(
         case 'data-type':
           dataTypeFiles.push({ relativePath: spec.path, content })
           break
+        case 'hmi':
+          hmiFiles.push({ relativePath: spec.path, content })
+          break
         case 'device-config':
           deviceConfig = content
           break
@@ -422,7 +452,9 @@ export async function executeSaveProject(
     // A path this save writes must never also be in deletions: desktop applies deletions after writes, so this
     // guards real data loss. Compared case-insensitively for macOS/Windows case-only renames.
     const writtenPaths = new Set(
-      [...pouFiles, ...serverFiles, ...remoteDeviceFiles, ...dataTypeFiles].map((f) => f.relativePath.toLowerCase()),
+      [...pouFiles, ...serverFiles, ...remoteDeviceFiles, ...dataTypeFiles, ...hmiFiles].map((f) =>
+        f.relativePath.toLowerCase(),
+      ),
     )
     const deletionsBeforeSave = [...new Set(pendingDeletions)].filter((path) => !writtenPaths.has(path.toLowerCase()))
 
@@ -436,6 +468,7 @@ export async function executeSaveProject(
       serverFiles,
       remoteDeviceFiles,
       dataTypeFiles,
+      hmiFiles,
       deletions: deletionsBeforeSave,
     }
 
@@ -451,6 +484,7 @@ export async function executeSaveProject(
         ...serverFiles.map((f) => ({ path: f.relativePath, content: f.content })),
         ...remoteDeviceFiles.map((f) => ({ path: f.relativePath, content: f.content })),
         ...dataTypeFiles.map((f) => ({ path: f.relativePath, content: f.content })),
+        ...hmiFiles.map((f) => ({ path: f.relativePath, content: f.content })),
       ]
       state.versionControlActions.recordSavedFiles({
         saved: savedRecords,
@@ -726,6 +760,13 @@ export async function executeSaveFile(
         state.projectActions.setDataTypesNeedMigration(false)
       } else {
         const res = await projectPort.saveFile(joinPath(projectPath, 'datatypes', `${fileName}.dt`), spec.content)
+        if (!res.success) return failedWrite(res)
+      }
+    } else if (file.type === 'hmi-screen' || file.type === 'hmi-widget' || file.type === 'hmi-settings') {
+      const found = file.type === 'hmi-settings' || specs.some((s) => s.path !== HMI_SETTINGS_PATH)
+      if (!found || specs.length === 0) return fail(`"${fileName}" not found.`)
+      for (const spec of specs) {
+        const res = await projectPort.saveFile(joinPath(projectPath, spec.path), spec.content)
         if (!res.success) return failedWrite(res)
       }
     } else {
@@ -1153,5 +1194,30 @@ export async function reloadFileFromDisk(
   if (file.type === 'data-type') {
     return reloadDataTypeFromDisk(store, fileName, projectPort)
   }
+  if (file.type === 'hmi-screen' || file.type === 'hmi-widget' || file.type === 'hmi-settings') {
+    return reloadHmiFromDisk(store, file.type, fileName, projectPort)
+  }
   return reloadPouFromDisk(store, fileName, projectPort)
+}
+
+/** Restores a screen, widget block or HMI Settings to its file on disk. */
+export async function reloadHmiFromDisk(
+  store: OpenPLCStore,
+  type: 'hmi-screen' | 'hmi-widget' | 'hmi-settings',
+  name: string,
+  projectPort: ProjectPort,
+): Promise<{ success: boolean }> {
+  const state = store.getState()
+  const relativePath =
+    type === 'hmi-screen' ? hmiScreenPath(name) : type === 'hmi-widget' ? hmiWidgetPath(name) : HMI_SETTINGS_PATH
+  const result = await projectPort.readFileContent(joinPath(state.project.meta.path, relativePath))
+  if (!result.success || typeof result.content !== 'string') return { success: false }
+  if (type !== 'hmi-settings') {
+    state.projectActions.updateHmiSource(type === 'hmi-screen' ? 'screen' : 'widget', name, result.content)
+    return { success: true }
+  }
+  const read = readHmiFiles([{ relativePath, content: result.content }]).hmi
+  if (!read) return { success: false }
+  if (read.unparsedSettings === undefined) state.projectActions.updateHmiSettings(read.settings)
+  return { success: read.unparsedSettings === undefined }
 }

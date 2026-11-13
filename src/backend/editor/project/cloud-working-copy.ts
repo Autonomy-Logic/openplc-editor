@@ -13,26 +13,16 @@ import { promises as fs } from 'node:fs'
 import { dirname, isAbsolute, join } from 'node:path'
 
 import { iterateWriteProjectFiles } from '@root/backend/shared/project/iterate-write-project-files'
+import { type RawProjectContent, writeFilesFromRaw } from '@root/backend/shared/project/raw-project-files'
 
-import type { RawProjectFile, WriteProjectFiles } from '../../../middleware/shared/ports/project-port'
+import type { WriteProjectFiles } from '../../../middleware/shared/ports/project-port'
 import { resolveBuildWorkspace } from './cloud-build-workspace'
 
 /** Build output survives a reopen, so a rebuild in the same session stays incremental. */
 const KEPT_ON_REFRESH = new Set(['build'])
 
 /** The files of a cloud project as `readCloudProject` receives them. */
-export interface CloudProjectFiles {
-  projectPath: string
-  projectJson: string
-  deviceConfig: string
-  pinMapping: string
-  /** Empty string is the "no library.json" sentinel. */
-  libraryManifest: string
-  pouFiles: RawProjectFile[]
-  serverFiles: RawProjectFile[]
-  remoteDeviceFiles: RawProjectFile[]
-  dataTypeFiles: RawProjectFile[]
-}
+export type CloudProjectFiles = RawProjectContent
 
 let sequence = 0
 /** Sequence of the newest read or save applied to each project, so nothing older can overwrite it. */
@@ -111,18 +101,7 @@ export function materializeCloudProject(project: CloudProjectFiles, readStartedA
     }
 
     const dir = workingCopyDir(project.projectPath)
-    const files: WriteProjectFiles = {
-      projectPath: project.projectPath,
-      projectJson: project.projectJson,
-      deviceConfig: project.deviceConfig,
-      pinMapping: project.pinMapping,
-      libraryManifest: project.libraryManifest.length > 0 ? project.libraryManifest : undefined,
-      pouFiles: project.pouFiles,
-      serverFiles: project.serverFiles,
-      remoteDeviceFiles: project.remoteDeviceFiles,
-      dataTypeFiles: project.dataTypeFiles,
-      deletions: [],
-    }
+    const files: WriteProjectFiles = writeFilesFromRaw(project)
 
     const staging = `${dir}.staging-${randomUUID()}`
     try {

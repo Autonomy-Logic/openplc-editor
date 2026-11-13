@@ -13,6 +13,8 @@ import { ArrayIcon } from '../../../assets/icons/project/Array'
 import { DeviceIcon } from '../../../assets/icons/project/Device'
 import { EnumIcon } from '../../../assets/icons/project/Enum'
 import { GlobalVariableListIcon } from '../../../assets/icons/project/GlobalVariableList'
+import { HmiScreenIcon } from '../../../assets/icons/project/HmiScreen'
+import { HmiWidgetIcon } from '../../../assets/icons/project/HmiWidget'
 import { LibraryIcon } from '../../../assets/icons/project/Library'
 import { LibraryManifestIcon } from '../../../assets/icons/project/LibraryManifest'
 import { OrchestratorIcon } from '../../../assets/icons/project/Orchestrator'
@@ -133,6 +135,24 @@ const Breadcrumbs = () => {
         </li>
         <li>
           <BreadcrumbItem Icon={Icon} text={category} isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={Icon} text={meta.name} isLast />
+        </li>
+      </ol>
+    )
+  }
+
+  if (editor.type === 'plc-hmi' || editor.type === 'plc-hmi-settings') {
+    const Icon =
+      editor.type === 'plc-hmi-settings' ? ConfigIcon : editor.meta.kind === 'screen' ? HmiScreenIcon : HmiWidgetIcon
+    return (
+      <ol className='flex h-1/2 cursor-default select-none items-center p-2'>
+        <li>
+          <BreadcrumbItem Icon={PLCIcon} text={name} isLast={false} />
+        </li>
+        <li>
+          <BreadcrumbItem Icon={HmiScreenIcon} text='HMI' isLast={false} />
         </li>
         <li>
           <BreadcrumbItem Icon={Icon} text={meta.name} isLast />

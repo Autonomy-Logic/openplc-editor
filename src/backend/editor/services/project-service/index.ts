@@ -3,6 +3,7 @@ import { projectDefaultFilesMapSchema } from '@root/backend/shared/project/proje
 import { PLCProject } from '@root/backend/shared/types/PLC/open-plc'
 import { getDefaultSchemaValues } from '@root/backend/shared/utils/default-zod-schema-values'
 import type { WriteProjectFiles } from '@root/middleware/shared/ports/project-port'
+import { HMI_DIRECTORY, HMI_FILE_EXTENSIONS } from '@root/middleware/shared/utils/hmi/project-files'
 import {
   CreateProjectFileProps,
   IProjectRecentHistoryEntry,
@@ -228,6 +229,7 @@ class ProjectService {
       serverFiles: Array<{ relativePath: string; content: string }>
       remoteDeviceFiles: Array<{ relativePath: string; content: string }>
       dataTypeFiles: Array<{ relativePath: string; content: string }>
+      hmiFiles: Array<{ relativePath: string; content: string }>
     }
     error?: { title: string; description: string }
   }> {
@@ -326,6 +328,7 @@ class ProjectService {
       // their own bucket, never into pouFiles (pou-path detection
       // throws for paths outside the pou folders).
       const dataTypeFiles = await readDirRecursive(join(projectPath, 'datatypes'), 'datatypes', ['.dt'])
+      const hmiFiles = await readDirRecursive(join(projectPath, HMI_DIRECTORY), HMI_DIRECTORY, [...HMI_FILE_EXTENSIONS])
 
       // Library projects own a `library.json` at the project root.
       // Read it as a plain string (parsing happens upstream in the
@@ -353,6 +356,7 @@ class ProjectService {
           serverFiles,
           remoteDeviceFiles,
           dataTypeFiles,
+          hmiFiles,
         },
       }
     } catch (error) {

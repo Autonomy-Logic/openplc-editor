@@ -55,6 +55,7 @@ const writeFiles = {
   serverFiles: [],
   remoteDeviceFiles: [],
   dataTypeFiles: [],
+  hmiFiles: [],
   deletions: [],
 }
 

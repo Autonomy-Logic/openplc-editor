@@ -15,6 +15,8 @@ export interface ApiProjectFiles {
   }
   pous: Record<string, Record<string, string>>
   datatypes?: Record<string, string>
+  /** `hmi/`: screens and settings.json, with widget blocks under `widgets`. */
+  hmi?: Record<string, string> & { widgets?: Record<string, string> }
   /** Legacy top-level server slot. Read as a fallback, never written. */
   servers?: Record<string, string>
   /** Build artifacts (`<name>.stlib`, verification cache). Without this slot they are silently dropped. */
@@ -31,6 +33,8 @@ const DevicesSchema = z
   .object({ remote: FileMapSchema.optional(), servers: FileMapSchema.optional() })
   .catchall(z.string())
 
+const HmiSchema = z.object({ widgets: FileMapSchema.optional() }).catchall(z.string())
+
 /** Nothing is defaulted: a malformed container must fail the parse, not become an empty one the next save would persist. */
 export const ApiProjectFilesSchema = z.object({
   'project.json': z.string().optional(),
@@ -39,6 +43,7 @@ export const ApiProjectFilesSchema = z.object({
   devices: DevicesSchema.optional(),
   pous: z.record(FileMapSchema).optional(),
   datatypes: FileMapSchema.optional(),
+  hmi: HmiSchema.optional(),
   servers: FileMapSchema.optional(),
   build: FileMapSchema.optional(),
   // A field renamed on the interface without being renamed here fails on this line.
@@ -67,6 +72,12 @@ export function getInEnvelope(env: IncomingApiProjectFiles, relativePath: string
   // Flat `build/<filename>` only; nested build paths are intentionally not persisted.
   if (parts.length === 2 && parts[0] === 'build') {
     return env.build?.[parts[1]]
+  }
+  if (parts.length === 2 && parts[0] === 'hmi' && parts[1] !== 'widgets') {
+    return env.hmi?.[parts[1]]
+  }
+  if (parts.length === 3 && parts[0] === 'hmi' && parts[1] === 'widgets') {
+    return env.hmi?.widgets?.[parts[2]]
   }
   return undefined
 }
@@ -124,6 +135,16 @@ export function setInEnvelope(env: IncomingApiProjectFiles, relativePath: string
     env.build[parts[1]] = content
     return
   }
+  if (parts.length === 2 && parts[0] === 'hmi' && parts[1] !== 'widgets') {
+    if (!env.hmi) env.hmi = {}
+    env.hmi[parts[1]] = content
+    return
+  }
+  if (parts.length === 3 && parts[0] === 'hmi' && parts[1] === 'widgets') {
+    if (!env.hmi) env.hmi = {}
+    if (!env.hmi.widgets) env.hmi.widgets = {}
+    env.hmi.widgets[parts[2]] = content
+  }
 }
 
 export function envelopeFromWriteProjectFiles(files: WriteProjectFiles): ApiProjectFiles {
@@ -146,6 +167,7 @@ const MODELLED_KEYS = [
   'devices',
   'pous',
   'datatypes',
+  'hmi',
   'servers',
   'build',
 ] as const
@@ -189,6 +211,14 @@ export function apiFilesToRaw(projectPath: string, files: IncomingApiProjectFile
   for (const [filename, content] of Object.entries(files.datatypes ?? {})) {
     dataTypeFiles.push({ relativePath: `datatypes/${filename}`, content })
   }
+  const hmiFiles = []
+  const { widgets, ...hmi } = files.hmi ?? {}
+  for (const [filename, content] of Object.entries(hmi)) {
+    hmiFiles.push({ relativePath: `hmi/${filename}`, content })
+  }
+  for (const [filename, content] of Object.entries(widgets ?? {})) {
+    hmiFiles.push({ relativePath: `hmi/widgets/${filename}`, content })
+  }
   return {
     projectPath,
     projectJson: files['project.json'] ?? '',
@@ -200,6 +230,7 @@ export function apiFilesToRaw(projectPath: string, files: IncomingApiProjectFile
     serverFiles,
     remoteDeviceFiles,
     dataTypeFiles,
+    hmiFiles,
     pendingPlcopenSource: files['plcopen-pending-import.xml'],
   }
 }

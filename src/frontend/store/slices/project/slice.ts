@@ -12,6 +12,9 @@ import type {
   S7CommPlcIdentity,
   S7CommServerSettings,
 } from '../../../../middleware/shared/ports/types'
+import { hmiScreenPath, hmiWidgetPath, sortHmiFiles } from '../../../../middleware/shared/utils/hmi/project-files'
+import { renameBlockHeader, renameHmiReferences } from '../../../../middleware/shared/utils/hmi/references'
+import { defaultHmiSettings } from '../../../../middleware/shared/utils/hmi/settings'
 import {
   type AddressPool,
   buildAddressPool,
@@ -1731,6 +1734,71 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
         }),
       )
       return ok()
+    },
+    createHmiElement: (kind, name, source) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const hmi = slice.project.data.hmi ?? { screens: [], widgets: [], settings: defaultHmiSettings() }
+          const list = kind === 'screen' ? hmi.screens : hmi.widgets
+          if (list.some((f) => f.name.toUpperCase() === name.toUpperCase())) return
+          list.push({ name, source })
+          hmi.screens = sortHmiFiles(hmi.screens)
+          hmi.widgets = sortHmiFiles(hmi.widgets)
+          slice.project.data.hmi = hmi
+        }),
+      )
+    },
+    deleteHmiElement: (kind, name) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const hmi = slice.project.data.hmi
+          if (!hmi) return
+          slice.pendingDeletions.push(kind === 'screen' ? hmiScreenPath(name) : hmiWidgetPath(name))
+          if (kind === 'screen') hmi.screens = hmi.screens.filter((f) => f.name !== name)
+          else hmi.widgets = hmi.widgets.filter((f) => f.name !== name)
+        }),
+      )
+    },
+    renameHmiElement: (kind, oldName, newName) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const hmi = slice.project.data.hmi
+          const file = (kind === 'screen' ? hmi?.screens : hmi?.widgets)?.find((f) => f.name === oldName)
+          if (!hmi || !file) return
+          slice.pendingDeletions.push(kind === 'screen' ? hmiScreenPath(oldName) : hmiWidgetPath(oldName))
+          file.name = newName
+          file.source = renameBlockHeader(file.source, oldName, newName)
+          hmi.screens = sortHmiFiles(hmi.screens)
+          hmi.widgets = sortHmiFiles(hmi.widgets)
+        }),
+      )
+    },
+    propagateHmiRename: (kind, oldName, newName) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const hmi = slice.project.data.hmi
+          if (hmi) slice.project.data.hmi = renameHmiReferences(kind, oldName, newName, hmi)
+        }),
+      )
+    },
+    updateHmiSource: (kind, name, source) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const hmi = slice.project.data.hmi
+          const file = (kind === 'screen' ? hmi?.screens : hmi?.widgets)?.find((f) => f.name === name)
+          if (file) file.source = source
+        }),
+      )
+    },
+    updateHmiSettings: (settings) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const hmi = slice.project.data.hmi
+          if (!hmi) return
+          hmi.settings = settings
+          delete hmi.unparsedSettings
+        }),
+      )
     },
     deleteDatatype: (name) => {
       setState(

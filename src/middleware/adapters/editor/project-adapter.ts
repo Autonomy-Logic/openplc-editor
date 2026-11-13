@@ -14,7 +14,7 @@ import type * as PdfJsLib from 'pdfjs-dist'
 import { z } from 'zod'
 
 import { renderProjectToPdf } from '../../../backend/shared/print'
-import { parseProjectFiles } from '../../../backend/shared/utils/parse-project-files'
+import { parseRawProjectFiles } from '../../../backend/shared/utils/parse-project-files'
 import type { OpenPLCStore } from '../../../frontend/store'
 import { buildProjectResponseFromPlcopenParse } from '../../../frontend/utils/PLC/build-plcopen-project-response'
 import { parsePlcopenXml } from '../../../frontend/utils/PLC/xml-parser'
@@ -215,6 +215,7 @@ const RawProjectFilesSchema = z.object({
       serverFiles: z.array(RawProjectFileSchema),
       remoteDeviceFiles: z.array(RawProjectFileSchema),
       dataTypeFiles: z.array(RawProjectFileSchema).catch([]),
+      hmiFiles: z.array(RawProjectFileSchema).catch([]),
       canEdit: z.boolean().optional(),
       readme: z.string().nullish(),
       pendingPlcopenSource: z.string().optional(),
@@ -322,17 +323,7 @@ export function createEditorProjectAdapter(
       if (!raw.success || !raw.data) {
         return { success: false, error: raw.error }
       }
-      const parsed = parseProjectFiles(
-        raw.data.projectPath,
-        raw.data.projectJson,
-        raw.data.deviceConfig,
-        raw.data.pinMapping,
-        raw.data.pouFiles,
-        raw.data.serverFiles,
-        raw.data.remoteDeviceFiles,
-        raw.data.libraryManifest,
-        raw.data.dataTypeFiles,
-      )
+      const parsed = parseRawProjectFiles(raw.data)
       return { success: true, data: parsed }
     },
 
@@ -362,17 +353,7 @@ export function createEditorProjectAdapter(
         }
       }
 
-      const parsed = parseProjectFiles(
-        raw.data.projectPath,
-        raw.data.projectJson,
-        raw.data.deviceConfig,
-        raw.data.pinMapping,
-        raw.data.pouFiles,
-        raw.data.serverFiles,
-        raw.data.remoteDeviceFiles,
-        raw.data.libraryManifest,
-        raw.data.dataTypeFiles,
-      )
+      const parsed = parseRawProjectFiles(raw.data)
       return {
         success: true,
         data: {

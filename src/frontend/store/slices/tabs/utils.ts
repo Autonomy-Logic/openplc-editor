@@ -192,6 +192,19 @@ const CreateGlobalVariableListEditor = (name: string): EditorModel => ({
   structure: { display: 'table', selectedRow: '-1', description: '' },
 })
 
+/** Tab and file-registry name of HMI Settings; not an identifier, so no screen or POU can take it. */
+const HMI_SETTINGS_TAB_NAME = 'HMI Settings'
+
+const CreateHmiEditor = (name: string, kind: 'screen' | 'widget'): EditorModel => ({
+  type: 'plc-hmi',
+  meta: { name, kind },
+})
+
+const CreateHmiSettingsEditor = (name = HMI_SETTINGS_TAB_NAME): EditorModel => ({
+  type: 'plc-hmi-settings',
+  meta: { name },
+})
+
 const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
   const { elementType, name } = tab
   switch (elementType.type) {
@@ -233,6 +246,12 @@ const CreateEditorObjectFromTab = (tab: TabsProps): EditorModel => {
       return CreatePersistentStorageEditor(name)
     case 'diff-viewer':
       return CreateDiffViewerEditor(name, elementType.filePath)
+    case 'hmi-screen':
+      return CreateHmiEditor(name, 'screen')
+    case 'hmi-widget':
+      return CreateHmiEditor(name, 'widget')
+    case 'hmi-settings':
+      return CreateHmiSettingsEditor(name)
   }
 }
 
@@ -245,6 +264,8 @@ export {
   CreateEtherCATDeviceEditor,
   CreateEtherCATModuleEditor,
   CreateGlobalVariableListEditor,
+  CreateHmiEditor,
+  CreateHmiSettingsEditor,
   CreateLibraryManagerEditor,
   CreateLibraryManifestEditor,
   CreatePackageManagerEditor,
@@ -256,5 +277,6 @@ export {
   CreateServerEditor,
   CreateUserManagementEditor,
   CreateVendorScreenEditor,
+  HMI_SETTINGS_TAB_NAME,
   LIBRARY_MANIFEST_TAB_NAME,
 }

@@ -7,7 +7,9 @@ import type {
   PLCVariable,
   ProjectMeta,
 } from '../../../../middleware/shared/ports/types'
+import type { HmiElementKind, HmiReferenceLocation } from '../../../../middleware/shared/utils/hmi/references'
 import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
+import type { ReferenceImpactAnalysis } from '../../../utils/variable-references/types'
 import type { AISlice } from '../ai'
 import type { ConsoleSlice } from '../console'
 import type { DeviceSlice } from '../device'
@@ -127,6 +129,34 @@ export type DatatypeActions = {
   duplicate: (sourceName: string, newName: string) => SharedResponse
 }
 
+/** A rename of a referenced screen or widget block waiting on the reference-impact modal. `resolve(true)` renames
+ *  the references too, `resolve(false)` leaves them as they are, `resolve(null)` abandons the rename. */
+export type PendingHmiRename = {
+  kind: HmiElementKind
+  oldName: string
+  newName: string
+  impact: ReferenceImpactAnalysis<HmiReferenceLocation>
+  resolve: (renameReferences: boolean | null) => void
+}
+
+/** Screens and widget blocks (`hmi/`). */
+export type HmiActions = {
+  /** Creates it from its template and opens its tab; the first one also creates HMI Settings. */
+  create: (kind: HmiElementKind, name: string) => SharedResponse
+  deleteRequest: (kind: HmiElementKind, name: string) => void
+  delete: (kind: HmiElementKind, name: string) => SharedResponse
+  /**
+   * Async: when other files or HMI Settings refer to it, the impact modal asks whether to rename them too. A second
+   * rename while one awaits the modal is refused.
+   */
+  rename: (kind: HmiElementKind, oldName: string, newName: string) => Promise<SharedResponse>
+  /** Answers the pending rename's impact modal: `true` renames the references, `false` keeps them. */
+  respondToPendingRename: (renameReferences: boolean) => void
+  duplicate: (kind: HmiElementKind, sourceName: string, newName: string) => SharedResponse
+  /** Opens the HMI Settings tab. */
+  openSettings: () => void
+}
+
 export type ServerActions = {
   create: (args: { name: string; protocol: 'modbus-tcp' | 's7comm' | 'ethernet-ip' | 'opcua' }) => SharedResponse
   deleteRequest: (name: string) => void
@@ -216,10 +246,12 @@ export type SharedSlice = {
   undoRedo: Record<string, PouHistory>
   pendingDatatypeRename: PendingDatatypeRename | null
   pendingDatatypeDelete: PendingDatatypeDelete | null
+  pendingHmiRename: PendingHmiRename | null
   pouActions: PouActions
   datatypeActions: DatatypeActions
   globalVariableListActions: GlobalVariableListActions
   serverActions: ServerActions
+  hmiActions: HmiActions
   remoteDeviceActions: RemoteDeviceActions
   ethercatDeviceActions: EtherCATDeviceActions
   snapshotActions: SnapshotActions

@@ -43,6 +43,9 @@ export type WorkspaceProjectTreeLeafType =
   | 'library-manifest'
   | 'user-management'
   | 'persistent-storage'
+  | 'hmi-screen'
+  | 'hmi-widget'
+  | 'hmi-settings'
   | 'ethercat-device'
   | 'ethercat-module'
   | null

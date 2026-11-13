@@ -3,6 +3,7 @@
  * openplc-web. Saving is read-modify-write because the backend deletes by omission.
  */
 
+import { rawLoadedFilesFromRaw } from '@root/backend/shared/project/raw-project-files'
 import { z } from 'zod'
 
 import { APP_VERSION } from '../../../frontend/data/constants/app-version'
@@ -196,29 +197,6 @@ async function readEnvelope(
   return files ? { ok: true, files } : { ok: false, error: 'Autonomy Edge returned no files.' }
 }
 
-function rawLoadedFilesFrom(raw: {
-  projectJson: string
-  deviceConfig: string
-  pinMapping: string
-  pouFiles: Array<{ relativePath: string; content: string }>
-  serverFiles: Array<{ relativePath: string; content: string }>
-  remoteDeviceFiles: Array<{ relativePath: string; content: string }>
-}): Record<string, string> {
-  const map: Record<string, string> = {
-    'project.json': raw.projectJson,
-    'devices/configuration.json': raw.deviceConfig,
-    'devices/pin-mapping.json': raw.pinMapping,
-  }
-
-  for (const group of [raw.pouFiles, raw.serverFiles, raw.remoteDeviceFiles]) {
-    for (const file of group) {
-      map[file.relativePath] = file.content
-    }
-  }
-
-  return map
-}
-
 export async function readCloudProject(projectId: string): Promise<RawProjectFiles> {
   const readStartedAt = beginCloudProjectRead()
 
@@ -280,7 +258,7 @@ export async function readCloudProject(projectId: string): Promise<RawProjectFil
         canEdit: payload?.capabilities?.canEdit ?? undefined,
         // The bytes exactly as the API sent them: echoed back for files the user didn't
         // edit rather than re-serialized, so an untouched file's bytes don't drift.
-        rawLoadedFiles: rawLoadedFilesFrom(raw),
+        rawLoadedFiles: rawLoadedFilesFromRaw(raw),
       },
     }
   } catch (error) {

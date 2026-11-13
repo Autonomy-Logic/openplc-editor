@@ -14,6 +14,7 @@
  */
 
 import type { LibraryPouType } from '../../../../middleware/shared/ports/library-types'
+import { hmiReservedName } from '../../../../middleware/shared/utils/hmi/reserved-names'
 import { globalVariableListTypeName } from '../../../utils/PLC/global-variable-list-serializer'
 import type { LibrarySlice } from '../library'
 import type { ProjectSlice } from '../project'
@@ -36,6 +37,8 @@ export type NamedElementKind =
   | 'remote-device'
   | 'ethercat-slave'
   | 'resource-global'
+  | 'hmi-screen'
+  | 'hmi-widget'
 
 /** Kinds the compiler sees as top-level identifiers. */
 const COMPILER_SYMBOL: Record<NamedElementKind, boolean> = {
@@ -43,6 +46,8 @@ const COMPILER_SYMBOL: Record<NamedElementKind, boolean> = {
   'data-type': true,
   'global-variable-list': true,
   'resource-global': true,
+  'hmi-screen': true,
+  'hmi-widget': true,
   server: false,
   'remote-device': false,
   'ethercat-slave': false,
@@ -56,6 +61,8 @@ const WORKSPACE_ELEMENT: Record<NamedElementKind, boolean> = {
   server: true,
   'remote-device': true,
   'ethercat-slave': true,
+  'hmi-screen': true,
+  'hmi-widget': true,
   'resource-global': false,
 }
 
@@ -69,6 +76,8 @@ const OWNS_FILE: Record<NamedElementKind, boolean> = {
   'data-type': true,
   server: true,
   'remote-device': true,
+  'hmi-screen': true,
+  'hmi-widget': true,
   'global-variable-list': false,
   'ethercat-slave': false,
   'resource-global': false,
@@ -80,6 +89,8 @@ const SAME_KIND_TAKEN: Record<Exclude<NamedElementKind, 'resource-global' | 'eth
   'global-variable-list': 'Global variable list name already exists',
   server: 'Server already exists',
   'remote-device': 'Remote device already exists',
+  'hmi-screen': 'Screen name already exists',
+  'hmi-widget': 'Widget block name already exists',
 }
 
 const sameKindTaken = (kind: Exclude<NamedElementKind, 'resource-global'>, name: string): string =>
@@ -93,6 +104,8 @@ const KIND_LABEL: Record<NamedElementKind, string> = {
   'remote-device': 'a remote device',
   'ethercat-slave': 'an EtherCAT slave',
   'resource-global': 'a global variable',
+  'hmi-screen': 'an HMI screen',
+  'hmi-widget': 'an HMI widget block',
 }
 
 const LIBRARY_SYMBOL_KIND: Record<LibraryPouType, string> = {
@@ -106,8 +119,10 @@ interface NamedElement {
 }
 
 function namedElements(state: NameCollisionState): NamedElement[] {
-  const { pous, dataTypes, globalVariableLists, servers, remoteDevices, configurations } = state.project.data
+  const { pous, dataTypes, globalVariableLists, servers, remoteDevices, configurations, hmi } = state.project.data
   return [
+    ...(hmi?.screens ?? []).map((screen): NamedElement => ({ kind: 'hmi-screen', name: screen.name })),
+    ...(hmi?.widgets ?? []).map((widget): NamedElement => ({ kind: 'hmi-widget', name: widget.name })),
     ...pous.map((pou): NamedElement => ({ kind: 'pou', name: pou.name })),
     ...dataTypes.map((dataType): NamedElement => ({ kind: 'data-type', name: dataType.name })),
     ...(globalVariableLists ?? []).map((list): NamedElement => ({ kind: 'global-variable-list', name: list.name })),
@@ -184,6 +199,11 @@ export function elementNameCollision(
   }
   const taken = others.find((o) => o.kind !== kind && sharesNamespace(kind, o.kind) && nameMatches(o.name, name))
   if (taken) return `"${name}" is already the name of ${KIND_LABEL[taken.kind]}`
+
+  if (kind === 'hmi-screen' || kind === 'hmi-widget') {
+    const reserved = hmiReservedName(name)
+    if (reserved) return reserved
+  }
 
   if (WORKSPACE_ELEMENT[kind]) {
     const unparsed = unparsedDataTypeFileOwning(state, name)
