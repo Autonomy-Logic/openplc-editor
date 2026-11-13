@@ -62,8 +62,7 @@ const INOUT_SUFFIX = '_IO_'
 /**
  * Scan interval for the harness task.  Fast enough that a forced
  * input shows its effect on the next poll (the debugger polls on the
- * order of 100 ms), slow enough that the emulated ATmega2560 is not
- * spending every cycle in the scan loop.
+ * order of 100 ms).
  */
 const DEFAULT_SCAN_INTERVAL = 'T#100ms'
 

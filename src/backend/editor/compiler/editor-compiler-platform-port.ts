@@ -766,16 +766,14 @@ function readVppRuntimeFloor(context: EditorCompilerPlatformPortContext, boardTa
  * directory.  arduino-cli writes it to a board-FQBN-specific
  * sub-directory (e.g. `examples/Baremetal/build/arduino.avr.mega/`)
  * derived from the hals.json `platform` field with `:` replaced by
- * `.` — same derivation `compileProgram`'s simulator branch uses to
- * locate the `.hex` it hands to avr8js.
+ * `.`.
  *
- * **Only meaningful for AVR / simulator builds.**  Other cores emit
+ * **Only meaningful for AVR builds.**  Other cores emit
  * different artefact formats — RP2040 writes `.uf2`, ESP32 / mbed
  * write `.bin` — so this helper returns `null` for those and the
  * caller MUST treat null-with-successful-compile as "no in-memory
- * binary to surface, but arduino-cli succeeded."  The simulator path
- * is the only consumer that actually loads the bytes (avr8js
- * requires Intel HEX); for real-board uploads arduino-cli's separate
+ * binary to surface, but arduino-cli succeeded."  For real-board
+ * uploads arduino-cli's separate
  * `upload` step finds its own artefact on disk under whatever
  * extension the core produced, so the editor doesn't need to read
  * it back into memory at all.

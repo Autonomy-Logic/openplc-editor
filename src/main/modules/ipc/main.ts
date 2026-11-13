@@ -330,7 +330,6 @@ class MainProcessBridge implements MainIpcModule {
     canonicalPath: (filePath) => canonicalWatchKey(resolve(filePath), process.platform),
     emitExternalChange: (filePath) => this.mainWindow?.webContents.send('file:external-change', { filePath }),
   })
-  // avr8js ATmega2560 emulator instance for the built-in simulator
   private simulator = this.createSimulator()
   // VPP package manager for board package operations
   private packageManagerModule: PackageManagerModule
