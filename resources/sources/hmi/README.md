@@ -57,8 +57,9 @@ against `tests/hmi-core/golden.txt` with both font variants, and runs the fuzzer
 `--update`.
 
 `npm run test:hmi-lib` (`tests/hmi-lib/run.mjs`) compiles the library and test screens with STruC++, builds them with
-this core on gcc and clang, drives scripted input and checks every frame against `tests/hmi-lib/golden.txt`.
+this core on gcc and clang (plus a build under AddressSanitizer and UndefinedBehaviorSanitizer), drives scripted
+input and checks every frame against `tests/hmi-lib/golden.txt`.
 
 `npm run test:hmi-unit` (`tests/hmi-unit/run.mjs`) generates a sample project's unit, builds it with this core and a
-C host that uses only `unit/hmi_unit.h` and `unit/hmi_preview.h`, and checks its frames, writes, navigation and role
-grid against `tests/hmi-unit/golden.txt`.
+C host that uses only `unit/hmi_unit.h` and `unit/hmi_preview.h`, and checks its frames, writes (range clamping
+included), navigation and role grid against `tests/hmi-unit/golden.txt`, also under the sanitizers.

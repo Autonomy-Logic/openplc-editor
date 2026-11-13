@@ -32,10 +32,11 @@ jobs:
       - name: Install STruC++
         run: npm run setup:strucpp
 
-      # Headless frames of the widget library on gcc and clang against golden.txt.
+      # Headless frames of the widget library on gcc and clang against golden.txt, and a sanitized gcc build.
       - name: Test the HMI widget library
-        run: node tests/hmi-lib/run.mjs --cc "gcc clang"
+        run: node tests/hmi-lib/run.mjs --cc "gcc clang" --sanitize
 
-      # The generated HMI unit of a sample project, run by a C host through hmi_unit.h, against golden.txt.
+      # The generated HMI unit of a sample project, run by a C host through hmi_unit.h, against golden.txt, and a
+      # sanitized gcc build.
       - name: Test the HMI unit generator
-        run: node tests/hmi-unit/run.mjs --cc "gcc clang"
+        run: node tests/hmi-unit/run.mjs --cc "gcc clang" --sanitize

@@ -195,6 +195,12 @@ int main(int argc, char **argv) {
     tap("home", kHome);
     frame("after_home");
 
+    /* A diagram squeezed to no height still takes a press without failing. */
+    show(6);
+    frame("squeezed_0");
+    tap_at("squeezed", 12, 12);
+    frame("squeezed_after");
+
     /* A second viewer starts on the start page with its own state. */
     hmi_session_t *viewer = hmi_session_create();
     hmi_session_use(viewer);

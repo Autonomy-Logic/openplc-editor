@@ -68,7 +68,10 @@ extern const uint32_t hmi_relock_minutes;
 size_t hmi_tag_size(int tag);
 /** Copies tag `tag` of the mirror into buf (hmi_tag_size bytes); returns 0, or -1 for an unknown tag. */
 int hmi_tag_read(int tag, void *buf);
-/** Sets tag `tag` of the mirror from buf; a longer STRING is cut to max_len. Returns 0, or -1 for an unknown tag. */
+/**
+ * Sets tag `tag` of the mirror from buf. For a STRING, buf holds NUL-terminated text and at most max_len bytes of it
+ * are read. Returns 0, or -1 for an unknown tag.
+ */
 int hmi_tag_write(int tag, const void *buf);
 
 /** Bytes one program instance needs. */

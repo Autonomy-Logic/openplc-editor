@@ -12,10 +12,12 @@ FUNCTION_BLOCK Overview EXTENDS HmiScreen
     Name : HmiTextInput := (Caption := 'Name', MaxLength := 20);
     Alarm : Badge := (Caption := 'Alarm');
     Next : HmiButton := (Text := 'Details');
+    Setpoint : HmiNumericInput := (Caption := 'Speed setpoint', Decimals := 0);
   END_VAR
   Level.Value := Main.Level;
   Run.Value := Main.Running;
   Speed.Value := Main.Speed;
+  Setpoint.Value := Main.Speed;
   Name.Value := Main.Tag;
   Alarm.Value := GVL.Alarm;
   IF Next.Clicked THEN HMI_Show(HMI_SCREEN#Details); END_IF;

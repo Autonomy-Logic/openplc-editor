@@ -6,28 +6,41 @@ tag 0 Main.Level arr=0 elem=3 type=14 max=0 size=4
 tag 1 Main.Running arr=0 elem=4 type=1 max=0 size=1
 tag 2 Main.Speed arr=0 elem=5 type=3 max=0 size=2
 tag 3 Main.Tag arr=1 elem=0 type=16 max=12 size=13
-admin start page=0 dl=38984e76aba01f94 status=0
-admin steady! page=0 dl=38984e76aba01f94 status=0
-admin run_down page=0 dl=631f5f908a2d1f52 status=0 write Main.Running=1
-admin run_up page=0 dl=631f5f908a2d1f52 status=0
-admin slider_down page=0 dl=156ac19a82d0fe10 status=0 write Main.Speed=55
-admin slider_up page=0 dl=92262451b8aa5b90 status=0
-admin name_down page=0 dl=e9c6f8cde01ae787 status=0
-admin name_up page=0 dl=e9c6f8cde01ae787 status=0
-admin name_typed! page=0 dl=627d93f2f99a714b status=0 write Main.Tag='PUMP STATION'
-admin next_down page=0 dl=f41033a881c1c88b status=0
-admin next_up page=1 dl=627d93f2f99a714b status=0
+admin start page=0 dl=2b67b85db8788774 status=0
+admin steady! page=0 dl=2b67b85db8788774 status=0
+admin run_down page=0 dl=a4b42bcf526517a2 status=0 write Main.Running=1
+admin run_up page=0 dl=a4b42bcf526517a2 status=0
+admin slider_down page=0 dl=4cbbd8b5cff7bcb7 status=0 write Main.Speed=55
+admin slider_up page=0 dl=e292c875b454ea37 status=0
+admin name_down page=0 dl=fbba02f265c7a016 status=0
+admin name_up page=0 dl=fbba02f265c7a016 status=0
+admin name_typed! page=0 dl=b90ca21026f8c970 status=0 write Main.Tag='PUMP STATION'
+admin setpoint_down page=0 dl=53d594f02bb386ae status=0
+admin setpoint_up page=0 dl=53d594f02bb386ae status=0
+admin setpoint_typed page=0 dl=96ca56f6cc78895e status=0 write Main.Speed=32767
+admin setpoint_down page=0 dl=87eb3030121a11d4 status=0
+admin setpoint_up page=0 dl=87eb3030121a11d4 status=0
+admin setpoint_typed page=0 dl=4e2636aae53aec15 status=0 write Main.Speed=-32768
+admin setpoint_down page=0 dl=bcdaab376c590af4 status=0
+admin setpoint_up page=0 dl=bcdaab376c590af4 status=0
+admin setpoint_typed page=0 dl=4e2636aae53aec15 status=0
+admin setpoint_down page=0 dl=bcdaab376c590af4 status=0
+admin setpoint_up page=0 dl=bcdaab376c590af4 status=0
+admin setpoint_typed page=0 dl=429a4e89b5d0530c status=0 write Main.Speed=12
+admin next_down page=0 dl=72e2668b19c1a34c status=0
+admin next_up page=1 dl=429a4e89b5d0530c status=0
 admin details! page=1 dl=5eadfcc4f4333fca status=0
 admin back_down page=1 dl=6c270d1644e7408a status=0
 admin back_up page=0 dl=5eadfcc4f4333fca status=0
-admin overview_again page=0 dl=627d93f2f99a714b status=0
-operator start! page=0 dl=bb02121b36fe3478 status=0
-operator next_down page=0 dl=c04000347ffcd8b8 status=0
-operator next_up page=0 dl=bb02121b36fe3478 status=0
-operator still_overview page=0 dl=bb02121b36fe3478 status=0
+admin overview_again page=0 dl=429a4e89b5d0530c status=0
+operator start! page=0 dl=5f2d69578e75f617 status=0
+operator next_down page=0 dl=031e9aceca788557 status=0
+operator next_up page=0 dl=5f2d69578e75f617 status=0
+operator still_overview page=0 dl=5f2d69578e75f617 status=0
 unknown start! page=0 dl=f0229c61b28f0664 status=0
-admin admin_after page=0 dl=627d93f2f99a714b status=0
+admin admin_after page=0 dl=429a4e89b5d0530c status=0
 setters rc=0 refused=-1 -1 -1
-admin live_edit! page=0 dl=864b84e7a479a7ba status=0
+admin live_edit! page=0 dl=cf7b012b9a5bf03d status=0
 cut 'ABCDEFGHIJKL'
+short 'AB'
 unit size known

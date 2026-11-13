@@ -156,6 +156,14 @@ int main(int argc, char **argv) {
     hmi_session_use(admin.session);
     for (const char *k = "\b\b\b\bPUMP STATION 7\r"; *k; k++) hmi_input_key((uint32_t)(unsigned char)*k);
     frame(&admin, "name_typed!");
+    /* Entries outside the INT's range write its nearest value; a non-number writes nothing. */
+    const char *entries[] = {"\b\b\b\b\b\b40000\r", "\b\b\b\b\b\b-1e30\r", "\b\b\b\b\b\binf\r", "\b\b\b\b\b\b12\r"};
+    for (int e = 0; e < 4; e++) {
+        tap(&admin, "setpoint", ID_OVERVIEW_SETPOINT);
+        hmi_session_use(admin.session);
+        for (const char *k = entries[e]; *k; k++) hmi_input_key((uint32_t)(unsigned char)*k);
+        frame(&admin, "setpoint_typed");
+    }
     tap(&admin, "next", ID_OVERVIEW_NEXT);
     frame(&admin, "details!");
     tap(&admin, "back", ID_DETAILS_BACK);
@@ -183,12 +191,20 @@ int main(int argc, char **argv) {
            hmi_unit_set_num(admin.unit, 0, 9999, 1.0), hmi_unit_set_str(NULL, 0, 0, "x"));
     frame(&admin, "live_edit!");
 
-    /* A STRING longer than its declared length is cut. */
+    /* A STRING longer than its declared length is cut; a short one is read only up to its end. */
     unsigned char text[VALUE_MAX] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     unsigned char back[VALUE_MAX];
     hmi_tag_write(3, text);
     hmi_tag_read(3, back);
     printf("cut '%s'\n", (const char *)back);
+    char *shortText = (char *)malloc(3);
+    if (shortText) {
+        memcpy(shortText, "AB", 3);
+        hmi_tag_write(3, shortText);
+        free(shortText);
+        hmi_tag_read(3, back);
+        printf("short '%s'\n", (const char *)back);
+    }
 
     hmi_unit_destroy(admin.unit);
     hmi_unit_destroy(op.unit);

@@ -1,5 +1,5 @@
 import { hmiSettingsSchema } from '../../../../../middleware/shared/utils/hmi/settings'
-import { generateHmiUnit, type HmiUnitInput, type HmiUnitResult } from '../generate-hmi-unit'
+import { generateHmiUnit, type HmiUnitInput, type HmiUnitResult, numericWriteBack } from '../generate-hmi-unit'
 import { DETAILS, OVERVIEW, sampleProject } from './fixtures/sample-project'
 
 function messages(result: HmiUnitResult): string[] {
@@ -45,6 +45,7 @@ describe('HMI unit generator', () => {
     expect(sample.files['hmi_unit_glue.cpp']).toContain('{1u, 0u, 16, 12, "Main.Tag"},')
     expect(sample.files['hmi_unit_glue.cpp']).not.toContain('GVL.Alarm')
     expect(sample.files['hmi_unit_glue.cpp']).toContain('const char hmi_panel_pin[] = "2468";')
+    expect(sample.files['hmi_unit_glue.cpp']).toContain('while (n < 12 && b[n] != 0) n++;')
   })
 
   it('keeps every tag without a PLC program, for previews', () => {
@@ -69,14 +70,16 @@ describe('HMI unit generator', () => {
       'UseTheme(5); Attach(ADR(Col), 0); Attach(ADR(Level), ADR(Col)); Attach(ADR(Run), ADR(Col)); Attach(ADR(Speed), 0);',
     )
     expect(line).toContain('IF Run.Changed THEN Main.Running := Run.NewValue; END_IF;')
-    expect(line).toContain('IF Speed.Changed THEN Main.Speed := REAL_TO_INT(Speed.NewValue); END_IF;')
+    expect(line).toContain(
+      'IF Speed.Changed AND Speed.NewValue = Speed.NewValue THEN Main.Speed := REAL_TO_INT(LIMIT(-32768.0, Speed.NewValue, 32767.0)); END_IF;',
+    )
     expect(line).toContain('IF Name.Changed THEN Main.Tag := Name.NewValue; END_IF;')
     expect(sample.elementIds.slice(0, 3)).toEqual([
       { id: 1, screen: 'Overview', element: 'Col' },
       { id: 2, screen: 'Overview', element: 'Level' },
       { id: 3, screen: 'Overview', element: 'Run' },
     ])
-    expect(sample.elementIds.at(-1)).toEqual({ id: 9, screen: 'Details', element: 'Shown' })
+    expect(sample.elementIds.at(-1)).toEqual({ id: 10, screen: 'Details', element: 'Shown' })
   })
 
   it('generates navigation by name, theme ids and the role grid', () => {
@@ -87,6 +90,7 @@ describe('HMI unit generator', () => {
     expect(main).toContain('Rt.SetThemeColor(5, 7, 16#7C3AED);')
     expect(main).toContain('Rt.SetStart(0);')
     expect(main).toContain('TASK HmiTask(INTERVAL := T#50ms, PRIORITY := 1);')
+    expect(main).toContain('  HMI__Page := Rt.CurrentPage();\n  HMI__Page := Rt.BeginFrame();')
     const operator = main.slice(main.indexOf('      2:'), main.indexOf('      3:'))
     expect(operator).toContain('Rt.SetAccess(0, TRUE);')
     expect(operator).toContain('Rt.SetAccess(1, FALSE);')
@@ -126,6 +130,28 @@ describe('HMI unit generator', () => {
     ])
   })
 
+  it('keeps a numeric write-back within the tag type, writing the nearest value instead of wrapping', () => {
+    expect(numericWriteBack('REAL', 'REAL', 'v')).toEqual({ expr: 'v' })
+    expect(numericWriteBack('REAL', 'INT', 'v')).toEqual({
+      expr: 'REAL_TO_INT(LIMIT(-32768.0, v, 32767.0))',
+      guard: 'v = v',
+    })
+    expect(numericWriteBack('REAL', 'DINT', 'v').expr).toBe('REAL_TO_DINT(LIMIT(-2147483648.0, v, 2147483520.0))')
+    expect(numericWriteBack('LREAL', 'DINT', 'v').expr).toBe('LREAL_TO_DINT(LIMIT(-2147483648.0, v, 2147483647.0))')
+    expect(numericWriteBack('REAL', 'WORD', 'v').expr).toBe('REAL_TO_WORD(LIMIT(0.0, v, 65535.0))')
+    expect(numericWriteBack('REAL', 'ULINT', 'v').expr).toBe('REAL_TO_ULINT(LIMIT(0.0, v, 18446742974197923840.0))')
+    expect(numericWriteBack('LREAL', 'REAL', 'v')).toEqual({
+      expr: 'LREAL_TO_REAL(LIMIT(-3.4028234663852886E38, v, 3.4028234663852886E38))',
+      guard: 'v = v',
+    })
+    expect(numericWriteBack('REAL', 'LREAL', 'v')).toEqual({ expr: 'REAL_TO_LREAL(v)' })
+    expect(numericWriteBack('INT', 'DINT', 'v')).toEqual({ expr: 'INT_TO_DINT(v)' })
+    expect(numericWriteBack('DINT', 'INT', 'v')).toEqual({ expr: 'DINT_TO_INT(LIMIT(-32768, v, 32767))' })
+    expect(numericWriteBack('DINT', 'UDINT', 'v')).toEqual({ expr: 'DINT_TO_UDINT(LIMIT(0, v, 2147483647))' })
+    expect(numericWriteBack('ULINT', 'LINT', 'v')).toEqual({ expr: 'ULINT_TO_LINT(LIMIT(0, v, 9223372036854775807))' })
+    expect(numericWriteBack('DINT', 'REAL', 'v')).toEqual({ expr: 'DINT_TO_REAL(v)' })
+  })
+
   it('refuses names already taken, reused or not identifiers', () => {
     const project = sampleProject()
     const named = (name: string, kind: 'screens' | 'widgets' = 'screens'): string[] =>
@@ -136,6 +162,16 @@ describe('HMI unit generator', () => {
     expect(named('DETAILS')).toEqual(["DETAILS: Screen name 'DETAILS' is used twice"])
     expect(named('badge', 'widgets')).toEqual(["badge: Widget block name 'badge' is used twice"])
     expect(named('2nd')).toEqual(["2nd: Screen name '2nd' is not an identifier"])
+    for (const name of [
+      'HMI_Show',
+      'HMI_CurrentScreen',
+      'hmi_glue',
+      'Hmi_Tags',
+      'HMI_MAIN',
+      'HMI__Request',
+      'HMI_THEME_Light',
+    ])
+      expect(named(name)).toEqual([`${name}: Screen name '${name}' is taken by the HMI library`])
     expect(messages(generateHmiUnit({ ...project, screens: [] }))).toEqual(['HMI: the project has no HMI screens'])
   })
 

@@ -119,6 +119,9 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
       PointerOver := TRUE;
       RETURN;
     END_IF;
+    IF FK <= 0 THEN
+      RETURN;
+    END_IF;
     mx := MAX(0, (1835008 / FK - Width) / 2);
     my := MAX(0, (1835008 / FK - Height) / 2);
     IF px >= Left - mx AND px < Left + Width + mx AND py >= Top - my AND py < Top + Height + my THEN

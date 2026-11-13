@@ -195,7 +195,7 @@ FUNCTION HMI_FormatValue : STRING
   END_IF;
 END_FUNCTION
 
-(* Parses a REAL from Text; Fallback when the text is not a number. *)
+(* Parses a REAL from Text; Fallback when the text is not a finite number. *)
 FUNCTION HMI_ParseReal : REAL
   VAR_INPUT Text : STRING; Fallback : REAL; END_VAR
   {external
@@ -207,7 +207,7 @@ FUNCTION HMI_ParseReal : REAL
     char *end = nullptr;
     float v = strtof(buf, &end);
     while (end != nullptr && (end[0] == ' ' || end[0] == '\\t')) end++;
-    HMI_PARSEREAL_result.set((end != buf && end != nullptr && end[0] == 0 && v == v) ? v : FALLBACK.get());
+    HMI_PARSEREAL_result.set((end != buf && end != nullptr && end[0] == 0 && v - v == 0.0f) ? v : FALLBACK.get());
   }
 END_FUNCTION
 

@@ -68,8 +68,8 @@ npm run test             # Jest with coverage (enforced thresholds)
 npm run test:watch       # Jest watch mode (no coverage)
 npm run test:e2e         # Playwright E2E tests
 npm run test:hmi-core    # HMI C core: golden scenes (gcc, clang, WebAssembly), unit tests, sanitized fuzzing
-npm run test:hmi-lib     # HMI widget library: headless frames of test screens (gcc, clang) against golden.txt
-npm run test:hmi-unit    # HMI unit generator: a sample project's unit run by a C host (gcc, clang)
+npm run test:hmi-lib     # HMI widget library: headless frames of test screens (gcc, clang, sanitizers) against golden.txt
+npm run test:hmi-unit    # HMI unit generator: a sample project's unit run by a C host (gcc, clang, sanitizers)
 
 npm run validate:arch    # Architecture layer dependency validation
 ```

@@ -196,7 +196,7 @@ FUNCTION_BLOCK HmiDiagram EXTENDS HmiStack
   VAR_INPUT
     DesignW : DINT := 1600;
     DesignH : DINT := 900;
-    (* Smallest scale in percent before the drawing stops shrinking and pans instead. *)
+    (* Smallest scale in percent, at least 1, before the drawing stops shrinking and pans instead. *)
     MinScalePct : DINT := 50;
     (* Snap step the designer uses when moving children, in design units. *)
     Grid : DINT := 10;
@@ -246,7 +246,7 @@ FUNCTION_BLOCK HmiDiagram EXTENDS HmiStack
     Width := MAX(PW, 0);
     Height := MAX(PH, 0);
     kq16 := LINT_TO_DINT(MIN(DINT_TO_LINT(Width) * 65536 / MAX(DesignW, 1), DINT_TO_LINT(Height) * 65536 / MAX(DesignH, 1)));
-    kq16 := MAX(kq16, MinScalePct * 65536 / 100);
+    kq16 := MAX(kq16, MAX(MinScalePct, 1) * 65536 / 100);
     ScalePct := kq16 * 100 / 65536;
     cw := LINT_TO_DINT(DINT_TO_LINT(DesignW) * kq16 / 65536);
     ch := LINT_TO_DINT(DINT_TO_LINT(DesignH) * kq16 / 65536);

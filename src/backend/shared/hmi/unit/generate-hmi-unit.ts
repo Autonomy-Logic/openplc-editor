@@ -155,7 +155,87 @@ const TAG_WIDTH: Readonly<Record<string, number>> = {
   LREAL: 8,
 }
 const NUMERIC: ReadonlySet<string> = new Set<string>(TAG_TYPES.filter((t) => t !== 'BOOL'))
-const RESERVED = ['HMI_SCREEN', 'HMIMAIN', 'HMICONFIG', 'HMIRESOURCE', 'HMITASK', 'HMIINSTANCE', 'GVL']
+/** Range of each integer type. */
+const INTEGER_RANGE: Readonly<Record<string, readonly [bigint, bigint]>> = {
+  SINT: [-128n, 127n],
+  INT: [-32768n, 32767n],
+  DINT: [-2147483648n, 2147483647n],
+  LINT: [-9223372036854775808n, 9223372036854775807n],
+  USINT: [0n, 255n],
+  BYTE: [0n, 255n],
+  UINT: [0n, 65535n],
+  WORD: [0n, 65535n],
+  UDINT: [0n, 4294967295n],
+  DWORD: [0n, 4294967295n],
+  ULINT: [0n, 18446744073709551615n],
+  LWORD: [0n, 18446744073709551615n],
+}
+/** Integer range bounds a REAL or LREAL can hold exactly without leaving the range, as ST literals. */
+const FLOAT_BOUNDS: Readonly<Record<'REAL' | 'LREAL', Readonly<Record<string, readonly [string, string]>>>> = {
+  REAL: {
+    SINT: ['-128.0', '127.0'],
+    INT: ['-32768.0', '32767.0'],
+    DINT: ['-2147483648.0', '2147483520.0'],
+    LINT: ['-9223372036854775808.0', '9223371487098961920.0'],
+    USINT: ['0.0', '255.0'],
+    UINT: ['0.0', '65535.0'],
+    UDINT: ['0.0', '4294967040.0'],
+    ULINT: ['0.0', '18446742974197923840.0'],
+  },
+  LREAL: {
+    SINT: ['-128.0', '127.0'],
+    INT: ['-32768.0', '32767.0'],
+    DINT: ['-2147483648.0', '2147483647.0'],
+    LINT: ['-9223372036854775808.0', '9223372036854774784.0'],
+    USINT: ['0.0', '255.0'],
+    UINT: ['0.0', '65535.0'],
+    UDINT: ['0.0', '4294967295.0'],
+    ULINT: ['0.0', '18446744073709549568.0'],
+  },
+}
+const SIGNED_OF: Readonly<Record<string, string>> = { BYTE: 'USINT', WORD: 'UINT', DWORD: 'UDINT', LWORD: 'ULINT' }
+const REAL_MAX = '3.4028234663852886E38'
+
+/**
+ * A numeric widget value converted to a tag's type, kept within the type's range so an out-of-range entry writes the
+ * nearest value instead of wrapping. `guard` is a condition the write needs (a REAL that is a number).
+ */
+export function numericWriteBack(from: string, to: string, value: string): { expr: string; guard?: string } {
+  if (from === to) return { expr: value }
+  const float = from === 'REAL' || from === 'LREAL' ? from : undefined
+  if (float && (to === 'REAL' || to === 'LREAL'))
+    return to === 'REAL'
+      ? { expr: `LREAL_TO_REAL(LIMIT(-${REAL_MAX}, ${value}, ${REAL_MAX}))`, guard: `${value} = ${value}` }
+      : { expr: `REAL_TO_LREAL(${value})` }
+  if (float) {
+    const [lo, hi] = FLOAT_BOUNDS[float][SIGNED_OF[to] ?? to]
+    return { expr: `${from}_TO_${to}(LIMIT(${lo}, ${value}, ${hi}))`, guard: `${value} = ${value}` }
+  }
+  if (to === 'REAL' || to === 'LREAL') return { expr: `${from}_TO_${to}(${value})` }
+  const [srcLo, srcHi] = INTEGER_RANGE[from]
+  const [dstLo, dstHi] = INTEGER_RANGE[to]
+  if (srcLo >= dstLo && srcHi <= dstHi) return { expr: `${from}_TO_${to}(${value})` }
+  const lo = srcLo > dstLo ? srcLo : dstLo
+  const hi = srcHi < dstHi ? srcHi : dstHi
+  return { expr: `${from}_TO_${to}(LIMIT(${lo}, ${value}, ${hi}))` }
+}
+/** Names the generated glue declares; screens and widget blocks may not take them. */
+const RESERVED = [
+  'HMI_SCREEN',
+  'HMI_SHOW',
+  'HMI_CURRENTSCREEN',
+  'HMIMAIN',
+  'HMICONFIG',
+  'HMIRESOURCE',
+  'HMITASK',
+  'HMIINSTANCE',
+  'GVL',
+  'HMI_GLUE',
+  'HMI_TAGS',
+  'HMI_MAIN',
+]
+/** Prefixes of generated names: internals and theme constants. */
+const RESERVED_PREFIXES = ['HMI__', 'HMI_THEME_']
 
 interface TagType {
   /** Upper-case elementary name, or STRING. */
@@ -285,9 +365,9 @@ function writeBacks(
     const source = widget.outputs.find((o) => o.name.toUpperCase() === twoWay.newValue.toUpperCase())
     const from = (source?.type ?? '').toUpperCase()
     const value = `${b.element}.${twoWay.newValue}`
-    let converted: string | undefined
-    if (from === tag.type.base || (from === 'STRING' && tag.type.base === 'STRING')) converted = value
-    else if (NUMERIC.has(from) && NUMERIC.has(tag.type.base)) converted = `${from}_TO_${tag.type.base}(${value})`
+    let converted: { expr: string; guard?: string } | undefined
+    if (from === tag.type.base) converted = { expr: value }
+    else if (NUMERIC.has(from) && NUMERIC.has(tag.type.base)) converted = numericWriteBack(from, tag.type.base, value)
     if (converted === undefined) {
       d.error(
         plan.file.name,
@@ -295,7 +375,10 @@ function writeBacks(
       )
       continue
     }
-    plan.writeBacks.push(`IF ${b.element}.${twoWay.changed} THEN ${b.variable} := ${converted}; END_IF;`)
+    const condition = converted.guard
+      ? `${b.element}.${twoWay.changed} AND ${converted.guard}`
+      : `${b.element}.${twoWay.changed}`
+    plan.writeBacks.push(`IF ${condition} THEN ${b.variable} := ${converted.expr}; END_IF;`)
   }
 }
 
@@ -402,6 +485,7 @@ function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start
     '    Started := TRUE;',
     '  END_IF;',
     '  HMI__Request := -1;',
+    '  HMI__Page := Rt.CurrentPage();',
     '  HMI__Page := Rt.BeginFrame();',
     '  CASE HMI__Page OF',
     ...screens.map((_, i) => `    ${i}: Scr${i}();`),
@@ -442,7 +526,7 @@ function glueCpp(
   )
   const write = tags.map(({ variable, type }, i) =>
     type.base === 'STRING'
-      ? `    case ${i}: { char s[${type.maxLength + 1}]; std::memcpy(s, buf, ${type.maxLength}); s[${type.maxLength}] = 0; ${member(variable)}.set(s); return 0; }`
+      ? `    case ${i}: { const char *b = static_cast<const char *>(buf); size_t n = 0; while (n < ${type.maxLength} && b[n] != 0) n++; char s[${type.maxLength + 1}]; std::memcpy(s, b, n); s[n] = 0; ${member(variable)}.set(s); return 0; }`
       : type.base === 'BOOL'
         ? `    case ${i}: { uint8_t v; std::memcpy(&v, buf, 1); ${member(variable)}.set(v != 0); return 0; }`
         : `    case ${i}: { auto v = ${member(variable)}.get(); std::memcpy(&v, buf, sizeof v); ${member(variable)}.set(v); return 0; }`,
@@ -625,7 +709,7 @@ function checkNames(input: HmiUnitInput, library: ReadonlySet<string>, d: Diagno
     for (const f of files) {
       const key = f.name.toUpperCase()
       if (!IDENTIFIER.test(f.name)) d.error(f.name, `${kind} name '${f.name}' is not an identifier`)
-      else if (library.has(key) || RESERVED.includes(key))
+      else if (library.has(key) || RESERVED.includes(key) || RESERVED_PREFIXES.some((p) => key.startsWith(p)))
         d.error(f.name, `${kind} name '${f.name}' is taken by the HMI library`)
       else if (project.has(key)) d.error(f.name, `${kind} name '${f.name}' is taken by a POU or data type`)
       else if (seen.has(key)) d.error(f.name, `${kind} name '${f.name}' is used twice`)

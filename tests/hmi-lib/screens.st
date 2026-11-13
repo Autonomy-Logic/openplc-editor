@@ -191,6 +191,23 @@ FUNCTION_BLOCK NavScreen EXTENDS HmiScreen
   IF Home.Clicked THEN GoHome := TRUE; END_IF;
 END_FUNCTION_BLOCK
 
+(* Page 6: a diagram allowed to shrink without limit, squeezed to no height, with a control inside. *)
+FUNCTION_BLOCK SqueezedScreen EXTENDS HmiScreen
+  VAR
+    Plant : HmiDiagram := (MinScalePct := 0, Floating := TRUE);
+    Go : HmiButton := (Text := 'Go', X := 10, Y := 10);
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Plant), 0);
+    Attach(ADR(Go), ADR(Plant));
+    Build := TRUE;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Layout : BOOL
+    Plant.Place(10, 10, 200, 0);
+    Layout := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
 PROGRAM HmiMain
   VAR
     S0 : DisplayScreen;
@@ -199,6 +216,7 @@ PROGRAM HmiMain
     S3 : DiagramScreen;
     S4 : LayoutScreen;
     S5 : NavScreen;
+    S6 : SqueezedScreen;
     Rt : HmiRuntime;
     Started : BOOL;
   END_VAR
@@ -211,6 +229,7 @@ PROGRAM HmiMain
     Rt.AddScreen(ADR(S3));
     Rt.AddScreen(ADR(S4));
     Rt.AddScreen(ADR(S5));
+    Rt.AddScreen(ADR(S6));
     Rt.SetStart(0);
     Started := TRUE;
   END_IF;
@@ -221,6 +240,7 @@ PROGRAM HmiMain
     3: S3();
     4: S4();
     5: S5();
+    6: S6();
   END_CASE;
   Rt.EndFrame();
   IF GoHome THEN

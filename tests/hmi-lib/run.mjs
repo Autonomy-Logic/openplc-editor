@@ -5,9 +5,11 @@
  * output against golden.txt. Every compiler must print the same lines (display lists and pixels). Needs STruC++
  * installed (`npm run setup:strucpp`).
  *
- *   node tests/hmi-lib/run.mjs [--cc "gcc clang"] [--update] [--png DIR]
+ *   node tests/hmi-lib/run.mjs [--cc "gcc clang"] [--sanitize] [--update] [--png DIR]
  *
- * --update rewrites golden.txt from the first compiler; --png writes the dumped frames as PNG files for review.
+ * --update rewrites golden.txt from the first compiler; --png writes the dumped frames as PNG files for review;
+ * --sanitize adds a build of the first compiler with AddressSanitizer and UndefinedBehaviorSanitizer, whose frames
+ * must match too.
  */
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -26,15 +28,20 @@ const RUNTIME_INCLUDE = join(STRUCPP, 'src', 'runtime', 'include')
 const CFLAGS = ['-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', '-ffp-contract=off']
 /* STruC++ output builds with the flags product builds use; the C core keeps its warning gate. */
 const CXXFLAGS = ['-std=gnu++17', '-O2', '-ffp-contract=off']
+const SANITIZE = ['-O1', '-g', '-fsanitize=address,undefined', '-fno-sanitize-recover=all', '-fno-omit-frame-pointer']
 const GOLDEN = join(HERE, 'golden.txt')
+
+/* Flags of a target: the sanitized one trades -O2 for AddressSanitizer and UndefinedBehaviorSanitizer. */
+const withSanitizer = (flags, sanitize) => (sanitize ? [...flags.filter((f) => f !== '-O2'), ...SANITIZE] : flags)
 const CXX = { gcc: 'g++', clang: 'clang++', cc: 'c++' }
 
 function parseArgs(argv) {
-  const opts = { cc: ['cc'], update: false, png: null }
+  const opts = { cc: ['cc'], update: false, png: null, sanitize: false }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--cc') opts.cc = argv[++i].split(/\s+/).filter(Boolean)
     else if (a === '--update') opts.update = true
+    else if (a === '--sanitize') opts.sanitize = true
     else if (a === '--png') opts.png = argv[++i]
     else throw new Error(`unknown argument ${a}`)
   }
@@ -70,7 +77,8 @@ async function generate(work) {
     libraries: [archive],
     headerFileName: 'hmi_unit.hpp',
   })
-  if (unit.errors.length > 0) throw new Error(`screens: ${unit.errors.map((e) => `${e.line}: ${e.message}`).join('\n')}`)
+  if (unit.errors.length > 0)
+    throw new Error(`screens: ${unit.errors.map((e) => `${e.line}: ${e.message}`).join('\n')}`)
   writeFileSync(join(work, 'hmi_unit.hpp'), unit.headerCode)
   writeFileSync(join(work, 'hmi_unit.cpp'), unit.cppCode)
   const fonts = join(work, 'fonts.c')
@@ -83,18 +91,18 @@ async function generate(work) {
   return fonts
 }
 
-function build(cc, work, fonts) {
-  const name = basename(cc)
+function build(cc, work, fonts, sanitize = false) {
+  const name = `${basename(cc)}${sanitize ? '-sanitized' : ''}`
   const objects = []
   for (const src of [...CORE_SOURCES.map((s) => join(CORE, s)), fonts]) {
     const obj = join(work, `${name}_${basename(src, '.c')}.o`)
-    must(run(cc, [...CFLAGS, `-I${CORE}`, '-c', src, '-o', obj]), `${cc} ${basename(src)}`)
+    must(run(cc, [...withSanitizer(CFLAGS, sanitize), `-I${CORE}`, '-c', src, '-o', obj]), `${cc} ${basename(src)}`)
     objects.push(obj)
   }
-  const cxx = CXX[name] ?? cc
+  const cxx = CXX[basename(cc)] ?? cc
   const out = join(work, `driver_${name}`)
   const r = run(cxx, [
-    ...CXXFLAGS,
+    ...withSanitizer(CXXFLAGS, sanitize),
     `-I${RUNTIME_INCLUDE}`,
     `-I${CORE}`,
     `-I${work}`,
@@ -120,8 +128,12 @@ async function main() {
   try {
     const fonts = await generate(work)
     let reference = null
-    for (const cc of opts.cc) {
-      const target = build(cc, work, fonts)
+    const targets = [
+      ...opts.cc.map((cc) => ({ cc, sanitize: false })),
+      ...(opts.sanitize ? [{ cc: opts.cc[0], sanitize: true }] : []),
+    ]
+    for (const { cc, sanitize } of targets) {
+      const target = build(cc, work, fonts, sanitize)
       const dump = opts.png && reference === null ? join(work, 'dump') : null
       if (dump) mkdirSync(dump, { recursive: true })
       const r = run(target.out, dump ? [dump] : [])
