@@ -59,17 +59,19 @@ export function installHostQueryHandler(
       })
       return
     }
-    dispatcher(method, args).then(
-      (result) => safePost({ channel: RELAY_CHANNEL, kind: 'host-response', id, ok: true, result }),
-      (error: unknown) =>
-        safePost({
-          channel: RELAY_CHANNEL,
-          kind: 'host-response',
-          id,
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        }),
-    )
+    Promise.resolve()
+      .then(() => dispatcher(method, args))
+      .then(
+        (result) => safePost({ channel: RELAY_CHANNEL, kind: 'host-response', id, ok: true, result }),
+        (error: unknown) =>
+          safePost({
+            channel: RELAY_CHANNEL,
+            kind: 'host-response',
+            id,
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          }),
+      )
   })
   return {
     dispose: () => {

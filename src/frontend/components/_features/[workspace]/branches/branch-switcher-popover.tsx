@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { Branch } from '../../../../../middleware/shared/ports/version-control-port'
 import { useVersionControl } from '../../../../../middleware/shared/providers'
+import { useIsEditingLocked } from '../../../../hooks/use-editing-lock'
 import { cn } from '../../../../utils/cn'
 import { CreateBranchPopover } from './create-branch-popover'
 
@@ -29,6 +30,7 @@ export function BranchSwitcherPopover({
   onMerge,
 }: BranchSwitcherPopoverProps) {
   const versionControl = useVersionControl()
+  const isEditingLocked = useIsEditingLocked()
   const [branches, setBranches] = useState<Branch[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [filter, setFilter] = useState('')
@@ -154,11 +156,12 @@ export function BranchSwitcherPopover({
                     don't trigger a branch switch. */}
                 <button
                   type='button'
+                  disabled={isEditingLocked}
                   onClick={() => {
                     onSelect(branch)
                     handleClose()
                   }}
-                  className='flex min-w-0 flex-1 cursor-pointer items-center gap-[6px] bg-transparent text-left'
+                  className='flex min-w-0 flex-1 items-center gap-[6px] bg-transparent text-left disabled:cursor-not-allowed'
                 >
                   <svg
                     className='h-3.5 w-3.5 shrink-0 text-neutral-500 dark:text-neutral-400'
@@ -207,10 +210,10 @@ export function BranchSwitcherPopover({
                       >
                         {onMerge && (
                           <DropdownMenu.Item
-                            disabled={isActive}
+                            disabled={isActive || isEditingLocked}
                             onSelect={(e) => {
                               e.preventDefault()
-                              if (isActive) return
+                              if (isActive || isEditingLocked) return
                               onMerge(branch)
                               handleClose()
                             }}

@@ -1,13 +1,19 @@
 import { cn } from '@root/frontend/utils/cn'
+import { newUuid } from '@root/frontend/utils/new-uuid'
+import {
+  buildDefaultNodeConfig,
+  isComplexTreeNode as isComplexType,
+  MAX_BROWSE_NAME_LENGTH,
+  MAX_NODE_ID_LENGTH,
+} from '@root/frontend/utils/opcua/node-defaults'
+import type { VariableTreeNode } from '@root/frontend/utils/opcua/types'
 import type { OpcUaFieldConfig, OpcUaNodeConfig, OpcUaPermissions } from '@root/middleware/shared/ports/types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 
 import { InputWithRef } from '../../../../../../_atoms/input'
 import { Label } from '../../../../../../_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../../_atoms/select'
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '../../../../../../_molecules/modal'
-import { isComplexType, type VariableTreeNode } from '../hooks/use-project-variables'
 
 interface VariableConfigModalProps {
   isOpen: boolean
@@ -25,101 +31,6 @@ const textareaStyles =
   'w-full rounded-md border border-neutral-300 bg-white px-2 py-2 font-caption text-xs text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
 
 type PermissionLevel = 'r' | 'w' | 'rw'
-
-/**
- * Generate a default node ID based on the variable path
- */
-const generateNodeId = (pouName: string, variablePath: string): string => {
-  const cleanPath = variablePath.replace(/\[/g, '_').replace(/\]/g, '')
-  return `PLC.${pouName}.${cleanPath}`
-}
-
-/**
- * Generate a browse name from the variable path
- */
-const generateBrowseName = (variablePath: string): string => {
-  const parts = variablePath.split('.')
-  return parts[parts.length - 1] || variablePath
-}
-
-/**
- * Generate a display name from the variable path
- * Handles camelCase, snake_case, and ALL_CAPS naming conventions
- */
-const generateDisplayName = (variablePath: string): string => {
-  const parts = variablePath.split('.')
-  const name = parts[parts.length - 1] || variablePath
-
-  // First replace underscores with spaces
-  let result = name.replace(/_/g, ' ')
-
-  // Only add spaces before uppercase letters if the string is NOT all uppercase
-  // This prevents "IRRIGATION MAIN CONTROLLER0" from becoming "I R R I G A T I O N..."
-  const isAllUpperCase = name === name.toUpperCase()
-  if (!isAllUpperCase) {
-    // For camelCase/PascalCase: add space before uppercase letters
-    result = result.replace(/([a-z])([A-Z])/g, '$1 $2')
-  }
-
-  // Convert to Title Case
-  return result
-    .replace(/^\s+/, '')
-    .split(' ')
-    .filter((word) => word.length > 0)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
-}
-
-/**
- * Determine node type from variable tree node
- */
-const getNodeType = (node: VariableTreeNode): 'variable' | 'structure' | 'array' => {
-  if (node.type === 'array') return 'array'
-  if (node.type === 'structure' || node.type === 'function_block') return 'structure'
-  return 'variable'
-}
-
-/**
- * Generate default field configs from a structure/FB/array node.
- * Generates hierarchical nested field configs to preserve structure in OPC-UA.
- * Complex types (FBs, nested structs) become fields with nested fields array.
- */
-const generateDefaultFieldConfigs = (
-  node: VariableTreeNode,
-  parentPermissions: OpcUaPermissions,
-): OpcUaFieldConfig[] => {
-  if (!node.children || node.children.length === 0) {
-    return []
-  }
-
-  return node.children.map((child) => {
-    // Check if this is a leaf variable (base type) or a complex type
-    const isLeaf = child.type === 'variable' && (!child.children || child.children.length === 0)
-
-    if (isLeaf) {
-      // Leaf field - no nested fields
-      // Use name (not variablePath) as fieldPath - the resolver builds the full path
-      // by combining parent path + fieldPath. Using variablePath would duplicate the parent.
-      return {
-        fieldPath: child.name,
-        displayName: child.name,
-        datatype: child.variableType || 'UNKNOWN',
-        permissions: { ...parentPermissions },
-      }
-    } else {
-      // Complex type (FB, struct, array) - generate nested fields recursively
-      const nestedFields = generateDefaultFieldConfigs(child, parentPermissions)
-      // Use name (not variablePath) - see comment above
-      return {
-        fieldPath: child.name,
-        displayName: child.name,
-        datatype: child.variableType || 'UNKNOWN',
-        permissions: { ...parentPermissions },
-        fields: nestedFields.length > 0 ? nestedFields : undefined,
-      }
-    }
-  })
-}
 
 /**
  * Permission selector component for inline use in tables
@@ -212,16 +123,15 @@ export const VariableConfigModal = ({
         setFieldConfigs(existingConfig.fields || [])
       } else {
         // New configuration - generate defaults
-        setNodeId(generateNodeId(variable.pouName, variable.variablePath))
-        setBrowseName(generateBrowseName(variable.variablePath))
-        setDisplayName(generateDisplayName(variable.variablePath))
-        setDescription('')
-        setViewerPerm('r')
-        setOperatorPerm('r')
-        setEngineerPerm('rw')
-        // Generate default field configs for complex types
-        const defaultPerms: OpcUaPermissions = { viewer: 'r', operator: 'r', engineer: 'rw' }
-        setFieldConfigs(isComplexType(variable) ? generateDefaultFieldConfigs(variable, defaultPerms) : [])
+        const defaults = buildDefaultNodeConfig(variable, () => '')
+        setNodeId(defaults.nodeId)
+        setBrowseName(defaults.browseName)
+        setDisplayName(defaults.displayName)
+        setDescription(defaults.description)
+        setViewerPerm(defaults.permissions.viewer)
+        setOperatorPerm(defaults.permissions.operator)
+        setEngineerPerm(defaults.permissions.engineer)
+        setFieldConfigs(defaults.fields ?? [])
       }
     }
   }, [isOpen, variable, existingConfig])
@@ -232,8 +142,8 @@ export const VariableConfigModal = ({
 
     if (!nodeId.trim()) {
       errors.push('Node ID is required')
-    } else if (nodeId.length > 128) {
-      errors.push('Node ID must be 128 characters or less')
+    } else if (nodeId.length > MAX_NODE_ID_LENGTH) {
+      errors.push(`Node ID must be ${MAX_NODE_ID_LENGTH} characters or less`)
     } else {
       // Check for duplicate Node ID (excluding current node if editing)
       const isDuplicate = existingNodeIds.some((id) => {
@@ -247,8 +157,8 @@ export const VariableConfigModal = ({
 
     if (!browseName.trim()) {
       errors.push('Browse name is required')
-    } else if (browseName.length > 64) {
-      errors.push('Browse name must be 64 characters or less')
+    } else if (browseName.length > MAX_BROWSE_NAME_LENGTH) {
+      errors.push(`Browse name must be ${MAX_BROWSE_NAME_LENGTH} characters or less`)
     }
 
     if (!displayName.trim()) {
@@ -324,21 +234,13 @@ export const VariableConfigModal = ({
     }
 
     const config: OpcUaNodeConfig = {
-      id: existingConfig?.id || uuidv4(),
-      pouName: variable.pouName,
-      variablePath: variable.variablePath,
-      variableType: variable.variableType || 'unknown',
+      ...buildDefaultNodeConfig(variable, () => existingConfig?.id ?? newUuid()),
       nodeId: nodeId.trim(),
       browseName: browseName.trim(),
       displayName: displayName.trim(),
       description: description.trim(),
       permissions,
-      nodeType: getNodeType(variable),
-      // Include field configs for complex types
       fields: isComplex ? fieldConfigs : undefined,
-      // Include array info if applicable
-      arrayLength: variable.arrayInfo?.totalLength,
-      elementType: variable.arrayInfo?.elementType,
     }
 
     onSave(config)

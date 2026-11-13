@@ -24,7 +24,12 @@ vi.mock('@radix-ui/react-icons', () => ({
   DragHandleDots2Icon: (props: Record<string, unknown>) => <svg data-testid='drag-handle-icon' {...props} />,
 }))
 
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
+
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../index'
+
+/** The handle reads the editing lock, so it needs the store provider. */
+const withStore = { wrapper: createStoreWrapper(createTestStore()) }
 
 describe('ResizablePanel exports', () => {
   it('exports ResizablePanel', () => {
@@ -53,12 +58,12 @@ describe('ResizablePanelGroup', () => {
 
 describe('ResizableHandle', () => {
   it('renders without handle by default', () => {
-    const { queryByTestId } = render(<ResizableHandle />)
+    const { queryByTestId } = render(<ResizableHandle />, withStore)
     expect(queryByTestId('drag-handle-icon')).toBeNull()
   })
 
   it('renders drag handle icon when withHandle is true', () => {
-    const { getByTestId } = render(<ResizableHandle withHandle />)
+    const { getByTestId } = render(<ResizableHandle withHandle />, withStore)
     expect(getByTestId('drag-handle-icon')).toBeTruthy()
   })
 })

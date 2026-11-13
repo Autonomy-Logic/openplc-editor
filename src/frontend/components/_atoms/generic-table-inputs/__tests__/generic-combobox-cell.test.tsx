@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 
+import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
+
 import { GenericComboboxCell } from '../generic-combobox-cell'
 
 const OPTIONS = [
@@ -9,7 +11,9 @@ const OPTIONS = [
 ]
 
 const renderCell = (props?: Partial<React.ComponentProps<typeof GenericComboboxCell>>) =>
-  render(<GenericComboboxCell value='' onValueChange={() => {}} selectValues={OPTIONS} {...props} />)
+  render(<GenericComboboxCell value='' onValueChange={() => {}} selectValues={OPTIONS} {...props} />, {
+    wrapper: createStoreWrapper(createTestStore()),
+  })
 
 // Radix DropdownMenu's trigger opens on Enter — deterministic across runners.
 const open = () => fireEvent.keyDown(screen.getByRole('button'), { key: 'Enter' })

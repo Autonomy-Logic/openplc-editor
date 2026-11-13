@@ -87,8 +87,6 @@ function makePort(overrides: Partial<CompilerPlatformPort> = {}): jest.Mocked<Co
   return {
     computeMd5: jest.fn().mockResolvedValue('a'.repeat(32)),
     transpileToSt: jest.fn().mockResolvedValue({ ok: true, programSt: 'PROGRAM main\nEND_PROGRAM' }),
-    installArduinoCore: jest.fn().mockResolvedValue({ ok: true }),
-    installArduinoLib: jest.fn().mockResolvedValue({ ok: true }),
     compileArduino: jest.fn().mockResolvedValue({ ok: true, binary: new Uint8Array([1, 2, 3]) }),
     uploadRuntimeV4: jest.fn().mockResolvedValue({ ok: true }),
     uploadArduinoBoard: jest.fn().mockResolvedValue({ ok: true }),
@@ -236,56 +234,6 @@ describe('runCompilePipeline — simulator path', () => {
     await runCompilePipeline(makeArgs({}), port, emit)
     const [callArgs] = port.compileArduino.mock.calls[0]
     expect(callArgs.files['src/defines.h']).not.toContain('OPLC_RETAIN_BLOB_SIZE')
-  })
-
-  // Regression: the board's `boardManagerUrl` (VPP `target.boardManagerUrl`)
-  // was resolved onto boardEntry but never forwarded to installArduinoCore,
-  // so vendor cores outside arduino-cli's built-in index could not be
-  // installed — "Platform 'industrialshields:esp32' not found".
-  it('forwards boardEntry.boardManagerUrl to installArduinoCore', async () => {
-    const port = makePort()
-    const { emit } = captureEvents()
-    const boardManagerUrl =
-      'https://apps.industrialshields.com/main/arduino/boards/package_industrialshields_index.json'
-    await runCompilePipeline(
-      makeArgs({
-        isSimulator: false,
-        boardRuntime: 'arduino-cli',
-        boardEntry: {
-          platform: 'industrialshields:esp32:esp32plc',
-          core: 'industrialshields:esp32',
-          boardManagerUrl,
-        },
-      }),
-      port,
-      emit,
-    )
-    expect(port.installArduinoCore).toHaveBeenCalledWith(
-      expect.objectContaining({ coreId: 'industrialshields:esp32', boardManagerUrl }),
-      expect.any(Function),
-    )
-  })
-
-  it('omits boardManagerUrl for boards that do not declare one', async () => {
-    const port = makePort()
-    const { emit } = captureEvents()
-    await runCompilePipeline(makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli' }), port, emit)
-    const [coreArgs] = port.installArduinoCore.mock.calls[0]
-    expect(coreArgs).not.toHaveProperty('boardManagerUrl')
-  })
-
-  it('calls installArduinoCore + installArduinoLib before compileArduino (no-op semantics for web)', async () => {
-    const port = makePort()
-    const { emit } = captureEvents()
-    await runCompilePipeline(makeArgs(), port, emit)
-    // Jest's invocationCallOrder is global, monotonically increasing —
-    // smaller value = called earlier.  This is the canonical way to
-    // assert mock call ordering in jest.
-    const coreOrder = port.installArduinoCore.mock.invocationCallOrder[0]
-    const libOrder = port.installArduinoLib.mock.invocationCallOrder[0]
-    const compileOrder = port.compileArduino.mock.invocationCallOrder[0]
-    expect(coreOrder).toBeLessThan(compileOrder)
-    expect(libOrder).toBeLessThan(compileOrder)
   })
 
   it('compileOnly returns success without invoking uploadArduinoBoard', async () => {
@@ -1224,7 +1172,13 @@ describe('runCompilePipeline — runtime v4 path', () => {
       emit,
     )
     expect(result.success).toBe(true)
-    expect(port.packageVppPlugin).toHaveBeenCalledWith({ boardTarget: 'SLM-RP4' }, expect.any(Function))
+    expect(port.packageVppPlugin).toHaveBeenCalledWith(
+      {
+        boardTarget: 'SLM-RP4',
+        screenConfigInputs: { vppExtensions: {}, debugMapContent: '{}', instances: [] },
+      },
+      expect.any(Function),
+    )
     expect(callOrder).toEqual(['vpp', 'upload'])
   })
 
@@ -1534,10 +1488,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
 })
 
 describe('runCompilePipeline — boardEntry shape variants', () => {
-  it('handles a boardEntry with no platform field (deriveArduinoCoreFromPlatform → empty)', async () => {
-    // When platform isn't set on the entry, the pipeline shouldn't
-    // crash — installArduinoCore is still called (with coreId='') and
-    // the no-op return resolves cleanly.
+  it('handles a boardEntry with no platform field', async () => {
     const port = makePort()
     const { emit } = captureEvents()
     const result = await runCompilePipeline(
@@ -1548,23 +1499,74 @@ describe('runCompilePipeline — boardEntry shape variants', () => {
       emit,
     )
     expect(result.success).toBe(true)
-    expect(port.installArduinoCore).toHaveBeenCalledWith(expect.objectContaining({ coreId: '' }), expect.any(Function))
   })
+})
 
-  it('derives the core id from `platform` (e.g. arduino:avr:mega → arduino:avr)', async () => {
-    const port = makePort()
-    const { emit } = captureEvents()
-    await runCompilePipeline(
-      makeArgs({
-        boardEntry: { platform: 'arduino:avr:mega', core: 'arduino:avr' },
+describe('runCompilePipeline — missing core hint', () => {
+  const failWith = (message: string) =>
+    makePort({
+      compileArduino: jest.fn().mockResolvedValue({
+        ok: false,
+        errors: [{ message, line: 0, column: 0, severity: 'error' }],
       }),
+    })
+  const lastMessage = (events: PipelineProgressEvent[]) => events[events.length - 1]?.message ?? ''
+
+  it('points the desktop user at Reinstall when the board core is missing', async () => {
+    const port = failWith("Error during build: Platform 'FACTS:stm32' not found: platform not installed")
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli', dependencyHintSurface: 'desktop' }),
       port,
       emit,
     )
-    expect(port.installArduinoCore).toHaveBeenCalledWith(
-      expect.objectContaining({ coreId: 'arduino:avr' }),
-      expect.any(Function),
+    expect(result.success).toBe(false)
+    expect(lastMessage(events)).toContain('File > Board Package Manager...')
+    expect(events[events.length - 1].level).toBe('error')
+  })
+
+  it('points the CLI user at packages install when the board core is missing', async () => {
+    const port = failWith("Error during build: Platform 'FACTS:stm32' not found: platform not installed")
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli', dependencyHintSurface: 'cli' }),
+      port,
+      emit,
     )
+    expect(lastMessage(events)).toContain('openplc-cli packages install <file.vpp>')
+  })
+
+  it("adds no hint for a missing header, which may be the user's own include", async () => {
+    const port = failWith('src/c_blocks_code.cpp:3:10: fatal error: NotInstalled.h: No such file or directory')
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli', dependencyHintSurface: 'desktop' }),
+      port,
+      emit,
+    )
+    expect(lastMessage(events)).toBe('Stopping compilation process.')
+  })
+
+  it('names the simulator core for a simulator build', async () => {
+    const port = failWith("Error during build: Platform 'arduino:avr' not found: platform not installed")
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(makeArgs({ isSimulator: true, dependencyHintSurface: 'desktop' }), port, emit)
+    expect(lastMessage(events)).toContain('arduino:avr')
+    expect(lastMessage(events)).not.toContain('Board Package Manager')
+  })
+
+  it('adds no hint for a compile error that is not a missing core', async () => {
+    const port = failWith("src/generated.cpp:12:5: error: 'foo' was not declared in this scope")
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(makeArgs({ dependencyHintSurface: 'desktop' }), port, emit)
+    expect(lastMessage(events)).toBe('Stopping compilation process.')
+  })
+
+  it('adds no hint when the host asks for none', async () => {
+    const port = failWith("Error during build: Platform 'FACTS:stm32' not found: platform not installed")
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli' }), port, emit)
+    expect(lastMessage(events)).toBe('Stopping compilation process.')
   })
 })
 
@@ -1648,40 +1650,6 @@ describe('runCompilePipeline — failure propagation', () => {
       emit,
     )
     expect(result.success).toBe(false)
-  })
-
-  it('returns success=false when installArduinoCore reports failure', async () => {
-    const port = makePort({
-      installArduinoCore: jest.fn().mockResolvedValue({ ok: false }),
-    })
-    const { emit } = captureEvents()
-    const result = await runCompilePipeline(makeArgs(), port, emit)
-    expect(result.success).toBe(false)
-    expect(port.compileArduino).not.toHaveBeenCalled()
-  })
-
-  it('continues with a warning when installArduinoLib reports failure (does not bail)', async () => {
-    // Library install is opportunistic — the user's target lib may
-    // already be available from a non-managed source (sketchbook,
-    // system install) and arduino-cli compile is the source of
-    // truth for whether a required header can be resolved.  An
-    // adapter returning `{ ok: false }` SHOULD emit a warning and
-    // let the pipeline proceed; the build only fails later if the
-    // missing header genuinely can't be found at compile time.
-    const port = makePort({
-      installArduinoLib: jest.fn().mockResolvedValue({ ok: false }),
-    })
-    const { emit, events } = captureEvents()
-    const result = await runCompilePipeline(makeArgs(), port, emit)
-    // Pipeline proceeded past lib-install — compileArduino fires.
-    expect(port.compileArduino).toHaveBeenCalled()
-    // A warning fired during the lib-install stage explaining the
-    // soft pass-through.
-    expect(events.some((e) => e.stage === 'lib-install' && e.level === 'warning')).toBe(true)
-    // Success/failure is now determined downstream — explicitly not
-    // asserted here because the test fixture's compileArduino mock
-    // controls it.  Just confirm the bail-on-lib-install is gone.
-    expect(typeof result.success).toBe('boolean')
   })
 
   it('returns success=false when generateRuntimeConfs throws (OPC-UA / EtherCAT failure)', async () => {

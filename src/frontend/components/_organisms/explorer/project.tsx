@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { projectCapabilities } from '../../../../middleware/shared/ports/types'
 import { useCapabilities, useProject } from '../../../../middleware/shared/providers'
 import { FolderIcon } from '../../../assets/icons/interface/Folder'
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useTargetCapabilities } from '../../../hooks/use-target-capabilities'
 import { useOpenPLCStore } from '../../../store'
 import type { TabsProps } from '../../../store/slices/tabs'
@@ -57,6 +58,7 @@ const Project = () => {
   // Read-only / forked projects can't be renamed — the backend rename
   // endpoint requires edit access, so gate the affordance here too.
   const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
+  const isEditingLocked = useIsEditingLocked()
 
   // Runtime User Management is only meaningful while connected to a runtime
   // (it reads/writes the runtime's account list over the authenticated API)
@@ -180,7 +182,7 @@ const Project = () => {
           id='project-name-container'
           className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 py-[1px] dark:bg-brand-dark'
           onClick={() => {
-            if (canEdit && !isRenaming) setIsEditing(true)
+            if (canEdit && !isRenaming && !isEditingLocked) setIsEditing(true)
           }}
         >
           <div className='flex-shrink-0'>

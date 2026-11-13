@@ -27,6 +27,22 @@
   background-color: transparent;
 }
 
+/* A list whose content overflows says so without a hover: the default thumb is
+ * 4px at 30% opacity, which reads as "nothing more to see" on a short pane. */
+.oplc-visible-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-medium) transparent;
+}
+
+.oplc-visible-scrollbar::-webkit-scrollbar {
+  width: 0.5rem;
+  height: 0.5rem;
+}
+
+.oplc-visible-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-opacity-70;
+}
+
 /* Select dropdown viewport — force a visible, always-on scrollbar.
  *
  * Radix Select injects a <style> tag in the portal that hides the native

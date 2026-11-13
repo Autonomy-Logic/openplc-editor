@@ -747,6 +747,8 @@ export interface PackageManifest {
       configTemplate?: string
       /** Shape of the generated plugin config. Absent → "slots". */
       pluginConfigFormat?: 'slots' | 'io-ranges'
+      /** Sibling configs `conf/<plugin_name>.<file>.json` generated from custom screen buckets; validated when packed. */
+      screenConfigs?: ReadonlyArray<{ storageId: string; format: string; file: string }>
       requirements?: string
       source?: string
       /** Prebuilt arduino-hal library directory, linked via --library alongside `hal.source`. */
@@ -811,6 +813,33 @@ export interface InstalledPackage {
   devices: string[]
 }
 
+/** An archive arduino-cli is downloading, with sizes as it prints them. */
+export interface PackageDownloadProgress {
+  /** The archive, e.g. `arduino:avr-gcc@7.3.0-atmel3.6.1-arduino5`. */
+  item: string
+  /** Bytes so far and total, e.g. `12.34 MiB`. */
+  done: string
+  total: string
+  percent: number
+}
+
+/** Progress of a board package's dependency installation or removal (cores and libraries). */
+export interface PackageInstallProgress {
+  /** 1-based position of the running step; 0 while waiting. */
+  step: number
+  total: number
+  label: string
+  download?: PackageDownloadProgress
+  /** Set while an uninstall removes the package's cores and libraries, which cannot be cancelled. */
+  removing?: boolean
+}
+
+/** A console message from the startup dependency check, kept until a console can show it. */
+export interface StartupNotice {
+  level: 'info' | 'warning'
+  message: string
+}
+
 export interface ImportResult {
   success: boolean
   canceled?: boolean
@@ -818,6 +847,8 @@ export interface ImportResult {
   packageName?: string
   devices?: string[]
   error?: string
+  /** Reinstall only: how many cores and libraries were installed. */
+  installed?: number
 }
 
 export interface RemoteVersionEntry {

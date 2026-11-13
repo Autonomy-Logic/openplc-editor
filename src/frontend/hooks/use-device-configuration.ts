@@ -10,6 +10,7 @@ import {
 import { generateDefaultChannelMappings, pdoToChannels } from '@root/backend/shared/ethercat/esi-parser'
 import { extractDefaultSdoConfigurations } from '@root/backend/shared/ethercat/sdo-config-defaults'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
+import { useIsEditingLocked } from '@root/frontend/hooks/use-editing-lock'
 import { useOpenPLCStoreApi } from '@root/frontend/store'
 import type {
   ConfiguredEtherCATDevice,
@@ -92,6 +93,7 @@ export function useDeviceConfiguration({
   const [alternativeSmMappings, setAlternativeSmMappings] = useState<ESIAlternativeSmMapping[] | undefined>(undefined)
   const [isLoadingChannels, setIsLoadingChannels] = useState(false)
   const [channelLoadError, setChannelLoadError] = useState<string | null>(null)
+  const isEditingLocked = useIsEditingLocked()
   const fullDeviceLoadedRef = useRef(false)
 
   // Capture latest callback refs to avoid stale closures and unstable deps
@@ -105,7 +107,7 @@ export function useDeviceConfiguration({
   onUpdateModuleRef.current = onUpdateModule
 
   useEffect(() => {
-    if (!enabled || !device || fullDeviceLoadedRef.current) return
+    if (!enabled || !device || fullDeviceLoadedRef.current || isEditingLocked) return
 
     const loadFullDevice = async () => {
       setIsLoadingChannels(true)
@@ -170,7 +172,7 @@ export function useDeviceConfiguration({
     }
 
     void loadFullDevice()
-  }, [enabled, projectPath, device?.esiDeviceRef?.repositoryItemId, device?.esiDeviceRef?.deviceIndex])
+  }, [enabled, projectPath, device?.esiDeviceRef?.repositoryItemId, device?.esiDeviceRef?.deviceIndex, isEditingLocked])
 
   // On a modular coupler the view lists the coupler's and every module's channels; the owner
   // map routes an alias edit back to the coupler or to the module that owns the channel.

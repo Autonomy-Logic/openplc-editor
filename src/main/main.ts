@@ -11,6 +11,7 @@ import { isWebUrl } from '@root/backend/editor/utils/is-web-url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, shell } from 'electron'
 import Installer from 'electron-devtools-installer'
 import log from 'electron-log'
+import { existsSync } from 'fs'
 import { enableMapSet } from 'immer'
 import { homedir, platform, release } from 'os'
 import { join, resolve } from 'path'
@@ -23,9 +24,14 @@ import { adoptProviderTokens } from '../backend/editor/edge-account/edge-account
 import { edgeOAuthProviderFromUrl, runOAuthFlow } from '../backend/editor/edge-account/oauth-browser-flow'
 import { HardwareModule } from '../backend/editor/hardware'
 import { PackageManagerModule } from '../backend/editor/package-manager'
+import {
+  type ArduinoDependencyServices,
+  createArduinoDependencyServices,
+} from '../backend/editor/package-manager/vpp-dependency-service'
 import { clearCloudBuildRoot } from '../backend/editor/project/cloud-build-workspace'
 import { logger, PouService, ProjectService, UserService } from '../backend/editor/services'
 import { resolveHtmlPath } from '../backend/editor/utils'
+import { getDesktopWasmCompileService } from '../backend/editor/wasm-toolchain/desktop-wasm-toolchain'
 import { getErrorMessage } from '../frontend/utils/get-error-message'
 import type { EdgeOAuthProviderId } from '../middleware/shared/ports/edge-account-port'
 import { VENDOR_DOCUMENT_SCHEME } from '../middleware/shared/vendor-document/document-url'
@@ -50,6 +56,7 @@ export let splash: BrowserWindow | null = null
 
 let mainIpcModule: MainProcessBridge | undefined
 let packageManager: PackageManagerModule | undefined
+let arduinoDependencies: ArduinoDependencyServices | undefined
 // One per process, not per window: macOS re-creates the window on activate.
 const updateService = createElectronUpdateService({
   getWindow: () => mainWindow,
@@ -73,7 +80,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Create the user service instance to initialize the user settings and history files.
-new UserService()
+const userService = new UserService()
 
 // Retrieves the system information
 const systemInfo = platform()
@@ -208,9 +215,11 @@ const createMainWindow = async () => {
     },
   })
 
-  const splashPath = app.isPackaged
-    ? resolve(__dirname, '../main/splash.html')
-    : 'src/main/modules/preload/splash-screen/splash.html'
+  const builtSplashPath = resolve(__dirname, '../main/splash.html')
+  const splashPath =
+    app.isPackaged || existsSync(builtSplashPath)
+      ? builtSplashPath
+      : 'src/main/modules/preload/splash-screen/splash.html'
   splash
     .loadFile(splashPath)
     .then(() => logger.info('Splash screen loaded successfully'))
@@ -265,15 +274,40 @@ const createMainWindow = async () => {
     if (process.env.START_MINIMIZED) {
       mainWindow.minimize()
     }
-    setTimeout(() => {
-      if (splash === null) {
-        mainWindow?.destroy()
-        return
-      }
-      splash.close()
-      mainWindow?.show()
-    }, 3000)
+    const minimumSplash = new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 3000))
+    void Promise.all([minimumSplash, getDesktopWasmCompileService().prepare()])
+      .then(([, toolchain]) => {
+        if (splash === null) {
+          mainWindow?.destroy()
+          return
+        }
+        if (!toolchain.ok) {
+          showStartupFailure(toolchain.message)
+          return
+        }
+        logger.info(`WebAssembly toolchain ready in ${Math.round(toolchain.ms)} ms`)
+        splash.close()
+        mainWindow?.show()
+      })
+      .catch((error: unknown) => {
+        showStartupFailure('The editor could not open: ' + getErrorMessage(error))
+      })
   })
+
+  /** Keeps the splash up with the reason the editor cannot start; closing it quits. */
+  const showStartupFailure = (message: string) => {
+    logger.error(message)
+    mainWindow?.destroy()
+    if (splash === null) {
+      app.quit()
+      return
+    }
+    splash.once('closed', () => app.quit())
+    splash.loadFile(splashPath, { query: { error: message } }).catch((error: unknown) => {
+      logger.error('Error showing the startup failure: ' + getErrorMessage(error))
+      app.quit()
+    })
+  }
 
   /**
    * -> Close event (https://www.electronjs.org/docs/latest/api/browser-window#event-close)
@@ -389,6 +423,10 @@ const createMainWindow = async () => {
 
   const hardwareModule = new HardwareModule()
 
+  const firstWindow = arduinoDependencies === undefined
+  const packages = (packageManager ??= new PackageManagerModule())
+  arduinoDependencies ??= createArduinoDependencyServices(packages, (args) => compilerModule.spawnArduinoCli(args))
+
   mainIpcModule = new MainProcessBridge({
     mainWindow,
     ipcMain,
@@ -399,9 +437,11 @@ const createMainWindow = async () => {
     compilerModule,
     hardwareModule,
     quitCoordinator,
-    packageManagerModule: packageManager,
+    packageManagerModule: packages,
+    arduinoDependencies,
   } as unknown as MainIpcModuleConstructor)
   mainIpcModule.setupMainIpcListener()
+  if (firstWindow) arduinoDependencies.startup.start(userService.initialize())
 }
 
 // Disable GPU Acceleration for Windows 7;
@@ -511,6 +551,9 @@ app
       VENDOR_DOCUMENT_SCHEME,
       createVendorDocumentHandler({ listPackages: () => packages.listInstalled() }),
     )
+    getDesktopWasmCompileService()
+      .prepare()
+      .catch((error: unknown) => logger.error('WebAssembly toolchain: ' + getErrorMessage(error)))
     void createMainWindow()
     // Last session's cloud builds. The cloud is the source of truth for those
     // projects, so nothing here survives a restart; best-effort, since a scratch

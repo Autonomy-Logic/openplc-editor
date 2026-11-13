@@ -24,6 +24,11 @@
  * `middleware/adapters/web/`.
  */
 
+import {
+  ARDUINO_EXPORT_DIR,
+  planBuildTreeSync,
+  staticCandidates,
+} from '@root/backend/shared/compile/steps/plan-build-tree-sync'
 import { deployReachedDevice, deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { probeRuntimeVersion } from '@root/backend/shared/library/probe-runtime-version'
 import {
@@ -35,23 +40,12 @@ import {
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
-import { buildLeafInfoMap, type DebugLeafInfo, parseDebugMap } from '@root/frontend/utils/debug-parser'
-import {
-  buildDebugPath,
-  buildGlobalDebugPath,
-  findInstanceName,
-  type PLCInstanceMapping,
-} from '@root/frontend/utils/debug-variable-finder'
 import type {
   CheckRuntimeVersionArgs,
   CheckRuntimeVersionResult,
-  CollectVppScreenRuntimeArtifactsArgs,
-  CollectVppScreenRuntimeArtifactsResult,
   CompileArduinoArgs,
   CompileArduinoResult,
   CompilerPlatformPort,
-  InstallArduinoCoreArgs,
-  InstallArduinoLibArgs,
   MaterializeRuntimeV4BundleArgs,
   MaterializeRuntimeV4BundleResult,
   PackageVppPluginArgs,
@@ -66,11 +60,59 @@ import type {
   UploadRuntimeV4Args,
 } from '@root/middleware/shared/ports/compiler-platform-port'
 import { createHash } from 'crypto'
-import { promises as fs } from 'fs'
+import { type Dirent, promises as fs } from 'fs'
 import { dirname, join } from 'path'
 
-import type { EmitterDebugEntry } from '../compile/vpp-screen-emitters'
 import type { CompilerModule } from './compiler-module'
+
+/** Every file under `root` as a POSIX path relative to it, skipping arduino-cli's export folder. */
+async function listBuildFolder(root: string, relDir = ''): Promise<string[]> {
+  let entries: Dirent[]
+  try {
+    entries = await fs.readdir(join(root, relDir), { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const paths: string[] = []
+  for (const entry of entries) {
+    const relPath = relDir === '' ? entry.name : `${relDir}/${entry.name}`
+    if (entry.isDirectory()) {
+      if (`${relPath}/` === ARDUINO_EXPORT_DIR) continue
+      paths.push(...(await listBuildFolder(root, relPath)))
+    } else {
+      paths.push(relPath)
+    }
+  }
+  return paths
+}
+
+/** Apply `planBuildTreeSync` to the build folder at `root`. */
+export async function syncBuildFolder(
+  root: string,
+  desired: Record<string, string>,
+  staticFiles: Record<string, string>,
+): Promise<void> {
+  const existingPaths = await listBuildFolder(root)
+  const present = new Set(existingPaths)
+  const existingContents: Record<string, string> = {}
+  for (const path of staticCandidates(desired, staticFiles)) {
+    if (!present.has(path)) continue
+    try {
+      existingContents[path] = await fs.readFile(join(root, path), 'utf-8')
+    } catch {
+      continue
+    }
+  }
+  const plan = planBuildTreeSync({ desired, staticFiles, existingPaths, existingContents })
+  await Promise.all(plan.remove.map((path) => fs.rm(join(root, path), { force: true })))
+  await Promise.all(
+    plan.write.map(async (path) => {
+      const absPath = join(root, path)
+      await fs.mkdir(dirname(absPath), { recursive: true })
+      await fs.writeFile(absPath, desired[path], 'utf-8')
+    }),
+  )
+}
 
 /**
  * Subset of `CompilerModule` the port adapter calls into.  Declared
@@ -81,8 +123,6 @@ import type { CompilerModule } from './compiler-module'
 export interface EditorCompilerHandlers {
   handleCompileArduinoProgram: CompilerModule['handleCompileArduinoProgram']
   handleUploadProgram: CompilerModule['handleUploadProgram']
-  handleCoreInstallation: CompilerModule['handleCoreInstallation']
-  handleLibraryInstallation: CompilerModule['handleLibraryInstallation']
   handleVendorPluginPackaging: CompilerModule['handleVendorPluginPackaging']
 }
 
@@ -109,6 +149,10 @@ export interface EditorCompilerPlatformPortContext {
   /** Whether the user requested a clean rebuild (drives arduino-cli's
    *  `--clean` flag). */
   cleanBuild: boolean
+  /** The editor's static firmware resources at their build-folder paths, so
+   *  `compileArduino` rewrites them only when they changed. Absent: every
+   *  file is written. */
+  staticFirmwareFiles?: Record<string, string>
   /** Bridge methods for runtime API calls (compile-status poll, etc.). */
   mainProcessBridge: {
     makeRuntimeApiRequest: <T = void>(
@@ -235,69 +279,6 @@ export function createEditorCompilerPlatformPort(
     },
 
     /**
-     * Arduino-cli core install.  The existing
-     * `handleCoreInstallation` already takes a core id and a log
-     * callback — direct passthrough modulo the log-shape
-     * translation.
-     *
-     * `args.boardManagerUrl` (the VPP's `target.boardManagerUrl`) is
-     * forwarded so vendor cores outside arduino-cli's built-in index
-     * install automatically rather than failing with "Platform not
-     * found".  `handleCoreInstallation` refreshes the index against
-     * that URL before installing.
-     */
-    async installArduinoCore(args: InstallArduinoCoreArgs, log: PlatformLog): Promise<UploadResult> {
-      try {
-        await handlers.handleCoreInstallation(
-          args.coreId,
-          (chunk, level) => {
-            const message = typeof chunk === 'string' ? chunk : chunk.toString()
-            log(message, level ?? 'info')
-          },
-          args.coreVersion,
-          args.boardManagerUrl,
-        )
-        return { ok: true }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        log(`Arduino core install failed: ${message}`, 'error')
-        return { ok: false }
-      }
-    },
-
-    /**
-     * Arduino-cli library install.  Forwards `args.extraLibraries`
-     * (the per-board library list from `BoardBuildInfo`) to
-     * `handleLibraryInstallation`, which combines them with the
-     * editor's `GLOBAL_LIBRARIES` and runs `arduino-cli lib install`
-     * for whatever's missing.  `args.libId` is unused on this path —
-     * kept in the port shape for the legacy single-library callers.
-     */
-    async installArduinoLib(args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult> {
-      try {
-        await handlers.handleLibraryInstallation(
-          args.extraLibraries ?? [],
-          (chunk, level) => {
-            const message = typeof chunk === 'string' ? chunk : chunk.toString()
-            log(message, level ?? 'info')
-          },
-          args.thirdPartyLibraries ?? [],
-        )
-        return { ok: true }
-      } catch (error) {
-        // Reached only when the install machinery itself can't run
-        // (arduino-cli binary missing, spawn failure, etc.).  Non-
-        // zero `arduino-cli lib install` exits are warnings inside
-        // `handleLibraryInstallation` and don't throw.  Either way
-        // the build continues — arduino-cli compile is the source of
-        // truth for whether a required header can be found.
-        const message = error instanceof Error ? error.message : String(error)
-        log(`Warning: library install machinery failed: ${message}. Continuing build.`, 'warning')
-        return { ok: true }
-      }
-    },
-
-    /**
      * Materialise the in-memory file map to disk under the project's
      * build directory, then spawn `arduino-cli compile` via the
      * existing `handleCompileArduinoProgram`.
@@ -316,18 +297,7 @@ export function createEditorCompilerPlatformPort(
      */
     async compileArduino(args: CompileArduinoArgs, log: PlatformLog): Promise<CompileArduinoResult> {
       try {
-        // Materialise every entry in the in-memory file map under
-        // the project's build directory.  Editor's existing flow
-        // wrote these files in scattered places throughout the
-        // compile pipeline; doing it here once preserves the same
-        // on-disk layout arduino-cli expects.
-        await Promise.all(
-          Object.entries(args.files).map(async ([relPath, content]) => {
-            const absPath = join(context.compilationPath, relPath)
-            await fs.mkdir(dirname(absPath), { recursive: true })
-            await fs.writeFile(absPath, content, 'utf-8')
-          }),
-        )
+        await syncBuildFolder(context.compilationPath, args.files, context.staticFirmwareFiles ?? {})
 
         // Invoke the existing handler — it spawns arduino-cli compile
         // with the per-board hals entry's flags.  The canonical
@@ -702,6 +672,7 @@ export function createEditorCompilerPlatformPort(
           args.boardTarget,
           context.normalizedProjectPath,
           context.sourceTargetFolderPath,
+          args.screenConfigInputs,
           // The handler's callback signature accepts `Buffer | string`
           // for the chunk and `'info' | 'error' | undefined` for the
           // log level; PlatformLog wants `string` + `'info' | 'warning'
@@ -727,27 +698,6 @@ export function createEditorCompilerPlatformPort(
           errors: [{ message, line: 0, column: 0, severity: 'error' }],
         }
       }
-    },
-
-    async collectVppScreenRuntimeArtifacts(
-      args: CollectVppScreenRuntimeArtifactsArgs,
-      _log: PlatformLog,
-    ): Promise<CollectVppScreenRuntimeArtifactsResult> {
-      const resolveAddress = (qualifier: string): string => args.addressByQualifier[qualifier] ?? ''
-      const resolveDebugEntry = buildResolveDebugEntry(args.debugMapContent, args.instances)
-      const { collectVppScreenRuntimeArtifacts: runCollect } = await import('../compile/vpp-screen-emitters')
-      const res = await runCollect({
-        vppExtensions: args.vppExtensions,
-        deviceId: args.deviceId,
-        exportableVariables: args.exportableVariables,
-        resolveAddress,
-        resolveDebugEntry,
-      })
-      const files: Record<string, string> = {}
-      for (const [path, content] of Object.entries(res.files)) {
-        files[path] = typeof content === 'string' ? content : Buffer.from(content).toString('utf-8')
-      }
-      return { files, errors: res.errors.length > 0 ? res.errors : undefined }
     },
   }
 }
@@ -858,44 +808,4 @@ export async function findHexInCompilationPath(compilationPath: string, fqbn: st
     // No build/ dir — compile didn't run.
   }
   return null
-}
-
-/**
- * Build the `resolveDebugEntry(qualifier) → {arr, elem, datatype} | null` closure the VPP
- * emitter sandbox calls to translate a program variable qualifier into a STruC++ debug-map
- * address. Mirrors how the OPC-UA config generator resolves nodes (same helpers, same
- * uppercase convention), so a qualifier the debugger can watch is one a publisher VPP can
- * export. Returns a closure that always returns `null` when the debug map is empty or
- * unparseable, so the emitter can refuse the compile with a clean error.
- *
- * Qualifier shape (as produced by the pipeline today):
- *   - "<POU_NAME>.<VAR_NAME>" — a program-local VAR, resolved via instance mapping
- *   - "GVL.<VAR_NAME>"        — a CONFIGURATION VAR_GLOBAL, bare uppercase path
- */
-function buildResolveDebugEntry(
-  debugMapContent: string,
-  instances: ReadonlyArray<{ name: string; task: string; program: string }>,
-): (qualifier: string) => EmitterDebugEntry | null {
-  const parsed = debugMapContent ? parseDebugMap(debugMapContent) : undefined
-  const pathToInfo: Map<string, DebugLeafInfo> | null = parsed ? buildLeafInfoMap(parsed) : null
-  const instanceMapping: PLCInstanceMapping[] = instances.map((i) => ({ name: i.name, program: i.program }))
-
-  return (qualifier: string): EmitterDebugEntry | null => {
-    if (pathToInfo === null) return null
-    const dot = qualifier.indexOf('.')
-    if (dot <= 0) return null
-    const pouName = qualifier.slice(0, dot)
-    const variablePath = qualifier.slice(dot + 1)
-    let debugPath: string
-    if (pouName === 'GVL' || pouName === 'CONFIG') {
-      debugPath = buildGlobalDebugPath(variablePath)
-    } else {
-      const instanceName = findInstanceName(pouName, instanceMapping)
-      if (instanceName === null) return null
-      debugPath = buildDebugPath(instanceName, variablePath)
-    }
-    const info = pathToInfo.get(debugPath.toUpperCase())
-    if (info === undefined) return null
-    return { arr: info.arr, elem: info.elem, datatype: info.type }
-  }
 }

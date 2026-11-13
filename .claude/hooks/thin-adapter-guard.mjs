@@ -12,7 +12,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { isAbsolute, join, relative, sep } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 
 const PLATFORM_DIRS = ['src/middleware/adapters/', 'src/main/', 'src/backend/editor/', 'src/backend/web/']
 const TEST_FILE = /(^|\/)__tests__\/|\.(test|spec)\.[cm]?[jt]sx?$/
@@ -36,39 +36,55 @@ function readInput() {
   }
 }
 
+/** Root of the editor or web checkout (worktrees included) that holds `filePath`; null outside one. */
+function checkoutRoot(filePath) {
+  let dir = dirname(filePath)
+  for (;;) {
+    if (existsSync(join(dir, '.git'))) return existsSync(join(dir, 'src/middleware/adapters')) ? dir : null
+    const parent = dirname(dir)
+    if (parent === dir) return null
+    dir = parent
+  }
+}
+
 function platformPath(input) {
   const filePath = input?.tool_input?.file_path ?? input?.tool_input?.notebook_path
   if (typeof filePath !== 'string' || filePath === '') return null
-  const root = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd()
-  const rel = relative(root, isAbsolute(filePath) ? filePath : join(root, filePath))
-    .split(sep)
-    .join('/')
-  if (rel.startsWith('../') || TEST_FILE.test(rel)) return null
-  return PLATFORM_DIRS.some((dir) => rel.startsWith(dir)) ? rel : null
+  const absolute = resolve(input.cwd || process.env.CLAUDE_PROJECT_DIR || process.cwd(), filePath)
+  const root = checkoutRoot(absolute)
+  if (root === null) return null
+  const rel = relative(root, absolute).split(sep).join('/')
+  if (TEST_FILE.test(rel) || !PLATFORM_DIRS.some((dir) => rel.startsWith(dir))) return null
+  return absolute
 }
 
-/** Records `rel` for this session; true when it was already recorded. */
-function seenBefore(sessionId, rel) {
-  const dir = join(tmpdir(), 'claude-thin-adapter-guard')
+/** Records `path` for this session; true when it was already recorded or cannot be recorded. */
+function seenBefore(sessionId, path) {
+  const dir = join(tmpdir(), `claude-thin-adapter-guard-${process.getuid?.() ?? 'user'}`)
   const file = join(dir, `${String(sessionId).replace(/[^A-Za-z0-9_-]/g, '_')}.json`)
   let seen = []
   try {
-    if (existsSync(file)) seen = JSON.parse(readFileSync(file, 'utf-8'))
+    const stored = existsSync(file) ? JSON.parse(readFileSync(file, 'utf-8')) : []
+    if (Array.isArray(stored)) seen = stored
   } catch {
     seen = []
   }
-  if (seen.includes(rel)) return true
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(file, JSON.stringify([...seen, rel]))
+  if (seen.includes(path)) return true
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    writeFileSync(file, JSON.stringify([...seen, path]))
+  } catch {
+    return true
+  }
   return false
 }
 
 const input = readInput()
-const rel = platformPath(input)
-if (rel === null || seenBefore(input.session_id ?? 'unknown', rel)) process.exit(0)
+const path = platformPath(input)
+if (path === null || seenBefore(input.session_id ?? 'unknown', path)) process.exit(0)
 
 process.stderr.write(
-  `Blocked once: ${rel} is platform code.\n\n${RULE}\n\n` +
+  `Blocked once: ${path} is platform code.\n\n${RULE}\n\n` +
     'If this change is only a mechanism, state which one in your reply and repeat the same edit. ' +
     'Otherwise put the logic in the shared surface (src/middleware/shared, src/backend/shared, ' +
     'src/frontend) and have this file supply only the mechanism.\n',

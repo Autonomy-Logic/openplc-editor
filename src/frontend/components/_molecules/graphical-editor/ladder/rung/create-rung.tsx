@@ -1,10 +1,13 @@
 import { PlusIcon } from '../../../../../assets/icons/interface/Plus'
+import { useIsEditingLocked } from '../../../../../hooks/use-editing-lock'
 
 type CreateRungProps = {
   onClick: () => void
 }
 
 export const CreateRung = ({ onClick }: CreateRungProps) => {
+  const isEditingLocked = useIsEditingLocked()
+
   return (
     <div
       aria-label='Create new rung'
@@ -14,7 +17,8 @@ export const CreateRung = ({ onClick }: CreateRungProps) => {
       <button
         aria-label='Create new rung button'
         onClick={onClick}
-        className='mr-1 rounded-md p-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+        disabled={isEditingLocked}
+        className='mr-1 rounded-md p-1 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-neutral-900'
       >
         <PlusIcon size='sm' className='stroke-[#0464FB] dark:stroke-brand-light' />
       </button>

@@ -1,6 +1,9 @@
 import { describe, expect, it } from '@jest/globals'
 
 import type { PLCPou, PLCProjectData, PLCVariable } from '../../../../middleware/shared/ports/types'
+import type { PLCProjectData as SchemaPLCProjectData } from '../../types/PLC/open-plc'
+import { transpileToSt } from '../st-transpiler'
+import { fromSchemaShape } from '../st-transpiler/from-schema'
 import { fromPortShape } from '../transpile-from-port'
 
 function variable(overrides: Partial<PLCVariable> & { name: string }): PLCVariable {
@@ -400,5 +403,56 @@ describe('projecting the store shape into the transpiler IR', () => {
       dataTypes: [],
       configuration: { tasks: [], instances: [], globalVariables: [] },
     })
+  })
+})
+
+describe('agreeing with the schema projection the build uses', () => {
+  const flagged: PLCVariable[] = [
+    variable({ name: 'Kept', class: 'local', flag: 'retain', type: { definition: 'base-type', value: 'DINT' } }),
+    variable({
+      name: 'Mem',
+      class: 'local',
+      flag: 'retain',
+      location: '%MW0',
+      type: { definition: 'base-type', value: 'INT' },
+    }),
+    variable({
+      name: 'Limit',
+      class: 'local',
+      flag: 'constant',
+      initialValue: '10',
+      type: { definition: 'base-type', value: 'INT' },
+    }),
+    variable({ name: 'Plain', class: 'local', type: { definition: 'base-type', value: 'BOOL' } }),
+  ]
+  const body = { language: 'st' as const, value: 'Plain := Kept > Limit;' }
+  const instances = [{ name: 'Inst0', task: 'Task0', program: 'Main' }]
+  const tasks = [{ name: 'Task0', triggering: 'Cyclic' as const, interval: 'T#20ms', priority: 1 }]
+
+  const port = {
+    dataTypes: [],
+    pous: [pou({ name: 'Main', interface: { variables: flagged }, body })],
+    configurations: { resource: { tasks, instances, globalVariables: [] } },
+  } as unknown as PLCProjectData
+  const schema = {
+    dataTypes: [],
+    pous: [{ type: 'program', data: { name: 'Main', variables: flagged, body, documentation: '' } }],
+    configuration: { resource: { tasks, instances, globalVariables: [] } },
+  } as unknown as SchemaPLCProjectData
+
+  it('forwards the retain and constant flags', () => {
+    const byName = new Map(fromPortShape(port).pous[0].interface.variables.map((v) => [v.name, v]))
+    expect(byName.get('Kept')?.flag).toBe('retain')
+    expect(byName.get('Limit')?.flag).toBe('constant')
+    expect(byName.get('Plain')).not.toHaveProperty('flag')
+  })
+
+  it('emits the same program.st as the build, so the debugger MD5 matches the uploaded program', () => {
+    const viaPort = transpileToSt(fromPortShape(port)).programSt
+    const viaSchema = transpileToSt(fromSchemaShape(schema)).programSt
+
+    expect(viaPort).toContain('VAR RETAIN')
+    expect(viaPort).toContain('VAR CONSTANT')
+    expect(viaPort).toBe(viaSchema)
   })
 })
