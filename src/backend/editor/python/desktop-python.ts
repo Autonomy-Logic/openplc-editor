@@ -1,6 +1,8 @@
+import { totalmem } from 'node:os'
 import { Worker } from 'node:worker_threads'
 
 import { PythonBlockHost } from '@root/backend/shared/python/python-block-host'
+import { maxPythonInterpreters } from '@root/backend/shared/python/python-memory-budget'
 import { ThreadedPythonRuntime } from '@root/backend/shared/python/python-thread'
 import type { PythonThreadMechanism } from '@root/middleware/shared/ports/python-mechanisms'
 
@@ -41,5 +43,5 @@ export interface DesktopPython {
 /** The process's Python runtime and the block host that uses it. */
 export function createDesktopPython(paths: PythonRuntimePaths): DesktopPython {
   const runtime = new ThreadedPythonRuntime(createThreadPythonMechanism(paths))
-  return { runtime, host: new PythonBlockHost(runtime) }
+  return { runtime, host: new PythonBlockHost(runtime, undefined, maxPythonInterpreters(totalmem())) }
 }

@@ -51,6 +51,11 @@ class RunningBlock {
   private exchanging = false
   private ended = false
 
+  /** Whether the block's interpreter is still running. */
+  get alive(): boolean {
+    return !this.ended
+  }
+
   constructor(
     private readonly block: SimulatorPythonBlock,
     readonly label: string,
@@ -129,7 +134,8 @@ class RunningBlock {
 
 /**
  * Starts the Python blocks a simulator run announces. Interpreters prepared ahead (`prepare`, while the project
- * builds) are used first; a block beyond them gets one started on demand.
+ * builds) are used first; a block beyond them gets one started on demand. No more than `maxInterpreters` are alive at
+ * once: a block beyond that limit is not started, and the Console says why.
  */
 export class PythonBlockHost {
   onLog: ((line: string, stream: SimulatorLogStream) => void) | null = null
@@ -138,16 +144,31 @@ export class PythonBlockHost {
   private readonly running: RunningBlock[] = []
   private preparing: Promise<void> = Promise.resolve()
   private pendingPrepares = 0
+  private pendingStarts = 0
   private runs = 0
+  private limitReported = 0
 
   constructor(
     private readonly interpreters: PythonInterpreters,
     private readonly timers: PythonHostTimers = platformTimers,
+    private readonly maxInterpreters: number = Number.POSITIVE_INFINITY,
   ) {}
 
-  /** Starts interpreters until `count` wait idle and ready. Failures go to the Console; blocks then start on demand. */
+  /** Interpreters alive or starting: idle, being prepared, being started for a block, or running one. */
+  private live(): number {
+    return (
+      this.idle.length + this.pendingPrepares + this.pendingStarts + this.running.filter((block) => block.alive).length
+    )
+  }
+
+  /**
+   * Starts interpreters until `count` wait idle and ready, within the interpreter limit. Failures go to the Console;
+   * blocks then start on demand.
+   */
   prepare(count: number): Promise<void> {
-    const missing = count - this.idle.length - this.pendingPrepares
+    const inUse = this.live() - this.idle.length - this.pendingPrepares
+    const wanted = Math.min(count, this.maxInterpreters - inUse)
+    const missing = wanted - this.idle.length - this.pendingPrepares
     if (missing <= 0) return this.preparing
     this.pendingPrepares += missing
     const started = Array.from({ length: missing }, () =>
@@ -190,11 +211,23 @@ export class PythonBlockHost {
 
   private async startBlock(run: number, bus: SimulatorPythonBus, block: SimulatorPythonBlock, label: string) {
     let process: PythonProcess
-    try {
-      process = this.idle.shift() ?? (await this.interpreters.spawn())
-    } catch (error) {
-      this.log(`[${label}] Python could not start: ${describe(error)}`, 'stderr')
-      return
+    const prepared = this.idle.shift()
+    if (prepared) {
+      process = prepared
+    } else {
+      if (this.live() >= this.maxInterpreters) {
+        this.reportLimit(run, label)
+        return
+      }
+      this.pendingStarts++
+      try {
+        process = await this.interpreters.spawn()
+      } catch (error) {
+        this.log(`[${label}] Python could not start: ${describe(error)}`, 'stderr')
+        return
+      } finally {
+        this.pendingStarts--
+      }
     }
     if (run !== this.runs) {
       this.keepIdle(process)
@@ -211,6 +244,17 @@ export class PythonBlockHost {
     )
     this.running.push(running)
     running.start()
+  }
+
+  /** Reports, once per run, the first block left idle by the interpreter limit. */
+  private reportLimit(run: number, label: string): void {
+    if (this.limitReported === run) return
+    this.limitReported = run
+    this.log(
+      `[${label}] Python block not started: this run already uses ${this.maxInterpreters} Python interpreters, the ` +
+        "most this computer's memory allows; it and any further blocks keep their initial outputs.",
+      'stderr',
+    )
   }
 
   /** Keeps a fresh interpreter for a later block, forgetting it if it ends first. */

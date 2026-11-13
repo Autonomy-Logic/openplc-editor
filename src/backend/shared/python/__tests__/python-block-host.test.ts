@@ -313,3 +313,56 @@ describe('hex', () => {
     expect(fromHex('')).toEqual(new Uint8Array())
   })
 })
+
+describe('PythonBlockHost interpreter limit', () => {
+  const LIMIT_LINE =
+    "[Doubler #3] Python block not started: this run already uses 2 Python interpreters, the most this computer's memory allows; it and any further blocks keep their initial outputs."
+
+  it('prepares no more interpreters than the limit', async () => {
+    const interpreters = fakeInterpreters()
+    const host = new PythonBlockHost(interpreters, manualTimers(), 3)
+    await host.prepare(5)
+    expect(interpreters.started).toHaveLength(3)
+  })
+
+  it('leaves the blocks beyond the limit idle, says so once per run, and runs the others', async () => {
+    const interpreters = fakeInterpreters()
+    const host = new PythonBlockHost(interpreters, manualTimers(), 2)
+    const lines: string[] = []
+    host.onLog = (line) => lines.push(line)
+    await host.prepare(4)
+    const bus = fakeBus()
+    host.attach(bus)
+    for (let id = 1; id <= 4; id++) bus.announce(block(id))
+    await settle()
+
+    expect(interpreters.started).toHaveLength(2)
+    expect(interpreters.started.every((process) => process.written.length > 0)).toBe(true)
+    expect(lines).toEqual([LIMIT_LINE])
+
+    host.stop()
+    const next = fakeBus()
+    host.attach(next)
+    for (let id = 1; id <= 3; id++) next.announce(block(id))
+    await settle()
+    expect(lines).toEqual([LIMIT_LINE, LIMIT_LINE])
+  })
+
+  it('gives the room of a block that ended to the next block', async () => {
+    const interpreters = fakeInterpreters()
+    const host = new PythonBlockHost(interpreters, manualTimers(), 1)
+    host.onLog = () => undefined
+    const bus = fakeBus()
+    host.attach(bus)
+    bus.announce(block(1))
+    await settle()
+    bus.announce(block(2))
+    await settle()
+    expect(interpreters.started).toHaveLength(1)
+
+    interpreters.started[0].onExit?.({ kind: 'exited', code: 0 })
+    bus.announce(block(3))
+    await settle()
+    expect(interpreters.started).toHaveLength(2)
+  })
+})
