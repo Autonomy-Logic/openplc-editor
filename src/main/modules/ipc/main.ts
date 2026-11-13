@@ -52,6 +52,7 @@ import {
   switchBranch,
 } from '@root/backend/editor/edge-version-control'
 import { EsiProjectFiles } from '@root/backend/editor/ethercat'
+import { readFolderBytes, readFolderText } from '@root/backend/editor/hmi/hmi-preview-files'
 import { createDesktopCatalogTransport } from '@root/backend/editor/library-manager/desktop-catalog-transport'
 import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-workspace'
 import { describeRetrievedLibraries } from '@root/backend/editor/project/describe-retrieved-libraries'
@@ -1034,6 +1035,8 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('util:read-debug-file', this.handleReadDebugFile)
 
     this.registerHandle('wasm-toolchain:compile', this.handleWasmToolchainCompile)
+    this.registerHandle('hmi-preview:read-sources', this.handleHmiPreviewReadSources)
+    this.registerHandle('hmi-preview:read-runtime-headers', this.handleHmiPreviewReadRuntimeHeaders)
 
     // ===================== DEBUGGER =====================
     this.registerHandle('debugger:verify-md5', this.handleDebuggerVerifyMd5)
@@ -2399,6 +2402,14 @@ class MainProcessBridge implements MainIpcModule {
   // Utility handlers
   handleWasmToolchainCompile = (_event: IpcMainInvokeEvent, request: unknown): Promise<WasmCompileResult> =>
     getDesktopWasmCompileService().compileRequest(request)
+
+  handleHmiPreviewReadSources = async (): Promise<{ root: string; files: Record<string, Uint8Array> }> => ({
+    root: '',
+    files: await readFolderBytes(join(this.compilerModule.sourceDirectoryPath, 'hmi')),
+  })
+
+  handleHmiPreviewReadRuntimeHeaders = (): Promise<Record<string, string>> =>
+    readFolderText(this.compilerModule.strucppRuntimeDir)
 
   handleUtilGetPreviewImage = async (_event: IpcMainInvokeEvent, image: string, packagePath?: string) =>
     this.hardwareModule.getBoardImagePreview(image, packagePath)

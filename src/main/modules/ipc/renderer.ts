@@ -591,6 +591,11 @@ const rendererProcessBridge = {
   wasmToolchainCompile: (request: WasmCompileRequest): Promise<WasmCompileResult> =>
     ipcRenderer.invoke('wasm-toolchain:compile', request),
 
+  hmiPreviewReadSources: (): Promise<{ root: string; files: Record<string, Uint8Array> }> =>
+    ipcRenderer.invoke('hmi-preview:read-sources'),
+  hmiPreviewReadRuntimeHeaders: (): Promise<Record<string, string>> =>
+    ipcRenderer.invoke('hmi-preview:read-runtime-headers'),
+
   // ===================== UTILITY METHODS =====================
   getPreviewImage: (image: string, packagePath?: string): Promise<string> =>
     ipcRenderer.invoke('util:get-preview-image', image, packagePath),

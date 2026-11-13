@@ -10,6 +10,7 @@ export {
   useDevice,
   useEdgeAccount as useEdgeAccountPort,
   useEditSession,
+  useHmiPreview,
   useNavigation,
   useOrchestrator,
   useProject,

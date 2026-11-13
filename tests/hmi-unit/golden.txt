@@ -1,6 +1,6 @@
 warnings [{"file":"HMI","message":"GVL.Alarm is not in the PLC program's debug map; the HMI will not sync it"}]
 fonts {"variant":"compact","faces":[0,1]}
-units {"library":["lib_standard_widgets.cpp"],"widgets":["lib_project_widgets.cpp"],"screens":{"Overview":["pou_OVERVIEW.cpp"],"Details":["pou_DETAILS.cpp"]},"glue":["configuration.cpp","pou_HMIMAIN.cpp","pou_HMI_SHOW.cpp","pou_HMI_CURRENTSCREEN.cpp","hmi_unit_glue.cpp"]}
+units {"library":["lib_standard_widgets.cpp"],"widgets":["lib_project_widgets.cpp"],"screens":{"Overview":["pou_OVERVIEW.cpp","hmi_preview_0.cpp"],"Details":["pou_DETAILS.cpp","hmi_preview_1.cpp"]},"glue":["configuration.cpp","pou_HMIMAIN.cpp","pou_HMI_SHOW.cpp","pou_HMI_CURRENTSCREEN.cpp","hmi_unit_glue.cpp","hmi_preview.cpp"]}
 tags 4 md5=0123456789abcdef0123456789abcdef frame_ms=50 pin='2468' relock=5
 tag 0 Main.Level arr=0 elem=3 type=14 max=0 size=4
 tag 1 Main.Running arr=0 elem=4 type=1 max=0 size=1

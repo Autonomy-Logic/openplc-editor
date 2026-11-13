@@ -133,12 +133,34 @@ describe('compileToWasm', () => {
     expect(compiledSources(runner).sort()).toEqual(['app/main.cpp', 'core/core.c'])
   })
 
-  it('recompiles every unit when a file is added or removed, since an include may now resolve elsewhere', async () => {
+  it('keeps every object when an added file could not change what any include finds', async () => {
+    const cache = new Map<string, CachedWasmObject>()
+    await compileToWasm(request(), { runner: runnerWithIncludes(), cache })
+    const added = request()
+    added.files['screens/new_screen.cpp'] = 'int screen(void) { return 0; }'
+    const runner = runnerWithIncludes()
+    expect((await compileToWasm(added, { runner, cache })).stats.cached).toBe(2)
+    expect(compiledSources(runner)).toEqual([])
+  })
+
+  it('recompiles only the units an added file could hide an include of, as one named like that include', async () => {
     const cache = new Map<string, CachedWasmObject>()
     await compileToWasm(request(), { runner: runnerWithIncludes(), cache })
     const added = request()
     added.files['app/core.h'] = 'int core(void);'
-    expect((await compileToWasm(added, { runner: runnerWithIncludes(), cache })).stats.cached).toBe(0)
+    const runner = runnerWithIncludes()
+    expect((await compileToWasm(added, { runner, cache })).stats.cached).toBe(1)
+    expect(compiledSources(runner)).toEqual(['core/core.c'])
+  })
+
+  it('recompiles a unit when a file named like one of its toolchain headers appears or goes', async () => {
+    const cache = new Map<string, CachedWasmObject>()
+    await compileToWasm(request(), { runner: runnerWithIncludes(), cache })
+    const shadowing = request()
+    shadowing.files['core/stdio.h'] = '/* hides <stdio.h> */'
+    expect((await compileToWasm(shadowing, { runner: runnerWithIncludes(), cache })).stats.cached).toBe(0)
+    expect((await compileToWasm(shadowing, { runner: runnerWithIncludes(), cache })).stats.cached).toBe(2)
+    expect((await compileToWasm(request(), { runner: runnerWithIncludes(), cache })).stats.cached).toBe(0)
   })
 
   it('recompiles a unit when its flags change', async () => {
@@ -163,6 +185,110 @@ describe('compileToWasm', () => {
     )
     await compileToWasm(request(), { runner, cache })
     expect(cache.size).toBe(1)
+  })
+
+  describe('precompiled headers', () => {
+    const withHeader = (header = '#include "core/core.h"'): WasmCompileRequest =>
+      request({
+        files: { ...request().files, 'rt.h': header },
+        precompiledHeaders: [{ header: 'rt.h', language: 'c++' }],
+        units: [
+          { source: 'core/core.c', language: 'c' },
+          { source: 'app/main.cpp', language: 'c++', flags: ['-DAPP'], pch: 'rt.h' },
+        ],
+      })
+    const headerRunner = () => runnerWithIncludes({ 'rt.h': ['core/core.h'] })
+
+    it('builds each header first and gives it only to the units that name it', async () => {
+      const runner = headerRunner()
+      const result = await compileToWasm(withHeader(), { runner })
+      expect(result.ok).toBe(true)
+      expect(result.stats.units).toBe(3)
+      expect(runner.jobs[0].argv).toEqual([
+        'clang++',
+        '--target=wasm32-wasip1',
+        '-std=gnu++17',
+        '-x',
+        'c++-header',
+        'rt.h',
+        '-MD',
+        '-MF',
+        '__objects/0.pch.d',
+        '-o',
+        '__objects/0.pch',
+      ])
+      const main = runner.jobs.find((j) => j.argv.includes('app/main.cpp'))
+      const core = runner.jobs.find((j) => j.argv.includes('core/core.c'))
+      expect(main?.argv.slice(main.argv.indexOf('-include-pch'), main.argv.indexOf('-include-pch') + 2)).toEqual([
+        '-include-pch',
+        '__objects/0.pch',
+      ])
+      expect(main && FakeRunner.text(main.tree, '__objects/0.pch')).toContain('c++-header rt.h')
+      expect(core?.argv).not.toContain('-include-pch')
+      const link = runner.jobs[runner.jobs.length - 1]
+      expect(link.argv.filter((a) => a.endsWith('.pch'))).toEqual([])
+    })
+
+    it('keeps the header and its units cached until a file the header includes changes', async () => {
+      const cache = new Map<string, CachedWasmObject>()
+      await compileToWasm(withHeader(), { runner: headerRunner(), cache })
+      const unchanged = headerRunner()
+      expect((await compileToWasm(withHeader(), { runner: unchanged, cache })).stats.cached).toBe(3)
+
+      const runner = headerRunner()
+      const edited = withHeader()
+      edited.files['core/core.h'] = 'int core(void); int more(void);'
+      const result = await compileToWasm(edited, { runner, cache })
+      expect(result.ok).toBe(true)
+      expect(runner.jobs.filter((j) => j.argv.includes('-x')).map((j) => j.argv[j.argv.indexOf('-x') + 2])).toEqual([
+        'rt.h',
+      ])
+      expect(compiledSources(runner).sort()).toEqual(['app/main.cpp', 'core/core.c'])
+    })
+
+    it('recompiles the units that use a header when the header changes, and only them', async () => {
+      const cache = new Map<string, CachedWasmObject>()
+      await compileToWasm(withHeader(), { runner: headerRunner(), cache })
+      const runner = headerRunner()
+      const result = await compileToWasm(withHeader('#include "core/core.h"\n#define MORE 1'), { runner, cache })
+      expect(result.stats.cached).toBe(1)
+      expect(compiledSources(runner)).toEqual(['app/main.cpp'])
+    })
+
+    it('stops before the units when a header fails', async () => {
+      const runner = new FakeRunner(2, (argv) =>
+        argv.includes('-x') ? { exitCode: 1, stderr: 'rt.h:1: error' } : { exitCode: 0 },
+      )
+      const result = await compileToWasm(withHeader(), { runner })
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.error).toBe('Compilation failed in 1 of 3 file(s): rt.h: clang exited with code 1.')
+      expect(runner.jobs).toHaveLength(1)
+    })
+
+    it('refuses a unit naming a header that is not precompiled, and a header that is missing or listed twice', async () => {
+      const runner = new FakeRunner()
+      const unknown = withHeader()
+      unknown.units[1] = { ...unknown.units[1], pch: 'other.h' }
+      const missing = withHeader()
+      delete missing.files['rt.h']
+      const twice = withHeader()
+      twice.precompiledHeaders = [
+        { header: 'rt.h', language: 'c++' },
+        { header: 'rt.h', language: 'c++' },
+      ]
+      const errors = await Promise.all(
+        [unknown, missing, twice].map(async (r) => {
+          const result = await compileToWasm(r, { runner })
+          return result.ok ? '' : result.error
+        }),
+      )
+      expect(errors).toEqual([
+        "Unit 'app/main.cpp' names 'other.h', which is not a precompiled header.",
+        "Precompiled header 'rt.h' is not among the input files.",
+        "Precompiled header 'rt.h' is listed more than once.",
+      ])
+      expect(runner.jobs).toEqual([])
+    })
   })
 
   it('never runs more jobs at once than the runner allows, largest unit first', async () => {

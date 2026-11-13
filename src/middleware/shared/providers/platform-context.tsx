@@ -118,6 +118,10 @@ export function useEsi() {
   return usePlatform().esi
 }
 
+export function useHmiPreview() {
+  return usePlatform().hmiPreview
+}
+
 export function useEtherCATScan() {
   return usePlatform().ethercatScan
 }

@@ -1,6 +1,7 @@
 import type {
   WasmCompileRequest,
   WasmCompileUnit,
+  WasmPrecompiledHeader,
   WasmToolchainFiles,
 } from '@root/middleware/shared/ports/wasm-toolchain-types'
 
@@ -43,9 +44,29 @@ function parseUnits(value: unknown): WasmCompileUnit[] | string {
     if (unit.language !== 'c' && unit.language !== 'c++') return `Unit '${unit.source}' has no valid language.`
     const flags = optionalFlags(unit.flags, `${unit.source}.flags`)
     if (typeof flags === 'string') return flags
-    units.push({ source: unit.source, language: unit.language, ...(flags ? { flags } : {}) })
+    if (unit.pch !== undefined && typeof unit.pch !== 'string') return `Unit '${unit.source}' has an invalid 'pch'.`
+    units.push({
+      source: unit.source,
+      language: unit.language,
+      ...(flags ? { flags } : {}),
+      ...(typeof unit.pch === 'string' ? { pch: unit.pch } : {}),
+    })
   }
   return units
+}
+
+function parseHeaders(value: unknown): WasmPrecompiledHeader[] | string {
+  if (!Array.isArray(value)) return "'precompiledHeaders' must be a list."
+  const headers: WasmPrecompiledHeader[] = []
+  for (const header of value) {
+    if (!isRecord(header) || typeof header.header !== 'string') return 'Every precompiled header needs a path.'
+    if (header.language !== 'c' && header.language !== 'c++')
+      return `Precompiled header '${header.header}' has no valid language.`
+    const flags = optionalFlags(header.flags, `${header.header}.flags`)
+    if (typeof flags === 'string') return flags
+    headers.push({ header: header.header, language: header.language, ...(flags ? { flags } : {}) })
+  }
+  return headers
 }
 
 /** Checks a compile request that crossed a process or worker boundary. */
@@ -56,6 +77,11 @@ export function parseWasmCompileRequest(value: unknown): ParsedWasmCompileReques
   const units = parseUnits(value.units)
   if (typeof units === 'string') return { ok: false, error: units }
   const request: WasmCompileRequest = { files, units }
+  if (value.precompiledHeaders !== undefined) {
+    const headers = parseHeaders(value.precompiledHeaders)
+    if (typeof headers === 'string') return { ok: false, error: headers }
+    request.precompiledHeaders = headers
+  }
   for (const field of ['cFlags', 'cxxFlags', 'linkFlags'] as const) {
     const flags = optionalFlags(value[field], field)
     if (typeof flags === 'string') return { ok: false, error: flags }

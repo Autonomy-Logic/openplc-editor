@@ -433,7 +433,15 @@ as diagnostics too, never as a rejection. The logic is shared and byte-identical
 that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its runtime headers.
 
 - **Object cache:** per unit, for the session (256 MB, least recently used first). Each object is kept with the
-  request files clang says it read (`-MD`), and reused while they are unchanged and no file was added or removed.
+  request files clang says it read (`-MD`) and the names of all its dependencies, toolchain headers included. It is
+  reused while those files are unchanged and no file carrying one of those names was added or removed; other added
+  or removed files leave it valid.
+- **Objects across sessions:** once the toolchain is ready the cache is filled from a store (desktop:
+  `userData/User/WasmObjects/`, web: IndexedDB `openplc-wasm-objects`) and every new object is written through, at
+  most 192 MB, oldest first. Records of another toolchain (a different `clang --version`) or damaged ones are
+  removed. Compiles wait for the store to load; a store that cannot be read only costs the reuse.
+- **Precompiled headers:** a request may list `precompiledHeaders`, built first and cached like units; a unit names
+  one with `pch`, and its digest is part of that unit's cache key.
 - **Worker pool:** starts with one worker and adds one, up to `clangWorkerCount` (four at most), when every worker
   is busy. A worker that fails, does not load within 120 s, or runs a job past 120 s is terminated and dropped,
   and its jobs fail.
@@ -447,8 +455,10 @@ that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its r
   loads it on first use, which is how a future CLI command will get it.
 - **Packaging:** the package ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
   entitlement in `assets/entitlements.mac.plist` lets it run under the hardened runtime.
-- **Running a module** is the caller's job. Instantiating one in the renderer needs `'wasm-unsafe-eval'` in the
-  renderer CSP (`src/index.ejs`), which is not there today.
+- **Running a module** is the caller's job. The HMI preview runs its modules in a Worker started from its own
+  renderer bundle (`hmi-preview-worker.js`, a second entry of the renderer webpack configs), which compiles
+  WebAssembly with the page CSP (`src/index.ejs`) unchanged; `e2e/hmi-preview-worker.spec.ts` checks it.
+  Instantiating a module on the page itself would need `'wasm-unsafe-eval'` there, which is not there today.
 
 **Updating the toolchain:** change the exact `@yowasp/clang` version in `package.json` in both repos (with both
 lockfiles, `pnpm-lock.yaml` included on the web), then run `e2e/wasm-toolchain.spec.ts` in both repos, including
@@ -483,6 +493,9 @@ and ship next to the toolchain; refresh them from the commits the new release wa
   (`src/middleware/shared/utils/hmi/settings.ts`) into the HMI unit: C++ in namespace `hmi` plus the C glue hosts
   link (`resources/sources/hmi/unit/hmi_unit.h`; preview setters in `hmi_preview.h`). `tests/hmi-unit/run.mjs`
   (`npm run test:hmi-unit`, same CI job) builds a sample project's unit and runs it from a C host.
+- **HMI preview:** `src/backend/shared/hmi/preview/` builds screens and widget blocks with the WebAssembly toolchain
+  and runs them in a Worker (`createHmiPreviewPort`; host `resources/sources/hmi/preview/`). `tests/hmi-preview/run.ts`
+  (`npm run test:hmi-preview`, same CI job) does it with the real toolchain and checks rebuild times.
 - **Manual:** the developer's manual test is required for every demand.
 
 ## Code Style

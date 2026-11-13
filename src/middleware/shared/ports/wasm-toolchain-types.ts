@@ -13,12 +13,24 @@ export interface WasmCompileUnit {
   language: WasmUnitLanguage
   /** Flags for this unit only, after the language flags. */
   flags?: string[]
+  /** Header of one of the request's `precompiledHeaders` that this unit includes precompiled, ahead of its source. */
+  pch?: string
+}
+
+/** A header compiled once into a precompiled header; units name it with `pch`. Its flags must match theirs. */
+export interface WasmPrecompiledHeader {
+  header: string
+  language: WasmUnitLanguage
+  /** Flags for this header only, after the language flags. */
+  flags?: string[]
 }
 
 export interface WasmCompileRequest {
   /** Sources, headers and any other input, keyed by relative path. */
   files: WasmToolchainFiles
   units: WasmCompileUnit[]
+  /** Headers compiled before the units, for units that name them with `pch`. */
+  precompiledHeaders?: WasmPrecompiledHeader[]
   /** Flags for every C unit. */
   cFlags?: string[]
   /** Flags for every C++ unit. */

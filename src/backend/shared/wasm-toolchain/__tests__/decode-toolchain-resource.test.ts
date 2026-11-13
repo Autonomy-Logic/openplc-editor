@@ -132,3 +132,39 @@ describe('parseWasmCompileRequest across realms', () => {
     expect(ArrayBuffer.isView(bytes) && bytes.byteLength).toBe(2)
   })
 })
+
+describe('parseWasmCompileRequest precompiled headers', () => {
+  const base = { files: { 'rt.h': '', 'a.cpp': '' } }
+
+  it('keeps precompiled headers and the header each unit names', () => {
+    const parsed = parseWasmCompileRequest({
+      ...base,
+      precompiledHeaders: [{ header: 'rt.h', language: 'c++', flags: ['-O1'] }],
+      units: [{ source: 'a.cpp', language: 'c++', pch: 'rt.h' }],
+    })
+    expect(parsed.ok && parsed.request.precompiledHeaders).toEqual([
+      { header: 'rt.h', language: 'c++', flags: ['-O1'] },
+    ])
+    expect(parsed.ok && parsed.request.units).toEqual([{ source: 'a.cpp', language: 'c++', pch: 'rt.h' }])
+  })
+
+  it('refuses malformed headers and a pch that is not a path', () => {
+    const errors = [
+      { precompiledHeaders: 'rt.h', units: [] },
+      { precompiledHeaders: [{ language: 'c++' }], units: [] },
+      { precompiledHeaders: [{ header: 'rt.h', language: 'rust' }], units: [] },
+      { precompiledHeaders: [{ header: 'rt.h', language: 'c', flags: [1] }], units: [] },
+      { units: [{ source: 'a.cpp', language: 'c++', pch: 1 }] },
+    ].map((r) => {
+      const parsed = parseWasmCompileRequest({ ...base, ...r })
+      return parsed.ok ? '' : parsed.error
+    })
+    expect(errors).toEqual([
+      "'precompiledHeaders' must be a list.",
+      'Every precompiled header needs a path.',
+      "Precompiled header 'rt.h' has no valid language.",
+      "'rt.h.flags' must be a list of strings.",
+      "Unit 'a.cpp' has an invalid 'pch'.",
+    ])
+  })
+})

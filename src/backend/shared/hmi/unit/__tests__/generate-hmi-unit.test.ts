@@ -1,5 +1,11 @@
 import { hmiSettingsSchema } from '../../../../../middleware/shared/utils/hmi/settings'
-import { generateHmiUnit, type HmiUnitInput, type HmiUnitResult, numericWriteBack } from '../generate-hmi-unit'
+import {
+  generateHmiUnit,
+  type HmiUnitInput,
+  type HmiUnitResult,
+  numericWriteBack,
+  WIDGET_PREVIEW_SCREEN,
+} from '../generate-hmi-unit'
 import { DETAILS, OVERVIEW, sampleProject } from './fixtures/sample-project'
 
 function messages(result: HmiUnitResult): string[] {
@@ -46,6 +52,64 @@ describe('HMI unit generator', () => {
     expect(sample.files['hmi_unit_glue.cpp']).not.toContain('GVL.Alarm')
     expect(sample.files['hmi_unit_glue.cpp']).toContain('const char hmi_panel_pin[] = "2468";')
     expect(sample.files['hmi_unit_glue.cpp']).toContain('while (n < 12 && b[n] != 0) n++;')
+  })
+
+  it('starts the mirror from literal initial values, and from the type default for anything else', () => {
+    const project = sampleProject()
+    const initial: Record<string, string> = {
+      'Main.Level': '12.5',
+      'Main.Running': 'TRUE',
+      'Main.Speed': 'INT#7',
+      'Main.Tag': "'Pump $'A$''",
+      'GVL.Alarm': 'Limit > 3',
+    }
+    const result = generateHmiUnit({
+      ...project,
+      plcVariables: project.plcVariables.map((v) => ({ ...v, initialValue: initial[v.path] })),
+    })
+    expect(messages(result)).toEqual([])
+    const mirror = result.sources['hmi_tags.st']
+    expect(mirror).toContain('    Level : REAL := 12.5;')
+    expect(mirror).toContain('    Running : BOOL := TRUE;')
+    expect(mirror).toContain('    Speed : INT := INT#7;')
+    expect(mirror).toContain("    Tag : STRING(12) := 'Pump $'A$'';")
+    expect(mirror).toContain('    Alarm : BOOL;')
+  })
+
+  it('never lets an initial value break out of the mirror declaration', () => {
+    const project = sampleProject()
+    for (const initialValue of [
+      '0; END_STRUCT; END_TYPE PROGRAM X',
+      "'a'; b : INT := 1",
+      "'open",
+      'MAX_LEVEL',
+      '1 + 2',
+    ]) {
+      const result = generateHmiUnit({
+        ...project,
+        plcVariables: project.plcVariables.map((v) => (v.path === 'Main.Speed' ? { ...v, initialValue } : v)),
+      })
+      expect(result.sources['hmi_tags.st']).toContain('    Speed : INT;')
+    }
+  })
+
+  it('previews a widget block on an extra screen, at natural size and stretched, with a test value', () => {
+    const project = sampleProject()
+    const result = generateHmiUnit({ ...project, screens: [], widgetPreview: 'badge', resolve: undefined })
+    expect(messages(result)).toEqual([])
+    const source =
+      result.sources[`${WIDGET_PREVIEW_SCREEN}.st`] ??
+      Object.values(result.sources).find((t) => t.includes(WIDGET_PREVIEW_SCREEN))
+    expect(source).toContain("Natural : Badge := (Parent := 'HMI__Row', GrowAuto := FALSE);")
+    expect(source).toContain("Stretched : Badge := (Parent := 'HMI__Column', Grow := 1, GrowAuto := FALSE);")
+    expect(source).toContain('Natural.Value := TRUE;')
+    expect(result.preview.units.screens[WIDGET_PREVIEW_SCREEN]).toBeDefined()
+    expect(generateHmiUnit(project).sources).not.toHaveProperty([`${WIDGET_PREVIEW_SCREEN}.st`])
+  })
+
+  it('refuses to preview a widget block the project does not have', () => {
+    const result = generateHmiUnit({ ...sampleProject(), widgetPreview: 'HmiLamp' })
+    expect(messages(result)).toEqual(['HMI: HmiLamp is not a widget block of the project'])
   })
 
   it('keeps every tag without a PLC program, for previews', () => {
@@ -102,8 +166,11 @@ describe('HMI unit generator', () => {
     expect(sample.preview.units).toEqual({
       library: ['lib_standard_widgets.cpp'],
       widgets: ['lib_project_widgets.cpp'],
-      screens: { Overview: ['pou_OVERVIEW.cpp'], Details: ['pou_DETAILS.cpp'] },
-      glue: expect.arrayContaining(['configuration.cpp', 'pou_HMIMAIN.cpp', 'hmi_unit_glue.cpp']),
+      screens: {
+        Overview: ['pou_OVERVIEW.cpp', 'hmi_preview_0.cpp'],
+        Details: ['pou_DETAILS.cpp', 'hmi_preview_1.cpp'],
+      },
+      glue: expect.arrayContaining(['configuration.cpp', 'pou_HMIMAIN.cpp', 'hmi_unit_glue.cpp', 'hmi_preview.cpp']),
     })
     const { setters } = sample.preview
     expect(setters['Overview.Level.MaxValue']).toEqual({ screen: 0, index: expect.any(Number), kind: 'num' })
