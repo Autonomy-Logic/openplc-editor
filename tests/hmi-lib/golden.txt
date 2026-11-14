@@ -50,16 +50,16 @@ name_typed page=2 dl=509041a10b7af473 status=0 run=1 held=0 clicks=1 pump=0 valv
 locked_down page=2 dl=509041a10b7af473 status=0 run=1 held=0 clicks=1 pump=0 valve=0 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
 locked_up page=2 dl=509041a10b7af473 status=0 run=1 held=0 clicks=1 pump=0 valve=0 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
 controls_after page=2 dl=509041a10b7af473 status=0 run=1 held=0 clicks=1 pump=0 valve=0 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0 raster=0 px=fc23df0c60cb2747
-diagram_0 page=3 dl=a99d4088b31a47d6 status=0 run=1 held=0 clicks=1 pump=0 valve=0 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
-diagram page=3 dl=a99d4088b31a47d6 status=0 run=1 held=0 clicks=1 pump=0 valve=0 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0 raster=0 px=5c5b9c23c88fac7e
-pump_down page=3 dl=022aef4cf466c305 status=0 run=1 held=0 clicks=1 pump=1 valve=0 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
-pump_up page=3 dl=9346e74a400f37b7 status=0 run=1 held=0 clicks=1 pump=1 valve=0 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
-valve_down page=3 dl=424be4810ad48a19 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
-valve_up page=3 dl=b1deca03d3021802 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
-diagram_flowing page=3 dl=44b03270e8a282d0 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0 raster=0 px=1b597611aa2ef54e
-pan_down page=3 dl=a77aae9dea73a20a status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
-pan_move page=3 dl=a24dc3fe0dd03733 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
-pan_up page=3 dl=1b69f6dfe43547de status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0 raster=0 px=22ad1409cefa3c51
+diagram_0 page=3 dl=177f2d5264bcd4b0 status=0 run=1 held=0 clicks=1 pump=0 valve=0 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
+diagram page=3 dl=177f2d5264bcd4b0 status=0 run=1 held=0 clicks=1 pump=0 valve=0 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0 raster=0 px=7dac253f9feeb0ad
+pump_down page=3 dl=3119221f3b4e76d5 status=0 run=1 held=0 clicks=1 pump=1 valve=0 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
+pump_up page=3 dl=1b1ccd0db9f6777b status=0 run=1 held=0 clicks=1 pump=1 valve=0 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
+valve_down page=3 dl=63402bb30d6339c1 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
+valve_up page=3 dl=8105f117db9abf7c status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
+diagram_flowing page=3 dl=8cfcf64f0ee5d6d2 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0 raster=0 px=3137af2414fae50d
+pan_down page=3 dl=14b57527d5a51a7c status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
+pan_move page=3 dl=3c5b84e46fdfe204 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
+pan_up page=3 dl=8367e9572dae5a5b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0 raster=0 px=10f45dc8c0322da2
 layout_0 page=4 dl=e54fa460f03cb72e status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0
 layout page=4 dl=e54fa460f03cb72e status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=0 hides=0 raster=0 px=89cbea2ba2cf864a
 layout w1=58 w2=58 w3=308 x4=90

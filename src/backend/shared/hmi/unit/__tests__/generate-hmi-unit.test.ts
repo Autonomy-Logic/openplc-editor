@@ -311,6 +311,31 @@ describe('HMI unit generator', () => {
     ])
   })
 
+  it('connects each pipe to the one declared before it in the same container, for its hops', () => {
+    const result = generateHmiUnit(
+      withScreen(
+        screen(
+          [
+            '    D1 : HmiDiagram;',
+            '    D2 : HmiDiagram;',
+            "    A : HmiPump := (Parent := 'D1');",
+            "    B : HmiValve := (Parent := 'D1');",
+            "    C : HmiPump := (Parent := 'D2');",
+            "    E : HmiValve := (Parent := 'D2');",
+            "    P1 : HmiPipe := (Parent := 'D1', Source := 'A', Target := 'B');",
+            "    Q1 : HmiPipe := (Parent := 'D2', Source := 'C', Target := 'E');",
+            "    P2 : HmiPipe := (Parent := 'D1', Source := 'B', Target := 'A', Path := '10,10;10,90');",
+          ].join('\n'),
+        ),
+      ),
+    )
+    expect(messages(result)).toEqual([])
+    const overview = Object.values(result.sources).find((t) => t.includes('FUNCTION_BLOCK Overview')) ?? ''
+    expect(overview).toContain('Connect(ADR(P1), ADR(A), ADR(B), 0);')
+    expect(overview).toContain('Connect(ADR(Q1), ADR(C), ADR(E), 0);')
+    expect(overview).toContain('Connect(ADR(P2), ADR(B), ADR(A), ADR(P1));')
+  })
+
   it('checks containers, parents and pipe ends', () => {
     expect(
       messages(

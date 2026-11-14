@@ -109,19 +109,22 @@ FUNCTION_BLOCK DiagramScreen EXTENDS HmiScreen
     L1 : HmiPipe := (Source := 'Tk', SourcePort := HMI_PORT#Bottom, Target := 'P1', TargetPort := HMI_PORT#Left, Animate := TRUE);
     L2 : HmiPipe := (Source := 'P1', SourcePort := HMI_PORT#Right, Target := 'V1', TargetPort := HMI_PORT#Left);
     L3 : HmiPipe := (Source := 'V1', SourcePort := HMI_PORT#Right, Target := 'Ft', TargetPort := HMI_PORT#Left);
+    L4 : HmiPipe := (Source := 'Tk', SourcePort := HMI_PORT#Right, Target := 'Ft', TargetPort := HMI_PORT#Bottom, Path := '330,136;330,400;600,400');
   END_VAR
   METHOD PROTECTED OVERRIDE Build : BOOL
     Attach(ADR(Plant), 0);
     Attach(ADR(L1), ADR(Plant));
     Attach(ADR(L2), ADR(Plant));
     Attach(ADR(L3), ADR(Plant));
+    Attach(ADR(L4), ADR(Plant));
     Attach(ADR(Tk), ADR(Plant));
     Attach(ADR(P1), ADR(Plant));
     Attach(ADR(V1), ADR(Plant));
     Attach(ADR(Ft), ADR(Plant));
-    Connect(ADR(L1), ADR(Tk), ADR(P1));
-    Connect(ADR(L2), ADR(P1), ADR(V1));
-    Connect(ADR(L3), ADR(V1), ADR(Ft));
+    Connect(ADR(L1), ADR(Tk), ADR(P1), 0);
+    Connect(ADR(L2), ADR(P1), ADR(V1), ADR(L1));
+    Connect(ADR(L3), ADR(V1), ADR(Ft), ADR(L2));
+    Connect(ADR(L4), ADR(Tk), ADR(Ft), ADR(L3));
     Build := TRUE;
   END_METHOD
   METHOD PROTECTED OVERRIDE WriteBack : BOOL

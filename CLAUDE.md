@@ -498,8 +498,10 @@ and ship next to the toolchain; refresh them from the commits the new release wa
   (`npm run test:hmi-preview`, same CI job) does it with the real toolchain and checks rebuild times. The port also
   draws the palette's thumbnails from a generated gallery screen (`hmi-thumbnails.ts`).
 - **HMI designer:** `src/frontend/components/_features/[workspace]/editor/hmi/designer/` edits a screen's ST as text
-  patches (`src/middleware/shared/utils/hmi/designer/`), with undo in the `hmiDesigner` store slice;
-  `e2e/hmi-designer.spec.ts` drives it on the real preview.
+  patches (`src/middleware/shared/utils/hmi/designer/`), with undo in the `hmiDesigner` store slice. In a diagram it
+  places symbols on the grid, draws pipes from port to port and edits their bends (`designer-diagram.ts`), from the
+  ports, diagram frames and pipe routes a design-mode frame records. `e2e/hmi-designer.spec.ts` and
+  `e2e/hmi-diagram.spec.ts` drive it on the real preview.
 - **Manual:** the developer's manual test is required for every demand.
 
 ## Code Style

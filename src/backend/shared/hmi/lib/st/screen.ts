@@ -243,9 +243,9 @@ FUNCTION_BLOCK HmiScreen
     END_IF;
   END_METHOD
   METHOD PROTECTED Connect : BOOL
-    VAR_INPUT Pipe : POINTER TO HmiPipe; Source, Target : POINTER TO HmiElement; END_VAR
+    VAR_INPUT Pipe : POINTER TO HmiPipe; Source, Target : POINTER TO HmiElement; Prior : POINTER TO HmiPipe; END_VAR
     IF Pipe <> 0 THEN
-      Connect := Pipe^.Connect(Source, Target);
+      Connect := Pipe^.Connect(Source, Target, Prior);
     END_IF;
   END_METHOD
   METHOD PROTECTED UseTheme : BOOL

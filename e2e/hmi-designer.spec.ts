@@ -7,17 +7,28 @@
  * Running it needs a production build plus the preload at the path a NON-packaged app looks for it; see "Electron
  * e2e" in CLAUDE.md. Every wait also reads the app's own error text and fails at once when the app reports one.
  */
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import type { ElectronApplication, Page } from '@playwright/test'
-import { _electron as electron, expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
-const ROOT = join(realpathSync(tmpdir()), 'openplc-e2e-hmi-designer')
-const FIXTURE = join(ROOT, 'project')
-const USER_DATA = join(ROOT, 'userdata')
-const SHOTS = join(ROOT, 'shots')
+import {
+  codeText,
+  hmiFixture,
+  htmlDrag,
+  launchHmiApp,
+  leaf,
+  save,
+  screenOnDisk,
+  status,
+  undo,
+  waitFor as waitForIn,
+  writeHmiFixture,
+} from './helpers/hmi-app'
+
+const F = hmiFixture('hmi-designer')
+const SHOTS = F.shots
 
 const OVERVIEW = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
   VAR
@@ -44,178 +55,25 @@ const BADGE = `FUNCTION_BLOCK Badge EXTENDS HmiSwitch
 END_FUNCTION_BLOCK
 `
 
-const APP_FAILURES = [/Failed to open project/i, /Something went wrong/i, /could not be loaded/i]
+const MAIN =
+  'PROGRAM Main\n  VAR\n    Level : REAL := 6.5;\n    Running : BOOL;\n  END_VAR\n  Level := Level;\nEND_PROGRAM\n'
 
-function writeFixture(): void {
-  rmSync(ROOT, { recursive: true, force: true })
-  mkdirSync(join(FIXTURE, 'devices'), { recursive: true })
-  mkdirSync(join(FIXTURE, 'pous', 'programs'), { recursive: true })
-  mkdirSync(join(FIXTURE, 'hmi', 'widgets'), { recursive: true })
-  mkdirSync(SHOTS, { recursive: true })
-  writeFileSync(
-    join(FIXTURE, 'project.json'),
-    JSON.stringify({
-      meta: { name: 'hmi-designer', type: 'plc-project' },
-      data: {
-        dataTypes: [],
-        pous: [],
-        configuration: {
-          resource: {
-            tasks: [{ name: 'task0', triggering: 'Cyclic', interval: 'T#20ms', priority: 1 }],
-            instances: [{ name: 'instance0', program: 'Main', task: 'task0' }],
-            globalVariables: [
-              {
-                name: 'Alarm',
-                type: { definition: 'base-type', value: 'BOOL' },
-                location: '',
-                documentation: '',
-                initialValue: 'TRUE',
-              },
-            ],
-          },
-        },
-        libraries: [],
-        debugVariables: { global: [], pous: {} },
-      },
-    }),
-  )
-  writeFileSync(
-    join(FIXTURE, 'devices', 'configuration.json'),
-    JSON.stringify({
-      deviceBoard: 'OpenPLC Runtime v4',
-      communicationPort: '',
-      runtimeIpAddress: '',
-      selectedPlatformOptions: {},
-    }),
-  )
-  writeFileSync(join(FIXTURE, 'devices', 'pin-mapping.json'), '{}')
-  writeFileSync(
-    join(FIXTURE, 'pous', 'programs', 'Main.st'),
-    'PROGRAM Main\n  VAR\n    Level : REAL := 6.5;\n    Running : BOOL;\n  END_VAR\n  Level := Level;\nEND_PROGRAM\n',
-  )
-  writeFileSync(join(FIXTURE, 'hmi', 'Overview.st'), OVERVIEW)
-  writeFileSync(join(FIXTURE, 'hmi', 'Details.st'), DETAILS)
-  writeFileSync(join(FIXTURE, 'hmi', 'widgets', 'Badge.st'), BADGE)
-  writeFileSync(join(FIXTURE, 'hmi', 'settings.json'), JSON.stringify({ startScreen: 'Overview' }))
-  const history = join(USER_DATA, 'User', 'History')
-  mkdirSync(history, { recursive: true })
-  writeFileSync(
-    join(history, 'projects.json'),
-    JSON.stringify([
-      {
-        name: 'hmi-designer',
-        path: FIXTURE,
-        projectFilePath: join(FIXTURE, 'project.json'),
-        createdAt: new Date().toISOString(),
-        lastOpenedAt: new Date().toISOString(),
-      },
-    ]),
-  )
-  writeFileSync(join(history, 'libraries.json'), '[]')
-  const runtime = join(USER_DATA, 'User', 'Runtime')
-  mkdirSync(runtime, { recursive: true })
-  writeFileSync(join(runtime, 'arduino-core-control.json'), '[]')
-  writeFileSync(join(runtime, 'arduino-library-control.json'), '[]')
-}
-
-async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
-  const app = await electron.launch({
-    args: [join(__dirname, '..', 'release', 'app', 'dist', 'main', 'main.js'), `--user-data-dir=${USER_DATA}`],
-    env: { ...process.env, NODE_ENV: 'production' },
-  })
-  const deadline = Date.now() + 60000
-  while (Date.now() < deadline) {
-    for (const w of app.windows()) {
-      try {
-        if (w.url().includes('index.html')) {
-          await w.waitForLoadState('domcontentloaded')
-          return { app, page: w }
-        }
-      } catch {
-        /* window is closing */
-      }
-    }
-    await new Promise((r) => setTimeout(r, 500))
-  }
-  throw new Error('main window never appeared')
-}
-
-async function failIfAppReportedFailure(page: Page): Promise<void> {
-  const text = await page.locator('body').innerText()
-  const failure = APP_FAILURES.find((pattern) => pattern.test(text))
-  if (failure)
-    throw new Error(
-      `the app reported a failure: ${text
-        .split('\n')
-        .filter((l) => failure.test(l))
-        .join(' | ')}`,
-    )
-}
-
-async function waitFor(page: Page, what: string, check: () => Promise<boolean>, timeoutMs = 30000): Promise<void> {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    await failIfAppReportedFailure(page)
-    if (await check()) return
-    await page.waitForTimeout(250)
-  }
-  await page.screenshot({ path: join(SHOTS, 'timeout.png') })
-  const errors = await page.getByTestId('hmi-errors').allInnerTexts()
-  throw new Error(`timed out waiting for ${what}${errors.length ? `; designer errors: ${errors.join(' | ')}` : ''}`)
-}
-
-const leaf = (page: Page, name: string) =>
-  page.locator('li.group').filter({ has: page.getByText(new RegExp(`^(\\* )?${name}$`)) })
-
-const status = (page: Page) => page.getByTestId('hmi-status').innerText()
-
-const save = (app: ElectronApplication) =>
-  app.evaluate(({ BrowserWindow }) => {
-    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))
-    win?.webContents.send('project:save-accelerator')
-  })
-
-const undo = (app: ElectronApplication) =>
-  app.evaluate(({ BrowserWindow }) => {
-    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))
-    win?.webContents.send('edit:undo-request')
-  })
-
-/**
- * Drags a palette item onto the canvas with the DOM's drag events: Playwright's own drag does not reach HTML5 drag and
- * drop in an Electron window, while these run the same handlers a user's drag does.
- */
-async function htmlDrag(page: Page, sourceTestId: string, x: number, y: number): Promise<void> {
-  await page.evaluate(
-    ({ source, x, y }) => {
-      const from = document.querySelector(`[data-testid="${source}"]`)
-      const to = document.querySelector('[data-testid="hmi-canvas-overlay"]')
-      if (!from || !to) throw new Error(`cannot drag ${source}`)
-      const rect = to.getBoundingClientRect()
-      const at = { clientX: rect.left + x, clientY: rect.top + y, bubbles: true, cancelable: true }
-      const dataTransfer = new DataTransfer()
-      from.dispatchEvent(new DragEvent('dragstart', { dataTransfer, bubbles: true }))
-      to.dispatchEvent(new DragEvent('dragenter', { ...at, dataTransfer }))
-      to.dispatchEvent(new DragEvent('dragover', { ...at, dataTransfer }))
-      to.dispatchEvent(new DragEvent('drop', { ...at, dataTransfer }))
-      from.dispatchEvent(new DragEvent('dragend', { dataTransfer, bubbles: true }))
-    },
-    { source: sourceTestId, x, y },
-  )
-}
-
-const overviewOnDisk = () => readFileSync(join(FIXTURE, 'hmi', 'Overview.st'), 'utf-8')
-
-/** The ST view's text: Monaco renders spaces as non-breaking spaces. */
-const codeText = async (page: Page) =>
-  (await page.locator('[data-testid="hmi-code-editor"] .view-lines:visible').innerText()).replace(/\u00a0/g, ' ')
+const waitFor = (page: Page, what: string, check: () => Promise<boolean>, timeoutMs?: number) =>
+  waitForIn(F, page, what, check, timeoutMs)
+const overviewOnDisk = () => screenOnDisk(F, 'Overview')
 
 test.describe('HMI designer', () => {
   test.setTimeout(180000)
 
   test('designs a screen visually and in ST, on the real preview', async () => {
-    writeFixture()
-    const { app, page } = await launch()
+    writeHmiFixture(F, {
+      main: MAIN,
+      globals: [{ name: 'Alarm', type: 'BOOL', initialValue: 'TRUE' }],
+      screens: { Overview: OVERVIEW, Details: DETAILS },
+      widgets: { Badge: BADGE },
+      startScreen: 'Overview',
+    })
+    const { app, page } = await launchHmiApp(F)
     try {
       await page.getByText('hmi-designer', { exact: true }).first().click({ timeout: 30000 })
       await waitFor(page, 'the HMI branch', async () => (await leaf(page, 'Overview').count()) > 0)
@@ -333,7 +191,9 @@ test.describe('HMI designer', () => {
       await renameLeaf('Badge', 'Pill', /Yes, rename references/)
       await save(app)
       await waitFor(page, 'the renamed use on disk', async () => overviewOnDisk().includes('Badge1 : Pill'))
-      expect(readFileSync(join(FIXTURE, 'hmi', 'widgets', 'Pill.st'), 'utf-8')).toMatch(/^FUNCTION_BLOCK Pill EXTENDS/)
+      expect(readFileSync(join(F.project, 'hmi', 'widgets', 'Pill.st'), 'utf-8')).toMatch(
+        /^FUNCTION_BLOCK Pill EXTENDS/,
+      )
       await page.getByTestId('hmi-preview-button').click()
       await waitFor(page, 'the preview with the renamed block', async () =>
         (await status(page)).startsWith('Preview ready'),
@@ -345,7 +205,7 @@ test.describe('HMI designer', () => {
         /undefined type 'pill'/i.test((await page.getByTestId('hmi-errors').allInnerTexts()).join('\n')),
       )
       await save(app)
-      await waitFor(page, 'Chip on disk', async () => existsSync(join(FIXTURE, 'hmi', 'widgets', 'Chip.st')))
+      await waitFor(page, 'Chip on disk', async () => existsSync(join(F.project, 'hmi', 'widgets', 'Chip.st')))
       expect(overviewOnDisk()).toContain('Badge1 : Pill')
     } finally {
       app.process().kill('SIGKILL')

@@ -27,6 +27,12 @@ import {
   pasteElements,
 } from '@root/middleware/shared/utils/hmi/designer/designer-clipboard'
 import {
+  designRecords,
+  formatPath,
+  pipeProps,
+  withTheirPipes,
+} from '@root/middleware/shared/utils/hmi/designer/designer-diagram'
+import {
   addElement,
   deleteElements,
   type DesignerEdit,
@@ -35,7 +41,9 @@ import {
   renameElement,
   setBinding,
   setEvent,
+  setProperties,
   setProperty,
+  stString,
 } from '@root/middleware/shared/utils/hmi/designer/designer-edits'
 import { type DesignerModel, parseDesignerBlock } from '@root/middleware/shared/utils/hmi/designer/designer-model'
 import { HMI_DEVICE_PRESETS, hmiDevicePreset } from '@root/middleware/shared/utils/hmi/device-presets'
@@ -230,6 +238,10 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     () => (model && preview.built ? canvasElements(preview.bounds, preview.built.elementIds, name, model) : []),
     [model, preview.built, preview.bounds, name],
   )
+  const records = useMemo(
+    () => designRecords(preview.bounds, preview.built?.elementIds ?? [], name),
+    [preview.built, preview.bounds, name],
+  )
 
   const rebuildTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scheduleRebuild = useCallback(() => {
@@ -275,15 +287,27 @@ export function HmiScreenDesigner({ name }: { name: string }) {
       if (apply(renameElement(source, model, element, newName, { refersToElement: refers }))) select([newName])
     },
     remove: (element) => {
-      if (model && apply(deleteElements(source, model, [element]))) select([])
+      if (model && apply(deleteElements(source, model, withTheirPipes(model, catalog, [element])))) select([])
     },
+  }
+
+  const setLiveAndCommit = (element: string, entries: Array<[string, string]>, commit: boolean) => {
+    if (!model) return
+    const live = entries.map(([property, value]) => preview.setLive(name, element, property, value)).every(Boolean)
+    if (commit) apply(setProperties(source, model, element, entries, isWidget), { rebuild: !live })
   }
 
   const canvasActions: CanvasActions = {
     select,
-    add: (type, target: DropTarget) => {
+    add: (type, target: DropTarget, at) => {
       if (!model) return
-      const result = addElement(source, model, { type, parent: target.parent, before: target.before })
+      const props: Array<[string, string]> = at
+        ? [
+            ['X', String(at.x)],
+            ['Y', String(at.y)],
+          ]
+        : []
+      const result = addElement(source, model, { type, parent: target.parent, before: target.before, props })
       if (apply(result) && result.ok && result.name) select([result.name])
     },
     move: (element, target) => model && apply(moveElement(source, model, element, target.parent, target.before)),
@@ -298,26 +322,32 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     },
     resize: (element, size, commit) => {
       if (!model) return
-      if (!commit) {
-        if (size.width !== undefined) preview.setLive(name, element, 'PrefWidth', String(size.width))
-        if (size.height !== undefined) preview.setLive(name, element, 'PrefHeight', String(size.height))
-        return
-      }
-      let next = source
-      let current = model
-      for (const [property, value] of [
-        ['PrefWidth', size.width],
-        ['PrefHeight', size.height],
-      ] as const) {
-        if (value === undefined) continue
-        const result = setProperty(next, current, element, property, String(value))
-        if (!result.ok) return void apply(result)
-        next = result.source
-        const reparsed = parseDesignerBlock(next, isWidget)
-        if (!reparsed.ok) return
-        current = reparsed.model
-      }
-      apply({ ok: true, source: next })
+      const entries: Array<[string, string]> = []
+      if (size.width !== undefined) entries.push(['PrefWidth', String(size.width)])
+      if (size.height !== undefined) entries.push(['PrefHeight', String(size.height)])
+      setLiveAndCommit(element, entries, commit)
+    },
+    place: (element, at, commit) =>
+      setLiveAndCommit(
+        element,
+        [
+          ['X', String(at.x)],
+          ['Y', String(at.y)],
+        ],
+        commit,
+      ),
+    connect: (diagram, from, to) => {
+      if (!model) return
+      const result = addElement(source, model, { type: 'HmiPipe', parent: diagram, props: pipeProps(from, to) })
+      if (apply(result) && result.ok && result.name) select([result.name])
+    },
+    bends: (pipe, bends, commit) => {
+      if (!model) return
+      const path = stString(formatPath(bends))
+      const live = preview.setLive(name, pipe, 'Path', path)
+      if (!commit) return
+      if (bends.length === 0) apply(removeProperty(source, model, pipe, 'Path'), { rebuild: !live })
+      else apply(setProperty(source, model, pipe, 'Path', path), { rebuild: !live })
     },
     pointer: preview.pointer,
   }
@@ -378,11 +408,14 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     if (locked || !model) return
     if ((e.key === 'Delete' || e.key === 'Backspace') && entry.selection.length > 0) {
       e.preventDefault()
-      if (apply(deleteElements(source, model, entry.selection))) select([])
+      if (apply(deleteElements(source, model, withTheirPipes(model, catalog, entry.selection)))) select([])
     } else if (command && e.key.toLowerCase() === 'c') {
       void copy()
     } else if (command && e.key.toLowerCase() === 'x') {
-      void copy().then((clip) => clip && apply(deleteElements(source, model, entry.selection)) && select([]))
+      void copy().then(
+        (clip) =>
+          clip && apply(deleteElements(source, model, withTheirPipes(model, catalog, entry.selection))) && select([]),
+      )
     } else if (command && e.key.toLowerCase() === 'v') {
       void paste()
     }
@@ -478,6 +511,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
           >
             <DesignerCanvas
               canvas={canvas}
+              records={records}
               device={device}
               zoom={zoom}
               mode={mode}

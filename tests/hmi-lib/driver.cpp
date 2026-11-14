@@ -27,8 +27,8 @@ const char *g_dump_dir;
 /* Element ids follow the order of Attach calls, across screens. */
 enum : int32_t {
     kStart = 15, kRunSwitch, kSpeedSlider, kSetpointIn, kNameIn, kLocked,
-    kPlant = 21, kPump = 26, kValve = 27,
-    kBack = 35, kHome = 36,
+    kPlant = 21, kPump = 27, kValve = 28,
+    kBack = 36, kHome = 37,
 };
 
 uint64_t fnv(const uint8_t *p, size_t n) {

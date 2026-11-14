@@ -42,7 +42,15 @@ const STACK_SIZE = 1024 * 1024
 
 const INCLUDES = [`-I${RUNTIME_DIR}`, `-I${HMI_DIR}/core`, `-I${HMI_DIR}/unit`, `-I${UNIT_DIR}`]
 /** C flags of the core: the ones its golden tests use, so the preview draws the same pixels. */
-export const HMI_PREVIEW_C_FLAGS = ['-std=c11', '-O2', '-ffp-contract=off', ...INCLUDES]
+/** Bounds records a preview frame keeps: design mode adds ports, diagram frames and pipe points. */
+export const HMI_PREVIEW_BOUNDS_MAX = 4096
+export const HMI_PREVIEW_C_FLAGS = [
+  '-std=c11',
+  '-O2',
+  '-ffp-contract=off',
+  `-DHMI_BOUNDS_MAX=${HMI_PREVIEW_BOUNDS_MAX}`,
+  ...INCLUDES,
+]
 /** C++ flags of the unit and host: optimised for build time, as the preview rebuilds on request. */
 export const HMI_PREVIEW_CXX_FLAGS = [
   '-std=gnu++17',

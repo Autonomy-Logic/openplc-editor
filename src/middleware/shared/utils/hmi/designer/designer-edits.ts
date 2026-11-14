@@ -2,7 +2,7 @@
  * The designer's edits of a screen or widget block. Each one changes only the declarations, properties and
  * statements it is about, as text patches on the source, and leaves every other character as it was.
  */
-import type { DesignerElement, DesignerModel, DesignerSpan } from './designer-model'
+import { type DesignerElement, type DesignerModel, type DesignerSpan, parseDesignerBlock } from './designer-model'
 
 export type DesignerEdit = { ok: true; source: string } | { ok: false; message: string }
 
@@ -87,6 +87,28 @@ export function setProperty(
 }
 
 /** Removes a property, so the element takes its default. */
+/** Sets several properties of one element in one edit; `isWidget` reads the source again between them. */
+export function setProperties(
+  source: string,
+  model: DesignerModel,
+  element: string,
+  entries: ReadonlyArray<readonly [string, string]>,
+  isWidget: (type: string) => boolean,
+): DesignerEdit {
+  let next = source
+  let current = model
+  for (const [index, [property, value]] of entries.entries()) {
+    const result = setProperty(next, current, element, property, value)
+    if (!result.ok) return result
+    next = result.source
+    if (index === entries.length - 1) break
+    const reparsed = parseDesignerBlock(next, isWidget)
+    if (!reparsed.ok) return refuse(`${element}: the edited code does not parse`)
+    current = reparsed.model
+  }
+  return ok(next)
+}
+
 export function removeProperty(source: string, model: DesignerModel, element: string, property: string): DesignerEdit {
   const target = editable(model, element)
   if (typeof target === 'string') return refuse(target)

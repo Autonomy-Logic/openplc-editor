@@ -310,6 +310,9 @@ FUNCTION_BLOCK HmiDiagram EXTENDS HmiStack
     END_IF;
   END_METHOD
   METHOD PROTECTED OVERRIDE Draw : BOOL
+    IF DesignMode() THEN
+      RecordBounds(-(Id * 8 + 7) - 1, Left + offX, Top + offY, kq16, 0, FALSE);
+    END_IF;
     IF Fill <> COLOR.Transparent THEN
       HMI_FillRect(Left, Top, Width, Height, 0, Fill);
     END_IF;

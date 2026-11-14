@@ -260,7 +260,7 @@ interface ScreenPlan {
   model: HmiBlockModel
   /** Elements in drawing order with their container (undefined for the screen's column). */
   attach: Array<{ element: HmiElementDecl; parent?: HmiElementDecl }>
-  connects: Array<{ pipe: string; source: string; target: string }>
+  connects: Array<{ pipe: string; source: string; target: string; prior: string | null }>
   writeBacks: string[]
   theme: number
 }
@@ -304,6 +304,7 @@ function elementTree(plan: ScreenPlan, catalog: HmiWidgetCatalog, d: Diagnostics
     const cap = isA(catalog, container.type, 'HMIDIAGRAM') ? DIAGRAM_CAPACITY : STACK_CAPACITY
     if (n > cap) d.error(file.name, `${container.name} holds ${n} elements; at most ${cap}`)
   }
+  const priorPipe = new Map<string, string>()
   for (const e of model.elements) {
     if (!isA(catalog, e.type, 'HMIPIPE')) continue
     const end = (prop: string): string | undefined => {
@@ -315,7 +316,10 @@ function elementTree(plan: ScreenPlan, catalog: HmiWidgetCatalog, d: Diagnostics
     }
     const source = end('SOURCE')
     const target = end('TARGET')
-    if (source !== undefined && target !== undefined) plan.connects.push({ pipe: e.name, source, target })
+    const parent = textLiteral(e.props.get('PARENT'))?.toUpperCase() ?? ''
+    const prior = priorPipe.get(parent) ?? null
+    priorPipe.set(parent, e.name)
+    if (source !== undefined && target !== undefined) plan.connects.push({ pipe: e.name, source, target, prior })
   }
 }
 
@@ -359,7 +363,9 @@ function screenSource(plan: ScreenPlan): string {
   const build = [
     `UseTheme(${plan.theme});`,
     ...plan.attach.map((a) => `Attach(ADR(${a.element.name}), ${a.parent ? `ADR(${a.parent.name})` : '0'});`),
-    ...plan.connects.map((c) => `Connect(ADR(${c.pipe}), ADR(${c.source}), ADR(${c.target}));`),
+    ...plan.connects.map(
+      (c) => `Connect(ADR(${c.pipe}), ADR(${c.source}), ADR(${c.target}), ${c.prior ? `ADR(${c.prior})` : '0'});`,
+    ),
   ]
   const generated =
     ` METHOD PROTECTED OVERRIDE Build : BOOL ${build.join(' ')} Build := TRUE; END_METHOD` +
