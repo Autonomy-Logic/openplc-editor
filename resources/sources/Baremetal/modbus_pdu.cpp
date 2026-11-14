@@ -59,6 +59,32 @@ int32_t mb_pdu_request_len(const uint8_t *f, uint16_t n)
     }
 }
 
+int32_t mb_pdu_response_len(uint8_t fc, uint16_t quantity)
+{
+    switch (fc)
+    {
+        case MB_FC_READ_COILS:
+        case MB_FC_READ_INPUT_STAT:
+            if (quantity == 0 || quantity > 2000) return -1;
+            return 5 + (int32_t)((quantity + 7u) / 8u);
+        case MB_FC_READ_REGS:
+        case MB_FC_READ_INPUT_REGS:
+            if (quantity == 0 || quantity > 125) return -1;
+            return 5 + 2 * (int32_t)quantity;
+        case MB_FC_WRITE_COIL:
+        case MB_FC_WRITE_REG:
+            return 8;
+        case MB_FC_WRITE_COILS:
+            if (quantity == 0 || quantity > 1968) return -1;
+            return 8;
+        case MB_FC_WRITE_REGS:
+            if (quantity == 0 || quantity > 123) return -1;
+            return 8;
+        default:
+            return -1;
+    }
+}
+
 // The debug FCs are private, well-formed and performance-sensitive, so their RTU
 // frames skip CRC. Keep this list in lockstep with the DEBUG cases below and in
 // mb_pdu_request_len above.

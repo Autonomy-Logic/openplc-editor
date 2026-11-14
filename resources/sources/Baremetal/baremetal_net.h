@@ -9,7 +9,8 @@ protocol servers contain no board macros. An unrecognised target is a hard
 compile failures and silent runtime faults.
 
 Each protocol declares its own `Listener` with its own port but they share one
-slot pool. This seam does not bring the interface up: setup() does that from the
+slot pool. The Modbus master's outbound `Connection`s are slots of their own,
+one per endpoint, outside that pool. This seam does not bring the interface up: setup() does that from the
 project's network screen, gated on OPLC_NET_ENABLED, before any protocol here
 starts listening. It used to be the Modbus TCP layer's job, which made a network
 without a Modbus server impossible.
@@ -20,10 +21,11 @@ without a Modbus server impossible.
 
 #include "opcua_config.h"
 #include "s7comm_config.h"
+#include "modbus_master_config.h"
 
-/** True when at least one protocol server needs a listening socket; with both
- *  disabled this entire file is empty. */
-#define BM_NET_ENABLED (OPCUA_ENABLED || S7COMM_ENABLED)
+/** True when a protocol server needs a listening socket or the Modbus master
+ *  polls a TCP device; otherwise this entire file is empty. */
+#define BM_NET_ENABLED (OPCUA_ENABLED || S7COMM_ENABLED || MB_MASTER_TCP_ENABLED)
 
 #if BM_NET_ENABLED
 
@@ -37,6 +39,13 @@ without a Modbus server impossible.
 // path -- `modbus_config.h` -- and every gated TU picks it up from there. This
 // is a dependency on the build configuration, not on Modbus.
 #include "modbus_config.h"
+
+/** How an outbound Connection reaches the stack: through the library client
+ *  with its connect timeout, a raw non-blocking lwIP socket, or a non-blocking
+ *  mbed TCPSocket. Each adapter branch below picks one. */
+#define BM_NET_CONNECT_CLIENT 0
+#define BM_NET_CONNECT_LWIP   1
+#define BM_NET_CONNECT_MBED   2
 
 // ---------------------------------------------------------------------------
 // Adapter selection: the only board-conditional block in the network layer.
@@ -57,11 +66,20 @@ without a Modbus server impossible.
     #include <WiFi.h>
     typedef WiFiServer bm_server_impl_t;
     typedef WiFiClient bm_client_impl_t;
+    #define BM_NET_CONNECT BM_NET_CONNECT_LWIP
 
 #elif defined(BOARD_ESP8266)
     #include <ESP8266WiFi.h>
     typedef WiFiServer bm_server_impl_t;
     typedef WiFiClient bm_client_impl_t;
+
+#elif defined(BOARD_WIFININA) && defined(MBTCP_WIFI)
+    // u-blox NINA module (Nano 33 IoT, Mkr WiFi, Nano RP2040 Connect), inbound
+    // and outbound. The library has no send-room query: BM_NET_SEND_UNMETERED.
+    #include <WiFiNINA.h>
+    typedef WiFiServer bm_server_impl_t;
+    typedef WiFiClient bm_client_impl_t;
+    #define BM_NET_SEND_UNMETERED
 
 #elif defined(BOARD_PICOW) && defined(MBTCP_WIFI)
     // Route-qualified: BOARD_PICOW names the CYW43 WiFi, and a Pico W with an
@@ -77,6 +95,12 @@ without a Modbus server impossible.
     #include <WiFi.h>
     typedef WiFiServer bm_server_impl_t;
     typedef WiFiClient bm_client_impl_t;
+    #if defined(ARDUINO_ARCH_ESP32)
+        #define BM_NET_CONNECT BM_NET_CONNECT_LWIP
+    #elif defined(ARDUINO_ARCH_MBED)
+        #define BM_NET_CONNECT BM_NET_CONNECT_MBED
+        #define BM_NET_MBED_NETWORK() (WiFi.getNetwork())
+    #endif
 
 #elif defined(MBETH_MBED_LWIP)
     // mbed lwIP MAC (Portenta, Giga, Portenta Machine Control). No <SPI.h>:
@@ -84,6 +108,10 @@ without a Modbus server impossible.
     #include <Ethernet.h>
     typedef EthernetServer bm_server_impl_t;
     typedef EthernetClient bm_client_impl_t;
+    #if defined(ARDUINO_ARCH_MBED)
+        #define BM_NET_CONNECT BM_NET_CONNECT_MBED
+        #define BM_NET_MBED_NETWORK() (Ethernet.getNetwork())
+    #endif
 
 #elif defined(MBETH_SPI)
     // Generic SPI Ethernet module. Reached only by targets that genuinely use
@@ -109,6 +137,10 @@ without a Modbus server impossible.
     #error "baremetal_net: no network adapter for this target. Add a branch keyed on the target's capability define -- do not add a fallback."
 #endif
 
+#ifndef BM_NET_CONNECT
+    #define BM_NET_CONNECT BM_NET_CONNECT_CLIENT
+#endif
+
 // Slot budget. A slot is an Arduino `Client` handle, not a protocol buffer, so
 // this is sized for TCP churn rather than sessions. OPC-UA asks for
 // maxSessions + 5 so a live connection overlapping a not-yet-reaped one cannot
@@ -127,6 +159,19 @@ without a Modbus server impossible.
 #endif
 
 #define BM_NET_MAX_CLIENTS (BM_NET_OPCUA_SLOTS + BM_NET_S7_SLOTS)
+
+/** Outbound slots reserved for the Modbus master: one Connection per endpoint,
+ *  outside the listeners' pool; neither side takes the other's. */
+#if MB_MASTER_TCP_ENABLED
+#  define BM_NET_MASTER_SLOTS MB_MASTER_ENDPOINT_COUNT
+#else
+#  define BM_NET_MASTER_SLOTS 0
+#endif
+
+#if BM_NET_MASTER_SLOTS > 0 && BM_NET_CONNECT == BM_NET_CONNECT_MBED
+    #include "netsocket/TCPSocket.h"
+    #include "netsocket/SocketAddress.h"
+#endif
 
 namespace bm_net {
 
@@ -184,6 +229,77 @@ void poll();
 
 /** Close every client in the pool. Listeners close themselves. */
 void close_all();
+
+#if BM_NET_MASTER_SLOTS > 0
+
+/** State of an outbound Connection. */
+enum ConnStatus : uint8_t
+{
+    BM_CONN_CLOSED,
+    BM_CONN_PENDING,
+    BM_CONN_CONNECTED,
+    BM_CONN_FAILED
+};
+
+/** Outcome of Connection::send(). */
+enum SendResult : uint8_t
+{
+    BM_SEND_OK,
+    BM_SEND_NO_ROOM,
+    BM_SEND_LOST
+};
+
+/** One outbound TCP connection, the Modbus master's slot for one endpoint.
+ *
+ *  Never blocks past the connect timeout: on the ESP32 and mbed cores the
+ *  connect is native and non-blocking and poll() advances it; elsewhere the
+ *  library's connect runs inside start() with its timeout set to
+ *  `timeout_ms`. A failed, timed-out or closed connection gives its socket
+ *  back at once. No name resolution: the peer is an IPv4 address. */
+class Connection
+{
+public:
+    Connection();
+
+    /** Begin connecting to `ip`:`port`. False when it failed at once (no free
+     *  socket, refused); poll() then reports BM_CONN_FAILED. */
+    bool start(const uint8_t ip[4], uint16_t port, uint32_t timeout_ms);
+
+    /** Advance a pending connect and report the state. */
+    ConnStatus poll();
+
+    /** Move up to `cap` received bytes into `buf` without waiting: the count,
+     *  0 when nothing is there, -1 once the stack reports the connection lost. */
+    int read(uint8_t* buf, size_t cap);
+
+    /** Queue the whole of `buf` without blocking: BM_SEND_NO_ROOM when the stack
+     *  has no room for all of it (nothing is sent), BM_SEND_LOST on a send error. */
+    SendResult send(const uint8_t* buf, size_t len);
+
+    /** Close the connection and give its socket back. Idempotent. */
+    void close();
+
+private:
+    void fail();
+#if BM_NET_CONNECT != BM_NET_CONNECT_CLIENT
+    void advance();
+#endif
+
+    ConnStatus status_;
+    uint32_t   started_ms_;
+    uint32_t   timeout_ms_;
+#if BM_NET_CONNECT == BM_NET_CONNECT_LWIP
+    int        fd_;
+#elif BM_NET_CONNECT == BM_NET_CONNECT_MBED
+    TCPSocket     socket_;
+    SocketAddress peer_;
+    bool          open_;
+#else
+    bm_client_impl_t client_;
+#endif
+};
+
+#endif
 
 } // namespace bm_net
 

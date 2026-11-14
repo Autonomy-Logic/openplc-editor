@@ -432,6 +432,12 @@ instead of a header; device and group names appear only inside comments. The pip
 baremetal for a project with Modbus remote devices; every other build keeps the skeleton stub
 `resources/sources/arduino/modbus_master_config.h` (`MB_MASTER_ENABLED 0`).
 
+The firmware's master is `resources/sources/Baremetal/modbus_master.{h,cpp}` (run state, scheduling, group
+splitting, response validation, error handling, once-per-scan commit before `runtime_plc_cycle()`) and
+`modbus_master_tcp.{h,cpp}` (MBAP over `bm_net::Connection`, Reconnect); `baremetal_net` is still the only file that
+names a network class, and its master slots sit outside the listeners' pool. Layering, the never-block rules and
+the per-core connect mechanisms are in `resources/sources/Baremetal/ARCHITECTURE.md`.
+
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 
 **Pre-build gates.** `evaluateVppBackplaneGate`

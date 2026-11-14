@@ -45,6 +45,7 @@
 #include "opcua_server.h"
 #include "opcua_log.h"
 #include "s7comm_server.h"   // brings in s7comm_config.h -> S7COMM_ENABLED
+#include "modbus_master.h"
 
 // Network device-discovery responder ("Search" in the editor). Feature-gated so
 // only targets declaring SUPPORTS_UDP_SCAN pull it in; unrelated to Modbus.
@@ -265,7 +266,7 @@ void setup()
     // Outside the transport branch above: the backing belongs to the image, so
     // whichever protocol addresses located variables needs it, not Modbus
     // specifically.
-    #if defined(MODBUS_ENABLED) || S7COMM_ENABLED
+    #if defined(MODBUS_ENABLED) || S7COMM_ENABLED || MB_MASTER_ENABLED
         mapEmptyBuffers();
     #endif
 
@@ -345,7 +346,7 @@ void setup()
 // Compiled when a protocol that addresses LOCATED variables is enabled. The
 // debugger reaches variables by symbol, so it can never name an unbound slot
 // and a debug-only build saves the SRAM.
-#if defined(MODBUS_ENABLED) || S7COMM_ENABLED
+#if defined(MODBUS_ENABLED) || S7COMM_ENABLED || MB_MASTER_ENABLED
 
 // Storage for slots the program declared no variable for -- the image is a
 // table of pointers into program variables, and those slots have none. Keeps
@@ -415,7 +416,7 @@ void mapEmptyBuffers()
     #endif
 }
 
-#endif // MODBUS_ENABLED || S7COMM_ENABLED
+#endif // MODBUS_ENABLED || S7COMM_ENABLED || MB_MASTER_ENABLED
 
 // =============================================================================
 // MODBUS TASK
@@ -445,7 +446,15 @@ static inline uint32_t cycle_slack_us()
 
 void scheduler()
 {
+    #if MB_MASTER_ENABLED
+        mb_master_commit_inputs();
+    #endif
+
     runtime_plc_cycle();
+
+    #if MB_MASTER_ENABLED
+        mb_master_sample_outputs();
+    #endif
 
     #ifdef USE_ARDUINO_SKETCH
         sketch_loop();
@@ -456,6 +465,10 @@ void scheduler()
     #elif defined(DEBUGGER_ENABLED)
         // Debug-only: poll the serial transport for debugger requests.
         mbtask();
+    #endif
+
+    #if MB_MASTER_ENABLED
+        mb_master_task();
     #endif
 
     // OPC-UA and S7Comm get the tail of the cycle, after the PLC logic and
@@ -527,6 +540,10 @@ void loop()
     #endif
     #if S7COMM_ENABLED
         s7commtask(cycle_slack_us());
+    #endif
+
+    #if MB_MASTER_ENABLED
+        mb_master_task();
     #endif
 
     // Same repair as in scheduler(): the inter-cycle service writes raw too.

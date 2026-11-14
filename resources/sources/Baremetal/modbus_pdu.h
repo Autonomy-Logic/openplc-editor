@@ -27,6 +27,11 @@ void process_mbpacket();
 // process_mbpacket() later parses the fields.
 int32_t mb_pdu_request_len(const uint8_t *f, uint16_t n);
 
+/** Total on-wire length (slave id + PDU + 2 CRC bytes) of the normal response to an
+ *  operation request of function code `fc` covering `quantity` coils or registers, the
+ *  inverse of mb_pdu_request_len(); -1 for another function code or a quantity it does not allow. */
+int32_t mb_pdu_response_len(uint8_t fc, uint16_t quantity);
+
 // True for the private debugger FCs, whose RTU frames deliberately skip CRC
 // validation (they are well-formed and performance-sensitive). Lets the serial
 // transport decide CRC handling without hardcoding the debug FC list.
