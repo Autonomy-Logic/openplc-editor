@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process'
+
 import type { PLCDataType, PLCVariable } from '../../../../middleware/shared/ports/types'
 import { injectPythonRuntime } from '../injectPythonRuntime'
 
@@ -715,5 +717,55 @@ describe('a function block pin that is itself composite', () => {
   it('declares a pin type before the block class that constructs it', () => {
     const result = run()
     expect(result.indexOf('class Motor:')).toBeLessThan(result.indexOf('class DRIVE:'))
+  })
+})
+
+describe('the simulator transport', () => {
+  const blockCode = [
+    'import struct, time, os',
+    'from multiprocessing import shared_memory',
+    'def block_init():',
+    "    print('init', flush=True)",
+    'def block_loop():',
+    '    global doubled',
+    '    doubled = value * 2',
+  ].join('\n')
+
+  const stdioWrapper = (): string =>
+    injectPythonRuntime({
+      transport: 'stdio',
+      inputVariables: [makeScalarVar('value', 'input', 'int')],
+      outputVariables: [makeScalarVar('doubled', 'output', 'int')],
+      originalCode: blockCode,
+      pouName: 'Doubler',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
+    })
+
+  it('opens no shared memory, never polls the PLC process and leaves no format directives', () => {
+    const script = stdioWrapper()
+    expect(script).not.toContain('shared_memory.SharedMemory')
+    expect(script).not.toContain('os.kill')
+    expect(script).not.toContain('%')
+  })
+
+  it('answers each inbound line with its outputs after the marker, in a real interpreter', () => {
+    const stdin = ['M1', '0300', '0500', 'ff00', ''].join('\n')
+    const stdout = execFileSync('python3', ['-c', stdioWrapper()], { input: stdin, encoding: 'utf8' })
+    expect(stdout.split('\n')).toEqual(['init', '@@M1 0a00', '@@M1 fe01', 'Stopping Python block: Doubler', ''])
+  })
+
+  it('seeds the outputs from the second line, so an output the block never writes keeps its value', () => {
+    const script = injectPythonRuntime({
+      transport: 'stdio',
+      inputVariables: [makeScalarVar('value', 'input', 'int')],
+      outputVariables: [makeScalarVar('kept', 'output', 'int')],
+      originalCode: 'import struct\ndef block_init():\n    pass\ndef block_loop():\n    pass',
+      pouName: 'Keeper',
+      inbound: { direction: 'in' },
+      outbound: { direction: 'out' },
+    })
+    const stdout = execFileSync('python3', ['-c', script], { input: 'M2\n2a00\n0100\n', encoding: 'utf8' })
+    expect(stdout).toContain('@@M2 2a00')
   })
 })

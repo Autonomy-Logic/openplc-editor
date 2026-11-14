@@ -12,6 +12,10 @@ import { LibraryManagerModule } from '@root/backend/editor/library-manager/libra
 import { buildUploadSnapshot } from '@root/backend/editor/project/build-upload-snapshot'
 import { resolveBuildWorkspace } from '@root/backend/editor/project/cloud-build-workspace'
 import { RUNTIME_API_PORT } from '@root/backend/editor/runtime/runtime-api-client'
+import {
+  SIMULATOR_MODULE,
+  SIMULATOR_SUPPORT_DIR,
+} from '@root/backend/shared/compile/steps/build-simulator-wasm-request'
 import { resolveTrustedKeysArtifact } from '@root/backend/shared/compile/steps/generate-trusted-keys'
 import type { VppModbusScreenState } from '@root/backend/shared/compile/steps/modbus-defines'
 import { shouldWipeBuildFolder } from '@root/backend/shared/compile/steps/plan-build-tree-sync'
@@ -186,6 +190,7 @@ import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { persistentStorageSchema } from '../../shared/types/PLC/devices/configuration'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
+import { getDesktopWasmCompileService } from '../wasm-toolchain/desktop-wasm-toolchain'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
 import type { CompileProgressChannel, HalsFile } from './types'
@@ -778,6 +783,20 @@ class CompilerModule {
       )
     } catch {
       // Same defensive posture as the arduino/ block above.
+    }
+
+    if (boardRuntime === 'simulator') {
+      const readTree = async (dir: string, prefix: string): Promise<void> => {
+        const entries = await readdir(dir, { withFileTypes: true })
+        await Promise.all(
+          entries.map(async (e) => {
+            const key = `${prefix}/${e.name}`
+            if (e.isDirectory()) await readTree(join(dir, e.name), key)
+            else if (e.isFile()) files[key] = await readFile(join(dir, e.name), 'utf-8')
+          }),
+        )
+      }
+      await readTree(join(this.sourceDirectoryPath, SIMULATOR_SUPPORT_DIR), SIMULATOR_SUPPORT_DIR)
     }
 
     return files
@@ -2293,6 +2312,7 @@ class CompilerModule {
         // have changed since the last compile (a package installed or
         // removed mid-session).
         getVppRuntimeFloor: (board: string) => new PackageManagerModule().getRuntimeFloorForBoard(board),
+        wasmCompileService: getDesktopWasmCompileService(),
         pollTimeoutMs: CompilerModule.COMPILATION_STATUS_TIMEOUT_MS,
         pollIntervalMs: CompilerModule.COMPILATION_STATUS_POLL_INTERVAL_MS,
         startTimeoutMs: POST_BUILD_START_TIMEOUT_MS,
@@ -2584,6 +2604,11 @@ class CompilerModule {
 
     // --- Editor-specific epilogue: simulator firmware path + closePort ---
     if (isSimulator) {
+      const modulePath = join(compilationPath, SIMULATOR_MODULE)
+      if (result.success && result.binary) {
+        await mkdir(compilationPath, { recursive: true })
+        await writeFile(modulePath, result.binary)
+      }
       if (compileOnly) {
         // Gated on the verdict: this line used to be unconditional, so a
         // simulator compile-only build whose strucpp step failed printed the
@@ -2595,20 +2620,12 @@ class CompilerModule {
         _mainProcessPort.close()
         return
       }
-      if (result.success) {
-        // Resolve the per-FQBN sub-directory arduino-cli wrote the
-        // .hex into.  Matches the layout the renderer's simulator
-        // loader expects.  `boardEntry.platform` is populated by the
-        // BoardInfoResolver above (hals.json OR VPP manifest), so
-        // this works uniformly for both catalogs.
-        const platform = typeof boardEntry?.platform === 'string' ? boardEntry.platform : ''
-        const fqbnSubDir = platform.replaceAll(':', '.')
-        const hexPath = join(compilationPath, 'examples', 'Baremetal', 'build', fqbnSubDir, 'Baremetal.ino.hex')
+      if (result.success && result.binary) {
         _mainProcessPort.postMessage({
           logLevel: 'info',
           message: 'Compilation successful. Loading firmware into simulator...',
         })
-        _mainProcessPort.postMessage({ simulatorFirmwarePath: hexPath, closePort: true, success: true })
+        _mainProcessPort.postMessage({ simulatorFirmwarePath: modulePath, closePort: true, success: true })
         _mainProcessPort.close()
         return
       }

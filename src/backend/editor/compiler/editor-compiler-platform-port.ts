@@ -40,6 +40,7 @@ import {
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
+import type { WasmCompileService } from '@root/backend/shared/wasm-toolchain/wasm-compile-service'
 import type {
   CheckRuntimeVersionArgs,
   CheckRuntimeVersionResult,
@@ -59,6 +60,7 @@ import type {
   UploadRuntimeV3Args,
   UploadRuntimeV4Args,
 } from '@root/middleware/shared/ports/compiler-platform-port'
+import type { WasmCompileRequest, WasmCompileResult } from '@root/middleware/shared/ports/wasm-toolchain-types'
 import { createHash } from 'crypto'
 import { type Dirent, promises as fs } from 'fs'
 import { dirname, join } from 'path'
@@ -207,6 +209,9 @@ export interface EditorCompilerPlatformPortContext {
    * floor known", which the pipeline treats as no constraint.
    */
   getVppRuntimeFloor?: (boardTarget: string) => string | null
+  /** The process's WebAssembly toolchain, which builds the simulator. Injected for the same reason as
+   *  `getVppRuntimeFloor`: the desktop toolchain module needs Electron at load. */
+  wasmCompileService: Pick<WasmCompileService, 'compile'>
   /** Timeout for the post-upload compile-status poll. */
   pollTimeoutMs: number
   /** Interval for the post-upload compile-status poll. */
@@ -278,22 +283,40 @@ export function createEditorCompilerPlatformPort(
       return Promise.resolve(result)
     },
 
+    /** Writes the request's text files to the build folder (the debugger reads the debug map there), then compiles. */
+    async compileToWasm(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult> {
+      const textFiles: Record<string, string> = {}
+      for (const [path, content] of Object.entries(request.files)) {
+        if (typeof content === 'string') textFiles[path] = content
+      }
+      try {
+        await syncBuildFolder(context.compilationPath, textFiles, context.staticFirmwareFiles ?? {})
+      } catch (error) {
+        const message = `Could not write the build folder: ${error instanceof Error ? error.message : String(error)}`
+        log(message, 'error')
+        return {
+          ok: false,
+          error: message,
+          stats: { units: 0, cached: 0, compileMs: 0, linkMs: 0 },
+          diagnostics: [{ message, level: 'error' }],
+        }
+      }
+      return context.wasmCompileService.compile(request, log)
+    },
+
     /**
      * Materialise the in-memory file map to disk under the project's
      * build directory, then spawn `arduino-cli compile` via the
      * existing `handleCompileArduinoProgram`.
      *
      * When a `Baremetal.ino.hex` exists under the FQBN build folder
-     * we read it back into the result `binary` field — the simulator
-     * path needs it in memory to hand to avr8js.  Non-AVR cores
+     * we read it back into the result `binary` field.  Non-AVR cores
      * (RP2040 → `.uf2`, ESP32 / mbed → `.bin`) don't produce a `.hex`
      * and don't need an in-memory binary: arduino-cli's separate
      * `upload` step finds the right artefact on disk under whatever
      * extension the core produced.  In that case we return
      * `{ ok: true, binary: undefined }` and the shared pipeline
-     * proceeds — the simulator branch is the only one that requires
-     * a non-empty binary and it bails there with a clearer error if
-     * .hex is somehow missing on AVR.
+     * proceeds.
      */
     async compileArduino(args: CompileArduinoArgs, log: PlatformLog): Promise<CompileArduinoResult> {
       try {
@@ -743,16 +766,14 @@ function readVppRuntimeFloor(context: EditorCompilerPlatformPortContext, boardTa
  * directory.  arduino-cli writes it to a board-FQBN-specific
  * sub-directory (e.g. `examples/Baremetal/build/arduino.avr.mega/`)
  * derived from the hals.json `platform` field with `:` replaced by
- * `.` — same derivation `compileProgram`'s simulator branch uses to
- * locate the `.hex` it hands to avr8js.
+ * `.`.
  *
- * **Only meaningful for AVR / simulator builds.**  Other cores emit
+ * **Only meaningful for AVR builds.**  Other cores emit
  * different artefact formats — RP2040 writes `.uf2`, ESP32 / mbed
  * write `.bin` — so this helper returns `null` for those and the
  * caller MUST treat null-with-successful-compile as "no in-memory
- * binary to surface, but arduino-cli succeeded."  The simulator path
- * is the only consumer that actually loads the bytes (avr8js
- * requires Intel HEX); for real-board uploads arduino-cli's separate
+ * binary to surface, but arduino-cli succeeded."  For real-board
+ * uploads arduino-cli's separate
  * `upload` step finds its own artefact on disk under whatever
  * extension the core produced, so the editor doesn't need to read
  * it back into memory at all.

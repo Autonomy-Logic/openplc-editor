@@ -12,6 +12,7 @@
  * emit-event payloads.
  */
 
+import hals from '../../firmware/hals.json'
 import type { DevicePin } from '../../types/PLC/devices'
 import type { PLCProjectData } from '../../types/PLC/open-plc'
 import type {
@@ -88,6 +89,12 @@ function makePort(overrides: Partial<CompilerPlatformPort> = {}): jest.Mocked<Co
     computeMd5: jest.fn().mockResolvedValue('a'.repeat(32)),
     transpileToSt: jest.fn().mockResolvedValue({ ok: true, programSt: 'PROGRAM main\nEND_PROGRAM' }),
     compileArduino: jest.fn().mockResolvedValue({ ok: true, binary: new Uint8Array([1, 2, 3]) }),
+    compileToWasm: jest.fn().mockResolvedValue({
+      ok: true,
+      wasm: new Uint8Array([0, 97, 115, 109]),
+      stats: { units: 3, cached: 1, compileMs: 10, linkMs: 2 },
+      diagnostics: [],
+    }),
     uploadRuntimeV4: jest.fn().mockResolvedValue({ ok: true }),
     uploadArduinoBoard: jest.fn().mockResolvedValue({ ok: true }),
     uploadRuntimeV3: jest.fn().mockResolvedValue({ ok: true }),
@@ -112,6 +119,19 @@ const deviceContextFixture: PlatformDeviceContext = {
   jwt: 'jwt-token',
 }
 
+const simulatorSupportFiles: Record<string, string> = {
+  'wasm-sim/sim_main.cpp': '// shim',
+  'wasm-sim/sim_python.cpp': '// python blocks',
+  'wasm-sim/core/api/Common.cpp': '// common',
+  'wasm-sim/core/api/Print.cpp': '// print',
+  'wasm-sim/core/api/Stream.cpp': '// stream',
+  'wasm-sim/core/api/String.cpp': '// string',
+}
+
+/** The files of the simulator compile request the pipeline handed to the port. */
+const simulatorRequestFiles = (port: jest.Mocked<CompilerPlatformPort>): Record<string, string | Uint8Array> =>
+  jest.mocked(port.compileToWasm).mock.calls[0][0].files
+
 function makeArgs(overrides: Partial<RunCompilePipelineArgs> = {}): RunCompilePipelineArgs {
   return {
     projectData: projectDataFixture,
@@ -128,6 +148,7 @@ function makeArgs(overrides: Partial<RunCompilePipelineArgs> = {}): RunCompilePi
     firmwareSkeleton: {
       'examples/Baremetal/Baremetal.ino': '// sketch',
       'src/arduino.cpp': '// hal',
+      ...simulatorSupportFiles,
     },
     strucppRuntimeHeaders: {},
     avrLibStdCppInclude: '/usr/avr/include',
@@ -163,14 +184,14 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('runCompilePipeline — simulator path', () => {
-  it('runs preprocess → ST → strucpp → arduino-compile and returns the firmware binary', async () => {
+  it('runs preprocess → ST → strucpp → simulator compile and returns the WebAssembly module', async () => {
     const port = makePort()
     const { events, emit } = captureEvents()
 
     const result = await runCompilePipeline(makeArgs(), port, emit)
 
     expect(result.success).toBe(true)
-    expect(result.binary).toBeInstanceOf(Uint8Array)
+    expect(result.binary).toEqual(new Uint8Array([0, 97, 115, 109]))
     expect(result.uploaded).toBe(false)
     expect(port.transpileToSt).toHaveBeenCalledTimes(1)
     // The pipeline hands the in-process transpiler the project IR plus
@@ -179,26 +200,30 @@ describe('runCompilePipeline — simulator path', () => {
       expect.objectContaining({ projectData: expect.anything() }),
       expect.any(Function),
     )
-    expect(port.compileArduino).toHaveBeenCalledTimes(1)
+    expect(port.compileToWasm).toHaveBeenCalledTimes(1)
+    expect(port.compileArduino).not.toHaveBeenCalled()
     expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
     expect(port.uploadArduinoBoard).not.toHaveBeenCalled()
     expect(events.map((e) => e.stage)).toContain('done')
+    expect(events.some((e) => e.stage === 'simulator-compile' && e.message.includes('3 files (1 reused)'))).toBe(true)
   })
 
-  it('calls compileArduino with the assembled file map + arduino-cli argv', async () => {
+  it('compiles the assembled firmware files as one simulator request, the sketch as a C++ unit', async () => {
     const port = makePort()
     const { emit } = captureEvents()
     await runCompilePipeline(
       makeArgs({
-        firmwareSkeleton: { 'examples/Baremetal/Baremetal.ino': 'INO' },
+        firmwareSkeleton: { 'examples/Baremetal/Baremetal.ino': 'void setup() {}\n', ...simulatorSupportFiles },
       }),
       port,
       emit,
     )
-    const [callArgs] = port.compileArduino.mock.calls[0]
-    expect(callArgs.files['examples/Baremetal/Baremetal.ino']).toBe('INO')
-    expect(callArgs.files['src/defines.h']).toContain('PROGRAM_MD5')
-    expect(callArgs.argv).toEqual(['compile', '-b', 'arduino:avr:mega'])
+    const [request] = jest.mocked(port.compileToWasm).mock.calls[0]
+    expect(request.files['examples/Baremetal/Baremetal.ino']).toBeUndefined()
+    expect(request.files['examples/Baremetal/Baremetal.cpp']).toContain('void setup() {}')
+    expect(request.files['src/defines.h']).toContain('PROGRAM_MD5')
+    expect(request.units.map((unit) => unit.source)).toContain('examples/Baremetal/Baremetal.cpp')
+    expect(request.output).toBe('simulator.wasm')
   })
 
   it('forwards a positive retainBlobSize into defines.h', async () => {
@@ -222,8 +247,7 @@ describe('runCompilePipeline — simulator path', () => {
     const { emit } = captureEvents()
     await runCompilePipeline(makeArgs({}), port, emit)
 
-    const [callArgs] = port.compileArduino.mock.calls[0]
-    expect(callArgs.files['src/defines.h']).toContain('#define OPLC_RETAIN_BLOB_SIZE 148')
+    expect(simulatorRequestFiles(port)['src/defines.h']).toContain('#define OPLC_RETAIN_BLOB_SIZE 148')
   })
 
   it('omits the define when nothing is retained', async () => {
@@ -232,8 +256,7 @@ describe('runCompilePipeline — simulator path', () => {
     const port = makePort()
     const { emit } = captureEvents()
     await runCompilePipeline(makeArgs({}), port, emit)
-    const [callArgs] = port.compileArduino.mock.calls[0]
-    expect(callArgs.files['src/defines.h']).not.toContain('OPLC_RETAIN_BLOB_SIZE')
+    expect(simulatorRequestFiles(port)['src/defines.h']).not.toContain('OPLC_RETAIN_BLOB_SIZE')
   })
 
   it('compileOnly returns success without invoking uploadArduinoBoard', async () => {
@@ -592,6 +615,45 @@ describe('runCompilePipeline — I/O image gate', () => {
     expect(result.success).toBe(true)
   })
 
+  it('builds the simulator with enabled OPC-UA and S7 servers, which it ignores', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+    const withServers = {
+      ...projectDataFixture,
+      servers: [
+        {
+          name: 'OPCUA',
+          protocol: 'opcua',
+          opcuaServerConfig: {
+            server: { enabled: true, name: 'OpenPLC OPC UA Server', port: 4840, endpointPath: '/openplc/opcua' },
+            securityProfiles: [],
+            users: [],
+            addressSpace: { namespaceUri: 'urn:openplc:opcua:namespace', nodes: [] },
+          },
+        },
+        {
+          name: 'S7',
+          protocol: 's7comm',
+          s7commSlaveConfig: { server: { enabled: true, port: 102 }, dataBlocks: [] },
+        },
+      ],
+    } as unknown as PLCProjectData
+
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: withServers,
+        boardEntry: { ...makeArgs().boardEntry, compiler: hals['OpenPLC Simulator'].compiler },
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    const files = simulatorRequestFiles(port)
+    expect(String(files['src/opcua_config.h'] ?? '')).not.toContain('OPCUA_ENABLED 1')
+    expect(String(files['src/s7comm_config.h'] ?? '')).not.toContain('S7COMM_ENABLED 1')
+  })
+
   it('composes a byte-identical bundle when the same project is compiled twice', async () => {
     // AC01 asks for the BUNDLE, not for each step. Every emitter being
     // deterministic on its own does not add up to a reproducible build: one
@@ -714,9 +776,7 @@ describe('runCompilePipeline — I/O image gate', () => {
 
     await runCompilePipeline(makeArgs(), port, emit)
 
-    const files = jest.mocked(port.compileArduino).mock.calls[0][0].files as Record<string, string>
-    const defines = Object.entries(files).find(([name]) => name.endsWith('defines.h'))?.[1] ?? ''
-    expect(defines).not.toContain('Process image')
+    expect(simulatorRequestFiles(port)['src/defines.h']).not.toContain('Process image')
   })
 
   it('exempts the simulator, which has no producers by construction', async () => {
@@ -1547,18 +1607,14 @@ describe('runCompilePipeline — missing core hint', () => {
     expect(lastMessage(events)).toBe('Stopping compilation process.')
   })
 
-  it('names the simulator core for a simulator build', async () => {
-    const port = failWith("Error during build: Platform 'arduino:avr' not found: platform not installed")
-    const { events, emit } = captureEvents()
-    await runCompilePipeline(makeArgs({ isSimulator: true, dependencyHintSurface: 'desktop' }), port, emit)
-    expect(lastMessage(events)).toContain('arduino:avr')
-    expect(lastMessage(events)).not.toContain('Board Package Manager')
-  })
-
   it('adds no hint for a compile error that is not a missing core', async () => {
     const port = failWith("src/generated.cpp:12:5: error: 'foo' was not declared in this scope")
     const { events, emit } = captureEvents()
-    await runCompilePipeline(makeArgs({ dependencyHintSurface: 'desktop' }), port, emit)
+    await runCompilePipeline(
+      makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli', dependencyHintSurface: 'desktop' }),
+      port,
+      emit,
+    )
     expect(lastMessage(events)).toBe('Stopping compilation process.')
   })
 
@@ -1619,19 +1675,43 @@ describe('runCompilePipeline — failure propagation', () => {
       }),
     })
     const { emit } = captureEvents()
-    const result = await runCompilePipeline(makeArgs(), port, emit)
+    const result = await runCompilePipeline(makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli' }), port, emit)
     expect(result.success).toBe(false)
   })
 
-  it('returns success=false when a simulator build produces no .hex binary', async () => {
-    // Simulator targets require the .hex artefact in memory (the loader can't
-    // find it on disk). A compile that reports ok but omits `binary` must fail
-    // with a precise error rather than silently succeeding.
-    const port = makePort({ compileArduino: jest.fn().mockResolvedValue({ ok: true }) })
+  it('returns success=false when the simulator module does not compile', async () => {
+    const port = makePort({
+      compileToWasm: jest.fn().mockResolvedValue({
+        ok: false,
+        error: 'Compilation failed in 1 of 3 file(s)',
+        stats: { units: 3, cached: 0, compileMs: 5, linkMs: 0 },
+        diagnostics: [
+          { message: "src/c_blocks_code.cpp:3:1: error: use of undeclared identifier 'PORTB'", level: 'error' },
+        ],
+      }),
+    })
     const { events, emit } = captureEvents()
     const result = await runCompilePipeline(makeArgs(), port, emit)
     expect(result.success).toBe(false)
-    expect(events.some((e) => e.stage === 'arduino-compile' && /did not produce a \.hex/.test(e.message))).toBe(true)
+    expect(events.some((e) => e.stage === 'simulator-compile' && e.message === 'Simulator compilation failed.')).toBe(
+      true,
+    )
+    expect(port.compileArduino).not.toHaveBeenCalled()
+  })
+
+  it('fails the simulator build before compiling when the skeleton has no simulator support files', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({ firmwareSkeleton: { 'examples/Baremetal/Baremetal.ino': '// sketch' } }),
+      port,
+      emit,
+    )
+    expect(result.success).toBe(false)
+    expect(port.compileToWasm).not.toHaveBeenCalled()
+    expect(events.some((e) => e.stage === 'simulator-compile' && e.message.includes('wasm-sim/sim_main.cpp'))).toBe(
+      true,
+    )
   })
 
   it('returns success=false when uploadRuntimeV4 reports failure', async () => {

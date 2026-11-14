@@ -41,8 +41,8 @@ type PreprocessResult = {
  * it when it cannot.
  *
  * Mirrors `TargetCapabilities.pythonFunctionBlocks`, which already states the
- * contract: Runtime v3 / v4 run them natively, the Simulator compiles them as
- * no-op stubs, and arduino-cli targets reject them at build time. The rejection
+ * contract: Runtime v3 / v4 and the Simulator run them, and arduino-cli targets
+ * reject them at build time. The rejection
  * half was never implemented — a Python block on an Arduino target took the
  * full Linux pipeline and died inside avr-g++ with `'python_block_loader' was
  * not declared in this scope`, which tells the user nothing.
@@ -185,65 +185,46 @@ function preprocessPous(
 
     processedProjectData = addPythonLocalVariables(projectData)
 
-    if (isSimulator) {
-      // Simulator: keep runtime variables but replace body with a no-op ST statement
-      processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
-        if (pou.body.language === 'python') {
+    // The simulator runs the same stub; only the Python side's transport differs (the host's stdio exchange).
+    const pythonData = extractPythonData(processedProjectData.pous)
+    const processedPythonCodes = injectPythonCode(
+      pythonData,
+      projectData.dataTypes ?? [],
+      projectData.pous,
+      libraries,
+      isSimulator ? 'stdio' : 'shared-memory',
+    )
+
+    let pythonIndex = 0
+    processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
+      if (pou.body.language === 'python') {
+        /* istanbul ignore next -- defensive: processedPythonCodes always matches python POU count */
+        if (processedPythonCodes[pythonIndex]) {
+          const stCode = generateSTCode({
+            pouName: pou.name,
+            allVariables:
+              /* istanbul ignore next -- defensive: interface may be undefined */
+              pou.interface?.variables ?? [],
+            processedPythonCode: processedPythonCodes[pythonIndex],
+            dataTypes: projectData.dataTypes ?? [],
+            pous: projectData.pous,
+            libraries,
+          })
+
+          pythonIndex++
           return {
             ...pou,
             body: {
               language: 'st' as const,
-              value: 'first_run := 0;',
+              value: stCode,
             },
           }
         }
-        return pou
-      })
-    } else {
-      // Full pipeline for runtime targets
-      const pythonData = extractPythonData(processedProjectData.pous)
-      const processedPythonCodes = injectPythonCode(
-        pythonData,
-        projectData.dataTypes ?? [],
-        projectData.pous,
-        libraries,
-      )
+      }
+      return pou
+    })
 
-      let pythonIndex = 0
-      processedProjectData.pous = processedProjectData.pous.map((pou: PLCPou) => {
-        if (pou.body.language === 'python') {
-          /* istanbul ignore next -- defensive: processedPythonCodes always matches python POU count */
-          if (processedPythonCodes[pythonIndex]) {
-            const stCode = generateSTCode({
-              pouName: pou.name,
-              allVariables:
-                /* istanbul ignore next -- defensive: interface may be undefined */
-                pou.interface?.variables ?? [],
-              processedPythonCode: processedPythonCodes[pythonIndex],
-              dataTypes: projectData.dataTypes ?? [],
-              pous: projectData.pous,
-              libraries,
-            })
-
-            pythonIndex++
-            return {
-              ...pou,
-              body: {
-                language: 'st' as const,
-                value: stCode,
-              },
-            }
-          }
-        }
-        return pou
-      })
-
-      log('info', `Successfully processed ${processedPythonCodes.length} Python POU(s)`)
-    }
-
-    if (isSimulator) {
-      log('info', `Compiled ${pythonPous.length} Python POU(s) as empty stubs for simulator`)
-    }
+    log('info', `Successfully processed ${processedPythonCodes.length} Python POU(s)`)
   }
 
   // --- C++ processing ---

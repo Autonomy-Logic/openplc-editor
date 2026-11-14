@@ -150,7 +150,7 @@ export class ClangWorkerPool implements WasmClangRunner {
     const stopped = new Error('The compiler was stopped.')
     for (const slot of slots) this.settle(slot, stopped)
     for (const waiting of this.queue.splice(0)) waiting.reject(stopped)
-    await Promise.all(slots.map((slot) => slot.handle.terminate()))
+    await Promise.all(slots.map((slot) => Promise.resolve(slot.handle.terminate())))
   }
 
   private async start(): Promise<void> {

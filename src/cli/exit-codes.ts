@@ -25,6 +25,8 @@ export const ExitCode = {
   TargetError: 7,
   /** Timed out waiting for the target or for a session to answer. */
   Timeout: 8,
+  /** Stopped by Ctrl+C (SIGINT) or SIGTERM before it finished, as 128 + SIGINT by shell convention. */
+  Interrupted: 130,
   /** Anything unanticipated — a bug in the CLI, not in the caller's input. */
   Internal: 70,
 } as const
@@ -58,6 +60,8 @@ export const ErrorCode = {
   UploadRejected: 'upload_rejected',
   Md5Mismatch: 'md5_mismatch',
   Timeout: 'timeout',
+  SimulatorFailed: 'simulator_failed',
+  Interrupted: 'interrupted',
   Internal: 'internal',
 } as const
 

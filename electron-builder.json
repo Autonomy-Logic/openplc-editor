@@ -31,6 +31,23 @@
     {
       "from": "./third-party-licenses/yowasp-clang",
       "to": "./yowasp-clang/licenses"
+    },
+    {
+      "from": "./node_modules/@wasmer/sdk",
+      "to": "./wasmer-sdk",
+      "filter": ["package.json", "LICENSE*", "README.md", "dist/**/*.js", "pkg/**"]
+    },
+    {
+      "from": "./vendor/python-runtime",
+      "to": "./python-runtime"
+    },
+    {
+      "from": "./python-runtime.json",
+      "to": "./python-runtime/python-runtime.json"
+    },
+    {
+      "from": "./third-party-licenses/python-runtime",
+      "to": "./python-runtime/licenses"
     }
   ],
   "mac": {

@@ -13,6 +13,8 @@ beforeEach(() => {
     simulatorLoadFirmware: jest.fn().mockResolvedValue({ success: true }),
     simulatorStop: jest.fn().mockResolvedValue({ success: true }),
     simulatorIsRunning: jest.fn().mockResolvedValue(true),
+    simulatorPreparePython: jest.fn().mockResolvedValue(undefined),
+    onSimulatorLog: jest.fn().mockReturnValue(jest.fn()),
     onSimulatorStopped: jest.fn().mockImplementation((cb: () => void) => {
       simulatorStoppedCallback = cb
       return unsubscribeFromMain
@@ -385,5 +387,23 @@ describe('setDebugVariable', () => {
     await adapter.setDebugVariable(3, true)
 
     expect(window.bridge.debuggerSetVariable).toHaveBeenCalledWith(3, true, undefined)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Python blocks and output
+// ---------------------------------------------------------------------------
+
+describe('preparePython and onLog', () => {
+  it('asks the main process to prepare interpreters', async () => {
+    await adapter.preparePython(3)
+    expect(window.bridge.simulatorPreparePython).toHaveBeenCalledWith(3)
+  })
+
+  it('subscribes to the main process output and hands back its unsubscribe', () => {
+    const callback = jest.fn()
+    const unsubscribe = adapter.onLog(callback)
+    expect(window.bridge.onSimulatorLog).toHaveBeenCalledWith(callback)
+    expect(unsubscribe).toBe((window.bridge.onSimulatorLog as jest.Mock).mock.results[0].value)
   })
 })

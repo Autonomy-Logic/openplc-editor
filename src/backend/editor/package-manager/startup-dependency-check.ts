@@ -13,7 +13,7 @@ import {
 } from './arduino-dependency-installer'
 import type { StartupDependencyGate } from './vpp-dependency-service'
 
-/** Installs the simulator's core and the global libraries in the background when missing; never updates them. */
+/** Installs the global Arduino libraries in the background when missing; never updates them. */
 export class StartupDependencyCheck implements StartupDependencyGate {
   #running = false
   #done: Promise<void> = Promise.resolve()

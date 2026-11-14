@@ -35,8 +35,8 @@ jest.mock('../../../../backend/editor/services', () => ({
   logger: { error: jest.fn(), info: jest.fn(), warn: jest.fn() },
 }))
 jest.mock('../../../../backend/editor/utils', () => ({ getOpenProjectPath: jest.fn(), getProjectPath: jest.fn() }))
-jest.mock('../../../../backend/shared/simulator/simulator-module', () => ({
-  SimulatorModule: jest.fn(() => ({ stop: jest.fn() })),
+jest.mock('../../../../backend/editor/simulator/desktop-simulator', () => ({
+  createDesktopSimulator: jest.fn(() => ({ stop: jest.fn(), isRunning: jest.fn(() => false) })),
 }))
 
 jest.mock('../../../../backend/editor/license/license-flow', () => ({

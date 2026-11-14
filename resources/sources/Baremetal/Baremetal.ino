@@ -531,8 +531,4 @@ void loop()
 
     // Same repair as in scheduler(): the inter-cycle service writes raw too.
     runtime_apply_located_forces();
-
-    #ifdef SIMULATOR_MODE
-    __asm volatile("sleep");
-    #endif
 }

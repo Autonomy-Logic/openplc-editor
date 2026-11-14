@@ -29,9 +29,11 @@ import {
   createArduinoDependencyServices,
 } from '../backend/editor/package-manager/vpp-dependency-service'
 import { clearCloudBuildRoot } from '../backend/editor/project/cloud-build-workspace'
+import { getDesktopPython } from '../backend/editor/python/desktop-python-service'
 import { logger, PouService, ProjectService, UserService } from '../backend/editor/services'
 import { resolveHtmlPath } from '../backend/editor/utils'
 import { getDesktopWasmCompileService } from '../backend/editor/wasm-toolchain/desktop-wasm-toolchain'
+import { preparePythonRuntime } from '../backend/shared/python/prepare-python'
 import { getErrorMessage } from '../frontend/utils/get-error-message'
 import type { EdgeOAuthProviderId } from '../middleware/shared/ports/edge-account-port'
 import { VENDOR_DOCUMENT_SCHEME } from '../middleware/shared/vendor-document/document-url'
@@ -275,8 +277,12 @@ const createMainWindow = async () => {
       mainWindow.minimize()
     }
     const minimumSplash = new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 3000))
-    void Promise.all([minimumSplash, getDesktopWasmCompileService().prepare()])
-      .then(([, toolchain]) => {
+    void Promise.all([
+      minimumSplash,
+      getDesktopWasmCompileService().prepare(),
+      preparePythonRuntime(getDesktopPython().runtime),
+    ])
+      .then(([, toolchain, python]) => {
         if (splash === null) {
           mainWindow?.destroy()
           return
@@ -286,6 +292,8 @@ const createMainWindow = async () => {
           return
         }
         logger.info(`WebAssembly toolchain ready in ${Math.round(toolchain.ms)} ms`)
+        if (python.ok) logger.info(`Python runtime ready in ${Math.round(python.ms)} ms`)
+        else logger.warn(python.message)
         splash.close()
         mainWindow?.show()
       })

@@ -10,6 +10,8 @@ import type { SimulatorPort } from '../../../../middleware/shared/ports/simulato
 function makePort(overrides: Partial<SimulatorPort> = {}): SimulatorPort {
   return {
     loadFirmware: jest.fn().mockResolvedValue({ success: true }),
+    preparePython: jest.fn().mockResolvedValue(undefined),
+    onLog: jest.fn().mockReturnValue(() => {}),
     stop: jest.fn().mockResolvedValue({ success: true }),
     isRunning: jest.fn().mockReturnValue(false),
     onStopped: jest.fn().mockReturnValue(() => {}),

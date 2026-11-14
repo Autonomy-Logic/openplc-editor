@@ -7,7 +7,7 @@
  * This allows byte-identical frontend code to call simulatorService methods
  * while the actual implementation differs per platform:
  * - Editor: SimulatorPort delegates to main process via IPC
- * - Web: SimulatorPort wraps in-process avr8js emulator
+ * - Web: SimulatorPort runs the WebAssembly simulator in a Web Worker
  */
 
 import type { SimulatorPort } from '../../../middleware/shared/ports/simulator-port'
