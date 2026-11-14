@@ -16,4 +16,8 @@ modbus_crc.h - Modbus RTU CRC-16 for the OpenPLC Modbus slave
 // one flash copy per translation unit).
 uint16_t calcCrc();
 
+/** CRC-16 (Modbus) of `len` bytes at `data`, high byte first as calcCrc() returns it:
+ *  the frame carries the high byte, then the low one. Touches no shared frame state. */
+uint16_t mb_crc16(const uint8_t *data, uint16_t len);
+
 #endif

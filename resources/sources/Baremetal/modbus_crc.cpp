@@ -71,3 +71,16 @@ uint16_t calcCrc()
 
     return ((uint16_t)CRCHi << 8) | (uint16_t)CRCLo;
 }
+
+uint16_t mb_crc16(const uint8_t *data, uint16_t len)
+{
+    uint8_t hi = 0xFF;
+    uint8_t lo = 0xFF;
+    for (uint16_t i = 0; i < len; i++)
+    {
+        const uint8_t index = (uint8_t)(hi ^ data[i]);
+        hi = (uint8_t)(lo ^ _auchCRCHi[index]);
+        lo = _auchCRCLo[index];
+    }
+    return (uint16_t)(((uint16_t)hi << 8) | lo);
+}

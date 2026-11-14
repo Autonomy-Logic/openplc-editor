@@ -7,10 +7,7 @@ modbus_serial.cpp - Modbus RTU / debugger serial transport
 #include "modbus_serial.h"
 #include "modbus_pdu.h"   // process_mbpacket, mb_pdu_request_len, mb_pdu_skips_crc, mb_pdu_is_editor_fc
 #include "modbus_crc.h"   // calcCrc
-
-#if defined(CONTROLLINO_MAXI) || defined(CONTROLLINO_MEGA)
-#include "Controllino.h"
-#endif
+#include "modbus_rs485.h"
 
 //Serial timing/port state.
 Stream* mb_serialport;
@@ -24,24 +21,7 @@ void mbconfig_serial_iface(Stream* port, long baud, int txPin)
     mb_txpin = txPin;
     //(*port).begin(baud); //Initialization already happened on main .ino file
 
-    //RS-485 control
-    if (txPin >= 0)
-    {
-        pinMode(txPin, OUTPUT);
-        digitalWrite(txPin, LOW);
-    }
-
-    #if defined(CONTROLLINO_MAXI) || defined(CONTROLLINO_MEGA)
-        if (mb_serialport == &Serial3)
-            Controllino_RS485Init();
-    #elif defined(CONTROLLINO_MICRO)
-    if (mb_serialport == &Serial2) {
-        pinMode(CUSTOM_RS485_DEFAULT_DE_PIN, OUTPUT);
-        pinMode(CUSTOM_RS485_DEFAULT_RE_PIN, OUTPUT);
-        digitalWrite(CUSTOM_RS485_DEFAULT_DE_PIN, LOW);
-        digitalWrite(CUSTOM_RS485_DEFAULT_RE_PIN, HIGH);
-    }
-    #endif
+    mb_rs485_init(port, txPin);
 
     // Modbus states that a baud rate higher than 19200 must use a fixed 750 us
     // for inter character time out. For baud rates below 19200 the timing
@@ -268,36 +248,17 @@ static void handle_serial_port(Stream *port, int8_t txpin, uint8_t slaveid,
 
     if (txpin >= 0)
     {
-        digitalWrite(txpin, HIGH);
+        mb_rs485_pin(txpin, true);
         delayMicroseconds(mb_t35);
     }
-
-    #if defined(CONTROLLINO_MAXI) || defined(CONTROLLINO_MEGA)
-        if (port == &Serial3) // RS485 serial port
-            Controllino_RS485TxEnable(); // Enable RS485 chip to transmit
-    #elif defined(CONTROLLINO_MICRO)
-        if (port == &Serial2) {
-            digitalWrite(CUSTOM_RS485_DEFAULT_DE_PIN, HIGH);
-            digitalWrite(CUSTOM_RS485_DEFAULT_RE_PIN, HIGH);
-        }
-    #endif
+    mb_rs485_board(port, true);
 
     port->write(mb_frame, mb_frame_len);
     port->flush();
     delayMicroseconds(mb_t35);
 
-    if (txpin >= 0)
-        digitalWrite(txpin, LOW);
-
-    #if defined(CONTROLLINO_MAXI) || defined(CONTROLLINO_MEGA)
-        if (port == &Serial3) // RS485 serial port
-            Controllino_RS485RxEnable(); // Go back to receive mode after transmitted data
-    #elif defined(CONTROLLINO_MICRO)
-        if (port == &Serial2) {
-            digitalWrite(CUSTOM_RS485_DEFAULT_DE_PIN, LOW);
-            digitalWrite(CUSTOM_RS485_DEFAULT_RE_PIN, LOW);
-        }
-    #endif
+    mb_rs485_pin(txpin, false);
+    mb_rs485_board(port, false);
 
         // 5) The request — and the response built over it — consumed the whole
         //    assembly buffer. Modbus RTU is turn-taking: the master waits for

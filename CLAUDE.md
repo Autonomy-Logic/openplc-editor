@@ -433,10 +433,13 @@ baremetal for a project with Modbus remote devices; every other build keeps the 
 `resources/sources/arduino/modbus_master_config.h` (`MB_MASTER_ENABLED 0`).
 
 The firmware's master is `resources/sources/Baremetal/modbus_master.{h,cpp}` (run state, scheduling, group
-splitting, response validation, error handling, once-per-scan commit before `runtime_plc_cycle()`) and
-`modbus_master_tcp.{h,cpp}` (MBAP over `bm_net::Connection`, Reconnect); `baremetal_net` is still the only file that
-names a network class, and its master slots sit outside the listeners' pool. Layering, the never-block rules and
-the per-core connect mechanisms are in `resources/sources/Baremetal/ARCHITECTURE.md`.
+splitting, response validation, error handling, once-per-scan commit before `runtime_plc_cycle()`),
+`modbus_master_tcp.{h,cpp}` (MBAP over `bm_net::Connection`, Reconnect) and `modbus_master_rtu.{h,cpp}` (one
+request in flight per UART, transmit handed to the UART without waiting, frames checked byte by byte and accepted
+after 3.5 characters of silence); `baremetal_net` is still the only file that names a network class, and its master
+slots sit outside the listeners' pool. `modbus_rs485.{h,cpp}` drives the RS-485 enable pin and the CONTROLLINO
+transceivers for both the RTU master and the Modbus RTU server. Layering, the never-block rules and the per-core
+connect and UART mechanisms are in `resources/sources/Baremetal/ARCHITECTURE.md`.
 
 Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs in `src/backend/shared/firmware/hals.json`.
 

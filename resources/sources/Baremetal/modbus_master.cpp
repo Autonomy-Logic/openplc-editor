@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "arduino_runtime_glue.h"
+#include "modbus_master_rtu.h"
 #include "modbus_master_tcp.h"
 #include "modbus_pdu.h"
 #include "openplc.h"
@@ -293,6 +294,9 @@ void stop_master()
 #if MB_MASTER_TCP_ENABLED
     mb_master_tcp_stop();
 #endif
+#if MB_MASTER_RTU_ENABLED
+    mb_master_rtu_stop();
+#endif
 }
 
 /** Enter RUN with all retry and give-up state cleared. */
@@ -301,6 +305,9 @@ void start_master(uint32_t now)
     restart_groups(now);
 #if MB_MASTER_TCP_ENABLED
     mb_master_tcp_start();
+#endif
+#if MB_MASTER_RTU_ENABLED
+    mb_master_rtu_start();
 #endif
 }
 
@@ -490,6 +497,9 @@ void mb_master_task(void)
     }
 #if MB_MASTER_TCP_ENABLED
     mb_master_tcp_service();
+#endif
+#if MB_MASTER_RTU_ENABLED
+    mb_master_rtu_service();
 #endif
 }
 
