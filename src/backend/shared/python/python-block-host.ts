@@ -4,8 +4,8 @@
  *
  * The exchange is the wrapper's stdio transport (`injectPythonRuntime`, `transport: 'stdio'`): the host sends the
  * block name, the script's length and the script to the boot script, then the marker and the seeded outputs, then one
- * hex line of inputs per exchange; the block answers each with `@@<marker> <hex outputs>`. Anything else it prints
- * goes to the Console, prefixed with its name.
+ * hex line of inputs per exchange; the block answers each with `@@<marker> <hex outputs>`, which may follow text the
+ * block printed without a newline. Anything else it prints goes to the Console, prefixed with its name.
  */
 import type { SimulatorLogStream, SimulatorPythonBlock, SimulatorPythonBus } from '../simulator/wasm-simulator-module'
 import type { PythonInterpreters } from './python-thread'
@@ -69,8 +69,13 @@ class RunningBlock {
   start(): void {
     const prefix = `@@${this.marker} `
     this.process.onStdout = (line) => {
-      if (line.startsWith(prefix)) this.received(line.slice(prefix.length))
-      else this.log(`[${this.label}] ${line}`, 'stdout')
+      const at = line.indexOf(prefix)
+      if (at < 0) {
+        this.log(`[${this.label}] ${line}`, 'stdout')
+        return
+      }
+      if (at > 0) this.log(`[${this.label}] ${line.slice(0, at)}`, 'stdout')
+      this.received(line.slice(at + prefix.length))
     }
     this.process.onStderr = (line) => this.log(`[${this.label}] ${line}`, 'stderr')
     this.process.onExit = (exit) => this.exited(exit)
@@ -133,8 +138,8 @@ class RunningBlock {
 }
 
 /**
- * Starts the Python blocks a simulator run announces. Interpreters prepared ahead (`prepare`, while the project
- * builds) are used first; a block beyond them gets one started on demand. No more than `maxInterpreters` are alive at
+ * Starts the Python blocks a simulator run announces. Interpreters prepared ahead (`prepare`, after the module
+ * compiles) are used first; a block beyond them gets one started on demand. No more than `maxInterpreters` are alive at
  * once: a block beyond that limit is not started, and the Console says why.
  */
 export class PythonBlockHost {

@@ -232,6 +232,20 @@ describe('ThreadedSimulator with a thread that starts later', () => {
     expect(simulator.isRunning()).toBe(true)
   })
 
+  it('rejects a start that is stopped after the thread exists but before the module started', async () => {
+    const mechanism = inMemoryThreads(false)
+    const simulator = threaded(mechanism)
+    const start = simulator.loadAndRun(fixtureModule())
+    await nextMessage()
+    expect(mechanism.threads).toHaveLength(1)
+
+    simulator.stop()
+
+    await expect(start).rejects.toThrow('The simulator was stopped before it started.')
+    expect(mechanism.threads[0].terminated).toBe(true)
+    expect(simulator.isRunning()).toBe(false)
+  })
+
   it('rejects the start when the thread cannot be started at all', async () => {
     const simulator = threaded({ spawn: () => Promise.reject(new Error('no workers here')) })
     await expect(simulator.loadAndRun(fixtureModule())).rejects.toThrow('no workers here')

@@ -2,7 +2,7 @@
  * Python function blocks on the OpenPLC Simulator (desktop): Play runs each block in its own interpreter next to the
  * PLC. A block with a thread and numpy updates its outputs; one that raises shows its traceback and keeps its last
  * outputs; one that never yields does not hold the PLC; one that opens a socket fails with a traceback; Stop ends
- * them all.
+ * them all. Play opens the Debugger tab, so the spec opens the Console tab to read block output.
  *
  * Running needs a production build plus the preload copy; see "Electron e2e" in CLAUDE.md.
  */
@@ -12,7 +12,7 @@ import { join } from 'node:path'
 
 import { expect, type Page, test } from '@playwright/test'
 
-import { waitForApp, waitForText } from './helpers/app-console'
+import { pageText, waitForApp, waitForText } from './helpers/app-console'
 import { launch, quitApp } from './helpers/ethercat-project'
 
 const FIXTURE = join(__dirname, 'fixtures', 'python-blocks')
@@ -122,7 +122,6 @@ test('Python blocks run beside the PLC: threads and numpy, failures, a block tha
     const leaves = readLeaves(project)
     const read = () => readVariables(page, leaves, names)
 
-    // TC06: the block's outputs follow its 100 ms loop, its thread runs, numpy computes the mean.
     await expect.poll(async () => (await read())?.PY_COUNT ?? 0, { timeout: 30000 }).toBeGreaterThan(5)
     const first = await read()
     await page.waitForTimeout(2000)
@@ -133,11 +132,9 @@ test('Python blocks run beside the PLC: threads and numpy, failures, a block tha
     expect(loopsPerSecond).toBeLessThan(11)
     expect(later.PY_BEATS).toBeGreaterThan(first.PY_BEATS)
     expect(later.PY_MEAN).toBeGreaterThan(0)
-    // Play opens the debugger tab in the bottom panel; the block output is on the Console tab.
     await page.getByRole('tab', { name: 'Console' }).click()
     await waitForText(page, /\[PyStats\] PyStats started, numpy 2\.3\.2/, { timeout: 30000 })
 
-    // TC07: the failing block's traceback reaches the Console and its output stays at its last value.
     await waitForText(page, /\[PyFail\] RuntimeError: planned failure after 30 loops/, { timeout: 30000 })
     const afterFailure = await read()
     await page.waitForTimeout(1000)
@@ -147,14 +144,15 @@ test('Python blocks run beside the PLC: threads and numpy, failures, a block tha
     expect(stillFailed.FAIL_COUNT).toBeLessThan(30)
     expect(stillFailed.COUNTER).toBeGreaterThan(afterFailure.COUNTER)
 
-    // TC08: the block stuck in its loop never published, and the PLC keeps scanning.
     expect(stillFailed.SPIN_ENTERED).toBe(0)
 
-    // TC09: no network for Python: the connection fails with a traceback and the output stays 0.
     await waitForText(page, /\[PySocket\] socket\.gaierror/, { timeout: 30000 })
+    const output = await pageText(page)
+    expect(output).toMatch(/\[PySocket\] raw IP connect failed: \w+/)
+    expect(output).toMatch(/\[PySocket\] host file hidden: \w+/)
+    expect(output).not.toMatch(/raw IP connect succeeded|host file read/)
     expect(stillFailed.NET_CONNECTED).toBe(0)
 
-    // Stop ends the PLC and every block, the one that never yields included.
     await play.click()
     await expect.poll(() => simulatorRunning(page), { timeout: 30000 }).toBe(false)
     const lines = await page.locator('text=/\\[PyStats\\] count=/').count()

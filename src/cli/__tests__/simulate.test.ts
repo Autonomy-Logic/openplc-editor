@@ -156,18 +156,19 @@ describe('openplc-cli simulate', () => {
     expect(simulator.calls).toEqual(['run 4', 'stop'])
   })
 
-  it('ends with the reason and a non-zero exit when the Python runtime cannot load', async () => {
-    const { out, reporter, simulator, deps } = setUp('json', {
+  it('runs the PLC anyway when the Python runtime cannot load, with the reason on the Console', async () => {
+    const { out, err, reporter, simulator, deps, interrupt } = setUp('json', {
       loadPython: () => Promise.resolve({ ok: false, message: 'The Python runtime could not be loaded: missing' }),
     })
-    const result = await runSimulate(args('/projects/demo'), reporter, deps)
+    const running = runSimulate(args('/projects/demo'), reporter, deps)
+    await until(() => simulator.calls.length === 2)
+    interrupt()
+    const result = await running
 
-    expect(JSON.parse(out[0])).toEqual({
-      ok: false,
-      error: { code: ErrorCode.SimulatorFailed, message: 'The Python runtime could not be loaded: missing' },
-    })
-    expect(result.exitCode).toBe(ExitCode.TargetError)
-    expect(simulator.calls).toEqual([])
+    expect(err).toContain('The Python runtime could not be loaded: missing\n')
+    expect(simulator.calls).toEqual(['prepare 2', 'run 4', 'stop'])
+    expect(JSON.parse(out[0]).ok).toBe(true)
+    expect(result.exitCode).toBe(ExitCode.Ok)
   })
 
   it('reports a module that cannot start', async () => {

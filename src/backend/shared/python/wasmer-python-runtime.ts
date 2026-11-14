@@ -101,6 +101,9 @@ export interface PythonProcess {
 
 const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
+/** The exit of a process is reported once its output drained, or after this long, so a traceback keeps its end. */
+const PYTHON_OUTPUT_DRAIN_MS = 1000
+
 class WasmerPythonProcess implements PythonProcess {
   onStdout: ((line: string) => void) | null = null
   onStderr: ((line: string) => void) | null = null
@@ -123,17 +126,23 @@ class WasmerPythonProcess implements PythonProcess {
     this.ready = new Promise<void>((resolve, reject) => {
       this.settleBoot = { resolve, reject }
     })
-    void this.pump(process.stdout, (line) => {
-      if (this.booted) this.onStdout?.(line)
-      else if (line === PYTHON_BOOT_READY) this.boot()
-    })
-    void this.pump(process.stderr, (line) => {
-      if (this.booted) this.onStderr?.(line)
-      else this.bootErrors.push(line)
-    })
+    const pumps = Promise.all([
+      this.pump(process.stdout, (line) => {
+        if (this.booted) this.onStdout?.(line)
+        else if (line === PYTHON_BOOT_READY) this.boot()
+      }),
+      this.pump(process.stderr, (line) => {
+        if (this.booted) this.onStderr?.(line)
+        else this.bootErrors.push(line)
+      }),
+    ])
+    const drained = (): Promise<unknown> =>
+      Promise.race([pumps, new Promise((resolve) => setTimeout(resolve, PYTHON_OUTPUT_DRAIN_MS))])
     process.wait().then(
-      (output) => this.end(this.killed ? { kind: 'killed' } : { kind: 'exited', code: output.exitCode }),
-      (error: unknown) => this.end(this.killed ? { kind: 'killed' } : { kind: 'failed', reason: describe(error) }),
+      (output) =>
+        drained().then(() => this.end(this.killed ? { kind: 'killed' } : { kind: 'exited', code: output.exitCode })),
+      (error: unknown) =>
+        drained().then(() => this.end(this.killed ? { kind: 'killed' } : { kind: 'failed', reason: describe(error) })),
     )
   }
 
@@ -154,7 +163,7 @@ class WasmerPythonProcess implements PythonProcess {
     try {
       for await (const line of stream.lines()) deliver(line.replace(/\r?\n$/, ''))
     } catch {
-      // The stream ends with the process; its exit is reported by `wait()`.
+      return
     }
   }
 
@@ -197,7 +206,6 @@ export class WasmerPythonRuntime {
     const sandbox = await this.client.sandboxes.create({
       packages: [this.pythonPackage],
       files: { [BOOT_SCRIPT]: PYTHON_BOOT_SCRIPT, [NUMPY_WHEEL]: this.numpyWheel },
-      // The Console shows plain text, so tracebacks come without colour codes.
       env: { PYTHON_COLORS: '0', NO_COLOR: '1' },
       network: { mode: 'disabled' },
     })

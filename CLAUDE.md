@@ -83,6 +83,7 @@ so it must be installed first or they fail with `TS2307: Cannot find module
 
 ```bash
 npm ci --ignore-scripts && npm run setup:strucpp   # required first, or tsc/jest can't resolve 'strucpp'
+npm run setup:python                               # the pinned Python runtime (vendor/python-runtime/), skipped by --ignore-scripts
 npx tsc --noEmit                                   # ci-build:       Build Check
 npx prettier --check "./src/**/*.{ts,tsx}"         # ci-format:      Format Check
 npx eslint "./src/**/*.{ts,tsx}"                   # ci-lint:        Lint Check
@@ -159,6 +160,7 @@ spec is a local check. `e2e/` drives the real Electron app through `_electron.la
 and three things bite before any assertion:
 
 ```bash
+npm run setup:python                                   # the Python runtime the simulator runs, if not installed
 OPENPLC_E2E_DEBUG_SEAM=1 npm run build                 # main + renderer
 mkdir -p release/app/configs/dll
 cp release/app/dist/main/preload.js release/app/configs/dll/preload.js
@@ -483,10 +485,14 @@ to `main.js`; `src/backend/editor/python/`). The logic is shared and byte-identi
 wrapper's stdio transport, Console lines prefixed `[Block]`, a block that ends or fails keeps its last outputs, Stop
 kills them all), the thread protocol and the Wasmer runtime. The module starts a block through
 `wasm-sim/sim_python.cpp` (`env.host_python_block`), force-included header `wasm-sim/stub/iec_python.h`. The runtime
-loads during the splash (startup fails on the splash if it cannot); interpreters for a project's blocks boot right
+loads during the splash but never stops the editor or a run: if it cannot load (or takes past 120 s), the editor opens,
+the PLC runs, and each Python block reports the reason on the Console; the failure stays for the session. Interpreters
+for a project's blocks boot right
 after its module compiles, and the PLC starts once they are ready (not during the compile: on WebKit that stalls the
 in-browser compiler). `openplc-cli simulate` (`src/cli/commands/simulate.ts`) runs the same simulator and loads
-Python only for a project with Python blocks; a runtime that cannot load ends it with the reason and a non-zero exit.
+Python only for a project with Python blocks; a toolchain that cannot load ends it (exit 4), a Python runtime that cannot
+load does not. A run keeps at most as many interpreters as fit in half of the computer's memory
+(`python-memory-budget.ts`).
 
 - **Assets:** the CPython package and the numpy wheel are pinned by sha256 in `python-runtime.json` and fetched at
   install time into `vendor/python-runtime/` (`npm run setup:python`, part of `postinstall`; never committed, the

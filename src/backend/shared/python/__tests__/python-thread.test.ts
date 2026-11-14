@@ -134,7 +134,7 @@ describe('ThreadedPythonRuntime with servePythonThread', () => {
     expect(exits).toEqual([{ kind: 'killed' }])
   })
 
-  it('rejects the load with the reason, and tries again on the next load', async () => {
+  it('rejects the load with the reason, ends that thread, and keeps failing with it for the session', async () => {
     let attempts = 0
     const mechanism = inMemoryThread(() => {
       attempts++
@@ -143,9 +143,16 @@ describe('ThreadedPythonRuntime with servePythonThread', () => {
     const runtime = new ThreadedPythonRuntime(mechanism)
     await expect(runtime.load()).rejects.toThrow('package missing')
     expect(mechanism.threads[0].terminated).toBe(true)
-    await expect(runtime.spawn()).resolves.toBeDefined()
-    expect(mechanism.spawns).toBe(2)
-    expect(mechanism.threads[1].terminated).toBe(false)
+    await expect(runtime.spawn()).rejects.toThrow('package missing')
+    expect(mechanism.spawns).toBe(1)
+  })
+
+  it('fails a load that takes longer than its deadline, and ends that thread', async () => {
+    const mechanism = inMemoryThread(() => new Promise<PythonInterpreters>(() => undefined))
+    const runtime = new ThreadedPythonRuntime(mechanism, 20)
+    await expect(runtime.load()).rejects.toThrow('The Python runtime did not load within 0 s.')
+    expect(mechanism.threads[0].terminated).toBe(true)
+    await expect(runtime.spawn()).rejects.toThrow('did not load')
   })
 
   it('rejects a spawn the runtime refuses', async () => {
@@ -178,9 +185,13 @@ describe('ThreadedPythonRuntime with servePythonThread', () => {
     await expect(loading).rejects.toThrow('The Python thread stopped: killed')
     expect(mechanism.threads[0].terminated).toBe(true)
 
-    const broken = new ThreadedPythonRuntime({ spawn: () => Promise.reject(new Error('no workers')) })
-    await expect(broken.load()).rejects.toThrow('no workers')
-    await expect(broken.load()).rejects.toThrow('no workers')
+    const broken = new ThreadedPythonRuntime({
+      spawn: () => {
+        throw new Error('python-runtime.json has no file for numpy.')
+      },
+    })
+    await expect(broken.load()).rejects.toThrow('python-runtime.json has no file for numpy.')
+    await expect(broken.load()).rejects.toThrow('python-runtime.json has no file for numpy.')
   })
 })
 

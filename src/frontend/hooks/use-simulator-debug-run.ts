@@ -76,7 +76,7 @@ export interface UseSimulatorDebugRunReturn {
     firmwarePath: string,
     options?: { attachDebugger?: boolean; projectData?: PLCProjectData },
   ) => Promise<boolean>
-  /** End the debug session (if any) and stop the emulator. */
+  /** End the debug session (if any), then stop the emulator, even when ending the session fails. */
   stop: () => Promise<void>
 }
 
@@ -111,7 +111,6 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
     })
   }, [simulator])
 
-  // The program's output and its Python blocks' reach the Console: stdout as information, stderr as errors.
   useEffect(() => {
     return simulator.onLog((line, stream) => addLog({ level: stream === 'stderr' ? 'error' : 'info', message: line }))
   }, [simulator, addLog])
@@ -120,7 +119,6 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
     async (firmwarePath: string, options: { attachDebugger?: boolean; projectData?: PLCProjectData }) => {
       const pythonBlocks = options.projectData ? countPythonBlockInstances(options.projectData) : 0
       if (pythonBlocks > 0) {
-        // A failure here is reported, and the blocks then start on demand.
         await simulator.preparePython(pythonBlocks).catch((error: unknown) => {
           addLog({ level: 'error', message: `Python could not be prepared: ${getErrorMessage(error)}` })
         })
@@ -168,28 +166,6 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
   const stop = useCallback(async (): Promise<void> => {
     setIsBusy(true)
     try {
-      // Two things end here, in this order, and the emulator's end is not
-      // conditional on the debug session's.
-      //
-      // The debug session goes first: it is a CONSUMER of the emulator, so it
-      // has to let go of the transport before the thing on the other end
-      // disappears.
-      //
-      // The emulator goes second, from a `finally`, because stopping it is
-      // this function's job and nothing else's. `stopSession()` deliberately
-      // does not do it (see its docstring: a debug session is not the owner of
-      // the thing it talks to), so with this call missing "Stop" ended the
-      // debug session, logged "Simulator stopped." and left the simulator's scan loop
-      // running — re-scheduling itself and burning a core for the rest of the
-      // session, unreachable because the button had flipped back to "Start".
-      //
-      // Sequencing it after a plain `await` reintroduced the same leak on the
-      // error path: anything that rejects inside the teardown (today only a
-      // throwing `onDisconnected` subscriber, which is why nothing hits it
-      // yet) skipped straight to the catch below, which only logs. The
-      // emulator kept running, `isRunning` stayed true, and every retry failed
-      // identically — worse than the original bug, because nothing settled at
-      // all. `finally` keeps the order and drops the condition.
       try {
         await debugSession.stopSession()
       } finally {

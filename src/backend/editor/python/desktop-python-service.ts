@@ -7,7 +7,7 @@ let python: DesktopPython | null = null
 
 /** The editor process's Python runtime and block host, created on first use. */
 export function getDesktopPython(): DesktopPython {
-  python ??= createDesktopPython(
+  python ??= createDesktopPython(() =>
     resolvePythonRuntimePaths({
       isPackaged: app.isPackaged,
       resourcesPath: process.resourcesPath,

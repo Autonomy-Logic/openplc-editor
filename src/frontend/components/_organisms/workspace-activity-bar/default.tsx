@@ -222,7 +222,6 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     },
   })
   const simulatorRunning = simulatorRun.isRunning
-  // Play and Stop stay disabled while a run starts (Python blocks preparing, the module loading) or stops.
   const simulatorBusy = simulatorRun.isBusy
 
   // A serial debug session lives on the device connection: it shares that
@@ -1539,9 +1538,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           <TooltipSidebarWrapperButton tooltipContent='Debugger'>
             <DebuggerButton
               onClick={() => void handleDebuggerClick()}
-              disabled={isDebuggerProcessing}
+              disabled={isDebuggerProcessing || simulatorBusy}
               isActive={isDebuggerVisible}
-              className={cn(isDebuggerProcessing && disabledButtonClass)}
+              className={cn((isDebuggerProcessing || simulatorBusy) && disabledButtonClass)}
             />
           </TooltipSidebarWrapperButton>
         </>

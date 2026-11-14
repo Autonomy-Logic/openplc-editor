@@ -203,10 +203,22 @@ describe('PythonSimulator', () => {
     await simulator.loadAndRun(pythonModule())
     await until(() => processes.length === 1, 'the block')
 
+    const lines: Array<[string, string]> = []
+    simulator.onLog = (line, stream) => lines.push([line, stream])
     runner.onStopped?.('The simulator stopped: trap')
     expect(reasons).toEqual(['The simulator stopped: trap'])
+    expect(lines).toContainEqual(['The simulator stopped: trap', 'stderr'])
     expect(processes[0].killed).toBe(true)
     runner.stop()
+  })
+
+  it('puts the reason Python could not be prepared on the Console, before any run starts', async () => {
+    const host = new PythonBlockHost({ spawn: () => Promise.reject(new Error('no runtime')) })
+    const simulator = new PythonSimulator(new WasmSimulatorModule(virtualTimers()), host)
+    const lines: string[] = []
+    simulator.onLog = (line) => lines.push(line)
+    await simulator.preparePython(1)
+    expect(lines).toEqual(['Python could not be prepared: no runtime'])
   })
 
   it('ends the blocks when the module cannot start', async () => {

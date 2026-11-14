@@ -160,6 +160,8 @@ export class ThreadedSimulator implements UartSimulator, SimulatorPythonBus {
   private running = false
   /** Counts stops, so a run whose thread was still starting when it was stopped does not go on. */
   private stops = 0
+  /** Fails the start in progress, if any. */
+  private abandonStart: (() => void) | null = null
   private reads = 0
   private readonly pendingReads = new Map<number, (bytes: Uint8Array | null) => void>()
 
@@ -183,8 +185,13 @@ export class ThreadedSimulator implements UartSimulator, SimulatorPythonBus {
     this.thread = thread
     return new Promise<void>((resolve, reject) => {
       let starting = true
+      this.abandonStart = () => {
+        if (starting) reject(new Error('The simulator was stopped before it started.'))
+        starting = false
+      }
       const fail = (reason: string): void => {
         if (this.thread !== thread) return
+        this.abandonStart = null
         this.end()
         if (starting) reject(new Error(reason))
         else this.onStopped?.(reason)
@@ -197,6 +204,7 @@ export class ThreadedSimulator implements UartSimulator, SimulatorPythonBus {
         switch (message.type) {
           case 'started':
             starting = false
+            this.abandonStart = null
             this.running = true
             resolve()
             return
@@ -262,6 +270,9 @@ export class ThreadedSimulator implements UartSimulator, SimulatorPythonBus {
   }
 
   private end(): void {
+    const abandon = this.abandonStart
+    this.abandonStart = null
+    abandon?.()
     const thread = this.thread
     this.thread = null
     this.running = false

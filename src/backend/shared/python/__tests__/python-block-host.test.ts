@@ -149,6 +149,18 @@ describe('PythonBlockHost', () => {
     expect(process.written).toHaveLength(4)
   })
 
+  it('reads a reply that follows text the block printed without a newline, and logs that text', async () => {
+    const { interpreters, bus, lines } = setUp()
+    bus.announce(block(1))
+    await settle()
+    const [process] = interpreters.started
+
+    process.onStdout?.(`...@@${process.marker} ${toHex(new Uint8Array([7, 0]))}`)
+    expect(bus.outputs).toEqual([{ id: 1, bytes: new Uint8Array([7, 0]) }])
+    expect(lines).toContainEqual({ line: '[Doubler] ...', stream: 'stdout' })
+    expect(lines.some(({ line }) => line.includes('@@'))).toBe(false)
+  })
+
   it('waits for a block that has not answered, so one in an endless loop gets no more inputs', async () => {
     const { timers, bus } = setUp()
     bus.announce(block(1))

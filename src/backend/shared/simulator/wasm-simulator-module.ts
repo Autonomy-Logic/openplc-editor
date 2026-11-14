@@ -206,6 +206,10 @@ export class WasmSimulatorModule implements UartSimulator, SimulatorPythonBus {
     this.cancelTimer = this.timers.schedule(() => this.step(), Math.max(0, delayMs))
   }
 
+  /**
+   * Runs one step of simulated time. Steps keep their schedule while a timer fires late by less than a period;
+   * further behind, time restarts from now instead of catching up.
+   */
   private step(): void {
     this.cancelTimer = null
     if (!this.running || !this.exports) return
@@ -225,7 +229,8 @@ export class WasmSimulatorModule implements UartSimulator, SimulatorPythonBus {
     this.announcePythonBlocks()
     if (!this.running) return
     const now = this.timers.now()
-    this.nextStepAt = Math.max(now, this.nextStepAt) + this.nextStepUs() / 1000
+    const behind = now - this.nextStepAt >= this.periodUs / 1000
+    this.nextStepAt = (behind ? now : this.nextStepAt) + this.nextStepUs() / 1000
     this.schedule(this.nextStepAt - now)
   }
 

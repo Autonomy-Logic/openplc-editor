@@ -165,22 +165,34 @@ interface PendingSpawn {
   reject: (error: Error) => void
 }
 
+/** How long the Python thread may take to load its runtime before the load fails. */
+export const PYTHON_LOAD_DEADLINE_MS = 120000
+
 /**
- * The main side: the Python thread, started once by `load()` and kept for the session. A thread that dies ends its
- * interpreters, and the next `load()` starts a new one.
+ * The main side: the Python thread, started once by `load()` and kept for the session. A thread that dies after
+ * loading ends its interpreters, and the next `load()` starts a new one. A runtime that could not load stays failed
+ * for the session, so later runs do not wait on it again: their Python blocks report the same reason.
  */
 export class ThreadedPythonRuntime implements PythonInterpreters {
   private thread: PythonThreadHandle | null = null
   private loading: Promise<PythonThreadHandle> | null = null
+  private loadFailure: Error | null = null
   private ids = 0
   private readonly spawning = new Map<number, PendingSpawn>()
   private readonly processes = new Map<number, ThreadedPythonProcess>()
 
-  constructor(private readonly mechanism: PythonThreadMechanism) {}
+  constructor(
+    private readonly mechanism: PythonThreadMechanism,
+    private readonly loadDeadlineMs = PYTHON_LOAD_DEADLINE_MS,
+  ) {}
 
   /** Starts the thread and waits for its runtime; rejects with the reason it could not load. */
   load(): Promise<void> {
-    this.loading ??= this.startThread()
+    if (this.loadFailure) return Promise.reject(this.loadFailure)
+    this.loading ??= this.startThread().catch((error: unknown) => {
+      this.loadFailure = error instanceof Error ? error : new Error(String(error))
+      throw this.loadFailure
+    })
     return this.loading.then(() => undefined)
   }
 
@@ -205,7 +217,15 @@ export class ThreadedPythonRuntime implements PythonInterpreters {
     }
     return new Promise<PythonThreadHandle>((resolve, reject) => {
       let loaded = false
+      const deadline = setTimeout(() => {
+        if (loaded) return
+        loaded = true
+        const reason = `The Python runtime did not load within ${Math.round(this.loadDeadlineMs / 1000)} s.`
+        this.lose(thread, reason)
+        reject(new Error(reason))
+      }, this.loadDeadlineMs)
       thread.onFailure((reason) => {
+        clearTimeout(deadline)
         if (this.thread === thread || !loaded) this.lose(thread, `The Python thread stopped: ${reason}`)
         if (!loaded) reject(new Error(`The Python thread stopped: ${reason}`))
         loaded = true
@@ -214,12 +234,16 @@ export class ThreadedPythonRuntime implements PythonInterpreters {
         const message = parsePythonThreadReply(value)
         if (message === null) return
         if (message.type === 'ready') {
+          if (loaded) return
+          clearTimeout(deadline)
           loaded = true
           this.thread = thread
           resolve(thread)
           return
         }
         if (message.type === 'load-failed') {
+          if (loaded) return
+          clearTimeout(deadline)
           loaded = true
           this.lose(thread, message.message)
           reject(new Error(message.message))

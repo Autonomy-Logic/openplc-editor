@@ -274,9 +274,10 @@ preparation) exits 130 (`interrupted`).
   mode prints both on stderr and keeps stdout for the result, which carries
   `project`, `target`, `pythonBlocks` and `ranMs`.
 - The toolchain and the Python runtime load on first need: a project with no
-  Python block never loads Python. A runtime that cannot load ends the command
-  with its reason: exit 4 (`compile_failed`) for the toolchain, exit 7
-  (`simulator_failed`) for Python.
+  Python block never loads Python. A toolchain that cannot load ends the
+  command with its reason (exit 4, `compile_failed`). A Python runtime that
+  cannot load does not: the PLC runs, and the Python blocks report why on the
+  Console.
 - A block that raises keeps its last outputs and the run goes on, as on Play. A
   run that stops on its own (the module traps) exits 7 with the reason.
 

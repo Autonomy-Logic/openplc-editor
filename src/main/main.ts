@@ -291,12 +291,9 @@ const createMainWindow = async () => {
           showStartupFailure(toolchain.message)
           return
         }
-        if (!python.ok) {
-          showStartupFailure(python.message)
-          return
-        }
         logger.info(`WebAssembly toolchain ready in ${Math.round(toolchain.ms)} ms`)
-        logger.info(`Python runtime ready in ${Math.round(python.ms)} ms`)
+        if (python.ok) logger.info(`Python runtime ready in ${Math.round(python.ms)} ms`)
+        else logger.warn(python.message)
         splash.close()
         mainWindow?.show()
       })

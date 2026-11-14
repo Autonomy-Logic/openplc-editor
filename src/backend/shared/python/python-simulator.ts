@@ -4,7 +4,7 @@ import type { PythonBlockHost } from './python-block-host'
 
 /**
  * A simulator run with its Python blocks: the PLC starts once the interpreters prepared for it are ready, and its
- * blocks end with it. The Console gets the program's output and the blocks' alike.
+ * blocks end with it. The Console gets the program's output, the blocks', and the reason a run stopped on its own.
  */
 export class PythonSimulator implements SimulatorRunner {
   onLog: ((line: string, stream: SimulatorLogStream) => void) | null = null
@@ -15,8 +15,10 @@ export class PythonSimulator implements SimulatorRunner {
     private readonly python: PythonBlockHost,
   ) {
     runner.onLog = (line, stream) => this.onLog?.(line, stream)
+    python.onLog = (line, stream) => this.onLog?.(line, stream)
     runner.onStopped = (reason) => {
       python.stop()
+      this.onLog?.(reason, 'stderr')
       this.onStopped?.(reason)
     }
   }
@@ -31,7 +33,6 @@ export class PythonSimulator implements SimulatorRunner {
 
   async loadAndRun(module: Uint8Array): Promise<void> {
     await this.python.ready()
-    this.python.onLog = (line, stream) => this.onLog?.(line, stream)
     this.python.attach(this.runner)
     try {
       await this.runner.loadAndRun(module)

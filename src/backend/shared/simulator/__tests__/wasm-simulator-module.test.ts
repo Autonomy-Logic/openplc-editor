@@ -111,6 +111,24 @@ describe('WasmSimulatorModule', () => {
     simulator.stop()
   })
 
+  it('keeps pace with the wall clock when every timer fires a little late', async () => {
+    const clock = manualTimers()
+    const simulator = new WasmSimulatorModule(clock.timers)
+    await simulator.loadAndRun(hostModule({ periodUs: 20000 }))
+
+    let wallMs = 0
+    for (let n = 0; n < 300; n++) {
+      const [delay] = clock.delays()
+      clock.jump(delay + 1)
+      wallMs += delay + 1
+    }
+
+    expect(simulator.simulatedTimeUs).toBe(3000000)
+    expect(wallMs - simulator.simulatedTimeUs / 1000).toBeGreaterThanOrEqual(0)
+    expect(wallMs - simulator.simulatedTimeUs / 1000).toBeLessThanOrEqual(10)
+    simulator.stop()
+  })
+
   it('falls behind instead of catching up when the host was held up', async () => {
     const clock = manualTimers()
     const simulator = new WasmSimulatorModule(clock.timers)

@@ -5,8 +5,10 @@
  * the project's Python blocks are prepared first and the PLC starts once they are ready. The run's Console (the
  * program's output and every Python block's, prefixed with its name) is printed until Ctrl+C.
  *
- * The toolchain and the Python runtime load on first need: a project with no Python block never loads Python, and
- * a runtime that cannot load ends the command with its reason and a non-zero exit.
+ * The toolchain and the Python runtime load on first need: a project with no Python block never loads Python. A
+ * toolchain that cannot load ends the command; a Python runtime that cannot load does not: the PLC runs, and the
+ * Python blocks report why they cannot start. Ctrl+C before the run starts (during the build or the Python
+ * preparation) ends the command as interrupted, not as a finished run.
  */
 
 import type { PythonRuntimeReadiness } from '@root/backend/shared/python/prepare-python'
@@ -55,7 +57,6 @@ export async function runSimulate(
     )
   }
 
-  // Listened for from the start: Ctrl+C during the build or the Python preparation must not read as a finished run.
   const INTERRUPTED = Symbol('interrupted')
   const interruption = deps.interrupted().then((): typeof INTERRUPTED => INTERRUPTED)
   const unlessInterrupted = <T>(work: Promise<T>): Promise<T | typeof INTERRUPTED> => Promise.race([work, interruption])
@@ -94,7 +95,7 @@ export async function runSimulate(
     reporter.progress('Loading the Python runtime…')
     const python = await unlessInterrupted(deps.loadPython())
     if (python === INTERRUPTED) return interruptedEarly()
-    if (!python.ok) return simulatorFailure(python.message)
+    if (!python.ok) reporter.console(python.message, 'stderr')
   }
 
   const simulator = deps.createSimulator()

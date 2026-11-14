@@ -37,6 +37,8 @@ interface FakeProcessControl {
   stdout(line: string): void
   stderr(line: string): void
   exit(code: number): void
+  /** Exits first and prints `lines` on stderr afterwards, as a stream that drains after the exit. */
+  exitBeforeDrain(code: number, lines: string[]): void
   trap(message: string): void
   written: string[]
   killed: boolean
@@ -89,6 +91,14 @@ function fakeSdk(): { sdk: WasmerSdk; processes: FakeProcessControl[]; closed: n
             out.end()
             err.end()
             settle?.resolve({ exitCode: code })
+          },
+          exitBeforeDrain: (code, trailing) => {
+            settle?.resolve({ exitCode: code })
+            setImmediate(() => {
+              for (const line of trailing) err.push(line)
+              out.end()
+              err.end()
+            })
           },
           trap: (message) => {
             out.end()
@@ -172,6 +182,23 @@ describe('WasmerPythonRuntime', () => {
     expect(err).toEqual(['warning'])
     expect(exits).toEqual([{ kind: 'exited', code: 0 }])
     expect(fake.closed).toBe(1)
+  })
+
+  it('reports the exit only after the last output lines, so a traceback keeps its end', async () => {
+    const fake = fakeSdk()
+    const runtime = await WasmerPythonRuntime.load(fake.sdk, assets)
+    const spawning = runtime.spawn()
+    await tick()
+    fake.processes[0].stdout(PYTHON_BOOT_READY)
+    const process = await spawning
+    const events: string[] = []
+    process.onStderr = (line) => events.push(line)
+    process.onExit = (exit) => events.push(`exit ${exit.kind}`)
+
+    fake.processes[0].exitBeforeDrain(1, ['Traceback (most recent call last):', 'RuntimeError: boom'])
+    for (let n = 0; n < 5; n++) await tick()
+
+    expect(events).toEqual(['Traceback (most recent call last):', 'RuntimeError: boom', 'exit exited'])
   })
 
   it('rejects the spawn with what Python printed when it dies while booting', async () => {

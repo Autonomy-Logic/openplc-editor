@@ -8,8 +8,9 @@ import { cpSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { expect, type Page, test } from '@playwright/test'
+import { type Page, test } from '@playwright/test'
 
+import { waitForApp } from './helpers/app-console'
 import { launch, quitApp } from './helpers/ethercat-project'
 
 const FIXTURE = join(
@@ -79,7 +80,7 @@ const readCounter = (page: Page): Promise<number | null> =>
   }, COUNTER)
 
 test('Play builds the project, runs it as WebAssembly with live values, and Play again stops it', async () => {
-  test.setTimeout(300000)
+  test.setTimeout(180000)
   const { userData } = writeProject('openplc-e2e-wasm-simulator-play')
   const { app, page } = await launch(userData)
   try {
@@ -88,16 +89,16 @@ test('Play builds the project, runs it as WebAssembly with live values, and Play
     const started = Date.now()
     await play.click({ timeout: 60000 })
 
-    await expect.poll(() => simulatorRunning(page), { timeout: 180000 }).toBe(true)
-    await expect.poll(() => readCounter(page), { timeout: 60000 }).toBeGreaterThan(0)
+    await waitForApp(page, () => simulatorRunning(page), { timeout: 90000, message: 'the simulator never started' })
+    await waitForApp(page, async () => ((await readCounter(page)) ?? 0) > 0, { message: 'no live values' })
     const playToLiveMs = Date.now() - started
     const first = (await readCounter(page)) ?? 0
-    await expect.poll(() => readCounter(page), { timeout: 30000 }).toBeGreaterThan(first)
+    await waitForApp(page, async () => ((await readCounter(page)) ?? 0) > first, { timeout: 30000 })
     test.info().annotations.push({ type: 'play-to-live-ms', description: String(playToLiveMs) })
     console.log(`Play to live values: ${playToLiveMs} ms`)
 
     await play.click()
-    await expect.poll(() => simulatorRunning(page), { timeout: 30000 }).toBe(false)
+    await waitForApp(page, async () => !(await simulatorRunning(page)), { timeout: 30000 })
   } finally {
     await quitApp(app, page)
   }

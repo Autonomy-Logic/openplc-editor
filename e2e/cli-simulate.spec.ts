@@ -1,7 +1,8 @@
 /**
  * `openplc-cli simulate`: builds the Python blocks fixture for the OpenPLC Simulator, runs it with its Python blocks
- * and prints their Console until Ctrl+C. The toolchain and the Python runtime load on first need; one that cannot
- * load ends the command with its reason and a non-zero exit.
+ * and prints their Console until Ctrl+C. The toolchain and the Python runtime load on first need: a toolchain that
+ * cannot load ends the command with its reason; a Python runtime that cannot load does not, the PLC runs and the
+ * Python blocks report why.
  *
  * Every wait also watches the process: it fails at once, quoting the output, when the CLI exits or reports an error.
  * Running needs a production build; see "Electron e2e" in CLAUDE.md.
@@ -142,15 +143,18 @@ test('simulate runs the Python blocks with the PLC, prints their Console and sto
   }
 })
 
-test('simulate ends with the reason and a non-zero exit when the Python runtime cannot load', async () => {
+test('simulate runs the PLC when the Python runtime cannot load, and the Python blocks report why', async () => {
   test.setTimeout(180000)
   const { root, project, userData } = writeProject('openplc-e2e-cli-simulate-no-python')
   const run = new CliRun(project, userData, mirrorRepo(root, ['vendor/python-runtime']))
   try {
-    expect(await run.ended(150000)).toBe(7)
-    expect(run.stdout).toContain('"code":"simulator_failed"')
-    expect(run.stdout).toContain('The Python runtime could not be loaded:')
-    expect(run.output).not.toContain('[PyStats]')
+    await run.waitFor(/The Python runtime could not be loaded:/, 120000)
+    await run.waitFor(/Press Ctrl\+C to stop/)
+    await run.waitFor(/\[PyStats\] Python could not start:/)
+    run.interrupt()
+    expect(await run.ended(15000)).toBe(0)
+    expect(resultOf(run)).toEqual(expect.objectContaining({ ok: true, pythonBlocks: 4 }))
+    expect(run.output).not.toContain('[PyStats] PyStats started')
   } finally {
     run.kill()
   }

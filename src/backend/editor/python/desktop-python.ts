@@ -8,10 +8,14 @@ import type { PythonThreadMechanism } from '@root/middleware/shared/ports/python
 
 import type { PythonRuntimePaths } from './python-paths'
 
-/** Starts the Python thread as a worker thread running `python-worker.js`; it lives for the process. */
-export function createThreadPythonMechanism(paths: PythonRuntimePaths): PythonThreadMechanism {
+/**
+ * Starts the Python thread as a worker thread running `python-worker.js`; it lives for the process. The runtime's
+ * files are located when the thread starts, so a missing or broken manifest fails the load instead of startup.
+ */
+export function createThreadPythonMechanism(resolvePaths: () => PythonRuntimePaths): PythonThreadMechanism {
   return {
     spawn: () => {
+      const paths = resolvePaths()
       const worker = new Worker(paths.workerScript, {
         workerData: { sdkEntry: paths.sdkEntry, pythonPackage: paths.pythonPackage, numpyWheel: paths.numpyWheel },
       })
@@ -21,10 +25,14 @@ export function createThreadPythonMechanism(paths: PythonRuntimePaths): PythonTh
         post: (message) => worker.postMessage(message),
         onMessage: (listener) => worker.on('message', listener),
         onFailure: (listener) => {
-          worker.on('error', (error) => listener(error.message))
-          worker.on('exit', (code) => {
-            if (!terminating) listener(`the thread exited with code ${code}`)
-          })
+          let reported = false
+          const report = (reason: string): void => {
+            if (reported || terminating) return
+            reported = true
+            listener(reason)
+          }
+          worker.on('error', (error) => report(error.message))
+          worker.on('exit', (code) => report(`the thread exited with code ${code}`))
         },
         terminate: () => {
           terminating = true
@@ -41,7 +49,7 @@ export interface DesktopPython {
 }
 
 /** The process's Python runtime and the block host that uses it. */
-export function createDesktopPython(paths: PythonRuntimePaths): DesktopPython {
-  const runtime = new ThreadedPythonRuntime(createThreadPythonMechanism(paths))
+export function createDesktopPython(resolvePaths: () => PythonRuntimePaths): DesktopPython {
+  const runtime = new ThreadedPythonRuntime(createThreadPythonMechanism(resolvePaths))
   return { runtime, host: new PythonBlockHost(runtime, undefined, maxPythonInterpreters(totalmem())) }
 }
