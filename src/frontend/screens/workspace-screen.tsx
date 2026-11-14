@@ -46,6 +46,7 @@ import { HostLockBoundary } from '../components/_molecules/editing-lock-boundary
 import { VariablesPanel } from '../components/_molecules/variables-panel'
 import { Console as ConsoleComponent } from '../components/_organisms/console'
 import { ConsoleFilters } from '../components/_organisms/console/filters'
+import { DebugTagTable } from '../components/_organisms/debug-tag-table'
 import { Debugger } from '../components/_organisms/debugger'
 import { Explorer } from '../components/_organisms/explorer'
 import { Navigation } from '../components/_organisms/navigation'
@@ -410,7 +411,7 @@ const WorkspaceScreen = () => {
     if (isDebuggerVisible) {
       setActiveTab('debug')
     } else {
-      setActiveTab((prev) => (prev === 'debug' ? 'console' : prev))
+      setActiveTab((prev) => (prev === 'debug' || prev === 'tags' ? 'console' : prev))
     }
   }, [isDebuggerVisible])
 
@@ -846,6 +847,14 @@ const WorkspaceScreen = () => {
                             Debugger
                           </Tabs.Trigger>
                         )}
+                        {isDebuggerVisible && (
+                          <Tabs.Trigger
+                            value='tags'
+                            className='h-7 w-16 rounded-md bg-neutral-100 text-xs font-medium text-brand-light data-[state=active]:bg-blue-500 data-[state=active]:text-white dark:bg-neutral-900 dark:text-neutral-700 dark:data-[state=active]:bg-blue-500 dark:data-[state=active]:text-white'
+                          >
+                            Tags
+                          </Tabs.Trigger>
+                        )}
                         {hasSearchResults && (
                           <Tabs.Trigger
                             value='search'
@@ -897,6 +906,14 @@ const WorkspaceScreen = () => {
                               <Debugger graphList={graphList} />
                             </ResizablePanel>
                           </ResizablePanelGroup>
+                        </Tabs.Content>
+                      )}
+                      {isDebuggerVisible && (
+                        <Tabs.Content
+                          value='tags'
+                          className='flex h-full w-full overflow-hidden data-[state=inactive]:hidden'
+                        >
+                          {activeTab === 'tags' && <DebugTagTable onForceVariable={handleForceVariable} />}
                         </Tabs.Content>
                       )}
                       {hasSearchResults && (

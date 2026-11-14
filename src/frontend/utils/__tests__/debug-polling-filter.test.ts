@@ -61,6 +61,7 @@ function makeState(overrides: {
   debugForcedVariables?: Map<string, unknown>
   debugExpandedNodes?: Map<string, boolean>
   debugGraphList?: string[]
+  debugTagTableKeys?: string[]
   fbSelectedInstance?: Map<string, string>
   fbDebugInstances?: Map<
     string,
@@ -82,6 +83,7 @@ function makeState(overrides: {
       debugForcedVariables: overrides.debugForcedVariables ?? new Map(),
       debugExpandedNodes: overrides.debugExpandedNodes ?? new Map(),
       debugGraphList: overrides.debugGraphList ?? [],
+      debugTagTableKeys: overrides.debugTagTableKeys ?? [],
       fbSelectedInstance: overrides.fbSelectedInstance ?? new Map(),
       fbDebugInstances: overrides.fbDebugInstances ?? new Map(),
     },
@@ -247,6 +249,29 @@ describe('buildActiveIndexSet', () => {
 
       const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
       expect(activeIndexes).toEqual([3])
+    })
+  })
+
+  describe('tag table', () => {
+    it('includes the tags the tag table shows', () => {
+      const indexMap = new Map([
+        ['Main:TABLE_VAR', 5],
+        ['Main:OFF_TABLE', 6],
+      ])
+      const state = makeState({ debugTagTableKeys: ['Main:TABLE_VAR'], debugVariableIndexes: indexMap })
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
+
+      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
+      expect(activeIndexes).toEqual([5])
+    })
+
+    it('polls nothing of its own when the tag table is closed', () => {
+      const indexMap = new Map([['Main:TABLE_VAR', 5]])
+      const state = makeState({ debugTagTableKeys: [], debugVariableIndexes: indexMap })
+      const allLeaves = new Map<number, { compositeKey: string; type: string }[]>()
+
+      const { activeIndexes } = buildActiveIndexSet(state, allLeaves, null)
+      expect(activeIndexes).toEqual([])
     })
   })
 

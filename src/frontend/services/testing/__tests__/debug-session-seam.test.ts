@@ -54,6 +54,41 @@ describe('debug session seam', () => {
     expect(store.getState().workspace.debuggerTargetIp).toBeNull()
   })
 
+  it('should publish the variables an e2e run hands it, with their debug indexes', () => {
+    const seam = installDebugSessionSeam(store, target)
+
+    seam.open()
+    seam.publishVariables(
+      [{ name: 'a', fullPath: 'main.a', compositeKey: 'main:a', type: 'BOOL', isComplex: false, debugIndex: 0 }],
+      { 'main:a': 0 },
+    )
+
+    const { debugVariableTree, debugVariableIndexes } = store.getState().workspace
+    expect(debugVariableTree.get('main:a')?.type).toBe('BOOL')
+    expect(debugVariableIndexes.get('main:a')).toBe(0)
+  })
+
+  it('should replace the published variables on every call', () => {
+    const seam = installDebugSessionSeam(store, target)
+
+    seam.publishVariables([{ name: 'a', fullPath: 'main.a', compositeKey: 'main:a', type: 'BOOL', isComplex: false }])
+    seam.publishVariables([{ name: 'b', fullPath: 'main.b', compositeKey: 'main:b', type: 'INT', isComplex: false }])
+
+    const { debugVariableTree } = store.getState().workspace
+    expect(Array.from(debugVariableTree.keys())).toEqual(['main:b'])
+  })
+
+  it('should drop the published variables when the session closes', () => {
+    const seam = installDebugSessionSeam(store, target)
+
+    seam.open()
+    seam.publishVariables([{ name: 'a', fullPath: 'main.a', compositeKey: 'main:a', type: 'BOOL', isComplex: false }])
+    seam.close()
+
+    expect(store.getState().workspace.debugVariableTree.size).toBe(0)
+    expect(store.getState().workspace.debugVariableIndexes.size).toBe(0)
+  })
+
   it('should close the session through the product teardown', () => {
     const seam = installDebugSessionSeam(store, target)
 

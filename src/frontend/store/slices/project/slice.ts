@@ -1076,6 +1076,14 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
     },
 
+    setMonitorViews: (views) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          slice.project.data.monitorViews = views
+        }),
+      )
+    },
+
     getVppExtension: (packageId, screenId) => {
       return getState().project.data.vppExtensions?.[packageId]?.[screenId]
     },

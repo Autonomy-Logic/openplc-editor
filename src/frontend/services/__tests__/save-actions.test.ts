@@ -593,6 +593,28 @@ describe('save-actions', () => {
   })
 })
 
+describe('project.json carries the debugger tag-table views', () => {
+  it('writes the views the debugger saved', () => {
+    store.getState().projectActions.setMonitorViews([{ name: 'Motors', entries: ['main:motor'] }])
+
+    const parsed = JSON.parse(buildAllProjectFileContentsPure(store)['project.json']) as {
+      data: { monitorViews?: { name: string; entries: string[] }[] }
+    }
+
+    expect(parsed.data.monitorViews).toEqual([{ name: 'Motors', entries: ['main:motor'] }])
+  })
+
+  it('omits the field while the project has no view, so its shape does not change', () => {
+    store.getState().projectActions.setMonitorViews([])
+
+    const parsed = JSON.parse(buildAllProjectFileContentsPure(store)['project.json']) as {
+      data: { monitorViews?: unknown }
+    }
+
+    expect('monitorViews' in parsed.data).toBe(false)
+  })
+})
+
 // project.json is built field-by-field; an omitted field silently drops that list (it has no file of its own).
 describe('project.json carries global variable lists', () => {
   const createList = (name: string, members: string[]) => {
