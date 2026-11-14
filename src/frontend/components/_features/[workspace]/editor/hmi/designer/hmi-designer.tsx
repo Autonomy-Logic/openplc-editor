@@ -1,7 +1,7 @@
 /**
- * The HMI designer: a screen's tab with the palette, the canvas on a device preset, the outline and the inspector, or
- * its code; and a widget block's tab with its code beside its preview. Every edit goes through the designer's text
- * patches and the store's history, so the code view and the designer edit one file and undo covers both.
+ * The HMI designer: a screen's tab with widgets, variables and layers on the left, the running screen on a device
+ * preset with the selection's properties pinned beside it, or its code; and a widget block's tab with its code beside
+ * its preview. Every edit goes through the designer's text patches and the store's history, so undo covers both views.
  */
 import { ViewModeToggle } from '@root/frontend/components/_atoms/view-mode-toggle'
 import { useOpenPLCStore } from '@root/frontend/store'
@@ -53,14 +53,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { HmiCodeEditor } from '../code-editor'
 import { type CanvasActions, type CanvasMode, DesignerCanvas } from './canvas'
-import { Inspector, type InspectorActions } from './inspector'
+import { type InspectorActions, PropertiesCard } from './inspector'
 import { Outline } from './outline'
-import { Palette } from './palette'
-import { DesignerSelect, ToolButton } from './parts'
+import { SidePanel, type SidePanelTab, VariableList, WidgetPalette } from './palette'
+import { CanvasControls, DesignerSelect, PreviewNotice } from './parts'
 import { usePreviewSession } from './use-preview-session'
 
 const EMPTY_CATALOG: HmiWidgetCatalog = { widgets: new Map(), colors: [] }
 const REBUILD_DELAY_MS = 300
+const NOTICE_MS = 3000
+/** Canvas room the fit zoom leaves for the properties card and the device picker. */
+const FIT_RESERVE = { width: 340, height: 64 }
 const ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3]
 const same = (a: string, b: string): boolean => a.toUpperCase() === b.toUpperCase()
 
@@ -162,9 +165,9 @@ function useFitZoom(width: number, height: number): [number, (element: HTMLDivEl
   useEffect(() => {
     if (!area) return
     const measure = () => {
-      const pad = 48
-      if (area.clientWidth <= pad || area.clientHeight <= pad) return
-      setFit(Math.max(0.1, Math.min((area.clientWidth - pad) / width, (area.clientHeight - pad) / height)))
+      const room = { width: area.clientWidth - FIT_RESERVE.width, height: area.clientHeight - FIT_RESERVE.height - 24 }
+      if (room.width <= 0 || room.height <= 0) return
+      setFit(Math.max(0.1, Math.min(room.width / width, room.height / height)))
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -191,14 +194,6 @@ function Diagnostics(props: { errors: readonly HmiDiagnostic[] }) {
   )
 }
 
-function statusText(status: string, buildMs: number | null): string {
-  if (status === 'building') return 'Building preview…'
-  if (status === 'ready') return buildMs === null ? 'Preview ready' : `Preview ready (${(buildMs / 1000).toFixed(1)} s)`
-  if (status === 'failed') return 'The preview did not build'
-  if (status === 'stopped') return 'The preview stopped'
-  return 'Preview unavailable'
-}
-
 export function HmiScreenDesigner({ name }: { name: string }) {
   const kind = 'screen'
   const source = useOpenPLCStore((s) => s.project.data.hmi?.screens.find((f) => same(f.name, name))?.source ?? '')
@@ -223,6 +218,9 @@ export function HmiScreenDesigner({ name }: { name: string }) {
 
   const device = hmiDevicePreset(entry.device)
   const [mode, setMode] = useState<CanvasMode>('design')
+  const [panel, setPanel] = useState<SidePanelTab>('widgets')
+  const [filter, setFilter] = useState('')
+  const [reveal, setReveal] = useState<{ line: number; key: number } | undefined>(undefined)
   const canvas = useRef<HTMLCanvasElement>(null)
   const [fit, area] = useFitZoom(device.width, device.height)
   const zoom = entry.zoom ?? fit
@@ -249,6 +247,38 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     rebuildTimer.current = setTimeout(preview.rebuild, REBUILD_DELAY_MS)
   }, [preview.rebuild])
   useEffect(() => () => void (rebuildTimer.current && clearTimeout(rebuildTimer.current)), [])
+  const builtSource = useRef(source)
+  useEffect(() => {
+    if (entry.view !== 'design' || !parsed.ok || builtSource.current === source) return
+    builtSource.current = source
+    scheduleRebuild()
+  }, [entry.view, parsed.ok, source, scheduleRebuild])
+  const builtLibrary = useRef({ widgets: request.widgets, settings: request.settings })
+  useEffect(() => {
+    if (builtLibrary.current.widgets === request.widgets && builtLibrary.current.settings === request.settings) return
+    builtLibrary.current = { widgets: request.widgets, settings: request.settings }
+    scheduleRebuild()
+  }, [request.widgets, request.settings, scheduleRebuild])
+
+  const [notice, setNotice] = useState(false)
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showNotice = useCallback(() => {
+    setNotice(true)
+    if (noticeTimer.current) clearTimeout(noticeTimer.current)
+    noticeTimer.current = setTimeout(() => setNotice(false), NOTICE_MS)
+  }, [])
+  useEffect(() => () => void (noticeTimer.current && clearTimeout(noticeTimer.current)), [])
+  const setPreviewMode = useCallback(
+    (on: boolean) => {
+      setMode(on ? 'run' : 'design')
+      if (on) showNotice()
+      else {
+        if (noticeTimer.current) clearTimeout(noticeTimer.current)
+        setNotice(false)
+      }
+    },
+    [showNotice],
+  )
 
   const apply = useCallback(
     (result: DesignerEdit, options: { rebuild: boolean; merge?: string } = { rebuild: true }): boolean => {
@@ -256,11 +286,11 @@ export function HmiScreenDesigner({ name }: { name: string }) {
         toast({ title: 'Not changed', description: result.message, variant: 'fail' })
         return false
       }
+      if (!options.rebuild) builtSource.current = result.source
       actions.applySource(kind, name, result.source, options.merge ? { key: options.merge, at: Date.now() } : undefined)
-      if (options.rebuild) scheduleRebuild()
       return true
     },
-    [actions, name, scheduleRebuild],
+    [actions, name],
   )
 
   const select = useCallback((names: string[]) => actions.select(kind, name, names), [actions, name])
@@ -350,6 +380,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
       else apply(setProperty(source, model, pipe, 'Path', path), { rebuild: !live })
     },
     pointer: preview.pointer,
+    blocked: showNotice,
   }
 
   const addFromPalette = (type: string) => {
@@ -393,16 +424,11 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     const target = e.target
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return
     const command = e.metaKey || e.ctrlKey
-    if (command && e.key === 'Enter') {
-      e.preventDefault()
-      preview.rebuild()
-      return
-    }
     if (mode === 'run') {
-      if (e.key.length === 1) preview.key(e.key.charCodeAt(0))
+      if (e.key === 'Escape') setPreviewMode(false)
+      else if (e.key.length === 1) preview.key(e.key.charCodeAt(0))
       else if (e.key === 'Enter') preview.key(13)
       else if (e.key === 'Backspace') preview.key(8)
-      else if (e.key === 'Escape') preview.key(27)
       return
     }
     if (locked || !model) return
@@ -428,126 +454,126 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     ...preview.errors,
   ]
 
+  const showInCode = (element: string) => {
+    const target = model?.elements.find((e) => same(e.name, element))
+    if (target) setReveal({ line: source.slice(0, target.lines.start).split('\n').length, key: Date.now() })
+    actions.setView(kind, name, 'code')
+  }
+  const zoomTo = (next: number | null) => actions.setZoom(kind, name, next)
+
   return (
-    <div className='flex h-full w-full flex-col overflow-hidden' data-testid='hmi-designer' onKeyDown={onKeyDown}>
-      <div className='flex h-10 shrink-0 items-center gap-2 border-b border-neutral-200 px-2 dark:border-neutral-850'>
+    <div className='flex h-full w-full flex-col gap-2 overflow-hidden' data-testid='hmi-designer' onKeyDown={onKeyDown}>
+      <div className='flex h-8 shrink-0 items-center justify-between'>
+        <h2 className='truncate font-display text-xl font-bold text-neutral-1000 dark:text-white'>{name}</h2>
         <ViewModeToggle
           display={entry.view === 'design' ? 'table' : 'code'}
           onDisplayChange={(d) => actions.setView(kind, name, d === 'table' ? 'design' : 'code')}
           containerLabel='Screen view'
           tableLabel='Designer'
           codeLabel='Code'
+          tableIcon='layout'
         />
-        <div className='w-40'>
-          <DesignerSelect
-            value={device.id}
-            testId='hmi-device'
-            options={HMI_DEVICE_PRESETS.map((d) => ({ value: d.id, label: `${d.label} (${d.width}×${d.height})` }))}
-            onChange={(id) => actions.setDevice(kind, name, id)}
-          />
-        </div>
-        <ToolButton
-          label='Zoom out'
-          onClick={() =>
-            actions.setZoom(kind, name, [...ZOOM_STEPS].reverse().find((z) => z < zoom - 0.01) ?? ZOOM_STEPS[0])
-          }
-        >
-          −
-        </ToolButton>
-        <span
-          className='w-12 text-center font-caption text-xs text-neutral-600 dark:text-neutral-400'
-          data-testid='hmi-zoom'
-        >
-          {Math.round(zoom * 100)}%
-        </span>
-        <ToolButton
-          label='Zoom in'
-          onClick={() => actions.setZoom(kind, name, ZOOM_STEPS.find((z) => z > zoom + 0.01) ?? ZOOM_STEPS.at(-1) ?? 3)}
-        >
-          +
-        </ToolButton>
-        <ToolButton label='Fit' active={entry.zoom === null} onClick={() => actions.setZoom(kind, name, null)}>
-          Fit
-        </ToolButton>
-        <div className='mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-850' />
-        <ToolButton
-          label='Design'
-          testId='hmi-mode-design'
-          active={mode === 'design'}
-          onClick={() => setMode('design')}
-        >
-          Design
-        </ToolButton>
-        <ToolButton label='Try it' testId='hmi-mode-run' active={mode === 'run'} onClick={() => setMode('run')}>
-          Try
-        </ToolButton>
-        <div className='flex-1' />
-        <span className='truncate font-caption text-xs text-neutral-600 dark:text-neutral-400' data-testid='hmi-status'>
-          {statusText(preview.status, preview.buildMs)}
-        </span>
-        <ToolButton label='Preview (Ctrl/Cmd+Enter)' testId='hmi-preview-button' onClick={preview.rebuild}>
-          Preview
-        </ToolButton>
       </div>
       {entry.view === 'code' ? (
         <div className='min-h-0 flex-1'>
-          <HmiCodeEditor name={name} kind={kind} onPreview={preview.rebuild} />
+          <HmiCodeEditor name={name} kind={kind} reveal={reveal} />
         </div>
       ) : (
-        <div className='flex min-h-0 flex-1'>
-          <aside className='w-56 shrink-0 border-r border-neutral-200 dark:border-neutral-850'>
-            <Palette
-              catalog={catalog}
-              projectWidgets={new Set(request.widgets.map((w) => w.name.toUpperCase()))}
-              variables={request.plcVariables}
-              thumbnails={thumbnails}
-              onAdd={addFromPalette}
-              disabled={locked}
-            />
-          </aside>
-          <div
-            ref={area}
-            className='flex min-w-0 flex-1 items-center justify-center overflow-auto bg-neutral-100 dark:bg-neutral-900'
+        <div className='flex min-h-0 flex-1 gap-2'>
+          <aside
+            className='flex w-60 shrink-0 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-850 dark:bg-neutral-950'
+            onPointerDownCapture={mode === 'run' ? showNotice : undefined}
           >
-            <DesignerCanvas
-              canvas={canvas}
-              records={records}
-              device={device}
-              zoom={zoom}
-              mode={mode}
-              model={model}
-              catalog={catalog}
-              elements={elements}
-              selection={entry.selection}
-              locked={locked}
-              actions={canvasActions}
-            />
-          </div>
-          <aside className='flex w-72 shrink-0 flex-col border-l border-neutral-200 dark:border-neutral-850'>
-            <div className='max-h-[40%] min-h-[80px] overflow-y-auto border-b border-neutral-200 dark:border-neutral-850'>
-              {model && (
-                <Outline model={model} selection={entry.selection} onSelect={(n) => select([n])} onShift={shift} />
-              )}
-            </div>
-            <div className='min-h-0 flex-1 overflow-y-auto'>
-              {model && (
-                <Inspector
-                  model={model}
-                  element={selected}
+            <SidePanel
+              tab={panel}
+              onTab={(t) => {
+                setPanel(t)
+                setFilter('')
+              }}
+              filter={filter}
+              onFilter={setFilter}
+            >
+              {panel === 'widgets' && (
+                <WidgetPalette
                   catalog={catalog}
-                  variables={request.plcVariables}
-                  screens={screens}
-                  actions={inspectorActions}
-                  locked={locked}
+                  projectWidgets={new Set(request.widgets.map((w) => w.name.toUpperCase()))}
+                  thumbnails={thumbnails}
+                  filter={filter}
+                  onAdd={addFromPalette}
+                  disabled={locked || mode === 'run'}
                 />
               )}
-            </div>
+              {panel === 'variables' && (
+                <VariableList variables={request.plcVariables} filter={filter} disabled={locked || mode === 'run'} />
+              )}
+              {panel === 'layers' && model && (
+                <Outline model={model} selection={entry.selection} onSelect={(n) => select([n])} onShift={shift} />
+              )}
+            </SidePanel>
           </aside>
+          <div
+            className='relative min-w-0 flex-1 overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100 bg-[radial-gradient(#b1b9c8_1px,transparent_1px)] [background-size:14px_14px] dark:border-neutral-850 dark:bg-neutral-900 dark:bg-[radial-gradient(#2e3038_1px,transparent_1px)]'
+            data-testid='hmi-canvas-area'
+            data-preview={`${preview.status} ${preview.buildMs ?? ''}`.trim()}
+          >
+            <div ref={area} className='absolute inset-0 overflow-auto'>
+              <div className='flex min-h-full min-w-fit flex-col items-start gap-2 py-3 pl-14 pr-[280px]'>
+                <div className='w-48' onPointerDownCapture={mode === 'run' ? showNotice : undefined}>
+                  <DesignerSelect
+                    value={device.id}
+                    testId='hmi-device'
+                    options={HMI_DEVICE_PRESETS.map((d) => ({
+                      value: d.id,
+                      label: `${d.label} · ${d.width} × ${d.height}`,
+                    }))}
+                    onChange={(id) => actions.setDevice(kind, name, id)}
+                  />
+                </div>
+                <div className='pt-4'>
+                  <DesignerCanvas
+                    canvas={canvas}
+                    records={records}
+                    device={device}
+                    zoom={zoom}
+                    mode={mode}
+                    model={model}
+                    catalog={catalog}
+                    elements={elements}
+                    selection={entry.selection}
+                    locked={locked}
+                    actions={canvasActions}
+                  />
+                </div>
+              </div>
+            </div>
+            {model && selected && mode === 'design' && (
+              <PropertiesCard
+                key={selected.name}
+                model={model}
+                element={selected}
+                catalog={catalog}
+                variables={request.plcVariables}
+                screens={screens}
+                actions={inspectorActions}
+                locked={locked}
+                onShowInCode={showInCode}
+              />
+            )}
+            <CanvasControls
+              zoom={zoom}
+              onZoomIn={() => zoomTo(ZOOM_STEPS.find((z) => z > zoom + 0.01) ?? ZOOM_STEPS.at(-1) ?? 3)}
+              onZoomOut={() => zoomTo([...ZOOM_STEPS].reverse().find((z) => z < zoom - 0.01) ?? ZOOM_STEPS[0])}
+              onFit={() => zoomTo(null)}
+              preview={mode === 'run'}
+              onPreview={() => setPreviewMode(mode !== 'run')}
+            />
+            <PreviewNotice visible={mode === 'run' && notice} />
+          </div>
         </div>
       )}
       {!parsed.ok && entry.view === 'design' && (
         <p
-          className='border-t border-amber-200 bg-amber-50 px-3 py-1 font-caption text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300'
+          className='rounded-md bg-amber-50 px-3 py-1 font-caption text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300'
           data-testid='hmi-locked-notice'
         >
           The code does not parse: the designer shows the last version that did, and visual edits wait until the code is
@@ -573,31 +599,36 @@ export function HmiWidgetEditor({ name }: { name: string }) {
     canvas,
   })
   return (
-    <div className='flex h-full w-full flex-col overflow-hidden' data-testid='hmi-widget-editor'>
-      <div className='flex h-10 shrink-0 items-center gap-2 border-b border-neutral-200 px-2 dark:border-neutral-850'>
-        <span className='font-caption text-xs font-medium text-neutral-850 dark:text-neutral-200'>
-          Widget block {name}
-        </span>
-        <div className='flex-1' />
-        <span className='font-caption text-xs text-neutral-600 dark:text-neutral-400' data-testid='hmi-status'>
-          {statusText(preview.status, preview.buildMs)}
-        </span>
-        <ToolButton label='Preview (Ctrl/Cmd+Enter)' testId='hmi-preview-button' onClick={preview.rebuild}>
+    <div className='flex h-full w-full flex-col gap-2 overflow-hidden' data-testid='hmi-widget-editor'>
+      <div className='flex h-8 shrink-0 items-center justify-between gap-2'>
+        <h2 className='truncate font-display text-xl font-bold text-neutral-1000 dark:text-white'>{name}</h2>
+        <button
+          type='button'
+          title='Preview (Ctrl/Cmd+Enter)'
+          data-testid='hmi-preview-button'
+          onClick={preview.rebuild}
+          className='flex h-7 items-center gap-2 rounded-md bg-brand px-2.5 font-caption text-xs font-semibold text-white hover:bg-brand-medium-dark'
+        >
+          <svg width='11' height='11' viewBox='0 0 24 24' className='fill-white' aria-hidden='true'>
+            <path d='M7 4v16l13-8z' />
+          </svg>
           Preview
-        </ToolButton>
+          <span className='font-medium opacity-80'>⌘↵</span>
+        </button>
       </div>
-      <div className='flex min-h-0 flex-1'>
+      <div className='flex min-h-0 flex-1 gap-2'>
         <div className='min-w-0 flex-1'>
           <HmiCodeEditor name={name} kind='widget' onPreview={preview.rebuild} />
         </div>
-        <aside className='flex w-[360px] shrink-0 flex-col items-center gap-2 border-l border-neutral-200 bg-neutral-100 p-4 dark:border-neutral-850 dark:bg-neutral-900'>
-          <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
-            At natural size, and stretched, with a test value
-          </p>
+        <div
+          className='flex w-[380px] shrink-0 items-start justify-center overflow-auto rounded-lg border border-neutral-200 bg-neutral-100 bg-[radial-gradient(#b1b9c8_1px,transparent_1px)] p-6 [background-size:14px_14px] dark:border-neutral-850 dark:bg-neutral-900 dark:bg-[radial-gradient(#2e3038_1px,transparent_1px)]'
+          data-testid='hmi-canvas-area'
+          data-preview={`${preview.status} ${preview.buildMs ?? ''}`.trim()}
+        >
           <canvas
             ref={canvas}
             data-testid='hmi-widget-canvas'
-            className='shadow-md'
+            className='rounded-lg shadow-[0_6px_24px_rgba(1,30,75,0.14)]'
             style={{ width: device.width, height: device.height }}
             onPointerDown={(e) => {
               const r = e.currentTarget.getBoundingClientRect()
@@ -608,7 +639,7 @@ export function HmiWidgetEditor({ name }: { name: string }) {
               preview.pointer('up', e.clientX - r.left, e.clientY - r.top)
             }}
           />
-        </aside>
+        </div>
       </div>
       <Diagnostics errors={preview.errors} />
     </div>

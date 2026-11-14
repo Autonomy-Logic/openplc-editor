@@ -19,6 +19,8 @@ import {
   htmlDrag,
   launchHmiApp,
   leaf,
+  pickLayer,
+  propertyField,
   save,
   screenOnDisk,
   status,
@@ -79,7 +81,7 @@ test.describe('HMI designer', () => {
       await waitFor(page, 'the HMI branch', async () => (await leaf(page, 'Overview').count()) > 0)
       await leaf(page, 'Overview').click()
       await expect(page.getByTestId('hmi-designer')).toBeVisible({ timeout: 15000 })
-      await waitFor(page, 'the preview', async () => (await status(page)).startsWith('Preview ready'), 60000)
+      await waitFor(page, 'the preview', async () => (await status(page)).startsWith('ready'), 60000)
       await page.screenshot({ path: join(SHOTS, '01-opened.png') })
       expect(overviewOnDisk()).toBe(OVERVIEW)
       const builtMs = await status(page)
@@ -95,27 +97,29 @@ test.describe('HMI designer', () => {
       )
       await page.getByTestId('hmi-palette').screenshot({ path: join(SHOTS, '00-palette.png') })
 
-      await page.getByTestId('hmi-outline-Title').click()
-      await page.getByTestId('hmi-prop-Text').fill('Plant overview')
-      await page.getByTestId('hmi-prop-Text').press('Enter')
+      await pickLayer(page, 'Title')
+      const text = await propertyField(page, 'Text')
+      await text.fill('Plant overview')
+      await text.press('Enter')
       await page.waitForTimeout(400)
       expect(await status(page)).toBe(builtMs)
 
       const canvas = page.getByTestId('hmi-canvas-overlay')
-      await page.getByTestId('hmi-outline-Col').click()
+      await pickLayer(page, 'Col')
       const colBox = await page.getByTestId('hmi-selected-Col').boundingBox()
       const canvasBox = await canvas.boundingBox()
       if (!colBox || !canvasBox) throw new Error('the column is not on the canvas')
+      await page.getByTestId('hmi-palette-tab-widgets').click()
       await htmlDrag(
         page,
         'hmi-palette-HmiLamp',
         colBox.x - canvasBox.x + colBox.width / 2,
         colBox.y - canvasBox.y + colBox.height - 3,
       )
-      await expect(page.getByTestId('hmi-outline-Lamp1')).toBeVisible({ timeout: 10000 })
-      await waitFor(page, 'the rebuilt preview', async () => (await status(page)).startsWith('Preview ready'))
+      await expect(page.getByTestId('hmi-selected-Lamp1')).toBeVisible({ timeout: 10000 })
+      await waitFor(page, 'the rebuilt preview', async () => (await status(page)).startsWith('ready'))
+      await pickLayer(page, 'Lamp1')
       await page.getByTestId('hmi-palette-tab-variables').click()
-      await page.getByTestId('hmi-outline-Lamp1').click()
       const lampBox = await page.getByTestId('hmi-selected-Lamp1').boundingBox()
       const overlayBox = await canvas.boundingBox()
       if (!lampBox || !overlayBox) throw new Error('the lamp is not on the canvas')
@@ -134,7 +138,7 @@ test.describe('HMI designer', () => {
       await page.mouse.move(handle.x + 60, handle.y + handle.height / 2, { steps: 5 })
       await page.mouse.up()
 
-      await page.getByRole('button', { name: 'Code' }).click()
+      await page.getByRole('button', { name: 'Code', exact: true }).click()
       await waitFor(page, 'the code view', async () => (await codeText(page)).includes('FUNCTION_BLOCK Overview'))
       await page.locator('[data-testid="hmi-code-editor"] .view-lines:visible').click()
       await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowUp' : 'Control+Home')
@@ -147,24 +151,44 @@ test.describe('HMI designer', () => {
       await page.getByRole('button', { name: 'Designer' }).click()
       await expect(page.getByTestId('hmi-zoom')).toHaveText(fitZoom, { timeout: 5000 })
       await page.screenshot({ path: join(SHOTS, '03-back-from-code.png') })
-      await page.getByTestId('hmi-palette-tab-widgets').click()
-      await page.getByTestId('hmi-outline-Level').click()
-      await page.getByTestId('hmi-prop-MaxValue').fill('20.0')
-      await page.getByTestId('hmi-prop-MaxValue').press('Enter')
+      await pickLayer(page, 'Level')
+      const max = await propertyField(page, 'MaxValue')
+      await max.fill('20.0')
+      await max.press('Enter')
 
-      await expect(page.getByTestId('hmi-palette-Badge')).toBeVisible()
-      await page.getByTestId('hmi-outline-Col').click()
+      await pickLayer(page, 'Col')
+      await page.getByTestId('hmi-palette-tab-widgets').click()
       await page.getByTestId('hmi-palette-Badge').dblclick()
-      await expect(page.getByTestId('hmi-outline-Badge1')).toBeVisible({ timeout: 10000 })
+      await expect(page.getByTestId('hmi-selected-Badge1')).toBeVisible({ timeout: 10000 })
+      await page.getByTestId('hmi-prop-tab-data').click()
       await page.getByTestId('hmi-main-binding').click()
       await page.getByRole('option', { name: /Main\.Running/ }).click()
       await waitFor(
         page,
         'the preview with the widget block',
-        async () => (await status(page)).startsWith('Preview ready'),
+        async () => (await status(page)).startsWith('ready'),
         60000,
       )
       await page.screenshot({ path: join(SHOTS, '02-designed.png') })
+
+      const notice = page.getByTestId('hmi-preview-notice')
+      await page.getByTestId('hmi-preview-mode').click()
+      await expect(notice).toHaveAttribute('data-visible', 'true')
+      await page.screenshot({ path: join(SHOTS, '04-preview-mode.png') })
+      await expect(page.getByTestId('hmi-inspector')).toHaveCount(0)
+      await expect(notice).toHaveAttribute('data-visible', 'false', { timeout: 6000 })
+      await page.getByTestId('hmi-palette-tab-variables').click()
+      await expect(notice).toHaveAttribute('data-visible', 'true')
+      await page.getByTestId('hmi-canvas-overlay').press('Escape')
+      await expect(page.getByTestId('hmi-preview-mode')).toHaveAttribute('aria-pressed', 'false')
+      await expect(notice).toHaveAttribute('data-visible', 'false')
+      await waitFor(page, 'the preview back in editing', async () => (await status(page)).startsWith('ready'), 60000)
+
+      await pickLayer(page, 'Level')
+      await page.getByTestId('hmi-show-in-code').click()
+      await waitFor(page, 'the code view at Level', async () => (await codeText(page)).includes('Level : HmiTank'))
+      await page.getByRole('button', { name: 'Designer' }).click()
+      await expect(page.getByTestId('hmi-canvas-overlay')).toBeVisible()
 
       await undo(app)
       await save(app)
@@ -194,13 +218,9 @@ test.describe('HMI designer', () => {
       expect(readFileSync(join(F.project, 'hmi', 'widgets', 'Pill.st'), 'utf-8')).toMatch(
         /^FUNCTION_BLOCK Pill EXTENDS/,
       )
-      await page.getByTestId('hmi-preview-button').click()
-      await waitFor(page, 'the preview with the renamed block', async () =>
-        (await status(page)).startsWith('Preview ready'),
-      )
+      await waitFor(page, 'the preview with the renamed block', async () => (await status(page)).startsWith('ready'))
 
       await renameLeaf('Pill', 'Chip', /Rename only/)
-      await page.getByTestId('hmi-preview-button').click()
       await waitFor(page, 'the unresolved use reported', async () =>
         /undefined type 'pill'/i.test((await page.getByTestId('hmi-errors').allInnerTexts()).join('\n')),
       )

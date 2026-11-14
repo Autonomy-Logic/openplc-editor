@@ -1,4 +1,5 @@
 import { CodeIcon } from '../../../assets/icons/interface/CodeIcon'
+import { LayoutIcon } from '../../../assets/icons/interface/LayoutIcon'
 import { TableIcon } from '../../../assets/icons/interface/TableIcon'
 import { cn } from '../../../utils/cn'
 
@@ -11,6 +12,8 @@ type ViewModeToggleProps = {
   tableLabel: string
   codeLabel: string
   className?: string
+  /** Icon of the non-code view: a table (default) or a graphical layout. */
+  tableIcon?: 'table' | 'layout'
 }
 
 const ViewModeToggle = ({
@@ -20,7 +23,9 @@ const ViewModeToggle = ({
   tableLabel,
   codeLabel,
   className,
+  tableIcon = 'table',
 }: ViewModeToggleProps) => {
+  const TableOrLayoutIcon = tableIcon === 'layout' ? LayoutIcon : TableIcon
   return (
     <div
       role='group'
@@ -34,7 +39,7 @@ const ViewModeToggle = ({
         onClick={() => onDisplayChange('table')}
         className='flex rounded-l-md hover:cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1'
       >
-        <TableIcon
+        <TableOrLayoutIcon
           size='md'
           currentVisible={display === 'table'}
           className={cn(

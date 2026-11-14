@@ -16,6 +16,7 @@ import {
   hmiFixture,
   launchHmiApp,
   leaf,
+  pickLayer,
   save,
   screenOnDisk,
   status,
@@ -64,9 +65,9 @@ test.describe('HMI diagram', () => {
       await page.getByText(F.name, { exact: true }).first().click({ timeout: 30000 })
       await waitFor(page, 'the HMI branch', async () => (await leaf(page, 'Plant').count()) > 0)
       await leaf(page, 'Plant').click()
-      await waitFor(page, 'the preview', async () => (await status(page)).startsWith('Preview ready'), 60000)
+      await waitFor(page, 'the preview', async () => (await status(page)).startsWith('ready'), 60000)
 
-      await page.getByTestId('hmi-outline-T1').click()
+      await pickLayer(page, 'T1')
       const from = await centre(page, 'hmi-port-T1-1')
       await page.mouse.move(from.x, from.y)
       await page.mouse.down()
@@ -74,8 +75,8 @@ test.describe('HMI diagram', () => {
       const to = await centre(page, 'hmi-port-T2-3')
       await page.mouse.move(to.x, to.y, { steps: 4 })
       await page.mouse.up()
-      await expect(page.getByTestId('hmi-outline-Pipe1')).toBeVisible({ timeout: 10000 })
-      await waitFor(page, 'the preview with the pipe', async () => (await status(page)).startsWith('Preview ready'))
+      await expect(page.getByTestId('hmi-selected-Pipe1')).toBeVisible({ timeout: 10000 })
+      await waitFor(page, 'the preview with the pipe', async () => (await status(page)).startsWith('ready'))
 
       const pipe = await page.getByTestId('hmi-selected-Pipe1').boundingBox()
       if (!pipe) throw new Error('the pipe is not on the canvas')
@@ -91,8 +92,7 @@ test.describe('HMI diagram', () => {
       await page.waitForTimeout(500)
       await page.screenshot({ path: join(F.shots, 'tc03-bends.png') })
 
-      const t2 = await page.getByTestId('hmi-outline-T2')
-      await t2.click()
+      await pickLayer(page, 'T2')
       const vessel = await centre(page, 'hmi-selected-T2')
       await drag(page, vessel, { x: vessel.x - 25, y: vessel.y })
       await page.waitForTimeout(500)
@@ -115,9 +115,10 @@ test.describe('HMI diagram', () => {
       expect(t2x).toBeLessThan(480)
       expect(t2x % 10).toBe(0)
 
-      await page.getByTestId('hmi-outline-T1').click()
+      await pickLayer(page, 'T1')
       await page.getByTestId('hmi-canvas-overlay').press('Delete')
       await expect(page.getByTestId('hmi-outline-Pipe1')).toHaveCount(0, { timeout: 10000 })
+      await expect(page.getByTestId('hmi-outline-Feed')).toBeVisible()
       await save(app)
       await waitFor(page, 'the deletion on disk', async () => !plantOnDisk().includes('T1 :'))
       expect(plantOnDisk()).not.toContain('Pipe1')

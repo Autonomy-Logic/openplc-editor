@@ -29,15 +29,15 @@ admin setpoint_up page=0 dl=bcdaab376c590af4 status=0
 admin setpoint_typed page=0 dl=429a4e89b5d0530c status=0 write Main.Speed=12
 admin next_down page=0 dl=72e2668b19c1a34c status=0
 admin next_up page=1 dl=429a4e89b5d0530c status=0
-admin details! page=1 dl=5eadfcc4f4333fca status=0
-admin back_down page=1 dl=6c270d1644e7408a status=0
-admin back_up page=0 dl=5eadfcc4f4333fca status=0
+admin details! page=1 dl=21e553692bd96c07 status=0
+admin back_down page=1 dl=b1406e8bebfaf5c7 status=0
+admin back_up page=0 dl=21e553692bd96c07 status=0
 admin overview_again page=0 dl=429a4e89b5d0530c status=0
 operator start! page=0 dl=5f2d69578e75f617 status=0
 operator next_down page=0 dl=031e9aceca788557 status=0
 operator next_up page=0 dl=5f2d69578e75f617 status=0
 operator still_overview page=0 dl=5f2d69578e75f617 status=0
-unknown start! page=0 dl=f0229c61b28f0664 status=0
+unknown start! page=0 dl=692f958adecd8655 status=0
 admin admin_after page=0 dl=429a4e89b5d0530c status=0
 setters rc=0 refused=-1 -1 -1
 admin live_edit! page=0 dl=cf7b012b9a5bf03d status=0

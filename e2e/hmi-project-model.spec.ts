@@ -176,7 +176,7 @@ test.describe('HMI project model', () => {
 
       // A screen opens in the designer; its code view holds the file's text.
       await leaf(page, 'Overview').click()
-      await page.getByRole('button', { name: 'Code' }).click({ timeout: 30000 })
+      await page.getByRole('button', { name: 'Code', exact: true }).click({ timeout: 30000 })
       await waitFor(page, 'the Overview source', async () => (await editorText(page)).includes('EXTENDS HmiScreen'))
 
       // HMI Settings opens its placeholder tab.
@@ -256,7 +256,7 @@ test.describe('HMI project model', () => {
       expect(await leaf(reopened.page, 'Overview').count()).toBe(0)
       expect(await leaf(reopened.page, 'Badge').count()).toBe(0)
       await leaf(reopened.page, 'Details').click()
-      await reopened.page.getByRole('button', { name: 'Code' }).click({ timeout: 30000 })
+      await reopened.page.getByRole('button', { name: 'Code', exact: true }).click({ timeout: 30000 })
       await waitFor(reopened.page, 'the Details source', async () =>
         (await editorText(reopened.page)).includes('HMI_Show(HMI_SCREEN#Home)'),
       )

@@ -51,6 +51,8 @@ export interface CanvasActions {
   /** Sets a pipe's bends, in design units; live while dragging, committed on release. */
   bends: (pipe: string, bends: Point[], commit: boolean) => void
   pointer: (kind: HmiPointerKind, x: number, y: number) => void
+  /** An edit was tried while the screen is in preview mode. */
+  blocked: () => void
 }
 
 const DRAG_THRESHOLD = 4
@@ -314,7 +316,11 @@ export function DesignerCanvas(props: {
   }
 
   const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    if (props.mode !== 'design' || props.locked || !model) return
+    if (props.mode === 'run') {
+      props.actions.blocked()
+      return
+    }
+    if (props.locked || !model) return
     const types = e.dataTransfer.types
     if (!types.includes(WIDGET_MIME) && !types.includes(VARIABLE_MIME)) return
     e.preventDefault()
@@ -324,7 +330,7 @@ export function DesignerCanvas(props: {
   }
 
   const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    if (!model) return
+    if (!model || props.mode === 'run') return
     e.preventDefault()
     const p = toLu(e.clientX, e.clientY)
     const widget = e.dataTransfer.getData(WIDGET_MIME)
@@ -361,8 +367,16 @@ export function DesignerCanvas(props: {
       ? portAt(records.ports, gesture.to, handle, (q) => !same(q.element, gesture.from.element))
       : null
   return (
-    <div className='relative shrink-0 shadow-md' style={{ width, height }} data-testid='hmi-canvas'>
-      <canvas ref={props.canvas} className='absolute inset-0 h-full w-full' style={{ imageRendering: 'auto' }} />
+    <div
+      className='relative shrink-0 rounded-lg shadow-[0_6px_24px_rgba(1,30,75,0.14)]'
+      style={{ width, height }}
+      data-testid='hmi-canvas'
+    >
+      <canvas
+        ref={props.canvas}
+        className='absolute inset-0 h-full w-full rounded-lg'
+        style={{ imageRendering: 'auto' }}
+      />
       <div
         ref={overlay}
         className={cn('absolute inset-0', props.mode === 'design' ? 'cursor-default' : 'cursor-pointer')}
@@ -403,6 +417,9 @@ export function DesignerCanvas(props: {
             style={selectedStyle}
             data-testid={`hmi-selected-${selected}`}
           >
+            <span className='absolute -top-[21px] left-[-2px] whitespace-nowrap rounded-t bg-brand px-1.5 py-0.5 font-caption text-[11px] font-semibold text-white'>
+              {selected}
+            </span>
             {!props.locked && !selectedPipe && (
               <>
                 <div

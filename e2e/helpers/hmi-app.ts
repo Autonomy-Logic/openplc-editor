@@ -162,7 +162,25 @@ export async function waitFor(
 export const leaf = (page: Page, name: string) =>
   page.locator('li.group').filter({ has: page.getByText(new RegExp(`^(\\* )?${name}$`)) })
 
-export const status = (page: Page) => page.getByTestId('hmi-status').innerText()
+/** The preview's state, `<status> <build ms>`, from the visible canvas area. */
+export const status = async (page: Page): Promise<string> =>
+  (await page.locator('[data-testid="hmi-canvas-area"]:visible').first().getAttribute('data-preview')) ?? ''
+
+/** Selects an element through the Layers tab. */
+export async function pickLayer(page: Page, name: string): Promise<void> {
+  await page.getByTestId('hmi-palette-tab-layers').click()
+  await page.getByTestId(`hmi-outline-${name}`).click()
+}
+
+/** The selected element's property field, on whichever tab of the properties card holds it. */
+export async function propertyField(page: Page, name: string) {
+  const field = page.getByTestId(`hmi-prop-${name}`)
+  for (const tab of ['data', 'style', 'layout']) {
+    await page.getByTestId(`hmi-prop-tab-${tab}`).click()
+    if (await field.isVisible()) return field
+  }
+  throw new Error(`no property ${name} on the properties card`)
+}
 
 const sendToWindow = (app: ElectronApplication, channel: string) =>
   app.evaluate(({ BrowserWindow }, name) => {

@@ -97,3 +97,105 @@ export function ToolButton(props: {
     </button>
   )
 }
+
+const CONTROL_CLASS =
+  'flex h-[26px] w-[26px] items-center justify-center rounded-[25%] border border-[#d0d0d0] bg-[#f5f5f5] hover:bg-[#e0e0e0] dark:border-neutral-900 dark:bg-neutral-900 dark:hover:bg-neutral-800'
+
+const ControlIcon = ({ d, active = false }: { d: string; active?: boolean }) => (
+  <svg
+    width='14'
+    height='14'
+    viewBox='0 0 24 24'
+    fill='none'
+    strokeWidth='2.2'
+    strokeLinecap='round'
+    strokeLinejoin='round'
+    className={active ? 'stroke-white' : 'stroke-neutral-900 dark:stroke-neutral-300'}
+    aria-hidden='true'
+  >
+    <path d={d} />
+  </svg>
+)
+
+const HAND =
+  'M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11.5v-2a1.5 1.5 0 0 1 3 0V12M14 10.5a1.5 1.5 0 0 1 3 0V12M17 11.5a1.5 1.5 0 0 1 3 0V16a6 6 0 0 1-6 6h-2a6 6 0 0 1-5-2.7L4.3 15a1.5 1.5 0 0 1 2.4-1.8L8 15'
+
+/** The canvas's floating controls, as the FBD editor's: zoom in, zoom out, fit, and preview mode; then the zoom. */
+export function CanvasControls(props: {
+  zoom: number
+  onZoomIn: () => void
+  onZoomOut: () => void
+  onFit: () => void
+  preview: boolean
+  onPreview: () => void
+}) {
+  return (
+    <div className='absolute bottom-3 left-3 z-10 flex flex-col items-start gap-[3px]'>
+      <button
+        type='button'
+        aria-label='Zoom in'
+        title='Zoom in'
+        data-testid='hmi-zoom-in'
+        onClick={props.onZoomIn}
+        className={CONTROL_CLASS}
+      >
+        <ControlIcon d='M12 5v14M5 12h14' />
+      </button>
+      <button
+        type='button'
+        aria-label='Zoom out'
+        title='Zoom out'
+        data-testid='hmi-zoom-out'
+        onClick={props.onZoomOut}
+        className={CONTROL_CLASS}
+      >
+        <ControlIcon d='M5 12h14' />
+      </button>
+      <button
+        type='button'
+        aria-label='Fit the screen'
+        title='Fit the screen'
+        data-testid='hmi-zoom-fit'
+        onClick={props.onFit}
+        className={CONTROL_CLASS}
+      >
+        <ControlIcon d='M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5' />
+      </button>
+      <button
+        type='button'
+        aria-label='Preview mode'
+        title='Preview mode: operate the screen'
+        aria-pressed={props.preview}
+        data-testid='hmi-preview-mode'
+        onClick={props.onPreview}
+        className={cn(CONTROL_CLASS, props.preview && '!border-brand-medium !bg-brand')}
+      >
+        <ControlIcon d={HAND} active={props.preview} />
+      </button>
+      <span
+        className='mt-1 flex h-[22px] items-center rounded-[5px] border border-[#d0d0d0] bg-[#f5f5f5] px-1.5 font-caption text-[11px] font-semibold text-neutral-850 dark:border-neutral-900 dark:bg-neutral-900 dark:text-neutral-300'
+        data-testid='hmi-zoom'
+      >
+        {Math.round(props.zoom * 100)}%
+      </span>
+    </div>
+  )
+}
+
+/** The short notice at the top of the canvas while it is shown. */
+export function PreviewNotice(props: { visible: boolean }) {
+  return (
+    <div
+      role='status'
+      aria-live='polite'
+      data-testid='hmi-preview-notice'
+      data-visible={props.visible}
+      className={cn(
+        'pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-lg bg-[rgba(1,30,75,0.9)] px-3.5 py-2 font-caption text-[13px] text-white shadow-lg transition-opacity duration-300',
+        props.visible ? 'opacity-100' : 'opacity-0',
+      )}
+    >
+      Preview mode, press Esc to exit
+    </div>
+  )
+}

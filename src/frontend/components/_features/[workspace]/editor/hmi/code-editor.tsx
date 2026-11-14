@@ -14,9 +14,11 @@ type HmiCodeEditorProps = {
   kind: 'screen' | 'widget'
   /** Requested with Ctrl/Cmd+Enter. */
   onPreview?: () => void
+  /** A line to show and put the cursor on; `key` tells a repeated request for the same line apart. */
+  reveal?: { line: number; key: number }
 }
 
-const HmiCodeEditor = ({ name, kind, onPreview }: HmiCodeEditorProps) => {
+const HmiCodeEditor = ({ name, kind, onPreview, reveal }: HmiCodeEditorProps) => {
   const source = useOpenPLCStore(
     (s) =>
       (kind === 'screen' ? s.project.data.hmi?.screens : s.project.data.hmi?.widgets)?.find((f) => f.name === name)
@@ -62,11 +64,21 @@ const HmiCodeEditor = ({ name, kind, onPreview }: HmiCodeEditorProps) => {
     ensureOpenplcThemes(monacoInstance)
   }, [])
 
+  const [mounted, setMounted] = useState(false)
   const handleEditorMount = useCallback((editor: monaco.editor.IStandaloneCodeEditor) => {
     editorRef.current = editor
     const keys = monacoRef.current
     if (keys) editor.addCommand(keys.KeyMod.CtrlCmd | keys.KeyCode.Enter, () => previewRef.current?.())
+    setMounted(true)
   }, [])
+
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!mounted || !editor || !reveal) return
+    editor.revealLineInCenter(reveal.line)
+    editor.setPosition({ lineNumber: reveal.line, column: 1 })
+    editor.focus()
+  }, [mounted, reveal])
 
   useEffect(() => {
     if (monacoRef.current) applyThemeNow(monacoRef.current, shouldUseDarkMode)
