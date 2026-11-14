@@ -1,13 +1,14 @@
-# Modbus TCP master on baremetal: compile and bench checks
+# Modbus TCP and RTU master on baremetal: compile and bench checks
 
-The baremetal firmware has no host test harness, so the Modbus TCP master is proven here: by compiling real
+The baremetal firmware has no host test harness, so the Modbus TCP and RTU master is proven here: by compiling real
 projects on real toolchains, by comparing images, and by running bench projects against the scripted hostile
 slave (`scripts/bench/modbus-hostile-slave/`). The preprocessor gates and the source rules have their own Jest
 tests in `src/frontend/utils/modbus-master/__tests__/` (see the README there).
 
 Every check below names its project, the observation that passes it, and what the firmware without the master
 shows instead (the negative control: build the same project from the branch before the master landed, where
-the firmware ignores `modbus_master_config.h`).
+the firmware ignores `modbus_master_config.h`). The RTU checks are in "RTU master" at the end; their negative
+control is the TCP master's firmware, which compiles the RTU buses out.
 
 ## Contents
 
@@ -36,6 +37,12 @@ reallocates their addresses; read them by name in the debugger. In the scenarios
   `--install`.
 - AS-09 W5500 rows: the board is pending (it needs a W5500 and the S7 server; the Uno and the Mega declare no
   S7 server). Its project is added with the board.
+- RTU RS-485 pins: the per-UART pin (`rs485_en_pins`) and the FX3U's fixed `PA14` exist only in the RTOP-410
+  packages, which declare `minEditorVersion` 4.4.0, and the package manager refuses a package that needs a
+  newer editor. Until the signed packages land, run the checks that need them with a local package build that
+  accepts the running editor, never committed; they stay pending with the signed packages.
+- TC10 RTU rows with a wrong slave id, a wrong FC or a bad CRC: pending. The hostile slave has no RTU scenario
+  for them (AS-02 runs over TCP only).
 
 ## Common setup
 
@@ -272,3 +279,183 @@ reported with the compiler's message (RSK04).
 maps/g1-1234-5678.json`. Expect `g1_0`, `g1_1` = 1234, 5678, an S7 read of DB1.DBW0 = 4242, and on the Nano
 RP2040 Connect an OPC-UA client connecting to `opc.tcp://192.168.1.20:4840/openplc/opcua` and reading the
 server status.
+
+## RTU master
+
+The RTU master polls Modbus RTU devices on the board's secondary UARTs through the same master core, one
+request in flight per bus, and drives each UART's RS-485 enable pin without blocking the scan. The Modbus RTU
+server shares the RS-485 helper (`Baremetal/modbus_rs485.*`) and must keep its behaviour.
+
+### RTU setup
+
+- Board: Arduino Mega. The debugger and the upload stay on the USB port (`Serial`); the slave is on `Serial1`
+  through a USB-TTL adapter at the Mega's 5 V logic (or through a level shifter): adapter TX to pin 19 (RX1),
+  adapter RX to pin 18 (TX1), common ground. AS-04 row 3 adds a W5500 shield and a second adapter on `Serial2`:
+  TX to pin 17 (RX2), RX to pin 16 (TX2).
+- Line: the projects use 19200 bd, 8 data bits, no parity, 1 stop bit, slave id 1, timeout 500 ms, except
+  `as07-rtu-115200` (115200 bd) and `br10-br12-rtu-bus-timeout` (timeouts 200 and 500 ms).
+- Hostile slave: `npm run bench:hostile-slave -- --scenario <name> [--row <n>] --serial <adapter> --baud
+  <the device's baud> [--map <file>] --log <check>.jsonl`. It answers unit 1 only and logs the frames of other
+  unit ids as `ignored`. Its `request`, `rx`, `tx`, `discarded`, `withheld` and `phase` events, with `t_us`, are
+  the line evidence.
+- Logic analyzer: pin 23 (scan toggle), pin 18 (TX1), pin 19 (RX1), and pin 22 (the RS-485 enable pin of
+  `Serial1`) in TC08. Scan time pass rule as in "Common setup": baseline + 2 ms.
+- Groups: the slave's fixed offsets and sizes (G1 10 registers at 0, G2 1 at 10, 2 in AS-12, G3 1 at 20). The
+  sentinel group is the first group of its device, so the master reads it before the attack; each check says
+  how to confirm that order in the slave's log.
+- Negative control for every RTU bench check: the same project built from the TCP master's firmware (the branch
+  at the phase 08 tests commit) puts no byte on TX1: the slave's log has no `rx` event and the points stay 0.
+
+### (d) The RTU master compiles, with and without an RS-485 pin
+
+```sh
+npm run compile:matrix -- /tmp/mm-projects/compile-rtu-master --user-data <dir> --clean \
+  --board "Arduino Mega" --board "Arduino Due (Programming Port)" --board "Arduino Leonardo" \
+  --board "Arduino Micro" --board "ESP32 Generic" --board "Arduino Opta" --board "Raspberry Pico" \
+  --board "Nano RP2040 Connect" --out /tmp/mm-d.jsonl
+npm run compile:matrix -- /tmp/mm-projects/compile-rtu-master-no-pin --user-data <dir> --clean --no-build \
+  --board "Arduino Mega" --board "Arduino Due (Programming Port)" --board "Arduino Leonardo" \
+  --board "Arduino Micro" --board "ESP32 Generic" --board "Arduino Opta" --board "Raspberry Pico" \
+  --board "Nano RP2040 Connect" --out /tmp/mm-d-no-pin.jsonl
+npm run compile:matrix -- /tmp/mm-projects/compile-rtu-master-fx3u --user-data <dir> --clean --no-build \
+  --board "WS3U-14Mx" --board "FX3U-24MR / DollaTek" --out /tmp/mm-d-fx3u.jsonl
+find /tmp/mm-projects/compile-rtu-master*/build -name modbus_master_config.h -exec grep -H '&Serial' {} +
+```
+
+The projects have every FC on `Drive` (slave id 1, timeout 500 ms) and a second device, `Drive2` (slave id 2,
+timeout 200 ms), on the same UART at 19200 bd, even parity. `compile-rtu-master` gives `Serial1` the RS-485 pin
+`4`, `compile-rtu-master-no-pin` none, and `compile-rtu-master-fx3u` puts both devices on `Serial3`, where the
+package fixes `PA14`. `<dir>` holds the RTOP-410 packages: a local build that accepts the running editor until
+the signed packages land (see "Open prerequisites").
+
+Pass: every board compiles, and the bus row of each build is `{ &Serial1, 19200, MB_PARITY_E, 1, 8, 200, 4 }`
+(`MB_MASTER_NO_PIN` without a pin; `{ &Serial3, 19200, MB_PARITY_E, 1, 8, 200, PA14 }` on the FX3U boards). A
+board that does not fit is reported with the compiler's message from the JSONL log (RSK04); any other failure
+fails the phase. These builds already pass with the TCP master's firmware, which compiles the RTU buses out:
+they prove the toolchains, and the bench checks below are the failing-first evidence.
+
+### (e) The Modbus RTU server builds the same image as on `development`
+
+`compile-rtu-server-secondary` (the RTU server on `Serial1`, so `MBSERIAL_ON_SECONDARY`) and
+`compile-rtu-server-default-uart` (the RTU server on the default UART beside the debugger) are 4.3.x projects
+with the legacy RS-485 pin `7` (`enable_rs485_en_pin`, `rs485_en_pin`) and no remote device. Build both on
+Arduino Mega, ESP32 Generic and Arduino Opta from this branch and from `development`, as in (b), with the same
+`--user-data` holding the production packages in both trees (the projects need no master capability), then
+compare:
+
+```sh
+for p in compile-rtu-server-secondary compile-rtu-server-default-uart; do
+  TS_NODE_TRANSPILE_ONLY=true npx ts-node scripts/bench/modbus-master/compare-images.ts \
+    /tmp/mm/development/$p/build /tmp/mm/branch/$p/build
+done
+```
+
+Pass, per target: `SAME`; or `DIFF` where every `symbol added` and `symbol removed` line names a symbol defined
+in `Baremetal/modbus_rs485.cpp` (the helper's own symbols, as `nm` lists them for that file's object in the
+branch build), and the `section` lines come only with such symbol lines. Any other symbol added or removed, or
+a section change with no helper symbol, fails. Run (b) again on this branch too, with the same rule: the
+debugger's serial path goes through the same helper.
+
+### (f) The web Simulator build stays green
+
+In openplc-web, as in (c), build `tc08-rtu-every-fc` with the board `OpenPLC Simulator`. Pass: the build
+succeeds and runs in the Simulator, shows the Simulator's "remote devices are ignored" warning, and its
+`/compile-arduino` request carries `src/modbus_master_config.h` with `#define MB_MASTER_ENABLED 0`.
+
+### RTU bench checks
+
+| Check | Project | Board | Runs |
+| --- | --- | --- | --- |
+| TC08, AC02 every FC; UC08 enable pin | `tc08-rtu-every-fc` | Mega + USB-TTL | hardware, analyzer for the pin |
+| BR10 bus timeout, BR12 unanswered slave | `br10-br12-rtu-bus-timeout` | Mega + USB-TTL | hardware |
+| TC10 excess bytes, AS-11 rows 1-2 | `tc10-as11-rtu-oversized` | Mega + USB-TTL | hardware |
+| TC10 wrong slave id, wrong FC, bad CRC | `tc10-as11-rtu-oversized` | Mega + USB-TTL | pending |
+| AS-12 | `as12-rtu-late-response` | Mega + USB-TTL | hardware |
+| AS-07 RTU rows | `as07-rtu-19200`, `as07-rtu-115200` | Mega + USB-TTL | hardware, analyzer |
+| AS-04 row 3 | `as04-row3-mega-w5500-rtu-server` | Mega + W5500 + two USB-TTL | hardware |
+
+`tc08-rtu-every-fc` (its RS-485 pin) and `as04-row3-mega-w5500-rtu-server` (its TCP master) need the RTOP-410
+packages; the other RTU bench projects build with the production packages.
+
+### TC08: every FC over RTU (AC02), and the enable pin (UC08)
+
+1. Slave: `--scenario normal --serial <adapter> --baud 19200 --map scripts/bench/modbus-master/maps/tc01.json
+   --log tc08.jsonl`, on a Mac for AC02. Upload `tc08-rtu-every-fc`, start the PLC, open the debugger.
+2. Expect: `fc1_0..2` = TRUE, FALSE, TRUE; `fc2_0..1` = FALSE, TRUE; `fc3_0` = 1234 and `fc3_3` = 4321;
+   `fc4_0..1` = 42, 7.
+3. Writes: `step` increases every second. The slave's log shows FC 5 to offset 20, FC 6 to offset 20, FC 15 to
+   offsets 30 to 32 and FC 16 to offsets 30 to 31 with the program's values; `back5_0` = `fc5_0`, `back6_0` =
+   `fc6_0`, `back15_*` = `fc15_*`, `back16_*` = `fc16_*` within one poll.
+4. One request in flight: between two consecutive `request` events of the log there is a `tx` answering the
+   first, or at least 500 ms.
+5. Idle line: on the analyzer, each request's first start bit on TX1 follows at least 1.8 ms (3.5 characters of
+   10 bits at 19200 bd) of silence on both TX1 and RX1.
+6. Enable pin: pin 22 rises before the first start bit of every request, falls after its last stop bit, and is
+   low between requests. Record the delay from the last stop bit to the fall; enable timing on a real
+   transceiver is out of scope (CON07).
+7. The board does not reset (toggle and debugger) for 10 minutes.
+
+### BR10 and BR12: the bus timeout is the smallest, and a silent slave keeps being polled
+
+`br10-br12-rtu-bus-timeout`: `Present` (slave id 1, timeout 200 ms, `present_0..1` at offset 0, cycle 1 s) and
+`Absent` (slave id 2, timeout 500 ms, `absent_0` at offset 0, cycle 100 ms) on `Serial1`. Slave `--scenario normal
+--serial <adapter> --baud 19200 --map scripts/bench/modbus-master/maps/g1-1234-5678.json --log br10.jsonl`, for
+5 minutes; the slave never answers unit 2.
+
+Expect: `present_0`, `present_1` = 1234, 5678 and `absent_0` = 0; every `ignored` frame (unit 2) is followed by
+the next frame on the line within 300 ms (the bus waits the smallest timeout, 200 ms; with `Absent`'s own 500 ms
+the gaps would be about 500 ms); `ignored` frames keep coming until the end, at most 350 ms apart; `Present`'s
+requests at most 1.3 s apart.
+
+### TC10 and AS-11: an RTU response longer than requested
+
+`tc10-as11-rtu-oversized`: sentinel G2 (1 register at offset 10, cycle 60 s, `g2_0`) first, then G1 (10
+registers at offset 0, cycle 100 ms, `g1_0..9`). For each row: `--scenario AS-11 --row <n> --serial <adapter>
+--baud 19200 --map scripts/bench/modbus-master/maps/g2-23130.json --log as-11-row<n>.jsonl`, then reset the
+board so the master starts against the running slave.
+
+- Precondition: the log shows G2's request (address 10) answered (`tx`) before the `hostile` phase. If not,
+  reset the board and repeat.
+- Row 1 (TC10 excess bytes: byte count 40, 40 data bytes, valid CRC) and row 2 (300 bytes with no gap): expect
+  `g1_*` = 0 after the hostile answer, never the 201.. values it carries; `g2_0` still 23130, read before G2's
+  next poll (row 1's twenty words would put 211 there); the toggle and the debugger alive; then `g1_*` =
+  501..510 at the next G1 request. Row 2: the next G1 request starts only after the 300 bytes end.
+- The slave answers the first G1 request with the hostile frame, so the scenario's 101..110 baseline is not
+  played; the discriminating oracles are the absence of 201.., the sentinel and the recovery.
+- TC10 wrong slave id, wrong FC and bad CRC: pending (see "Open prerequisites"). Their oracles are the same: one
+  failed poll (`g1_*` = 0, never the malformed values), the sentinel kept, the next poll applied.
+
+### AS-12: a late RTU response is rejected by its shape
+
+`as12-rtu-late-response`: sentinel G3 (1 register at offset 20, cycle 60 s, `g3_0`) first, then G1 (10 registers
+at offset 0, `g1_0..9`) and G2 (2 registers at offset 10, `g2_0..1`), both every 100 ms. Slave `--scenario AS-12
+--serial <adapter> --baud 19200 --log as-12.jsonl`, then reset the board.
+
+- Precondition: G3's request (address 20) answered before the `late-response` phase; otherwise reset and repeat.
+- Expect: after the late answer (G1's frame, byte count 20, 1111..1120, sent to G2's request), `g2_0`, `g2_1` =
+  0, never 1111, 1112; `g3_0` still 23130 (an overrun would put 1113 there); then `g2_0`, `g2_1` = 3333, 4444 at
+  the next G2 request, and `g1_*` = 1111..1120 afterwards.
+- Accepted residual: a late reply with the same slave id, FC and byte count cannot be told apart.
+
+### AS-07 RTU rows: a flood of unsolicited bytes
+
+`as07-rtu-19200` and `as07-rtu-115200`: G1 (2 registers at offset 0, cycle 100 ms, `g1_0..1`). For each, at the
+project's baud: run `normal --map scripts/bench/modbus-master/maps/g1-1234-5678.json` until `g1_0`, `g1_1` = 1234,
+5678, stop it, then start `--scenario AS-07 --serial <adapter> --baud <19200|115200> --log as-07-rtu-<baud>.jsonl`.
+As in the TCP row, the restart already zeroes G1, so "reads 0" is not the discriminating oracle there.
+
+Expect: no idle gap of 3.5 characters on RX1 during the 60 s flood (analyzer: the flood is real); the worst scan
+within baseline + 2 ms during it; `g1_*` = 0 during it; no reset or hang; then `g1_*` = 4321, 8765.
+
+### AS-04 row 3: the RTU server's line never reaches the master's pending response
+
+`as04-row3-mega-w5500-rtu-server`: the TCP master polls `192.168.1.50:502` (G1, 10 registers at offset 0, cycle
+300 ms, `g1_0..9`), the program holds 7000..7009 in `held_0..9` (`%QW0`..`%QW9`) and counts in `bad_steps`
+(`%QW10`) every `g1_0` that is not the previous value plus 1, and the Modbus RTU server (slave id 1, 19200 bd)
+is on `Serial2`. Slave `--scenario AS-04 --row 3 --tcp-listen 192.168.1.50:502 --client-serial <adapter on
+Serial2> --client-baud 19200 --client-unit 1 --log as-04-row3.jsonl`.
+
+Expect after 50 rounds: `bad_steps` = 0; `g1_0` equal to the last `counter` of the slave's `poll` events; every
+`response` of the client role = 7000..7009; each client request inside a 200 ms wait of the master (between
+G1's `request` and its delayed `tx` in the log). This check holds before and after the RTU master: it guards M3
+for the RTU server through the helper extraction.

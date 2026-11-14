@@ -1,0 +1,34 @@
+{
+  "name": "Absent",
+  "protocol": "modbus-tcp",
+  "modbusTcpConfig": {
+    "transport": "rtu",
+    "serialPort": "Serial1",
+    "baudRate": 19200,
+    "parity": "N",
+    "stopBits": 1,
+    "dataBits": 8,
+    "timeout": 500,
+    "slaveId": 2,
+    "ioGroups": [
+      {
+        "id": "absent",
+        "name": "absent",
+        "functionCode": "3",
+        "cycleTime": 100,
+        "offset": "0",
+        "length": 1,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "absent_0",
+            "name": "absent_0",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW102",
+            "alias": "MB_ABSENT_0"
+          }
+        ]
+      }
+    ]
+  }
+}

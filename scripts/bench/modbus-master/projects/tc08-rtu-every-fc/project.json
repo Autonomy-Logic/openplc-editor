@@ -1,0 +1,64 @@
+{
+  "meta": {
+    "name": "tc08-rtu-every-fc",
+    "type": "plc-project"
+  },
+  "data": {
+    "dataTypes": [],
+    "pous": [],
+    "configuration": {
+      "resource": {
+        "tasks": [
+          {
+            "name": "task0",
+            "triggering": "Cyclic",
+            "interval": "T#20ms",
+            "priority": 1
+          }
+        ],
+        "instances": [
+          {
+            "name": "instance0",
+            "program": "main",
+            "task": "task0"
+          }
+        ],
+        "globalVariables": []
+      }
+    },
+    "libraries": [],
+    "debugVariables": {
+      "global": [],
+      "pous": {
+        "main": [
+          "scan_toggle",
+          "fc1_0",
+          "fc1_1",
+          "fc1_2",
+          "fc2_0",
+          "fc2_1",
+          "fc3_0",
+          "fc3_3",
+          "fc4_0",
+          "fc4_1",
+          "fc5_0",
+          "fc6_0",
+          "fc15_0",
+          "fc15_1",
+          "fc15_2",
+          "fc16_0",
+          "fc16_1",
+          "back5_0",
+          "back6_0",
+          "back15_0",
+          "back15_1",
+          "back15_2",
+          "back16_0",
+          "back16_1",
+          "scans",
+          "step"
+        ]
+      }
+    }
+  }
+}

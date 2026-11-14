@@ -1,0 +1,18 @@
+{
+  "deviceBoard": "WS3U-14Mx",
+  "communicationPort": "",
+  "runtimeIpAddress": "",
+  "selectedPlatformOptions": {},
+  "vendorScreenData": {
+    "serial": {
+      "baud_rate": "115200"
+    }
+  },
+  "vendorScreenDataByBoard": {
+    "WS3U-14Mx": {
+      "serial": {
+        "baud_rate": "115200"
+      }
+    }
+  }
+}

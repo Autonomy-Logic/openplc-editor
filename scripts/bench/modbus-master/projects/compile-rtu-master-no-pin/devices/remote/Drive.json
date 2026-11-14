@@ -1,0 +1,212 @@
+{
+  "name": "Drive",
+  "protocol": "modbus-tcp",
+  "modbusTcpConfig": {
+    "transport": "rtu",
+    "serialPort": "Serial1",
+    "baudRate": 19200,
+    "parity": "E",
+    "stopBits": 1,
+    "dataBits": 8,
+    "timeout": 500,
+    "slaveId": 1,
+    "ioGroups": [
+      {
+        "id": "coils",
+        "name": "coils",
+        "functionCode": "1",
+        "cycleTime": 100,
+        "offset": "0",
+        "length": 3,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "coils_0",
+            "name": "coils_0",
+            "type": "Digital Input (Coil Status)",
+            "iecLocation": "%IX0.0"
+          },
+          {
+            "id": "coils_1",
+            "name": "coils_1",
+            "type": "Digital Input (Coil Status)",
+            "iecLocation": "%IX0.1"
+          },
+          {
+            "id": "coils_2",
+            "name": "coils_2",
+            "type": "Digital Input (Coil Status)",
+            "iecLocation": "%IX0.2"
+          }
+        ]
+      },
+      {
+        "id": "discretes",
+        "name": "discretes",
+        "functionCode": "2",
+        "cycleTime": 100,
+        "offset": "0",
+        "length": 2,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "discretes_0",
+            "name": "discretes_0",
+            "type": "Digital Input (Discrete Input)",
+            "iecLocation": "%IX0.3"
+          },
+          {
+            "id": "discretes_1",
+            "name": "discretes_1",
+            "type": "Digital Input (Discrete Input)",
+            "iecLocation": "%IX0.4"
+          }
+        ]
+      },
+      {
+        "id": "holding",
+        "name": "holding",
+        "functionCode": "3",
+        "cycleTime": 100,
+        "offset": "0",
+        "length": 4,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "holding_0",
+            "name": "holding_0",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW0"
+          },
+          {
+            "id": "holding_1",
+            "name": "holding_1",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW1"
+          },
+          {
+            "id": "holding_2",
+            "name": "holding_2",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW2"
+          },
+          {
+            "id": "holding_3",
+            "name": "holding_3",
+            "type": "Analog Input (Holding Register)",
+            "iecLocation": "%IW3"
+          }
+        ]
+      },
+      {
+        "id": "inputs",
+        "name": "inputs",
+        "functionCode": "4",
+        "cycleTime": 100,
+        "offset": "0",
+        "length": 2,
+        "errorHandling": "keep-last-value",
+        "ioPoints": [
+          {
+            "id": "inputs_0",
+            "name": "inputs_0",
+            "type": "Analog Input (Input Register)",
+            "iecLocation": "%IW4"
+          },
+          {
+            "id": "inputs_1",
+            "name": "inputs_1",
+            "type": "Analog Input (Input Register)",
+            "iecLocation": "%IW5"
+          }
+        ]
+      },
+      {
+        "id": "coil_out",
+        "name": "coil_out",
+        "functionCode": "5",
+        "cycleTime": 100,
+        "offset": "20",
+        "length": 1,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "coil_out_0",
+            "name": "coil_out_0",
+            "type": "Digital Output (Single Coil)",
+            "iecLocation": "%QX0.1"
+          }
+        ]
+      },
+      {
+        "id": "reg_out",
+        "name": "reg_out",
+        "functionCode": "6",
+        "cycleTime": 100,
+        "offset": "20",
+        "length": 1,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "reg_out_0",
+            "name": "reg_out_0",
+            "type": "Analog Output (Single Register)",
+            "iecLocation": "%QW0"
+          }
+        ]
+      },
+      {
+        "id": "coils_out",
+        "name": "coils_out",
+        "functionCode": "15",
+        "cycleTime": 100,
+        "offset": "30",
+        "length": 3,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "coils_out_0",
+            "name": "coils_out_0",
+            "type": "Digital Output (Multiple Coils)",
+            "iecLocation": "%QX0.2"
+          },
+          {
+            "id": "coils_out_1",
+            "name": "coils_out_1",
+            "type": "Digital Output (Multiple Coils)",
+            "iecLocation": "%QX0.3"
+          },
+          {
+            "id": "coils_out_2",
+            "name": "coils_out_2",
+            "type": "Digital Output (Multiple Coils)",
+            "iecLocation": "%QX0.4"
+          }
+        ]
+      },
+      {
+        "id": "regs_out",
+        "name": "regs_out",
+        "functionCode": "16",
+        "cycleTime": 100,
+        "offset": "30",
+        "length": 2,
+        "errorHandling": "set-to-zero",
+        "ioPoints": [
+          {
+            "id": "regs_out_0",
+            "name": "regs_out_0",
+            "type": "Analog Output (Multiple Registers)",
+            "iecLocation": "%QW1"
+          },
+          {
+            "id": "regs_out_1",
+            "name": "regs_out_1",
+            "type": "Analog Output (Multiple Registers)",
+            "iecLocation": "%QW2"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "deviceBoard": "Arduino Mega",
+  "communicationPort": "",
+  "runtimeIpAddress": "",
+  "selectedPlatformOptions": {},
+  "vendorScreenData": {
+    "serial": {
+      "baud_rate": "115200"
+    }
+  },
+  "vendorScreenDataByBoard": {
+    "Arduino Mega": {
+      "serial": {
+        "baud_rate": "115200"
+      }
+    }
+  }
+}

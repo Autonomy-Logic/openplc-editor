@@ -15,13 +15,22 @@
   and stays closed for an RTU-only master or the stub; a NINA board takes `WiFiNINA.h`; `Baremetal.ino` calls
   `mb_master_task()` from `scheduler()` and `loop()` before the forces, maps the empty buffers for a master-only
   build, and calls nothing of the master with the stub. Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
+- `firmware-master-rtu-sources.test.ts`: the RTU master and the RS-485 helper ship; the RTU master calls no
+  `flush()`, `delayMicroseconds()` or `delay()`, never touches `mb_frame`, `mb_rx_*` or the frame-bound
+  `calcCrc()`, and includes `modbus_crc.h`; the server and the master both include `modbus_rs485.h`, which
+  includes no upper-layer header and carries every CONTROLLINO RS-485 call and pin, gone from
+  `modbus_serial.cpp`. Read as text; runs everywhere.
+- `firmware-master-rtu-gates.test.ts`: through `g++ -E` like the gates above, `Baremetal.ino` with an RTU-only
+  master runs `mb_master_task()` from `scheduler()` and `loop()` before the forces and maps the empty buffers;
+  `modbus_rs485` keeps the CONTROLLINO MAXI and MEGA calls on `Serial3`, the MICRO DE and RE pins on
+  `Serial2`, and neither on another board. Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
 
 Run the host checks locally from the repository root:
 
 ```sh
 # openplc-editor
-MB_MASTER_HOST_COMPILE=1 npx jest --config jest.config.json --no-coverage src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts
+MB_MASTER_HOST_COMPILE=1 npx jest --config jest.config.json --no-coverage src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-rtu-gates.test.ts
 
 # openplc-web
-MB_MASTER_HOST_COMPILE=1 npx vitest run --config vitest.config.ts src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts
+MB_MASTER_HOST_COMPILE=1 npx vitest run --config vitest.config.ts src/frontend/utils/modbus-master/__tests__/host-compile.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-gates.test.ts src/frontend/utils/modbus-master/__tests__/firmware-master-rtu-gates.test.ts
 ```
