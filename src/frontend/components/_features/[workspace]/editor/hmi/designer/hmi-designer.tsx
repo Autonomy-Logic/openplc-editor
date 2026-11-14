@@ -144,22 +144,26 @@ function useThumbnails(request: HmiPreviewRequest): ReadonlyMap<string, string> 
   return thumbnails
 }
 
-/** Zoom that fits a device into the area around the canvas. */
-function useFitZoom(area: React.RefObject<HTMLDivElement>, width: number, height: number): number {
+/**
+ * Zoom that fits a device into the area around the canvas, and the ref that names that area. A hidden or unmounted
+ * area keeps the last zoom.
+ */
+function useFitZoom(width: number, height: number): [number, (element: HTMLDivElement | null) => void] {
   const [fit, setFit] = useState(1)
+  const [area, setArea] = useState<HTMLDivElement | null>(null)
   useEffect(() => {
-    const element = area.current
-    if (!element) return
+    if (!area) return
     const measure = () => {
       const pad = 48
-      setFit(Math.max(0.1, Math.min((element.clientWidth - pad) / width, (element.clientHeight - pad) / height)))
+      if (area.clientWidth <= pad || area.clientHeight <= pad) return
+      setFit(Math.max(0.1, Math.min((area.clientWidth - pad) / width, (area.clientHeight - pad) / height)))
     }
     measure()
     const observer = new ResizeObserver(measure)
-    observer.observe(element)
+    observer.observe(area)
     return () => observer.disconnect()
   }, [area, width, height])
-  return fit
+  return [fit, setArea]
 }
 
 function Diagnostics(props: { errors: readonly HmiDiagnostic[] }) {
@@ -212,8 +216,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   const device = hmiDevicePreset(entry.device)
   const [mode, setMode] = useState<CanvasMode>('design')
   const canvas = useRef<HTMLCanvasElement>(null)
-  const area = useRef<HTMLDivElement>(null)
-  const fit = useFitZoom(area, device.width, device.height)
+  const [fit, area] = useFitZoom(device.width, device.height)
   const zoom = entry.zoom ?? fit
   const preview = usePreviewSession({
     request,

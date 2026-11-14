@@ -225,6 +225,7 @@ test.describe('HMI designer', () => {
       await page.screenshot({ path: join(SHOTS, '01-opened.png') })
       expect(overviewOnDisk()).toBe(OVERVIEW)
       const builtMs = await status(page)
+      const fitZoom = await page.getByTestId('hmi-zoom').innerText()
 
       await waitFor(
         page,
@@ -286,6 +287,8 @@ test.describe('HMI designer', () => {
         (await codeText(page)).includes('END_VAR\n  METHOD Extra'),
       )
       await page.getByRole('button', { name: 'Designer' }).click()
+      await expect(page.getByTestId('hmi-zoom')).toHaveText(fitZoom, { timeout: 5000 })
+      await page.screenshot({ path: join(SHOTS, '03-back-from-code.png') })
       await page.getByTestId('hmi-palette-tab-widgets').click()
       await page.getByTestId('hmi-outline-Level').click()
       await page.getByTestId('hmi-prop-MaxValue').fill('20.0')
