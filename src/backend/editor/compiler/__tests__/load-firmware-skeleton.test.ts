@@ -99,7 +99,7 @@ describe('loadFirmwareSkeletonInMemory', () => {
     writeFileSync(join(tmp, 'Baremetal', 'extras', 'README.md'), 'should not ship\n')
 
     const m = makeModule(tmp)
-    const result = await m.loadFirmwareSkeletonInMemory('simulator')
+    const result = await m.loadFirmwareSkeletonInMemory('arduino-cli')
 
     expect(result['examples/Baremetal/Baremetal.ino']).toBe('/* sketch */\n')
     // `extras/` is not whitelisted, so its contents are skipped.
@@ -115,7 +115,7 @@ describe('loadFirmwareSkeletonInMemory', () => {
     writeFileSync(join(tmp, 'Baremetal', 'Baremetal.ino'), '/* sketch */\n')
 
     const m = makeModule(tmp)
-    const result = await m.loadFirmwareSkeletonInMemory('simulator')
+    const result = await m.loadFirmwareSkeletonInMemory('arduino-cli')
 
     expect(result['examples/Baremetal/Baremetal.ino']).toBe('/* sketch */\n')
     expect(Object.keys(result).some((k) => k.startsWith('src/'))).toBe(false)
@@ -126,7 +126,7 @@ describe('loadFirmwareSkeletonInMemory', () => {
     writeFileSync(join(tmp, 'arduino', 'openplc.h'), '#pragma once\n')
 
     const m = makeModule(tmp)
-    const result = await m.loadFirmwareSkeletonInMemory('simulator')
+    const result = await m.loadFirmwareSkeletonInMemory('arduino-cli')
 
     expect(result['src/openplc.h']).toBe('#pragma once\n')
     expect(Object.keys(result).some((k) => k.startsWith('examples/Baremetal/'))).toBe(false)
@@ -138,7 +138,7 @@ describe('loadFirmwareSkeletonInMemory', () => {
     // arduino-cli compile step will surface a missing-sketch error,
     // which is easier to diagnose than an unhandled ENOENT here.
     const m = makeModule(tmp)
-    const result = await m.loadFirmwareSkeletonInMemory('simulator')
+    const result = await m.loadFirmwareSkeletonInMemory('arduino-cli')
     expect(result).toEqual({})
   })
 
@@ -148,10 +148,34 @@ describe('loadFirmwareSkeletonInMemory', () => {
     writeFileSync(join(tmp, 'arduino', 'subdir', 'nested.h'), 'should not ship\n')
 
     const m = makeModule(tmp)
-    const result = await m.loadFirmwareSkeletonInMemory('simulator')
+    const result = await m.loadFirmwareSkeletonInMemory('arduino-cli')
 
     expect(result['src/openplc.h']).toBe('#pragma once\n')
     // Nested files under subdirs of arduino/ are not whitelisted.
     expect(Object.keys(result).some((k) => k.includes('nested'))).toBe(false)
+  })
+
+  it('adds the simulator support tree under wasm-sim/ for the simulator, and only for it', async () => {
+    mkdirSync(join(tmp, 'Baremetal'), { recursive: true })
+    writeFileSync(join(tmp, 'Baremetal', 'Baremetal.ino'), 'void setup() {}\n')
+    mkdirSync(join(tmp, 'wasm-sim', 'core', 'api'), { recursive: true })
+    writeFileSync(join(tmp, 'wasm-sim', 'sim_main.cpp'), '// shim\n')
+    writeFileSync(join(tmp, 'wasm-sim', 'core', 'api', 'Print.cpp'), '// print\n')
+
+    const m = makeModule(tmp)
+    const simulator = await m.loadFirmwareSkeletonInMemory('simulator')
+    const arduino = await m.loadFirmwareSkeletonInMemory('arduino-cli')
+
+    expect(simulator['wasm-sim/sim_main.cpp']).toBe('// shim\n')
+    expect(simulator['wasm-sim/core/api/Print.cpp']).toBe('// print\n')
+    expect(simulator['examples/Baremetal/Baremetal.ino']).toBe('void setup() {}\n')
+    expect(Object.keys(arduino).some((k) => k.startsWith('wasm-sim/'))).toBe(false)
+  })
+
+  it('fails the simulator skeleton when the support tree is missing', async () => {
+    mkdirSync(join(tmp, 'Baremetal'), { recursive: true })
+
+    const m = makeModule(tmp)
+    await expect(m.loadFirmwareSkeletonInMemory('simulator')).rejects.toThrow()
   })
 })

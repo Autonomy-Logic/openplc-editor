@@ -88,6 +88,16 @@ export class Reporter {
   }
 
   /**
+   * A line the running program printed (the editor's Console). Never quieted: it is what `simulate` is run for. In
+   * human mode stdout lines go to stdout and stderr lines to stderr; in JSON mode both go to stderr, which leaves
+   * stdout for the result.
+   */
+  console(line: string, stream: 'stdout' | 'stderr'): void {
+    const target = this.mode === 'human' && stream === 'stdout' ? this.streams.out : this.streams.err
+    target(`${line}\n`)
+  }
+
+  /**
    * The command's answer. `payload` is emitted verbatim as JSON in JSON mode;
    * `humanRender` produces the terminal form. Callers pass both so neither
    * mode is an afterthought that renders `[object Object]`.
