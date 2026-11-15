@@ -5,6 +5,7 @@ import {
   maskStComments,
   renameBlockHeader,
   renameHmiReferences,
+  screensUsingTheme,
 } from '../references'
 import type { ProjectHmi } from '../project-files'
 
@@ -127,5 +128,15 @@ describe('HMI references', () => {
     )
     expect(renameBlockHeader('FUNCTION_BLOCK ABSTRACT Old', 'Old', 'New')).toBe('FUNCTION_BLOCK ABSTRACT New')
     expect(renameBlockHeader('PROGRAM Old', 'Old', 'New')).toBe('PROGRAM Old')
+  })
+})
+
+describe('theme uses', () => {
+  it('finds the screens that set a theme, ignoring case and comments', () => {
+    const project = hmi()
+    project.screens[0].source = `{attribute 'hmi_theme' := 'Brand'}\n${project.screens[0].source}`
+    project.screens[1].source = `(* {attribute 'hmi_theme' := 'Brand'} *)\n${project.screens[1].source}`
+    expect(screensUsingTheme(project, 'brand')).toEqual(['Main'])
+    expect(screensUsingTheme(project, 'Dark')).toEqual([])
   })
 })

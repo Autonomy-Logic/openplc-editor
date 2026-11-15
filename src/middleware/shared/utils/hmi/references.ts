@@ -147,3 +147,17 @@ export function renameHmiReferences(
   }
   return next
 }
+
+const THEME_ATTRIBUTE = /\{\s*attribute\s+'hmi_theme'\s*:=\s*'([^']*)'\s*\}/gi
+
+/** Screens that set `theme` with their `hmi_theme` attribute; comments do not count. */
+export function screensUsingTheme(hmi: ProjectHmi, theme: string): string[] {
+  return hmi.screens
+    .filter((screen) => {
+      const code = maskStComments(screen.source)
+      return [...screen.source.matchAll(THEME_ATTRIBUTE)].some(
+        (m) => code[m.index] === '{' && m[1].toUpperCase() === theme.toUpperCase(),
+      )
+    })
+    .map((screen) => screen.name)
+}

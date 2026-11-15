@@ -214,6 +214,24 @@ export async function htmlDrag(page: Page, sourceTestId: string, x: number, y: n
   )
 }
 
+/** Drags a palette item over a canvas point without dropping it, so the drop marks show. */
+export async function htmlDragOver(page: Page, sourceTestId: string, x: number, y: number): Promise<void> {
+  await page.evaluate(
+    ({ source, x, y }) => {
+      const from = document.querySelector(`[data-testid="${source}"]`)
+      const to = document.querySelector('[data-testid="hmi-canvas-overlay"]')
+      if (!from || !to) throw new Error(`cannot drag ${source}`)
+      const rect = to.getBoundingClientRect()
+      const dataTransfer = new DataTransfer()
+      from.dispatchEvent(new DragEvent('dragstart', { dataTransfer, bubbles: true }))
+      const at = { clientX: rect.left + x, clientY: rect.top + y, bubbles: true, cancelable: true, dataTransfer }
+      to.dispatchEvent(new DragEvent('dragenter', at))
+      to.dispatchEvent(new DragEvent('dragover', at))
+    },
+    { source: sourceTestId, x, y },
+  )
+}
+
 export const screenOnDisk = (f: HmiFixture, name: string) => readFileSync(join(f.project, 'hmi', `${name}.st`), 'utf-8')
 
 /** The ST view's text: Monaco renders spaces as non-breaking spaces. */

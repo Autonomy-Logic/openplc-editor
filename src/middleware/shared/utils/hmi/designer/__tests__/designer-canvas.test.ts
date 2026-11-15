@@ -2,6 +2,7 @@ import type { HmiWidgetCatalog, HmiWidgetInfo } from '../../../../ports/hmi-prev
 import {
   canvasElements,
   type CanvasElement,
+  dropIndicator,
   dropTarget,
   elementAt,
   isContainerType,
@@ -116,5 +117,29 @@ describe('designer canvas', () => {
   it('never drops a moving container into itself or its own containers', () => {
     expect(dropTarget(model(), CATALOG, ELEMENTS, 190, 10, 'Row')).toEqual({ parent: 'Col', before: 'C' })
     expect(dropTarget(model(), CATALOG, ELEMENTS, 190, 10, 'Col')).toEqual({ parent: null, before: null })
+  })
+
+  it('marks the container and a bar where the drop goes, along its direction', () => {
+    const m = model()
+    expect(dropIndicator(m, ELEMENTS, { parent: 'Row', before: 'B' })).toEqual({
+      box: ELEMENTS[1].box,
+      line: { x: 96, y: 0, width: 3, height: 50 },
+    })
+    expect(dropIndicator(m, ELEMENTS, { parent: 'Col', before: null }).line).toEqual({
+      x: 0,
+      y: 101,
+      width: 200,
+      height: 3,
+    })
+    expect(dropIndicator(m, ELEMENTS, { parent: 'Row', before: null }, 'B').line).toEqual({
+      x: 101,
+      y: 0,
+      width: 3,
+      height: 50,
+    })
+    expect(dropIndicator(m, ELEMENTS, { parent: null, before: null })).toEqual({
+      box: null,
+      line: { x: 0, y: 201, width: 200, height: 3 },
+    })
   })
 })

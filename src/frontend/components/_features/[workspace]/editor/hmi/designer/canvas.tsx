@@ -5,9 +5,10 @@
  * the screen.
  */
 import { cn } from '@root/frontend/utils/cn'
-import type { HmiPointerKind, HmiWidgetCatalog } from '@root/middleware/shared/ports/hmi-preview-types'
+import type { HmiBuildStep, HmiPointerKind, HmiWidgetCatalog } from '@root/middleware/shared/ports/hmi-preview-types'
 import {
   type CanvasElement,
+  dropIndicator,
   type DropTarget,
   dropTarget,
   elementAt,
@@ -33,6 +34,7 @@ import type { HmiDevicePreset } from '@root/middleware/shared/utils/hmi/device-p
 import { type RefObject, useRef, useState } from 'react'
 
 import { VARIABLE_MIME, WIDGET_MIME } from './palette'
+import { PreviewLoading } from './parts'
 
 export type CanvasMode = 'design' | 'run'
 
@@ -60,8 +62,9 @@ const DRAG_THRESHOLD = 4
 const HANDLE_RADIUS = 7
 const same = (a: string, b: string): boolean => a.toUpperCase() === b.toUpperCase()
 
+/** `reselected`: the element was already selected, so releasing without a drag clears the selection. */
 type Gesture =
-  | { kind: 'move'; name: string; startX: number; startY: number; moved: boolean }
+  | { kind: 'move'; name: string; startX: number; startY: number; moved: boolean; reselected: boolean }
   | {
       kind: 'resize'
       name: string
@@ -81,6 +84,7 @@ type Gesture =
       origin: Point
       at: Point
       moved: boolean
+      reselected: boolean
     }
   | { kind: 'wire'; diagram: string; from: CanvasPort; to: Point }
   | { kind: 'bend'; pipe: string; index: number; frame: DiagramFrame; grid: number; bends: Point[] }
@@ -98,6 +102,8 @@ export function DesignerCanvas(props: {
   selection: readonly string[]
   locked: boolean
   actions: CanvasActions
+  /** The build step while the screen has not been drawn yet; null once it has. */
+  loading: HmiBuildStep | null
 }) {
   const overlay = useRef<HTMLDivElement | null>(null)
   const [hover, setHover] = useState<string | null>(null)
@@ -173,8 +179,13 @@ export function DesignerCanvas(props: {
       }
     }
     const name = elementAt(elements, p.x, p.y)
-    props.actions.select(name ? [name] : [])
-    if (!name || props.locked) return
+    const reselected = name !== null && props.selection.length === 1 && same(props.selection[0], name)
+    if (!reselected) props.actions.select(name ? [name] : [])
+    if (!name) return
+    if (props.locked) {
+      if (reselected) props.actions.select([])
+      return
+    }
     e.currentTarget.setPointerCapture(e.pointerId)
     const placed = isPipe(name) ? null : diagramFrame(name)
     const element = elementOf(name)
@@ -190,10 +201,11 @@ export function DesignerCanvas(props: {
         origin,
         at: origin,
         moved: false,
+        reselected,
       })
       return
     }
-    setGesture({ kind: 'move', name, startX: p.x, startY: p.y, moved: false })
+    setGesture({ kind: 'move', name, startX: p.x, startY: p.y, moved: false, reselected })
   }
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -266,6 +278,8 @@ export function DesignerCanvas(props: {
       props.actions.move(gesture.name, drop)
     } else if (gesture?.kind === 'place' && gesture.moved) {
       props.actions.place(gesture.name, gesture.at, true)
+    } else if ((gesture?.kind === 'move' || gesture?.kind === 'place') && gesture.reselected && !gesture.moved) {
+      props.actions.select([])
     } else if (gesture?.kind === 'bend') {
       props.actions.bends(gesture.pipe, gesture.bends, true)
     } else if (gesture?.kind === 'wire') {
@@ -354,8 +368,14 @@ export function DesignerCanvas(props: {
 
   const selected = props.mode === 'design' ? props.selection[0] : undefined
   const selectedStyle = selected ? style(selected) : null
-  const dropStyle = drop?.parent ? style(drop.parent) : null
-  const beforeStyle = drop?.before ? style(drop.before) : null
+  const moving = gesture?.kind === 'move' ? gesture.name : null
+  const indicator = drop && model ? dropIndicator(model, elements, drop, moving) : null
+  const scaled = (r: { x: number; y: number; width: number; height: number }) => ({
+    left: r.x * zoom,
+    top: r.y * zoom,
+    width: r.width * zoom,
+    height: r.height * zoom,
+  })
   const shownPorts =
     props.mode !== 'design' || props.locked
       ? []
@@ -368,9 +388,13 @@ export function DesignerCanvas(props: {
       : null
   return (
     <div
-      className='relative shrink-0 rounded-lg shadow-[0_6px_24px_rgba(1,30,75,0.14)]'
+      className={cn(
+        'relative shrink-0 rounded-lg shadow-[0_6px_24px_rgba(1,30,75,0.14)]',
+        props.mode === 'run' && 'ring-[3px] ring-brand',
+      )}
       style={{ width, height }}
       data-testid='hmi-canvas'
+      data-mode={props.mode}
     >
       <canvas
         ref={props.canvas}
@@ -397,18 +421,22 @@ export function DesignerCanvas(props: {
             style={style(hover) ?? undefined}
           />
         )}
-        {dropStyle && (
-          <div className='border-brand/60 bg-brand/5 pointer-events-none absolute border-2' style={dropStyle} />
-        )}
-        {beforeStyle && (
+        {indicator && drop && (
           <div
-            className='pointer-events-none absolute bg-brand'
-            style={{
-              left: beforeStyle.left,
-              top: beforeStyle.top - 2,
-              width: Math.max(beforeStyle.width, 4),
-              height: 3,
-            }}
+            className='pointer-events-none absolute rounded-sm border-2 border-green-500 bg-green-500/10'
+            style={indicator.box ? scaled(indicator.box) : { left: 0, top: 0, width, height }}
+            data-testid='hmi-drop-target'
+          >
+            <span className='absolute left-1 top-1 whitespace-nowrap rounded bg-green-600 px-1.5 py-0.5 font-caption text-[10px] font-medium text-white'>
+              {moving ? 'Move to' : 'Add to'} {drop.parent ?? 'the screen'}
+            </span>
+          </div>
+        )}
+        {indicator?.line && (
+          <div
+            className='pointer-events-none absolute rounded-full bg-green-600'
+            style={scaled(indicator.line)}
+            data-testid='hmi-drop-line'
           />
         )}
         {selectedStyle && (
@@ -477,6 +505,7 @@ export function DesignerCanvas(props: {
           </svg>
         )}
       </div>
+      {props.loading !== null && <PreviewLoading step={props.loading} />}
     </div>
   )
 }

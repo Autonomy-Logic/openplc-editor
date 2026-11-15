@@ -37,7 +37,14 @@ export interface HmiPreviewRequest extends HmiUnitSources {
   widgetPreview?: string
   /** Builds the palette gallery, every widget on one screen at natural size, in place of the project's screens. */
   gallery?: boolean
+  /** Builds a sample screen drawn in this theme, in place of the project's screens. */
+  themePreview?: string
 }
+
+/** The steps of a preview build, in order: the last one is starting the built module in a session. */
+export const HMI_BUILD_STEPS = ['sources', 'generate', 'compile', 'start'] as const
+
+export type HmiBuildStep = (typeof HMI_BUILD_STEPS)[number]
 
 export interface HmiDiagnostic {
   /** Screen or widget block, or `HMI` for the unit as a whole. */
@@ -174,6 +181,8 @@ export interface HmiWidgetInfo {
   main?: HmiWidgetBinding
   /** The operator's change of the main input: `changed` is set for one frame with the value in `newValue`. */
   twoWay?: { value: string; changed: string; newValue: string }
+  /** A main BOOL output with `changed` set for one frame when it flips: a wired variable is written on those frames. */
+  momentary?: { value: string; changed: string }
   /** BOOL outputs set for one frame when something happens (Clicked). */
   events: readonly string[]
 }

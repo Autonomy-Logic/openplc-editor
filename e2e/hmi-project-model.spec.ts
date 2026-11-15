@@ -179,9 +179,9 @@ test.describe('HMI project model', () => {
       await page.getByRole('button', { name: 'Code', exact: true }).click({ timeout: 30000 })
       await waitFor(page, 'the Overview source', async () => (await editorText(page)).includes('EXTENDS HmiScreen'))
 
-      // HMI Settings opens its placeholder tab.
+      // HMI Settings opens its tab.
       await leaf(page, 'HMI Settings').click()
-      await expect(page.getByTestId('hmi-settings-placeholder')).toBeVisible({ timeout: 10000 })
+      await expect(page.getByTestId('hmi-settings')).toBeVisible({ timeout: 10000 })
 
       // A widget block from the + menu, and a name the HMI library already uses is refused.
       await createFromMenu(page, 'hmi-widget', 'HmiLamp')

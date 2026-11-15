@@ -4,7 +4,11 @@
  * rebuilds only what an edit changed: one unit per generated file, the core and fonts apart, and the runtime headers
  * precompiled once.
  */
-import type { HmiPreviewBuild, HmiPreviewRequest } from '../../../../middleware/shared/ports/hmi-preview-types'
+import type {
+  HmiBuildStep,
+  HmiPreviewBuild,
+  HmiPreviewRequest,
+} from '../../../../middleware/shared/ports/hmi-preview-types'
 import type {
   WasmCompileRequest,
   WasmCompileResult,
@@ -12,7 +16,13 @@ import type {
 } from '../../../../middleware/shared/ports/wasm-toolchain-types'
 import { buildHmiFontTableSource, HmiFontError } from '../fonts/font-table-source'
 import { vettedHmiFont } from '../fonts/vetted-fonts'
-import { generateHmiUnit, HMI_GALLERY_SCREEN, type HmiPreview, WIDGET_PREVIEW_SCREEN } from '../unit/generate-hmi-unit'
+import {
+  generateHmiUnit,
+  HMI_GALLERY_SCREEN,
+  HMI_THEME_PREVIEW_SCREEN,
+  type HmiPreview,
+  WIDGET_PREVIEW_SCREEN,
+} from '../unit/generate-hmi-unit'
 
 /** What the preview build reads besides the project: the files every preview compiles in. */
 export interface HmiPreviewResources {
@@ -139,12 +149,18 @@ export function buildHmiPreviewRequest(
 
 const UNIT = 'HMI'
 
+/** Resolves on a later task, so a step reported before synchronous work can be drawn first. */
+const nextTask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
 /** Builds the preview of a project's screens, of one widget block when `input.widgetPreview` names it, or the gallery. */
 export async function buildHmiPreview(
   input: HmiPreviewRequest,
   resources: HmiPreviewResources,
   compile: HmiPreviewCompile,
+  onStep?: (step: HmiBuildStep) => void,
 ): Promise<HmiPreviewBuild> {
+  onStep?.('generate')
+  await nextTask()
   const generated = generateHmiUnit({ ...input, preview: true, resolve: undefined, plcMd5: undefined })
   if (!generated.ok) return { ok: false, errors: generated.errors, warnings: generated.warnings }
 
@@ -169,6 +185,7 @@ export async function buildHmiPreview(
     fontTable,
     resources,
   )
+  onStep?.('compile')
   const result = await compile(request)
   if (!result.ok) {
     const errors = result.diagnostics
@@ -183,7 +200,9 @@ export async function buildHmiPreview(
   }
   const names = input.gallery
     ? [HMI_GALLERY_SCREEN]
-    : [...input.screens.map((s) => s.name), ...(input.widgetPreview === undefined ? [] : [WIDGET_PREVIEW_SCREEN])]
+    : input.themePreview !== undefined
+      ? [HMI_THEME_PREVIEW_SCREEN]
+      : [...input.screens.map((s) => s.name), ...(input.widgetPreview === undefined ? [] : [WIDGET_PREVIEW_SCREEN])]
   return {
     ok: true,
     wasm: result.wasm,

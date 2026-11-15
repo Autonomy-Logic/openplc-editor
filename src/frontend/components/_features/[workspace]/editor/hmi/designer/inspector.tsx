@@ -10,6 +10,18 @@ import type {
   HmiWidgetInfo,
   HmiWidgetProperty,
 } from '@root/middleware/shared/ports/hmi-preview-types'
+import {
+  actionCode,
+  actionOf,
+  actionOfKind,
+  HMI_ACTIONS,
+  type HmiAction,
+} from '@root/middleware/shared/utils/hmi/designer/designer-actions'
+import {
+  bindableVariables,
+  momentaryCode,
+  momentaryOf,
+} from '@root/middleware/shared/utils/hmi/designer/designer-binding'
 import { stString } from '@root/middleware/shared/utils/hmi/designer/designer-edits'
 import {
   type DesignerElement,
@@ -213,7 +225,20 @@ export function PropertiesCard(props: {
       />
     </Field>
   )
-  const mainBound = info?.main ? binding(info.main.name) : undefined
+  const eventCode = (event: string) =>
+    props.model.events.find((e) => same(e.element, element.name) && same(e.event, event))?.code ?? ''
+  const momentary = info?.momentary
+  const pressBinding = momentary ? momentaryOf(eventCode(momentary.changed), element.name, momentary) : null
+  const mainBound = momentary ? pressBinding?.variable : info?.main ? binding(info.main.name) : undefined
+  const bindMain = (variable: string | null, whilePressed = pressBinding?.whilePressed ?? true) => {
+    if (!info?.main) return
+    if (!momentary) return actions.bind(element.name, info.main.name, variable)
+    actions.setEvent(
+      element.name,
+      momentary.changed,
+      variable === null ? null : momentaryCode(element.name, momentary, { variable, whilePressed }),
+    )
+  }
   const content = (() => {
     switch (tab) {
       case 'data': {
@@ -222,15 +247,39 @@ export function PropertiesCard(props: {
         return (
           <>
             {info?.main && (
-              <Field label={info.twoWay ? `${info.main.name} (the operator can change it)` : info.main.name}>
+              <Field
+                label={
+                  momentary
+                    ? 'Variable'
+                    : info.twoWay
+                      ? `${info.main.name} (the operator can change it)`
+                      : info.main.name
+                }
+              >
                 <DesignerSelect
                   value={mainBound ?? NONE}
                   testId='hmi-main-binding'
                   options={[
                     { value: NONE, label: 'Not bound' },
-                    ...props.variables.map((v) => ({ value: v.path, label: `${v.path} : ${v.type}` })),
+                    ...bindableVariables(info.main, props.variables).map((v) => ({
+                      value: v.path,
+                      label: `${v.path} : ${v.type}`,
+                    })),
                   ]}
-                  onChange={(v) => actions.bind(element.name, info.main?.name ?? '', v === NONE ? null : v)}
+                  onChange={(v) => bindMain(v === NONE ? null : v)}
+                />
+              </Field>
+            )}
+            {momentary && pressBinding && (
+              <Field label='Behavior'>
+                <DesignerSelect
+                  value={pressBinding.whilePressed ? 'true' : 'false'}
+                  testId='hmi-main-press'
+                  options={[
+                    { value: 'true', label: 'Set to TRUE while pressed' },
+                    { value: 'false', label: 'Set to FALSE while pressed' },
+                  ]}
+                  onChange={(v) => bindMain(pressBinding.variable, v === 'true')}
                 />
               </Field>
             )}
@@ -250,26 +299,16 @@ export function PropertiesCard(props: {
       case 'actions': {
         const events = info?.events ?? []
         if (events.length === 0) return <Empty>This widget has no actions.</Empty>
-        return events.map((event) => {
-          const code = props.model.events.find((e) => same(e.element, element.name) && same(e.event, event))?.code ?? ''
-          return (
-            <div key={event} className='flex flex-col gap-1.5' data-testid={`hmi-event-${event}`}>
-              <span className='font-caption text-xs text-neutral-850 dark:text-neutral-300'>When {event}</span>
-              <DesignerSelect
-                value={NONE}
-                options={[
-                  { value: NONE, label: 'Show a screen…' },
-                  ...props.screens.map((s) => ({ value: s, label: s })),
-                ]}
-                onChange={(s) => s !== NONE && actions.setEvent(element.name, event, `HMI_Show(HMI_SCREEN#${s});`)}
-              />
-              <EventCode
-                code={code}
-                onCommit={(text) => actions.setEvent(element.name, event, text.trim() === '' ? null : text)}
-              />
-            </div>
-          )
-        })
+        return events.map((event) => (
+          <ActionEditor
+            key={event}
+            event={event}
+            code={eventCode(event)}
+            screens={props.screens}
+            variables={props.variables}
+            onChange={(code) => actions.setEvent(element.name, event, code)}
+          />
+        ))
       }
       default: {
         const unhandled: never = tab
@@ -283,7 +322,7 @@ export function PropertiesCard(props: {
       data-testid='hmi-inspector'
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <div className='flex items-center gap-2 bg-neutral-50 px-3 py-2 dark:bg-neutral-900'>
+      <div className='flex shrink-0 items-center gap-2 bg-neutral-50 px-3 py-2 dark:bg-neutral-900'>
         <NameField
           value={element.name}
           disabled={props.locked || element.locked !== undefined}
@@ -325,7 +364,7 @@ export function PropertiesCard(props: {
             </p>
           ) : (
             <>
-              <div className='px-3 pt-2'>
+              <div className='shrink-0 px-3 pt-2'>
                 <div
                   role='tablist'
                   aria-label='Property groups'
@@ -349,12 +388,14 @@ export function PropertiesCard(props: {
                   ))}
                 </div>
               </div>
-              <fieldset disabled={props.locked} className='flex min-h-0 flex-col gap-2.5 overflow-y-auto p-3'>
-                {content}
-              </fieldset>
+              <div className='min-h-0 flex-1 overflow-y-auto' data-testid='hmi-properties-body'>
+                <fieldset disabled={props.locked} className='flex min-w-0 flex-col gap-2.5 p-3'>
+                  {content}
+                </fieldset>
+              </div>
             </>
           )}
-          <div className='flex items-center gap-2 border-t border-neutral-100 px-3 py-1.5 dark:border-neutral-850'>
+          <div className='flex shrink-0 items-center gap-2 border-t border-neutral-100 px-3 py-1.5 dark:border-neutral-850'>
             <button
               type='button'
               onClick={() => props.onShowInCode(element.name)}
@@ -419,6 +460,79 @@ function NameField(props: { value: string; disabled: boolean; onCommit: (name: s
       }}
       className='min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 font-display text-sm font-semibold text-neutral-1000 outline-none hover:border-neutral-300 focus:border-brand-medium-dark focus:bg-white dark:text-white dark:focus:bg-neutral-950'
     />
+  )
+}
+
+/** One event's action: what kind it is, then what it needs (a screen, a variable and value, or ST code). */
+function ActionEditor(props: {
+  event: string
+  code: string
+  screens: readonly string[]
+  variables: readonly HmiPlcVariable[]
+  onChange: (code: string | null) => void
+}) {
+  const [action, setAction] = useState<HmiAction>(() => actionOf(props.code))
+  useEffect(() => {
+    const read = actionOf(props.code)
+    setAction((draft) => (actionCode(draft) === actionCode(read) ? draft : read))
+  }, [props.code])
+  const change = (next: HmiAction) => {
+    setAction(next)
+    const code = actionCode(next)
+    if (code !== null) props.onChange(code)
+    else if (next.kind === 'none') props.onChange(null)
+  }
+  const variableOptions = (kind: 'set' | 'toggle') => [
+    { value: NONE, label: 'Pick a variable' },
+    ...props.variables
+      .filter((v) => kind === 'set' || v.type.toUpperCase() === 'BOOL')
+      .map((v) => ({ value: v.path, label: `${v.path} : ${v.type}` })),
+  ]
+  return (
+    <div className='flex flex-col gap-1.5' data-testid={`hmi-event-${props.event}`}>
+      <Field label={`When ${props.event}`}>
+        <DesignerSelect
+          value={action.kind}
+          testId={`hmi-action-${props.event}`}
+          options={HMI_ACTIONS.map((a) => ({ value: a.kind, label: a.label }))}
+          onChange={(kind) => {
+            const known = HMI_ACTIONS.find((a) => a.kind === kind)
+            if (known) change(actionOfKind(known.kind, action))
+          }}
+        />
+      </Field>
+      {action.kind === 'show' && (
+        <Field label='Screen'>
+          <DesignerSelect
+            value={props.screens.find((s) => same(s, action.screen)) ?? NONE}
+            testId={`hmi-action-screen-${props.event}`}
+            options={[{ value: NONE, label: 'Pick a screen' }, ...props.screens.map((s) => ({ value: s, label: s }))]}
+            onChange={(screen) => screen !== NONE && change({ kind: 'show', screen })}
+          />
+        </Field>
+      )}
+      {(action.kind === 'set' || action.kind === 'toggle') && (
+        <Field label='Variable'>
+          <DesignerSelect
+            value={props.variables.find((v) => same(v.path, action.variable))?.path ?? NONE}
+            testId={`hmi-action-variable-${props.event}`}
+            options={variableOptions(action.kind)}
+            onChange={(variable) => variable !== NONE && change({ ...action, variable })}
+          />
+        </Field>
+      )}
+      {action.kind === 'set' && (
+        <Field label='Value'>
+          <CommitField
+            value={action.value}
+            placeholder='TRUE, 42, 1.5…'
+            testId={`hmi-action-value-${props.event}`}
+            onCommit={(value) => change({ ...action, value })}
+          />
+        </Field>
+      )}
+      {action.kind === 'code' && <EventCode code={action.code} onCommit={(code) => change({ kind: 'code', code })} />}
+    </div>
   )
 }
 

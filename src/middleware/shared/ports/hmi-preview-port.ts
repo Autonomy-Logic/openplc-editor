@@ -4,6 +4,7 @@
  * own mechanisms (`hmi-preview-mechanisms.ts`).
  */
 import type {
+  HmiBuildStep,
   HmiCatalogResult,
   HmiPointerKind,
   HmiPreviewBuild,
@@ -41,7 +42,8 @@ export interface HmiPreviewSession {
 }
 
 export interface HmiPreviewPort {
-  build(request: HmiPreviewRequest): Promise<HmiPreviewBuild>
+  /** Builds a preview module; `onStep` hears each step as it begins, up to `compile`. */
+  build(request: HmiPreviewRequest, onStep?: (step: HmiBuildStep) => void): Promise<HmiPreviewBuild>
   /** The widgets screens can use: StandardWidgets and the project's widget blocks. */
   catalog(widgets: readonly HmiSourceFile[]): Promise<HmiCatalogResult>
   /** The palette's widgets drawn by the core with test values, `scale` device pixels per logical unit. */

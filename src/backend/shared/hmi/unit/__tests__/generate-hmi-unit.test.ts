@@ -2,6 +2,7 @@ import { hmiSettingsSchema } from '../../../../../middleware/shared/utils/hmi/se
 import {
   generateHmiUnit,
   HMI_GALLERY_SCREEN,
+  HMI_THEME_PREVIEW_SCREEN,
   hmiGalleryWidget,
   type HmiUnitInput,
   type HmiUnitResult,
@@ -124,6 +125,40 @@ describe('HMI unit generator', () => {
     expect(source).toContain("W_HmiLamp : HmiLamp := (Parent := 'HMI__R_HmiLamp', GrowAuto := FALSE);")
     expect(source).toContain('W_HmiLamp.Value := TRUE;')
     expect(hmiGalleryWidget('HMI__Column')).toBeNull()
+  })
+
+  it('draws a sample screen in a theme, in place of the project screens, and refuses an unknown theme', () => {
+    const project = sampleProject()
+    const settings = {
+      ...project.settings,
+      themes: [{ name: 'Brand', base: 'Autonomy' as const, colors: { Accent: '#E91E63' } }],
+    }
+    const result = generateHmiUnit({ ...project, settings, themePreview: 'Brand', resolve: undefined })
+    expect(messages(result)).toEqual([])
+    expect(new Set(result.elementIds.map((e) => e.screen))).toEqual(new Set([HMI_THEME_PREVIEW_SCREEN]))
+    const source = Object.values(result.sources).find((t) => t.includes(`FUNCTION_BLOCK ${HMI_THEME_PREVIEW_SCREEN}`))
+    expect(source).toContain('HMI__Red : HmiRect')
+    const unknown = generateHmiUnit({ ...project, themePreview: 'Nope', resolve: undefined })
+    expect(messages(unknown).join('\n')).toMatch(/unknown theme 'Nope'/)
+  })
+
+  it('keeps an operator change on a two-way widget that nothing else sets', () => {
+    const result = generateHmiUnit(
+      withScreen(
+        screen(
+          ['    Free : HmiSlider;', '    Wired : HmiSlider;', '    Scaled : HmiSlider;', '    Note : HmiSwitch;'].join(
+            '\n',
+          ),
+          '  Wired.Value := Main.Level;\n  Scaled.Value := Main.Level * 2.0;\n  (* Note.Value := TRUE; *)',
+        ),
+      ),
+    )
+    expect(messages(result)).toEqual([])
+    const overview = Object.values(result.sources).find((t) => t.includes('FUNCTION_BLOCK Overview')) ?? ''
+    expect(overview).toContain('IF Free.Changed THEN Free.Value := Free.NewValue; END_IF;')
+    expect(overview).toContain('IF Note.Changed THEN Note.Value := Note.NewValue; END_IF;')
+    expect(overview).not.toContain('Wired.Value := Wired.NewValue')
+    expect(overview).not.toContain('Scaled.Value := Scaled.NewValue')
   })
 
   it('refuses to preview a widget block the project does not have', () => {

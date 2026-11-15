@@ -7,6 +7,7 @@
  * hosts keep in step with the PLC. `Element.Value := <variable>;` on a two-way widget also writes the operator's
  * change back to the variable, converted to its type.
  */
+import { maskStComments } from '@root/middleware/shared/utils/hmi/references'
 import { hmiReservedName } from '@root/middleware/shared/utils/hmi/reserved-names'
 import {
   HMI_BUILTIN_THEMES,
@@ -45,6 +46,8 @@ export interface HmiUnitInput extends HmiUnitSources {
   widgetPreview?: string
   /** Preview only: one screen showing every palette widget at natural size, in place of the project's screens. */
   gallery?: boolean
+  /** Preview only: a sample screen drawn in this theme, in place of the project's screens. */
+  themePreview?: string
   /** Preview build: the libraries are emitted whole, so their code does not change with the screens. */
   preview?: boolean
   /** PLC debug-table address of a variable; absent when building without a PLC program (preview). */
@@ -355,6 +358,16 @@ function writeBacks(
       ? `${b.element}.${twoWay.changed} AND ${converted.guard}`
       : `${b.element}.${twoWay.changed}`
     plan.writeBacks.push(`IF ${condition} THEN ${b.variable} := ${converted.expr}; END_IF;`)
+  }
+  const code = maskStComments(plan.file.source)
+  for (const element of plan.model.elements) {
+    const twoWay = catalog.widgets.get(element.type.toUpperCase())?.twoWay
+    if (!twoWay) continue
+    const assigned = new RegExp(`\\b${element.name}\\s*\\.\\s*${twoWay.value}\\s*:=`, 'i').test(code)
+    if (!assigned)
+      plan.writeBacks.push(
+        `IF ${element.name}.${twoWay.changed} THEN ${element.name}.${twoWay.value} := ${element.name}.${twoWay.newValue}; END_IF;`,
+      )
   }
 }
 
@@ -843,6 +856,40 @@ function gallerySource(widgets: readonly HmiWidgetInfo[]): string {
   ].join('\n')
 }
 
+/** Name of the theme preview's screen. */
+export const HMI_THEME_PREVIEW_SCREEN = 'HMI__ThemePreview'
+
+/** The theme preview's screen: controls and values on surface cards, then the fixed colors, in `theme`. */
+function themePreviewSource(theme: string): string {
+  const card = (name: string) =>
+    `    ${name} : HmiStack := (Parent := 'HMI__Column', Direction := HMI_DIRECTION#Row, Gap := 12, Padding := 12, Fill := COLOR.Surface, GrowAuto := FALSE);`
+  const fixed = ['Red', 'Green', 'Blue', 'Yellow', 'Orange', 'Gray'].map(
+    (c) =>
+      `    HMI__${c} : HmiRect := (Parent := 'HMI__Fixed', Fill := COLOR.${c}, PrefWidth := 36, PrefHeight := 20);`,
+  )
+  return [
+    `{attribute 'hmi_theme' := '${theme}'}`,
+    `FUNCTION_BLOCK ${HMI_THEME_PREVIEW_SCREEN} EXTENDS HmiScreen`,
+    '  VAR',
+    '    HMI__Column : HmiStack := (Direction := HMI_DIRECTION#Column, Gap := 12, Padding := 16, Grow := 1, GrowAuto := FALSE);',
+    `    HMI__Title : HmiLabel := (Parent := 'HMI__Column', Text := 'Plant overview', Size := 20, Font := HMI_FONT#Bold);`,
+    card('HMI__Controls'),
+    `    HMI__Start : HmiButton := (Parent := 'HMI__Controls', Text := 'Start');`,
+    `    HMI__Pump : HmiSwitch := (Parent := 'HMI__Controls', Caption := 'Pump', Value := TRUE);`,
+    `    HMI__Running : HmiLamp := (Parent := 'HMI__Controls', Caption := 'Running', Value := TRUE);`,
+    `    HMI__Speed : HmiSlider := (Parent := 'HMI__Controls', Caption := 'Speed', Value := 60.0, Unit := '%', Grow := 1);`,
+    card('HMI__Values'),
+    `    HMI__Level : HmiGauge := (Parent := 'HMI__Values', Caption := 'Level', Value := 62.0);`,
+    `    HMI__Tank : HmiTank := (Parent := 'HMI__Values', Caption := 'Tank', Value := 45.0, Unit := '%');`,
+    `    HMI__Flow : HmiValue := (Parent := 'HMI__Values', Caption := 'Flow', Value := 42.5, Unit := 'm3/h');`,
+    `    HMI__Fixed : HmiStack := (Parent := 'HMI__Column', Direction := HMI_DIRECTION#Row, Gap := 8, GrowAuto := FALSE);`,
+    ...fixed,
+    '  END_VAR',
+    'END_FUNCTION_BLOCK',
+    '',
+  ].join('\n')
+}
+
 export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   const d = new Diagnostics()
   const result: HmiUnitResult = {
@@ -861,7 +908,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     for (const e of library.errors) d.error(UNIT, `StandardWidgets: ${e.message}`, e.line)
     return result
   }
-  if (input.screens.length === 0 && input.widgetPreview === undefined && !input.gallery)
+  if (input.screens.length === 0 && input.widgetPreview === undefined && !input.gallery && !input.themePreview)
     d.error(UNIT, 'the project has no HMI screens')
   if (input.screens.length > SCREENS_MAX) d.error(UNIT, `${input.screens.length} screens; at most ${SCREENS_MAX}`)
   checkNames(input, libraryNames(library.archive), d)
@@ -885,7 +932,9 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   const plans: ScreenPlan[] = []
   const screenFiles = input.gallery
     ? [{ name: HMI_GALLERY_SCREEN, source: gallerySource(galleryWidgets(catalog, input.widgets)) }]
-    : [...input.screens]
+    : input.themePreview !== undefined
+      ? [{ name: HMI_THEME_PREVIEW_SCREEN, source: themePreviewSource(input.themePreview) }]
+      : [...input.screens]
   if (input.widgetPreview !== undefined) {
     const widget = input.widgets.find((w) => w.name.toUpperCase() === input.widgetPreview?.toUpperCase())
     const info = widget ? catalog.widgets.get(widget.name.toUpperCase()) : undefined
@@ -929,7 +978,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   }
   for (const plan of plans) writeBacks(plan, catalog, tags, d)
   const start =
-    input.widgetPreview !== undefined || input.gallery
+    input.widgetPreview !== undefined || input.gallery || input.themePreview !== undefined
       ? plans.length - 1
       : input.settings.startScreen === ''
         ? 0

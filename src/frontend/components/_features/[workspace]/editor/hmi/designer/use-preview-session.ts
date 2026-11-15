@@ -5,6 +5,7 @@
  */
 import type { HmiPreviewSession } from '@root/middleware/shared/ports/hmi-preview-port'
 import type {
+  HmiBuildStep,
   HmiDiagnostic,
   HmiPointerKind,
   HmiPreviewBounds,
@@ -27,6 +28,8 @@ export interface PreviewState {
   buildMs: number | null
   bounds: HmiPreviewBounds[]
   page: number
+  /** The step a build is on; null when no build runs. */
+  step: HmiBuildStep | null
 }
 
 export interface PreviewControls extends PreviewState {
@@ -78,6 +81,7 @@ export function usePreviewSession({
     buildMs: null,
     bounds: [],
     page: 0,
+    step: null,
   })
   requestRef.current = request
 
@@ -100,26 +104,37 @@ export function usePreviewSession({
     if (!port || !current) return
     const id = ++generation.current
     const started = performance.now()
+    const onStep = (step: HmiBuildStep) => {
+      if (id === generation.current) setState((s) => ({ ...s, step }))
+    }
     setState((s) => ({ ...s, status: 'building' }))
-    void port.build(current).then(async (result) => {
+    void port.build(current, onStep).then(async (result) => {
       if (id !== generation.current) return
       if (!result.ok) {
-        setState((s) => ({ ...s, status: builtRef.current ? 'ready' : 'failed', errors: result.errors }))
+        setState((s) => ({ ...s, status: builtRef.current ? 'ready' : 'failed', errors: result.errors, step: null }))
         return
       }
       const page = result.pages[screen] ?? 0
+      onStep('start')
       try {
         await session.current?.load(result.wasm, { width: device.width, height: device.height, page, design })
       } catch (error) {
         if (id !== generation.current) return
         const message = error instanceof Error ? error.message : String(error)
-        setState((s) => ({ ...s, status: 'failed', errors: [{ file: 'HMI', message }] }))
+        setState((s) => ({ ...s, status: 'failed', errors: [{ file: 'HMI', message }], step: null }))
         return
       }
       if (id !== generation.current) return
       builtRef.current = result
       setBuilt(result)
-      setState((s) => ({ ...s, status: 'ready', errors: [], buildMs: Math.round(performance.now() - started), page }))
+      setState((s) => ({
+        ...s,
+        status: 'ready',
+        errors: [],
+        buildMs: Math.round(performance.now() - started),
+        page,
+        step: null,
+      }))
     })
   }, [port, screen, device.width, device.height, design])
 
@@ -134,11 +149,8 @@ export function usePreviewSession({
       height: device.height * device.density,
       scale: device.density,
     }
-    const target = canvas.current
-    if (target && (target.width !== surface.width || target.height !== surface.height)) {
-      target.width = surface.width
-      target.height = surface.height
-    }
+    const image = new ImageData(surface.width, surface.height)
+    let painted: HTMLCanvasElement | null = null
     const started = performance.now()
     const tick = () => {
       const running = session.current
@@ -147,10 +159,22 @@ export function usePreviewSession({
       running
         .frame(Math.round(performance.now() - started), surface)
         .then((frame) => {
-          const context = canvas.current?.getContext('2d')
-          if (frame.pixels && context) {
-            const { width, rows, y0, rgba } = frame.pixels
-            context.putImageData(new ImageData(new Uint8ClampedArray(rgba), width, rows), 0, y0)
+          if (frame.pixels) {
+            const { width, y0, rgba } = frame.pixels
+            if (width === surface.width) image.data.set(rgba, y0 * width * 4)
+          }
+          const target = canvas.current
+          const context = target?.getContext('2d')
+          if (target && context) {
+            if (target !== painted || target.width !== surface.width || target.height !== surface.height) {
+              target.width = surface.width
+              target.height = surface.height
+              context.putImageData(image, 0, 0)
+              painted = target
+            } else if (frame.pixels) {
+              const { width, rows, y0, rgba } = frame.pixels
+              context.putImageData(new ImageData(new Uint8ClampedArray(rgba), width, rows), 0, y0)
+            }
           }
           setState((s) =>
             sameBounds(s.bounds, frame.bounds) && s.page === frame.page

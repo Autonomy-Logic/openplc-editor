@@ -14,11 +14,16 @@ FUNCTION_BLOCK HmiPump EXTENDS HmiElement
     OffColor : UDINT := COLOR.Danger;
     {attribute 'hmi_color'}
     FaultColor : UDINT := COLOR.Gray;
+    (* Turns the impeller while running. *)
+    Animate : BOOL := TRUE;
   END_VAR
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
     NewValue : BOOL;
+  END_VAR
+  VAR
+    spin : HmiAnimator;
   END_VAR
   METHOD PROTECTED OVERRIDE TakesInput : BOOL
     TakesInput := TRUE;
@@ -80,7 +85,7 @@ FUNCTION_BLOCK HmiPump EXTENDS HmiElement
     END_IF;
   END_METHOD
   METHOD PROTECTED OVERRIDE Draw : BOOL
-    VAR cx, cy, r : DINT; c : UDINT; END_VAR
+    VAR cx, cy, r, i, a : DINT; c : UDINT; END_VAR
     IF LEN(Caption) > 0 THEN
       HMI_Text(Left + Width / 2, Top, Caption, 11, HMI_FONT#Bold, HMI_ALIGN#Center, COLOR.Text);
     END_IF;
@@ -97,7 +102,142 @@ FUNCTION_BLOCK HmiPump EXTENDS HmiElement
     HMI_StrokeRect(cx, cy - r, r * 135 / 100, r * 6 / 10, 1, 1, COLOR.Text);
     HMI_FillCircle(cx, cy, r + 1, COLOR.Text);
     HMI_FillCircle(cx, cy, r, c);
-    HMI_FillCircle(cx - r * 3 / 10, cy - r * 3 / 10, r * 28 / 100, HMI_Alpha(COLOR.White, 38));
+    spin(Run := Value AND NOT Fault AND Animate, Rate := 360);
+    FOR i := 0 TO 2 DO
+      a := spin.Phase + i * 120;
+      HMI_Line(cx, cy, cx + HMI_Cos(a, r * 72 / 100), cy + HMI_Sin(a, r * 72 / 100), MAX(r / 6, 2),
+        HMI_Alpha(COLOR.White, 85));
+    END_FOR;
+    HMI_FillCircle(cx, cy, MAX(r / 5, 2), COLOR.Text);
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Axial fan: the blades turn at Speed degrees per second while Value is on; FaultColor on fault. *)
+{attribute 'hmi_palette' := 'Process'}
+FUNCTION_BLOCK HmiFan EXTENDS HmiElement
+  VAR_INPUT
+    {attribute 'hmi_main'}
+    Value : BOOL;
+    {attribute 'hmi_group' := 'data'}
+    Fault : BOOL;
+    Caption : STRING(64);
+    Blades : DINT := 4;
+    Speed : DINT := 540;
+    Animate : BOOL := TRUE;
+    {attribute 'hmi_color'}
+    OnColor : UDINT := COLOR.Accent;
+    {attribute 'hmi_color'}
+    OffColor : UDINT := COLOR.Border;
+    {attribute 'hmi_color'}
+    FaultColor : UDINT := COLOR.Danger;
+  END_VAR
+  VAR
+    spin : HmiAnimator;
+  END_VAR
+  METHOD INTERNAL CapH : DINT
+    IF LEN(Caption) > 0 THEN
+      CapH := 15;
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalWidth : DINT
+    NaturalWidth := MAX(56, HMI_TextWidth(Caption, 11, HMI_FONT#Bold) + 4);
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalHeight : DINT
+    NaturalHeight := 56 + CapH();
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
+    NaturalGrow := 0;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    VAR cx, cy, r, n, i, a : DINT; c : UDINT; END_VAR
+    IF LEN(Caption) > 0 THEN
+      HMI_Text(Left + Width / 2, Top, Caption, 11, HMI_FONT#Bold, HMI_ALIGN#Center, COLOR.Text);
+    END_IF;
+    cx := Left + Width / 2;
+    cy := Top + CapH() + (Height - CapH()) / 2;
+    r := MAX(MIN(Width, Height - CapH()) / 2 - 1, 2);
+    c := OffColor;
+    IF Fault THEN
+      c := FaultColor;
+    ELSIF Value THEN
+      c := OnColor;
+    END_IF;
+    HMI_FillCircle(cx, cy, r, COLOR.Surface);
+    HMI_StrokeCircle(cx, cy, r, 2, COLOR.Text);
+    spin(Run := Value AND NOT Fault AND Animate, Rate := Speed);
+    n := LIMIT(2, Blades, 8);
+    FOR i := 0 TO n - 1 DO
+      a := spin.Phase + i * 360 / n;
+      HMI_PolyBegin(c);
+      HMI_PolyPoint(cx + HMI_Cos(a - 25, r * 22 / 100), cy + HMI_Sin(a - 25, r * 22 / 100));
+      HMI_PolyPoint(cx + HMI_Cos(a - 16, r * 84 / 100), cy + HMI_Sin(a - 16, r * 84 / 100));
+      HMI_PolyPoint(cx + HMI_Cos(a + 6, r * 86 / 100), cy + HMI_Sin(a + 6, r * 86 / 100));
+      HMI_PolyPoint(cx + HMI_Cos(a + 20, r * 22 / 100), cy + HMI_Sin(a + 20, r * 22 / 100));
+      HMI_PolyFill();
+    END_FOR;
+    HMI_FillCircle(cx, cy, MAX(r * 22 / 100, 2), COLOR.Text);
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Belt conveyor: the slats move at Speed units per second while Value is on, right to left when Reverse. *)
+{attribute 'hmi_palette' := 'Process'}
+FUNCTION_BLOCK HmiConveyor EXTENDS HmiElement
+  VAR_INPUT
+    {attribute 'hmi_main'}
+    Value : BOOL;
+    Reverse : BOOL;
+    Caption : STRING(64);
+    Speed : DINT := 40;
+    Animate : BOOL := TRUE;
+    {attribute 'hmi_color'}
+    OnColor : UDINT := COLOR.Accent;
+    {attribute 'hmi_color'}
+    OffColor : UDINT := COLOR.Border;
+  END_VAR
+  VAR
+    belt : HmiAnimator := (Period := 16);
+  END_VAR
+  METHOD INTERNAL CapH : DINT
+    IF LEN(Caption) > 0 THEN
+      CapH := 15;
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalWidth : DINT
+    NaturalWidth := MAX(160, HMI_TextWidth(Caption, 11, HMI_FONT#Bold) + 4);
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalHeight : DINT
+    NaturalHeight := 28 + CapH();
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
+    NaturalGrow := 0;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    VAR bt, bh, rr, x, right, tip, tail : DINT; c : UDINT; END_VAR
+    IF LEN(Caption) > 0 THEN
+      HMI_Text(Left + Width / 2, Top, Caption, 11, HMI_FONT#Bold, HMI_ALIGN#Center, COLOR.Text);
+    END_IF;
+    bt := Top + CapH();
+    bh := MAX(Height - CapH(), 6);
+    rr := bh / 2;
+    right := Left + Width;
+    c := SEL(Value, OffColor, OnColor);
+    HMI_FillRect(Left, bt, Width, bh, rr, COLOR.Text);
+    HMI_FillRect(Left + 3, bt + 3, Width - 6, bh - 6, rr - 3, COLOR.Surface);
+    belt(Run := Value AND Animate, Rate := SEL(Reverse, Speed, -Speed));
+    HMI_Clip(Left + rr, bt + 3, Width - 2 * rr, bh - 6);
+    x := Left + rr - 16 + belt.Phase;
+    tip := SEL(Reverse, 6, 0);
+    tail := 6 - tip;
+    WHILE x < right DO
+      HMI_Line(x + tail, bt + 5, x + tip, bt + bh / 2, 3, c);
+      HMI_Line(x + tip, bt + bh / 2, x + tail, bt + bh - 5, 3, c);
+      x := x + 16;
+    END_WHILE;
+    HMI_Unclip();
+    HMI_FillCircle(Left + rr, bt + rr, MAX(rr - 6, 2), COLOR.Border);
+    HMI_FillCircle(right - rr, bt + rr, MAX(rr - 6, 2), COLOR.Border);
     Draw := TRUE;
   END_METHOD
 END_FUNCTION_BLOCK

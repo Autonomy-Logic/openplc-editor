@@ -15,6 +15,7 @@ import type {
   HmiWidgetCatalog,
 } from '@root/middleware/shared/ports/hmi-preview-types'
 import { useHmiPreview } from '@root/middleware/shared/providers'
+import { canBind, momentaryCode, momentaryOf } from '@root/middleware/shared/utils/hmi/designer/designer-binding'
 import {
   canvasElements,
   type DropTarget,
@@ -43,12 +44,13 @@ import {
   setEvent,
   setProperties,
   setProperty,
+  setTheme,
   stString,
 } from '@root/middleware/shared/utils/hmi/designer/designer-edits'
 import { type DesignerModel, parseDesignerBlock } from '@root/middleware/shared/utils/hmi/designer/designer-model'
 import { HMI_DEVICE_PRESETS, hmiDevicePreset } from '@root/middleware/shared/utils/hmi/device-presets'
 import { hmiPlcVariables } from '@root/middleware/shared/utils/hmi/plc-variables'
-import { defaultHmiSettings } from '@root/middleware/shared/utils/hmi/settings'
+import { defaultHmiSettings, HMI_BUILTIN_THEMES } from '@root/middleware/shared/utils/hmi/settings'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { HmiCodeEditor } from '../code-editor'
@@ -56,12 +58,14 @@ import { type CanvasActions, type CanvasMode, DesignerCanvas } from './canvas'
 import { type InspectorActions, PropertiesCard } from './inspector'
 import { Outline } from './outline'
 import { SidePanel, type SidePanelTab, VariableList, WidgetPalette } from './palette'
-import { CanvasControls, DesignerSelect, PreviewNotice } from './parts'
+import { CanvasControls, DesignerSelect, PreviewLoading, PreviewNotice } from './parts'
 import { usePreviewSession } from './use-preview-session'
 
 const EMPTY_CATALOG: HmiWidgetCatalog = { widgets: new Map(), colors: [] }
 const REBUILD_DELAY_MS = 300
 const NOTICE_MS = 3000
+/** The theme picker's value for a screen without its own theme. */
+const DEFAULT_THEME = '__default__'
 /** Canvas room the fit zoom leaves for the properties card and the device picker. */
 const FIT_RESERVE = { width: 340, height: 64 }
 const ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3]
@@ -81,7 +85,7 @@ async function readClipboard(): Promise<DesignerClipboard | null> {
 }
 
 /** What every preview request carries: the project's HMI and what screens may refer to. */
-function useProjectRequest(): Omit<HmiPreviewRequest, 'widgetPreview'> {
+export function useProjectRequest(): Omit<HmiPreviewRequest, 'widgetPreview'> {
   const hmi = useOpenPLCStore((s) => s.project.data.hmi)
   const pous = useOpenPLCStore((s) => s.project.data.pous)
   const dataTypes = useOpenPLCStore((s) => s.project.data.dataTypes)
@@ -343,12 +347,37 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     move: (element, target) => model && apply(moveElement(source, model, element, target.parent, target.before)),
     bindMain: (element, variable) => {
       const type = model?.elements.find((e) => same(e.name, element))?.type
-      const main = type ? catalog.widgets.get(type.toUpperCase())?.main : undefined
+      const info = type ? catalog.widgets.get(type.toUpperCase()) : undefined
+      const main = info?.main
       if (!model || !main) {
         toast({ title: 'Not wired', description: `${element} has no input a variable can show`, variant: 'warn' })
         return
       }
-      apply(setBinding(source, model, element, main.name, variable))
+      const declared = request.plcVariables.find((v) => same(v.path, variable))?.type
+      if (declared !== undefined && !canBind(main, declared)) {
+        toast({
+          title: 'Not wired',
+          description: `${element}.${main.name} takes ${main.type}; ${variable} is ${declared}`,
+          variant: 'warn',
+        })
+        return
+      }
+      const momentary = info.momentary
+      if (!momentary) {
+        apply(setBinding(source, model, element, main.name, variable))
+        return
+      }
+      const current = model.events.find((e) => same(e.element, element) && same(e.event, momentary.changed))?.code
+      const whilePressed = momentaryOf(current ?? '', element, momentary)?.whilePressed ?? true
+      apply(
+        setEvent(
+          source,
+          model,
+          element,
+          momentary.changed,
+          momentaryCode(element, momentary, { variable, whilePressed }),
+        ),
+      )
     },
     resize: (element, size, commit) => {
       if (!model) return
@@ -515,19 +544,38 @@ export function HmiScreenDesigner({ name }: { name: string }) {
             className='relative min-w-0 flex-1 overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100 bg-[radial-gradient(#b1b9c8_1px,transparent_1px)] [background-size:14px_14px] dark:border-neutral-850 dark:bg-neutral-900 dark:bg-[radial-gradient(#2e3038_1px,transparent_1px)]'
             data-testid='hmi-canvas-area'
             data-preview={`${preview.status} ${preview.buildMs ?? ''}`.trim()}
+            data-page={preview.page}
           >
             <div ref={area} className='absolute inset-0 overflow-auto'>
               <div className='flex min-h-full min-w-fit flex-col items-start gap-2 py-3 pl-14 pr-[280px]'>
-                <div className='w-48' onPointerDownCapture={mode === 'run' ? showNotice : undefined}>
-                  <DesignerSelect
-                    value={device.id}
-                    testId='hmi-device'
-                    options={HMI_DEVICE_PRESETS.map((d) => ({
-                      value: d.id,
-                      label: `${d.label} · ${d.width} × ${d.height}`,
-                    }))}
-                    onChange={(id) => actions.setDevice(kind, name, id)}
-                  />
+                <div className='flex gap-2' onPointerDownCapture={mode === 'run' ? showNotice : undefined}>
+                  <div className='w-48'>
+                    <DesignerSelect
+                      value={device.id}
+                      testId='hmi-device'
+                      options={HMI_DEVICE_PRESETS.map((d) => ({
+                        value: d.id,
+                        label: `${d.label} · ${d.width} × ${d.height}`,
+                      }))}
+                      onChange={(id) => actions.setDevice(kind, name, id)}
+                    />
+                  </div>
+                  <div className='w-56'>
+                    <DesignerSelect
+                      value={model?.theme ?? DEFAULT_THEME}
+                      testId='hmi-theme'
+                      options={[
+                        { value: DEFAULT_THEME, label: `Theme: ${request.settings.defaultTheme} (default)` },
+                        ...[...HMI_BUILTIN_THEMES, ...request.settings.themes.map((t) => t.name)].map((t) => ({
+                          value: t,
+                          label: `Theme: ${t}`,
+                        })),
+                      ]}
+                      onChange={(theme) =>
+                        model && apply(setTheme(source, model, theme === DEFAULT_THEME ? null : theme))
+                      }
+                    />
+                  </div>
                 </div>
                 <div className='pt-4'>
                   <DesignerCanvas
@@ -542,6 +590,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
                     selection={entry.selection}
                     locked={locked}
                     actions={canvasActions}
+                    loading={preview.built === null && preview.status === 'building' ? preview.step : null}
                   />
                 </div>
               </div>
@@ -625,20 +674,23 @@ export function HmiWidgetEditor({ name }: { name: string }) {
           data-testid='hmi-canvas-area'
           data-preview={`${preview.status} ${preview.buildMs ?? ''}`.trim()}
         >
-          <canvas
-            ref={canvas}
-            data-testid='hmi-widget-canvas'
-            className='rounded-lg shadow-[0_6px_24px_rgba(1,30,75,0.14)]'
-            style={{ width: device.width, height: device.height }}
-            onPointerDown={(e) => {
-              const r = e.currentTarget.getBoundingClientRect()
-              preview.pointer('down', e.clientX - r.left, e.clientY - r.top)
-            }}
-            onPointerUp={(e) => {
-              const r = e.currentTarget.getBoundingClientRect()
-              preview.pointer('up', e.clientX - r.left, e.clientY - r.top)
-            }}
-          />
+          <div className='relative shrink-0' style={{ width: device.width, height: device.height }}>
+            <canvas
+              ref={canvas}
+              data-testid='hmi-widget-canvas'
+              className='rounded-lg shadow-[0_6px_24px_rgba(1,30,75,0.14)]'
+              style={{ width: device.width, height: device.height }}
+              onPointerDown={(e) => {
+                const r = e.currentTarget.getBoundingClientRect()
+                preview.pointer('down', e.clientX - r.left, e.clientY - r.top)
+              }}
+              onPointerUp={(e) => {
+                const r = e.currentTarget.getBoundingClientRect()
+                preview.pointer('up', e.clientX - r.left, e.clientY - r.top)
+              }}
+            />
+            {preview.built === null && preview.status === 'building' && <PreviewLoading step={preview.step} />}
+          </div>
         </div>
       </div>
       <Diagnostics errors={preview.errors} />

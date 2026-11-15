@@ -85,6 +85,60 @@ export interface DropTarget {
   before: string | null
 }
 
+/** Whether a container lays its children out in a row: its Direction, else Auto by its shape; the screen is a column. */
+function isRow(model: DesignerModel, parent: string | null, box: HmiPreviewBounds | undefined): boolean {
+  if (parent === null) return false
+  const direction = model.elements
+    .find((e) => same(e.name, parent))
+    ?.props.find((p) => same(p.name, 'Direction'))?.value
+  if (direction !== undefined) return /row/i.test(direction)
+  return box ? box.width >= box.height : false
+}
+
+/** Where a drop shows: the container it goes into (null: the screen) and a bar where it is inserted, if any. */
+export interface DropIndicator {
+  box: HmiPreviewBounds | null
+  line: { x: number; y: number; width: number; height: number } | null
+}
+
+/**
+ * The marks of a drop target: its container, and a bar across the gap before the sibling it goes before, or after the
+ * last sibling; none in an empty container.
+ */
+export function dropIndicator(
+  model: DesignerModel,
+  elements: readonly CanvasElement[],
+  target: DropTarget,
+  moving: string | null = null,
+): DropIndicator {
+  const boxes = new Map(elements.map((e) => [e.name.toUpperCase(), e.box]))
+  const box = target.parent === null ? null : (boxes.get(target.parent.toUpperCase()) ?? null)
+  const row = isRow(model, target.parent, box ?? undefined)
+  const siblings = model.elements
+    .filter(
+      (e) =>
+        (target.parent === null ? e.parent === null : e.parent !== null && same(e.parent, target.parent)) &&
+        (moving === null || !same(e.name, moving)),
+    )
+    .flatMap((e) => {
+      const b = boxes.get(e.name.toUpperCase())
+      return b ? [b] : []
+    })
+  const before = target.before === null ? undefined : boxes.get(target.before.toUpperCase())
+  const last = siblings.at(-1)
+  const BAR = 3
+  const line = before
+    ? row
+      ? { x: before.x - BAR - 1, y: before.y, width: BAR, height: before.height }
+      : { x: before.x, y: before.y - BAR - 1, width: before.width, height: BAR }
+    : last
+      ? row
+        ? { x: last.x + last.width + 1, y: last.y, width: BAR, height: last.height }
+        : { x: last.x, y: last.y + last.height + 1, width: last.width, height: BAR }
+      : null
+  return { box, line }
+}
+
 /**
  * The drop target under a point: the innermost container there, and among its children the first one whose middle
  * lies after the point along the container's direction.
@@ -112,17 +166,7 @@ export function dropTarget(
       (parent === null ? e.parent === null : e.parent !== null && same(e.parent, parent)) &&
       (moving === null || !same(e.name, moving)),
   )
-  const parentBox = parent === null ? null : boxes.get(parent.toUpperCase())
-  const direction =
-    parent === null
-      ? null
-      : model.elements.find((e) => same(e.name, parent))?.props.find((p) => same(p.name, 'Direction'))?.value
-  const row =
-    direction !== undefined && direction !== null
-      ? /row/i.test(direction)
-      : parentBox
-        ? parentBox.width >= parentBox.height
-        : false
+  const row = isRow(model, parent, parent === null ? undefined : boxes.get(parent.toUpperCase()))
   for (const child of children) {
     const box = boxes.get(child.name.toUpperCase())
     if (!box) continue

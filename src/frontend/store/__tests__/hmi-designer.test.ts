@@ -32,6 +32,15 @@ describe('HMI designer state', () => {
     expect(hmiDesignerActions.redo('screen', 'Overview')).toBe(false)
   })
 
+  it('applies HMI Settings and marks them unsaved', () => {
+    const settings = store.getState().project.data.hmi?.settings
+    if (!settings) throw new Error('no HMI Settings')
+    store.getState().fileActions.setAllToSaved()
+    store.getState().hmiDesignerActions.applySettings({ ...settings, framePeriodMs: 250 })
+    expect(store.getState().project.data.hmi?.settings.framePeriodMs).toBe(250)
+    expect(store.getState().files['HMI Settings'].saved).toBe(false)
+  })
+
   it('merges typing into one step, ignores no-op and unknown edits', () => {
     const { hmiDesignerActions } = store.getState()
     const original = source()

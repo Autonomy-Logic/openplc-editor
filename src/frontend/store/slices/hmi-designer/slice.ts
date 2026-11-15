@@ -6,6 +6,7 @@ import type { HmiElementKind } from '../../../../middleware/shared/utils/hmi/ref
 import { emptyHistory, recordStep, redoStep, undoStep } from '../../../../middleware/shared/utils/hmi/source-history'
 import type { ProjectSlice } from '../project'
 import type { SharedSlice } from '../shared'
+import { HMI_SETTINGS_TAB_NAME } from '../tabs/utils'
 import type { HmiDesignerEntry, HmiDesignerSlice } from './types'
 
 type HmiDesignerRootState = HmiDesignerSlice & ProjectSlice & SharedSlice
@@ -83,6 +84,10 @@ export const createHmiDesignerSlice: StateCreator<HmiDesignerRootState, [], [], 
         })
         putSource(kind, name, step.source)
         return true
+      },
+      applySettings: (settings) => {
+        getState().projectActions.updateHmiSettings(settings)
+        getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(HMI_SETTINGS_TAB_NAME)
       },
       setView: (kind, name, view) => update(kind, name, (entry) => void (entry.view = view)),
       setDevice: (kind, name, device) => update(kind, name, (entry) => void (entry.device = device)),

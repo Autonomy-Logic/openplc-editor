@@ -1,4 +1,5 @@
 /** Small building blocks of the HMI designer, in the editor's own styles. */
+import { HMI_BUILD_STEPS, type HmiBuildStep } from '@root/middleware/shared/ports/hmi-preview-types'
 import type { ReactNode } from 'react'
 
 import { cn } from '../../../../../../utils/cn'
@@ -196,6 +197,37 @@ export function PreviewNotice(props: { visible: boolean }) {
       )}
     >
       Preview mode, press Esc to exit
+    </div>
+  )
+}
+
+const STEP_LABELS: Record<HmiBuildStep, string> = {
+  sources: 'Loading the HMI library',
+  generate: 'Generating the screens',
+  compile: 'Compiling the screens',
+  start: 'Starting the preview',
+}
+
+/** Stands in for a screen until its first build runs: the build's step and how far along it is. */
+export function PreviewLoading(props: { step: HmiBuildStep | null }) {
+  const step = props.step ?? 'sources'
+  const done = (HMI_BUILD_STEPS.indexOf(step) + 1) / HMI_BUILD_STEPS.length
+  return (
+    <div
+      role='status'
+      aria-live='polite'
+      data-testid='hmi-preview-loading'
+      data-step={step}
+      className='absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg bg-[#F7F8FA] dark:bg-neutral-950'
+    >
+      <p className='font-caption text-sm font-semibold text-neutral-850 dark:text-neutral-200'>Building the preview</p>
+      <div className='h-1.5 w-56 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800'>
+        <div
+          className='h-full rounded-full bg-brand transition-[width] duration-500'
+          style={{ width: `${done * 100}%` }}
+        />
+      </div>
+      <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>{STEP_LABELS[step]}</p>
     </div>
   )
 }

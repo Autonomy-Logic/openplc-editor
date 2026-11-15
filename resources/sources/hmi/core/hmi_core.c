@@ -52,6 +52,7 @@ struct hmi_session {
     int32_t page_hist[PAGE_HISTORY];
     int page_hist_n;
     int32_t page_shown_1; /* page last shown + 1; 0 = none yet */
+    int page_chosen;      /* hmi_page_reset ran */
     int32_t theme;
 
     /* Frame: screen_q4 = local_q4 * fk / 65536 + (fox, foy), clipped to (fcx, fcy, fcw, fch) when fclip. */
@@ -631,7 +632,10 @@ void hmi_set_page(int32_t page) {
 void hmi_page_reset(int32_t page) {
     S->page = page;
     S->page_hist_n = 0;
+    S->page_chosen = 1;
 }
+
+int hmi_page_chosen(void) { return S->page_chosen; }
 
 int32_t hmi_page_shown(void) { return S->page_shown_1 - 1; }
 void hmi_page_set_shown(int32_t page) { S->page_shown_1 = page < 0 ? 0 : page + 1; }

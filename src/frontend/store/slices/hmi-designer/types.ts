@@ -1,4 +1,5 @@
 import type { HmiElementKind } from '../../../../middleware/shared/utils/hmi/references'
+import type { HmiSettings } from '../../../../middleware/shared/utils/hmi/settings'
 import type { HistoryMerge, SourceHistory } from '../../../../middleware/shared/utils/hmi/source-history'
 
 export type HmiDesignerView = 'design' | 'code'
@@ -33,6 +34,8 @@ export interface HmiDesignerActions {
   setZoom: (kind: HmiElementKind, name: string, zoom: number | null) => void
   select: (kind: HmiElementKind, name: string, selection: string[]) => void
   setLastValidSource: (kind: HmiElementKind, name: string, source: string) => void
+  /** Puts edited HMI Settings in place and marks them unsaved. */
+  applySettings: (settings: HmiSettings) => void
   /** Follows a renamed screen or widget block. */
   renameEntry: (kind: HmiElementKind, oldName: string, newName: string) => void
   forgetEntry: (kind: HmiElementKind, name: string) => void

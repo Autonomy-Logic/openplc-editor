@@ -145,6 +145,33 @@ function groups(
   return [...byGroup.entries()].sort(([a], [b]) => (a === PROJECT_GROUP ? 1 : b === PROJECT_GROUP ? -1 : 0))
 }
 
+const STROKE = 'stroke-neutral-700 dark:stroke-neutral-400'
+
+/** Drawn tiles for the widgets the core draws nothing for on their own: the containers and the pipe. */
+const DRAWN_TILES: Record<string, ReactNode> = {
+  HMISTACK: (
+    <svg width='56' height='38' viewBox='0 0 56 38' fill='none' strokeWidth='1.5' aria-hidden='true'>
+      <rect x='1' y='1' width='54' height='36' rx='4' className={STROKE} strokeDasharray='3 2' />
+      <rect x='6' y='6' width='44' height='7' rx='2' className='fill-brand-light stroke-brand' />
+      <rect x='6' y='16' width='44' height='7' rx='2' className='fill-brand-light stroke-brand' />
+      <rect x='6' y='26' width='44' height='6' rx='2' className='fill-brand-light stroke-brand' />
+    </svg>
+  ),
+  HMIDIAGRAM: (
+    <svg width='56' height='38' viewBox='0 0 56 38' fill='none' strokeWidth='1.5' aria-hidden='true'>
+      <rect x='1' y='1' width='54' height='36' rx='4' className={STROKE} strokeDasharray='3 2' />
+      <rect x='7' y='8' width='12' height='16' rx='3' className='fill-brand-light stroke-brand' />
+      <circle cx='42' cy='27' r='5' className='fill-brand-light stroke-brand' />
+      <path d='M19 16h12v11h6' className='stroke-brand' strokeLinejoin='round' />
+    </svg>
+  ),
+  HMIPIPE: (
+    <svg width='56' height='38' viewBox='0 0 56 38' fill='none' strokeWidth='3' aria-hidden='true'>
+      <path d='M6 10h22v18h22' className='stroke-brand' strokeLinejoin='round' strokeLinecap='round' />
+    </svg>
+  ),
+}
+
 /** The widgets as cards with the core-drawn thumbnail of each. */
 export function WidgetPalette(props: {
   catalog: HmiWidgetCatalog
@@ -186,6 +213,8 @@ export function WidgetPalette(props: {
                   <div className='flex h-12 items-center justify-center overflow-hidden rounded bg-neutral-50 dark:bg-neutral-900'>
                     {thumbnail ? (
                       <img src={thumbnail} alt='' className='max-h-11 max-w-full object-contain' draggable={false} />
+                    ) : DRAWN_TILES[w.name.toUpperCase()] ? (
+                      DRAWN_TILES[w.name.toUpperCase()]
                     ) : (
                       <span className='font-caption text-[11px] text-neutral-700'>{label}</span>
                     )}

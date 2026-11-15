@@ -44,6 +44,11 @@ const FR18_WIDGETS = [
   'HmiValve',
   'HmiPipe',
   'HmiRect',
+  'HmiEllipse',
+  'HmiPolygon',
+  'HmiLine',
+  'HmiFan',
+  'HmiConveyor',
 ]
 
 describe('StandardWidgets library', () => {
@@ -57,7 +62,9 @@ describe('StandardWidgets library', () => {
     expect(archive.manifest.name).toBe(STANDARD_WIDGETS_LIBRARY.name)
     expect(archive.manifest.headers).toEqual(['hmi_core.h'])
     const names = archive.manifest.functionBlocks.map((fb) => fb.displayName ?? fb.name)
-    expect(names).toEqual(expect.arrayContaining([...FR18_WIDGETS, 'HmiElement', 'HmiScreen', 'HmiRuntime']))
+    expect(names).toEqual(
+      expect.arrayContaining([...FR18_WIDGETS, 'HmiElement', 'HmiScreen', 'HmiRuntime', 'HmiAnimator']),
+    )
   })
 
   it('compiles once per session and again when the compiler changes', () => {

@@ -42,6 +42,9 @@ describe('widget catalogue', () => {
       HmiStack: 'Containers',
       HmiDiagram: 'Containers',
       HmiRect: 'Shapes',
+      HmiEllipse: 'Shapes',
+      HmiPolygon: 'Shapes',
+      HmiLine: 'Shapes',
       HmiLabel: 'Display',
       HmiValue: 'Display',
       HmiLamp: 'Display',
@@ -56,6 +59,8 @@ describe('widget catalogue', () => {
       HmiNumericInput: 'Controls',
       HmiTextInput: 'Controls',
       HmiPump: 'Process',
+      HmiFan: 'Process',
+      HmiConveyor: 'Process',
       HmiValve: 'Process',
       HmiPipe: 'Process',
     })
@@ -131,9 +136,11 @@ describe('widget catalogue', () => {
     const button = widget(catalog.widgets, 'HmiButton')
     expect(button.main).toEqual({ name: 'Pressed', direction: 'output', type: 'BOOL' })
     expect(button.twoWay).toBeUndefined()
+    expect(button.momentary).toEqual({ value: 'Pressed', changed: 'Changed' })
     expect(button.events).toEqual(['Clicked'])
     expect(widget(catalog.widgets, 'HmiLamp')).toMatchObject({ main: { name: 'Value' }, events: [] })
     expect(widget(catalog.widgets, 'HmiLamp').twoWay).toBeUndefined()
+    expect(widget(catalog.widgets, 'HmiSlider').momentary).toBeUndefined()
     expect(widget(catalog.widgets, 'HmiRect').main).toBeUndefined()
     expect(widget(catalog.widgets, 'HmiDiagram').outputs).toEqual(
       expect.arrayContaining([{ name: 'ScalePct', type: 'DINT' }]),

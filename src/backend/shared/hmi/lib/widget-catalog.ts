@@ -6,7 +6,8 @@
  * - `hmi_main` on an input or output: what a dropped variable is wired to;
  * - `hmi_group` on an input: its inspector group (`data`, `display` or `layout`);
  * - `hmi_color` on an input: a color; `hmi_element_ref` on an input: the name of another element.
- * A main input with `Changed` and `NewValue` outputs is two-way; other BOOL outputs are events.
+ * A main input with `Changed` and `NewValue` outputs is two-way; a main BOOL output with `Changed` is momentary; other
+ * BOOL outputs are events.
  */
 import type { LibraryFBEntry, LibraryManifest, LibraryTypeEntry } from 'strucpp'
 
@@ -150,6 +151,8 @@ function widgetOf(
   if (main) widget.main = main
   if (main?.direction === 'input' && changed && newValue)
     widget.twoWay = { value: main.name, changed: written(changed), newValue: written(newValue) }
+  if (main?.direction === 'output' && main.type.toUpperCase() === 'BOOL' && changed)
+    widget.momentary = { value: main.name, changed: written(changed) }
   return widget
 }
 

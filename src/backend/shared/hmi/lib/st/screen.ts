@@ -387,6 +387,9 @@ FUNCTION_BLOCK HmiRuntime
   METHOD INTERNAL Shown : DINT
     {external SHOWN_result.set(hmi_page_shown()); }
   END_METHOD
+  METHOD INTERNAL PageChosen : BOOL
+    {external PAGECHOSEN_result.set(hmi_page_chosen() != 0); }
+  END_METHOD
   METHOD INTERNAL SetShown : BOOL
     VAR_INPUT Page : DINT; END_VAR
     {external hmi_page_set_shown(PAGE.get()); }
@@ -403,7 +406,7 @@ FUNCTION_BLOCK HmiRuntime
     END_IF;
     shown := Shown();
     page := CurrentPage();
-    IF shown < 0 OR NOT CanShow(page) THEN
+    IF (shown < 0 AND NOT PageChosen()) OR NOT CanShow(page) THEN
       page := Entry();
       IF page < 0 THEN
         RETURN;

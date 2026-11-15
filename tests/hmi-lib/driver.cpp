@@ -201,6 +201,12 @@ int main(int argc, char **argv) {
     tap_at("squeezed", 12, 12);
     frame("squeezed_after");
 
+    /* Shapes and animation: frames 40 ms apart turn the fan and pump, move the belts and flash the lamp. */
+    show(7);
+    frame("motion_0", true);
+    for (int i = 1; i < 7; i++) frame(i == 3 ? "motion_120ms" : "motion_step", i == 3);
+    frame("motion_280ms", true);
+
     /* A second viewer starts on the start page with its own state. */
     hmi_session_t *viewer = hmi_session_create();
     hmi_session_use(viewer);
