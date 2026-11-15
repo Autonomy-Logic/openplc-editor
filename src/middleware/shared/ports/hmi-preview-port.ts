@@ -6,6 +6,7 @@
 import type {
   HmiBuildStep,
   HmiCatalogResult,
+  HmiCodeContext,
   HmiPointerKind,
   HmiPreviewBuild,
   HmiPreviewFrame,
@@ -44,6 +45,8 @@ export interface HmiPreviewSession {
 export interface HmiPreviewPort {
   /** Builds a preview module; `onStep` hears each step as it begins, up to `compile`. */
   build(request: HmiPreviewRequest, onStep?: (step: HmiBuildStep) => void): Promise<HmiPreviewBuild>
+  /** What the ST language service and the code view need for screens and widget blocks. */
+  codeContext(sources: Pick<HmiUnitSources, 'screens' | 'settings'>): Promise<HmiCodeContext>
   /** The widgets screens can use: StandardWidgets and the project's widget blocks. */
   catalog(widgets: readonly HmiSourceFile[]): Promise<HmiCatalogResult>
   /** The palette's widgets drawn by the core with test values, `scale` device pixels per logical unit. */

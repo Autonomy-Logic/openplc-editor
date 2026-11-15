@@ -10,7 +10,7 @@ const v = (name: string, value: string, extra: Partial<PLCVariable> = {}): PLCVa
 })
 
 describe('hmiPlcVariables', () => {
-  it("lists programs' variables and the globals with elementary types, and their initial values", () => {
+  it("lists each program instance's variables, the globals and list members with elementary types", () => {
     const variables = hmiPlcVariables({
       pous: [
         {
@@ -34,13 +34,30 @@ describe('hmiPlcVariables', () => {
         },
       ],
       configurations: {
-        resource: { tasks: [], instances: [], globalVariables: [v('Alarm', 'bool', { initialValue: 'TRUE' })] },
+        resource: {
+          tasks: [],
+          instances: [
+            { name: 'instance0', task: 'task0', program: 'main' },
+            { name: 'spare', task: 'task0', program: 'Main' },
+            { name: 'ghost', task: 'task0', program: 'Missing' },
+          ],
+          globalVariables: [v('Alarm', 'bool', { initialValue: 'TRUE' })],
+        },
       },
+      globalVariableLists: [
+        {
+          name: 'GVL',
+          variables: [v('Output1', 'bool'), v('Axis', 'AXIS', { type: { definition: 'derived', value: 'AXIS' } })],
+        },
+      ],
     })
     expect(variables).toEqual([
-      { path: 'Main.Level', type: 'REAL', initialValue: '12.5' },
-      { path: 'Main.Name', type: 'STRING' },
-      { path: 'GVL.Alarm', type: 'BOOL', initialValue: 'TRUE' },
+      { path: 'instance0.Main.Level', type: 'REAL', initialValue: '12.5' },
+      { path: 'instance0.Main.Name', type: 'STRING' },
+      { path: 'spare.Main.Level', type: 'REAL', initialValue: '12.5' },
+      { path: 'spare.Main.Name', type: 'STRING' },
+      { path: 'Alarm', type: 'BOOL', initialValue: 'TRUE' },
+      { path: 'GVL.Output1', type: 'BOOL' },
     ])
   })
 })

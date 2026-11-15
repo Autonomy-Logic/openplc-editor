@@ -248,7 +248,8 @@ FUNCTION_BLOCK HmiSlider EXTENDS HmiElement
   END_METHOD
 END_FUNCTION_BLOCK
 
-(* Numeric entry: a tap opens the on-screen keyboard; OK delivers NewValue with Changed for one frame. *)
+(* Numeric entry: a tap opens the on-screen keyboard; OK delivers NewValue with Changed for one frame, unless the
+   entry is not a finite number. *)
 {attribute 'hmi_palette' := 'Controls'}
 FUNCTION_BLOCK HmiNumericInput EXTENDS HmiElement
   VAR_INPUT
@@ -276,11 +277,13 @@ FUNCTION_BLOCK HmiNumericInput EXTENDS HmiElement
     NaturalGrow := 0;
   END_METHOD
   METHOD PROTECTED OVERRIDE Input : BOOL
+    VAR_TEMP entry : STRING; END_VAR
     Changed := FALSE;
     Clicked := FALSE;
     IF KeyboardTake() THEN
-      NewValue := HMI_ParseReal(KeyboardText(), Value);
-      Changed := TRUE;
+      entry := KeyboardText();
+      NewValue := HMI_ParseReal(entry, 0.0);
+      Changed := NewValue = HMI_ParseReal(entry, 1.0);
     END_IF;
     IF NOT Visible OR NOT Enabled THEN
       RETURN;

@@ -10,6 +10,30 @@ describe('serializeResourceGlobalsToST', () => {
     expect(serializeResourceGlobalsToST([])).toBe('')
   })
 
+  it('lists the program instances in the configuration the compiler emits, globals or not', () => {
+    const resource = {
+      tasks: [{ name: 'task0', triggering: 'Cyclic' as const, interval: 'T#20ms', priority: 1 }],
+      instances: [
+        { name: 'instance0', task: 'task0', program: 'Main' },
+        { name: 'mixer1', task: '', program: 'Mixer' },
+      ],
+    }
+    expect(serializeResourceGlobalsToST([], new Map(), resource)).toBe(
+      [
+        'CONFIGURATION Config0',
+        '  RESOURCE Res0 ON PLC',
+        '    TASK task0(INTERVAL := T#20ms, PRIORITY := 1);',
+        '    PROGRAM instance0 WITH task0 : Main;',
+        '    PROGRAM mixer1 : Mixer;',
+        '  END_RESOURCE',
+        'END_CONFIGURATION',
+        '',
+      ].join('\n'),
+    )
+    const st = serializeResourceGlobalsToST([global('g', 'INT')], new Map(), resource)
+    expect(st.indexOf('VAR_GLOBAL')).toBeLessThan(st.indexOf('PROGRAM instance0'))
+  })
+
   it('wraps the globals in a CONFIGURATION so VAR_EXTERNAL resolves', () => {
     const st = serializeResourceGlobalsToST([global('test_global', 'DINT')])
     expect(st).toContain('CONFIGURATION')

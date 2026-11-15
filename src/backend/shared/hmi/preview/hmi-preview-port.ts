@@ -12,7 +12,13 @@ import type {
   HmiSourceFile,
   HmiThumbnailResult,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
-import { buildHmiWidgetCatalog, type HmiWidgetLibrary } from '../unit/generate-hmi-unit'
+import { buildStandardWidgets } from '../lib/build-standard-widgets'
+import {
+  buildHmiWidgetCatalog,
+  hmiGlueSource,
+  hmiScreenMembers,
+  type HmiWidgetLibrary,
+} from '../unit/generate-hmi-unit'
 import { buildHmiPreview, type HmiPreviewResources } from './build-hmi-preview'
 import { renderHmiThumbnails } from './hmi-thumbnails'
 import { createHmiPreviewSession, type HmiPreviewSessionOptions } from './preview-session'
@@ -92,6 +98,17 @@ export function createHmiPreviewPort(
         }
       }
       return buildHmiPreview(request, loaded, (compileRequest) => mechanisms.compileToWasm(compileRequest), onStep)
+    },
+    codeContext(sources) {
+      const library = buildStandardWidgets()
+      return Promise.resolve({
+        libraries: library.ok ? [{ name: library.archive.manifest.name, archiveJson: library.archiveJson }] : [],
+        glue: hmiGlueSource(
+          sources.screens.map((s) => s.name),
+          sources.settings,
+        ),
+        screenMembers: library.ok ? [...hmiScreenMembers(library.archive)] : [],
+      })
     },
     catalog(widgets) {
       const library = catalogOf(widgets)

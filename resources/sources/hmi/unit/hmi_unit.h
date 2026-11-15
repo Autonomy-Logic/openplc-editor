@@ -6,9 +6,10 @@
  * library) and its tag table. A host creates one program instance per viewer, sets the viewer's role, and calls
  * hmi_unit_frame between hmi_frame_begin and hmi_frame_end of that viewer's core session.
  *
- * Tags: screens read and write a mirror of the PLC variables they use. Before a frame the host copies each tag's PLC
- * value into the mirror (hmi_tag_write); after it, a value that differs from what was copied is the viewer's write,
- * which the host applies to the PLC through the debug interface and logs.
+ * Tags: the PLC variables screens use, by id. Screens read a tag straight from the PLC's variable, which the host
+ * locates through the debug interface (the HMI runs in the PLC program's address space), and hand every write to the
+ * host, which applies it through the debug interface and logs it. Nothing is copied or buffered between frames.
+ * Without a host (the editor's preview) the unit keeps the variables itself.
  */
 #ifndef HMI_UNIT_H
 #define HMI_UNIT_H
@@ -49,8 +50,18 @@ typedef struct {
     uint32_t elem;
     uint8_t type;       /**< ::hmi_tag_type */
     uint16_t max_len;   /**< declared length of a STRING, 0 otherwise */
-    const char *path;   /**< `POU.Name` or `GVL.Name` as written */
+    const char *path;   /**< canonical path, upper case: `CONFIG0.RES0.<INSTANCE>.<PROGRAM>.<NAME>`, `CONFIG0.<GLOBAL>` or
+                             `<LIST>.<NAME>` */
 } hmi_tag_t;
+
+/** How the unit reaches the PLC's variables. */
+typedef struct {
+    /** The PLC's variable object of a tag, as the debug interface locates it; NULL when it has none. */
+    void *(*variable)(void *ctx, int tag);
+    /** Applies a screen's write of a tag; `value` is a variable object of the tag's type holding the new value. */
+    void (*write)(void *ctx, int tag, const void *value);
+    void *ctx;
+} hmi_tag_access_t;
 
 extern const hmi_tag_t hmi_tags[];
 extern const int hmi_tag_count;
@@ -64,15 +75,20 @@ extern const char hmi_panel_pin[];
 /** Idle minutes after which an unlocked panel locks again; 0 means only at startup. */
 extern const uint32_t hmi_relock_minutes;
 
-/** Bytes a tag value takes in buffers: its IEC width, or max_len + 1 for a STRING. */
+/** Installs the host's access to the PLC's variables, kept by reference; NULL makes the unit keep them itself. */
+void hmi_set_tag_access(const hmi_tag_access_t *access);
+/** Bytes a tag value takes in buffers: its IEC width, little endian, or max_len + 1 for a NUL-terminated STRING. */
 size_t hmi_tag_size(int tag);
-/** Copies tag `tag` of the mirror into buf (hmi_tag_size bytes); returns 0, or -1 for an unknown tag. */
-int hmi_tag_read(int tag, void *buf);
 /**
- * Sets tag `tag` of the mirror from buf. For a STRING, buf holds NUL-terminated text and at most max_len bytes of it
- * are read. Returns 0, or -1 for an unknown tag.
+ * Copies the value of a variable object of tag `tag` into buf (hmi_tag_size bytes); with variable NULL, the tag's
+ * current value. Returns 0, or -1 for an unknown tag.
  */
-int hmi_tag_write(int tag, const void *buf);
+int hmi_tag_read(int tag, const void *variable, void *buf);
+/**
+ * Sets a variable object of tag `tag` from buf; with variable NULL, the variable the unit keeps itself. For a STRING,
+ * buf holds NUL-terminated text and at most max_len bytes of it are read. Returns 0, or -1 for an unknown tag.
+ */
+int hmi_tag_write(int tag, void *variable, const void *buf);
 
 /** Bytes one program instance needs. */
 size_t hmi_unit_size(void);

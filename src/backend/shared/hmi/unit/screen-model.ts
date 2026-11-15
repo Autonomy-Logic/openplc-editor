@@ -15,13 +15,15 @@ export interface HmiElementDecl {
   type: string
   /** Initializer values as ST text, by upper-case property name. */
   props: ReadonlyMap<string, string>
+  /** The initializer's properties in order, names as written. */
+  propList: ReadonlyArray<{ name: string; value: string }>
 }
 
 /** `Element.Property := Variable;` in the body. */
 export interface HmiBinding {
   element: string
   property: string
-  /** Bound variable as written, `POU.Name` or `GVL.Name`. */
+  /** Bound variable as written: a global, `List.Member` or `Instance.Program.Var`. */
   variable: string
 }
 
@@ -66,11 +68,17 @@ function plainField(v: VariableExpression): string | undefined {
   return `${v.name}.${v.fieldAccess[0]}`
 }
 
+/** A variable named by plain fields only: a global, `List.Member`, `Instance.Program.Var` or the long form. */
+function plainPath(v: VariableExpression): boolean {
+  if (v.subscripts.length > 0 || v.isDereference) return false
+  return v.accessChain === undefined || v.accessChain.every((step) => step.kind === 'field')
+}
+
 function bindingOf(statement: Statement, text: SourceText): HmiBinding | undefined {
   if (statement.kind !== 'AssignmentStatement') return undefined
   const { target, value } = statement
   if (!isVariableExpression(target) || !isVariableExpression(value)) return undefined
-  if (plainField(target) === undefined || plainField(value) === undefined) return undefined
+  if (plainField(target) === undefined || !plainPath(value)) return undefined
   const [element, property] = text
     .slice(target.sourceSpan)
     .split('.')
@@ -91,14 +99,23 @@ function modelOf(
         locals.add(name)
         if (block.blockType !== 'VAR' || !isWidgetType(decl.type.name)) return
         const props = new Map<string, string>()
+        const propList: Array<{ name: string; value: string }> = []
         const init = decl.initialValue
         if (init?.kind === 'StructInitializerExpression')
-          for (const element of init.elements) props.set(element.name, text.slice(element.value.sourceSpan))
+          for (const element of init.elements) {
+            const value = text.slice(element.value.sourceSpan)
+            props.set(element.name, value)
+            propList.push({
+              name: /^\s*([A-Za-z_]\w*)/.exec(text.slice(element.sourceSpan))?.[1] ?? element.name,
+              value,
+            })
+          }
         const nameSpan = decl.nameSpans?.[i]
         elements.push({
           name: nameSpan ? text.slice(nameSpan) : name,
           type: text.slice(decl.type.sourceSpan),
           props,
+          propList,
         })
       })
     }

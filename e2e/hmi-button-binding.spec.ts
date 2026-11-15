@@ -33,7 +33,7 @@ const OVERVIEW = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
     Jog : HmiButton := (Parent := 'Row', Text := 'Jog', PrefWidth := 160);
     Light : HmiLamp := (Parent := 'Row', Caption := 'Run');
   END_VAR
-  Light.Value := Main.Run;
+  Light.Value := instance0.Main.Run;
 END_FUNCTION_BLOCK
 `
 
@@ -100,9 +100,9 @@ test.describe('HMI button binding', () => {
       await page.getByTestId('hmi-prop-tab-data').click()
       let before = await status(page)
       await page.getByTestId('hmi-main-binding').click()
-      await expect(page.getByRole('option', { name: 'Main.Run : BOOL', exact: true })).toBeVisible()
-      await expect(page.getByRole('option', { name: 'Main.Level : REAL', exact: true })).toHaveCount(0)
-      await page.getByRole('option', { name: 'Main.Run : BOOL', exact: true }).click()
+      await expect(page.getByRole('option', { name: 'instance0.Main.Run : BOOL', exact: true })).toBeVisible()
+      await expect(page.getByRole('option', { name: 'instance0.Main.Level : REAL', exact: true })).toHaveCount(0)
+      await page.getByRole('option', { name: 'instance0.Main.Run : BOOL', exact: true }).click()
       await expect(page.getByTestId('hmi-main-press')).toContainText('Set to TRUE while pressed')
       await page.screenshot({ path: join(F.shots, 'binding.png') })
       await waitFor(page, 'the rebuilt preview', async () => rebuilt(page, before), 60000)
@@ -128,7 +128,7 @@ test.describe('HMI button binding', () => {
       await waitFor(page, 'the rebuilt preview', async () => rebuilt(page, before), 60000)
       await save(app)
       await waitFor(page, 'the binding on disk', async () => screenOnDisk(F, 'Overview').includes('NOT Jog.Pressed'))
-      expect(screenOnDisk(F, 'Overview')).toMatch(/IF Jog\.Changed THEN\s+Main\.Run := NOT Jog\.Pressed;\s+END_IF;/)
+      expect(screenOnDisk(F, 'Overview')).toMatch(/IF Jog\.Changed THEN\s+instance0\.Main\.Run := NOT Jog\.Pressed;\s+END_IF;/)
 
       before = await status(page)
       await page.getByTestId('hmi-preview-mode').click()

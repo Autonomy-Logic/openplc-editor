@@ -13,7 +13,7 @@ export interface HmiSourceFile {
 
 /** A PLC variable screens may use. */
 export interface HmiPlcVariable {
-  /** `<POU>.<Name>` or `GVL.<Name>`. */
+  /** `<Instance>.<Program>.<Name>`, a configuration global's name, or `<List>.<Name>` of a Global Variable List. */
   path: string
   /** Declared type: an elementary type, or STRING / STRING(n). */
   type: string
@@ -28,6 +28,11 @@ export interface HmiUnitSources {
   widgets: readonly HmiSourceFile[]
   settings: HmiSettings
   plcVariables: readonly HmiPlcVariable[]
+  /**
+   * The PLC program's declarations, data types and configuration as ST, without bodies: what screens' instance paths
+   * resolve against. Builds that show no project screens may leave it out.
+   */
+  plcDeclarations?: string
   /** Names of the project's POUs and data types, which screens and widget blocks may not reuse. */
   projectNames: readonly string[]
 }
@@ -213,4 +218,14 @@ export interface HmiThumbnailResult {
 export interface HmiCatalogResult {
   catalog: HmiWidgetCatalog
   errors: HmiDiagnostic[]
+}
+
+/** What the ST language service and the code view need for screens and widget blocks. */
+export interface HmiCodeContext {
+  /** The libraries screens use, as .stlib archive JSON; empty when StandardWidgets does not build. */
+  libraries: Array<{ name: string; archiveJson: string }>
+  /** ST of the navigation and theme declarations the HMI build generates for the project's screens. */
+  glue: string
+  /** Upper-case members of HmiScreen, which elements may not reuse. */
+  screenMembers: string[]
 }

@@ -28,8 +28,10 @@
 import type {
   PLCDataType,
   PLCGlobalVariableList,
+  PLCInstance,
   PLCPou,
   PLCRemoteDevice,
+  PLCTask,
   PLCVariable,
 } from '../../../middleware/shared/ports/types'
 import { serializeSoftMotionAxisGlobalsToST } from '../../../middleware/shared/utils/ethercat'
@@ -151,8 +153,15 @@ export function attachProjectSync(store: OpenPLCStore, service: StLspService): P
 
   // The project's configuration-level `VAR_GLOBAL`s wrapped in a CONFIGURATION,
   // so a POU's `VAR_EXTERNAL` resolves against a matching global.
-  function reconcileResourceGlobals(globals: PLCVariable[]): void {
-    reconcileSyntheticDoc(RESOURCE_GLOBALS_URI, serializeResourceGlobalsToST(globals, aliasIndex()))
+  function reconcileResourceGlobals(resource: {
+    globalVariables: PLCVariable[]
+    instances: PLCInstance[]
+    tasks: PLCTask[]
+  }): void {
+    reconcileSyntheticDoc(
+      RESOURCE_GLOBALS_URI,
+      serializeResourceGlobalsToST(resource.globalVariables, aliasIndex(), resource),
+    )
   }
 
   // A `VAR_GLOBAL <axis> : AXIS_REF_SM3` per recognized CiA 402 drive, so editor
@@ -297,11 +306,11 @@ export function attachProjectSync(store: OpenPLCStore, service: StLspService): P
     (state) => state.project.data.dataTypes,
     (dataTypes) => reconcileDataTypes(dataTypes),
   )
-  // Resource globals live under the configuration and change independently of
-  // POUs, so a POU's VAR_EXTERNAL resolves without waiting on a POU edit.
+  // Resource globals and program instances live under the configuration and change independently of
+  // POUs, so a POU's VAR_EXTERNAL and a screen's instance path resolve without waiting on a POU edit.
   const unsubscribeResourceGlobals = store.subscribe(
-    (state) => state.project.data.configurations.resource.globalVariables,
-    (globals) => reconcileResourceGlobals(globals),
+    (state) => state.project.data.configurations.resource,
+    (resource) => reconcileResourceGlobals(resource),
   )
   // SoftMotion axis globals derive from the EtherCAT remote devices — adding,
   // renaming, or enabling a CiA 402 drive must refresh the synthesized globals
@@ -334,7 +343,7 @@ export function attachProjectSync(store: OpenPLCStore, service: StLspService): P
     (state) => state.projectActions.getAliasIndex(),
     () => {
       const live = store.getState()
-      reconcileResourceGlobals(live.project.data.configurations.resource.globalVariables)
+      reconcileResourceGlobals(live.project.data.configurations.resource)
       reconcile(live.project.data.pous)
     },
   )
@@ -343,7 +352,7 @@ export function attachProjectSync(store: OpenPLCStore, service: StLspService): P
   // synthesized globals/types load first so any POU that references
   // them resolves on the first didOpen, not on a follow-up didChange.
   reconcileDataTypes(store.getState().project.data.dataTypes)
-  reconcileResourceGlobals(store.getState().project.data.configurations.resource.globalVariables)
+  reconcileResourceGlobals(store.getState().project.data.configurations.resource)
   reconcileSoftMotionGlobals(store.getState().project.data.remoteDevices)
   reconcileGlobalVariableLists(store.getState().project.data.globalVariableLists)
   reconcile(store.getState().project.data.pous)
@@ -352,7 +361,7 @@ export function attachProjectSync(store: OpenPLCStore, service: StLspService): P
     resync() {
       if (disposed) return
       reconcileDataTypes(store.getState().project.data.dataTypes)
-      reconcileResourceGlobals(store.getState().project.data.configurations.resource.globalVariables)
+      reconcileResourceGlobals(store.getState().project.data.configurations.resource)
       reconcileSoftMotionGlobals(store.getState().project.data.remoteDevices)
       reconcileGlobalVariableLists(store.getState().project.data.globalVariableLists)
       reconcile(store.getState().project.data.pous)

@@ -6,6 +6,7 @@
 import { ViewModeToggle } from '@root/frontend/components/_atoms/view-mode-toggle'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { hmiDesignerEntry } from '@root/frontend/store/slices/hmi-designer'
+import { hmiPlcDeclarations } from '@root/frontend/utils/PLC/hmi-plc-declarations'
 import { toast } from '@root/frontend/utils/toast'
 import type {
   HmiCatalogResult,
@@ -90,17 +91,27 @@ export function useProjectRequest(): Omit<HmiPreviewRequest, 'widgetPreview'> {
   const pous = useOpenPLCStore((s) => s.project.data.pous)
   const dataTypes = useOpenPLCStore((s) => s.project.data.dataTypes)
   const configurations = useOpenPLCStore((s) => s.project.data.configurations)
-  const plcVariables = useMemo(() => hmiPlcVariables({ pous, configurations }), [pous, configurations])
+  const globalVariableLists = useOpenPLCStore((s) => s.project.data.globalVariableLists)
+  const plcVariables = useMemo(
+    () => hmiPlcVariables({ pous, configurations, globalVariableLists }),
+    [pous, configurations, globalVariableLists],
+  )
   const projectNames = useMemo(() => [...pous.map((p) => p.name), ...dataTypes.map((d) => d.name)], [pous, dataTypes])
+  const aliasIndex = useOpenPLCStore((s) => s.projectActions.getAliasIndex())
+  const plcDeclarations = useMemo(
+    () => hmiPlcDeclarations({ pous, dataTypes, configurations, globalVariableLists }, aliasIndex),
+    [pous, dataTypes, configurations, globalVariableLists, aliasIndex],
+  )
   return useMemo(
     () => ({
       screens: hmi?.screens ?? [],
       widgets: hmi?.widgets ?? [],
       settings: hmi?.settings ?? defaultHmiSettings(),
       plcVariables,
+      plcDeclarations,
       projectNames,
     }),
-    [hmi, plcVariables, projectNames],
+    [hmi, plcVariables, plcDeclarations, projectNames],
   )
 }
 
@@ -477,10 +488,10 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   }
 
   const screens = request.screens.map((s) => s.name)
+  const buildErrors = useMemo(() => [...catalogErrors, ...preview.errors], [catalogErrors, preview.errors])
   const errors = [
     ...(parsed.ok ? [] : parsed.errors.map((e) => ({ file: name, line: e.line, message: e.message }))),
-    ...catalogErrors,
-    ...preview.errors,
+    ...buildErrors,
   ]
 
   const showInCode = (element: string) => {
@@ -505,7 +516,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
       </div>
       {entry.view === 'code' ? (
         <div className='min-h-0 flex-1'>
-          <HmiCodeEditor name={name} kind={kind} reveal={reveal} />
+          <HmiCodeEditor name={name} kind={kind} reveal={reveal} diagnostics={buildErrors} />
         </div>
       ) : (
         <div className='flex min-h-0 flex-1 gap-2'>
@@ -629,7 +640,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
           fixed.
         </p>
       )}
-      <Diagnostics errors={errors} />
+      {entry.view === 'design' && <Diagnostics errors={errors} />}
     </div>
   )
 }
@@ -667,7 +678,7 @@ export function HmiWidgetEditor({ name }: { name: string }) {
       </div>
       <div className='flex min-h-0 flex-1 gap-2'>
         <div className='min-w-0 flex-1'>
-          <HmiCodeEditor name={name} kind='widget' onPreview={preview.rebuild} />
+          <HmiCodeEditor name={name} kind='widget' onPreview={preview.rebuild} diagnostics={preview.errors} />
         </div>
         <div
           className='flex w-[380px] shrink-0 items-start justify-center overflow-auto rounded-lg border border-neutral-200 bg-neutral-100 bg-[radial-gradient(#b1b9c8_1px,transparent_1px)] p-6 [background-size:14px_14px] dark:border-neutral-850 dark:bg-neutral-900 dark:bg-[radial-gradient(#2e3038_1px,transparent_1px)]'
@@ -693,7 +704,6 @@ export function HmiWidgetEditor({ name }: { name: string }) {
           </div>
         </div>
       </div>
-      <Diagnostics errors={preview.errors} />
     </div>
   )
 }

@@ -39,7 +39,7 @@ const OVERVIEW = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
     Title : HmiLabel := (Text := 'Overview', Parent := 'Col');
     Level : HmiTank := (Caption := 'Level', Parent := 'Col', MaxValue := 10.0);
   END_VAR
-  Level.Value := Main.Level;
+  Level.Value := instance0.Main.Level;
 END_FUNCTION_BLOCK
 `
 const DETAILS = `FUNCTION_BLOCK Details EXTENDS HmiScreen
@@ -125,11 +125,11 @@ test.describe('HMI designer', () => {
       if (!lampBox || !overlayBox) throw new Error('the lamp is not on the canvas')
       await htmlDrag(
         page,
-        'hmi-variable-GVL.Alarm',
+        'hmi-variable-Alarm',
         lampBox.x - overlayBox.x + lampBox.width / 2,
         lampBox.y - overlayBox.y + lampBox.height / 2,
       )
-      await expect(page.getByTestId('hmi-main-binding')).toContainText('GVL.Alarm', { timeout: 10000 })
+      await expect(page.getByTestId('hmi-main-binding')).toContainText('Alarm', { timeout: 10000 })
 
       const handle = await page.getByTestId('hmi-grow-right').boundingBox()
       if (!handle) throw new Error('no grow handle')
@@ -162,7 +162,7 @@ test.describe('HMI designer', () => {
       await expect(page.getByTestId('hmi-selected-Badge1')).toBeVisible({ timeout: 10000 })
       await page.getByTestId('hmi-prop-tab-data').click()
       await page.getByTestId('hmi-main-binding').click()
-      await page.getByRole('option', { name: /Main\.Running/ }).click()
+      await page.getByRole('option', { name: /instance0\.Main\.Running/ }).click()
       await waitFor(
         page,
         'the preview with the widget block',
@@ -199,10 +199,10 @@ test.describe('HMI designer', () => {
       expect(saved).toContain("Title : HmiLabel := (Text := 'Plant overview', Parent := 'Col'")
       expect(saved).toContain('MaxValue := 20.0')
       expect(saved).toMatch(/Lamp1 : HmiLamp := \(Parent := 'Col'[^)]*\);/)
-      expect(saved).toContain('Lamp1.Value := GVL.Alarm;')
+      expect(saved).toContain('Lamp1.Value := Alarm;')
       expect(saved).toMatch(/PrefWidth := \d+/)
       expect(saved).toContain("Badge1 : Badge := (Parent := 'Col');")
-      expect(saved).not.toContain('Badge1.Value := Main.Running;')
+      expect(saved).not.toContain('Badge1.Value := instance0.Main.Running;')
 
       const renameLeaf = async (from: string, to: string, choice: RegExp) => {
         await leaf(page, from).locator('span').first().dblclick()
@@ -221,9 +221,18 @@ test.describe('HMI designer', () => {
       await waitFor(page, 'the preview with the renamed block', async () => (await status(page)).startsWith('ready'))
 
       await renameLeaf('Pill', 'Chip', /Rename only/)
-      await waitFor(page, 'the unresolved use reported', async () =>
-        /undefined type 'pill'/i.test((await page.getByTestId('hmi-errors').allInnerTexts()).join('\n')),
-      )
+      await waitFor(page, 'the unresolved use marked on the block name', async () => {
+        const squiggle = page.locator('[data-testid="hmi-code-editor"] .squiggly-error').first()
+        const box = (await squiggle.count()) > 0 ? await squiggle.boundingBox() : null
+        if (!box) return false
+        await page.mouse.move(0, 0)
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - 4)
+        await page.waitForTimeout(500)
+        const hover = page.locator('.monaco-hover:visible').first()
+        if (!(await hover.isVisible().catch(() => false))) return false
+        return /Overview:\d+: undefined type 'pill'/i.test(await hover.innerText())
+      })
+      await expect(page.getByTestId('hmi-errors')).toHaveCount(0)
       await save(app)
       await waitFor(page, 'Chip on disk', async () => existsSync(join(F.project, 'hmi', 'widgets', 'Chip.st')))
       expect(overviewOnDisk()).toContain('Badge1 : Pill')

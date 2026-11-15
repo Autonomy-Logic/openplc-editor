@@ -7,6 +7,13 @@
  * hosts keep in step with the PLC. `Element.Value := <variable>;` on a two-way widget also writes the operator's
  * change back to the variable, converted to its type.
  */
+import {
+  checkHmiBlockElements,
+  checkHmiBlockHeader,
+  type HmiCheckBlock,
+  hmiTextLiteral as textLiteral,
+} from '@root/middleware/shared/utils/hmi/block-checks'
+import { widgetIsA as isA } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
 import { maskStComments } from '@root/middleware/shared/utils/hmi/references'
 import { hmiReservedName } from '@root/middleware/shared/utils/hmi/reserved-names'
 import {
@@ -91,19 +98,21 @@ export interface HmiPreview {
 
 /**
  * STruC++ compile options plus `wholeLibraries` (emit the named libraries whole), which releases before it ignore; the
- * preview is then correct but recompiles the library when the set of widgets in use changes.
+ * preview is then correct but recompiles the library when the set of widgets in use changes. `externalSources` names
+ * the files whose programs, configuration and globals the host owns.
  */
-type StrucppCompileOptions = Partial<CompileOptions> & { wholeLibraries?: string[] }
+type StrucppCompileOptions = Partial<CompileOptions> & { wholeLibraries?: string[]; externalSources?: string[] }
 
 const UNIT = 'HMI'
 const NAMESPACE = 'hmi'
 const HEADER = 'hmi_unit.hpp'
 const GLUE_FILE = 'hmi_glue.st'
-const MIRROR_FILE = 'hmi_tags.st'
+const PLC_FILE = 'hmi_plc.st'
 const MAIN_FILE = 'hmi_main.st'
-const SCREEN_CAPACITY = 256
-const STACK_CAPACITY = 64
-const DIAGRAM_CAPACITY = 256
+/** Marks the screens and the glue program so they reach the PLC's variables by instance path. */
+const INSTANCE_PATHS = "{attribute 'instance_paths'}"
+/** The configuration and resource every OpenPLC project compiles to, which paths may leave out. */
+const CONFIG_PREFIXES = ['CONFIG0.RES0.', 'CONFIG0.']
 const SCREENS_MAX = 64
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/
 /** Properties that change the element tree; editing them needs a build. */
@@ -229,22 +238,6 @@ function tagType(declared: string): TagType | undefined {
   return maxLength >= 1 && maxLength <= 65535 ? { base: 'STRING', type: TAG_STRING, maxLength } : undefined
 }
 
-/** A plain ST text literal's content, or undefined. */
-function textLiteral(text: string | undefined): string | undefined {
-  const m = text === undefined ? null : /^'([^'$]*)'$/.exec(text.trim())
-  return m ? m[1] : undefined
-}
-
-function isA(catalog: HmiWidgetCatalog, type: string, base: string): boolean {
-  const seen = new Set<string>()
-  for (let t: string | undefined = type.toUpperCase(); t !== undefined && !seen.has(t); ) {
-    if (t === base) return true
-    seen.add(t)
-    t = catalog.widgets.get(t)?.extends.toUpperCase()
-  }
-  return false
-}
-
 const hex = (rgb: string): string => `16#${rgb.slice(1).toUpperCase()}`
 
 class Diagnostics {
@@ -268,25 +261,24 @@ interface ScreenPlan {
   theme: number
 }
 
-/** Elements in drawing order, containers before what they hold, with capacity and Parent checks. */
-function elementTree(plan: ScreenPlan, catalog: HmiWidgetCatalog, d: Diagnostics): void {
-  const { model, file } = plan
+/** What the shared checks read from a parsed screen. */
+const checkBlockOf = (model: HmiBlockModel): HmiCheckBlock => ({
+  name: model.name,
+  extends: model.extends,
+  theme: model.theme ?? null,
+  methods: model.methods,
+  elements: model.elements.map((e) => ({ name: e.name, type: e.type, props: e.propList })),
+})
+
+/** Elements in drawing order, containers before what they hold, and the pipes' ends; the tree is checked before. */
+function elementTree(plan: ScreenPlan, catalog: HmiWidgetCatalog): void {
+  const { model } = plan
   const byName = new Map(model.elements.map((e) => [e.name.toUpperCase(), e]))
   const parentOf = new Map<HmiElementDecl, HmiElementDecl>()
   for (const e of model.elements) {
-    const text = e.props.get('PARENT')
-    if (text === undefined) continue
-    const name = textLiteral(text)
-    if (name === undefined) {
-      d.error(file.name, `${e.name}: Parent must be a text literal naming a container`)
-      continue
-    }
-    if (name === '') continue
-    const parent = byName.get(name.toUpperCase())
-    if (!parent) d.error(file.name, `${e.name}: Parent '${name}' is not an element of this screen`)
-    else if (!isA(catalog, parent.type, 'HMISTACK'))
-      d.error(file.name, `${e.name}: Parent '${name}' is not a container`)
-    else parentOf.set(e, parent)
+    const name = textLiteral(e.props.get('PARENT'))
+    const parent = name ? byName.get(name.toUpperCase()) : undefined
+    if (parent && isA(catalog, parent.type, 'HMISTACK')) parentOf.set(e, parent)
   }
   const visit = (parent: HmiElementDecl | undefined, depth: number): void => {
     for (const e of model.elements) {
@@ -297,25 +289,12 @@ function elementTree(plan: ScreenPlan, catalog: HmiWidgetCatalog, d: Diagnostics
     }
   }
   visit(undefined, 0)
-  for (const e of model.elements)
-    if (!plan.attach.some((a) => a.element === e)) d.error(file.name, `${e.name}: its Parent chain is a cycle`)
-  if (model.elements.length > SCREEN_CAPACITY)
-    d.error(file.name, `${model.elements.length} elements; a screen holds at most ${SCREEN_CAPACITY}`)
-  const held = new Map<HmiElementDecl, number>()
-  for (const a of plan.attach) if (a.parent) held.set(a.parent, (held.get(a.parent) ?? 0) + 1)
-  for (const [container, n] of held) {
-    const cap = isA(catalog, container.type, 'HMIDIAGRAM') ? DIAGRAM_CAPACITY : STACK_CAPACITY
-    if (n > cap) d.error(file.name, `${container.name} holds ${n} elements; at most ${cap}`)
-  }
   const priorPipe = new Map<string, string>()
   for (const e of model.elements) {
     if (!isA(catalog, e.type, 'HMIPIPE')) continue
     const end = (prop: string): string | undefined => {
       const name = textLiteral(e.props.get(prop))
-      const found = name === undefined ? undefined : byName.get(name.toUpperCase())
-      if (!found)
-        d.error(file.name, `${e.name}: ${prop === 'SOURCE' ? 'Source' : 'Target'} must name an element of this screen`)
-      return found?.name
+      return name === undefined ? undefined : byName.get(name.toUpperCase())?.name
     }
     const source = end('SOURCE')
     const target = end('TARGET')
@@ -326,11 +305,18 @@ function elementTree(plan: ScreenPlan, catalog: HmiWidgetCatalog, d: Diagnostics
   }
 }
 
+/** A PLC path as the project's variable list names it, upper case: without the configuration and resource. */
+function shortPath(path: string): string {
+  const upper = path.replace(/\s+/g, '').toUpperCase()
+  const prefix = CONFIG_PREFIXES.find((p) => upper.startsWith(p))
+  return prefix ? upper.slice(prefix.length) : upper
+}
+
 /** Typed write-back of `Element.Value := Variable;` for two-way widgets. */
 function writeBacks(
   plan: ScreenPlan,
   catalog: HmiWidgetCatalog,
-  tags: ReadonlyMap<string, { variable: HmiPlcVariable; type: TagType }>,
+  variables: ReadonlyMap<string, HmiPlcVariable>,
   d: Diagnostics,
 ): void {
   const elements = new Map(plan.model.elements.map((e) => [e.name.toUpperCase(), e]))
@@ -339,18 +325,19 @@ function writeBacks(
     const widget: HmiWidgetInfo | undefined = element ? catalog.widgets.get(element.type.toUpperCase()) : undefined
     const twoWay = widget?.twoWay
     if (!twoWay || twoWay.value.toUpperCase() !== b.property.toUpperCase()) continue
-    const tag = tags.get(b.variable.toUpperCase())
-    if (!tag) continue
+    const variable = variables.get(shortPath(b.variable))
+    const type = variable ? tagType(variable.type) : undefined
+    if (!variable || !type) continue
     const source = widget.outputs.find((o) => o.name.toUpperCase() === twoWay.newValue.toUpperCase())
     const from = (source?.type ?? '').toUpperCase()
     const value = `${b.element}.${twoWay.newValue}`
     let converted: { expr: string; guard?: string } | undefined
-    if (from === tag.type.base) converted = { expr: value }
-    else if (NUMERIC.has(from) && NUMERIC.has(tag.type.base)) converted = numericWriteBack(from, tag.type.base, value)
+    if (from === type.base) converted = { expr: value }
+    else if (NUMERIC.has(from) && NUMERIC.has(type.base)) converted = numericWriteBack(from, type.base, value)
     if (converted === undefined) {
       d.error(
         plan.file.name,
-        `${b.element}.${b.property}: a ${from} widget value cannot be written to ${b.variable} (${tag.variable.type})`,
+        `${b.element}.${b.property}: a ${from} widget value cannot be written to ${b.variable} (${variable.type})`,
       )
       continue
     }
@@ -387,8 +374,7 @@ function screenSource(plan: ScreenPlan): string {
   return `${source.slice(0, plan.model.insertAt)}${generated}${source.slice(plan.model.insertAt)}`
 }
 
-function glueSource(screens: readonly ScreenPlan[], settings: HmiSettings): string {
-  const names = screens.map((s) => s.model.name)
+function glueSource(names: readonly string[], settings: HmiSettings): string {
   const themes = [...HMI_BUILTIN_THEMES, ...settings.themes.map((t) => t.name)]
   return [
     '(* Generated by the HMI build: screens by name, navigation and theme ids. *)',
@@ -421,33 +407,18 @@ function glueSource(screens: readonly ScreenPlan[], settings: HmiSettings): stri
 const ST_LITERAL =
   /^(?:[+-]?\d[\d_]*(?:\.\d[\d_]*)?(?:E[+-]?\d+)?|\d+#[0-9A-F_]+|TRUE|FALSE|[A-Z_]\w*#[\w.]+|'(?:[^'$\n]|\$[^\n])*')$/i
 
-/** ` := <initial value>` for a literal initial value, else nothing. */
-const mirrorInitializer = (initial: string | undefined): string => {
-  const text = initial?.trim()
-  return text !== undefined && ST_LITERAL.test(text) ? ` := ${text}` : ''
+/**
+ * Preview only, where the unit's own storage stands in for the PLC: statements starting each variable screens may use
+ * from its declared initial value, when that is a literal; the others keep their type's default.
+ */
+function previewStarts(variables: readonly HmiPlcVariable[]): string[] {
+  return variables.flatMap((v) => {
+    const initial = v.initialValue?.trim()
+    return initial !== undefined && tagType(v.type) && ST_LITERAL.test(initial) ? [`    ${v.path} := ${initial};`] : []
+  })
 }
 
-function mirrorSource(tags: ReadonlyArray<{ variable: HmiPlcVariable; type: TagType }>): string {
-  const byPou = new Map<string, { pou: string; fields: string[] }>()
-  for (const { variable, type } of tags) {
-    const [pou, name] = variable.path.split('.')
-    const entry = byPou.get(pou.toUpperCase()) ?? { pou, fields: [] }
-    const declared = type.base === 'STRING' ? `STRING(${type.maxLength})` : type.base
-    entry.fields.push(`    ${name} : ${declared}${mirrorInitializer(variable.initialValue)};`)
-    byPou.set(pou.toUpperCase(), entry)
-  }
-  const lines = ['(* Generated by the HMI build: mirror of the PLC variables the screens use. *)']
-  for (const { pou, fields } of byPou.values())
-    lines.push(`TYPE HMI__PLC_${pou} :`, '  STRUCT', ...fields, '  END_STRUCT;', 'END_TYPE')
-  if (byPou.size > 0) {
-    lines.push('VAR_GLOBAL')
-    for (const { pou } of byPou.values()) lines.push(`  ${pou} : HMI__PLC_${pou};`)
-    lines.push('END_VAR')
-  }
-  return `${lines.join('\n')}\n`
-}
-
-function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start: number): string {
+function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start: number, starts: string[]): string {
   const access = (role: (typeof HMI_ROLES)[number] | null): string[] =>
     screens.map(
       (s, i) =>
@@ -465,6 +436,7 @@ function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start
   })
   return [
     '(* Generated by the HMI build: one instance per viewer; the host sets Role before the first frame. *)',
+    INSTANCE_PATHS,
     'PROGRAM HmiMain',
     '  VAR_INPUT',
     '    Role : DINT;',
@@ -475,6 +447,7 @@ function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start
     '    Started : BOOL;',
     '  END_VAR',
     '  IF NOT Started THEN',
+    ...starts,
     ...themes,
     ...screens.map((_, i) => `    Rt.AddScreen(ADR(Scr${i}));`),
     `    Rt.SetStart(${start});`,
@@ -510,32 +483,43 @@ function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start
 
 const cString = (s: string): string => JSON.stringify(s)
 
-function glueCpp(
-  tags: ReadonlyArray<{ variable: HmiPlcVariable; type: TagType; address: HmiTagAddress | null }>,
-  input: HmiUnitInput,
-): string {
-  const member = (v: HmiPlcVariable): string => {
-    const [pou, name] = v.path.split('.')
-    return `${NAMESPACE}::${pou.toUpperCase()}.${name.toUpperCase()}`
-  }
+/** A PLC variable the unit's screens use, by the id STruC++ gave its path. */
+interface UnitTag {
+  /** Canonical path, upper case. */
+  path: string
+  type: TagType
+  address: HmiTagAddress | null
+}
+
+/** C++ type of a tag's variable, as STruC++ declares it. */
+const cppTypeOf = (t: TagType): string =>
+  t.base === 'STRING' ? `strucpp::IECStringVar<${t.maxLength}>` : `strucpp::IEC_${t.base}`
+
+function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput): string {
   const sizeOf = (t: TagType): number => (t.base === 'STRING' ? t.maxLength + 1 : (TAG_WIDTH[t.base] ?? 0))
-  const read = tags.map(({ variable, type }, i) =>
-    type.base === 'STRING'
-      ? `    case ${i}: { const auto s = ${member(variable)}.get(); size_t n = std::min<size_t>(s.length(), ${type.maxLength}); std::memcpy(buf, s.c_str(), n); static_cast<char *>(buf)[n] = 0; return 0; }`
+  const read = tags.map(({ type }, i) => {
+    const v = `static_cast<const ${cppTypeOf(type)} *>(variable)`
+    return type.base === 'STRING'
+      ? `    case ${i}: { const auto s = ${v}->get(); size_t n = std::min<size_t>(s.length(), ${type.maxLength}); std::memcpy(buf, s.c_str(), n); static_cast<char *>(buf)[n] = 0; return 0; }`
       : type.base === 'BOOL'
-        ? `    case ${i}: { uint8_t v = ${member(variable)}.get() ? 1 : 0; std::memcpy(buf, &v, 1); return 0; }`
-        : `    case ${i}: { auto v = ${member(variable)}.get(); std::memcpy(buf, &v, sizeof v); return 0; }`,
-  )
-  const write = tags.map(({ variable, type }, i) =>
-    type.base === 'STRING'
-      ? `    case ${i}: { const char *b = static_cast<const char *>(buf); size_t n = 0; while (n < ${type.maxLength} && b[n] != 0) n++; char s[${type.maxLength + 1}]; std::memcpy(s, b, n); s[n] = 0; ${member(variable)}.set(s); return 0; }`
+        ? `    case ${i}: { uint8_t b = ${v}->get() ? 1 : 0; std::memcpy(buf, &b, 1); return 0; }`
+        : `    case ${i}: { auto x = ${v}->get(); std::memcpy(buf, &x, sizeof x); return 0; }`
+  })
+  const write = tags.map(({ type }, i) => {
+    const v = `static_cast<${cppTypeOf(type)} *>(variable)`
+    return type.base === 'STRING'
+      ? `    case ${i}: { const char *b = static_cast<const char *>(buf); size_t n = 0; while (n < ${type.maxLength} && b[n] != 0) n++; char s[${type.maxLength + 1}]; std::memcpy(s, b, n); s[n] = 0; ${v}->set(s); return 0; }`
       : type.base === 'BOOL'
-        ? `    case ${i}: { uint8_t v; std::memcpy(&v, buf, 1); ${member(variable)}.set(v != 0); return 0; }`
-        : `    case ${i}: { auto v = ${member(variable)}.get(); std::memcpy(&v, buf, sizeof v); ${member(variable)}.set(v); return 0; }`,
-  )
+        ? `    case ${i}: { uint8_t b; std::memcpy(&b, buf, 1); ${v}->set(b != 0); return 0; }`
+        : `    case ${i}: { auto x = ${v}->get(); std::memcpy(&x, buf, sizeof x); ${v}->set(x); return 0; }`
+  })
   const rows = tags.map(
-    ({ variable, type, address }) =>
-      `    {${address?.arr ?? 0}u, ${address?.elem ?? 0}u, ${type.type}, ${type.maxLength}, ${cString(variable.path)}},`,
+    ({ path, type, address }) =>
+      `    {${address?.arr ?? 0}u, ${address?.elem ?? 0}u, ${type.type}, ${type.maxLength}, ${cString(path)}},`,
+  )
+  const stores = tags.map(
+    ({ type }, i) =>
+      `    case ${i}: *static_cast<${cppTypeOf(type)} *>(g_own[${i}]) = *static_cast<const ${cppTypeOf(type)} *>(value); return;`,
   )
   const { settings } = input
   return [
@@ -546,8 +530,38 @@ function glueCpp(
     '',
     '#include "hmi_unit.h"',
     `#include "${HEADER}"`,
+    '#include "iec_external.hpp"',
     '',
     `using HmiProgram = ${NAMESPACE}::Program_HMIMAIN;`,
+    '',
+    'namespace {',
+    'const hmi_tag_access_t *g_access = nullptr;',
+    '/* The variables when no host serves them: the preview, where no PLC runs. */',
+    ...tags.map((t, i) => `${cppTypeOf(t.type)} g_own_${i}{};`),
+    `void *const g_own[${Math.max(tags.length, 1)}] = {${tags.length > 0 ? tags.map((_, i) => `&g_own_${i}`).join(', ') : 'nullptr'}};`,
+    '',
+    'void *tag_variable(uint32_t id) {',
+    '    if (g_access && g_access->variable) {',
+    '        void *v = g_access->variable(g_access->ctx, static_cast<int>(id));',
+    '        if (v) return v;',
+    '    }',
+    `    return id < ${tags.length}u ? g_own[id] : nullptr;`,
+    '}',
+    '}',
+    '',
+    'namespace strucpp {',
+    'void *external_variable(uint32_t id) { return tag_variable(id); }',
+    'void external_store(uint32_t id, const void *value) {',
+    '    if (g_access && g_access->write) {',
+    '        g_access->write(g_access->ctx, static_cast<int>(id), value);',
+    '        return;',
+    '    }',
+    '    switch (id) {',
+    ...stores,
+    '    default: return;',
+    '    }',
+    '}',
+    '}',
     '',
     'extern "C" {',
     `const hmi_tag_t hmi_tags[${Math.max(tags.length, 1)}] = {`,
@@ -559,6 +573,8 @@ function glueCpp(
     `const char hmi_panel_pin[] = ${cString(settings.pin.enabled ? settings.pin.value : '')};`,
     `const uint32_t hmi_relock_minutes = ${settings.relock.mode === 'idle' ? settings.relock.minutes : 0};`,
     '',
+    'void hmi_set_tag_access(const hmi_tag_access_t *access) { g_access = access; }',
+    '',
     'size_t hmi_tag_size(int tag) {',
     '    switch (tag) {',
     ...tags.map(({ type }, i) => `    case ${i}: return ${sizeOf(type)};`),
@@ -566,14 +582,18 @@ function glueCpp(
     '    }',
     '}',
     '',
-    'int hmi_tag_read(int tag, void *buf) {',
+    'int hmi_tag_read(int tag, const void *variable, void *buf) {',
+    '    if (tag < 0 || tag >= hmi_tag_count) return -1;',
+    '    if (!variable) variable = tag_variable(static_cast<uint32_t>(tag));',
     '    switch (tag) {',
     ...read,
     '    default: return -1;',
     '    }',
     '}',
     '',
-    'int hmi_tag_write(int tag, const void *buf) {',
+    'int hmi_tag_write(int tag, void *variable, const void *buf) {',
+    '    if (tag < 0 || tag >= hmi_tag_count) return -1;',
+    '    if (!variable) variable = g_own[tag];',
     '    switch (tag) {',
     ...write,
     '    default: return -1;',
@@ -890,6 +910,19 @@ function themePreviewSource(theme: string): string {
   ].join('\n')
 }
 
+/** The navigation and theme declarations the HMI build generates for these screens; empty without screens. */
+export function hmiGlueSource(screens: readonly string[], settings: HmiSettings): string {
+  return screens.length === 0 ? '' : glueSource(screens, settings)
+}
+
+/** Upper-case names of HmiScreen's inputs, variables and methods in a StandardWidgets archive. */
+export function hmiScreenMembers(archive: StlibArchive): ReadonlySet<string> {
+  const base = archive.manifest.functionBlocks.find((fb) => fb.name.toUpperCase() === 'HMISCREEN')
+  return new Set(
+    [...(base?.inputs ?? []), ...(base?.locals ?? []), ...(base?.methods ?? [])].map((m) => m.name.toUpperCase()),
+  )
+}
+
 export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   const d = new Diagnostics()
   const result: HmiUnitResult = {
@@ -920,15 +953,8 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   if (d.errors.length > 0) return result
   const { archives, catalog } = widgetLibrary
 
-  const screenBase = library.archive.manifest.functionBlocks.find((fb) => fb.name.toUpperCase() === 'HMISCREEN')
-  const screenMembers = new Set(
-    [...(screenBase?.inputs ?? []), ...(screenBase?.locals ?? []), ...(screenBase?.methods ?? [])].map((m) =>
-      m.name.toUpperCase(),
-    ),
-  )
-  const variables = new Map(input.plcVariables.map((v) => [v.path.toUpperCase(), v]))
-  const pous = new Set([...input.plcVariables.map((v) => v.path.split('.')[0].toUpperCase()), 'GVL'])
-  const tags = new Map<string, { variable: HmiPlcVariable; type: TagType }>()
+  const screenMembers = hmiScreenMembers(library.archive)
+  const variables = new Map(input.plcVariables.map((v) => [shortPath(v.path), v]))
   const plans: ScreenPlan[] = []
   const screenFiles = input.gallery
     ? [{ name: HMI_GALLERY_SCREEN, source: gallerySource(galleryWidgets(catalog, input.widgets)) }]
@@ -948,35 +974,16 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
       continue
     }
     const { model } = parsed
-    if (model.name.toUpperCase() !== file.name.toUpperCase())
-      d.error(file.name, `the file declares ${model.name}; it must declare FUNCTION_BLOCK ${file.name}`)
-    if (model.extends.toUpperCase() !== 'HMISCREEN') d.error(file.name, `${file.name} must extend HmiScreen`)
-    for (const generated of ['BUILD', 'WRITEBACK'])
-      if (model.methods.has(generated))
-        d.error(file.name, `the HMI build generates ${generated === 'BUILD' ? 'Build' : 'WriteBack'}; remove it`)
-    const themeName = model.theme ?? input.settings.defaultTheme
-    const theme = hmiThemeId(input.settings, themeName)
-    if (theme < 0) d.error(file.name, `unknown theme '${themeName}'`)
-    for (const ref of model.references) {
-      const [pou] = ref.split('.')
-      if (!pous.has(pou)) continue
-      const variable = variables.get(ref)
-      if (!variable) {
-        d.error(file.name, `${ref} is not a PLC variable`)
-        continue
-      }
-      const type = tagType(variable.type)
-      if (!type) d.error(file.name, `${variable.path}: ${variable.type} variables cannot be used on screens`)
-      else tags.set(ref, { variable, type })
-    }
-    for (const e of model.elements)
-      if (screenMembers.has(e.name.toUpperCase()))
-        d.error(file.name, `${e.name}: an element may not be named like a member of HmiScreen`)
+    const block = checkBlockOf(model)
+    const checks = { kind: 'screen' as const, fileName: file.name, catalog, settings: input.settings, screenMembers }
+    for (const f of checkHmiBlockHeader(block, checks)) d.error(file.name, f.message)
+    const theme = hmiThemeId(input.settings, model.theme ?? input.settings.defaultTheme)
+    for (const f of checkHmiBlockElements(block, checks)) d.error(file.name, f.message)
     const plan: ScreenPlan = { file, model, attach: [], connects: [], writeBacks: [], theme }
-    elementTree(plan, catalog, d)
+    elementTree(plan, catalog)
     plans.push(plan)
   }
-  for (const plan of plans) writeBacks(plan, catalog, tags, d)
+  for (const plan of plans) writeBacks(plan, catalog, variables, d)
   const start =
     input.widgetPreview !== undefined || input.gallery || input.themePreview !== undefined
       ? plans.length - 1
@@ -986,24 +993,20 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   if (start < 0) d.error(UNIT, `start screen '${input.settings.startScreen}' is not a screen`)
   if (d.errors.length > 0) return result
 
-  const tagList: Array<{ variable: HmiPlcVariable; type: TagType; address: HmiTagAddress | null }> = []
-  for (const t of tags.values()) {
-    const address = input.resolve ? input.resolve(t.variable.path) : null
-    if (input.resolve && address === null)
-      d.warn(UNIT, `${t.variable.path} is not in the PLC program's debug map; the HMI will not sync it`)
-    else tagList.push({ ...t, address })
-  }
   let nextId = 1
   for (const plan of plans) {
     for (const a of plan.attach)
       result.elementIds.push({ id: nextId++, screen: plan.model.name, element: a.element.name })
   }
   const sources: Record<string, string> = {
-    [GLUE_FILE]: glueSource(plans, input.settings),
-    [MIRROR_FILE]: mirrorSource([...tags.values()]),
+    [GLUE_FILE]: glueSource(
+      plans.map((p) => p.model.name),
+      input.settings,
+    ),
+    [PLC_FILE]: input.plcDeclarations ?? '',
   }
-  for (const plan of plans) sources[`${plan.model.name}.st`] = screenSource(plan)
-  sources[MAIN_FILE] = mainSource(plans, input.settings, start)
+  for (const plan of plans) sources[`${plan.model.name}.st`] = `${INSTANCE_PATHS} ${screenSource(plan)}`
+  sources[MAIN_FILE] = mainSource(plans, input.settings, start, input.preview ? previewStarts(input.plcVariables) : [])
   result.sources = sources
   const [first, ...rest] = Object.entries(sources)
   const options: StrucppCompileOptions = {
@@ -1013,6 +1016,8 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     namespace: NAMESPACE,
     headerFileName: HEADER,
     separateLibraryFiles: true,
+    externalInstancePaths: true,
+    externalSources: [PLC_FILE],
     ...(input.preview ? { wholeLibraries: archives.map((a) => a.manifest.name) } : {}),
   }
   const compiled = strucpp.compile(first[1], options)
@@ -1024,13 +1029,22 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   result.files[HEADER] = compiled.headerCode
   if (compiled.libraryHeader) result.files[compiled.libraryHeader.name] = compiled.libraryHeader.content
   for (const f of compiled.cppFiles) result.files[f.name] = f.content
-  result.files['hmi_unit_glue.cpp'] = glueCpp(tagList, input)
-  result.tags = tagList.map(({ variable, type, address }) => ({
-    path: variable.path,
-    type: type.type,
-    maxLength: type.maxLength,
-    address,
-  }))
+  const tags: UnitTag[] = []
+  for (const entry of [...(compiled.instancePaths ?? [])].sort((a, b) => a.id - b.id)) {
+    const named = variables.get(shortPath(entry.path))?.path ?? shortPath(entry.path)
+    const type = tagType(entry.type === 'STRING' ? `STRING(${entry.maxLength ?? DEFAULT_STRING_LENGTH})` : entry.type)
+    if (!type) {
+      d.error(UNIT, `${named}: ${entry.type} variables cannot be used on screens`)
+      continue
+    }
+    const address = input.resolve ? input.resolve(entry.path) : null
+    if (input.resolve && address === null)
+      d.warn(UNIT, `${named} is not in the PLC program's debug map; the HMI will not sync it`)
+    tags.push({ path: entry.path, type, address })
+  }
+  if (d.errors.length > 0) return result
+  result.files['hmi_unit_glue.cpp'] = glueCpp(tags, input)
+  result.tags = tags.map(({ path, type, address }) => ({ path, type: type.type, maxLength: type.maxLength, address }))
   const setters = previewSetters(plans, catalog)
   result.preview = {
     units: previewUnits([...Object.keys(result.files), ...Object.keys(setters.files)], plans),

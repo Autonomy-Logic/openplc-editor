@@ -48,7 +48,8 @@ export interface HmiMomentaryBinding {
 
 type Momentary = NonNullable<HmiWidgetInfo['momentary']>
 
-const VARIABLE = '[A-Za-z_]\\w*\\s*\\.\\s*[A-Za-z_]\\w*'
+/** A global, `List.Member` or `Instance.Program.Var`: identifiers joined by dots. */
+const VARIABLE = '[A-Za-z_]\\w*(?:\\s*\\.\\s*[A-Za-z_]\\w*)*'
 
 /** The binding an element's `Changed` code is, or null when the code is anything else. */
 export function momentaryOf(code: string, element: string, momentary: Momentary): HmiMomentaryBinding | null {

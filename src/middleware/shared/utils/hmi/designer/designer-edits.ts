@@ -279,7 +279,7 @@ export function renameElement(
   return ok(applyPatches(source, patches))
 }
 
-/** Binds a property to a PLC variable (`POU.Name` / `GVL.Name`), or removes the binding when variable is null. */
+/** Binds a property to a PLC variable (a global, `List.Member` or `Instance.Program.Var`), or unbinds it when null. */
 export function setBinding(
   source: string,
   model: DesignerModel,
@@ -289,7 +289,7 @@ export function setBinding(
 ): DesignerEdit {
   const target = editable(model, element)
   if (typeof target === 'string') return refuse(target)
-  if (variable !== null && !/^[A-Za-z_]\w*\.[A-Za-z_]\w*$/.test(variable))
+  if (variable !== null && !/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$/.test(variable))
     return refuse(`${variable} is not a PLC variable`)
   const existing = model.bindings.find((b) => same(b.element, element) && same(b.property, property))
   const line = variable === null ? '' : bindingStatement(model, target.name, property, variable)

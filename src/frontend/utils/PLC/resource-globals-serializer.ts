@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (c) 2026 Autonomy®
-import type { PLCVariable } from '../../../middleware/shared/ports/types'
+import type { PLCInstance, PLCTask, PLCVariable } from '../../../middleware/shared/ports/types'
 import { resolveLocation } from '../../../middleware/shared/utils/iec-address/registry'
 import { generateIecVariablesToString } from '../generate-iec-variables-to-string'
 
-const GLOBALS_CONFIG_NAME = '__globals_cfg__'
-const GLOBALS_RESOURCE_NAME = '__globals_res__'
+/** The configuration and resource names the compiler emits (`st-transpiler/emit/configuration.ts`). */
+const GLOBALS_CONFIG_NAME = 'Config0'
+const GLOBALS_RESOURCE_NAME = 'Res0'
 
 /**
  * Serialize the project's resource-level global variables as a standalone
@@ -24,6 +25,9 @@ const GLOBALS_RESOURCE_NAME = '__globals_res__'
  * same formatter the variables editor uses — so declarations stay in lockstep
  * with how variables render everywhere else. Returns '' when there are none.
  *
+ * The resource lists the tasks and program instances, so HMI screens resolve instance paths
+ * (`instance0.Main.Run`) against the same configuration the compiler emits.
+ *
  * `aliasIndex` resolves alias-bound locations to literal `%…` addresses. A
  * global bound to an IO alias would otherwise serialize as `AT my_alias`,
  * which strucpp rejects — taking the whole VAR_GLOBAL block (and thus every
@@ -33,21 +37,35 @@ const GLOBALS_RESOURCE_NAME = '__globals_res__'
 export function serializeResourceGlobalsToST(
   globals: PLCVariable[],
   aliasIndex: ReadonlyMap<string, string> = new Map(),
+  resource: { tasks: readonly PLCTask[]; instances: readonly PLCInstance[] } = { tasks: [], instances: [] },
 ): string {
-  if (!globals || globals.length === 0) return ''
+  const { tasks, instances } = resource
+  if ((!globals || globals.length === 0) && instances.length === 0) return ''
+  const taskNames = new Set(tasks.map((t) => t.name.toUpperCase()))
   // Force the global class so the shared formatter always emits a single
   // VAR_GLOBAL block, regardless of any stray class on the stored variable.
-  const varBlock = generateIecVariablesToString(
-    globals.map((g) => ({
-      ...g,
-      class: 'global',
-      location: g.location ? resolveLocation(g.location, aliasIndex) : '',
-    })),
-  )
+  const varBlock =
+    (globals ?? []).length === 0
+      ? ''
+      : generateIecVariablesToString(
+          globals.map((g) => ({
+            ...g,
+            class: 'global',
+            location: g.location ? resolveLocation(g.location, aliasIndex) : '',
+          })),
+        )
   return [
     `CONFIGURATION ${GLOBALS_CONFIG_NAME}`,
-    varBlock,
+    ...(varBlock ? [varBlock] : []),
     `  RESOURCE ${GLOBALS_RESOURCE_NAME} ON PLC`,
+    ...tasks.map(
+      (t) => `    TASK ${t.name}(${t.interval ? `INTERVAL := ${t.interval}, ` : ''}PRIORITY := ${t.priority});`,
+    ),
+    ...instances.map((i) =>
+      i.task && taskNames.has(i.task.toUpperCase())
+        ? `    PROGRAM ${i.name} WITH ${i.task} : ${i.program};`
+        : `    PROGRAM ${i.name} : ${i.program};`,
+    ),
     '  END_RESOURCE',
     'END_CONFIGURATION',
     '',

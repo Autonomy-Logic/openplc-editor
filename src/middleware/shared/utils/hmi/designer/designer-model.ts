@@ -43,7 +43,7 @@ export interface DesignerElement {
   locked: string | null
 }
 
-/** `Element.Property := POU.Variable;` in the body. */
+/** `Element.Property := Variable;` in the body, the variable a global, `List.Member` or `Instance.Program.Var`. */
 export interface DesignerBinding {
   element: string
   property: string
@@ -76,12 +76,16 @@ export interface DesignerModel {
   themeLines: DesignerSpan | null
   /** Start of the line holding FUNCTION_BLOCK, where a pragma goes. */
   headerStart: number
+  /** The block's name after FUNCTION_BLOCK. */
+  nameSpan: DesignerSpan
   elements: DesignerElement[]
   bindings: DesignerBinding[]
   events: DesignerEvent[]
   uses: DesignerUse[]
   /** Upper-case names of the block's variables and methods, elements included. */
   members: ReadonlySet<string>
+  /** Upper-case names of the block's methods. */
+  methods: ReadonlySet<string>
   /** Where a declaration goes after the last one: inside the last VAR block, or a new VAR block when there is none. */
   declarationAt: number
   /** Whether a new declaration needs a VAR block around it. */
@@ -150,6 +154,13 @@ function plainField(v: VariableExpression, text: SourceText): [string, string] |
   return b === undefined ? null : [a, b]
 }
 
+/** A variable named by plain fields only, as written without spaces: a global, `List.Member` or `Instance.Program.Var`. */
+function plainPath(v: VariableExpression, text: SourceText): string | null {
+  if (v.subscripts.length > 0 || v.isDereference) return null
+  if (v.accessChain !== undefined && v.accessChain.some((step) => step.kind !== 'field')) return null
+  return text.slice(v.sourceSpan).replace(/\s+/g, '')
+}
+
 function elementsOf(
   fb: FunctionBlockDeclaration,
   text: SourceText,
@@ -214,9 +225,9 @@ function bodyParts(
       const { target, value } = statement
       if (!isVariableExpression(target) || !isVariableExpression(value)) continue
       const t = plainField(target, text)
-      const v = plainField(value, text)
+      const v = plainPath(value, text)
       if (t && v && elements.has(t[0].toUpperCase()))
-        bindings.push({ element: t[0], property: t[1], variable: `${v[0]}.${v[1]}`, lines: lines(statement) })
+        bindings.push({ element: t[0], property: t[1], variable: v, lines: lines(statement) })
     } else if (statement.kind === 'IfStatement') {
       const s = statement
       if (s.elsifClauses.length > 0 || s.elseStatements.length > 0 || !isVariableExpression(s.condition)) continue
@@ -277,6 +288,9 @@ function modelOf(
   for (const block of fb.varBlocks)
     for (const decl of block.declarations) for (const n of decl.names) members.add(n.toUpperCase())
   for (const method of fb.methods) members.add(method.name.toUpperCase())
+  const methods = new Set(fb.methods.map((m) => m.name.toUpperCase()))
+  const nameStart = header ? headerOffset + header[0].length - header[1].length : fbStart
+  const nameSpan = { start: nameStart, end: nameStart + (header?.[1].length ?? 0) }
 
   const uses = variableExpressions([fb.body, fb.methods, fb.properties]).map((v) => {
     const start = text.start(v.sourceSpan)
@@ -289,11 +303,13 @@ function modelOf(
     theme: themePragma ? themePragma[1] : null,
     themeLines: themePragma ? { start: themePragma.index, end: themePragma.index + themePragma[0].length } : null,
     headerStart,
+    nameSpan,
     elements,
     bindings,
     events,
     uses,
     members,
+    methods,
     declarationAt,
     needsVarBlock: !lastVar,
     declarationIndent,

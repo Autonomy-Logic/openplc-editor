@@ -34,8 +34,8 @@ FUNCTION_BLOCK Overview EXTENDS HmiScreen
     (* kept as written *)
     Busy := Count > 3;
   END_METHOD
-  Level.Value := Main.Level;
-  Run.Value := Main.Running;
+  Level.Value := instance0.Main.Level;
+  Run.Value := instance0.Main.Running;
   IF Next.Clicked THEN
     HMI_Show(HMI_SCREEN#Details);
   END_IF;
@@ -87,8 +87,8 @@ describe('designer model', () => {
 
   it('reads the bindings and event handlers of the body', () => {
     expect(model.bindings.map((b) => [b.element, b.property, b.variable])).toEqual([
-      ['Level', 'Value', 'Main.Level'],
-      ['Run', 'Value', 'Main.Running'],
+      ['Level', 'Value', 'instance0.Main.Level'],
+      ['Run', 'Value', 'instance0.Main.Running'],
     ])
     expect(model.events).toEqual([
       expect.objectContaining({ element: 'Next', event: 'Clicked', code: 'HMI_Show(HMI_SCREEN#Details);' }),
@@ -252,10 +252,10 @@ describe('designer edits', () => {
   })
 
   it('binds, rebinds and unbinds a property', () => {
-    const bound = edited(setBinding(SCREEN, model, 'Next', 'Visible', 'GVL.Alarm'))
-    expect(bound).toContain('  Count := Count + 1;\n  Next.Visible := GVL.Alarm;\nEND_FUNCTION_BLOCK')
-    expect(edited(setBinding(SCREEN, model, 'Level', 'Value', 'Main.Speed'))).toContain(
-      '  Level.Value := Main.Speed;\n',
+    const bound = edited(setBinding(SCREEN, model, 'Next', 'Visible', 'AlarmOn'))
+    expect(bound).toContain('  Count := Count + 1;\n  Next.Visible := AlarmOn;\nEND_FUNCTION_BLOCK')
+    expect(edited(setBinding(SCREEN, model, 'Level', 'Value', 'instance0.Main.Speed'))).toContain(
+      '  Level.Value := instance0.Main.Speed;\n',
     )
     const unbound = edited(setBinding(SCREEN, model, 'Run', 'Value', null))
     expect(unbound).not.toContain('Run.Value')
@@ -427,7 +427,7 @@ describe('designer edits that are refused', () => {
     expect(refused(deleteElements(SCREEN, model, ['Nope']))).toMatch(/Nope/)
     expect(refused(moveElement(SCREEN, model, 'Nope', null, null))).toMatch(/Nope/)
     expect(refused(renameElement(SCREEN, model, 'Nope', 'Other'))).toMatch(/Nope/)
-    expect(refused(setBinding(SCREEN, model, 'Nope', 'Value', 'Main.Level'))).toMatch(/Nope/)
+    expect(refused(setBinding(SCREEN, model, 'Nope', 'Value', 'instance0.Main.Level'))).toMatch(/Nope/)
     expect(refused(setEvent(SCREEN, model, 'Nope', 'Clicked', 'Count := 0;'))).toMatch(/Nope/)
   })
 

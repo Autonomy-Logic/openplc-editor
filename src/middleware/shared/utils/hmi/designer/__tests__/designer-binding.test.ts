@@ -46,6 +46,12 @@ describe('designer binding', () => {
       variable: 'main.run',
       whilePressed: false,
     })
+    const path = { variable: 'instance0.Main.Run', whilePressed: true }
+    expect(momentaryOf(momentaryCode('Start', momentary, path), 'Start', momentary)).toEqual(path)
+    expect(momentaryOf('Alarm := Start.Pressed;', 'Start', momentary)).toEqual({
+      variable: 'Alarm',
+      whilePressed: true,
+    })
   })
 
   it('does not read other code as a momentary binding', () => {

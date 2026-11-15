@@ -3,7 +3,10 @@
  * through `model.setValue` under a guard, and user edits go through the designer's history, merged while typing.
  */
 import { Editor as PrimitiveEditor } from '@monaco-editor/react'
+import { attachHmiBuildMarkers } from '@root/frontend/services/hmi-code/build-markers'
+import { hmiFileUri } from '@root/frontend/services/hmi-code/uris'
 import { useOpenPLCStore } from '@root/frontend/store'
+import type { HmiDiagnostic } from '@root/middleware/shared/ports/hmi-preview-types'
 import type * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -16,9 +19,13 @@ type HmiCodeEditorProps = {
   onPreview?: () => void
   /** A line to show and put the cursor on; `key` tells a repeated request for the same line apart. */
   reveal?: { line: number; key: number }
+  /** The HMI build's errors, marked in the code like the language service's. */
+  diagnostics?: readonly HmiDiagnostic[]
 }
 
-const HmiCodeEditor = ({ name, kind, onPreview, reveal }: HmiCodeEditorProps) => {
+const NO_DIAGNOSTICS: readonly HmiDiagnostic[] = []
+
+const HmiCodeEditor = ({ name, kind, onPreview, reveal, diagnostics = NO_DIAGNOSTICS }: HmiCodeEditorProps) => {
   const source = useOpenPLCStore(
     (s) =>
       (kind === 'screen' ? s.project.data.hmi?.screens : s.project.data.hmi?.widgets)?.find((f) => f.name === name)
@@ -29,6 +36,9 @@ const HmiCodeEditor = ({ name, kind, onPreview, reveal }: HmiCodeEditorProps) =>
   const applySource = useOpenPLCStore((s) => s.hmiDesignerActions.applySource)
   const previewRef = useRef(onPreview)
   previewRef.current = onPreview
+  const diagnosticsRef = useRef(diagnostics)
+  diagnosticsRef.current = diagnostics
+  const buildMarkersRef = useRef<{ refresh(): void } | null>(null)
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<typeof monaco | null>(null)
@@ -81,6 +91,22 @@ const HmiCodeEditor = ({ name, kind, onPreview, reveal }: HmiCodeEditorProps) =>
   }, [mounted, reveal])
 
   useEffect(() => {
+    const api = monacoRef.current
+    const model = editorRef.current?.getModel()
+    if (!mounted || !api || !model) return
+    const markers = attachHmiBuildMarkers(api, model, name, () => diagnosticsRef.current)
+    buildMarkersRef.current = markers
+    return () => {
+      buildMarkersRef.current = null
+      markers.dispose()
+    }
+  }, [mounted, name, kind])
+
+  useEffect(() => {
+    buildMarkersRef.current?.refresh()
+  }, [diagnostics])
+
+  useEffect(() => {
     if (monacoRef.current) applyThemeNow(monacoRef.current, shouldUseDarkMode)
   }, [shouldUseDarkMode])
 
@@ -89,7 +115,7 @@ const HmiCodeEditor = ({ name, kind, onPreview, reveal }: HmiCodeEditorProps) =>
       <PrimitiveEditor
         height='100%'
         language='st'
-        path={`hmi-${kind}-${name}`}
+        path={hmiFileUri(kind, name)}
         theme={shouldUseDarkMode ? 'openplc-dark' : 'openplc-light'}
         value={localText}
         onChange={handleChange}
@@ -103,6 +129,7 @@ const HmiCodeEditor = ({ name, kind, onPreview, reveal }: HmiCodeEditorProps) =>
           renderWhitespace: 'selection',
           scrollBeyondLastLine: false,
           occurrencesHighlight: 'off',
+          fixedOverflowWidgets: true,
         }}
       />
     </div>
