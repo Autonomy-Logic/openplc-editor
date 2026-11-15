@@ -1,0 +1,14 @@
+{
+  "python": {
+    "file": "python-3.13.19.webc",
+    "url": "https://cdn.wasmer.io/webcimages/a016e626e56a2f08c17804df26d58e2d45170d07bfca1770f1a1bb844d9d4693.webc",
+    "sha256": "a016e626e56a2f08c17804df26d58e2d45170d07bfca1770f1a1bb844d9d4693",
+    "source": "python/python@3.13.19 on the Wasmer registry (CPython 3.13.15)"
+  },
+  "numpy": {
+    "file": "numpy-2.3.2-cp313-cp313-wasix_wasm32.whl",
+    "url": "https://pythonindex.wasix.org/packages/numpy-2.3.2-cp313-cp313-wasix_wasm32.whl",
+    "sha256": "f2abcba47de3063e00fd960b17058bf14954fb3485e58153ba6925447d28af55",
+    "source": "numpy 2.3.2 WASIX wheel"
+  }
+}

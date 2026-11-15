@@ -16,9 +16,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import type { PLCProjectData } from '../../middleware/shared/ports/types'
 import { useSimulator } from '../../middleware/shared/providers'
 import { useOpenPLCStore } from '../store'
 import { getErrorMessage } from '../utils/get-error-message'
+import { countPythonBlockInstances } from '../utils/python/count-python-block-instances'
 import type { UseDebugSessionReturn } from './useDebugSession'
 
 export interface UseSimulatorDebugRunArgs {
@@ -45,6 +47,8 @@ export interface UseSimulatorDebugRunArgs {
 }
 
 export interface UseSimulatorDebugRunReturn {
+  /** True from `launch` until the run has started or failed, and from `stop` until it has stopped. */
+  isBusy: boolean
   /** True while the emulator is running. */
   isRunning: boolean
   /**
@@ -61,9 +65,18 @@ export interface UseSimulatorDebugRunReturn {
    * Note the asymmetry with `isRunning`: a failed ATTACH still leaves
    * the emulator running, so the caller's stop control stays live and
    * `stop()` remains the way to end it.
+   *
+   * With `projectData`, one Python interpreter per Python block instance
+   * is started first and the PLC starts once they are ready, so the
+   * blocks start with the first scan. They start after the compile, not
+   * during it: booting them while the in-browser compiler runs stalls it
+   * on WebKit.
    */
-  launch: (firmwarePath: string, options?: { attachDebugger?: boolean }) => Promise<boolean>
-  /** End the debug session (if any) and stop the emulator. */
+  launch: (
+    firmwarePath: string,
+    options?: { attachDebugger?: boolean; projectData?: PLCProjectData },
+  ) => Promise<boolean>
+  /** End the debug session (if any), then stop the emulator, even when ending the session fails. */
   stop: () => Promise<void>
 }
 
@@ -73,6 +86,7 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
   const addLog = useOpenPLCStore((state) => state.consoleActions.addLog)
 
   const [isRunning, setIsRunning] = useState(false)
+  const [isBusy, setIsBusy] = useState(false)
 
   // Callers pass these as inline arrows, so their identity changes on every
   // render. Held in refs and read at call time so the subscription below and
@@ -97,8 +111,18 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
     })
   }, [simulator])
 
-  const launch = useCallback(
-    async (firmwarePath: string, options: { attachDebugger?: boolean } = {}): Promise<boolean> => {
+  useEffect(() => {
+    return simulator.onLog((line, stream) => addLog({ level: stream === 'stderr' ? 'error' : 'info', message: line }))
+  }, [simulator, addLog])
+
+  const start = useCallback(
+    async (firmwarePath: string, options: { attachDebugger?: boolean; projectData?: PLCProjectData }) => {
+      const pythonBlocks = options.projectData ? countPythonBlockInstances(options.projectData) : 0
+      if (pythonBlocks > 0) {
+        await simulator.preparePython(pythonBlocks).catch((error: unknown) => {
+          addLog({ level: 'error', message: `Python could not be prepared: ${getErrorMessage(error)}` })
+        })
+      }
       const loadResult = await simulator.loadFirmware(firmwarePath)
       if (!loadResult.success) {
         addLog({ level: 'error', message: `Failed to start simulator: ${loadResult.error ?? 'Unknown error'}` })
@@ -124,30 +148,24 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
     [simulator, debugSession, addLog],
   )
 
+  const launch = useCallback(
+    async (
+      firmwarePath: string,
+      options: { attachDebugger?: boolean; projectData?: PLCProjectData } = {},
+    ): Promise<boolean> => {
+      setIsBusy(true)
+      try {
+        return await start(firmwarePath, options)
+      } finally {
+        setIsBusy(false)
+      }
+    },
+    [start],
+  )
+
   const stop = useCallback(async (): Promise<void> => {
+    setIsBusy(true)
     try {
-      // Two things end here, in this order, and the emulator's end is not
-      // conditional on the debug session's.
-      //
-      // The debug session goes first: it is a CONSUMER of the emulator, so it
-      // has to let go of the transport before the thing on the other end
-      // disappears.
-      //
-      // The emulator goes second, from a `finally`, because stopping it is
-      // this function's job and nothing else's. `stopSession()` deliberately
-      // does not do it (see its docstring: a debug session is not the owner of
-      // the thing it talks to), so with this call missing "Stop" ended the
-      // debug session, logged "Simulator stopped." and left the avr8js loop
-      // running — re-scheduling itself and burning a core for the rest of the
-      // session, unreachable because the button had flipped back to "Start".
-      //
-      // Sequencing it after a plain `await` reintroduced the same leak on the
-      // error path: anything that rejects inside the teardown (today only a
-      // throwing `onDisconnected` subscriber, which is why nothing hits it
-      // yet) skipped straight to the catch below, which only logs. The
-      // emulator kept running, `isRunning` stayed true, and every retry failed
-      // identically — worse than the original bug, because nothing settled at
-      // all. `finally` keeps the order and drops the condition.
       try {
         await debugSession.stopSession()
       } finally {
@@ -159,8 +177,10 @@ export function useSimulatorDebugRun(args: UseSimulatorDebugRunArgs): UseSimulat
       addLog({ level: 'info', message: 'Simulator stopped.' })
     } catch (error: unknown) {
       addLog({ level: 'error', message: `Simulator control error: ${getErrorMessage(error)}` })
+    } finally {
+      setIsBusy(false)
     }
   }, [debugSession, simulator, addLog])
 
-  return { isRunning, launch, stop }
+  return { isBusy, isRunning, launch, stop }
 }

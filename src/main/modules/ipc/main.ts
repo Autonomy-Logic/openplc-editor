@@ -70,6 +70,8 @@ import type {
   PlcControlResult,
 } from '@root/backend/shared/debug/types'
 import { runEsiParseOp } from '@root/backend/shared/ethercat/esi-parse-ops'
+import { buildNeedsArduinoComponents } from '@root/backend/shared/firmware/board-toolchain'
+import { getHalsFile } from '@root/backend/shared/firmware/hals-loader'
 import { listPublicLibraries, PublicLibrarySchema } from '@root/backend/shared/library/public-catalog-client'
 import type { SnapshotMetadata } from '@root/backend/shared/project/project-snapshot-archive'
 import { PlcRuntimeState } from '@root/backend/shared/simulator/types'
@@ -160,6 +162,7 @@ import {
 import { BootloaderApiClient } from '../../../backend/editor/runtime/bootloader-api-client'
 import { RuntimeApiClient } from '../../../backend/editor/runtime/runtime-api-client'
 import { logger } from '../../../backend/editor/services'
+import { createDesktopSimulator } from '../../../backend/editor/simulator/desktop-simulator'
 import {
   getOpenProjectPath,
   getPdfExportSavePath,
@@ -168,7 +171,6 @@ import {
   getProjectPath,
 } from '../../../backend/editor/utils'
 import { getDesktopWasmCompileService } from '../../../backend/editor/wasm-toolchain/desktop-wasm-toolchain'
-import { SimulatorModule } from '../../../backend/shared/simulator/simulator-module'
 import { VirtualSerialPort } from '../../../backend/shared/simulator/virtual-serial-port'
 import {
   interpretPluginCommandResponse,
@@ -328,8 +330,7 @@ class MainProcessBridge implements MainIpcModule {
     canonicalPath: (filePath) => canonicalWatchKey(resolve(filePath), process.platform),
     emitExternalChange: (filePath) => this.mainWindow?.webContents.send('file:external-change', { filePath }),
   })
-  // avr8js ATmega2560 emulator instance for the built-in simulator
-  private simulatorModule = new SimulatorModule()
+  private simulator = this.createSimulator()
   // VPP package manager for board package operations
   private packageManagerModule: PackageManagerModule
   private vppDependencies: VppDependencyService
@@ -1105,6 +1106,7 @@ class MainProcessBridge implements MainIpcModule {
     // ===================== SIMULATOR =====================
     this.registerHandle('simulator:load-firmware', this.handleSimulatorLoadFirmware)
     this.registerHandle('simulator:stop', this.handleSimulatorStop)
+    this.registerHandle('simulator:prepare-python', this.handleSimulatorPreparePython)
     this.registerHandle('simulator:is-running', this.handleSimulatorIsRunning)
 
     // ===================== FILE WATCHER =====================
@@ -2233,7 +2235,7 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   async #compileAfterStartupCheck(args: CompileProgramIpcArgs, port: MessagePortMain): Promise<void> {
-    if (this.startupDependencies.isRunning()) {
+    if (buildNeedsArduinoComponents(getHalsFile(), args[1]) && this.startupDependencies.isRunning()) {
       port.postMessage({
         logLevel: 'info',
         message: 'Waiting for the editor to finish installing the Arduino components every build needs...',
@@ -2666,7 +2668,7 @@ class MainProcessBridge implements MainIpcModule {
 
   /** The simulator lives in this process, so the factory needs a way to build the in-process serial port it answers on. */
   private readonly debugChannelDeps = {
-    createVirtualSerialPort: () => new VirtualSerialPort(this.simulatorModule),
+    createVirtualSerialPort: () => new VirtualSerialPort(this.simulator),
     // Read from the token manager at open time, never a closure over the login-time value.
     getToken: () => this.runtimeApi.tokens.getToken(),
   }
@@ -3158,10 +3160,21 @@ class MainProcessBridge implements MainIpcModule {
 
   /** Stops the simulator and notifies the renderer so it can update UI state. */
   private stopSimulatorAndNotify(): void {
-    if (this.simulatorModule.isRunning()) {
+    if (this.simulator.isRunning()) {
       this.stopSimulator()
       this.mainWindow?.webContents.send('simulator:stopped')
     }
+  }
+
+  /** The simulator, whose runs each get a worker thread; a run that ends on its own closes its session. */
+  private createSimulator(): ReturnType<typeof createDesktopSimulator> {
+    const simulator = createDesktopSimulator()
+    simulator.onStopped = () => {
+      this.closeSimulatorSession()
+      this.mainWindow?.webContents.send('simulator:stopped')
+    }
+    simulator.onLog = (line, stream) => this.mainWindow?.webContents.send('simulator:log', line, stream)
+    return simulator
   }
 
   // ===================== ETHERCAT DISCOVERY HANDLERS =====================
@@ -3441,12 +3454,11 @@ class MainProcessBridge implements MainIpcModule {
    */
   handleSimulatorLoadFirmware = async (
     _event: IpcMainInvokeEvent,
-    hexPath: string,
+    modulePath: string,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       const fs = await import('fs/promises')
-      const hexContent = await fs.readFile(hexPath, 'utf-8')
-      this.simulatorModule.loadAndRun(hexContent)
+      await this.simulator.loadAndRun(new Uint8Array(await fs.readFile(modulePath)))
 
       const opened = await this.deviceSession.open(
         this.toDeviceLinkCandidates([{ connectionType: 'simulator', connectionParams: {} }]),
@@ -3459,15 +3471,15 @@ class MainProcessBridge implements MainIpcModule {
       this.debuggerConnectionType = 'simulator'
       return { success: true }
     } catch (error) {
-      // A start that threw part-way still leaves state behind: `loadAndRun`
-      // marks the emulator running before it finishes wiring, so a throw after
-      // that point leaked a running emulator with no session — and no button to
-      // reach it, because the renderer never learned it had started. Web ends up
-      // in the right place through its worker, which cleans up and reports
-      // 'stopped' when `loadAndRun` throws; this is the editor's counterpart.
       this.stopSimulator()
       return { success: false, error: getErrorMessage(error) }
     }
+  }
+
+  /** Starts interpreters for the next run's Python blocks; resolves once they are ready. */
+  handleSimulatorPreparePython = (_event: IpcMainInvokeEvent, count: unknown): Promise<void> => {
+    if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) return Promise.resolve()
+    return this.simulator.preparePython(count)
   }
 
   /**
@@ -3490,7 +3502,7 @@ class MainProcessBridge implements MainIpcModule {
    */
   stopSimulator(): void {
     this.closeSimulatorSession()
-    this.simulatorModule.stop()
+    this.simulator.stop()
   }
 
   /** Close the session if it is the simulator's. No-op for any other target. */
@@ -3501,7 +3513,7 @@ class MainProcessBridge implements MainIpcModule {
   }
 
   handleSimulatorIsRunning = (_event: IpcMainInvokeEvent): Promise<boolean> => {
-    return Promise.resolve(this.simulatorModule.isRunning())
+    return Promise.resolve(this.simulator.isRunning())
   }
 
   handleFileWatchStart = (
