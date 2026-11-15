@@ -1,4 +1,5 @@
 import type { PLCProjectData } from '../../../middleware/shared/ports/types'
+import { serializeSoftMotionAxisGlobalsToST } from '../../../middleware/shared/utils/ethercat'
 import { serializeDataTypesToST } from './data-type-serializer'
 import {
   serializeGlobalVariableListInstances,
@@ -9,12 +10,12 @@ import { serializeResourceGlobalsToST } from './resource-globals-serializer'
 
 /**
  * The PLC program as the HMI build compiles screens against it: data types, Global Variable Lists, every POU's
- * declarations without bodies, and the configuration with its globals and program instances. Built by the same
+ * declarations without bodies, the SoftMotion axis globals, and the configuration with its globals and program instances. Built by the same
  * serializers the ST language server's documents use, so a path that resolves in the editor compiles.
  */
 export function hmiPlcDeclarations(
   project: Pick<PLCProjectData, 'pous' | 'dataTypes' | 'configurations'> &
-    Partial<Pick<PLCProjectData, 'globalVariableLists'>>,
+    Partial<Pick<PLCProjectData, 'globalVariableLists' | 'remoteDevices'>>,
   aliasIndex: ReadonlyMap<string, string> = new Map(),
 ): string {
   const lists = project.globalVariableLists ?? []
@@ -24,7 +25,11 @@ export function hmiPlcDeclarations(
     serializeGlobalVariableListsToTypes(lists),
     serializeGlobalVariableListInstances(lists),
     ...project.pous.map((pou) => `${serializePouSignatureToSTWithBodyOffset(pou, aliasIndex, true).text}\n`),
-    serializeResourceGlobalsToST(resource.globalVariables, aliasIndex, resource),
+    serializeSoftMotionAxisGlobalsToST(project),
+    serializeResourceGlobalsToST(resource.globalVariables, aliasIndex, {
+      ...resource,
+      programs: project.pous.filter((p) => p.pouType === 'program').map((p) => p.name),
+    }),
   ]
     .filter((part) => part.length > 0)
     .join('\n')

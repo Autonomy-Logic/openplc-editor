@@ -14,18 +14,22 @@ type HmiDesignerRootState = HmiDesignerSlice & ProjectSlice & SharedSlice
 /** Store key of a screen or widget block. */
 export const hmiDesignerKey = (kind: HmiElementKind, name: string): string => `${kind}:${name.toUpperCase()}`
 
+/** A new designer state, for a screen or widget block that has none yet. */
+const newEntry = (): HmiDesignerEntry => ({
+  history: emptyHistory(),
+  view: 'design',
+  device: DEFAULT_HMI_DEVICE,
+  zoom: null,
+  selection: [],
+  lastValidSource: null,
+})
+
+/** What a screen or widget block without designer state reads; one object, so a store selector returning it is stable. */
+const DEFAULT_ENTRY: HmiDesignerEntry = Object.freeze(newEntry())
+
 /** The designer's state of a screen or widget block, defaults when it has none yet. */
 export function hmiDesignerEntry(state: HmiDesignerSlice, kind: HmiElementKind, name: string): HmiDesignerEntry {
-  return (
-    state.hmiDesigner[hmiDesignerKey(kind, name)] ?? {
-      history: emptyHistory(),
-      view: 'design',
-      device: DEFAULT_HMI_DEVICE,
-      zoom: null,
-      selection: [],
-      lastValidSource: null,
-    }
-  )
+  return state.hmiDesigner[hmiDesignerKey(kind, name)] ?? DEFAULT_ENTRY
 }
 
 function sourceOf(state: ProjectSlice, kind: HmiElementKind, name: string): string | undefined {
@@ -41,7 +45,7 @@ export const createHmiDesignerSlice: StateCreator<HmiDesignerRootState, [], [], 
     setState(
       produce((state: HmiDesignerRootState) => {
         const key = hmiDesignerKey(kind, name)
-        const entry = state.hmiDesigner[key] ?? hmiDesignerEntry(state, kind, name)
+        const entry = state.hmiDesigner[key] ?? newEntry()
         change(entry)
         state.hmiDesigner[key] = entry
       }),

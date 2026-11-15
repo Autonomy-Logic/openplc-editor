@@ -1,7 +1,6 @@
 /**
- * The running preview of a screen or widget block: builds on opening and on request, keeps the last good module on
- * screen while a build runs, drives frames at the project's frame period, paints the rows that changed and keeps the
- * element bounds, and applies live property edits through the module's setters.
+ * The running preview of a screen or widget block: builds it, keeps the last good module while a build runs, drives
+ * frames, paints changed rows, keeps element bounds and applies live property edits.
  */
 import type { HmiPreviewSession } from '@root/middleware/shared/ports/hmi-preview-port'
 import type {
@@ -138,9 +137,10 @@ export function usePreviewSession({
     })
   }, [port, screen, device.width, device.height, design])
 
+  const ready = request !== null
   useEffect(() => {
-    rebuild()
-  }, [rebuild])
+    if (ready) rebuild()
+  }, [rebuild, ready])
 
   useEffect(() => {
     if (state.status !== 'ready') return

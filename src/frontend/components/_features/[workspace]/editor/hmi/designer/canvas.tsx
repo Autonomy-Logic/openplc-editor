@@ -1,8 +1,6 @@
 /**
- * The device the screen is designed on: the running preview, and over it the hover, selection and drop marks. In
- * design mode the pointer selects and moves elements, drops widgets and variables, and resizes with the handles; in a
- * diagram it places symbols on the grid, draws pipes from port to port and edits their bends. In run mode it operates
- * the screen.
+ * The device a screen is designed on: the running preview with hover, selection and drop marks. Design mode selects,
+ * moves, drops and resizes, and edits diagrams; run mode operates the screen.
  */
 import { cn } from '@root/frontend/utils/cn'
 import type { HmiBuildStep, HmiPointerKind, HmiWidgetCatalog } from '@root/middleware/shared/ports/hmi-preview-types'

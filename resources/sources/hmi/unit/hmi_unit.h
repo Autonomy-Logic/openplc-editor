@@ -1,15 +1,7 @@
 /**
  * @file hmi_unit.h
- * @brief What a generated HMI unit gives the host that runs it: program instances, the tag table and project settings.
- *
- * The editor generates the unit (screens, widget blocks and glue, compiled by STruC++ with the StandardWidgets
- * library) and its tag table. A host creates one program instance per viewer, sets the viewer's role, and calls
- * hmi_unit_frame between hmi_frame_begin and hmi_frame_end of that viewer's core session.
- *
- * Tags: the PLC variables screens use, by id. Screens read a tag straight from the PLC's variable, which the host
- * locates through the debug interface (the HMI runs in the PLC program's address space), and hand every write to the
- * host, which applies it through the debug interface and logs it. Nothing is copied or buffered between frames.
- * Without a host (the editor's preview) the unit keeps the variables itself.
+ * @brief What a generated HMI unit gives its host: program instances (one per viewer, run by hmi_unit_frame inside
+ *        that viewer's core frame), the tag table, PLC variable access and project settings.
  */
 #ifndef HMI_UNIT_H
 #define HMI_UNIT_H
@@ -54,7 +46,11 @@ typedef struct {
                              `<LIST>.<NAME>` */
 } hmi_tag_t;
 
-/** How the unit reaches the PLC's variables. */
+/**
+ * How the unit reaches the PLC's variables. Screens read a tag straight from the PLC's variable, which the host
+ * locates through the debug interface (the HMI runs in the PLC program's address space), and hand every write to the
+ * host, which applies and logs it. Nothing is copied or buffered between frames.
+ */
 typedef struct {
     /** The PLC's variable object of a tag, as the debug interface locates it; NULL when it has none. */
     void *(*variable)(void *ctx, int tag);

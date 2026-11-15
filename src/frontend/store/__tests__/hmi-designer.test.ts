@@ -1,6 +1,11 @@
-import type { OpenPLCStore } from '..'
+/**
+ * @jest-environment jsdom
+ */
+import { renderHook } from '@testing-library/react'
+
+import { type OpenPLCStore, useOpenPLCStore } from '..'
 import { hmiDesignerEntry } from '../slices/hmi-designer'
-import { createTestStore } from '../testing'
+import { createStoreWrapper, createTestStore } from '../testing'
 
 let store: OpenPLCStore
 
@@ -13,6 +18,16 @@ const source = () => store.getState().project.data.hmi?.screens.find((s) => s.na
 const entry = () => hmiDesignerEntry(store.getState(), 'screen', 'Overview')
 
 describe('HMI designer state', () => {
+  it('reads one default for a screen without designer state, so a component selecting it renders once', () => {
+    expect(hmiDesignerEntry(store.getState(), 'screen', 'Missing')).toBe(
+      hmiDesignerEntry(store.getState(), 'screen', 'Missing'),
+    )
+    const { result } = renderHook(() => useOpenPLCStore((s) => hmiDesignerEntry(s, 'screen', 'Missing')), {
+      wrapper: createStoreWrapper(store),
+    })
+    expect(result.current.view).toBe('design')
+  })
+
   it('applies edits through the project, marks the screen unsaved, and undoes and redoes them', () => {
     const { hmiDesignerActions } = store.getState()
     const original = source()

@@ -7,6 +7,7 @@ import { Label } from '@root/frontend/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@root/frontend/components/_atoms/table'
 import { ToggleSwitch } from '@root/frontend/components/_atoms/toggle-switch'
+import { readyRequest } from '@root/frontend/services/hmi-code/plc-libraries'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import { toast } from '@root/frontend/utils/toast'
@@ -141,7 +142,7 @@ function ThemePreview(props: { theme: string }) {
   const themed = useMemo(() => ({ ...request, screens: [], themePreview: props.theme }), [request, props.theme])
   const canvas = useRef<HTMLCanvasElement>(null)
   const preview = usePreviewSession({
-    request: themed,
+    request: readyRequest(themed),
     screen: '',
     device: PREVIEW_DEVICE,
     design: false,

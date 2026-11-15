@@ -1,7 +1,6 @@
 /**
- * What the visual designer edits in a screen or widget block, read from the STruC++ syntax tree with the source
- * spans an edit needs: the elements with their properties, the bindings and event handlers in the body, where new
- * declarations and statements go, and every use of an identifier. Spans are offsets into the source, end exclusive.
+ * What the designer edits in a screen or widget block, read from the STruC++ syntax tree: elements and properties,
+ * bindings, event handlers, insertion points and identifier uses, as source spans (end exclusive).
  */
 import type { FunctionBlockDeclaration, SourceSpan, Statement, VarDeclaration, VariableExpression } from 'strucpp'
 import { parse } from 'strucpp'

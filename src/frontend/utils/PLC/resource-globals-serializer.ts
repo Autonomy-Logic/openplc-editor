@@ -8,6 +8,9 @@ import { generateIecVariablesToString } from '../generate-iec-variables-to-strin
 const GLOBALS_CONFIG_NAME = 'Config0'
 const GLOBALS_RESOURCE_NAME = 'Res0'
 
+/** An ST identifier, which a task or instance name must be to appear in the document. */
+const IDENTIFIER = /^[A-Za-z_]\w*$/
+
 /**
  * Serialize the project's resource-level global variables as a standalone
  * `CONFIGURATION` document for the language server, so a POU's `VAR_EXTERNAL`
@@ -26,7 +29,9 @@ const GLOBALS_RESOURCE_NAME = 'Res0'
  * with how variables render everywhere else. Returns '' when there are none.
  *
  * The resource lists the tasks and program instances, so HMI screens resolve instance paths
- * (`instance0.Main.Run`) against the same configuration the compiler emits.
+ * (`instance0.Main.Run`) against the same configuration the compiler emits. Only instances of an
+ * existing program (`programs`) with identifier names are listed, so a row being filled in or one
+ * left by a deleted program adds no error to every document.
  *
  * `aliasIndex` resolves alias-bound locations to literal `%…` addresses. A
  * global bound to an IO alias would otherwise serialize as `AT my_alias`,
@@ -37,9 +42,17 @@ const GLOBALS_RESOURCE_NAME = 'Res0'
 export function serializeResourceGlobalsToST(
   globals: PLCVariable[],
   aliasIndex: ReadonlyMap<string, string> = new Map(),
-  resource: { tasks: readonly PLCTask[]; instances: readonly PLCInstance[] } = { tasks: [], instances: [] },
+  resource: { tasks: readonly PLCTask[]; instances: readonly PLCInstance[]; programs: readonly string[] } = {
+    tasks: [],
+    instances: [],
+    programs: [],
+  },
 ): string {
-  const { tasks, instances } = resource
+  const programs = new Set(resource.programs.map((p) => p.toUpperCase()))
+  const tasks = resource.tasks.filter((t) => IDENTIFIER.test(t.name))
+  const instances = resource.instances.filter(
+    (i) => IDENTIFIER.test(i.name) && programs.has(i.program.trim().toUpperCase()),
+  )
   if ((!globals || globals.length === 0) && instances.length === 0) return ''
   const taskNames = new Set(tasks.map((t) => t.name.toUpperCase()))
   // Force the global class so the shared formatter always emits a single

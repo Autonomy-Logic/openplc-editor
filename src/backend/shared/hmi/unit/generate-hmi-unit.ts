@@ -28,6 +28,7 @@ import type { CompileOptions, StlibArchive } from 'strucpp'
 
 import type {
   HmiDiagnostic,
+  HmiLibraryArchive,
   HmiPlcVariable,
   HmiPreviewSetter,
   HmiSourceFile,
@@ -328,6 +329,10 @@ function writeBacks(
     const variable = variables.get(shortPath(b.variable))
     const type = variable ? tagType(variable.type) : undefined
     if (!variable || !type) continue
+    if (variable.constant) {
+      d.error(plan.file.name, `${b.element}.${b.property}: ${b.variable} is a CONSTANT; the operator cannot change it`)
+      continue
+    }
     const source = widget.outputs.find((o) => o.name.toUpperCase() === twoWay.newValue.toUpperCase())
     const from = (source?.type ?? '').toUpperCase()
     const value = `${b.element}.${twoWay.newValue}`
@@ -413,6 +418,7 @@ const ST_LITERAL =
  */
 function previewStarts(variables: readonly HmiPlcVariable[]): string[] {
   return variables.flatMap((v) => {
+    if (v.constant) return []
     const initial = v.initialValue?.trim()
     return initial !== undefined && tagType(v.type) && ST_LITERAL.test(initial) ? [`    ${v.path} := ${initial};`] : []
   })
@@ -747,7 +753,31 @@ function checkNames(input: HmiUnitInput, library: ReadonlySet<string>, d: Diagno
   }
 }
 
-/** Builds and compiles the HMI unit. */
+/** Parsed PLC library archives by their JSON text, so a preview rebuild does not parse them again. */
+const plcArchiveCache = new Map<string, StlibArchive>()
+const PLC_ARCHIVE_CACHE_SIZE = 64
+
+/** The PLC's library archives, parsed; one that does not load is an error of the unit. */
+function plcArchives(libraries: readonly HmiLibraryArchive[], d: Diagnostics): StlibArchive[] {
+  const strucpp = loadStrucpp()
+  return libraries.flatMap((library) => {
+    const cached = plcArchiveCache.get(library.archiveJson)
+    if (cached) return [cached]
+    try {
+      const archive = strucpp.loadStlibFromString(library.archiveJson, library.name)
+      if (plcArchiveCache.size >= PLC_ARCHIVE_CACHE_SIZE) plcArchiveCache.clear()
+      plcArchiveCache.set(library.archiveJson, archive)
+      return [archive]
+    } catch (error) {
+      d.error(
+        UNIT,
+        `library ${library.name} could not be loaded: ${error instanceof Error ? error.message : String(error)}`,
+      )
+      return []
+    }
+  })
+}
+
 /** The library archives and the widget catalogue a project's widget blocks give, with their errors. */
 export interface HmiWidgetLibrary {
   archives: StlibArchive[]
@@ -923,6 +953,7 @@ export function hmiScreenMembers(archive: StlibArchive): ReadonlySet<string> {
   )
 }
 
+/** Builds and compiles the HMI unit. */
 export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   const d = new Diagnostics()
   const result: HmiUnitResult = {
@@ -1009,10 +1040,15 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   sources[MAIN_FILE] = mainSource(plans, input.settings, start, input.preview ? previewStarts(input.plcVariables) : [])
   result.sources = sources
   const [first, ...rest] = Object.entries(sources)
+  const widgetLibraries = new Set(archives.map((a) => a.manifest.name.toUpperCase()))
+  const plcLibraries = plcArchives(input.plcLibraries ?? [], d).filter(
+    (a) => !widgetLibraries.has(a.manifest.name.toUpperCase()),
+  )
+  if (d.errors.length > 0) return result
   const options: StrucppCompileOptions = {
     fileName: first[0],
     additionalSources: rest.map(([fileName, source]) => ({ fileName, source })),
-    libraries: archives,
+    libraries: [...archives, ...plcLibraries],
     namespace: NAMESPACE,
     headerFileName: HEADER,
     separateLibraryFiles: true,

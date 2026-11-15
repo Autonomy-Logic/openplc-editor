@@ -28,11 +28,8 @@
 import type {
   PLCDataType,
   PLCGlobalVariableList,
-  PLCInstance,
   PLCPou,
   PLCRemoteDevice,
-  PLCTask,
-  PLCVariable,
 } from '../../../middleware/shared/ports/types'
 import { serializeSoftMotionAxisGlobalsToST } from '../../../middleware/shared/utils/ethercat'
 import type { OpenPLCStore } from '../../store'
@@ -153,14 +150,15 @@ export function attachProjectSync(store: OpenPLCStore, service: StLspService): P
 
   // The project's configuration-level `VAR_GLOBAL`s wrapped in a CONFIGURATION,
   // so a POU's `VAR_EXTERNAL` resolves against a matching global.
-  function reconcileResourceGlobals(resource: {
-    globalVariables: PLCVariable[]
-    instances: PLCInstance[]
-    tasks: PLCTask[]
-  }): void {
+  function reconcileResourceGlobals(): void {
+    const { pous, configurations } = store.getState().project.data
+    const { resource } = configurations
     reconcileSyntheticDoc(
       RESOURCE_GLOBALS_URI,
-      serializeResourceGlobalsToST(resource.globalVariables, aliasIndex(), resource),
+      serializeResourceGlobalsToST(resource.globalVariables, aliasIndex(), {
+        ...resource,
+        programs: pous.filter((p) => p.pouType === 'program').map((p) => p.name),
+      }),
     )
   }
 
@@ -220,7 +218,7 @@ export function attachProjectSync(store: OpenPLCStore, service: StLspService): P
   }
 
   function reconcileSoftMotionGlobals(remoteDevices: PLCRemoteDevice[] | undefined): void {
-    reconcileSyntheticDoc(SOFTMOTION_GLOBALS_URI, serializeSoftMotionAxisGlobalsToST({ remoteDevices } as never))
+    reconcileSyntheticDoc(SOFTMOTION_GLOBALS_URI, serializeSoftMotionAxisGlobalsToST({ remoteDevices }))
   }
 
   function reconcile(pous: PLCPou[]): void {
@@ -296,7 +294,10 @@ export function attachProjectSync(store: OpenPLCStore, service: StLspService): P
   // references update on every mutation.
   const unsubscribePous = store.subscribe(
     (state) => state.project.data.pous,
-    (pous) => reconcile(pous),
+    (pous) => {
+      reconcileResourceGlobals()
+      reconcile(pous)
+    },
   )
   // Data types live in their own slice and change independently of
   // POUs (a user can add an enum without touching any POU body).
@@ -310,7 +311,7 @@ export function attachProjectSync(store: OpenPLCStore, service: StLspService): P
   // POUs, so a POU's VAR_EXTERNAL and a screen's instance path resolve without waiting on a POU edit.
   const unsubscribeResourceGlobals = store.subscribe(
     (state) => state.project.data.configurations.resource,
-    (resource) => reconcileResourceGlobals(resource),
+    () => reconcileResourceGlobals(),
   )
   // SoftMotion axis globals derive from the EtherCAT remote devices — adding,
   // renaming, or enabling a CiA 402 drive must refresh the synthesized globals
@@ -343,7 +344,7 @@ export function attachProjectSync(store: OpenPLCStore, service: StLspService): P
     (state) => state.projectActions.getAliasIndex(),
     () => {
       const live = store.getState()
-      reconcileResourceGlobals(live.project.data.configurations.resource)
+      reconcileResourceGlobals()
       reconcile(live.project.data.pous)
     },
   )
@@ -352,7 +353,7 @@ export function attachProjectSync(store: OpenPLCStore, service: StLspService): P
   // synthesized globals/types load first so any POU that references
   // them resolves on the first didOpen, not on a follow-up didChange.
   reconcileDataTypes(store.getState().project.data.dataTypes)
-  reconcileResourceGlobals(store.getState().project.data.configurations.resource)
+  reconcileResourceGlobals()
   reconcileSoftMotionGlobals(store.getState().project.data.remoteDevices)
   reconcileGlobalVariableLists(store.getState().project.data.globalVariableLists)
   reconcile(store.getState().project.data.pous)
@@ -361,7 +362,7 @@ export function attachProjectSync(store: OpenPLCStore, service: StLspService): P
     resync() {
       if (disposed) return
       reconcileDataTypes(store.getState().project.data.dataTypes)
-      reconcileResourceGlobals(store.getState().project.data.configurations.resource)
+      reconcileResourceGlobals()
       reconcileSoftMotionGlobals(store.getState().project.data.remoteDevices)
       reconcileGlobalVariableLists(store.getState().project.data.globalVariableLists)
       reconcile(store.getState().project.data.pous)

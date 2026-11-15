@@ -23,7 +23,7 @@ export interface HmiFixture {
 export interface HmiProject {
   /** ST of the Main program. */
   main: string
-  globals?: Array<{ name: string; type: string; initialValue?: string }>
+  globals?: Array<{ name: string; type: string; initialValue?: string; constant?: boolean }>
   screens: Record<string, string>
   widgets?: Record<string, string>
   startScreen: string
@@ -59,6 +59,7 @@ export function writeHmiFixture(f: HmiFixture, project: HmiProject): void {
               location: '',
               documentation: '',
               initialValue: g.initialValue ?? '',
+              ...(g.constant ? { flag: 'constant' } : {}),
             })),
           },
         },

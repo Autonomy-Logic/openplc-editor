@@ -1,8 +1,6 @@
 /**
- * Project HMI → ST language server: every screen and widget block as a document, screens marked so their instance paths
- * (`instance0.Main.Run`) resolve, the navigation and theme declarations the HMI build generates for the screens, and
- * the HMI libraries once the project has an HMI file. Screens are re-sent when the PLC program or the HMI around them
- * changes, since the server analyses each document on its own changes only.
+ * Project HMI to the ST language server: screens (marked for instance paths) and widget blocks as documents, the
+ * generated navigation and theme declarations, and the HMI libraries, re-sent when the PLC program changes.
  */
 import type { HmiPreviewPort } from '../../../middleware/shared/ports/hmi-preview-port'
 import { defaultHmiSettings } from '../../../middleware/shared/utils/hmi/settings'

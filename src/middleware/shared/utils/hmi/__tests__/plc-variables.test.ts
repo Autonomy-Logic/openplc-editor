@@ -60,4 +60,24 @@ describe('hmiPlcVariables', () => {
       { path: 'GVL.Output1', type: 'BOOL' },
     ])
   })
+
+  it('marks a CONSTANT, so screens read it and never write it', () => {
+    const variables = hmiPlcVariables({
+      pous: [],
+      configurations: {
+        resource: {
+          tasks: [],
+          instances: [],
+          globalVariables: [
+            v('MaxL', 'int', { class: 'global', flag: 'constant', initialValue: '10' }),
+            v('Run', 'bool'),
+          ],
+        },
+      },
+    })
+    expect(variables).toEqual([
+      { path: 'MaxL', type: 'INT', initialValue: '10', constant: true },
+      { path: 'Run', type: 'BOOL' },
+    ])
+  })
 })

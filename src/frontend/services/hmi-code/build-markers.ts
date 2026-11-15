@@ -1,7 +1,6 @@
 /**
- * Marks the HMI build's errors in a screen or widget block's code, the way the language service marks its own: at the
- * line they name, or at the block name when they name none or belong to another file. An error another owner already
- * marks on the same line is left out.
+ * Marks the HMI build's errors in a screen or widget block's code: at their line, or at the block name when they name
+ * none or another file; an error another owner marks on that line is left out.
  */
 import type * as monaco from 'monaco-editor'
 

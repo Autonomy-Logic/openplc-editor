@@ -1,7 +1,6 @@
 /**
- * The PLC variables a project's screens may use, named as screens write them: a program instance's variables as
- * `<Instance>.<Program>.<Name>`, the configuration's globals by name, and a Global Variable List's members as
- * `<List>.<Name>`, with elementary types only.
+ * The PLC variables screens may use, named as screens write them: `<Instance>.<Program>.<Name>`, configuration
+ * globals by name and `<List>.<Name>`; elementary types only, constants marked read-only.
  */
 import type { HmiPlcVariable } from '../../ports/hmi-preview-types'
 import type { PLCProjectData, PLCVariable } from '../../ports/types'
@@ -16,6 +15,7 @@ function asHmiVariable(path: string, variable: PLCVariable): HmiPlcVariable | nu
     path,
     type: variable.type.value.toUpperCase(),
     ...(initial ? { initialValue: initial } : {}),
+    ...(variable.flag === 'constant' ? { constant: true as const } : {}),
   }
 }
 

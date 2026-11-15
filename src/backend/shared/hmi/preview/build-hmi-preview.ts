@@ -1,8 +1,6 @@
 /**
- * The editor's preview build: generates the HMI unit and composes its WebAssembly compile request (unit files, live
- * setters, the C core, the vetted fonts the screens use and the preview host), laid out so the toolchain's object cache
- * rebuilds only what an edit changed: one unit per generated file, the core and fonts apart, and the runtime headers
- * precompiled once.
+ * The editor's preview build: generates the HMI unit and its WebAssembly compile request, one unit per generated
+ * file with the core, fonts and precompiled runtime headers apart, so an edit rebuilds only what it changed.
  */
 import type {
   HmiBuildStep,
@@ -51,9 +49,9 @@ export const HMI_PREVIEW_MAX_MEMORY = 128 * 1024 * 1024
 const STACK_SIZE = 1024 * 1024
 
 const INCLUDES = [`-I${RUNTIME_DIR}`, `-I${HMI_DIR}/core`, `-I${HMI_DIR}/unit`, `-I${UNIT_DIR}`]
-/** C flags of the core: the ones its golden tests use, so the preview draws the same pixels. */
 /** Bounds records a preview frame keeps: design mode adds ports, diagram frames and pipe points. */
 export const HMI_PREVIEW_BOUNDS_MAX = 4096
+/** C flags of the core: the ones its golden tests use, so the preview draws the same pixels. */
 export const HMI_PREVIEW_C_FLAGS = [
   '-std=c11',
   '-O2',

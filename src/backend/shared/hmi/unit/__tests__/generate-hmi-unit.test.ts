@@ -1,3 +1,6 @@
+import { readFileSync } from 'fs'
+import { join } from 'path'
+
 import { hmiSettingsSchema } from '../../../../../middleware/shared/utils/hmi/settings'
 import {
   generateHmiUnit,
@@ -410,6 +413,57 @@ describe('HMI unit generator', () => {
     expect(messages(generateHmiUnit(withScreen(screen(`    Col : HmiStack;\n${labels}`))))).toEqual([
       'Overview: Col holds 65 elements; at most 64',
     ])
+  })
+
+  it('compiles PLC declarations that use library blocks, with the PLC libraries passed in', () => {
+    const project = sampleProject()
+    const plcDeclarations = project.plcDeclarations?.replace(
+      '    Unused : DINT;\n',
+      '    Unused : DINT;\n    T1 : TON;\n',
+    )
+    const input = {
+      ...withScreen(screen('    Done : HmiLamp;', '  Done.Value := instance0.Main.T1.Q;')),
+      plcDeclarations,
+      preview: true,
+      resolve: undefined,
+    }
+    expect(messages(generateHmiUnit(input))).toContain("HMI:8: Undefined type 'TON' in PROGRAM 'MAIN'")
+    const archiveJson = readFileSync(
+      join(process.cwd(), 'node_modules', 'strucpp', 'libs', 'iec-standard-fb.stlib'),
+      'utf-8',
+    )
+    const result = generateHmiUnit({ ...input, plcLibraries: [{ name: 'iec-standard-fb', archiveJson }] })
+    expect(messages(result)).toEqual([])
+    expect(result.tags.map((t) => t.path)).toContain('CONFIG0.RES0.INSTANCE0.MAIN.T1.Q')
+    expect(Object.values(result.files).some((text) => /\bclass TON\b|\bTON::/.test(text))).toBe(false)
+  })
+
+  it('shows a CONSTANT, never starts it in a preview, and refuses a widget that would write it', () => {
+    const project = sampleProject()
+    const constant = {
+      ...project,
+      plcDeclarations: project.plcDeclarations?.replace(
+        'CONFIGURATION Config0\n',
+        'CONFIGURATION Config0\n  VAR_GLOBAL CONSTANT\n    MaxL : INT := 10;\n  END_VAR\n',
+      ),
+      plcVariables: [
+        ...project.plcVariables,
+        { path: 'MaxL', type: 'INT', initialValue: '10', constant: true as const },
+      ],
+      preview: true,
+      resolve: undefined,
+    }
+    const shown = generateHmiUnit({
+      ...constant,
+      screens: withScreen(screen('    Max : HmiLabel;', '  Max.Text := INT_TO_STRING(MaxL);')).screens,
+    })
+    expect(messages(shown)).toEqual([])
+    expect(shown.sources['hmi_main.st']).not.toContain('MaxL :=')
+    const written = generateHmiUnit({
+      ...constant,
+      screens: withScreen(screen('    S : HmiSlider;', '  S.Value := MaxL;')).screens,
+    })
+    expect(messages(written)).toEqual(['Overview: S.Value: MaxL is a CONSTANT; the operator cannot change it'])
   })
 
   it('refuses a write-back the variable cannot take', () => {

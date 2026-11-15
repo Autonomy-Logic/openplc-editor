@@ -21,6 +21,7 @@ import {
   bindableVariables,
   momentaryCode,
   momentaryOf,
+  writesMain,
 } from '@root/middleware/shared/utils/hmi/designer/designer-binding'
 import { stString } from '@root/middleware/shared/utils/hmi/designer/designer-edits'
 import {
@@ -261,7 +262,7 @@ export function PropertiesCard(props: {
                   testId='hmi-main-binding'
                   options={[
                     { value: NONE, label: 'Not bound' },
-                    ...bindableVariables(info.main, props.variables).map((v) => ({
+                    ...bindableVariables(info.main, props.variables, writesMain(info)).map((v) => ({
                       value: v.path,
                       label: `${v.path} : ${v.type}`,
                     })),

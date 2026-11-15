@@ -1,9 +1,9 @@
 /**
- * The HMI designer: a screen's tab with widgets, variables and layers on the left, the running screen on a device
- * preset with the selection's properties pinned beside it, or its code; and a widget block's tab with its code beside
- * its preview. Every edit goes through the designer's text patches and the store's history, so undo covers both views.
+ * The HMI designer: a screen's tab (panels, the running screen on a device and its properties, or its code) and a
+ * widget block's tab (code beside preview). Edits go through text patches and the store history.
  */
 import { ViewModeToggle } from '@root/frontend/components/_atoms/view-mode-toggle'
+import { loadHmiPlcLibraries, readyRequest } from '@root/frontend/services/hmi-code/plc-libraries'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { hmiDesignerEntry } from '@root/frontend/store/slices/hmi-designer'
 import { hmiPlcDeclarations } from '@root/frontend/utils/PLC/hmi-plc-declarations'
@@ -11,12 +11,18 @@ import { toast } from '@root/frontend/utils/toast'
 import type {
   HmiCatalogResult,
   HmiDiagnostic,
+  HmiLibraryArchive,
   HmiPreviewRequest,
   HmiThumbnail,
   HmiWidgetCatalog,
 } from '@root/middleware/shared/ports/hmi-preview-types'
-import { useHmiPreview } from '@root/middleware/shared/providers'
-import { canBind, momentaryCode, momentaryOf } from '@root/middleware/shared/utils/hmi/designer/designer-binding'
+import { useHmiPreview, usePlatform } from '@root/middleware/shared/providers'
+import {
+  canBind,
+  momentaryCode,
+  momentaryOf,
+  writesMain,
+} from '@root/middleware/shared/utils/hmi/designer/designer-binding'
 import {
   canvasElements,
   type DropTarget,
@@ -85,9 +91,34 @@ async function readClipboard(): Promise<DesignerClipboard | null> {
   }
 }
 
-/** What every preview request carries: the project's HMI and what screens may refer to. */
+/** The PLC's library archives, loaded once per editor; null until they are. */
+function usePlcLibraries(): readonly HmiLibraryArchive[] | null {
+  const source = usePlatform().stlibSource
+  const [libraries, setLibraries] = useState<readonly HmiLibraryArchive[] | null>(null)
+  useEffect(() => {
+    let live = true
+    loadHmiPlcLibraries(source).then(
+      (loaded) => live && setLibraries(loaded),
+      (error: unknown) => {
+        console.warn('[hmi] PLC libraries could not be listed:', error)
+        if (live) setLibraries([])
+      },
+    )
+    return () => {
+      live = false
+    }
+  }, [source])
+  return libraries
+}
+
+/**
+ * What every preview request carries: the project's HMI and what screens may refer to. `plcLibraries` is absent until
+ * the PLC's libraries are loaded; a preview waits for them (`readyRequest`).
+ */
 export function useProjectRequest(): Omit<HmiPreviewRequest, 'widgetPreview'> {
   const hmi = useOpenPLCStore((s) => s.project.data.hmi)
+  const plcLibraries = usePlcLibraries()
+  const remoteDevices = useOpenPLCStore((s) => s.project.data.remoteDevices)
   const pous = useOpenPLCStore((s) => s.project.data.pous)
   const dataTypes = useOpenPLCStore((s) => s.project.data.dataTypes)
   const configurations = useOpenPLCStore((s) => s.project.data.configurations)
@@ -99,8 +130,8 @@ export function useProjectRequest(): Omit<HmiPreviewRequest, 'widgetPreview'> {
   const projectNames = useMemo(() => [...pous.map((p) => p.name), ...dataTypes.map((d) => d.name)], [pous, dataTypes])
   const aliasIndex = useOpenPLCStore((s) => s.projectActions.getAliasIndex())
   const plcDeclarations = useMemo(
-    () => hmiPlcDeclarations({ pous, dataTypes, configurations, globalVariableLists }, aliasIndex),
-    [pous, dataTypes, configurations, globalVariableLists, aliasIndex],
+    () => hmiPlcDeclarations({ pous, dataTypes, configurations, globalVariableLists, remoteDevices }, aliasIndex),
+    [pous, dataTypes, configurations, globalVariableLists, remoteDevices, aliasIndex],
   )
   return useMemo(
     () => ({
@@ -109,9 +140,10 @@ export function useProjectRequest(): Omit<HmiPreviewRequest, 'widgetPreview'> {
       settings: hmi?.settings ?? defaultHmiSettings(),
       plcVariables,
       plcDeclarations,
+      ...(plcLibraries ? { plcLibraries } : {}),
       projectNames,
     }),
-    [hmi, plcVariables, plcDeclarations, projectNames],
+    [hmi, plcVariables, plcDeclarations, plcLibraries, projectNames],
   )
 }
 
@@ -240,7 +272,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   const [fit, area] = useFitZoom(device.width, device.height)
   const zoom = entry.zoom ?? fit
   const preview = usePreviewSession({
-    request,
+    request: readyRequest(request),
     screen: name,
     device,
     design: mode === 'design',
@@ -364,7 +396,16 @@ export function HmiScreenDesigner({ name }: { name: string }) {
         toast({ title: 'Not wired', description: `${element} has no input a variable can show`, variant: 'warn' })
         return
       }
-      const declared = request.plcVariables.find((v) => same(v.path, variable))?.type
+      const plcVariable = request.plcVariables.find((v) => same(v.path, variable))
+      const declared = plcVariable?.type
+      if (plcVariable?.constant && writesMain(info)) {
+        toast({
+          title: 'Not wired',
+          description: `${variable} is a CONSTANT; ${element} would write it`,
+          variant: 'warn',
+        })
+        return
+      }
       if (declared !== undefined && !canBind(main, declared)) {
         toast({
           title: 'Not wired',
@@ -651,7 +692,7 @@ export function HmiWidgetEditor({ name }: { name: string }) {
   const device = useMemo(() => ({ id: 'widget', label: 'Widget', width: 320, height: 240, density: 2 }), [])
   const canvas = useRef<HTMLCanvasElement>(null)
   const preview = usePreviewSession({
-    request: widgetRequest,
+    request: readyRequest(widgetRequest),
     screen: '',
     device,
     design: false,

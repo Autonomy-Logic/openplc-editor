@@ -1,7 +1,6 @@
 /**
- * The rules a screen or widget block must follow beyond what the ST compiler checks: its name and base, the theme
- * pragma, the Parent tree, container capacities, pipe ends and the properties an element may set. The HMI build
- * reports them per file; the code view marks them where they are, from the optional spans.
+ * The rules a screen or widget block follows beyond the ST compiler's: name and base, theme pragma, Parent tree,
+ * capacities, pipe ends and element properties. Reported by the build and marked in the code view.
  */
 import type { HmiWidgetCatalog } from '../../ports/hmi-preview-types'
 import { widgetIsA } from './designer/designer-canvas'

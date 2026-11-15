@@ -35,9 +35,18 @@ export function canBind(main: HmiWidgetBinding, type: string): boolean {
   return main.direction === 'input' && NUMERIC.has(want) && NUMERIC.has(have)
 }
 
-/** The variables that can be wired to `main`. */
-export function bindableVariables(main: HmiWidgetBinding, variables: readonly HmiPlcVariable[]): HmiPlcVariable[] {
-  return variables.filter((v) => canBind(main, v.type))
+/** Whether a widget's main binding writes the variable: an output, an input the operator changes, or a momentary output. */
+export function writesMain(info: Pick<HmiWidgetInfo, 'main' | 'twoWay' | 'momentary'>): boolean {
+  return info.main?.direction === 'output' || info.twoWay !== undefined || info.momentary !== undefined
+}
+
+/** The variables that can be wired to `main`; constants only when the binding never writes. */
+export function bindableVariables(
+  main: HmiWidgetBinding,
+  variables: readonly HmiPlcVariable[],
+  writes: boolean,
+): HmiPlcVariable[] {
+  return variables.filter((v) => canBind(main, v.type) && !(writes && v.constant))
 }
 
 /** A variable wired to a momentary output, and the value it takes while the output is on. */

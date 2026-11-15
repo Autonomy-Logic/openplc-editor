@@ -1,13 +1,6 @@
 /**
- * Widget catalogue for the designer and the HMI build, read from STruC++ library manifests: the StandardWidgets
- * archive and any archive of project widget blocks. A widget is a function block that is not abstract and extends
- * HmiElement. Attribute pragmas in the ST source drive the catalogue:
- * - `hmi_palette` on a block: its palette group;
- * - `hmi_main` on an input or output: what a dropped variable is wired to;
- * - `hmi_group` on an input: its inspector group (`data`, `display` or `layout`);
- * - `hmi_color` on an input: a color; `hmi_element_ref` on an input: the name of another element.
- * A main input with `Changed` and `NewValue` outputs is two-way; a main BOOL output with `Changed` is momentary; other
- * BOOL outputs are events.
+ * Widget catalogue for the designer and the HMI build, read from STruC++ library manifests (StandardWidgets and the
+ * project's widget blocks); see `buildWidgetCatalog` for the pragmas that drive it.
  */
 import type { LibraryFBEntry, LibraryManifest, LibraryTypeEntry } from 'strucpp'
 
@@ -156,7 +149,16 @@ function widgetOf(
   return widget
 }
 
-/** Catalogue of every widget the manifests declare; a block's base may come from another manifest. */
+/**
+ * Catalogue of every widget the manifests declare; a block's base may come from another manifest. A widget is a
+ * function block that is not abstract and extends HmiElement. Attribute pragmas in the ST source drive it:
+ * - `hmi_palette` on a block: its palette group;
+ * - `hmi_main` on an input or output: what a dropped variable is wired to;
+ * - `hmi_group` on an input: its inspector group (`data`, `display` or `layout`);
+ * - `hmi_color` on an input: a color; `hmi_element_ref` on an input: the name of another element.
+ * A main input with `Changed` and `NewValue` outputs is two-way; a main BOOL output with `Changed` is momentary; other
+ * BOOL outputs are events.
+ */
 export function buildWidgetCatalog(manifests: readonly LibraryManifest[]): HmiWidgetCatalog {
   const blocks = new Map<string, Located>()
   const types = new Map<string, LibraryTypeEntry>()

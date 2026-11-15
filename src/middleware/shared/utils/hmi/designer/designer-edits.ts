@@ -86,7 +86,6 @@ export function setProperty(
   return ok(applyPatches(source, propertyPatches(target, property, value)))
 }
 
-/** Removes a property, so the element takes its default. */
 /** Sets several properties of one element in one edit; `isWidget` reads the source again between them. */
 export function setProperties(
   source: string,
@@ -109,6 +108,7 @@ export function setProperties(
   return ok(next)
 }
 
+/** Removes a property, so the element takes its default. */
 export function removeProperty(source: string, model: DesignerModel, element: string, property: string): DesignerEdit {
   const target = editable(model, element)
   if (typeof target === 'string') return refuse(target)

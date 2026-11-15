@@ -1,7 +1,6 @@
 /**
- * Process diagrams in the designer: the design-mode records a frame carries (element ports, each diagram's frame and
- * each pipe's route), conversions between the canvas and a diagram's design units, snapping, and the pipe edits a
- * diagram needs (bends in `Path`, pipes between ports, the pipes that go with a deleted element).
+ * Process diagrams in the designer: the design-mode records of a frame (ports, diagram frames, pipe routes), canvas
+ * and diagram units, snapping, and pipe edits (bends, connections, removal with an element).
  */
 import type { HmiPreviewBounds, HmiPreviewElementId, HmiWidgetCatalog } from '../../../ports/hmi-preview-types'
 import { widgetIsA } from './designer-canvas'

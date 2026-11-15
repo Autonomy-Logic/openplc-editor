@@ -1,7 +1,6 @@
 /**
- * Compiled objects kept across sessions: a session cache filled from a platform store when the toolchain starts and
- * written through as objects are compiled, so a first build after a restart reuses what earlier sessions compiled.
- * Records of another toolchain, damaged records and the oldest records past the size bound are removed.
+ * Compiled objects kept across sessions: a session cache filled from a platform store at startup and written through,
+ * dropping other toolchains' records, damaged ones and the oldest past the size bound.
  */
 import type { WasmObjectStore } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 

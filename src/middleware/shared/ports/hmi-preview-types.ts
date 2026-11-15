@@ -17,8 +17,16 @@ export interface HmiPlcVariable {
   path: string
   /** Declared type: an elementary type, or STRING / STRING(n). */
   type: string
-  /** Declared initial value as ST text; the mirror starts from it when it is a literal, else from the type default. */
+  /** Declared initial value as ST text; the preview starts from it when it is a literal, else from the type default. */
   initialValue?: string
+  /** Declared CONSTANT: screens may read it, never write it. */
+  constant?: true
+}
+
+/** A STruC++ library archive, as the JSON text of its `.stlib`. */
+export interface HmiLibraryArchive {
+  name: string
+  archiveJson: string
 }
 
 /** The project's HMI and what it may refer to. */
@@ -33,6 +41,8 @@ export interface HmiUnitSources {
    * resolve against. Builds that show no project screens may leave it out.
    */
   plcDeclarations?: string
+  /** The PLC's library archives, which `plcDeclarations` may use; only what screens themselves use is compiled in. */
+  plcLibraries?: readonly HmiLibraryArchive[]
   /** Names of the project's POUs and data types, which screens and widget blocks may not reuse. */
   projectNames: readonly string[]
 }
@@ -223,7 +233,7 @@ export interface HmiCatalogResult {
 /** What the ST language service and the code view need for screens and widget blocks. */
 export interface HmiCodeContext {
   /** The libraries screens use, as .stlib archive JSON; empty when StandardWidgets does not build. */
-  libraries: Array<{ name: string; archiveJson: string }>
+  libraries: HmiLibraryArchive[]
   /** ST of the navigation and theme declarations the HMI build generates for the project's screens. */
   glue: string
   /** Upper-case members of HmiScreen, which elements may not reuse. */

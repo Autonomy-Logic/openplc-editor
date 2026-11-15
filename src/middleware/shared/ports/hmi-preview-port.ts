@@ -1,7 +1,6 @@
 /**
- * The HMI preview: builds a project's screens, or one widget block, into a WebAssembly module with the in-editor
- * toolchain and runs it in a Worker. Every platform uses the same implementation, `createHmiPreviewPort`, over its
- * own mechanisms (`hmi-preview-mechanisms.ts`).
+ * The HMI preview: builds screens, or one widget block, into a WebAssembly module and runs it in a Worker. Every
+ * platform uses `createHmiPreviewPort` over its own mechanisms.
  */
 import type {
   HmiBuildStep,

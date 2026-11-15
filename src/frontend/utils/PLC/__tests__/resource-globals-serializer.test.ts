@@ -1,3 +1,5 @@
+import { analyze } from 'strucpp'
+
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { serializeResourceGlobalsToST } from '../resource-globals-serializer'
 
@@ -17,6 +19,7 @@ describe('serializeResourceGlobalsToST', () => {
         { name: 'instance0', task: 'task0', program: 'Main' },
         { name: 'mixer1', task: '', program: 'Mixer' },
       ],
+      programs: ['Main', 'Mixer'],
     }
     expect(serializeResourceGlobalsToST([], new Map(), resource)).toBe(
       [
@@ -32,6 +35,28 @@ describe('serializeResourceGlobalsToST', () => {
     )
     const st = serializeResourceGlobalsToST([global('g', 'INT')], new Map(), resource)
     expect(st.indexOf('VAR_GLOBAL')).toBeLessThan(st.indexOf('PROGRAM instance0'))
+  })
+
+  it('leaves out an instance row being filled in or left by a deleted program, so no document gets an error', () => {
+    const main = 'PROGRAM Main\n  VAR x : INT; END_VAR\n  x := x + 1;\nEND_PROGRAM\n'
+    const resource = {
+      tasks: [
+        { name: 'task0', triggering: 'Cyclic' as const, interval: 'T#20ms', priority: 1 },
+        { name: '', triggering: 'Cyclic' as const, interval: '', priority: 0 },
+      ],
+      instances: [
+        { name: 'instance0', task: 'task0', program: 'Main' },
+        { name: 'instance1', task: 'task0', program: '' },
+        { name: 'instance2', task: 'task0', program: 'Deleted' },
+        { name: '', task: 'task0', program: 'Main' },
+      ],
+      programs: ['Main'],
+    }
+    const st = serializeResourceGlobalsToST([global('g', 'INT')], new Map(), resource)
+    expect(st).toContain('PROGRAM instance0 WITH task0 : Main;')
+    expect(st).not.toMatch(/instance1|instance2|TASK \(|PROGRAM  /)
+    const result = analyze(main, { additionalSources: [{ fileName: 'resource.st', source: st }] })
+    expect(result.errors).toEqual([])
   })
 
   it('wraps the globals in a CONFIGURATION so VAR_EXTERNAL resolves', () => {

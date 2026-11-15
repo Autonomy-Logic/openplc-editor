@@ -58,7 +58,7 @@ END_FUNCTION_BLOCK
 `
 
 const MAIN =
-  'PROGRAM Main\n  VAR\n    Level : REAL := 6.5;\n    Running : BOOL;\n  END_VAR\n  Level := Level;\nEND_PROGRAM\n'
+  'PROGRAM Main\n  VAR\n    Level : REAL := 6.5;\n    Running : BOOL;\n    Delay : TON;\n  END_VAR\n  VAR CONSTANT\n    MaxLevel : REAL := 10.0;\n  END_VAR\n  Delay(IN := Running, PT := T#1s);\n  Level := Level;\nEND_PROGRAM\n'
 
 const waitFor = (page: Page, what: string, check: () => Promise<boolean>, timeoutMs?: number) =>
   waitForIn(F, page, what, check, timeoutMs)
@@ -70,7 +70,10 @@ test.describe('HMI designer', () => {
   test('designs a screen visually and in ST, on the real preview', async () => {
     writeHmiFixture(F, {
       main: MAIN,
-      globals: [{ name: 'Alarm', type: 'BOOL', initialValue: 'TRUE' }],
+      globals: [
+        { name: 'Alarm', type: 'BOOL', initialValue: 'TRUE' },
+        { name: 'Limit', type: 'INT', initialValue: '3', constant: true },
+      ],
       screens: { Overview: OVERVIEW, Details: DETAILS },
       widgets: { Badge: BADGE },
       startScreen: 'Overview',

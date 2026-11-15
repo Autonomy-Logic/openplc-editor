@@ -1,8 +1,6 @@
 /**
- * Completions the ST language service cannot give for screens and widget blocks: the properties an element's
- * initializer may set, the values of enumerated, color and BOOL properties, the element names Parent, Source and
- * Target take, and the themes of the theme pragma. Read from the text before the cursor, so it works while the
- * code does not parse.
+ * Completions the ST language service cannot give for HMI code: initializer properties, enum, color and BOOL values,
+ * element names for Parent, Source and Target, and theme names. Works while the code does not parse.
  */
 import type { HmiWidgetCatalog, HmiWidgetInfo, HmiWidgetProperty } from '../../ports/hmi-preview-types'
 import { widgetIsA } from './designer/designer-canvas'

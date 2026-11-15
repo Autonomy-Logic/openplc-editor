@@ -1,11 +1,7 @@
 /**
  * @file hmi_preview_host.cpp
- * @brief The editor's preview host: runs one viewer of a generated HMI unit inside a WebAssembly module and
- *        rasterizes its frames with the core.
- *
- * The page drives it through the exported functions below. Tags keep their declared initial values: the preview has
- * no PLC, so a write by a control stays in the preview's mirror. Frames are rasterized in bands; a band whose hash did
- * not change keeps its pixels, and hmi_pv_render reports the rows that changed so the page copies only those.
+ * @brief The editor's preview host: runs a generated HMI unit in a WebAssembly module, keeping its own variables, and
+ *        rasterizes its frames in bands, reporting the rows that changed.
  */
 #include <stdint.h>
 #include <stdlib.h>

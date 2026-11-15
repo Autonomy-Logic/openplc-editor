@@ -1,5 +1,5 @@
 import type { HmiWidgetBinding } from '../../../../ports/hmi-preview-types'
-import { bindableVariables, canBind, momentaryCode, momentaryOf } from '../designer-binding'
+import { bindableVariables, canBind, momentaryCode, momentaryOf, writesMain } from '../designer-binding'
 
 const pressed: HmiWidgetBinding = { name: 'Pressed', direction: 'output', type: 'BOOL' }
 const level: HmiWidgetBinding = { name: 'Value', direction: 'input', type: 'REAL' }
@@ -31,8 +31,21 @@ describe('designer binding', () => {
       { path: 'Main.Speed', type: 'REAL' },
       { path: 'GVL.Count', type: 'DINT' },
     ]
-    expect(bindableVariables(pressed, variables).map((v) => v.path)).toEqual(['Main.Run'])
-    expect(bindableVariables(level, variables).map((v) => v.path)).toEqual(['Main.Speed', 'GVL.Count'])
+    expect(bindableVariables(pressed, variables, true).map((v) => v.path)).toEqual(['Main.Run'])
+    expect(bindableVariables(level, variables, false).map((v) => v.path)).toEqual(['Main.Speed', 'GVL.Count'])
+  })
+
+  it('offers a CONSTANT only to a binding that never writes it', () => {
+    const variables = [
+      { path: 'MaxL', type: 'REAL', constant: true as const },
+      { path: 'Main.Speed', type: 'REAL' },
+    ]
+    expect(bindableVariables(level, variables, false).map((v) => v.path)).toEqual(['MaxL', 'Main.Speed'])
+    expect(bindableVariables(level, variables, true).map((v) => v.path)).toEqual(['Main.Speed'])
+    expect(writesMain({ main: level })).toBe(false)
+    expect(writesMain({ main: level, twoWay: { value: 'Value', changed: 'Changed', newValue: 'NewValue' } })).toBe(true)
+    expect(writesMain({ main: pressed })).toBe(true)
+    expect(writesMain({ main: level, momentary })).toBe(true)
   })
 
   it('writes a momentary binding as one statement and reads it back', () => {
