@@ -53,14 +53,95 @@ function isElementObject(value: unknown): value is GsdmlXmlElement {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/** The named entity references XML predefines; with no DTD, every other name is undeclared. */
+const PREDEFINED_ENTITY_NAMES: ReadonlySet<string> = new Set(['lt', 'gt', 'amp', 'quot', 'apos'])
+
+/** Markup whose content holds no references: its opening, and the text that closes it. */
+const UNREFERENCED_SECTIONS = [
+  { open: '<!--', close: '-->' },
+  { open: '<![CDATA[', close: ']]>' },
+  { open: '<?', close: '?>' },
+] as const
+
+/** A named entity reference with no declaration, and the 1-based line and UTF-16 column of its `&`. */
+interface UndeclaredEntityReference {
+  readonly name: string
+  readonly line: number
+  readonly column: number
+}
+
+/** Whether a character ends an entity reference name: XML whitespace, markup delimiters, quotes or `;`. */
+function endsReferenceName(character: string): boolean {
+  return ' \t\r\n<>&;"\''.includes(character)
+}
+
+/** The 1-based line and UTF-16 column of an index of the text, lines split at LF. */
+function positionAt(text: string, index: number): { line: number; column: number } {
+  let line = 1
+  let lineStart = 0
+  let newline = text.indexOf('\n')
+  while (newline !== -1 && newline < index) {
+    line += 1
+    lineStart = newline + 1
+    newline = text.indexOf('\n', lineStart)
+  }
+  return { line, column: index - lineStart + 1 }
+}
+
+/**
+ * Finds the first named entity reference, in document order, whose name is not one of the five predefined ones.
+ * Comments, CDATA sections and processing instructions are skipped; an unterminated one ends the search.
+ *
+ * @param text - XML text without a DOCTYPE.
+ * @returns The reference and its position, or null when there is none.
+ */
+function findUndeclaredEntityReference(text: string): UndeclaredEntityReference | null {
+  let index = 0
+  while (index < text.length) {
+    const character = text[index]
+    if (character === '<') {
+      const section = UNREFERENCED_SECTIONS.find(({ open }) => text.startsWith(open, index))
+      if (section === undefined) {
+        index += 1
+        continue
+      }
+      const close = text.indexOf(section.close, index + section.open.length)
+      if (close === -1) return null
+      index = close + section.close.length
+      continue
+    }
+    if (character !== '&' || text[index + 1] === '#') {
+      index += 1
+      continue
+    }
+    let end = index + 1
+    while (end < text.length && !endsReferenceName(text[end])) end += 1
+    if (end > index + 1 && text[end] === ';') {
+      const name = text.slice(index + 1, end)
+      if (!PREDEFINED_ENTITY_NAMES.has(name)) return { name, ...positionAt(text, index) }
+    }
+    index = end
+  }
+  return null
+}
+
 /**
  * Checks that the text is well-formed XML, then parses it with the configured library parser. Never throws.
+ *
+ * Before the XML library runs, a named entity reference other than `lt`, `gt`, `amp`, `quot` and `apos`, outside
+ * comments, CDATA sections and processing instructions, rejects the text as an undeclared entity reference with the
+ * line and column of its `&`. Numeric character references are not affected.
  *
  * @param text - XML text without a DOCTYPE.
  * @returns The top-level elements, or the reason the text could not be read.
  */
 export function readGsdmlXml(text: string): GsdmlXmlReadResult {
   try {
+    const undeclared = findUndeclaredEntityReference(text)
+    if (undeclared !== null) {
+      const { name, line, column } = undeclared
+      return { ok: false, reason: `undeclared entity reference &${name}; (line ${line}, column ${column})` }
+    }
     const validation = XMLValidator.validate(text, { allowBooleanAttributes: false })
     if (validation !== true) {
       const { msg, line, col } = validation.err
