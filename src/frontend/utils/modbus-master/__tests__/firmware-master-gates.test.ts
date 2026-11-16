@@ -441,3 +441,109 @@ describeOnHost('modbus_master_tcp.cpp starts no connect in a pass that closed a 
     ).toEqual([])
   })
 })
+
+/** An `opcua_config.h` with the server on and the debug log switched by `debugLog`. */
+const opcuaConfig = (debugLog: 0 | 1): string =>
+  `#ifndef OPCUA_CONFIG_H\n#define OPCUA_CONFIG_H\n#define OPCUA_ENABLED 1\n#define OPCUA_MAX_SESSIONS 2\n#define OPCUA_DEBUG_LOG ${debugLog}\n#endif\n`
+
+/** The body of `class name` in preprocessed code, without its braces, or `null` when it is not declared. */
+function classBody(code: string, name: string): string | null {
+  const start = new RegExp(`\\bclass\\s+${name}\\b[^;{]*\\{`).exec(code)
+  if (start === null) return null
+  let depth = 1
+  let index = start.index + start[0].length
+  const bodyStart = index
+  while (index < code.length && depth > 0) {
+    if (code[index] === '{') depth += 1
+    if (code[index] === '}') depth -= 1
+    index += 1
+  }
+  return code.slice(bodyStart, index - 1)
+}
+
+/** Names of the member functions a class body declares, constructors and operators included. */
+const declaredMembers = (body: string): string[] => [
+  ...new Set([...body.matchAll(/\b([A-Za-z_]\w*)\s*\(/g)].map((m) => m[1])),
+]
+
+/** Names of the members `code` calls on `object` with `object.name(`, in order of first call. */
+const membersCalledOn = (code: string, object: string): string[] => [
+  ...new Set([...code.matchAll(new RegExp(`\\b${object}\\s*\\.\\s*([A-Za-z_]\\w*)\\s*\\(`, 'g'))].map((m) => m[1])),
+]
+
+/** The argument text of every call of `name` in `code`, parentheses balanced. */
+function callArguments(code: string, name: string): string[] {
+  const found: string[] = []
+  for (const match of code.matchAll(new RegExp(`\\b${name}\\s*\\(`, 'g'))) {
+    let depth = 1
+    let index = (match.index ?? 0) + match[0].length
+    const start = index
+    while (index < code.length && depth > 0) {
+      if (code[index] === '(') depth += 1
+      if (code[index] === ')') depth -= 1
+      index += 1
+    }
+    found.push(code.slice(start, index - 1))
+  }
+  return found
+}
+
+describeOnHost('NINA OPC-UA debug log build (BOARD_WIFININA, MBTCP_WIFI, OPCUA_DEBUG_LOG 1)', () => {
+  const NINA = ['BOARD_WIFININA', 'MBTCP_WIFI']
+
+  /** `file` preprocessed for a NINA board with the OPC-UA server and its debug log switched by `debugLog`. */
+  const ninaOpcua = (file: string, debugLog: 0 | 1): string =>
+    preprocess(
+      { file: join(BAREMETAL_DIR, file) },
+      { defines: NINA, masterConfig: STUB_CONFIG(), configs: { 'opcua_config.h': opcuaConfig(debugLog) } },
+      false,
+    )
+
+  const members = (code: string, name: string): string[] => {
+    const body = classBody(code, name)
+    if (body === null) throw new Error(`class ${name} is not declared in the NINA build`)
+    return declaredMembers(body)
+  }
+
+  it('declares available() on NinaServer', () => {
+    expect(members(ninaOpcua('opcua_log.cpp', 1), 'NinaServer')).toContain('available')
+  })
+
+  it('declares port() on NinaClient', () => {
+    expect(members(ninaOpcua('opcua_log.cpp', 1), 'NinaClient')).toContain('port')
+  })
+
+  it('declares on NinaServer every member opcua_log.cpp calls on the log server', () => {
+    const code = ninaOpcua('opcua_log.cpp', 1)
+    const called = membersCalledOn(ownCode(code, 'opcua_log.cpp'), 'g_log_server')
+    const declared = members(code, 'NinaServer')
+
+    expect(called.length).toBeGreaterThan(0)
+    expect(called.filter((name) => !declared.includes(name))).toEqual([])
+  })
+
+  it('declares on NinaClient every member opcua_log.cpp calls on the log client', () => {
+    const code = ninaOpcua('opcua_log.cpp', 1)
+    const own = ownCode(code, 'opcua_log.cpp')
+    const called = [...new Set([...membersCalledOn(own, 'g_log_client'), ...membersCalledOn(own, 'incoming')])]
+    const declared = members(code, 'NinaClient')
+
+    expect(called.length).toBeGreaterThan(0)
+    expect(called.filter((name) => !declared.includes(name))).toEqual([])
+  })
+
+  it("declares on NinaClient the member baremetal_net.cpp's accept log calls on the accepted client", () => {
+    const code = ninaOpcua('baremetal_net.cpp', 1)
+    const logged = callArguments(ownCode(code, 'baremetal_net.cpp'), 'opcua_logf').flatMap((args) =>
+      membersCalledOn(args, 'incoming'),
+    )
+    const declared = members(code, 'NinaClient')
+
+    expect(logged.length).toBeGreaterThan(0)
+    expect(logged.filter((name) => !declared.includes(name))).toEqual([])
+  })
+
+  it('compiles the log unit out with OPCUA_DEBUG_LOG 0', () => {
+    expect(ownCode(ninaOpcua('opcua_log.cpp', 0), 'opcua_log.cpp')).not.toMatch(/\bg_log_server\b/)
+  })
+})

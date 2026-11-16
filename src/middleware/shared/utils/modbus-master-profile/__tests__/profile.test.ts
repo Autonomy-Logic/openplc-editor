@@ -5,6 +5,7 @@ import {
   createDefaultRemoteDeviceConfig,
   endpointKey,
   type ModbusMasterProfile,
+  resolveBoardModbusMasterProfile,
   resolveModbusMasterProfile,
 } from '..'
 
@@ -218,6 +219,26 @@ describe('resolveModbusMasterProfile on runtime targets', () => {
     expect(profile.transports).toEqual([])
     expect(profile.vppScreens).toEqual({})
     expect(profile.showBoardLinks).toBe(false)
+  })
+})
+
+describe('resolveBoardModbusMasterProfile', () => {
+  it('offers no transport on an unknown target', () => {
+    expect(resolveBoardModbusMasterProfile(undefined).transports).toEqual([])
+  })
+
+  it('equals the profile resolved with the gating capabilities on an unknown target', () => {
+    expect(resolveBoardModbusMasterProfile(undefined)).toEqual(
+      resolveModbusMasterProfile(undefined, resolveTargetCapabilities(undefined)),
+    )
+  })
+
+  it.each([
+    ['a baremetal Mega with spare UARTs', MEGA],
+    ['the Simulator', SIMULATOR],
+    ['Runtime v4', RUNTIME_V4],
+  ])('equals the profile resolved with the gating capabilities on %s', (_name, board) => {
+    expect(resolveBoardModbusMasterProfile(board)).toEqual(profileOf(board))
   })
 })
 

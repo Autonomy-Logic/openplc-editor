@@ -1,4 +1,4 @@
-import { resolveRs485Pins } from '..'
+import { isValidRs485Pin, resolveRs485Pins, storedRs485Pins } from '..'
 
 type SerialState = Parameters<typeof resolveRs485Pins>[0]
 type Rs485Board = Parameters<typeof resolveRs485Pins>[1]
@@ -176,6 +176,144 @@ describe('resolveRs485Pins', () => {
 
     it('never trims a per-UART pin', () => {
       expect(resolveRs485Pins(perUartPins({ Serial1: '22 ' }), MEGA, 'Serial1')).toEqual({})
+    })
+  })
+})
+
+/** Serial screen state as a project file carries it, whatever types its values have. */
+const fromProjectFile = (serial: Record<string, unknown>): SerialState => JSON.parse(JSON.stringify({ serial }))
+
+const storedPins = (pins: Record<string, unknown>): SerialState =>
+  fromProjectFile({ baud_rate: '115200', rs485_en_pins: pins })
+
+describe('storedRs485Pins', () => {
+  describe('per-UART aware board', () => {
+    it.each([['-1'], ['22 '], ['d5'], [22]])('keeps the stored pin %j on its UART', (pin) => {
+      expect(storedRs485Pins(storedPins({ Serial2: pin }), MEGA, null)).toEqual({ Serial2: pin })
+    })
+
+    it('keeps a valid stored pin on its UART', () => {
+      expect(storedRs485Pins(storedPins({ Serial2: '22' }), MEGA, null)).toEqual({ Serial2: '22' })
+    })
+
+    it.each([[null], [true], [{ pin: '22' }]])('keeps a stored value of any JSON type (%j) as stored', (pin) => {
+      expect(storedRs485Pins(storedPins({ Serial1: pin }), MEGA, null)).toEqual({ Serial1: pin })
+    })
+
+    it('gives no entry for an empty pin, which means no pin', () => {
+      expect(storedRs485Pins(storedPins({ Serial1: '', Serial2: '-1' }), MEGA, null)).toEqual({ Serial2: '-1' })
+    })
+
+    it('lets a fixed pin win over a stored entry on the same UART', () => {
+      expect(storedRs485Pins(storedPins({ Serial: '4', Serial3: '-1' }), FX3U, null)).toEqual({
+        Serial: '4',
+        Serial3: 'PA14',
+      })
+    })
+
+    it('returns a fixed pin as declared, even one outside the pattern', () => {
+      const badFixed: Rs485Board = {
+        serialPorts: ['Serial', 'Serial3'],
+        rs485FixedPins: { Serial3: 'P A' },
+        perUartAware: true,
+      }
+
+      expect(storedRs485Pins({}, badFixed, null)).toEqual({ Serial3: 'P A' })
+    })
+
+    it("puts the trimmed legacy pin on the RTU server's UART when no per-UART map is stored", () => {
+      expect(storedRs485Pins(legacyPin(' -1 '), MEGA, 'Serial2')).toEqual({ Serial2: '-1' })
+    })
+
+    it("puts the legacy pin on the RTU server's UART when the stored map is not a plain object", () => {
+      const state = fromProjectFile({ enable_rs485_en_pin: true, rs485_en_pin: 'd5', rs485_en_pins: ['22'] })
+
+      expect(storedRs485Pins(state, MEGA, 'Serial2')).toEqual({ Serial2: 'd5' })
+    })
+
+    it('lets a fixed pin win over the legacy pin on the RTU server UART', () => {
+      expect(storedRs485Pins(legacyPin('-1'), FX3U, 'Serial3')).toEqual({ Serial3: 'PA14' })
+    })
+
+    it('keeps the fixed pins beside a legacy pin on another UART', () => {
+      expect(storedRs485Pins(legacyPin('-1'), FX3U, 'Serial')).toEqual({ Serial: '-1', Serial3: 'PA14' })
+    })
+
+    it('maps the legacy pin to no UART when there is no Modbus RTU server', () => {
+      expect(storedRs485Pins(legacyPin('-1'), MEGA, null)).toEqual({})
+    })
+
+    it('ignores the legacy pair once the per-UART pins are written', () => {
+      const state = fromProjectFile({ enable_rs485_en_pin: true, rs485_en_pin: '-1', rs485_en_pins: {} })
+
+      expect(storedRs485Pins(state, MEGA, 'Serial2')).toEqual({})
+    })
+  })
+
+  describe('legacy board', () => {
+    it("puts the trimmed legacy pin on the Modbus RTU server's UART", () => {
+      expect(storedRs485Pins(legacyPin('-1 '), LEGACY, 'Serial1')).toEqual({ Serial1: '-1' })
+    })
+
+    it('returns nothing without a Modbus RTU server', () => {
+      expect(storedRs485Pins(legacyPin('-1'), LEGACY, null)).toEqual({})
+    })
+
+    it('returns nothing when the switch is off or unset, or the pin is not a string or empty once trimmed', () => {
+      expect(storedRs485Pins({}, LEGACY, 'Serial1')).toEqual({})
+      expect(storedRs485Pins(fromProjectFile({ rs485_en_pin: '-1' }), LEGACY, 'Serial1')).toEqual({})
+      expect(
+        storedRs485Pins(fromProjectFile({ enable_rs485_en_pin: false, rs485_en_pin: '-1' }), LEGACY, 'Serial1'),
+      ).toEqual({})
+      expect(
+        storedRs485Pins(fromProjectFile({ enable_rs485_en_pin: true, rs485_en_pin: 22 }), LEGACY, 'Serial1'),
+      ).toEqual({})
+      expect(storedRs485Pins(legacyPin('   '), LEGACY, 'Serial1')).toEqual({})
+    })
+
+    it('ignores a per-UART map on a legacy board', () => {
+      expect(storedRs485Pins(storedPins({ Serial1: '-1' }), LEGACY, 'Serial1')).toEqual({})
+    })
+  })
+
+  it('never modifies the state', () => {
+    const state = deepFreeze(
+      fromProjectFile({ enable_rs485_en_pin: true, rs485_en_pin: '17', rs485_en_pins: { Serial1: '-1', Serial2: '' } }),
+    )
+    const before = JSON.parse(JSON.stringify(state))
+
+    storedRs485Pins(state, FX3U, 'Serial')
+
+    expect(state).toEqual(before)
+  })
+
+  describe('agrees with resolveRs485Pins once the pattern filter is applied', () => {
+    const FIXTURES: Array<[string, SerialState, Rs485Board, string | null]> = [
+      ['invalid per-UART pins', storedPins({ Serial1: '-1', Serial2: '22 ', Serial3: 'd5' }), MEGA, null],
+      ['a numeric per-UART pin beside a valid one', storedPins({ Serial1: 22, Serial2: '22' }), MEGA, 'Serial2'],
+      ['an empty per-UART pin', storedPins({ Serial1: '', Serial2: 'A0' }), MEGA, null],
+      ['a fixed pin over a stored entry', storedPins({ Serial: '4', Serial3: '-1' }), FX3U, null],
+      ['a fixed pin outside the pattern', {}, { ...FX3U, rs485FixedPins: { Serial3: 'P A' } }, null],
+      ['the legacy pin on a per-UART board', legacyPin(' 22 '), MEGA, 'Serial2'],
+      ['an invalid legacy pin on a per-UART board', legacyPin('-1'), MEGA, 'Serial2'],
+      ['the legacy pin beside fixed pins', legacyPin('17'), FX3U, 'Serial'],
+      ['the legacy pin on a legacy board', legacyPin('22 '), LEGACY, 'Serial1'],
+      ['an invalid legacy pin on a legacy board', legacyPin('-1'), LEGACY, 'Serial1'],
+      ['the legacy pin without a server', legacyPin('17'), LEGACY, null],
+      [
+        'an empty map beside the legacy pair',
+        fromProjectFile({ enable_rs485_en_pin: true, rs485_en_pin: '17', rs485_en_pins: {} }),
+        MEGA,
+        'Serial',
+      ],
+    ]
+
+    it.each(FIXTURES)('with %s', (_name, state, board, uart) => {
+      const valid = Object.fromEntries(
+        Object.entries(storedRs485Pins(state, board, uart)).filter(([, pin]) => isValidRs485Pin(pin)),
+      )
+
+      expect(resolveRs485Pins(state, board, uart)).toEqual(valid)
     })
   })
 })

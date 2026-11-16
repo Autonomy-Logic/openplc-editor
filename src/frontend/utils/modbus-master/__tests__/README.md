@@ -19,7 +19,11 @@
   build, and calls nothing of the master with the stub. On a NINA board `baremetal_net.cpp` calls no
   `checkDataSent()`, `delay()` or `setRetry(true)` and names `ServerDrv`; on a W5x00 board `Connection::close()`
   stops only after a zero connection timeout (or aborts); `modbus_master_tcp.cpp` marks the pass on every close
-  path and `mb_master_tcp_service()` reads that mark. Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
+  path and `mb_master_tcp_service()` reads that mark. On a NINA board with the OPC-UA server and
+  `OPCUA_DEBUG_LOG 1` (an `opcua_config.h` override), `NinaServer` declares `available()` and every member
+  `opcua_log.cpp` calls on the log server, and `NinaClient` declares `port()` and every member `opcua_log.cpp`
+  and the accept log of `baremetal_net.cpp` call on a client; with `OPCUA_DEBUG_LOG 0` the log unit is empty.
+  Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
 - `firmware-master-rtu-sources.test.ts`: the RTU master and the RS-485 helper ship; the RTU master calls no
   `flush()`, `delayMicroseconds()` or `delay()`, never touches `mb_frame`, `mb_rx_*` or the frame-bound
   `calcCrc()`, and includes `modbus_crc.h`; the server and the master both include `modbus_rs485.h`, which

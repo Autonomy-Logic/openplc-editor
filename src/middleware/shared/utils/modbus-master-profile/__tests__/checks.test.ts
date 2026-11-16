@@ -628,6 +628,21 @@ describe('checkModbusMaster: RS-485 pin of a UART the master uses (CRA M4)', () 
     expect(issues).toEqual([])
   })
 
+  it('refuses a stored pin that is a number, naming the UART and the devices on it', () => {
+    const issues = check('baremetal', [rtu('Pump', { serialPort: 'Serial2' })], {
+      board: { serialPorts: MEGA.serialPorts, defaultSerial: 'Serial', rs485Pins: { Serial2: 22 } },
+    })
+
+    expect(errorsOf(issues)).toEqual([
+      {
+        severity: 'error',
+        devices: ['Pump'],
+        item: 'RS-485 pin',
+        message: 'Serial2: RS-485 pin 22 is not a pin name such as 22, A0 or PA14.',
+      },
+    ])
+  })
+
   it('leaves the pin of a UART the master does not use alone', () => {
     const issues = check('baremetal', [rtu('Pump', { serialPort: 'Serial2' })], {
       board: { serialPorts: MEGA.serialPorts, defaultSerial: 'Serial', rs485Pins: { Serial3: '-1' } },

@@ -460,6 +460,63 @@ describe('pipeline: modbus_master_config.h', () => {
   })
 })
 
+describe('pipeline: the stored RS-485 pin of a master UART (CR-1, BR15)', () => {
+  /** Serial screen state as a project file carries it, whatever types its values have. */
+  const storedSerial = (serial: Record<string, unknown>): VppModbusState =>
+    JSON.parse(JSON.stringify({ serial: { baud_rate: '115200', ...serial } }))
+
+  const buildDrive = (serial: Record<string, unknown>) =>
+    build('baremetal', {
+      boardEntry: MEGA_PER_UART,
+      remoteDevices: [rtu('Drive', { serialPort: 'Serial2' })],
+      vppModbusState: storedSerial(serial),
+    })
+
+  const busPin = (header: string | undefined, uart: string): string | undefined =>
+    new RegExp(`\\{\\s*&\\s*${uart}\\s*,[^{}]*,\\s*([^,{}\\s]+)\\s*\\}`).exec(header ?? '')?.[1]
+
+  it.each([
+    ['-1', 'Serial2: RS-485 pin "-1" is not a pin name such as 22, A0 or PA14.'],
+    ['22 ', 'Serial2: RS-485 pin "22 " is not a pin name such as 22, A0 or PA14.'],
+    ['d5', 'Serial2: RS-485 pin "d5" is not a pin name such as 22, A0 or PA14.'],
+    [22, 'Serial2: RS-485 pin 22 is not a pin name such as 22, A0 or PA14.'],
+  ])('refuses the stored pin %j at validate and hands nothing to the compiler', async (pin, message) => {
+    const { result, events, port } = await buildDrive({ rs485_en_pins: { Serial2: pin } })
+
+    expect(result.success).toBe(false)
+    expect(validateErrors(events)).toContain(message)
+    expect(port.compileArduino).not.toHaveBeenCalled()
+  })
+
+  it('builds with a valid stored pin and gives it to the Serial2 bus', async () => {
+    const { result, files } = await buildDrive({ rs485_en_pins: { Serial2: '22' } })
+
+    expect(result.success).toBe(true)
+    expect(busPin(files?.['src/modbus_master_config.h'], 'Serial2')).toBe('22')
+  })
+
+  it('builds with an empty stored pin and leaves the Serial2 bus without a pin', async () => {
+    const { result, files } = await buildDrive({ rs485_en_pins: { Serial2: '' } })
+
+    expect(result.success).toBe(true)
+    expect(busPin(files?.['src/modbus_master_config.h'], 'Serial2')).toBe('MB_MASTER_NO_PIN')
+  })
+
+  it('builds with an invalid stored pin on a UART no device uses, and puts no Serial3 pin in the header', async () => {
+    const { result, files } = await buildDrive({ rs485_en_pins: { Serial3: '-1' } })
+
+    expect(result.success).toBe(true)
+    expect(files?.['src/modbus_master_config.h']).not.toMatch(/\bSerial3\b/)
+  })
+
+  it('builds with an invalid legacy pin when there is no Modbus RTU server to map it to', async () => {
+    const { result, events } = await buildDrive({ enable_rs485_en_pin: true, rs485_en_pin: '-1' })
+
+    expect(validateErrors(events)).toEqual([])
+    expect(result.success).toBe(true)
+  })
+})
+
 describe('pipeline: the Remote IO warning comes from the validate stage', () => {
   it('warns on Runtime v3 with the new text and builds on without any master check (TC23)', async () => {
     const { result, events } = await build('runtime-v3', {
