@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from '@jest/globals'
 
 import type { BoardInfo, PLCRemoteDevice } from '../../../middleware/shared/ports/types'
+import { buildAllProjectFileContentsPure } from '../../services/save-actions'
 import type { OpenPLCStore } from '../index'
 import { createTestStore } from '../testing'
 
@@ -39,6 +40,30 @@ const tcpDevice = (name: string, reconnect?: boolean): PLCRemoteDevice => ({
     transport: 'tcp',
     host: '192.168.1.20',
     port: 502,
+    slaveId: 1,
+    timeout: 1000,
+    ioGroups: [],
+    ...(reconnect === undefined ? {} : { reconnect }),
+  },
+})
+
+/** A TCP device saved before `transport` existed: no transport key and no Reconnect key. */
+const untypedTcpDevice = (name: string): PLCRemoteDevice => ({
+  name,
+  protocol: 'modbus-tcp',
+  modbusTcpConfig: { host: '192.168.1.20', port: 502, slaveId: 1, timeout: 1000, ioGroups: [] },
+})
+
+const rtuDevice = (name: string, reconnect?: boolean): PLCRemoteDevice => ({
+  name,
+  protocol: 'modbus-tcp',
+  modbusTcpConfig: {
+    transport: 'rtu',
+    serialPort: 'Serial1',
+    baudRate: 9600,
+    parity: 'N',
+    stopBits: 1,
+    dataBits: 8,
     slaveId: 1,
     timeout: 1000,
     ioGroups: [],
@@ -153,5 +178,94 @@ describe('opening a project saved before Reconnect existed (TC12)', () => {
     selectBoard('OpenPLC Runtime v4', RUNTIME_V4)
 
     expect(Object.keys(configOf('Pump') ?? {})).not.toContain('reconnect')
+  })
+})
+
+describe('editing an older device writes the Reconnect it shows (TC12)', () => {
+  it.each([
+    ['the Timeout', { timeout: 900 }],
+    ['the host', { host: '10.0.0.9' }],
+    ['the port', { port: 1502 }],
+    ['the slave id', { slaveId: 7 }],
+  ])('writes Reconnect checked on an older TCP device when %s is edited', (_field, edit) => {
+    openProjectWith([tcpDevice('Gateway')])
+
+    store.getState().projectActions.updateRemoteDeviceConfig('Gateway', edit)
+
+    expect(configOf('Gateway')).toMatchObject({ ...edit, reconnect: true })
+  })
+
+  it('writes Reconnect checked on an older device saved with no transport', () => {
+    openProjectWith([untypedTcpDevice('Gateway')])
+
+    store.getState().projectActions.updateRemoteDeviceConfig('Gateway', { timeout: 900 })
+
+    expect(configOf('Gateway')).toMatchObject({ timeout: 900, reconnect: true })
+  })
+
+  it('writes no Reconnect on an older RTU device', () => {
+    openProjectWith([rtuDevice('Drive')])
+
+    store.getState().projectActions.updateRemoteDeviceConfig('Drive', { baudRate: 19200 })
+
+    expect(configOf('Drive')?.baudRate).toBe(19200)
+    expect(Object.keys(configOf('Drive') ?? {})).not.toContain('reconnect')
+  })
+
+  it('writes Reconnect checked when an older RTU device is switched to TCP', () => {
+    openProjectWith([rtuDevice('Drive')])
+
+    store.getState().projectActions.updateRemoteDeviceConfig('Drive', { transport: 'tcp' })
+
+    expect(configOf('Drive')).toMatchObject({ transport: 'tcp', reconnect: true })
+  })
+
+  it.each([
+    ['a TCP device saved unchecked', tcpDevice('Gateway', false), { timeout: 900 }, false],
+    ['a TCP device saved checked', tcpDevice('Gateway', true), { timeout: 900 }, true],
+    [
+      'an RTU device saved unchecked and switched to TCP',
+      rtuDevice('Gateway', false),
+      { transport: 'tcp' as const },
+      false,
+    ],
+  ])('keeps the saved Reconnect of %s', (_device, device, edit, saved) => {
+    openProjectWith([device])
+
+    store.getState().projectActions.updateRemoteDeviceConfig('Gateway', edit)
+
+    expect(configOf('Gateway')?.reconnect).toBe(saved)
+  })
+
+  it('writes the Reconnect a call gives on an older TCP device', () => {
+    openProjectWith([tcpDevice('Gateway')])
+
+    store.getState().projectActions.updateRemoteDeviceConfig('Gateway', { timeout: 900, reconnect: false })
+
+    expect(configOf('Gateway')).toMatchObject({ timeout: 900, reconnect: false })
+  })
+
+  it('leaves a device with no Modbus configuration untouched', () => {
+    const bus: PLCRemoteDevice = { name: 'Bus', protocol: 'ethercat' }
+    openProjectWith([bus])
+
+    store.getState().projectActions.updateRemoteDeviceConfig('Bus', { timeout: 900 })
+
+    expect(store.getState().project.data.remoteDevices).toEqual([bus])
+  })
+
+  it('answers ok for the edit of an older TCP device', () => {
+    openProjectWith([tcpDevice('Gateway')])
+
+    expect(store.getState().projectActions.updateRemoteDeviceConfig('Gateway', { timeout: 900 }).ok).toBe(true)
+  })
+
+  it('saves Reconnect checked to the device file of an older TCP device after an edit', () => {
+    openProjectWith([tcpDevice('Gateway')])
+
+    store.getState().projectActions.updateRemoteDeviceConfig('Gateway', { timeout: 900 })
+
+    const saved: unknown = JSON.parse(buildAllProjectFileContentsPure(store)['devices/remote/Gateway.json'])
+    expect(saved).toMatchObject({ modbusTcpConfig: { timeout: 900, reconnect: true } })
   })
 })

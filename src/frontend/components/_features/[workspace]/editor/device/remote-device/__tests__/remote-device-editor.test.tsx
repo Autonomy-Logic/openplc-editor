@@ -4,7 +4,7 @@ import { createStoreWrapper, createTestPorts, createTestStore } from '@root/fron
 import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { BoardInfo, PLCRemoteDevice } from '@root/middleware/shared/ports/types'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 import { RemoteDeviceEditor } from '..'
 
@@ -448,5 +448,48 @@ describe('Remote Device screen test ids', () => {
     ]) {
       expect(screen.getByTestId(id)).toBeTruthy()
     }
+  })
+})
+
+describe('keeps the IO Tag Mapping reachable on a short window', () => {
+  const classesOf = (element: HTMLElement) => element.className.split(/\s+/)
+
+  it.each([
+    ['a TCP device', tcpDevice()],
+    ['an RTU device', rtuDevice('Serial1')],
+  ])('scrolls the screen vertically for %s instead of clipping it', (_device, device) => {
+    openDevice('Arduino Mega', MEGA, device)
+    const root = screen.getByLabelText('Remote device content container')
+
+    expect(classesOf(root)).toEqual(expect.arrayContaining(['overflow-y-auto', 'overflow-x-hidden']))
+    expect(classesOf(root)).not.toContain('overflow-hidden')
+  })
+
+  it.each([
+    ['a TCP device', tcpDevice()],
+    ['an RTU device', rtuDevice('Serial1')],
+  ])('gives the IO Tag Mapping of %s a minimum height', (_device, device) => {
+    openDevice('Arduino Mega', MEGA, device)
+
+    expect(classesOf(screen.getByTestId('remote-device-io-mapping'))).toContain('min-h-[200px]')
+  })
+
+  it.each([
+    ['a TCP device', tcpDevice()],
+    ['an RTU device', rtuDevice('Serial1')],
+  ])('keeps the heading, the toolbar and the table of %s inside the IO Tag Mapping', (_device, device) => {
+    openDevice('Arduino Mega', MEGA, device)
+    const mapping = screen.getByTestId('remote-device-io-mapping')
+
+    expect(within(mapping).getByText('IO Tag Mapping')).toBeTruthy()
+    expect(within(mapping).getByTestId('io-group-import-button')).toBeTruthy()
+    expect(mapping.querySelector('table')).not.toBeNull()
+  })
+
+  it('still shows the Reconnect help verbatim beside the IO Tag Mapping', () => {
+    openDevice('Arduino Mega', MEGA, tcpDevice())
+
+    expect(screen.getByTestId('remote-device-reconnect-help').textContent).toBe(RECONNECT_HELP)
+    expect(screen.getByTestId('remote-device-io-mapping')).toBeTruthy()
   })
 })
