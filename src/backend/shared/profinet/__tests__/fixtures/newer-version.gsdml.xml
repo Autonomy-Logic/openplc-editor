@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ISO15745Profile xmlns="http://www.profibus.com/GSDML/2003/11/DeviceProfile" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.profibus.com/GSDML/2003/11/DeviceProfile ..\XSD\GSDML-DeviceProfile-V2.99.xsd" FutureRootAttribute="ignored">
+  <ProfileHeader>
+    <ProfileIdentification>PROFINET Device Profile</ProfileIdentification>
+    <ProfileClassID>Device</ProfileClassID>
+    <FutureHeaderExtension Hint="ignored" />
+  </ProfileHeader>
+  <ProfileBody>
+    <DeviceIdentity VendorID="0x0F0D" DeviceID="0x00E1" FutureIdentityAttribute="1">
+      <InfoText TextId="N_Device" />
+      <VendorName Value="Future Vendor" />
+      <FutureIdentityHint Level="2">Not a known element</FutureIdentityHint>
+    </DeviceIdentity>
+    <ApplicationProcess>
+      <FutureTopLevelList>
+        <FutureTopLevelItem ID="N_FUTURE_TOP" Payload="42" />
+      </FutureTopLevelList>
+      <DeviceAccessPointList>
+        <DeviceAccessPointItem ID="N_DAP" PhysicalSlots="0..2" ModuleIdentNumber="0x00000D01" FixedInSlots="0" MinDeviceInterval="32" DNS_CompatibleName="future" ObjectUUID_LocalIndex="1" PNIO_Version="V2.99" FutureDapAttribute="novel">
+          <ModuleInfo>
+            <Name TextId="N_Dap" />
+            <FutureModuleInfoField Value="x" />
+          </ModuleInfo>
+          <FutureNestedBlock Payload="42">
+            <FutureLeaf />
+          </FutureNestedBlock>
+          <UseableModules>
+            <ModuleItemRef ModuleItemTarget="N_MOD" AllowedInSlots="1..2" FutureRefAttribute="y" />
+          </UseableModules>
+          <VirtualSubmoduleList>
+            <VirtualSubmoduleItem ID="N_VSUB" SubmoduleIdentNumber="0x00000001" FutureSubmoduleAttribute="x">
+              <IOData FutureIoAttribute="1">
+                <Input>
+                  <DataItem DataType="Unsigned16" TextId="N_In" FutureDataAttribute="z">
+                    <FutureDataChild />
+                  </DataItem>
+                </Input>
+              </IOData>
+              <FutureInnerBlock />
+            </VirtualSubmoduleItem>
+          </VirtualSubmoduleList>
+        </DeviceAccessPointItem>
+      </DeviceAccessPointList>
+      <ModuleList>
+        <ModuleItem ID="N_MOD" ModuleIdentNumber="0x00000D02">
+          <ModuleInfo>
+            <Name TextId="N_Mod" />
+          </ModuleInfo>
+          <FutureModuleExtension />
+        </ModuleItem>
+        <ModuleItem ID="N_FUTURE_MOD" RequiredSchemaVersion="V2.99">
+          <ModuleInfo>
+            <Name TextId="N_Mod" />
+          </ModuleInfo>
+          <VirtualSubmoduleList>
+            <VirtualSubmoduleItem ID="N_FUTURE_VSUB">
+              <IOData>
+                <Input>
+                  <DataItem TextId="N_In" />
+                </Input>
+              </IOData>
+            </VirtualSubmoduleItem>
+          </VirtualSubmoduleList>
+        </ModuleItem>
+      </ModuleList>
+      <ExternalTextList>
+        <PrimaryLanguage>
+          <Text TextId="N_Device" Value="Future device" />
+          <Text TextId="N_Dap" Value="Future head" />
+          <Text TextId="N_In" Value="Future input" />
+          <Text TextId="N_Mod" Value="Future module" />
+        </PrimaryLanguage>
+      </ExternalTextList>
+    </ApplicationProcess>
+  </ProfileBody>
+</ISO15745Profile>

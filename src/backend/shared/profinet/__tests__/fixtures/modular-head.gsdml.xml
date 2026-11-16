@@ -1,0 +1,471 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic test device: invented identifiers and texts. -->
+<ISO15745Profile xmlns="http://www.profibus.com/GSDML/2003/11/DeviceProfile" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.profibus.com/GSDML/2003/11/DeviceProfile ..\XSD\GSDML-DeviceProfile-v2.45.xsd">
+	<ProfileHeader>
+		<ProfileIdentification>PROFINET Device Profile</ProfileIdentification>
+		<ProfileRevision>1.00</ProfileRevision>
+		<ProfileName>Device Profile for PROFINET Devices</ProfileName>
+		<ProfileSource>Synthetic</ProfileSource>
+		<ProfileClassID>Device</ProfileClassID>
+		<ISO15745Reference>
+			<ISO15745Part>4</ISO15745Part>
+			<ISO15745Edition>1</ISO15745Edition>
+			<ProfileTechnology>GSDML</ProfileTechnology>
+		</ISO15745Reference>
+	</ProfileHeader>
+	<ProfileBody>
+		<DeviceIdentity VendorID="0x0F0A" DeviceID="0x00B1">
+			<InfoText TextId="Info device" />
+			<VendorName Value="Example Devices" />
+		</DeviceIdentity>
+		<DeviceFunction>
+			<Family MainFamily="I/O" ProductFamily="Example IO" />
+		</DeviceFunction>
+		<ApplicationProcess>
+			<DeviceAccessPointList>
+				<DeviceAccessPointItem PNIO_Version="V2.3" RequiredSchemaVersion="V2.25" ID="Head A" PhysicalSlots="0..33" ModuleIdentNumber="0x00000A10" MinDeviceInterval="8" DNS_CompatibleName="example-head-a" FixedInSlots="0" ObjectUUID_LocalIndex="1" MultipleWriteSupported="true">
+					<ModuleInfo>
+						<Name TextId="Head A" />
+						<InfoText TextId="Info Head A" />
+						<VendorName Value="Example Devices" />
+						<OrderNumber Value="EX-HD-0001" />
+						<HardwareRelease Value="1" />
+						<SoftwareRelease Value="V1.0" />
+					</ModuleInfo>
+					<SubslotList>
+						<SubslotItem SubslotNumber="32768" TextId="Subslot interface" />
+						<SubslotItem SubslotNumber="32769" TextId="Subslot port 1" />
+					</SubslotList>
+					<IOConfigData MaxInputLength="256" MaxOutputLength="256" />
+					<UseableModules>
+						<ModuleItemRef ModuleItemTarget="DI 8" AllowedInSlots="1..32" />
+						<ModuleItemRef ModuleItemTarget="DI 8 V2" AllowedInSlots="1..32" />
+						<ModuleItemRef ModuleItemTarget="DQ 8" AllowedInSlots="1 3 5..7" UsedInSlots="5 6" FixedInSlots="5" />
+						<ModuleItemRef ModuleItemTarget="AI 2" AllowedInSlots="2..4 8" />
+						<ModuleItemRef ModuleItemTarget="Mixed IO" AllowedInSlots="1..32" />
+						<ModuleItemRef ModuleItemTarget="Server" AllowedInSlots="33" FixedInSlots="33" UsedInSlots="33" />
+					</UseableModules>
+					<VirtualSubmoduleList>
+						<VirtualSubmoduleItem ID="Head A" SubmoduleIdentNumber="0x00000000" Writeable_IM_Records="1 2 3" MayIssueProcessAlarm="false">
+							<IOData />
+							<RecordDataList>
+								<ParameterRecordDataItem Length="4" Index="1">
+									<Name TextId="Head parameters" />
+									<Const Data="0x00,0x00,0x00,0x00" />
+									<Ref DataType="Bit" TextId="Group diagnosis" DefaultValue="0" ByteOffset="0" BitOffset="0" />
+								</ParameterRecordDataItem>
+							</RecordDataList>
+							<ModuleInfo>
+								<Name TextId="Head A" />
+							</ModuleInfo>
+						</VirtualSubmoduleItem>
+					</VirtualSubmoduleList>
+					<SystemDefinedSubmoduleList>
+						<InterfaceSubmoduleItem ID="Head A IF" SupportedRT_Classes="RT_CLASS_1;RT_CLASS_3" SupportedProtocols="SNMP;LLDP" DCP_HelloSupported="true" SubslotNumber="32768" TextId="Interface" SubmoduleIdentNumber="0x00008002">
+							<RecordDataList>
+								<ParameterRecordDataItem Index="45" Length="2">
+									<Name TextId="Interface options" />
+									<Ref DataType="Unsigned16" ByteOffset="0" DefaultValue="0" TextId="Interface option word" />
+								</ParameterRecordDataItem>
+							</RecordDataList>
+							<ApplicationRelations NumberOfAR="2">
+								<TimingProperties SendClock="8 16 32" ReductionRatioPow2="1 2 4" />
+							</ApplicationRelations>
+							<MediaRedundancy SupportedRole="Client" />
+						</InterfaceSubmoduleItem>
+						<PortSubmoduleItem ID="Head A P1" SubslotNumber="32769" SubmoduleIdentNumber="0x00008003" TextId="Port 1" MAUTypes="16" PortDeactivationSupported="true">
+							<MAUTypeList>
+								<MAUTypeItem Value="16" />
+							</MAUTypeList>
+							<RecordDataList>
+								<ParameterRecordDataItem Index="46" Length="1">
+									<Name TextId="Port options" />
+									<Ref DataType="Bit" ByteOffset="0" BitOffset="1" DefaultValue="0" TextId="Port disable" />
+								</ParameterRecordDataItem>
+							</RecordDataList>
+						</PortSubmoduleItem>
+						<PortSubmoduleItem ID="Head A P2" SubslotNumber="32770" SubmoduleIdentNumber="0x00008003" TextId="Port 2" MAUTypes="16">
+							<MAUTypeList>
+								<MAUTypeItem Value="16" />
+							</MAUTypeList>
+						</PortSubmoduleItem>
+					</SystemDefinedSubmoduleList>
+				</DeviceAccessPointItem>
+				<DeviceAccessPointItem PNIO_Version="V2.31" RequiredSchemaVersion="V2.3" ID="Head B" PhysicalSlots="0..65" ModuleIdentNumber="0x00000A10" MinDeviceInterval="8" DNS_CompatibleName="example-head-b" FixedInSlots="0" ObjectUUID_LocalIndex="2">
+					<ModuleInfo>
+						<Name TextId="Head B" />
+						<InfoText TextId="Info Head B" />
+						<OrderNumber Value="EX-HD-0002" />
+					</ModuleInfo>
+					<UseableModules>
+						<ModuleItemRef ModuleItemTarget="DI 8 V2" AllowedInSlots="1..64" />
+						<ModuleItemRef ModuleItemTarget="Multi Sub" AllowedInSlots="1..64" />
+					</UseableModules>
+					<VirtualSubmoduleList>
+						<VirtualSubmoduleItem ID="Head B" SubmoduleIdentNumber="0x00000000">
+							<IOData>
+								<Input>
+									<DataItem TextId="Head status" DataType="Unsigned32" UseAsBits="false" />
+								</Input>
+							</IOData>
+							<ModuleInfo>
+								<Name TextId="Head B" />
+							</ModuleInfo>
+						</VirtualSubmoduleItem>
+					</VirtualSubmoduleList>
+					<SystemDefinedSubmoduleList>
+						<InterfaceSubmoduleItem ID="Head B IF" SubslotNumber="32768" SubmoduleIdentNumber="0x00008002" TextId="Interface" SupportedRT_Classes="RT_CLASS_1;RT_CLASS_FUTURE" SupportedProtocols="SNMP;LLDP;FUTURE_PROTOCOL" />
+					</SystemDefinedSubmoduleList>
+					<UseableSubmodules>
+						<SubmoduleItemRef SubmoduleItemTarget="Port A1" AllowedInSubslots="32769" UsedInSubslots="32769" />
+						<SubmoduleItemRef SubmoduleItemTarget="Port A2" AllowedInSubslots="32770" />
+					</UseableSubmodules>
+				</DeviceAccessPointItem>
+				<DeviceAccessPointItem PNIO_Version="V2.4" RequiredSchemaVersion="V2.45" ID="Head C" PhysicalSlots="0..81" ModuleIdentNumber="0x00010A10" MinDeviceInterval="8" DNS_CompatibleName="example-head-c" FixedInSlots="0" ObjectUUID_LocalIndex="3">
+					<ModuleInfo>
+						<Name TextId="Head C" />
+					</ModuleInfo>
+					<UseableModules>
+						<ModuleItemRef ModuleItemTarget="AI 2" AllowedInSlots="2..65" />
+					</UseableModules>
+					<VirtualSubmoduleList>
+						<VirtualSubmoduleItem ID="Head C" SubmoduleIdentNumber="0x00000000">
+							<IOData />
+							<ModuleInfo>
+								<Name TextId="Head C" />
+							</ModuleInfo>
+						</VirtualSubmoduleItem>
+					</VirtualSubmoduleList>
+					<SystemDefinedSubmoduleList>
+						<InterfaceSubmoduleItem ID="Head C IF" SubslotNumber="32768" SubmoduleIdentNumber="0x00008002" TextId="Interface" SupportedRT_Classes="RT_CLASS_1" SupportedProtocols="SNMP;LLDP" />
+						<PortSubmoduleItem ID="Head C P1" SubslotNumber="32769" SubmoduleIdentNumber="0x00008003" TextId="Port 1" MAUTypes="16" />
+					</SystemDefinedSubmoduleList>
+				</DeviceAccessPointItem>
+			</DeviceAccessPointList>
+			<ModuleList>
+				<ModuleItem ID="DI 8" ModuleIdentNumber="0x00004D40">
+					<ModuleInfo>
+						<Name TextId="DI 8" />
+						<InfoText TextId="Info DI 8" />
+						<OrderNumber Value="EX-DI-0008" />
+						<HardwareRelease Value="2" />
+						<SoftwareRelease Value="V1.1" />
+					</ModuleInfo>
+					<VirtualSubmoduleList>
+						<VirtualSubmoduleItem ID="DI 8" SubmoduleIdentNumber="0x00000001" MayIssueProcessAlarm="true">
+							<IOData>
+								<Input Consistency="Item consistency">
+									<DataItem ID="DI 8 inputs" DataType="Unsigned8" UseAsBits="true" TextId="Inputs 0 to 7">
+										<BitDataItem BitOffset="0" TextId="Channel 0" />
+										<BitDataItem BitOffset="1" TextId="Channel 1" />
+										<BitDataItem BitOffset="7" TextId="Channel 7" />
+									</DataItem>
+									<DataItem DataType="Unsigned16" TextId="Counter value" />
+								</Input>
+							</IOData>
+							<RecordDataList>
+								<ParameterRecordDataItem Index="128" Length="6" TransferSequence="1">
+									<Name TextId="Channel parameters" />
+									<Const ByteOffset="0" Data="0x01,0x02" />
+									<Const ByteOffset="4" Data="0xFF,0x00" />
+									<Ref ID="Delay ref" ValueItemTarget="Input delay values" DataType="Unsigned8" ByteOffset="0" DefaultValue="3" AllowedValues="1 3 5" TextId="Input delay" />
+									<Ref DataType="Bit" ByteOffset="1" BitOffset="2" DefaultValue="1" Changeable="false" TextId="Wire break diagnosis" />
+									<Ref DataType="BitArea" ByteOffset="1" BitOffset="4" BitLength="3" DefaultValue="0" AllowedValues="0..5" Visible="false" TextId="Filter level" />
+									<Ref DataType="BitArea" ByteOffset="2" DefaultValue="0" TextId="Mode flag" />
+									<Ref DataType="Integer16" ByteOffset="4" DefaultValue="-5" AllowedValues="-100..100" TextId="Offset" />
+								</ParameterRecordDataItem>
+							</RecordDataList>
+							<ModuleInfo>
+								<Name TextId="DI 8 submodule" />
+							</ModuleInfo>
+						</VirtualSubmoduleItem>
+					</VirtualSubmoduleList>
+				</ModuleItem>
+				<ModuleItem ID="DI 8 V2" ModuleIdentNumber="0x00004D40">
+					<ModuleInfo>
+						<Name TextId="DI 8 V2" />
+						<OrderNumber Value="EX-DI-0008" />
+						<SoftwareRelease Value="V2.0" />
+					</ModuleInfo>
+					<VirtualSubmoduleList>
+						<VirtualSubmoduleItem ID="DI 8 V2" SubmoduleIdentNumber="0x00000001">
+							<IOData>
+								<Input>
+									<DataItem DataType="Unsigned8" TextId="Inputs 0 to 7" />
+								</Input>
+							</IOData>
+							<ModuleInfo>
+								<Name TextId="DI 8 V2" />
+							</ModuleInfo>
+						</VirtualSubmoduleItem>
+					</VirtualSubmoduleList>
+				</ModuleItem>
+				<ModuleItem ID="DQ 8" ModuleIdentNumber="0x00004D41">
+					<ModuleInfo>
+						<Name TextId="DQ 8" />
+					</ModuleInfo>
+					<VirtualSubmoduleList>
+						<VirtualSubmoduleItem ID="DQ 8" SubmoduleIdentNumber="0x00000001">
+							<IOData>
+								<Output Consistency="Item consistency">
+									<DataItem DataType="Unsigned8" UseAsBits="true" TextId="Outputs 0 to 7">
+										<BitDataItem BitOffset="0" TextId="Channel 0" />
+									</DataItem>
+								</Output>
+							</IOData>
+							<ModuleInfo>
+								<Name TextId="DQ 8" />
+							</ModuleInfo>
+						</VirtualSubmoduleItem>
+					</VirtualSubmoduleList>
+				</ModuleItem>
+				<ModuleItem ID="AI 2" ModuleIdentNumber="0x00004D50">
+					<ModuleInfo>
+						<Name TextId="AI 2" />
+					</ModuleInfo>
+					<VirtualSubmoduleList>
+						<VirtualSubmoduleItem ID="AI 2" SubmoduleIdentNumber="0x00000001">
+							<IOData>
+								<Input>
+									<DataItem DataType="Integer16" TextId="Channel 0 value" />
+									<DataItem DataType="Integer16" TextId="Channel 1 value" />
+									<DataItem DataType="Unsigned8+Unsigned8" TextId="Status pair" />
+									<DataItem DataType="Float32+Unsigned8" TextId="Scaled value" />
+								</Input>
+								<Output>
+									<DataItem DataType="Float32" TextId="Setpoint" />
+								</Output>
+							</IOData>
+							<ModuleInfo>
+								<Name TextId="AI 2" />
+							</ModuleInfo>
+						</VirtualSubmoduleItem>
+					</VirtualSubmoduleList>
+				</ModuleItem>
+				<ModuleItem ID="Mixed IO" ModuleIdentNumber="0x00004D60">
+					<ModuleInfo>
+						<Name TextId="Mixed IO" />
+					</ModuleInfo>
+					<VirtualSubmoduleList>
+						<VirtualSubmoduleItem ID="Mixed IO" SubmoduleIdentNumber="0x00000001">
+							<IOData>
+								<Input>
+									<DataItem DataType="Integer8" TextId="Mixed value" />
+									<DataItem DataType="Unsigned32" TextId="Mixed value" />
+									<DataItem DataType="Integer32" TextId="Mixed value" />
+									<DataItem DataType="Unsigned64" TextId="Mixed value" />
+									<DataItem DataType="Integer64" TextId="Mixed value" />
+									<DataItem DataType="Float64" TextId="Mixed value" />
+									<DataItem DataType="VisibleString" Length="10" TextId="Mixed value" />
+									<DataItem DataType="OctetString" Length="3" TextId="Mixed value" />
+								</Input>
+								<Output>
+									<DataItem DataType="F_MessageTrailer4Byte" TextId="Mixed value" />
+									<DataItem DataType="F_MessageTrailer5Byte" TextId="Mixed value" />
+									<DataItem DataType="Unsigned8" TextId="Mixed value" />
+								</Output>
+							</IOData>
+							<ModuleInfo>
+								<Name TextId="Mixed IO" />
+							</ModuleInfo>
+						</VirtualSubmoduleItem>
+					</VirtualSubmoduleList>
+				</ModuleItem>
+				<ModuleItem ID="Multi Sub" ModuleIdentNumber="0x00004D70">
+					<ModuleInfo>
+						<Name TextId="Multi Sub" />
+					</ModuleInfo>
+					<UseableSubmodules>
+						<SubmoduleItemRef SubmoduleItemTarget="Sub A" AllowedInSubslots="1..4" FixedInSubslots="1" UsedInSubslots="1 2" />
+						<SubmoduleItemRef SubmoduleItemTarget="Sub B" AllowedInSubslots="2 3" />
+					</UseableSubmodules>
+				</ModuleItem>
+				<ModuleItem ID="Server" ModuleIdentNumber="0x0000F000">
+					<ModuleInfo>
+						<Name TextId="Server" />
+					</ModuleInfo>
+					<VirtualSubmoduleList>
+						<VirtualSubmoduleItem ID="Server" SubmoduleIdentNumber="0x00000001">
+							<IOData />
+							<ModuleInfo>
+								<Name TextId="Server" />
+							</ModuleInfo>
+						</VirtualSubmoduleItem>
+					</VirtualSubmoduleList>
+				</ModuleItem>
+			</ModuleList>
+			<SubmoduleList>
+				<SubmoduleItem ID="Sub A" SubmoduleIdentNumber="0x00000101" MayIssueProcessAlarm="false">
+					<IOData>
+						<Input>
+							<DataItem DataType="Unsigned16" TextId="Sub value" />
+						</Input>
+					</IOData>
+					<RecordDataList>
+						<ParameterRecordDataItem Index="200" Length="2">
+							<Name TextId="Sub parameters" />
+							<Ref DataType="Unsigned16" ByteOffset="0" DefaultValue="10" AllowedValues="0 5 10..20" TextId="Threshold" />
+						</ParameterRecordDataItem>
+					</RecordDataList>
+					<ModuleInfo>
+						<Name TextId="Sub A" />
+						<InfoText TextId="Info Sub A" />
+					</ModuleInfo>
+				</SubmoduleItem>
+				<SubmoduleItem ID="Sub B" SubmoduleIdentNumber="0x00000101">
+					<IOData>
+						<Output>
+							<DataItem DataType="Unsigned16" TextId="Sub output" />
+						</Output>
+					</IOData>
+					<ModuleInfo>
+						<Name TextId="Sub B" />
+					</ModuleInfo>
+				</SubmoduleItem>
+				<PortSubmoduleItem ID="Port A1" SubmoduleIdentNumber="0x0000C000" SubslotNumber="32769" MAUTypes="16">
+					<MAUTypeList>
+						<MAUTypeItem Value="16" />
+					</MAUTypeList>
+					<RecordDataList>
+						<ParameterRecordDataItem Index="47" Length="1">
+							<Name TextId="Port options" />
+							<Ref DataType="Bit" ByteOffset="0" BitOffset="0" DefaultValue="0" TextId="Port disable" />
+						</ParameterRecordDataItem>
+					</RecordDataList>
+					<ModuleInfo>
+						<Name TextId="Port A1" />
+						<OrderNumber Value="EX-BA-0001" />
+					</ModuleInfo>
+				</PortSubmoduleItem>
+				<PortSubmoduleItem ID="Port A2" SubmoduleIdentNumber="0x0000C000" MAUTypes="16">
+					<MAUTypeList>
+						<MAUTypeItem Value="16" />
+					</MAUTypeList>
+					<ModuleInfo>
+						<Name TextId="Port A2 name" />
+					</ModuleInfo>
+				</PortSubmoduleItem>
+			</SubmoduleList>
+			<ValueList>
+				<ValueItem ID="Input delay values">
+					<Help TextId="Input delay help" />
+					<Assignments>
+						<Assign Content="1" TextId="Delay short" />
+						<Assign Content="3" TextId="Delay medium" />
+						<Assign Content="5" TextId="Delay long" />
+					</Assignments>
+				</ValueItem>
+				<ValueItem ID="Unused values">
+					<Assignments>
+						<Assign Content="0" TextId="Off" />
+					</Assignments>
+				</ValueItem>
+			</ValueList>
+			<ChannelDiagList>
+				<ChannelDiagItem ErrorType="256">
+					<Name TextId="Short circuit" />
+					<Help TextId="Short circuit help" />
+					<ExtChannelDiagList>
+						<ExtChannelDiagItem ErrorType="32768">
+							<Name TextId="Short to ground" />
+						</ExtChannelDiagItem>
+					</ExtChannelDiagList>
+				</ChannelDiagItem>
+				<ChannelDiagItem ErrorType="257">
+					<Name TextId="Supply missing" />
+				</ChannelDiagItem>
+			</ChannelDiagList>
+			<UnitDiagTypeList>
+				<UnitDiagTypeItem UserStructureIdentifier="21">
+					<Name TextId="Unit supply" />
+					<Ref ByteOffset="1" DataType="Unsigned8" DefaultValue="0" TextId="Missing supply" />
+				</UnitDiagTypeItem>
+				<UnitDiagTypeItem UserStructureIdentifier="22">
+					<Name TextId="Unit slot" />
+					<Ref ID="Slot code ref" ByteOffset="0" DataType="BitArea" BitOffset="2" BitLength="4" TextId="Slot code" />
+				</UnitDiagTypeItem>
+			</UnitDiagTypeList>
+			<ExternalTextList>
+				<PrimaryLanguage>
+					<Text TextId="Info device" Value="Example modular device" />
+					<Text TextId="Head A" Value="Head module A" />
+					<Text TextId="Subslot interface" Value="Interface subslot" />
+					<Text TextId="Subslot port 1" Value="Port 1 subslot" />
+					<Text TextId="Head parameters" Value="Head parameter record" />
+					<Text TextId="Group diagnosis" Value="Group diagnosis enabled" />
+					<Text TextId="Interface" Value="PN interface" />
+					<Text TextId="Interface options" Value="Interface option record" />
+					<Text TextId="Interface option word" Value="Interface option bits" />
+					<Text TextId="Port 1" Value="Port 1 RJ45" />
+					<Text TextId="Port 2" Value="Port 2 RJ45" />
+					<Text TextId="Port options" Value="Port option record" />
+					<Text TextId="Port disable" Value="Disable port" />
+					<Text TextId="Head B" Value="Head module B" />
+					<Text TextId="Info Head B" Value="Head B with pluggable ports" />
+					<Text TextId="Head status" Value="Head status word" />
+					<Text TextId="Head C" Value="Head module C" />
+					<Text TextId="DI 8" Value="Digital input 8" />
+					<Text TextId="Info DI 8" Value="Eight digital inputs" />
+					<Text TextId="Inputs 0 to 7" Value="Input byte" />
+					<Text TextId="Channel 0" Value="Channel 0 state" />
+					<Text TextId="Channel 1" Value="Channel 1 state" />
+					<Text TextId="Channel 7" Value="Channel 7 state" />
+					<Text TextId="Counter value" Value="Counter" />
+					<Text TextId="Channel parameters" Value="Channel parameter record" />
+					<Text TextId="Input delay" Value="Input delay time" />
+					<Text TextId="Wire break diagnosis" Value="Wire break check" />
+					<Text TextId="Filter level" Value="Filter level setting" />
+					<Text TextId="Mode flag" Value="Mode selection" />
+					<Text TextId="Offset" Value="Measurement offset" />
+					<Text TextId="DI 8 submodule" Value="Digital input 8 submodule" />
+					<Text TextId="DI 8 V2" Value="Digital input 8 second version" />
+					<Text TextId="DQ 8" Value="Digital output 8" />
+					<Text TextId="Outputs 0 to 7" Value="Output byte" />
+					<Text TextId="AI 2" Value="Analog input 2" />
+					<Text TextId="Channel 0 value" Value="Channel 0 measurement" />
+					<Text TextId="Channel 1 value" Value="Channel 1 measurement" />
+					<Text TextId="Status pair" Value="Status bytes" />
+					<Text TextId="Scaled value" Value="Scaled measurement with status" />
+					<Text TextId="Setpoint" Value="Output setpoint" />
+					<Text TextId="Mixed IO" Value="Mixed data types" />
+					<Text TextId="Mixed value" Value="Value of mixed type" />
+					<Text TextId="Multi Sub" Value="Module with pluggable submodules" />
+					<Text TextId="Server" Value="Server module" />
+					<Text TextId="Sub value" Value="Submodule input word" />
+					<Text TextId="Sub parameters" Value="Submodule parameter record" />
+					<Text TextId="Threshold" Value="Switching threshold" />
+					<Text TextId="Sub A" Value="Submodule A" />
+					<Text TextId="Info Sub A" Value="Pluggable submodule A" />
+					<Text TextId="Sub output" Value="Submodule output word" />
+					<Text TextId="Sub B" Value="Submodule B" />
+					<Text TextId="Port A1" Value="Pluggable port A1" />
+					<Text TextId="Input delay help" Value="Delay applied to every input" />
+					<Text TextId="Delay short" Value="Short delay" />
+					<Text TextId="Delay medium" Value="Medium delay" />
+					<Text TextId="Delay long" Value="Long delay" />
+					<Text TextId="Off" Value="Switched off" />
+					<Text TextId="Short circuit" Value="Short circuit detected" />
+					<Text TextId="Short circuit help" Value="Check the channel wiring" />
+					<Text TextId="Short to ground" Value="Short circuit to ground" />
+					<Text TextId="Supply missing" Value="Supply voltage missing" />
+					<Text TextId="Unit supply" Value="Unit supply diagnosis" />
+					<Text TextId="Missing supply" Value="Slot with missing supply" />
+					<Text TextId="Unit slot" Value="Unit slot diagnosis" />
+					<Text TextId="Slot code" Value="Slot error code" />
+				</PrimaryLanguage>
+				<Language xml:lang="de">
+					<Text TextId="Head A" Value="Kopf A" />
+					<Text TextId="Info Head A" Value="Kopf A Information" />
+					<Text TextId="Port A2 name" Value="Anschluss A2" />
+				</Language>
+				<Language xml:lang="en">
+					<Text TextId="Head A" Value="Head A in English" />
+					<Text TextId="Info Head A" Value="Head A information in English" />
+				</Language>
+				<Language xml:lang="fr">
+					<Text TextId="Port A2 name" Value="Port A2 en francais" />
+				</Language>
+			</ExternalTextList>
+		</ApplicationProcess>
+	</ProfileBody>
+</ISO15745Profile>
