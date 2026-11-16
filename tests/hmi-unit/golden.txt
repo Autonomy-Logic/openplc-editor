@@ -1,4 +1,4 @@
-warnings [{"file":"HMI","message":"AlarmOn is not in the PLC program's debug map; the HMI will not sync it"}]
+warnings []
 fonts {"variant":"compact","faces":[0,1]}
 units {"library":["lib_standard_widgets.cpp"],"widgets":["lib_project_widgets.cpp"],"screens":{"Overview":["pou_OVERVIEW.cpp","hmi_preview_0.cpp"],"Details":["pou_DETAILS.cpp","hmi_preview_1.cpp"]},"glue":["configuration.cpp","pou_HMIMAIN.cpp","pou_HMI_SHOW.cpp","pou_HMI_CURRENTSCREEN.cpp","hmi_unit_glue.cpp","hmi_preview.cpp"]}
 tags 5 md5=0123456789abcdef0123456789abcdef frame_ms=50 pin='2468' relock=5
@@ -6,7 +6,7 @@ tag 0 CONFIG0.RES0.INSTANCE0.MAIN.LEVEL arr=0 elem=3 type=14 max=0 size=4
 tag 1 CONFIG0.RES0.INSTANCE0.MAIN.RUNNING arr=0 elem=4 type=1 max=0 size=1
 tag 2 CONFIG0.RES0.INSTANCE0.MAIN.SPEED arr=0 elem=5 type=3 max=0 size=2
 tag 3 CONFIG0.RES0.INSTANCE0.MAIN.TAG arr=1 elem=0 type=16 max=12 size=13
-tag 4 CONFIG0.ALARMON arr=0 elem=0 type=1 max=0 size=1
+tag 4 CONFIG0.ALARMON arr=2 elem=0 type=1 max=0 size=1
 admin start page=0 dl=2b67b85db8788774 status=0
 admin steady! page=0 dl=2b67b85db8788774 status=0
 admin run_down page=0 dl=a4b42bcf526517a2 status=0 write CONFIG0.RES0.INSTANCE0.MAIN.RUNNING=1
@@ -42,6 +42,13 @@ unknown start! page=0 dl=692f958adecd8655 status=0
 admin admin_after page=0 dl=429a4e89b5d0530c status=0
 setters rc=0 refused=-1 -1 -1
 admin live_edit! page=0 dl=cf7b012b9a5bf03d status=0
+admin reads page=0 dl=cf7b012b9a5bf03d status=0
+frame read the host yes
+read level=7.25 reads=1
+unreadable level=7.25
+readable again level=9.50
+host cut 'ABCDEFGHIJKL'
+half access reads=0
 cut 'ABCDEFGHIJKL'
 short 'AB'
 unit size known

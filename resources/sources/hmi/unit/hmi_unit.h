@@ -1,11 +1,13 @@
 /**
  * @file hmi_unit.h
  * @brief What a generated HMI unit gives its host: program instances (one per viewer, run by hmi_unit_frame inside
- *        that viewer's core frame), the tag table, PLC variable access and project settings.
+ *        that viewer's core frame), the tag table, PLC variable access and project settings. The unit keeps shared,
+ *        unsynchronized state: the host makes every call from one thread at a time.
  */
 #ifndef HMI_UNIT_H
 #define HMI_UNIT_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -37,7 +39,7 @@ enum hmi_tag_type {
 };
 
 typedef struct {
-    /** PLC debug-table address (array, element); both 0 when the unit was built without a PLC program. */
+    /** PLC debug-table address (array, element); both 0 only when the unit was built without a PLC program. */
     uint32_t arr;
     uint32_t elem;
     uint8_t type;       /**< ::hmi_tag_type */
@@ -47,15 +49,16 @@ typedef struct {
 } hmi_tag_t;
 
 /**
- * How the unit reaches the PLC's variables. Screens read a tag straight from the PLC's variable, which the host
- * locates through the debug interface (the HMI runs in the PLC program's address space), and hand every write to the
- * host, which applies and logs it. Nothing is copied or buffered between frames.
+ * How the unit reaches the PLC's variables. Screens read a tag through `read` at the moment they use it and hand every
+ * write to `write`, which applies and logs it. Values cross in their buffer format (see hmi_tag_size), so the host can
+ * serve them from the debug interface by (arr, elem). The unit keeps each tag's last read value, shared by all its
+ * instances, and uses it when a read fails. Both callbacks are required.
  */
 typedef struct {
-    /** The PLC's variable object of a tag, as the debug interface locates it; NULL when it has none. */
-    void *(*variable)(void *ctx, int tag);
-    /** Applies a screen's write of a tag; `value` is a variable object of the tag's type holding the new value. */
-    void (*write)(void *ctx, int tag, const void *value);
+    /** Copies the tag's current value into dest in its buffer format (hmi_tag_size bytes); false when unreadable. */
+    bool (*read)(void *ctx, int tag, void *dest);
+    /** Applies a screen's write of the tag; src holds the new value in its buffer format. */
+    void (*write)(void *ctx, int tag, const void *src);
     void *ctx;
 } hmi_tag_access_t;
 
@@ -71,18 +74,22 @@ extern const char hmi_panel_pin[];
 /** Idle minutes after which an unlocked panel locks again; 0 means only at startup. */
 extern const uint32_t hmi_relock_minutes;
 
-/** Installs the host's access to the PLC's variables, kept by reference; NULL makes the unit keep them itself. */
+/**
+ * Installs the host's access to the PLC's variables, kept by reference. NULL, or access missing either callback, makes
+ * the unit keep the variables itself (the preview, where no PLC runs).
+ */
 void hmi_set_tag_access(const hmi_tag_access_t *access);
 /** Bytes a tag value takes in buffers: its IEC width, little endian, or max_len + 1 for a NUL-terminated STRING. */
 size_t hmi_tag_size(int tag);
 /**
  * Copies the value of a variable object of tag `tag` into buf (hmi_tag_size bytes); with variable NULL, the tag's
- * current value. Returns 0, or -1 for an unknown tag.
+ * current value, through the host's read when access is installed. Returns 0, or -1 for an unknown tag.
  */
 int hmi_tag_read(int tag, const void *variable, void *buf);
 /**
- * Sets a variable object of tag `tag` from buf; with variable NULL, the variable the unit keeps itself. For a STRING,
- * buf holds NUL-terminated text and at most max_len bytes of it are read. Returns 0, or -1 for an unknown tag.
+ * Sets a variable object of tag `tag` from buf; with variable NULL, the variable the unit keeps itself, which screens
+ * read only while no access is installed. For a STRING, buf holds NUL-terminated text and at most max_len bytes of it
+ * are read. Returns 0, or -1 for an unknown tag.
  */
 int hmi_tag_write(int tag, void *variable, const void *buf);
 
@@ -93,8 +100,13 @@ void *hmi_unit_create(void);
 void hmi_unit_destroy(void *unit);
 /** Sets the viewer's role (::hmi_role) before its first frame; screens its role is not granted stay closed. */
 void hmi_unit_set_role(void *unit, int role);
-/** Runs one frame of the viewer's screens; the host brackets it with the viewer's hmi_frame_begin and end. */
-void hmi_unit_frame(void *unit);
+/**
+ * Runs one frame of the viewer's screens; the host brackets it with the viewer's hmi_frame_begin and end.
+ * Returns false when the screen code raised an IEC fault (null reference, array bounds): in builds with
+ * C++ exceptions the unit catches it here, so it never reaches the host; the host then closes the viewer. A host built
+ * without exceptions must define the C++ hook `strucpp::iec_runtime_fault`, which then receives the fault.
+ */
+bool hmi_unit_frame(void *unit);
 
 #ifdef __cplusplus
 }

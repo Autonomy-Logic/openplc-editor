@@ -3,9 +3,9 @@
  * STruC++ with the StandardWidgets library into C++ in namespace `hmi`, plus the C glue every host links
  * (`resources/sources/hmi/unit/hmi_unit.h`): tag table, tag accessors, program instances and settings.
  *
- * Screens use PLC variables as `<POU>.<Name>` or `GVL.<Name>`; the unit holds a mirror of the ones they use, which
- * hosts keep in step with the PLC. `Element.Value := <variable>;` on a two-way widget also writes the operator's
- * change back to the variable, converted to its type.
+ * Screens use PLC variables as `<POU>.<Name>` or `GVL.<Name>`; the unit reads each one through the host's access at
+ * the moment a screen uses it. `Element.Value := <variable>;` on a two-way widget also writes the operator's change
+ * back to the variable, converted to its type, through the host.
  */
 import {
   checkHmiBlockElements,
@@ -537,6 +537,7 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput): string {
     '#include "hmi_unit.h"',
     `#include "${HEADER}"`,
     '#include "iec_external.hpp"',
+    '#include "iec_fault.hpp"',
     '',
     `using HmiProgram = ${NAMESPACE}::Program_HMIMAIN;`,
     '',
@@ -546,20 +547,26 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput): string {
     ...tags.map((t, i) => `${cppTypeOf(t.type)} g_own_${i}{};`),
     `void *const g_own[${Math.max(tags.length, 1)}] = {${tags.length > 0 ? tags.map((_, i) => `&g_own_${i}`).join(', ') : 'nullptr'}};`,
     '',
+    "/* The host's values as screens last read them; a failed read keeps the previous value. */",
+    ...tags.map((t, i) => `${cppTypeOf(t.type)} g_read_${i}{};`),
+    `void *const g_read[${Math.max(tags.length, 1)}] = {${tags.length > 0 ? tags.map((_, i) => `&g_read_${i}`).join(', ') : 'nullptr'}};`,
+    `constexpr size_t kTagBufferSize = ${Math.max(1, ...tags.map(({ type }) => sizeOf(type)))};`,
+    '',
     'void *tag_variable(uint32_t id) {',
-    '    if (g_access && g_access->variable) {',
-    '        void *v = g_access->variable(g_access->ctx, static_cast<int>(id));',
-    '        if (v) return v;',
-    '    }',
-    `    return id < ${tags.length}u ? g_own[id] : nullptr;`,
+    `    if (id >= ${tags.length}u) return nullptr;`,
+    '    if (!g_access) return g_own[id];',
+    '    alignas(8) unsigned char buf[kTagBufferSize];',
+    '    if (g_access->read(g_access->ctx, static_cast<int>(id), buf)) hmi_tag_write(static_cast<int>(id), g_read[id], buf);',
+    '    return g_read[id];',
     '}',
     '}',
     '',
     'namespace strucpp {',
     'void *external_variable(uint32_t id) { return tag_variable(id); }',
     'void external_store(uint32_t id, const void *value) {',
-    '    if (g_access && g_access->write) {',
-    '        g_access->write(g_access->ctx, static_cast<int>(id), value);',
+    '    if (g_access) {',
+    '        alignas(8) unsigned char buf[kTagBufferSize];',
+    '        if (hmi_tag_read(static_cast<int>(id), value, buf) == 0) g_access->write(g_access->ctx, static_cast<int>(id), buf);',
     '        return;',
     '    }',
     '    switch (id) {',
@@ -579,7 +586,9 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput): string {
     `const char hmi_panel_pin[] = ${cString(settings.pin.enabled ? settings.pin.value : '')};`,
     `const uint32_t hmi_relock_minutes = ${settings.relock.mode === 'idle' ? settings.relock.minutes : 0};`,
     '',
-    'void hmi_set_tag_access(const hmi_tag_access_t *access) { g_access = access; }',
+    'void hmi_set_tag_access(const hmi_tag_access_t *access) {',
+    '    g_access = access && access->read && access->write ? access : nullptr;',
+    '}',
     '',
     'size_t hmi_tag_size(int tag) {',
     '    switch (tag) {',
@@ -612,8 +621,18 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput): string {
     'void hmi_unit_set_role(void *unit, int role) {',
     '    if (unit) static_cast<HmiProgram *>(unit)->ROLE.set(role);',
     '}',
-    'void hmi_unit_frame(void *unit) {',
-    '    if (unit) static_cast<HmiProgram *>(unit)->run();',
+    'bool hmi_unit_frame(void *unit) {',
+    '    if (!unit) return true;',
+    '#if STRUCPP_HAS_EXCEPTIONS',
+    '    try {',
+    '        static_cast<HmiProgram *>(unit)->run();',
+    '    } catch (...) {',
+    '        return false;',
+    '    }',
+    '#else',
+    '    static_cast<HmiProgram *>(unit)->run();',
+    '#endif',
+    '    return true;',
     '}',
     '}',
     '',
@@ -1074,8 +1093,10 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
       continue
     }
     const address = input.resolve ? input.resolve(entry.path) : null
-    if (input.resolve && address === null)
-      d.warn(UNIT, `${named} is not in the PLC program's debug map; the HMI will not sync it`)
+    if (input.resolve && address === null) {
+      d.error(UNIT, `${named} has no debug address in the compiled PLC program, so the HMI cannot reach it`)
+      continue
+    }
     tags.push({ path: entry.path, type, address })
   }
   if (d.errors.length > 0) return result
