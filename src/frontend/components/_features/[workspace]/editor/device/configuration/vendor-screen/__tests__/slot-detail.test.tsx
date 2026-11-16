@@ -16,7 +16,8 @@ describe('SlotDetailPane', () => {
         <TallContent label='slot 1' />
       </SlotDetailPane>,
     )
-    const pane = screen.getByText('slot 1').parentElement as HTMLDivElement
+    const pane = screen.getByText('slot 1').parentElement
+    if (!(pane instanceof HTMLDivElement)) throw new Error('the slot detail pane is not in the document')
     pane.scrollTop = 687
     expect(pane.scrollTop).toBe(687)
 
@@ -35,7 +36,8 @@ describe('SlotDetailPane', () => {
         <TallContent label='slot 4' />
       </SlotDetailPane>,
     )
-    const pane = screen.getByText('slot 4').parentElement as HTMLDivElement
+    const pane = screen.getByText('slot 4').parentElement
+    if (!(pane instanceof HTMLDivElement)) throw new Error('the slot detail pane is not in the document')
     pane.scrollTop = 120
 
     rerender(

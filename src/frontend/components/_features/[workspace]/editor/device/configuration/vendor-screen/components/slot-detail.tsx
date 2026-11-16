@@ -70,7 +70,7 @@ function ModulePicture({ image, packagePath, alt }: { image?: string; packagePat
     <img
       src={dataUrl}
       alt={alt}
-      className='h-auto max-h-[min(20rem,30vh)] w-auto max-w-[20rem] shrink-0 self-start object-contain'
+      className='h-auto max-h-[min(20rem,30vh)] w-auto max-w-[40%] self-start object-contain'
     />
   )
 }
