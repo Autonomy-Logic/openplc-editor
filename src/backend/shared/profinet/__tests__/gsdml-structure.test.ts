@@ -101,7 +101,7 @@ describe('parseGsdml: input', () => {
   })
 
   it('accepts a leading U+FEFF and reads the same catalog as without it', () => {
-    expect(parseGsdml(`﻿${BASE}`)).toEqual(parseGsdml(BASE))
+    expect(parseGsdml(`\uFEFF${BASE}`)).toEqual(parseGsdml(BASE))
   })
 
   it('rejects empty input', () => {
