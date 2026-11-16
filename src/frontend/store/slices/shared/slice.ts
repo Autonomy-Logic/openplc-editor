@@ -974,6 +974,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().workspaceActions.clearWorkspace()
       getState().fileActions.clearFiles()
       getState().consoleActions.clearLogs()
+      getState().consoleActions.closeProjectConsole()
       getState().historyActions.clearHistory()
       getState().searchActions.clearSearch()
       getState().modalActions.closeModal()
@@ -989,6 +990,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // side effect, which would let a stale timer persist a fresh flow).
       cancelFlowWriteBacks()
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+      getState().consoleActions.openProjectConsole()
       getState().workspaceActions.setEditingState('saved')
       // Any in-place reload (branch switch, restore, discard, stash) can move
       // HEAD, so drop the cached HEAD snapshot used by source-control diffs;

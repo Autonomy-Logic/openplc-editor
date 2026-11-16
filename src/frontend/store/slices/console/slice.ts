@@ -28,7 +28,7 @@ function normalizeLogEntry(log: LogEntry): LogEntry {
 let logSequence = 0
 const nextLogId = () => `log-${++logSequence}`
 
-const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (setState) => ({
+const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (setState, getState) => ({
   logs: [],
   filters: {
     levels: {
@@ -41,6 +41,8 @@ const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (se
     timestampFormat: 'full',
   },
   followRequestId: 0,
+  logsAwaitingProject: [],
+  projectConsoleOpen: false,
   consoleActions: {
     addLog: (log, options) => {
       setState(
@@ -101,6 +103,36 @@ const createConsoleSlice: StateCreator<ConsoleSlice, [], [], ConsoleSlice> = (se
       setState(
         produce((state: ConsoleSlice) => {
           state.followRequestId += 1
+        }),
+      )
+    },
+    addLogWhenProjectOpen: (log) => {
+      if (getState().projectConsoleOpen) {
+        getState().consoleActions.addLog(log)
+        return
+      }
+      setState(
+        produce((state: ConsoleSlice) => {
+          state.logsAwaitingProject.push({ ...log, tstamp: log.tstamp ?? new Date() })
+        }),
+      )
+    },
+    openProjectConsole: () => {
+      const kept = getState().logsAwaitingProject
+      setState(
+        produce((state: ConsoleSlice) => {
+          state.projectConsoleOpen = true
+          state.logsAwaitingProject = []
+        }),
+      )
+      for (const log of kept) {
+        getState().consoleActions.addLog(log)
+      }
+    },
+    closeProjectConsole: () => {
+      setState(
+        produce((state: ConsoleSlice) => {
+          state.projectConsoleOpen = false
         }),
       )
     },

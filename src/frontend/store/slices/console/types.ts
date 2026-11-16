@@ -27,6 +27,10 @@ export type ConsoleState = {
   // a single "kick to bottom" so auto-follow resumes — without overriding the
   // user's manual scroll position at any other time.
   followRequestId: number
+  /** Logs kept by `addLogWhenProjectOpen` until a project opens, oldest first. */
+  logsAwaitingProject: LogObject[]
+  /** Whether a project is open on the Console: set by `openProjectConsole`, cleared by `closeProjectConsole`. */
+  projectConsoleOpen: boolean
 }
 
 /** Per-write directives for {@link ConsoleActions.addLog}. */
@@ -48,6 +52,12 @@ export type ConsoleActions = {
   setTimestampFormat: (format: TimestampFormat) => void
   // Reveal the console and kick it to the latest line (re-engaging auto-follow).
   requestConsoleFollow: () => void
+  /** Adds `log` now when a project is open on the Console; otherwise keeps it and adds it at the next `openProjectConsole`. */
+  addLogWhenProjectOpen: (log: LogObject) => void
+  /** Marks a project open on the Console and adds every kept log once, in the order kept, then forgets them. */
+  openProjectConsole: () => void
+  /** Marks no project open on the Console; kept logs stay kept. */
+  closeProjectConsole: () => void
 }
 
 export type ConsoleSlice = ConsoleState & {
