@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
 import type { GsdmlCatalog, GsdmlParseResult } from '@root/middleware/shared/ports/gsdml-types'
+import { buildGsdmlCatalogLookups } from '@root/middleware/shared/utils/profinet/gsdml-catalog-lookups'
 
 /** A device access point of the catalog. */
 export type CatalogDap = GsdmlCatalog['deviceAccessPoints'][number]
@@ -91,6 +92,25 @@ export function byId<T extends { readonly id: string }>(items: readonly T[], id:
 /** The notices of one kind. */
 export function noticesOf(catalog: GsdmlCatalog, kind: CatalogNotice['kind']): CatalogNotice[] {
   return catalog.notices.filter((notice) => notice.kind === kind)
+}
+
+/** Placements whose target is neither a catalog object nor the detail of a dangling-reference notice, as `owner -> target`. */
+export function unresolvedPlacements(catalog: GsdmlCatalog): string[] {
+  const { moduleById, submoduleById } = buildGsdmlCatalogLookups(catalog)
+  const dangling = new Set(noticesOf(catalog, 'dangling-reference').map((notice) => notice.detail))
+  const unresolved = (target: string, known: ReadonlyMap<string, unknown>): boolean =>
+    !known.has(target) && !dangling.has(target)
+  const modulePlacements = catalog.deviceAccessPoints.flatMap((dap) =>
+    dap.useableModules
+      .filter((placement) => unresolved(placement.moduleId, moduleById))
+      .map((placement) => `${dap.id} -> ${placement.moduleId}`),
+  )
+  const submodulePlacements = [...catalog.deviceAccessPoints, ...catalog.modules].flatMap((owner) =>
+    owner.useableSubmodules
+      .filter((placement) => unresolved(placement.submoduleId, submoduleById))
+      .map((placement) => `${owner.id} -> ${placement.submoduleId}`),
+  )
+  return [...modulePlacements, ...submodulePlacements]
 }
 
 /** Every submodule of a catalog: virtual and system-defined ones of DAPs, virtual ones of modules, the SubmoduleList. */

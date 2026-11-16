@@ -11,6 +11,7 @@ import {
   countRawElements,
   expectCatalog,
   noticesOf,
+  unresolvedPlacements,
 } from './fixtures/gsdml-fixtures'
 
 const REAL_FILE_TIMEOUT_MS = 120_000
@@ -65,6 +66,14 @@ if (REAL_FILES.length === 0) {
           ...catalog.submodules.filter((sub) => !(lookups.submodulesByIdent.get(sub.identNumber) ?? []).includes(sub)),
         ].map((item) => item.id)
         expect(unreachable).toEqual([])
+      },
+      REAL_FILE_TIMEOUT_MS,
+    )
+
+    it(
+      'resolves every placement to a catalog object or the target of a dangling-reference notice',
+      () => {
+        expect(unresolvedPlacements(catalog)).toEqual([])
       },
       REAL_FILE_TIMEOUT_MS,
     )
