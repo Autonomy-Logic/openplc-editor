@@ -92,7 +92,7 @@ export type RuntimeConnection = {
    *  poll. `'run'` on any device without a physical switch, so a null-safe
    *  caller treats absence as "no gating". */
   switchPosition: 'run' | 'stop' | null
-  /** Commercial licence state from `/api/status`, or null when the runtime does not report one. */
+  /** Commercial licence state the editor verified from `GET /api/runtime-license`, or null when none was verified. */
   license: RuntimeCommercialLicense | null
   ipAddress: string | null
   /** Version string reported by the connected runtime (from
