@@ -57,7 +57,17 @@ describe('HMI unit generator', () => {
     const glue = sample.files['hmi_unit_glue.cpp']
     expect(glue).toContain('{1u, 0u, 16, 12, "CONFIG0.RES0.INSTANCE0.MAIN.TAG"},')
     expect(glue).toContain('void *external_variable(uint32_t id) { return tag_variable(id); }')
-    expect(glue).toContain('g_access->write(g_access->ctx, static_cast<int>(id), value);')
+    expect(glue).toContain('constexpr size_t kTagBufferSize = 13;')
+    expect(glue).toContain(
+      '    if (g_access->read(g_access->ctx, static_cast<int>(id), buf)) hmi_tag_write(static_cast<int>(id), g_read[id], buf);',
+    )
+    expect(glue).toContain('    return g_read[id];')
+    expect(glue).toContain(
+      '        if (hmi_tag_read(static_cast<int>(id), value, buf) == 0) g_access->write(g_access->ctx, static_cast<int>(id), buf);',
+    )
+    expect(glue).not.toContain('g_access->variable')
+    expect(glue).toContain('bool hmi_unit_frame(void *unit) {')
+    expect(glue).toMatch(/try \{\s+static_cast<HmiProgram \*>\(unit\)->run\(\);\s+\} catch \(\.\.\.\) \{\s+return false;/)
     expect(glue).toContain(
       '    case 0: *static_cast<strucpp::IEC_REAL *>(g_own[0]) = *static_cast<const strucpp::IEC_REAL *>(value); return;',
     )

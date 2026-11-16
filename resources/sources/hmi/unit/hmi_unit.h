@@ -6,6 +6,7 @@
 #ifndef HMI_UNIT_H
 #define HMI_UNIT_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -47,15 +48,15 @@ typedef struct {
 } hmi_tag_t;
 
 /**
- * How the unit reaches the PLC's variables. Screens read a tag straight from the PLC's variable, which the host
- * locates through the debug interface (the HMI runs in the PLC program's address space), and hand every write to the
- * host, which applies and logs it. Nothing is copied or buffered between frames.
+ * How the unit reaches the PLC's variables. Screens read a tag through `read` at the moment they use it and hand every
+ * write to `write`, which applies and logs it. Values cross in their buffer format (see hmi_tag_size), so the host can
+ * serve them from the debug interface by (arr, elem). Nothing is copied or buffered between frames.
  */
 typedef struct {
-    /** The PLC's variable object of a tag, as the debug interface locates it; NULL when it has none. */
-    void *(*variable)(void *ctx, int tag);
-    /** Applies a screen's write of a tag; `value` is a variable object of the tag's type holding the new value. */
-    void (*write)(void *ctx, int tag, const void *value);
+    /** Copies the tag's current value into dest in its buffer format (hmi_tag_size bytes); false when unreadable. */
+    bool (*read)(void *ctx, int tag, void *dest);
+    /** Applies a screen's write of the tag; src holds the new value in its buffer format. */
+    void (*write)(void *ctx, int tag, const void *src);
     void *ctx;
 } hmi_tag_access_t;
 
@@ -77,7 +78,7 @@ void hmi_set_tag_access(const hmi_tag_access_t *access);
 size_t hmi_tag_size(int tag);
 /**
  * Copies the value of a variable object of tag `tag` into buf (hmi_tag_size bytes); with variable NULL, the tag's
- * current value. Returns 0, or -1 for an unknown tag.
+ * current value, through the host's read when access is installed. Returns 0, or -1 for an unknown tag.
  */
 int hmi_tag_read(int tag, const void *variable, void *buf);
 /**
@@ -93,8 +94,12 @@ void *hmi_unit_create(void);
 void hmi_unit_destroy(void *unit);
 /** Sets the viewer's role (::hmi_role) before its first frame; screens its role is not granted stay closed. */
 void hmi_unit_set_role(void *unit, int role);
-/** Runs one frame of the viewer's screens; the host brackets it with the viewer's hmi_frame_begin and end. */
-void hmi_unit_frame(void *unit);
+/**
+ * Runs one frame of the viewer's screens; the host brackets it with the viewer's hmi_frame_begin and end.
+ * Returns false when the screen code raised an IEC fault (null reference, array bounds): in builds with
+ * C++ exceptions the unit catches it here, so it never reaches the host; the host then closes the viewer.
+ */
+bool hmi_unit_frame(void *unit);
 
 #ifdef __cplusplus
 }
