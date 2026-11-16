@@ -131,6 +131,14 @@ function writeFixture(root: string): { userData: string } {
   return { userData }
 }
 
+async function killElectron(app: ElectronApplication): Promise<void> {
+  const electronProcess = app.process()
+  if (electronProcess.exitCode !== null) return
+  const exited = new Promise((resolve) => electronProcess.once('exit', resolve))
+  electronProcess.kill('SIGKILL')
+  await exited
+}
+
 async function launch(userData: string): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
     args: [join(__dirname, '..', 'release', 'app', 'dist', 'main', 'main.js'), `--user-data-dir=${userData}`],
@@ -154,6 +162,7 @@ async function launch(userData: string): Promise<{ app: ElectronApplication; pag
     }
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
+  await killElectron(app)
   throw new Error('the editor window never appeared')
 }
 
@@ -215,11 +224,7 @@ test.describe('deleting a function block removes its unreferenced instance varia
   })
 
   test.afterEach(async () => {
-    const electronProcess = app.process()
-    if (electronProcess.exitCode !== null) return
-    const exited = new Promise((resolve) => electronProcess.once('exit', resolve))
-    electronProcess.kill('SIGKILL')
-    await exited
+    await killElectron(app)
   })
 
   test('FBD: deleting an unreferenced TON drops its instance from the variables and the OPC-UA list', async () => {
