@@ -246,6 +246,13 @@ int main(int argc, char **argv) {
     hmi_tag_read(tag, NULL, got);
     printf("host cut '%s'\n", (const char *)got);
 
+    /* Access missing a callback counts as none: the unit keeps the variables itself and never calls the host. */
+    static const hmi_tag_access_t half = {plc_read, NULL, NULL};
+    hmi_set_tag_access(&half);
+    g_reads = 0;
+    hmi_tag_read(level_tag, NULL, got);
+    printf("half access reads=%d\n", g_reads);
+
     /* Without host access the unit keeps the variables itself, as in the preview. */
     hmi_set_tag_access(NULL);
 

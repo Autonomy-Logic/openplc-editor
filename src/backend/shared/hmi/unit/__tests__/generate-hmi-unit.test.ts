@@ -49,11 +49,9 @@ describe('HMI unit generator', () => {
       { path: 'CONFIG0.RES0.INSTANCE0.MAIN.RUNNING', type: 1, maxLength: 0, address: { arr: 0, elem: 4 } },
       { path: 'CONFIG0.RES0.INSTANCE0.MAIN.SPEED', type: 3, maxLength: 0, address: { arr: 0, elem: 5 } },
       { path: 'CONFIG0.RES0.INSTANCE0.MAIN.TAG', type: 16, maxLength: 12, address: { arr: 1, elem: 0 } },
-      { path: 'CONFIG0.ALARMON', type: 1, maxLength: 0, address: null },
+      { path: 'CONFIG0.ALARMON', type: 1, maxLength: 0, address: { arr: 2, elem: 0 } },
     ])
-    expect(sample.warnings).toEqual([
-      { file: 'HMI', message: "AlarmOn is not in the PLC program's debug map; the HMI will not sync it" },
-    ])
+    expect(sample.warnings).toEqual([])
     const glue = sample.files['hmi_unit_glue.cpp']
     expect(glue).toContain('{1u, 0u, 16, 12, "CONFIG0.RES0.INSTANCE0.MAIN.TAG"},')
     expect(glue).toContain('void *external_variable(uint32_t id) { return tag_variable(id); }')
@@ -61,13 +59,19 @@ describe('HMI unit generator', () => {
     expect(glue).toContain(
       '    if (g_access->read(g_access->ctx, static_cast<int>(id), buf)) hmi_tag_write(static_cast<int>(id), g_read[id], buf);',
     )
+    expect(glue).toContain('    if (!g_access) return g_own[id];')
+    expect(glue).toContain('    g_access = access && access->read && access->write ? access : nullptr;')
     expect(glue).toContain('    return g_read[id];')
     expect(glue).toContain(
       '        if (hmi_tag_read(static_cast<int>(id), value, buf) == 0) g_access->write(g_access->ctx, static_cast<int>(id), buf);',
     )
     expect(glue).not.toContain('g_access->variable')
     expect(glue).toContain('bool hmi_unit_frame(void *unit) {')
-    expect(glue).toMatch(/try \{\s+static_cast<HmiProgram \*>\(unit\)->run\(\);\s+\} catch \(\.\.\.\) \{\s+return false;/)
+    expect(glue).toContain('#if STRUCPP_HAS_EXCEPTIONS')
+    expect(glue).toContain('#include "iec_fault.hpp"')
+    expect(glue).toMatch(
+      /try \{\s+static_cast<HmiProgram \*>\(unit\)->run\(\);\s+\} catch \(\.\.\.\) \{\s+return false;/,
+    )
     expect(glue).toContain(
       '    case 0: *static_cast<strucpp::IEC_REAL *>(g_own[0]) = *static_cast<const strucpp::IEC_REAL *>(value); return;',
     )
@@ -181,6 +185,19 @@ describe('HMI unit generator', () => {
   it('refuses to preview a widget block the project does not have', () => {
     const result = generateHmiUnit({ ...sampleProject(), widgetPreview: 'HmiLamp' })
     expect(messages(result)).toEqual(['HMI: HmiLamp is not a widget block of the project'])
+  })
+
+  it('refuses a tag the PLC program does not have, so the host never serves it from another address', () => {
+    const project = sampleProject()
+    const result = generateHmiUnit({
+      ...project,
+      resolve: (path) => (path.toUpperCase() === 'CONFIG0.ALARMON' ? null : (project.resolve?.(path) ?? null)),
+    })
+    expect(result.ok).toBe(false)
+    expect(messages(result)).toEqual([
+      'HMI: AlarmOn has no debug address in the compiled PLC program, so the HMI cannot reach it',
+    ])
+    expect(result.files['hmi_unit_glue.cpp']).toBeUndefined()
   })
 
   it('keeps every tag without a PLC program, for previews', () => {

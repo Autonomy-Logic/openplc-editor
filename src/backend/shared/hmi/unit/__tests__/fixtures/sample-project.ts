@@ -64,13 +64,15 @@ CONFIGURATION Config0
 END_CONFIGURATION
 `
 
-/** Debug-table addresses of the sample PLC program; the global AlarmOn is missing, as after a rename. */
+/** Debug-table addresses of the sample PLC program, plus an array element some tests declare. */
 const DEBUG_MAP = new Map([
   ['CONFIG0.RES0.INSTANCE0.MAIN.LEVEL', { arr: 0, elem: 3 }],
   ['CONFIG0.RES0.INSTANCE0.MAIN.RUNNING', { arr: 0, elem: 4 }],
   ['CONFIG0.RES0.INSTANCE0.MAIN.SPEED', { arr: 0, elem: 5 }],
   ['CONFIG0.RES0.INSTANCE0.MAIN.TAG', { arr: 1, elem: 0 }],
   ['CONFIG0.RES0.INSTANCE0.MAIN.UNUSED', { arr: 0, elem: 6 }],
+  ['CONFIG0.RES0.INSTANCE0.MAIN.BUF[1]', { arr: 0, elem: 8 }],
+  ['CONFIG0.ALARMON', { arr: 2, elem: 0 }],
 ])
 
 export function sampleProject(): HmiUnitInput {
