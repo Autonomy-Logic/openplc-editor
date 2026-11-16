@@ -28,12 +28,23 @@ export interface WasmClangJobResult {
 }
 
 export interface WasmClangRunner {
-  /** How many jobs the runner executes at the same time. */
+  /** Jobs run one at a time: always 1. */
   readonly concurrency: number
-  /** Loads the toolchain into memory. Resolves once jobs can run; rejects when the toolchain cannot load. */
+  /**
+   * Gets the toolchain's files ready through the mechanism; starts no worker. A success is kept; a failure is not, so
+   * the next call tries again.
+   */
   prepare(): Promise<void>
-  /** Runs one job. Rejects only when the job could not be run at all, never for a compile error. */
+  /**
+   * Runs one job on the one worker, starting it when none is alive, after a stopping worker has exited. Rejects only
+   * when the job could not run, never for a compile error.
+   */
   run(job: WasmClangJob): Promise<WasmClangJobResult>
+  /**
+   * Ends the worker when no job is running or queued; resolves once it has exited, at once when there is none. Ends
+   * nothing while jobs remain.
+   */
+  release(): Promise<void>
 }
 
 /** A message the pool sends a clang worker: run one job. */
@@ -55,13 +66,14 @@ export interface ClangWorkerHandle {
    * thread) lets it go while idle; others ignore it.
    */
   setBusy?(busy: boolean): void
+  /** Ends the worker. A promise settles once it has exited; a `void` return means it exited when the call returned. */
   terminate(): Promise<unknown> | void
 }
 
 export interface ClangWorkerMechanism {
   /**
-   * Gets the toolchain's files ready before any worker starts: checks they are there (desktop) or downloads them
-   * (web). Rejects with the reason when it cannot.
+   * Gets the toolchain's files ready before any worker starts: checks every file is there (desktop) or downloads them
+   * (web). Rejects with the reason when it cannot, naming the first missing file on the desktop.
    */
   load(): Promise<void>
   spawn(): ClangWorkerHandle

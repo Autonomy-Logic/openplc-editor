@@ -11,10 +11,14 @@ import { BoundedWasmObjectCache } from './wasm-object-cache'
 export const WASM_OBJECT_CACHE_BYTES = 256 * 1024 * 1024
 
 export interface WasmCompileService {
-  /** Loads the toolchain. Called once at editor start; later calls return the same readiness. */
+  /**
+   * Gets the toolchain's files ready, starting no worker. A success is kept and later calls return it; a failure is
+   * not, so the next call tries again.
+   */
   prepare(): Promise<WasmToolchainReadiness>
+  /** Compiles a request; once no other build is running, it resolves only after the clang worker has ended. */
   compile(request: WasmCompileRequest, log?: PlatformLog): Promise<WasmCompileResult>
-  /** Checks a request that crossed a process or worker boundary, then compiles it. */
+  /** Checks a request that crossed a process or worker boundary, then compiles it as `compile` does. */
   compileRequest(value: unknown, log?: PlatformLog): Promise<WasmCompileResult>
 }
 
@@ -25,18 +29,42 @@ const rejected = (error: string): WasmCompileResult => ({
   diagnostics: [{ message: error, level: 'error' }],
 })
 
-/** The toolchain a platform exposes: one runner, one session cache, one readiness. */
+/**
+ * The toolchain a platform exposes: one runner, one session cache that outlives its workers, one readiness. Builds in
+ * flight share the runner's worker; when the last one ends, whatever its outcome, the runner is released.
+ */
 export function createWasmCompileService(runner: WasmClangRunner): WasmCompileService {
   const cache = new BoundedWasmObjectCache(WASM_OBJECT_CACHE_BYTES)
   let readiness: Promise<WasmToolchainReadiness> | null = null
-  const compile = (request: WasmCompileRequest, log?: PlatformLog): Promise<WasmCompileResult> =>
-    compileToWasm(request, { runner, cache, log })
+  let inFlight = 0
+
+  const build = async (work: () => Promise<WasmCompileResult>): Promise<WasmCompileResult> => {
+    inFlight++
+    try {
+      return await work()
+    } finally {
+      inFlight--
+      if (inFlight === 0) await runner.release()
+    }
+  }
+
+  const prepare = (): Promise<WasmToolchainReadiness> => {
+    readiness ??= prepareWasmToolchain(runner).then((result) => {
+      if (!result.ok) readiness = null
+      return result
+    })
+    return readiness
+  }
+
   return {
-    prepare: () => (readiness ??= prepareWasmToolchain(runner)),
-    compile,
-    compileRequest: (value, log) => {
-      const parsed = parseWasmCompileRequest(value)
-      return parsed.ok ? compile(parsed.request, log) : Promise.resolve(rejected(parsed.error))
-    },
+    prepare,
+    compile: (request, log) => build(() => compileToWasm(request, { runner, cache, log })),
+    compileRequest: (value, log) =>
+      build(() => {
+        const parsed = parseWasmCompileRequest(value)
+        return parsed.ok
+          ? compileToWasm(parsed.request, { runner, cache, log })
+          : Promise.resolve(rejected(parsed.error))
+      }),
   }
 }

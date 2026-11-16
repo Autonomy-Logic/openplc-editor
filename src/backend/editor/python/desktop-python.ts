@@ -1,9 +1,11 @@
+import { access } from 'node:fs/promises'
 import { totalmem } from 'node:os'
 import { Worker } from 'node:worker_threads'
 
 import { PythonBlockHost } from '@root/backend/shared/python/python-block-host'
 import { maxPythonInterpreters } from '@root/backend/shared/python/python-memory-budget'
 import { ThreadedPythonRuntime } from '@root/backend/shared/python/python-thread'
+import { requireFiles } from '@root/backend/shared/wasm-toolchain/toolchain-files'
 import type { PythonThreadMechanism } from '@root/middleware/shared/ports/python-mechanisms'
 
 import type { PythonRuntimePaths } from './python-paths'
@@ -46,10 +48,26 @@ export function createThreadPythonMechanism(resolvePaths: () => PythonRuntimePat
 export interface DesktopPython {
   runtime: ThreadedPythonRuntime
   host: PythonBlockHost
+  /** Checks the Python runtime's files are present, starting no thread; rejects naming the first missing file. */
+  checkFiles(): Promise<void>
 }
+
+/** Whether a file exists. */
+const fileExists = (path: string): Promise<boolean> =>
+  access(path).then(
+    () => true,
+    () => false,
+  )
 
 /** The process's Python runtime and the block host that uses it. */
 export function createDesktopPython(resolvePaths: () => PythonRuntimePaths): DesktopPython {
   const runtime = new ThreadedPythonRuntime(createThreadPythonMechanism(resolvePaths))
-  return { runtime, host: new PythonBlockHost(runtime, undefined, maxPythonInterpreters(totalmem())) }
+  return {
+    runtime,
+    host: new PythonBlockHost(runtime, undefined, maxPythonInterpreters(totalmem())),
+    checkFiles: async () => {
+      const paths = resolvePaths()
+      await requireFiles([paths.sdkEntry, paths.pythonPackage, paths.numpyWheel], fileExists, 'Python runtime')
+    },
+  }
 }

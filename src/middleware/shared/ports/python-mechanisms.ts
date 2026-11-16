@@ -17,6 +17,8 @@ export interface PythonThreadHandle {
 export interface PythonThreadMechanism {
   /** Starts the thread; a platform may load the thread's code first, so this may resolve later. */
   spawn(): PythonThreadHandle | Promise<PythonThreadHandle>
+  /** Whether the page is cross-origin isolated, as the browser reports it. Platforms that are not a page omit it. */
+  isCrossOriginIsolated?(): boolean
 }
 
 /** The thread's side of the channel. */

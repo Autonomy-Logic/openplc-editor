@@ -280,7 +280,7 @@ const createMainWindow = async () => {
     void Promise.all([
       minimumSplash,
       getDesktopWasmCompileService().prepare(),
-      preparePythonRuntime(getDesktopPython().runtime),
+      preparePythonRuntime({ load: () => getDesktopPython().checkFiles() }),
     ])
       .then(([, toolchain, python]) => {
         if (splash === null) {
@@ -291,8 +291,8 @@ const createMainWindow = async () => {
           showStartupFailure(toolchain.message)
           return
         }
-        logger.info(`WebAssembly toolchain ready in ${Math.round(toolchain.ms)} ms`)
-        if (python.ok) logger.info(`Python runtime ready in ${Math.round(python.ms)} ms`)
+        logger.info(`WebAssembly toolchain files checked in ${Math.round(toolchain.ms)} ms`)
+        if (python.ok) logger.info(`Python runtime files checked in ${Math.round(python.ms)} ms`)
         else logger.warn(python.message)
         splash.close()
         mainWindow?.show()
@@ -559,9 +559,6 @@ app
       VENDOR_DOCUMENT_SCHEME,
       createVendorDocumentHandler({ listPackages: () => packages.listInstalled() }),
     )
-    getDesktopWasmCompileService()
-      .prepare()
-      .catch((error: unknown) => logger.error('WebAssembly toolchain: ' + getErrorMessage(error)))
     void createMainWindow()
     // Last session's cloud builds. The cloud is the source of truth for those
     // projects, so nothing here survives a restart; best-effort, since a scratch

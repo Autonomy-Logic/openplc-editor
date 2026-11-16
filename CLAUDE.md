@@ -439,21 +439,24 @@ clang, lld and libc++ run inside the editor as WebAssembly (`@yowasp/clang`, pin
 `package.json`); no native compiler is involved. `CompilerPort.compileToWasm(request)` compiles C and C++
 translation units into one module and returns its bytes and the compiler's diagnostics; a bad request comes back
 as diagnostics too, never as a rejection. The logic is shared and byte-identical with openplc-web, in
-`src/backend/shared/wasm-toolchain/`: compile and link, the worker pool, the worker host, and the check of requests
+`src/backend/shared/wasm-toolchain/`: compile and link, the clang worker's runner, the worker host, and the check of requests
 that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its runtime headers.
 
 - **Object cache:** per unit, for the session (256 MB, least recently used first). Each object is kept with the
   request files clang says it read (`-MD`), and reused while they are unchanged and no file was added or removed.
-- **Worker pool:** starts with one worker and adds one, up to `clangWorkerCount` (four at most), when every worker
-  is busy. A worker that fails, does not load within 120 s, or runs a job past 120 s is terminated and dropped,
-  and its jobs fail.
+- **Clang worker:** at most one (`ClangWorkerPool`), running one job at a time. A build starts it, and it ends once
+  no build is running or queued, whatever the last build's outcome, so the simulator runs with no clang worker; builds
+  that overlap share it. A worker counts from its start until it has exited, and a new one starts only after the
+  previous one exited. A worker that fails or runs a job past 120 s is terminated and its job fails; one that fails
+  or does not load within 120 s fails the build with `The WebAssembly compiler could not be loaded: <reason>`.
 
-- **Desktop:** up to four worker threads (`src/backend/editor/wasm-toolchain/`); the worker is its own webpack
+- **Desktop:** one worker thread (`src/backend/editor/wasm-toolchain/`); the worker is its own webpack
   entry, `clang-worker.js`, built next to `main.js`. The renderer reaches it over the `wasm-toolchain:compile` IPC
   channel.
-- **Startup:** the toolchain loads while the splash is up, and the main window appears only once it is ready. If it
-  cannot load, the splash shows the reason with a Quit button.
-- **CLI:** the toolchain loads on first use, so only an OpenPLC Simulator build (`compile` for it, or `simulate`) loads it.
+- **Startup:** while the splash is up the editor only checks that every toolchain file and every Python runtime file
+  is present; it starts no clang worker and no Python thread, and compiles nothing. A missing toolchain file keeps the
+  splash up with the reason and a Quit button; a missing Python runtime file only logs a warning.
+- **CLI:** one worker through the same pool, started by an OpenPLC Simulator build (`compile` for it, or `simulate`).
 - **Packaging:** the package ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
   entitlement in `assets/entitlements.mac.plist` lets it run under the hardened runtime.
 - **Running a module** happens in main-process worker threads (the simulator, Python), never in the renderer: the
@@ -485,8 +488,10 @@ to `main.js`; `src/backend/editor/python/`). The logic is shared and byte-identi
 wrapper's stdio transport, Console lines prefixed `[Block]`, a block that ends or fails keeps its last outputs, Stop
 kills them all), the thread protocol and the Wasmer runtime. The module starts a block through
 `wasm-sim/sim_python.cpp` (`env.host_python_block`), force-included header `wasm-sim/stub/iec_python.h`. The runtime
-loads during the splash but never stops the editor or a run: if it cannot load (or takes past 120 s), the editor opens,
-the PLC runs, and each Python block reports the reason on the Console; the failure stays for the session. Interpreters
+starts only for a run with Python blocks (the splash only checks its files) and never stops the editor or a run: if it
+cannot load (or takes past 120 s), the PLC runs and each Python block reports the reason on the Console; the failure
+stays for the session. On a page that is not cross-origin isolated (web) it is never started, and the blocks report
+`Python blocks cannot run here: the page is not cross-origin isolated.` Interpreters
 for a project's blocks boot right
 after its module compiles, and the PLC starts once they are ready (not during the compile: on WebKit that stalls the
 in-browser compiler). `openplc-cli simulate` (`src/cli/commands/simulate.ts`) runs the same simulator and loads
