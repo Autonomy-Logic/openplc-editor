@@ -20,7 +20,7 @@ jobs:
     steps:
       - name: Skipped, already passed locally
         if: ${{ inputs.skip }}
-        run: echo "Skipped because the ci-passed-locally label was on this pull request into development when it was opened, and this check ran locally on the demand head."
+        run: echo "Skipped because MisterFlow ran this check locally on this exact head commit and set the commit status misterflow/local-ci to success on it."
 
       - name: Checkout repository
         if: ${{ !inputs.skip }}

@@ -7,53 +7,58 @@ on:
       - development
 
 jobs:
-  # Decides whether build-check, lint and unit-tests, which MisterFlow already
-  # ran locally on the demand head, may skip their steps. Only the run of the
-  # opened event of a pull request into development that carries the
-  # ci-passed-locally label skips them; every later run (synchronize,
-  # reopened) and every pull request into main runs everything. The labels are
-  # read from the API because the event payload can predate the label.
+  # Decides whether build-check, lint and unit-tests may skip their steps.
+  # Before every push of a pull request MisterFlow runs the full unit suite,
+  # lint and type check locally on the exact head it pushes, then sets the
+  # commit status misterflow/local-ci to success on that SHA. On any
+  # pull_request event into development, the steps skip only when the head
+  # SHA of the event carries that status. A push made without MisterFlow has
+  # no such status and runs everything, as does every pull request into main.
   local-ci-gate:
-    name: Local CI label check
+    name: Local CI status check
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pull-requests: read
+      statuses: read
     outputs:
       skip: ${{ steps.check.outputs.skip }}
     steps:
-      - name: Read the ci-passed-locally label
+      - name: Read the misterflow/local-ci commit status
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
-          ACTION: ${{ github.event.action }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          LABEL: ci-passed-locally
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CONTEXT: misterflow/local-ci
         run: |
           skip=false
-          if [ "$EVENT_NAME" != "pull_request" ] || [ "$BASE_REF" != "development" ] || [ "$ACTION" != "opened" ]; then
-            reason="Not the opened run of a pull request into development"
+          if [ "$EVENT_NAME" != "pull_request" ] || [ "$BASE_REF" != "development" ]; then
+            reason="Not a pull request into development"
+          elif ! printf '%s' "$HEAD_SHA" | grep -Eqx '[0-9a-f]{40}'; then
+            reason="No valid head SHA in the event"
           else
-            # gh pr create adds the label right after the pull request exists,
-            # so poll for up to 10 seconds (at 0, 5 and 10 seconds).
-            reason="Label $LABEL not found (or the labels could not be read) within 10 seconds"
-            for i in 1 2 3; do
-              if labels=$(timeout 15 gh api "repos/$REPO/issues/$PR_NUMBER/labels?per_page=100" --jq '.[].name'); then
-                if printf '%s\n' "$labels" | grep -Fxq "$LABEL"; then
+            # MisterFlow sets the status seconds after the push, so poll every
+            # 3 seconds for up to 12 seconds (at 0, 3, 6, 9 and 12 seconds).
+            # The combined status holds only the latest state of each context.
+            reason="Status $CONTEXT not found as success on $HEAD_SHA (or the statuses could not be read) within 12 seconds"
+            for i in 1 2 3 4 5; do
+              if state=$(timeout 10 gh api "repos/$REPO/commits/$HEAD_SHA/status?per_page=100" --jq ".statuses[] | select(.context == \"$CONTEXT\") | .state"); then
+                if [ "$state" = "success" ]; then
                   skip=true
+                  break
+                elif [ "$state" = "failure" ] || [ "$state" = "error" ]; then
+                  reason="Status $CONTEXT is $state on $HEAD_SHA"
                   break
                 fi
               else
-                echo "::warning::Could not read the pull request labels (attempt $i)."
+                echo "::warning::Could not read the commit statuses of $HEAD_SHA (attempt $i)."
               fi
-              if [ "$i" -lt 3 ]; then sleep 5; fi
+              if [ "$i" -lt 5 ]; then sleep 3; fi
             done
           fi
           if [ "$skip" = "true" ]; then
-            msg="Label $LABEL found on the opened run: build-check, lint and unit-tests skip their steps (they ran locally)."
+            msg="Status $CONTEXT is success on $HEAD_SHA: build-check, lint and unit-tests skip their steps (they ran locally on this commit)."
           else
             msg="$reason: every job runs."
           fi
@@ -67,7 +72,7 @@ jobs:
   # The skip is passed into the called workflow instead of being an `if:`
   # here: a skipped caller job never reports the called job's check name
   # (e.g. `lint / Lint Check`), so a required check would stay "Expected".
-  # `!cancelled()` keeps these running in full if the label check fails.
+  # `!cancelled()` keeps these running in full if the status check fails.
   build-check:
     needs: [local-ci-gate]
     if: ${{ !cancelled() }}
@@ -93,8 +98,8 @@ jobs:
     uses: ./.github/workflows/ci-e2e-debug-lock.yml
 
   # The explicit conditions below keep the usual rule (run only when the
-  # direct needs succeeded) but ignore the label check further upstream:
-  # without them a failed label check would skip format, sync and
+  # direct needs succeeded) but ignore the status check further upstream:
+  # without them a failed status check would skip format, sync and
   # complete-build through the implicit success(), which looks at every
   # upstream job, and the required checks would never report.
   format:
