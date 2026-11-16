@@ -355,9 +355,6 @@ describe('createConsoleSlice', () => {
     })
   })
 
-  // -------------------------------------------------------------------------
-  // Logs kept until a project is open on the Console
-  // -------------------------------------------------------------------------
   describe('logs kept until a project opens', () => {
     afterEach(() => {
       vi.useRealTimers()
