@@ -119,7 +119,6 @@ describe('createThreadPythonMechanism', () => {
 })
 
 describe('createDesktopPython checkFiles', () => {
-  /** Paths to the runtime files under a fresh directory, writing only those named in `present`. */
   function runtimeFiles(name: string, present: Array<'sdkEntry' | 'pythonPackage' | 'numpyWheel'>): PythonRuntimePaths {
     const dir = join(root, name)
     mkdirSync(dir, { recursive: true })

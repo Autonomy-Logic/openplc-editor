@@ -168,7 +168,6 @@ describe('createWasmCompileService over one clang worker', () => {
     return { files, units: list }
   }
 
-  /** A pool over an in-memory mechanism whose workers answer jobs as `FakeRunner` would. */
   const setup = (outcome?: ConstructorParameters<typeof FakeRunner>[1]) => {
     const mechanism = new CountingClangMechanism()
     const clang = new FakeRunner(1, outcome)
