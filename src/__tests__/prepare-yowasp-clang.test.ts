@@ -16,6 +16,8 @@ const tsNode = join(repo, 'node_modules', '.bin', 'ts-node')
 
 const ORIGINAL = 'this.#fetchResources(options.fetchProgress ?? defaultFetchProgress)'
 const PATCHED = 'this.#fetchResources(options.fetchProgress)'
+const NOTICE =
+  '// This file was changed from the @yowasp/clang package: a run given no fetchProgress gets no default progress callback.\n'
 const installedBundle = readFileSync(join(repo, 'node_modules', '@yowasp', 'clang', 'gen', 'bundle.js'), 'utf8')
 
 /** The package files the prepared copy holds, apart from `gen/bundle.js`. */
@@ -100,14 +102,14 @@ function runScript(root: string): Promise<Run> {
 }
 
 describe('prepare-yowasp-clang', () => {
-  it('writes bundle.js with the loader patch applied once to release/yowasp-clang', async () => {
+  it('writes bundle.js with the change notice and the loader patch applied once to release/yowasp-clang', async () => {
     const root = repositoryRoot(installedBundle)
 
     const run = await runScript(root)
 
     expect(run).toMatchObject({ code: 0 })
     const prepared = readFileSync(join(preparedDir(root), 'gen', 'bundle.js'), 'utf8')
-    expect(prepared).toBe(installedBundle.replace(ORIGINAL, PATCHED))
+    expect(prepared).toBe(NOTICE + installedBundle.replace(ORIGINAL, PATCHED))
     expect(prepared).not.toContain('?? defaultFetchProgress')
   }, 60000)
 
@@ -121,6 +123,18 @@ describe('prepare-yowasp-clang', () => {
     for (const [name, bytes] of Object.entries(COPIED)) {
       expect(new Uint8Array(readFileSync(join(preparedDir(root), name)))).toEqual(bytes)
     }
+  }, 60000)
+
+  it('leaves no file or folder an earlier run or package version put in release/yowasp-clang', async () => {
+    const root = repositoryRoot(installedBundle)
+    write(join(preparedDir(root), 'gen', 'llvm.core5.wasm'), new Uint8Array([0, 0x61, 0x73, 0x6d, 5]))
+    write(join(preparedDir(root), 'old', 'notes.txt'), 'left from an earlier package version')
+
+    const run = await runScript(root)
+
+    expect(run.code).toBe(0)
+    expect(listFiles(preparedDir(root))).toEqual(['gen/bundle.js', ...Object.keys(COPIED)].sort())
+    expect(readdirSync(preparedDir(root)).sort()).toEqual(['README.md', 'gen', 'package.json'])
   }, 60000)
 
   it('never writes the package in node_modules', async () => {

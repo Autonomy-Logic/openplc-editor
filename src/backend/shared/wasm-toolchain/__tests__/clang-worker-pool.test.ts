@@ -117,6 +117,38 @@ describe('ClangWorkerPool prepare', () => {
     expect(mechanism.loads).toBe(2)
     expect(mechanism.started).toBe(0)
   })
+
+  it('shares one load between a prepare in flight and a run started meanwhile', async () => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.answer = succeed
+    mechanism.holdLoads = true
+    const pool = new ClangWorkerPool(mechanism)
+
+    const pageLoad = pool.prepare()
+    const build = pool.run(job())
+    await flushMicrotasks()
+
+    expect(mechanism.loads).toBe(1)
+    expect(mechanism.started).toBe(0)
+    mechanism.holdLoads = false
+    mechanism.settleLoads()
+    await expect(pageLoad).resolves.toBeUndefined()
+    await expect(build).resolves.toMatchObject({ exitCode: 0 })
+    expect(mechanism.loads).toBe(1)
+  })
+
+  it('loads nothing again for a run after a job ran and release resolved', async () => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.answer = succeed
+    const pool = new ClangWorkerPool(mechanism)
+    await pool.run(job('a.c'))
+    await pool.release()
+
+    await expect(pool.run(job('b.c'))).resolves.toMatchObject({ exitCode: 0 })
+
+    expect(mechanism.loads).toBe(1)
+    expect(mechanism.started).toBe(2)
+  })
 })
 
 describe('ClangWorkerPool with one worker', () => {

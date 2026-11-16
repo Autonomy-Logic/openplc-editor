@@ -16,10 +16,13 @@ import { createThreadClangWorkerMechanism, WorkerClangRunner } from '../worker-c
 const repo = join(__dirname, '..', '..', '..', '..', '..')
 const installedDir = join(repo, 'node_modules', '@yowasp', 'clang')
 const installedBundle = readFileSync(join(installedDir, 'gen', 'bundle.js'), 'utf8')
-const PATCHED_BUNDLE = installedBundle.replace(
+const NOTICE =
+  '// This file was changed from the @yowasp/clang package: a run given no fetchProgress gets no default progress callback.\n'
+const PATCHED_LINE_ONLY = installedBundle.replace(
   'this.#fetchResources(options.fetchProgress ?? defaultFetchProgress)',
   'this.#fetchResources(options.fetchProgress)',
 )
+const PATCHED_BUNDLE = NOTICE + PATCHED_LINE_ONLY
 const fixture = (name: string): string => join(__dirname, 'fixtures', name)
 const scratch = mkdtempSync(join(tmpdir(), 'worker-clang-runner-'))
 
@@ -88,6 +91,15 @@ describe('createThreadClangWorkerMechanism load', () => {
 
   it('rejects a complete package whose bundle.js is not the patched loader', async () => {
     const dir = packageWithout('unpatched', [], installedBundle)
+    const mechanism = createThreadClangWorkerMechanism({ workerScript: fixture('echo-worker.mjs'), toolchainDir: dir })
+
+    await expect(mechanism.load()).rejects.toThrow(
+      `The toolchain's loader is not patched: ${join(dir, 'gen', 'bundle.js')}`,
+    )
+  })
+
+  it('rejects a bundle.js with the patched line but no change notice as not patched', async () => {
+    const dir = packageWithout('patched-line-no-notice', [], PATCHED_LINE_ONLY)
     const mechanism = createThreadClangWorkerMechanism({ workerScript: fixture('echo-worker.mjs'), toolchainDir: dir })
 
     await expect(mechanism.load()).rejects.toThrow(

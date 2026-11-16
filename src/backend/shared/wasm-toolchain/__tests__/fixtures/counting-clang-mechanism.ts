@@ -102,6 +102,8 @@ export class CountingClangMechanism implements ClangWorkerMechanism {
   autoReady = true
   exitMode: FakeClangExit = 'auto'
   answer: FakeClangAnswer | null = null
+  holdLoads = false
+  private readonly heldLoads: Array<() => void> = []
 
   get started(): number {
     return this.workers.length
@@ -117,7 +119,17 @@ export class CountingClangMechanism implements ClangWorkerMechanism {
 
   load(): Promise<void> {
     this.loads++
+    if (this.holdLoads) {
+      return new Promise<void>((resolve, reject) => {
+        this.heldLoads.push(() => (this.loadError ? reject(this.loadError) : resolve()))
+      })
+    }
     return this.loadError ? Promise.reject(this.loadError) : Promise.resolve()
+  }
+
+  /** Settles every load held while `holdLoads` was set: rejects with `loadError` when set, resolves otherwise. */
+  settleLoads(): void {
+    for (const settle of this.heldLoads.splice(0)) settle()
   }
 
   spawn(): ClangWorkerHandle {
