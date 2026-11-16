@@ -1,5 +1,7 @@
 export { GSDML_MAX_NOTICES } from './gsdml-notices'
 export { runGsdmlParseOp } from './gsdml-parse-ops'
 export { parseGsdml, summarizeGsdmlCatalog } from './gsdml-parser'
+export type { GsdmlRepositoryMechanisms } from './gsdml-repository-port'
+export { createGsdmlRepositoryPort, GSDML_SUMMARY_VERSION } from './gsdml-repository-port'
 export { GSDML_SUPPORTED_SCHEMA_VERSION } from './gsdml-version'
 export { GSDML_XML_ENTITY_LIMITS } from './gsdml-xml'
