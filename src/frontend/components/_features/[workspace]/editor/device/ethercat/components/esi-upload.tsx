@@ -135,9 +135,7 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
             newItems.push(result.item)
           } else if (result.success && result.dedupAfterRetry) {
             needsRepositoryRefresh = true
-          } else if (result.success) {
-            // Real duplicate — content already in the repository. Skip silently.
-          } else {
+          } else if (!result.success) {
             errors.push({ filename: item.filename, error: result.error ?? 'Parse failed' })
           }
         } catch (err) {
