@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<EtherCATInfo>
+  <Vendor>
+    <Id>0x02</Id>
+    <Name>Beckhoff</Name>
+  </Vendor>
+</EtherCATInfo>

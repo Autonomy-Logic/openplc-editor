@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ISO15745Profile xmlns="http://www.profibus.com/GSDML/2003/11/DeviceProfile">
+  <ProfileBody>
+    <DeviceIdentity VendorID="0x002A" DeviceID="0x0313 VendorName="Siemens">
+      <InfoText TextId="TOK_InfoText_Device"
+    </DeviceIdentity>
+    <ApplicationProcess>
+      <<InvalidTagStart/>
+      <UnclosedTag>
+    </ApplicationProcess>
+  </ProfileBody>

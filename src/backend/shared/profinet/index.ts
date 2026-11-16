@@ -1,0 +1,21 @@
+export { buildGsdmlCatalogLookups, parseGsdml } from './gsdml-parser'
+export type {
+  GsdmlBitDataItem,
+  GsdmlCatalog,
+  GsdmlCatalogLookups,
+  GsdmlDataItem,
+  GsdmlDeviceAccessPoint,
+  GsdmlDeviceIdentity,
+  GsdmlIoData,
+  GsdmlIoDirection,
+  GsdmlModule,
+  GsdmlParameterEnumOption,
+  GsdmlParameterField,
+  GsdmlParameterFieldKind,
+  GsdmlParameterRecord,
+  GsdmlParseFailure,
+  GsdmlParseResult,
+  GsdmlParseSuccess,
+  GsdmlSlotEntry,
+  GsdmlSubmodule,
+} from '@root/middleware/shared/ports/gsdml-types'
