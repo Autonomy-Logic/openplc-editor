@@ -1,6 +1,8 @@
 /**
  * Play on the OpenPLC Simulator: the editor builds the project to a WebAssembly module, runs it in a worker thread
- * and connects the debugger to it, so live values arrive; Play again stops it.
+ * and connects the debugger to it, so live values arrive; Play again stops it. The editor starts with no clang worker
+ * and no Python thread; the build runs on one clang worker thread, which has ended once the simulator runs, and a
+ * project without Python blocks starts no Python thread.
  *
  * Running needs a production build plus the preload copy; see "Electron e2e" in CLAUDE.md.
  */
@@ -8,10 +10,11 @@ import { cpSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { type Page, test } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
 
 import { waitForApp } from './helpers/app-console'
 import { launch, quitApp } from './helpers/ethercat-project'
+import { countOf, trackWorkerThreads, workerThreads } from './helpers/worker-threads'
 
 const FIXTURE = join(
   __dirname,
@@ -84,12 +87,23 @@ test('Play builds the project, runs it as WebAssembly with live values, and Play
   const { userData } = writeProject('openplc-e2e-wasm-simulator-play')
   const { app, page } = await launch(userData)
   try {
+    await trackWorkerThreads(app)
+    const atStartup = await workerThreads(app)
+    expect(countOf(atStartup.live, 'clang-worker.js')).toBe(0)
+    expect(countOf(atStartup.live, 'python-worker.js')).toBe(0)
+
     await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
     const play = page.getByRole('button', { name: 'Play' })
     const started = Date.now()
     await play.click({ timeout: 60000 })
 
     await waitForApp(page, () => simulatorRunning(page), { timeout: 90000, message: 'the simulator never started' })
+    const whileRunning = await workerThreads(app)
+    expect(countOf(whileRunning.live, 'clang-worker.js')).toBe(0)
+    expect(countOf(whileRunning.started, 'clang-worker.js')).toBeGreaterThan(0)
+    expect(whileRunning.maxLive['clang-worker.js']).toBe(1)
+    expect(countOf(whileRunning.live, 'simulator-worker.js')).toBe(1)
+    expect(countOf(whileRunning.started, 'python-worker.js')).toBe(0)
     await waitForApp(page, async () => ((await readCounter(page)) ?? 0) > 0, { message: 'no live values' })
     const playToLiveMs = Date.now() - started
     const first = (await readCounter(page)) ?? 0

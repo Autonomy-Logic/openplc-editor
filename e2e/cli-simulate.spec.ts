@@ -163,11 +163,12 @@ test('simulate runs the PLC when the Python runtime cannot load, and the Python 
 test('simulate ends with the reason and a non-zero exit when the toolchain cannot load', async () => {
   test.setTimeout(180000)
   const { root, project, userData } = writeProject('openplc-e2e-cli-simulate-no-toolchain')
-  const run = new CliRun(project, userData, mirrorRepo(root, ['node_modules/@yowasp']))
+  const cwd = mirrorRepo(root, ['release/yowasp-clang'])
+  const run = new CliRun(project, userData, cwd)
   try {
     expect(await run.ended(150000)).toBe(4)
     expect(run.stdout).toContain('"code":"compile_failed"')
-    expect(run.output).toMatch(/toolchain|clang/i)
+    expect(run.output).toContain(`Missing toolchain file: ${join(cwd, 'release', 'yowasp-clang', 'gen', 'bundle.js')}`)
   } finally {
     run.kill()
   }

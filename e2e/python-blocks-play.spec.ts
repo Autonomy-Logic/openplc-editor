@@ -2,7 +2,8 @@
  * Python function blocks on the OpenPLC Simulator (desktop): Play runs each block in its own interpreter next to the
  * PLC. A block with a thread and numpy updates its outputs; one that raises shows its traceback and keeps its last
  * outputs; one that never yields does not hold the PLC; one that opens a socket fails with a traceback; Stop ends
- * them all. Play opens the Debugger tab, so the spec opens the Console tab to read block output.
+ * them all. Play opens the Debugger tab, so the spec opens the Console tab to read block output. The editor starts
+ * with no Python thread; Play on a project with Python blocks starts one, and no clang worker is left once it runs.
  *
  * Running needs a production build plus the preload copy; see "Electron e2e" in CLAUDE.md.
  */
@@ -14,6 +15,7 @@ import { expect, type Page, test } from '@playwright/test'
 
 import { pageText, waitForApp, waitForText } from './helpers/app-console'
 import { launch, quitApp } from './helpers/ethercat-project'
+import { countOf, trackWorkerThreads, workerThreads } from './helpers/worker-threads'
 
 const FIXTURE = join(__dirname, 'fixtures', 'python-blocks')
 const PROJECT_NAME = 'python-blocks'
@@ -115,10 +117,15 @@ test('Python blocks run beside the PLC: threads and numpy, failures, a block tha
   const { app, page } = await launch(userData)
   const names = ['COUNTER', 'PY_COUNT', 'PY_BEATS', 'PY_MEAN', 'FAIL_COUNT', 'SPIN_ENTERED', 'NET_CONNECTED']
   try {
+    await trackWorkerThreads(app)
+    expect(countOf((await workerThreads(app)).live, 'python-worker.js')).toBe(0)
     await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
     const play = page.getByRole('button', { name: 'Play' })
     await play.click({ timeout: 60000 })
     await waitForApp(page, () => simulatorRunning(page), { timeout: 90000, message: 'the simulator never started' })
+    const whileRunning = await workerThreads(app)
+    expect(countOf(whileRunning.live, 'python-worker.js')).toBe(1)
+    expect(countOf(whileRunning.live, 'clang-worker.js')).toBe(0)
     const leaves = readLeaves(project)
     const read = () => readVariables(page, leaves, names)
 
