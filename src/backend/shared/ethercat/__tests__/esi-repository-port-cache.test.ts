@@ -1,22 +1,12 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-
-import type {
-  EsiParserMechanism,
-  EsiRowStore,
-  EsiStoredRow,
-} from '@root/middleware/shared/ports/esi-repository-mechanisms'
-import { decodeXmlBytes } from '@root/middleware/shared/utils/ethercat/esi-zip-import'
+import type { EsiParserMechanism, EsiStoredRow } from '@root/middleware/shared/ports/esi-repository-mechanisms'
 
 import { toRepositoryItem as coreToRepositoryItem } from '../../device-description/description-repository'
 import { runEsiParseOp } from '../esi-parse-ops'
 import { createEsiRepositoryPort, toRepositoryItem } from '../esi-repository-port'
+import { createMemoryEsiStore, readEsiFixture } from './fixtures/esi-repository-test-helpers'
 
-const read = (name: string): string =>
-  decodeXmlBytes(new Uint8Array(readFileSync(join(__dirname, 'fixtures', 'esi-real', name))))
-
-const AXL_COUPLER = read('phoenix-axl-f-bk-ec.xml')
-const EK1818 = read('beckhoff-ek1818.xml')
+const AXL_COUPLER = readEsiFixture('phoenix-axl-f-bk-ec.xml')
+const EK1818 = readEsiFixture('beckhoff-ek1818.xml')
 
 /** A parser that runs the real parse ops and counts the `deviceFull` runs. */
 function countingParser() {
@@ -30,52 +20,10 @@ function countingParser() {
   return { parser, deviceFullRuns: () => deviceFullRuns }
 }
 
-/** A store that only keeps what it is given and records the ids whose XML was read. */
-function memoryStore() {
-  const rows: EsiStoredRow[] = []
-  const xml = new Map<string, string>()
-  const xmlReads: string[] = []
-  const store: EsiRowStore = {
-    list: () => Promise.resolve(rows.map((r) => ({ ...r }))),
-    insert: (row, text) => {
-      rows.push(row)
-      xml.set(row.id, text)
-      return Promise.resolve(row)
-    },
-    update: (row) => {
-      rows.splice(
-        rows.findIndex((r) => r.id === row.id),
-        1,
-        row,
-      )
-      return Promise.resolve()
-    },
-    remove: (id) => {
-      rows.splice(
-        rows.findIndex((r) => r.id === id),
-        1,
-      )
-      xml.delete(id)
-      return Promise.resolve()
-    },
-    clear: () => {
-      rows.length = 0
-      xml.clear()
-      return Promise.resolve()
-    },
-    readXml: (id) => {
-      xmlReads.push(id)
-      const text = xml.get(id)
-      return text === undefined ? Promise.reject(new Error('XML file not found')) : Promise.resolve(text)
-    },
-  }
-  return { store, xmlReads: (id: string) => xmlReads.filter((readId) => readId === id).length }
-}
-
 /** A port over a counting parser and an in-memory store, with the given files uploaded. */
 async function portWith(...files: Array<readonly [string, string]>) {
   const counting = countingParser()
-  const memory = memoryStore()
+  const memory = createMemoryEsiStore()
   const port = createEsiRepositoryPort({ parser: counting.parser, store: memory.store })
   const ids: string[] = []
   for (const [filename, content] of files) {

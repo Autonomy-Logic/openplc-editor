@@ -1,81 +1,19 @@
-/**
- * Repository rows keep every field the light parse returns, including `modules`;
- * duplicates are found by content; rows from another parser version are re-parsed.
- * Runs the real parser on real vendor ESIs over an in-memory row store.
- */
-
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-
-import type {
-  EsiParserMechanism,
-  EsiRowStore,
-  EsiStoredRow,
-} from '@root/middleware/shared/ports/esi-repository-mechanisms'
-import { decodeXmlBytes } from '@root/middleware/shared/utils/ethercat/esi-zip-import'
+import type { EsiParserMechanism, EsiRowStore } from '@root/middleware/shared/ports/esi-repository-mechanisms'
 
 import { hashText } from '../../project/project-snapshot-archive'
 import { runEsiParseOp } from '../esi-parse-ops'
 import { parseESILight } from '../esi-parser-main'
 import { createEsiRepositoryPort, ESI_SUMMARY_VERSION } from '../esi-repository-port'
+import { createMemoryEsiStore, readEsiFixture } from './fixtures/esi-repository-test-helpers'
 
-const read = (name: string): string =>
-  decodeXmlBytes(new Uint8Array(readFileSync(join(__dirname, 'fixtures', 'esi-real', name))))
-
-const AXL_COUPLER = read('phoenix-axl-f-bk-ec.xml')
-const AXL_MODULES = read('phoenix-axl-f-io-modules.xml')
+const AXL_COUPLER = readEsiFixture('phoenix-axl-f-bk-ec.xml')
+const AXL_MODULES = readEsiFixture('phoenix-axl-f-io-modules.xml')
 
 const parser: EsiParserMechanism = { run: (request) => Promise.resolve(runEsiParseOp(request)) }
 
-/** A store that only keeps what it is given. */
-function memoryStore() {
-  const rows: EsiStoredRow[] = []
-  const xml = new Map<string, string>()
-  const updated: string[] = []
-  let lists = 0
-  const store: EsiRowStore = {
-    list: () => {
-      lists++
-      return Promise.resolve(rows.map((r) => ({ ...r })))
-    },
-    insert: (row, text) => {
-      rows.push(row)
-      xml.set(row.id, text)
-      return Promise.resolve(row)
-    },
-    update: (row) => {
-      updated.push(row.id)
-      rows.splice(
-        rows.findIndex((r) => r.id === row.id),
-        1,
-        row,
-      )
-      return Promise.resolve()
-    },
-    remove: (id) => {
-      rows.splice(
-        rows.findIndex((r) => r.id === id),
-        1,
-      )
-      xml.delete(id)
-      return Promise.resolve()
-    },
-    clear: () => {
-      rows.length = 0
-      xml.clear()
-      return Promise.resolve()
-    },
-    readXml: (id) => {
-      const text = xml.get(id)
-      return text === undefined ? Promise.reject(new Error('XML file not found')) : Promise.resolve(text)
-    },
-  }
-  return { store, rows, xml, updated, lists: () => lists }
-}
-
 describe('shared ESI repository port', () => {
   it('keeps the modules of a module ESI on the repository row', async () => {
-    const port = createEsiRepositoryPort({ parser, store: memoryStore().store })
+    const port = createEsiRepositoryPort({ parser, store: createMemoryEsiStore().store })
 
     const result = await port.parseAndSaveFile('AXL_F_BK_EC_IO_Modules_321.xml', AXL_MODULES)
 
@@ -84,7 +22,7 @@ describe('shared ESI repository port', () => {
   })
 
   it('stores every field the light parse returns, with the content hash and summary version', async () => {
-    const { store, rows } = memoryStore()
+    const { store, rows } = createMemoryEsiStore()
     const port = createEsiRepositoryPort({ parser, store })
 
     await port.parseAndSaveFile('AXL_F_BK_EC_321.xml', AXL_COUPLER)
@@ -107,7 +45,7 @@ describe('shared ESI repository port', () => {
   })
 
   it('treats identical content as a duplicate whatever the filename, without storing it again', async () => {
-    const { store, rows } = memoryStore()
+    const { store, rows } = createMemoryEsiStore()
     const port = createEsiRepositoryPort({ parser, store })
 
     await port.parseAndSaveFile('a.xml', AXL_COUPLER)
@@ -118,7 +56,7 @@ describe('shared ESI repository port', () => {
   })
 
   it('finds a duplicate among rows it has not listed yet', async () => {
-    const { store, rows } = memoryStore()
+    const { store, rows } = createMemoryEsiStore()
     await createEsiRepositoryPort({ parser, store }).parseAndSaveFile('a.xml', AXL_COUPLER)
 
     const fresh = createEsiRepositoryPort({ parser, store })
@@ -128,7 +66,7 @@ describe('shared ESI repository port', () => {
   })
 
   it('uses the row the store kept, whose id the store may have assigned', async () => {
-    const { store } = memoryStore()
+    const { store } = createMemoryEsiStore()
     const insert = store.insert
     store.insert = (row, text) => insert({ ...row, id: 'assigned-by-store' }, text)
     const port = createEsiRepositoryPort({ parser, store })
@@ -139,7 +77,7 @@ describe('shared ESI repository port', () => {
   })
 
   it('re-parses rows without a summary or from another parser version, and stores the result', async () => {
-    const { store, rows, xml, updated } = memoryStore()
+    const { store, rows, xml, updated } = createMemoryEsiStore()
     rows.push({ id: 'legacy', filename: 'm.xml', loadedAt: '2026-01-01T00:00:00.000Z' })
     rows.push({
       id: 'older',
@@ -167,7 +105,7 @@ describe('shared ESI repository port', () => {
   })
 
   it('shows a re-parsed row even when the store cannot keep the update', async () => {
-    const { store, rows, xml } = memoryStore()
+    const { store, rows, xml } = createMemoryEsiStore()
     rows.push({ id: 'legacy', filename: 'c.xml', loadedAt: '2026-01-01T00:00:00.000Z' })
     xml.set('legacy', AXL_COUPLER)
     store.update = () => Promise.reject(new Error('read-only'))
@@ -180,7 +118,7 @@ describe('shared ESI repository port', () => {
   })
 
   it('skips a row whose XML is missing or no longer parses, and keeps the rest', async () => {
-    const { store, rows, xml } = memoryStore()
+    const { store, rows, xml } = createMemoryEsiStore()
     rows.push({ id: 'broken', filename: 'broken.xml', loadedAt: '2026-01-01T00:00:00.000Z' })
     rows.push({ id: 'gone', filename: 'gone.xml', loadedAt: '2026-01-01T00:00:00.000Z' })
     xml.set('broken', '<NotAnEsi/>')
@@ -193,7 +131,7 @@ describe('shared ESI repository port', () => {
   })
 
   it('rejects a file that is not an ESI without storing anything', async () => {
-    const { store, rows } = memoryStore()
+    const { store, rows } = createMemoryEsiStore()
 
     const result = await createEsiRepositoryPort({ parser, store }).parseAndSaveFile('notes.xml', '<NotAnEsi/>')
 
@@ -202,7 +140,7 @@ describe('shared ESI repository port', () => {
   })
 
   it('loads a module by ident, and names the ident it cannot find', async () => {
-    const port = createEsiRepositoryPort({ parser, store: memoryStore().store })
+    const port = createEsiRepositoryPort({ parser, store: createMemoryEsiStore().store })
     const upload = await port.parseAndSaveFile('modules.xml', AXL_MODULES)
     if (!upload.success || !upload.item?.modules?.length) throw new Error('upload failed')
     const ident = upload.item.modules[0].ident
@@ -215,7 +153,7 @@ describe('shared ESI repository port', () => {
   })
 
   it('hands each caller its own copy of a cached device, and reports a bad device index', async () => {
-    const port = createEsiRepositoryPort({ parser, store: memoryStore().store })
+    const port = createEsiRepositoryPort({ parser, store: createMemoryEsiStore().store })
     const upload = await port.parseAndSaveFile('coupler.xml', AXL_COUPLER)
     if (!upload.success || !upload.item) throw new Error('upload failed')
 
@@ -246,7 +184,7 @@ describe('shared ESI repository port', () => {
   it('reports a parser thread crash and an unparsable module file', async () => {
     const crashing: EsiParserMechanism = { run: () => Promise.reject(new Error('worker crashed')) }
     expect(
-      await createEsiRepositoryPort({ parser: crashing, store: memoryStore().store }).parseAndSaveFile(
+      await createEsiRepositoryPort({ parser: crashing, store: createMemoryEsiStore().store }).parseAndSaveFile(
         'a.xml',
         AXL_COUPLER,
       ),
@@ -256,7 +194,7 @@ describe('shared ESI repository port', () => {
       run: (request: Parameters<EsiParserMechanism['run']>[0]) =>
         request.op === 'modules' ? Promise.resolve({ success: false }) : parser.run(request),
     } as EsiParserMechanism
-    const port = createEsiRepositoryPort({ parser: failingModules, store: memoryStore().store })
+    const port = createEsiRepositoryPort({ parser: failingModules, store: createMemoryEsiStore().store })
     const upload = await port.parseAndSaveFile('m.xml', AXL_MODULES)
     if (!upload.success || !upload.item) throw new Error('upload failed')
     expect(await port.loadModuleFull(upload.item.id, '0x1')).toEqual({
@@ -266,7 +204,7 @@ describe('shared ESI repository port', () => {
   })
 
   it('drops its caches and listed rows when the scope changes, and after delete and clear', async () => {
-    const { store, lists } = memoryStore()
+    const { store, lists } = createMemoryEsiStore()
     let reads = 0
     const readXml = store.readXml
     store.readXml = (id) => {
