@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -14,7 +14,12 @@ import { resolveWasmToolchainPaths } from '../toolchain-paths'
 import { createThreadClangWorkerMechanism, WorkerClangRunner } from '../worker-clang-runner'
 
 const repo = join(__dirname, '..', '..', '..', '..', '..')
-const toolchainDir = join(repo, 'node_modules', '@yowasp', 'clang')
+const installedDir = join(repo, 'node_modules', '@yowasp', 'clang')
+const installedBundle = readFileSync(join(installedDir, 'gen', 'bundle.js'), 'utf8')
+const PATCHED_BUNDLE = installedBundle.replace(
+  'this.#fetchResources(options.fetchProgress ?? defaultFetchProgress)',
+  'this.#fetchResources(options.fetchProgress)',
+)
 const fixture = (name: string): string => join(__dirname, 'fixtures', name)
 const scratch = mkdtempSync(join(tmpdir(), 'worker-clang-runner-'))
 
@@ -28,17 +33,20 @@ afterAll(async () => {
   rmSync(scratch, { recursive: true, force: true })
 })
 
-/** Writes a toolchain package directory holding every toolchain file except `missing`. */
-function packageWithout(name: string, missing: string[]): string {
+/** Writes a toolchain package directory holding every toolchain file except `missing`, `bundle.js` holding `bundle`. */
+function packageWithout(name: string, missing: string[], bundle = ''): string {
   const dir = join(scratch, name)
   for (const file of WASM_TOOLCHAIN_PACKAGE_FILES) {
     if (missing.includes(file)) continue
     const path = join(dir, file)
     mkdirSync(join(path, '..'), { recursive: true })
-    writeFileSync(path, '')
+    writeFileSync(path, file === 'gen/bundle.js' ? bundle : '')
   }
   return dir
 }
+
+/** A prepared toolchain package: every file present, `bundle.js` the patched loader. */
+const toolchainDir = packageWithout('prepared', [], PATCHED_BUNDLE)
 
 describe('resolveWasmToolchainPaths', () => {
   it('takes the worker from the built main process and clang from the extra resources when packaged', () => {
@@ -50,21 +58,41 @@ describe('resolveWasmToolchainPaths', () => {
     })
   })
 
-  it('takes clang from the repository otherwise', () => {
+  it('takes clang from the prepared copy in the repository otherwise, never from node_modules', () => {
     expect(
       resolveWasmToolchainPaths({ isPackaged: false, resourcesPath: '/r', cwd: '/repo', mainDir: '/repo/dist' }),
     ).toEqual({
       workerScript: join('/repo/dist', 'clang-worker.js'),
-      toolchainDir: join('/repo', 'node_modules', '@yowasp', 'clang'),
+      toolchainDir: join('/repo', 'release', 'yowasp-clang'),
     })
   })
 })
 
 describe('createThreadClangWorkerMechanism load', () => {
-  it('resolves when every toolchain file is present', async () => {
+  it('resolves when every toolchain file is present and the loader is patched', async () => {
     const mechanism = createThreadClangWorkerMechanism({ workerScript: fixture('echo-worker.mjs'), toolchainDir })
 
     await expect(mechanism.load()).resolves.toBeUndefined()
+  })
+
+  it('rejects the installed package, whose loader is not patched, naming its bundle.js', async () => {
+    const mechanism = createThreadClangWorkerMechanism({
+      workerScript: fixture('echo-worker.mjs'),
+      toolchainDir: installedDir,
+    })
+
+    await expect(mechanism.load()).rejects.toThrow(
+      `The toolchain's loader is not patched: ${join(installedDir, 'gen', 'bundle.js')}`,
+    )
+  })
+
+  it('rejects a complete package whose bundle.js is not the patched loader', async () => {
+    const dir = packageWithout('unpatched', [], installedBundle)
+    const mechanism = createThreadClangWorkerMechanism({ workerScript: fixture('echo-worker.mjs'), toolchainDir: dir })
+
+    await expect(mechanism.load()).rejects.toThrow(
+      `The toolchain's loader is not patched: ${join(dir, 'gen', 'bundle.js')}`,
+    )
   })
 
   it('rejects naming the missing toolchain file', async () => {
@@ -131,6 +159,15 @@ describe('WorkerClangRunner thread mechanism', () => {
     )
     await expect(runner.run({ argv: ['clang', '--version'], tree: {} })).rejects.toThrow(
       'The WebAssembly compiler could not be loaded: toolchain failed to load',
+    )
+  })
+
+  it('rejects prepare when the loader is not patched, so the splash or the first build reports it', async () => {
+    const dir = packageWithout('runner-unpatched', [], installedBundle)
+    const runner = track(new WorkerClangRunner({ workerScript: fixture('echo-worker.mjs'), toolchainDir: dir }))
+
+    await expect(runner.prepare()).rejects.toThrow(
+      `The toolchain's loader is not patched: ${join(dir, 'gen', 'bundle.js')}`,
     )
   })
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals'
 
 import type { WasmToolchainTree } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 
+import * as host from '../clang-worker-host'
 import {
   type ClangWorkerPort,
   isClangWorkerJob,
@@ -26,13 +27,16 @@ type Behaviour = (
 /** A stand-in for the `@yowasp/clang` module. */
 function fakeClang(
   behaviour: Behaviour = () => ({ 'out.o': new Uint8Array([1]) }),
-): YowaspClang & { calls: string[][] } {
+): YowaspClang & { calls: string[][]; runOptions: object[] } {
   const calls: string[][] = []
+  const runOptions: object[] = []
   return {
     calls,
+    runOptions,
     Exit,
     runClang: (args, _files, options) => {
       calls.push(args)
+      runOptions.push(options)
       const outcome = behaviour(args, options)
       return outcome instanceof Error ? Promise.reject(outcome) : Promise.resolve(outcome)
     },
@@ -87,6 +91,15 @@ describe('runClangJob', () => {
     })
   })
 
+  it('runs clang with no fetchProgress option, so the loader neither wraps nor logs its downloads', async () => {
+    const clang = fakeClang()
+
+    await runClangJob(clang, ['clang', '-c', 'a.c'], { 'a.c': 'int a;' })
+
+    expect(clang.runOptions).toHaveLength(1)
+    expect(Object.keys(clang.runOptions[0])).not.toContain('fetchProgress')
+  })
+
   it('rejects when clang fails in any other way', async () => {
     const clang = fakeClang(() => new Error('out of memory'))
     await expect(runClangJob(clang, ['clang'], {})).rejects.toThrow('out of memory')
@@ -124,6 +137,15 @@ describe('serveClangWorker', () => {
     expect(port.replies[1]).toEqual({ type: 'error', id: 1, message: 'trap' })
   })
 
+  it('checks clang with --version without a fetchProgress option', async () => {
+    const clang = fakeClang()
+
+    await serveClangWorker(() => Promise.resolve(clang), memoryPort())
+
+    expect(clang.calls[0]).toEqual(['clang', '--version'])
+    expect(Object.keys(clang.runOptions[0] ?? {})).not.toContain('fetchProgress')
+  })
+
   it('rejects a module that is not the toolchain', async () => {
     await expect(serveClangWorker(() => Promise.resolve({}), memoryPort())).rejects.toThrow(
       'The compiler bundle does not export runClang and Exit.',
@@ -136,6 +158,17 @@ describe('serveClangWorker', () => {
       'clang --version exited with code 2',
     )
     expect(port.replies).toEqual([])
+  })
+})
+
+describe('clang-worker-host exports', () => {
+  it('no longer downloads or decodes toolchain resources itself', () => {
+    expect(Object.keys(host)).not.toContain('loadToolchainResources')
+    expect(Object.keys(host)).not.toContain('decodeToolchainResource')
+  })
+
+  it('keeps the stall-limited download', () => {
+    expect(typeof host.downloadWithStallLimit).toBe('function')
   })
 })
 
