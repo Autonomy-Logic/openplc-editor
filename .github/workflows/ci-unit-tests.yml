@@ -6,7 +6,7 @@ on:
   workflow_call:
     inputs:
       skip:
-        description: Skip every step and end green because the same check passed locally.
+        description: Skip the steps because the same check already passed locally (the job still ends green).
         type: boolean
         default: false
 
@@ -15,10 +15,12 @@ jobs:
     name: Unit Tests + Coverage
     runs-on: ubuntu-latest
     # Required check on `development` — a red suite blocks the merge.
+    # Skipped per step, not with a job `if:`, so the job still ends green under
+    # its check name, like the build and lint checks.
     steps:
-      - name: Skipped, passed locally
+      - name: Skipped, already passed locally
         if: ${{ inputs.skip }}
-        run: echo "Skipped because this check passed locally (label ci-passed-locally)."
+        run: echo "Skipped because the ci-passed-locally label was on this pull request into development when it was opened, and this check ran locally on the demand head."
 
       - name: Checkout repository
         if: ${{ !inputs.skip }}

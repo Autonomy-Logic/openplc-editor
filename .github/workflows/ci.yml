@@ -7,8 +7,12 @@ on:
       - development
 
 jobs:
-  # Outputs skip=true only for a PR into development that carries the
-  # ci-passed-locally label, read live from the API (the event payload predates it).
+  # Decides whether build-check, lint and unit-tests, which MisterFlow already
+  # ran locally on the demand head, may skip their steps. Only the run of the
+  # opened event of a pull request into development that carries the
+  # ci-passed-locally label skips them; every later run (synchronize,
+  # reopened) and every pull request into main runs everything. The labels are
+  # read from the API because the event payload can predate the label.
   local-ci-gate:
     name: Local CI label check
     runs-on: ubuntu-latest
@@ -30,15 +34,14 @@ jobs:
           LABEL: ci-passed-locally
         run: |
           skip=false
-          if [ "$EVENT_NAME" != "pull_request" ] || [ "$BASE_REF" != "development" ]; then
-            echo "Not a pull request into development: every job runs."
+          if [ "$EVENT_NAME" != "pull_request" ] || [ "$BASE_REF" != "development" ] || [ "$ACTION" != "opened" ]; then
+            reason="Not the opened run of a pull request into development"
           else
-            # The publisher adds the label a few seconds after opening the PR,
-            # so an opened run polls for about 20 seconds before giving up.
-            attempts=1
-            if [ "$ACTION" = "opened" ]; then attempts=5; fi
-            for i in $(seq 1 "$attempts"); do
-              if labels=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels?per_page=100" --jq '.[].name'); then
+            # gh pr create adds the label right after the pull request exists,
+            # so poll for up to 10 seconds (at 0, 5 and 10 seconds).
+            reason="Label $LABEL not found (or the labels could not be read) within 10 seconds"
+            for i in 1 2 3; do
+              if labels=$(timeout 15 gh api "repos/$REPO/issues/$PR_NUMBER/labels?per_page=100" --jq '.[].name'); then
                 if printf '%s\n' "$labels" | grep -Fxq "$LABEL"; then
                   skip=true
                   break
@@ -46,13 +49,13 @@ jobs:
               else
                 echo "::warning::Could not read the pull request labels (attempt $i)."
               fi
-              if [ "$i" -lt "$attempts" ]; then sleep 5; fi
+              if [ "$i" -lt 3 ]; then sleep 5; fi
             done
           fi
           if [ "$skip" = "true" ]; then
-            msg="Label $LABEL found: build-check, lint and unit-tests skip their steps (they ran locally)."
+            msg="Label $LABEL found on the opened run: build-check, lint and unit-tests skip their steps (they ran locally)."
           else
-            msg="Label $LABEL not found: every job runs."
+            msg="$reason: every job runs."
           fi
           echo "$msg"
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
@@ -61,8 +64,10 @@ jobs:
   architecture:
     uses: ./.github/workflows/ci-architecture.yml
 
-  # The skip is passed into the called workflow so its job still reports the
-  # required check name (e.g. build-check / Build Check) as passed.
+  # The skip is passed into the called workflow instead of being an `if:`
+  # here: a skipped caller job never reports the called job's check name
+  # (e.g. `lint / Lint Check`), so a required check would stay "Expected".
+  # `!cancelled()` keeps these running in full if the label check fails.
   build-check:
     needs: [local-ci-gate]
     if: ${{ !cancelled() }}
@@ -87,12 +92,19 @@ jobs:
   debug-lock-e2e:
     uses: ./.github/workflows/ci-e2e-debug-lock.yml
 
+  # The explicit conditions below keep the usual rule (run only when the
+  # direct needs succeeded) but ignore the label check further upstream:
+  # without them a failed label check would skip format, sync and
+  # complete-build through the implicit success(), which looks at every
+  # upstream job, and the required checks would never report.
   format:
     needs: [architecture, build-check, lint]
+    if: ${{ !cancelled() && needs.architecture.result == 'success' && needs.build-check.result == 'success' && needs.lint.result == 'success' }}
     uses: ./.github/workflows/ci-format.yml
 
   sync:
     needs: [format]
+    if: ${{ !cancelled() && needs.format.result == 'success' }}
     uses: ./.github/workflows/ci-sync.yml
     secrets: inherit
 
@@ -101,5 +113,5 @@ jobs:
     # Full 3-OS packaging is release work: the tag-triggered release
     # workflow builds it for real, so PRs into development skip it and
     # only the promotion PRs into main still prove the app packages.
-    if: github.base_ref == 'main'
+    if: ${{ !cancelled() && needs.sync.result == 'success' && github.base_ref == 'main' }}
     uses: ./.github/workflows/build.yml
