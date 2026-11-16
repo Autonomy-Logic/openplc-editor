@@ -11,21 +11,15 @@ export type ConsoleFilters = {
 }
 
 /**
- * A log as the store holds it: the caller's {@link LogObject} plus the `id`
- * the slice minted for it. The id exists only so the console's list has a
- * stable React key — nothing outside the renderer reads it, which is why
- * callers neither supply nor see it.
+ * A log as the store holds it: the caller's {@link LogObject} plus the `id` the slice gives it, the Console list's
+ * React key.
  */
 export type LogEntry = LogObject & { id: string }
 
 export type ConsoleState = {
   logs: LogEntry[]
   filters: ConsoleFilters
-  // Monotonic nonce bumped each time something (e.g. a build start) wants the
-  // console to become visible and re-attach to the tail. Consumers compare it
-  // to the previous value and, on change, reveal the console panel and perform
-  // a single "kick to bottom" so auto-follow resumes — without overriding the
-  // user's manual scroll position at any other time.
+  /** A nonce bumped when the Console should be revealed and scrolled once to its latest line. */
   followRequestId: number
   /** Logs kept by `addLogWhenProjectOpen` until a project opens, oldest first. */
   logsAwaitingProject: LogObject[]
@@ -36,10 +30,8 @@ export type ConsoleState = {
 /** Per-write directives for {@link ConsoleActions.addLog}. */
 export type AddLogOptions = {
   /**
-   * This line came from a carriage-return redraw, so it overwrites the
-   * in-place line above it when that line is still open (`transient`).
-   * A write directive rather than entity state — whether the line stays
-   * open afterwards is recorded on the entry itself.
+   * The line comes from a carriage-return redraw and overwrites the line above it while that line is open
+   * (`transient`).
    */
   redraw?: boolean
 }

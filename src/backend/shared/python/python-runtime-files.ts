@@ -1,9 +1,3 @@
-/**
- * Where the bundled Python runtime's files are: the names `python-runtime.json` pins (the desktop reads them to find
- * the downloaded files), and the URLs a web page serves them from, which its Python thread receives first in an
- * `init` message. Platforms read and send these; the checks live here.
- */
-
 /** The file names `python-runtime.json` pins, which the install script downloads under those names. */
 export interface PinnedPythonFiles {
   python: string

@@ -1,10 +1,3 @@
-/**
- * Mechanisms behind the in-editor WebAssembly toolchain.
- *
- * All compile logic is shared (`backend/shared/wasm-toolchain/`). A platform supplies only the runner, which
- * makes no decisions: where clang runs (worker threads, Web Workers) and how the toolchain is loaded.
- */
-
 /** A file tree as clang sees it: directories are nested objects, files are text or bytes. */
 export type WasmToolchainTree = { [name: string]: string | Uint8Array | WasmToolchainTree }
 

@@ -1,9 +1,3 @@
-/**
- * What a platform provides to run Python function blocks: a long-lived thread that loads the Python runtime once and
- * runs `servePythonThread`, and the thread's side of its message channel. Everything else is shared
- * (`backend/shared/python/`).
- */
-
 /** The main side of the Python thread. */
 export interface PythonThreadHandle {
   post(message: unknown): void
