@@ -62,10 +62,38 @@ export interface GsdmlCatalogContext {
   readonly texts: GsdmlTextResolver
   readonly notices: GsdmlNoticeLog
   readonly valueList: GsdmlValueList
-  /** The IDs of every ModuleItem, skipped ones included. */
-  readonly moduleIds: ReadonlySet<string>
-  /** The IDs of every SubmoduleList entry, skipped ones included. */
-  readonly submoduleIds: ReadonlySet<string>
+  /** The IDs of the ModuleItems, split by whether the catalog holds them. */
+  readonly moduleIds: GsdmlTargetIds
+  /** The IDs of the SubmoduleList entries, split by whether the catalog holds them. */
+  readonly submoduleIds: GsdmlTargetIds
+}
+
+/** The IDs of the elements a reference may name, split by whether the catalog holds them. */
+export interface GsdmlTargetIds {
+  /** IDs of at least one element the catalog holds. */
+  readonly kept: ReadonlySet<string>
+  /** IDs whose every element was skipped for its RequiredSchemaVersion; none of them is in `kept`. */
+  readonly skipped: ReadonlySet<string>
+}
+
+/** The RequiredSchemaVersion of an object when it is newer than the supported one; undefined otherwise. */
+function newerRequiredSchemaVersion(element: GsdmlXmlElement): string | undefined {
+  const required = attributeValue(element, 'RequiredSchemaVersion')
+  return required !== undefined && isNewerSchemaVersion(required) ? required : undefined
+}
+
+/** Splits the IDs of the given elements into those the catalog holds and those skipped for their schema version. */
+export function targetIdsOf(elements: readonly GsdmlXmlElement[]): GsdmlTargetIds {
+  const kept = new Set<string>()
+  const skipped = new Set<string>()
+  for (const element of elements) {
+    const id = attributeValue(element, 'ID')
+    if (id === undefined) continue
+    if (newerRequiredSchemaVersion(element) === undefined) kept.add(id)
+    else skipped.add(id)
+  }
+  for (const id of kept) skipped.delete(id)
+  return { kept, skipped }
 }
 
 /**
@@ -77,8 +105,8 @@ export function isSkippedForSchemaVersion(
   elementName: string,
   context: GsdmlCatalogContext,
 ): boolean {
-  const required = attributeValue(element, 'RequiredSchemaVersion')
-  if (required === undefined || !isNewerSchemaVersion(required)) return false
+  const required = newerRequiredSchemaVersion(element)
+  if (required === undefined) return false
   const id = attributeValue(element, 'ID')
   const subject = id === undefined ? elementName : `${elementName} "${id}"`
   context.notices.add(

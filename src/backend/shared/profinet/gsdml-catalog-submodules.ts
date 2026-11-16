@@ -5,7 +5,13 @@ import type {
   GsdmlVirtualSubmodule,
 } from '@root/middleware/shared/ports/gsdml-types'
 
-import { type GsdmlCatalogContext, isSkippedForSchemaVersion, readModuleInfo } from './gsdml-catalog-context'
+import {
+  type GsdmlCatalogContext,
+  type GsdmlTargetIds,
+  isSkippedForSchemaVersion,
+  readModuleInfo,
+  targetIdsOf,
+} from './gsdml-catalog-context'
 import { readIoData } from './gsdml-catalog-io'
 import { readParameterRecords } from './gsdml-catalog-records'
 import {
@@ -15,7 +21,14 @@ import {
   requireUnsigned,
   UNSIGNED32_HEX_DIGITS,
 } from './gsdml-structure'
-import { attributeValue, childElement, childElements, type GsdmlXmlElement, parseTokenList } from './gsdml-xml'
+import {
+  attributeValue,
+  childElement,
+  childElements,
+  type GsdmlXmlElement,
+  listItems,
+  parseTokenList,
+} from './gsdml-xml'
 
 /**
  * Reads the fields every submodule kind shares.
@@ -100,16 +113,13 @@ export function readPluggableSubmodules(
   return [...submodules, ...ports]
 }
 
-/** The IDs of every entry of ApplicationProcess/SubmoduleList, whatever its schema version. */
-export function submoduleListIds(applicationProcess: GsdmlXmlElement): Set<string> {
-  const list = childElement(applicationProcess, 'SubmoduleList')
-  const ids = new Set<string>()
-  if (list === undefined) return ids
-  for (const name of ['SubmoduleItem', 'PortSubmoduleItem']) {
-    for (const item of childElements(list, name)) {
-      const id = attributeValue(item, 'ID')
-      if (id !== undefined) ids.add(id)
-    }
-  }
-  return ids
+/**
+ * The IDs of the entries of ApplicationProcess/SubmoduleList, split by whether the catalog holds them or skips them for
+ * their schema version.
+ */
+export function submoduleListIds(applicationProcess: GsdmlXmlElement): GsdmlTargetIds {
+  return targetIdsOf([
+    ...listItems(applicationProcess, 'SubmoduleList', 'SubmoduleItem'),
+    ...listItems(applicationProcess, 'SubmoduleList', 'PortSubmoduleItem'),
+  ])
 }

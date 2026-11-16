@@ -157,7 +157,11 @@ export type GsdmlSubmodule =
   | GsdmlInterfaceSubmodule
   | GsdmlPortSubmodule
 
-/** A module a device access point accepts, from UseableModules/ModuleItemRef. */
+/**
+ * A module a device access point accepts, from UseableModules/ModuleItemRef. Its `moduleId` names a module of the
+ * catalog unless a `dangling-reference` notice has it as its detail. A ModuleItemRef whose ModuleItem was skipped for
+ * its RequiredSchemaVersion (Annex A.3.3) is left out.
+ */
 export interface GsdmlModulePlacement {
   readonly moduleId: string
   readonly allowedInSlots: GsdmlSlotSet
@@ -165,7 +169,11 @@ export interface GsdmlModulePlacement {
   readonly usedInSlots: GsdmlSlotSet
 }
 
-/** A submodule a device access point or module accepts, from UseableSubmodules/SubmoduleItemRef. */
+/**
+ * A submodule a device access point or module accepts, from UseableSubmodules/SubmoduleItemRef. Its `submoduleId` names
+ * a submodule of the catalog SubmoduleList unless a `dangling-reference` notice has it as its detail. A
+ * SubmoduleItemRef whose SubmoduleList entry was skipped for its RequiredSchemaVersion (Annex A.3.3) is left out.
+ */
 export interface GsdmlSubmodulePlacement {
   readonly submoduleId: string
   readonly allowedInSubslots: GsdmlSlotSet

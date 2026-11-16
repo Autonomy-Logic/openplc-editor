@@ -7,9 +7,11 @@ import type {
 
 import {
   type GsdmlCatalogContext,
+  type GsdmlTargetIds,
   isSkippedForSchemaVersion,
   noteDanglingReference,
   readModuleInfo,
+  targetIdsOf,
 } from './gsdml-catalog-context'
 import { readSystemDefinedSubmodules, readVirtualSubmodules } from './gsdml-catalog-submodules'
 import {
@@ -21,44 +23,69 @@ import {
 } from './gsdml-structure'
 import { attributeValue, type GsdmlXmlElement, listItems } from './gsdml-xml'
 
-/** Reads UseableModules/ModuleItemRef of a device access point, noting each target that names no ModuleItem. */
+/**
+ * Whether a placement stays in the catalog. A target skipped for its RequiredSchemaVersion drops it without a notice;
+ * a target that names no element keeps it, with one `dangling-reference` notice.
+ */
+function keepsPlacement(
+  ids: GsdmlTargetIds,
+  context: GsdmlCatalogContext,
+  reference: string,
+  target: string,
+  targetElement: string,
+  ownerId: string,
+): boolean {
+  if (ids.kept.has(target)) return true
+  if (ids.skipped.has(target)) return false
+  noteDanglingReference(context, reference, target, targetElement, ownerId)
+  return true
+}
+
+/**
+ * Reads UseableModules/ModuleItemRef of a device access point, leaving out the ones whose ModuleItem was skipped and
+ * noting each target that names no ModuleItem.
+ */
 function readModulePlacements(
   dap: GsdmlXmlElement,
   dapId: string,
   context: GsdmlCatalogContext,
 ): GsdmlModulePlacement[] {
-  return listItems(dap, 'UseableModules', 'ModuleItemRef').map((ref) => {
+  const placements: GsdmlModulePlacement[] = []
+  for (const ref of listItems(dap, 'UseableModules', 'ModuleItemRef')) {
     const moduleId = requireAttribute(ref, 'ModuleItemRef', 'ModuleItemTarget')
-    if (!context.moduleIds.has(moduleId)) {
-      noteDanglingReference(context, 'ModuleItemTarget', moduleId, 'ModuleItem', dapId)
-    }
-    return {
+    if (!keepsPlacement(context.moduleIds, context, 'ModuleItemTarget', moduleId, 'ModuleItem', dapId)) continue
+    placements.push({
       moduleId,
       allowedInSlots: optionalSlotSet(ref, 'AllowedInSlots'),
       fixedInSlots: optionalSlotSet(ref, 'FixedInSlots'),
       usedInSlots: optionalSlotSet(ref, 'UsedInSlots'),
-    }
-  })
+    })
+  }
+  return placements
 }
 
-/** Reads UseableSubmodules/SubmoduleItemRef, noting each target that names no SubmoduleList entry. */
+/**
+ * Reads UseableSubmodules/SubmoduleItemRef, leaving out the ones whose SubmoduleList entry was skipped and noting each
+ * target that names no SubmoduleList entry.
+ */
 function readSubmodulePlacements(
   parent: GsdmlXmlElement,
   parentId: string,
   context: GsdmlCatalogContext,
 ): GsdmlSubmodulePlacement[] {
-  return listItems(parent, 'UseableSubmodules', 'SubmoduleItemRef').map((ref) => {
+  const placements: GsdmlSubmodulePlacement[] = []
+  for (const ref of listItems(parent, 'UseableSubmodules', 'SubmoduleItemRef')) {
     const submoduleId = requireAttribute(ref, 'SubmoduleItemRef', 'SubmoduleItemTarget')
-    if (!context.submoduleIds.has(submoduleId)) {
-      noteDanglingReference(context, 'SubmoduleItemTarget', submoduleId, 'SubmoduleList entry', parentId)
-    }
-    return {
+    const entry = 'SubmoduleList entry'
+    if (!keepsPlacement(context.submoduleIds, context, 'SubmoduleItemTarget', submoduleId, entry, parentId)) continue
+    placements.push({
       submoduleId,
       allowedInSubslots: optionalSlotSet(ref, 'AllowedInSubslots'),
       fixedInSubslots: optionalSlotSet(ref, 'FixedInSubslots'),
       usedInSubslots: optionalSlotSet(ref, 'UsedInSubslots'),
-    }
-  })
+    })
+  }
+  return placements
 }
 
 /** Reads one DeviceAccessPointItem. */
@@ -129,12 +156,7 @@ export function readModules(applicationProcess: GsdmlXmlElement, context: GsdmlC
     .map((item) => readModule(item, context))
 }
 
-/** The IDs of every ModuleItem, whatever its schema version. */
-export function moduleListIds(applicationProcess: GsdmlXmlElement): Set<string> {
-  const ids = new Set<string>()
-  for (const item of listItems(applicationProcess, 'ModuleList', 'ModuleItem')) {
-    const id = attributeValue(item, 'ID')
-    if (id !== undefined) ids.add(id)
-  }
-  return ids
+/** The IDs of the ModuleItems, split by whether the catalog holds them or skips them for their schema version. */
+export function moduleListIds(applicationProcess: GsdmlXmlElement): GsdmlTargetIds {
+  return targetIdsOf(listItems(applicationProcess, 'ModuleList', 'ModuleItem'))
 }
