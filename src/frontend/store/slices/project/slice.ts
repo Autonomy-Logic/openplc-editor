@@ -2470,6 +2470,13 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           // Common fields
           if (config.slaveId !== undefined) device.modbusTcpConfig.slaveId = config.slaveId
           if (config.timeout !== undefined) device.modbusTcpConfig.timeout = config.timeout
+          if (
+            config.reconnect === undefined &&
+            device.modbusTcpConfig.reconnect === undefined &&
+            (device.modbusTcpConfig.transport ?? 'tcp') === 'tcp'
+          ) {
+            device.modbusTcpConfig.reconnect = true
+          }
         }),
       )
       return ok()

@@ -156,12 +156,13 @@ in the same PR pair (editor + web).
 
 `ci-e2e-debug-lock.yml` runs the `debug-*` specs on every pull request; every other
 spec is a local check. `e2e/` drives the real Electron app through `_electron.launch`,
-and three things bite before any assertion:
+and these things bite before any assertion:
 
 ```bash
 OPENPLC_E2E_DEBUG_SEAM=1 npm run build                 # main + renderer
 mkdir -p release/app/configs/dll
 cp release/app/dist/main/preload.js release/app/configs/dll/preload.js
+mkdir -p release/app/dist/main/node_modules && ln -sfn "$PWD/node_modules/strucpp" release/app/dist/main/node_modules/strucpp
 npx playwright test e2e/<spec>.ts --workers=1
 ```
 
@@ -174,6 +175,10 @@ and closes a debug session with no PLC attached. Any other build drops the branc
   looks under `release/app/configs/dll/` - a path `npm run build` never writes. Without
   it the window renders blank and the only clue is `Cannot read properties of undefined
   (reading 'onSimulatorStopped')` in the renderer console.
+- **The STruC++ link is required for a spec that builds a project.** The build reads the
+  STruC++ runtime headers and libraries from `<app path>/node_modules/strucpp`. For a suite
+  launching `release/app/dist/main/main.js` that path is under `release/app/dist/main/`, which
+  `npm run build` never writes, so without the link the build fails for want of the headers.
 - **Do not set `NODE_ENV=development`.** `resolveHtmlPath` would point the window at the
   webpack dev server on `localhost:1212`, which is not running against a built app.
 - **`firstWindow()` returns the splash**, which then closes. Poll `app.windows()` for the

@@ -4,11 +4,13 @@ import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
+import { canHostModbusMaster } from '../../../../../../middleware/shared/utils/modbus-master-profile'
 import { resolveModbusServerProfile } from '../../../../../../middleware/shared/utils/modbus-server-profile'
 import { resolveTargetCapabilities } from '../../../../../../middleware/shared/utils/target-capabilities'
 import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
 import { DatatypeDerivationSources } from '../../../../../data/sources/data-type'
 import { CreatePouSources, PouLanguageSources } from '../../../../../data/sources/POU'
+import { useModbusMasterProfile } from '../../../../../hooks/use-modbus-master-profile'
 import { useOpenPLCStore } from '../../../../../store'
 import { cn } from '../../../../../utils/cn'
 import {
@@ -168,6 +170,17 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
       (protocol.value === 'modbus-tcp' && !targetServesModbus) ||
       (protocol.value === 's7comm' && !targetCaps.s7Server) ||
       (protocol.value === 'opcua' && !targetCaps.opcuaServer)
+    return unsupported ? { ...protocol, disabled: true } : protocol
+  })
+
+  const masterProfile = useModbusMasterProfile()
+  const targetHostsModbusMaster = canHostModbusMaster(masterProfile)
+  const targetHostsRemoteDevices = targetHostsModbusMaster || targetCaps.ethercat
+  const remoteDeviceProtocolOptions = RemoteDeviceProtocolSources.map((protocol) => {
+    if (protocol.disabled) return protocol
+    const unsupported =
+      (protocol.value === 'modbus-tcp' && !targetHostsModbusMaster) ||
+      (protocol.value === 'ethercat' && !targetCaps.ethercat)
     return unsupported ? { ...protocol, disabled: true } : protocol
   })
 
@@ -643,13 +656,13 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                   </div>
                   <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />
                 </div>
-                {!(isRuntimeV4 || isSimulator) ? (
+                {!targetHostsRemoteDevices ? (
                   <div className='flex flex-col gap-2 py-2'>
-                    <p className='text-sm text-neutral-700 dark:text-neutral-300'>
-                      Remote device configuration is only available for OpenPLC Runtime v4 targets.
-                    </p>
-                    <p className='text-xs text-neutral-500 dark:text-neutral-400'>
-                      Please select OpenPLC Runtime v4 in the Device Configuration to enable this feature.
+                    <p
+                      data-testid='remote-device-unavailable'
+                      className='text-sm text-neutral-700 dark:text-neutral-300'
+                    >
+                      Remote devices are not available on the current target.
                     </p>
                   </div>
                 ) : (
@@ -716,7 +729,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                                   align='center'
                                   side='bottom'
                                 >
-                                  {RemoteDeviceProtocolSources.map((protocol) => {
+                                  {remoteDeviceProtocolOptions.map((protocol) => {
                                     return (
                                       <SelectItem
                                         key={protocol.value}

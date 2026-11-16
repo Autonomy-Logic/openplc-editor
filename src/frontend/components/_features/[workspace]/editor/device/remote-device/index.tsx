@@ -1000,7 +1000,10 @@ const RemoteDeviceEditor = () => {
   )
 
   return (
-    <div aria-label='Remote device content container' className='flex h-full w-full flex-col overflow-hidden p-4'>
+    <div
+      aria-label='Remote device content container'
+      className='flex h-full w-full flex-col overflow-y-auto overflow-x-hidden p-4'
+    >
       <div className='mb-4'>
         <h2 className='text-lg font-semibold text-neutral-1000 dark:text-neutral-100'>Remote Device: {deviceName}</h2>
         <p className='text-sm text-neutral-600 dark:text-neutral-400'>
@@ -1231,7 +1234,7 @@ const RemoteDeviceEditor = () => {
         </div>
       </EditingLockBoundary>
 
-      <div className='flex flex-1 flex-col overflow-hidden'>
+      <div data-testid='remote-device-io-mapping' className='flex min-h-[200px] flex-1 flex-col overflow-hidden'>
         <div className='mb-2 flex items-center justify-between'>
           <h3 className='text-sm font-medium text-neutral-950 dark:text-neutral-100'>IO Tag Mapping</h3>
           <div className='flex items-center gap-1'>
