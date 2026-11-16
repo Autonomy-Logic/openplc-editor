@@ -12,10 +12,14 @@ import {
   readModuleInfo,
 } from './gsdml-catalog-context'
 import { readSystemDefinedSubmodules, readVirtualSubmodules } from './gsdml-catalog-submodules'
-import { optionalSlotSet, requireAttribute, requireIdent, requireSlotSet } from './gsdml-structure'
+import {
+  optionalSlotSet,
+  requireAttribute,
+  requireIdent,
+  requireSlotSet,
+  UNSIGNED32_HEX_DIGITS,
+} from './gsdml-structure'
 import { attributeValue, type GsdmlXmlElement, listItems } from './gsdml-xml'
-
-const UNSIGNED32_HEX_DIGITS = 8
 
 /** Reads UseableModules/ModuleItemRef of a device access point, noting each target that names no ModuleItem. */
 function readModulePlacements(

@@ -1,17 +1,3 @@
-/**
- * The generic device-description repository, shared by every platform and every
- * description format.
- *
- * Holds the repository behaviour that does not depend on the format: the row and
- * its summary, content hashing and duplicate detection, re-reading rows from
- * another summary version, and caching of the XML. A format supplies only its
- * summarizer; a platform supplies only a row store
- * (`ports/device-description-repository.ts`).
- *
- * Row ids never change for given content, so only delete, clear and a scope
- * change (account, project) invalidate the caches.
- */
-
 import { newUuid } from '@root/frontend/utils/new-uuid'
 import type {
   DescriptionItem,
@@ -22,6 +8,9 @@ import type { Result } from '@root/middleware/shared/ports/types'
 import { createPromiseLruCache } from '@root/middleware/shared/utils/ethercat/promise-lru-cache'
 
 import { hashText } from '../project/project-snapshot-archive'
+import { errorMessage } from './error-message'
+
+export { errorMessage }
 
 /** Bound of the XML cache, in characters: about 64 MB of ASCII XML. */
 const XML_CACHE_MAX_CHARS = 64 * 1024 * 1024
@@ -83,13 +72,17 @@ export function toRepositoryItem<S>(row: DescriptionStoredRow<S> & { summary: S 
   return { ...row.summary, id: row.id, filename: row.filename, loadedAt: row.loadedAt }
 }
 
-/** The message of a thrown value, or `fallback` when it has none. */
-export function errorMessage(err: unknown, fallback: string): string {
-  if (err instanceof Error) return err.message || fallback
-  return String(err) || fallback
-}
-
-/** Builds a repository over a row store and a summarizer. */
+/**
+ * Builds the generic device-description repository, shared by every platform and every description format.
+ *
+ * It holds the behaviour that does not depend on the format: each row with its summary, content hashing and
+ * duplicate detection, re-reading rows stored with another summary version, and the XML cache. A format supplies
+ * only its summarizer; a platform supplies only a row store (`ports/device-description-repository.ts`). Delete,
+ * clear and a change of the store's scope invalidate the caches.
+ *
+ * @param options - The row store, summary version, label and summarizer.
+ * @returns The repository.
+ */
 export function createDescriptionRepository<S>(options: DescriptionRepositoryOptions<S>): DescriptionRepository<S> {
   const { store, summaryVersion, label } = options
   const xmlCache = createPromiseLruCache<string>({ maxWeight: XML_CACHE_MAX_CHARS, weigh: (xml) => xml.length })

@@ -1,3 +1,4 @@
+import { errorMessage } from '@root/backend/shared/device-description/error-message'
 import type { ProcessEntitiesOptions } from 'fast-xml-parser'
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
 
@@ -52,11 +53,6 @@ function isElementObject(value: unknown): value is GsdmlXmlElement {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** The message of a thrown value. */
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 /**
  * Checks that the text is well-formed XML, then parses it with the configured library parser. Never throws.
  *
@@ -74,7 +70,7 @@ export function readGsdmlXml(text: string): GsdmlXmlReadResult {
     if (!isElementObject(parsed)) return { ok: false, reason: 'the XML library returned no document' }
     return { ok: true, document: parsed }
   } catch (error: unknown) {
-    return { ok: false, reason: errorMessage(error) }
+    return { ok: false, reason: errorMessage(error, 'unknown error') }
   }
 }
 

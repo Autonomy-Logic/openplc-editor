@@ -79,10 +79,17 @@ export function requireUnsigned(element: GsdmlXmlElement, elementName: string, a
   return requireConverted(element, elementName, attribute, 'an unsigned integer', parseUnsignedValue)
 }
 
+/** The hex digit count of an Unsigned16 ident number. */
+export const UNSIGNED16_HEX_DIGITS = 4
+
+/** The hex digit count of an Unsigned32 ident number. */
+export const UNSIGNED32_HEX_DIGITS = 8
+
 /**
  * Reads a required `0x` hexadecimal ident number and normalises it.
  *
- * @param maxDigits - 4 for an Unsigned16 ident, 8 for an Unsigned32 ident.
+ * @param maxDigits - {@link UNSIGNED16_HEX_DIGITS} for an Unsigned16 ident, {@link UNSIGNED32_HEX_DIGITS} for an
+ *   Unsigned32 ident.
  * @throws {GsdmlStructureError} When it is missing or not a hexadecimal number of that size.
  */
 export function requireIdent(

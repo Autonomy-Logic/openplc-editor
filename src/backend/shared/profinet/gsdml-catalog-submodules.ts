@@ -8,10 +8,14 @@ import type {
 import { type GsdmlCatalogContext, isSkippedForSchemaVersion, readModuleInfo } from './gsdml-catalog-context'
 import { readIoData } from './gsdml-catalog-io'
 import { readParameterRecords } from './gsdml-catalog-records'
-import { optionalUnsigned, requireAttribute, requireIdent, requireUnsigned } from './gsdml-structure'
+import {
+  optionalUnsigned,
+  requireAttribute,
+  requireIdent,
+  requireUnsigned,
+  UNSIGNED32_HEX_DIGITS,
+} from './gsdml-structure'
 import { attributeValue, childElement, childElements, type GsdmlXmlElement, parseTokenList } from './gsdml-xml'
-
-const UNSIGNED32_HEX_DIGITS = 8
 
 /**
  * Reads the fields every submodule kind shares.

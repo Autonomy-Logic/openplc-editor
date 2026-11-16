@@ -1,12 +1,3 @@
-/**
- * Mechanisms behind the ESI repository port.
- *
- * All repository behaviour is shared (`backend/shared/device-description/description-repository.ts`,
- * `backend/shared/ethercat/esi-repository-port.ts` and `esi-file-store.ts`). A platform
- * supplies only mechanisms, which make no decisions: where the parser runs, and where
- * rows or files are kept.
- */
-
 import type { DescriptionRowStore, DescriptionStoredRow } from './device-description-repository'
 import type { ESIDevice, ESIModule, ESIRepositoryItemLight } from './esi-types'
 
@@ -42,7 +33,13 @@ export type EsiParseResult<T extends EsiParseOp> = T extends { op: 'light' }
     ? EsiDeviceParse
     : EsiModulesParse
 
-/** Runs one parse request on the platform's parsing thread and returns the result unchanged. */
+/**
+ * Runs one parse request on the platform's parsing thread and returns the result unchanged.
+ *
+ * The parser mechanism, the row store and the file store are the only platform-supplied parts of the ESI repository,
+ * and none makes decisions. The repository behaviour is in `backend/shared/ethercat/esi-repository-port.ts`,
+ * `esi-file-store.ts` and `backend/shared/device-description/description-repository.ts`.
+ */
 export interface EsiParserMechanism {
   run<T extends EsiParseOp>(request: T): Promise<EsiParseResult<T>>
 }

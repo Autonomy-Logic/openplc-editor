@@ -1,11 +1,3 @@
-/**
- * Mechanisms behind a device-description repository (a catalog of XML device
- * description files, each kept as a row with the summary its parser produced).
- *
- * All repository behaviour is shared (`backend/shared/device-description/description-repository.ts`).
- * A platform supplies only the row store, which makes no decisions.
- */
-
 /** A repository row with summary type `S`. Stores keep it exactly as given and return it exactly as kept. */
 export interface DescriptionStoredRow<S> {
   id: string
@@ -19,7 +11,12 @@ export interface DescriptionStoredRow<S> {
   summary?: S
 }
 
-/** Row storage (the Edge backend on the web). Stores and returns rows verbatim. */
+/**
+ * The row store of a device-description repository: a catalog of XML device-description files, each kept as a row
+ * with the summary its parser produced. A platform supplies it (the Edge backend on the web); it stores and returns
+ * rows verbatim and makes no decisions. The repository behaviour is in
+ * `backend/shared/device-description/description-repository.ts`.
+ */
 export interface DescriptionRowStore<S> {
   list(): Promise<DescriptionStoredRow<S>[]>
   /** Keep a new row and its XML; returns the row as kept, whose id the store may have assigned. */

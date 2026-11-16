@@ -1,3 +1,4 @@
+import { errorMessage } from '@root/backend/shared/device-description/error-message'
 import type { GsdmlRepositorySummary } from '@root/middleware/shared/ports/gsdml-repository-mechanisms'
 import type { GsdmlCatalog, GsdmlDeviceIdentity, GsdmlParseResult } from '@root/middleware/shared/ports/gsdml-types'
 
@@ -6,7 +7,7 @@ import { readChannelDiagnostics, readLogBookEntries, readUnitDiagnosticTypes } f
 import { moduleListIds, readDeviceAccessPoints, readModules } from './gsdml-catalog-modules'
 import { readPluggableSubmodules, submoduleListIds } from './gsdml-catalog-submodules'
 import { gsdmlNotice, GsdmlNoticeLog } from './gsdml-notices'
-import { containsDoctype, GsdmlStructureError, requireIdent } from './gsdml-structure'
+import { containsDoctype, GsdmlStructureError, requireIdent, UNSIGNED16_HEX_DIGITS } from './gsdml-structure'
 import { GsdmlTextResolver, readExternalTexts } from './gsdml-text'
 import { GSDML_SUPPORTED_SCHEMA_VERSION, isNewerSchemaVersion, schemaVersionFromLocation } from './gsdml-version'
 import {
@@ -15,15 +16,13 @@ import {
   childElement,
   childElementNames,
   childElements,
-  errorMessage,
   type GsdmlXmlElement,
   readGsdmlXml,
 } from './gsdml-xml'
 
 const ROOT_ELEMENT = 'ISO15745Profile'
 const GSDML_NAMESPACE_MARKER = 'profibus.com/gsdml'
-const UNSIGNED16_HEX_DIGITS = 4
-const BYTE_ORDER_MARK = '﻿'
+const BYTE_ORDER_MARK = '\uFEFF'
 
 /** The root element and the values of its namespace and schema location attributes. */
 interface GsdmlRoot {
@@ -177,7 +176,7 @@ export function parseGsdml(xml: string): GsdmlParseResult {
     return { success: true, catalog: buildCatalog(read.document) }
   } catch (error: unknown) {
     if (error instanceof GsdmlStructureError) return { success: false, error: error.message }
-    return { success: false, error: `GSDML could not be read: ${errorMessage(error)}` }
+    return { success: false, error: `GSDML could not be read: ${errorMessage(error, 'unknown error')}` }
   }
 }
 

@@ -1,14 +1,3 @@
-/**
- * The ESI repository port, shared by every platform.
- *
- * Built on the generic description repository
- * (`backend/shared/device-description/description-repository.ts`), which holds the
- * rows, content hashing, duplicate detection, re-parsing of rows from another parser
- * version and the XML cache. This port adds what is ESI-specific: parse acceptance,
- * the cache of parsed devices, and module lookup by ident. Platforms supply only a
- * parser mechanism and a row store (`ports/esi-repository-mechanisms.ts`).
- */
-
 import {
   createDescriptionRepository,
   errorMessage,
@@ -44,6 +33,15 @@ export interface EsiRepositoryMechanisms {
   store: EsiRowStore
 }
 
+/**
+ * Builds the ESI repository port, shared by every platform, on the generic description repository
+ * (`backend/shared/device-description/description-repository.ts`). It adds parse acceptance, the cache of parsed
+ * devices and module lookup by ident. A platform supplies only a parser mechanism and a row store
+ * (`ports/esi-repository-mechanisms.ts`).
+ *
+ * @param mechanisms - The platform's parser mechanism and row store.
+ * @returns The ESI port.
+ */
 export function createEsiRepositoryPort({ parser, store }: EsiRepositoryMechanisms): EsiPort {
   const deviceCache = createPromiseLruCache<ESIDevice>({ maxWeight: DEVICE_CACHE_MAX_ENTRIES, weigh: () => 1 })
 
