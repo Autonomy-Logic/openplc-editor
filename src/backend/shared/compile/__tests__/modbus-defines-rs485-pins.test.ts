@@ -52,6 +52,12 @@ describe('MBSERIAL_TXPIN', () => {
       ])
     })
 
+    it("emits a 4.3.x project's padded pin trimmed", () => {
+      expect(txPinLines(generateModbusDefines(legacyPin('22 '), 'Serial', rtuOn(), undefined, LEGACY))).toEqual([
+        '#define MBSERIAL_TXPIN 22',
+      ])
+    })
+
     it.each(['-1', '2\n#define MBSERIAL_SLAVE 9'])('emits no pin for %j', (pin) => {
       const out = generateModbusDefines(legacyPin(pin), 'Serial', rtuOn('Serial1'), undefined, LEGACY)
 

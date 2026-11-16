@@ -679,3 +679,60 @@ describe('checkModbusMaster: the Remote IO warning (Runtime v3 and the Simulator
     expect(remoteIoWarnings(check('runtime-v4', [tcp('A')], { hasRemoteDevices: true }))).toEqual([])
   })
 })
+
+describe('checkModbusMaster: remote devices baremetal does not support', () => {
+  const ethercat = (name: string): PLCRemoteDevice => ({ name, protocol: 'ethercat' })
+  const unsupported = (target: string, names: string): string =>
+    `Warning: Your project contains remote devices that ${target} does not support: ${names}. They will be ignored during compilation.`
+  const remoteIoItems = (issues: Issues): Issues => issues.filter((issue) => issue.item === 'Remote IO')
+
+  it('warns once about an EtherCAT device, naming it, and nothing else', () => {
+    expect(check('baremetal', [ethercat('Slave1')], { hasRemoteDevices: true })).toEqual([
+      {
+        severity: 'warning',
+        item: 'Remote IO',
+        devices: ['Slave1'],
+        message: unsupported('the selected target', 'Slave1'),
+      },
+    ])
+  })
+
+  it('names the selected target in the warning when it is known', () => {
+    const issues = check('baremetal', [ethercat('Slave1')], { hasRemoteDevices: true, boardTarget: 'Arduino Mega' })
+
+    expect(remoteIoItems(issues).map((issue) => issue.message)).toEqual([
+      unsupported('the selected target (Arduino Mega)', 'Slave1'),
+    ])
+  })
+
+  it('gives Modbus devices on baremetal no Remote IO warning', () => {
+    expect(remoteIoItems(check('baremetal', [tcp('Pump'), rtu('Drive')], { hasRemoteDevices: true }))).toEqual([])
+  })
+
+  it('names only the EtherCAT devices of a mixed project', () => {
+    const issues = check('baremetal', [ethercat('Slave1'), tcp('Pump'), ethercat('Slave2')], {
+      hasRemoteDevices: true,
+    })
+
+    expect(remoteIoItems(issues)).toEqual([
+      {
+        severity: 'warning',
+        item: 'Remote IO',
+        devices: ['Slave1', 'Slave2'],
+        message: unsupported('the selected target', 'Slave1, Slave2'),
+      },
+    ])
+  })
+
+  it('keeps the Modbus checks of a mixed project', () => {
+    const issues = check('baremetal', [ethercat('Slave1'), tcp('Named', { host: 'plc.local' })], {
+      hasRemoteDevices: true,
+    })
+
+    expect(errorsOf(issues).map((issue) => issue.devices)).toEqual([['Named']])
+  })
+
+  it('leaves Runtime v4 without a Remote IO warning for an EtherCAT device', () => {
+    expect(remoteIoItems(check('runtime-v4', [ethercat('Slave1')], { hasRemoteDevices: true }))).toEqual([])
+  })
+})

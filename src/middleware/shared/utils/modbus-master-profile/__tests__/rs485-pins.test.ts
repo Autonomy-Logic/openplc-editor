@@ -160,4 +160,22 @@ describe('resolveRs485Pins', () => {
       expect(resolveRs485Pins({}, badFixed, null)).toEqual({})
     })
   })
+
+  describe('legacy pin trimming', () => {
+    it.each(['22 ', ' 22'])('trims the legacy pin %j on a legacy board', (pin) => {
+      expect(resolveRs485Pins(legacyPin(pin), LEGACY, 'Serial1')).toEqual({ Serial1: '22' })
+    })
+
+    it.each(['22 ', ' 22'])('trims the legacy pin %j on a per-UART aware board with no per-UART pins', (pin) => {
+      expect(resolveRs485Pins(legacyPin(pin), MEGA, 'Serial1')).toEqual({ Serial1: '22' })
+    })
+
+    it('gives no pin for a legacy pin that is empty once trimmed', () => {
+      expect(resolveRs485Pins(legacyPin('   '), LEGACY, 'Serial1')).toEqual({})
+    })
+
+    it('never trims a per-UART pin', () => {
+      expect(resolveRs485Pins(perUartPins({ Serial1: '22 ' }), MEGA, 'Serial1')).toEqual({})
+    })
+  })
 })

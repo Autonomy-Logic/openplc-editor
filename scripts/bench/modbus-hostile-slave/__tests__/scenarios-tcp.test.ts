@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, test } from 'node:test'
 
-import { settle } from './helpers/fake-clock'
+import { createScenario, FLOOD_MS, runSlave, RunningSlave, ScenarioEngine } from '../scenario'
+import { FakeClock, settle } from './helpers/fake-clock'
+import { MemoryLink } from './helpers/memory-link'
 import { GROUPS, hex, range, tcpFrame, tcpRead, tcpRegistersAnswer } from './helpers/modbus'
 import { OpenSlave, openSlave } from './helpers/slave'
 
@@ -189,5 +191,150 @@ describe('AS-07 over TCP', { timeout: 60_000 }, () => {
     slave.link.take()
     await slave.clock.advance(100)
     assert.equal(slave.link.take().length, 0, 'flood still running after the answer')
+  })
+})
+
+/** Duration scale of the multi-connection AS-07 tests: a 600 ms flood instead of 60 s. */
+const SHORT_FLOOD_SCALE = 0.01
+
+/** One scenario engine shared by several TCP connections, as the CLI runs it, on a virtual clock. */
+class SharedEngine {
+  readonly clock = new FakeClock()
+  readonly events: Array<Record<string, unknown>> = []
+  private readonly running: RunningSlave[] = []
+  private readonly engine: ScenarioEngine
+
+  constructor(scenario: string) {
+    this.engine = createScenario({
+      scenario,
+      transport: 'tcp',
+      log: this.log,
+      clock: this.timers(),
+      durationScale: SHORT_FLOOD_SCALE,
+    })
+  }
+
+  private readonly log = (event: Record<string, unknown>): void => {
+    this.events.push(event)
+  }
+
+  private timers() {
+    return { nowUs: this.clock.nowUs, setTimeout: this.clock.setTimeout, clearTimeout: this.clock.clearTimeout }
+  }
+
+  /** Opens a new connection on the shared engine. */
+  open(): { link: MemoryLink; close: () => void } {
+    const link = new MemoryLink(this.clock)
+    const slave = runSlave({
+      scenario: 'AS-07',
+      transport: 'tcp',
+      stream: link.stream,
+      engine: this.engine,
+      log: this.log,
+      clock: this.timers(),
+      durationScale: SHORT_FLOOD_SCALE,
+    })
+    this.running.push(slave)
+    return { link, close: () => slave.stop() }
+  }
+
+  stop(): void {
+    this.running.forEach((slave) => slave.stop())
+    this.engine.stop()
+  }
+}
+
+const isFlood = (bytes: Buffer): boolean => bytes.length > 0 && bytes.every((byte) => byte === 0xff)
+
+describe('AS-07 over TCP with reconnections', () => {
+  let shared: SharedEngine | null = null
+
+  function engine(): SharedEngine {
+    shared = new SharedEngine('AS-07')
+    return shared
+  }
+
+  afterEach(() => {
+    shared?.stop()
+    shared = null
+  })
+
+  test('floods the connection the board opens after closing the first one', async () => {
+    const run = engine()
+    const first = run.open()
+    first.link.stream.push(tcpRead(1, GROUPS.g1))
+    await run.clock.advance(5)
+    first.close()
+    const second = run.open()
+
+    second.link.stream.push(tcpRead(2, GROUPS.g1))
+    await run.clock.advance(100)
+
+    assert.ok(isFlood(second.link.all()), `second connection got ${second.link.all().length} bytes`)
+  })
+
+  test('floods a connection attached during the window before it sends anything', async () => {
+    const run = engine()
+    const first = run.open()
+    first.link.stream.push(tcpRead(1, GROUPS.g1))
+    await run.clock.advance(5)
+
+    const idle = run.open()
+    await run.clock.advance(100)
+
+    assert.ok(isFlood(idle.link.all()), `idle connection got ${idle.link.all().length} bytes`)
+  })
+
+  test('still logs a request made during the window as withheld', async () => {
+    const run = engine()
+    const first = run.open()
+    first.link.stream.push(tcpRead(1, GROUPS.g1))
+    await run.clock.advance(5)
+    const second = run.open()
+
+    second.link.stream.push(tcpRead(2, GROUPS.g1))
+    await run.clock.advance(5)
+
+    assert.deepEqual(
+      run.events.filter((event) => event.event === 'withheld').map((event) => event.tid),
+      [2],
+    )
+  })
+
+  test('stops the flood on every connection when the window ends', async () => {
+    const run = engine()
+    const first = run.open()
+    first.link.stream.push(tcpRead(1, GROUPS.g1))
+    await run.clock.advance(5)
+    first.close()
+    const second = run.open()
+    const idle = run.open()
+    second.link.stream.push(tcpRead(2, GROUPS.g1))
+    await run.clock.advance(FLOOD_MS * SHORT_FLOOD_SCALE + 50)
+    second.link.take()
+    idle.link.take()
+
+    await run.clock.advance(100)
+
+    assert.deepEqual(
+      { second: second.link.take().length, idle: idle.link.take().length },
+      { second: 0, idle: 0 },
+      'the flood still runs after the window',
+    )
+  })
+
+  test('answers the next G1 request on the second connection with 4321, 8765 after the window', async () => {
+    const run = engine()
+    const first = run.open()
+    first.link.stream.push(tcpRead(1, GROUPS.g1))
+    await run.clock.advance(5)
+    first.close()
+    const second = run.open()
+    second.link.stream.push(tcpRead(2, GROUPS.g1))
+    await run.clock.advance(FLOOD_MS * SHORT_FLOOD_SCALE + 50)
+
+    const answer = await second.link.exchange(tcpRead(3, GROUPS.g1))
+
+    assert.equal(hex(answer), hex(tcpRegistersAnswer(3, [4321, 8765])))
   })
 })

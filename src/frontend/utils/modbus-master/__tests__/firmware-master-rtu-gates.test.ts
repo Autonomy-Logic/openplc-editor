@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -69,6 +69,44 @@ function rtuConfig(): string {
     profile: PROFILE,
     board: { serialPorts: ESP32.serialPorts, defaultSerial: ESP32.defaultSerial },
     rs485Pins: { Serial1: '4' },
+  })
+  if (!generated.ok) throw new Error(`the fixture was refused: ${JSON.stringify(generated.issues)}`)
+  return generated.header
+}
+
+/** The `modbus_master_config.h` for one RTU device on `Serial1` whose bus has RS-485 enable pin 22. */
+function rtuConfigWithPin22(): string {
+  const generated = generateModbusMasterHeader({
+    devices: [RTU_SLAVE],
+    profile: PROFILE,
+    board: { serialPorts: ESP32.serialPorts, defaultSerial: ESP32.defaultSerial },
+    rs485Pins: { Serial1: '22' },
+  })
+  if (!generated.ok) throw new Error(`the fixture was refused: ${JSON.stringify(generated.issues)}`)
+  return generated.header
+}
+
+/** The `modbus_master_config.h` for one TCP device and no RTU bus. */
+function tcpOnlyConfig(): string {
+  const generated = generateModbusMasterHeader({
+    devices: [
+      {
+        name: 'Meter',
+        protocol: 'modbus-tcp',
+        modbusTcpConfig: {
+          transport: 'tcp',
+          host: '192.168.1.50',
+          port: 502,
+          reconnect: true,
+          slaveId: 1,
+          timeout: 500,
+          ioGroups: [GROUP],
+        },
+      },
+    ],
+    profile: PROFILE,
+    board: { serialPorts: ESP32.serialPorts, defaultSerial: ESP32.defaultSerial },
+    rs485Pins: { Serial1: '22' },
   })
   if (!generated.ok) throw new Error(`the fixture was refused: ${JSON.stringify(generated.issues)}`)
   return generated.header
@@ -233,5 +271,40 @@ describeOnHost('modbus_rs485 keeps the CONTROLLINO RS-485 branches of the server
 
   it('any other board keeps only the generic enable pin path', () => {
     expect(named(helper(['BOARD_ESP32']), [...CHIP_CALLS, ...MICRO_PINS])).toEqual([])
+  })
+})
+
+describeOnHost("Baremetal.ino keeps the master's RS-485 enable pins out of the HAL pin masks (P08-D5)", () => {
+  const MASKS = ['pinMask_DIN', 'pinMask_AIN', 'pinMask_DOUT', 'pinMask_AOUT']
+
+  /** The part of `setup()` that runs after `hardwareInit()`, for `masterConfig`. */
+  const afterHardwareInit = (masterConfig: string): string => {
+    const setup =
+      functionBody(
+        preprocess(including('Baremetal.ino'), { defines: ['BOARD_ESP32', 'DEBUGGER_ENABLED'], masterConfig }),
+        'setup',
+      ) ?? ''
+    const init = callsOf(setup, 'hardwareInit')
+    if (init.length === 0) throw new Error('setup() does not call hardwareInit()')
+    return setup.slice(Math.max(...init))
+  }
+
+  it('reads every bus RS-485 pin from MB_MASTER_BUSES after hardwareInit()', () => {
+    const tail = afterHardwareInit(rtuConfigWithPin22())
+    expect(named(tail, ['MB_MASTER_BUSES', 'rs485_pin'])).toEqual(['MB_MASTER_BUSES', 'rs485_pin'])
+  })
+
+  it.each(MASKS)('sets to 255 the %s elements equal to a bus RS-485 pin after hardwareInit()', (mask) => {
+    const tail = afterHardwareInit(rtuConfigWithPin22())
+    expect(tail).toMatch(new RegExp(`\\b${mask}\\s*\\[[^\\]]*\\]\\s*=\\s*255\\b`))
+  })
+
+  it('names no MB_MASTER_BUSES in setup() with the skeleton stub', () => {
+    const stub = readFileSync(join(ARDUINO_DIR, 'modbus_master_config.h'), 'utf-8')
+    expect(named(afterHardwareInit(stub), ['MB_MASTER_BUSES'])).toEqual([])
+  })
+
+  it('names no MB_MASTER_BUSES in setup() for a TCP-only master', () => {
+    expect(named(afterHardwareInit(tcpOnlyConfig()), ['MB_MASTER_BUSES'])).toEqual([])
   })
 })

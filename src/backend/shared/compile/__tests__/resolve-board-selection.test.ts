@@ -234,3 +234,65 @@ describe('resolveBoardSelection', () => {
     }
   })
 })
+
+describe('resolveBoardSelection with an unreadable Serial screen', () => {
+  const pkg: InstalledPackage = {
+    packageId: 'com.openplc.arduino',
+    version: '0.1.0',
+    installedAt: '2026-01-01T00:00:00.000Z',
+    path: '/fake/packages/com.openplc.arduino',
+    devices: ['arduino-mega'],
+  }
+  const manifest: PackageManifest = {
+    formatVersion: '1.0',
+    package: {
+      id: 'com.openplc.arduino',
+      name: 'Arduino',
+      version: '0.1.0',
+      vendor: { name: 'Arduino', logo: 'l.png' },
+      description: 'd',
+    },
+    devices: [
+      {
+        id: 'arduino-mega',
+        name: 'Arduino Mega',
+        preview: 'p.png',
+        target: { type: 'arduino-cli', core: 'arduino:avr', platform: 'arduino:avr:mega' },
+        hal: { type: 'arduino-hal', source: 'hal/arduino/mega.cpp' },
+        serialPorts: ['Serial', 'Serial1'],
+        defaultSerial: 'Serial',
+        screens: { Serial: 'screens/serial.json' },
+      },
+    ],
+  }
+  const packageManager: PackageManagerPort = {
+    listInstalled: () => [pkg],
+    getInstalledPackageManifest: (id) => (id === pkg.packageId ? manifest : null),
+  }
+  const missingFile = (_pkg: InstalledPackage, relPath: string): string => {
+    throw new Error(`ENOENT: no such file or directory, open '${relPath}'`)
+  }
+
+  it('refuses the board instead of building it as a legacy board', () => {
+    const resolver = makeResolver({}, { packageManager, readPackageFile: missingFile })
+    const result = resolveBoardSelection(resolver, 'Arduino Mega')
+    expect(result.ok).toBe(false)
+  })
+
+  it("reports the resolver's message, naming the package and the screen", () => {
+    const resolver = makeResolver({}, { packageManager, readPackageFile: missingFile })
+    let thrown = ''
+    try {
+      resolver.resolve('Arduino Mega')
+    } catch (error) {
+      thrown = error instanceof Error ? error.message : String(error)
+    }
+
+    const result = resolveBoardSelection(resolver, 'Arduino Mega')
+
+    expect(thrown).toContain('com.openplc.arduino')
+    expect(thrown).toContain('screens/serial.json')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain(thrown)
+  })
+})

@@ -72,4 +72,20 @@ describe('vpp_config.h RS-485 pins', () => {
 
     expect(pinLines(out)).toEqual(['#define VPP_SERIAL_RS485_EN_PINS_SERIAL2 "23"'])
   })
+
+  it("emits a 4.3.x project's padded pin trimmed", () => {
+    const out = generateVppConfigContent({
+      vendorScreenData: { serial: { enable_rs485_en_pin: true, rs485_en_pin: '22 ' } },
+    })
+
+    expect(pinLines(out)).toEqual(['#define VPP_SERIAL_ENABLE_RS485_EN_PIN 1', '#define VPP_SERIAL_RS485_EN_PIN "22"'])
+  })
+
+  it('emits no define for a per-UART pin with a trailing space', () => {
+    const out = generateVppConfigContent({
+      vendorScreenData: { serial: { rs485_en_pins: { Serial1: '22 ', Serial2: '23' } } },
+    })
+
+    expect(pinLines(out)).toEqual(['#define VPP_SERIAL_RS485_EN_PINS_SERIAL2 "23"'])
+  })
 })

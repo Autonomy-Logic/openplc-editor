@@ -303,3 +303,141 @@ describeOnHost('Baremetal.ino with the skeleton stub', () => {
     expect(callsOf(setup, 'mapEmptyBuffers').length).toBe(1)
   })
 })
+
+/** The lines of preprocessed `output` that come from `fileName` itself, by the preprocessor's line markers. */
+function ownCode(output: string, fileName: string): string {
+  const kept: string[] = []
+  let current = ''
+  for (const line of output.split('\n')) {
+    const marker = /^# \d+ "([^"]*)"/.exec(line)
+    if (marker !== null) {
+      current = marker[1]
+      continue
+    }
+    if (current === fileName || current.endsWith(`/${fileName}`)) kept.push(line)
+  }
+  return kept.join('\n')
+}
+
+const C_KEYWORDS = new Set(['if', 'while', 'for', 'switch', 'catch', 'return', 'sizeof', 'decltype', 'defined'])
+
+/** Every function defined in `code`, by name (`Class::name` kept whole), with its body without the braces. */
+function functionsOf(code: string): Array<{ name: string; body: string }> {
+  const found: Array<{ name: string; body: string }> = []
+  const head = /\b([A-Za-z_][\w:]*)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*(?:const\s*)?(?:->[^{;]*)?\{/g
+  for (let match = head.exec(code); match !== null; match = head.exec(code)) {
+    if (C_KEYWORDS.has(match[1])) continue
+    let depth = 1
+    let index = match.index + match[0].length
+    const bodyStart = index
+    while (index < code.length && depth > 0) {
+      if (code[index] === '{') depth += 1
+      if (code[index] === '}') depth -= 1
+      index += 1
+    }
+    found.push({ name: match[1], body: code.slice(bodyStart, index - 1) })
+    head.lastIndex = index
+  }
+  return found
+}
+
+/** `baremetal_net.cpp` preprocessed for `defines` with one TCP device, its own lines only. */
+const netUnit = (defines: string[]): string =>
+  ownCode(
+    preprocess({ file: join(BAREMETAL_DIR, 'baremetal_net.cpp') }, { defines, masterConfig: TCP_CONFIG() }, false),
+    'baremetal_net.cpp',
+  )
+
+/** A W5x00 shield on an AVR board: the SPI Ethernet branch and the library client. */
+const W5X00 = ['MBTCP_ETHERNET']
+
+/** A connection timeout set to zero, the form that makes Ethernet 2.0.2's `stop()` skip its graceful wait. */
+const ZERO_TIMEOUT = /\bsetConnectionTimeout\s*\(\s*(?:\(\s*\w+\s*\)\s*)?0[uU]?[lL]?\s*\)/
+
+describeOnHost('baremetal_net.cpp on a NINA board sends without waiting for the module (P07-1)', () => {
+  const NINA = ['BOARD_WIFININA', 'MBTCP_WIFI']
+
+  it('calls no checkDataSent(), the module query that polls with delay(100)', () => {
+    expect(netUnit(NINA)).not.toMatch(/\bcheckDataSent\s*\(/)
+  })
+
+  it('calls no delay()', () => {
+    expect(netUnit(NINA)).not.toMatch(/\bdelay\s*\(/)
+  })
+
+  it("never turns the library's send retry on", () => {
+    expect(netUnit(NINA)).not.toMatch(/\bsetRetry\s*\(\s*true\s*\)/)
+  })
+
+  it("handles the sockets through the library's module driver", () => {
+    expect(netUnit(NINA)).toMatch(/\bServerDrv\b/)
+  })
+
+  it('still takes WiFiNINA.h', () => {
+    const dump = preprocess(
+      { file: join(BAREMETAL_DIR, 'baremetal_net.cpp') },
+      { defines: NINA, masterConfig: TCP_CONFIG() },
+      true,
+    )
+    expect(wifiHeaders(dump)).toEqual({ wifiNina: true, wifi: false })
+  })
+})
+
+describeOnHost('baremetal_net.cpp on a W5x00 board closes without waiting (P07-2)', () => {
+  it('has a close form that does not wait: a zero connection timeout or an abort', () => {
+    const code = netUnit(W5X00)
+    expect(ZERO_TIMEOUT.test(code) || /\babort\s*\(/.test(code)).toBe(true)
+  })
+
+  it('never stops the master connection in Connection::close() with its connect timeout still set', () => {
+    const close = functionsOf(netUnit(W5X00)).find((fn) => fn.name === 'Connection::close')
+    if (close === undefined) throw new Error('Connection::close() is not defined for the W5x00 build')
+    const stops = [...close.body.matchAll(/\.\s*stop\s*\(/g)].map((match) => match.index ?? 0)
+    const zeroed = close.body.search(ZERO_TIMEOUT)
+    expect(stops.filter((stop) => zeroed < 0 || zeroed > stop)).toEqual([])
+  })
+})
+
+describeOnHost('modbus_master_tcp.cpp starts no connect in a pass that closed a connection (P07-2)', () => {
+  /** Bare identifiers assigned in `body`, declarations left out. */
+  const assignedIn = (body: string): string[] => {
+    const names: string[] = []
+    for (const match of body.matchAll(/(^|[;{}()\s])([A-Za-z_]\w*)\s*(?:=(?!=)|\+=|\|=|\+\+)/g)) {
+      const before = body.slice(0, match.index + match[1].length)
+      const statement = before.slice(
+        Math.max(before.lastIndexOf(';'), before.lastIndexOf('{'), before.lastIndexOf('}')) + 1,
+      )
+      const prefix = statement.trim()
+      if (prefix === '' || prefix.endsWith(')') || prefix === 'else') names.push(match[2])
+    }
+    return names
+  }
+
+  const unit = (): Array<{ name: string; body: string }> =>
+    functionsOf(
+      ownCode(
+        preprocess(
+          { file: join(BAREMETAL_DIR, 'modbus_master_tcp.cpp') },
+          { defines: W5X00, masterConfig: TCP_CONFIG() },
+          false,
+        ),
+        'modbus_master_tcp.cpp',
+      ),
+    )
+
+  it('marks the pass on every close path, and the connect path reads that mark', () => {
+    const functions = unit()
+    const service = functions.find((fn) => fn.name === 'mb_master_tcp_service')
+    if (service === undefined) throw new Error('mb_master_tcp_service() is not defined')
+    const closePaths = functions.filter(
+      (fn) => fn.name !== 'mb_master_tcp_start' && fn.name !== 'mb_master_tcp_stop' && /\.\s*close\s*\(/.test(fn.body),
+    )
+    const readByService = (name: string): boolean =>
+      [...service.body.matchAll(new RegExp(`\\b${name}\\b(?!\\s*(?:=(?!=)|\\+=|\\|=|\\+\\+))`, 'g'))].length > 0
+
+    expect(closePaths.length).toBeGreaterThan(0)
+    expect(
+      closePaths.filter((fn) => !assignedIn(fn.body).some((name) => readByService(name))).map((fn) => fn.name),
+    ).toEqual([])
+  })
+})

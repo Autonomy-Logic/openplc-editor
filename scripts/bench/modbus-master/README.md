@@ -41,8 +41,6 @@ reallocates their addresses; read them by name in the debugger. In the scenarios
   packages, which declare `minEditorVersion` 4.4.0, and the package manager refuses a package that needs a
   newer editor. Until the signed packages land, run the checks that need them with a local package build that
   accepts the running editor, never committed; they stay pending with the signed packages.
-- TC10 RTU rows with a wrong slave id, a wrong FC or a bad CRC: pending. The hostile slave has no RTU scenario
-  for them (AS-02 runs over TCP only).
 
 ## Common setup
 
@@ -155,6 +153,8 @@ the `/compile-arduino` request of both builds carries `src/modbus_master_config.
 | AS-09 W5500 rows | placeholder, added with the board | W5500 + S7 (pending) | hardware |
 | AS-13 | `as13-w5100-reconnect-on`, `as13-w5100-reconnect-off` | Uno + W5100 | hardware |
 | TC17, AC07 | `tc17-nano-33-iot-s7`, `tc17-nano-rp2040-connect-s7-opcua`, `tc17-mkr-wifi-s7` | as named | hardware |
+| NINA send metering (AS-10, TC17 widened) | `as06-as07-as10-slow-slave` on a NINA board, the `tc17-*` projects | Nano 33 IoT, Mkr WiFi, Nano RP2040 Connect | pending: NINA boards, analyzer |
+| Closes that do not wait (TC06, NFR01) | added with the board: two endpoints, Reconnect checked, timeout 500 ms | W5500, then a TC17 NINA board | pending: W5500, NINA, analyzer |
 
 The ESP32 projects name `ESP32 Generic`, the bench ESP32's package entry.
 
@@ -280,6 +280,23 @@ maps/g1-1234-5678.json`. Expect `g1_0`, `g1_1` = 1234, 5678, an S7 read of DB1.D
 RP2040 Connect an OPC-UA client connecting to `opc.tcp://192.168.1.20:4840/openplc/opcua` and reading the
 server status.
 
+### NINA send metering: AS-10 on a NINA board, and TC17 widened
+
+Board: Nano 33 IoT. Build `as06-as07-as10-slow-slave` for it, with `%QX0.0` on its default pin 7, and run the
+AS-10 row of "AS-06, AS-07, AS-10" against it. Expect the worst scan within the no-attack baseline + 2 ms (a send
+never waits for the module: without the metering, `WiFiClient::write()` polls the module up to 25 times 100 ms,
+about 2.5 s per scan). Then run TC17 on the Nano 33 IoT (S7), the Mkr WiFi (S7) and the Nano RP2040 Connect (S7
+and OPC-UA): every server still answers. Status: pending, NINA boards and the analyzer.
+
+### Closes that do not wait (TC06, NFR01)
+
+Board: an AVR with a W5500 shield; the project, added with the board, has two endpoints (`A` and `B`), Reconnect
+checked, timeout 500 ms. Slave A closes the connection and drops the board's final FIN/ACK exchange while host B
+drops every SYN. Expect the worst scan within cycle time + 500 ms (a close never waits; at most one connect, the
+endpoint timeout, per pass, and no connect in a pass that closed a connection). Then press Stop with every
+endpoint hostile: the debugger answers within one cycle after the Stop. Repeat the close on a TC17 NINA board.
+Status: pending, W5500, NINA board and the analyzer.
+
 ## RTU master
 
 The RTU master polls Modbus RTU devices on the board's secondary UARTs through the same master core, one
@@ -369,7 +386,9 @@ succeeds and runs in the Simulator, shows the Simulator's "remote devices are ig
 | TC08, AC02 every FC; UC08 enable pin | `tc08-rtu-every-fc` | Mega + USB-TTL | hardware, analyzer for the pin |
 | BR10 bus timeout, BR12 unanswered slave | `br10-br12-rtu-bus-timeout` | Mega + USB-TTL | hardware |
 | TC10 excess bytes, AS-11 rows 1-2 | `tc10-as11-rtu-oversized` | Mega + USB-TTL | hardware |
-| TC10 wrong slave id, wrong FC, bad CRC | `tc10-as11-rtu-oversized` | Mega + USB-TTL | pending |
+| TC10 wrong slave id, wrong FC, bad CRC | `tc10-as11-rtu-oversized` | Mega + USB-TTL | hardware |
+| RS-485 enable pin out of the HAL pin masks | added with the run: `tc08-rtu-every-fc` with pin 22 also mapped as a digital output the program toggles | Mega + USB-TTL | pending: Mega, analyzer |
+| Echoing transceiver | `tc08-rtu-every-fc`, `tc10-as11-rtu-oversized` | Mega + RS-485 transceivers | pending: Mega, transceivers |
 | AS-12 | `as12-rtu-late-response` | Mega + USB-TTL | hardware |
 | AS-07 RTU rows | `as07-rtu-19200`, `as07-rtu-115200` | Mega + USB-TTL | hardware, analyzer |
 | AS-04 row 3 | `as04-row3-mega-w5500-rtu-server` | Mega + W5500 + two USB-TTL | hardware |
@@ -422,8 +441,28 @@ board so the master starts against the running slave.
   501..510 at the next G1 request. Row 2: the next G1 request starts only after the 300 bytes end.
 - The slave answers the first G1 request with the hostile frame, so the scenario's 101..110 baseline is not
   played; the discriminating oracles are the absence of 201.., the sentinel and the recovery.
-- TC10 wrong slave id, wrong FC and bad CRC: pending (see "Open prerequisites"). Their oracles are the same: one
-  failed poll (`g1_*` = 0, never the malformed values), the sentinel kept, the next poll applied.
+- TC10 wrong slave id, wrong FC and bad CRC: `--scenario TC10 --row <n> --serial <adapter> --baud 19200 --map
+  scripts/bench/modbus-master/maps/g2-23130.json --log tc10-row<n>.jsonl`, rows 1 (slave id 2), 2 (FC 0x04) and 3
+  (both CRC bytes inverted), each carrying byte count 20 and the values 201..210. Their oracles are the AS-11
+  rows': one failed poll (`g1_*` = 0, never the malformed values), the sentinel kept, then `g1_*` = 501..510 at the
+  next G1 request.
+
+### RS-485 enable pin out of the HAL pin masks
+
+Board: Mega. Build `tc08-rtu-every-fc` (RS-485 pin 22 on `Serial1`) with pin 22 also mapped as a digital output
+that the program toggles every scan; this variant is built at the run and not committed. Expect, on the analyzer,
+pin 22 to change only around the master's requests (high from before the first start bit to after the last stop
+bit), never at the program's toggle rate. Without the exclusion the HAL drives pin 22 every scan. A build with
+no remote devices keeps its image (compile check (b)). Status: pending, Mega and the analyzer.
+
+### Echoing transceiver
+
+Board: Mega with RS-485 transceivers on `Serial1`. Tie the master transceiver's RE low so its receiver stays on
+while it transmits, and run TC08 (every FC): the values match. Then run TC08 and AS-11 through the non-echoing
+setup of "RTU setup": unchanged. The master discards what it receives from the start of a request to 3.5
+characters after its estimated end, so an echo is never read as the response; a master pass that comes later
+than that window cannot tell an echo from a response (the RS-485 enable limit). Status: pending, Mega and the
+transceivers.
 
 ### AS-12: a late RTU response is rejected by its shape
 

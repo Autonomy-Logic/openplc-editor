@@ -1,8 +1,19 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, test } from 'node:test'
 
+import { crc16Modbus } from '../frames'
 import { settle } from './helpers/fake-clock'
-import { GROUPS, hasValidCrc, hex, range, readPdu, rtuFrame, rtuRead, rtuRegistersAnswer } from './helpers/modbus'
+import {
+  GROUPS,
+  hasValidCrc,
+  hex,
+  range,
+  readPdu,
+  rtuFrame,
+  rtuRead,
+  rtuRegistersAnswer,
+  words,
+} from './helpers/modbus'
 import { OpenSlave, openSlave } from './helpers/slave'
 
 let current: OpenSlave | null = null
@@ -111,5 +122,66 @@ describe('AS-12 over RTU', () => {
     await slave.link.exchange(rtuRead(GROUPS.g1), 5_000)
     await slave.link.exchange(rtuRead(GROUPS.g2Pair))
     assert.equal(hex(await slave.link.exchange(rtuRead(GROUPS.g2Pair))), hex(rtuRegistersAnswer([3333, 4444])))
+  })
+})
+
+describe('TC10 over RTU', () => {
+  const MALFORMED_DATA = Buffer.concat([Buffer.from([20]), words(range(201, 210))])
+
+  /** Slave 1, FC 3, byte count 20, 201..210, with both CRC bytes inverted. */
+  function badCrcFrame(): Buffer {
+    const body = Buffer.concat([Buffer.from([0x01, 0x03]), MALFORMED_DATA])
+    const inverted = crc16Modbus(body) ^ 0xffff
+    return Buffer.concat([body, Buffer.from([inverted & 0xff, inverted >> 8])])
+  }
+
+  const rows: Array<{ row: number; rule: string; expected: () => Buffer }> = [
+    {
+      row: 1,
+      rule: 'slave id 2, FC 3, byte count 20, 20 data bytes, valid CRC',
+      expected: () => rtuFrame(Buffer.concat([Buffer.from([0x03]), MALFORMED_DATA]), 2),
+    },
+    {
+      row: 2,
+      rule: 'slave id 1, FC 0x04, byte count 20, 20 data bytes, valid CRC',
+      expected: () => rtuFrame(Buffer.concat([Buffer.from([0x04]), MALFORMED_DATA]), 1),
+    },
+    {
+      row: 3,
+      rule: 'slave id 1, FC 3, byte count 20, 20 data bytes, both CRC bytes inverted',
+      expected: badCrcFrame,
+    },
+  ]
+
+  for (const { row, rule, expected } of rows) {
+    test(`row ${row} answers the first G1 request with ${rule}`, async () => {
+      const slave = start('TC10', row)
+      assert.equal(hex(await slave.link.exchange(rtuRead(GROUPS.g1))), hex(expected()))
+    })
+
+    test(`row ${row} then answers G1 with 501..510`, async () => {
+      const slave = start('TC10', row)
+      await slave.link.exchange(rtuRead(GROUPS.g1))
+      assert.equal(hex(await slave.link.exchange(rtuRead(GROUPS.g1))), hex(rtuRegistersAnswer(range(501, 510))))
+    })
+
+    test(`row ${row} answers G2 as the normal scenario does`, async () => {
+      const normal = start('normal')
+      const normalAnswer = await normal.link.exchange(rtuRead(GROUPS.g2))
+      normal.stop()
+      const slave = start('TC10', row)
+
+      assert.equal(hex(await slave.link.exchange(rtuRead(GROUPS.g2))), hex(normalAnswer))
+    })
+  }
+
+  test('row 3 inverts both bytes of a CRC the reference computes', async () => {
+    const slave = start('TC10', 3)
+    const answer = await slave.link.exchange(rtuRead(GROUPS.g1))
+    const restored = Buffer.from(answer)
+    restored[restored.length - 2] ^= 0xff
+    restored[restored.length - 1] ^= 0xff
+
+    assert.deepEqual({ sent: hasValidCrc(answer), restored: hasValidCrc(restored) }, { sent: false, restored: true })
   })
 })

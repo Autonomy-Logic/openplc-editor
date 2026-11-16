@@ -1,3 +1,4 @@
+import type { BoardInfo } from '../../../ports/types'
 import {
   ALL_ADDRESS_PRODUCERS_ACTIVE,
   ARDUINO_CLI_CAPABILITIES,
@@ -346,3 +347,63 @@ describe('the Modbus master capabilities', () => {
     expect(ALL_ADDRESS_PRODUCERS_ACTIVE.modbusRtuMaster).toBe(true)
   })
 })
+
+describe('modbusRtuMaster declared by a board', () => {
+  const vppPackage: BoardInfo['vpp'] = {
+    packageId: 'com.openplc.arduino',
+    vendor: 'OpenPLC',
+    deviceId: 'mega',
+    packagePath: '/packages/com.openplc.arduino',
+    screens: {},
+    moduleSystem: null,
+  }
+
+  it('is ignored on a VPP baremetal board, so the family preset stands', () => {
+    const board: BoardInfo = {
+      compiler: 'arduino-cli',
+      core: 'arduino:avr',
+      preview: '',
+      specs: {},
+      capabilities: { modbusTcpMaster: true, modbusRtuMaster: false },
+      vpp: vppPackage,
+    }
+    expect(resolveTargetCapabilities(board).modbusRtuMaster).toBe(true)
+  })
+
+  it('is ignored on a board that resolveBoardSelection marks as VPP', () => {
+    const capabilities = declaring({ modbusTcpMaster: true, modbusRtuMaster: false })
+    expect(resolveTargetCapabilities({ compiler: 'arduino-cli', vpp: true, capabilities }).modbusRtuMaster).toBe(true)
+  })
+
+  it('is ignored on a VPP Runtime v4 board', () => {
+    const capabilities = declaring({ modbusTcpMaster: true, modbusRtuMaster: false })
+    expect(resolveTargetCapabilities({ compiler: 'openplc-compiler', vpp: true, capabilities }).modbusRtuMaster).toBe(
+      true,
+    )
+  })
+
+  it('keeps the RTU master off on the built-in Runtime v3 entry, which is not a VPP board', () => {
+    expect(
+      resolveTargetCapabilities({
+        compiler: 'openplc-compiler',
+        capabilities: declaring({ modbusTcpMaster: false, modbusRtuMaster: false }),
+      }).modbusRtuMaster,
+    ).toBe(false)
+  })
+
+  it('keeps the RTU master on for the built-in Simulator entry', () => {
+    expect(
+      resolveTargetCapabilities({
+        compiler: 'simulator',
+        capabilities: declaring({ modbusTcpMaster: true, modbusRtuMaster: true }),
+      }).modbusRtuMaster,
+    ).toBe(true)
+  })
+})
+
+/** A capability block naming both Modbus masters, as a manifest or a hals.json entry writes it. */
+function declaring(
+  masters: Pick<TargetCapabilities, 'modbusTcpMaster' | 'modbusRtuMaster'>,
+): Partial<TargetCapabilities> {
+  return { ...masters }
+}

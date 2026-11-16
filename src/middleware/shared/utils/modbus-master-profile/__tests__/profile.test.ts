@@ -56,6 +56,13 @@ const MEGA_WITHOUT_TCP = baremetal({
   defaultSerial: 'Serial',
   vpp: vpp(BOARD_SCREENS),
 })
+/** A manifest that tries to turn the RTU master off, which only built-in entries may do. */
+const MEGA_DECLARING_NO_RTU_MASTER = baremetal({
+  serialPorts: ['Serial', 'Serial1', 'Serial2', 'Serial3'],
+  defaultSerial: 'Serial',
+  capabilities: { modbusTcpMaster: true, modbusRtuMaster: false },
+  vpp: vpp(BOARD_SCREENS),
+})
 /** Declares no `serialPorts` at all. */
 const LOGO = baremetal({ capabilities: { modbusTcpMaster: true }, vpp: vpp({ Network: {} }) })
 /** No `defaultSerial`: the debugger is on `Serial`. */
@@ -108,6 +115,10 @@ describe('resolveModbusMasterProfile on baremetal boards', () => {
 
   it('offers RTU only on the Mega with a package that has no TCP opt-in', () => {
     expect(profileOf(MEGA_WITHOUT_TCP).transports).toEqual(['rtu'])
+  })
+
+  it('offers RTU on a VPP Mega whose manifest declares modbusRtuMaster false', () => {
+    expect(profileOf(MEGA_DECLARING_NO_RTU_MASTER).transports).toContain('rtu')
   })
 
   it('offers TCP only on a board that declares no serial ports', () => {

@@ -9,12 +9,17 @@
   `MB_MASTER_HOST_COMPILE=1` is set.
 - `firmware-master-sources.test.ts`: the master modules ship, name no network class (only `baremetal_net`
   does), never touch `mb_frame`, and no firmware source resolves a host name or carries a pending-work marker.
-  Read as text; runs everywhere.
+  No source keeps `BM_NET_SEND_UNMETERED` or calls `checkDataSent()`; `reached`, `put16` and `get16` are
+  `static inline` in one SPDX-headed Baremetal header that includes only `<stdint.h>` and that the three master
+  units include. Read as text; runs everywhere.
 - `firmware-master-gates.test.ts`: the build gates, through the host C preprocessor (`g++ -E`) with every
   Arduino and network library header replaced by an empty stand-in. `baremetal_net.h` opens for a TCP master
   and stays closed for an RTU-only master or the stub; a NINA board takes `WiFiNINA.h`; `Baremetal.ino` calls
   `mb_master_task()` from `scheduler()` and `loop()` before the forces, maps the empty buffers for a master-only
-  build, and calls nothing of the master with the stub. Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
+  build, and calls nothing of the master with the stub. On a NINA board `baremetal_net.cpp` calls no
+  `checkDataSent()`, `delay()` or `setRetry(true)` and names `ServerDrv`; on a W5x00 board `Connection::close()`
+  stops only after a zero connection timeout (or aborts); `modbus_master_tcp.cpp` marks the pass on every close
+  path and `mb_master_tcp_service()` reads that mark. Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
 - `firmware-master-rtu-sources.test.ts`: the RTU master and the RS-485 helper ship; the RTU master calls no
   `flush()`, `delayMicroseconds()` or `delay()`, never touches `mb_frame`, `mb_rx_*` or the frame-bound
   `calcCrc()`, and includes `modbus_crc.h`; the server and the master both include `modbus_rs485.h`, which
@@ -23,7 +28,9 @@
 - `firmware-master-rtu-gates.test.ts`: through `g++ -E` like the gates above, `Baremetal.ino` with an RTU-only
   master runs `mb_master_task()` from `scheduler()` and `loop()` before the forces and maps the empty buffers;
   `modbus_rs485` keeps the CONTROLLINO MAXI and MEGA calls on `Serial3`, the MICRO DE and RE pins on
-  `Serial2`, and neither on another board. Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
+  `Serial2`, and neither on another board; with an RTU master whose bus has an RS-485 pin, `setup()` sets to 255,
+  after `hardwareInit()`, the pin-mask elements equal to each `MB_MASTER_BUSES` pin, and names no
+  `MB_MASTER_BUSES` with the stub or a TCP-only master. Skipped unless `MB_MASTER_HOST_COMPILE=1` is set.
 
 Run the host checks locally from the repository root:
 

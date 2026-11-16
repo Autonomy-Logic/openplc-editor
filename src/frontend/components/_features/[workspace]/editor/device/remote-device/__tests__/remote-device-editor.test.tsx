@@ -123,6 +123,12 @@ const offeredBy = (testId: string): string[] => {
   return screen.getAllByRole('option').map((option) => (option.textContent ?? '').trim())
 }
 
+/** Picks a transport from the transport picker. */
+const chooseTransport = (label: string) => {
+  fireEvent.keyDown(interactive('remote-device-transport-select', 'button, [role="combobox"]'), { key: 'Enter' })
+  fireEvent.click(screen.getByRole('option', { name: label }))
+}
+
 const reconnectBox = () => interactive('remote-device-reconnect-checkbox', 'input[type="checkbox"], [role="checkbox"]')
 
 const isChecked = (control: HTMLElement) =>
@@ -294,6 +300,53 @@ describe('Remote Device screen help texts (TC21)', () => {
 
   it('gives no such warning on Runtime v4', () => {
     openDevice('OpenPLC Runtime v4', RUNTIME_V4, tcpDevice())
+    expect(screen.queryByTestId('remote-device-timeout-help')).toBeNull()
+  })
+
+  it('gives no Timeout warning to an RTU device on baremetal (FR32)', () => {
+    openDevice('Arduino Mega', MEGA, rtuDevice('Serial1'))
+    expect(screen.queryByTestId('remote-device-timeout-help')).toBeNull()
+  })
+
+  it('describes the Timeout of an RTU device on baremetal with nothing', () => {
+    openDevice('Arduino Mega', MEGA, rtuDevice('Serial1'))
+    expect(interactive('remote-device-timeout-input', 'input').hasAttribute('aria-describedby')).toBe(false)
+  })
+
+  it('ties the Timeout warning to the Timeout of a TCP device on baremetal', () => {
+    openDevice('Arduino Uno', UNO, tcpDevice())
+    const help = screen.getByTestId('remote-device-timeout-help')
+
+    expect(help.id).not.toBe('')
+    expect(interactive('remote-device-timeout-input', 'input').getAttribute('aria-describedby')?.split(' ')).toContain(
+      help.id,
+    )
+  })
+
+  it('drops the Timeout warning when a baremetal TCP device switches to RTU', () => {
+    openDevice('Arduino Mega', MEGA, tcpDevice())
+
+    chooseTransport('RTU (Serial)')
+
+    expect(screen.queryByTestId('remote-device-timeout-help')).toBeNull()
+    expect(interactive('remote-device-timeout-input', 'input').hasAttribute('aria-describedby')).toBe(false)
+  })
+
+  it('restores the Timeout warning when that device switches back to TCP', () => {
+    openDevice('Arduino Mega', MEGA, tcpDevice())
+    chooseTransport('RTU (Serial)')
+
+    chooseTransport('TCP/IP')
+
+    const help = screen.getByTestId('remote-device-timeout-help')
+    expect(help.textContent).toBe(TIMEOUT_HELP)
+    expect(interactive('remote-device-timeout-input', 'input').getAttribute('aria-describedby')?.split(' ')).toContain(
+      help.id,
+    )
+  })
+
+  it('gives no Timeout warning to an RTU device on Runtime v4', () => {
+    openDevice('OpenPLC Runtime v4', RUNTIME_V4, rtuDevice('/dev/ttyUSB0'))
     expect(screen.queryByTestId('remote-device-timeout-help')).toBeNull()
   })
 })

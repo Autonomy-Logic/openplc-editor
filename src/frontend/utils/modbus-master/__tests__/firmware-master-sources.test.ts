@@ -64,6 +64,8 @@ const NETWORK_NAMES = [
   'fcntl',
   'set_blocking',
   'setConnectionTimeout',
+  'ServerDrv',
+  'WiFiSocketBuffer',
 ]
 
 const NETWORK_HEADER = /#\s*include\s*<\s*(?:WiFi|Ethernet|ESP8266WiFi|NetworkClient|Network\.h|SPI\.h|lwip\/|mbed)/
@@ -115,5 +117,88 @@ describe('NFR03: no DNS anywhere in the firmware', () => {
 describe('no pending-work markers in the firmware sources', () => {
   it.each(FIRMWARE_SOURCES)('%s/%s carries no TODO, FIXME, XXX or HACK', (folder, name) => {
     expect(readSource(folder, name)).not.toMatch(MARKERS)
+  })
+})
+
+describe('P07-1: WiFiNINA sends are metered', () => {
+  it('leaves BM_NET_SEND_UNMETERED in no firmware source', () => {
+    const naming = FIRMWARE_SOURCES.filter(([folder, name]) =>
+      readSource(folder, name).includes('BM_NET_SEND_UNMETERED'),
+    )
+    expect(naming.map(([folder, name]) => `${folder}/${name}`)).toEqual([])
+  })
+
+  it("calls the module's waiting checkDataSent() from no Baremetal source", () => {
+    const calling = FIRMWARE_SOURCES.filter(
+      ([folder, name]) => folder === 'Baremetal' && /\bcheckDataSent\s*\(/.test(codeOf(readSource(folder, name))),
+    )
+    expect(calling.map(([, name]) => name)).toEqual([])
+  })
+})
+
+const MASTER_UNITS = ['modbus_master.cpp', 'modbus_master_tcp.cpp', 'modbus_master_rtu.cpp']
+
+const MASTER_HELPERS = ['reached', 'put16', 'get16']
+
+const BAREMETAL_SOURCES = readdirSync(BAREMETAL_DIR).filter((name) => SOURCE_FILE.test(name))
+
+/** A definition of `helper` at the start of a line: one or more type words, the name, its parameters, a brace. */
+const definitionOf = (helper: string): RegExp =>
+  new RegExp(`^[ \\t]*(?:[A-Za-z_][\\w:]*[ \\t*&]+)+${helper}\\s*\\([^()]*\\)\\s*\\{`, 'm')
+
+/** The Baremetal files that define `helper`. */
+const definersOf = (helper: string): string[] =>
+  BAREMETAL_SOURCES.filter((name) => definitionOf(helper).test(codeOf(readBaremetal(name))))
+
+/** The one Baremetal header that defines every master helper; throws when there is none. */
+function masterHelperHeader(): string {
+  const definers = MASTER_HELPERS.map(definersOf)
+  const header = definers[0][0]
+  if (
+    header === undefined ||
+    !header.endsWith('.h') ||
+    !definers.every((files) => files.length === 1 && files[0] === header)
+  ) {
+    throw new Error(`no single Baremetal header defines ${MASTER_HELPERS.join(', ')}: ${JSON.stringify(definers)}`)
+  }
+  return header
+}
+
+/** Comments blanked but string literals kept, so quoted include names survive. */
+const codeOfIncludes = (source: string): string => source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/.*$/gm, '')
+
+/** The targets of every `#include` in `source`, as written, e.g. `<stdint.h>` or `"modbus_master.h"`. */
+const includesOf = (source: string): string[] =>
+  [...codeOfIncludes(source).matchAll(/^[ \t]*#\s*include\s*([<"][^>"]+[>"])/gm)].map((match) => match[1])
+
+describe('P07-4: the master helpers live in one internal header', () => {
+  it('defines reached, put16 and get16 in exactly one Baremetal file, a header', () => {
+    const definers = Object.fromEntries(MASTER_HELPERS.map((helper) => [helper, definersOf(helper)]))
+    const header = definers.reached[0] ?? '<none>'
+    expect({ header: header.endsWith('.h'), definers }).toEqual({
+      header: true,
+      definers: { reached: [header], put16: [header], get16: [header] },
+    })
+  })
+
+  it('defines each helper static inline', () => {
+    const code = codeOf(readBaremetal(masterHelperHeader()))
+    const notStaticInline = MASTER_HELPERS.filter((helper) => {
+      const line = definitionOf(helper).exec(code)?.[0] ?? ''
+      return !/\bstatic\b/.test(line) || !/\binline\b/.test(line)
+    })
+    expect(notStaticInline).toEqual([])
+  })
+
+  it('includes only <stdint.h> in the helper header', () => {
+    expect(includesOf(readBaremetal(masterHelperHeader()))).toEqual(['<stdint.h>'])
+  })
+
+  it('opens the helper header with the SPDX line of the other firmware files', () => {
+    expect(readBaremetal(masterHelperHeader()).split('\n')[0]).toBe('// SPDX-License-Identifier: GPL-3.0-only')
+  })
+
+  it.each(MASTER_UNITS)('%s includes the helper header', (name) => {
+    expect(includesOf(readBaremetal(name))).toContain(`"${masterHelperHeader()}"`)
   })
 })

@@ -33,7 +33,7 @@
     "dev": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && concurrently -k \"npm run start:renderer\" \"cross-env PORT=1313 electronmon .\"",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "test": "jest --collectCoverage --maxWorkers=2",
-    "test:bench": "cross-env TS_NODE_TRANSPILE_ONLY=true node --require ts-node/register --test scripts/bench/modbus-hostile-slave/__tests__/*.test.ts",
+    "test:bench": "cross-env TS_NODE_TRANSPILE_ONLY=true node --require ts-node/register --test scripts/bench/modbus-hostile-slave/__tests__/*.test.ts scripts/bench/modbus-master/__tests__/*.test.ts",
     "test:watch": "jest --watch --no-coverage",
     "test:e2e": "cross-env OPENPLC_E2E_DEBUG_SEAM=1 npm run build && npx playwright test",
     "validate:arch": "npx tsx src/__architecture__/validate.ts",

@@ -274,6 +274,93 @@ describe('AS-04 row 1 with the client role against --board', { timeout: 60_000 }
   })
 })
 
+describe('AS-04 row 1 client given a short FC 3 answer by the board', { timeout: 60_000 }, () => {
+  const SHORT_ANSWER = Buffer.from('0001000000050103140001', 'hex')
+  let lines: LogLine[] = []
+  let aliveAfterShortAnswer = false
+  let boardConnections = 0
+  let boardRequests = 0
+  let exit: { code: number | null; signal: NodeJS.Signals | null } = { code: null, signal: null }
+
+  before(async () => {
+    const board = net.createServer((socket) => {
+      boardConnections += 1
+      let pending = Buffer.alloc(0)
+      socket.on('data', (chunk: Buffer) => {
+        pending = Buffer.concat([pending, chunk])
+        while (pending.length >= 6 && pending.length >= 6 + pending.readUInt16BE(4)) {
+          const frame = pending.subarray(0, 6 + pending.readUInt16BE(4))
+          pending = pending.subarray(frame.length)
+          boardRequests += 1
+          socket.write(boardRequests === 1 ? SHORT_ANSWER : tcpRegistersAnswer(frame.readUInt16BE(0), range(1, 10)))
+        }
+      })
+    })
+    const boardPort = await freePort()
+    await new Promise<void>((resolve) => board.listen(boardPort, '127.0.0.1', resolve))
+    try {
+      const started = await listen('as-04-short', [
+        '--scenario',
+        'AS-04',
+        '--row',
+        '1',
+        '--board',
+        `127.0.0.1:${boardPort}`,
+      ])
+      const responses = (current: LogLine[]): LogLine[] => current.filter((line) => line.event === 'response')
+      try {
+        const master = await TcpMaster.connect(started.port)
+        master.send(tcpRead(1, GROUPS.g1))
+        await waitForLog(started.log, (current) => responses(current).length >= 1)
+        aliveAfterShortAnswer = started.cli.child.exitCode === null && started.cli.child.signalCode === null
+        await master.readFrame()
+        master.send(tcpRead(2, GROUPS.g1))
+        await master.readFrame()
+        await waitForLog(started.log, (current) => responses(current).length >= 2)
+        await master.close()
+      } catch {
+        aliveAfterShortAnswer = aliveAfterShortAnswer && started.cli.child.exitCode === null
+      }
+      exit = await started.cli.stop()
+      lines = readLog(started.log)
+    } finally {
+      await new Promise<void>((resolve) => board.close(() => resolve()))
+    }
+  })
+
+  test('keeps running after the short answer', () => {
+    assert.equal(aliveAfterShortAnswer, true)
+  })
+
+  test('logs the short answer as malformed, with the PDU hex and no values', () => {
+    const first = lines.find((line) => line.event === 'response')
+    assert.deepEqual(first && { malformed: first.malformed, hex: first.hex, hasValues: 'values' in first }, {
+      malformed: true,
+      hex: '03140001',
+      hasValues: false,
+    })
+  })
+
+  test('keeps its one connection to the board and reads the board again', () => {
+    assert.deepEqual({ boardConnections, boardRequests }, { boardConnections: 1, boardRequests: 2 })
+  })
+
+  test('still logs the values of a well-formed answer', () => {
+    const decoded = lines.filter((line) => line.event === 'response' && Array.isArray(line.values))
+    assert.deepEqual(
+      decoded.map((line) => line.values),
+      [range(1, 10)],
+    )
+  })
+
+  test('writes its stopped line and exits 0 on SIGTERM', () => {
+    assert.deepEqual(
+      { exit, stopped: lines.some((line) => line.event === 'stopped') },
+      { exit: { code: 0, signal: null }, stopped: true },
+    )
+  })
+})
+
 describe('CLI boundaries', { timeout: 60_000 }, () => {
   test(
     'binds only to the address given: 127.0.0.2 is refused while 127.0.0.1 listens',
@@ -305,6 +392,25 @@ describe('CLI boundaries', { timeout: 60_000 }, () => {
       readLog(log).some((line) => line.event === 'listening'),
       false,
     )
+  })
+
+  test('refuses TC10 over TCP with exit code 2, saying it does not run over TCP', async () => {
+    const cli = startCli(['--scenario', 'TC10', '--row', '1', '--tcp-listen', '127.0.0.1:0'])
+    const exit = await cli.exited
+    assert.deepEqual({ code: exit.code, overTcp: /does not run over TCP/.test(cli.stderr) }, { code: 2, overTcp: true })
+  })
+
+  test('refuses TC10 row 4 with exit code 2, naming the rows 1..3', async () => {
+    const port = path.join(workDir, 'no-such-port')
+    const cli = startCli(['--scenario', 'TC10', '--row', '4', '--serial', port, '--baud', '9600'])
+    const exit = await cli.exited
+    assert.deepEqual({ code: exit.code, rows: /--row 1\.\.3/.test(cli.stderr) }, { code: 2, rows: true })
+  })
+
+  test("lists TC10 among the known scenarios in an unknown scenario's message", async () => {
+    const cli = startCli(['--scenario', 'AS-99', '--tcp-listen', '127.0.0.1:0'])
+    await cli.exited
+    assert.match(cli.stderr, /known scenarios: .*\bTC10\b/)
   })
 
   test('package.json wires bench:hostile-slave to the CLI and test:bench to these tests', () => {
