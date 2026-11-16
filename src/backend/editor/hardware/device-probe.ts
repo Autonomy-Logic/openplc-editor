@@ -119,16 +119,14 @@ export async function connectWithRetries(client: Connectable, { attempts, backof
 }
 
 /**
- * Read the device id (FC 0x48) with a bounded retry/backoff loop -- a readiness
+ * Read the raw ID report (FC 0x48) with a bounded retry/backoff loop -- a readiness
  * probe for the firmware itself (the serial open auto-resets ESP8266/AVR boards).
  *
- * A SUCCESSFUL REPLY is the signal, not a non-empty id. `success` already means
- * the frame came back with the right function code and a SUCCESS status, which
- * only an OpenPLC firmware sends. The id itself is allowed to be empty: cores
- * with no license-core linked, and boards whose architecture the closed
- * reader refuses (AVR, RP2040), deliberately answer `id_len = 0` rather than fail to
- * compile (see `debugGetDeviceId` in modbus_debug.cpp). Requiring bytes here
- * reported those boards as having no firmware at all.
+ * The reply is `count`, then `[kind][len][bytes]` per ID source (see
+ * `parseGetDeviceIdResponse`). A SUCCESSFUL REPLY is the signal, not a non-empty
+ * report: `success` means the frame came back with the right function code and a
+ * SUCCESS status, which only an OpenPLC firmware sends, and `count = 0` (a board
+ * with no ID yet) is still a successful reply.
  */
 export async function readDeviceIdWithRetries(
   client: DeviceIdReadable,
