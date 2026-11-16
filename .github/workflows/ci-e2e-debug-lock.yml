@@ -28,6 +28,16 @@ jobs:
       - name: Install strucpp
         run: npm run setup:strucpp
 
+      # --ignore-scripts also skips the postinstall that fetches the pinned Python runtime the simulator runs.
+      - name: Cache the Python runtime
+        uses: actions/cache@v4
+        with:
+          path: vendor/python-runtime
+          key: python-runtime-${{ hashFiles('python-runtime.json') }}
+
+      - name: Install the Python runtime
+        run: npm run setup:python
+
       # --ignore-scripts also skips electron's own postinstall, which downloads
       # the binary `_electron.launch` runs.
       - name: Install the Electron binary

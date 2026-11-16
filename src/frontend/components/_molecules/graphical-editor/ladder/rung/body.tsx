@@ -26,6 +26,7 @@ import { usePouSnapshot } from '../../../../../hooks/use-pou-snapshot'
 import { useStableCallback } from '../../../../../hooks/use-stable-callback'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../store'
 import type { RungLadderState } from '../../../../../store/slices/ladder'
+import type { GraphicalElementModalData } from '../../../../../store/slices/modal'
 import { cn } from '../../../../../utils/cn'
 import { getLadderBlockType, isLadderBlockDrag } from '../../../../../utils/graphical/drag-detection'
 import { getFunctionBlockVariablesToCleanup } from '../../../../../utils/graphical/get-function-block-variables-to-cleanup'
@@ -53,7 +54,7 @@ import { findNode, getRungNodesBounds } from './ladder-utils/nodes'
 import { computeRungDebugStates, type RungDebugStates } from './rung-debug-states'
 import { isSameSelection } from './selection'
 
-/** Checks whether the related target or one of its ancestors is inside the ladder viewport. */
+/** Whether the related target or one of its ancestors is inside the ladder viewport. */
 const isDragEventFromWithinLadderArea = (
   relatedTarget: EventTarget | null,
   ladderViewportRef: HTMLDivElement | null,
@@ -522,7 +523,7 @@ export const RungBody = ({ rung, className, nodeDivergences = [], isDebuggerActi
             : undefined
     if (!modalToOpen) return
 
-    openModal(modalToOpen, node)
+    openModal(modalToOpen, { pouName, node } satisfies GraphicalElementModalData)
   }
 
   const onNodesDelete = useStableCallback((nodes: FlowNode[]) => {
