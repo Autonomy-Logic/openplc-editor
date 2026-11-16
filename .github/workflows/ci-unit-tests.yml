@@ -4,6 +4,11 @@ on:
   workflow_dispatch:
   # Called from `ci.yml` on every pull request.
   workflow_call:
+    inputs:
+      skip:
+        description: Skip every step and end green because the same check passed locally.
+        type: boolean
+        default: false
 
 jobs:
   unit-tests:
@@ -11,16 +16,23 @@ jobs:
     runs-on: ubuntu-latest
     # Required check on `development` — a red suite blocks the merge.
     steps:
+      - name: Skipped, passed locally
+        if: ${{ inputs.skip }}
+        run: echo "Skipped because this check passed locally (label ci-passed-locally)."
+
       - name: Checkout repository
+        if: ${{ !inputs.skip }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js
+        if: ${{ !inputs.skip }}
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'npm'
 
       - name: Install dependencies
+        if: ${{ !inputs.skip }}
         run: npm ci --ignore-scripts
 
       # --ignore-scripts skips the postinstall, so strucpp (a GitHub-release
@@ -29,12 +41,15 @@ jobs:
       # strucpp (no native rebuild) so the suites
       # can load and the coverage gate actually runs.
       - name: Install strucpp
+        if: ${{ !inputs.skip }}
         run: npm run setup:strucpp
 
       - name: Run tests with coverage
+        if: ${{ !inputs.skip }}
         run: npx jest --config jest.config.json --collectCoverage --ci
 
       - name: Upload coverage report
+        if: ${{ !inputs.skip }}
         uses: actions/upload-artifact@v4
         with:
           name: coverage

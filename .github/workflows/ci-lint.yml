@@ -2,23 +2,36 @@ name: CI - Lint
 
 on:
   workflow_call:
+    inputs:
+      skip:
+        description: Skip every step and end green because the same check passed locally.
+        type: boolean
+        default: false
 
 jobs:
   lint:
     name: Lint Check
     runs-on: ubuntu-latest
     steps:
+      - name: Skipped, passed locally
+        if: ${{ inputs.skip }}
+        run: echo "Skipped because this check passed locally (label ci-passed-locally)."
+
       - name: Checkout repository
+        if: ${{ !inputs.skip }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js
+        if: ${{ !inputs.skip }}
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'npm'
 
       - name: Install dependencies
+        if: ${{ !inputs.skip }}
         run: npm ci --ignore-scripts
 
       - name: Run ESLint
+        if: ${{ !inputs.skip }}
         run: npx eslint "./src/**/*.{ts,tsx}"

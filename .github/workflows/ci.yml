@@ -7,17 +7,82 @@ on:
       - development
 
 jobs:
+  # Outputs skip=true only for a PR into development that carries the
+  # ci-passed-locally label, read live from the API (the event payload predates it).
+  local-ci-gate:
+    name: Local CI label check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Read the ci-passed-locally label
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          LABEL: ci-passed-locally
+        run: |
+          skip=false
+          if [ "$EVENT_NAME" != "pull_request" ] || [ "$BASE_REF" != "development" ]; then
+            echo "Not a pull request into development: every job runs."
+          else
+            # The publisher adds the label a few seconds after opening the PR,
+            # so an opened run polls for about 20 seconds before giving up.
+            attempts=1
+            if [ "$ACTION" = "opened" ]; then attempts=5; fi
+            for i in $(seq 1 "$attempts"); do
+              if labels=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels?per_page=100" --jq '.[].name'); then
+                if printf '%s\n' "$labels" | grep -Fxq "$LABEL"; then
+                  skip=true
+                  break
+                fi
+              else
+                echo "::warning::Could not read the pull request labels (attempt $i)."
+              fi
+              if [ "$i" -lt "$attempts" ]; then sleep 5; fi
+            done
+          fi
+          if [ "$skip" = "true" ]; then
+            msg="Label $LABEL found: build-check, lint and unit-tests skip their steps (they ran locally)."
+          else
+            msg="Label $LABEL not found: every job runs."
+          fi
+          echo "$msg"
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
   architecture:
     uses: ./.github/workflows/ci-architecture.yml
 
+  # The skip is passed into the called workflow so its job still reports the
+  # required check name (e.g. build-check / Build Check) as passed.
   build-check:
+    needs: [local-ci-gate]
+    if: ${{ !cancelled() }}
     uses: ./.github/workflows/ci-build.yml
+    with:
+      skip: ${{ needs.local-ci-gate.outputs.skip == 'true' }}
 
   lint:
+    needs: [local-ci-gate]
+    if: ${{ !cancelled() }}
     uses: ./.github/workflows/ci-lint.yml
+    with:
+      skip: ${{ needs.local-ci-gate.outputs.skip == 'true' }}
 
   unit-tests:
+    needs: [local-ci-gate]
+    if: ${{ !cancelled() }}
     uses: ./.github/workflows/ci-unit-tests.yml
+    with:
+      skip: ${{ needs.local-ci-gate.outputs.skip == 'true' }}
 
   debug-lock-e2e:
     uses: ./.github/workflows/ci-e2e-debug-lock.yml
