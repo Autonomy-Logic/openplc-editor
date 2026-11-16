@@ -235,6 +235,7 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
 
       {/* Drop zone */}
       <div
+        data-testid='esi-upload-dropzone'
         role='button'
         tabIndex={isProcessing ? -1 : 0}
         onClick={handleClick}
@@ -257,6 +258,7 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
         )}
       >
         <input
+          data-testid='esi-upload-input'
           ref={fileInputRef}
           type='file'
           accept='.xml,.zip,application/zip,application/xml,text/xml'

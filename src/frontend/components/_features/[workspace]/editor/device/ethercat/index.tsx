@@ -74,14 +74,17 @@ const TabItem = ({
   label,
   isActive,
   badge,
+  testId,
 }: {
   value: string
   label: string
   isActive: boolean
   badge?: React.ReactNode
+  testId?: string
 }) => (
   <Tabs.Trigger
     value={value}
+    data-testid={testId}
     className={cn(
       'px-4 py-2 font-caption !text-xs font-medium transition-colors',
       'border-b-2 border-transparent',
@@ -647,7 +650,12 @@ const EtherCATEditor = () => {
       >
         <Tabs.List className='flex shrink-0 border-b border-neutral-200 dark:border-neutral-700'>
           <TabItem value='scan-bus' label='Bus' isActive={activeTab === 'scan-bus'} />
-          <TabItem value='repository' label='Repository' isActive={activeTab === 'repository'} />
+          <TabItem
+            value='repository'
+            label='Repository'
+            isActive={activeTab === 'repository'}
+            testId='ethercat-tab-repository'
+          />
           <TabItem value='advanced' label='Advanced' isActive={activeTab === 'advanced'} />
         </Tabs.List>
 

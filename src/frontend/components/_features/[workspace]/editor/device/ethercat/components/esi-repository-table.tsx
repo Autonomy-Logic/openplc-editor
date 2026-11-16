@@ -32,7 +32,10 @@ const ESIRepositoryTable = ({ repository, onRemoveItem, onClearAll, isLoading = 
 
   if (repository.length === 0) {
     return (
-      <div className='flex flex-1 items-center justify-center rounded-lg border border-dashed border-neutral-300 p-8 dark:border-neutral-700'>
+      <div
+        data-testid='esi-repository-empty'
+        className='flex flex-1 items-center justify-center rounded-lg border border-dashed border-neutral-300 p-8 dark:border-neutral-700'
+      >
         <p className='text-sm text-neutral-500 dark:text-neutral-400'>
           No ESI files loaded. Upload files above to populate the repository.
         </p>
@@ -46,10 +49,11 @@ const ESIRepositoryTable = ({ repository, onRemoveItem, onClearAll, isLoading = 
     <div className='flex flex-1 flex-col gap-2 overflow-hidden'>
       {/* Header with count and clear button */}
       <div className='flex items-center justify-between'>
-        <span className='text-xs font-medium text-neutral-700 dark:text-neutral-300'>
+        <span data-testid='esi-repository-count' className='text-xs font-medium text-neutral-700 dark:text-neutral-300'>
           Loaded Files ({repository.length}) - {totalDevices} device(s)
         </span>
         <button
+          data-testid='esi-repository-clear-all'
           onClick={() => void onClearAll()}
           disabled={isLoading}
           className='text-xs text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300'
@@ -106,7 +110,11 @@ const RepositoryItemRow = ({ item, isExpanded, onToggleExpand, onRemove }: Repos
   return (
     <>
       {/* Main row */}
-      <tr className='cursor-pointer border-b border-neutral-200 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50'>
+      <tr
+        data-testid='esi-repository-row'
+        data-filename={item.filename}
+        className='cursor-pointer border-b border-neutral-200 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/50'
+      >
         <td className='px-2 py-2'>
           <button
             onClick={onToggleExpand}
@@ -152,6 +160,7 @@ const RepositoryItemRow = ({ item, isExpanded, onToggleExpand, onRemove }: Repos
         <td className='px-2 py-2 text-sm text-neutral-700 dark:text-neutral-300'>{item.devices.length}</td>
         <td className='px-2 py-2 text-right'>
           <button
+            data-testid='esi-repository-remove'
             onClick={(e) => {
               e.stopPropagation()
               onRemove()

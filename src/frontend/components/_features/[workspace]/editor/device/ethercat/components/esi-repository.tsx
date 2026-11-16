@@ -85,7 +85,10 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
 
       {/* Error Summary (collapsible) */}
       {uploadErrors.length > 0 && (
-        <div className='shrink-0 rounded-md border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'>
+        <div
+          data-testid='esi-upload-errors'
+          className='shrink-0 rounded-md border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
+        >
           <div className='flex items-center justify-between px-3 py-2'>
             <button onClick={() => setErrorsExpanded((prev) => !prev)} className='flex items-center gap-2'>
               <svg
