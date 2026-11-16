@@ -99,6 +99,22 @@ function rowOfNode(
   }
 }
 
+/** Compiler-generated output of a function call, addressable by the diagram but never a tag the user declared. */
+const isCompilerTemporary = (node: DebugTreeNode): boolean => node.name.toUpperCase().startsWith('_TMP_')
+
+/**
+ * Roots of the flat debug tree map, which holds every node, nested ones included.
+ * Feeding the whole map to `buildTagRows` would repeat each member as a tag of its own,
+ * so a member only ever reaches the table by expanding its parent.
+ */
+export function rootDebugNodes(treeMap: Map<string, DebugTreeNode>): DebugTreeNode[] {
+  const childKeys = new Set<string>()
+  for (const node of treeMap.values()) {
+    for (const child of node.children ?? []) childKeys.add(child.compositeKey)
+  }
+  return Array.from(treeMap.values()).filter((node) => !childKeys.has(node.compositeKey) && !isCompilerTemporary(node))
+}
+
 export function buildTagRows({
   trees,
   pous,

@@ -173,14 +173,11 @@ async function openProject(page: Page): Promise<void> {
 async function openTagTable(page: Page): Promise<void> {
   await expect.poll(() => page.evaluate(() => typeof window.__OPENPLC_E2E_DEBUG_SESSION__)).toBe('object')
   await page.evaluate(
-    ([nodes, indexes]) => {
+    ({ nodes, indexes }) => {
       window.__OPENPLC_E2E_DEBUG_SESSION__?.open()
-      window.__OPENPLC_E2E_DEBUG_SESSION__?.publishVariables(
-        nodes as DebugTreeNode[],
-        indexes as Record<string, number>,
-      )
+      window.__OPENPLC_E2E_DEBUG_SESSION__?.publishVariables(nodes, indexes)
     },
-    [TAGS, INDEXES],
+    { nodes: TAGS, indexes: INDEXES },
   )
   await page.getByRole('tab', { name: 'Tags', exact: true }).click()
 }

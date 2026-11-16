@@ -16,6 +16,7 @@ import {
   nextMonitorViewName,
   pruneMonitorViews,
   removeMonitorView,
+  rootDebugNodes,
   rowsOfView,
   type TagRow,
 } from '../../../utils/debug-tag-table'
@@ -74,7 +75,7 @@ const DebugTagTable = ({ onForceVariable }: DebugTagTableProps) => {
   const allRows = useMemo(
     () =>
       buildTagRows({
-        trees: Array.from(debugVariableTree.values()),
+        trees: rootDebugNodes(debugVariableTree),
         pous,
         globalVariables,
         globalVariableLists,
@@ -98,7 +99,6 @@ const DebugTagTable = ({ onForceVariable }: DebugTagTableProps) => {
     setDebugTagTableKeys(keys)
   }, [rows, setDebugTagTableKeys])
 
-  // The table is the only reason these tags are polled, so closing it has to stop the reads.
   useEffect(() => {
     return () => {
       publishedKeysRef.current = ''
@@ -112,12 +112,10 @@ const DebugTagTable = ({ onForceVariable }: DebugTagTableProps) => {
     }
   }, [views, activeView])
 
-  // An empty tree means the session has not published its variables yet, not that they are gone.
   useEffect(() => {
     if (debugVariableTree.size === 0 || views.length === 0) return
     const pruned = pruneMonitorViews(views, new Set(debugVariableTree.keys()))
     const changed = pruned.some((view, index) => view.entries.length !== views[index].entries.length)
-    // No unsaved marker: opening the table is not an edit the user made.
     if (changed) setMonitorViews(pruned)
   }, [debugVariableTree, views, setMonitorViews])
 
@@ -165,18 +163,37 @@ const DebugTagTable = ({ onForceVariable }: DebugTagTableProps) => {
     [debugVariableIndexes],
   )
 
+  /** Reports a rejected write instead of dropping it: the value the user typed is only cleared once it lands. */
+  const runForce = useCallback(async (title: string, write: () => Promise<unknown>): Promise<boolean> => {
+    try {
+      await write()
+      return true
+    } catch (error) {
+      toast({
+        title,
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'fail',
+      })
+      return false
+    }
+  }, [])
+
   const handleForceBool = useCallback(
     (row: TagRow, value: boolean) => {
-      void onForceVariable(row.compositeKey, 'BOOL', value, undefined, lookupKeyOf(row))
+      void runForce('Cannot force value', () =>
+        onForceVariable(row.compositeKey, 'BOOL', value, undefined, lookupKeyOf(row)),
+      )
     },
-    [onForceVariable, lookupKeyOf],
+    [onForceVariable, lookupKeyOf, runForce],
   )
 
   const handleRelease = useCallback(
     (row: TagRow) => {
-      void onForceVariable(row.compositeKey, row.type, undefined, undefined, lookupKeyOf(row))
+      void runForce('Cannot release the variable', () =>
+        onForceVariable(row.compositeKey, row.type, undefined, undefined, lookupKeyOf(row)),
+      )
     },
-    [onForceVariable, lookupKeyOf],
+    [onForceVariable, lookupKeyOf, runForce],
   )
 
   const handleForceValue = useCallback(
@@ -196,10 +213,13 @@ const DebugTagTable = ({ onForceVariable }: DebugTagTableProps) => {
         return
       }
 
-      void onForceVariable(row.compositeKey, row.type, isForcedValueHigh(draft), valueBuffer, lookupKeyOf(row))
-      setForceDrafts((previous) => ({ ...previous, [row.compositeKey]: '' }))
+      void runForce('Cannot force value', () =>
+        onForceVariable(row.compositeKey, row.type, isForcedValueHigh(draft), valueBuffer, lookupKeyOf(row)),
+      ).then((written) => {
+        if (written) setForceDrafts((previous) => ({ ...previous, [row.compositeKey]: '' }))
+      })
     },
-    [forceDrafts, onForceVariable, lookupKeyOf],
+    [forceDrafts, onForceVariable, lookupKeyOf, runForce],
   )
 
   const renderForceCell = (row: TagRow) => {

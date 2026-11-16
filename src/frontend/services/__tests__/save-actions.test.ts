@@ -593,13 +593,22 @@ describe('save-actions', () => {
   })
 })
 
+/** Narrows the written project.json instead of asserting its shape. */
+function parseProjectJson(contents: string): { data: Record<string, unknown> } {
+  const parsed: unknown = JSON.parse(contents)
+  if (typeof parsed !== 'object' || parsed === null || !('data' in parsed)) {
+    throw new Error('project.json has no data object')
+  }
+  const data: unknown = parsed.data
+  if (typeof data !== 'object' || data === null) throw new Error('project.json has no data object')
+  return { data: { ...data } }
+}
+
 describe('project.json carries the debugger tag-table views', () => {
   it('writes the views the debugger saved', () => {
     store.getState().projectActions.setMonitorViews([{ name: 'Motors', entries: ['main:motor'] }])
 
-    const parsed = JSON.parse(buildAllProjectFileContentsPure(store)['project.json']) as {
-      data: { monitorViews?: { name: string; entries: string[] }[] }
-    }
+    const parsed = parseProjectJson(buildAllProjectFileContentsPure(store)['project.json'])
 
     expect(parsed.data.monitorViews).toEqual([{ name: 'Motors', entries: ['main:motor'] }])
   })
@@ -607,9 +616,7 @@ describe('project.json carries the debugger tag-table views', () => {
   it('omits the field while the project has no view, so its shape does not change', () => {
     store.getState().projectActions.setMonitorViews([])
 
-    const parsed = JSON.parse(buildAllProjectFileContentsPure(store)['project.json']) as {
-      data: { monitorViews?: unknown }
-    }
+    const parsed = parseProjectJson(buildAllProjectFileContentsPure(store)['project.json'])
 
     expect('monitorViews' in parsed.data).toBe(false)
   })

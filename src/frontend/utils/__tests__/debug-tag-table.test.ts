@@ -27,10 +27,9 @@ function makePou(name: string, variables: PLCVariable[]): PLCPou {
   return {
     name,
     pouType: 'program',
-    language: 'st',
     body: { language: 'st', value: '' },
-    interface: { returnType: { definition: 'base-type', value: 'BOOL' }, variables },
-  } as unknown as PLCPou
+    interface: { variables },
+  }
 }
 
 function makeLeaf(compositeKey: string, name: string, type: string, debugIndex?: number): DebugTreeNode {

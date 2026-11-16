@@ -145,9 +145,6 @@ export function buildActiveIndexSet(
     activeKeys.add(compositeKey)
   }
 
-  // -----------------------------------------------------------------------
-  // 3b. Tags the tag table shows
-  // -----------------------------------------------------------------------
   for (const compositeKey of debugTagTableKeys) {
     activeKeys.add(compositeKey)
   }
