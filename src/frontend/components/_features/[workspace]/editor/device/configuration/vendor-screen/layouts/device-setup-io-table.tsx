@@ -163,7 +163,7 @@ function DeviceSetupIoTable() {
         })}
       </SlotList>
 
-      <SlotDetailPane>
+      <SlotDetailPane scrollResetKey={selected.guid}>
         <section aria-label={`Slot ${selected.slot} ${selected.instanceName}`}>
           <div className='mb-5 flex gap-5'>
             <div className='flex min-w-0 flex-1 flex-col'>
