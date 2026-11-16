@@ -404,10 +404,12 @@ The RS-485 enable pin is per UART. `resolveRs485Pins`
 (`src/middleware/shared/utils/modbus-master-profile/rs485-pins.ts`) is the one source for the Serial
 screen and for `MBSERIAL_TXPIN` (the pin of the RTU server's UART): on a per-UART aware board
 (`BoardBuildInfo.perUartAware`: its Serial screen has a `uart-pin-map` field or the device declares
-`rs485FixedPins`) the package's fixed pins win, then `serial.rs485_en_pins`, then a 4.3.x project's
+`rs485FixedPins`; a declared Serial screen that cannot be read or parsed fails the board's resolution, naming the
+board, the package and the file) the package's fixed pins win, then `serial.rs485_en_pins`, then a 4.3.x project's
 `rs485_en_pin` on the RTU server's UART until `rs485_en_pins` is first written, when the store drops the
 legacy pair; a legacy board puts `rs485_en_pin` on the RTU server's UART. Only pins matching
-`^[A-Z]{0,2}\d{1,3}$` reach `defines.h` and `vpp_config.h`. Board hardware fields (`serialPorts`,
+`^[A-Z]{0,2}\d{1,3}$` reach `defines.h` and `vpp_config.h`; a 4.3.x project's `rs485_en_pin` is trimmed before
+that check, while `rs485_en_pins` entries are checked as entered. Board hardware fields (`serialPorts`,
 `defaultSerial`, `networkInterfaces`, `rs485FixedPins`) come from `boardHardwareFromManifestDevice`
 (`src/middleware/shared/utils/board-hardware/from-manifest-device.ts`) on both platforms.
 
@@ -458,7 +460,8 @@ on Reconnect and devices on one serial port that disagree on line settings, and 
 devices. Runtime v4 also refuses a transport it does not offer. Baremetal also refuses an RTU device on the
 debugger's or the Modbus RTU server's UART, a host that is not IPv4, a UART the board lacks, TCP without the
 network (`OPLC_NET_ENABLED`, `isBuildNetworkEnabled`), a field out of range and a bad RS-485 pin, and warns when
-the TCP endpoints exceed the board's `networkSockets`. Switching to a baremetal board that cannot run a device
+the TCP endpoints exceed the board's `networkSockets`. A remote device that is not a Modbus device (EtherCAT) gets
+a baremetal warning naming it, and the build ignores it and continues. Switching to a baremetal board that cannot run a device
 opens a dialog saying it stays in the project and the build is refused until it is fixed or removed.
 
 ### WebAssembly toolchain

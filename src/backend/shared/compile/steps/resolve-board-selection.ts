@@ -16,10 +16,12 @@
  * module; web: a no-op stub until the VPP catalog lands there).
  *
  * Returns either the resolved selection or an `error` discriminator
- * with a human-readable message the renderer can surface verbatim.
+ * with a human-readable message the renderer can surface verbatim:
+ * a fixed not-found text for an unknown board, otherwise the
+ * resolver's own message.
  */
 
-import type { BoardInfoResolver } from '../../hardware/board-info-resolver'
+import { type BoardInfoResolver, BoardNotFoundError } from '../../hardware/board-info-resolver'
 import type { BoardHalsBuildEntry } from '../pipeline'
 
 export type ResolvedBoardSelection =
@@ -88,7 +90,10 @@ export function resolveBoardSelection(resolver: BoardInfoResolver, boardTarget: 
       isRuntimeV4: boardInfo.isRuntimeV4,
       isRuntimeV3: boardInfo.isRuntimeV3,
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && !(error instanceof BoardNotFoundError)) {
+      return { ok: false, error: error.message }
+    }
     return {
       ok: false,
       error: `Board "${boardTarget}" not found in hals.json or installed VPP packages.`,

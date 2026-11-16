@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import crypto, { createHash } from 'node:crypto'
-import { existsSync, promises as fs, readFileSync } from 'node:fs'
+import { existsSync, promises as fs } from 'node:fs'
 import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import https from 'node:https'
@@ -186,6 +186,7 @@ import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { persistentStorageSchema } from '../../shared/types/PLC/devices/configuration'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager'
+import { readPackageFile } from '../package-manager/read-package-file'
 import { createDesktopLibraryBuildPort } from './desktop-library-build-port'
 import { createEditorCompilerPlatformPort } from './editor-compiler-platform-port'
 import type { CompileProgressChannel, HalsFile } from './types'
@@ -370,7 +371,7 @@ class CompilerModule {
       packageManager: new PackageManagerModule(),
       resolveHalSourcePath: (rel) => join(this.sourceDirectoryPath, 'hal', rel),
       resolvePackageRelativePath,
-      readPackageFile: (pkg, relPath) => readFileSync(resolvePackageRelativePath(pkg.path, relPath), 'utf-8'),
+      readPackageFile,
     })
   }
 

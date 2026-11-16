@@ -2,8 +2,15 @@
   "OpenPLC Simulator": {
     "compiler": "simulator",
     "core": "arduino:avr",
-    "c_flags": ["-MMD", "-c", "-Wno-incompatible-pointer-types"],
-    "ld_flags": ["-Wl,--defsym,__DATA_REGION_LENGTH__=0xFE00", "-Wl,--defsym,__stack=0x80FFFF"],
+    "c_flags": [
+      "-MMD",
+      "-c",
+      "-Wno-incompatible-pointer-types"
+    ],
+    "ld_flags": [
+      "-Wl,--defsym,__DATA_REGION_LENGTH__=0xFE00",
+      "-Wl,--defsym,__stack=0x80FFFF"
+    ],
     "max_data_size": 65024,
     "default_ain": "A0, A1, A2, A3, A4, A5, A6, A7",
     "default_aout": "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13",
@@ -24,7 +31,9 @@
       "Bluetooth": "No",
       "Ethernet": "No"
     },
-    "cxx_flags": ["-std=gnu++17"],
+    "cxx_flags": [
+      "-std=gnu++17"
+    ],
     "capabilities": {
       "pinMapping": false,
       "vppIo": false,
@@ -34,7 +43,9 @@
       "modbusTcpServer": true,
       "opcuaServer": true,
       "s7Server": true,
-      "debuggerTransports": ["modbus-serial"],
+      "debuggerTransports": [
+        "modbus-serial"
+      ],
       "pythonFunctionBlocks": true,
       "arduinoApiCompletions": true,
       "hasRuntimeStats": false,
@@ -55,7 +66,9 @@
   "OpenPLC Runtime v3": {
     "compiler": "openplc-compiler",
     "preview": "generic.png",
-    "cxx_flags": ["-std=gnu++17"],
+    "cxx_flags": [
+      "-std=gnu++17"
+    ],
     "capabilities": {
       "pinMapping": false,
       "vppIo": false,
@@ -65,7 +78,9 @@
       "modbusTcpServer": false,
       "opcuaServer": false,
       "s7Server": false,
-      "debuggerTransports": ["modbus-tcp"],
+      "debuggerTransports": [
+        "modbus-tcp"
+      ],
       "pythonFunctionBlocks": true,
       "arduinoApiCompletions": false,
       "hasRuntimeStats": false,
@@ -73,7 +88,9 @@
       "directUsbUpload": false
     },
     "debug": {
-      "preconditions": ["runtimeConnected"],
+      "preconditions": [
+        "runtimeConnected"
+      ],
       "channels": [
         {
           "label": "Modbus TCP",
@@ -92,7 +109,9 @@
   "OpenPLC Runtime v4": {
     "compiler": "openplc-compiler",
     "preview": "generic.png",
-    "cxx_flags": ["-std=gnu++17"],
+    "cxx_flags": [
+      "-std=gnu++17"
+    ],
     "capabilities": {
       "pinMapping": false,
       "vppIo": false,
@@ -102,7 +121,9 @@
       "modbusTcpServer": true,
       "opcuaServer": true,
       "s7Server": true,
-      "debuggerTransports": ["websocket"],
+      "debuggerTransports": [
+        "websocket"
+      ],
       "pythonFunctionBlocks": true,
       "arduinoApiCompletions": false,
       "hasRuntimeStats": true,
@@ -110,7 +131,10 @@
       "directUsbUpload": false
     },
     "debug": {
-      "preconditions": ["runtimeConnected", "jwtToken"],
+      "preconditions": [
+        "runtimeConnected",
+        "jwtToken"
+      ],
       "channels": [
         {
           "label": "WebSocket",

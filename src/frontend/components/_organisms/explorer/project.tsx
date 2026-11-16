@@ -80,11 +80,6 @@ const Project = () => {
   // affordances that don't apply to a `.stlib` build.
   const projectCaps = projectCapabilities({ type: projectType })
 
-  // Remote devices are also gated on the TARGET, not just the project type:
-  // a board that hosts neither Modbus remote I/O nor EtherCAT cannot drive
-  // them at all (the v3 build ships a single `program.st` and no remote-I/O
-  // config), and the variable-location dropdown already hides their points
-  // behind this exact predicate.
   const targetCaps = useTargetCapabilities()
   const masterProfile = useModbusMasterProfile()
   const canHostRemoteIo = canHostModbusMaster(masterProfile) || targetCaps.ethercat

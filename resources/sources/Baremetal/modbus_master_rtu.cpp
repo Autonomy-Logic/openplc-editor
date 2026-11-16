@@ -6,6 +6,7 @@
 #if MB_MASTER_ENABLED && MB_MASTER_RTU_ENABLED
 
 #include "modbus_crc.h"
+#include "modbus_master_util.h"
 #include "modbus_rs485.h"
 
 namespace {
@@ -284,8 +285,7 @@ void take_request(uint16_t b)
     }
     bus.tx[0] = bus.req.unit;
     const uint16_t crc = mb_crc16(bus.tx, (uint16_t)(pdu_len + 1));
-    bus.tx[pdu_len + 1] = (uint8_t)(crc >> 8);
-    bus.tx[pdu_len + 2] = (uint8_t)crc;
+    put16(&bus.tx[pdu_len + 1], crc);
     bus.tx_len = (uint16_t)(pdu_len + 3);
     bus.tx_pos = 0;
     bus.expected = (uint16_t)(response_pdu + 3);
@@ -337,6 +337,14 @@ bool tx_done(const Bus &bus)
     return (uint32_t)((uint32_t)micros() - bus.tx_start_us) >= frame_us + bus.char_us + frame_us / 32u;
 }
 
+/** Whether bytes on the line now cannot be the response: the request is on the line or ended less than 3.5
+ *  characters ago, by the estimated end less 1/32 of the frame for clock error. Echoed request bytes fall here. */
+bool echo_window(const Bus &bus)
+{
+    const uint32_t frame_us = bus.tx_chars * bus.char_us;
+    return (uint32_t)((uint32_t)micros() - bus.tx_start_us) < frame_us - frame_us / 32u + bus.t35_us;
+}
+
 /** Start sending the pending request on an idle line: the RS-485 line goes to transmit before the first byte. */
 void start_send(uint16_t b)
 {
@@ -365,18 +373,24 @@ bool response_so_far(Bus &bus)
     if (bus.rx_len < bus.expected)
         return true;
     const uint16_t crc = mb_crc16(bus.rx, (uint16_t)(bus.expected - 2));
-    if (bus.rx[bus.expected - 2] != (uint8_t)(crc >> 8) || bus.rx[bus.expected - 1] != (uint8_t)crc)
+    if (get16(&bus.rx[bus.expected - 2]) != crc)
         return false;
     bus.complete = true;
     return true;
 }
 
 /** Take at most one buffer of the response; fail on a byte that cannot belong to it or on the timeout, and
- *  hand a whole frame to the core once the line has been silent for 3.5 characters. */
+ *  hand a whole frame to the core once the line has been silent for 3.5 characters. Inside the echo window the
+ *  buffer is discarded instead. */
 void receive(uint16_t b)
 {
     Bus &bus = g_buses[b];
     HardwareSerial *const uart = MB_MASTER_BUSES[b].uart;
+    if (echo_window(bus))
+    {
+        discard(bus, uart);
+        return;
+    }
     for (uint16_t budget = FRAME_MAX; budget > 0 && uart->available() > 0; budget--)
     {
         const int value = uart->read();
@@ -437,6 +451,8 @@ void service(uint16_t b)
 
     if (bus.state == BUS_SEND)
     {
+        if (echo_window(bus))
+            discard(bus, uart);
         feed(b);
         if (bus.state == BUS_SEND && bus.tx_pos >= bus.tx_len && tx_done(bus))
         {

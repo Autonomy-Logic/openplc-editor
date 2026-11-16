@@ -35,11 +35,6 @@ const CreatePLCElement = () => {
   // gating happens here so a future new POU type doesn't have to be
   // wired up in two places.
   const projectCaps = projectCapabilities({ type: projectType })
-  // Remote devices are additionally gated on the TARGET: a board that hosts
-  // neither Modbus remote I/O nor EtherCAT cannot drive one, and creating it
-  // anyway yields I/O points no variable can reference (the location dropdown
-  // hides them behind this same predicate). Unlike the tree branch, which
-  // keeps already-configured devices visible, creation is refused outright.
   const targetCaps = useTargetCapabilities()
   const masterProfile = useModbusMasterProfile()
   const CreatePLCElementTypes: CreatePLCElementType[] = (

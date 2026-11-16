@@ -38,11 +38,18 @@ export function tcpClientRole(board: Endpoint, log: Log): ClientRole & { close: 
       pending = taken.rest
       taken.frames.forEach((frame) => {
         const fc = frame.pdu[0]
-        const values =
-          fc === FC.readHoldingRegisters && frame.pdu.length >= 2
-            ? Array.from({ length: frame.pdu[1] >> 1 }, (_, index) => frame.pdu.readUInt16BE(2 + index * 2))
-            : undefined
-        log({ event: 'response', tid: frame.tid, unit: frame.unit, fc, values, hex: hex(frame.pdu) })
+        const response = { event: 'response', tid: frame.tid, unit: frame.unit, fc }
+        if (fc !== FC.readHoldingRegisters) {
+          log({ ...response, hex: hex(frame.pdu) })
+          return
+        }
+        const count = frame.pdu.length >= 2 ? frame.pdu[1] : -1
+        if (count % 2 !== 0 || count !== frame.pdu.length - 2) {
+          log({ ...response, malformed: true, hex: hex(frame.pdu) })
+          return
+        }
+        const values = Array.from({ length: count >> 1 }, (_, index) => frame.pdu.readUInt16BE(2 + index * 2))
+        log({ ...response, values, hex: hex(frame.pdu) })
       })
     })
     created.on('error', (error: NodeJS.ErrnoException) =>

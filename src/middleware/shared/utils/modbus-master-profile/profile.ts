@@ -1,4 +1,5 @@
 import type { BoardInfo } from '../../ports/types'
+import { debuggerUart } from '../board-hardware/default-serial'
 import { BOARD_NETWORK_SCREEN, BOARD_SERIAL_SCREEN, findBoardScreen } from '../board-screens'
 import type { TargetCapabilities } from '../target-capabilities'
 
@@ -26,12 +27,9 @@ export interface ModbusMasterProfile {
 /** A board as the profile takes it; it reads `compiler`, `serialPorts`, `defaultSerial` and the VPP screens. */
 export type ModbusMasterBoardInfoLike = Partial<BoardInfo>
 
-/** UART the debugger sits on when a package declares no `defaultSerial`. */
-const FALLBACK_DEFAULT_SERIAL = 'Serial'
-
 /** The board's UARTs without the debugger's, in manifest order. */
 function spareUarts(board: ModbusMasterBoardInfoLike): string[] {
-  const debuggerPort = board.defaultSerial ?? FALLBACK_DEFAULT_SERIAL
+  const debuggerPort = debuggerUart(board)
   return (board.serialPorts ?? []).filter((port) => port !== debuggerPort)
 }
 

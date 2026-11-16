@@ -16,20 +16,140 @@ unrecognised target is a hard #error rather than a fallback.
 
 namespace bm_net {
 
-#if BM_NET_MASTER_SLOTS > 0 && BM_NET_CONNECT == BM_NET_CONNECT_CLIENT
+#if defined(BM_NET_NINA)
+
+NinaClient::NinaClient()
+    : sock_(NO_SOCKET_AVAIL), timeout_ms_(0)
+{
+}
+
+NinaClient::NinaClient(uint8_t sock)
+    : sock_(sock), timeout_ms_(0)
+{
+}
+
+void NinaClient::setConnectionTimeout(uint16_t timeout_ms)
+{
+    timeout_ms_ = timeout_ms;
+}
+
+int NinaClient::connect(IPAddress ip, uint16_t port)
+{
+    stop();
+    sock_ = ServerDrv::getSocket();
+    if (sock_ == NO_SOCKET_AVAIL)
+        return 0;
+    ServerDrv::startClient(nullptr, 0, uint32_t(ip), port, sock_, TCP_MODE, timeout_ms_);
+    if (ServerDrv::getClientState(sock_) == ESTABLISHED)
+        return 1;
+    stop();
+    return 0;
+}
+
+int NinaClient::connect(const char* host, uint16_t port)
+{
+    (void)host;
+    (void)port;
+    return 0;
+}
+
+size_t NinaClient::write(uint8_t b)
+{
+    return write(&b, 1);
+}
+
+size_t NinaClient::write(const uint8_t* buf, size_t size)
+{
+    if (sock_ == NO_SOCKET_AVAIL || size == 0 || size > 0xFFFFu)
+    {
+        setWriteError();
+        return 0;
+    }
+    const uint16_t sent = ServerDrv::sendData(sock_, buf, (uint16_t)size);
+    if (sent == 0)
+        setWriteError();
+    return sent;
+}
+
+int NinaClient::available()
+{
+    return sock_ == NO_SOCKET_AVAIL ? 0 : WiFiSocketBuffer.available(sock_);
+}
+
+int NinaClient::read()
+{
+    uint8_t b = 0;
+    return read(&b, 1) == 1 ? b : -1;
+}
+
+int NinaClient::read(uint8_t* buf, size_t size)
+{
+    return sock_ == NO_SOCKET_AVAIL ? 0 : WiFiSocketBuffer.read(sock_, buf, size);
+}
+
+int NinaClient::peek()
+{
+    return sock_ == NO_SOCKET_AVAIL ? -1 : WiFiSocketBuffer.peek(sock_);
+}
+
+void NinaClient::flush()
+{
+}
+
+void NinaClient::stop()
+{
+    if (sock_ == NO_SOCKET_AVAIL)
+        return;
+    ServerDrv::stopClient(sock_);
+    WiFiSocketBuffer.close(sock_);
+    sock_ = NO_SOCKET_AVAIL;
+}
+
+uint8_t NinaClient::connected()
+{
+    if (sock_ == NO_SOCKET_AVAIL)
+        return 0;
+    if (available() > 0)
+        return 1;
+    return ServerDrv::getClientState(sock_) == ESTABLISHED ? 1 : 0;
+}
+
+NinaClient::operator bool()
+{
+    return sock_ != NO_SOCKET_AVAIL;
+}
+
+NinaServer::NinaServer(uint16_t port)
+    : port_(port), sock_(NO_SOCKET_AVAIL)
+{
+}
+
+void NinaServer::begin()
+{
+    if (sock_ != NO_SOCKET_AVAIL)
+        return;
+    sock_ = ServerDrv::getSocket();
+    if (sock_ != NO_SOCKET_AVAIL)
+        ServerDrv::startServer(port_, sock_);
+}
+
+NinaClient NinaServer::accept()
+{
+    if (sock_ == NO_SOCKET_AVAIL)
+        return NinaClient();
+    return NinaClient(ServerDrv::availServer(sock_, true));
+}
+
+#endif
+
+#if BM_NET_MASTER_SLOTS > 0 && BM_NET_CONNECT == BM_NET_CONNECT_CLIENT && !defined(BM_NET_NINA)
 namespace {
 
 /** Whether `need` bytes can be queued on `client` without blocking. */
 bool room_for(bm_client_impl_t& client, size_t need)
 {
-#if defined(BM_NET_SEND_UNMETERED)
-    (void)client;
-    (void)need;
-    return true;
-#else
     const int room = client.availableForWrite();
     return room > 0 && (size_t)room >= need;
-#endif
 }
 
 }
@@ -197,8 +317,8 @@ bool can_send(const Client* client, size_t need)
             static_cast<const Client*>(&g_slots[i].client) == client)
         {
             // The concrete type is the whole reason this lives here.
-#if defined(BM_NET_SEND_UNMETERED)
-            return true;
+#if defined(BM_NET_NINA)
+            return need <= 0xFFFFu;
 #else
             const int room = g_slots[i].client.availableForWrite();
             return room > 0 && (size_t)room >= need;
@@ -527,6 +647,30 @@ int timed_connect(C& client, const IPAddress& ip, uint16_t port, uint32_t ms, ra
     return client.connect(ip, port);
 }
 
+/** Close through the library's bounded stop(), waiting at most 1 ms for the peer's acknowledgements
+ *  (ESP8266, Pico W; their stop() and abort() otherwise wait up to 300 ms). */
+template <typename C>
+auto quick_stop(C& client, rank2) -> decltype(client.stop(1u), void())
+{
+    client.stop(1u);
+}
+
+/** Close after setting the connection timeout to 0, so stop() checks the socket once and closes it
+ *  (Ethernet 2.0.2: one status check, at most delay(1)). */
+template <typename C>
+auto quick_stop(C& client, rank1) -> decltype(client.setConnectionTimeout(0), void())
+{
+    client.setConnectionTimeout(0);
+    client.stop();
+}
+
+/** Close through stop(), for a library whose stop() takes no bound. */
+template <typename C>
+void quick_stop(C& client, rank0)
+{
+    client.stop();
+}
+
 }
 
 Connection::Connection()
@@ -540,6 +684,7 @@ bool Connection::start(const uint8_t ip[4], uint16_t port, uint32_t timeout_ms)
     started_ms_ = millis();
     timeout_ms_ = timeout_ms;
     const IPAddress peer(ip[0], ip[1], ip[2], ip[3]);
+    status_ = BM_CONN_PENDING;
     if (timed_connect(client_, peer, port, timeout_ms, rank2()) > 0 && client_.connected())
     {
         status_ = BM_CONN_CONNECTED;
@@ -574,9 +719,16 @@ SendResult Connection::send(const uint8_t* buf, size_t len)
 {
     if (status_ != BM_CONN_CONNECTED)
         return BM_SEND_LOST;
+#if defined(BM_NET_NINA)
+    const size_t sent = client_.write(buf, len);
+    if (sent == 0)
+        return BM_SEND_NO_ROOM;
+#else
     if (!room_for(client_, len))
         return BM_SEND_NO_ROOM;
-    if (client_.write(buf, len) != len)
+    const size_t sent = client_.write(buf, len);
+#endif
+    if (sent != len)
     {
         fail();
         return BM_SEND_LOST;
@@ -586,7 +738,8 @@ SendResult Connection::send(const uint8_t* buf, size_t len)
 
 void Connection::close()
 {
-    client_.stop();
+    if (status_ == BM_CONN_PENDING || status_ == BM_CONN_CONNECTED)
+        quick_stop(client_, rank2());
     status_ = BM_CONN_CLOSED;
 }
 

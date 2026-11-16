@@ -203,11 +203,12 @@ transports, the transports call the core, and the core calls neither.
 | Module | Responsibility | Build gate | Depends on |
 |--------|----------------|------------|------------|
 | **`modbus_master.*`** | Facade: `mb_master_task()` follows `runtime_get_plc_state()` (every connection closed while STOPPED, all retry and give-up state cleared on the RUN edge) and services the transports. Core: per-group cycle scheduling, the split of a group larger than one frame (`MB_MASTER_PDU_MAX`, from `MAX_MB_FRAME`: 128 bytes on ATmega328P/168/32U4, 272 elsewhere), request PDUs for FC 1-6, 15 and 16, response validation (function code, byte count, echoed address, value or quantity), staging, error handling (zero or keep) and the once-per-scan commit into the image. | `MB_MASTER_ENABLED` | `modbus_master_tcp`, `modbus_master_rtu`, `modbus_pdu`, `arduino_runtime_glue`, `openplc.h` |
-| **`modbus_master_tcp.*`** | Modbus TCP transport: one `bm_net::Connection` per endpoint (devices on one `host:port` share it), MBAP header, transaction id, at most one receive buffer per connection per pass, the response timeout counted from the send, Reconnect. | `MB_MASTER_TCP_ENABLED` | `modbus_master`, `baremetal_net` |
-| **`modbus_master_rtu.*`** | Modbus RTU transport: one state machine per bus (devices on one UART share it): idle, pending (waits for an idle line), send, await. Slave id and CRC around the core's PDU, the bus timeout (the smallest of its devices) counted from the end of the request, at most one receive buffer per bus per pass. See "RTU buses" below. | `MB_MASTER_RTU_ENABLED` | `modbus_master`, `modbus_crc`, `modbus_rs485` |
+| **`modbus_master_tcp.*`** | Modbus TCP transport: one `bm_net::Connection` per endpoint (devices on one `host:port` share it), MBAP header, transaction id, at most one receive buffer per connection per pass, the response timeout counted from the send, Reconnect. | `MB_MASTER_TCP_ENABLED` | `modbus_master`, `modbus_master_util`, `baremetal_net` |
+| **`modbus_master_rtu.*`** | Modbus RTU transport: one state machine per bus (devices on one UART share it): idle, pending (waits for an idle line), send, await. Slave id and CRC around the core's PDU, the bus timeout (the smallest of its devices) counted from the end of the request, at most one receive buffer per bus per pass. See "RTU buses" below. | `MB_MASTER_RTU_ENABLED` | `modbus_master`, `modbus_master_util`, `modbus_crc`, `modbus_rs485` |
 | **`modbus_rs485.*`** | The RS-485 helper of the slave's base layer, shared with the RTU server. | — | `modbus_config` |
 | **`modbus_crc.*`** | `mb_crc16(data, len)`: CRC-16 over the master's own buffers, never `mb_frame`. | — | `frame` |
-| **`baremetal_net.*`** | Network seam, extended with the outbound `Connection` (see below) and the `BOARD_WIFININA` branch. | `BM_NET_ENABLED` = `OPCUA_ENABLED \|\| S7COMM_ENABLED \|\| MB_MASTER_TCP_ENABLED` | `modbus_config` (board defines) |
+| **`modbus_master_util.h`** | Internal helpers of the three master units, `static inline`: `reached(now, when)` (wrap-safe deadline test), `put16` and `get16` (big-endian 16-bit values). | — | `<stdint.h>` only |
+| **`baremetal_net.*`** | Network seam, extended with the outbound `Connection` (see below) and the `BOARD_WIFININA` branch with its own `NinaClient` and `NinaServer` over the WiFiNINA module driver. | `BM_NET_ENABLED` = `OPCUA_ENABLED \|\| S7COMM_ENABLED \|\| MB_MASTER_TCP_ENABLED` | `modbus_config` (board defines) |
 | **`modbus_pdu.*`** | `mb_pdu_response_len(fc, quantity)`: the length of the normal response, the inverse of `mb_pdu_request_len()`. | — | `registers`, `debug` |
 
 ## Scan integration
@@ -224,9 +225,15 @@ MB_MASTER_ENABLED`, so a point with no program variable still has storage.
 
 1. **Never block.** A request is sent only when the stack has room for all of it
    (`Connection::send()` returns `BM_SEND_NO_ROOM` otherwise, and the poll fails);
-   the wait for its response is bounded by the endpoint timeout from the send; a
-   pass reads at most one buffer per connection. At most one connect starts per
-   pass, so a pass is held at most one connect timeout.
+   on `BOARD_WIFININA` the module's answer to the send command is the meter: a
+   send is one module exchange with no retry and no data-sent poll, and a send the
+   module takes none of is `BM_SEND_NO_ROOM`, never retried in the pass. The wait
+   for its response is bounded by the endpoint timeout from the send; a pass reads
+   at most one buffer per connection. At most one connect starts per pass, and
+   none in a pass in which any endpoint's connection was closed, so a pass is held
+   at most one connect timeout. Closes do not wait (see "Closing a connection"),
+   except on the branches listed there, which close at most one connection per
+   pass when the PLC stops.
 2. **A frame is accepted whole or not at all.** Transaction id, protocol id 0,
    MBAP length (from `mb_pdu_response_len`), unit id, function code and byte count
    must all match the request; values are written only into the group's own points
@@ -258,7 +265,7 @@ timeout_ms)`, `poll()` (`BM_CONN_PENDING`, `BM_CONN_CONNECTED`, `BM_CONN_FAILED`
 |---|---|---|
 | `BM_NET_CONNECT_LWIP` | ESP32 core (`BOARD_ESP32`, and `BOARD_PORTENTA` Wi-Fi on the esp32 core) | raw lwIP socket with `O_NONBLOCK`; `poll()` follows it, room from `select()` |
 | `BM_NET_CONNECT_MBED` | mbed core (`MBETH_MBED_LWIP`, `BOARD_PORTENTA` Wi-Fi) | `TCPSocket` with `set_blocking(false)` |
-| `BM_NET_CONNECT_CLIENT` | every other target | the library client, with its connect timeout set to the endpoint timeout (a three-argument `connect`, `setConnectionTimeout` or `setTimeout`, whichever the library has); room from `availableForWrite()`, except on `BOARD_WIFININA`, whose library has no room query (`BM_NET_SEND_UNMETERED`) |
+| `BM_NET_CONNECT_CLIENT` | every other target | the library client, with its connect timeout set to the endpoint timeout (a three-argument `connect`, `setConnectionTimeout` or `setTimeout`, whichever the library has); room from `availableForWrite()`, except on `BOARD_WIFININA`, where `NinaClient::write()` is one `ServerDrv::sendData()` exchange and the module's count is the answer (all of it: sent; none: `BM_SEND_NO_ROOM`; part: lost) |
 
 The master has `BM_NET_MASTER_SLOTS` = `MB_MASTER_ENDPOINT_COUNT` slots of its
 own, outside the listeners' pool (`BM_NET_MAX_CLIENTS`), so neither the master
@@ -268,8 +275,46 @@ Reconnect. Without a TCP master none of this code is compiled.
 
 The `BOARD_WIFININA` branch (with `MBTCP_WIFI`) comes before the generic Wi-Fi
 branch and serves outbound and inbound connections alike: the S7 and OPC-UA
-listeners on a NINA board take `WiFiNINA.h` too. The Modbus TCP server keeps its
-own clients and includes in `modbus_tcp.h`.
+listeners on a NINA board take `WiFiNINA.h` too. `WiFiClient::write()` of
+WiFiNINA 2.1.1 always ends in `ServerDrv::checkDataSent()`, which polls the
+module with `delay(100)` up to 25 times, and with retry off it closes the socket
+when the module refuses the data; `WiFiClient::stop()` waits up to 5 s for the
+close. So on NINA the seam never uses `WiFiClient`: `NinaClient` and `NinaServer`
+handle the module's sockets through `ServerDrv` (socket, start client, start and
+accept server, send, state, stop) and `WiFiSocketBuffer` (available, read). A send
+is one `sendData()` exchange and the module's answer says how much it took; the
+module firmware's data-sent query is a no-op that always answers yes, so there is
+no separate confirmation to ask for. `can_send()` answers true for a listener's
+client (up to 65535 bytes), and a write the module refuses returns 0 without
+closing the socket. `stop()` sends the module's stop and frees the receive buffer
+without waiting; the module frees the socket in that exchange and hands out only
+free sockets. Only `baremetal_net` names these classes. The Modbus TCP server keeps
+its own clients and includes in `modbus_tcp.h`.
+
+### Closing a connection
+
+`Connection::close()` makes no library call on a connection that is already
+closed, and on the library-client path releases the socket without the library's
+graceful wait, through the first form the library has:
+
+| Form | Libraries | Wait |
+|---|---|---|
+| `stop(1)` | ESP8266 core, Pico W (`stop()` and the ESP8266 `abort()` wait up to 300 ms for the peer's acknowledgements) | at most 1 ms |
+| `setConnectionTimeout(0)`, then `stop()` | Ethernet 2.0.2 (W5x00 AVR, P1AM; one status check, at most `delay(1)`, then `socketClose()`), EthernetENC and STM32Ethernet (their `stop()` does not wait), `NinaClient`, WiFiS3 | none, except WiFiS3 below |
+| `stop()` | Energia lwIP (LOGO!): `stop()` does not wait | none |
+
+The close after a failed connect and after a lost link is this same close. In a
+master pass in which any endpoint's connection was closed no connect starts; the
+due endpoint connects on a later pass.
+
+Branches whose library has no close that skips its wait set
+`BM_NET_CLOSE_WAITS`: `BOARD_PORTENTA` with `MBTCP_WIFI` on the Renesas core (Uno
+R4 WiFi, WiFiS3: `stop()` is one modem command, bounded by the library's
+`MODEM_TIMEOUT` of 10 s) and the generic `MBTCP_WIFI` branch (its library is not
+identified, so it is treated the same way). On those, the STOP edge closes one
+connection and each following pass closes the next, so a pass holds at most one
+such close; no request is sent while STOPPED. A RUN edge before they are all
+closed closes the rest one per pass before the endpoint connects again.
 
 ## RTU buses
 
@@ -286,6 +331,24 @@ machine, one request in flight at a time:
 After a failed poll the bytes still arriving are discarded by the next idle and
 pending passes, so the next request starts only after the line has been idle.
 A failed poll keeps the bus as it is; RTU has no Reconnect.
+
+**Echoed request bytes.** A slave answers only after 3.5 characters of silence,
+so bytes that arrive while the request is on the line, and until 3.5 characters
+after its estimated end (less 1/32 of the frame for clock error), cannot be the
+response. The send passes, and the await passes still inside that window, read and
+discard them (at most one buffer per pass) instead of reading them as the
+response. With a transceiver whose receiver stays on while transmitting, every
+function code reads and writes correctly as long as the master's pass after the
+request comes within the window; a later pass cannot tell the echo from a response
+and the poll may fail, the same limit as the RS-485 release. Without an echo
+nothing is discarded that could be a response.
+
+**RS-485 enable pins and the pin masks.** In `setup()`, after `hardwareInit()`,
+every pin mask element (`pinMask_DIN`, `pinMask_AIN`, `pinMask_DOUT`,
+`pinMask_AOUT`) equal to a bus's `rs485_pin` is set to 255, as for
+`MBSERIAL_TXPIN`, so the program's I/O never drives the master's transceiver.
+Only with `MB_MASTER_RTU_ENABLED`; the stub and a TCP-only master leave the masks
+as they are.
 
 **UART mechanisms.** On the first RUN edge each bus's UART is begun with its baud
 rate and line setting (`SERIAL_8E1` and the like, 7 or 8 data bits, parity N, E or

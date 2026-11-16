@@ -96,15 +96,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * `vendorScreenData` with the Serial screen's RS-485 pins limited to values matching the pin pattern:
- * invalid entries of `rs485_en_pins` are dropped, and `rs485_en_pin` is dropped unless empty or valid.
+ * invalid entries of `rs485_en_pins` are dropped as entered, and `rs485_en_pin` is trimmed, then kept
+ * only when empty or valid.
  */
 function withValidRs485Pins(vendorScreenData: Record<string, unknown>): Record<string, unknown> {
   const serial = vendorScreenData[SERIAL_SCREEN_STATE_KEY]
   if (!isRecord(serial)) return vendorScreenData
 
   const next: Record<string, unknown> = { ...serial }
-  const legacyPin = next['rs485_en_pin']
-  if (legacyPin !== undefined && legacyPin !== '' && !isValidRs485Pin(legacyPin)) delete next['rs485_en_pin']
+  const legacyPin = typeof next['rs485_en_pin'] === 'string' ? next['rs485_en_pin'].trim() : next['rs485_en_pin']
+  if (legacyPin === '' || isValidRs485Pin(legacyPin)) next['rs485_en_pin'] = legacyPin
+  else if (legacyPin !== undefined) delete next['rs485_en_pin']
   const pins = next[RS485_PINS_KEY]
   if (isRecord(pins)) {
     next[RS485_PINS_KEY] = Object.fromEntries(Object.entries(pins).filter(([, pin]) => isValidRs485Pin(pin)))

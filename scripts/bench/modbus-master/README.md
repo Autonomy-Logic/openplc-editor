@@ -121,7 +121,10 @@ done
 ```
 
 Pass: `compare-images.ts` prints `SAME` for every target and exits 0: identical `.hex` or `.bin`, or, where
-the toolchain embeds build data, identical allocated section sizes and the same defined symbols.
+the toolchain embeds build data, identical allocated section sizes and the same defined symbols, compared on
+normalised names (GCC and LTO clone suffixes `.constprop.<n>`, `.part.<n>`, `.isra.<n>`, `.lto_priv.<n>` and
+`.cold` removed, and the `.o.<n>` tail of a `_GLOBAL__` name), so an identical image whose clones were
+renumbered compares `SAME`.
 
 ### (c) The web Simulator build keeps the master out
 
@@ -367,8 +370,8 @@ for p in compile-rtu-server-secondary compile-rtu-server-default-uart; do
 done
 ```
 
-Pass, per target: `SAME`; or `DIFF` where every `symbol added` and `symbol removed` line names a symbol defined
-in `Baremetal/modbus_rs485.cpp` (the helper's own symbols, as `nm` lists them for that file's object in the
+The comparison is on normalised symbol names, as in (b). Pass, per target: `SAME`; or `DIFF` where every
+`symbol added` and `symbol removed` line names a symbol defined in `Baremetal/modbus_rs485.cpp` (the helper's own symbols, as `nm` lists them for that file's object in the
 branch build), and the `section` lines come only with such symbol lines. Any other symbol added or removed, or
 a section change with no helper symbol, fails. Run (b) again on this branch too, with the same rule: the
 debugger's serial path goes through the same helper.
@@ -422,8 +425,9 @@ packages; the other RTU bench projects build with the production packages.
 5 minutes; the slave never answers unit 2.
 
 Expect: `present_0`, `present_1` = 1234, 5678 and `absent_0` = 0; every `ignored` frame (unit 2) is followed by
-the next frame on the line within 300 ms (the bus waits the smallest timeout, 200 ms; with `Absent`'s own 500 ms
-the gaps would be about 500 ms); `ignored` frames keep coming until the end, at most 350 ms apart; `Present`'s
+the next frame on the line within 320 ms (the smallest timeout, 200 ms, the one-cycle wait after a failed poll,
+100 ms, the request's transmit time and 3.5 characters make about 305 ms; with `Absent`'s own 500 ms timeout the
+gaps would be about 605 ms); `ignored` frames keep coming until the end, at most 350 ms apart; `Present`'s
 requests at most 1.3 s apart.
 
 ### TC10 and AS-11: an RTU response longer than requested

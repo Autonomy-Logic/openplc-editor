@@ -159,6 +159,30 @@ void setup()
     // Initialize hardware (HAL -- unchanged)
     hardwareInit();
 
+    #if MB_MASTER_RTU_ENABLED
+        for (uint16_t b = 0; b < MB_MASTER_BUS_COUNT; b++)
+        {
+            const int16_t pin = MB_MASTER_BUSES[b].rs485_pin;
+            if (pin == MB_MASTER_NO_PIN) continue;
+            for (int i = 0; i < NUM_DISCRETE_INPUT; i++)
+            {
+                if (pinMask_DIN[i] == pin) pinMask_DIN[i] = 255;
+            }
+            for (int i = 0; i < NUM_ANALOG_INPUT; i++)
+            {
+                if (pinMask_AIN[i] == pin) pinMask_AIN[i] = 255;
+            }
+            for (int i = 0; i < NUM_DISCRETE_OUTPUT; i++)
+            {
+                if (pinMask_DOUT[i] == pin) pinMask_DOUT[i] = 255;
+            }
+            for (int i = 0; i < NUM_ANALOG_OUTPUT; i++)
+            {
+                if (pinMask_AOUT[i] == pin) pinMask_AOUT[i] = 255;
+            }
+        }
+    #endif
+
     // Establish the run/stop state. Must follow hardwareInit() so the HAL has
     // already configured its mode-switch pin: a board powered up with the
     // switch in STOP must never execute a scan. Boards with no mode switch

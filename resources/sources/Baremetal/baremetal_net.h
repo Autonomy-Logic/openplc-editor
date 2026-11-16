@@ -74,12 +74,70 @@ without a Modbus server impossible.
     typedef WiFiClient bm_client_impl_t;
 
 #elif defined(BOARD_WIFININA) && defined(MBTCP_WIFI)
-    // u-blox NINA module (Nano 33 IoT, Mkr WiFi, Nano RP2040 Connect), inbound
-    // and outbound. The library has no send-room query: BM_NET_SEND_UNMETERED.
     #include <WiFiNINA.h>
-    typedef WiFiServer bm_server_impl_t;
-    typedef WiFiClient bm_client_impl_t;
-    #define BM_NET_SEND_UNMETERED
+    #include <utility/server_drv.h>
+    #include <utility/WiFiSocketBuffer.h>
+    #define BM_NET_NINA 1
+
+namespace bm_net {
+
+/** A u-blox NINA module socket (Nano 33 IoT, Mkr WiFi, Nano RP2040 Connect)
+ *  as an Arduino `Client`, driven through the WiFiNINA module driver
+ *  (`ServerDrv`, `WiFiSocketBuffer`). write() is one module exchange that
+ *  returns what the module took: no retry, no data-sent poll, no delay.
+ *  stop() releases the socket without waiting for the close. connect(host)
+ *  resolves no names and fails. */
+class NinaClient : public Client
+{
+public:
+    NinaClient();
+    explicit NinaClient(uint8_t sock);
+
+    /** Bound of the module's connect, in ms; 0 leaves the module's default. */
+    void setConnectionTimeout(uint16_t timeout_ms);
+
+    int connect(IPAddress ip, uint16_t port) override;
+    int connect(const char* host, uint16_t port) override;
+    size_t write(uint8_t b) override;
+    size_t write(const uint8_t* buf, size_t size) override;
+    int available() override;
+    int read() override;
+    int read(uint8_t* buf, size_t size) override;
+    int peek() override;
+    void flush() override;
+    void stop() override;
+    uint8_t connected() override;
+    operator bool() override;
+
+    using Print::write;
+
+private:
+    uint8_t  sock_;
+    uint16_t timeout_ms_;
+};
+
+/** A NINA module listening socket that hands each accepted socket over as a
+ *  NinaClient, through the module driver. */
+class NinaServer
+{
+public:
+    explicit NinaServer(uint16_t port);
+
+    /** Open the listening socket on the module. */
+    void begin();
+
+    /** The next accepted socket, or a client that tests false. */
+    NinaClient accept();
+
+private:
+    uint16_t port_;
+    uint8_t  sock_;
+};
+
+}
+
+    typedef bm_net::NinaServer bm_server_impl_t;
+    typedef bm_net::NinaClient bm_client_impl_t;
 
 #elif defined(BOARD_PICOW) && defined(MBTCP_WIFI)
     // Route-qualified: BOARD_PICOW names the CYW43 WiFi, and a Pico W with an
@@ -100,6 +158,8 @@ without a Modbus server impossible.
     #elif defined(ARDUINO_ARCH_MBED)
         #define BM_NET_CONNECT BM_NET_CONNECT_MBED
         #define BM_NET_MBED_NETWORK() (WiFi.getNetwork())
+    #else
+        #define BM_NET_CLOSE_WAITS 1
     #endif
 
 #elif defined(MBETH_MBED_LWIP)
@@ -132,6 +192,7 @@ without a Modbus server impossible.
     #include <WiFi.h>
     typedef WiFiServer bm_server_impl_t;
     typedef WiFiClient bm_client_impl_t;
+    #define BM_NET_CLOSE_WAITS 1
 
 #else
     #error "baremetal_net: no network adapter for this target. Add a branch keyed on the target's capability define -- do not add a fallback."
@@ -139,6 +200,13 @@ without a Modbus server impossible.
 
 #ifndef BM_NET_CONNECT
     #define BM_NET_CONNECT BM_NET_CONNECT_CLIENT
+#endif
+
+/** 1 when the adapter's library has no close that skips its wait (set by the
+ *  branch above): the master then closes at most one connection per pass when
+ *  the PLC stops. */
+#ifndef BM_NET_CLOSE_WAITS
+    #define BM_NET_CLOSE_WAITS 0
 #endif
 
 // Slot budget. A slot is an Arduino `Client` handle, not a protocol buffer, so
@@ -255,7 +323,9 @@ enum SendResult : uint8_t
  *  connect is native and non-blocking and poll() advances it; elsewhere the
  *  library's connect runs inside start() with its timeout set to
  *  `timeout_ms`. A failed, timed-out or closed connection gives its socket
- *  back at once. No name resolution: the peer is an IPv4 address. */
+ *  back at once, without the library's graceful wait where it has a form that
+ *  skips it (BM_NET_CLOSE_WAITS otherwise). No name resolution: the peer is an
+ *  IPv4 address. */
 class Connection
 {
 public:
@@ -273,10 +343,12 @@ public:
     int read(uint8_t* buf, size_t cap);
 
     /** Queue the whole of `buf` without blocking: BM_SEND_NO_ROOM when the stack
-     *  has no room for all of it (nothing is sent), BM_SEND_LOST on a send error. */
+     *  has no room for all of it (nothing is sent; on NINA, when the module took
+     *  none of it), BM_SEND_LOST on a send error or a partial send. */
     SendResult send(const uint8_t* buf, size_t len);
 
-    /** Close the connection and give its socket back. Idempotent. */
+    /** Close the connection and give its socket back. Idempotent: on a closed
+     *  connection it makes no library call. */
     void close();
 
 private:

@@ -187,9 +187,10 @@ UART besides the debugger's. Devices already configured stay **visible** on a ta
 can't host them; only creating a new one is refused. On Runtime v3 and the
 Simulator the board-switch warning says they are "disabled during compilation",
 and the build warns and ignores them. On a baremetal board the build is refused
-while a device is one the board cannot run (`checkModbusMaster`), and the
+while a Modbus device is one the board cannot run (`checkModbusMaster`), and the
 board-switch dialog says so: the device stays in the project until it is fixed
-or removed.
+or removed. A remote device that is not a Modbus device (EtherCAT) gets a
+warning naming it on a baremetal board; the build ignores it and continues.
 
 ## 6. Aliases and variable binding
 

@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "baremetal_net.h"
+#include "modbus_master_util.h"
 
 namespace {
 
@@ -23,7 +24,9 @@ enum LinkState : uint8_t
     LINK_WAIT,
     LINK_CONNECTING,
     LINK_UP,
-    LINK_GIVEN_UP
+    LINK_GIVEN_UP,
+    /** The connection is still open from before a STOP edge and closes in a pass with no other close. */
+    LINK_CLOSING
 };
 
 /** One endpoint: its connection, its Reconnect timing, the request in flight and its receive buffer. */
@@ -50,30 +53,27 @@ Endpoint g_endpoints[MB_MASTER_ENDPOINT_COUNT];
 /** The request being sent: MBAP header, unit id and PDU, written in one call. */
 uint8_t g_tx[MB_MASTER_ADU_MAX];
 
-/** Whether `now` has reached `when`, across a millis() wrap. */
-bool reached(uint32_t now, uint32_t when)
+/** A connection was closed in the current master pass, so no connect starts before the next one. */
+bool g_closed_this_pass = false;
+
+/** Whether an endpoint in `state` still holds an open connection. */
+bool link_open(uint8_t state)
 {
-    return (int32_t)(now - when) >= 0;
+    return state == LINK_CONNECTING || state == LINK_UP || state == LINK_CLOSING;
 }
 
-/** Store `value` big-endian at `p`. */
-void put16(uint8_t *p, uint16_t value)
+/** Close the connection of endpoint `e` and mark the pass as one that closed a connection. */
+void link_close(uint16_t e)
 {
-    p[0] = (uint8_t)(value >> 8);
-    p[1] = (uint8_t)value;
-}
-
-/** The big-endian 16-bit value at `p`. */
-uint16_t get16(const uint8_t *p)
-{
-    return (uint16_t)(((uint16_t)p[0] << 8) | p[1]);
+    g_endpoints[e].conn.close();
+    g_closed_this_pass = true;
 }
 
 /** The connection of endpoint `e` failed or was lost: close it, apply error handling, then retry or give up. */
 void link_lost(uint16_t e)
 {
     Endpoint &ep = g_endpoints[e];
-    ep.conn.close();
+    link_close(e);
     ep.in_flight = false;
     ep.quiet = false;
     ep.rx_len = 0;
@@ -250,43 +250,52 @@ void mb_master_tcp_start(void)
     for (uint16_t e = 0; e < MB_MASTER_ENDPOINT_COUNT; e++)
     {
         Endpoint &ep = g_endpoints[e];
-        ep.conn.close();
         ep.in_flight = false;
         ep.quiet = false;
         ep.rx_len = 0;
         ep.retry_delay = RETRY_FIRST_MS;
         ep.retry_at = now;
-        ep.state = LINK_WAIT;
+        ep.state = link_open(ep.state) ? LINK_CLOSING : LINK_WAIT;
         mb_master_link_down(MB_MASTER_TCP, e);
     }
 }
 
 void mb_master_tcp_stop(void)
 {
+    bool closed = false;
     for (uint16_t e = 0; e < MB_MASTER_ENDPOINT_COUNT; e++)
     {
         Endpoint &ep = g_endpoints[e];
-        ep.conn.close();
         ep.in_flight = false;
         ep.quiet = false;
         ep.rx_len = 0;
+        if (BM_NET_CLOSE_WAITS && closed && link_open(ep.state))
+        {
+            ep.state = LINK_CLOSING;
+            continue;
+        }
+        if (link_open(ep.state))
+        {
+            closed = true;
+            ep.conn.close();
+        }
         ep.state = LINK_IDLE;
     }
 }
 
 void mb_master_tcp_service(void)
 {
-    bool may_connect = true;
+    g_closed_this_pass = false;
     for (uint16_t e = 0; e < MB_MASTER_ENDPOINT_COUNT; e++)
     {
         Endpoint &ep = g_endpoints[e];
         switch (ep.state)
         {
-            case LINK_WAIT:
-                if (may_connect && reached((uint32_t)millis(), ep.retry_at))
+            case LINK_CLOSING:
+                if (!g_closed_this_pass)
                 {
-                    may_connect = false;
-                    link_connect(e);
+                    link_close(e);
+                    ep.state = LINK_WAIT;
                 }
                 break;
             case LINK_CONNECTING:
@@ -297,6 +306,17 @@ void mb_master_tcp_service(void)
                 break;
             default:
                 break;
+        }
+    }
+    if (g_closed_this_pass)
+        return;
+    const uint32_t now = (uint32_t)millis();
+    for (uint16_t e = 0; e < MB_MASTER_ENDPOINT_COUNT; e++)
+    {
+        if (g_endpoints[e].state == LINK_WAIT && reached(now, g_endpoints[e].retry_at))
+        {
+            link_connect(e);
+            return;
         }
     }
 }

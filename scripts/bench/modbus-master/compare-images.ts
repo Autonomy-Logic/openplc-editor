@@ -7,7 +7,8 @@
  * Each argument is a copy of a project's `build/` folder, which holds one folder per target. A target passes
  * when its `Baremetal.ino.hex` or `.bin` is byte-identical in both, or, where the toolchain embeds build data in
  * the image, when the ELF's allocated sections have the same sizes and it defines the same functions and
- * objects. Exit code 0 when every target of the baseline passes, 1 otherwise.
+ * objects, compared by name after `normalizeSymbolName`. Exit code 0 when every target of the baseline passes,
+ * 1 otherwise.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
@@ -17,6 +18,30 @@ const SHT_SYMTAB = 2
 const SHF_ALLOC = 0x2
 const STT_OBJECT = 1
 const STT_FUNC = 2
+
+/** GCC and LTO clone suffixes: `.constprop.<n>`, `.part.<n>`, `.isra.<n>`, `.lto_priv.<n>` and `.cold`. */
+const CLONE_SUFFIX = /\.(?:(?:constprop|part|isra|lto_priv)\.\d+|cold(?:\.\d+)?)$/
+
+/** The numeric tail LTO gives a `_GLOBAL__` static constructor or destructor named after its object file. */
+const GLOBAL_OBJECT_TAIL = /^(_GLOBAL__.*\.o)\.\d+$/
+
+/**
+ * A symbol name with its compiler-generated numbering removed, so the clones of one function in two builds of
+ * the same code compare equal: every clone suffix, chained ones included, and the `.o.<n>` tail of a
+ * `_GLOBAL__` name.
+ *
+ * @param name - The symbol name as the ELF symbol table gives it.
+ * @returns The name without those suffixes; any other name unchanged.
+ */
+export function normalizeSymbolName(name: string): string {
+  let previous = ''
+  let normalized = name
+  while (normalized !== previous) {
+    previous = normalized
+    normalized = normalized.replace(CLONE_SUFFIX, '').replace(GLOBAL_OBJECT_TAIL, '$1')
+  }
+  return normalized
+}
 
 /** The allocated sections and defined symbols of an ELF file. */
 interface ElfSummary {
@@ -117,7 +142,7 @@ function summarize(path: string): ElfSummary {
       const kind = info & 0xf
       if (sectionIndex === 0 || (kind !== STT_FUNC && kind !== STT_OBJECT)) continue
       const name = elf.cString(strings.offset + elf.u32(at))
-      if (name !== '') symbols.push(name)
+      if (name !== '') symbols.push(normalizeSymbolName(name))
     }
   }
   symbols.sort()
@@ -211,4 +236,4 @@ function main(argv: string[]): number {
   return verdicts.every((verdict) => verdict.pass) ? 0 : 1
 }
 
-process.exitCode = main(process.argv.slice(2))
+if (require.main === module) process.exitCode = main(process.argv.slice(2))

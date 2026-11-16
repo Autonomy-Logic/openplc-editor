@@ -60,6 +60,7 @@ export const SCENARIOS: Readonly<Record<string, ScenarioSpec>> = {
   'AS-11': { transports: ['rtu'], rows: [1, 2], needsClient: false },
   'AS-12': { transports: ['rtu'], rows: [], needsClient: false },
   'AS-13': { transports: BOTH, rows: [], needsClient: false },
+  TC10: { transports: ['rtu'], rows: range(1, 3), needsClient: false },
 }
 
 /** Throws an error naming the scenario when it is unknown or does not accept this row or transport. */
@@ -485,18 +486,30 @@ function trickle(ctx: Context, nowUs: () => number): Handler {
   }
 }
 
-/** AS-07: 0xFF flood for 60 s from the first request, then 4321, 8765 to that request and to every poll group. */
+/** AS-07: 0xFF flood for 60 s from the first request on every connection open meanwhile, then 4321, 8765 to that
+ *  request and to every poll group. */
 function flood(ctx: Context): Handler {
   let state: 'idle' | 'flooding' | 'answering' = 'idle'
+  const open = new Set<SlaveLink>()
   return {
+    attach: (link) => {
+      open.add(link)
+      if (state === 'flooding') {
+        link.startFlood()
+      }
+    },
+    detach: (link) => {
+      open.delete(link)
+    },
     handle: (request, link) => {
       if (state === 'idle') {
         state = 'flooding'
         ctx.phase('flood', { duration_ms: FLOOD_MS * ctx.scale })
-        link.startFlood()
+        open.add(link)
+        open.forEach((each) => each.startFlood())
         ctx.later(FLOOD_MS * ctx.scale, () => {
           state = 'answering'
-          link.stopFlood()
+          open.forEach((each) => each.stopFlood())
           ctx.phase('flood-end')
           answerValues(link, request, RESUME_VALUES)
         })
@@ -573,8 +586,25 @@ function as11Hostile(row: number): Buffer {
   return frame
 }
 
-/** AS-11: one malformed RTU answer to G1, then 501..510 on G1. */
-function rtuHostile(ctx: Context, row: number): Handler {
+/** TC10 rows 1-3: a 10-register FC 3 answer with a wrong slave id, a wrong FC or both CRC bytes inverted. */
+function tc10Hostile(row: number): Buffer {
+  const data = Buffer.concat([Buffer.from([20]), hostileWords(10)])
+  switch (row) {
+    case 1:
+      return rtuAdu(2, Buffer.concat([Buffer.from([FC.readHoldingRegisters]), data]))
+    case 2:
+      return rtuAdu(SLAVE_UNIT, Buffer.concat([Buffer.from([FC.readInputRegisters]), data]))
+    default: {
+      const frame = rtuAdu(SLAVE_UNIT, Buffer.concat([Buffer.from([FC.readHoldingRegisters]), data]))
+      frame[frame.length - 2] ^= 0xff
+      frame[frame.length - 1] ^= 0xff
+      return frame
+    }
+  }
+}
+
+/** AS-11 and TC10: one malformed RTU answer to G1, then 501..510 on G1. */
+function rtuHostile(ctx: Context, malformed: Buffer): Handler {
   let hostileSent = false
   return {
     handle: (request, link) => {
@@ -585,7 +615,7 @@ function rtuHostile(ctx: Context, row: number): Handler {
       } else {
         hostileSent = true
         ctx.phase('hostile')
-        link.send(as11Hostile(row))
+        link.send(malformed)
       }
     },
   }
@@ -610,7 +640,9 @@ function buildHandler(scenario: string, ctx: Context, nowUs: () => number): Hand
     case 'AS-10':
       return readStop(ctx)
     case 'AS-11':
-      return rtuHostile(ctx, row)
+      return rtuHostile(ctx, as11Hostile(row))
+    case 'TC10':
+      return rtuHostile(ctx, tc10Hostile(row))
     default:
       return normalScenario(ctx)
   }

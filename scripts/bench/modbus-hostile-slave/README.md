@@ -31,8 +31,8 @@ npm run bench:hostile-slave -- --scenario <name> [--row <n>] \
 
 | Option                                     | Meaning                                                                                                                                                                                                             |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--scenario <name>`                        | `normal`, `AS-01`, `AS-02`, `AS-03`, `AS-04`, `AS-06`, `AS-07`, `AS-08`, `AS-09`, `AS-10`, `AS-11`, `AS-12` or `AS-13`. An unknown name stops the tool with exit code 2 before it listens.                          |
-| `--row <n>`                                | Row of the scenario: AS-02 1-9, AS-04 1-3, AS-09 1-2, AS-11 1-2. Required by those scenarios, refused by the others.                                                                                                |
+| `--scenario <name>`                        | `normal`, `AS-01`, `AS-02`, `AS-03`, `AS-04`, `AS-06`, `AS-07`, `AS-08`, `AS-09`, `AS-10`, `AS-11`, `AS-12`, `AS-13` or `TC10`. An unknown name stops the tool with exit code 2 before it listens.                  |
+| `--row <n>`                                | Row of the scenario: AS-02 1-9, AS-04 1-3, AS-09 1-2, AS-11 1-2, TC10 1-3. Required by those scenarios, refused by the others.                                                                                      |
 | `--tcp-listen <ip:port>`                   | Slave role over Modbus TCP, listening only on that address. Port `0` takes a free port, reported in the `listening` event. The wildcard addresses `0.0.0.0` and `::` are refused.                                   |
 | `--serial <path> --baud <n>`               | Slave role over Modbus RTU on that serial port, 8 data bits. `--parity` defaults to `N`, `--stop` to `1`.                                                                                                           |
 | `--board <ip[:port]>`                      | The board, for the `client` role of AS-04 row 1 (default port 502) and the `attacker` role of AS-08 (default port 102) and AS-13 (default port 502). The tool never sends to any other address.                     |
@@ -155,8 +155,10 @@ npm run bench:hostile-slave -- --scenario AS-06 --tcp-listen 192.168.1.50:502 --
 ### AS-07 (TCP or RTU)
 
 On the first request, 0xFF sent continuously at full rate for 60 s (on RTU with no 3.5-character gap: blocks sized
-for twice the line rate keep the port's output buffer full), then the answer 4321, 8765 to that request. Requests
-during the flood are not answered; afterwards every poll group gets 4321, 8765.
+for twice the line rate keep the port's output buffer full), then the answer 4321, 8765 to that request. Over TCP
+the flood follows reconnections: every connection open while it lasts receives it, including one the board opens
+after closing the first, and it stops on all of them when the 60 s end. Requests during the flood are not answered
+(logged `withheld`); afterwards every poll group gets 4321, 8765.
 
 ```bash
 npm run bench:hostile-slave -- --scenario AS-07 --tcp-listen 192.168.1.50:502 --log as-07-tcp.jsonl
@@ -219,6 +221,19 @@ The first G1 request gets a malformed answer, every later one 501..510:
 npm run bench:hostile-slave -- --scenario AS-11 --row 1 --serial /dev/ttyUSB0 --baud 19200 --log as-11-row1.jsonl
 ```
 
+### TC10 rows 1-3 (RTU)
+
+The first G1 request (FC 3, 10 registers) gets a malformed answer carrying 201..210, every later one 501..510; the
+other groups get their `normal` answers. Over TCP the tool stops with exit code 2.
+
+- Row 1, wrong slave id: slave 2, FC 3, byte count 20, 20 data bytes and a valid CRC.
+- Row 2, wrong FC: slave 1, FC 0x04, byte count 20, 20 data bytes and a valid CRC.
+- Row 3, bad CRC: slave 1, FC 3, byte count 20, 20 data bytes, both CRC bytes inverted.
+
+```bash
+npm run bench:hostile-slave -- --scenario TC10 --row 1 --serial /dev/ttyUSB0 --baud 19200 --log tc10-row1.jsonl
+```
+
 ### AS-12 (RTU)
 
 G3 answered with 23130; G1 not answered; the next G2 request gets G1's answer (byte count 20, 1111..1120, valid
@@ -240,6 +255,12 @@ npm run bench:hostile-slave -- --scenario AS-13 --board 192.168.1.100 --tcp-list
 ```
 
 ## Tests and checks
+
+```bash
+npm run test:bench
+```
+
+`npm run test:bench` also runs the tests of `scripts/bench/modbus-master/`. The tool's own tests alone, without npm:
 
 ```bash
 TS_NODE_TRANSPILE_ONLY=true node --require ts-node/register --test scripts/bench/modbus-hostile-slave/__tests__/*.test.ts

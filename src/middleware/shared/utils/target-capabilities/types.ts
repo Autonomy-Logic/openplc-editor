@@ -166,7 +166,8 @@ export interface TargetCapabilities {
 
   /** The target runs a Modbus RTU master over a UART. On baremetal the family
    *  can; the master profile narrows it to boards with a UART besides the
-   *  debugger's. Not declarable by a VPP manifest. */
+   *  debugger's. A VPP manifest cannot set it (the resolver ignores it on a VPP
+   *  board); built-in hals.json entries do. */
   modbusRtuMaster: boolean
 
   /** EtherCAT slaves. */

@@ -8,6 +8,7 @@
  * Byte-identical between openplc-editor and openplc-web.
  */
 
+import { debuggerUart, FALLBACK_DEFAULT_SERIAL } from '../board-hardware/default-serial'
 import { BOARD_NETWORK_SCREEN, BOARD_SERIAL_SCREEN, findBoardScreen } from '../board-screens'
 import { resolveTargetCapabilities } from '../target-capabilities'
 import type { ModbusSegment, ModbusSegmentCounts, ModbusServerProfile, ModbusServerTransport } from './types'
@@ -78,9 +79,6 @@ const BAREMETAL_TCP_PORT = 502
 
 /** The IANA Modbus port, and the default for a new Runtime v4 server. */
 const DEFAULT_TCP_PORT = 502
-
-/** Port name assumed when a package declares no `defaultSerial`. */
-const FALLBACK_DEFAULT_SERIAL = 'Serial'
 
 /**
  * The profile for a target that serves no Modbus server at all — Runtime v3,
@@ -172,7 +170,7 @@ export function resolveModbusServerProfile(board: ModbusBoardInfoLike | undefine
       // One network interface on a microcontroller; there is nothing to bind to.
       configurableBindAddress: false,
       serialPorts: board.serialPorts ?? [],
-      defaultSerial: board.defaultSerial ?? FALLBACK_DEFAULT_SERIAL,
+      defaultSerial: debuggerUart(board),
       fixedPort: BAREMETAL_TCP_PORT,
       derivedCounts: firmwareCounts(board.platform),
       minCounts: null,

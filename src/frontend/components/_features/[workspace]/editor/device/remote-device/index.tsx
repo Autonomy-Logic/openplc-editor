@@ -619,6 +619,7 @@ const RemoteDeviceEditor = () => {
 
   // Transport type state
   const [transport, setTransport] = useState<'tcp' | 'rtu'>('tcp')
+  const showTimeoutHelp = isBaremetal && transport === 'tcp'
 
   // TCP-specific state
   const [host, setHost] = useState('')
@@ -1203,11 +1204,11 @@ const RemoteDeviceEditor = () => {
                 onBlur={handleTimeoutBlur}
                 placeholder='1000'
                 className={inputStyles}
-                aria-describedby={isBaremetal ? timeoutHelpId : undefined}
+                aria-describedby={showTimeoutHelp ? timeoutHelpId : undefined}
                 data-testid='remote-device-timeout-input'
               />
             </div>
-            {isBaremetal && (
+            {showTimeoutHelp && (
               <p id={timeoutHelpId} data-testid='remote-device-timeout-help' className={HINT_STYLES}>
                 {BAREMETAL_TIMEOUT_HELP}
               </p>

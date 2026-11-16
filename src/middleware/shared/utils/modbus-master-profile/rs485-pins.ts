@@ -51,11 +51,11 @@ export function isValidRs485Pin(value: unknown): value is string {
   return typeof value === 'string' && RS485_PIN_PATTERN.test(value)
 }
 
-/** The single pin of a 4.3.x Serial screen, or `null` when its switch is off or the pin is empty. */
+/** The single pin of a 4.3.x Serial screen, trimmed, or `null` when its switch is off or the pin is empty. */
 function legacyPin(serial: SerialScreenState['serial']): string | null {
   if (serial?.enable_rs485_en_pin !== true) return null
-  const pin = serial.rs485_en_pin
-  return typeof pin === 'string' && pin.length > 0 ? pin : null
+  const pin = typeof serial.rs485_en_pin === 'string' ? serial.rs485_en_pin.trim() : ''
+  return pin.length > 0 ? pin : null
 }
 
 /**

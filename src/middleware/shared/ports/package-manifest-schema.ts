@@ -94,6 +94,10 @@ const boardManagerUrl = z.string().refine(
   { message: 'must be an https:// URL' },
 )
 
+/**
+ * Device entries declare only `target.boardManagerUrl`, `target.uploadMethod` and `rs485FixedPins`;
+ * every other key passes through.
+ */
 export const PackageManifestSchema = z
   .object({
     formatVersion: z.string().min(1),
@@ -121,10 +125,6 @@ export const PackageManifestSchema = z
       .array(
         z
           .object({
-            // Only `boardManagerUrl`, `uploadMethod` and `rs485FixedPins` are declared; everything
-            // else on a device — and on `target` itself — still flows through
-            // untouched.
-            //
             // `uploadMethod` is constrained rather than passed through because
             // it ROUTES: it is typed `'serial' | 'ethernet'` downstream, and
             // `BoardInfoResolver.#fromVppDevice` copies whatever is here into

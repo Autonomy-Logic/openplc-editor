@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, resolve as pathResolve, sep as pathSep } from 'node:path'
 import { promisify } from 'node:util'
@@ -13,6 +13,7 @@ import { readHalsFile } from '../../shared/firmware/hals-loader'
 import { type BoardBuildInfo, BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { resolveConfigTemplatePluginName } from '../../shared/utils/vpp/build-vpp-plugin-files'
 import { PackageManagerModule } from '../package-manager'
+import { readPackageFile } from '../package-manager/read-package-file'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
 import { orderBoardsByVppGroup } from './order-boards-by-vpp-group'
@@ -225,7 +226,7 @@ class HardwareModule {
       // inside the package's root directory.  Web's adapter will pick
       // its own scheme when VPP-on-web lands.
       resolvePackageRelativePath,
-      readPackageFile: (pkg, relPath) => readFileSync(resolvePackageRelativePath(pkg.path, relPath), 'utf-8'),
+      readPackageFile,
     })
     return resolver.resolve(boardName)
   }

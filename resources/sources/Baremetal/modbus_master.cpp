@@ -10,6 +10,7 @@
 #include "arduino_runtime_glue.h"
 #include "modbus_master_rtu.h"
 #include "modbus_master_tcp.h"
+#include "modbus_master_util.h"
 #include "modbus_pdu.h"
 #include "openplc.h"
 
@@ -81,25 +82,6 @@ bool on_link(uint16_t g, uint8_t transport, uint16_t link)
 {
     const mb_master_device_t &device = MB_MASTER_DEVICES[MB_MASTER_GROUPS[g].device];
     return device.transport == transport && device.link == link;
-}
-
-/** Whether `now` has reached `when`, across a millis() wrap. */
-bool reached(uint32_t now, uint32_t when)
-{
-    return (int32_t)(now - when) >= 0;
-}
-
-/** Store `value` big-endian at `p`. */
-void put16(uint8_t *p, uint16_t value)
-{
-    p[0] = (uint8_t)(value >> 8);
-    p[1] = (uint8_t)value;
-}
-
-/** The big-endian 16-bit value at `p`. */
-uint16_t get16(const uint8_t *p)
-{
-    return (uint16_t)(((uint16_t)p[0] << 8) | p[1]);
 }
 
 /** Image area of a point's MB_IMG_* code. */
@@ -287,7 +269,8 @@ void stop_groups()
 
 #endif
 
-/** Leave RUN: every poll stops and every connection closes, giving its socket back. */
+/** Leave RUN: every poll stops and every connection closes, giving its socket back; where a close may wait,
+ *  the TCP connections close one per pass on the passes that follow. */
 void stop_master()
 {
     stop_groups();
@@ -488,6 +471,12 @@ void mb_master_task(void)
             g_running = false;
             stop_master();
         }
+#if MB_MASTER_TCP_ENABLED
+        else
+        {
+            mb_master_tcp_stop();
+        }
+#endif
         return;
     }
     if (!g_running)

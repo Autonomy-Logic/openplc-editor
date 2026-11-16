@@ -1,4 +1,5 @@
 import type { PLCRemoteDevice } from '../../ports/types'
+import { debuggerUart } from '../board-hardware/default-serial'
 import { endpointKey } from './endpoint'
 import {
   boardSerialPortIssues,
@@ -42,13 +43,22 @@ export interface CheckModbusMasterInput {
   boardTarget?: string
 }
 
-/** UART the debugger sits on when a package declares no `defaultSerial`. */
-const FALLBACK_DEFAULT_SERIAL = 'Serial'
+/** The selected target as the Remote IO warnings quote it. */
+function quotedTarget(boardTarget: string | undefined): string {
+  return boardTarget === undefined ? 'the selected target' : `the selected target (${boardTarget})`
+}
 
 /** The warning a target that ignores remote devices gives for a project that has some. */
 export function remoteIoWarning(boardTarget: string | undefined): string {
-  const target = boardTarget === undefined ? 'the selected target' : `the selected target (${boardTarget})`
-  return `Warning: Your project contains Remote IO configurations, but ${target} does not support this feature. The remote device configurations will be ignored during compilation.`
+  return `Warning: Your project contains Remote IO configurations, but ${quotedTarget(boardTarget)} does not support this feature. The remote device configurations will be ignored during compilation.`
+}
+
+/** The warning a target gives for the remote devices it ignores while it runs the others, named in `deviceNames`. */
+export function unsupportedRemoteDevicesWarning(
+  boardTarget: string | undefined,
+  deviceNames: readonly string[],
+): string {
+  return `Warning: Your project contains remote devices that ${quotedTarget(boardTarget)} does not support: ${deviceNames.join(', ')}. They will be ignored during compilation.`
 }
 
 /** Groups items by a key, keeping first-seen order; items whose key is `null` are left out. */
@@ -225,7 +235,8 @@ function socketBudgetIssues(devices: readonly ModbusRemoteDevice[], profile: Mod
  * Runtime v3 only warns that remote devices are ignored. The Simulator refuses mismatched Reconnect or
  * line settings and warns that it ignores the devices. Runtime v4 also refuses a transport it does not
  * offer. Baremetal also refuses reserved UARTs, hosts that are not IPv4, ports the board lacks, values out
- * of range and bad RS-485 pins, and warns when the TCP endpoints exceed the declared sockets.
+ * of range and bad RS-485 pins, warns when the TCP endpoints exceed the declared sockets, and warns that
+ * it ignores remote devices that are not Modbus devices.
  */
 export function checkModbusMaster(input: CheckModbusMasterInput): MasterIssue[] {
   const { profile, board, target } = input
@@ -248,14 +259,28 @@ export function checkModbusMaster(input: CheckModbusMasterInput): MasterIssue[] 
   if (target === 'baremetal') {
     const offered = devices.filter((device) => profile.transports.includes(transportOf(device.modbusTcpConfig)))
     issues.push(
-      ...reservedUartIssues(offered, board.defaultSerial ?? FALLBACK_DEFAULT_SERIAL, input.rtuServerUart),
+      ...reservedUartIssues(offered, debuggerUart(board), input.rtuServerUart),
       ...devices.flatMap((device) => deviceFieldIssues(device, board.serialPorts ?? [])),
       ...masterUartPinIssues(devices, board.rs485Pins),
       ...socketBudgetIssues(devices, profile),
+      ...unsupportedDeviceIssues(input),
     )
   }
 
   return issues
+}
+
+function unsupportedDeviceIssues(input: CheckModbusMasterInput): MasterIssue[] {
+  const unsupported = input.devices.filter((device) => !isModbusRemoteDevice(device)).map((device) => device.name)
+  if (unsupported.length === 0) return []
+  return [
+    {
+      severity: 'warning',
+      devices: unsupported,
+      item: 'Remote IO',
+      message: unsupportedRemoteDevicesWarning(input.boardTarget, unsupported),
+    },
+  ]
 }
 
 function remoteIoIssue(input: CheckModbusMasterInput): MasterIssue {

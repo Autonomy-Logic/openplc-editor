@@ -36,8 +36,9 @@ import type { AddressProducerCapabilities, OpcUaTargetProfile, S7TargetProfile, 
  * demands a complete `opcua` / `s7` profile, while the contract for both is
  * "declare only what you raise". The nested blocks have to be partial too.
  *
- * `modbusRtuMaster` is not declarable: it comes from the family preset and the
- * master profile narrows it to the board's spare UARTs.
+ * `modbusRtuMaster` is not declarable by a VPP manifest: the resolver ignores it
+ * on a VPP board, so the family preset stands, and the master profile narrows it
+ * to the board's spare UARTs. Built-in hals.json entries do declare it.
  */
 export type DeclaredCapabilities = Omit<Partial<TargetCapabilities>, 'opcua' | 's7' | 'modbusRtuMaster'> & {
   opcua?: Partial<OpcUaTargetProfile>
@@ -184,6 +185,10 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
 
   if (merged.s7Server) {
     merged.s7 = resolveS7Profile(declared?.s7, base.s7)
+  }
+
+  if (boardInfo.vpp) {
+    merged.modbusRtuMaster = base.modbusRtuMaster
   }
 
   return merged
