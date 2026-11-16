@@ -24,7 +24,7 @@ type ESIUploadProps = {
  * ESI File Upload Component
  *
  * Allows users to upload multiple EtherCAT ESI XML files via drag-and-drop or file picker.
- * Files are read and sent to the main process one at a time to avoid memory issues.
+ * Files are read and sent to the main process one at a time.
  */
 const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadProps) => {
   const esi = useEsi()
@@ -47,8 +47,6 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
 
       const errors: Array<{ filename: string; error: string }> = []
 
-      // A ZIP is expanded into its ESIs before the save loop so each XML gets its own
-      // progress step; a ZIP with nothing recognisable is an error on the ZIP's name.
       const zipExpanded: Array<{ sourceZip: string; file: ESIImportFile }> = []
       for (const zipFile of zipInputs) {
         try {
@@ -92,14 +90,9 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
       })
 
       const newItems: ESIRepositoryItemLight[] = []
-      // A dedup-after-retry result means the file was persisted on the backend
-      // but its row was missing from the upload response (and the adapter's own
-      // recovery lookup also failed). Honor the EsiPort contract by re-listing
-      // the repository after the batch so the file appears instead of silently
-      // vanishing — see EsiPort.parseAndSaveFile (`dedupAfterRetry`).
       let needsRepositoryRefresh = false
 
-      const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
+      const MAX_FILE_SIZE = 100 * 1024 * 1024
 
       type WorkItem = { filename: string; getXml: () => Promise<string>; size?: number }
       const work: WorkItem[] = [
@@ -143,7 +136,6 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
           } else if (result.success && result.dedupAfterRetry) {
             needsRepositoryRefresh = true
           } else if (result.success) {
-            // Real duplicate — content already in the repository. Skip silently.
           } else {
             errors.push({ filename: item.filename, error: result.error ?? 'Parse failed' })
           }
@@ -159,9 +151,6 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
         percentage: 100,
       })
 
-      // A recovered-but-unlisted upload (dedupAfterRetry) is on the backend yet
-      // missing from `newItems`. Re-list the repository so it shows up; fall
-      // back to the locally accumulated list if the refresh itself fails.
       if (needsRepositoryRefresh) {
         const refreshed = await esiPort.loadRepositoryLight()
         if (refreshed.success && refreshed.items) {
@@ -170,10 +159,6 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
         }
       }
 
-      // A recovered add (item + dedupAfterRetry) can return a row that already
-      // exists in `repository` — the retry hit the backend dedup against a
-      // pre-existing entry. Dedup the merged list by id (repository wins) so the
-      // same row isn't rendered twice or assigned a duplicate React key.
       const mergedById = new Map<ESIRepositoryItemLight['id'], ESIRepositoryItemLight>()
       for (const item of [...repository, ...newItems]) {
         if (!mergedById.has(item.id)) {
@@ -217,7 +202,6 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
       if (files && files.length > 0) {
         void processFiles(files)
       }
-      // Reset input so same files can be selected again
       e.target.value = ''
     },
     [processFiles],
@@ -233,7 +217,6 @@ const ESIUpload = ({ onFilesLoaded, repository, isLoading = false }: ESIUploadPr
     <div className='flex flex-col gap-2'>
       <label className='text-xs font-medium text-neutral-950 dark:text-white'>ESI Device Files</label>
 
-      {/* Drop zone */}
       <div
         data-testid='esi-upload-dropzone'
         role='button'

@@ -28,7 +28,6 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
 
   const handleFilesLoaded = useCallback(
     (items: ESIRepositoryItemLight[], errors?: Array<{ filename: string; error: string }>) => {
-      // Items are already parsed and saved by the main process
       onRepositoryChange(items)
       setUploadErrors(errors ?? [])
     },
@@ -80,10 +79,8 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
 
   return (
     <div className='flex flex-1 flex-col gap-4 overflow-hidden'>
-      {/* Upload Area */}
       <ESIUpload onFilesLoaded={handleFilesLoaded} repository={repository} isLoading={isProcessing} />
 
-      {/* Error Summary (collapsible) */}
       {uploadErrors.length > 0 && (
         <div
           data-testid='esi-upload-errors'
@@ -135,7 +132,6 @@ const ESIRepository = ({ repository, onRepositoryChange, projectPath, isLoading 
         </div>
       )}
 
-      {/* Repository Table */}
       <div className='flex flex-1 flex-col overflow-hidden'>
         <ESIRepositoryTable
           repository={repository}

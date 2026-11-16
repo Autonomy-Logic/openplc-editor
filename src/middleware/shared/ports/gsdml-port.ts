@@ -12,7 +12,7 @@ export type GsdmlRepositoryItem = DescriptionItem<GsdmlRepositorySummary>
  * Every platform uses the same implementation, `createGsdmlRepositoryPort`
  * (`backend/shared/profinet/gsdml-repository-port.ts`). Platforms only supply
  * mechanisms (`gsdml-repository-mechanisms.ts`): where the shared parser runs and
- * where rows are stored. Never implement this port per platform.
+ * where rows are stored.
  */
 export interface GsdmlPort {
   /**

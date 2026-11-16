@@ -47,7 +47,6 @@ const ESIRepositoryTable = ({ repository, onRemoveItem, onClearAll, isLoading = 
 
   return (
     <div className='flex flex-1 flex-col gap-2 overflow-hidden'>
-      {/* Header with count and clear button */}
       <div className='flex items-center justify-between'>
         <span data-testid='esi-repository-count' className='text-xs font-medium text-neutral-700 dark:text-neutral-300'>
           Loaded Files ({repository.length}) - {totalDevices} device(s)
@@ -62,7 +61,6 @@ const ESIRepositoryTable = ({ repository, onRemoveItem, onClearAll, isLoading = 
         </button>
       </div>
 
-      {/* Repository list */}
       <div className='flex-1 overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-800'>
         <table className='w-full table-fixed'>
           <thead className='sticky top-0 bg-neutral-100 dark:bg-neutral-900'>
@@ -109,7 +107,6 @@ type RepositoryItemRowProps = {
 const RepositoryItemRow = ({ item, isExpanded, onToggleExpand, onRemove }: RepositoryItemRowProps) => {
   return (
     <>
-      {/* Main row */}
       <tr
         data-testid='esi-repository-row'
         data-filename={item.filename}
@@ -172,7 +169,6 @@ const RepositoryItemRow = ({ item, isExpanded, onToggleExpand, onRemove }: Repos
         </td>
       </tr>
 
-      {/* Expanded device rows */}
       {isExpanded &&
         item.devices.map((device, index) => (
           <tr
@@ -209,7 +205,6 @@ const RepositoryItemRow = ({ item, isExpanded, onToggleExpand, onRemove }: Repos
           </tr>
         ))}
 
-      {/* Warnings row */}
       {isExpanded && item.warnings && item.warnings.length > 0 && (
         <tr className='border-b border-neutral-100 bg-yellow-50 dark:border-neutral-900 dark:bg-yellow-900/10'>
           <td className='px-2 py-1'></td>
