@@ -324,6 +324,7 @@ test('appends groups after the existing ones, with warnings and fresh IEC addres
 async function expectTooltipOn(cell: ReturnType<Page['getByTestId']>, full: string) {
   await expect(cell).toHaveText(full)
   expect(await cell.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true)
+  await cell.scrollIntoViewIfNeeded()
   const box = await cell.boundingBox()
   if (!box) throw new Error('cell has no box')
   await page.mouse.move(box.x - 20, box.y + box.height / 2)
