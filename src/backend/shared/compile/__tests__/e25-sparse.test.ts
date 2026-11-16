@@ -1,10 +1,3 @@
-/**
- * Bench case E25 — a project that arrives sparse and was never recalculated.
- *
- * The ESI parser proposes BYTE offsets for the channels, so until a producer
- * screen is opened the disk holds %IL0/%IL8/%IL16 for three LWORD channels.
- * The compiler reproduces what is on disk -- it does not compact it.
- */
 import { computeIoImage, IMAGE_AREAS_RUNTIME_V4 } from '../steps/compute-io-image'
 
 const ALL = { pinMapping: true, vppIo: true, modbusTcpMaster: true, modbusRtuMaster: true, ethercat: true }
@@ -42,7 +35,6 @@ describe('E25 — sparse at the source', () => {
   })
 
   it('control: compacted by the recalculation, the same 3 ask for 4', () => {
-    // What updateEthercatConfig produces when the screen is opened and saved.
     const img = withChannels(['%IL1', '%IL2', '%IL3'])
     // eslint-disable-next-line no-console
     console.log(`[E25] compact  -> ${JSON.stringify(img.sizes)}`)

@@ -1,17 +1,3 @@
-/**
- * Tests for `buildLocationDropdownOptions` — the variables-table
- * location-cell dropdown source. The core contract is target-scoping:
- * the picker must offer only addresses the active target's capability
- * block authorizes, even when the project file still carries persisted
- * state from previously-active targets.
- *
- * The user-facing bug this regression-tests against: switching a
- * project from SLM-RP4 (Runtime v4 + VPP IO) to Arduino Mega
- * (arduino-cli + pin-mapping) was leaving the dropdown showing both
- * the Arduino pin's `%QX0.0` AND the stale SLM-RP4 slot 1 `%QX0.0`,
- * because the dropdown wasn't honoring `caps.vppIo === false`.
- */
-
 import type { DevicePin, IoMappingEntry } from '../../../middleware/shared/ports/types'
 import {
   ARDUINO_CLI_CAPABILITIES,
@@ -66,24 +52,12 @@ describe('buildLocationDropdownOptions', () => {
         capabilities: ARDUINO_CLI_CAPABILITIES,
       })
 
-      // The Arduino pin's %QX0.0 surfaces under Digital Outputs.
       const digitalOutputs = groups.find((g) => g.label === 'Digital Outputs')
       expect(digitalOutputs?.options.map((o) => o.value)).toEqual(['%QX0.0'])
 
-      // The stale SLM-RP4 entry must NOT appear — neither as a group nor
-      // as an option in any group.
       const allOptionValues = groups.flatMap((g) => g.options.map((o) => o.value))
-      const vppGroupCount = groups.filter((g) =>
-        // VPP groups carry a "slot-N module-name" pattern; pin/remote
-        // groups use fixed labels. The exact convention is set by
-        // `buildVendorIoOptionGroups`, so we test the user-visible
-        // contract instead: when vppIo is off, no group should
-        // reference a slot number.
-        /slot/i.test(g.label),
-      ).length
+      const vppGroupCount = groups.filter((g) => /slot/i.test(g.label)).length
       expect(vppGroupCount).toBe(0)
-      // Belt-and-suspenders: even if a VPP group did slip through with a
-      // non-matching label, the entry's specific alias must not appear.
       expect(allOptionValues.filter((v) => v === '%QX0.0')).toHaveLength(1)
     })
 
@@ -96,25 +70,16 @@ describe('buildLocationDropdownOptions', () => {
         capabilities: SLM_RP4_CAPABILITIES,
       })
 
-      // No pin groups should carry options — the pin entries are
-      // disabled. Group headings stay (empty) so the picker keeps a
-      // stable shape regardless of active target.
       for (const label of ['Analog Inputs', 'Analog Outputs', 'Digital Inputs', 'Digital Outputs']) {
         const group = groups.find((g) => g.label === label)
         expect(group?.options).toEqual([])
       }
 
-      // The VPP entry surfaces under whatever group the vendor-io
-      // builder produces for slot 1; assert via the option value. Vendor
-      // IO options carry the ALIAS as their value (resolved to an
-      // address only at compile time), so we assert the alias here.
       const allOptionValues = groups.flatMap((g) => g.options.map((o) => o.value))
       expect(allOptionValues).toContain('slm-rp4-relay-1')
     })
 
     it('drops remote-device IO points when both Modbus masters and `ethercat` are disabled', () => {
-      // A target that can run neither master nor EtherCAT. The remote point
-      // persists in the project but must not surface.
       const groups = buildLocationDropdownOptions({
         cellId: 'loc-3',
         pins: [],
@@ -123,14 +88,11 @@ describe('buildLocationDropdownOptions', () => {
         capabilities: { ...ARDUINO_CLI_CAPABILITIES, modbusTcpMaster: false, modbusRtuMaster: false },
       })
 
-      // Remote IO options carry the alias as their value.
       const allOptionValues = groups.flatMap((g) => g.options.map((o) => o.value))
       expect(allOptionValues).not.toContain('flow-sensor-alias')
     })
 
     it('surfaces remote-device IO points when EITHER Modbus master OR `ethercat` is enabled', () => {
-      // Both flags on the SLM-RP4 capability block — typical Runtime v4
-      // setup. The point should appear.
       const groups = buildLocationDropdownOptions({
         cellId: 'loc-4',
         pins: [],
@@ -178,16 +140,11 @@ describe('buildLocationDropdownOptions', () => {
         capabilities: RUNTIME_V3_CAPABILITIES,
       })
 
-      // Pin headings remain (empty); no remote or vendor groups exist.
       const allOptionValues = groups.flatMap((g) => g.options.map((o) => o.value))
       expect(allOptionValues).toEqual([])
     })
 
     it('surfaces persisted remote/EtherCAT points on the simulator (mirrors v4 semantics for project compatibility)', () => {
-      // The simulator preset enables both Modbus masters + ethercat as
-      // no-ops at the bytecode level so v4-authored projects don't
-      // get nagged when simulated. Pin-mapping stays off — the
-      // simulator has no real hardware pins to drive.
       const groups = buildLocationDropdownOptions({
         cellId: 'loc-6',
         pins: [ARDUINO_PIN],
@@ -197,9 +154,6 @@ describe('buildLocationDropdownOptions', () => {
       })
 
       const allOptionValues = groups.flatMap((g) => g.options.map((o) => o.value))
-      // Pin (Arduino-specific) dropped, vendor (VPP-specific) dropped,
-      // remote points retained. Remote/vendor values are aliases; the
-      // pin value would have been the literal address.
       expect(allOptionValues).toContain('flow-sensor-alias')
       expect(allOptionValues).not.toContain('%QX0.0')
       expect(allOptionValues).not.toContain('slm-rp4-relay-1')
@@ -255,19 +209,11 @@ describe('buildLocationDropdownOptions', () => {
         capabilities: SLM_RP4_CAPABILITIES,
       })
 
-      // Find positional indices of the fixed pin-group labels — they
-      // come first. Then the remote-device group (named after the
-      // device) and the vendor group (named after the module/slot)
-      // follow in that order. We don't pin exact remote/vendor labels
-      // because the underlying builders own that contract; we just
-      // assert relative ordering.
       const labels = groups.map((g) => g.label)
       expect(labels.indexOf('Analog Inputs')).toBe(0)
       expect(labels.indexOf('Analog Outputs')).toBe(1)
       expect(labels.indexOf('Digital Inputs')).toBe(2)
       expect(labels.indexOf('Digital Outputs')).toBe(3)
-      // Anything else is remote/vendor and must come after the four
-      // pin-group headings.
       expect(labels.length).toBeGreaterThan(4)
     })
   })

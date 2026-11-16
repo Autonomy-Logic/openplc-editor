@@ -1,8 +1,3 @@
-/**
- * A one-program project for the Modbus master specs, written with its remote devices and servers on disk,
- * plus the launch, save and shutdown steps those specs share. Boards from the unsigned e2e package need the
- * signature stub `launch` installs before the project opens.
- */
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,9 +27,8 @@ export function remoteDevice(name: string, config: Record<string, unknown>): Rec
 }
 
 /**
- * Writes the project and a fresh profile under the real temp folder (Electron resolves `userData` through
- * symlinks), with empty Arduino control files, without which the board list never loads, and the e2e
- * baremetal package. Borrows this machine's arduino-cli folder when it has one, so startup installs nothing.
+ * Writes the project, a fresh profile, empty Arduino control files and the e2e baremetal package under the real
+ * temp folder.
  */
 export function writeModbusMasterProject(slug: string, spec: ModbusMasterProjectSpec): ModbusMasterProject {
   const root = join(realpathSync(tmpdir()), `openplc-e2e-modbus-master-${slug}`)
@@ -149,7 +143,7 @@ export async function launchProject(userData: string): Promise<{ app: ElectronAp
   throw new Error('main window never appeared')
 }
 
-/** The quit confirmation holds every quit with a project open, so the process is killed. */
+/** Kills the app process and waits for it to exit. */
 export async function shutdown(app: ElectronApplication): Promise<void> {
   const proc = app.process()
   if (proc.exitCode !== null) return
@@ -158,7 +152,7 @@ export async function shutdown(app: ElectronApplication): Promise<void> {
   await exited
 }
 
-/** Ctrl+S is a native menu accelerator, which Playwright's keyboard never reaches. */
+/** Sends the save accelerator to the main window. */
 export async function save(app: ElectronApplication): Promise<void> {
   await app.evaluate(({ BrowserWindow }) => {
     const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))

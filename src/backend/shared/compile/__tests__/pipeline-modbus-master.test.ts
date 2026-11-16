@@ -1,8 +1,3 @@
-/**
- * The Modbus master in the shared pipeline: the checks of the `validate` stage
- * on every target, and `modbus_master_config.h` on baremetal.
- */
-
 import type { DevicePin } from '../../types/PLC/devices'
 import type { PLCProjectData } from '../../types/PLC/open-plc'
 import type { CompilerPlatformPort } from '../../../../middleware/shared/ports/compiler-platform-port'
@@ -461,7 +456,6 @@ describe('pipeline: modbus_master_config.h', () => {
 })
 
 describe('pipeline: the stored RS-485 pin of a master UART (CR-1, BR15)', () => {
-  /** Serial screen state as a project file carries it, whatever types its values have. */
   const storedSerial = (serial: Record<string, unknown>): VppModbusState =>
     JSON.parse(JSON.stringify({ serial: { baud_rate: '115200', ...serial } }))
 

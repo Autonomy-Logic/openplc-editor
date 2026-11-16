@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (c) 2026 Autonomy®
-// modbus_master_types.h: record types and constants of the tables in modbus_master_config.h,
-// written by generate-modbus-master-header.ts.
 #ifndef MODBUS_MASTER_TYPES_H
 #define MODBUS_MASTER_TYPES_H
 
@@ -79,4 +77,4 @@ typedef struct
     uint8_t bit;
 } mb_master_point_t;
 
-#endif // MODBUS_MASTER_TYPES_H
+#endif

@@ -105,31 +105,11 @@ export interface PLCPou {
   }
   body: PLCBody
   documentation?: string
-  /**
-   * The POU's `VAR … END_VAR` declarations, verbatim, as the user wrote them.
-   *
-   * This is the source of truth for the variables, and `interface.variables`
-   * is the view of it the table renders (DOPE-650). The project file has
-   * always stored the declarations as IEC text; what changed is that the text
-   * is now KEPT rather than discarded the moment it parsed.
-   *
-   * Everything the model cannot carry lives here and only here: comments,
-   * blank lines, alignment, the user's choice of declaration ordering within a
-   * block. A table edit patches this text (`applyVariablesToText`) instead of
-   * regenerating it, so editing one cell no longer deletes the rest.
-   *
-   * Optional only for a POU created in memory this session and not yet
-   * serialised; anything loaded from disk carries it.
-   */
+  /** The POU's `VAR … END_VAR` declarations, verbatim, as the user wrote them. */
   variablesText?: string
   /**
-   * True when {@link variablesText} could not be parsed on load, so the editor
-   * should open this POU's variables in the code view for repair.
-   *
-   * An explicit flag rather than the old inference of "has text but no
-   * variables": every loaded POU carries its text now, and an empty POU
-   * legitimately has no variables, so that test matched a POU with nothing
-   * wrong with it.
+   * True when {@link variablesText} could not be parsed on load, so the editor should open this POU's variables in
+   * the code view for repair.
    */
   variablesTextUnparsed?: boolean
 }
@@ -351,8 +331,7 @@ export interface OpcUaUser {
   id: string
   type: 'password' | 'certificate'
   username: string | null
-  /** Plaintext. See OpcUaUserSchema in backend/shared/types/PLC/open-plc.ts
-   *  for why the build, not the editor, derives the stored credential. */
+  /** Plaintext. */
   password?: string | null
   /** Legacy pre-hashed credential; passed through untouched. */
   passwordHash: string | null
@@ -504,7 +483,6 @@ export function isRemoteProjectPath(identifier: string): boolean {
   }
 
   const isPosixAbsolute = identifier.startsWith('/')
-  // `C:\...` or `C:/...`, and `\\server\share` for a UNC path.
   const isWindowsAbsolute = /^[A-Za-z]:[\\/]/.test(identifier) || identifier.startsWith('\\\\')
 
   return !isPosixAbsolute && !isWindowsAbsolute
@@ -901,7 +879,6 @@ export interface VendorIoMapping {
   entries: IoMappingEntry[]
 }
 
-/** Deliberately NOT a pre-composed display string. */
 export interface CommunicationPort {
   /** OS-canonical identifier, and the value actually opened (`COM5`, `/dev/ttyUSB0`). */
   address: string
@@ -924,7 +901,7 @@ export interface DevicePin {
   pin: string
   pinType: PinType
   address: string
-  /** Participates in the alias registry. Used to be `name`; legacy projects auto-upgrade on load. */
+  /** Participates in the alias registry. */
   alias?: string
   /** Digital inputs only, and only when the board declares `pins.pull`. Absent → the board's default for the pin. */
   pull?: PinPullMode
@@ -941,7 +918,7 @@ export interface PinPullOverride {
 export interface PinPullSpec {
   options: PinPullMode[]
   default?: PinPullMode
-  /** Keyed by the pin name as written in the pin table (`"34"`, `"D0"`). */
+  /** Keyed by the pin name as written in the pin table. */
   pins?: Record<string, PinPullOverride>
 }
 
@@ -982,15 +959,8 @@ export interface DeviceConfiguration {
   /** Choices for the board's `target.platformOptions`, keyed by option `key`. Cleared when the selected board changes. */
   selectedPlatformOptions?: Record<string, string>
   /**
-   * Which vendor package each VPP board was authored against —
-   * `packageId@version` plus the `contentHash` of the signed payload.
-   *
-   * Recorded when a VPP board is selected, and compared against what is
-   * installed at authoring and again before an upload: a package that moved
-   * underneath a program would otherwise only show up as wrong I/O on the
-   * device. Per-board for the same reason `vendorScreenDataByBoard` is, and
-   * optional for back-compat with every project saved before pinning existed —
-   * absent simply means there is nothing to compare.
+   * Which vendor package each VPP board was authored against — `packageId@version` plus the `contentHash` of the
+   * signed payload.
    */
   vppPackagePinsByBoard?: Record<string, VppPackagePin>
   /** The vPLC this project targets on web; reopening the project selects it again when it is still listed. */
@@ -1057,10 +1027,8 @@ export interface DebugConnectionConfig {
     baudRate?: number
     slaveId?: number
     /**
-     * An id a board flashed before 4.3.0 may still answer the editor on, tried
-     * only after `slaveId` has gone unanswered. Not a manifest field: the editor
-     * reads it from the project's own legacy screen state, because the packages
-     * no longer declare the screen it lived on.
+     * An id a board flashed before 4.3.0 may still answer the editor on, tried only after `slaveId` has gone
+     * unanswered.
      */
     jwtToken?: string
   }
@@ -1093,7 +1061,7 @@ export interface SimulatorDebugResult {
   success: boolean
   tick?: number
   lastIndex?: number
-  data?: string // hex string
+  data?: string
   error?: string
 }
 
@@ -1140,7 +1108,7 @@ export interface DebugCompileResult {
   error?: string
 }
 
-/** Deliberately carries no verification field: running a library is its own action, via the debug harness. */
+/** Carries no verification field. */
 export interface CompileLibraryResult {
   success: boolean
   /** Absolute path, set only on success. */
@@ -1196,7 +1164,7 @@ export interface LogSegment {
   className?: string
 }
 
-/** What a caller hands to `addLog`. Deliberately has no `id`: the store mints the rendering key itself. */
+/** What a caller hands to `addLog`. */
 export interface LogObject {
   level?: 'debug' | 'info' | 'warning' | 'error'
   message: string
@@ -1366,7 +1334,6 @@ export type FBDRungState = {
   edges: import('@xyflow/react').Edge[]
 }
 
-/** Lives here, not in the ladder slice, so `RungLadderState` can reference it across layers. */
 export type HandleBranch = {
   /** The block node ID this branch connects to */
   blockId: string

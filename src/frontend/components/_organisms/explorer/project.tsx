@@ -23,10 +23,6 @@ import {
 
 type PouLeafLang = 'il' | 'st' | 'ld' | 'sfc' | 'fbd' | 'python' | 'cpp'
 
-// Mirror the backend's RenameProjectDto rules so we can reject obviously
-// invalid names before the round-trip and give immediate feedback. The
-// backend (`project-input.constants.ts`) is still the source of truth — long
-// dashes break git refs / S3 paths handled by the git-worker.
 const PROJECT_NAME_MIN = 2
 const PROJECT_NAME_MAX = 100
 const DASH_FREE_PATTERN = /^[^—–―]*$/
@@ -57,52 +53,25 @@ const Project = () => {
     searchQuery,
   } = useOpenPLCStore()
 
-  // Read-only / forked projects can't be renamed — the backend rename
-  // endpoint requires edit access, so gate the affordance here too.
   const canEdit = useOpenPLCStore((s) => s.workspace.canEdit)
   const isEditingLocked = useIsEditingLocked()
 
-  // Runtime User Management is only meaningful while connected to a runtime
-  // (it reads/writes the runtime's account list over the authenticated API)
-  // AND only exists on runtimes ≥ v4.1.9 — older runtimes lack the endpoints.
   const runtimeConnected = useOpenPLCStore((s) => s.runtimeConnection.connectionStatus === 'connected')
   const runtimeVersion = useOpenPLCStore((s) => s.runtimeConnection.runtimeVersion)
   const showUserManagement = runtimeConnected && isUserManagementCapableRuntime(runtimeVersion)
-  // Everything on the Runtime Status screen is read from a live device -- scan
-  // statistics, host facts, the bootloader's state -- so the leaf appears only
-  // while connected rather than opening onto an empty screen.
   const showRuntimeStatus = runtimeConnected
 
-  // Per-project-type capability matrix — drives which branches
-  // render.  Library projects only show Functions / Function Blocks /
-  // Data Types plus the manifest tab; Programs / Resource / Devices /
-  // Servers / Remote-Devices / VPP screens are program-level
-  // affordances that don't apply to a `.stlib` build.
   const projectCaps = projectCapabilities({ type: projectType })
 
   const targetCaps = useTargetCapabilities()
   const masterProfile = useModbusMasterProfile()
   const canHostRemoteIo = canHostModbusMaster(masterProfile) || targetCaps.ethercat
 
-  // Get VPP vendor screens from the currently selected board
   const deviceBoard = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
   const availableBoards = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards)
   const currentBoardInfo = availableBoards.get(deviceBoard)
   const vendorScreens = currentBoardInfo?.vpp?.screens ? Object.keys(currentBoardInfo.vpp.screens) : []
 
-  // Persistent Storage is a PROJECT screen: the settings are saved with the
-  // project and delivered by the upload, so it is available offline and has
-  // nothing to do with whether a device is connected. Two facts about the
-  // TARGET decide whether it appears at all:
-  //
-  //   • the target's runtime has a built-in retain store to configure. Only
-  //     runtime v4 does; on baremetal the store is whatever the board's driver
-  //     provides and nothing in the project can point it anywhere.
-  //   • the target has not taken retention over. A VPP whose driver implements
-  //     its own store declares `hidesNativeScreens: ['persistent-storage']`,
-  //     and the editor then also emits no `retain.conf` — which makes the
-  //     runtime remove its copy and the built-in store stand down. So the
-  //     screen never offers settings that are inert.
   const showPersistentStorage =
     targetCaps.nativeRetainStore && isNativeScreenAvailable(currentBoardInfo, 'persistent-storage')
 
@@ -112,9 +81,6 @@ const Project = () => {
 
     const existing = getEditorFromEditors(tabToBeCreated.name)
     const fresh = CreateEditorObjectFromTab(tabToBeCreated)
-    // The editor cache is keyed by display name alone, so an element rebuilt under the same
-    // name (a module removed and added again) would reopen the old model. Any identity field
-    // that disagrees with the fresh model marks the cached one stale.
     const existingMeta = existing === null ? null : new Map<string, unknown>(Object.entries(existing.meta))
     const stale =
       existing !== null &&
@@ -133,7 +99,6 @@ const Project = () => {
     setIsEditing(false)
     const trimmed = inputValue.trim()
 
-    // No-op when unchanged — reset the field to drop any stray whitespace.
     if (trimmed === name) {
       setInputValue(name)
       return
@@ -146,10 +111,6 @@ const Project = () => {
       return
     }
 
-    // Persist the rename to the backend FIRST (it updates the canonical DB
-    // name, moves the S3 folder and realigns gitPath). Only mirror it into
-    // the in-memory meta.name on success, so a rejected rename never leaves
-    // the UI showing a name the backend didn't accept.
     setIsRenaming(true)
     const result = await projectPort.renameProject(projectPath, trimmed)
     setIsRenaming(false)
@@ -173,9 +134,7 @@ const Project = () => {
 
   return (
     <div id='project-container' className='flex h-full w-full flex-col pr-2'>
-      {/* Actions handler */}
       <div id='project-actions-container' className='relative z-10 my-3 flex w-full justify-normal gap-2 pl-2'>
-        {/* Project name input */}
         <div
           id='project-name-container'
           className='flex h-8 w-full flex-1 cursor-default select-none items-center justify-start gap-1 rounded-lg bg-neutral-100 px-1.5 py-[1px] dark:bg-brand-dark'
@@ -212,14 +171,8 @@ const Project = () => {
         </div>
       </div>
 
-      {/* Data display */}
       <div id='project-tree-container' className='mb-1 flex h-full w-full flex-col overflow-auto'>
         <ProjectTreeRoot label={name}>
-          {/* Library Project manifest leaf — single fixed entry at
-              the top of the tree, opens `library.json` in a Monaco
-              JSON editor.  Cannot be deleted or renamed (the file
-              is mandatory for `.stlib` builds).  Only rendered for
-              library projects. */}
           {projectCaps.hasLibraryManifest && (
             <ProjectTreeLeaf
               leafLang='libraryManifest'
@@ -235,7 +188,6 @@ const Project = () => {
             />
           )}
 
-          {/* Project Functions tree branch */}
           <ProjectTreeBranch branchTarget='function'>
             {pous
               ?.filter((pou) => pou.pouType === 'function')
@@ -258,7 +210,6 @@ const Project = () => {
               ))}
           </ProjectTreeBranch>
 
-          {/* Project Function Blocks tree branch */}
           <ProjectTreeBranch branchTarget='function-block'>
             {pous
               ?.filter((pou) => pou.pouType === 'function-block')
@@ -281,8 +232,6 @@ const Project = () => {
               ))}
           </ProjectTreeBranch>
 
-          {/* Project Programs tree branch — hidden in library projects
-              (libraries have no programs). */}
           {projectCaps.hasPrograms && (
             <ProjectTreeBranch branchTarget='program'>
               {pous
@@ -307,7 +256,6 @@ const Project = () => {
             </ProjectTreeBranch>
           )}
 
-          {/* Project Data Types tree branch */}
           <ProjectTreeBranch branchTarget='data-type'>
             {dataTypes
               ?.filter(({ derivation }) => derivation === 'array')
@@ -338,7 +286,6 @@ const Project = () => {
                   leafType='data-type'
                   label={name}
                   highlightQuery={searchQuery}
-                  /** Todo: Update the tab state */
                   onClick={() =>
                     handleCreateTab({
                       name,
@@ -358,7 +305,6 @@ const Project = () => {
                   leafType='data-type'
                   label={name}
                   highlightQuery={searchQuery}
-                  /** Todo: Update the tab state */
                   onClick={() =>
                     handleCreateTab({
                       name,
@@ -370,7 +316,6 @@ const Project = () => {
               ))}
           </ProjectTreeBranch>
 
-          {/* Global Variable Lists — CODESYS's own grouping, one node per list. */}
           <ProjectTreeBranch branchTarget='global-variable-list'>
             {globalVariableLists
               ?.slice()
@@ -393,7 +338,6 @@ const Project = () => {
               ))}
           </ProjectTreeBranch>
 
-          {/* Project Resources tree branch — hidden for libraries. */}
           {projectCaps.hasResource && (
             <ProjectTreeBranch
               branchTarget='resource'
@@ -412,7 +356,6 @@ const Project = () => {
             />
           )}
 
-          {/* Project Device tree branch — hidden for libraries. */}
           {projectCaps.hasDevices && (
             <ProjectTreeBranch branchTarget='device'>
               {capabilities.hasLocalSerialPorts && (
@@ -489,16 +432,6 @@ const Project = () => {
                   }
                 />
               )}
-              {/* Vendor screens from VPP packages — hidden for libraries.
-               *
-               *  Every screen the package declares is listed, the Modbus one
-               *  included. A package built for 4.3.0 ships none: its Modbus became
-               *  the native screen under Servers. A package built before that still
-               *  ships one, and it is the ONLY place that state can be seen — the
-               *  defines emitter falls back to it whenever the project has no
-               *  server, so filtering it out left settings that reach the firmware
-               *  with no UI anywhere. It was filtered while it was re-homed under
-               *  Servers; that re-homing is gone. */}
               {projectCaps.hasVendorScreens &&
                 vendorScreens.map((screenName) => (
                   <ProjectTreeLeaf
@@ -518,11 +451,6 @@ const Project = () => {
             </ProjectTreeBranch>
           )}
 
-          {/* Project Servers tree branch — gated by project type only.
-           *  The Servers branch must remain visible on platforms that
-           *  lack local serial ports (e.g. orchestrator-only / web
-           *  builds), per the fix in d257e2a07; libraries still hide
-           *  it via the `projectCaps.hasServers` capability check. */}
           {projectCaps.hasServers && (
             <ProjectTreeBranch branchTarget='server'>
               {[...(servers || [])]
@@ -546,12 +474,6 @@ const Project = () => {
             </ProjectTreeBranch>
           )}
 
-          {/* Project Remote Devices tree branch — hidden for libraries, and on
-              a target that can host neither Modbus remote I/O nor EtherCAT.
-              Devices already configured stay visible on such a target: the
-              board-switch warning promises they are "disabled during
-              compilation", not removed, so hiding saved data would contradict
-              what the user just accepted. */}
           {projectCaps.hasRemoteDevices && (canHostRemoteIo || (remoteDevices?.length ?? 0) > 0) && (
             <ProjectTreeBranch branchTarget='remote-device'>
               {[...(remoteDevices || [])]
@@ -573,10 +495,6 @@ const Project = () => {
                       }
                     >
                       {device.ethercatConfig?.devices?.map((child) => {
-                        // A modular coupler expands to show its slot modules.
-                        // isModularCoupler is set at import time from the ESI's <Slots>
-                        // block; existing modules make the coupler expandable even when
-                        // the flag is missing (older projects).
                         const isModular = child.isModularCoupler === true || (child.modules?.length ?? 0) > 0
                         if (isModular) {
                           return (
@@ -601,10 +519,6 @@ const Project = () => {
                                   <ProjectTreeLeaf
                                     key={module.id}
                                     leafLang='ethercatDevice'
-                                    // Must be 'ethercat-module', not 'ethercat-device' —
-                                    // the tree's Delete action keys off leafType to
-                                    // choose between `deleteModule` (one slot) and
-                                    // `delete` (the whole coupler).
                                     leafType='ethercat-module'
                                     busName={device.name}
                                     deviceId={child.id}

@@ -20,15 +20,8 @@ import {
 } from './validation/pins'
 
 /**
- * Lazily resolve the active board's pin array on an Immer draft,
- * creating the entry the first time a board claims pins. Returns a
- * reference that's safe to mutate (push / splice / index-assign) —
- * the surrounding `produce()` call captures the changes.
- *
- * Centralising this keeps every action's "operate on the current
- * board's pins" intent obvious and prevents a stale write when the
- * dict didn't yet have a key for the active board (which would
- * otherwise crash with `Cannot read properties of undefined`).
+ * Lazily resolve the active board's pin array on an Immer draft, creating the entry the first time a board claims
+ * pins.
  */
 function getActivePinsDraft(draft: DeviceSlice): DevicePin[] {
   const board = draft.deviceDefinitions.configuration.deviceBoard
@@ -38,51 +31,22 @@ function getActivePinsDraft(draft: DeviceSlice): DevicePin[] {
   return draft.deviceDefinitions.pinMapping.pinsByBoard[board]
 }
 
-/**
- * Reset licensing to its initial state on an Immer draft — THE one way to drop
- * a licence. Every path that drops one must call it (`clearDeviceLicense`, an actual
- * board, port or address change, `clearDeviceDefinitions`), and when each inlined
- * its own reset they drifted: two of them forgot the purchase watch, whose poll
- * then outlived the board it was started for and kept running `refresh()` —
- * including its licence WRITE — against whatever board came next. Route any
- * future reset path through here so it cannot drift the same way.
- */
+/** Reset licensing to its initial state on an Immer draft — THE one way to drop a licence. */
 function resetDeviceLicense(deviceLicense: DeviceLicenseInfo): void {
   deviceLicense.phase = 'idle'
   deviceLicense.report = null
-  // Ends any purchase watch too: the poll effect keys off this deadline, and a
-  // watch without its board would poll (and could write a licence to) hardware
-  // the user never asked about.
   deviceLicense.awaitingPurchaseUntil = null
 }
 
-/**
- * The only pin state the central IEC recalculation depends on: which addresses
- * the pin block occupies, in order.
- *
- * Pins are the one producer the registry keeps PINNED — they're fixed hardware,
- * so VPP / Modbus / EtherCAT allocate around them. Every pin add / remove /
- * retype therefore moves the constraints the other producers were packed
- * against, and nothing recompacted them: `removePin` decrements the trailing
- * pins of its own type, so the freed slot slides to the END of the pin block
- * and whatever allocated after it never moves up; `createNewPin` mints
- * `highest + 1`, which on a board with pin mapping AND VPP/Modbus can land on
- * top of a channel already sitting there — a two-producer collision with no
- * conflict report, because nothing recalculated.
- */
+/** The only pin state the central IEC recalculation depends on: which addresses the pin block occupies, in order. */
 function pinAddressSignature(state: DeviceSliceRoot): string {
   const board = state.deviceDefinitions.configuration.deviceBoard
   return (state.deviceDefinitions.pinMapping.pinsByBoard[board] ?? []).map((pin) => pin.address).join(',')
 }
 
 /**
- * Recompact the other producers around the new pin layout, but only when the
- * pin addresses actually moved since `before`. Mirrors `setDeviceBoard`, the
- * other place where a constraint change drives the central recalculation.
- *
- * Comparing rather than recalculating unconditionally keeps alias-only and
- * pin-number-only edits free, and covers `updatePin`'s pinType branch (which
- * rewrites addresses) without special-casing it.
+ * Recompact the other producers around the new pin layout, but only when the pin addresses actually moved since
+ * `before`.
  */
 function recalcIfPinAddressesMoved(getState: () => DeviceSliceRoot, before: string): void {
   if (pinAddressSignature(getState()) !== before) {
@@ -146,13 +110,6 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           }
         }),
       )
-
-      // Board discovery only affects target-capability resolution; it no
-      // longer needs to touch program variables. In the single-field model a
-      // variable's `location` holds either a stable alias name (resolved to an
-      // address at compile time) or a literal address — neither changes when
-      // the board list lands. Producer address recompaction on an actual
-      // target change is handled by `setDeviceBoard → recalculateIecAddresses`.
     },
     setDeviceDefinitions: ({ configuration, pinMapping }): void => {
       setState(
@@ -164,12 +121,6 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
             }
           }
           if (pinMapping) {
-            // Two shapes are accepted by design — see DeviceActions.setDeviceDefinitions.
-            // Legacy flat array attaches to whatever board the
-            // accompanying configuration names (or the current
-            // store value if no configuration was passed). This
-            // is the migration path for projects saved before
-            // per-board scoping landed.
             if (Array.isArray(pinMapping)) {
               const targetBoard = deviceDefinitions.configuration.deviceBoard
               deviceDefinitions.pinMapping.pinsByBoard = targetBoard ? { [targetBoard]: pinMapping } : {}
@@ -201,16 +152,10 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
           runtimeConnection.includeTimingStatsInPolling = false
           runtimeConnection.ethercatStatus = null
           runtimeConnection.includeEthercatStatsInPolling = false
-          // The held device link is meaningless once the project is closed —
-          // reset it so a stale connection can't leak into the next one.
           deviceConnection.status = 'disconnected'
           deviceConnection.port = null
           deviceConnection.transport = null
           deviceConnection.debugTransport = null
-          // Same for licensing, and for a sharper reason: the next project may
-          // select a different board entirely, and a "Licensed" badge carried over
-          // from the previous one would be an assertion about hardware that is not
-          // even connected.
           resetDeviceLicense(deviceLicense)
         }),
       )
@@ -399,9 +344,6 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
                     return Number(removeAddressPrefix(a.address)) - Number(removeAddressPrefix(b.address))
                   })
 
-                  // Replace the active board's bucket with the
-                  // re-sorted array. Re-resolve currentPin's index
-                  // by identity — the sort moved it.
                   pinMapping.pinsByBoard[activeBoard] = newPinsArray
                   pinMapping.currentSelectedPinTableRow = newPinsArray.findIndex((p) => p === currentPin)
 
@@ -455,57 +397,19 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
       setState(
         produce(({ deviceDefinitions, deviceUpdated, deviceLicense }: DeviceSlice) => {
           deviceUpdated.updated = true
-          // Wipe platformOption selections when the board changes — they're
-          // declared per-board in the VPP manifest, so a `cpu=atmega328old`
-          // choice from a previous Nano session shouldn't bleed into a fresh
-          // Mega/Opta/etc. setup. Compile-time code falls back to each
-          // manifest's `default` when the record is empty.
-          //
-          // Pin mappings on the other hand stay on disk per-board (the
-          // `pinsByBoard` dict), so switching here just changes which
-          // bucket the active selector pulls from — the previous board's
-          // pins are preserved for when the user switches back. The
-          // selected-row pointer is reset because the new board's
-          // bucket has its own row count.
           if (deviceDefinitions.configuration.deviceBoard !== deviceBoard) {
             deviceDefinitions.configuration.selectedPlatformOptions = {}
             deviceDefinitions.pinMapping.currentSelectedPinTableRow = -1
-            // Vendor-screen data is board-specific (a backplane configured for
-            // one target is meaningless on another). Stash the outgoing board's
-            // data into its bucket, then swap the active view to the incoming
-            // board's bucket (empty when it was never configured) — the
-            // previous board's modules are preserved for when the user returns,
-            // and the new board starts clean instead of inheriting stale slots.
             const cfg = deviceDefinitions.configuration
             syncActiveBoardVendorBucket(cfg)
             cfg.vendorScreenData = { ...(cfg.vendorScreenDataByBoard?.[deviceBoard] ?? {}) }
-            // Persistent storage is board-specific for a sharper reason than the
-            // rest: the value is a PATH ON A PARTICULAR BOX. Carried across a
-            // switch it does not merely become meaningless, it ships the new
-            // device a location belonging to the old one — and the compile path
-            // reads this flat view, so that path is what lands in retain.conf.
-            //
-            // Deliberately `undefined`, not `{}`, when the incoming board has no
-            // bucket: absent settings are what make `generateRetainConf` emit no
-            // file, which is the right default for a board nobody has configured
-            // and is not the same as inheriting a path.
             syncActiveBoardPersistentStorage(cfg)
             cfg.persistentStorage = cfg.persistentStorageByBoard?.[deviceBoard]
-            // A licence report is board-specific for the same reason all of the
-            // above is: it was verified against the PREVIOUS board's `deviceId`
-            // and its VPP's `productId`. Carried across a switch, the badge
-            // asserts possession for hardware that is no longer selected, and
-            // the buy link gets built from the NEW package id paired with the
-            // OLD device id — binding a purchase to the wrong board.
             resetDeviceLicense(deviceLicense)
           }
           deviceDefinitions.configuration.deviceBoard = deviceBoard
         }),
       )
-      // Switching target changes which producer kinds are active — a board
-      // without pin mapping / VPP frees those addresses. Recompute the
-      // Modbus addresses project-wide so they reclaim the freed space, and
-      // reconcile bound variables. (Skipped when the board is unchanged.)
       if (previousBoard !== deviceBoard) {
         getState().projectActions.recalculateIecAddresses()
       }
@@ -536,7 +440,6 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
       setState(
         produce(({ deviceDefinitions, deviceUpdated, deviceLicense }: DeviceSlice) => {
           deviceUpdated.updated = true
-          // Another port may lead to another device, so the last license check no longer applies.
           if (deviceDefinitions.configuration.communicationPort !== communicationPort) resetDeviceLicense(deviceLicense)
           deviceDefinitions.configuration.communicationPort = communicationPort
         }),
@@ -545,7 +448,6 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     setRuntimeIpAddress: (ipAddress, options): void => {
       setState(
         produce(({ deviceDefinitions, runtimeConnection, deviceLicense }: DeviceSlice) => {
-          // Another address may lead to another device, so the last license check no longer applies.
           if (!options?.sameDevice && deviceDefinitions.configuration.runtimeIpAddress !== ipAddress) {
             resetDeviceLicense(deviceLicense)
           }
@@ -710,7 +612,6 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
       setState(
         produce(({ deviceLicense }: DeviceSlice) => {
           deviceLicense.phase = 'checking'
-          // `report` is deliberately left alone — see the action's docstring.
         }),
       )
     },
@@ -725,9 +626,6 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
     setAwaitingPurchase: (awaiting): void => {
       setState(
         produce(({ deviceLicense }: DeviceSlice) => {
-          // The window is an absolute wall-clock deadline stamped here, not a
-          // counter kept by the poll effect — so a remounted effect resumes
-          // the SAME window and a skipped overlap tick spends none of it.
           deviceLicense.awaitingPurchaseUntil = awaiting ? Date.now() + PURCHASE_WATCH_WINDOW_MS : null
         }),
       )
@@ -744,9 +642,6 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         produce(({ deviceDefinitions, deviceUpdated }: DeviceSlice) => {
           deviceUpdated.updated = true
           const cfg = deviceDefinitions.configuration
-          // Absent means "this project does not use persistent storage", so the
-          // first edit materialises the object from the same defaults the schema
-          // declares rather than half of one.
           cfg.persistentStorage = {
             enabled: false,
             path: '',
@@ -758,14 +653,6 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
-    /**
-     * Record which vendor package the board was authored against.
-     *
-     * Per board, like the vendor-screen buckets: a pin belongs to the target
-     * it was authored for. Writing the same pin twice is a no-op so the
-     * board picker can call it on every render without marking the project
-     * dirty and prompting to save a file that did not change.
-     */
     setVppPackagePin: (board, pin): void => {
       const existing = getState().deviceDefinitions.configuration.vppPackagePinsByBoard?.[board]
       if (pin === null) {
@@ -821,16 +708,6 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
         }),
       )
     },
-    /**
-     * Restore a contiguous slice of `vendorScreenData` from a snapshot.
-     * Used by the vendor-screen tab's "Don't save" revert path: the
-     * snapshot was captured when the tab opened (or on last save),
-     * and applying it back means deleting any keys the user added in
-     * this session and putting the rest back to their original
-     * values.  Keys outside `ownedKeys` are left untouched so other
-     * vendor-screen tabs and the device editor don't see unrelated
-     * mutations.
-     */
     restoreVendorScreenSlice: (ownedKeys, snapshot): void => {
       setState(
         produce(({ deviceDefinitions }: DeviceSlice) => {
@@ -853,10 +730,8 @@ const createDeviceSlice: StateCreator<DeviceSliceRoot, [], [], DeviceSlice> = (s
 })
 
 /**
- * Keep the active board's bucket in `persistentStorageByBoard` in lock-step with
- * the flat `persistentStorage` view, exactly as the vendor-screen sibling below
- * does. A storage path names a location on one particular box, so retargeting a
- * project must not carry it onto another.
+ * Keep the active board's bucket in `persistentStorageByBoard` in lock-step with the flat `persistentStorage` view,
+ * exactly as the vendor-screen sibling below does.
  */
 function syncActiveBoardPersistentStorage(configuration: DeviceConfiguration): void {
   if (!configuration.persistentStorageByBoard) {
@@ -950,19 +825,10 @@ function mergeDeviceConfigWithDefaults(
     runtimeIpAddress: provided.runtimeIpAddress ?? defaults.runtimeIpAddress,
     vendorScreenData,
     vendorScreenDataByBoard,
-    // Must merge — otherwise loading a project whose configuration.json
-    // predates platformOptions leaves the field undefined in the store, and
-    // every selector falling back to `?? {}` returns a fresh literal that
-    // triggers an infinite Zustand re-render loop (blank device screen).
     selectedPlatformOptions: provided.selectedPlatformOptions ?? defaults.selectedPlatformOptions,
-    // Must merge — otherwise every project load drops the saved pin and
-    // board.tsx's drift detection sees a blank slate instead of the real
-    // prior pin, so a project with a VPP board always opens as if unpinned.
     vppPackagePinsByBoard: provided.vppPackagePinsByBoard ?? defaults.vppPackagePinsByBoard,
-    // Must merge — otherwise the next save (auto-save on build included) drops the RETAIN settings.
     ...(persistentStorage ? { persistentStorage } : {}),
     ...(persistentStorageByBoard ? { persistentStorageByBoard } : {}),
-    // Copied: a fresh object per load is what tells the restore hook a project was (re)opened.
     ...(provided.targetDevice ? { targetDevice: { ...provided.targetDevice } } : {}),
   }
 }

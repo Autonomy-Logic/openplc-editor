@@ -399,7 +399,6 @@ describeOnHost('baremetal_net.cpp on a W5x00 board closes without waiting (P07-2
 })
 
 describeOnHost('modbus_master_tcp.cpp starts no connect in a pass that closed a connection (P07-2)', () => {
-  /** Bare identifiers assigned in `body`, declarations left out. */
   const assignedIn = (body: string): string[] => {
     const names: string[] = []
     for (const match of body.matchAll(/(^|[;{}()\s])([A-Za-z_]\w*)\s*(?:=(?!=)|\+=|\|=|\+\+)/g)) {
@@ -491,7 +490,6 @@ function callArguments(code: string, name: string): string[] {
 describeOnHost('NINA OPC-UA debug log build (BOARD_WIFININA, MBTCP_WIFI, OPCUA_DEBUG_LOG 1)', () => {
   const NINA = ['BOARD_WIFININA', 'MBTCP_WIFI']
 
-  /** `file` preprocessed for a NINA board with the OPC-UA server and its debug log switched by `debugLog`. */
   const ninaOpcua = (file: string, debugLog: 0 | 1): string =>
     preprocess(
       { file: join(BAREMETAL_DIR, file) },

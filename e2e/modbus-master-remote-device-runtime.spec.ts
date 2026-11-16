@@ -1,10 +1,3 @@
-/**
- * The Remote Device screen and build on Runtime v4 and the Simulator: a new device starts with Reconnect
- * unchecked, the Reconnect help shows on every target while the Timeout help and the board links stay
- * baremetal only, Reconnect reaches the Runtime v4 master config, and the agreement checks refuse a build.
- *
- * Needs a production build and the preload copy; see "Electron e2e" in CLAUDE.md.
- */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 

@@ -14,22 +14,7 @@ import { createLibrarySlice } from '../slices/library'
 import { createProjectSlice } from '../slices/project/slice'
 import type { ProjectSliceRoot } from '../slices/project/types'
 
-/**
- * Board-load contract under the single-field variable-location model.
- *
- * Replaces the old `syncVariableAliases` auto-adoption integration test: that
- * suite asserted boards landing (`setAvailableOptions`) would ADOPT a
- * producer's alias onto a variable that happened to sit at the same address.
- * The single-field model deliberately drops that behaviour — a manual `%addr`
- * is always manual, and an alias binding lives verbatim in `location`,
- * resolved to a concrete address only at compile time. This file locks in the
- * new contract:
- *   - board-load (`setAvailableOptions`) never mutates a variable's `location`;
- *   - a manual literal that collides with an alias's address stays literal;
- *   - an alias-bound `location` keeps the alias name in the store and resolves
- *     to the producer's address in the compile-ready snapshot (or to '' when
- *     the alias is no longer declared).
- */
+/** Board-load contract under the single-field variable-location model. */
 
 function makeStore() {
   return createStore<ProjectSliceRoot>()((...args) => ({
@@ -63,8 +48,7 @@ const RUNTIME_V4: BoardInfo = {
   },
 }
 
-/** Land the Runtime v4 board — the project-load "boards resolve" moment that
- *  used to trigger the alias auto-sync. */
+/** Land the Runtime v4 board. */
 function landBoards(store: ReturnType<typeof makeStore>) {
   store.getState().deviceActions.setAvailableOptions({
     availableBoards: new Map<string, BoardInfo>([['OpenPLC Runtime v4', RUNTIME_V4]]),
@@ -124,22 +108,20 @@ function setPous(store: ReturnType<typeof makeStore>, pous: PLCPou[]) {
 /** Stand up a Modbus remote device whose first point (%IW0) is aliased "flow". */
 function seedAliasedModbusPoint(store: ReturnType<typeof makeStore>): void {
   addRemoteDevice(store, makeRemoteDevice('Dev1'))
-  store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2)) // %IW0, %IW1
+  store.getState().projectActions.addIOGroup('Dev1', makeIOGroup('g1', '3', 2))
   const pointId = store.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
-  store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', pointId, 'flow') // flow → %IW0
+  store.getState().projectActions.updateIOPointAlias('Dev1', 'g1', pointId, 'flow')
 }
 
 describe('alias location on board load (single-field model)', () => {
   it('does NOT auto-adopt an alias onto a manually located variable when boards (re-)land', () => {
     const store = makeStore()
     landBoards(store)
-    seedAliasedModbusPoint(store) // "flow" is a live alias at %IW0
-    setPous(store, [pou('main', [intVar('reading', '%IW0')])]) // variable manually located at that same address
+    seedAliasedModbusPoint(store)
+    setPous(store, [pou('main', [intVar('reading', '%IW0')])])
 
-    // Re-land boards: the project-load resolve point that used to auto-sync.
     landBoards(store)
 
-    // New contract: the manual literal is untouched — never promoted to "flow".
     expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('%IW0')
   })
 
@@ -147,13 +129,11 @@ describe('alias location on board load (single-field model)', () => {
     const store = makeStore()
     landBoards(store)
     seedAliasedModbusPoint(store)
-    setPous(store, [pou('main', [intVar('reading', 'flow')])]) // bound by alias name
+    setPous(store, [pou('main', [intVar('reading', 'flow')])])
 
     landBoards(store)
 
-    // The store holds the alias name verbatim (no mutation on board-load)...
     expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('flow')
-    // ...and the compile-ready snapshot resolves it to the producer's address.
     const compileReady = store.getState().projectActions.getCompileReadyProjectData()
     expect(compileReady.pous[0].interface!.variables![0].location).toBe('%IW0')
   })
@@ -161,12 +141,11 @@ describe('alias location on board load (single-field model)', () => {
   it('resolves an alias-bound location to empty at compile time when no producer declares it', () => {
     const store = makeStore()
     landBoards(store)
-    seedAliasedModbusPoint(store) // only "flow" exists; "ghost" does not
+    seedAliasedModbusPoint(store)
     setPous(store, [pou('main', [intVar('reading', 'ghost')])])
 
     landBoards(store)
 
-    // Store keeps the (orphaned) alias name; compile resolution drops it to unlocated.
     expect(store.getState().project.data.pous[0].interface!.variables![0].location).toBe('ghost')
     const compileReady = store.getState().projectActions.getCompileReadyProjectData()
     expect(compileReady.pous[0].interface!.variables![0].location).toBe('')

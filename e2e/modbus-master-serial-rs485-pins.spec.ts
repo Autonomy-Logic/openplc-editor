@@ -1,10 +1,3 @@
-/**
- * The per-UART RS-485 enable pin on a baremetal board's Serial screen: one field per UART, none where the
- * package fixes the pin, the entry check of each value, and where a 4.3.x project's single pin shows up.
- *
- * Boards come from the unsigned e2e package in `fixtures/baremetal-modbus-master/`. Needs a production build
- * and the preload copy; see "Electron e2e" in CLAUDE.md.
- */
 import type { Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 

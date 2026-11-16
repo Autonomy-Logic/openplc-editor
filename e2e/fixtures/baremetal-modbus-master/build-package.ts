@@ -1,10 +1,3 @@
-/**
- * Installs an unsigned e2e package of Arduino-style baremetal boards for the Modbus master specs: a Mega
- * with four UARTs and a Network screen, an Uno with one UART, a board with no settings pages and a board
- * whose package fixes the RS-485 pin of one UART. The editor removes unsigned packages when a project
- * opens, so a suite using it must stub `packages:verify-signatures` first.
- */
-
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 

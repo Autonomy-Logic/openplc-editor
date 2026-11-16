@@ -1,11 +1,3 @@
-/**
- * X1 (the editor's half) — the image.conf it emits matches the project.
- *
- * Builds the producers through the STORE, which is the user's own path, and
- * emits the file with the pipeline's own generator. The other half of the
- * chain -- the core allocating and the plugins logging -- runs on the
- * containerised runtime.
- */
 import { createStore } from 'zustand/vanilla'
 
 import type { BoardInfo, ModbusIOGroup, PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
@@ -73,14 +65,9 @@ it('X1 — image.conf reflects the producers built through the store', () => {
 
   const cur = s.getState().project
   s.setState({ project: { ...cur, data: { ...cur.data, remoteDevices: [device('Dev1')] } } })
-  s.getState().projectActions.addIOGroup('Dev1', group('g1', 6)) // 6 pontos %IW
+  s.getState().projectActions.addIOGroup('Dev1', group('g1', 6))
 
   const compileReady = s.getState().projectActions.getCompileReadyProjectData()
-  // Reshaped here rather than through the editor's `toIpcProjectData`: that
-  // adapter is editor-only and this file lives on the shared surface, so
-  // importing it would not resolve in the web build. Only the two fields the
-  // sizer reads are needed, and the rename (`configurations` -> `configuration`)
-  // is the one the adapter performs.
   const forSizer = {
     ...compileReady,
     configuration: (compileReady as unknown as { configurations: unknown }).configurations,

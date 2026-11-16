@@ -1,4 +1,3 @@
-/** X5 (the measuring half): the process image block F1 emits. */
 import { computeIoImage, IMAGE_AREAS_BAREMETAL } from '../steps/compute-io-image'
 
 const ALL = { pinMapping: true, vppIo: true, modbusTcpMaster: true, modbusRtuMaster: true, ethercat: true }
@@ -35,8 +34,6 @@ it('X5 — minimal project (8 DI, 8 DO, 4 %MW)', () => {
       ],
       globalVariableLists: [],
       dataTypes: [],
-      // Memory needs a producer like every other area, so the four words are
-      // stated by a server rather than by the declarations that sit on them.
       servers: [
         {
           name: 'mb',

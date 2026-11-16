@@ -19,10 +19,6 @@ describe('resolveTargetCapabilities', () => {
     expect(caps.debuggerTransports).toEqual([])
   })
 
-  // The presets carry no nested `opcua` / `s7` block; the resolver fills them
-  // whenever the matching server flag is on, so a target that declares nothing
-  // still gets a usable profile. Compared field-by-field rather than with
-  // toEqual for that reason.
   it('returns Simulator preset for compiler="simulator"', () => {
     expect(resolveTargetCapabilities({ compiler: 'simulator' })).toMatchObject(SIMULATOR_CAPABILITIES)
   })
@@ -32,11 +28,6 @@ describe('resolveTargetCapabilities', () => {
   })
 
   it('fills the nested profiles even with no capability block at all', () => {
-    // The regression this guards: the resolver used to return the preset
-    // unchanged when a board carried no `capabilities`, leaving `opcua`
-    // undefined on a target whose preset enables the server. The pipeline tests
-    // `capability && profile` before emitting a config header, so such a target
-    // silently got no server.
     const caps = resolveTargetCapabilities({ compiler: 'simulator' })
     expect(caps.opcuaServer).toBe(true)
     expect(caps.opcua).toBeDefined()
@@ -44,10 +35,6 @@ describe('resolveTargetCapabilities', () => {
   })
 
   it('defaults to the MOST COMPATIBLE profile, not the most capable', () => {
-    // A target that says nothing about itself gets the configuration that
-    // works everywhere: no security policy, no certificates, and no assumed
-    // crypto hardware. Anything else would be the editor guessing that
-    // silicon it has never heard of can do RSA.
     const caps = resolveTargetCapabilities({
       compiler: 'arduino-cli',
       capabilities: { opcuaServer: true, s7Server: true },
@@ -63,7 +50,6 @@ describe('resolveTargetCapabilities', () => {
   it('flips vppIo on when the board is marked as VPP-derived', () => {
     const caps = resolveTargetCapabilities({ compiler: 'openplc-compiler', vpp: { kind: 'whatever' } })
     expect(caps.vppIo).toBe(true)
-    // Other v4 capabilities preserved.
     expect(caps.ethercat).toBe(RUNTIME_V4_CAPABILITIES.ethercat)
     expect(caps.modbusTcpServer).toBe(true)
   })
@@ -80,7 +66,6 @@ describe('resolveTargetCapabilities', () => {
   })
 
   it('lets boardInfo.capabilities override the compiler-derived preset', () => {
-    // SLM-RP4-shaped manifest: Runtime v4 baseline + vppIo override.
     const caps = resolveTargetCapabilities({
       compiler: 'openplc-compiler',
       capabilities: { vppIo: true },
@@ -94,10 +79,9 @@ describe('resolveTargetCapabilities', () => {
   it('honors a fully-specified capabilities block without inferring from compiler', () => {
     const explicit: TargetCapabilities = {
       ...RUNTIME_V3_CAPABILITIES,
-      pinMapping: true, // intentional contradiction with Runtime v3 preset
+      pinMapping: true,
     }
     const caps = resolveTargetCapabilities({ compiler: 'openplc-compiler', capabilities: explicit })
-    // The explicit block wins over the v4-from-compiler default.
     expect(caps.pinMapping).toBe(true)
     expect(caps.vppIo).toBe(false)
     expect(caps.modbusTcpServer).toBe(false)
@@ -106,42 +90,32 @@ describe('resolveTargetCapabilities', () => {
   it('merges partial capabilities over the preset (no need to declare unchanged fields)', () => {
     const caps = resolveTargetCapabilities({
       compiler: 'arduino-cli',
-      capabilities: { modbusTcpServer: true }, // some hypothetical custom Arduino
+      capabilities: { modbusTcpServer: true },
     })
     expect(caps.modbusTcpServer).toBe(true)
-    // Other Arduino defaults preserved.
     expect(caps.pinMapping).toBe(true)
     expect(caps.arduinoApiCompletions).toBe(true)
   })
 
   it('allows vppIo on an arduino-cli board (Opta-shaped manifest)', () => {
-    // The Arduino Opta VPP declares moduleSystem + capabilities.vppIo on
-    // an arduino-cli-compiled board.  Both flags must take effect: the
-    // capability block enables the backplane configurator UI, and the
-    // pinMapping screen is suppressed in favor of the module slots.
     const caps = resolveTargetCapabilities({
       compiler: 'arduino-cli',
       capabilities: { vppIo: true, pinMapping: false },
     })
     expect(caps.vppIo).toBe(true)
     expect(caps.pinMapping).toBe(false)
-    // Arduino specifics still flow through where not overridden.
     expect(caps.arduinoApiCompletions).toBe(true)
     expect(caps.directUsbUpload).toBe(true)
     expect(caps.debuggerTransports).toEqual(ARDUINO_CLI_CAPABILITIES.debuggerTransports)
   })
 
   it('handles a board with capabilities but no compiler (web orchestrator devices)', () => {
-    // openplc-web populates capabilities directly on vPLC entries with
-    // no `compiler` field. Resolver must take the capabilities verbatim
-    // over the empty-block baseline.
     const caps = resolveTargetCapabilities({
       capabilities: { modbusTcpServer: true, modbusTcpMaster: true, debuggerTransports: ['websocket'] },
     })
     expect(caps.modbusTcpServer).toBe(true)
     expect(caps.modbusTcpMaster).toBe(true)
     expect(caps.debuggerTransports).toEqual(['websocket'])
-    // Fields not declared remain false.
     expect(caps.pinMapping).toBe(false)
     expect(caps.modbusRtuMaster).toBe(false)
   })
@@ -186,10 +160,6 @@ describe('preset shapes', () => {
   it('Arduino-CLI has pin mapping, Arduino API completions and both Modbus server transports', () => {
     expect(ARDUINO_CLI_CAPABILITIES.pinMapping).toBe(true)
     expect(ARDUINO_CLI_CAPABILITIES.arduinoApiCompletions).toBe(true)
-    // The baremetal firmware has always served both — `ModbusSlave.cpp`
-    // compiles a serial transport under MBSERIAL and a TCP one under MBTCP.
-    // These read `false` until DOPE-442 only because the configuration lived
-    // in a vendor screen the Servers UX could not see.
     expect(ARDUINO_CLI_CAPABILITIES.modbusTcpServer).toBe(true)
     expect(ARDUINO_CLI_CAPABILITIES.modbusRtuServer).toBe(true)
     expect(ARDUINO_CLI_CAPABILITIES.pythonFunctionBlocks).toBe(false)
@@ -206,9 +176,6 @@ describe('preset shapes', () => {
 
 describe('resolveAddressProducerCapabilities', () => {
   it('is permissive when there is no board info at all', () => {
-    // The rule it encodes: an all-false block reads as "this target supports no
-    // producers", which froze every address in the store and would size every
-    // area to zero in the compile-time image sizer.
     expect(resolveAddressProducerCapabilities(undefined)).toEqual(ALL_ADDRESS_PRODUCERS_ACTIVE)
   })
 
@@ -218,9 +185,6 @@ describe('resolveAddressProducerCapabilities', () => {
   })
 
   it('is permissive for a capability block that names no producer', () => {
-    // A block declaring only a server has not spoken about producers. Reading
-    // it as authoritative resolved all four to false, which is the all-false
-    // block this resolver exists to avoid.
     expect(resolveAddressProducerCapabilities({ capabilities: { opcuaServer: true } })).toEqual(
       ALL_ADDRESS_PRODUCERS_ACTIVE,
     )
@@ -238,9 +202,6 @@ describe('resolveAddressProducerCapabilities', () => {
   })
 
   it('honours a target that answered, including when it answers all-false', () => {
-    // The difference that matters: a resolved board declaring `pinMapping:
-    // false` must really deactivate pins, so their space frees up and the
-    // still-active producers compact into it.
     const simulator = resolveAddressProducerCapabilities({ compiler: 'simulator' })
     expect(simulator.pinMapping).toBe(false)
     expect(simulator.modbusTcpMaster).toBe(true)
@@ -254,15 +215,12 @@ describe('resolveAddressProducerCapabilities', () => {
   it('honours an explicit capability block even with no compiler', () => {
     const caps = resolveAddressProducerCapabilities({ capabilities: { pinMapping: true } })
     expect(caps.pinMapping).toBe(true)
-    // The rest fills in from EMPTY, which is the declared answer here, not silence.
     expect(caps.ethercat).toBe(false)
   })
 })
 
 describe('the S7 profile', () => {
   it('is materialised only for a target that can host an S7 server', () => {
-    // A profile on a target that cannot host one is noise, and leaving it
-    // undefined keeps EMPTY_CAPABILITIES genuinely empty.
     const without = resolveTargetCapabilities({ compiler: 'arduino-cli', capabilities: { s7Server: false } })
     expect(without.s7).toBeUndefined()
 
@@ -271,8 +229,6 @@ describe('the S7 profile', () => {
   })
 
   it('fills everything a manifest did not declare', () => {
-    // A VPP declares only what it raises. A shallow spread would leave the
-    // rest undefined and the generated header would be missing defines.
     const caps = resolveTargetCapabilities({
       compiler: 'arduino-cli',
       capabilities: { s7Server: true, s7: { maxClients: 4 } },
@@ -285,15 +241,12 @@ describe('the S7 profile', () => {
   })
 
   it('defaults below Runtime v4, deliberately', () => {
-    // v4 allows 32 clients and 64 DBs because it is a Linux process with a
-    // thread each. Here every client is a PDU pair in .bss.
     const caps = resolveTargetCapabilities({ compiler: 'arduino-cli', capabilities: { s7Server: true } })
     expect(caps.s7?.maxClients).toBe(2)
     expect(caps.s7?.maxDataBlocks).toBe(8)
   })
 
   it('leaves the OPC-UA profile alone', () => {
-    // The two are independent blocks; resolving one must not disturb the other.
     const caps = resolveTargetCapabilities({
       compiler: 'arduino-cli',
       capabilities: { s7Server: true, opcuaServer: true, opcua: { maxSessions: 2 } },

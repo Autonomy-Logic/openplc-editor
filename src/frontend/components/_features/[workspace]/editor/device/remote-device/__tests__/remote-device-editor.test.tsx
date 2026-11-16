@@ -139,7 +139,6 @@ const boardLink = (testId: string) => interactive(testId, 'button, [role="button
 const isDisabled = (control: HTMLElement) =>
   control.matches(':disabled') || control.getAttribute('aria-disabled') === 'true'
 
-/** Focuses the help icon next to a board link and returns the reason it reveals. */
 const reasonBeside = async (testId: string, reason: string) => {
   const holder = screen.getByTestId(testId)
   const icon =

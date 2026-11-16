@@ -160,7 +160,7 @@ function debugAddresses(text: string | undefined): Array<{ arr: number; elem: nu
   })
 }
 
-/** Parses and checks the command line; throws an error with the reason when it is not usable. */
+/** Parses and checks the command line. */
 function parseConfig(argv: readonly string[]): Config {
   const { values } = parseArgs({
     args: [...argv],

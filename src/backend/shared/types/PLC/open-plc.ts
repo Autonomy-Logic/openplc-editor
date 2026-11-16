@@ -1,18 +1,6 @@
 import { z } from 'zod'
 
 import { zodFBDFlowSchema, zodLadderFlowSchema } from '../../../../middleware/shared/ports/flow-schemas'
-// One source of truth for the IEC base-type list: the canonical
-// schema lives in `middleware/shared/ports/plc-schemas` and is
-// derived from strucpp's `iec-types.json`.  It accepts any case on
-// input and normalises to the canonical uppercase form, which is
-// what makes load / save round-trips case-insensitive (legacy
-// `'real'` files keep loading, modern `'REAL'` files too).
-//
-// Re-importing here — rather than redefining the list — guarantees
-// the save / load schemas stay in sync with the runtime UI's idea
-// of "what's an IEC base type."  The previous local lowercase enum
-// drifted from the runtime uppercase one and caused projects to
-// fail validation on open.
 import { baseTypeSchema } from '../../../../middleware/shared/ports/plc-schemas'
 import type { ImageTableKey } from '../../../../middleware/shared/utils/io-image/tables'
 import { IMAGE_TABLES } from '../../../../middleware/shared/utils/io-image/tables'
@@ -58,7 +46,6 @@ const PLCStructureVariableSchema = z.object({
       definition: z.literal('array'),
       value: z.string(),
       data: z.object({
-        /** This must also include the data types created by the user */
         baseType: z.discriminatedUnion('definition', [
           z.object({
             definition: z.literal('base-type'),
@@ -73,9 +60,6 @@ const PLCStructureVariableSchema = z.object({
       }),
     }),
     z.object({
-      /**
-       * This should be omitted at variable table type options
-       */
       definition: z.literal('derived'),
       value: z.string(),
     }),
@@ -87,8 +71,6 @@ const PLCStructureVariableSchema = z.object({
       }),
     })
     .optional(),
-  // Preserved through load — the .dt serializer emits it as a
-  // trailing (* … *) comment; omitting it here strips it on open.
   documentation: z.string().optional(),
 })
 const PLCStructureDatatypeSchema = z.object({
@@ -126,7 +108,6 @@ const PLCVariableSchema = z.object({
       definition: z.literal('array'),
       value: z.string(),
       data: z.object({
-        /** This must also include the data types created by the user */
         baseType: z.discriminatedUnion('definition', [
           z.object({
             definition: z.literal('base-type'),
@@ -145,27 +126,10 @@ const PLCVariableSchema = z.object({
       value: z.string(),
     }),
   ]),
-  /**
-   * The variable's binding. Single-field model: holds EITHER an alias name
-   * (bound to a producer channel) OR a literal IEC address the user typed
-   * (`%QX0.0`). Empty = unlocated. Alias→address resolution happens at
-   * compile time; a manual literal is honoured verbatim. Legacy projects
-   * that carried a separate `alias` field are migrated on load (the alias
-   * name is folded into `location`).
-   */
   location: z.string(),
   initialValue: z.string().or(z.null()).optional(),
   documentation: z.string(),
   debug: z.boolean().optional(),
-  /**
-   * IEC block qualifier — the variables table's **Flags** column.
-   *
-   * Optional, so every project written before this field existed still
-   * validates: absent means a plain `VAR`, which is IEC's NON_RETAIN default
-   * and exactly what those projects meant. One field rather than two booleans
-   * because CONSTANT and RETAIN are mutually exclusive — the invalid pair is
-   * unrepresentable instead of merely rejected.
-   */
   flag: z.enum(['constant', 'retain']).optional(),
 })
 
@@ -174,10 +138,10 @@ const PLCGlobalVariableSchema = PLCVariableSchema
 type PLCGlobalVariable = z.infer<typeof PLCGlobalVariableSchema>
 
 const PLCTaskSchema = z.object({
-  name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the task object.
+  name: z.string(),
   triggering: z.enum(['Cyclic', 'Interrupt']),
-  interval: z.string(), // TODO: Must have a regex validation for this. Probably a new modal must be created to handle this.
-  priority: z.number(), // TODO: implement this validation. This must be a positive integer from 0 to 100
+  interval: z.string(),
+  priority: z.number(),
 })
 
 type PLCTask = z.infer<typeof PLCTaskSchema>
@@ -219,11 +183,9 @@ const PLCFunctionSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python', 'cpp']),
   name: z.string(),
   returnType: z.union([baseTypeSchema, z.string()]),
-  /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
   body: bodySchema,
   documentation: z.string(),
-  /** Raw unparsed variables text - used to preserve user input even if it doesn't parse correctly */
   variablesText: z.string().optional(),
 })
 
@@ -232,20 +194,18 @@ type PLCFunction = z.infer<typeof PLCFunctionSchema>
 const PLCProgramSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python', 'cpp']),
   name: z.string(),
-  /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
   body: bodySchema,
   documentation: z.string(),
-  /** Raw unparsed variables text - used to preserve user input even if it doesn't parse correctly */
   variablesText: z.string().optional(),
 })
 
 type PLCProgram = z.infer<typeof PLCProgramSchema>
 
 const PLCInstanceSchema = z.object({
-  name: z.string(), // TODO: This should be homologate. Concept: An unique identifier for the instance object.
-  task: z.string(), // TODO: Implement this validation. This task must be one of the objects in the "tasks" array defined right above.
-  program: z.string(), // TODO: Implement this validation. This program must be one of the user's defined pou of program type.
+  name: z.string(),
+  task: z.string(),
+  program: z.string(),
 })
 
 type PLCInstance = z.infer<typeof PLCInstanceSchema>
@@ -253,11 +213,9 @@ type PLCInstance = z.infer<typeof PLCInstanceSchema>
 const PLCFunctionBlockSchema = z.object({
   language: z.enum(['il', 'st', 'ld', 'sfc', 'fbd', 'python', 'cpp']),
   name: z.string(),
-  /** Array of variable - will be implemented */
   variables: z.array(PLCVariableSchema),
   body: bodySchema,
   documentation: z.string(),
-  /** Raw unparsed variables text - used to preserve user input even if it doesn't parse correctly */
   variablesText: z.string().optional(),
 })
 
@@ -291,15 +249,7 @@ type PLCConfiguration = z.infer<typeof PLCConfigurationSchema>
 const PLCServerProtocolSchema = z.enum(['modbus-tcp', 's7comm', 'ethernet-ip', 'opcua'])
 type PLCServerProtocol = z.infer<typeof PLCServerProtocolSchema>
 
-/**
- * Every segment and every count is OPTIONAL, and absent is not zero.
- *
- * Absent means "publish whatever the image turns out to be"; a number is a
- * request that sizes the area. The screen persists only what was edited, so a
- * server with one count set is the ordinary shape on disk -- requiring all
- * seven here dropped the whole server at parse time, and the build then
- * reported that nothing produced the addresses it serves.
- */
+/** Every segment and every count is OPTIONAL, and absent is not zero. */
 const ModbusSlaveBufferMappingSchema = z.object({
   holdingRegisters: z
     .object({
@@ -340,34 +290,10 @@ type ModbusParity = z.infer<typeof ModbusParitySchema>
 
 const ModbusSlaveConfigSchema = z.object({
   enabled: z.boolean(),
-  /**
-   * Transports this server answers on. RTU and TCP together are ONE server with
-   * two transports, never two servers, so this is a set rather than the single
-   * `transport` the master carries -- a master dials one endpoint, a server
-   * listens on everything it was given.
-   *
-   * Absent means TCP, which is what every project saved before baremetal gained
-   * a real `PLCServer` implies: Runtime v4 serves TCP and nothing else.
-   */
   transports: z.array(ModbusTransportTypeSchema).optional(),
   networkInterface: z.string(),
-  // Reaches `#define MBTCP_PORT` verbatim, so it is bounded like every sibling
-  // port in this file. A project file not authored by the screen -- the very
-  // population the migration exists for -- is the only way an unbounded value
-  // could arrive.
   port: z.number().int().min(1).max(65535),
-  /**
-   * Slave id this server answers to. Meaningful on RTU, where it is the only
-   * addressing there is; on TCP the MBAP unit id is a gateway routing field and
-   * is deliberately not filtered on.
-   *
-   * 1-247 is the addressable range the screen enforces. `0` is the broadcast
-   * address, which a server must never answer on, and 248-255 are reserved.
-   */
   slaveId: z.number().int().min(1).max(247).optional(),
-  // RTU wiring, mirroring the master's serial half. Absent on a TCP-only
-  // server, and absent on baremetal when the RTU shares the editor's default
-  // port, where the package owns the port's speed.
   serialPort: z.string().optional(),
   baudRate: z.number().int().positive().optional(),
   parity: ModbusParitySchema.optional(),
@@ -378,12 +304,6 @@ const ModbusSlaveConfigSchema = z.object({
 type ModbusSlaveConfig = z.infer<typeof ModbusSlaveConfigSchema>
 
 // S7Comm Buffer Type Enumeration
-/* The tables an S7comm data block may be mapped onto are the tables the
- * runtime HAS, so the list is derived rather than transcribed. A table added
- * to the runtime and forgotten here would be a block the user cannot declare;
- * one removed and forgotten would be a block that sizes storage that is gone.
- *
- * `z.enum` needs a non-empty tuple literal, hence the cast on the spread. */
 const S7CommBufferTypeSchema = z.enum(IMAGE_TABLES.map((table) => table.key) as [ImageTableKey, ...ImageTableKey[]])
 type S7CommBufferType = z.infer<typeof S7CommBufferTypeSchema>
 
@@ -414,12 +334,6 @@ type S7CommPlcIdentity = z.infer<typeof S7CommPlcIdentitySchema>
 // S7Comm Buffer Mapping Schema
 const S7CommBufferMappingSchema = z.object({
   type: S7CommBufferTypeSchema,
-  // 65535, not 1023: 1023 was the runtime's old fixed BUFFER_SIZE, copied
-  // here as if it were a property of S7comm. The image is sized from the
-  // project now, so the only ceiling left is the ABI's own — a located
-  // variable's index is a uint16 (CON03, strucpp_abi.hpp), which makes 65535
-  // the highest addressable element. The bound stays: an unbounded start
-  // buffer would be a number with no meaning rather than a freedom.
   startBuffer: z.number().min(0).max(65535),
   bitAddressing: z.boolean(),
 })
@@ -496,13 +410,6 @@ const OpcUaSecurityProfileSchema = z.object({
   securityPolicy: OpcUaSecurityPolicySchema,
   securityMode: OpcUaSecurityModeSchema,
   authMethods: z.array(OpcUaAuthMethodSchema).min(1),
-  /** Role granted to Anonymous sessions on this profile. An anonymous client
-   *  carries no identity, so the role it maps to must be stated explicitly
-   *  rather than inferred. Defaults to the least-privilege 'viewer'
-   *  (read-only); an administrator raises it deliberately to allow anonymous
-   *  writes. Only meaningful when authMethods includes 'Anonymous'. Optional
-   *  for backward compatibility with projects authored before this field —
-   *  those are treated as 'viewer'. */
   anonymousRole: OpcUaUserRoleSchema.optional(),
 })
 type OpcUaSecurityProfile = z.infer<typeof OpcUaSecurityProfileSchema>
@@ -523,15 +430,7 @@ const OpcUaUserSchema = z.object({
   id: z.string(),
   type: z.enum(['password', 'certificate']),
   username: z.string().nullable(),
-  /** The password, in the clear. Deliberate: how a credential is stored is a
-   *  device property, so the build derives it, and to derive it the build needs
-   *  the password. A project file containing OPC-UA users is therefore a secret
-   *  and must be handled as one. */
   password: z.string().nullable().optional(),
-  /** Legacy: a pre-hashed credential from a project authored before the build
-   *  took over derivation. Passed through untouched so existing Runtime v4
-   *  projects keep working; it cannot be re-derived for another target, so the
-   *  build warns when one is used on a target that wants a different scheme. */
   passwordHash: z.string().nullable(),
   certificateId: z.string().nullable(),
   role: OpcUaUserRoleSchema,
@@ -557,12 +456,6 @@ interface OpcUaFieldConfig {
   /** Nested fields for complex types (FB instances, nested structs). Undefined or empty for leaf fields. */
   fields?: OpcUaFieldConfig[]
 }
-// `initialValue` was removed in the OPC-UA STruC++ migration — the
-// plugin reads the program's actual value via debug_read at server
-// startup, so no per-variable default is configured anymore. The
-// schema accepts (and silently drops) unknown keys via Zod's default
-// passthrough behaviour, so projects saved before the removal still
-// load cleanly without a migration step.
 const OpcUaFieldConfigSchema: z.ZodType<OpcUaFieldConfig> = z.lazy(() =>
   z.object({
     fieldPath: z.string(),
@@ -668,19 +561,15 @@ const ModbusIOGroupSchema = z.object({
 type ModbusIOGroup = z.infer<typeof ModbusIOGroupSchema>
 
 const ModbusTcpConfigSchema = z.object({
-  // Transport type: 'tcp' (default) or 'rtu' (serial)
   transport: ModbusTransportTypeSchema.optional(),
-  // TCP-specific fields (optional when using RTU)
   host: z.string().optional(),
   port: z.number().optional(),
   reconnect: z.boolean().optional(),
-  // RTU-specific fields (optional when using TCP)
   serialPort: z.string().optional(),
   baudRate: z.number().optional(),
   parity: ModbusParitySchema.optional(),
   stopBits: z.number().int().min(1).max(2).optional(),
   dataBits: z.number().int().min(7).max(8).optional(),
-  // Common fields
   timeout: z.number(),
   slaveId: z.number().int().min(0).max(255).optional(),
   ioGroups: z.array(ModbusIOGroupSchema),
@@ -695,10 +584,6 @@ type PLCRemoteDeviceProtocol = z.infer<typeof PLCRemoteDeviceProtocolSchema>
 const EtherCATChannelMappingSchema = z.object({
   channelId: z.string(),
   iecLocation: z.string(),
-  /* `userEdited` was carried here historically; addresses are always
-   * editor-allocated, so the flag was dead. Accepted but ignored on
-   * load (via Zod's stripping unknown keys) to keep legacy projects
-   * compatible. */
   alias: z.string().optional(),
 })
 
@@ -746,11 +631,6 @@ const EtherCATSlaveConfigSchema = z.object({
   timeouts: EtherCATTimeoutsSchema,
   watchdog: EtherCATWatchdogSchema,
   distributedClocks: EtherCATDistributedClocksSchema,
-  /**
-   * CoE flags defaulted from the ESI, overridable in the Expert view.
-   * Optional for backward compatibility; the project loader runs the one-pass migration
-   * helper to fill them in from the ESI on projects saved under the earlier schema, without CoE flags or per-PDO flags.
-   */
   coeFlags: z
     .object({
       pdoAssign: z.boolean(),
@@ -775,7 +655,6 @@ const PersistedPdoSchema = z.object({
   entries: z.array(PersistedPdoEntrySchema),
   dependOnSlot: z.boolean().optional(),
   assigned: z.boolean().optional(),
-  /** ESI defaults carried forward on first import. */
   fixed: z.boolean().optional(),
   mandatory: z.boolean().optional(),
   sm: z.number().int().optional(),
@@ -803,9 +682,7 @@ const SDOConfigurationEntrySchema = z.object({
   bitLength: z.number(),
   name: z.string(),
   objectName: z.string(),
-  /** Byte-string payload (hex-encoded) sent via EtherDOG's value_bytes. */
   valueBytes: z.string().optional(),
-  /** Send with CoE Complete Access. */
   completeAccess: z.boolean().optional(),
   dependOnSlot: z.boolean().optional(),
   transition: z.string().optional(),
@@ -892,17 +769,8 @@ const ConfiguredEtherCATDeviceSchema = z.object({
   txPdos: z.array(PersistedPdoSchema).optional(),
   slaveType: z.string().optional(),
   sdoConfigurations: z.array(SDOConfigurationEntrySchema).optional(),
-  /** Present when this drive is a CiA 402 SoftMotion axis (see schema above). */
   cia402: Cia402AxisConfigSchema.optional(),
-  /**
-   * Modules plugged into this coupler, in slot order. Present only when the
-   * underlying ESI declares a `<Slots>` block (ETG.5001 modular coupler).
-   */
   modules: z.array(ConfiguredEtherCATModuleSchema).optional(),
-  /**
-   * True when the ESI declares a `<Slots>` block. Set once at import time so
-   * the UI can offer the "Add module to slot N" affordance before any module is attached.
-   */
   isModularCoupler: z.boolean().optional(),
   esiInitCmdSdos: z.array(SDOConfigurationEntrySchema).optional(),
   slotsSpec: ESISlotsSpecSchema.optional(),
@@ -932,11 +800,7 @@ const PLCRemoteDeviceSchema = z.object({
 })
 type PLCRemoteDevice = z.infer<typeof PLCRemoteDeviceSchema>
 
-/**
- * Schema for storing debug variable flags.
- * Since POU variables are saved as text files (IEC 61131-3 format) which don't support debug flags,
- * we store the debug flags separately in project.json.
- */
+/** Schema for storing debug variable flags. */
 const PLCDebugVariablesSchema = z
   .object({
     global: z.array(z.string()).optional(),
@@ -946,73 +810,30 @@ const PLCDebugVariablesSchema = z
 
 type PLCDebugVariables = z.infer<typeof PLCDebugVariablesSchema>
 
-/**
- * One row of the project's per-project library enablement.  Records
- * the subset of the system-wide library pool the project pulls into
- * its compile + UI surfaces.
- *
- * `name` matches the strucpp manifest identifier used by
- * LibraryManagerModule (the same value `InstalledLibrary.name`
- * carries), so project ↔ system pool joins are O(1) on a Map.
- *
- * `version` is informational on load — name-only match against the
- * pool is the contract today; a soft warning surfaces when the
- * installed version differs.  Strict version pinning is a future
- * feature.
- *
- * Bundled / canonical libraries (every .stlib strucpp ships) are
- * always-on regardless of this field — they can't be disabled and
- * do not need to be listed here.  Only opt-in libraries belong in
- * this array.
- */
+/** One row of the project's per-project library enablement. */
 const PLCProjectLibraryRefSchema = z.object({
   name: z.string(),
   version: z.string(),
 })
 type PLCProjectLibraryRef = z.infer<typeof PLCProjectLibraryRefSchema>
 
-/**
- * A Global Variable List — the object CODESYS calls a GVL.
- *
- * Optional on the wire so projects written before lists existed still validate; absent
- * reads as no lists. Members keep their `location`, which is deliberately not compiled
- * (a struct member cannot be bound to I/O yet) but has to survive so the CODESYS export
- * can put it back. `qualifier` is carried for the same reason — see
- * `PLCGlobalVariableList` in `middleware/shared/ports/types.ts`.
- */
+/** A Global Variable List — the object CODESYS calls a GVL. */
 const PLCGlobalVariableListSchema = z.object({
   name: z.string(),
   variables: z.array(PLCVariableSchema).default([]),
   qualifier: z.string().optional(),
-  /** Raw declaration kept while it does not parse — see `PLCGlobalVariableList.text`. */
   text: z.string().optional(),
   documentation: z.string().optional(),
 })
 
 const PLCProjectDataSchema = z.object({
-  // Defaulted: once data types live in datatypes/<Name>.dt files the
-  // field disappears from newly-written project.json (DOPE-385);
-  // legacy projects still carry it and keep validating.
   dataTypes: z.array(PLCDataTypeSchema).default([]),
   globalVariableLists: z.array(PLCGlobalVariableListSchema).optional(),
   pous: z.array(PLCPouSchema).default([]),
   configuration: PLCConfigurationSchema,
   servers: z.array(PLCServerSchema).optional(),
   remoteDevices: z.array(PLCRemoteDeviceSchema).optional(),
-  /**
-   * Opt-in libraries enabled for this project.  Defaults to `[]`
-   * (legacy projects load with bundled-only — those are always-on
-   * regardless of this field).  Order is alphabetical-by-name on
-   * save for stable diffs.
-   */
   libraries: z.array(PLCProjectLibraryRefSchema).default([]),
-  /** Raw bytes of the library project's `library.json` manifest.
-   *  Lives in-memory exactly like POU bodies (`pous[i].body.value`)
-   *  — set for library projects when the project opens, serialised
-   *  out to `library.json` by the save pipeline, NEVER embedded in
-   *  the on-disk `project.json` (the save serialiser drops it the
-   *  same way it drops POU bodies, which write to their own
-   *  `.st`/`.il`/etc. files).  Optional / undefined for PLC projects. */
   libraryManifest: z.string().optional(),
   debugVariables: PLCDebugVariablesSchema,
   deletedPous: z
@@ -1040,7 +861,6 @@ const PLCProjectDataSchema = z.object({
       }),
     )
     .optional(),
-  /** Opaque VPP screen data keyed by (packageId, screenId). */
   vppExtensions: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
 })
 

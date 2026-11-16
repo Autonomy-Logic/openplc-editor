@@ -1,11 +1,3 @@
-/**
- * The Remote Device screen on baremetal boards: which transports and UARTs a board offers, Reconnect and
- * its help, the Timeout help on TCP only, the links to the board's Network and Serial pages, the dialog a
- * board switch opens when the new board cannot run a device.
- *
- * Boards come from the unsigned e2e package in `fixtures/baremetal-modbus-master/`. Needs a production build
- * and the preload copy; see "Electron e2e" in CLAUDE.md.
- */
 import type { Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 

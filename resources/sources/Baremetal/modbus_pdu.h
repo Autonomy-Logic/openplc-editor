@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (c) 2026 Autonomy®
-/*
-modbus_pdu.h - Transport-agnostic Modbus PDU dispatch + per-FC frame shape
-
-The protocol layer: it owns the set of function codes and their shapes. A
-transport fills mb_frame with a request, calls process_mbpacket() to dispatch it
-(operation FC -> modbus_registers, debug FC -> modbus_debug) and read the
-response back out. The transport does NOT know the FC set — it asks this layer
-via mb_pdu_request_len() / mb_pdu_skips_crc(), so adding a function code touches
-only this file plus its handler, never the transports.
-*/
 
 #ifndef MODBUS_PDU_H
 #define MODBUS_PDU_H
@@ -20,11 +10,8 @@ only this file plus its handler, never the transports.
 // response back into mb_frame.
 void process_mbpacket();
 
-// Total on-wire length (slave id + PDU + 2 CRC bytes) of the RTU request whose
-// first `n` bytes are in `f`: >0 for a known length, 0 when more header bytes are
-// needed to size it, -1 for a function code we do not serve (so the byte cannot
-// be a frame head). Length is implicit in Modbus RTU — derived per FC, exactly as
-// process_mbpacket() later parses the fields.
+// Total on-wire length (slave id + PDU + 2 CRC bytes) of the RTU request whose first `n` bytes are in `f`: >0 for a
+// known length, 0 when more header bytes are needed to size it, -1 for a function code that is not served.
 int32_t mb_pdu_request_len(const uint8_t *f, uint16_t n);
 
 /** Total on-wire length (slave id + PDU + 2 CRC bytes) of the normal response to an
@@ -32,15 +19,10 @@ int32_t mb_pdu_request_len(const uint8_t *f, uint16_t n);
  *  inverse of mb_pdu_request_len(); -1 for another function code or a quantity it does not allow. */
 int32_t mb_pdu_response_len(uint8_t fc, uint16_t quantity);
 
-// True for the private debugger FCs, whose RTU frames deliberately skip CRC
-// validation (they are well-formed and performance-sensitive). Lets the serial
-// transport decide CRC handling without hardcoding the debug FC list.
+// True for the private debugger FCs, whose RTU frames skip CRC validation.
 bool mb_pdu_skips_crc(uint8_t fc);
 
-// True for the editor's private function codes, 0x41-0x4B. Deliberately NOT the
-// same set as mb_pdu_skips_crc(): that one excludes MB_FC_PLC_SET_STATE, which
-// does carry a CRC, and reusing it here would leave run/stop unreachable on the
-// editor's own slave id.
+// True for the editor's private function codes, 0x41-0x4B.
 bool mb_pdu_is_editor_fc(uint8_t fc);
 
 #endif

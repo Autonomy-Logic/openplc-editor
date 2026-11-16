@@ -36,7 +36,6 @@ describe('buildAliasRegistry', () => {
           entries: [
             { iecAddress: '%QX0.5', alias: 'conveyor_motor', slot: 1, channelName: 'DO1' },
             { iecAddress: '%IW2', alias: 'tank_level', slot: 2, channelName: 'AI1' },
-            // No alias — should not appear in the registry.
             { iecAddress: '%QW3', slot: 3, channelName: 'AO1' },
           ],
         },
@@ -47,13 +46,10 @@ describe('buildAliasRegistry', () => {
     expect(reg.byAlias.size).toBe(2)
     expect(reg.byAlias.get('conveyor_motor')?.address).toBe('%QX0.5')
     expect(reg.byAlias.get('tank_level')?.address).toBe('%IW2')
-    // The un-aliased claim (%QW3) is absent from the index.
     expect([...reg.byAlias.values()].some((e) => e.address === '%QW3')).toBe(false)
   })
 
   it('records duplicate alias names; first encounter wins in byAlias', () => {
-    // Two different addresses both labelled "valve" — one from pin
-    // mapping, one from a Modbus remote device.
     const pool = buildAddressPool(
       {
         pinMapping: { pins: [{ address: '%QX0.0', alias: 'valve' }] },
@@ -69,7 +65,6 @@ describe('buildAliasRegistry', () => {
       { ...arduino, modbusTcpMaster: true },
     )
     const reg = buildAliasRegistry(pool)
-    // Pool's reservation pass runs pin-mapping first; that's who wins.
     expect(reg.byAlias.get('valve')?.address).toBe('%QX0.0')
     expect(reg.duplicateAliases).toEqual(['valve'])
   })
@@ -105,8 +100,6 @@ describe('buildAliasRegistry', () => {
   })
 
   it('respects target scoping: aliases on inactive producers do not appear', () => {
-    // Same project data — Arduino-target view skips VPP and Modbus
-    // remote aliases.
     const inputs = {
       vendorIoMapping: {
         entries: [{ iecAddress: '%IW0', alias: 'vpp_alias', slot: 1, channelName: 'AI1' }],
@@ -244,10 +237,6 @@ describe('an alias has to be an IEC identifier (DOPE-650)', () => {
     expect(validateAliasName('%QX0.0').ok).toBe(false)
   })
 
-  // Which words are reserved is the parser's to say, and it says fewer than the
-  // editor's identifier list did. That list also holds every standard function
-  // name, so an existing pin called `Max` or `Step` was renamed on open although
-  // STruC++ reads either one as an `AT` operand perfectly well.
   it.each(['Max', 'Min', 'Step', 'TP', 'Left', 'Time', 'Limit', 'Move', 'Abs', 'Sel', 'Mux'])(
     'accepts %s, which STruC++ reads as an AT operand',
     (alias) => {
@@ -260,14 +249,10 @@ describe('an alias has to be an IEC identifier (DOPE-650)', () => {
   })
 
   it('refuses a name that would smuggle a second declaration in', () => {
-    // The operand is spliced into the file verbatim, so the check is that it
-    // reads back as ONE thing.
     expect(validateAliasName('a; b : INT').ok).toBe(false)
   })
 
   it('rejects a malformed name through validateAliasEdit, before any collision check', () => {
-    // The shape is wrong whether or not the name is taken, and "already in use"
-    // would be a confusing thing to say about `Motor Start`.
     const result = validateAliasEdit(empty, 'Motor Start', anywhere)
     expect(result.ok).toBe(false)
     expect(isAliasConflict(result)).toBe(false)

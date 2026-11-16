@@ -1,44 +1,3 @@
-/**
- * Address pool — single source of truth for which IEC 61131-3
- * addresses are currently claimed and by which producer.
- *
- * Replaces the older `collectUsedIecAddresses` + `generateIecAddress`
- * pair, which were separate concerns: collection (string set of used
- * addresses) and allocation (next-free lookup with a known skip set).
- * The pool unifies both, adds target-scoping via TargetCapabilities,
- * tracks origin per claim (for the alias registry in Phase 2), and
- * reports conflicts when two producers claim the same address.
- *
- * Pure derived structure: building the pool is a function of project
- * state + the active target's capabilities, no caching, no
- * side-effects. Rebuild whenever the inputs change; cost is
- * O(slots + remote points + pins), trivial at realistic project size.
- *
- * Target scoping
- * ----------------
- * Each producer contributes to the pool only when the active target's
- * capability for that source is `true`. Switching to a target that
- * disables a source releases every claim that source had made — the
- * underlying project data is preserved, just not counted. This is
- * why an Arduino target's pin-mapping claims and a Runtime v4
- * target's VPP slots can coexist in the same project file without
- * clashing: only one set is active at a time.
- *
- * Reservation order
- * ----------------
- * Inside the pool build:
- *   1. Pin-mapping claims first (Arduino-style fixed-address sources).
- *   2. VPP I/O claims next (per-slot, in slot order).
- *   3. Modbus TCP remote-device I/O points (per-device, per-group).
- *   4. EtherCAT channel mappings (per-device, in scan order).
- *
- * The order matters when two producers happen to claim the same
- * address: only the first wins, and the second is reported as a
- * conflict. The editor should never produce conflicts under normal
- * operation; if `pool.conflicts` is non-empty, the caller should
- * re-run the address-sync flow (Phase 4) to reassign the losers.
- */
-
 import type { AddressProducerCapabilities } from '../target-capabilities'
 import { runsModbusMaster } from '../target-capabilities/modbus-master'
 
@@ -76,14 +35,6 @@ export interface AddressPool {
   byPrefix: ReadonlyMap<string, readonly ClaimedAddress[]>
   conflicts: readonly ConflictReport[]
 }
-
-/* ------------------------------------------------------------------
- * Pool inputs
- *
- * Loosely typed because each platform stores producer data in its own
- * shape. The shared pool consumes the minimum each producer needs to
- * declare. Missing fields are treated as empty.
- * ------------------------------------------------------------------ */
 
 export interface PoolPinMappingInput {
   pins: Array<{
@@ -155,16 +106,9 @@ export interface PoolInputs {
 }
 
 export interface BuildPoolOptions {
-  /** Exclude every claim from this source kind. Used when a producer
-   *  is about to regenerate its own claims (allocating addresses):
-   *  the pool must reflect "everything except me" so we don't
-   *  conflict with our own about-to-be-overwritten entries. */
+  /** Exclude every claim from this source kind. */
   ignoreSource?: SourceKind
 }
-
-/* ------------------------------------------------------------------
- * Address parsing helpers (internal)
- * ------------------------------------------------------------------ */
 
 const BIT_ADDRESS_REGEX = /^(%[IQM]X)(\d+)\.(\d+)$/
 const WORD_ADDRESS_REGEX = /^(%[IQM][BWDL])(\d+)$/
@@ -186,23 +130,14 @@ function parseAddress(address: string): ParsedAddress | null {
 function compareClaimedAddress(a: ClaimedAddress, b: ClaimedAddress): number {
   const pa = parseAddress(a.address)
   const pb = parseAddress(b.address)
-  // Unparseable addresses sort last but stably amongst themselves.
   if (!pa) return pb ? 1 : a.address.localeCompare(b.address)
   if (!pb) return -1
   if (pa.index !== pb.index) return pa.index - pb.index
   return (pa.bit ?? 0) - (pb.bit ?? 0)
 }
 
-/* ------------------------------------------------------------------
- * Pool construction
- * ------------------------------------------------------------------ */
-
 export function buildAddressPool(
   inputs: PoolInputs,
-  /* Only the four producer flags are read. Narrower than
-   * `TargetCapabilities` on purpose: "which producers are active" can also be
-   * answered by something that is not a target — see
-   * `ALL_ADDRESS_PRODUCERS_ACTIVE`, the answer for an unresolved board. */
   caps: AddressProducerCapabilities,
   options: BuildPoolOptions = {},
 ): AddressPool {
@@ -226,23 +161,18 @@ export function buildAddressPool(
     byAddress.set(address, { address, source, alias: alias && alias.length > 0 ? alias : undefined })
   }
 
-  // 1. Pin mapping — fixed hardware addresses. Goes first so other
-  //    producers can't accidentally claim a pin-bound slot when
-  //    Arduino-style targets are active.
   if (caps.pinMapping && inputs.pinMapping && ignore !== 'pin-mapping') {
     for (const pin of inputs.pinMapping.pins) {
       claim(pin.address, { kind: 'pin-mapping', ref: pin.address }, pin.alias)
     }
   }
 
-  // 2. VPP module I/O.
   if (caps.vppIo && inputs.vendorIoMapping?.entries && ignore !== 'vpp-io') {
     for (const entry of inputs.vendorIoMapping.entries) {
       claim(entry.iecAddress, { kind: 'vpp-io', ref: `slot-${entry.slot}:${entry.channelName}` }, entry.alias)
     }
   }
 
-  // 3. Modbus TCP slave remote-device I/O points.
   if (runsModbusMaster(caps) && inputs.remoteDevices && ignore !== 'modbus-tcp-remote') {
     for (const dev of inputs.remoteDevices) {
       const devRef = dev.deviceName || dev.name || 'unknown-device'
@@ -254,11 +184,6 @@ export function buildAddressPool(
     }
   }
 
-  // 4. EtherCAT channel mappings.
-  //
-  // Ref format: "<devRef>:<slaveRef>:<channelId>" for a plain
-  // slave channel, "<devRef>:<slaveRef>:<moduleId>:<channelId>" for a module channel on
-  // an ETG.5001 modular coupler.
   if (caps.ethercat && inputs.remoteDevices && ignore !== 'ethercat') {
     for (const dev of inputs.remoteDevices) {
       const devRef = dev.deviceName || dev.name || 'unknown-device'
@@ -271,9 +196,6 @@ export function buildAddressPool(
             mapping.alias,
           )
         }
-        // Modules plugged into a modular coupler. Their channel addresses
-        // live in the same address pool as the coupler's own channels; the ref format
-        // carries a fourth segment so the editor can tell them apart.
         for (const module of slave.modules ?? []) {
           const moduleRef = module.id || `slot-${module.slot}`
           for (const mapping of module.channelMappings ?? []) {
@@ -288,7 +210,6 @@ export function buildAddressPool(
     }
   }
 
-  // Build the prefix index for fast next-free lookups.
   const byPrefix = new Map<string, ClaimedAddress[]>()
   for (const c of byAddress.values()) {
     const parsed = parseAddress(c.address)
@@ -304,10 +225,6 @@ export function buildAddressPool(
 
   return { byAddress, byPrefix, conflicts }
 }
-
-/* ------------------------------------------------------------------
- * Allocation
- * ------------------------------------------------------------------ */
 
 /**
  * Find the next unclaimed address with the given prefix.
@@ -336,15 +253,6 @@ export function nextFreeAddress(
   startFrom?: number,
   alsoUsed?: ReadonlySet<string>,
 ): string {
-  // Linearise: bit addresses become byte*8 + bit; word addresses are
-  // already a single integer. The pool's `byPrefix` list is sorted on
-  // construction, so we walk it once and find the lowest unclaimed
-  // linear slot >= startFrom. `alsoUsed` (caller-tracked in-flight
-  // allocations) is merged in via a second sorted cursor. Time
-  // complexity is O(N + M) for N pool claims and M extras under the
-  // same prefix — strictly better than the previous candidate-by-
-  // candidate scan when claims are sparse, and lets later phases
-  // reclaim freed slots without a linear walk.
   const linearOf = (parsed: ParsedAddress | null): number => {
     if (!parsed || parsed.prefix !== prefix) return -1
     return isBit ? parsed.index * 8 + (parsed.bit ?? 0) : parsed.index
@@ -352,9 +260,6 @@ export function nextFreeAddress(
   const formatLinear = (linear: number): string =>
     isBit ? `${prefix}${Math.floor(linear / 8)}.${linear % 8}` : `${prefix}${linear}`
 
-  // Claims already sorted by `buildAddressPool`. Skip entries that
-  // belong to other prefixes (shouldn't happen — byPrefix is keyed
-  // by prefix — but defensive against future refactors).
   const poolClaims: number[] = []
   for (const claim of pool.byPrefix.get(prefix) ?? []) {
     const n = linearOf(parseAddress(claim.address))
@@ -377,15 +282,12 @@ export function nextFreeAddress(
     const a = i < poolClaims.length ? poolClaims[i] : Number.POSITIVE_INFINITY
     const b = j < extras.length ? extras[j] : Number.POSITIVE_INFINITY
     const next = a < b ? a : b
-    // Advance cursors past anything < startFrom (we don't care about
-    // earlier slots) and dedupe pool/extras overlap.
     if (next < expect) {
       if (a === next) i++
       if (b === next) j++
       continue
     }
     if (next > expect) return formatLinear(expect)
-    // next === expect: this slot is taken; try the next one.
     expect++
     if (a === next) i++
     if (b === next) j++

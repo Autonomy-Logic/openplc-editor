@@ -115,10 +115,6 @@ describe('generateModbusMasterConfig', () => {
     expect(ioPoints[0].error_handling).toBe('keep-last-value')
   })
 
-  // Regression, openplc-editor#691: the per-group "Keep last value / Set to
-  // zero" choice existed only in the UI. It was stored in the project and
-  // dropped here, so the runtime never learned about it and always kept the
-  // last value when a device went unreachable.
   it('emits the error handling each IO group is configured with', () => {
     const device = makeTcpDevice()
     device.modbusTcpConfig!.ioGroups[0].errorHandling = 'set-to-zero'
@@ -145,8 +141,6 @@ describe('generateModbusMasterConfig', () => {
   })
 
   it('defaults to keeping the last value when a group predates the field', () => {
-    // Projects saved before the option shipped have no value stored; the
-    // runtime's historical behaviour is to keep the last value.
     const device = makeTcpDevice()
     const group = device.modbusTcpConfig!.ioGroups[0]
     delete (group as { errorHandling?: unknown }).errorHandling
@@ -375,8 +369,6 @@ describe('generateModbusMasterConfig', () => {
       },
     }
 
-    // The filter will match (protocol + config present), but convertRemoteDeviceToModbusMaster
-    // returns null due to empty ioGroups
     expect(generateModbusMasterConfig([device])).toBeNull()
   })
 })

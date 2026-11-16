@@ -1,16 +1,3 @@
-/**
- * Compare the firmware images of two builds of one project, target by target.
- *
- * Usage
- *   npx ts-node scripts/bench/modbus-master/compare-images.ts <baseline-build> <candidate-build>
- *
- * Each argument is a copy of a project's `build/` folder, which holds one folder per target. A target passes
- * when its `Baremetal.ino.hex` or `.bin` is byte-identical in both, or, where the toolchain embeds build data in
- * the image, when the ELF's allocated sections have the same sizes and it defines the same functions and
- * objects, compared by name after `normalizeSymbolName`. Exit code 0 when every target of the baseline passes,
- * 1 otherwise.
- */
-
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 

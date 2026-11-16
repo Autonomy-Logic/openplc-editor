@@ -51,7 +51,7 @@ const UPPER_LAYER_HEADERS = [
   'modbus_master_rtu.h',
 ]
 
-/** The CONTROLLINO-specific RS-485 calls and pins the server used to drive itself. */
+/** The CONTROLLINO-specific RS-485 calls and pins of the Modbus server. */
 const CONTROLLINO_RS485_NAMES = [
   'Controllino_RS485Init',
   'Controllino_RS485TxEnable',

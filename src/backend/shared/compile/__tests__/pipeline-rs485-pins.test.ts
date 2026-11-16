@@ -1,9 +1,3 @@
-/**
- * `MBSERIAL_TXPIN` in the `defines.h` an arduino-cli build hands to the
- * compiler, with the board resolved the way the build resolves it:
- * `BoardInfoResolver`, then `resolveBoardSelection`, then the pipeline.
- */
-
 import type { DevicePin } from '../../types/PLC/devices'
 import type { PLCProjectData } from '../../types/PLC/open-plc'
 import type { CompilerPlatformPort } from '../../../../middleware/shared/ports/compiler-platform-port'

@@ -1,28 +1,3 @@
-/**
- * Board build info resolver — single canonical source of truth for
- * board-info lookup across the OpenPLC compile pipeline.
- *
- * One uniform shape (`BoardBuildInfo`) regardless of catalog source:
- * `hals.json` (the built-in Simulator / Runtime v3 / Runtime v4
- * entries) or an installed VPP manifest (Arduino-family devices plus
- * future runtime-v4 plugins shipped as `.vpp` packages).
- *
- * Forward-compatible with the eventual web-side VPP catalog:
- * platform-specific I/O is injected through `BoardInfoResolverConfig`
- * (the package-manager source, hals-source path resolution, and
- * package-relative path resolution).  The editor passes its
- * filesystem-backed `PackageManagerModule`; web ships a no-op
- * `packageManager` stub today and a real impl when VPP-on-web lands.
- *
- * Pure: no fs I/O, no electron, no globals.  Caller is responsible
- * for loading `hals.json` ahead of time and passing the content in.
- *
- * Precedence: `hals.json` wins when a board exists in both catalogs.
- * Preserves the editor's pre-migration behavior; once builtin
- * entries leave `hals.json` (later VPP-migration phase) the
- * conflict surface disappears.
- */
-
 import type { DebugSpec } from '../../../middleware/shared/ports/debug-spec-types'
 import type {
   InstalledPackage,
@@ -36,16 +11,7 @@ import { classifyBoardRuntime } from '../../../middleware/shared/utils/target-ca
 import type { TargetCapabilities } from '../../../middleware/shared/utils/target-capabilities/types'
 import { findVppDeviceByBoardName } from './find-vpp-device'
 
-// ---------------------------------------------------------------------------
-// Public shapes
-// ---------------------------------------------------------------------------
-
-/**
- * Slice of a `hals.json` entry the resolver reads.  Defined inline
- * (rather than reusing editor's zod-derived `BoardInfo`) so the
- * shared zone stays free of editor-only types and the web build
- * doesn't drag a zod schema into its bundle.
- */
+/** Slice of a `hals.json` entry the resolver reads. */
 export interface HalsBoardEntry {
   /** Toolchain selector: `'arduino-cli' | 'openplc-compiler' | 'simulator'`. */
   compiler: string
@@ -99,8 +65,7 @@ export interface BoardInfoResolverConfig {
   /** Already-loaded `hals.json` content.  Editor reads from disk;
    *  web pulls via `import.meta.glob` at bundle time. */
   halsContent: HalsFileContent
-  /** VPP package source.  Editor: `PackageManagerModule`.  Web:
-   *  no-op stub today; real impl when VPP catalog lands on web. */
+  /** VPP package source. */
   packageManager: PackageManagerPort
   /** Convert a hals.json `source` field (relative HAL filename) to
    *  the opaque key downstream consumers will use.  Editor: an
@@ -129,9 +94,7 @@ export interface BoardBuildInfo {
   source: 'hals' | 'vpp'
   /** Toolchain selector: `'arduino-cli' | 'openplc-compiler' | 'simulator'`. */
   compiler: string
-  /** Mirror of `compiler` — convenience for callers that already
-   *  treat the toolchain as the runtime identifier (editor's
-   *  pre-migration `boardRuntime` variable). */
+  /** Mirror of `compiler`. */
   boardRuntime: string
   /** `true` when this is the in-browser avr8js simulator target.
    *  Derived from `compiler === 'simulator'`. */
@@ -145,7 +108,6 @@ export interface BoardBuildInfo {
    *  and not v3). */
   isRuntimeV4: boolean
 
-  // arduino-cli targets ----------------------------------------------------
   core?: string
   /** FQBN.  Consumed by `buildArduinoCliCompileArgs` and the
    *  hex-path derivation that the simulator-firmware loader keys
@@ -172,15 +134,10 @@ export interface BoardBuildInfo {
    *  library dir, linked via a 2nd `--library`. Its presence marks an arduino
    *  prebuilt board (the source HAL still compiles as the integration layer). */
   precompiledLibraryDir?: string
-  /** Resolved paths of the VPP's on-device license-storage backend sources
-   *  (`device.hal.licenseStore`), injected into the Baremetal sketch so they
-   *  define the STRONG `license_store_*` symbols over the weak default.
-   *
-   *  This is the ONE representation of "this VPP ships storage". There is
-   *  deliberately no capability mirroring it: every licensable VPP targets
-   *  hardware that persists a licence, so a second derived boolean would be
-   *  true wherever `isLicensable` is and only add a way for the two to
-   *  disagree. */
+  /**
+   * Resolved paths of the VPP's on-device license-storage backend sources (`device.hal.licenseStore`), injected
+   * into the Baremetal sketch so they define the STRONG `license_store_*` symbols over the weak default.
+   */
   licenseStoreFiles?: string[]
   /** Per-VPP signing key id (`device.hal.licenseKeyId`). Informational in the
    *  editor: the activation request carries only `{ deviceId, packageId }` and
@@ -211,27 +168,17 @@ export interface BoardBuildInfo {
    */
   platformOptions?: PlatformOption[]
 
-  // runtime-v4 targets -----------------------------------------------------
   pluginType?: 'python' | 'native'
   pluginEntry?: string
   configTemplate?: string
   requirements?: string
 
-  // VPP metadata -----------------------------------------------------------
   vppPackageId?: string
   vppDeviceId?: string
   vppPackagePath?: string
-  /** Names of the configuration screens the device declares (the keys of
-   *  `device.screens`, not their contents).
-   *
-   *  The compile side needs them for one question only: does this board ship a
-   *  Network screen? That is how a package states it has a TCP carrier, and
-   *  `resolveModbusServerProfile` reads it to decide whether Modbus TCP is on
-   *  offer at all. Without it the pipeline cannot tell an ESP32 with Wi-Fi from
-   *  an ATmega with nothing, and emits `MBTCP` into both. */
+  /** Names of the configuration screens the device declares (the keys of `device.screens`, not their contents). */
   vppScreenNames?: string[]
 
-  // Physical transport the board exposes ------------------------------------
   /** Hardware UARTs, from the manifest device's `serialPorts`. */
   serialPorts?: string[]
   /** The UART the debugger answers on, from `defaultSerial`. Absent → `Serial`. */
@@ -245,17 +192,12 @@ export interface BoardBuildInfo {
   /** Per-pin pull-up/pull-down rules, from `defaults.pins.pull`. */
   pinPull?: PinPullSpec
 
-  // Debug-channel resolver spec --------------------------------------------
   /** Declarative debug spec consumed by `resolveDebugConnection`.
    *  Carries through from both `hals.json` entries and VPP manifest
    *  device entries.  Undefined when the board didn't declare one;
    *  callers can fall back to "Debugging Not Available". */
   debug?: DebugSpec
 }
-
-// ---------------------------------------------------------------------------
-// Resolver
-// ---------------------------------------------------------------------------
 
 /** Thrown by `BoardInfoResolver.resolve` when neither hals.json nor an installed VPP package has the board. */
 export class BoardNotFoundError extends Error {
@@ -349,10 +291,6 @@ export class BoardInfoResolver {
     if (device.target.coreVersion) info.coreVersion = device.target.coreVersion
     if (device.target.uploadMethod) info.uploadMethod = device.target.uploadMethod
 
-    // The physical transport the board exposes, and which screens it ships.
-    // The renderer's `BoardInfo` has carried these since the screen split; the
-    // compile side never received them, so the emitter had no way to know what
-    // the board can actually serve over.
     if (device.screens) info.vppScreenNames = Object.keys(device.screens)
     if (device.defaults?.pins?.pull) info.pinPull = device.defaults.pins.pull
 
@@ -374,11 +312,6 @@ export class BoardInfoResolver {
     if (device.hal.extraArduinoLibraries) info.extraArduinoLibraries = device.hal.extraArduinoLibraries
     if (device.hal.licenseKeyId) info.licenseKeyId = device.hal.licenseKeyId
 
-    // `hal.licenseStore` resolves to build inputs and nothing else. It used to
-    // ALSO derive a `capabilities.licenseStore` boolean; that is gone, because
-    // every licensable VPP targets hardware that persists a licence, so the
-    // boolean was true wherever `isLicensable` was and its only job was one
-    // diagnostic sentence.
     const licenseStoreFiles = normalizeToArray(device.hal.licenseStore)
     if (licenseStoreFiles.length > 0) {
       info.licenseStoreFiles = licenseStoreFiles.map((file) => resolveRel(pkg.path, file))
@@ -439,11 +372,7 @@ export class BoardInfoResolver {
   }
 }
 
-/**
- * A manifest field declared as `string | string[]` as a flat list of non-empty
- * entries. Blank strings are dropped rather than resolved: a `licenseStore: ""`
- * would otherwise resolve to the package root and read as "storage present".
- */
+/** A manifest field declared as `string | string[]` as a flat list of non-empty entries. */
 function normalizeToArray(value: string | string[] | undefined): string[] {
   if (value === undefined) return []
   const list = Array.isArray(value) ? value : [value]

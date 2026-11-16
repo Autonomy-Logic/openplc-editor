@@ -37,13 +37,9 @@ class HardwareModule {
   arduinoCliBaseParameters: string[]
   arduinoCoreFilePath: string
 
-  // ############################################################################
-  // =========================== Static properties ==============================
-  // ############################################################################
   static readonly HOST_PLATFORM = process.platform
   static readonly HOST_ARCHITECTURE = process.arch
-  /** Unpackaged means the binaries and sources sit beside the checkout. See the
-   *  note on `CompilerModule.DEVELOPMENT_MODE` for why this is not `NODE_ENV`. */
+  /** Unpackaged means the binaries and sources sit beside the checkout. */
   static readonly DEVELOPMENT_MODE = !electronApp.isPackaged
 
   constructor() {
@@ -52,23 +48,14 @@ class HardwareModule {
 
     this.arduinoCliBinaryPath = this.#constructArduinoCliBinaryPath()
     this.arduinoCliConfigurationFilePath = join(electronApp.getPath('userData'), 'User', 'arduino-cli.yaml')
-    // INFO: We use this approach because some commands can receive additional parameters as a string array.
     this.arduinoCliBaseParameters = ['--config-file', this.arduinoCliConfigurationFilePath]
     this.arduinoCoreFilePath = this.#constructArduinoCoreFilePath()
   }
-
-  // ############################################################################
-  // =========================== Static methods =================================
-  // ############################################################################
 
   static async readJSONFile<T>(filePath: string): Promise<T> {
     const data = await readFile(filePath, 'utf-8')
     return JSON.parse(data) as T
   }
-
-  // ############################################################################
-  // =========================== Private methods ================================
-  // ############################################################################
 
   // Initialize paths based on the environment
   #constructBinaryDirectoryPath(): string {
@@ -90,7 +77,6 @@ class HardwareModule {
     )
   }
 
-  // TODO: Validate the path.
   #constructArduinoCliBinaryPath(): string {
     return join(this.binaryDirectoryPath, 'arduino-cli')
   }
@@ -99,19 +85,7 @@ class HardwareModule {
     return join(electronApp.getPath('userData'), 'User', 'Runtime', 'arduino-core-control.json')
   }
 
-  // ############################################################################
-  // =========================== Public methods =================================
-  // ############################################################################
-
-  // ++ ============================= Getters ================================ ++
   async getAvailableSerialPorts(): Promise<SerialPort[]> {
-    // Two independent, best-effort scans merged by device path. The path is
-    // always the primary, unique label (mirrors the Arduino IDE); the
-    // parenthetical descriptor is the arduino-cli-identified board name when
-    // known, falling back to `serialport`'s manufacturer/vendor string. See
-    // `mergeSerialPortList` for the labelling rules. Running both scans is
-    // cheap here: the list is static after build and only re-scanned on an
-    // explicit user refresh.
     const [boardNamesByPath, manufacturersByPath] = await Promise.all([
       this.#identifyBoardsByPath(),
       this.#listSerialPortManufacturers(),
@@ -119,19 +93,7 @@ class HardwareModule {
     return mergeSerialPortList(boardNamesByPath, manufacturersByPath)
   }
 
-  /**
-   * Is this serial port still attached?
-   *
-   * The `serialport` scan only — deliberately NOT `getAvailableSerialPorts()`,
-   * which also shells out to arduino-cli. This is called on every tick of the
-   * device link poll to tell a pulled USB cable (fail now, there is nothing to
-   * retry against) from a device that is merely slow to answer (retry), so it has
-   * to be instant.
-   *
-   * Fails SAFE: if enumeration itself breaks, the port is reported present. A
-   * false "gone" would tear down a working connection, which is worse than
-   * waiting out one timeout.
-   */
+  /** Is this serial port still attached? */
   async isSerialPortPresent(address: string): Promise<boolean> {
     try {
       const ports = await NodeSerialPort.list()
@@ -217,14 +179,7 @@ class HardwareModule {
     const resolver = new BoardInfoResolver({
       halsContent,
       packageManager: new PackageManagerModule(),
-      // Editor maps hals.json `source` (relative HAL .cpp filename) to
-      // an absolute path under `resources/sources/hal/`.  Web's adapter
-      // (when VPP-on-web lands) will map the same string to a bundled-
-      // asset key.
       resolveHalSourcePath: (rel) => join(this.sourcesDirectoryPath, 'hal', rel),
-      // Editor security-check: VPP-package-relative paths must resolve
-      // inside the package's root directory.  Web's adapter will pick
-      // its own scheme when VPP-on-web lands.
       resolvePackageRelativePath,
       readPackageFile,
     })
@@ -232,16 +187,11 @@ class HardwareModule {
   }
 
   async getAvailableBoards(): Promise<AvailableBoards> {
-    // hals.json is now bundled at `src/backend/shared/firmware/hals.json`
-    // (the canonical shared board catalogue editor and web both consume).
-    // `readHalsFile` resolves synchronously off the bundled JSON — keeps
-    // the async shape so this call site stays unchanged.
     const halsFileContent = await readHalsFile<HalsFile>()
     const arduinoCoreFileContent = await HardwareModule.readJSONFile<{ [core: string]: string }[]>(
       this.arduinoCoreFilePath,
     )
 
-    // Create a Map to store the available boards, which will be returned
     let availableBoards: AvailableBoards = new Map()
 
     for (const [board, boardData] of Object.entries(halsFileContent)) {
@@ -283,14 +233,9 @@ class HardwareModule {
         })
       })
     }
-    // Merge boards from installed VPP packages
     const mutableBoards: AvailableBoards = new Map(availableBoards)
     await this.#mergeVppBoards(mutableBoards)
 
-    // Group by source VPP package so devices from the same package land
-    // contiguously in the device dropdown, with the three built-in targets
-    // (OpenPLC Runtime v3, v4, Simulator) pinned to the top. See
-    // `order-boards-by-vpp-group.ts` for the full ordering contract.
     return orderBoardsByVppGroup(mutableBoards)
   }
 
@@ -303,7 +248,6 @@ class HardwareModule {
         if (!manifest) continue
 
         for (const device of manifest.devices) {
-          // Read all screen definitions
           const screens: Record<string, unknown> = {}
           if (device.screens) {
             for (const [screenName, screenFile] of Object.entries(device.screens)) {
@@ -311,19 +255,14 @@ class HardwareModule {
               if (existsSync(screenPath)) {
                 try {
                   screens[screenName] = await HardwareModule.readJSONFile(screenPath)
-                } catch {
-                  /* ignore invalid screen */
-                }
+                  // eslint-disable-next-line no-empty
+                } catch {}
               }
             }
           }
 
-          // Map target type to compiler
           const compiler = device.target.type === 'runtime-v4' ? 'openplc-compiler' : 'arduino-cli'
 
-          // Per-module configuration screens live alongside top-level
-          // screens; load them eagerly so the renderer can present the
-          // full per-slot detail pane without an extra IPC round trip.
           const loadModuleConfigScreen = async (relPath: string | undefined) => {
             if (!relPath) return undefined
             const fullPath = join(pkg.path, relPath)
@@ -348,7 +287,6 @@ class HardwareModule {
           boards.set(device.name, {
             compiler,
             core: device.target.core ?? '',
-            // Upload transport ("ethernet" for the LOGO! 8.2; serial default).
             uploadMethod: device.target.uploadMethod,
             ...(device.target.platform ? { platform: device.target.platform } : {}),
             preview: device.preview,
@@ -360,17 +298,10 @@ class HardwareModule {
               defaultAout: device.defaults?.pins?.defaultAout,
               ...(device.defaults?.pins?.pull ? { pull: device.defaults.pins.pull } : {}),
             },
-            // Forward platformOptions only when the manifest actually declares
-            // some; the UI keys off `platformOptions?.length` to decide whether
-            // to render the variant dropdown, so leaving it undefined for
-            // boards that don't expose variants keeps the JSX gate tight.
             platformOptions:
               device.target.platformOptions && device.target.platformOptions.length > 0
                 ? device.target.platformOptions
                 : undefined,
-            // Forward any capability overrides the manifest declares (e.g. a
-            // runtime-v4 GPIO board setting `pinMapping: true`).
-            // `resolveTargetCapabilities` merges these over the preset.
             capabilities: device.capabilities,
             vpp: {
               packageId: manifest.package.id,
@@ -415,17 +346,6 @@ class HardwareModule {
   }
 
   async getBoardImagePreview(image: string, packagePath?: string) {
-    // `image` arrives from a board manifest (built-in or VPP-installed)
-    // and ultimately from disk-resident JSON the user can edit. Without
-    // containment, an entry like `image: "../../../../etc/passwd"`
-    // would resolve outside the expected directory and the contents
-    // would be base64'd back across the IPC boundary — effectively a
-    // file-read primitive scoped to whatever the editor user can read.
-    //
-    // For built-in boards: contain under sources/boards/previews.
-    // For VPP boards: contain under the package's own directory, since
-    // package authors expect to ship their preview alongside other
-    // package assets.
     const baseDir = packagePath ? packagePath : join(this.sourcesDirectoryPath, 'boards', 'previews')
     const imagePath = join(baseDir, image)
     assertPathContained(baseDir, imagePath, 'preview image path')

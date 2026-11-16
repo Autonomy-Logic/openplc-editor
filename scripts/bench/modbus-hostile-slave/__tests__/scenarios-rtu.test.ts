@@ -128,7 +128,6 @@ describe('AS-12 over RTU', () => {
 describe('TC10 over RTU', () => {
   const MALFORMED_DATA = Buffer.concat([Buffer.from([20]), words(range(201, 210))])
 
-  /** Slave 1, FC 3, byte count 20, 201..210, with both CRC bytes inverted. */
   function badCrcFrame(): Buffer {
     const body = Buffer.concat([Buffer.from([0x01, 0x03]), MALFORMED_DATA])
     const inverted = crc16Modbus(body) ^ 0xffff

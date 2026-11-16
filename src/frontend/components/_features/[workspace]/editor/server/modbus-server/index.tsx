@@ -29,8 +29,7 @@ const MAX_BIT_COUNT = 8192
 const MIN_SLAVE_ID = 1
 const MAX_SLAVE_ID = 247
 
-/** The rates every package's serial screen has ever offered. Held here because
- *  the speed of the server's UART is the server's now, not the package's. */
+/** The rates every package's serial screen has ever offered. */
 const BAUD_RATE_OPTIONS = ['9600', '14400', '19200', '38400', '57600', '115200']
 
 const inputStyles =
@@ -70,24 +69,7 @@ const Toggle = ({
   </label>
 )
 
-/**
- * A named block of rows, with the way out to the board page that governs the
- * same wiring.
- *
- * The link belongs to the group and not to a row because it explains all of
- * them at once: the board's serial page holds that line's speed, its RS-485 pin
- * and its driver-enable flag, and none of those maps onto a single field here.
- * It used to be a card of its own two panels down, which is a long way to send
- * someone looking at a value they cannot edit.
- *
- * Rendered on every target, with the link disabled and carrying its reason
- * where the package ships no such page -- the same rule every other control on
- * this screen follows, and the reason the card was never conditional either.
- *
- * The group's NAME is the wire, not the protocol. Its rows are enabled by what
- * the board HAS rather than by what the user selected, so calling it "Modbus
- * RTU" would promise a coupling the screen does not implement.
- */
+/** A named block of rows, with the way out to the board page that governs the same wiring. */
 const Group = ({
   name,
   action,
@@ -146,9 +128,7 @@ interface BufferInputProps {
   max: number
   description: string
   readOnly: boolean
-  /** Shown instead of a value when the project pins no count for this segment.
-   *  A placeholder is the point: it renders as absent, which is what the
-   *  project is, while still answering "how many will I get?". */
+  /** Shown instead of a value when the project pins no count for this segment. */
   placeholder?: string
 }
 
@@ -252,12 +232,7 @@ const selectItemStyles = cn(
 const boardValueStyles =
   'flex h-[30px] w-full items-center justify-between gap-2 rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-2 font-caption text-xs font-medium text-neutral-800 hover:border-brand-medium-dark hover:text-brand disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-neutral-300 disabled:hover:text-neutral-800 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
 
-/**
- * Transport sets the dropdown offers, in a fixed order on every target. A set
- * the target cannot serve is rendered disabled rather than dropped, so the
- * screen has the same shape everywhere and the user can see what the board is
- * missing rather than guess.
- */
+/** Transport sets the dropdown offers, in a fixed order on every target. */
 const TRANSPORT_CHOICES: { value: string; label: string; transports: ModbusServerTransport[] }[] = [
   { value: 'rtu', label: 'Modbus RTU', transports: ['rtu'] },
   { value: 'tcp', label: 'Modbus TCP', transports: ['tcp'] },
@@ -288,23 +263,13 @@ const ModbusServerEditor = () => {
     actions,
   } = useModbusServerConfig(serverName)
 
-  // The RTU shares the editor's line when it is on the default UART. The firmware
-  // answers both ids there and routes by function code, so the slave id stays the
-  // user's to pick; what is shared is the wire, not the address.
   const rtuAvailable = profile.transports.includes('rtu')
   const boardSerialScreen = profile.vppScreens.serial
 
-  // A target with no vendor page for this: the host operating system owns the
-  // ports. On a baremetal board the package always ships one.
   const noBoardPage = (what: string): string => `The host operating system owns this target's ${what}.`
   const rtuOnEditorPort =
     rtuAvailable && transports.includes('rtu') && (serialPort === '' || serialPort === profile.defaultSerial)
 
-  // No fallback value. When the stored transports survive the board's filter this
-  // names the matching choice; when they do not it is empty and the Select shows
-  // its placeholder, which is the only honest thing to show -- falling back to
-  // `'tcp'` displayed "Modbus TCP" on a board that cannot serve it, directly
-  // above a header already saying the server was not serving yet.
   const transportChoiceValue =
     TRANSPORT_CHOICES.find(
       (choice) =>
@@ -317,18 +282,12 @@ const ModbusServerEditor = () => {
     },
     [actions],
   )
-  // `FR07`: a disabled choice has to say WHY. Three cases, because a board that
-  // declares no network carrier is not the same as a target that has no serial
-  // path -- and the second sentence is the only thing telling the user the
-  // greyed-out option is the board's limit rather than a missing feature.
   const transportHint = !profile.transports.includes('rtu')
     ? 'This target serves over the network only.'
     : profile.transports.includes('tcp')
       ? 'What the server answers on. Both means one board on two wires.'
       : 'What the server answers on. This board declares no network carrier, so Modbus TCP is not on offer.'
 
-  // Text state for the inputs that commit on blur, so a half-typed number does
-  // not reach the store and get clamped mid-keystroke.
   const [slaveIdText, setSlaveIdText] = useState(String(slaveId))
   const [portText, setPortText] = useState(String(port))
   const [countText, setCountText] = useState<Partial<Record<ModbusSegment, string>>>({})
@@ -362,9 +321,6 @@ const ModbusServerEditor = () => {
       if (raw === undefined) return
       const floor = profile.minCounts?.[segment] ?? 0
       const ceiling = profile.maxCounts?.[segment] ?? meta.max
-      // AN EMPTY FIELD IS AN INSTRUCTION, not a typo: it unpins the segment.
-      // Without this the only way back from a number typed once was to edit
-      // the server's JSON by hand.
       if (raw.trim() === '') {
         actions.clearBufferCount(meta.group, meta.field)
         setCountText((prev) => ({ ...prev, [segment]: undefined }))
@@ -375,13 +331,6 @@ const ModbusServerEditor = () => {
         setCountText((prev) => ({ ...prev, [segment]: undefined }))
         return
       }
-      // COMMIT ALSO WHEN THE NUMBER IS UNCHANGED, as long as the segment is
-      // not pinned yet. The old guard compared against the DISPLAYED count,
-      // which for an unpinned segment was a default this project never stored
-      // -- so typing the number the field was already showing did nothing at
-      // all, and the user was left with a screen that looked set and a project
-      // that had nothing in it. Typing a value is the act of pinning it,
-      // whatever it equals.
       if (parsed !== buffers[segment] || !pinnedSegments.has(segment)) {
         actions.setBufferCount(meta.group, meta.field, parsed)
       }
@@ -431,11 +380,6 @@ const ModbusServerEditor = () => {
             <DuplicateProtocolNotice name={serverName} protocol={protocol} />
 
             <Panel title='Modbus Server'>
-              {/* One screen for every target. What a target cannot configure comes
-               * through disabled with the reason, rather than absent: a control
-               * that disappears makes the user wonder whether the feature exists
-               * at all, and two targets whose screens differ in shape cannot be
-               * compared. */}
               <Group>
                 <Row label='Enabled' hint={enabled ? 'Serving.' : 'Not serving. Settings are kept.'}>
                   <Toggle checked={enabled} onChange={actions.setEnabled} label='Enable Modbus server' />
@@ -516,10 +460,6 @@ const ModbusServerEditor = () => {
                   }
                 >
                   <div className='w-64'>
-                    {/* On the default UART the value is the board's, so the control
-                     *  stops being a dead dropdown and becomes the way to the page
-                     *  that sets it. Only where such a page exists -- otherwise
-                     *  there is nowhere to go and it stays a plain disabled field. */}
                     {!baudRateEditable && rtuAvailable && boardSerialScreen ? (
                       <NavigationButton
                         onClick={() => enabled && openVppScreen(boardSerialScreen)}
@@ -647,20 +587,11 @@ const ModbusServerEditor = () => {
                       .filter((segment) => SEGMENT_META[segment].block === block)
                       .map((segment) => {
                         const meta = SEGMENT_META[segment]
-                        // A segment the target has no storage for is shown, sized
-                        // zero, with the reason -- not hidden. Hiding it made two
-                        // targets' screens differ in shape, and left the user with
-                        // no way to tell "this board has no %MX" from "the editor
-                        // forgot about %MX".
                         const absent = !profile.segments.includes(segment)
                         return (
                           <BufferInput
                             key={segment}
                             label={`%${segment}`}
-                            // A segment the project does not pin shows NOTHING,
-                            // with the count it would get as the placeholder.
-                            // Showing the derived number as a value is what made
-                            // 1024 look like a setting the project carried.
                             value={
                               absent
                                 ? '0'
@@ -680,10 +611,6 @@ const ModbusServerEditor = () => {
               </div>
             </Panel>
 
-            {/* Which Modbus address each IEC segment answers on, recomputed from
-             *  the buffer sizes above. A segment the target does not have arrives
-             *  here sized 0, which the reference renders as an empty range rather
-             *  than a row promising addresses that do not exist. */}
             {(profile.configurableBuffers || profile.derivedCounts) && (
               <AddressMappingReference bufferMapping={bufferMapping} />
             )}

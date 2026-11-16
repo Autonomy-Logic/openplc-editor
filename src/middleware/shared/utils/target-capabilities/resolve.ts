@@ -1,22 +1,3 @@
-/**
- * Capability resolution from the platform-abstracted BoardInfo shape.
- *
- * Every UI / build check that used to switch on `boardInfo.compiler`
- * goes through this helper instead. The platform that built the
- * BoardInfo is responsible for attaching the right capability block:
- *
- *   Desktop: hals.json entries declare `capabilities`; the VPP merger
- *            attaches a capability block to every injected VPP board.
- *   Web:     orchestrator devices attach Simulator / Runtime-v4
- *            capabilities depending on the device kind.
- *
- * For backward compatibility with hals.json files that haven't been
- * migrated yet, the helper falls back to the legacy `compiler` string.
- * This is a transition affordance — once every shipped hals.json has
- * been updated, the fallback path becomes dead code (but stays for
- * defensive purposes against user-supplied JSON).
- */
-
 import {
   ALL_ADDRESS_PRODUCERS_ACTIVE,
   ARDUINO_CLI_CAPABILITIES,
@@ -101,11 +82,6 @@ function inferFromCompiler(boardInfo: BoardInfoLike): TargetCapabilities {
     case 'arduino-cli':
       return ARDUINO_CLI_CAPABILITIES
     case 'openplc-compiler':
-      // Both Runtime v3 and Runtime v4 used `openplc-compiler` historically.
-      // VPP boards always derive from v4 today; the v3 / v4 distinction for
-      // non-VPP boards has to come from somewhere else (the board name —
-      // the only existing signal). Default to v4 since it's the active
-      // runtime; v3 is mapped explicitly on the board entry it belongs to.
       if (isVpp) {
         return { ...RUNTIME_V4_CAPABILITIES, vppIo: true }
       }
@@ -147,11 +123,7 @@ function resolveOpcUaProfile(declared: Partial<OpcUaTargetProfile> | undefined):
   }
 }
 
-/**
- * Fill an S7 profile from `DEFAULT_S7_PROFILE`, so a VPP manifest can declare
- * only what it raises. A flat merge suffices: unlike OPC-UA there is no nested
- * `hw` block, because classic S7 has no crypto to accelerate.
- */
+/** Fill an S7 profile from `DEFAULT_S7_PROFILE`, so a VPP manifest can declare only what it raises. */
 /** The preset's own profile is the floor, not the microcontroller's: Runtime v4
  *  holds 64 areas and addresses every buffer, and answering it with the
  *  bare-metal eight sized a v4 project short of what its plugin serves. */
@@ -169,16 +141,9 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
 
   const base = inferFromCompiler(boardInfo)
 
-  // The spread may put a partial nested profile on `merged`; both are replaced
-  // with fully-resolved ones immediately below, so the partial never escapes.
   const declared = boardInfo.capabilities
   const merged = { ...base, ...(declared ?? {}) } as TargetCapabilities
 
-  // Nested profiles are always resolved, even when the manifest carried no
-  // capability block: returning `base` early left `opcua` / `s7` undefined on a
-  // target whose preset enables a server, and the pipeline tests
-  // `capability && profile` before emitting a config header. Still gated on the
-  // server flag, because a profile on a target that cannot host one is noise.
   if (merged.opcuaServer) {
     merged.opcua = resolveOpcUaProfile(declared?.opcua)
   }
@@ -198,19 +163,7 @@ export function resolveTargetCapabilities(boardInfo: BoardInfoLike | undefined):
  *  not spoken about producers, whatever else it declares. */
 const ADDRESS_PRODUCER_KEYS = ['pinMapping', 'vppIo', 'modbusTcpMaster', 'modbusRtuMaster', 'ethercat'] as const
 
-/**
- * True when nothing in the board info says which producers are active.
- *
- * A capability block counts only when it names a producer. One carrying just
- * `opcuaServer` says nothing here, and reading it as authoritative resolved
- * every producer to false — which is the all-false block this resolver exists
- * to avoid, not a declaration.
- *
- * The compiler path is derived from `inferFromCompiler` rather than by listing
- * the compilers again: that function already owns which strings it recognises
- * and answers `EMPTY_CAPABILITIES` — the very object, so reference equality
- * holds — for the ones it does not.
- */
+/** True when nothing in the board info says which producers are active. */
 function saysNothingAboutProducers(boardInfo: BoardInfoLike | undefined): boolean {
   if (!boardInfo) return true
   const declared: Partial<AddressProducerCapabilities> | undefined = boardInfo.capabilities
@@ -218,29 +171,7 @@ function saysNothingAboutProducers(boardInfo: BoardInfoLike | undefined): boolea
   return inferFromCompiler(boardInfo) === EMPTY_CAPABILITIES
 }
 
-/**
- * Which producers claim IEC addresses — the answer for ADDRESS SPACE, never
- * for UI or feature gating.
- *
- * The difference from `resolveTargetCapabilities` is what happens when the
- * target says nothing. There, silence has to resolve to `EMPTY_CAPABILITIES`,
- * because the wrong answer for gating is offering an affordance the target
- * cannot back. Here that same answer is actively harmful: an all-false block
- * is indistinguishable from "this target supports no producers", so every
- * consumer drops out. In the store that froze addresses in place and reported
- * success; in the compile-time image sizer it would size every area
- * to zero and then refuse the build for want of a producer.
- *
- * So silence answers `ALL_ADDRESS_PRODUCERS_ACTIVE` instead. Permissive is the
- * safe direction in both callers: the worst case is an address space sized or
- * compacted for a producer the eventual target turns out not to support, while
- * the strict reading refuses work that is fine.
- *
- * Silence means a board that did not resolve at all (not in the catalogue: its
- * VPP package is not installed, the project came from another machine, or the
- * catalogue has not loaded yet) or an entry carrying neither a capability
- * block nor a recognised `compiler`.
- */
+/** Which producers claim IEC addresses — the answer for ADDRESS SPACE, never for UI or feature gating. */
 export function resolveAddressProducerCapabilities(boardInfo: BoardInfoLike | undefined): AddressProducerCapabilities {
   if (saysNothingAboutProducers(boardInfo)) return ALL_ADDRESS_PRODUCERS_ACTIVE
   return resolveTargetCapabilities(boardInfo)

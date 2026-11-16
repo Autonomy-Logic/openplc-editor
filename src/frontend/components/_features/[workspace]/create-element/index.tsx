@@ -28,12 +28,6 @@ const CreatePLCElement = () => {
   } = useOpenPLCStore()
   const [isContainerOpen, setIsContainerOpen] = useState(false)
 
-  // Filter the picker by the current project's capability matrix.
-  // Libraries only allow function / function-block / data-type —
-  // programs / servers / remote devices are program-level
-  // affordances that don't apply to a `.stlib` build.  Project-type
-  // gating happens here so a future new POU type doesn't have to be
-  // wired up in two places.
   const projectCaps = projectCapabilities({ type: projectType })
   const targetCaps = useTargetCapabilities()
   const masterProfile = useModbusMasterProfile()
@@ -48,7 +42,6 @@ const CreatePLCElement = () => {
       case 'remote-device':
         return projectCaps.hasRemoteDevices && (canHostModbusMaster(masterProfile) || targetCaps.ethercat)
       default:
-        // function / function-block / data-type / global-variable-list — always available.
         return true
     }
   })
@@ -71,8 +64,6 @@ const CreatePLCElement = () => {
           alignOffset={-7}
           sideOffset={10}
           align='end'
-          /* Wide enough for the longest entry — "Global Variable List" — to sit on one
-             line beside its icon and arrow. */
           className='box flex h-fit w-[222px] flex-col gap-2 rounded-lg bg-white p-2 dark:bg-neutral-950'
         >
           {CreatePLCElementTypes.map((target) => (

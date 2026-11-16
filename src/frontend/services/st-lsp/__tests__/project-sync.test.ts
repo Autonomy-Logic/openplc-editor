@@ -192,8 +192,6 @@ describe('attachProjectSync — global variable lists', () => {
   })
 
   it('refreshes the document when a member is edited through the table', () => {
-    // The table writes one cell at a time through the shared variable action; the LSP has to
-    // hear about it, or the editor keeps completing `GVL.` against the members as they were.
     seedList()
     const service = makeStubService()
     const handle = attachProjectSync(store, service)
@@ -213,8 +211,6 @@ describe('attachProjectSync — global variable lists', () => {
   })
 
   it('re-publishes a POU that references the list, so it is analysed against the new members', () => {
-    // The POU's own text does not change when a member is renamed — it only ever names the
-    // list — so without this the worker answers `GVL.` from the analysis it already had.
     seedList()
     setProjectPous([makeStPou('Uses', 'localCopy := GVL.Output1;'), makeStPou('Ignores', 'x := 1;')])
     const service = makeStubService()
@@ -230,15 +226,11 @@ describe('attachProjectSync — global variable lists', () => {
 
     const uris = service.changeDocument.mock.calls.map(([uri]: [string]) => uri)
     expect(uris).toContain('inmemory://pou/Uses.st')
-    // And only that one: re-publishing every document per edited cell is analysis work
-    // nothing asked for.
     expect(uris).not.toContain('inmemory://pou/Ignores.st')
     handle.dispose()
   })
 
   it('does not re-publish consumers when the edit leaves the declaration identical', () => {
-    // Member documentation is not part of the declaration, so an edit to it moves the store
-    // without giving the worker anything to re-analyse.
     seedList()
     setProjectPous([makeStPou('Uses', 'localCopy := GVL.Output1;')])
     const service = makeStubService()
@@ -327,8 +319,6 @@ describe('attachProjectSync', () => {
     service.openDocument.mockClear()
     service.changeDocument.mockClear()
 
-    // Force a project update with the same content — sync must
-    // notice the text is identical and skip the change message.
     setProjectPous([makeStPou('Idle')])
     expect(service.changeDocument).not.toHaveBeenCalled()
     expect(service.openDocument).not.toHaveBeenCalled()
@@ -353,8 +343,6 @@ describe('attachProjectSync', () => {
     service.openDocument.mockClear()
     service.closeDocument.mockClear()
 
-    // Same name, body language now FBD — URI scheme flips from pou://
-    // to stub:// so the worker must see the old URI close + new URI open.
     setProjectPous([makeFbdPou('Foo')])
     expect(service.closeDocument).toHaveBeenCalledWith('inmemory://pou/Foo.st')
     expect(service.openDocument).toHaveBeenCalledWith(
@@ -415,8 +403,6 @@ describe('attachProjectSync', () => {
     service.openDocument.mockClear()
     service.changeDocument.mockClear()
 
-    // resync against an unchanged store doesn't re-open — nothing
-    // changed in the diff layer.
     handle.resync()
     expect(service.openDocument).not.toHaveBeenCalled()
     expect(service.changeDocument).not.toHaveBeenCalled()
@@ -440,9 +426,6 @@ describe('attachProjectSync', () => {
     handle.dispose()
   })
 
-  // `AT <alias>` is not valid IEC ST — strucpp abandons the whole VAR block on
-  // it, so every symbol after the first alias-bound variable falls out of the
-  // POU's scope (no autocomplete, red boxes in the LD/FBD editors).
   it('never publishes a bare alias name as a location', () => {
     setProjectPous([makeAliasPou('Main')])
     const service = makeStubService()
@@ -451,8 +434,6 @@ describe('attachProjectSync', () => {
     const text = service.openDocument.mock.calls.find((c) => c[0] === 'inmemory://pou/Main.st')?.[1] as string
     expect(text).not.toContain('AT label2')
     expect(text).toContain('label2 : INT;')
-    // The store still holds the alias-name form — only the LSP projection is
-    // resolved.
     expect(store.getState().project.data.pous[0].interface?.variables?.[0].location).toBe('label2')
     handle.dispose()
   })
@@ -475,9 +456,6 @@ describe('attachProjectSync', () => {
     const handle = attachProjectSync(store, service)
     service.changeDocument.mockClear()
 
-    // Dropping the producer touches only `remoteDevices` — the POU array is
-    // untouched, so only the alias-index subscription can catch it. Without
-    // it the stub would keep advertising the now-dead `%IW0`.
     store.setState((s) => ({
       ...s,
       project: { ...s.project, data: { ...s.project.data, remoteDevices: [] } },
@@ -505,7 +483,6 @@ function makeSystemLibrary(name: string, version: string = '1.0.0'): SystemLibra
 
 describe('attachEnabledLibrariesSync', () => {
   beforeEach(() => {
-    // The test store comes seeded with the bundled system libraries.
     const a = store.getState().libraryActions
     a.setProjectLibraries([])
     a.setSystemLibraries([])
@@ -595,8 +572,6 @@ describe('attachEnabledLibrariesSync', () => {
     onAfterRefresh.mockClear()
 
     a.enableLibrary('Semaphore_Package')
-    // Drain the `.then(...)` continuation that runs after the
-    // refreshStlibs() promise resolves.
     await Promise.resolve()
     await Promise.resolve()
 
@@ -639,7 +614,6 @@ describe('getSyncedDocumentText', () => {
     setProjectPous([makeStPou('main', 'second := 2;')])
     const second = attachProjectSync(store, makeStubService())
     expect(getSyncedDocumentText(pouUri('main'))).toContain('second := 2;')
-    // Disposing the superseded sync must not tear down the live reader.
     first.dispose()
     expect(getSyncedDocumentText(pouUri('main'))).toContain('second := 2;')
     second.dispose()

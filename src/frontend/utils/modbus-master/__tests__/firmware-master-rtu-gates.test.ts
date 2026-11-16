@@ -241,7 +241,6 @@ describeOnHost('modbus_rs485 keeps the CONTROLLINO RS-485 branches of the server
   const MICRO_PINS = ['CUSTOM_RS485_DEFAULT_DE_PIN', 'CUSTOM_RS485_DEFAULT_RE_PIN']
   const CHIP_BOARDS = ['CONTROLLINO_MAXI', 'CONTROLLINO_MEGA']
 
-  /** `modbus_rs485` preprocessed for a Modbus RTU server build on a board that defines `board`. */
   const helper = (board: string[]): string =>
     preprocess(including('modbus_rs485.h', 'modbus_rs485.cpp'), {
       defines: [...board, 'MODBUS_ENABLED', 'MBSERIAL', 'DEBUGGER_ENABLED'],
@@ -277,7 +276,6 @@ describeOnHost('modbus_rs485 keeps the CONTROLLINO RS-485 branches of the server
 describeOnHost("Baremetal.ino keeps the master's RS-485 enable pins out of the HAL pin masks (P08-D5)", () => {
   const MASKS = ['pinMask_DIN', 'pinMask_AIN', 'pinMask_DOUT', 'pinMask_AOUT']
 
-  /** The part of `setup()` that runs after `hardwareInit()`, for `masterConfig`. */
   const afterHardwareInit = (masterConfig: string): string => {
     const setup =
       functionBody(

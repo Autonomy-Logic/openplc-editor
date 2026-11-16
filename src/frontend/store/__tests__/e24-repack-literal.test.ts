@@ -1,11 +1,3 @@
-/**
- * Bench case E24 — a literal location does not follow a repack.
- *
- * Two variables over the SAME channel: one bound by alias, one written as a
- * literal. A new producer arrives and triggers the repack. The contrast
- * between them is the evidence: if both follow, the model changed; if neither
- * does, the repack never ran and the scenario proved nothing.
- */
 import { createStore } from 'zustand/vanilla'
 
 import type { BoardInfo, ModbusIOGroup, PLCRemoteDevice, PLCVariable } from '../../../middleware/shared/ports/types'
@@ -93,7 +85,6 @@ describe('E24 — a literal does not follow the repack', () => {
     })
     s.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
 
-    // Producer B first, so the repack has something to reorder when A arrives.
     addDevice(s, device('DevB'))
     s.getState().projectActions.addIOGroup('DevB', group('gb', 2))
     const pb = s.getState().project.data.remoteDevices![0].modbusTcpConfig!.ioGroups[0].ioPoints![0].id
@@ -116,20 +107,12 @@ describe('E24 — a literal does not follow the repack', () => {
     expect(locOf(s, 'byAlias')).toBe(before)
     expect(locOf(s, 'byLiteral')).toBe(before)
 
-    // A VPP module arrives, and in the canonical order it comes BEFORE Modbus
-    // (pins -> VPP -> Modbus), so it pushes the device's points along.
     s.getState().deviceActions.setVendorScreenData('io-mapping', {
       entries: [
-        // A REAL address, colliding with the Modbus point: the registry
-        // migrates existing state, so a channel with no address registers
-        // nothing (seedChannel returns null). With VPP at %IW0 and Modbus at
-        // %IW0 too, the canonical order (pins -> VPP -> Modbus) gives %IW0 to
-        // the VPP and pushes Modbus along.
         { slot: 0, moduleId: 'mod', channelName: 'ch0', iecAddress: '%IW0', alias: '' },
         { slot: 0, moduleId: 'mod', channelName: 'ch1', iecAddress: '%IW1', alias: '' },
       ],
     })
-    // The repack's own trigger — what every producer screen calls on save.
     s.getState().projectActions.recalculateIecAddresses()
 
     const after = s.getState().project.data.remoteDevices!.find((d) => d.name === 'DevB')!.modbusTcpConfig!.ioGroups[0]
@@ -142,7 +125,7 @@ describe('E24 — a literal does not follow the repack', () => {
     if (after === before) {
       throw new Error(`the repack never ran (the point is still at ${before}) — the scenario proved nothing`)
     }
-    expect(locOf(s, 'byAlias')).toBe(after) // the alias follows
-    expect(locOf(s, 'byLiteral')).toBe(before) // the literal stays behind
+    expect(locOf(s, 'byAlias')).toBe(after)
+    expect(locOf(s, 'byLiteral')).toBe(before)
   })
 })
