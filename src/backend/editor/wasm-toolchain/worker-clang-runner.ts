@@ -1,8 +1,9 @@
-import { access, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Worker } from 'node:worker_threads'
 
+import { fileExists } from '@root/backend/editor/utils/file-exists'
 import { ClangWorkerPool } from '@root/backend/shared/wasm-toolchain/clang-worker-pool'
 import { requireFiles, WASM_TOOLCHAIN_PACKAGE_FILES } from '@root/backend/shared/wasm-toolchain/toolchain-files'
 import { isYowaspLoaderPatched } from '@root/backend/shared/wasm-toolchain/yowasp-loader-patch'
@@ -14,13 +15,6 @@ export interface WorkerClangRunnerPaths {
   /** The root of the prepared `@yowasp/clang` package, holding the patched `gen/bundle.js` and its WebAssembly files. */
   toolchainDir: string
 }
-
-/** Whether a file exists. */
-const fileExists = (path: string): Promise<boolean> =>
-  access(path).then(
-    () => true,
-    () => false,
-  )
 
 /** Desktop mechanism: each clang worker is a Node worker thread, which holds the process only while it runs a job. */
 export function createThreadClangWorkerMechanism(paths: WorkerClangRunnerPaths): ClangWorkerMechanism {

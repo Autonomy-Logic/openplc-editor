@@ -1,7 +1,7 @@
-import { access } from 'node:fs/promises'
 import { totalmem } from 'node:os'
 import { Worker } from 'node:worker_threads'
 
+import { fileExists } from '@root/backend/editor/utils/file-exists'
 import { PythonBlockHost } from '@root/backend/shared/python/python-block-host'
 import { maxPythonInterpreters } from '@root/backend/shared/python/python-memory-budget'
 import { ThreadedPythonRuntime } from '@root/backend/shared/python/python-thread'
@@ -51,13 +51,6 @@ export interface DesktopPython {
   /** Checks the Python runtime's files are present, starting no thread; rejects naming the first missing file. */
   checkFiles(): Promise<void>
 }
-
-/** Whether a file exists. */
-const fileExists = (path: string): Promise<boolean> =>
-  access(path).then(
-    () => true,
-    () => false,
-  )
 
 /** The process's Python runtime and the block host that uses it. */
 export function createDesktopPython(resolvePaths: () => PythonRuntimePaths): DesktopPython {

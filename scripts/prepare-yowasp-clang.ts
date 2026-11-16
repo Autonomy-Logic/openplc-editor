@@ -3,7 +3,6 @@ import path from 'node:path'
 
 import { patchYowaspLoader } from '../src/backend/shared/wasm-toolchain/yowasp-loader-patch'
 
-/** The repository root: package scripts run from it. */
 const ROOT = process.cwd()
 const SOURCE_DIR = path.join(ROOT, 'node_modules', '@yowasp', 'clang')
 const PREPARED_DIR = path.join(ROOT, 'release', 'yowasp-clang')
@@ -23,6 +22,7 @@ function listFiles(dir: string, base: string): string[] {
  * Writes the prepared copy of `@yowasp/clang` to `release/yowasp-clang/` from scratch: `package.json`, `README.md`
  * and every file under `gen/` byte for byte, but `gen/bundle.js`, written with the loader patch applied. The desktop
  * and the CLI load clang from this copy in development, and the packaged app ships it. `node_modules` is only read.
+ * Paths are taken from the working directory, the repository root, where package scripts run.
  * Usage, from the repository root: `ts-node scripts/prepare-yowasp-clang.ts`.
  * @throws {Error} the patch's message when the patch does not apply; the script then exits with code 1
  */
