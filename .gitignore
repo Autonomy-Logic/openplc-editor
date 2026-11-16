@@ -23,6 +23,7 @@ release/app/dist
 release/app/configs
 release/build
 release/relay
+release/yowasp-clang
 configs/dll
 
 .idea

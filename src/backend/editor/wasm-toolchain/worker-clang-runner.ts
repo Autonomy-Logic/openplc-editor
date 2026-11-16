@@ -1,16 +1,17 @@
-import { access } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Worker } from 'node:worker_threads'
 
 import { ClangWorkerPool } from '@root/backend/shared/wasm-toolchain/clang-worker-pool'
 import { requireFiles, WASM_TOOLCHAIN_PACKAGE_FILES } from '@root/backend/shared/wasm-toolchain/toolchain-files'
+import { isYowaspLoaderPatched } from '@root/backend/shared/wasm-toolchain/yowasp-loader-patch'
 import type { ClangWorkerHandle, ClangWorkerMechanism } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 
 export interface WorkerClangRunnerPaths {
   /** The built worker script (`clang-worker.js`, from `clang-worker.ts`). */
   workerScript: string
-  /** The root of the `@yowasp/clang` package, holding `gen/bundle.js` and its WebAssembly files. */
+  /** The root of the prepared `@yowasp/clang` package, holding the patched `gen/bundle.js` and its WebAssembly files. */
   toolchainDir: string
 }
 
@@ -25,12 +26,16 @@ const fileExists = (path: string): Promise<boolean> =>
 export function createThreadClangWorkerMechanism(paths: WorkerClangRunnerPaths): ClangWorkerMechanism {
   const bundlePath = join(paths.toolchainDir, 'gen', 'bundle.js')
   return {
-    load: () =>
-      requireFiles(
+    load: async () => {
+      await requireFiles(
         WASM_TOOLCHAIN_PACKAGE_FILES.map((file) => join(paths.toolchainDir, file)),
         fileExists,
         'toolchain',
-      ),
+      )
+      if (!isYowaspLoaderPatched(await readFile(bundlePath, 'utf8'))) {
+        throw new Error(`The toolchain's loader is not patched: ${bundlePath}`)
+      }
+    },
     spawn: (): ClangWorkerHandle => {
       const worker = new Worker(paths.workerScript, { workerData: { bundleUrl: pathToFileURL(bundlePath).href } })
       return {

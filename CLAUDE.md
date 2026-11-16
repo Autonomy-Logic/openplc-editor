@@ -457,7 +457,16 @@ that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its r
   is present; it starts no clang worker and no Python thread, and compiles nothing. A missing toolchain file keeps the
   splash up with the reason and a Quit button; a missing Python runtime file only logs a warning.
 - **CLI:** one worker through the same pool, started by an OpenPLC Simulator build (`compile` for it, or `simulate`).
-- **Packaging:** the package ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
+- **Loader patch:** `patchYowaspLoader` (`src/backend/shared/wasm-toolchain/yowasp-loader-patch.ts`, shared with
+  openplc-web) replaces the one `options.fetchProgress ?? defaultFetchProgress` in the package's `gen/bundle.js`, so a
+  run with no `fetchProgress` (the shared host passes none) compiles each module straight from its URL and logs
+  nothing. `scripts/prepare-yowasp-clang.ts` writes the prepared copy `release/yowasp-clang/` (git-ignored):
+  `package.json`, `README.md` and `gen/**` of `node_modules/@yowasp/clang`, `gen/bundle.js` patched, everything else
+  byte for byte; it fails when the patch does not apply exactly once, and never writes `node_modules`. It runs in
+  `postinstall`, `prestart` and at the start of `build:main`, so `npm run dev`, `npm run build`, `npm run package`
+  and the CLI builds always have it. Outside a package the desktop and the CLI load clang from that copy, and the
+  worker's `load()` refuses a `bundle.js` that is not patched (`The toolchain's loader is not patched: <path>`).
+- **Packaging:** the prepared copy (`release/yowasp-clang`) ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
   entitlement in `assets/entitlements.mac.plist` lets it run under the hardened runtime.
 - **Running a module** happens in main-process worker threads (the simulator, Python), never in the renderer: the
   renderer CSP (`src/index.ejs`) has no `'wasm-unsafe-eval'`.
@@ -476,8 +485,10 @@ The desktop writes the module to `<build>/OpenPLC Simulator/simulator.wasm`. The
 from Play; `e2e/wasm-simulator-build.spec.ts` builds through `openplc-cli compile`.
 
 **Updating the toolchain:** change the exact `@yowasp/clang` version in `package.json` in both repos (with both
-lockfiles, `pnpm-lock.yaml` included on the web), then run `e2e/wasm-toolchain.spec.ts` in both repos, including
-the packaged-app case (`E2E_PACKAGED_APP`). The npm package carries no licence files, so the texts for YoWASP, LLVM and
+lockfiles, `pnpm-lock.yaml` included on the web), then run `yowasp-loader-patch.test.ts`
+(`src/backend/shared/wasm-toolchain/__tests__/`) in both repos, which fails when the new `bundle.js` drops or moves the
+patched line (re-check the patch then, in both repos), and `e2e/wasm-toolchain.spec.ts` in both repos, including the
+packaged-app case (`E2E_PACKAGED_APP`). The npm package carries no licence files, so the texts for YoWASP, LLVM and
 wasi-libc live in `third-party-licenses/yowasp-clang/` (in both repos, with their sources in its README)
 and ship next to the toolchain; refresh them from the commits the new release was built from.
 

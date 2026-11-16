@@ -16,7 +16,6 @@ interface RunOptions {
   stdout: (bytes: Uint8Array | null) => void
   stderr: (bytes: Uint8Array | null) => void
   decodeASCII: boolean
-  fetchProgress: () => void
 }
 
 /** The part of the `@yowasp/clang` module the worker uses. */
@@ -60,7 +59,6 @@ export async function runClangJob(
         if (bytes) stderr += errors.decode(bytes, { stream: true })
       },
       decodeASCII: false,
-      fetchProgress: () => undefined,
     })
     return { exitCode: 0, stderr, stdout, tree: out }
   } catch (error) {
@@ -90,18 +88,6 @@ export async function serveClangWorker(loadModule: () => Promise<unknown>, port:
   port.post({ type: 'ready' })
 }
 
-const isGzip = (bytes: Uint8Array): boolean => bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
-
-/**
- * A downloaded toolchain resource as clang needs it. Stored compressed, it may still be gzip, or a server that
- * labelled it `Content-Encoding: gzip` may have had it decompressed already.
- */
-export async function decodeToolchainResource(bytes: Uint8Array, compressed: boolean): Promise<Uint8Array> {
-  if (!compressed || !isGzip(bytes)) return bytes
-  const inflated = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))
-  return new Uint8Array(await new Response(inflated).arrayBuffer())
-}
-
 /** How long a download may go without receiving any bytes before it counts as stalled. */
 export const DOWNLOAD_STALL_MS = 30_000
 
@@ -109,15 +95,16 @@ export const DOWNLOAD_STALL_MS = 30_000
 export type OpenDownload = (url: string, signal: AbortSignal) => Promise<Response>
 
 /**
- * Downloads `url` with no limit on total time: it fails only when no bytes arrive for `stallMs`, so a slow but
- * moving download always finishes. Empty chunks are not progress. Every wait races the stall, so a transport that
- * ignores the abort cannot hang it.
+ * Reads the body of `url` to its end, handing each non-empty chunk to `onChunk`, with no limit on total time: it fails
+ * only when no bytes arrive for `stallMs`, so a slow but moving download always finishes. Every wait races the stall,
+ * so a transport that ignores the abort cannot hang it.
  */
-export async function downloadWithStallLimit(
+export async function readWithStallLimit(
   url: string,
   open: OpenDownload,
+  onChunk: (chunk: Uint8Array) => void,
   stallMs: number = DOWNLOAD_STALL_MS,
-): Promise<Uint8Array> {
+): Promise<void> {
   const controller = new AbortController()
   const stallError = new Error(`Download of ${url} stalled: no data for ${Math.round(stallMs / 1000)} s.`)
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -138,26 +125,16 @@ export async function downloadWithStallLimit(
   try {
     const response = await Promise.race([open(url, controller.signal), stalled])
     if (!response.ok) throw new Error(`Could not download ${url} (HTTP ${response.status}).`)
-    if (!response.body) return new Uint8Array(await Promise.race([response.arrayBuffer(), stalled]))
+    if (!response.body) return
     arm()
     reader = response.body.getReader()
-    const chunks: Uint8Array[] = []
-    let total = 0
     for (;;) {
       const { done, value } = await Promise.race([reader.read(), stalled])
       if (done) break
       if (value.byteLength === 0) continue
-      chunks.push(value)
-      total += value.byteLength
+      onChunk(value)
       arm()
     }
-    const bytes = new Uint8Array(total)
-    let offset = 0
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset)
-      offset += chunk.byteLength
-    }
-    return bytes
   } catch (error) {
     if (controller.signal.aborted) {
       void reader?.cancel().catch(() => undefined)
@@ -169,24 +146,28 @@ export async function downloadWithStallLimit(
   }
 }
 
-/** One toolchain resource: the name `bundle.js` asks for, and where it is stored. */
-export interface ToolchainResourceLocation {
-  name: string
-  url: string
-}
-
-/** Downloads every toolchain resource once and decodes it, keyed by the name `bundle.js` asks for. */
-export async function loadToolchainResources(
-  resources: ToolchainResourceLocation[],
-  compressed: boolean,
+/** Downloads `url` into memory, failing only when no bytes arrive for `stallMs` (see {@link readWithStallLimit}). */
+export async function downloadWithStallLimit(
+  url: string,
   open: OpenDownload,
   stallMs: number = DOWNLOAD_STALL_MS,
-): Promise<Record<string, Uint8Array>> {
-  const entries = await Promise.all(
-    resources.map(
-      async ({ name, url }) =>
-        [name, await decodeToolchainResource(await downloadWithStallLimit(url, open, stallMs), compressed)] as const,
-    ),
+): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = []
+  let total = 0
+  await readWithStallLimit(
+    url,
+    open,
+    (chunk) => {
+      chunks.push(chunk)
+      total += chunk.byteLength
+    },
+    stallMs,
   )
-  return Object.fromEntries(entries)
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return bytes
 }

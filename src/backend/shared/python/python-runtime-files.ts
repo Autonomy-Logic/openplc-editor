@@ -29,8 +29,6 @@ export interface PythonRuntimeUrls {
   sdkUrl: string
   /** The CPython package (WEBC). */
   packageUrl: string
-  /** Whether the package is served gzip-compressed. */
-  packageCompressed: boolean
   /** The numpy wheel. */
   wheelUrl: string
 }
@@ -53,15 +51,7 @@ export function parsePythonThreadInit(message: unknown): PythonRuntimeUrls | nul
   if (typeof where !== 'object' || where === null) return null
   const sdkUrl: unknown = Reflect.get(where, 'sdkUrl')
   const packageUrl: unknown = Reflect.get(where, 'packageUrl')
-  const packageCompressed: unknown = Reflect.get(where, 'packageCompressed')
   const wheelUrl: unknown = Reflect.get(where, 'wheelUrl')
-  if (
-    typeof sdkUrl !== 'string' ||
-    typeof packageUrl !== 'string' ||
-    typeof packageCompressed !== 'boolean' ||
-    typeof wheelUrl !== 'string'
-  ) {
-    return null
-  }
-  return { sdkUrl, packageUrl, packageCompressed, wheelUrl }
+  if (typeof sdkUrl !== 'string' || typeof packageUrl !== 'string' || typeof wheelUrl !== 'string') return null
+  return { sdkUrl, packageUrl, wheelUrl }
 }
