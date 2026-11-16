@@ -55,6 +55,8 @@ export type ResolverModuleChannel = {
   /** Current selected mode key (the value of `slotConfig[modeFieldId]`,
    *  or the entry's `default`). Absent for static channels. */
   modeValue?: string
+  /** Module-relative position in the device's process image; bit only for BOOL channels. */
+  wire?: { byte: number; bit?: number }
 }
 
 /** One per-channel selector entry. `modes` maps the slot's value for
@@ -81,6 +83,64 @@ export type ResolverModuleDef = {
 }
 
 export type SlotFieldValue = string | number | boolean
+
+function isOptionalArray(value: unknown): boolean {
+  return value === undefined || Array.isArray(value)
+}
+
+/** Shallow check of a manifest `addressMapping`; channels are filtered by `resolveModuleChannels`. */
+export function isResolverAddressMapping(value: unknown): value is ResolverAddressMapping {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const byFormat: unknown = Reflect.get(value, 'channelsByFormat')
+  return (
+    isOptionalArray(Reflect.get(value, 'channels')) &&
+    isOptionalArray(Reflect.get(value, 'perChannelChoices')) &&
+    (byFormat === undefined || (typeof byFormat === 'object' && byFormat !== null && !Array.isArray(byFormat)))
+  )
+}
+
+/**
+ * The address prefixes a VPP manifest may declare for a channel.
+ *
+ * The package schema (`schema/manifest.schema.json`, `addressPrefix`) admits
+ * exactly these ten: inputs and outputs, bit, byte, word, dword and lword. No
+ * memory prefix.
+ *
+ * The editor enforces the same set rather than trusting the manifest, and the
+ * reason is narrow but real: `addressMapping` is typed `unknown` where the
+ * board entry is read (`backend/editor/hardware/types.ts`), so the string
+ * reaches `nextFreeAddress` unchecked. A manifest declaring `%MW` -- hand
+ * edited, from an older packaging tool, or simply wrong -- would then have
+ * memory allocated for it as if a module produced it, which is the one thing
+ * BR14 says nothing can do: memory has no external producer, and an address
+ * space that thinks otherwise is sized for a producer that is not there.
+ *
+ * A refused channel is DROPPED rather than throwing: one bad channel in a
+ * manifest must not take down the whole device screen, and a channel that
+ * allocates nothing is visibly missing in a way the user can report.
+ */
+export const MANIFEST_ADDRESS_PREFIXES: ReadonlySet<string> = new Set([
+  '%IX',
+  '%QX',
+  '%IB',
+  '%QB',
+  '%IW',
+  '%QW',
+  '%ID',
+  '%QD',
+  '%IL',
+  '%QL',
+])
+
+/** Channels already reported, so the warning does not repeat every render.
+ *  Module-level and never cleared: a manifest does not change within a
+ *  session, and the point is to say it once. */
+const warnedChannels = new Set<string>()
+
+/** Whether a manifest channel names a prefix the schema allows. */
+export function isValidManifestPrefix(prefix: string): boolean {
+  return MANIFEST_ADDRESS_PREFIXES.has(prefix)
+}
 
 export function resolveModuleChannels(
   moduleDef: ResolverModuleDef | undefined,
@@ -124,5 +184,25 @@ export function resolveModuleChannels(
       }
     }
   }
-  return out
+  return out.filter((channel) => {
+    if (isValidManifestPrefix(channel.addressPrefix)) return true
+    // Warned rather than silent: the channel disappears from the screen, and
+    // without this line there is nothing anywhere saying why.
+    //
+    // ONCE PER CHANNEL, not once per call. This is a pure resolver run per
+    // slot and per render, not a one-shot load step, so a manifest with one
+    // bad channel produced an unbounded stream of identical lines — which
+    // makes the log less useful rather than more, working against the reason
+    // the line exists at all.
+    const seen = `${channel.name}:${channel.addressPrefix}`
+    if (!warnedChannels.has(seen)) {
+      warnedChannels.add(seen)
+      console.warn(
+        `VPP manifest: channel "${channel.name}" declares address prefix ` +
+          `"${channel.addressPrefix}", which is not one the manifest schema allows ` +
+          `(${[...MANIFEST_ADDRESS_PREFIXES].join(', ')}). The channel is ignored.`,
+      )
+    }
+    return false
+  })
 }

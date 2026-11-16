@@ -477,6 +477,8 @@ export interface PLCProjectData {
     global?: string[]
     pous?: Record<string, string[]>
   }
+  /** Project-scope opaque data a VPP screen owns under its (packageId, screenId) key. */
+  vppExtensions?: Record<string, Record<string, unknown>>
 }
 
 /** Alias used by Monaco completion providers */
@@ -635,6 +637,10 @@ export interface VppModuleDefinition {
   name: string
   /** Used by module-discovery to match a detected device. Modules with no hwId can only be added manually. */
   hwId?: string
+  /** Vendor type id the configurator reports for this module; matched by exact string. */
+  typeId?: string
+  /** Bytes this module occupies in the device's input and output process images. */
+  processImage?: { inputBytes: number; outputBytes: number }
   /** True for an always-present part of the device hardware (e.g. Arduino Opta's built-in I/O). Auto-placed and locked in slot 1. */
   fixed?: boolean
   image?: string
@@ -673,9 +679,13 @@ export interface VppMetadata {
   packagePath: string
   screens: Record<string, unknown>
   hidesNativeScreens?: NativeScreenId[]
+  /** Runtime plugin name from the device's `hal.configTemplate`; absent when the device has no valid one. */
+  pluginName?: string
   moduleSystem: {
     enabled: boolean
     maxSlots: number
+    /** The device can report its installed modules on request. */
+    discoverySupported?: boolean
     modules: VppModuleDefinition[]
   } | null
 }
@@ -730,6 +740,10 @@ export interface PackageManifest {
       provisioning?: string
       pluginEntry?: string
       configTemplate?: string
+      /** Shape of the generated plugin config. Absent → "slots". */
+      pluginConfigFormat?: 'slots' | 'io-ranges'
+      /** Sibling configs `conf/<plugin_name>.<file>.json` generated from custom screen buckets; validated when packed. */
+      screenConfigs?: ReadonlyArray<{ storageId: string; format: string; file: string }>
       requirements?: string
       source?: string
       /** Prebuilt arduino-hal library directory, linked via --library alongside `hal.source`. */
@@ -794,6 +808,33 @@ export interface InstalledPackage {
   devices: string[]
 }
 
+/** An archive arduino-cli is downloading, with sizes as it prints them. */
+export interface PackageDownloadProgress {
+  /** The archive, e.g. `arduino:avr-gcc@7.3.0-atmel3.6.1-arduino5`. */
+  item: string
+  /** Bytes so far and total, e.g. `12.34 MiB`. */
+  done: string
+  total: string
+  percent: number
+}
+
+/** Progress of a board package's dependency installation or removal (cores and libraries). */
+export interface PackageInstallProgress {
+  /** 1-based position of the running step; 0 while waiting. */
+  step: number
+  total: number
+  label: string
+  download?: PackageDownloadProgress
+  /** Set while an uninstall removes the package's cores and libraries, which cannot be cancelled. */
+  removing?: boolean
+}
+
+/** A console message from the startup dependency check, kept until a console can show it. */
+export interface StartupNotice {
+  level: 'info' | 'warning'
+  message: string
+}
+
 export interface ImportResult {
   success: boolean
   canceled?: boolean
@@ -801,6 +842,8 @@ export interface ImportResult {
   packageName?: string
   devices?: string[]
   error?: string
+  /** Reinstall only: how many cores and libraries were installed. */
+  installed?: number
 }
 
 export interface RemoteVersionEntry {
@@ -911,6 +954,13 @@ export interface PersistentStorageSettings {
   flushSeconds: number
 }
 
+/** The vPLC a project targets, as `devices/configuration.json` records it. */
+export interface ProjectTargetDevice {
+  orchestratorId: string
+  deviceId: string
+  deviceName: string
+}
+
 export interface DeviceConfiguration {
   deviceBoard: string
   communicationPort: string
@@ -937,6 +987,8 @@ export interface DeviceConfiguration {
    * absent simply means there is nothing to compare.
    */
   vppPackagePinsByBoard?: Record<string, VppPackagePin>
+  /** The vPLC this project targets on web; reopening the project selects it again when it is still listed. */
+  targetDevice?: ProjectTargetDevice
 }
 
 export type PlcStatus = 'INIT' | 'RUNNING' | 'STOPPED' | 'ERROR' | 'EMPTY' | 'TRANSITIONING' | 'UNKNOWN'

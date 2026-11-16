@@ -11,6 +11,7 @@ import {
   rungToSpec,
 } from '../../../store/slices/ladder/utils/rung-spec'
 import { scheduleFlowWriteBack } from '../../../store/slices/shared/flow-writeback'
+import { selectIsEditingLocked } from '../../../store/slices/workspace/selectors'
 import { computeHunks } from '../../../utils/ai-diff-review'
 import { isLegalIdentifier } from '../../../utils/keywords'
 import { getVariableRestrictionType, validateVariableType } from '../../../utils/PLC/validate-variable-type'
@@ -63,21 +64,33 @@ export type ToolExecutionOptions = {
   transpileProject?: ProjectStTranspiler
 }
 
-/** Tools whose success changes the POUs or data types the cached project ST was produced from. */
-const PROJECT_MUTATING_TOOLS = new Set([
-  'create_pou',
-  'update_pou_body',
-  'delete_pou',
-  'create_variable',
-  'update_variable',
-  'delete_variable',
-  'create_datatype',
-  'update_datatype',
-  'delete_datatype',
-  'add_rung',
-  'update_rung',
-  'delete_rung',
-])
+/**
+ * Every tool the executor dispatches, and whether it writes the project.
+ * A new tool has to be classified here or `dispatchTool` fails the type check.
+ */
+export const TOOL_ACCESS = {
+  create_pou: 'write',
+  update_pou_body: 'write',
+  create_variable: 'write',
+  delete_pou: 'write',
+  update_variable: 'write',
+  delete_variable: 'write',
+  create_datatype: 'write',
+  update_datatype: 'write',
+  delete_datatype: 'write',
+  read_project_state: 'read',
+  read_pou_body: 'read',
+  read_ladder_diagram: 'read',
+  add_rung: 'write',
+  update_rung: 'write',
+  delete_rung: 'write',
+} as const satisfies Record<string, 'read' | 'write'>
+
+export type ToolName = keyof typeof TOOL_ACCESS
+
+function isToolName(name: string): name is ToolName {
+  return name in TOOL_ACCESS
+}
 
 /**
  * Never throws — every error comes back as a failed ToolResult.
@@ -90,9 +103,15 @@ export async function executeTool(
   options: ToolExecutionOptions = {},
 ): Promise<ToolResult> {
   try {
+    if (isToolName(toolName) && TOOL_ACCESS[toolName] === 'write' && selectIsEditingLocked(store.getState())) {
+      return {
+        success: false,
+        message: 'The project is read-only while the debugger is active. Stop the debugger to change it.',
+      }
+    }
     // `await` keeps a rejection inside this try/catch (never-throws contract).
     const result = await dispatchTool(store, toolName, toolInput, options)
-    if (result.success && PROJECT_MUTATING_TOOLS.has(toolName)) invalidateSTCache()
+    if (result.success && isToolName(toolName) && TOOL_ACCESS[toolName] === 'write') invalidateSTCache()
     return result
   } catch (error) {
     return {
@@ -108,6 +127,8 @@ function dispatchTool(
   toolInput: unknown,
   options: ToolExecutionOptions,
 ): ToolResult | Promise<ToolResult> {
+  if (!isToolName(toolName)) return { success: false, message: `Unknown tool: ${toolName}` }
+
   switch (toolName) {
     case 'create_pou':
       return executeCreatePou(store, toolInput as CreatePouInput)
@@ -139,8 +160,10 @@ function dispatchTool(
       return executeUpdateRung(store, toolInput as UpdateRungInput)
     case 'delete_rung':
       return executeDeleteRung(store, toolInput as DeleteRungInput)
-    default:
-      return { success: false, message: `Unknown tool: ${toolName}` }
+    default: {
+      const unreachable: never = toolName
+      return unreachable
+    }
   }
 }
 

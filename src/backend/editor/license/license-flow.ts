@@ -111,31 +111,31 @@ export function verifyStoredLicenseBlob(
   if (!blob || blob.length !== LIC_BLOB_SIZE) {
     // A 0x7E with no (or a short) blob is itself off-contract: the parser only
     // fills `blob` when the device sent all `len` bytes. Treat as unverified.
-    return { ok: false, reason: 'The licence stored on this device is incomplete.' }
+    return { ok: false, reason: 'The license stored on this device is incomplete.' }
   }
 
   const parsed = deserializeLicenseBlob(blob)
 
   if (parsed.magic !== LIC_MAGIC_LE) {
-    return { ok: false, reason: 'The data stored on this device is not a licence.' }
+    return { ok: false, reason: 'The data stored on this device is not a license.' }
   }
 
   const expectedCrc = crc32IsoHdlc(blob.subarray(0, LIC_CRC_COVERAGE))
   if (parsed.crc32 !== expectedCrc) {
-    return { ok: false, reason: 'The licence stored on this device is damaged.' }
+    return { ok: false, reason: 'The license stored on this device is damaged.' }
   }
 
   const blobDeviceId = bytesToHex(parsed.deviceId)
   if (blobDeviceId !== deviceIdHex) {
     // The clone case: valid bytes, wrong board. The gate answers DEVICE_MISMATCH.
-    return { ok: false, reason: 'The licence stored on this device was issued for a different device.' }
+    return { ok: false, reason: 'The license stored on this device was issued for a different device.' }
   }
 
   if (packageId) {
     const expectedProductId = deriveVppId(packageId)
     const blobProductId = bytesToHex(parsed.productId)
     if (blobProductId !== expectedProductId) {
-      return { ok: false, reason: 'The licence stored on this device was issued for a different VPP.' }
+      return { ok: false, reason: 'The license stored on this device was issued for a different VPP.' }
     }
   }
 
@@ -237,7 +237,7 @@ function deriveIdentity(identity: DeviceIdentity): { deviceId: string } | Device
         // does fix. Says that, instead of naming license-core at a user who has
         // no way to act on the word.
         error:
-          'This board did not report an identity a licence can be issued for. ' +
+          'This board did not report an identity a license can be issued for. ' +
           'Its firmware was built without licensing support, so rebuild and upload the program to this board.',
         retryable: false,
       },
@@ -297,7 +297,7 @@ async function readAndVerify(
       kind: 'settled',
       outcome: {
         state: 'check-failed',
-        error: stored.error ?? 'The device did not answer when asked for its stored licence.',
+        error: stored.error ?? 'The device did not answer when asked for its stored license.',
       },
     }
   }
@@ -352,7 +352,7 @@ async function recoverLicense(
     // could not confirm rather than claiming either state.
     return {
       deviceId,
-      outcome: { state: 'check-failed', error: 'The licence server reported a licence but sent no licence data.' },
+      outcome: { state: 'check-failed', error: 'The license server reported a license but sent no license data.' },
     }
   }
 
@@ -364,7 +364,7 @@ async function recoverLicense(
   if (!write.success) {
     return {
       deviceId,
-      outcome: { state: 'check-failed', error: write.error ?? 'The licence could not be written to the device.' },
+      outcome: { state: 'check-failed', error: write.error ?? 'The license could not be written to the device.' },
     }
   }
 
@@ -379,7 +379,7 @@ async function recoverLicense(
       deviceId,
       outcome: {
         state: 'check-failed',
-        error: `The licence was written but could not be confirmed. Reading it back from the device failed: ${readBack.error ?? 'the device did not reply'}.`,
+        error: `The license was written but could not be confirmed. Reading it back from the device failed: ${readBack.error ?? 'the device did not reply'}.`,
       },
     }
   }
@@ -395,7 +395,7 @@ async function recoverLicense(
     deviceId,
     outcome: {
       state: 'check-failed',
-      error: `The licence was written but could not be confirmed on the device. ${verdict.reason}`,
+      error: `The license was written but could not be confirmed on the device. ${verdict.reason}`,
     },
   }
 }

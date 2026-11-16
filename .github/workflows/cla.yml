@@ -1,0 +1,28 @@
+name: CLA
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  cla:
+    name: CLA
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the Contributor License Agreement checkbox
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+        run: |
+          if [ "$AUTHOR_TYPE" = "Bot" ]; then
+            echo "Bot account: CLA not required."; exit 0
+          fi
+          if printf '%s\n' "$PR_BODY" | grep -Eiq '^[[:space:]]*[-*][[:space:]]+\[x\][[:space:]]+I have read and agree to the \[?Contributor License Agreement'; then
+            echo "Contributor License Agreement accepted."
+          else
+            echo "::error::Tick the Contributor License Agreement checkbox in the pull request description (see CLA.md)."
+            exit 1
+          fi

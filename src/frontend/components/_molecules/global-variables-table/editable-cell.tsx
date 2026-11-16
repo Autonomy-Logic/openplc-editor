@@ -1,5 +1,6 @@
 import * as PrimitivePopover from '@radix-ui/react-popover'
 import { useAliasRegistry } from '@root/frontend/hooks/use-alias-registry'
+import { useIsEditingLocked } from '@root/frontend/hooks/use-editing-lock'
 import { useProjectAliasBindings } from '@root/frontend/hooks/use-project-alias-bindings'
 import { isLiteralLocation } from '@root/middleware/shared/utils/iec-address/registry'
 import type { CellContext, RowData } from '@tanstack/react-table'
@@ -52,10 +53,12 @@ const EditableNameCell = ({
   row: { index },
   column: { id },
   table,
-  editable = true,
+  editable: editableProp = true,
   skipReferenceImpact = false,
   isResourceGlobal = true,
 }: IEditableCellProps) => {
+  const isEditingLocked = useIsEditingLocked()
+  const editable = editableProp && !isEditingLocked
   const store = useOpenPLCStoreApi()
   const initialValue = getValue<string>()
   const { toast } = useToast()
@@ -205,8 +208,10 @@ const EditableDocumentationCell = ({
   row: { index },
   column: { id },
   table,
-  editable = true,
+  editable: editableProp = true,
 }: IEditableCellProps) => {
+  const isEditingLocked = useIsEditingLocked()
+  const editable = editableProp && !isEditingLocked
   const initialValue = getValue<string | undefined>()
 
   const [cellValue, setCellValue] = useState(initialValue ?? '')
@@ -256,8 +261,10 @@ const EditableInitialValueCell = ({
   row: { index },
   column: { id },
   table,
-  editable = true,
+  editable: editableProp = true,
 }: IEditableCellProps) => {
+  const isEditingLocked = useIsEditingLocked()
+  const editable = editableProp && !isEditingLocked
   const initialValue = getValue<string>()
 
   const { searchQuery } = useOpenPLCStore()
@@ -309,8 +316,10 @@ const EditableLocationCell = ({
   row: { index, original },
   column: { id },
   table,
-  editable = true,
+  editable: editableProp = true,
 }: IEditableCellProps) => {
+  const isEditingLocked = useIsEditingLocked()
+  const editable = editableProp && !isEditingLocked
   const initialValue = getValue<string>()
   const { toast } = useToast()
 

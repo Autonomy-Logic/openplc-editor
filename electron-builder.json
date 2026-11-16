@@ -5,6 +5,7 @@
   "asarUnpack": "**\\*.{node,dll}",
   "generateUpdatesFilesForAllChannels": true,
   "files": ["dist", "node_modules", "package.json"],
+  "beforePack": "scripts/before-pack-debug-seam.js",
   "afterPack": "scripts/mac-inject-local-network-usage.js",
   "afterSign": "scripts/notarize.js",
   "directories": {
@@ -21,6 +22,32 @@
     {
       "from": "./node_modules/strucpp/libs",
       "to": "./strucpp/libs"
+    },
+    {
+      "from": "./node_modules/@yowasp/clang",
+      "to": "./yowasp-clang",
+      "filter": ["package.json", "README.md", "gen/**"]
+    },
+    {
+      "from": "./third-party-licenses/yowasp-clang",
+      "to": "./yowasp-clang/licenses"
+    },
+    {
+      "from": "./node_modules/@wasmer/sdk",
+      "to": "./wasmer-sdk",
+      "filter": ["package.json", "LICENSE*", "README.md", "dist/**/*.js", "pkg/**"]
+    },
+    {
+      "from": "./vendor/python-runtime",
+      "to": "./python-runtime"
+    },
+    {
+      "from": "./python-runtime.json",
+      "to": "./python-runtime/python-runtime.json"
+    },
+    {
+      "from": "./third-party-licenses/python-runtime",
+      "to": "./python-runtime/licenses"
     }
   ],
   "mac": {
@@ -85,6 +112,13 @@
       }
     ],
     "artifactName": "${productName}_${version}.${ext}"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": false,
+    "license": "LICENSE",
+    "runAfterFinish": true
   },
   "linux": {
     "extraResources": [

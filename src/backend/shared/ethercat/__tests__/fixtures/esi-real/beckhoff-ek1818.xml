@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EtherCATInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Version="1.4">
+  <Vendor>
+    <Id>#x00000002</Id>
+    <Name>Beckhoff Automation GmbH &amp; Co. KG</Name>
+    <ImageData16x14></ImageData16x14>
+  </Vendor>
+  <Descriptions>
+    <Groups>
+      <Group>
+        <Type>Coupler</Type>
+        <Name LcId="1033">EtherCAT Coupler</Name>
+      </Group>
+    </Groups>
+    <Devices>
+      <Device Physics="YY">
+        <Type ProductCode="#x071a2c52" RevisionNo="#x00100000">EK1818</Type>
+        <Name LcId="1033"><![CDATA[EK1818 EtherCAT Coupler, 8 ch. digital input, 3ms, 4 ch. digital output 24V DC, 0.5A]]></Name>
+        <URL LcId="1033">http://www.beckhoff.de/EK1818</URL>
+        <GroupType>Coupler</GroupType>
+        <Fmmu>Outputs</Fmmu>
+        <Fmmu>Inputs</Fmmu>
+        <Fmmu>MBoxState</Fmmu>
+        <Sm MinSize="40" MaxSize="128" DefaultSize="128" StartAddress="#x1000" ControlByte="#x26" Enable="1">MBoxOut</Sm>
+        <Sm MinSize="40" MaxSize="128" DefaultSize="128" StartAddress="#x1080" ControlByte="#x22" Enable="1">MBoxIn</Sm>
+        <Sm StartAddress="#x1100" ControlByte="#x24" Enable="1">Outputs</Sm>
+        <Sm StartAddress="#x1180" ControlByte="#x20" Enable="1">Inputs</Sm>
+        <RxPdo Sm="2" Fixed="1" Mandatory="1">
+          <Index>#x1600</Index>
+          <Name>Digital Outputs</Name>
+          <Entry>
+            <Index>#x7000</Index>
+            <SubIndex>1</SubIndex>
+            <BitLen>1</BitLen>
+            <Name>Output 1</Name>
+            <DataType>BOOL</DataType>
+          </Entry>
+          <Entry>
+            <Index>#x7010</Index>
+            <SubIndex>1</SubIndex>
+            <BitLen>1</BitLen>
+            <Name>Output 2</Name>
+            <DataType>BOOL</DataType>
+          </Entry>
+          <Entry>
+            <Index>#x7020</Index>
+            <SubIndex>1</SubIndex>
+            <BitLen>1</BitLen>
+            <Name>Output 3</Name>
+            <DataType>BOOL</DataType>
+          </Entry>
+          <Entry>
+            <Index>#x7030</Index>
+            <SubIndex>1</SubIndex>
+            <BitLen>1</BitLen>
+            <Name>Output 4</Name>
+            <DataType>BOOL</DataType>
+          </Entry>
+          <Entry>
+            <Index>0</Index>
+            <BitLen>4</BitLen>
+          </Entry>
+        </RxPdo>
+        <TxPdo Sm="3" Fixed="1" Mandatory="1">
+          <Index>#x1a00</Index>
+          <Name>Digital Inputs</Name>
+          <Entry>
+            <Index>#x6000</Index>
+            <SubIndex>1</SubIndex>
+            <BitLen>1</BitLen>
+            <Name>Input 1</Name>
+            <DataType>BOOL</DataType>
+          </Entry>
+          <Entry>
+            <Index>#x6010</Index>
+            <SubIndex>1</SubIndex>
+            <BitLen>1</BitLen>
+            <Name>Input 2</Name>
+            <DataType>BOOL</DataType>
+          </Entry>
+          <Entry>
+            <Index>#x6020</Index>
+            <SubIndex>1</SubIndex>
+            <BitLen>1</BitLen>
+            <Name>Input 3</Name>
+            <DataType>BOOL</DataType>
+          </Entry>
+          <Entry>
+            <Index>#x6030</Index>
+            <SubIndex>1</SubIndex>
+            <BitLen>1</BitLen>
+            <Name>Input 4</Name>
+            <DataType>BOOL</DataType>
+          </Entry>
+          <Entry>
+            <Index>#x6040</Index>
+            <SubIndex>1</SubIndex>
+            <BitLen>1</BitLen>
+            <Name>Input 5</Name>
+            <DataType>BOOL</DataType>
+          </Entry>
+          <Entry>
+            <Index>#x6050</Index>
+            <SubIndex>1</SubIndex>
+            <BitLen>1</BitLen>
+            <Name>Input 6</Name>
+            <DataType>BOOL</DataType>
+          </Entry>
+          <Entry>
+            <Index>#x6060</Index>
+            <SubIndex>1</SubIndex>
+            <BitLen>1</BitLen>
+            <Name>Input 7</Name>
+            <DataType>BOOL</DataType>
+          </Entry>
+          <Entry>
+            <Index>#x6070</Index>
+            <SubIndex>1</SubIndex>
+            <BitLen>1</BitLen>
+            <Name>Input 8</Name>
+            <DataType>BOOL</DataType>
+          </Entry>
+        </TxPdo>
+        <Mailbox>
+          <CoE SdoInfo="true" PdoAssign="false" PdoConfig="false" PdoUpload="false" CompleteAccess="true"/>
+        </Mailbox>
+        <Eeprom>
+          <ByteSize>2048</ByteSize>
+          <ConfigData>8003006EFFFF00000000000000000000</ConfigData>
+        </Eeprom>
+      </Device>
+    </Devices>
+  </Descriptions>
+</EtherCATInfo>

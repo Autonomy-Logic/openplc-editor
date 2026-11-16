@@ -24,6 +24,8 @@ const StoreSchema = z.object({
       refreshToken: z.string(),
     })
     .optional(),
+  // The update check when the editor opens (DOPE-486). Manual "Check for Updates" works either way.
+  auto_update_check: z.boolean(),
 })
 
 export { StoreSchema, ThemeSchema }

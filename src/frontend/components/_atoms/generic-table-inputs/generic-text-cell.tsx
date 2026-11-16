@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../store'
 import { extractSearchQuery } from '../../../store/slices/search/utils'
 import { cn } from '../../../utils/cn'
@@ -9,7 +10,7 @@ export const GenericTextCell = ({
   value,
   onChange,
   onBlur,
-  editable = false,
+  editable: editableProp = false,
   selected = false,
 }: {
   value: string
@@ -19,6 +20,9 @@ export const GenericTextCell = ({
   selected?: boolean
 }) => {
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const isEditingLocked = useIsEditingLocked()
+  const editable = editableProp && !isEditingLocked
 
   const { searchQuery } = useOpenPLCStore()
   const formattedCellValue = searchQuery ? extractSearchQuery(value, searchQuery) : value

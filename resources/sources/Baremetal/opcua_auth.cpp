@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 opcua_auth.cpp - PBKDF2-HMAC-SHA256 password verification
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 
 See opcua_auth.h for why the iteration count is the interesting part.
 */

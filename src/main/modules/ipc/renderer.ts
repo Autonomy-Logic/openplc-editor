@@ -24,7 +24,7 @@ import type {
   DeviceLicenseRequest,
 } from '@root/middleware/shared/ports/device-port'
 import type { EdgeSignInOutcome, EdgeUserRead } from '@root/middleware/shared/ports/edge-account-port'
-import type { ESIDevice, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
+import type { EsiParseOp, EsiParseResult } from '@root/middleware/shared/ports/esi-repository-mechanisms'
 import type {
   EtherCATRuntimeStatusResponse,
   EtherCATScanRequest,
@@ -56,7 +56,7 @@ import type {
   WhoAmIResult,
 } from '@root/middleware/shared/ports/runtime-port'
 import type { DebugConnectionConfig } from '@root/middleware/shared/ports/types'
-import type { PLCProjectData } from '@root/middleware/shared/ports/types'
+import type { PackageInstallProgress, PLCProjectData, StartupNotice } from '@root/middleware/shared/ports/types'
 import type {
   Branch,
   BranchDiffWithBase,
@@ -68,6 +68,7 @@ import type {
   Stash,
   VersionControlResult,
 } from '@root/middleware/shared/ports/version-control-port'
+import type { WasmCompileRequest, WasmCompileResult } from '@root/middleware/shared/ports/wasm-toolchain-types'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
@@ -80,6 +81,8 @@ import type {
   BootloaderUpdateProgress,
   RuntimeDeviceInfo,
 } from '../../../backend/editor/runtime/bootloader-api-client'
+
+type EsiFileOutcome<T> = { ok: true; value: T } | { ok: false; error: string }
 
 type IpcRendererCallbacks = (_event: IpcRendererEvent, ...args: unknown[]) => void
 
@@ -168,6 +171,8 @@ const rendererProcessBridge = {
   pageSetupAccelerator: (callback: IpcRendererCallbacks) => subscribe('project:page-setup-accelerator', callback),
   switchPerspective: (callback: IpcRendererCallbacks) =>
     subscribe('workspace:switch-perspective-accelerator', callback),
+  openDiagnosticsAccelerator: (callback: IpcRendererCallbacks) =>
+    subscribe('workspace:open-diagnostics-accelerator', callback),
 
   // ===================== POU METHODS =====================
   createPouFile: (props: CreatePouFileProps): Promise<PouServiceResponse> => ipcRenderer.invoke('pou:create', props),
@@ -399,6 +404,14 @@ const rendererProcessBridge = {
     return () => ipcRenderer.removeListener('libraries:changed', listener)
   },
   handleQuitApp: () => ipcRenderer.send('app:quit'),
+  appUpdateGetStatus: (): Promise<unknown> => ipcRenderer.invoke('app-update:get-status'),
+  appUpdateDownload: () => ipcRenderer.send('app-update:download'),
+  appUpdateDismiss: () => ipcRenderer.send('app-update:dismiss'),
+  appUpdateCheck: () => ipcRenderer.send('app-update:check'),
+  appUpdateGetAutoCheck: (): Promise<unknown> => ipcRenderer.invoke('app-update:get-auto-check'),
+  appUpdateSetAutoCheck: (enabled: boolean) => ipcRenderer.send('app-update:set-auto-check', enabled),
+  onAppUpdateStatus: (callback: (status: unknown) => void) =>
+    subscribe('app-update:status', (_event, status) => callback(status)),
   requestQuitApp: () => ipcRenderer.send('app:request-quit'),
   quitRequested: (callback: IpcRendererCallbacks) => {
     const unsubscribe = subscribe('app:quit-requested', callback)
@@ -440,6 +453,7 @@ const rendererProcessBridge = {
   minimizeWindow: () => ipcRenderer.send('window-controls:minimize'),
   rebuildMenu: () => ipcRenderer.send('window:rebuild-menu'),
   setMenuProjectOpen: (open: boolean) => ipcRenderer.send('window:project-open', open),
+  setMenuDebuggerActive: (active: boolean) => ipcRenderer.send('window:debugger-active', active),
   reloadWindow: () => ipcRenderer.send('window:reload'),
   windowIsClosing: (callback: IpcRendererCallbacks) => subscribe('window-controls:is-closing', callback),
 
@@ -541,8 +555,24 @@ const rendererProcessBridge = {
   listInstalledPackages: (): Promise<
     Array<{ packageId: string; version: string; installedAt: string; path: string; devices: string[] }>
   > => ipcRenderer.invoke('packages:list-installed'),
-  uninstallPackage: (packageId: string): Promise<{ success: boolean; error?: string }> =>
+  uninstallPackage: (packageId: string): Promise<{ success: boolean; error?: string; warning?: string }> =>
     ipcRenderer.invoke('packages:uninstall', packageId),
+  reinstallPackage: (
+    packageId: string,
+  ): Promise<{ success: boolean; canceled?: boolean; packageId?: string; packageName?: string; error?: string }> =>
+    ipcRenderer.invoke('packages:reinstall', packageId),
+  cancelPackageInstall: (): void => ipcRenderer.send('packages:cancel-install'),
+  takeStartupNotices: (): Promise<StartupNotice[]> => ipcRenderer.invoke('packages:take-startup-notices'),
+  onStartupNoticesAvailable: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('packages:startup-notices-available', listener)
+    return () => ipcRenderer.removeListener('packages:startup-notices-available', listener)
+  },
+  onPackageInstallProgress: (callback: (progress: PackageInstallProgress) => void) => {
+    const listener = (_event: IpcRendererEvent, progress: PackageInstallProgress) => callback(progress)
+    ipcRenderer.on('packages:install-progress', listener)
+    return () => ipcRenderer.removeListener('packages:install-progress', listener)
+  },
   getPackageManifest: (packageId: string): Promise<unknown> => ipcRenderer.invoke('packages:get-manifest', packageId),
   getPackagePin: (packageId: string): Promise<{ packageId: string; version: string; contentHash: string } | null> =>
     ipcRenderer.invoke('packages:get-pin', packageId),
@@ -557,6 +587,9 @@ const rendererProcessBridge = {
     ipcRenderer.on('packages:boards-updated', listener)
     return () => ipcRenderer.removeListener('packages:boards-updated', listener)
   },
+
+  wasmToolchainCompile: (request: WasmCompileRequest): Promise<WasmCompileResult> =>
+    ipcRenderer.invoke('wasm-toolchain:compile', request),
 
   // ===================== UTILITY METHODS =====================
   getPreviewImage: (image: string, packagePath?: string): Promise<string> =>
@@ -681,6 +714,10 @@ const rendererProcessBridge = {
   // ===================== RUNTIME API METHODS =====================
   runtimeGetUsersInfo: (ipAddress: string): Promise<{ hasUsers: boolean; runtimeVersion?: string; error?: string }> =>
     ipcRenderer.invoke('runtime:get-users-info', ipAddress),
+  runtimeGetCapabilities: (
+    ipAddress: string,
+  ): Promise<{ features: readonly string[] | null; runtimeVersion?: string; error?: string }> =>
+    ipcRenderer.invoke('runtime:get-capabilities', ipAddress),
   runtimeCreateUser: (
     ipAddress: string,
     username: string,
@@ -832,6 +869,18 @@ const rendererProcessBridge = {
   ): Promise<{ success: boolean; data?: EtherCATScanResponse; error?: string }> =>
     ipcRenderer.invoke('ethercat:scan', ipAddress, scanRequest),
 
+  etherCATScanModules: (
+    ipAddress: string,
+    scanRequest: { busName: string; slavePosition: number; networkInterface?: string },
+  ): Promise<{ success: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('ethercat:scan-modules', ipAddress, scanRequest),
+
+  etherCATDiagnostics: (
+    ipAddress: string,
+    request: { busName: string; slavePosition: number },
+  ): Promise<{ success: boolean; data?: unknown; error?: string }> =>
+    ipcRenderer.invoke('ethercat:diagnostics', ipAddress, request),
+
   etherCATTest: (
     ipAddress: string,
     testRequest: EtherCATTestRequest,
@@ -850,61 +899,30 @@ const rendererProcessBridge = {
     ipcRenderer.invoke('ethercat:get-runtime-status', ipAddress),
 
   // ===================== ESI REPOSITORY METHODS =====================
-  esiLoadRepositoryIndex: (
-    projectPath: string,
-  ): Promise<{
-    success: boolean
-    data?: { version: number; items: Array<Record<string, unknown>> }
-    error?: string
-  }> => ipcRenderer.invoke('esi:load-repository-index', projectPath),
-
-  esiSaveXmlFile: (
-    projectPath: string,
-    itemId: string,
-    xmlContent: string,
-  ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:save-xml-file', projectPath, itemId, xmlContent),
-
-  esiLoadXmlFile: (
-    projectPath: string,
-    itemId: string,
-  ): Promise<{ success: boolean; content?: string; error?: string }> =>
-    ipcRenderer.invoke('esi:load-xml-file', projectPath, itemId),
-
-  esiDeleteXmlFile: (projectPath: string, itemId: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:delete-xml-file', projectPath, itemId),
-
-  esiParseAndSaveFile: (
-    projectPath: string,
-    filename: string,
-    content: string,
-  ): Promise<{ success: boolean; item?: ESIRepositoryItemLight; duplicate?: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:parse-and-save-file', projectPath, filename, content),
-
-  esiClearRepository: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:clear-repository', projectPath),
-
-  esiLoadDeviceFull: (
-    projectPath: string,
-    itemId: string,
-    deviceIndex: number,
-  ): Promise<{ success: boolean; device?: ESIDevice; error?: string }> =>
-    ipcRenderer.invoke('esi:load-device-full', projectPath, itemId, deviceIndex),
-
-  esiLoadRepositoryLight: (
-    projectPath: string,
-  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; needsMigration?: boolean; error?: string }> =>
-    ipcRenderer.invoke('esi:load-repository-light', projectPath),
-
-  esiMigrateRepository: (
-    projectPath: string,
-  ): Promise<{ success: boolean; items?: ESIRepositoryItemLight[]; error?: string }> =>
-    ipcRenderer.invoke('esi:migrate-repository', projectPath),
+  // ESI repository mechanisms: the shared port runs the parser in the main process and
+  // keeps files in the project's devices/esi folder through these.
+  esiParse: <T extends EsiParseOp>(request: T): Promise<EsiParseResult<T>> => ipcRenderer.invoke('esi:parse', request),
+  esiFileRead: (projectPath: string, name: string): Promise<EsiFileOutcome<string | null>> =>
+    ipcRenderer.invoke('esi:file-read', projectPath, name),
+  esiFileWrite: (projectPath: string, name: string, text: string): Promise<EsiFileOutcome<void>> =>
+    ipcRenderer.invoke('esi:file-write', projectPath, name, text),
+  esiFileRemove: (projectPath: string, name: string): Promise<EsiFileOutcome<void>> =>
+    ipcRenderer.invoke('esi:file-remove', projectPath, name),
+  esiFileList: (projectPath: string): Promise<EsiFileOutcome<string[]>> =>
+    ipcRenderer.invoke('esi:file-list', projectPath),
 
   // ===================== SIMULATOR METHODS =====================
   simulatorLoadFirmware: (hexPath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('simulator:load-firmware', hexPath),
   simulatorStop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('simulator:stop'),
+  simulatorPreparePython: (count: number): Promise<void> => ipcRenderer.invoke('simulator:prepare-python', count),
+  onSimulatorLog: (callback: (line: string, stream: 'stdout' | 'stderr') => void) => {
+    const listener = (_event: IpcRendererEvent, line: unknown, stream: unknown) => {
+      if (typeof line === 'string' && (stream === 'stdout' || stream === 'stderr')) callback(line, stream)
+    }
+    ipcRenderer.on('simulator:log', listener)
+    return () => ipcRenderer.removeListener('simulator:log', listener)
+  },
   simulatorIsRunning: (): Promise<boolean> => ipcRenderer.invoke('simulator:is-running'),
   onSimulatorStopped: (callback: () => void) => {
     const listener = () => callback()

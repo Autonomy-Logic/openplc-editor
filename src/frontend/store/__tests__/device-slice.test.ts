@@ -416,7 +416,7 @@ describe('createDeviceSlice', () => {
       expect(store.getState().deviceLicense.awaitingPurchaseUntil).toBeNull()
     })
 
-    it('a board change drops the licence AND the purchase watch — both were bound to the OLD board', () => {
+    it('a board change drops the license AND the purchase watch — both were bound to the OLD board', () => {
       // setDeviceBoard already wipes everything else that is board-specific
       // (platform options, the pin-table row, vendor-screen data). A licence
       // report is just as board-specific: it was verified against the previous
@@ -485,7 +485,7 @@ describe('createDeviceSlice', () => {
       expect(archive?.['Raspberry Pi 4']?.enabled).toBe(false)
     })
 
-    it('leaves the licence alone when setDeviceBoard is called with the same board', () => {
+    it('leaves the license alone when setDeviceBoard is called with the same board', () => {
       // The device screen re-sets the board on several paths; only an actual
       // change invalidates the licence — or ends a running purchase watch.
       const store = makeStore()
@@ -497,6 +497,31 @@ describe('createDeviceSlice', () => {
 
       expect(store.getState().deviceLicense.report).toEqual(LICENSED)
       expect(store.getState().deviceLicense.awaitingPurchaseUntil).not.toBeNull()
+    })
+
+    it('a port change drops the license, the same port keeps it', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setCommunicationPort('/dev/ttyACM0')
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+
+      store.getState().deviceActions.setCommunicationPort('/dev/ttyACM0')
+      expect(store.getState().deviceLicense.report).toEqual(LICENSED)
+
+      store.getState().deviceActions.setCommunicationPort('/dev/ttyACM1')
+      expect(store.getState().deviceLicense).toEqual({ phase: 'idle', report: null, awaitingPurchaseUntil: null })
+    })
+
+    it('an address change drops the license, unless the same device only moved', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setRuntimeIpAddress('192.168.0.10')
+      store.getState().deviceActions.setDeviceLicenseReport(LICENSED)
+
+      store.getState().deviceActions.setRuntimeIpAddress('192.168.0.10')
+      store.getState().deviceActions.setRuntimeIpAddress('192.168.0.20', { sameDevice: true })
+      expect(store.getState().deviceLicense.report).toEqual(LICENSED)
+
+      store.getState().deviceActions.setRuntimeIpAddress('192.168.0.30')
+      expect(store.getState().deviceLicense.report).toBeNull()
     })
 
     it('clearDeviceDefinitions clears licensing and the watch — a new project may select another board', () => {
@@ -607,6 +632,81 @@ describe('createDeviceSlice', () => {
       expect(cfg.communicationPort).toBe('COM3')
       // defaults preserved
       expect(cfg.runtimeIpAddress).toBe(defaultDeviceConfiguration.runtimeIpAddress)
+    })
+
+    it("keeps the project's persistent storage settings and archive on load", () => {
+      const store = makeStore()
+      const settings = { enabled: true, path: '/var/lib/openplc/retain', flushSeconds: 5 }
+      const other = { enabled: false, path: '/data/esp.bin', flushSeconds: 10 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'OpenPLC Runtime v4',
+          persistentStorage: settings,
+          persistentStorageByBoard: { 'OpenPLC Runtime v4': settings, 'ESP8266 NodeMCU': other },
+        },
+      })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg.persistentStorage).toEqual(settings)
+      expect(cfg.persistentStorageByBoard).toEqual({ 'OpenPLC Runtime v4': settings, 'ESP8266 NodeMCU': other })
+    })
+
+    it('attributes legacy flat persistent storage to the saved board', () => {
+      const store = makeStore()
+      const settings = { enabled: true, path: '', flushSeconds: 5 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: { deviceBoard: 'OpenPLC Runtime v4', persistentStorage: settings },
+      })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg.persistentStorage).toEqual(settings)
+      expect(cfg.persistentStorageByBoard).toEqual({ 'OpenPLC Runtime v4': settings })
+    })
+
+    it('restores the active board bucket when the flat view is absent', () => {
+      const store = makeStore()
+      const settings = { enabled: true, path: '/x', flushSeconds: 5 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'OpenPLC Runtime v4',
+          persistentStorageByBoard: { 'OpenPLC Runtime v4': settings },
+        },
+      })
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage).toEqual(settings)
+    })
+
+    it("switching board after load restores the other board's loaded settings", () => {
+      const store = makeStore()
+      const v4 = { enabled: true, path: '/v4', flushSeconds: 5 }
+      const esp = { enabled: false, path: '/esp', flushSeconds: 9 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: {
+          deviceBoard: 'OpenPLC Runtime v4',
+          persistentStorage: v4,
+          persistentStorageByBoard: { 'OpenPLC Runtime v4': v4, 'ESP8266 NodeMCU': esp },
+        },
+      })
+      store.getState().deviceActions.setDeviceBoard('ESP8266 NodeMCU')
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage).toEqual(esp)
+      store.getState().deviceActions.setDeviceBoard('OpenPLC Runtime v4')
+      expect(store.getState().deviceDefinitions.configuration.persistentStorage).toEqual(v4)
+    })
+
+    it('leaves the active board without settings when only another board has a bucket', () => {
+      const store = makeStore()
+      const esp = { enabled: true, path: '/esp', flushSeconds: 9 }
+      store.getState().deviceActions.setDeviceDefinitions({
+        configuration: { deviceBoard: 'OpenPLC Runtime v4', persistentStorageByBoard: { 'ESP8266 NodeMCU': esp } },
+      })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg.persistentStorage).toBeUndefined()
+      expect(cfg.persistentStorageByBoard).toEqual({ 'ESP8266 NodeMCU': esp })
+    })
+
+    it('leaves persistent storage absent for a project that never configured it', () => {
+      const store = makeStore()
+      store.getState().deviceActions.setDeviceDefinitions({ configuration: { deviceBoard: 'OpenPLC Runtime v4' } })
+      const cfg = store.getState().deviceDefinitions.configuration
+      expect(cfg).not.toHaveProperty('persistentStorage')
+      expect(cfg).not.toHaveProperty('persistentStorageByBoard')
     })
 
     it('sets pinMapping', () => {

@@ -3,6 +3,7 @@ import { ComponentPropsWithoutRef } from 'react'
 import { GraphicalEditorActiveProvider } from './active-context'
 import FbdEditor from './FBD'
 import LadderEditor from './ladder'
+import { GraphicalPlacementProvider } from './placement/placement-context'
 import SfcEditor from './SFC'
 
 type GraphicalEditorProps = ComponentPropsWithoutRef<'div'> & {
@@ -36,7 +37,9 @@ const GraphicalEditor = ({ name, language, readOnly, isActive = true }: Graphica
           <div className='absolute inset-0 z-10 cursor-not-allowed' title='Read-only: viewing historical commit' />
         )}
         <div className={`h-full w-full${readOnly ? ' pointer-events-none' : ''}`}>
-          <EditorComponent />
+          <GraphicalPlacementProvider language={language} isActive={isActive} readOnly={readOnly}>
+            <EditorComponent />
+          </GraphicalPlacementProvider>
         </div>
       </div>
     </GraphicalEditorActiveProvider>

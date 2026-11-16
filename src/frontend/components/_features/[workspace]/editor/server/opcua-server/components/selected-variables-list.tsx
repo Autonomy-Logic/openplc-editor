@@ -1,7 +1,10 @@
-import type { OpcUaNodeConfig } from '@root/middleware/shared/ports/types'
+import type { OpcUaFieldConfig, OpcUaNodeConfig } from '@root/middleware/shared/ports/types'
+import { useState } from 'react'
 
 interface SelectedVariablesListProps {
   nodes: OpcUaNodeConfig[]
+  /** Ids of nodes whose variable no longer exists in the project. */
+  missingNodeIds?: ReadonlySet<string>
   onEdit: (node: OpcUaNodeConfig) => void
   onRemove: (nodeId: string) => void
 }
@@ -23,7 +26,36 @@ const formatPermissions = (permissions: OpcUaNodeConfig['permissions']): string 
   return `V:${permissions.viewer} O:${permissions.operator} E:${permissions.engineer}`
 }
 
-export const SelectedVariablesList = ({ nodes, onEdit, onRemove }: SelectedVariablesListProps) => {
+const MemberList = ({ fields, depth = 0 }: { fields: OpcUaFieldConfig[]; depth?: number }) => (
+  <ul className='flex flex-col gap-1'>
+    {fields.map((field) => (
+      <li key={field.fieldPath} className='flex flex-col gap-1' style={{ paddingLeft: `${depth * 12}px` }}>
+        <div className='flex items-center gap-2'>
+          <span className='font-caption text-xs font-medium text-neutral-800 dark:text-neutral-200'>
+            {field.displayName}
+          </span>
+          <span className='font-caption text-xs text-neutral-500 dark:text-neutral-500'>{field.fieldPath}</span>
+          {field.datatype && (
+            <span className='font-caption text-xs text-neutral-500 dark:text-neutral-500'>{field.datatype}</span>
+          )}
+          <span className='font-caption text-xs text-neutral-500 dark:text-neutral-500'>
+            {formatPermissions(field.permissions)}
+          </span>
+        </div>
+        {field.fields && field.fields.length > 0 && <MemberList fields={field.fields} depth={depth + 1} />}
+      </li>
+    ))}
+  </ul>
+)
+
+export const SelectedVariablesList = ({ nodes, missingNodeIds, onEdit, onRemove }: SelectedVariablesListProps) => {
+  const [expandedIds, setExpandedIds] = useState<ReadonlyArray<string>>([])
+
+  const toggleExpanded = (nodeId: string) =>
+    setExpandedIds((current) =>
+      current.includes(nodeId) ? current.filter((id) => id !== nodeId) : [...current, nodeId],
+    )
+
   if (nodes.length === 0) {
     return (
       <div className='flex h-full items-center justify-center p-4'>
@@ -36,61 +68,92 @@ export const SelectedVariablesList = ({ nodes, onEdit, onRemove }: SelectedVaria
 
   return (
     <div className='flex flex-col gap-2 overflow-y-auto'>
-      {nodes.map((node) => (
-        <div
-          key={node.id}
-          className='flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900'
-        >
-          {/* Header row with icon, name, and actions */}
-          <div className='flex items-start justify-between'>
-            <div className='flex items-start gap-2'>
-              {/* Node Icon */}
-              <div className='mt-0.5'>
-                <NodeTypeIcon nodeType={node.nodeType} />
+      {nodes.map((node) => {
+        const isMissing = missingNodeIds?.has(node.id) ?? false
+        const members = node.fields ?? []
+        const isExpanded = expandedIds.includes(node.id)
+        return (
+          <div
+            key={node.id}
+            data-missing={isMissing || undefined}
+            className={
+              isMissing
+                ? 'flex flex-col gap-2 rounded-lg border border-amber-400 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950/40'
+                : 'flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900'
+            }
+          >
+            {/* Header row with icon, name, and actions */}
+            <div className='flex items-start justify-between'>
+              <div className='flex items-start gap-2'>
+                {members.length > 0 && (
+                  <button
+                    type='button'
+                    aria-label={`Members of ${node.displayName}`}
+                    aria-expanded={isExpanded}
+                    onClick={() => toggleExpanded(node.id)}
+                    className='mt-0.5 flex h-4 w-4 items-center justify-center rounded text-xs font-bold text-neutral-600 hover:bg-neutral-100 disabled:cursor-not-allowed dark:text-neutral-300 dark:hover:bg-neutral-800'
+                  >
+                    {isExpanded ? '-' : '+'}
+                  </button>
+                )}
+
+                {/* Node Icon */}
+                <div className='mt-0.5'>
+                  <NodeTypeIcon nodeType={node.nodeType} />
+                </div>
+
+                {/* Node Info */}
+                <div className='flex flex-col gap-1'>
+                  <span className='font-caption text-sm font-semibold text-neutral-950 dark:text-white'>
+                    {node.displayName}
+                  </span>
+                  <span className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>{node.nodeId}</span>
+                </div>
               </div>
 
-              {/* Node Info */}
-              <div className='flex flex-col gap-1'>
-                <span className='font-caption text-sm font-semibold text-neutral-950 dark:text-white'>
-                  {node.displayName}
-                </span>
-                <span className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>{node.nodeId}</span>
+              {/* Actions */}
+              <div className='flex items-center gap-2'>
+                {!isMissing && (
+                  <button
+                    type='button'
+                    onClick={() => onEdit(node)}
+                    className='h-[24px] rounded-md border border-neutral-300 bg-white px-2 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+                  >
+                    Edit
+                  </button>
+                )}
+                <button
+                  type='button'
+                  onClick={() => onRemove(node.id)}
+                  className='h-[24px] rounded-md border border-neutral-300 bg-white px-2 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
+                >
+                  Remove
+                </button>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className='flex items-center gap-2'>
-              <button
-                type='button'
-                onClick={() => onEdit(node)}
-                className='h-[24px] rounded-md border border-neutral-300 bg-white px-2 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
-              >
-                Edit
-              </button>
-              <button
-                type='button'
-                onClick={() => onRemove(node.id)}
-                className='h-[24px] rounded-md border border-neutral-300 bg-white px-2 font-caption text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700'
-              >
-                Remove
-              </button>
+            {/* Details */}
+            <div className='flex flex-col gap-1 pl-6'>
+              <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
+                <span className='font-medium'>Variable:</span> {node.pouName}:{node.variablePath}
+              </p>
+              <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
+                <span className='font-medium'>Type:</span> {node.variableType}
+              </p>
+              <p className='font-caption text-xs text-neutral-500 dark:text-neutral-500'>
+                <span className='font-medium'>Permissions:</span> {formatPermissions(node.permissions)}
+              </p>
+              {isMissing && (
+                <p role='alert' className='font-caption text-xs font-medium text-amber-700 dark:text-amber-300'>
+                  Variable not found in the project. This tag is left out of the build until it is removed or the
+                  variable is restored.
+                </p>
+              )}
+              {isExpanded && members.length > 0 && <MemberList fields={members} />}
             </div>
           </div>
-
-          {/* Details */}
-          <div className='flex flex-col gap-1 pl-6'>
-            <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
-              <span className='font-medium'>Variable:</span> {node.pouName}:{node.variablePath}
-            </p>
-            <p className='font-caption text-xs text-neutral-600 dark:text-neutral-400'>
-              <span className='font-medium'>Type:</span> {node.variableType}
-            </p>
-            <p className='font-caption text-xs text-neutral-500 dark:text-neutral-500'>
-              <span className='font-medium'>Permissions:</span> {formatPermissions(node.permissions)}
-            </p>
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

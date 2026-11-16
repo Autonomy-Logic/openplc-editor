@@ -254,7 +254,7 @@ const TaskEditor = () => {
 
   return (
     <div aria-label='Tasks editor container' className='flex  w-full flex-shrink-0 flex-col gap-4 '>
-      <div aria-label='Tasks editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
+      <div aria-label='Tasks editor actions' className='relative flex h-8 w-full'>
         <div
           aria-label='Tasks editor table actions container'
           className='relative flex h-full w-full items-center justify-between'

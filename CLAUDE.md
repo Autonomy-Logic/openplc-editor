@@ -51,12 +51,14 @@ External contributors without Jira access follow CONTRIBUTING.md; GitHub Issues 
 **Package manager:** `npm` (not pnpm)
 
 ```bash
-npm install              # Install deps + download binaries + build DLL cache
+npm install              # Install deps + download binaries + Python runtime + build DLL cache
+npm run setup:python     # Fetch the pinned Python runtime into vendor/python-runtime/ (python-runtime.json)
 npm run dev              # Full dev mode (main + renderer + Electron, port 1313)
 npm run build            # Production build (main + renderer)
 npm run build:main       # Electron main process only
 npm run build:renderer   # React renderer only
 npm run build:dll        # Webpack DLL cache for faster dev rebuilds
+npm run build:relay      # Vendor-document relay.js for a VPP package (release/relay/)
 npm run package          # Build + create distributable (electron-builder)
 
 npm run lint             # ESLint check
@@ -81,6 +83,7 @@ so it must be installed first or they fail with `TS2307: Cannot find module
 
 ```bash
 npm ci --ignore-scripts && npm run setup:strucpp   # required first, or tsc/jest can't resolve 'strucpp'
+npm run setup:python                               # the pinned Python runtime (vendor/python-runtime/), skipped by --ignore-scripts
 npx tsc --noEmit                                   # ci-build:       Build Check
 npx prettier --check "./src/**/*.{ts,tsx}"         # ci-format:      Format Check
 npx eslint "./src/**/*.{ts,tsx}"                   # ci-lint:        Lint Check
@@ -100,17 +103,73 @@ The shared surface (`src/frontend`, `src/middleware/shared`, `src/backend/shared
 is byte-identical with **openplc-web** — mirror any change and run the check suite
 in BOTH repos (web uses **Vitest**, not Jest, so a test can pass here and fail there).
 
+## Thin adapters (hard rule)
+
+**All logic lives in the shared surface. Adapters are thin: they hold only the
+platform mechanism.** Desktop and web must run the same logic, line by line, so
+a feature cannot work on one and break on the other.
+
+Platform code is everything outside the shared surface: `src/middleware/adapters/*`,
+and on the desktop also `src/main/` and `src/backend/editor/`, on the web also
+`src/backend/web/`. It may only:
+
+- **Store and bring back data**: read or write a file, list a folder, call an HTTP
+  endpoint, send over IPC or WebRTC, exactly as given.
+- **Run code elsewhere**: start a thread, Web Worker or process, and pass messages to it.
+- **Reach the OS**: native dialogs, keyring, serial ports, menus, system browser.
+- **Handle transport**: retry a transient network failure, turn an HTTP or IPC
+  failure into an `Error` with a message.
+
+Everything else is logic and goes to the shared surface, including: parsing,
+validation, hashing, dedup, ids, defaults, file and index formats (current and
+legacy), caching, ordering of writes, state machines, interpreting response
+bodies, and building or reshaping domain objects. Pass data across a platform
+boundary **verbatim**: never rebuild an object field by field
+(`{ id: x.id, name: x.name, ... }`) in platform code, or the next field added in
+shared code is silently dropped on that platform.
+
+**Pattern.** The port implementation is a shared factory, `createXxxPort(mechanisms)`,
+and the mechanism interfaces live in `src/middleware/shared/ports/`. Each
+platform's adapter only builds the mechanisms and calls the factory. Reference:
+the ESI repository. Shared: `backend/shared/ethercat/esi-repository-port.ts`
+(hashing, dedup, ids, summaries, caches), `esi-file-store.ts` (index format,
+legacy versions, validation, write order), `esi-parse-ops.ts`, and
+`ports/esi-repository-mechanisms.ts`. Mechanisms: desktop
+`adapters/editor/esi-adapter.ts` + `backend/editor/ethercat/esi-project-files.ts`
+(file read, write, list, remove); web `adapters/web/esi-adapter.ts` (Edge HTTP)
++ `services/esi/esi.worker.ts`. Test the behaviour once, in a shared test, with
+the real shared code and an in-memory mechanism.
+
+**Why.** When each platform kept its own copy of the ESI repository logic, the
+desktop copy dropped `modules` and modular EtherCAT couplers lost their modules
+on the desktop only.
+
+**Enforcement.** `.claude/hooks/thin-adapter-guard.mjs` (a Claude Code `PreToolUse` hook in
+`.claude/settings.json`) blocks an agent's first write to each platform file in a session and shows
+this rule; the same write then passes, so the agent must name the mechanism or move the logic. It
+loads only when Claude Code runs from this repository, and does not see shell edits.
+
+**Existing code** that predates this rule still has logic in adapters. Don't add
+more: when a change touches such a port, move its logic into the shared surface
+in the same PR pair (editor + web).
+
 ## Electron e2e (Playwright)
 
-No CI workflow runs Playwright, so these are local checks. `e2e/` drives the real
-Electron app through `_electron.launch`, and three things bite before any assertion:
+`ci-e2e-debug-lock.yml` runs the `debug-*` specs on every pull request; every other
+spec is a local check. `e2e/` drives the real Electron app through `_electron.launch`,
+and three things bite before any assertion:
 
 ```bash
-npm run build                                          # main + renderer
+npm run setup:python                                   # the Python runtime the simulator runs, if not installed
+OPENPLC_E2E_DEBUG_SEAM=1 npm run build                 # main + renderer
 mkdir -p release/app/configs/dll
 cp release/app/dist/main/preload.js release/app/configs/dll/preload.js
 npx playwright test e2e/<spec>.ts --workers=1
 ```
+
+`OPENPLC_E2E_DEBUG_SEAM=1` installs `window.__OPENPLC_E2E_DEBUG_SESSION__`, which opens
+and closes a debug session with no PLC attached. Any other build drops the branch, and
+`electron-builder`'s `beforePack` hook refuses to package a renderer that carries it.
 
 - **The preload copy is required.** `main.ts` picks the preload with `app.isPackaged`,
   and a suite launching `release/app/dist/main/main.js` directly is NOT packaged, so it
@@ -121,6 +180,23 @@ npx playwright test e2e/<spec>.ts --workers=1
   webpack dev server on `localhost:1212`, which is not running against a built app.
 - **`firstWindow()` returns the splash**, which then closes. Poll `app.windows()` for the
   one whose URL contains `index.html`.
+- **Build profile paths from `realpathSync(tmpdir())`.** On macOS Electron resolves `userData`
+  through the `/var` symlink, and a package path recorded under `/var/...` fails the containment
+  check, so the package's boards silently never load.
+- **`app.close()` hangs with a project open**: the quit confirmation holds it. Kill the process
+  (`app.process().kill('SIGKILL')`) once what the test needs is on disk.
+- **An unsigned fixture package is removed when a project opens.** A suite that installs one
+  (`e2e/fixtures/vendor-configurator/`) replaces the `packages:verify-signatures` handler with a
+  no-op once the bridge has registered it, as `e2e/vendor-configurator.spec.ts` does.
+
+**Never wait on a dead app.** Every wait for a build, a Play, a running simulator or a Console line must also
+read what the app shows and fail at once when it reports a failure: use `e2e/helpers/app-console.ts`
+(`waitForApp`, `waitForText`; identical in both repos) instead of polling a success condition alone. Most specs
+finish in under 3 minutes: set `test.setTimeout` near 180 s and each wait in tens of seconds, and run with
+`--global-timeout` (or in the background). Prove it with a negative control: break the fixture and expect a failure
+within seconds that quotes the Console. The Console is readable only while its tab is open; Play opens the debugger
+tab, so click the `Console` tab before reading block output.
+`launch()` (`e2e/helpers/ethercat-project.ts`) throws at once when the splash shows a startup failure.
 
 Every open tab keeps its Monaco editor mounted (hidden with `display: none`), so read
 body text from `.view-lines:visible`, never `.view-lines` alone.
@@ -165,7 +241,7 @@ The codebase uses **dependency inversion** via port interfaces. Frontend code ne
 | `CompilerPort` | PLC compilation pipeline |
 | `RuntimePort` | Remote PLC runtime control (login, start/stop, status) |
 | `DebuggerPort` | Debug protocol (read/write variables, MD5 verification) |
-| `SimulatorPort` | Built-in AVR simulator |
+| `SimulatorPort` | Built-in OpenPLC Simulator (WebAssembly) |
 | `ProjectPort` | Project CRUD operations |
 | `DevicePort` | Board discovery, serial ports |
 | `OrchestratorPort` | Device fleet management (web-only) |
@@ -201,7 +277,7 @@ export const editorPorts = createEditorPorts(appStore)
 ```
 The CLI creates its own store per process and passes it down (`src/cli/main.ts`, `src/cli/session/daemon-main.ts`).
 
-**Editor adapters** (`src/middleware/adapters/editor/`) implement ports by calling `window.bridge.*` (Electron IPC). The web repo has its own adapters using HTTP/WebRTC instead.
+**Editor adapters** (`src/middleware/adapters/editor/`) supply the desktop's mechanisms (`window.bridge.*`, Electron IPC) to shared port implementations. The web repo supplies HTTP/WebRTC mechanisms instead. Adapters are thin and logic-free: see **Thin adapters (hard rule)**.
 
 ### Architecture Layer Rules
 
@@ -229,6 +305,9 @@ Main and renderer processes communicate through typed IPC bridges:
 - **Main bridge:** `src/main/modules/ipc/main.ts` — `MainProcessBridge` registers 50+ `ipcMain.handle()` handlers
 - **Renderer bridge:** `src/main/modules/ipc/renderer.ts` — async wrappers calling `ipcRenderer.invoke()`
 - **Preload:** `src/main/modules/preload/preload.ts` — exposes `window.bridge` via `contextBridge`
+
+Vendor package documents (an embedded configurator, for example) are served to a sandboxed iframe under
+the `vpp-doc://` scheme, never with `allow-same-origin`; see `docs/vendor-document-serving.md`.
 
 ### State Management (Zustand)
 
@@ -314,6 +393,7 @@ PLCProjectData -> Preprocess POUs -> ST transpiler (in-process) -> strucpp -> C+
                                                     defines.h (pins, Modbus, MD5)
                                                                            |
                                                     Arduino CLI / openplc-compiler -> firmware
+                                                    WebAssembly toolchain -> simulator.wasm (OpenPLC Simulator)
 ```
 
 Structured Text is generated in-process by the TS transpiler
@@ -353,11 +433,86 @@ is `null` or differs from the board's. In `src/frontend/components/_organisms/wo
 `handleBuild` runs it before `evaluatePreBuildPlcGate`, and `handleMd5Verification` runs it before offering an upload.
 It is inert in the editor (no orchestrator devices) and kept so the shared surface stays byte-identical with openplc-web.
 
+### WebAssembly toolchain
+
+clang, lld and libc++ run inside the editor as WebAssembly (`@yowasp/clang`, pinned to an exact version in
+`package.json`); no native compiler is involved. `CompilerPort.compileToWasm(request)` compiles C and C++
+translation units into one module and returns its bytes and the compiler's diagnostics; a bad request comes back
+as diagnostics too, never as a rejection. The logic is shared and byte-identical with openplc-web, in
+`src/backend/shared/wasm-toolchain/`: compile and link, the worker pool, the worker host, and the check of requests
+that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its runtime headers.
+
+- **Object cache:** per unit, for the session (256 MB, least recently used first). Each object is kept with the
+  request files clang says it read (`-MD`), and reused while they are unchanged and no file was added or removed.
+- **Worker pool:** starts with one worker and adds one, up to `clangWorkerCount` (four at most), when every worker
+  is busy. A worker that fails, does not load within 120 s, or runs a job past 120 s is terminated and dropped,
+  and its jobs fail.
+
+- **Desktop:** up to four worker threads (`src/backend/editor/wasm-toolchain/`); the worker is its own webpack
+  entry, `clang-worker.js`, built next to `main.js`. The renderer reaches it over the `wasm-toolchain:compile` IPC
+  channel.
+- **Startup:** the toolchain loads while the splash is up, and the main window appears only once it is ready. If it
+  cannot load, the splash shows the reason with a Quit button.
+- **CLI:** the toolchain loads on first use, so only an OpenPLC Simulator build (`compile` for it, or `simulate`) loads it.
+- **Packaging:** the package ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
+  entitlement in `assets/entitlements.mac.plist` lets it run under the hardened runtime.
+- **Running a module** happens in main-process worker threads (the simulator, Python), never in the renderer: the
+  renderer CSP (`src/index.ejs`) has no `'wasm-unsafe-eval'`.
+
+**Simulator build.** The OpenPLC Simulator target builds with this toolchain, not arduino-cli: the pipeline's
+simulator branch (`compileSimulatorModule` in `src/backend/shared/compile/pipeline.ts`) turns the composed firmware
+files into one request (`steps/build-simulator-wasm-request.ts`) and calls `CompilerPlatformPort.compileToWasm`. The
+sketch becomes `examples/Baremetal/Baremetal.cpp` with `Arduino.h` included and Arduino-style prototypes
+(`steps/ino-prototypes.ts`); the network stack and the Modbus TCP, OPC UA and S7 units are left out, Modbus RTU stays
+for the debugger. The firmware skeleton carries `resources/sources/wasm-sim/`: the host shim `sim_main.cpp`, a stub `Arduino.h` and the
+ArduinoCore-API (LGPL-2.1, commit `0f4e57ea`, licence in `wasm-sim/core/`). The module is a reactor that imports
+`env.host_clock_us` and `env.host_uart_write` and exports `sim_setup`, `sim_loop`, `sim_uart_receive` and
+`sim_scan_period_us`; time moves only when the host advances it. The simulator has no pins: its `defines.h` declares
+none and `resources/sources/hal/simulator.cpp` does no I/O. No Arduino core is installed for it.
+The desktop writes the module to `<build>/OpenPLC Simulator/simulator.wasm`. The editor builds the simulator only
+from Play; `e2e/wasm-simulator-build.spec.ts` builds through `openplc-cli compile`.
+
+**Updating the toolchain:** change the exact `@yowasp/clang` version in `package.json` in both repos (with both
+lockfiles, `pnpm-lock.yaml` included on the web), then run `e2e/wasm-toolchain.spec.ts` in both repos, including
+the packaged-app case (`E2E_PACKAGED_APP`). The npm package carries no licence files, so the texts for YoWASP, LLVM and
+wasi-libc live in `third-party-licenses/yowasp-clang/` (in both repos, with their sources in its README)
+and ship next to the toolchain; refresh them from the commits the new release was built from.
+
+**Python blocks in the simulator.** Each Python block instance runs in its own CPython 3.13 interpreter (WASIX build,
+run by the Wasmer SDK, no network), in one long-lived worker thread of the main process (`python-worker.js`, built next
+to `main.js`; `src/backend/editor/python/`). The logic is shared and byte-identical with openplc-web in
+`src/backend/shared/python/`: the block host (one interpreter per instance, the runtime's 100 ms exchange over the
+wrapper's stdio transport, Console lines prefixed `[Block]`, a block that ends or fails keeps its last outputs, Stop
+kills them all), the thread protocol and the Wasmer runtime. The module starts a block through
+`wasm-sim/sim_python.cpp` (`env.host_python_block`), force-included header `wasm-sim/stub/iec_python.h`. The runtime
+loads during the splash but never stops the editor or a run: if it cannot load (or takes past 120 s), the editor opens,
+the PLC runs, and each Python block reports the reason on the Console; the failure stays for the session. Interpreters
+for a project's blocks boot right
+after its module compiles, and the PLC starts once they are ready (not during the compile: on WebKit that stalls the
+in-browser compiler). `openplc-cli simulate` (`src/cli/commands/simulate.ts`) runs the same simulator and loads
+Python only for a project with Python blocks; a toolchain that cannot load ends it (exit 4), a Python runtime that cannot
+load does not. A run keeps at most as many interpreters as fit in half of the computer's memory
+(`python-memory-budget.ts`).
+
+- **Assets:** the CPython package and the numpy wheel are pinned by sha256 in `python-runtime.json` and fetched at
+  install time into `vendor/python-runtime/` (`npm run setup:python`, part of `postinstall`; never committed, the
+  package is 161 MB). A packaged app ships them, with the Wasmer SDK and the licences in
+  `third-party-licenses/python-runtime/`, as the extra resources `python-runtime` and `wasmer-sdk`; users download
+  nothing.
+- **Updating:** change the pins in `python-runtime.json` in both repos (and the exact `@wasmer/sdk` version with both
+  lockfiles), run `setup:python -- --force`, refresh the licence texts, then run `e2e/python-blocks-play.spec.ts` in
+  both repos (WebKit included on the web) and `e2e/cli-simulate.spec.ts` in the editor.
+
 ### Debugging
 
 - **Protocol:** Custom Modbus PDU: function codes 0x41-0x45 for variable read/write, and 0x46-0x4D for status, version, licensing, run/stop state, bootloader reboot and lock state (`resources/sources/Baremetal/modbus_types.h`)
 - **Transports:** Modbus TCP, Modbus RTU, WebSocket, or virtual serial (simulator)
-- **Simulator:** AVR8JS emulator (`src/backend/shared/simulator/`) emulates ATmega2560
+- **Simulator:** the project's WebAssembly module (`src/backend/shared/simulator/`): `WasmSimulatorModule` runs it
+  with simulated time (one scan period per scan, never ahead of the wall clock, in steps of at most 10 ms so the
+  serial service runs between scans), in a worker thread (`ThreadedSimulator` + `serveSimulatorThread`; desktop entry
+  `src/backend/editor/simulator/simulator-worker.ts`, built as `simulator-worker.js`). The debugger's Modbus RTU client
+  talks to it through `VirtualSerialPort`. Test fixtures, and how to rebuild them, are in
+  `src/backend/shared/simulator/__tests__/fixtures/README.md`.
 - **Flow:** Compile with debug symbols (.dbg file + MD5) -> connect debugger -> poll variables
 
 ## Testing
@@ -368,7 +523,7 @@ It is inert in the editor (no orchestrator devices) and kept so the shared surfa
   the platform providers — `validate:arch` rejects it (openplc-web runs these shared tests without
   per-file isolation, where such a mock would leak).
 - **Coverage:** per-directory floors are in `jest.config.json` (`coverageThreshold`).
-- **End-to-end:** Playwright specs in `e2e/` drive the built Electron app through `_electron.launch`; run them as described in "Electron e2e (Playwright)" above. No CI workflow runs them.
+- **End-to-end:** Playwright specs in `e2e/` drive the built Electron app through `_electron.launch`; run them as described in "Electron e2e (Playwright)" above. CI runs the `debug-*` specs only.
 - **Manual:** the developer's manual test is required for every demand.
 
 ## Code Style
@@ -393,7 +548,7 @@ It is inert in the editor (no orchestrator devices) and kept so the shared surfa
 
 ## Key Technologies
 
-- **Electron 35** / **React 18** / **TypeScript** (target ES2022)
+- **Electron 37** (the last line that still runs on macOS 11) / **React 18** / **TypeScript** (target ES2022)
 - **Webpack** (not Vite) with separate main/renderer/preload configs
 - **Zustand 5** + **Immer** for state management
 - **Monaco Editor** for code editing (ST, IL, Python, C++)
@@ -402,7 +557,6 @@ It is inert in the editor (no orchestrator devices) and kept so the shared surfa
 - **Tailwind CSS 3** + **Radix UI** for styling
 - **Zod** for schema validation
 - **i18next** for internationalization
-- **avr8js** for Arduino simulation
 - **Axios** for HTTP requests
 - **Socket.io** for real-time communication
 - **Winston** for structured logging (main process)
@@ -445,6 +599,17 @@ repos and merge to `development`; promote `development` to `main` in both repos;
 (equal to `APP_VERSION`) on openplc-editor's `main`, which triggers `release.yml` ("Build and
 Release"). openplc-web has no release workflow: `production-cd.yml` deploys on every push to its
 `main`, and `staging-cd.yml` on pushes to `development`.
+
+### Update notice (never publish `latest*.yml`):
+The editor checks the GitHub releases API once per launch and, when a newer
+version is out, shows a banner at the top of the window ("Update" and an X);
+Update downloads that OS's installer, checks its sha256 against the release and
+opens it. The user installs (DOPE-486, `docs/update-notice.md`). The release
+pipeline needs nothing for it. The Windows installer is an assisted NSIS
+installer (`assets/installer.nsh`) that asks the user to close a running editor
+and never kills it; keep `oneClick: false`. **Never add `latest-mac.yml` / `latest-linux*.yml` / `latest.yml`
+to a release**: every editor from 4.1.0 to 4.3.2 still embeds electron-updater's
+`app-update.yml` and would install it without asking, unsigned on Windows.
 
 ### When adding a new port:
 1. Define the interface in `src/middleware/shared/ports/`
@@ -515,7 +680,7 @@ new alias.
 
 ## Environment
 
-- **Node.js:** >= 22.x < 24
+- **Node.js:** 22.x
 - **Dev server port:** 1313
 - **Supported platforms:** macOS, Windows, Linux (x64 & ARM64)
 - **Binaries:** Auto-downloaded via `scripts/download-binaries.ts` during `npm install`

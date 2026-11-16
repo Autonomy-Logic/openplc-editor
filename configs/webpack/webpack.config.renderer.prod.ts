@@ -145,6 +145,7 @@ const configuration: webpack.Configuration = {
       // origin from the API above.  Unset in release builds → `system-adapter.ts`
       // falls back to https://edge.autonomylogic.com.
       OPENPLC_EDGE_WEB_URL: '',
+      OPENPLC_E2E_DEBUG_SEAM: '',
     }),
 
     new MiniCssExtractPlugin({

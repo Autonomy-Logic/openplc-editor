@@ -25,8 +25,8 @@ import { explainLicenseOutcome } from '../utils/license-outcome-dialog'
 import { useDeviceLicense } from './use-device-license'
 
 export interface UseDeviceConnectResult {
-  /** Open + hold the link for the given board. Never throws. */
-  connect: () => Promise<void>
+  /** Open + hold the link for the given board. Resolves true when a firmware answered. Never throws. */
+  connect: () => Promise<boolean>
   /** Close the held link. */
   disconnect: () => Promise<void>
   /** Live link status, mirrored from the main process. */
@@ -45,7 +45,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
   const status = useOpenPLCStore((s) => s.deviceConnection.status)
   const licensing = useDeviceLicense(boardInfo)
 
-  const connect = useCallback(async (): Promise<void> => {
+  const connect = useCallback(async (): Promise<boolean> => {
     const deviceBoard = store.getState().deviceDefinitions.configuration.deviceBoard
 
     // FIRST PASS: everything that needs nothing from the user — serial, then
@@ -53,8 +53,8 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
     // aside rather than interrupting with an address dialog, because with a cable
     // attached the user should never be asked for one.
     const silent = await resolveDeviceLinkWithUx(store, deviceBoard, boardInfo, { deferPrompts: true })
-    if (!silent) return
-    if (silent.candidates.length === 0 && silent.awaitingInput.length === 0) return
+    if (!silent) return false
+    if (silent.candidates.length === 0 && silent.awaitingInput.length === 0) return false
 
     const tried: string[] = []
     setDeviceConnectionStatus('connecting', null)
@@ -86,7 +86,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
           // try, so nothing was attempted at all. Saying "could not reach the
           // device" would be reporting a failure that never happened — they
           // cancelled. The `finally` below clears the button.
-          return
+          return false
         }
       }
 
@@ -100,7 +100,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
           buttons: ['OK'],
           onResponse: () => undefined,
         })
-        return
+        return false
       }
 
       if (result.status === 'error') {
@@ -111,7 +111,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
           buttons: ['OK'],
           onResponse: () => undefined,
         })
-        return
+        return false
       }
 
       if (result.status === 'no-firmware') {
@@ -124,7 +124,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
             if (buttonIndex === 0) requestDeviceFlash()
           },
         })
-        return
+        return false
       }
 
       // The link is up and a firmware answered. If this board's VPP is sold
@@ -168,6 +168,7 @@ export function useDeviceConnect(boardInfo: BoardInfo | undefined): UseDeviceCon
         setDeviceConnectionStatus('disconnected', null)
       }
     }
+    return result.status === 'connected-with-firmware'
   }, [store, boardInfo, device, licensing, openModal, setDeviceConnectionStatus])
 
   const disconnect = useCallback(async (): Promise<void> => {

@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<EtherCATModule Version="1.12" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="EtherCATModule.xsd">
+	<Vendor FileVersion="0001">
+		<Id>132</Id>
+		<Name>Phoenix Contact</Name>
+	</Vendor>
+	<!--ESI-Version 3.21-->
+	<Modules>
+			<!--DI Modules-->
+			<Module>
+				<!--AXL F DI8/2 24DC 1F-->
+				<Type ModuleIdent="#x000D0D03" ModuleClass="DI_TERM" ModulePdoGroup="1">AXL F DI8/2 24DC 1F</Type>
+				<Name LcId="1033">AXL F DI8/2 24DC 1F, Axioline digital input module, 8 digital inputs, 24 V DC</Name>
+				<Name LcId="1031">AXL F DI8/2 24DC 1F, Axioline-Digital-Eingabemodul, 8 Eingänge, 24 V DC</Name>
+				<TxPdo Fixed="true" Mandatory="true" Sm="3">
+					<Index DependOnSlot="true">#x1A00</Index>
+					<Name LcId="1033">AXL F DI8/2 24DC 1F Input-PD</Name>
+					<Name LcId="1031">AXL F DI8/2 24DC 1F Input-PD</Name>
+					<Entry>
+						<Index DependOnSlot="true">#x6000</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DI channel 01 (terminal point 00)</Name>
+						<Name LcId="1031">DI Kanal 01 (Klemmpunkt 00)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x6000</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DI channel 02 (terminal point 01)</Name>
+						<Name LcId="1031">DI Kanal 02 (Klemmpunkt 01)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x6000</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DI channel 03 (terminal point 02)</Name>
+						<Name LcId="1031">DI Kanal 03 (Klemmpunkt 02)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x6000</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DI channel 04 (terminal point 03)</Name>
+						<Name LcId="1031">DI Kanal 04 (Klemmpunkt 03)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x6000</Index>
+						<SubIndex>5</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DI channel 05 (terminal point 10)</Name>
+						<Name LcId="1031">DI Kanal 05 (Klemmpunkt 10)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x6000</Index>
+						<SubIndex>6</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DI channel 06 (terminal point 11)</Name>
+						<Name LcId="1031">DI Kanal 06 (Klemmpunkt 11)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x6000</Index>
+						<SubIndex>7</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DI channel 07 (terminal point 12)</Name>
+						<Name LcId="1031">DI Kanal 07 (Klemmpunkt 12)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x6000</Index>
+						<SubIndex>8</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DI channel 08 (terminal point 13)</Name>
+						<Name LcId="1031">DI Kanal 08 (Klemmpunkt 13)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+				</TxPdo>
+				<Profile>
+					<Dictionary>
+						<DataTypes>
+							<DataType>
+								<Name>USINT</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<Name>ARRAY [0..8] OF BYTE</Name>
+								<BaseType>USINT</BaseType>
+								<BitSize>72</BitSize>
+								<ArrayInfo>
+									<LBound>0</LBound>
+									<Elements>9</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>ARRAY [0..249] OF BYTE</Name>
+								<BaseType>USINT</BaseType>
+								<BitSize>2000</BitSize>
+								<ArrayInfo>
+									<LBound>0</LBound>
+									<Elements>250</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT2000</Name>
+								<BitSize>2096</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Command</Name>
+									<Type>ARRAY [0..249] OF BYTE</Type>
+									<BitSize>2000</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Status</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>2016</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Response</Name>
+									<Type>ARRAY [0..8] OF BYTE</Type>
+									<BitSize>72</BitSize>
+									<BitOffs>2024</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+						</DataTypes>
+						<Objects>
+							<Object>
+								<Index DependOnSlot="true">#x2000</Index>
+								<Name>AXL F DI8/2 24DC 1F PDI Write Tunnel</Name>
+								<Type>DT2000</Type>
+								<BitSize>2096</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>m</Category>
+								</Flags>
+							</Object>
+						</Objects>
+					</Dictionary>
+				</Profile>
+				<ImageData16x14>424DD6020000000000003600000028000000100000000E0000000100180000000000A0020000C40E0000C40E00000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000000000000000001205002C1A024B30116A4821865E30A1733FB6834BC08244FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF140F0AFFFFC5FFFEBFFFFFC5FFFFCAFFFFCDFFFFD2FFFFD6FFFFD9FFFFE5BA8B5CFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF2A1F14E9C792DFC391E3C997E6CF9DEAD6A3ECDDAAF0E3B0F3E8B5FDF7C3A37A52FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF443322E5C18ADDBE8BE2C492E5CB98E8D29EEBD7A5EFDEABF2E3B0FCF3BE8A6744FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF614930D6A666DBB884DEBD8AD9B476DEBD7EE9D09DEBD7A4EDDDAAFAEDB96D5237FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA37A51FFFFFFD5A365D1A363FFFFFFFFFFFFDCBA7AE7D09DEAD5A2F9E9B4513D28FFFFFFFFFFFF000000000000000000000000000000FFFFFFFFFFFF000000000000FFFFFFE2C693E5CD9BF7E0AB312418FFFFFFFFFFFF000000000000FFFFFF1F1F1F000000000000FFFFFF000000000000FFFFFFF1D099F7D9A1FFF1B51B140DFFFFFFFFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFF000000000000FFFFFF9C7C50947A50978358000000FFFFFFFFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFF000000000000FFFFFF837E7C7270736063697D7E7EFFFFFFFFFFFF000000000000FFFFFF4F4F4F000000000000FFFFFF000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000000000000000000000000000DFDFDFFFFFFF000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+			</Module>
+			<!--DO Modules-->
+			<Module>
+				<!--AXL F DO8/2 2A 1H-->
+				<Type ModuleIdent="#x000100D5" ModuleClass="DO_TERM" ModulePdoGroup="1">AXL F DO8/2 2A 1H</Type>
+				<Name LcId="1033">AXL F DO8/2 2A 1H, Axioline digital output module, 8 outputs, 24 V DC, 2 A, 2-wire connection technology</Name>
+				<Name LcId="1031">AXL F DO8/2 2A 1H, Axioline-Digital-Ausgabemodul, 8 Ausgänge, 24 V DC, 2 A, 2-Leiter-Anschlusstechnik</Name>
+				<RxPdo Fixed="true" Mandatory="true" Sm="2">
+					<Index DependOnSlot="true">#x1600</Index>
+					<Name LcId="1033">Digital Output channels</Name>
+					<Name LcId="1031">Digitale Ausgangskanäle</Name>
+					<Entry>
+						<Index DependOnSlot="true">#x7000</Index>
+						<SubIndex>1</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DO channel 01 (terminal point 00)</Name>
+						<Name LcId="1031">DO Kanal 01 (Klemmpunkt 00)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x7000</Index>
+						<SubIndex>2</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DO channel 02 (terminal point 01)</Name>
+						<Name LcId="1031">DO Kanal 02 (Klemmpunkt 01)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x7000</Index>
+						<SubIndex>3</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DO channel 03 (terminal point 02)</Name>
+						<Name LcId="1031">DO Kanal 03 (Klemmpunkt 02)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x7000</Index>
+						<SubIndex>4</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DO channel 04 (terminal point 03)</Name>
+						<Name LcId="1031">DO Kanal 04 (Klemmpunkt 03)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x7000</Index>
+						<SubIndex>5</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DO channel 05 (terminal point 20)</Name>
+						<Name LcId="1031">DO Kanal 05 (Klemmpunkt 20)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x7000</Index>
+						<SubIndex>6</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DO channel 06 (terminal point 21)</Name>
+						<Name LcId="1031">DO Kanal 06 (Klemmpunkt 21)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x7000</Index>
+						<SubIndex>7</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DO channel 07 (terminal point 22)</Name>
+						<Name LcId="1031">DO Kanal 07 (Klemmpunkt 22)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+					<Entry>
+						<Index DependOnSlot="true">#x7000</Index>
+						<SubIndex>8</SubIndex>
+						<BitLen>1</BitLen>
+						<Name LcId="1033">DO channel 08 (terminal point 23)</Name>
+						<Name LcId="1031">DO Kanal 08 (Klemmpunkt 23)</Name>
+						<DataType>BOOL</DataType>
+					</Entry>
+				</RxPdo>
+				<Profile>
+					<Dictionary>
+						<DataTypes>
+							<DataType>
+								<Name>USINT</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<Name>ARRAY [0..8] OF BYTE</Name>
+								<BaseType>USINT</BaseType>
+								<BitSize>72</BitSize>
+								<ArrayInfo>
+									<LBound>0</LBound>
+									<Elements>9</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>ARRAY [0..249] OF BYTE</Name>
+								<BaseType>USINT</BaseType>
+								<BitSize>2000</BitSize>
+								<ArrayInfo>
+									<LBound>0</LBound>
+									<Elements>250</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT2000</Name>
+								<BitSize>2096</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Command</Name>
+									<Type>ARRAY [0..249] OF BYTE</Type>
+									<BitSize>2000</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Status</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>2016</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Response</Name>
+									<Type>ARRAY [0..8] OF BYTE</Type>
+									<BitSize>72</BitSize>
+									<BitOffs>2024</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										<Category>o</Category>
+									</Flags>
+								</SubItem>
+							</DataType>
+						</DataTypes>
+						<Objects>
+							<Object>
+								<Index DependOnSlot="true">#x2000</Index>
+								<Name>AXL F DO8/2 2A 1H PDI Write Tunnel</Name>
+								<Type>DT2000</Type>
+								<BitSize>2096</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<Category>m</Category>
+								</Flags>
+							</Object>
+						</Objects>
+					</Dictionary>
+				</Profile>
+				<ImageData16x14>424DD6020000000000003600000028000000100000000E0000000100180000000000A0020000C40E0000C40E00000000000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000000000070F002023083A39175750257364348E7641A6864BB98F55C78244C0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF1D1226F2B6FFF2B8FFF8BEFFFDC4FFFFC9FFFFD0FFFFD5FFFFDAFFFFF0FF9A66CDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF301F3FC38FE4C491E1CA97E5D19EE7D7A4E9DDAAEEE2B0F0E8B5F3FEC6FF9663C8FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF442E5CBE89E2BE8BDDC491E2CB98E5D19FE8D8A5EBDEAAEDE4B0F1F7C1FF875AB5FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF3C1462A768D9B784DBBE8ADEC491E1BD7FDEC586E1CC8EE6D496EAEEBAFB754F9DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA363D5B481DAB272DCFFFFFFFFFFFFFFFFFFFFFFFFE5A3F95D3A7DFFFFFFFFFFFF000000000000000000000000000000FFFFFFA972D4FFFFFF000000000000000000000000FFFFFF3B2255FFFFFFFFFFFF000000000000FFFFFF1F1F1F000000000000FFFFFF0000000000001F1F1F1F1F1F000000000000FFFFFFFFFFFFFFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFFFFFFFFFFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFF000000000000FFFFFFFFFFFF000000000000FFFFFFFFFFFFFFFFFF000000000000FFFFFF4F4F4F000000000000FFFFFF0000000000004F4F4F4F4F4F000000000000FFFFFFFFFFFFFFFFFF000000000000000000000000000000DFDFDFFFFFFFDFDFDF000000000000000000000000DFDFDFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</ImageData16x14>
+			</Module>
+			<!--AI Modules-->
+			<!--AO Modules-->
+			<!--AIO Modules-->
+			<!--FUNC Modules-->
+			<!--COMM Modules-->
+			<!--AXL F IOL8 2H-->
+			<!--AXL SE IOL4-->
+			<!--SBT Modules-->
+		</Modules>
+</EtherCATModule>

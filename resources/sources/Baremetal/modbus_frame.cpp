@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 modbus_frame.cpp - Shared Modbus message seam for the OpenPLC Modbus slave
-Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include "modbus_frame.h"

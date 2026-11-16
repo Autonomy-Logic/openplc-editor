@@ -1,11 +1,11 @@
 /**
  * CompilerPort — Abstracts the PLC compilation pipeline.
  *
- * Editor adapter: Delegates to main process via IPC (local tools: STruC++, arduino-cli).
- * Web adapter:    Delegates to remote API at compile.getedge.me (callGenerateSt, callCompileSt, etc.).
+ * Editor adapter: Delegates to main process via IPC (local tools: STruC++, arduino-cli, the WebAssembly toolchain).
+ * Web adapter:    Runs the shared pipeline in the browser (the WebAssembly toolchain for the simulator, WebRTC
+ *                 for Runtime v4 uploads).
  *
  * The UI only knows "compile this project" and receives progress events.
- * The adapter decides whether to call local binaries or remote HTTP endpoints.
  *
  * ## Editor IPC methods replaced:
  *   - window.bridge.runCompileProgram()
@@ -27,6 +27,7 @@ import type {
   PLCProjectData,
   Unsubscribe,
 } from './types'
+import type { WasmCompileRequest, WasmCompileResult } from './wasm-toolchain-types'
 
 export interface CompileProgramArgs {
   projectData: PLCProjectData
@@ -104,6 +105,12 @@ export interface CompilerPort {
     args: CompileLibraryArgs,
     onProgress: (event: CompileProgressEvent) => void,
   ): Promise<CompileLibraryResult>
+
+  /**
+   * Compile C and C++ sources to one WebAssembly module with the toolchain loaded at editor start. Objects of
+   * unchanged sources are reused within the session. Compiler output comes back in `diagnostics`.
+   */
+  compileToWasm(request: WasmCompileRequest): Promise<WasmCompileResult>
 
   /**
    * Subscribe to compilation output logs (stdout/stderr streaming).

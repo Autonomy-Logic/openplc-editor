@@ -1,0 +1,374 @@
+{
+  "name": "ecat_bus",
+  "protocol": "ethercat",
+  "ethercatConfig": {
+    "masterConfig": {
+      "enabled": true,
+      "networkInterface": "eth0",
+      "cycleTimeUs": 1000
+    },
+    "devices": [
+      {
+        "id": "ek1818",
+        "position": 1,
+        "name": "EK1818",
+        "esiDeviceRef": {
+          "repositoryItemId": "beckhoff-ek18xx",
+          "deviceIndex": 0
+        },
+        "vendorId": "0x00000002",
+        "productCode": "0x071a2c52",
+        "revisionNo": "0x00100000",
+        "addedFrom": "repository",
+        "config": {
+          "startupChecks": {
+            "checkVendorId": true,
+            "checkProductCode": true
+          },
+          "addressing": {
+            "ethercatAddress": 0
+          },
+          "timeouts": {
+            "sdoTimeoutMs": 1000,
+            "initToPreOpTimeoutMs": 3000,
+            "safeOpToOpTimeoutMs": 10000
+          },
+          "watchdog": {
+            "smWatchdogEnabled": true,
+            "smWatchdogMs": 100,
+            "pdiWatchdogEnabled": false,
+            "pdiWatchdogMs": 100
+          },
+          "distributedClocks": {
+            "dcEnabled": false,
+            "dcSyncUnitCycleUs": 0,
+            "dcSync0Enabled": false,
+            "dcSync0CycleUs": 0,
+            "dcSync0ShiftUs": 0,
+            "dcSync1Enabled": false,
+            "dcSync1CycleUs": 0,
+            "dcSync1ShiftUs": 0
+          },
+          "coeFlags": {
+            "pdoAssign": false,
+            "pdoConfig": false,
+            "completeAccess": true
+          }
+        },
+        "channelInfo": [
+          {
+            "channelId": "0x1a00-0x6000-0x1",
+            "name": "Input 1",
+            "direction": "input",
+            "pdoIndex": "0x1a00",
+            "entryIndex": "0x6000",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1a00-0x6010-0x1",
+            "name": "Input 2",
+            "direction": "input",
+            "pdoIndex": "0x1a00",
+            "entryIndex": "0x6010",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1a00-0x6020-0x1",
+            "name": "Input 3",
+            "direction": "input",
+            "pdoIndex": "0x1a00",
+            "entryIndex": "0x6020",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1a00-0x6030-0x1",
+            "name": "Input 4",
+            "direction": "input",
+            "pdoIndex": "0x1a00",
+            "entryIndex": "0x6030",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1a00-0x6040-0x1",
+            "name": "Input 5",
+            "direction": "input",
+            "pdoIndex": "0x1a00",
+            "entryIndex": "0x6040",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1a00-0x6050-0x1",
+            "name": "Input 6",
+            "direction": "input",
+            "pdoIndex": "0x1a00",
+            "entryIndex": "0x6050",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1a00-0x6060-0x1",
+            "name": "Input 7",
+            "direction": "input",
+            "pdoIndex": "0x1a00",
+            "entryIndex": "0x6060",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1a00-0x6070-0x1",
+            "name": "Input 8",
+            "direction": "input",
+            "pdoIndex": "0x1a00",
+            "entryIndex": "0x6070",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1600-0x7000-0x1",
+            "name": "Output 1",
+            "direction": "output",
+            "pdoIndex": "0x1600",
+            "entryIndex": "0x7000",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1600-0x7010-0x1",
+            "name": "Output 2",
+            "direction": "output",
+            "pdoIndex": "0x1600",
+            "entryIndex": "0x7010",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1600-0x7020-0x1",
+            "name": "Output 3",
+            "direction": "output",
+            "pdoIndex": "0x1600",
+            "entryIndex": "0x7020",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1600-0x7030-0x1",
+            "name": "Output 4",
+            "direction": "output",
+            "pdoIndex": "0x1600",
+            "entryIndex": "0x7030",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          }
+        ],
+        "rxPdos": [
+          {
+            "index": "0x1600",
+            "name": "Digital Outputs",
+            "assigned": true,
+            "fixed": true,
+            "mandatory": true,
+            "sm": 2,
+            "entries": [
+              {
+                "index": "0x7000",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Output 1",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0x7010",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Output 2",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0x7020",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Output 3",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0x7030",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Output 4",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0x0000",
+                "subIndex": "0x00",
+                "bitLen": 4,
+                "name": "Padding",
+                "dataType": "BIT"
+              }
+            ]
+          }
+        ],
+        "txPdos": [
+          {
+            "index": "0x1a00",
+            "name": "Digital Inputs",
+            "assigned": true,
+            "fixed": true,
+            "mandatory": true,
+            "sm": 3,
+            "entries": [
+              {
+                "index": "0x6000",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Input 1",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0x6010",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Input 2",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0x6020",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Input 3",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0x6030",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Input 4",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0x6040",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Input 5",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0x6050",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Input 6",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0x6060",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Input 7",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0x6070",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Input 8",
+                "dataType": "BOOL"
+              }
+            ]
+          }
+        ],
+        "slaveType": "digital_io",
+        "channelMappings": [
+          {
+            "channelId": "0x1a00-0x6000-0x1",
+            "iecLocation": "%IX0.0",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1a00-0x6010-0x1",
+            "iecLocation": "%IX0.1",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1a00-0x6020-0x1",
+            "iecLocation": "%IX0.2",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1a00-0x6030-0x1",
+            "iecLocation": "%IX0.3",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1a00-0x6040-0x1",
+            "iecLocation": "%IX0.4",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1a00-0x6050-0x1",
+            "iecLocation": "%IX0.5",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1a00-0x6060-0x1",
+            "iecLocation": "%IX0.6",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1a00-0x6070-0x1",
+            "iecLocation": "%IX0.7",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1600-0x7000-0x1",
+            "iecLocation": "%QX0.0",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1600-0x7010-0x1",
+            "iecLocation": "%QX0.1",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1600-0x7020-0x1",
+            "iecLocation": "%QX0.2",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1600-0x7030-0x1",
+            "iecLocation": "%QX0.3",
+            "alias": ""
+          }
+        ],
+        "isModularCoupler": false
+      }
+    ]
+  }
+}

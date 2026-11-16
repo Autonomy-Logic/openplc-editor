@@ -5,6 +5,7 @@ import { enrichDeviceData } from '@root/backend/shared/ethercat/enrich-device-da
 import type { EtherCATMasterConfig } from '@root/backend/shared/types/PLC/open-plc'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { Modal, ModalContent, ModalTitle } from '@root/frontend/components/_molecules/modal'
+import { useIsEditingLocked } from '@root/frontend/hooks/use-editing-lock'
 import type { OpenPLCStore } from '@root/frontend/store'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
 import { elementNameCollision } from '@root/frontend/store/slices/shared/name-collision'
@@ -23,10 +24,11 @@ import type { EtherCATDevice, NetworkInterface } from '@root/middleware/shared/p
 import { useEsi, useRuntime } from '@root/middleware/shared/providers/platform-context'
 import { sanitizeAxisName } from '@root/middleware/shared/utils/ethercat'
 import { buildAddressPool } from '@root/middleware/shared/utils/iec-address'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
+import { EditingLockBoundary } from '../../../../../_molecules/editing-lock-boundary'
 import { AdvancedTab } from './components/advanced-tab'
 import { RepositoryTab } from './components/repository-tab'
 import { ScanBusTab } from './components/scan-bus-tab'
@@ -62,7 +64,7 @@ function buildClaimedAddressSet(store: OpenPLCStore): Set<string> {
       vendorIoMapping: { entries: ioMapping },
       remoteDevices,
     },
-    resolveTargetCapabilities(boardInfo),
+    resolveAddressProducerCapabilities(boardInfo),
   )
   return new Set(pool.byAddress.keys())
 }
@@ -118,6 +120,7 @@ const EtherCATEditor = () => {
   } = useOpenPLCStore()
   const runtime = useRuntime()
   const esi = useEsi()
+  const isEditingLocked = useIsEditingLocked()
 
   const deviceName = editor.type === 'plc-remote-device' ? editor.meta.name : ''
   const projectPath = project.meta.path
@@ -167,17 +170,19 @@ const EtherCATEditor = () => {
 
   const syncDevicesToStore = useCallback(
     (devices: ConfiguredEtherCATDevice[]) => {
+      if (isEditingLocked) return
       projectActions.updateEthercatConfig(deviceName, {
         masterConfig: readEthercatConfig()?.masterConfig ?? masterConfig,
         devices,
       })
       workspaceActions.setEditingState('unsaved')
     },
-    [deviceName, projectActions, readEthercatConfig, masterConfig, workspaceActions],
+    [deviceName, projectActions, readEthercatConfig, masterConfig, workspaceActions, isEditingLocked],
   )
 
   const handleUpdateMasterConfig = useCallback(
     (updates: Partial<EtherCATMasterConfig>) => {
+      if (isEditingLocked) return
       const newMasterConfig = { ...masterConfig, ...updates }
       projectActions.updateEthercatConfig(deviceName, {
         masterConfig: newMasterConfig,
@@ -185,7 +190,7 @@ const EtherCATEditor = () => {
       })
       workspaceActions.setEditingState('unsaved')
     },
-    [deviceName, projectActions, masterConfig, configuredDevices, workspaceActions],
+    [deviceName, projectActions, masterConfig, configuredDevices, workspaceActions, isEditingLocked],
   )
 
   // Network interfaces state
@@ -279,7 +284,7 @@ const EtherCATEditor = () => {
         if (fetchedInterfaces.length > 0) {
           _setSelectedInterface((prev) => {
             const next = prev && names.has(prev) ? prev : fetchedInterfaces[0].name
-            handleUpdateMasterConfig({ networkInterface: next })
+            if (next !== masterConfig.networkInterface) handleUpdateMasterConfig({ networkInterface: next })
             return next
           })
         } else {
@@ -473,7 +478,9 @@ const EtherCATEditor = () => {
       for (const [index, { match, bestMatch, repoItem }] of toLoad.entries()) {
         setAddProgress({ current: index + 1, total: toLoad.length })
 
-        let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
+        let enriched: Partial<ConfiguredEtherCATDevice> & {
+          coeFlags?: NonNullable<ReturnType<typeof enrichDeviceData>>['coeFlags']
+        } = { channelMappings: [] }
         const result = await esi!.loadDeviceFull(bestMatch.repositoryItemId, bestMatch.deviceIndex)
         if (result.success && result.device) {
           enriched = enrichDeviceData(result.device, usedAddresses)
@@ -488,6 +495,9 @@ const EtherCATEditor = () => {
         const uniqueName = generateUniqueSlaveName(baseName, nameTaken)
         batch.add(uniqueName)
 
+        // Lift the CoE flags off `enriched` so they land on `config` —
+        // spreading `enriched` after `config` would otherwise drop them at the top level.
+        const { coeFlags: enrichedCoeFlags, ...enrichedRest } = enriched
         newDevices.push({
           id: uuidv4(),
           position: match.device.position,
@@ -500,9 +510,9 @@ const EtherCATEditor = () => {
           productCode: bestMatch.esiDevice.type.productCode,
           revisionNo: bestMatch.esiDevice.type.revisionNo,
           addedFrom: 'scan',
-          config: createDefaultSlaveConfig(),
+          config: { ...createDefaultSlaveConfig(), ...(enrichedCoeFlags && { coeFlags: enrichedCoeFlags }) },
           channelMappings: [],
-          ...enriched,
+          ...enrichedRest,
         })
       }
 
@@ -551,7 +561,9 @@ const EtherCATEditor = () => {
       setAddProgress({ current: 1, total: 1 })
 
       try {
-        let enriched: Partial<ConfiguredEtherCATDevice> = { channelMappings: [] }
+        let enriched: Partial<ConfiguredEtherCATDevice> & {
+          coeFlags?: NonNullable<ReturnType<typeof enrichDeviceData>>['coeFlags']
+        } = { channelMappings: [] }
         const result = await esi!.loadDeviceFull(ref.repositoryItemId, ref.deviceIndex)
         if (result.success && result.device) {
           enriched = enrichDeviceData(result.device, buildClaimedAddressSet(store))
@@ -569,6 +581,9 @@ const EtherCATEditor = () => {
           (name) => elementNameCollision(store.getState(), name, 'ethercat-slave') !== null,
         )
 
+        // Lift the CoE flags off `enriched` so they land on `config` —
+        // spreading `enriched` after `config` would otherwise drop them at the top level.
+        const { coeFlags: enrichedCoeFlags, ...enrichedRest } = enriched
         const newDevice: ConfiguredEtherCATDevice = {
           id: uuidv4(),
           position: nextPosition,
@@ -578,9 +593,9 @@ const EtherCATEditor = () => {
           productCode: device.type.productCode,
           revisionNo: device.type.revisionNo,
           addedFrom: 'repository',
-          config: createDefaultSlaveConfig(),
+          config: { ...createDefaultSlaveConfig(), ...(enrichedCoeFlags && { coeFlags: enrichedCoeFlags }) },
           channelMappings: [],
-          ...enriched,
+          ...enrichedRest,
         }
 
         syncDevicesToStore([...currentDevices, newDevice])
@@ -641,33 +656,35 @@ const EtherCATEditor = () => {
           value='scan-bus'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <ScanBusTab
-            isConnectedToRuntime={isConnectedToRuntime}
-            serviceAvailable={serviceAvailable}
-            serviceMessage={serviceMessage}
-            interfaces={interfaces}
-            selectedInterface={selectedInterface}
-            onSelectInterface={setSelectedInterface}
-            isLoadingInterfaces={isLoadingInterfaces}
-            interfaceError={interfaceError}
-            isScanning={isScanning}
-            scanError={scanError}
-            scanTimeMs={scanTimeMs}
-            scanMessage={scanMessage}
-            scannedDevices={scannedDevices}
-            onScan={() => void scanDevices()}
-            deviceMatches={deviceMatches}
-            selectedScannedDevices={selectedScannedDevices}
-            onSelectScannedDevice={handleSelectScannedDevice}
-            onSelectAllScanned={handleSelectAllScanned}
-            onAddSelectedFromScan={() => void handleAddSelectedFromScan()}
-            isAdding={isAdding}
-            addProgress={addProgress}
-            configuredDevices={configuredDevices}
-            repository={repository}
-            onAddDeviceFromBrowser={(...args) => void handleAddDeviceFromBrowser(...args)}
-            onRemoveDevice={handleRemoveDevice}
-          />
+          <EditingLockBoundary className='contents'>
+            <ScanBusTab
+              isConnectedToRuntime={isConnectedToRuntime}
+              serviceAvailable={serviceAvailable}
+              serviceMessage={serviceMessage}
+              interfaces={interfaces}
+              selectedInterface={selectedInterface}
+              onSelectInterface={setSelectedInterface}
+              isLoadingInterfaces={isLoadingInterfaces}
+              interfaceError={interfaceError}
+              isScanning={isScanning}
+              scanError={scanError}
+              scanTimeMs={scanTimeMs}
+              scanMessage={scanMessage}
+              scannedDevices={scannedDevices}
+              onScan={() => void scanDevices()}
+              deviceMatches={deviceMatches}
+              selectedScannedDevices={selectedScannedDevices}
+              onSelectScannedDevice={handleSelectScannedDevice}
+              onSelectAllScanned={handleSelectAllScanned}
+              onAddSelectedFromScan={() => void handleAddSelectedFromScan()}
+              isAdding={isAdding}
+              addProgress={addProgress}
+              configuredDevices={configuredDevices}
+              repository={repository}
+              onAddDeviceFromBrowser={(...args) => void handleAddDeviceFromBrowser(...args)}
+              onRemoveDevice={handleRemoveDevice}
+            />
+          </EditingLockBoundary>
         </Tabs.Content>
 
         {/* Repository Tab */}
@@ -675,14 +692,16 @@ const EtherCATEditor = () => {
           value='repository'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <RepositoryTab
-            repository={repository}
-            onRepositoryChange={setRepository}
-            projectPath={projectPath}
-            isLoadingRepository={isLoadingRepository}
-            repositoryError={repositoryError}
-            onRetryRepository={handleRetryRepository}
-          />
+          <EditingLockBoundary className='contents'>
+            <RepositoryTab
+              repository={repository}
+              onRepositoryChange={setRepository}
+              projectPath={projectPath}
+              isLoadingRepository={isLoadingRepository}
+              repositoryError={repositoryError}
+              onRetryRepository={handleRetryRepository}
+            />
+          </EditingLockBoundary>
         </Tabs.Content>
 
         {/* Advanced Tab */}
@@ -690,7 +709,9 @@ const EtherCATEditor = () => {
           value='advanced'
           className='flex min-h-0 flex-1 flex-col overflow-hidden pt-4 data-[state=inactive]:hidden'
         >
-          <AdvancedTab masterConfig={masterConfig} onUpdateMasterConfig={handleUpdateMasterConfig} />
+          <EditingLockBoundary className='contents'>
+            <AdvancedTab masterConfig={masterConfig} onUpdateMasterConfig={handleUpdateMasterConfig} />
+          </EditingLockBoundary>
         </Tabs.Content>
       </Tabs.Root>
 
@@ -782,4 +803,5 @@ const EtherCATEditor = () => {
 }
 
 export { EtherCATDeviceEditor } from './ethercat-device-editor'
+export { EtherCATModuleEditor } from './ethercat-module-editor'
 export { EtherCATEditor }

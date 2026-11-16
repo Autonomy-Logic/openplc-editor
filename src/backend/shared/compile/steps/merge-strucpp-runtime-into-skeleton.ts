@@ -20,6 +20,9 @@
  * is a new merged file map the pipeline consumes.
  */
 
+/** Where the board HAL lands in the firmware tree. */
+export const BOARD_HAL_SKELETON_PATH = 'src/arduino.cpp'
+
 export interface MergeStrucppRuntimeArgs {
   /** Arduino-cli firmware skeleton — bundled `Baremetal.ino`,
    *  arduino HAL headers, etc.  Keys are paths relative to the
@@ -65,7 +68,7 @@ export function mergeStrucppRuntimeIntoSkeleton(args: MergeStrucppRuntimeArgs): 
     merged[`src/${filename}`] = content
   }
   if (typeof args.boardHalContent === 'string' && args.boardHalContent.length > 0) {
-    merged['src/arduino.cpp'] = args.boardHalContent
+    merged[BOARD_HAL_SKELETON_PATH] = args.boardHalContent
   }
   return merged
 }

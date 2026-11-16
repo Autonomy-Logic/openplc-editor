@@ -2,12 +2,14 @@ import { useCallback, useEffect } from 'react'
 
 import { useAccelerator, useCapabilities, useProject, useTheme, useWindow } from '../../../middleware/shared/providers'
 import { executeExportPlcopen } from '../../services/export-actions'
+import { openDiagnosticsTab } from '../../services/io-diagnostics/open-tab'
 import { requestAppRefresh } from '../../services/refresh-app'
 import { restoreOpenProjectRoot } from '../../services/restore-open-project-root'
 import { executeSaveActiveFile, executeSaveProject } from '../../services/save-actions'
 import { executeSaveProjectAs } from '../../services/save-project-as'
 import { type OpenPLCStore, useOpenPLCStore, useOpenPLCStoreApi } from '../../store'
 import type { ModalTypes } from '../../store/slices/modal'
+import { selectIsEditingLocked } from '../../store/slices/workspace/selectors'
 import { canExportPdf } from '../../utils/print-availability'
 import { toast } from '../_features/[app]/toast/use-toast'
 
@@ -23,6 +25,9 @@ const quitAppRequest = (isUnsaved: boolean, openModal: (modal: ModalTypes, data?
 
 // The native menu disables project-only items on the start screen; this covers a keypress that beats the rebuild.
 const hasOpenProject = (store: OpenPLCStore) => store.getState().project.meta.path !== ''
+
+/** Whether editing accelerators are refused because a debug session is open. */
+const isEditingLocked = (store: OpenPLCStore) => selectIsEditingLocked(store.getState())
 
 const AcceleratorHandler = () => {
   const accelerator = useAccelerator()
@@ -240,10 +245,11 @@ const AcceleratorHandler = () => {
 
   useEffect(() => {
     const unsub = accelerator.onImportPlcopen(() => {
+      if (isEditingLocked(store)) return
       openModal('confirm-plcopen-import', null)
     })
     return unsub
-  }, [accelerator, openModal])
+  }, [store, accelerator, openModal])
 
   /**
    * Delete file
@@ -278,7 +284,7 @@ const AcceleratorHandler = () => {
     }
 
     const unsub = accelerator.onDeleteFile(() => {
-      if (!hasOpenProject(store)) return
+      if (!hasOpenProject(store) || isEditingLocked(store)) return
       handleDelete()
     })
     return unsub
@@ -351,6 +357,11 @@ const AcceleratorHandler = () => {
   }, [store, accelerator, toggleCollapse])
 
   /**
+   * Developer I/O image diagnostics, from the native menu on a framed window.
+   */
+  useEffect(() => accelerator.onOpenDiagnostics?.(() => openDiagnosticsTab(store)), [accelerator, store])
+
+  /**
    * Undo / Redo
    */
   // An invalid graphical body blocks history changes outright, so say so rather
@@ -365,7 +376,7 @@ const AcceleratorHandler = () => {
 
   useEffect(() => {
     const unsub = accelerator.onUndo(() => {
-      if (!hasOpenProject(store) || !meta?.name) return
+      if (!hasOpenProject(store) || isEditingLocked(store) || !meta?.name) return
       if (!undo(meta.name)) notifyStaleBody(meta.name)
     })
     return unsub
@@ -373,7 +384,7 @@ const AcceleratorHandler = () => {
 
   useEffect(() => {
     const unsub = accelerator.onRedo(() => {
-      if (!hasOpenProject(store) || !meta?.name) return
+      if (!hasOpenProject(store) || isEditingLocked(store) || !meta?.name) return
       if (!redo(meta.name)) notifyStaleBody(meta.name)
     })
     return unsub

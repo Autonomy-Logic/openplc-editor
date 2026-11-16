@@ -11,7 +11,7 @@ jest.mock('electron', () => ({
 }))
 
 jest.mock('@root/backend/editor/ethercat', () => ({
-  ESIService: jest.fn(),
+  EsiProjectFiles: jest.fn(),
 }))
 
 jest.mock('@root/backend/editor/library-manager/desktop-catalog-transport', () => ({
@@ -53,8 +53,8 @@ jest.mock('../../../backend/editor/utils', () => ({
   getProjectPath: jest.fn(),
 }))
 
-jest.mock('../../../backend/shared/simulator/simulator-module', () => ({
-  SimulatorModule: jest.fn(() => ({ stop: jest.fn() })),
+jest.mock('../../../backend/editor/simulator/desktop-simulator', () => ({
+  createDesktopSimulator: jest.fn(() => ({ stop: jest.fn(), isRunning: jest.fn(() => false) })),
 }))
 
 const createBridge = (mainWindow: { isDestroyed: jest.Mock; isMaximized: jest.Mock }) =>

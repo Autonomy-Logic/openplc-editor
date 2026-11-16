@@ -147,6 +147,9 @@ export type RemoteDeviceActions = {
 export type EtherCATDeviceActions = {
   delete: (busName: string, deviceId: string) => SharedResponse
   rename: (busName: string, deviceId: string, newName: string) => SharedResponse
+  /** Delete a module slotted into a modular coupler. The coupler and every
+   *  other module on it stay put; only the one module is removed. */
+  deleteModule: (busName: string, deviceId: string, moduleId: string) => SharedResponse
 }
 
 export type SnapshotActions = {

@@ -4,6 +4,7 @@ import type { Branch } from '../../../../../middleware/shared/ports/version-cont
 import { SwitchBranchCarryConflictError } from '../../../../../middleware/shared/ports/version-control-port'
 import { useCapabilities, useNavigation, useVersionControl } from '../../../../../middleware/shared/providers'
 import { useActiveBranch } from '../../../../hooks/use-active-branch'
+import { useIsEditingLocked } from '../../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../../store'
 import { toast } from '../../../../utils/toast'
 import { BranchSwitcherPopover } from './branch-switcher-popover'
@@ -18,6 +19,7 @@ type BranchStatusBarProps = {
 
 export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarProps) {
   const versionControl = useVersionControl()
+  const isEditingLocked = useIsEditingLocked()
   const caps = useCapabilities()
   const navigation = useNavigation()
   const checkIfAllFilesAreSaved = useOpenPLCStore((s) => s.fileActions.checkIfAllFilesAreSaved)
@@ -66,6 +68,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
 
   const doSwitch = useCallback(
     async (branch: Branch, strategy: 'discard' | 'carry' = 'discard') => {
+      if (isEditingLocked) return
       if (!versionControl) return
       try {
         await versionControl.switchBranch(projectId, branch.name, strategy)
@@ -80,7 +83,7 @@ export function BranchStatusBar({ projectId, onBranchSwitch }: BranchStatusBarPr
         return { ok: false as const, conflictedFiles: [] as string[] }
       }
     },
-    [projectId, versionControl, setActiveBranch, onBranchSwitch],
+    [projectId, versionControl, setActiveBranch, onBranchSwitch, isEditingLocked],
   )
 
   const handleSelect = useCallback(

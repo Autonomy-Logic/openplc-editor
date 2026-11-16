@@ -16,10 +16,6 @@
  *     `/api/upload`, web pipes through the orchestrator
  *     (WebRTC data channel with HTTP fallback).
  *
- * Plus the supporting Arduino-CLI lifecycle calls on editor that
- * the web platform's pre-provisioned compiler image makes redundant:
- * `installArduinoCore` and `installArduinoLib` are no-ops on web.
- *
  * Each method on this port takes the same canonical arguments
  * regardless of platform and returns the same canonical result
  * shape.  The pipeline orchestrator is fully platform-agnostic —
@@ -28,14 +24,14 @@
  * once and wires it into its `compiler-adapter.ts`.
  *
  * Editor-canonical contract: web's no-op implementations of
- * `installArduinoCore` / `installArduinoLib` / `uploadArduinoBoard`
- * / `uploadRuntimeV3` MUST resolve to `{ ok: true }` so the
+ * `uploadArduinoBoard` / `uploadRuntimeV3` MUST resolve to `{ ok: true }` so the
  * pipeline's ordering and downstream steps run identically on both
  * platforms.  Web simply skips work that's already handled
  * server-side, but the pipeline never knows.
  */
 
 import type { PLCProjectData, StructuredCompileError } from './types'
+import type { WasmCompileRequest, WasmCompileResult } from './wasm-toolchain-types'
 
 /**
  * Canonical progress callback the pipeline passes to every port
@@ -117,27 +113,24 @@ export interface CompileArduinoArgs {
    *  `examples/Baremetal/Baremetal.ino`, `src/generated.cpp`,
    *  `src/c_blocks.h`, `examples/Baremetal/c_blocks_code.cpp`,
    *  `src/defines.h`, and the bundled firmware skeleton + strucpp
-   *  runtime headers.  On editor: written to disk before
-   *  arduino-cli runs.  On web: POSTed in the request body. */
+   *  runtime headers.  Written to disk before arduino-cli runs; no
+   *  web target builds with arduino-cli. */
   files: Record<string, string>
   /** Argv suffix for arduino-cli compile (after the `compile`
    *  subcommand).  Comes from the shared `buildArduinoCliCompileArgs`
    *  helper. */
   argv: string[]
-  /** When `false`, arduino-cli is invoked with `--jobs 1` (web
-   *  default — backend runs many clients in sandboxes, so saturating
-   *  cores would starve concurrents).  When `true`, arduino-cli
-   *  defaults to `--jobs 0` (editor default — uses every core). */
+  /** When `false`, arduino-cli is invoked with `--jobs 1`.  When
+   *  `true`, arduino-cli defaults to `--jobs 0` (editor default — uses
+   *  every core). */
   parallel: boolean
 }
 
 export interface CompileArduinoResult {
   ok: boolean
-  /** Compiled firmware bytes (`.hex` for AVR).  Editor: read from
+  /** Compiled firmware bytes when the core produces a `.hex`.  Editor: read from
    *  the build output directory.  Web: base64-decoded from the
-   *  server response.  Caller decides whether to write to disk
-   *  (editor: stores the path; web: holds in memory and hands to
-   *  the simulator). */
+   *  server response. */
   binary?: Uint8Array
   errors?: StructuredCompileError[]
 }
@@ -172,8 +165,8 @@ export interface UploadResult {
 
 /** Arduino direct-upload (editor-only, used for non-simulator
  *  Arduino targets).  Web's adapter MUST no-op this with
- *  `{ ok: true }` — web only targets the simulator (avr8js, no
- *  device upload step) or runtime v4 (handled separately). */
+ *  `{ ok: true }` — web only targets the simulator (no device
+ *  upload step) or runtime v4 (handled separately). */
 export interface UploadArduinoBoardArgs {
   /** Path arduino-cli reads the compiled artefacts from.  Editor:
    *  the build output dir.  Web: ignored (no-op). */
@@ -201,67 +194,6 @@ export interface UploadRuntimeV3Args {
    *  device's v3 `/api/upload`. */
   programSt: string
   context: PlatformDeviceContext
-}
-
-/** Arduino-CLI core install (editor-only.  Web's adapter MUST
- *  no-op with `{ ok: true }` — web's compiler-service backend
- *  ships with every core preinstalled). */
-export interface InstallArduinoCoreArgs {
-  /** Core identifier (e.g. `arduino:avr`).  Editor invokes
-   *  `arduino-cli core install <id>`. */
-  coreId: string
-  /** Optional exact core version (e.g. `1.8.8`).  When set, the editor runs
-   *  `core install <id>@<version>`, which installs exactly that version and
-   *  fails if it is unavailable — required for prebuilt arduino-hal boards
-   *  whose precompiled `.a` is ABI-locked to that core version. */
-  coreVersion?: string
-  /** Optional third-party board-manager index URL (e.g. a vendor's
-   *  `package_<vendor>_index.json`).  Sourced from the VPP manifest's
-   *  `target.boardManagerUrl` (or `board_manager_url` in hals.json) and
-   *  forwarded to arduino-cli as `--additional-urls`.
-   *
-   *  Cores outside arduino-cli's built-in index are invisible without it:
-   *  `core install industrialshields:esp32` fails with "Platform not found"
-   *  unless the vendor index is supplied AND `core update-index` has been
-   *  run against it.  The editor does both; web ignores this field. */
-  boardManagerUrl?: string
-}
-
-/** Arduino-CLI library install (editor-only.  Same no-op
- *  contract as core install for web). */
-/** A library installed from a git URL rather than the Arduino index.
- *  Mirrors `ThirdPartyLibrary` in backend/shared/compile/third-party-libraries.ts,
- *  restated here so the port does not depend on a backend module. */
-export interface ThirdPartyLibraryRequest {
-  name: string
-  gitUrl: string
-  reason: string
-}
-
-export interface InstallArduinoLibArgs {
-  /** Legacy single-library id (kept for the placeholder call sites
-   *  that pre-date `extraLibraries`).  Empty string when the caller
-   *  is driving the install entirely from `extraLibraries`. */
-  libId: string
-  /** Libraries this target needs that are not in the Arduino index, installed
-   *  with `lib install --git-url`. Selected from the target's CAPABILITIES —
-   *  a board that cannot host an OPC-UA server never downloads the OPC-UA
-   *  stack. Web no-ops: its compile service pre-installs everything. */
-  thirdPartyLibraries?: ThirdPartyLibraryRequest[]
-  /** Per-board library list.  Sourced from the selected board's
-   *  `hals.json` `extra_libraries` (static boards) or its VPP
-   *  manifest `hal.extraArduinoLibraries` (VPP boards) — both feed
-   *  the same `BoardBuildInfo.extraArduinoLibraries` field.  The
-   *  editor adapter installs each name via `arduino-cli lib install`;
-   *  web no-ops (its compile-service backend pre-installs every lib).
-   *
-   *  A library declared here that arduino-cli can't resolve MUST
-   *  fail the install so the build aborts before generating a sketch
-   *  that won't link.  Per-device libs are the source of truth: if
-   *  the Opta package declares `Arduino_Opta_Blueprint` and
-   *  arduino-cli can't find it, the user needs to know now, not
-   *  during the arduino-cli compile step. */
-  extraLibraries?: string[]
 }
 
 /** Runtime-version probe (used for the v4 strucpp-compatibility
@@ -319,6 +251,18 @@ export type RuntimeV4Bundle = Record<string, string | Uint8Array>
 export interface PackageVppPluginArgs {
   /** Selected board name, looked up against installed VPP packages. */
   boardTarget: string
+  /** Compile outputs the device's `hal.screenConfigs` are generated from; passed to the shared builder untouched. */
+  screenConfigInputs: VppScreenConfigInputs
+}
+
+/** What the compile pipeline knows about the program, for the configs a VPP device declares for its screens. */
+export interface VppScreenConfigInputs {
+  /** `project.data.vppExtensions`, keyed by package id, then by storage id. */
+  vppExtensions: Record<string, Record<string, unknown>>
+  /** STruC++ `debug-map.json` of this compile; empty when none was produced. */
+  debugMapContent: string
+  /** Program instances of the resource, to turn `<POU>.<var>` into a debug path. */
+  instances: ReadonlyArray<{ name: string; program: string }>
 }
 
 export interface PackageVppPluginResult {
@@ -385,16 +329,12 @@ export interface CompilerPlatformPort {
   /** Step 3 of the editor pipeline.  Transpile project IR to ST. */
   transpileToSt(args: TranspileToStArgs, log: PlatformLog): Promise<TranspileToStResult>
 
-  /** Step 5 of the editor pipeline.  Arduino-CLI core install.
-   *  Web returns `{ ok: true }` immediately. */
-  installArduinoCore(args: InstallArduinoCoreArgs, log: PlatformLog): Promise<UploadResult>
-
-  /** Step 9 of the editor pipeline.  Arduino-CLI library install.
-   *  Web returns `{ ok: true }` immediately. */
-  installArduinoLib(args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult>
-
   /** Step 12 of the editor pipeline.  Arduino-CLI compile. */
   compileArduino(args: CompileArduinoArgs, log: PlatformLog): Promise<CompileArduinoResult>
+
+  /** Compiles a request with the in-editor WebAssembly toolchain; the simulator build uses it in place of
+   *  arduino-cli.  Both platforms run the same shared compile service, so the request and result are the same. */
+  compileToWasm(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult>
 
   /** Step 13a of the editor pipeline (runtime v4 path).  Upload
    *  the strucpp bundle. */

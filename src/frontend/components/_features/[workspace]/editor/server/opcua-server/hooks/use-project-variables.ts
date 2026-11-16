@@ -1,5 +1,6 @@
 import { useOpenPLCStore } from '@root/frontend/store'
 import { GLOBAL_SCOPE_POU } from '@root/frontend/utils/opcua/resolve-indices'
+import type { VariableTreeNode } from '@root/frontend/utils/opcua/types'
 import {
   findFunctionBlockVariables,
   findStructureVariables,
@@ -19,31 +20,6 @@ import { useMemo } from 'react'
 type ArrayData = {
   baseType: { definition: 'base-type'; value: string } | { definition: 'user-data-type'; value: string }
   dimensions: Array<{ dimension: string }>
-}
-
-/**
- * Tree node type for variable tree display
- */
-export interface VariableTreeNode {
-  id: string
-  name: string
-  type: 'program' | 'function_block' | 'global' | 'variable' | 'structure' | 'array'
-  variableType?: string // IEC type for variables
-  children?: VariableTreeNode[]
-  pouName: string
-  variablePath: string
-  isSelectable: boolean
-  isExpanded?: boolean
-  variableClass?: string
-  arrayInfo?: {
-    dimensions: string[]
-    elementType: string
-    totalLength: number
-  }
-  structureInfo?: {
-    structTypeName: string
-    fieldCount: number
-  }
 }
 
 /**
@@ -573,8 +549,4 @@ export const getSelectionState = (node: VariableTreeNode, selectedIds: Set<strin
   }
 
   return 'none'
-}
-
-export const isComplexType = (node: VariableTreeNode): boolean => {
-  return node.type === 'structure' || node.type === 'array' || node.type === 'function_block'
 }

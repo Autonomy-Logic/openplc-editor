@@ -1,0 +1,7078 @@
+<?xml version="1.0"?>
+<EtherCATInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="EtherCATInfo.xsd" Version="1.6">
+	<Vendor>
+		<Id>#x1DD</Id>
+		<Name>Delta Electronics, Inc.</Name>
+		<ImageData16x14>424DB6030000000000003600000028000000100000000E00000001002000000000008003000000000000000000000000000000000000CC8D3300CF7F0D00E7860000DE850100C5740500C17A0E00C27B0000C6750000D9860000D7840000D4870300D8850400D4850000DC890000C9760A00CDA57600F5E7B300C7892C00DC820100CF7D0400DFB86600EAD49B00E6D09700DEB96B00CA851F00DE942200D7820700D8800200D7890100D7850000CF872700FEF7DF00FFFFFF00DFC69000C8700000DBA34400EBCC8400D37B1100CD891800DCB86A00F8ECDF00F9FBEA00EED39800C9800C00DB880400D5790000E8C79000F6FFFF00F9F1FD00F5FBF100D5901D00E4A65100D6B77400CF7D0000D9830000DBA13D00F8FDFF00E7F5FD00FCFEFF00DAA04200D7780000D5993C00FEFCED00F0F7FC00F5E8F700FCFEFF00F0D8A400D57F1B00E9D6A100CF840A00E27E0100CF984400FDFDEA00F6FFFF00F6FAE700D9931F00D3790200EAD9B400F7FEFF00FDFAF500F3FDF500FBFAF700FFFFFF00D09D4600D3A85D00EFC98500C07C0000C37B0200E9B14500EED09700E8D5B400C67F1200DCA64A00F6FEFC00EBF7FD00FFFDF500FBFDEE00FAF9F900FDFDFD00EDE9C600B8751000E4BB8200DFCA8400CD821F00C2760000BB6A0000E5C98E00BF933C00F3E5C200F5FDFF00F9FAF800FDFDF800FEFBFB00F8FBFD00F8FAF700FEFFFE00D6B76F00C26F0000E1B05700F0D29E00DAC37C00E4CA9500E1B57400D7B47100FBFFFF00F3F8FA00FFFEF200FAFCFC00F8FCFD00FEFDF800FAFCF900F2FBFE00F8F2D700CA892300D2780000E0841300CFA14900D4A33800CB872200F9F4E500FCFDFD00FCFCFB00FDFDFC00FDFDFD00F7FBFE00FDFDF800FCFDF900F4F9FD00FFFFFC00E7C68800CC7A0200D6830900CD800000C5740000EACA9200FFFFFF00FDFCFB00FEFDFD00FDFDFE00FEFEFE00F8FAFD00FCFCFB00FEFEF800FAFBFD00F9F9FC00FCFAEF00D3953600CF810200DD8A0000D99C3600F9F9F500FDFBFB00FDFDFD00FDFCFD00FEFEFD00FDFDFD00FBFBFE00FDFDFD00FEFDFB00FDFCFD00F6F9FB00FAFFFF00EFDBB200CE810000CD800100E9DBB600FAFEFF00FDFBF900FCFEFE00FEFDFD00FEFEFE00FEFEFE00FEFDFB00FBFDFD00F7FDFE00FCFCFC00FCFDFB00FAFBFB00FDFDFC00CDA25100D2A25000FBFDFE00F8F9F900FDFDFB00FDFDFD00FDFDFC00FEFEFE00FEFEFE00FFFEF700F8FDFC00F0FCFD00FAFCFB00FEFEF500FDFBF600FDFEFF00E3D9BC00EDDCB000FBFCFE00F1F8F600FCFEF900FEFCFE00FCFDFD00FEFEFE00FEFEFE00</ImageData16x14>
+	</Vendor>
+	<Descriptions>
+		<Groups>
+			<Group>
+				<Type>ServoDrive</Type>
+				<Name LcId="1033">Servo Drives</Name>
+				<Image16x14>DRIVE</Image16x14>
+			</Group>
+		</Groups>
+		<Devices>
+			<Device Physics="YY">
+				<Type ProductCode="#x10305070" RevisionNo="#x02040608" UseLrdLwr="false">ASDA-A2-E CoE Drive</Type>
+				<Name LcId="1033"><![CDATA[Delta ASDA-A2-E EtherCAT(CoE) Drive Rev4]]></Name>
+				<Info>
+					<StateMachine>
+						<Timeout>
+							<PreopTimeout>3000</PreopTimeout>
+							<SafeopOpTimeout>10000</SafeopOpTimeout>
+							<BackToInitTimeout>5000</BackToInitTimeout>
+							<BackToSafeopTimeout>200</BackToSafeopTimeout>
+						</Timeout>
+						<Behavior StartToSafeopNoSync="true"/>
+					</StateMachine>
+					<Mailbox>
+						<Timeout>
+							<RequestTimeout>100</RequestTimeout>
+							<ResponseTimeout>2000</ResponseTimeout>
+						</Timeout>
+					</Mailbox>
+				</Info>
+				<GroupType>ServoDrive</GroupType>
+				
+				<Profile>
+					<ChannelInfo>
+						<ProfileNo>402</ProfileNo>
+					</ChannelInfo>
+					<Dictionary>
+						<DataTypes>
+							<DataType>
+								<!--Std type (see ETG.2000)-->
+								<Name>BIT2</Name>
+								<BitSize>2</BitSize>
+							</DataType>
+							<DataType>
+								<!--Std type (see ETG.2000)-->
+								<Name>BOOL</Name>
+								<BitSize>1</BitSize>
+							</DataType>
+							<DataType>
+								<!--Std type (see ETG.2000)-->
+								<Name>DINT</Name>
+								<BitSize>32</BitSize>
+							</DataType>
+							<DataType>
+								<!--Std type (see ETG.2000)-->
+								<Name>INT</Name>
+								<BitSize>16</BitSize>
+							</DataType>
+							<DataType>
+								<!--Std type (see ETG.2000)-->
+								<Name>SINT</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<!--Std type (see ETG.2000)-->
+								<Name>UDINT</Name>
+								<BitSize>32</BitSize>
+							</DataType>
+							<DataType>
+								<!--Std type (see ETG.2000)-->
+								<Name>UINT</Name>
+								<BitSize>16</BitSize>
+							</DataType>
+							<DataType>
+								<!--Std type (see ETG.2000)-->
+								<Name>USINT</Name>
+								<BitSize>8</BitSize>
+							</DataType>
+							<DataType>
+								<!--Device Name (0x1008) type-->
+								<Name>STRING(0)</Name>
+								<BitSize>0</BitSize>
+							</DataType>
+							<DataType>
+								<!--Hardware version string (0x1009)-->
+								<Name>STRING(8)</Name>
+								<BitSize>64</BitSize>
+							</DataType>
+							<DataType>
+								<!--Software version string (0x100A)-->
+								<Name>STRING(3)</Name>
+								<BitSize>24</BitSize>
+							</DataType>
+							<DataType>
+								<!--Ident object (0x1018) type-->
+								<Name>DT1018</Name>
+								<BitSize>144</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Vendor ID</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Product code</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Revision</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Serial number</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT160X</Name>
+								<BitSize>272</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Objects</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Mapping entry (1)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Mapping entry (2)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Mapping entry (3)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Mapping entry (4)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Mapping entry (5)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>144</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>Mapping entry (6)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>176</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>7</SubIdx>
+									<Name>Mapping entry (7)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>208</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>8</SubIdx>
+									<Name>Mapping entry (8)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>240</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1A0X</Name>
+								<BitSize>272</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Objects</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Mapping entry (1)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Mapping entry (2)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Mapping entry (3)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>80</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Mapping entry (4)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Mapping entry (5)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>144</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>Mapping entry (6)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>176</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>7</SubIdx>
+									<Name>Mapping entry (7)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>208</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>8</SubIdx>
+									<Name>Mapping entry (8)</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>240</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C00ARR</Name>
+								<BaseType>USINT</BaseType>
+								<BitSize>32</BitSize>
+								<ArrayInfo>
+									<LBound>1</LBound>
+									<Elements>4</Elements>
+								</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT1C00</Name>
+								<BitSize>48</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of SyncManager channels</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>SyncManager type</Name>
+									<Type>DT1C00ARR</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C1XARR</Name>
+								<BaseType>UINT</BaseType>
+								<BitSize>32</BitSize>
+									<ArrayInfo>
+										<LBound>1</LBound>
+										<Elements>2</Elements>
+									</ArrayInfo>
+							</DataType>
+							<DataType>
+								<Name>DT1C1X</Name>
+								<BitSize>48</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of assigned PDOs</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<Name>Index of assigned PDO</Name>
+									<Type>DT1C1XARR</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C32</Name>
+								<BitSize>400</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Sync mode</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>								
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Cycle time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Shift time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>64</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Sync modes supported</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>96</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Minimum cycle time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>Calc and copy time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>144</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>8</SubIdx>
+									<Name>Get cycle time</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>208</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>9</SubIdx>
+									<Name>Delay time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>224</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>10</SubIdx>
+									<Name>Sync0 time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>256</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>11</SubIdx>
+									<Name>Cycle exceeded counter</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>288</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>12</SubIdx>
+									<Name>SM event missed counter</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>320</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>13</SubIdx>
+									<Name>Shift too short counter</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>352</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>32</SubIdx>
+									<Name>Sync error</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>384</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT1C33</Name>
+								<BitSize>400</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>SubIndex 000</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Sync mode</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Cycle time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>3</SubIdx>
+									<Name>Shift time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>64</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+										</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>4</SubIdx>
+									<Name>Sync modes supported</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>96</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>5</SubIdx>
+									<Name>Minimum cycle time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>112</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>6</SubIdx>
+									<Name>Calc and copy time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>144</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>8</SubIdx>
+									<Name>Get cycle time</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>208</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>9</SubIdx>
+									<Name>Delay time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>224</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>10</SubIdx>
+									<Name>Sync0 time</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>256</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>11</SubIdx>
+									<Name>Cycle exceeded counter</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>288</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>12</SubIdx>
+									<Name>SM event missed counter</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>320</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>13</SubIdx>
+									<Name>Shift too short counter</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>352</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>32</SubIdx>
+									<Name>Sync error</Name>
+									<Type>BOOL</Type>
+									<BitSize>1</BitSize>
+									<BitOffs>384</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT607D</Name>
+								<BitSize>80</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Min position limit</Name>
+									<Type>DINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<PdoMapping>RT</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Max position limit</Name>
+									<Type>DINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<PdoMapping>RT</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT6093</Name>
+								<BitSize>80</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Numerator</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<PdoMapping>RT</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Feed constant</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<PdoMapping>RT</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT6099</Name>
+								<BitSize>80</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Speed during search for switch</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<PdoMapping>RT</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Speed during search for zero</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<PdoMapping>RT</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT60C1</Name>
+								<BitSize>64</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Position Command</Name>
+									<Type>DINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<PdoMapping>RT</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Symmetrical Diff</Name>
+									<Type>UINT</Type>
+									<BitSize>16</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<PdoMapping>RT</PdoMapping>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT60C2</Name>
+								<BitSize>48</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Interpolation time period</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Interpolation time index</Name>
+									<Type>SINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>32</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+							<DataType>
+								<Name>DT60FE</Name>
+								<BitSize>80</BitSize>
+								<SubItem>
+									<SubIdx>0</SubIdx>
+									<Name>Number of Entries</Name>
+									<Type>USINT</Type>
+									<BitSize>8</BitSize>
+									<BitOffs>0</BitOffs>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>1</SubIdx>
+									<Name>Physical outputs</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>16</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+										<PdoMapping>RT</PdoMapping>
+									</Flags>
+								</SubItem>
+								<SubItem>
+									<SubIdx>2</SubIdx>
+									<Name>Bit mask</Name>
+									<Type>UDINT</Type>
+									<BitSize>32</BitSize>
+									<BitOffs>48</BitOffs>
+									<Flags>
+										<Access>rw</Access>
+									</Flags>
+								</SubItem>
+							</DataType>
+						</DataTypes>
+						<Objects>
+							<Object>
+								<Index>#x1000</Index>
+								<Name>Device type</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Info>
+									<DefaultData>92010204</DefaultData>
+								</Info>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1001</Index>
+								<Name>Error Register</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1008</Index>
+								<Name>Device name</Name>
+								<Type>STRING(3)</Type>
+								<BitSize>24</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x100A</Index>
+								<Name>Software version</Name>
+								<Type>STRING(3)</Type>
+								<BitSize>24</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1018</Index>
+								<Name>Identity</Name>
+								<Type>DT1018</Type>
+								<BitSize>144</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1600</Index>
+								<Name>1st Receive PDO Mapping</Name>
+								<Type>DT160X</Type>
+								<BitSize>272</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1601</Index>
+								<Name>2nd Receive PDO Mapping</Name>
+								<Type>DT160X</Type>
+								<BitSize>272</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1602</Index>
+								<Name>3rd Receive PDO Mapping</Name>
+								<Type>DT160X</Type>
+								<BitSize>272</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1603</Index>
+								<Name>4th Receive PDO Mapping</Name>
+								<Type>DT160X</Type>
+								<BitSize>272</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1A00</Index>
+								<Name>1st Transmit PDO Mapping</Name>
+								<Type>DT1A0X</Type>
+								<BitSize>272</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1A01</Index>
+								<Name>2nd Transmit PDO Mapping</Name>
+								<Type>DT1A0X</Type>
+								<BitSize>272</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1A02</Index>
+								<Name>3rd Transmit PDO Mapping</Name>
+								<Type>DT1A0X</Type>
+								<BitSize>272</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1A03</Index>
+								<Name>4th Transmit PDO Mapping</Name>
+								<Type>DT1A0X</Type>
+								<BitSize>272</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1C00</Index>
+								<Name>Sync manager type</Name>
+								<Type>DT1C00</Type>
+								<BitSize>48</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1C12</Index>
+								<Name>RxPDO assign</Name>
+								<Type>DT1C1X</Type>
+								<BitSize>48</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1C13</Index>
+								<Name>TxPDO assign</Name>
+								<Type>DT1C1X</Type>
+								<BitSize>48</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x1c32</Index>
+								<Name>SM output parameter</Name>
+								<Type>DT1C32</Type>
+								<BitSize>400</BitSize>
+									<Flags>
+										<Access>ro</Access>
+									</Flags>
+							</Object>
+							<Object>
+								<Index>#x1c33</Index>
+								<Name>SM input parameter</Name>
+								<Type>DT1C33</Type>
+								<BitSize>400</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									</Flags>
+							</Object>
+  							<Object>
+								<Index>#x2000</Index>
+								<Name>DRV's Parameter  P0-00</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2001</Index>
+								<Name>DRV's Parameter  P0-01</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2002</Index>
+								<Name>DRV's Parameter  P0-02</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2003</Index>
+								<Name>DRV's Parameter  P0-03</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2004</Index>
+								<Name>DRV's Parameter  P0-04</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2005</Index>
+								<Name>DRV's Parameter  P0-05</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2006</Index>
+								<Name>DRV's Parameter  P0-06</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2007</Index>
+								<Name>DRV's Parameter  P0-07</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2008</Index>
+								<Name>DRV's Parameter  P0-08</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2009</Index>
+								<Name>DRV's Parameter  P0-09</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x200A</Index>
+								<Name>DRV's Parameter  P0-10</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x200B</Index>
+								<Name>DRV's Parameter  P0-11</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x200C</Index>
+								<Name>DRV's Parameter  P0-12</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x200D</Index>
+								<Name>DRV's Parameter  P0-13</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x200E</Index>
+								<Name>DRV's Parameter  P0-14</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x200F</Index>
+								<Name>DRV's Parameter  P0-15</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2010</Index>
+								<Name>DRV's Parameter  P0-16</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2011</Index>
+								<Name>DRV's Parameter  P0-17</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2012</Index>
+								<Name>DRV's Parameter  P0-18</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2013</Index>
+								<Name>DRV's Parameter  P0-19</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2014</Index>
+								<Name>DRV's Parameter  P0-20</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2015</Index>
+								<Name>DRV's Parameter  P0-21</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2016</Index>
+								<Name>DRV's Parameter  P0-22</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2017</Index>
+								<Name>DRV's Parameter  P0-23</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2018</Index>
+								<Name>DRV's Parameter  P0-24</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2019</Index>
+								<Name>DRV's Parameter  P0-25</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x201A</Index>
+								<Name>DRV's Parameter  P0-26</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x201B</Index>
+								<Name>DRV's Parameter  P0-27</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x201C</Index>
+								<Name>DRV's Parameter  P0-28</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x201D</Index>
+								<Name>DRV's Parameter  P0-29</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x201E</Index>
+								<Name>DRV's Parameter  P0-30</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x201F</Index>
+								<Name>DRV's Parameter  P0-31</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2020</Index>
+								<Name>DRV's Parameter  P0-32</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2021</Index>
+								<Name>DRV's Parameter  P0-33</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2022</Index>
+								<Name>DRV's Parameter  P0-34</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2023</Index>
+								<Name>DRV's Parameter  P0-35</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2024</Index>
+								<Name>DRV's Parameter  P0-36</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2025</Index>
+								<Name>DRV's Parameter  P0-37</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2026</Index>
+								<Name>DRV's Parameter  P0-38</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2027</Index>
+								<Name>DRV's Parameter  P0-39</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2028</Index>
+								<Name>DRV's Parameter  P0-40</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2029</Index>
+								<Name>DRV's Parameter  P0-41</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x202A</Index>
+								<Name>DRV's Parameter  P0-42</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x202B</Index>
+								<Name>DRV's Parameter  P0-43</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x202C</Index>
+								<Name>DRV's Parameter  P0-44</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x202D</Index>
+								<Name>DRV's Parameter  P0-45</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x202E</Index>
+								<Name>DRV's Parameter  P0-46</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x202F</Index>
+								<Name>DRV's Parameter  P0-47</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2030</Index>
+								<Name>DRV's Parameter  P0-48</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2031</Index>
+								<Name>DRV's Parameter  P0-49</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>							
+							<Object>
+								<Index>#x2032</Index>
+								<Name>DRV's Parameter  P0-50</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>	
+							<Object>
+								<Index>#x2033</Index>
+								<Name>DRV's Parameter  P0-51</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2034</Index>
+								<Name>DRV's Parameter  P0-52</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>							
+							<Object>
+								<Index>#x2100</Index>
+								<Name>DRV's Parameter  P1-00</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2101</Index>
+								<Name>DRV's Parameter  P1-01</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2102</Index>
+								<Name>DRV's Parameter  P1-02</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2103</Index>
+								<Name>DRV's Parameter  P1-03</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2104</Index>
+								<Name>DRV's Parameter  P1-04</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2105</Index>
+								<Name>DRV's Parameter  P1-05</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2106</Index>
+								<Name>DRV's Parameter  P1-06</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2107</Index>
+								<Name>DRV's Parameter  P1-07</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2108</Index>
+								<Name>DRV's Parameter  P1-08</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2109</Index>
+								<Name>DRV's Parameter  P1-09</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x210A</Index>
+								<Name>DRV's Parameter  P1-10</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x210B</Index>
+								<Name>DRV's Parameter  P1-11</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x210C</Index>
+								<Name>DRV's Parameter  P1-12</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x210D</Index>
+								<Name>DRV's Parameter  P1-13</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x210E</Index>
+								<Name>DRV's Parameter  P1-14</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x210F</Index>
+								<Name>DRV's Parameter  P1-15</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2110</Index>
+								<Name>DRV's Parameter  P1-16</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2111</Index>
+								<Name>DRV's Parameter  P1-17</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2112</Index>
+								<Name>DRV's Parameter  P1-18</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2113</Index>
+								<Name>DRV's Parameter  P1-19</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2114</Index>
+								<Name>DRV's Parameter  P1-20</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2115</Index>
+								<Name>DRV's Parameter  P1-21</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2116</Index>
+								<Name>DRV's Parameter  P1-22</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2117</Index>
+								<Name>DRV's Parameter  P1-23</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2118</Index>
+								<Name>DRV's Parameter  P1-24</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2119</Index>
+								<Name>DRV's Parameter  P1-25</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x211A</Index>
+								<Name>DRV's Parameter  P1-26</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x211B</Index>
+								<Name>DRV's Parameter  P1-27</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x211C</Index>
+								<Name>DRV's Parameter  P1-28</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x211D</Index>
+								<Name>DRV's Parameter  P1-29</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x211E</Index>
+								<Name>DRV's Parameter  P1-30</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x211F</Index>
+								<Name>DRV's Parameter  P1-31</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2120</Index>
+								<Name>DRV's Parameter  P1-32</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2121</Index>
+								<Name>DRV's Parameter  P1-33</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2122</Index>
+								<Name>DRV's Parameter  P1-34</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2123</Index>
+								<Name>DRV's Parameter  P1-35</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2124</Index>
+								<Name>DRV's Parameter  P1-36</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2125</Index>
+								<Name>DRV's Parameter  P1-37</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2126</Index>
+								<Name>DRV's Parameter  P1-38</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2127</Index>
+								<Name>DRV's Parameter  P1-39</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2128</Index>
+								<Name>DRV's Parameter  P1-40</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2129</Index>
+								<Name>DRV's Parameter  P1-41</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x212A</Index>
+								<Name>DRV's Parameter  P1-42</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x212B</Index>
+								<Name>DRV's Parameter  P1-43</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x212C</Index>
+								<Name>DRV's Parameter  P1-44</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x212D</Index>
+								<Name>DRV's Parameter  P1-45</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x212E</Index>
+								<Name>DRV's Parameter  P1-46</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x212F</Index>
+								<Name>DRV's Parameter  P1-47</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2130</Index>
+								<Name>DRV's Parameter  P1-48</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2131</Index>
+								<Name>DRV's Parameter  P1-49</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2132</Index>
+								<Name>DRV's Parameter  P1-50</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2133</Index>
+								<Name>DRV's Parameter  P1-51</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2134</Index>
+								<Name>DRV's Parameter  P1-52</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2135</Index>
+								<Name>DRV's Parameter  P1-53</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2136</Index>
+								<Name>DRV's Parameter  P1-54</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2137</Index>
+								<Name>DRV's Parameter  P1-55</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2138</Index>
+								<Name>DRV's Parameter  P1-56</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2139</Index>
+								<Name>DRV's Parameter  P1-57</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x213A</Index>
+								<Name>DRV's Parameter  P1-58</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x213B</Index>
+								<Name>DRV's Parameter  P1-59</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x213C</Index>
+								<Name>DRV's Parameter  P1-60</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x213D</Index>
+								<Name>DRV's Parameter  P1-61</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x213E</Index>
+								<Name>DRV's Parameter  P1-62</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x213F</Index>
+								<Name>DRV's Parameter  P1-63</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2140</Index>
+								<Name>DRV's Parameter  P1-64</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2141</Index>
+								<Name>DRV's Parameter  P1-65</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2142</Index>
+								<Name>DRV's Parameter  P1-66</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2143</Index>
+								<Name>DRV's Parameter  P1-67</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2144</Index>
+								<Name>DRV's Parameter  P1-68</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2145</Index>
+								<Name>DRV's Parameter  P1-69</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2146</Index>
+								<Name>DRV's Parameter  P1-70</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2147</Index>
+								<Name>DRV's Parameter  P1-71</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2148</Index>
+								<Name>DRV's Parameter  P1-72</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2149</Index>
+								<Name>DRV's Parameter  P1-73</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x214A</Index>
+								<Name>DRV's Parameter  P1-74</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x214B</Index>
+								<Name>DRV's Parameter  P1-75</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x214C</Index>
+								<Name>DRV's Parameter  P1-76</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x214D</Index>
+								<Name>DRV's Parameter  P1-77</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2200</Index>
+								<Name>DRV's Parameter  P2-00</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2201</Index>
+								<Name>DRV's Parameter  P2-01</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2202</Index>
+								<Name>DRV's Parameter  P2-02</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2203</Index>
+								<Name>DRV's Parameter  P2-03</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2204</Index>
+								<Name>DRV's Parameter  P2-04</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2205</Index>
+								<Name>DRV's Parameter  P2-05</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2206</Index>
+								<Name>DRV's Parameter  P2-06</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2207</Index>
+								<Name>DRV's Parameter  P2-07</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2208</Index>
+								<Name>DRV's Parameter  P2-08</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2209</Index>
+								<Name>DRV's Parameter  P2-09</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x220A</Index>
+								<Name>DRV's Parameter  P2-10</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x220B</Index>
+								<Name>DRV's Parameter  P2-11</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x220C</Index>
+								<Name>DRV's Parameter  P2-12</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x220D</Index>
+								<Name>DRV's Parameter  P2-13</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x220E</Index>
+								<Name>DRV's Parameter  P2-14</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x220F</Index>
+								<Name>DRV's Parameter  P2-15</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2210</Index>
+								<Name>DRV's Parameter  P2-16</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2211</Index>
+								<Name>DRV's Parameter  P2-17</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2212</Index>
+								<Name>DRV's Parameter  P2-18</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2213</Index>
+								<Name>DRV's Parameter  P2-19</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2214</Index>
+								<Name>DRV's Parameter  P2-20</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2215</Index>
+								<Name>DRV's Parameter  P2-21</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2216</Index>
+								<Name>DRV's Parameter  P2-22</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2217</Index>
+								<Name>DRV's Parameter  P2-23</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2218</Index>
+								<Name>DRV's Parameter  P2-24</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2219</Index>
+								<Name>DRV's Parameter  P2-25</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x221A</Index>
+								<Name>DRV's Parameter  P2-26</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x221B</Index>
+								<Name>DRV's Parameter  P2-27</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x221C</Index>
+								<Name>DRV's Parameter  P2-28</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x221D</Index>
+								<Name>DRV's Parameter  P2-29</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x221E</Index>
+								<Name>DRV's Parameter  P2-30</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x221F</Index>
+								<Name>DRV's Parameter  P2-31</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2220</Index>
+								<Name>DRV's Parameter  P2-32</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2221</Index>
+								<Name>DRV's Parameter  P2-33</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2222</Index>
+								<Name>DRV's Parameter  P2-34</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2223</Index>
+								<Name>DRV's Parameter  P2-35</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2224</Index>
+								<Name>DRV's Parameter  P2-36</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2225</Index>
+								<Name>DRV's Parameter  P2-37</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2226</Index>
+								<Name>DRV's Parameter  P2-38</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2227</Index>
+								<Name>DRV's Parameter  P2-39</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2228</Index>
+								<Name>DRV's Parameter  P2-40</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2229</Index>
+								<Name>DRV's Parameter  P2-41</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x222A</Index>
+								<Name>DRV's Parameter  P2-42</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x222B</Index>
+								<Name>DRV's Parameter  P2-43</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x222C</Index>
+								<Name>DRV's Parameter  P2-44</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x222D</Index>
+								<Name>DRV's Parameter  P2-45</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x222E</Index>
+								<Name>DRV's Parameter  P2-46</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x222F</Index>
+								<Name>DRV's Parameter  P2-47</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2230</Index>
+								<Name>DRV's Parameter  P2-48</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2231</Index>
+								<Name>DRV's Parameter  P2-49</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2232</Index>
+								<Name>DRV's Parameter  P2-50</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2233</Index>
+								<Name>DRV's Parameter  P2-51</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2234</Index>
+								<Name>DRV's Parameter  P2-52</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2235</Index>
+								<Name>DRV's Parameter  P2-53</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2236</Index>
+								<Name>DRV's Parameter  P2-54</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2237</Index>
+								<Name>DRV's Parameter  P2-55</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2238</Index>
+								<Name>DRV's Parameter  P2-56</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2239</Index>
+								<Name>DRV's Parameter  P2-57</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x223A</Index>
+								<Name>DRV's Parameter  P2-58</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x223B</Index>
+								<Name>DRV's Parameter  P2-59</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x223C</Index>
+								<Name>DRV's Parameter  P2-60</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x223D</Index>
+								<Name>DRV's Parameter  P2-61</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x223E</Index>
+								<Name>DRV's Parameter  P2-62</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x223F</Index>
+								<Name>DRV's Parameter  P2-63</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2240</Index>
+								<Name>DRV's Parameter  P2-64</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2241</Index>
+								<Name>DRV's Parameter  P2-65</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2242</Index>
+								<Name>DRV's Parameter  P2-66</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2243</Index>
+								<Name>DRV's Parameter  P2-67</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2244</Index>
+								<Name>DRV's Parameter  P2-68</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2245</Index>
+								<Name>DRV's Parameter  P2-69</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2246</Index>
+								<Name>DRV's Parameter  P2-70</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2247</Index>
+								<Name>DRV's Parameter  P2-71</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>							
+							<Object>
+								<Index>#x2248</Index>
+								<Name>DRV's Parameter  P2-72</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2249</Index>
+								<Name>DRV's Parameter  P2-73</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x224A</Index>
+								<Name>DRV's Parameter  P2-74</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>							
+							<Object>
+								<Index>#x224B</Index>
+								<Name>DRV's Parameter  P2-75</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x224C</Index>
+								<Name>DRV's Parameter  P2-76</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>							
+							<Object>
+								<Index>#x224D</Index>
+								<Name>DRV's Parameter  P2-77</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x224E</Index>
+								<Name>DRV's Parameter  P2-78</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>							
+							<Object>
+								<Index>#x224F</Index>
+								<Name>DRV's Parameter  P2-79</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2250</Index>
+								<Name>DRV's Parameter  P2-80</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2251</Index>
+								<Name>DRV's Parameter  P2-81</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2252</Index>
+								<Name>DRV's Parameter  P2-82</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>							
+							<Object>
+								<Index>#x2253</Index>
+								<Name>DRV's Parameter  P2-83</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2254</Index>
+								<Name>DRV's Parameter  P2-84</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>							
+							<Object>
+								<Index>#x2255</Index>
+								<Name>DRV's Parameter  P2-85</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2256</Index>
+								<Name>DRV's Parameter  P2-86</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2257</Index>
+								<Name>DRV's Parameter  P2-87</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2258</Index>
+								<Name>DRV's Parameter  P2-88</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2259</Index>
+								<Name>DRV's Parameter  P2-89</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x225A</Index>
+								<Name>DRV's Parameter  P2-90</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x225B</Index>
+								<Name>DRV's Parameter  P2-91</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x225C</Index>
+								<Name>DRV's Parameter  P2-92</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>							
+							<Object>
+								<Index>#x225D</Index>
+								<Name>DRV's Parameter  P2-93</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>																			
+							<Object>
+								<Index>#x2300</Index>
+								<Name>DRV's Parameter  P3-00</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2301</Index>
+								<Name>DRV's Parameter  P3-01</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2302</Index>
+								<Name>DRV's Parameter  P3-02</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2303</Index>
+								<Name>DRV's Parameter  P3-03</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2304</Index>
+								<Name>DRV's Parameter  P3-04</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2305</Index>
+								<Name>DRV's Parameter  P3-05</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2306</Index>
+								<Name>DRV's Parameter  P3-06</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2307</Index>
+								<Name>DRV's Parameter  P3-07</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2308</Index>
+								<Name>DRV's Parameter  P3-08</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2309</Index>
+								<Name>DRV's Parameter  P3-09</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x230A</Index>
+								<Name>DRV's Parameter  P3-10</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x230B</Index>
+								<Name>DRV's Parameter  P3-11</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x230C</Index>
+								<Name>DRV's Parameter  P3-12</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x230D</Index>
+								<Name>DRV's Parameter  P3-13</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x230E</Index>
+								<Name>DRV's Parameter  P3-14</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x230F</Index>
+								<Name>DRV's Parameter  P3-15</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2310</Index>
+								<Name>DRV's Parameter  P3-16</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2311</Index>
+								<Name>DRV's Parameter  P3-17</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2312</Index>
+								<Name>DRV's Parameter  P3-18</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2313</Index>
+								<Name>DRV's Parameter  P3-19</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2400</Index>
+								<Name>DRV's Parameter  P4-00</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2401</Index>
+								<Name>DRV's Parameter  P4-01</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2402</Index>
+								<Name>DRV's Parameter  P4-02</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2403</Index>
+								<Name>DRV's Parameter  P4-03</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2404</Index>
+								<Name>DRV's Parameter  P4-04</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2405</Index>
+								<Name>DRV's Parameter  P4-05</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2406</Index>
+								<Name>DRV's Parameter  P4-06</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2407</Index>
+								<Name>DRV's Parameter  P4-07</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2408</Index>
+								<Name>DRV's Parameter  P4-08</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2409</Index>
+								<Name>DRV's Parameter  P4-09</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x240A</Index>
+								<Name>DRV's Parameter  P4-10</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x240B</Index>
+								<Name>DRV's Parameter  P4-11</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x240C</Index>
+								<Name>DRV's Parameter  P4-12</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x240D</Index>
+								<Name>DRV's Parameter  P4-13</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x240E</Index>
+								<Name>DRV's Parameter  P4-14</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x240F</Index>
+								<Name>DRV's Parameter  P4-15</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2410</Index>
+								<Name>DRV's Parameter  P4-16</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2411</Index>
+								<Name>DRV's Parameter  P4-17</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2412</Index>
+								<Name>DRV's Parameter  P4-18</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2413</Index>
+								<Name>DRV's Parameter  P4-19</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2414</Index>
+								<Name>DRV's Parameter  P4-20</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2415</Index>
+								<Name>DRV's Parameter  P4-21</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2416</Index>
+								<Name>DRV's Parameter  P4-22</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2417</Index>
+								<Name>DRV's Parameter  P4-23</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2418</Index>
+								<Name>DRV's Parameter  P4-24</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2500</Index>
+								<Name>DRV's Parameter  P5-00</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2501</Index>
+								<Name>DRV's Parameter  P5-01</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2502</Index>
+								<Name>DRV's Parameter  P5-02</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2503</Index>
+								<Name>DRV's Parameter  P5-03</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2504</Index>
+								<Name>DRV's Parameter  P5-04</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2505</Index>
+								<Name>DRV's Parameter  P5-05</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2506</Index>
+								<Name>DRV's Parameter  P5-06</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2507</Index>
+								<Name>DRV's Parameter  P5-07</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2508</Index>
+								<Name>DRV's Parameter  P5-08</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2509</Index>
+								<Name>DRV's Parameter  P5-09</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x250A</Index>
+								<Name>DRV's Parameter  P5-10</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x250B</Index>
+								<Name>DRV's Parameter  P5-11</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x250C</Index>
+								<Name>DRV's Parameter  P5-12</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x250D</Index>
+								<Name>DRV's Parameter  P5-13</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x250E</Index>
+								<Name>DRV's Parameter  P5-14</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x250F</Index>
+								<Name>DRV's Parameter  P5-15</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2510</Index>
+								<Name>DRV's Parameter  P5-16</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2511</Index>
+								<Name>DRV's Parameter  P5-17</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2512</Index>
+								<Name>DRV's Parameter  P5-18</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2513</Index>
+								<Name>DRV's Parameter  P5-19</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2514</Index>
+								<Name>DRV's Parameter  P5-20</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2515</Index>
+								<Name>DRV's Parameter  P5-21</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2516</Index>
+								<Name>DRV's Parameter  P5-22</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2517</Index>
+								<Name>DRV's Parameter  P5-23</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2518</Index>
+								<Name>DRV's Parameter  P5-24</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2519</Index>
+								<Name>DRV's Parameter  P5-25</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x251A</Index>
+								<Name>DRV's Parameter  P5-26</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x251B</Index>
+								<Name>DRV's Parameter  P5-27</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x251C</Index>
+								<Name>DRV's Parameter  P5-28</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x251D</Index>
+								<Name>DRV's Parameter  P5-29</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x251E</Index>
+								<Name>DRV's Parameter  P5-30</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x251F</Index>
+								<Name>DRV's Parameter  P5-31</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2520</Index>
+								<Name>DRV's Parameter  P5-32</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2521</Index>
+								<Name>DRV's Parameter  P5-33</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2522</Index>
+								<Name>DRV's Parameter  P5-34</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2523</Index>
+								<Name>DRV's Parameter  P5-35</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2524</Index>
+								<Name>DRV's Parameter  P5-36</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2525</Index>
+								<Name>DRV's Parameter  P5-37</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2526</Index>
+								<Name>DRV's Parameter  P5-38</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2527</Index>
+								<Name>DRV's Parameter  P5-39</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2528</Index>
+								<Name>DRV's Parameter  P5-40</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2529</Index>
+								<Name>DRV's Parameter  P5-41</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x252A</Index>
+								<Name>DRV's Parameter  P5-42</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x252B</Index>
+								<Name>DRV's Parameter  P5-43</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x252C</Index>
+								<Name>DRV's Parameter  P5-44</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x252D</Index>
+								<Name>DRV's Parameter  P5-45</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x252E</Index>
+								<Name>DRV's Parameter  P5-46</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x252F</Index>
+								<Name>DRV's Parameter  P5-47</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2530</Index>
+								<Name>DRV's Parameter  P5-48</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2531</Index>
+								<Name>DRV's Parameter  P5-49</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2532</Index>
+								<Name>DRV's Parameter  P5-50</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2533</Index>
+								<Name>DRV's Parameter  P5-51</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2534</Index>
+								<Name>DRV's Parameter  P5-52</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2535</Index>
+								<Name>DRV's Parameter  P5-53</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2536</Index>
+								<Name>DRV's Parameter  P5-54</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2537</Index>
+								<Name>DRV's Parameter  P5-55</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2538</Index>
+								<Name>DRV's Parameter  P5-56</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2539</Index>
+								<Name>DRV's Parameter  P5-57</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x253A</Index>
+								<Name>DRV's Parameter  P5-58</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x253B</Index>
+								<Name>DRV's Parameter  P5-59</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x253C</Index>
+								<Name>DRV's Parameter  P5-60</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x253D</Index>
+								<Name>DRV's Parameter  P5-61</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x253E</Index>
+								<Name>DRV's Parameter  P5-62</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x253F</Index>
+								<Name>DRV's Parameter  P5-63</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2540</Index>
+								<Name>DRV's Parameter  P5-64</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2541</Index>
+								<Name>DRV's Parameter  P5-65</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2542</Index>
+								<Name>DRV's Parameter  P5-66</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2543</Index>
+								<Name>DRV's Parameter  P5-67</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2544</Index>
+								<Name>DRV's Parameter  P5-68</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2545</Index>
+								<Name>DRV's Parameter  P5-69</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2546</Index>
+								<Name>DRV's Parameter  P5-70</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2547</Index>
+								<Name>DRV's Parameter  P5-71</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2548</Index>
+								<Name>DRV's Parameter  P5-72</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2549</Index>
+								<Name>DRV's Parameter  P5-73</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x254A</Index>
+								<Name>DRV's Parameter  P5-74</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x254B</Index>
+								<Name>DRV's Parameter  P5-75</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x254C</Index>
+								<Name>DRV's Parameter  P5-76</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x254D</Index>
+								<Name>DRV's Parameter  P5-77</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x254E</Index>
+								<Name>DRV's Parameter  P5-78</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x254F</Index>
+								<Name>DRV's Parameter  P5-79</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2550</Index>
+								<Name>DRV's Parameter  P5-80</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2551</Index>
+								<Name>DRV's Parameter  P5-81</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2552</Index>
+								<Name>DRV's Parameter  P5-82</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2553</Index>
+								<Name>DRV's Parameter  P5-83</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2554</Index>
+								<Name>DRV's Parameter  P5-84</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2555</Index>
+								<Name>DRV's Parameter  P5-85</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2556</Index>
+								<Name>DRV's Parameter  P5-86</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2557</Index>
+								<Name>DRV's Parameter  P5-87</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2558</Index>
+								<Name>DRV's Parameter  P5-88</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2559</Index>
+								<Name>DRV's Parameter  P5-89</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x255A</Index>
+								<Name>DRV's Parameter  P5-90</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x255B</Index>
+								<Name>DRV's Parameter  P5-91</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x255C</Index>
+								<Name>DRV's Parameter  P5-92</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x255D</Index>
+								<Name>DRV's Parameter  P5-93</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x255E</Index>
+								<Name>DRV's Parameter  P5-94</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x255F</Index>
+								<Name>DRV's Parameter  P5-95</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2560</Index>
+								<Name>DRV's Parameter  P5-96</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2561</Index>
+								<Name>DRV's Parameter  P5-97</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2562</Index>
+								<Name>DRV's Parameter  P5-98</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2563</Index>
+								<Name>DRV's Parameter  P5-99</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2600</Index>
+								<Name>DRV's Parameter  P6-00</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2601</Index>
+								<Name>DRV's Parameter  P6-01</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2602</Index>
+								<Name>DRV's Parameter  P6-02</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2603</Index>
+								<Name>DRV's Parameter  P6-03</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2604</Index>
+								<Name>DRV's Parameter  P6-04</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2605</Index>
+								<Name>DRV's Parameter  P6-05</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2606</Index>
+								<Name>DRV's Parameter  P6-06</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2607</Index>
+								<Name>DRV's Parameter  P6-07</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2608</Index>
+								<Name>DRV's Parameter  P6-08</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2609</Index>
+								<Name>DRV's Parameter  P6-09</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x260A</Index>
+								<Name>DRV's Parameter  P6-10</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x260B</Index>
+								<Name>DRV's Parameter  P6-11</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x260C</Index>
+								<Name>DRV's Parameter  P6-12</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x260D</Index>
+								<Name>DRV's Parameter  P6-13</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x260E</Index>
+								<Name>DRV's Parameter  P6-14</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x260F</Index>
+								<Name>DRV's Parameter  P6-15</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2610</Index>
+								<Name>DRV's Parameter  P6-16</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2611</Index>
+								<Name>DRV's Parameter  P6-17</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2612</Index>
+								<Name>DRV's Parameter  P6-18</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2613</Index>
+								<Name>DRV's Parameter  P6-19</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2614</Index>
+								<Name>DRV's Parameter  P6-20</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2615</Index>
+								<Name>DRV's Parameter  P6-21</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2616</Index>
+								<Name>DRV's Parameter  P6-22</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2617</Index>
+								<Name>DRV's Parameter  P6-23</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2618</Index>
+								<Name>DRV's Parameter  P6-24</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2619</Index>
+								<Name>DRV's Parameter  P6-25</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x261A</Index>
+								<Name>DRV's Parameter  P6-26</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x261B</Index>
+								<Name>DRV's Parameter  P6-27</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x261C</Index>
+								<Name>DRV's Parameter  P6-28</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x261D</Index>
+								<Name>DRV's Parameter  P6-29</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x261E</Index>
+								<Name>DRV's Parameter  P6-30</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x261F</Index>
+								<Name>DRV's Parameter  P6-31</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2620</Index>
+								<Name>DRV's Parameter  P6-32</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2621</Index>
+								<Name>DRV's Parameter  P6-33</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2622</Index>
+								<Name>DRV's Parameter  P6-34</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2623</Index>
+								<Name>DRV's Parameter  P6-35</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2624</Index>
+								<Name>DRV's Parameter  P6-36</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2625</Index>
+								<Name>DRV's Parameter  P6-37</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2626</Index>
+								<Name>DRV's Parameter  P6-38</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2627</Index>
+								<Name>DRV's Parameter  P6-39</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2628</Index>
+								<Name>DRV's Parameter  P6-40</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2629</Index>
+								<Name>DRV's Parameter  P6-41</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x262A</Index>
+								<Name>DRV's Parameter  P6-42</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x262B</Index>
+								<Name>DRV's Parameter  P6-43</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x262C</Index>
+								<Name>DRV's Parameter  P6-44</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x262D</Index>
+								<Name>DRV's Parameter  P6-45</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x262E</Index>
+								<Name>DRV's Parameter  P6-46</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x262F</Index>
+								<Name>DRV's Parameter  P6-47</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2630</Index>
+								<Name>DRV's Parameter  P6-48</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2631</Index>
+								<Name>DRV's Parameter  P6-49</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2632</Index>
+								<Name>DRV's Parameter  P6-50</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2633</Index>
+								<Name>DRV's Parameter  P6-51</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2634</Index>
+								<Name>DRV's Parameter  P6-52</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2635</Index>
+								<Name>DRV's Parameter  P6-53</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2636</Index>
+								<Name>DRV's Parameter  P6-54</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2637</Index>
+								<Name>DRV's Parameter  P6-55</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2638</Index>
+								<Name>DRV's Parameter  P6-56</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2639</Index>
+								<Name>DRV's Parameter  P6-57</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x263A</Index>
+								<Name>DRV's Parameter  P6-58</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x263B</Index>
+								<Name>DRV's Parameter  P6-59</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x263C</Index>
+								<Name>DRV's Parameter  P6-60</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x263D</Index>
+								<Name>DRV's Parameter  P6-61</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x263E</Index>
+								<Name>DRV's Parameter  P6-62</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x263F</Index>
+								<Name>DRV's Parameter  P6-63</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2640</Index>
+								<Name>DRV's Parameter  P6-64</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2641</Index>
+								<Name>DRV's Parameter  P6-65</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2642</Index>
+								<Name>DRV's Parameter  P6-66</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2643</Index>
+								<Name>DRV's Parameter  P6-67</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2644</Index>
+								<Name>DRV's Parameter  P6-68</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2645</Index>
+								<Name>DRV's Parameter  P6-69</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2646</Index>
+								<Name>DRV's Parameter  P6-70</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2647</Index>
+								<Name>DRV's Parameter  P6-71</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2648</Index>
+								<Name>DRV's Parameter  P6-72</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2649</Index>
+								<Name>DRV's Parameter  P6-73</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x264A</Index>
+								<Name>DRV's Parameter  P6-74</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x264B</Index>
+								<Name>DRV's Parameter  P6-75</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x264C</Index>
+								<Name>DRV's Parameter  P6-76</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x264D</Index>
+								<Name>DRV's Parameter  P6-77</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x264E</Index>
+								<Name>DRV's Parameter  P6-78</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x264F</Index>
+								<Name>DRV's Parameter  P6-79</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2650</Index>
+								<Name>DRV's Parameter  P6-80</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2651</Index>
+								<Name>DRV's Parameter  P6-81</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2652</Index>
+								<Name>DRV's Parameter  P6-82</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2653</Index>
+								<Name>DRV's Parameter  P6-83</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2654</Index>
+								<Name>DRV's Parameter  P6-84</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2655</Index>
+								<Name>DRV's Parameter  P6-85</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2656</Index>
+								<Name>DRV's Parameter  P6-86</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2657</Index>
+								<Name>DRV's Parameter  P6-87</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2658</Index>
+								<Name>DRV's Parameter  P6-88</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2659</Index>
+								<Name>DRV's Parameter  P6-89</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x265A</Index>
+								<Name>DRV's Parameter  P6-90</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x265B</Index>
+								<Name>DRV's Parameter  P6-91</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x265C</Index>
+								<Name>DRV's Parameter  P6-92</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x265D</Index>
+								<Name>DRV's Parameter  P6-93</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x265E</Index>
+								<Name>DRV's Parameter  P6-94</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x265F</Index>
+								<Name>DRV's Parameter  P6-95</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2660</Index>
+								<Name>DRV's Parameter  P6-96</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2661</Index>
+								<Name>DRV's Parameter  P6-97</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2662</Index>
+								<Name>DRV's Parameter  P6-98</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2663</Index>
+								<Name>DRV's Parameter  P6-99</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2700</Index>
+								<Name>DRV's Parameter  P7-00</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2701</Index>
+								<Name>DRV's Parameter  P7-01</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2702</Index>
+								<Name>DRV's Parameter  P7-02</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2703</Index>
+								<Name>DRV's Parameter  P7-03</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2704</Index>
+								<Name>DRV's Parameter  P7-04</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2705</Index>
+								<Name>DRV's Parameter  P7-05</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2706</Index>
+								<Name>DRV's Parameter  P7-06</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2707</Index>
+								<Name>DRV's Parameter  P7-07</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2708</Index>
+								<Name>DRV's Parameter  P7-08</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2709</Index>
+								<Name>DRV's Parameter  P7-09</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x270A</Index>
+								<Name>DRV's Parameter  P7-10</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x270B</Index>
+								<Name>DRV's Parameter  P7-11</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x270C</Index>
+								<Name>DRV's Parameter  P7-12</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x270D</Index>
+								<Name>DRV's Parameter  P7-13</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x270E</Index>
+								<Name>DRV's Parameter  P7-14</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x270F</Index>
+								<Name>DRV's Parameter  P7-15</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2710</Index>
+								<Name>DRV's Parameter  P7-16</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2711</Index>
+								<Name>DRV's Parameter  P7-17</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2712</Index>
+								<Name>DRV's Parameter  P7-18</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2713</Index>
+								<Name>DRV's Parameter  P7-19</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2714</Index>
+								<Name>DRV's Parameter  P7-20</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2715</Index>
+								<Name>DRV's Parameter  P7-21</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2716</Index>
+								<Name>DRV's Parameter  P7-22</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2717</Index>
+								<Name>DRV's Parameter  P7-23</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2718</Index>
+								<Name>DRV's Parameter  P7-24</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2719</Index>
+								<Name>DRV's Parameter  P7-25</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x271A</Index>
+								<Name>DRV's Parameter  P7-26</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x271B</Index>
+								<Name>DRV's Parameter  P7-27</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x2800</Index>
+								<Name>Gantry Setting  P8-00</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x3100</Index>
+								<Name>PEPS Enable</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x3101</Index>
+								<Name>PEPS Motion type</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x3102</Index>
+								<Name>PEPS Local Axis</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x3103</Index>
+								<Name>Total PEPS Axis</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x3105</Index>
+								<Name>PEPS Interface</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x3106</Index>
+								<Name>PEPS Gantry Axis Status</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x603F</Index>
+								<Name>Error code</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6040</Index>
+								<Name>Controlword</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6041</Index>
+								<Name>Statusword</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x605B</Index>
+								<Name>Shutdown option code</Name>
+								<Type>INT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x605E</Index>
+								<Name>Fault reaction option code</Name>
+								<Type>INT</Type>
+								<BitSize>16</BitSize>
+							    <Flags>
+									<Access>rw</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6060</Index>
+								<Name>Modes of operation</Name>
+								<Type>SINT</Type>
+								<BitSize>8</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+							    <Index>#x6061</Index>
+								<Name>Modes of operation display</Name>
+								<Type>SINT</Type>
+								<BitSize>8</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6062</Index>
+								<Name>Position demand value</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6063</Index>
+								<Name>Position actual internal value</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6064</Index>
+								<Name>Position actual value</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6065</Index>
+								<Name>Following error window</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6067</Index>
+								<Name>Position window</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6068</Index>
+								<Name>Position window time</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x606B</Index>
+								<Name>Velocity demand value</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x606C</Index>
+								<Name>Velocity actual value</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x606D</Index>
+								<Name>Velocity window</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x606E</Index>
+								<Name>Velocity window time</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x606F</Index>
+								<Name>Velocity threshold</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6071</Index>
+								<Name>Target torque</Name>
+								<Type>INT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6072</Index>
+								<Name>Max torque</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6074</Index>
+								<Name>Torque demand value</Name>
+								<Type>INT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6075</Index>
+								<Name>Motor rated current</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6076</Index>
+								<Name>Motor rated torque</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6077</Index>
+								<Name>Torque actual value</Name>
+								<Type>INT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6078</Index>
+								<Name>Current actual value</Name>
+								<Type>INT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x607A</Index>
+								<Name>Target position</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x607C</Index>
+								<Name>Home offset</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x607D</Index>
+								<Name>Software position limit</Name>
+								<Type>DT607D</Type>
+								<BitSize>80</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x607E</Index>
+								<Name>Polarity</Name>
+								<Type>USINT</Type>
+								<BitSize>8</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x607F</Index>
+								<Name>Max profile velocity</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6080</Index>
+								<Name>Max motor speed</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6081</Index>
+								<Name>Profile velocity</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6083</Index>
+								<Name>Profile acceleration</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6084</Index>
+								<Name>Profile deceleration</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6085</Index>
+								<Name>Quick stop deceleration</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6086</Index>
+								<Name>Motion profile type</Name>
+								<Type>INT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6087</Index>
+								<Name>Torque slope</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6093</Index>
+								<Name>Position factor</Name>
+								<Type>DT6093</Type>
+								<BitSize>80</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6098</Index>
+								<Name>Homing method</Name>
+								<Type>SINT</Type>
+								<BitSize>8</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6099</Index>
+								<Name>Homing speeds</Name>
+								<Type>DT6099</Type>
+								<BitSize>80</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x609A</Index>
+								<Name>Homing acceleration</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60B0</Index>
+								<Name>Position offset</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60B1</Index>
+								<Name>Velocity offset</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60B2</Index>
+								<Name>Torque offset</Name>
+								<Type>INT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60B8</Index>
+								<Name>Touch Probe Function</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60B9</Index>
+								<Name>Touch Probe Status</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60BA</Index>
+								<Name>Touch Probe Pos1 Pos Value</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60BB</Index>
+								<Name>Touch Probe Pos1 Neg Value</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60BC</Index>
+								<Name>Touch Probe Pos2 Pos Value</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60BD</Index>
+								<Name>Touch Probe Pos2 Neg Value</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60C0</Index>
+								<Name>Interpolation sub mode select</Name>
+								<Type>INT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60C1</Index>
+								<Name>Interpolation data record</Name>
+								<Type>DT60C1</Type>
+								<BitSize>64</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60C2</Index>
+								<Name>Interpolation time period</Name>
+								<Type>DT60C2</Type>
+								<BitSize>48</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60C5</Index>
+								<Name>Max acceleration</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60C6</Index>
+								<Name>Max deceleration</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60E0</Index>
+								<Name>Positive torque limit</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60E1</Index>
+								<Name>Negtive torque limit</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60F2</Index>
+								<Name>Positioning option code</Name>
+								<Type>UINT</Type>
+								<BitSize>16</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60F4</Index>
+								<Name>Following error actual value</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60FC</Index>
+								<Name>Position demand internal value</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60FD</Index>
+								<Name>Digital inputs</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60FE</Index>
+								<Name>Digital outputs</Name>
+								<Type>DT60FE</Type>
+								<BitSize>80</BitSize>
+								<Flags>
+									<Access>ro</Access>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x60FF</Index>
+								<Name>Target velocity</Name>
+								<Type>DINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>rw</Access>
+									<PdoMapping>RT</PdoMapping>
+								</Flags>
+							</Object>
+							<Object>
+								<Index>#x6502</Index>
+								<Name>Supported drive modes</Name>
+								<Type>UDINT</Type>
+								<BitSize>32</BitSize>
+								<Flags>
+									<Access>ro</Access>
+									<PdoMapping>T</PdoMapping>
+								</Flags>
+							</Object>
+						</Objects>
+					</Dictionary>
+				</Profile>
+				
+				<Fmmu>Outputs</Fmmu>
+				<Fmmu>Inputs</Fmmu>
+				<Fmmu>MBoxState</Fmmu>
+				
+				<!-- SM0 MBX OUT (Master2Slave) -->
+				<Sm MinSize="34" MaxSize="192" DefaultSize="128" StartAddress="#x1000" ControlByte="#x36" Enable="1">MBoxOut</Sm>
+				
+				<!-- SM1 MBX INP (Slave2Master) -->
+				<Sm MinSize="34" MaxSize="192" DefaultSize="128" StartAddress="#x10C0" ControlByte="#x32" Enable="1">MBoxIn</Sm>
+				
+				<!-- SM2 ProcessData OUT (Master2Slave) -->
+				<Sm MinSize="1" MaxSize="256" DefaultSize="6" StartAddress="#x1180" ControlByte="#x24" Enable="1">Outputs</Sm>
+				
+				<!-- SM3 ProcessData INP (Slave2Master) -->
+				<Sm MinSize="1" MaxSize="256" DefaultSize="6" StartAddress="#x1480" ControlByte="#x00" Enable="1">Inputs</Sm>
+			
+				<!-- 1st RxPDO -->
+				<RxPdo Fixed="0" >
+					<Index>#x1600</Index>
+					<Name>1st RxPDO Mapping</Name>
+					<Exclude>#x1601</Exclude>
+					<Exclude>#x1602</Exclude>
+					<Exclude>#x1603</Exclude>
+					<Entry>
+						<Index>#x6040</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Control Word</Name>
+						<Comment>object 0x6040:0</Comment>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x607A</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>TargetPosition</Name>
+						<Comment>object 0x607A:0</Comment>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x60FF</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>TargetVelocity</Name>
+						<Comment>object 0x60FF:0</Comment>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6071</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>TargetTorque</Name>
+						<Comment>object 0x6071:0</Comment>
+						<DataType>INT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6060</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>ModeOfOperation</Name>
+						<Comment>object 0x6060:0</Comment>
+						<DataType>SINT</DataType>
+					</Entry>
+				</RxPdo>
+				<!-- 2nd RxPDO -->
+				<RxPdo Fixed="0" Sm="2">
+					<Index>#x1601</Index>
+					<Name>2nd RxPDO Mapping</Name>
+					<Exclude>#x1600</Exclude>
+					<Exclude>#x1602</Exclude>
+					<Exclude>#x1603</Exclude>
+					<Entry>
+						<Index>#x6040</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Control Word</Name>
+						<Comment>object 0x6040:0</Comment>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x607A</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>TargetPosition</Name>
+						<Comment>object 0x607A:0</Comment>
+						<DataType>DINT</DataType>
+					</Entry>
+				</RxPdo>
+				<!-- 3rd RxPDO -->
+				<RxPdo Fixed="0" >
+					<Index>#x1602</Index>
+					<Name>3rd RxPDO Mapping</Name>
+					<Exclude>#x1600</Exclude>
+					<Exclude>#x1601</Exclude>
+					<Exclude>#x1603</Exclude>
+					<Entry>
+						<Index>#x6040</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Control Word</Name>
+						<Comment>object 0x6040:0</Comment>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x60FF</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>TargetVelocity</Name>
+						<Comment>object 0x60FF:0</Comment>
+						<DataType>DINT</DataType>
+					</Entry>
+				</RxPdo>
+				<!-- 4th RxPDO -->
+				<RxPdo Fixed="0" >
+					<Index>#x1603</Index>
+					<Name>4th RxPDO Mapping</Name>
+					<Exclude>#x1600</Exclude>
+					<Exclude>#x1601</Exclude>
+					<Exclude>#x1602</Exclude>
+					<Entry>
+						<Index>#x6040</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Control Word</Name>
+						<Comment>object 0x6040:0</Comment>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6071</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>TargetTorque</Name>
+						<Comment>object 0x6071:0</Comment>
+						<DataType>INT</DataType>
+					</Entry>
+				</RxPdo>
+				
+				<!--1st TxPDO -->
+				<TxPdo Fixed="0" >
+					<Index>#x1a00</Index>
+					<Name>1st TxPDO Mapping</Name>
+					<Exclude>#x1a01</Exclude>
+					<Exclude>#x1a02</Exclude>
+					<Exclude>#x1a03</Exclude>
+					<Entry>
+						<Index>#x6041</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Status Word</Name>
+						<Comment>object 0x6041:0</Comment>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6064</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>ActualPosition</Name>
+						<Comment>object 0x6064:0</Comment>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x606C</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Velocity actual value</Name>
+						<Comment>object 0x606C:0</Comment>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6077</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>ActualTorque</Name>
+						<Comment>object 0x6077:0</Comment>
+						<DataType>INT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6061</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>8</BitLen>
+						<Name>ModeOfOperationDisplay</Name>
+						<Comment>object 0x6061:0</Comment>
+						<DataType>SINT</DataType>
+					</Entry>
+				</TxPdo>	
+				<!-- 2nd TxPDO -->
+				<TxPdo Fixed="0" Sm="3">
+					<Index>#x1a01</Index>
+					<Name>2nd TxPDO Mapping</Name>
+					<Exclude>#x1a00</Exclude>
+					<Exclude>#x1a02</Exclude>
+					<Exclude>#x1a03</Exclude>
+					<Entry>
+						<Index>#x6041</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Status Word</Name>
+						<Comment>object 0x6041:0</Comment>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6064</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>ActualPosition</Name>
+						<Comment>object 0x6064:0</Comment>
+						<DataType>DINT</DataType>
+					</Entry>
+				</TxPdo>			
+				<!-- 3rd TxPDO -->
+				<TxPdo Fixed="0" >
+					<Index>#x1a02</Index>
+					<Name>3rd TxPDO Mapping</Name>
+					<Exclude>#x1a00</Exclude>
+					<Exclude>#x1a01</Exclude>
+					<Exclude>#x1a03</Exclude>
+					<Entry>
+						<Index>#x6041</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Status Word</Name>
+						<Comment>object 0x6041:0</Comment>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6064</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>ActualPosition</Name>
+						<Comment>object 0x6064:0</Comment>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x606C</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>Velocity actual value</Name>
+						<Comment>object 0x606C:0</Comment>
+						<DataType>DINT</DataType>
+					</Entry>
+				</TxPdo>
+				<!-- 4th TxPDO -->
+				<TxPdo Fixed="0" >
+					<Index>#x1a03</Index>
+					<Name>4th TxPDO Mapping</Name>
+					<Exclude>#x1a00</Exclude>
+					<Exclude>#x1a01</Exclude>
+					<Exclude>#x1a02</Exclude>
+					<Entry>
+						<Index>#x6041</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>Status Word</Name>
+						<Comment>object 0x6041:0</Comment>
+						<DataType>UINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6064</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>32</BitLen>
+						<Name>ActualPosition</Name>
+						<Comment>object 0x6064:0</Comment>
+						<DataType>DINT</DataType>
+					</Entry>
+					<Entry>
+						<Index>#x6077</Index>
+						<SubIndex>0</SubIndex>
+						<BitLen>16</BitLen>
+						<Name>ActualTorque</Name>
+						<Comment>object 0x6077:0</Comment>
+						<DataType>INT</DataType>
+					</Entry>
+				</TxPdo>
+				
+				<Mailbox DataLinkLayer="true">
+					<CoE SdoInfo="true" PdoAssign="true" PdoConfig="true">
+						<InitCmd>
+							<Transition>PS</Transition>
+							<Index>#x6060</Index>
+							<SubIndex>0</SubIndex>
+							<Data>08</Data>
+							<Comment>Op mode</Comment>
+						</InitCmd>
+						<InitCmd>
+							<Transition>PS</Transition>
+							<Index>#x60C2</Index>
+							<SubIndex>1</SubIndex>
+							<Data>01</Data>
+							<Comment>Interpolation time period</Comment>
+						</InitCmd>
+						<InitCmd>
+							<Transition>PS</Transition>
+							<Index>#x60C2</Index>
+							<SubIndex>2</SubIndex>
+							<Data>FD</Data>
+						<Comment>Interpolation time index</Comment>
+						</InitCmd>
+					</CoE>
+				</Mailbox>
+
+				<Dc Unknown64Bit="true">
+					<OpMode>
+						<Name>DC</Name>
+						<Desc>DC-Synchronous</Desc>
+						<AssignActivate>#x300</AssignActivate>
+						<CycleTimeSync0 Factor="1">0</CycleTimeSync0>
+						<ShiftTimeSync0>0</ShiftTimeSync0>
+					</OpMode>
+					<OpMode>
+						<Name>Free Run</Name>
+						<Desc>Free Run</Desc>
+						<AssignActivate>#x0</AssignActivate>
+					</OpMode>
+				</Dc>
+				
+				<Eeprom>
+					<ByteSize>512</ByteSize>
+					<ConfigData>08000066e8030000000000000000</ConfigData>
+				</Eeprom>
+				<Image16x14>DRIVE</Image16x14>
+			</Device>
+		</Devices>
+	</Descriptions>
+</EtherCATInfo>

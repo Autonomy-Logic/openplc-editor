@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
+import { useIsEditingLocked } from '../../../../hooks/use-editing-lock'
 import { GraphicalDiffViewer, isGraphicalFile } from '../editor/diff-viewer'
 import { useDiffEditorTeardown, useDiffModelPaths } from '../editor/diff-viewer/use-diff-editor-teardown'
 import { ensureOpenplcThemes } from '../editor/monaco/theme-utils'
@@ -220,6 +221,7 @@ export type BranchMergeViewProps = {
 
 export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, onMerged }: BranchMergeViewProps) {
   const versionControl = useVersionControl()
+  const isEditingLocked = useIsEditingLocked()
   // Reversed teardown for the directly-mounted Monaco diff editor, or disposing the
   // screen throws "TextModel got disposed before DiffEditorWidget model got reset".
   const diffEditorRef = useDiffEditorTeardown()
@@ -413,6 +415,7 @@ export function BranchMergeView({ projectId, sourceBranch, targetParam, onBack, 
   const finishAndClose = onMerged
 
   const runMerge = async (shouldDelete: boolean) => {
+    if (isEditingLocked) return
     if (!versionControl?.mergeBranches) return
 
     setMergeError(null)

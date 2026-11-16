@@ -11,7 +11,7 @@ const TableActionButton = ({ className, children, ...props }: TableActionButtonP
   return (
     <button
       className={cn(
-        'hover:cursor-pointer hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900',
+        'hover:cursor-pointer hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-neutral-900',
         className,
       )}
       {...props}

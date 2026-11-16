@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 opcua_nodes.h - address-space construction
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 */
 
 #ifndef OPCUA_NODES_H

@@ -41,9 +41,11 @@ import { LIBRARY_MANIFEST_TAB_NAME } from '@root/frontend/store/slices/tabs/util
 import * as monaco from 'monaco-editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { useIsEditingLocked } from '../../../../../hooks/use-editing-lock'
 import { applyThemeNow, ensureOpenplcThemes } from '../monaco/theme-utils'
 
 const LibraryManifestEditor = () => {
+  const isEditingLocked = useIsEditingLocked()
   const manifestContent = useOpenPLCStore((s) => s.project.data.libraryManifest ?? '')
   const shouldUseDarkMode = useOpenPLCStore((s) => s.workspace.systemConfigs.shouldUseDarkMode)
   const updateLibraryManifest = useOpenPLCStore((s) => s.projectActions.updateLibraryManifest)
@@ -150,6 +152,7 @@ const LibraryManifestEditor = () => {
         beforeMount={handleBeforeMount}
         onMount={handleEditorMount}
         options={{
+          readOnly: isEditingLocked,
           minimap: { enabled: false },
           fontSize: 13,
           tabSize: 2,

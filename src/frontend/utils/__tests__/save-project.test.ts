@@ -1,6 +1,6 @@
 import type { PLCPou } from '../../../middleware/shared/ports/types'
 import type { EditorLike } from '../save-project'
-import { collectDebugVariables, sanitizePou } from '../save-project'
+import { codeViewBuffer, collectDebugVariables, hasUnappliedVariablesText, sanitizePou } from '../save-project'
 
 // ---------------------------------------------------------------------------
 // sanitizePou
@@ -93,6 +93,93 @@ describe('sanitizePou', () => {
     }
     const result = sanitizePou(basePou, editor)
     expect((result as PLCPou & { variablesText?: string }).variablesText).toBe('')
+  })
+
+  it('writes an unclosed code-view buffer verbatim, so a refused build loses nothing the user typed', () => {
+    const buffer = 'VAR\n  bFirstScan : BOOL := TRUE; (* Executado (* ciclo 1 *)\n  Q1 AT %QX0.0 : BOOL;'
+    const editor: EditorLike = {
+      type: 'plc-textual',
+      meta: { name: 'MyProgram' },
+      variable: { display: 'code', code: buffer },
+    }
+    const stored: PLCPou = { ...basePou, variablesText: 'VAR\nEND_VAR', variablesTextUnparsed: true }
+
+    expect(sanitizePou(stored, editor).variablesText).toBe(buffer)
+  })
+})
+
+describe('codeViewBuffer', () => {
+  const buffer = 'VAR\n  x : INT;\nEND_VAR'
+
+  it('returns the buffer of a textual editor in code display', () => {
+    expect(
+      codeViewBuffer({ type: 'plc-textual', meta: { name: 'P' }, variable: { display: 'code', code: buffer } }),
+    ).toBe(buffer)
+  })
+
+  it('returns the buffer of a graphical editor in code display', () => {
+    expect(
+      codeViewBuffer({ type: 'plc-graphical', meta: { name: 'P' }, variable: { display: 'code', code: buffer } }),
+    ).toBe(buffer)
+  })
+
+  it('returns an empty buffer as the empty string, not as missing', () => {
+    expect(codeViewBuffer({ type: 'plc-textual', meta: { name: 'P' }, variable: { display: 'code', code: '' } })).toBe(
+      '',
+    )
+  })
+
+  it('has no buffer in table display', () => {
+    expect(codeViewBuffer({ type: 'plc-textual', meta: { name: 'P' }, variable: { display: 'table' } })).toBeUndefined()
+  })
+
+  it('has no buffer when the code is null or absent', () => {
+    expect(
+      codeViewBuffer({ type: 'plc-textual', meta: { name: 'P' }, variable: { display: 'code', code: null } }),
+    ).toBeUndefined()
+    expect(codeViewBuffer({ type: 'plc-textual', meta: { name: 'P' }, variable: { display: 'code' } })).toBeUndefined()
+  })
+
+  it('has no buffer without an editor, or for an editor that is not a POU editor', () => {
+    expect(codeViewBuffer(undefined)).toBeUndefined()
+    expect(codeViewBuffer({ type: 'plc-textual', meta: { name: 'P' } })).toBeUndefined()
+    expect(
+      codeViewBuffer({ type: 'other', meta: { name: 'P' }, variable: { display: 'code', code: buffer } }),
+    ).toBeUndefined()
+  })
+})
+
+describe('hasUnappliedVariablesText', () => {
+  const stored = 'VAR\n  x : INT;\nEND_VAR'
+  const pou = (over: Partial<PLCPou> = {}): PLCPou => ({
+    name: 'P',
+    pouType: 'program',
+    interface: { variables: [] },
+    body: { language: 'st', value: '' },
+    variablesText: stored,
+    ...over,
+  })
+  const codeView = (code: string): EditorLike => ({
+    type: 'plc-textual',
+    meta: { name: 'P' },
+    variable: { display: 'code', code },
+  })
+
+  it('is false when the buffer equals the stored text', () => {
+    expect(hasUnappliedVariablesText(pou(), codeView(stored))).toBe(false)
+  })
+
+  it('is true when the buffer differs from the stored text', () => {
+    expect(hasUnappliedVariablesText(pou(), codeView('VAR\n  x : INT;'))).toBe(true)
+  })
+
+  it('is true for a POU whose stored text could not be parsed, with or without a buffer', () => {
+    expect(hasUnappliedVariablesText(pou({ variablesTextUnparsed: true }), undefined)).toBe(true)
+    expect(hasUnappliedVariablesText(pou({ variablesTextUnparsed: true }), codeView(stored))).toBe(true)
+  })
+
+  it('is false without an editor for a POU that parsed', () => {
+    expect(hasUnappliedVariablesText(pou(), undefined)).toBe(false)
   })
 })
 

@@ -1,0 +1,1680 @@
+{
+  "name": "bus_a",
+  "protocol": "ethercat",
+  "ethercatConfig": {
+    "masterConfig": {
+      "enabled": true,
+      "networkInterface": "eth0",
+      "cycleTimeUs": 1000
+    },
+    "devices": [
+      {
+        "id": "ur20-coupler",
+        "position": 1,
+        "name": "UR20_Coupler",
+        "esiDeviceRef": {
+          "repositoryItemId": "ur20-fbc",
+          "deviceIndex": 0
+        },
+        "vendorId": "0x00000230",
+        "productCode": "0x4F911C30",
+        "revisionNo": "0x00000001",
+        "addedFrom": "repository",
+        "config": {
+          "startupChecks": {
+            "checkVendorId": true,
+            "checkProductCode": true
+          },
+          "addressing": {
+            "ethercatAddress": 0
+          },
+          "timeouts": {
+            "sdoTimeoutMs": 1000,
+            "initToPreOpTimeoutMs": 3000,
+            "safeOpToOpTimeoutMs": 10000
+          },
+          "watchdog": {
+            "smWatchdogEnabled": true,
+            "smWatchdogMs": 100,
+            "pdiWatchdogEnabled": false,
+            "pdiWatchdogMs": 100
+          },
+          "distributedClocks": {
+            "dcEnabled": false,
+            "dcSyncUnitCycleUs": 0,
+            "dcSync0Enabled": false,
+            "dcSync0CycleUs": 0,
+            "dcSync0ShiftUs": 0,
+            "dcSync1Enabled": false,
+            "dcSync1CycleUs": 0,
+            "dcSync1ShiftUs": 0
+          },
+          "coeFlags": {
+            "pdoAssign": false,
+            "pdoConfig": true,
+            "completeAccess": true
+          }
+        },
+        "channelInfo": [
+          {
+            "channelId": "0x1AFF-0xF100-0x1",
+            "name": "Summarized module diagnosis",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x2",
+            "name": "Station pending",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0x2",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x3",
+            "name": "Errorbit 2",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0x3",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x4",
+            "name": "Systembus error",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0x4",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x5",
+            "name": "Errorbit 4",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0x5",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x6",
+            "name": "Errorbit 5",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0x6",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x7",
+            "name": "I/O-Configuration error",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0x7",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x8",
+            "name": "Masterconfiguration error",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0x8",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x9",
+            "name": "Errorbit 8",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0x9",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0xA",
+            "name": "Errorbit 9",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0xA",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0xB",
+            "name": "Force mode active",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0xB",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0xC",
+            "name": "Errorbit 11",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0xC",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0xD",
+            "name": "Errorbit 12",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0xD",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0xE",
+            "name": "Uout error",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0xE",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0xF",
+            "name": "Usys error",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0xF",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x10",
+            "name": "IOLink event available",
+            "direction": "input",
+            "pdoIndex": "0x1AFF",
+            "entryIndex": "0xF100",
+            "entrySubIndex": "0x10",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x1",
+            "name": "Controlbit 0",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0x1",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x2",
+            "name": "Controlbit 1",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0x2",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x3",
+            "name": "Controlbit 2",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0x3",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x4",
+            "name": "Controlbit 3",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0x4",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x5",
+            "name": "Controlbit 4",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0x5",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x6",
+            "name": "Controlbit 5",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0x6",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x7",
+            "name": "Controlbit 6",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0x7",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x8",
+            "name": "Controlbit 7",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0x8",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x9",
+            "name": "Controlbit 8",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0x9",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0xA",
+            "name": "Controlbit 9",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0xA",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0xB",
+            "name": "Controlbit 10",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0xB",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0xC",
+            "name": "Controlbit 11",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0xC",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0xD",
+            "name": "Controlbit 12",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0xD",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0xE",
+            "name": "Controlbit 13",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0xE",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0xF",
+            "name": "Controlbit 14",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0xF",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x10",
+            "name": "Controlbit 15",
+            "direction": "output",
+            "pdoIndex": "0x16FF",
+            "entryIndex": "0xF200",
+            "entrySubIndex": "0x10",
+            "dataType": "BOOL",
+            "bitLen": 1,
+            "iecType": "BOOL"
+          }
+        ],
+        "rxPdos": [
+          {
+            "index": "0x16FF",
+            "name": "Mapping RxPDO Device Control",
+            "assigned": true,
+            "fixed": true,
+            "mandatory": true,
+            "sm": 2,
+            "entries": [
+              {
+                "index": "0xF200",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Controlbit 0",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0x2",
+                "bitLen": 1,
+                "name": "Controlbit 1",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0x3",
+                "bitLen": 1,
+                "name": "Controlbit 2",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0x4",
+                "bitLen": 1,
+                "name": "Controlbit 3",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0x5",
+                "bitLen": 1,
+                "name": "Controlbit 4",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0x6",
+                "bitLen": 1,
+                "name": "Controlbit 5",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0x7",
+                "bitLen": 1,
+                "name": "Controlbit 6",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0x8",
+                "bitLen": 1,
+                "name": "Controlbit 7",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0x9",
+                "bitLen": 1,
+                "name": "Controlbit 8",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0xA",
+                "bitLen": 1,
+                "name": "Controlbit 9",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0xB",
+                "bitLen": 1,
+                "name": "Controlbit 10",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0xC",
+                "bitLen": 1,
+                "name": "Controlbit 11",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0xD",
+                "bitLen": 1,
+                "name": "Controlbit 12",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0xE",
+                "bitLen": 1,
+                "name": "Controlbit 13",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0xF",
+                "bitLen": 1,
+                "name": "Controlbit 14",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF200",
+                "subIndex": "0x10",
+                "bitLen": 1,
+                "name": "Controlbit 15",
+                "dataType": "BOOL"
+              }
+            ]
+          }
+        ],
+        "txPdos": [
+          {
+            "index": "0x1AFF",
+            "name": "Mapping TxPDO Device Status",
+            "assigned": true,
+            "fixed": true,
+            "mandatory": true,
+            "sm": 3,
+            "entries": [
+              {
+                "index": "0xF100",
+                "subIndex": "0x1",
+                "bitLen": 1,
+                "name": "Summarized module diagnosis",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0x2",
+                "bitLen": 1,
+                "name": "Station pending",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0x3",
+                "bitLen": 1,
+                "name": "Errorbit 2",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0x4",
+                "bitLen": 1,
+                "name": "Systembus error",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0x5",
+                "bitLen": 1,
+                "name": "Errorbit 4",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0x6",
+                "bitLen": 1,
+                "name": "Errorbit 5",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0x7",
+                "bitLen": 1,
+                "name": "I/O-Configuration error",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0x8",
+                "bitLen": 1,
+                "name": "Masterconfiguration error",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0x9",
+                "bitLen": 1,
+                "name": "Errorbit 8",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0xA",
+                "bitLen": 1,
+                "name": "Errorbit 9",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0xB",
+                "bitLen": 1,
+                "name": "Force mode active",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0xC",
+                "bitLen": 1,
+                "name": "Errorbit 11",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0xD",
+                "bitLen": 1,
+                "name": "Errorbit 12",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0xE",
+                "bitLen": 1,
+                "name": "Uout error",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0xF",
+                "bitLen": 1,
+                "name": "Usys error",
+                "dataType": "BOOL"
+              },
+              {
+                "index": "0xF100",
+                "subIndex": "0x10",
+                "bitLen": 1,
+                "name": "IOLink event available",
+                "dataType": "BOOL"
+              }
+            ]
+          }
+        ],
+        "slaveType": "digital_io",
+        "sdoConfigurations": [
+          {
+            "index": "0xF200",
+            "subIndex": 1,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 0",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 2,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 1",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 3,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 2",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 4,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 3",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 5,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 4",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 6,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 5",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 7,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 6",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 8,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 7",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 9,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 8",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 10,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 9",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 11,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 10",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 12,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 11",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 13,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 12",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 14,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 13",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 15,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 14",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF200",
+            "subIndex": 16,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "BOOL",
+            "bitLength": 1,
+            "name": "Controlbit 15",
+            "objectName": "Coupler control"
+          },
+          {
+            "index": "0xF800",
+            "subIndex": 1,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "USINT",
+            "bitLength": 8,
+            "name": "Process Alarm",
+            "objectName": "Device configuration parameter"
+          },
+          {
+            "index": "0xF800",
+            "subIndex": 2,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "USINT",
+            "bitLength": 8,
+            "name": "Diagnostic Alarm",
+            "objectName": "Device configuration parameter"
+          },
+          {
+            "index": "0xF800",
+            "subIndex": 3,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "USINT",
+            "bitLength": 8,
+            "name": "Behaviour of outputs on field bus error",
+            "objectName": "Device configuration parameter"
+          },
+          {
+            "index": "0xF800",
+            "subIndex": 4,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "USINT",
+            "bitLength": 8,
+            "name": "Module behaviour on hot swap",
+            "objectName": "Device configuration parameter"
+          },
+          {
+            "index": "0xF800",
+            "subIndex": 5,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "USINT",
+            "bitLength": 8,
+            "name": "Data format",
+            "objectName": "Device configuration parameter"
+          },
+          {
+            "index": "0xF800",
+            "subIndex": 6,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "USINT",
+            "bitLength": 8,
+            "name": "Lock force mode",
+            "objectName": "Device configuration parameter"
+          },
+          {
+            "index": "0xF800",
+            "subIndex": 7,
+            "value": "",
+            "defaultValue": "",
+            "dataType": "USINT",
+            "bitLength": 8,
+            "name": "Save module parameters",
+            "objectName": "Device configuration parameter"
+          }
+        ],
+        "esiInitCmdSdos": [
+          {
+            "index": "0xF810",
+            "subIndex": 1,
+            "value": "",
+            "defaultValue": "",
+            "valueBytes": "0x00100100",
+            "dataType": "OCTET_STRING",
+            "bitLength": 32,
+            "name": "Compatibility index",
+            "objectName": "ESI InitCmd",
+            "completeAccess": false,
+            "transition": "PS"
+          }
+        ],
+        "channelMappings": [
+          {
+            "channelId": "0x1AFF-0xF100-0x1",
+            "iecLocation": "%IX0.0",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x2",
+            "iecLocation": "%IX0.1",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x3",
+            "iecLocation": "%IX0.2",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x4",
+            "iecLocation": "%IX0.3",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x5",
+            "iecLocation": "%IX0.4",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x6",
+            "iecLocation": "%IX0.5",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x7",
+            "iecLocation": "%IX0.6",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x8",
+            "iecLocation": "%IX0.7",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x9",
+            "iecLocation": "%IX1.0",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0xA",
+            "iecLocation": "%IX1.1",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0xB",
+            "iecLocation": "%IX1.2",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0xC",
+            "iecLocation": "%IX1.3",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0xD",
+            "iecLocation": "%IX1.4",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0xE",
+            "iecLocation": "%IX1.5",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0xF",
+            "iecLocation": "%IX1.6",
+            "alias": ""
+          },
+          {
+            "channelId": "0x1AFF-0xF100-0x10",
+            "iecLocation": "%IX1.7",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x1",
+            "iecLocation": "%QX0.0",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x2",
+            "iecLocation": "%QX0.1",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x3",
+            "iecLocation": "%QX0.2",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x4",
+            "iecLocation": "%QX0.3",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x5",
+            "iecLocation": "%QX0.4",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x6",
+            "iecLocation": "%QX0.5",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x7",
+            "iecLocation": "%QX0.6",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x8",
+            "iecLocation": "%QX0.7",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x9",
+            "iecLocation": "%QX1.0",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0xA",
+            "iecLocation": "%QX1.1",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0xB",
+            "iecLocation": "%QX1.2",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0xC",
+            "iecLocation": "%QX1.3",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0xD",
+            "iecLocation": "%QX1.4",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0xE",
+            "iecLocation": "%QX1.5",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0xF",
+            "iecLocation": "%QX1.6",
+            "alias": ""
+          },
+          {
+            "channelId": "0x16FF-0xF200-0x10",
+            "iecLocation": "%QX1.7",
+            "alias": ""
+          }
+        ],
+        "isModularCoupler": true,
+        "slotsSpec": {
+          "slots": [
+            {
+              "name": "Terminals",
+              "minInstances": 1,
+              "maxInstances": 64,
+              "moduleClasses": [
+                "Do",
+                "Di",
+                "Ao",
+                "Ai",
+                "Sf",
+                "Fc",
+                "SAI",
+                "IOLink",
+                "Ts"
+              ]
+            }
+          ],
+          "slotIndexIncrement": 16,
+          "slotPdoIncrement": 1,
+          "downloadModuleIdentList": true,
+          "identifyModuleBy": "ModuleIdent"
+        },
+        "modulePdoGroups": [
+          {
+            "group": 0,
+            "alignment": 1,
+            "rxPdoIndex": "0x16FF",
+            "txPdoIndex": "0x1AFF"
+          },
+          {
+            "group": 1,
+            "alignment": 1,
+            "rxPdoIndex": "0x1600",
+            "txPdoIndex": "0x1A00"
+          }
+        ],
+        "modules": [
+          {
+            "id": "module-1",
+            "slot": 1,
+            "name": "UR20-4DI-P / 1315170000",
+            "ident": "0x00091F84",
+            "esiModuleRef": {
+              "repositoryItemId": "ur20-io",
+              "moduleIdent": "0x00091F84"
+            },
+            "channelMappings": [
+              {
+                "channelId": "0x1A00-0x6000-0x1",
+                "iecLocation": "%IX2.0",
+                "alias": ""
+              },
+              {
+                "channelId": "0x1A00-0x6000-0x2",
+                "iecLocation": "%IX2.1",
+                "alias": ""
+              },
+              {
+                "channelId": "0x1A00-0x6000-0x3",
+                "iecLocation": "%IX2.2",
+                "alias": ""
+              },
+              {
+                "channelId": "0x1A00-0x6000-0x4",
+                "iecLocation": "%IX2.3",
+                "alias": ""
+              },
+              {
+                "channelId": "0x1A00-0x6000-0x5",
+                "iecLocation": "%IB3",
+                "alias": ""
+              }
+            ],
+            "channelInfo": [
+              {
+                "channelId": "0x1A00-0x6000-0x1",
+                "name": "DI1",
+                "direction": "input",
+                "pdoIndex": "0x1A00",
+                "entryIndex": "0x6000",
+                "entrySubIndex": "0x1",
+                "dataType": "BOOL",
+                "bitLen": 1,
+                "iecType": "BOOL"
+              },
+              {
+                "channelId": "0x1A00-0x6000-0x2",
+                "name": "DI2",
+                "direction": "input",
+                "pdoIndex": "0x1A00",
+                "entryIndex": "0x6000",
+                "entrySubIndex": "0x2",
+                "dataType": "BOOL",
+                "bitLen": 1,
+                "iecType": "BOOL"
+              },
+              {
+                "channelId": "0x1A00-0x6000-0x3",
+                "name": "DI3",
+                "direction": "input",
+                "pdoIndex": "0x1A00",
+                "entryIndex": "0x6000",
+                "entrySubIndex": "0x3",
+                "dataType": "BOOL",
+                "bitLen": 1,
+                "iecType": "BOOL"
+              },
+              {
+                "channelId": "0x1A00-0x6000-0x4",
+                "name": "DI4",
+                "direction": "input",
+                "pdoIndex": "0x1A00",
+                "entryIndex": "0x6000",
+                "entrySubIndex": "0x4",
+                "dataType": "BOOL",
+                "bitLen": 1,
+                "iecType": "BOOL"
+              },
+              {
+                "channelId": "0x1A00-0x6000-0x5",
+                "name": "Module state",
+                "direction": "input",
+                "pdoIndex": "0x1A00",
+                "entryIndex": "0x6000",
+                "entrySubIndex": "0x5",
+                "dataType": "USINT",
+                "bitLen": 8,
+                "iecType": "USINT"
+              }
+            ],
+            "rxPdos": [],
+            "txPdos": [
+              {
+                "index": "0x1A00",
+                "name": "Input",
+                "assigned": true,
+                "fixed": true,
+                "mandatory": true,
+                "sm": 3,
+                "dependOnSlot": true,
+                "entries": [
+                  {
+                    "index": "0x6000",
+                    "subIndex": "0x1",
+                    "bitLen": 1,
+                    "name": "DI1",
+                    "dataType": "BOOL",
+                    "dependOnSlot": true
+                  },
+                  {
+                    "index": "0x6000",
+                    "subIndex": "0x2",
+                    "bitLen": 1,
+                    "name": "DI2",
+                    "dataType": "BOOL",
+                    "dependOnSlot": true
+                  },
+                  {
+                    "index": "0x6000",
+                    "subIndex": "0x3",
+                    "bitLen": 1,
+                    "name": "DI3",
+                    "dataType": "BOOL",
+                    "dependOnSlot": true
+                  },
+                  {
+                    "index": "0x6000",
+                    "subIndex": "0x4",
+                    "bitLen": 1,
+                    "name": "DI4",
+                    "dataType": "BOOL",
+                    "dependOnSlot": true
+                  },
+                  {
+                    "index": "0x0000",
+                    "subIndex": "0x00",
+                    "bitLen": 4,
+                    "name": "Padding",
+                    "dataType": "BIT"
+                  },
+                  {
+                    "index": "0x6000",
+                    "subIndex": "0x5",
+                    "bitLen": 8,
+                    "name": "Module state",
+                    "dataType": "USINT",
+                    "dependOnSlot": true
+                  }
+                ]
+              }
+            ],
+            "sdoConfigurations": [
+              {
+                "index": "0x8000",
+                "subIndex": 3,
+                "value": "",
+                "defaultValue": "",
+                "valueBytes": "0x555232302D3444492D50",
+                "dataType": "OCTET_STRING",
+                "bitLength": 80,
+                "name": "Name UR20-4DI-P",
+                "objectName": "Module InitCmd",
+                "completeAccess": false,
+                "dependOnSlot": true,
+                "transition": "PS"
+              },
+              {
+                "index": "0x8000",
+                "subIndex": 10,
+                "value": "",
+                "defaultValue": "",
+                "valueBytes": "0x841F0900",
+                "dataType": "OCTET_STRING",
+                "bitLength": 32,
+                "name": "Module id of UR20-4DI-P",
+                "objectName": "Module InitCmd",
+                "completeAccess": false,
+                "dependOnSlot": true,
+                "transition": "PS"
+              }
+            ],
+            "moduleClass": "Di",
+            "modulePdoGroup": 1
+          },
+          {
+            "id": "module-2",
+            "slot": 2,
+            "name": "UR20-4DO-P / 1315220000",
+            "ident": "0x01012FA0",
+            "esiModuleRef": {
+              "repositoryItemId": "ur20-io",
+              "moduleIdent": "0x01012FA0"
+            },
+            "channelMappings": [
+              {
+                "channelId": "0x1A01-0x6010-0x1",
+                "iecLocation": "%IB4",
+                "alias": ""
+              },
+              {
+                "channelId": "0x1601-0x7010-0x1",
+                "iecLocation": "%QX2.0",
+                "alias": ""
+              },
+              {
+                "channelId": "0x1601-0x7010-0x2",
+                "iecLocation": "%QX2.1",
+                "alias": ""
+              },
+              {
+                "channelId": "0x1601-0x7010-0x3",
+                "iecLocation": "%QX2.2",
+                "alias": ""
+              },
+              {
+                "channelId": "0x1601-0x7010-0x4",
+                "iecLocation": "%QX2.3",
+                "alias": ""
+              }
+            ],
+            "channelInfo": [
+              {
+                "channelId": "0x1A01-0x6010-0x1",
+                "name": "Module state",
+                "direction": "input",
+                "pdoIndex": "0x1A01",
+                "entryIndex": "0x6010",
+                "entrySubIndex": "0x1",
+                "dataType": "USINT",
+                "bitLen": 8,
+                "iecType": "USINT"
+              },
+              {
+                "channelId": "0x1601-0x7010-0x1",
+                "name": "DO1",
+                "direction": "output",
+                "pdoIndex": "0x1601",
+                "entryIndex": "0x7010",
+                "entrySubIndex": "0x1",
+                "dataType": "BOOL",
+                "bitLen": 1,
+                "iecType": "BOOL"
+              },
+              {
+                "channelId": "0x1601-0x7010-0x2",
+                "name": "DO2",
+                "direction": "output",
+                "pdoIndex": "0x1601",
+                "entryIndex": "0x7010",
+                "entrySubIndex": "0x2",
+                "dataType": "BOOL",
+                "bitLen": 1,
+                "iecType": "BOOL"
+              },
+              {
+                "channelId": "0x1601-0x7010-0x3",
+                "name": "DO3",
+                "direction": "output",
+                "pdoIndex": "0x1601",
+                "entryIndex": "0x7010",
+                "entrySubIndex": "0x3",
+                "dataType": "BOOL",
+                "bitLen": 1,
+                "iecType": "BOOL"
+              },
+              {
+                "channelId": "0x1601-0x7010-0x4",
+                "name": "DO4",
+                "direction": "output",
+                "pdoIndex": "0x1601",
+                "entryIndex": "0x7010",
+                "entrySubIndex": "0x4",
+                "dataType": "BOOL",
+                "bitLen": 1,
+                "iecType": "BOOL"
+              }
+            ],
+            "rxPdos": [
+              {
+                "index": "0x1601",
+                "name": "Output",
+                "assigned": true,
+                "fixed": true,
+                "mandatory": true,
+                "sm": 2,
+                "dependOnSlot": true,
+                "entries": [
+                  {
+                    "index": "0x7010",
+                    "subIndex": "0x1",
+                    "bitLen": 1,
+                    "name": "DO1",
+                    "dataType": "BOOL",
+                    "dependOnSlot": true
+                  },
+                  {
+                    "index": "0x7010",
+                    "subIndex": "0x2",
+                    "bitLen": 1,
+                    "name": "DO2",
+                    "dataType": "BOOL",
+                    "dependOnSlot": true
+                  },
+                  {
+                    "index": "0x7010",
+                    "subIndex": "0x3",
+                    "bitLen": 1,
+                    "name": "DO3",
+                    "dataType": "BOOL",
+                    "dependOnSlot": true
+                  },
+                  {
+                    "index": "0x7010",
+                    "subIndex": "0x4",
+                    "bitLen": 1,
+                    "name": "DO4",
+                    "dataType": "BOOL",
+                    "dependOnSlot": true
+                  },
+                  {
+                    "index": "0x0000",
+                    "subIndex": "0x00",
+                    "bitLen": 4,
+                    "name": "Padding",
+                    "dataType": "BIT"
+                  }
+                ]
+              }
+            ],
+            "txPdos": [
+              {
+                "index": "0x1A01",
+                "name": "Input",
+                "assigned": true,
+                "fixed": true,
+                "mandatory": true,
+                "sm": 3,
+                "dependOnSlot": true,
+                "entries": [
+                  {
+                    "index": "0x6010",
+                    "subIndex": "0x1",
+                    "bitLen": 8,
+                    "name": "Module state",
+                    "dataType": "USINT",
+                    "dependOnSlot": true
+                  }
+                ]
+              }
+            ],
+            "sdoConfigurations": [
+              {
+                "index": "0x8010",
+                "subIndex": 3,
+                "value": "",
+                "defaultValue": "",
+                "valueBytes": "0x555232302D34444F2D50",
+                "dataType": "OCTET_STRING",
+                "bitLength": 80,
+                "name": "Name UR20-4DO-P",
+                "objectName": "Module InitCmd",
+                "completeAccess": false,
+                "dependOnSlot": true,
+                "transition": "PS"
+              },
+              {
+                "index": "0x8010",
+                "subIndex": 10,
+                "value": "",
+                "defaultValue": "",
+                "valueBytes": "0xA02F0101",
+                "dataType": "OCTET_STRING",
+                "bitLength": 32,
+                "name": "Module id of UR20-4DO-P",
+                "objectName": "Module InitCmd",
+                "completeAccess": false,
+                "dependOnSlot": true,
+                "transition": "PS"
+              }
+            ],
+            "moduleClass": "Do",
+            "modulePdoGroup": 1
+          },
+          {
+            "id": "module-4",
+            "slot": 4,
+            "name": "UR20-4AI-UI-16 / 1315620000",
+            "ident": "0x040115C4",
+            "esiModuleRef": {
+              "repositoryItemId": "ur20-io",
+              "moduleIdent": "0x040115C4"
+            },
+            "channelMappings": [
+              {
+                "channelId": "0x1A03-0x6030-0x1",
+                "iecLocation": "%IW6",
+                "alias": ""
+              },
+              {
+                "channelId": "0x1A03-0x6030-0x2",
+                "iecLocation": "%IW8",
+                "alias": ""
+              },
+              {
+                "channelId": "0x1A03-0x6030-0x3",
+                "iecLocation": "%IW10",
+                "alias": ""
+              },
+              {
+                "channelId": "0x1A03-0x6030-0x4",
+                "iecLocation": "%IW12",
+                "alias": ""
+              },
+              {
+                "channelId": "0x1A03-0x6030-0x5",
+                "iecLocation": "%IB14",
+                "alias": ""
+              }
+            ],
+            "channelInfo": [
+              {
+                "channelId": "0x1A03-0x6030-0x1",
+                "name": "AI1",
+                "direction": "input",
+                "pdoIndex": "0x1A03",
+                "entryIndex": "0x6030",
+                "entrySubIndex": "0x1",
+                "dataType": "INT",
+                "bitLen": 16,
+                "iecType": "INT"
+              },
+              {
+                "channelId": "0x1A03-0x6030-0x2",
+                "name": "AI2",
+                "direction": "input",
+                "pdoIndex": "0x1A03",
+                "entryIndex": "0x6030",
+                "entrySubIndex": "0x2",
+                "dataType": "INT",
+                "bitLen": 16,
+                "iecType": "INT"
+              },
+              {
+                "channelId": "0x1A03-0x6030-0x3",
+                "name": "AI3",
+                "direction": "input",
+                "pdoIndex": "0x1A03",
+                "entryIndex": "0x6030",
+                "entrySubIndex": "0x3",
+                "dataType": "INT",
+                "bitLen": 16,
+                "iecType": "INT"
+              },
+              {
+                "channelId": "0x1A03-0x6030-0x4",
+                "name": "AI4",
+                "direction": "input",
+                "pdoIndex": "0x1A03",
+                "entryIndex": "0x6030",
+                "entrySubIndex": "0x4",
+                "dataType": "INT",
+                "bitLen": 16,
+                "iecType": "INT"
+              },
+              {
+                "channelId": "0x1A03-0x6030-0x5",
+                "name": "Module state",
+                "direction": "input",
+                "pdoIndex": "0x1A03",
+                "entryIndex": "0x6030",
+                "entrySubIndex": "0x5",
+                "dataType": "USINT",
+                "bitLen": 8,
+                "iecType": "USINT"
+              }
+            ],
+            "rxPdos": [],
+            "txPdos": [
+              {
+                "index": "0x1A03",
+                "name": "Input",
+                "assigned": true,
+                "fixed": true,
+                "mandatory": true,
+                "sm": 3,
+                "dependOnSlot": true,
+                "entries": [
+                  {
+                    "index": "0x6030",
+                    "subIndex": "0x1",
+                    "bitLen": 16,
+                    "name": "AI1",
+                    "dataType": "INT",
+                    "dependOnSlot": true
+                  },
+                  {
+                    "index": "0x6030",
+                    "subIndex": "0x2",
+                    "bitLen": 16,
+                    "name": "AI2",
+                    "dataType": "INT",
+                    "dependOnSlot": true
+                  },
+                  {
+                    "index": "0x6030",
+                    "subIndex": "0x3",
+                    "bitLen": 16,
+                    "name": "AI3",
+                    "dataType": "INT",
+                    "dependOnSlot": true
+                  },
+                  {
+                    "index": "0x6030",
+                    "subIndex": "0x4",
+                    "bitLen": 16,
+                    "name": "AI4",
+                    "dataType": "INT",
+                    "dependOnSlot": true
+                  },
+                  {
+                    "index": "0x6030",
+                    "subIndex": "0x5",
+                    "bitLen": 8,
+                    "name": "Module state",
+                    "dataType": "USINT",
+                    "dependOnSlot": true
+                  }
+                ]
+              }
+            ],
+            "sdoConfigurations": [
+              {
+                "index": "0x8030",
+                "subIndex": 3,
+                "value": "",
+                "defaultValue": "",
+                "valueBytes": "0x555232302D3441492D55492D3136",
+                "dataType": "OCTET_STRING",
+                "bitLength": 112,
+                "name": "Name UR20-4AI-UI-16",
+                "objectName": "Module InitCmd",
+                "completeAccess": false,
+                "dependOnSlot": true,
+                "transition": "PS"
+              },
+              {
+                "index": "0x8030",
+                "subIndex": 10,
+                "value": "",
+                "defaultValue": "",
+                "valueBytes": "0xC4150104",
+                "dataType": "OCTET_STRING",
+                "bitLength": 32,
+                "name": "Module id of UR20-4AI-UI-16",
+                "objectName": "Module InitCmd",
+                "completeAccess": false,
+                "dependOnSlot": true,
+                "transition": "PS"
+              }
+            ],
+            "moduleClass": "Ai",
+            "modulePdoGroup": 1
+          }
+        ]
+      }
+    ]
+  }
+}

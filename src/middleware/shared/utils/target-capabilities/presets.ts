@@ -10,6 +10,7 @@
  * updated yet.
  */
 
+import { IMAGE_TABLES } from '../io-image/tables'
 import type { AddressProducerCapabilities, OpcUaTargetProfile, S7TargetProfile, TargetCapabilities } from './types'
 
 /**
@@ -64,6 +65,34 @@ export const DEFAULT_OPCUA_PROFILE: OpcUaTargetProfile = {
 }
 
 /**
+ * Mapping types a bare-metal S7 server can address.
+ *
+ * `openplc.h` declares an array for these seven and for no other, so a block
+ * naming one of the rest has nowhere to land. `generate-s7comm-header` holds
+ * the matching `S7COMM_BUF_*` codes and a test pins the two together.
+ */
+export const BAREMETAL_S7_BUFFERS: readonly string[] = [
+  'bool_input',
+  'bool_output',
+  'int_input',
+  'int_output',
+  'int_memory',
+  'dint_memory',
+  'lint_memory',
+]
+
+/**
+ * Every mapping type the Runtime v4 plugin's parser accepts.
+ *
+ * DERIVED, not restated: the plugin's table and the editor's schema are both
+ * the image table list, so writing the fourteen out again is one more copy to
+ * drift. Bare metal's set cannot be derived the same way -- it is smaller than
+ * the areas the firmware declares, because `openplc.h` has an array the S7
+ * plugin has no buffer code for.
+ */
+export const RUNTIME_S7_BUFFERS: readonly string[] = IMAGE_TABLES.map((table) => table.key)
+
+/**
  * What a target gets when it declares `s7Server` and nothing else. Below Runtime
  * v4's numbers, because v4 is a Linux process with a thread per client and this
  * is a microcontroller where each client is a PDU pair in .bss.
@@ -78,6 +107,22 @@ export const DEFAULT_S7_PROFILE: S7TargetProfile = {
   maxDataBlocks: 8,
   szl: true,
   writeEnabled: true,
+  buffers: BAREMETAL_S7_BUFFERS,
+}
+
+/**
+ * Runtime v4's own numbers, which are the plugin's: 64 areas in the config
+ * record and every mapping type its parser accepts. Carried as a preset
+ * because the editor sizes the image from what the target serves, and
+ * answering with the microcontroller's eight sized a v4 project short.
+ */
+export const RUNTIME_V4_S7_PROFILE: S7TargetProfile = {
+  maxClients: 32,
+  pduSize: 240,
+  maxDataBlocks: 64,
+  szl: true,
+  writeEnabled: true,
+  buffers: RUNTIME_S7_BUFFERS,
 }
 
 export const SIMULATOR_CAPABILITIES: TargetCapabilities = {
@@ -155,6 +200,7 @@ export const RUNTIME_V4_CAPABILITIES: TargetCapabilities = {
   modbusRtuServer: false,
   opcuaServer: true,
   s7Server: true,
+  s7: RUNTIME_V4_S7_PROFILE,
   debuggerTransports: ['websocket'],
   pythonFunctionBlocks: true,
   arduinoApiCompletions: false,

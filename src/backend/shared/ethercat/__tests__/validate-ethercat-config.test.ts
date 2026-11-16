@@ -1,4 +1,10 @@
-import { ETHERDOG_LIMITS, validateEthercatConfig } from '../validate-ethercat-config'
+import {
+  DYNAMIC_ETHERDOG_LIMITS,
+  etherdogLimitsFor,
+  type EtherdogLimits,
+  FIXED_ETHERDOG_LIMITS,
+  validateEthercatConfig,
+} from '../validate-ethercat-config'
 
 const makeMaster = (name: string, networkInterface: string) => ({
   name,
@@ -221,7 +227,7 @@ describe('validateEthercatConfig', () => {
     })
   })
   describe('runtime limits (EtherDOG runtimes)', () => {
-    const L = ETHERDOG_LIMITS
+    const L = FIXED_ETHERDOG_LIMITS
     const pdo = (index: string, entries: number) => ({ index, entries: Array.from({ length: entries }, () => ({})) })
     const busWith = (slave: Record<string, unknown>, masters = 1) =>
       toJson(
@@ -243,8 +249,8 @@ describe('validateEthercatConfig', () => {
       })
     const channels = (n: number) =>
       Array.from({ length: n }, (_, i) => ({ pdo_entry_index: '0x6000', pdo_entry_subindex: i % 256 }))
-    const limitErrors = (bus: string, io: string) =>
-      validateEthercatConfig(bus, io).filter(
+    const limitErrors = (bus: string, io: string, limits: EtherdogLimits = FIXED_ETHERDOG_LIMITS) =>
+      validateEthercatConfig(bus, io, limits).filter(
         (e) => e.includes('at most') || e.includes('IEC location') || e.includes('beyond'),
       )
 
@@ -307,6 +313,76 @@ describe('validateEthercatConfig', () => {
 
     it('does not apply to the legacy format', () => {
       expect(validateEthercatConfig(busWith({}, L.masters + 1))).toEqual([])
+    })
+
+    describe('dynamic EtherDOG (runtime 4.3.2 and newer)', () => {
+      const D = DYNAMIC_ETHERDOG_LIMITS
+      // The startup SDO count of the reported drive, above FIXED_ETHERDOG_LIMITS.sdosPerSlave
+      const REPORTED_SDOS = 109
+      const sdoList = () => Array.from({ length: REPORTED_SDOS }, () => ({}))
+      const oversizedSlave = () =>
+        busWith({
+          channels: channels(L.channelsPerSlave + 1),
+          rx_pdos: [
+            ...Array.from({ length: L.pdosPerDirection }, (_, i) => pdo(`0x16${i}`, 1)),
+            pdo('0x16FF', L.entriesPerPdo + 1),
+          ],
+          sdo_configurations: sdoList(),
+        })
+
+      it('picks the limit set from the runtime version', () => {
+        expect(etherdogLimitsFor('v4.3.2')).toBe(DYNAMIC_ETHERDOG_LIMITS)
+        expect(etherdogLimitsFor('v4.3.1')).toBe(FIXED_ETHERDOG_LIMITS)
+        expect(etherdogLimitsFor('v4.3.0')).toBe(FIXED_ETHERDOG_LIMITS)
+        expect(etherdogLimitsFor(null)).toBe(FIXED_ETHERDOG_LIMITS)
+      })
+
+      it('accepts the startup SDOs that the fixed limits refuse', () => {
+        const bus = busWith({ sdo_configurations: sdoList() })
+        expect(limitErrors(bus, mapWith([]), D)).toEqual([])
+        expect(limitErrors(bus, mapWith([]))[0]).toContain(
+          `${REPORTED_SDOS} SDO configurations; at most ${L.sdosPerSlave}`,
+        )
+      })
+
+      it('does not check slaves, PDOs, PDO entries, channels or mapped entries', () => {
+        const manySlaves = toJson([
+          {
+            ...makeMaster('bus_0', 'eth0'),
+            config: {
+              ...makeMaster('bus_0', 'eth0').config,
+              slaves: Array.from({ length: 200 }, (_, i) => ({ position: i + 1 })),
+            },
+          },
+        ])
+        expect(limitErrors(manySlaves, mapWith([]), D)).toEqual([])
+        expect(limitErrors(oversizedSlave(), mapWith([]), D)).toEqual([])
+        const io = mapWith(
+          Array.from({ length: L.mappedEntriesPerMaster + 1 }, (_, i) => ({ iec_location: `%IW${i}` })),
+        )
+        expect(limitErrors(busWith({}), io, D)).toEqual([])
+      })
+
+      it('reports the same oversized slave against the fixed limits', () => {
+        const errors = limitErrors(oversizedSlave(), mapWith([])).join('\n')
+        expect(errors).toContain(`${L.channelsPerSlave + 1} channels`)
+        expect(errors).toContain(`${L.pdosPerDirection + 1} RxPDOs`)
+        expect(errors).toContain(`PDO 0x16FF has ${L.entriesPerPdo + 1} entries`)
+        expect(errors).toContain(`${REPORTED_SDOS} SDO configurations`)
+      })
+
+      it('still reports too many masters and a name longer than the runtime keeps', () => {
+        expect(limitErrors(busWith({}, D.masters + 1), mapWith([], D.masters + 1), D)).toHaveLength(1)
+        const name = 'm'.repeat(D.nameLength + 1)
+        const bus = toJson([makeMaster(name, 'eth0')])
+        const io = JSON.stringify({ version: 1, masters: [{ name, entries: [] }] })
+        expect(validateEthercatConfig(bus, io, D).some((e) => e.includes('longer than 63'))).toBe(true)
+      })
+
+      it('still reports IEC locations the runtime cannot hold', () => {
+        const io = mapWith([{ iec_location: '%IW65536' }, { iec_location: '%QX1.8' }])
+        expect(limitErrors(busWith({}), io, D)).toHaveLength(2)
+      })
     })
   })
 })

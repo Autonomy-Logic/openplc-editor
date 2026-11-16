@@ -2,7 +2,7 @@ import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
 import type { PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
-import { isValidIecIdentifier } from '../../../../middleware/shared/utils/ethercat'
+import { isValidIecIdentifier, removeModuleAndCompact } from '../../../../middleware/shared/utils/ethercat'
 import { describeAliasRename } from '../../../../middleware/shared/utils/iec-address/normalize-aliases'
 import { findAllReferencesToDataType } from '../../../utils/data-type-references'
 import type { DataTypeReferenceImpactAnalysis } from '../../../utils/data-type-references/types'
@@ -148,6 +148,15 @@ function duplicateRemoteDeviceIdentity(device: PLCRemoteDevice, slaveNameTaken: 
             ...mapping,
             iecLocation: '',
             alias: undefined,
+          })),
+          modules: slave.modules?.map((module) => ({
+            ...module,
+            id: newUuid(),
+            channelMappings: module.channelMappings.map((mapping) => ({
+              ...mapping,
+              iecLocation: '',
+              alias: undefined,
+            })),
           })),
         }
       }),
@@ -599,8 +608,8 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const nameCheck = validateElementName(name)
       if (!nameCheck.ok) return nameCheck
 
+      // Reachable: the project slice also refuses a second server of a protocol.
       const result = state.projectActions.createServer({ data: { name, protocol } })
-      /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
       if (!result.ok) return { ok: false, message: result.message }
 
       const editorModel = CreateServerEditor(name, protocol)
@@ -646,8 +655,9 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       // Deep-cloned: the protocol config is nested, and a shallow copy would leave the
       // two servers sharing it, so editing one would silently edit the other.
       const copy = { ...structuredClone(source), name: newName }
+      // Duplicating a server is creating a second one of its protocol, which
+      // the project slice refuses for the same reason the build does.
       const result = state.projectActions.createServer({ data: copy })
-      /* istanbul ignore next -- defensive: shared slice already validates name uniqueness */
       if (!result.ok) return { ok: false, message: result.message }
 
       const editorModel = CreateServerEditor(newName, source.protocol)
@@ -749,6 +759,49 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
   },
 
   ethercatDeviceActions: {
+    deleteModule: (busName, deviceId, moduleId) => {
+      const state = getState()
+      const remoteDevice = state.project.data.remoteDevices?.find((d) => d.name === busName)
+      if (!remoteDevice) return { ok: false, message: 'Bus not found' }
+
+      const device = remoteDevice.ethercatConfig?.devices?.find((d) => d.id === deviceId)
+      if (!device) return { ok: false, message: 'EtherCAT device not found' }
+
+      const module = device.modules?.find((m) => m.id === moduleId)
+      if (!module) return { ok: false, message: 'Module not found' }
+      const moduleName = module.name
+
+      // The modules after the removed one move up a slot, as in the Modules tab.
+      const spec = device.slotsSpec
+      const nextModules =
+        spec === undefined
+          ? (device.modules ?? []).filter((m) => m.id !== moduleId)
+          : removeModuleAndCompact(device.modules ?? [], moduleId, spec)
+      state.projectActions.updateEthercatConfig(busName, {
+        masterConfig: remoteDevice.ethercatConfig?.masterConfig ?? {
+          networkInterface: 'eth0',
+          cycleTimeUs: 1000,
+          watchdogTimeoutCycles: 3,
+        },
+        devices: (remoteDevice.ethercatConfig?.devices ?? []).map((d) =>
+          d.id === deviceId ? { ...d, modules: nextModules.length > 0 ? nextModules : undefined } : d,
+        ),
+      })
+
+      // The module's own editor tab (if open) now points at a module that no
+      // longer exists; close it so the user doesn't see a stale pane. The
+      // parent coupler stays open.
+      const tabName = `${device.name}/${moduleName}`
+      state.editorActions.removeModel(tabName)
+      state.tabsActions.removeTab(tabName)
+      const currentEditor = state.editor
+      if (currentEditor.type !== 'available' && currentEditor.meta.name === tabName) {
+        state.editorActions.clearEditor()
+      }
+
+      return { ok: true }
+    },
+
     delete: (busName, deviceId) => {
       const state = getState()
       const remoteDevice = state.project.data.remoteDevices?.find((d) => d.name === busName)
@@ -869,9 +922,12 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().tabsActions.setSelectedTab(nextTab.name)
       getState().workspaceActions.setSelectedProjectTreeLeaf({
         label: nextTab.name,
-        // A diff-viewer tab has no corresponding project-tree leaf to
-        // highlight, so it maps to `null` rather than a tree leaf type.
-        type: nextTab.elementType.type === 'diff-viewer' ? null : nextTab.elementType.type,
+        // A diff-viewer or diagnostics tab has no corresponding project-tree
+        // leaf to highlight, so both map to `null` rather than a leaf type.
+        type:
+          nextTab.elementType.type === 'diff-viewer' || nextTab.elementType.type === 'diagnostics'
+            ? null
+            : nextTab.elementType.type,
       })
 
       return { success: true }

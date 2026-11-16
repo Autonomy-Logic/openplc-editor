@@ -95,6 +95,11 @@ type BitRangeMapping = {
   count: number
 }
 
+type ByteRangeMapping = {
+  base_byte: number
+  count: number
+}
+
 type WordRangeMapping = {
   base_word: number
   count: number
@@ -108,6 +113,8 @@ type DwordRangeMapping = {
 type PluginSlotIoMapping = {
   digital_inputs?: BitRangeMapping
   digital_outputs?: BitRangeMapping
+  byte_inputs?: ByteRangeMapping
+  byte_outputs?: ByteRangeMapping
   analog_inputs?: WordRangeMapping
   analog_outputs?: WordRangeMapping
   analog_real_inputs?: DwordRangeMapping
@@ -126,6 +133,7 @@ type PluginSlot = {
 }
 
 const BIT_ADDRESS_REGEX = /^%[IQ]X(\d+)\.(\d+)$/
+const BYTE_ADDRESS_REGEX = /^%[IQ]B(\d+)$/
 const WORD_ADDRESS_REGEX = /^%[IQ]W(\d+)$/
 const DWORD_ADDRESS_REGEX = /^%[IQ]D(\d+)$/
 
@@ -186,6 +194,18 @@ function buildBitRange(channels: { name: string; address: string }[]): BitRangeM
     base_bit: parsed[0].bit,
     count: parsed.length,
   }
+}
+
+function buildByteRange(channels: { name: string; address: string }[]): ByteRangeMapping | null {
+  if (channels.length === 0) return null
+  const parsed: number[] = []
+  for (const ch of channels) {
+    const m = BYTE_ADDRESS_REGEX.exec(ch.address)
+    if (!m) return null
+    parsed.push(Number(m[1]))
+  }
+  parsed.sort((a, b) => a - b)
+  return { base_byte: parsed[0], count: parsed.length }
 }
 
 function buildWordRange(channels: { name: string; address: string }[]): WordRangeMapping | null {
@@ -251,6 +271,8 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
     // analog_inputs (%IW) or analog_real_inputs (%ID).
     const di: { name: string; address: string }[] = []
     const dout: { name: string; address: string }[] = []
+    const bi: { name: string; address: string }[] = []
+    const bo: { name: string; address: string }[] = []
     const ai: { name: string; address: string }[] = []
     const ao: { name: string; address: string }[] = []
     const aiReal: { name: string; address: string }[] = []
@@ -262,6 +284,8 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
       if (!address) continue
       if (address.startsWith('%IX')) di.push({ name: channel.name, address })
       else if (address.startsWith('%QX')) dout.push({ name: channel.name, address })
+      else if (address.startsWith('%IB')) bi.push({ name: channel.name, address })
+      else if (address.startsWith('%QB')) bo.push({ name: channel.name, address })
       else if (address.startsWith('%IW')) ai.push({ name: channel.name, address })
       else if (address.startsWith('%QW')) ao.push({ name: channel.name, address })
       else if (address.startsWith('%ID')) aiReal.push({ name: channel.name, address })
@@ -271,12 +295,16 @@ function buildSlots(vendorScreenData: VendorScreenData, modules: VppModuleDefini
     const ioMappingBlock: PluginSlotIoMapping = {}
     const diRange = buildBitRange(di)
     const doRange = buildBitRange(dout)
+    const biRange = buildByteRange(bi)
+    const boRange = buildByteRange(bo)
     const aiRange = buildWordRange(ai)
     const aoRange = buildWordRange(ao)
     const aiRealRange = buildDwordRange(aiReal)
     const aoRealRange = buildDwordRange(aoReal)
     if (diRange) ioMappingBlock.digital_inputs = diRange
     if (doRange) ioMappingBlock.digital_outputs = doRange
+    if (biRange) ioMappingBlock.byte_inputs = biRange
+    if (boRange) ioMappingBlock.byte_outputs = boRange
     if (aiRange) ioMappingBlock.analog_inputs = aiRange
     if (aoRange) ioMappingBlock.analog_outputs = aoRange
     if (aiRealRange) ioMappingBlock.analog_real_inputs = aiRealRange
@@ -497,12 +525,31 @@ function sanitizeConfigValue(value: unknown, depth: number): unknown {
   return out
 }
 
+/** Keys of the vendor screen data that are never merged into the plugin config as form values. */
+const RESERVED_KEYS = new Set(['module-configuration', 'io-mapping', 'configurator', 'device-setup'])
+
+/** The config template, with each form-valued vendor screen entry merged at the root. */
+export function mergeTemplateAndScreenData(
+  configTemplate: Record<string, unknown>,
+  vendorScreenData: VendorScreenData,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>
+  assignSafely(result, configTemplate)
+  for (const [key, value] of Object.entries(vendorScreenData)) {
+    if (RESERVED_KEYS.has(key)) continue
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      assignSafely(result, value as Record<string, unknown>)
+    }
+  }
+  // Back onto a normal object; the null prototype was only needed while untrusted keys were merged in.
+  return { ...result }
+}
+
 /**
  * Generate the final plugin config JSON for a VPP runtime-v4 package.
  *
  * All fields from the config template are preserved. Form-based vendor screen
- * data (keyed by persistence keys other than 'module-configuration' and
- * 'io-mapping') is merged at the root level. The `slots` array is always set
+ * data (every key outside `RESERVED_KEYS`) is merged at the root level. The `slots` array is always set
  * from the backplane configuration + I/O mapping. When `devicePins` is
  * non-empty (pin-based GPIO boards), a `pins` array is emitted from the
  * editor's pin-mapping table.
@@ -513,18 +560,7 @@ export function generateVendorPluginConfig(
   modules: VppModuleDefinition[],
   devicePins: DevicePinInput[] = [],
 ): Record<string, unknown> {
-  const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>
-  assignSafely(result, configTemplate)
-
-  // Merge form-based vendor screen data at root. Skip the keys that have
-  // specific handling below.
-  const RESERVED_KEYS = new Set(['module-configuration', 'io-mapping'])
-  for (const [key, value] of Object.entries(vendorScreenData)) {
-    if (RESERVED_KEYS.has(key)) continue
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      assignSafely(result, value as Record<string, unknown>)
-    }
-  }
+  const result = mergeTemplateAndScreenData(configTemplate, vendorScreenData)
 
   // Always write the slots array from module configuration + IO mapping
   result.slots = buildSlots(vendorScreenData, modules)
@@ -536,10 +572,7 @@ export function generateVendorPluginConfig(
     result.pins = buildPins(devicePins)
   }
 
-  // Back onto a normal object so callers (and JSON.stringify) see what they
-  // expect; the null prototype was only needed while untrusted keys were
-  // being merged in.
-  return { ...result }
+  return result
 }
 
 export type { PluginSlot, PluginSlotIoMapping, VendorScreenData, VppModuleDefinition }

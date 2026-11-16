@@ -10,11 +10,13 @@ import { SerialPort as NodeSerialPort } from 'serialport'
 
 import { readHalsFile } from '../../shared/firmware/hals-loader'
 import { type BoardBuildInfo, BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
+import { resolveConfigTemplatePluginName } from '../../shared/utils/vpp/build-vpp-plugin-files'
 import { PackageManagerModule } from '../package-manager'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
 import { orderBoardsByVppGroup } from './order-boards-by-vpp-group'
 import { mergeSerialPortList, toCalloutPath } from './serial-port-list'
+import { toVppModuleDefinition } from './to-vpp-module-definition'
 import type { AvailableBoards, HalsFile, SerialPort } from './types'
 
 const execFileAsync = promisify(execFile)
@@ -331,22 +333,13 @@ class HardwareModule {
 
           const modules = device.moduleSystem
             ? await Promise.all(
-                device.moduleSystem.modules.map(async (m) => ({
-                  id: m.id,
-                  name: m.name,
-                  hwId: m.hwId,
-                  fixed: m.fixed,
-                  image: m.image,
-                  description: m.description,
-                  specs: m.specs,
-                  configScreen: m.configScreen,
-                  configScreenDefinition: await loadModuleConfigScreen(m.configScreen),
-                  io: m.io,
-                  parameters: m.parameters,
-                  addressMapping: m.addressMapping,
-                })),
+                device.moduleSystem.modules.map(async (m) =>
+                  toVppModuleDefinition(m, await loadModuleConfigScreen(m.configScreen)),
+                ),
               )
             : []
+
+          const pluginName = await HardwareModule.#readPluginName(pkg.path, device.hal?.configTemplate)
 
           boards.set(device.name, {
             compiler,
@@ -382,10 +375,12 @@ class HardwareModule {
               packagePath: pkg.path,
               screens,
               ...(device.hidesNativeScreens ? { hidesNativeScreens: device.hidesNativeScreens } : {}),
+              ...(pluginName ? { pluginName } : {}),
               moduleSystem: device.moduleSystem
                 ? {
                     enabled: device.moduleSystem.enabled,
                     maxSlots: device.moduleSystem.maxSlots,
+                    discoverySupported: device.moduleSystem.discoverySupported === true,
                     modules,
                   }
                 : null,
@@ -399,6 +394,21 @@ class HardwareModule {
       }
     } catch (err) {
       logger.error(`Failed to load VPP packages: ${String(err)}`)
+    }
+  }
+
+  /** Plugin name from the device's config template, or null when it is absent, unreadable or unsafe. */
+  static async #readPluginName(packagePath: string, configTemplate: string | undefined): Promise<string | null> {
+    if (!configTemplate) return null
+    const templatePath = join(packagePath, configTemplate)
+    try {
+      assertPathContained(packagePath, templatePath, 'hal.configTemplate')
+      if (!existsSync(templatePath)) return null
+      const parsed: unknown = await HardwareModule.readJSONFile(templatePath)
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+      return resolveConfigTemplatePluginName(parsed as Record<string, unknown>)
+    } catch {
+      return null
     }
   }
 

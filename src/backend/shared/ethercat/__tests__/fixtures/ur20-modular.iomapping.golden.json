@@ -1,0 +1,292 @@
+{
+  "version": 1,
+  "masters": [
+    {
+      "name": "bus_a",
+      "entries": [
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 1,
+          "iec_location": "%IX0.0"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 2,
+          "iec_location": "%IX0.1"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 3,
+          "iec_location": "%IX0.2"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 4,
+          "iec_location": "%IX0.3"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 5,
+          "iec_location": "%IX0.4"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 6,
+          "iec_location": "%IX0.5"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 7,
+          "iec_location": "%IX0.6"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 8,
+          "iec_location": "%IX0.7"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 9,
+          "iec_location": "%IX1.0"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 10,
+          "iec_location": "%IX1.1"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 11,
+          "iec_location": "%IX1.2"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 12,
+          "iec_location": "%IX1.3"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 13,
+          "iec_location": "%IX1.4"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 14,
+          "iec_location": "%IX1.5"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 15,
+          "iec_location": "%IX1.6"
+        },
+        {
+          "slave": 1,
+          "index": "0xF100",
+          "subindex": 16,
+          "iec_location": "%IX1.7"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 1,
+          "iec_location": "%QX0.0"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 2,
+          "iec_location": "%QX0.1"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 3,
+          "iec_location": "%QX0.2"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 4,
+          "iec_location": "%QX0.3"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 5,
+          "iec_location": "%QX0.4"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 6,
+          "iec_location": "%QX0.5"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 7,
+          "iec_location": "%QX0.6"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 8,
+          "iec_location": "%QX0.7"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 9,
+          "iec_location": "%QX1.0"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 10,
+          "iec_location": "%QX1.1"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 11,
+          "iec_location": "%QX1.2"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 12,
+          "iec_location": "%QX1.3"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 13,
+          "iec_location": "%QX1.4"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 14,
+          "iec_location": "%QX1.5"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 15,
+          "iec_location": "%QX1.6"
+        },
+        {
+          "slave": 1,
+          "index": "0xF200",
+          "subindex": 16,
+          "iec_location": "%QX1.7"
+        },
+        {
+          "slave": 1,
+          "index": "0x6000",
+          "subindex": 1,
+          "iec_location": "%IX2.0"
+        },
+        {
+          "slave": 1,
+          "index": "0x6000",
+          "subindex": 2,
+          "iec_location": "%IX2.1"
+        },
+        {
+          "slave": 1,
+          "index": "0x6000",
+          "subindex": 3,
+          "iec_location": "%IX2.2"
+        },
+        {
+          "slave": 1,
+          "index": "0x6000",
+          "subindex": 4,
+          "iec_location": "%IX2.3"
+        },
+        {
+          "slave": 1,
+          "index": "0x6000",
+          "subindex": 5,
+          "iec_location": "%IB3"
+        },
+        {
+          "slave": 1,
+          "index": "0x6010",
+          "subindex": 1,
+          "iec_location": "%IB4"
+        },
+        {
+          "slave": 1,
+          "index": "0x7010",
+          "subindex": 1,
+          "iec_location": "%QX2.0"
+        },
+        {
+          "slave": 1,
+          "index": "0x7010",
+          "subindex": 2,
+          "iec_location": "%QX2.1"
+        },
+        {
+          "slave": 1,
+          "index": "0x7010",
+          "subindex": 3,
+          "iec_location": "%QX2.2"
+        },
+        {
+          "slave": 1,
+          "index": "0x7010",
+          "subindex": 4,
+          "iec_location": "%QX2.3"
+        },
+        {
+          "slave": 1,
+          "index": "0x6030",
+          "subindex": 1,
+          "iec_location": "%IW6"
+        },
+        {
+          "slave": 1,
+          "index": "0x6030",
+          "subindex": 2,
+          "iec_location": "%IW8"
+        },
+        {
+          "slave": 1,
+          "index": "0x6030",
+          "subindex": 3,
+          "iec_location": "%IW10"
+        },
+        {
+          "slave": 1,
+          "index": "0x6030",
+          "subindex": 4,
+          "iec_location": "%IW12"
+        },
+        {
+          "slave": 1,
+          "index": "0x6030",
+          "subindex": 5,
+          "iec_location": "%IB14"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "sections": [
+    {
+      "id": "io-mapping",
+      "title": "I/O Mapping",
+      "layout": "io-table",
+      "source": "device-setup",
+      "persistence": "io-mapping"
+    }
+  ]
+}

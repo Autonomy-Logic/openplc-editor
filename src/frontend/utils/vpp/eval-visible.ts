@@ -28,7 +28,10 @@ const FIELDS_PREFIX = 'fields.'
 /** Nesting depth a `visible` clause may reach before it is treated as hostile. */
 export const MAX_VISIBLE_DEPTH = 16
 
-/** Every operator the evaluator understands. Anything else hides the field. */
+/** Every operator the evaluator understands. Anything else hides the field.
+ *  Array-sourced fields reach here as a presence boolean (callers coerce before eval), so use
+ *  `equals true/false` or `exists`/`not-exists` on them — the scalar operators (`in`, numeric
+ *  comparisons) assume a scalar `v`. */
 const LEAF_OPERATORS = new Set(['equals', 'not-equals', 'in', 'exists', 'not-exists', 'greater-than', 'less-than'])
 
 /**

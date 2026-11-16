@@ -7,6 +7,7 @@ import { baseTypeEnum } from '../../../../middleware/shared/ports'
 import type { PLCGlobalVariable, PLCVariable } from '../../../../middleware/shared/ports/types'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../store'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
@@ -18,6 +19,11 @@ import { TypeChangeModal } from '../type-change-modal'
 import { GlobalArrayModal } from './elements/array-modal'
 
 type ISelectableCellProps = CellContext<PLCGlobalVariable, unknown> & { editable?: boolean }
+
+type ISelectableTypeCellProps = ISelectableCellProps & {
+  /** Skip the type-change impact analysis and the propagation to POU declarations of the same name. */
+  skipReferenceImpact?: boolean
+}
 
 const createVariableType = (
   definition: PLCVariable['type']['definition'],
@@ -45,8 +51,11 @@ const SelectableTypeCell = ({
   row: { index },
   column: { id },
   table,
-  editable = true,
-}: ISelectableCellProps) => {
+  editable: editableProp = true,
+  skipReferenceImpact = false,
+}: ISelectableTypeCellProps) => {
+  const isEditingLocked = useIsEditingLocked()
+  const editable = editableProp && !isEditingLocked
   const {
     project: {
       data: { dataTypes, pous },
@@ -136,7 +145,7 @@ const SelectableTypeCell = ({
     table.options.meta?.updateData(index, id, { definition, value })
 
     const newType = createVariableType(definition, value)
-    if (newType) {
+    if (newType && !skipReferenceImpact) {
       propagateVariableTypeChange(variableName, newType, pous, { updateVariable })
     }
   }
@@ -150,7 +159,7 @@ const SelectableTypeCell = ({
 
     const newType = createVariableType(definition, value)
 
-    if (!newType) {
+    if (!newType || skipReferenceImpact) {
       applyTypeChange(definition, value)
       return
     }
@@ -207,11 +216,11 @@ const SelectableTypeCell = ({
           )
         })()}
       <GlobalArrayModal
-        variableName={variableName}
-        variableRow={index}
+        variableType={currentVariable.type}
         arrayModalIsOpen={arrayModalIsOpen}
         setArrayModalIsOpen={setArrayModalIsOpen}
         closeContainer={() => setPoppoverIsOpen(false)}
+        onSave={(type) => table.options.meta?.updateData(index, id, type)}
       />
       <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
         <PrimitiveDropdown.Trigger asChild>
@@ -372,8 +381,10 @@ const SelectableClassCell = ({
   row: { index },
   column: { id },
   table,
-  editable = true,
+  editable: editableProp = true,
 }: ISelectableCellProps) => {
+  const isEditingLocked = useIsEditingLocked()
+  const editable = editableProp && !isEditingLocked
   const initialValue = getValue()
 
   const [cellValue, setCellValue] = useState(initialValue)
@@ -434,7 +445,11 @@ const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }
   }, [initialValue])
 
   return (
-    <button className='flex h-full w-full cursor-pointer items-center justify-center' onClick={onClick}>
+    <button
+      aria-label='Toggle debug for this variable'
+      className='flex h-full w-full cursor-pointer items-center justify-center'
+      onClick={onClick}
+    >
       <DebuggerIcon variant={cellValue ? 'default' : 'muted'} />
     </button>
   )

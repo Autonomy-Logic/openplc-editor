@@ -86,6 +86,8 @@ const availableBoardsSchema = z.map(
 type VppModuleDefinition = {
   id: string
   name: string
+  typeId?: string
+  processImage?: { inputBytes: number; outputBytes: number }
   image?: string
   io: {
     digitalInputs: number
@@ -116,9 +118,11 @@ type VppMetadata = {
   deviceId: string
   packagePath: string
   screens: Record<string, unknown>
+  pluginName?: string
   moduleSystem: {
     enabled: boolean
     maxSlots: number
+    discoverySupported?: boolean
     modules: VppModuleDefinition[]
   } | null
 }

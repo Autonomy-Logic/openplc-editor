@@ -84,3 +84,7 @@ export function createEditorWindowAdapter(): WindowPort {
 export function setMenuProjectOpen(open: boolean): void {
   window.bridge.setMenuProjectOpen(open)
 }
+
+export function setMenuDebuggerActive(active: boolean): void {
+  window.bridge.setMenuDebuggerActive(active)
+}

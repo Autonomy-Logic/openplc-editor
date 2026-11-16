@@ -17,6 +17,26 @@ type ScreenSection = {
   fields?: unknown[]
   actions?: unknown[]
   persistence?: string
+  /** vpp-extensions override: multiple sections sharing the same
+   *  `storageId` persist into one bucket under
+   *  `project.data.vppExtensions[packageId][storageId]`. */
+  storageId?: string
+  /** io-table / table: `device-setup` or `variable-picker` select which row source feeds the layout. */
+  source?: unknown
+  /** table: columns the renderer walks to lay out the grid. */
+  columns?: unknown[]
+  /** table: `{ field, placeholder? }` — enables the filter bar; `field` is a column id. */
+  search?: unknown
+  /** form / table: structured conditional-visibility clause evaluated against
+   *  the shared storage bucket; a false evaluation renders the section but
+   *  disables every input and reports the gate to the user. */
+  enabledWhen?: unknown
+  /** vendor-document: page inside the package that hosts the configurator. */
+  document?: unknown
+  /** vendor-document: device board name → controller type id passed to the configurator. */
+  controllers?: unknown
+  /** vendor-document: configurator bundle version, stored next to its archive. */
+  bundleVersion?: unknown
 }
 
 type ScreenDefinition = {
@@ -27,6 +47,8 @@ type ModuleDefinition = {
   id: string
   name: string
   hwId?: string
+  typeId?: string
+  processImage?: { inputBytes: number; outputBytes: number }
   image?: string
   description?: string
   specs?: Record<string, string>
@@ -51,6 +73,7 @@ type ModuleDefinition = {
 type ModuleSystem = {
   enabled: boolean
   maxSlots: number
+  discoverySupported?: boolean
   modules: ModuleDefinition[]
 } | null
 

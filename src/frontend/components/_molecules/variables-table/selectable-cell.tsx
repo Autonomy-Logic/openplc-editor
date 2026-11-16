@@ -7,6 +7,7 @@ import { baseTypeEnum } from '../../../../middleware/shared/ports/plc-schemas'
 import type { PLCVariable, VariableClass } from '../../../../middleware/shared/ports/types'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { DebuggerIcon } from '../../../assets/icons/interface/Debugger'
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../store'
 import { TypeChangeValidationResult, validateTypeChange } from '../../../store/slices/project/validation/type-change'
 import { cn } from '../../../utils/cn'
@@ -61,8 +62,8 @@ const SelectableTypeCell = ({
     ladderFlowActions: { updateNodes },
     fbdFlowActions: { updateNodes: updateFBDNodes },
     libraries: sliceLibraries,
-    workspace: { isDebuggerVisible },
   } = useOpenPLCStore()
+  const isDebuggerVisible = useIsEditingLocked()
 
   const VariableTypes = [
     {
@@ -421,10 +422,8 @@ const SelectableClassCell = ({
   table,
   selected = true,
 }: ISelectableCellProps) => {
-  const {
-    editor,
-    workspace: { isDebuggerVisible },
-  } = useOpenPLCStore()
+  const { editor } = useOpenPLCStore()
+  const isDebuggerVisible = useIsEditingLocked()
 
   const language = 'language' in editor.meta ? editor.meta.language : null
 
@@ -520,7 +519,11 @@ const SelectableDebugCell = ({ getValue, row: { index }, column: { id }, table }
   }, [initialValue])
 
   return (
-    <button className='flex h-full w-full cursor-pointer items-center justify-center' onClick={onClick}>
+    <button
+      aria-label='Toggle debug for this variable'
+      className='flex h-full w-full cursor-pointer items-center justify-center'
+      onClick={onClick}
+    >
       <DebuggerIcon variant={cellValue ? 'default' : 'muted'} />
     </button>
   )
@@ -566,9 +569,7 @@ const SelectableFlagCell = ({
   table,
   selected = true,
 }: ISelectableCellProps) => {
-  const {
-    workspace: { isDebuggerVisible },
-  } = useOpenPLCStore()
+  const isDebuggerVisible = useIsEditingLocked()
 
   const currentValue = getValue<string | undefined>() ?? NO_FLAG
   const [cellValue, setCellValue] = useState(currentValue)

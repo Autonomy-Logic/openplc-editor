@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 baremetal_net.cpp - the concrete network adapter every protocol server shares
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 
 The only translation unit in the runtime's protocol layers that touches a
 network class. See baremetal_net.h for why the seam exists and why an

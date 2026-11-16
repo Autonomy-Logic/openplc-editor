@@ -1,6 +1,7 @@
 import { Modal, ModalContent, ModalFooter, ModalHeader, ModalTitle } from '@root/frontend/components/_molecules/modal'
 import { cn } from '@root/frontend/utils/cn'
 import type { ESIDeviceRef, ESIDeviceSummary, ESIRepositoryItemLight } from '@root/middleware/shared/ports/esi-types'
+import { canonicalVendorId } from '@root/middleware/shared/utils/ethercat'
 import { useCallback, useMemo, useState } from 'react'
 
 type DeviceBrowserModalProps = {
@@ -37,10 +38,10 @@ const DeviceBrowserModal = ({ isOpen, onClose, onSelectDevice, repository }: Dev
     > = new Map()
 
     for (const repoItem of repository) {
-      const vendorKey = repoItem.vendor.id
+      const vendorKey = canonicalVendorId(repoItem.vendor.id)
       if (!groups.has(vendorKey)) {
         groups.set(vendorKey, {
-          vendorId: repoItem.vendor.id,
+          vendorId: vendorKey,
           vendorName: repoItem.vendor.name,
           devices: [],
         })
@@ -221,6 +222,12 @@ const DeviceBrowserModal = ({ isOpen, onClose, onSelectDevice, repository }: Dev
                                 {device.groupName && (
                                   <span className='flex-shrink-0 rounded bg-neutral-200 px-1.5 py-0.5 text-xs text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300'>
                                     {device.groupName}
+                                  </span>
+                                )}
+                                {/* Mark modular couplers so the operator spots them. */}
+                                {device.isModularCoupler === true && (
+                                  <span className='bg-brand/10 dark:bg-brand/20 flex-shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-brand'>
+                                    Modular coupler
                                   </span>
                                 )}
                               </div>

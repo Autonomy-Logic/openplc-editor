@@ -1,6 +1,7 @@
 import { Edge, Node, ReactFlowInstance, XYPosition } from '@xyflow/react'
 import { RefObject, useCallback, useEffect } from 'react'
 
+import { useIsEditingLocked } from '../../../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../../../store'
 import { ClipboardType } from '../../../../../store/slices/clipboard/types'
 import type { FBDRungState } from '../../../../../store/slices/fbd'
@@ -44,6 +45,7 @@ export const useFBDClipboard = ({
 }) => {
   const pouName = useBoundPou()
   const isActive = useIsGraphicalEditorActive()
+  const isEditingLocked = useIsEditingLocked()
   const fbdFlowActions = useOpenPLCStore((state) => state.fbdFlowActions)
 
   // True when the clipboard event originated from a DOM node inside
@@ -105,6 +107,7 @@ export const useFBDClipboard = ({
    */
   const handleCutEvent = useCallback(
     (event: ClipboardEvent) => {
+      if (isEditingLocked) return
       if (!isInsideThisFbd(event)) return
       if (!rung.selectedNodes.length) {
         toast({
@@ -127,7 +130,7 @@ export const useFBDClipboard = ({
       })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rung, handleDeleteNodes],
+    [rung, handleDeleteNodes, isEditingLocked],
   )
 
   /**
@@ -152,6 +155,7 @@ export const useFBDClipboard = ({
    */
   const handlePasteEvent = useCallback(
     (event: ClipboardEvent) => {
+      if (isEditingLocked) return
       if (!isActive) return
       const clipboardData = event.clipboardData?.getData('fbd:nodes')
       if (!clipboardData) return
@@ -220,7 +224,7 @@ export const useFBDClipboard = ({
       })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isActive, reactFlowInstance, fbdFlowActions, rung],
+    [isActive, reactFlowInstance, fbdFlowActions, rung, isEditingLocked],
   )
 
   useEffect(() => {

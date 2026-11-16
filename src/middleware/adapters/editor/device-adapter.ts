@@ -24,6 +24,7 @@ import type {
   DevicePort,
 } from '../../shared/ports/device-port'
 import type { BoardInfo, CommunicationPort, DebugConnectionConfig } from '../../shared/ports/types'
+import { buildVendorDocumentUrl } from '../../shared/vendor-document/document-url'
 
 export function createEditorDeviceAdapter(): DevicePort {
   return {
@@ -45,6 +46,10 @@ export function createEditorDeviceAdapter(): DevicePort {
 
     getPreviewImage(imageName: string, packagePath?: string): Promise<string> {
       return window.bridge.getPreviewImage(imageName, packagePath)
+    },
+
+    getVendorDocumentUrl(packageId: string, relPath: string): string | null {
+      return buildVendorDocumentUrl(packageId, relPath)
     },
 
     connect(candidates: DebugConnectionConfig[]): Promise<DeviceConnectResult> {

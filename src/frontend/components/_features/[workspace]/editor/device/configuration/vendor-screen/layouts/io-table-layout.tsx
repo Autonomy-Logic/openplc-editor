@@ -1,6 +1,7 @@
+import { NavigationButton } from '@root/frontend/components/_atoms/navigation-button'
 import { toast } from '@root/frontend/components/_features/[app]/toast/use-toast'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '@root/frontend/store'
-import { getSectionPersistenceKey } from '@root/frontend/utils/vpp/persistence-keys'
+import { getSectionPersistenceKey, isDeviceSetupIoTable } from '@root/frontend/utils/vpp/persistence-keys'
 import { resolveModuleChannels, type ResolverModuleDef } from '@root/frontend/utils/vpp/resolve-module-channels'
 import type { IoMappingEntry, VendorIoMapping } from '@root/middleware/shared/ports/types'
 import {
@@ -11,10 +12,11 @@ import {
   validateAliasEdit,
 } from '@root/middleware/shared/utils/iec-address'
 import { vppMemoryKey } from '@root/middleware/shared/utils/iec-address/registry'
-import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleSystem, ScreenSection } from '../index'
+import { DeviceSetupIoTable } from './device-setup-io-table'
 
 type IoTableLayoutProps = {
   section: ScreenSection
@@ -48,7 +50,7 @@ function AliasInputCell({ value, onCommit }: { value: string; onCommit: (next: s
   )
 }
 
-function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
+function ManifestIoTable({ section, moduleSystem }: IoTableLayoutProps) {
   const store = useOpenPLCStoreApi()
   // See `getSectionPersistenceKey` in ../index.tsx — the single
   // source of truth for the per-section storage key.  Falls back to
@@ -73,7 +75,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       remoteDevices: state.project.data.remoteDevices ?? [],
       pinMappingPins:
         state.deviceDefinitions.pinMapping.pinsByBoard[state.deviceDefinitions.configuration.deviceBoard] ?? [],
-      capabilities: resolveTargetCapabilities(boardInfo),
+      capabilities: resolveAddressProducerCapabilities(boardInfo),
     }
   }, [store, persistenceKey])
 
@@ -202,7 +204,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
         vendorIoMapping: { entries },
         remoteDevices: state.project.data.remoteDevices,
       },
-      resolveTargetCapabilities(boardInfo),
+      resolveAddressProducerCapabilities(boardInfo),
     )
     const registry = buildAliasRegistry(pool)
     const validation = validateAliasEdit(registry, alias, sourceRef)
@@ -300,8 +302,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
 
         return (
           <div key={slot} className='overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700'>
-            <button
-              type='button'
+            <NavigationButton
               onClick={() => toggleSlot(slot)}
               className='flex w-full items-center justify-between bg-neutral-50 px-4 py-2.5 text-left hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-850'
             >
@@ -324,7 +325,7 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
               <span className='font-caption text-cp-sm text-neutral-500 dark:text-neutral-400'>
                 {ioSummary.join(' / ')}
               </span>
-            </button>
+            </NavigationButton>
 
             {isExpanded && (
               <table className='w-full text-left'>
@@ -375,6 +376,12 @@ function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
       })}
     </div>
   )
+}
+
+/** Without `source` the table allocates from `module-configuration`; an unknown `source` draws nothing. */
+function IoTableLayout({ section, moduleSystem }: IoTableLayoutProps) {
+  if (section.source === undefined) return <ManifestIoTable section={section} moduleSystem={moduleSystem} />
+  return isDeviceSetupIoTable(section) ? <DeviceSetupIoTable /> : null
 }
 
 export { IoTableLayout }

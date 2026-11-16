@@ -116,6 +116,8 @@ function writePluginDir(pkgDir: string): string {
   return pluginDir
 }
 
+const NO_SCREEN_CONFIGS = { vppExtensions: {}, debugMapContent: '', instances: [] }
+
 describe('handleVendorPluginPackaging — provisioning branch', () => {
   let pkgDir: string
   let projectDir: string
@@ -125,9 +127,16 @@ describe('handleVendorPluginPackaging — provisioning branch', () => {
   const runFor = (hal: Record<string, unknown>, capabilities?: Record<string, unknown>) => {
     listInstalled.mockReturnValue([{ packageId: 'com.openplc.rpi', path: pkgDir }])
     getInstalledPackageManifest.mockReturnValue(makeManifest(hal, capabilities))
-    return handler.call(makeReceiver(), BOARD, projectDir, targetDir, (message: string | Buffer, level?: string) => {
-      logs.push({ message: String(message), level: level ?? '' })
-    })
+    return handler.call(
+      makeReceiver(),
+      BOARD,
+      projectDir,
+      targetDir,
+      NO_SCREEN_CONFIGS,
+      (message: string | Buffer, level?: string) => {
+        logs.push({ message: String(message), level: level ?? '' })
+      },
+    )
   }
 
   beforeEach(() => {
@@ -332,9 +341,16 @@ describe('handleVendorPluginPackaging — provisioning branch', () => {
 
   const runWithEmptyStore = () => {
     listInstalled.mockReturnValue([])
-    return handler.call(makeReceiver(), BOARD, projectDir, targetDir, (message: string | Buffer, level?: string) => {
-      logs.push({ message: String(message), level: level ?? '' })
-    })
+    return handler.call(
+      makeReceiver(),
+      BOARD,
+      projectDir,
+      targetDir,
+      NO_SCREEN_CONFIGS,
+      (message: string | Buffer, level?: string) => {
+        logs.push({ message: String(message), level: level ?? '' })
+      },
+    )
   }
 
   it('stays silent about licensing for a built-in (hals.json) target with no VPP package', async () => {

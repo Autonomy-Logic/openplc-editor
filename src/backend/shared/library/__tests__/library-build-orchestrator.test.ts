@@ -293,6 +293,47 @@ describe('runLibraryBuildPipeline', () => {
     expect(events.some((e) => /\[main\.st:15\].*Undefined type 'TON'/.test(e.message))).toBe(true)
   })
 
+  it('hands the globals declared in stage 1 to libraryBuildFromTranspiledSt', async () => {
+    const harness = makePort()
+    mockPrepareXml.mockReturnValueOnce({
+      projectData: projectDataEmpty(),
+      knownPous: [],
+      manifest: { name: 'lib', version: '0.1.0', namespace: 'lib', extra: {} },
+      declaredGlobals: ['MotorCmd', 'Motors'],
+    })
+    const { emit } = captureEvents()
+
+    await runLibraryBuildPipeline({ projectPath: '/project', projectData: projectDataEmpty() }, harness.port, emit)
+
+    const [, , , aux] = mockLibraryBuild.mock.calls[0]
+    expect(aux.declaredGlobals).toEqual(['MotorCmd', 'Motors'])
+  })
+
+  it('prints every undeclared-export refusal and writes no .stlib', async () => {
+    const harness = makePort()
+    const refusals = [
+      'Library build refused: the built library would export the function block "EVIL", which the library project does not declare.',
+      'Library build refused: the built library would export the global "PAD", which the library project does not declare.',
+    ]
+    mockLibraryBuild.mockReturnValueOnce({
+      success: false,
+      archive: undefined,
+      errors: refusals.map((message) => ({ message })),
+    })
+    const { events, emit } = captureEvents()
+
+    const result = await runLibraryBuildPipeline(
+      { projectPath: '/project', projectData: projectDataEmpty() },
+      harness.port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toBe(refusals[0])
+    expect(events.filter((e) => e.level === 'error').map((e) => e.message)).toEqual(refusals)
+    expect(harness.files.has('build/lib.stlib')).toBe(false)
+  })
+
   it('threads pouDocs through to libraryBuildFromTranspiledSt', async () => {
     const harness = makePort()
     const { emit } = captureEvents()

@@ -34,7 +34,11 @@ import type {
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
 import { resolveModbusServerProfile } from '../../../middleware/shared/utils/modbus-server-profile'
-import { resolveTargetCapabilities } from '../../../middleware/shared/utils/target-capabilities'
+import {
+  DEFAULT_S7_PROFILE,
+  resolveAddressProducerCapabilities,
+  resolveTargetCapabilities,
+} from '../../../middleware/shared/utils/target-capabilities'
 import type { BoardHalsCompileEntry } from '../firmware/build-arduino-cli-args'
 import { buildArduinoCliCompileArgs } from '../firmware/build-arduino-cli-args'
 import { isRetainConfigCapableRuntime, MIN_RETAIN_CONFIG_RUNTIME_VERSION } from '../firmware/runtime-version-gate'
@@ -46,6 +50,11 @@ import {
 } from '../firmware/runtime-version-gate'
 import { buildKnownPous, emitCompileErrorEvents } from '../library/program-build-helpers'
 import { runProgramBuildPipeline } from '../library/program-build-pipeline'
+import {
+  type DependencyHintSurface,
+  detectsMissingArduinoCore,
+  missingArduinoCoreHint,
+} from '../packages/arduino-dependencies'
 import type { DevicePin } from '../types/PLC/devices'
 // PLCProjectData is read from the schema-shape type (singular `configuration`)
 // because that's the runtime shape the editor's pipeline operates on.
@@ -54,14 +63,25 @@ import type { DevicePin } from '../types/PLC/devices'
 // in the architectural plan.
 import type { PLCProjectData } from '../types/PLC/open-plc'
 import { materialiseOpcUaCredentials } from './opcua-credentials'
+import { buildSimulatorWasmRequest } from './steps/build-simulator-wasm-request'
 import { buildCBlocksFromPous, composeFirmwareBundle } from './steps/compose-firmware-bundle'
+import {
+  computeIoImage,
+  describeDuplicateOutput,
+  describeIoImageSizes,
+  describeUnbackedBail,
+  describeUnbackedLocations,
+  describeUnsupportedArea,
+  IMAGE_AREAS_BAREMETAL,
+  IMAGE_AREAS_RUNTIME_V4,
+} from './steps/compute-io-image'
 import { generateRuntimeConfs } from './steps/generate-confs'
 import { generateDefinesContent } from './steps/generate-defines'
+import { generateImageConf } from './steps/generate-image-conf'
 import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
 import { narrowModbusTransports, selectModbusServer } from './steps/modbus-defines'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
-import { selectThirdPartyLibraries } from './third-party-libraries'
 
 // ---------------------------------------------------------------------------
 // Public contract
@@ -83,9 +103,8 @@ export interface PipelineProgressEvent {
     | 'firmware-bundle'
     | 'runtime-v4-bundle'
     | 'embed-c-blocks'
-    | 'core-install'
-    | 'lib-install'
     | 'arduino-compile'
+    | 'simulator-compile'
     | 'runtime-version'
     | 'upload'
     | 'done'
@@ -107,19 +126,6 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
   /** Per-board #defines, fed through to `generateDefinesContent` as
    *  the `// Board defines` section. */
   define?: string | string[]
-  /** Per-board arduino-cli library list.  Sourced from `hals.json`
-   *  `extra_libraries` (static boards) and from VPP manifests'
-   *  `device.hal.extraArduinoLibraries` (installed VPP boards) — the
-   *  `BoardInfoResolver` collapses both onto the same key.  The
-   *  pipeline forwards these into `installArduinoLib`, which on the
-   *  editor runs `arduino-cli lib install <name>` and on the web
-   *  no-ops (compile-service backend pre-installs every library).
-   *
-   *  Per-board libs are the contract: a board that needs the
-   *  `Arduino_Opta_Blueprint` library declares it here, and the
-   *  install fires only when that board is selected.  Boards that
-   *  don't need a specific library never download it. */
-  extra_libraries?: string[]
   /** Names of the device's configuration screens, and the physical transport it
    *  exposes. Forwarded from the VPP manifest so the pipeline can resolve the
    *  SAME Modbus profile the screen resolves — what the board can serve over is
@@ -135,18 +141,10 @@ export interface BoardHalsBuildEntry extends BoardHalsCompileEntry {
    *  prebuilt boards (the `source` HAL still compiles as the integration layer).
    *  Sourced from the VPP manifest `device.hal.precompiledLibrary`. */
   precompiledLibraryDir?: string
-  /** Exact Arduino core version to install/verify before linking a prebuilt
-   *  arduino library (ABI-locked). From the VPP manifest `target.coreVersion`. */
-  coreVersion?: string
   /** Upload transport for arduino-cli targets. Absent/"serial" (default):
    *  serial-port upload. "ethernet": network upload, with the device IP passed
    *  as arduino-cli's `--port`. From `target.uploadMethod`. */
   uploadMethod?: 'serial' | 'ethernet'
-  /** Vendor board-manager index (`package_<vendor>_index.json`).  From the
-   *  VPP manifest `target.boardManagerUrl` or hals.json `board_manager_url`.
-   *  Forwarded to `installArduinoCore`, which passes it to arduino-cli as
-   *  `--additional-urls` so cores outside the built-in index resolve. */
-  boardManagerUrl?: string
   /** Compiler / runtime identifier (`'arduino-cli' | 'openplc-compiler'
    *  | 'simulator'`).  Used by `resolveTargetCapabilities`'s
    *  preset lookup — without this the resolver can't pick the right
@@ -176,7 +174,7 @@ export interface RunCompilePipelineArgs {
    *  Simulator'`, `'OpenPLC Runtime v4 (RPi)'`, `'Arduino Mega 2560'`). */
   boardTarget: string
   /** Runtime identifier from the matching `hals.json` entry:
-   *  `'simulator'` (avr8js), `'arduino-cli'` (direct Arduino board),
+   *  `'simulator'` (OpenPLC Simulator), `'arduino-cli'` (direct Arduino board),
    *  `'openplc-compiler'` (runtime v4 vPLC). */
   boardRuntime: string
   /** Resolved `hals.json` entry for `boardTarget`.  Carries the
@@ -301,6 +299,9 @@ export interface RunCompilePipelineArgs {
    *  `resolveTargetCapabilities(boardEntry)`, keeping capability
    *  semantics in one place. */
   vendorScreenData?: Record<string, unknown>
+  /** Where to tell the user how to repair a missing core when arduino-cli fails on one.
+   *  Absent means no hint, for hosts that do not install cores. */
+  dependencyHintSurface?: DependencyHintSurface
 }
 
 export interface RunCompilePipelineResult {
@@ -308,11 +309,10 @@ export interface RunCompilePipelineResult {
   /** Structured strucpp diagnostics from this run.  Carries
    *  the per-error events the renderer's navigation keys off. */
   errors?: StructuredCompileError[]
-  /** Compiled firmware bytes when the pipeline reached the
-   *  arduino-cli compile step successfully.  `undefined` when the
-   *  pipeline targeted runtime v4 (no arduino-cli step) or failed
-   *  before compile.  Caller decides what to do with these bytes
-   *  (editor: write to `Baremetal.ino.hex`; web: feed avr8js). */
+  /** Compiled firmware: the WebAssembly module for the simulator, the
+   *  arduino-cli output for a board when it produced a `.hex`.
+   *  `undefined` when the pipeline targeted runtime v4 or failed
+   *  before compile. */
   binary?: Uint8Array
   /** MD5 of the strucpp-compiled `program.st`.  Echoed back so
    *  callers can use it as a cache key (defines.h PROGRAM_MD5
@@ -363,10 +363,11 @@ function bailError(
  *   - Runtime v4 (openplc-compiler runtime): preprocess → ST →
  *     strucpp → confs → composeRuntimeV4Bundle → version check →
  *     uploadRuntimeV4.
- *   - Simulator (avr8js):                   preprocess → ST →
- *     strucpp → defines → composeFirmwareBundle → installCore/Lib
- *     (no-op on web) → compileArduino → return hex.
- *   - Arduino direct (physical board):     same as simulator, then
+ *   - Simulator:                            preprocess → ST →
+ *     strucpp → defines → composeFirmwareBundle → compileToWasm →
+ *     return the module.
+ *   - Arduino direct (physical board):     preprocess → ST → strucpp →
+ *     defines → composeFirmwareBundle → compileArduino, then
  *     uploadArduinoBoard.
  *   - Runtime v3 (legacy):                  preprocess → ST →
  *     strucpp → embed c-blocks → uploadRuntimeV3.
@@ -424,6 +425,7 @@ async function runCompilePipelineInner(
     targetHidesPersistentStorage,
     vendorScreenData,
     editorVersion,
+    dependencyHintSurface,
   } = args
 
   // Resolve the board's effective capabilities from `boardEntry`.
@@ -432,7 +434,102 @@ async function runCompilePipelineInner(
   // BoardInfoLike, but the runtime shape (capabilities + compiler +
   // optional vpp flag) is compatible — the resolver only reads
   // those fields and treats unknowns as missing.
-  const targetCapabilities = resolveTargetCapabilities(boardEntry as Parameters<typeof resolveTargetCapabilities>[0])
+  const targetCapabilities = resolveTargetCapabilities(boardEntry)
+
+  // ---------------------------------------------------------------------
+  // Step 0a: Size the I/O image from the project, and refuse a located
+  // declaration the target cannot honour.
+  //
+  // Here rather than inside either branch: the figure feeds the runtime-v4
+  // bundle AND the arduino-cli defines, and computing it once is what keeps
+  // the two from disagreeing (FR05).
+  //
+  // TWO TARGETS ARE EXEMPT, and for the same reason: we do not size what we
+  // cannot measure, and a target we do not size must not be gated either.
+  //
+  //   - Runtime v3 receives plain ST and sizes its own image. We emit nothing
+  //     for it and know nothing about its buffers.
+  //   - The SIMULATOR has no address producers by construction. Its
+  //     capability block declares `pinMapping: false`, which hides the pin
+  //     table, and nothing seeds pins for a new project — so `PINMASK_DIN`
+  //     comes out empty, `NUM_DISCRETE_INPUT` comes out 0, and
+  //     `simulator.cpp`'s I/O loops run zero times. Located I/O on the
+  //     simulator is therefore already inert today. Gating it would refuse
+  //     projects for a producer the user has no way to create, and sizing it
+  //     would hand the firmware an all-zero image, which is worse than the
+  //     header's own defaults. It keeps those defaults.
+  // ---------------------------------------------------------------------
+  const sizesTheImage = !isRuntimeV3 && !isSimulator
+
+  const ioImage = computeIoImage({
+    projectData,
+    devicePinMapping,
+    vendorScreenData,
+    // NOT `targetCapabilities`: that answers `EMPTY_CAPABILITIES` for an entry
+    // that declares nothing, which reads as "no producers at all" and would
+    // size every area to zero and then refuse the build.
+    capabilities: resolveAddressProducerCapabilities(boardEntry),
+    // The STRICT resolver here, unlike the producer one above, and the
+    // difference is deliberate. For producers, a board that does not resolve
+    // has to read as permissive or the store and the compiler disagree about
+    // which addresses are taken. For servers the safe direction is the other
+    // way: a target we cannot place has not been shown to run any server, and
+    // sizing the firmware from a config it may never receive is the failure
+    // this scoping exists to prevent.
+    serverCapabilities: resolveTargetCapabilities(boardEntry),
+    areas: isRuntimeV4 ? IMAGE_AREAS_RUNTIME_V4 : IMAGE_AREAS_BAREMETAL,
+  })
+
+  if (sizesTheImage && (ioImage.unsupported.length > 0 || ioImage.unbacked.length > 0)) {
+    // Both lists, not the first non-empty one: a project can carry each kind of
+    // mistake, and reporting one round at a time turns a single fix into
+    // several compile attempts.
+    for (const issue of ioImage.unsupported) {
+      emit({ stage: 'validate', message: describeUnsupportedArea(issue, boardTarget), level: 'error' })
+    }
+    for (const message of describeUnbackedLocations(ioImage.unbacked)) {
+      emit({ stage: 'validate', message, level: 'error' })
+    }
+    return bailError(emit, 'validate', describeUnbackedBail(ioImage.unbacked))
+  }
+
+  // TWO WRITERS ON ONE OUTPUT IS A WARNING, NOT A REFUSAL.
+  //
+  // IEC 61131-3 does not forbid it: a located variable may be declared in more
+  // than one POU, and which write survives is then the programmer's business,
+  // not the editor's. Where the standard does not restrict, neither do we.
+  //
+  // It is still worth saying. The addresses are global, so the last write in
+  // the scan wins and which one that is depends on POU order — a fact that is
+  // invisible in either declaration on its own. So the compile reports it and
+  // continues, and the amber glyph says the same thing at edit time.
+  if (sizesTheImage) {
+    for (const issue of ioImage.duplicateOutputs) {
+      emit({ stage: 'validate', message: describeDuplicateOutput(issue), level: 'warning' })
+    }
+  }
+
+  // WHERE EACH NUMBER CAME FROM, not just what it is.
+  //
+  // Both emitters are downstream of here — the `#define` block for bare metal
+  // and `image.conf` for v4 — so this is the one place that serves both, the
+  // same reason the sizer itself is called here rather than in each branch.
+  //
+  // The size alone is untraceable. Three contributors can size an area and the
+  // image takes the largest, so `%QW = 1024` might be the program's producers
+  // or might be a Modbus slave config nobody has opened in a year, and which
+  // one it is decides what the user changes. That is sharpest for a project
+  // that came from somewhere else: it arrives with a `bufferMapping` and an
+  // `s7commSlaveConfig` already in it, and nothing in the editor says so.
+  //
+  // Info level and only for the targets that actually size: v3 and the
+  // simulator keep their firmware defaults, so a line here would describe an
+  // image neither of them receives.
+  if (sizesTheImage) {
+    for (const line of describeIoImageSizes(ioImage)) {
+      emit({ stage: 'validate', message: line, level: 'info' })
+    }
+  }
 
   // ---------------------------------------------------------------------
   // Step 0: Use the already-preprocessed project data.
@@ -482,13 +579,16 @@ async function runCompilePipelineInner(
   // "only one server is allowed" leaves the user to guess which to turn off.
   // ---------------------------------------------------------------------
   const modbusSelection = selectModbusServer(processedData.servers as never)
-  // Only a target that actually builds this firmware can be in conflict. The
-  // simulator and the openplc-compiler runtimes never read the selection, so
-  // refusing their build over two enabled servers would block work on a project
-  // that is merely passing through -- which is the same "a project moves
-  // between targets" reasoning that put the refusal here instead of at creation.
+  // Whether this build COMPILES the server into firmware macros. The simulator
+  // and the openplc-compiler runtimes do not, so narrowing their transports
+  // would warn about a macro nothing reads.
   const targetServesOneSlave = !isRuntimeV4 && !isSimulator && boardRuntime !== 'openplc-compiler'
-  if (targetServesOneSlave && modbusSelection.conflict) {
+  // Whether exactly one slave configuration reaches the device, by whichever
+  // route: Runtime v4 ships `conf/modbus_slave.json`, bare metal ships macros.
+  // A target that serves no slave has nothing to be in conflict about, and the
+  // simulator's flags are UX rather than a slave it runs.
+  const oneSlaveConfigShips = !isSimulator && (targetCapabilities.modbusTcpServer || targetCapabilities.modbusRtuServer)
+  if (oneSlaveConfigShips && modbusSelection.conflict) {
     return bailError(
       emit,
       'validate',
@@ -658,6 +758,10 @@ async function runCompilePipelineInner(
       )
 
       confs = generateRuntimeConfs({
+        imageSizes: ioImage.sizes,
+        // The same profile the sizer read, so the file that ships and the image
+        // that holds it are selected by one answer.
+        s7Profile: targetCapabilities.s7 ?? DEFAULT_S7_PROFILE,
         // generateRuntimeConfs declares a stricter inline server shape than
         // PLCServer (bufferMapping required, etc.); the cast bridges that
         // cross-module difference, not the credentials type which is now
@@ -718,7 +822,15 @@ async function runCompilePipelineInner(
     // map and the bundle is unchanged.  Without this, programs
     // upload but the runtime runs as a generic v4 with no physical
     // I/O — the diagnostic surface for that failure is silence.
-    const vppResult = await port.packageVppPlugin({ boardTarget }, makePlatformLog(emit, 'runtime-v4-bundle'))
+    const instances = (projectData.configuration?.resource?.instances ?? []).map((inst) => ({
+      name: inst.name,
+      program: inst.program,
+    }))
+    const vppExtensions = projectData.vppExtensions ?? {}
+    const vppResult = await port.packageVppPlugin(
+      { boardTarget, screenConfigInputs: { vppExtensions, debugMapContent: debugMapJson, instances } },
+      makePlatformLog(emit, 'runtime-v4-bundle'),
+    )
     if (vppResult.errors && vppResult.errors.length > 0) {
       return bailError(emit, 'runtime-v4-bundle', 'VPP plugin packaging failed.', vppResult.errors)
     }
@@ -754,6 +866,17 @@ async function runCompilePipelineInner(
         level: 'info',
       })
     }
+
+    // The I/O image sizes travel the same way, and unconditionally: unlike
+    // retain.conf there is no meaning in withholding the file, so there is no
+    // branch here. A runtime too old to read it keeps its compiled-in
+    // BUFFER_SIZE, which is today's behaviour.
+    bundle['image.conf'] = generateImageConf(ioImage.sizes)
+    emit({
+      stage: 'runtime-v4-bundle',
+      message: `Generated image.conf (${Object.keys(ioImage.sizes).length} address area(s) sized from the project)`,
+      level: 'info',
+    })
 
     // Write the bundle out BEFORE the compile-only branch, so `compile` and
     // `upload` leave the same artifacts on disk. Until this existed, the bundle
@@ -880,13 +1003,7 @@ async function runCompilePipelineInner(
   }
 
   // ---------------------------------------------------------------------
-  // Step 4b: Runtime v3 branch — legacy target that ingests a single
-  // `program.st` (not a zip).  v3's on-device MatIEC recompiles the ST
-  // itself, so this MUST short-circuit BEFORE the arduino-cli path
-  // (core/lib install, firmware bundle, compile) — none of which apply
-  // to v3.  (Placing it after `installArduinoCore` was the bug: v3 has
-  // no Arduino core, so the install ran with an empty FQBN and aborted
-  // the build before the upload was ever reached.)
+  // Step 4b: Runtime v3 branch — uploads `program.st` and returns before the arduino-cli path.
   //
   // Strucpp already ran above purely as a correctness check; a strucpp
   // error bails before we get here, which is the desired behaviour
@@ -926,70 +1043,12 @@ async function runCompilePipelineInner(
   }
 
   // ---------------------------------------------------------------------
-  // Step 4c: Arduino / Simulator path — install core + lib (no-op on
-  // web), generate defines.h, compose firmware bundle, compile via
-  // arduino-cli.
+  // Step 4c: Arduino / Simulator path — defines.h, firmware bundle, arduino-cli compile.
   // ---------------------------------------------------------------------
-  emit({ stage: 'core-install', message: 'Installing Arduino core...', level: 'info' })
-  const coreInstall = await port.installArduinoCore(
-    {
-      coreId: typeof boardEntry.platform === 'string' ? deriveArduinoCoreFromPlatform(boardEntry.platform) : '',
-      // Pin the exact core version for prebuilt arduino libraries (ABI-locked).
-      ...(boardEntry.coreVersion ? { coreVersion: boardEntry.coreVersion } : {}),
-      // Vendor board-manager index for cores outside arduino-cli's built-in
-      // list.  Resolved from the VPP manifest's `target.boardManagerUrl`; the
-      // editor turns it into `--additional-urls` (and refreshes the index)
-      // so the core can be auto-installed instead of erroring out with
-      // "Platform not found".
-      ...(boardEntry.boardManagerUrl ? { boardManagerUrl: boardEntry.boardManagerUrl } : {}),
-    },
-    makePlatformLog(emit, 'core-install'),
-  )
-  if (!coreInstall.ok) {
-    return bailError(emit, 'core-install', 'Failed to install Arduino core.', coreInstall.errors)
-  }
-
-  // Library install — forward the per-board `extra_libraries` list so
-  // boards that need a specific lib (Arduino_Opta_Blueprint for the
-  // Opta, P1AM for the P1AM board, etc.) get installed when that
-  // board is selected, and boards that don't never download it.
-  //
-  // Install is opportunistic: the editor adapter warns and continues
-  // on `arduino-cli lib install` failure because the library may
-  // already be available from another source the editor doesn't
-  // manage (sketchbook, system-wide install, custom library path).
-  // arduino-cli compile is the source of truth — if a required
-  // header truly can't be resolved, it fails with a precise message
-  // pointing at the file that needed it.  Web's adapter no-ops
-  // entirely (its compile-service backend pre-installs every
-  // library).  Either way `ok` should be true here; the defensive
-  // `!ok` branch below warns and continues if an adapter ever
-  // returns false.
-  emit({ stage: 'lib-install', message: 'Installing Arduino libraries...', level: 'info' })
-  const libInstall = await port.installArduinoLib(
-    {
-      libId: '',
-      extraLibraries: boardEntry.extra_libraries ?? [],
-      // Capability-driven, not board-name-driven: a target gets the OPC-UA stack
-      // because it declares `opcuaServer`.
-      thirdPartyLibraries: selectThirdPartyLibraries(targetCapabilities),
-    },
-    makePlatformLog(emit, 'lib-install'),
-  )
-  if (!libInstall.ok) {
-    emit({
-      stage: 'lib-install',
-      message:
-        'Warning: library install reported a failure. Continuing — arduino-cli compile will surface any genuinely missing headers.',
-      level: 'warning',
-    })
-  }
-
   // Build defines.h using the shared content authoring step.
   const definesH = generateDefinesContent({
     boardEntry,
     devicePinMapping,
-    stProgramFileContent: programSt,
     buildMD5Hash: md5,
     boardRuntime,
     ...(vppModbusState !== undefined ? { vppModbusState } : {}),
@@ -1000,6 +1059,9 @@ async function runCompilePipelineInner(
     ...(boardEntry.defaultSerial ? { defaultSerial: boardEntry.defaultSerial } : {}),
     ...(boardEntry.networkInterfaces ? { networkInterfaces: boardEntry.networkInterfaces } : {}),
     ...(strucppResult.retainBlobSize !== null ? { retainBlobSize: strucppResult.retainBlobSize } : {}),
+    // Only for a target we actually size. Runtime v3 and the simulator keep
+    // openplc.h's own fallbacks, so their defines.h is unchanged.
+    ...(sizesTheImage ? { imageSizes: ioImage.sizes } : {}),
     ...(boardEntry.pinPull ? { pinPull: boardEntry.pinPull } : {}),
   })
 
@@ -1135,6 +1197,8 @@ async function runCompilePipelineInner(
     firmwareSkeleton,
   })
 
+  if (isSimulator) return compileSimulatorModule(firmwareFiles, port, emit, md5)
+
   // Build arduino-cli argv via the shared helper.  Same input/output
   // on both platforms.  `boardEntry` carries `platform` / `core` /
   // `c_flags` / etc. straight from `hals.json`.
@@ -1151,9 +1215,14 @@ async function runCompilePipelineInner(
   // Run arduino-cli compile.  Editor: spawns the binary.  Web: HTTP
   // POST.  Both consume the same `files` map + `argv`.
   emit({ stage: 'arduino-compile', message: 'Compiling Arduino firmware...', level: 'info' })
+  const compileOutput: string[] = []
+  const compileLog = makePlatformLog(emit, 'arduino-compile')
   const compileResult = await port.compileArduino(
     { files: firmwareFiles, argv: arduinoArgs, parallel: arduinoCliParallel },
-    makePlatformLog(emit, 'arduino-compile'),
+    (message, level) => {
+      compileOutput.push(message)
+      compileLog(message, level)
+    },
   )
   if (!compileResult.ok) {
     if (compileResult.errors && compileResult.errors.length > 0) {
@@ -1162,27 +1231,15 @@ async function runCompilePipelineInner(
         (msg, level, compileError) => emit({ stage: 'arduino-compile', message: msg, level, compileError }),
       )
     }
-    return bailError(emit, 'arduino-compile', 'Arduino compilation failed', compileResult.errors)
-  }
-
-  // Simulator: avr8js needs the Intel HEX bytes in memory.  The
-  // editor adapter reads `Baremetal.ino.hex` off disk for AVR builds;
-  // if it's missing here the compile silently succeeded but produced
-  // no .hex, which would crash the simulator loader downstream.
-  // Surface a precise error instead.  Non-simulator branches don't
-  // require `binary` — arduino-cli's upload step finds whatever
-  // artefact the core produced (.uf2 / .bin / .hex) on disk directly.
-  if (isSimulator) {
-    if (!compileResult.binary) {
-      return bailError(
-        emit,
-        'arduino-compile',
-        'Simulator build did not produce a .hex artefact.',
-        compileResult.errors,
-      )
+    const failed = bailError(emit, 'arduino-compile', 'Arduino compilation failed', compileResult.errors)
+    if (dependencyHintSurface) {
+      const output = [...compileOutput, ...(compileResult.errors ?? []).map((e) => e.message)].join('\n')
+      if (detectsMissingArduinoCore(output)) {
+        const hint = missingArduinoCoreHint({ surface: dependencyHintSurface })
+        emit({ stage: 'error', message: hint, level: 'error' })
+      }
     }
-    emit({ stage: 'done', message: 'Simulator firmware ready', level: 'info' })
-    return { success: true, md5, binary: compileResult.binary, uploaded: false }
+    return failed
   }
 
   // Compile-only: skip the physical upload step.
@@ -1230,18 +1287,24 @@ async function runCompilePipelineInner(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Derive the arduino-cli core id from a fully-qualified board name.
- *
- *   `'arduino:avr:mega'` → `'arduino:avr'`
- *   `'arduino:samd:zero'` → `'arduino:samd'`
- *
- * Used to pass the core id to `port.installArduinoCore`.  On web
- * (where install is a no-op) this never actually drives anything;
- * on editor it gates arduino-cli's lazy install.
- */
-function deriveArduinoCoreFromPlatform(platform: string): string {
-  const parts = platform.split(':')
-  if (parts.length < 2) return ''
-  return `${parts[0]}:${parts[1]}`
+/** The simulator build: the composed firmware files compiled to one WebAssembly module, with no arduino-cli. */
+async function compileSimulatorModule(
+  firmwareFiles: Record<string, string>,
+  port: CompilerPlatformPort,
+  emit: (event: PipelineProgressEvent) => void,
+  md5: string,
+): Promise<RunCompilePipelineResult> {
+  const built = buildSimulatorWasmRequest(firmwareFiles)
+  if (!built.ok) return bailError(emit, 'simulator-compile', built.error)
+  emit({ stage: 'simulator-compile', message: 'Compiling the simulator module...', level: 'info' })
+  const result = await port.compileToWasm(built.request, makePlatformLog(emit, 'simulator-compile'))
+  if (!result.ok) return bailError(emit, 'simulator-compile', 'Simulator compilation failed.')
+  const { units, cached, compileMs, linkMs } = result.stats
+  emit({
+    stage: 'simulator-compile',
+    message: `Simulator module compiled: ${units} files (${cached} reused) in ${Math.round(compileMs)} ms, linked in ${Math.round(linkMs)} ms.`,
+    level: 'info',
+  })
+  emit({ stage: 'done', message: 'Simulator firmware ready', level: 'info' })
+  return { success: true, md5, binary: result.wasm, uploaded: false }
 }

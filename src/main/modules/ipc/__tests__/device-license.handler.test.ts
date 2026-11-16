@@ -20,7 +20,7 @@ jest.mock('electron', () => ({
   shell: { openExternal: jest.fn() },
 }))
 
-jest.mock('@root/backend/editor/ethercat', () => ({ ESIService: jest.fn() }))
+jest.mock('@root/backend/editor/ethercat', () => ({ EsiProjectFiles: jest.fn() }))
 jest.mock('@root/backend/editor/library-manager/desktop-catalog-transport', () => ({
   createDesktopCatalogTransport: jest.fn(() => ({})),
 }))
@@ -35,8 +35,8 @@ jest.mock('../../../../backend/editor/services', () => ({
   logger: { error: jest.fn(), info: jest.fn(), warn: jest.fn() },
 }))
 jest.mock('../../../../backend/editor/utils', () => ({ getOpenProjectPath: jest.fn(), getProjectPath: jest.fn() }))
-jest.mock('../../../../backend/shared/simulator/simulator-module', () => ({
-  SimulatorModule: jest.fn(() => ({ stop: jest.fn() })),
+jest.mock('../../../../backend/editor/simulator/desktop-simulator', () => ({
+  createDesktopSimulator: jest.fn(() => ({ stop: jest.fn(), isRunning: jest.fn(() => false) })),
 }))
 
 jest.mock('../../../../backend/editor/license/license-flow', () => ({
@@ -267,7 +267,7 @@ describe('device:refresh-license', () => {
 
     expect(second.outcome).toEqual({
       state: 'check-failed',
-      error: 'A licence check is already running on this device.',
+      error: 'A license check is already running on this device.',
     })
     expect(licenseFlow.resolveDeviceLicense).toHaveBeenCalledTimes(1)
 
@@ -421,7 +421,7 @@ describe('licensing over a REST-controlled session (runtime v4)', () => {
     expect(result.outcome.state).toBe('check-failed')
     if (result.outcome.state === 'check-failed') {
       expect(result.outcome.retryable).toBe(false)
-      expect(result.outcome.error).toMatch(/no hardware identity a licence can be issued for/)
+      expect(result.outcome.error).toMatch(/no hardware identity a license can be issued for/)
       // The storage wording must not follow this condition anywhere.
       expect(result.outcome.error).not.toMatch(/storage|rebuild/i)
     }

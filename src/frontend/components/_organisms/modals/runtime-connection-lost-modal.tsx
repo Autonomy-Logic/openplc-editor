@@ -27,7 +27,7 @@ const RuntimeConnectionLostModal = () => {
         modalActions.onOpenChange('runtime-connection-lost', open)
       }}
     >
-      <ModalContent className='flex max-h-[380px] w-[400px] select-none flex-col items-center justify-evenly rounded-lg'>
+      <ModalContent className='flex w-[400px] select-none flex-col items-center justify-evenly rounded-lg'>
         <ModalTitle className='hidden'>Runtime Connection Lost</ModalTitle>
         <div className='flex select-none flex-col items-center gap-6'>
           <WarningIcon className='mr-2 mt-2 h-[73px] w-[73px] stroke-amber-500' />

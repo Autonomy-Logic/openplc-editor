@@ -1,8 +1,3 @@
-/**
- * Explain - This is a workaround to avoid the following error:
- * The ```@dnd-kit``` package is not correctly asserted by the lint tool.
- */
-
 import type { UniqueIdentifier } from '@dnd-kit/core'
 import {
   closestCenter,
@@ -15,14 +10,16 @@ import {
 import { restrictToParentElement } from '@dnd-kit/modifiers'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import * as Portal from '@radix-ui/react-portal'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 
+import { useGraphicalFocus } from '../../../../../../hooks/use-graphical-focus'
 import { usePouSnapshot } from '../../../../../../hooks/use-pou-snapshot'
 import { ladderSelectors } from '../../../../../../hooks/use-store-selectors'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import { RungLadderState } from '../../../../../../store/slices/ladder'
+import { graphicalElementModalFor } from '../../../../../../store/slices/modal'
 import { scheduleFlowWriteBack } from '../../../../../../store/slices/shared/flow-writeback'
 import { cn } from '../../../../../../utils/cn'
 import { hasLegacyInOutOutputHandle } from '../../../../../../utils/graphical/in-out-pin-rules'
@@ -36,17 +33,13 @@ import { useBoundPou } from '../active-context'
 import BlockElement from '../elements/ladder/block'
 import CoilElement from '../elements/ladder/coil'
 import ContactElement from '../elements/ladder/contact'
+import { useGraphicalPlacement } from '../placement/placement-context'
 
 const EMPTY_DIVERGENCES: string[] = []
 
 export default function LadderEditor() {
   const store = useOpenPLCStoreApi()
-  // Bound POU comes from the `GraphicalEditorActiveProvider` set up
-  // in the wrapper one level up.  Mirrors `FbdEditor` — see that
-  // file for the multi-mount rationale.
   const pouName = useBoundPou()
-  // Pou-scoped subscription: immer's structural sharing keeps this flow's
-  // identity stable when other POUs' flows (or unrelated slices) change.
   const flow = useOpenPLCStore((state) => state.ladderFlows.find((f) => f.name === pouName))
   const ladderFlowActions = useOpenPLCStore((state) => state.ladderFlowActions)
   const searchNodePosition = useOpenPLCStore((state) => state.searchNodePosition)
@@ -57,12 +50,16 @@ export default function LadderEditor() {
   const closeModal = useOpenPLCStore((state) => state.modalActions.closeModal)
   const userLibraries = useOpenPLCStore((state) => state.libraries.user)
   const isDebuggerVisible = useOpenPLCStore((state) => state.workspace.isDebuggerVisible)
+  const blockElement = graphicalElementModalFor(blockElementModal, pouName)
+  const contactElement = graphicalElementModalFor(contactElementModal, pouName)
+  const coilElement = graphicalElementModalFor(coilElementModal, pouName)
 
   const { captureAndPush } = usePouSnapshot()
+  const placement = useGraphicalPlacement()
 
   const updateModelLadder = ladderSelectors.useUpdateModelLadder()
 
-  const rungs = flow?.rungs || []
+  const rungs = useMemo(() => flow?.rungs ?? [], [flow?.rungs])
   const flowUpdated = flow?.updated || false
 
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null)
@@ -115,9 +112,6 @@ export default function LadderEditor() {
         const hasDivergence =
           originalInOut?.length !== currentVariables.length ||
           !originalInOut?.every((variable) => currentMap.has(formatVariable(variable))) ||
-          // The declarations can agree while the persisted GEOMETRY is stale: a rung saved
-          // before a VAR_IN_OUT pin became input-only still carries the pin's output side. The
-          // interface never changed, so the comparison above cannot see it.
           hasLegacyInOutOutputHandle(node)
 
         if (hasDivergence) {
@@ -128,6 +122,21 @@ export default function LadderEditor() {
 
     return divergences.length > 0 ? divergences : EMPTY_DIVERGENCES
   }, [flow?.rungs, userLibraries, pous])
+
+  const selectSearchedNode = useCallback(
+    ({ nodeId, rungId }: { nodeId: string; rungId?: string }) => {
+      const rung =
+        rungs.find((candidate) => candidate.id === rungId) ??
+        rungs.find((candidate) => candidate.nodes.some((node) => node.id === nodeId))
+      const node = rung?.nodes.find((candidate) => candidate.id === nodeId)
+      if (!rung || !node) return false
+
+      ladderFlowActions.setSelectedNodes({ nodes: [node], rungId: rung.id, editorName: pouName })
+      return true
+    },
+    [rungs, ladderFlowActions, pouName],
+  )
+  useGraphicalFocus(pouName, selectSearchedNode)
 
   const scrollableRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -140,13 +149,6 @@ export default function LadderEditor() {
     }
   }, [searchNodePosition])
 
-  /**
-   * Queue the flow → project JSON write-back. The scheduler debounces it
-   * (edits inside the window coalesce), persists the raw flow object, and
-   * clears the `updated` flag; save paths flush it so a save landing inside
-   * the window still serializes the fresh body. Validation and the DOPE-477
-   * raw-object policy live in store/slices/shared/flow-writeback.ts.
-   */
   useEffect(() => {
     if (!flowUpdated) return
     scheduleFlowWriteBack(store.getState, pouName, 'ld')
@@ -218,7 +220,6 @@ export default function LadderEditor() {
     }
 
     const auxRungs = [...(flow?.rungs || [])]
-    // Store the original state for recovery
     const originalRungs = [...auxRungs]
     const [removed] = auxRungs.splice(sourceIndex, 1)
     auxRungs.splice(destinationIndex, 0, removed)
@@ -228,22 +229,22 @@ export default function LadderEditor() {
       ladderFlowActions.setRungs({ editorName: pouName, rungs: auxRungs })
     } catch (error) {
       console.error('Failed to update rungs:', error)
-      // Recover the original state
       ladderFlowActions.setRungs({ editorName: pouName, rungs: originalRungs })
-      // Notify the user
       console.error('Failed to reorder rungs. The operation has been reverted.')
     }
   }
 
-  /**
-   * Handle the close of the modal
-   */
   const handleModalClose = () => {
     closeModal()
   }
 
   return (
-    <div className='h-full w-full overflow-y-auto' ref={scrollableRef} style={{ scrollbarGutter: 'stable' }}>
+    <div
+      className='h-full w-full overflow-y-auto'
+      ref={scrollableRef}
+      style={{ scrollbarGutter: 'stable' }}
+      onContextMenu={placement?.handleContextMenu}
+    >
       <div className='flex flex-1 flex-col gap-4 px-2'>
         <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
           <div
@@ -278,24 +279,24 @@ export default function LadderEditor() {
         </DndContext>
         <CreateRung onClick={handleAddNewRung} />
         <Portal.Root>
-          {blockElementModal?.open && (
+          {blockElement && (
             <BlockElement
               onClose={handleModalClose}
-              selectedNode={blockElementModal.data as BlockNode<BlockVariant>}
+              selectedNode={blockElement.node as BlockNode<BlockVariant>}
               isOpen={blockElementModal.open}
             />
           )}
-          {contactElementModal?.open && (
+          {contactElement && (
             <ContactElement
               onClose={handleModalClose}
-              node={contactElementModal.data as ContactNode}
+              node={contactElement.node as ContactNode}
               isOpen={contactElementModal.open}
             />
           )}
-          {coilElementModal?.open && (
+          {coilElement && (
             <CoilElement
               onClose={handleModalClose}
-              node={coilElementModal.data as CoilNode}
+              node={coilElement.node as CoilNode}
               isOpen={coilElementModal.open}
             />
           )}

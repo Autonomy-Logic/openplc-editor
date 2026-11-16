@@ -398,7 +398,7 @@ const GlobalVariablesEditor = () => {
 
   return (
     <div ref={containerRef} aria-label='Variables editor container' className='flex  w-full flex-col gap-4'>
-      <div aria-label='Variables editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
+      <div aria-label='Variables editor actions' className='relative flex h-8 w-full'>
         <div aria-label='Variables editor table actions container' className='flex h-full w-full justify-between'>
           <span className='select-none'>Global Variables</span>
 

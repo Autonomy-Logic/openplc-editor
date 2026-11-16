@@ -57,6 +57,44 @@
         display: flex;
         justify-content: space-between;
       }
+      .startupError {
+        display: none;
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        padding: 16px;
+        box-sizing: border-box;
+        flex-direction: column;
+        gap: 12px;
+        background-color: #023c97;
+        font-size: 12px;
+        user-select: text;
+      }
+      .startupError h1 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .startupError p {
+        margin: 0;
+        overflow: auto;
+        flex: 1;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .startupError button {
+        align-self: flex-end;
+        padding: 6px 20px;
+        border: none;
+        border-radius: 4px;
+        background-color: #0464fb;
+        color: #fff;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
       img {
         -webkit-app-region: no-drag;
         user-select: none;
@@ -88,6 +126,11 @@
           <span>All rights reserved.</span>
         </div>
       </div>
+      <div class="startupError" id="startupError" role="alert">
+        <h1>OpenPLC Editor could not start</h1>
+        <p id="startupErrorMessage"></p>
+        <button type="button" id="startupErrorQuit">Quit</button>
+      </div>
       <div class="loadContainer">
         <div class="loadbar" id="progressBar"></div>
       </div>
@@ -96,6 +139,13 @@
     <script>
       document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('copyrightYear').textContent = new Date().getFullYear()
+        const startupError = new URLSearchParams(window.location.search).get('error')
+        if (startupError !== null) {
+          document.getElementById('startupErrorMessage').textContent = startupError
+          document.getElementById('startupError').style.display = 'flex'
+          document.getElementById('startupErrorQuit').addEventListener('click', () => window.close())
+          return
+        }
 
         function updateProgressBar(progress) {
           const progressBar = document.getElementById('progressBar')

@@ -1,5 +1,6 @@
 import type { PLCVariable } from '../../../../middleware/shared/ports/types'
 import { WarningIcon } from '../../../assets/icons/interface/Warning'
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../store'
 import type { RungLadderState } from '../../../store/slices/ladder'
 import { BasicNodeData } from '../../_atoms/graphical-editor/ladder/utils/types'
@@ -88,6 +89,7 @@ function resolveDeleteTarget(data: unknown): { name: string; elementType: Delete
 
 const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteElementProps) => {
   const store = useOpenPLCStore()
+  const isEditingLocked = useIsEditingLocked()
   const {
     editor,
     project: {
@@ -168,6 +170,10 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
   }
 
   const handleDeleteElement = (): void => {
+    if (isEditingLocked) {
+      closeModal()
+      return
+    }
     try {
       // Ladder rung deletion: takes precedence when a rung is provided.
       // Rung deletes are an in-editor edit, not a file-level deletion — they
@@ -262,7 +268,7 @@ const ConfirmDeleteElementModal = ({ rung, isOpen, ...rest }: ConfirmDeleteEleme
       }}
       {...rest}
     >
-      <ModalContent className='flex max-h-80 w-[300px] select-none flex-col items-center justify-evenly rounded-lg'>
+      <ModalContent className='flex w-[300px] select-none flex-col items-center justify-evenly rounded-lg'>
         <div className='flex select-none flex-col items-center gap-6'>
           <WarningIcon className='mr-2 mt-2 h-[73px] w-[73px]' />
           <div>

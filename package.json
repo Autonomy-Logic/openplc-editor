@@ -1,8 +1,8 @@
 {
   "name": "open-plc-editor",
   "description": "OpenPLC Editor - IDE capable of creating programs for the OpenPLC Runtime",
-  "version": "4.3.2",
-  "license": "GPL-3.0",
+  "version": "4.3.5",
+  "license": "GPL-3.0-only",
   "author": {
     "name": "Autonomy Logic"
   },
@@ -16,13 +16,15 @@
     "cli": "electron ./release/app/dist/main/main.js --cli",
     "cli:dev": "electron ./openplc-cli.dev.js --cli",
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.renderer.prod.ts",
+    "build:relay": "cross-env TS_NODE_TRANSPILE_ONLY=true ts-node scripts/relay/build-relay.ts",
     "lint": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx}",
     "lint:fix": "cross-env NODE_ENV=development eslint ./src/**/*.{ts,tsx} --fix",
     "format": "cross-env NODE_ENV=development prettier --write \"./src/**/*.{ts,tsx}\"",
-    "postinstall": "ts-node scripts/download-binaries.ts && ts-node scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
+    "postinstall": "ts-node scripts/download-binaries.ts && ts-node scripts/download-python-runtime.ts && ts-node scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll",
     "compile:matrix": "ts-node scripts/compile-matrix.ts",
     "setup:binaries": "ts-node scripts/download-binaries.ts",
     "setup:strucpp": "ts-node scripts/download-binaries.ts --strucpp-only",
+    "setup:python": "ts-node scripts/download-python-runtime.ts",
     "package": "ts-node scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "prestart": "ts-node scripts/download-binaries.ts && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.dev.ts",
@@ -32,7 +34,7 @@
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.preload.dev.ts",
     "test": "jest --collectCoverage --maxWorkers=2",
     "test:watch": "jest --watch --no-coverage",
-    "test:e2e": "npm run build && npx playwright test",
+    "test:e2e": "cross-env OPENPLC_E2E_DEBUG_SEAM=1 npm run build && npx playwright test",
     "validate:arch": "npx tsx src/__architecture__/validate.ts",
     "prepare": "husky"
   },
@@ -64,7 +66,6 @@
     "@tanstack/react-table": "^8.21.2",
     "@xyflow/react": "^12.11.2",
     "auto-zustand-selectors-hook": "^2.0.0",
-    "avr8js": "0.20.0",
     "axios": "^1.13.6",
     "browser-basedpyright": "^1.39.6",
     "clsx": "^2.1.1",
@@ -74,7 +75,6 @@
     "electron-debug": "^3.2.0",
     "electron-log": "^4.4.8",
     "electron-store": "^8.1.0",
-    "electron-updater": "^6.1.4",
     "embla-carousel-react": "^8.0.0-rc17",
     "extract-zip": "^2.0.1",
     "fast-xml-parser": "^5.6.0",
@@ -134,6 +134,8 @@
     "@types/source-map-support": "^0.5.10",
     "@types/uuid": "^9.0.7",
     "@types/webpack-bundle-analyzer": "^4.6.0",
+    "@wasmer/sdk": "0.19.1",
+    "@yowasp/clang": "22.0.0-git20542-10",
     "autoprefixer": "^10.4.16",
     "browserslist-config-erb": "^0.0.3",
     "chalk": "^4.1.2",
@@ -143,7 +145,7 @@
     "css-loader": "^6.8.1",
     "css-minimizer-webpack-plugin": "^5.0.1",
     "detect-port": "^1.5.1",
-    "electron": "^35.0.0",
+    "electron": "^37.10.3",
     "electron-builder": "^26.0.12",
     "electron-devtools-installer": "^3.2.0",
     "electronmon": "^2.0.2",
@@ -190,7 +192,7 @@
     "webpack-merge": "^6.0.1"
   },
   "engines": {
-    "node": ">=22.x <24",
+    "node": "^22",
     "npm": ">=10.x"
   },
   "electronmon": {

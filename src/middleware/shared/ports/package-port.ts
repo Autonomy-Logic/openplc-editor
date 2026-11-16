@@ -13,7 +13,16 @@
  */
 
 import type { VppPackagePin } from '../../../backend/shared/types/PLC/devices/configuration'
-import type { ImportResult, InstalledPackage, PackageManifest, RemoteCatalog, Result, Unsubscribe } from './types'
+import type {
+  ImportResult,
+  InstalledPackage,
+  PackageInstallProgress,
+  PackageManifest,
+  RemoteCatalog,
+  Result,
+  StartupNotice,
+  Unsubscribe,
+} from './types'
 import type { DeviceVpp } from './vpp-types'
 
 export interface PackagePort {
@@ -57,8 +66,28 @@ export interface PackagePort {
 
   /**
    * Uninstall a VPP package by its ID.
+   * Editor: also removes the cores and libraries no other installed package
+   * needs; `warning` names any that could not be removed.
    */
-  uninstall(packageId: string): Promise<Result>
+  uninstall(packageId: string): Promise<Result<{ warning?: string }>>
+
+  /**
+   * Install whatever cores and libraries the installed package is missing,
+   * without uninstalling it. Web: nothing to install, resolves successfully.
+   */
+  reinstall(packageId: string): Promise<ImportResult>
+
+  /** Cancel the running package installation or Reinstall. Web: no-op. */
+  cancelInstall(): void
+
+  /** Subscribe to dependency-installation progress. Web: never fires. */
+  onInstallProgress(callback: (progress: PackageInstallProgress) => void): Unsubscribe
+
+  /**
+   * Subscribe to the startup dependency check's console messages. Messages raised
+   * before anyone subscribed are delivered on subscription. Web: never fires.
+   */
+  onStartupNotices(callback: (notices: StartupNotice[]) => void): Unsubscribe
 
   /**
    * Get the full manifest of an installed package.
@@ -69,10 +98,9 @@ export interface PackagePort {
    * The installed package's pinnable identity — `packageId@version` plus the
    * `contentHash` of its signed payload — or null when it is not installed.
    *
-   * A project records this when a VPP board is selected, so the editor can say
-   * at authoring and again before an upload that the package has moved since
-   * the program was written against it. The hash is the part that matters: a
-   * republished package keeps its version string.
+   * The board screen records this as the project's pin, replacing an older
+   * pin when a different package is installed. The hash tells a republished
+   * package apart, since a republish keeps its version string.
    */
   getPackagePin(packageId: string): Promise<VppPackagePin | null>
 

@@ -353,6 +353,63 @@ describe('createLibrarySlice', () => {
       store.getState().libraryActions.disableLibrary('phantom')
       expect(store.getState().enabledLibraries).toEqual([])
     })
+
+    describe('on a library the system pool does not have', () => {
+      beforeEach(() => {
+        const a = store.getState().libraryActions
+        a.setSystemLibraries([makeSystemLibrary({ name: 'oscat-basic', version: '3.4.0' })])
+        a.setProjectLibraries([
+          { name: 'oscat-basic', version: '3.4.0' },
+          { name: 'ghost-lib', version: '1.0.0' },
+          { name: 'other-ghost', version: '2.0.0' },
+        ])
+      })
+
+      it('drops it from missingLibraries and keeps the other missing entry', () => {
+        store.getState().libraryActions.disableLibrary('ghost-lib')
+
+        expect(store.getState().missingLibraries).toEqual([{ name: 'other-ghost', version: '2.0.0' }])
+      })
+
+      it('leaves missingLibraries empty once the last missing entry is removed', () => {
+        const a = store.getState().libraryActions
+        a.disableLibrary('ghost-lib')
+        a.disableLibrary('other-ghost')
+
+        expect(store.getState().missingLibraries).toEqual([])
+      })
+
+      it('keeps the order of the remaining missing entries', () => {
+        store.getState().libraryActions.setProjectLibraries([
+          { name: 'ghost-lib', version: '1.0.0' },
+          { name: 'middle-ghost', version: '1.5.0' },
+          { name: 'other-ghost', version: '2.0.0' },
+        ])
+
+        store.getState().libraryActions.disableLibrary('middle-ghost')
+
+        expect(store.getState().missingLibraries).toEqual([
+          { name: 'ghost-lib', version: '1.0.0' },
+          { name: 'other-ghost', version: '2.0.0' },
+        ])
+      })
+
+      it('leaves enabledLibraries untouched', () => {
+        store.getState().libraryActions.disableLibrary('ghost-lib')
+
+        expect(store.getState().enabledLibraries).toEqual(['oscat-basic'])
+      })
+
+      it('changes neither list for a name the project does not reference', () => {
+        store.getState().libraryActions.disableLibrary('never-referenced')
+
+        expect(store.getState().missingLibraries).toEqual([
+          { name: 'ghost-lib', version: '1.0.0' },
+          { name: 'other-ghost', version: '2.0.0' },
+        ])
+        expect(store.getState().enabledLibraries).toEqual(['oscat-basic'])
+      })
+    })
   })
 })
 

@@ -118,4 +118,84 @@ describe('interpretPluginCommandResponse', () => {
       expect(interpretPluginCommandResponse(200, body)).toMatchObject({ ok: false })
     },
   )
+
+  it('passes the device refusal through as the error to show', () => {
+    expect(interpretPluginCommandResponse(200, { error: 'Stop the PLC before detecting modules.' })).toEqual({
+      ok: false,
+      error: 'Stop the PLC before detecting modules.',
+    })
+  })
+})
+
+describe('parseScreenActions with the package schema command type', () => {
+  const detect = {
+    id: 'detect_modules',
+    label: 'Auto-Detect Modules',
+    icon: 'search',
+    type: 'command',
+    command: 'discover_modules',
+    requiresConnection: true,
+    confirm: 'Replace the configuration?',
+    resultMapping: { path: 'modules', slotField: 'slot', moduleIdField: 'hwId' },
+  }
+
+  it('reads a schema-valid command action as a plugin command', () => {
+    expect(parseScreenActions([detect], 'synergy')).toEqual([
+      {
+        kind: 'plugin-command',
+        id: 'detect_modules',
+        label: 'Auto-Detect Modules',
+        plugin: 'synergy',
+        command: 'discover_modules',
+        params: {},
+        confirm: 'Replace the configuration?',
+        requiresConnection: true,
+        resultMapping: { path: 'modules', slotField: 'slot', moduleIdField: 'hwId' },
+      },
+    ])
+  })
+
+  it('sends the command payload as the params', () => {
+    const actions = parseScreenActions([{ ...detect, payload: { verbose: true } }], 'synergy')
+    expect(actions[0]).toMatchObject({ params: { verbose: true } })
+  })
+
+  it('omits requiresConnection and resultMapping when the screen does not declare them', () => {
+    const actions = parseScreenActions(
+      [{ id: 's', label: 'Status', type: 'command', command: 'status', requiresConnection: false }],
+      'synergy',
+    )
+    expect(actions).toEqual([
+      { kind: 'plugin-command', id: 's', label: 'Status', plugin: 'synergy', command: 'status', params: {} },
+    ])
+  })
+
+  it('drops a command action without a plugin to route to', () => {
+    expect(parseScreenActions([detect])).toEqual([])
+  })
+
+  it('drops a command outside the allowlist', () => {
+    expect(parseScreenActions([{ ...detect, command: 'reboot' }], 'synergy')).toEqual([])
+  })
+
+  it.each([
+    ['not an object', 'modules'],
+    ['missing path', { slotField: 'slot', moduleIdField: 'hwId' }],
+    ['missing slotField', { path: 'modules', moduleIdField: 'hwId' }],
+    ['empty moduleIdField', { path: 'modules', slotField: 'slot', moduleIdField: '' }],
+  ] as Array<[string, unknown]>)('drops an action whose resultMapping is %s', (_label: string, mapping: unknown) => {
+    expect(parseScreenActions([{ ...detect, resultMapping: mapping }], 'synergy')).toEqual([])
+  })
+
+  it('still ignores the schema types it does not implement', () => {
+    expect(
+      parseScreenActions(
+        [
+          { id: 'q', label: 'Q', type: 'query', query: 'status' },
+          { id: 'n', label: 'N', type: 'navigate', target: 'x' },
+        ],
+        'synergy',
+      ),
+    ).toEqual([])
+  })
 })

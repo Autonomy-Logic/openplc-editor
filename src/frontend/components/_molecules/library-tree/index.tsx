@@ -4,6 +4,7 @@ import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { LibraryCloseFolderIcon } from '../../../assets/icons/library/CloseFolder'
 import { LibraryFileIcon } from '../../../assets/icons/library/File'
 import { LibraryOpenFolderIcon } from '../../../assets/icons/library/OpenFolder'
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { cn } from '../../../utils/cn'
 
 type ILibraryRootProps = ComponentPropsWithoutRef<'ul'> & {
@@ -92,10 +93,20 @@ type ILibraryFileProps = ComponentPropsWithoutRef<'li'> & {
   onSelect: () => void
 }
 
-const LibraryFile = ({ label, isSelected, onSelect, ...res }: ILibraryFileProps) => {
+const LibraryFile = ({ label, isSelected, onSelect, draggable, onDragStart, ...res }: ILibraryFileProps) => {
+  const isEditingLocked = useIsEditingLocked()
+  const isLockedDragSource = draggable === true && isEditingLocked
+
   return (
     <li
-      className={`${isSelected ? 'bg-slate-50 dark:bg-neutral-900' : ''} ml-2 cursor-pointer pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900`}
+      className={cn(
+        isSelected && 'bg-slate-50 dark:bg-neutral-900',
+        'ml-2 cursor-pointer pl-2 hover:bg-slate-50 dark:hover:bg-neutral-900',
+        isLockedDragSource && 'cursor-not-allowed opacity-50',
+      )}
+      draggable={draggable === undefined ? undefined : draggable && !isEditingLocked}
+      data-editing-locked={isLockedDragSource ? 'true' : undefined}
+      onDragStart={isLockedDragSource ? undefined : onDragStart}
       {...res}
     >
       <div className='flex flex-row items-center gap-[6px] py-1 pl-6 '>

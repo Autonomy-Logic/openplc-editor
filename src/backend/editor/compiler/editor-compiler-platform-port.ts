@@ -24,6 +24,11 @@
  * `middleware/adapters/web/`.
  */
 
+import {
+  ARDUINO_EXPORT_DIR,
+  planBuildTreeSync,
+  staticCandidates,
+} from '@root/backend/shared/compile/steps/plan-build-tree-sync'
 import { deployReachedDevice, deployRuntimeProgram } from '@root/backend/shared/library/deploy-runtime-program'
 import { probeRuntimeVersion } from '@root/backend/shared/library/probe-runtime-version'
 import {
@@ -35,14 +40,13 @@ import {
   type SchemaProjectData,
   transpileToSt as runJsonTranspiler,
 } from '@root/backend/shared/transpilers/st-transpiler'
+import type { WasmCompileService } from '@root/backend/shared/wasm-toolchain/wasm-compile-service'
 import type {
   CheckRuntimeVersionArgs,
   CheckRuntimeVersionResult,
   CompileArduinoArgs,
   CompileArduinoResult,
   CompilerPlatformPort,
-  InstallArduinoCoreArgs,
-  InstallArduinoLibArgs,
   MaterializeRuntimeV4BundleArgs,
   MaterializeRuntimeV4BundleResult,
   PackageVppPluginArgs,
@@ -56,11 +60,61 @@ import type {
   UploadRuntimeV3Args,
   UploadRuntimeV4Args,
 } from '@root/middleware/shared/ports/compiler-platform-port'
+import type { WasmCompileRequest, WasmCompileResult } from '@root/middleware/shared/ports/wasm-toolchain-types'
 import { createHash } from 'crypto'
-import { promises as fs } from 'fs'
+import { type Dirent, promises as fs } from 'fs'
 import { dirname, join } from 'path'
 
 import type { CompilerModule } from './compiler-module'
+
+/** Every file under `root` as a POSIX path relative to it, skipping arduino-cli's export folder. */
+async function listBuildFolder(root: string, relDir = ''): Promise<string[]> {
+  let entries: Dirent[]
+  try {
+    entries = await fs.readdir(join(root, relDir), { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const paths: string[] = []
+  for (const entry of entries) {
+    const relPath = relDir === '' ? entry.name : `${relDir}/${entry.name}`
+    if (entry.isDirectory()) {
+      if (`${relPath}/` === ARDUINO_EXPORT_DIR) continue
+      paths.push(...(await listBuildFolder(root, relPath)))
+    } else {
+      paths.push(relPath)
+    }
+  }
+  return paths
+}
+
+/** Apply `planBuildTreeSync` to the build folder at `root`. */
+export async function syncBuildFolder(
+  root: string,
+  desired: Record<string, string>,
+  staticFiles: Record<string, string>,
+): Promise<void> {
+  const existingPaths = await listBuildFolder(root)
+  const present = new Set(existingPaths)
+  const existingContents: Record<string, string> = {}
+  for (const path of staticCandidates(desired, staticFiles)) {
+    if (!present.has(path)) continue
+    try {
+      existingContents[path] = await fs.readFile(join(root, path), 'utf-8')
+    } catch {
+      continue
+    }
+  }
+  const plan = planBuildTreeSync({ desired, staticFiles, existingPaths, existingContents })
+  await Promise.all(plan.remove.map((path) => fs.rm(join(root, path), { force: true })))
+  await Promise.all(
+    plan.write.map(async (path) => {
+      const absPath = join(root, path)
+      await fs.mkdir(dirname(absPath), { recursive: true })
+      await fs.writeFile(absPath, desired[path], 'utf-8')
+    }),
+  )
+}
 
 /**
  * Subset of `CompilerModule` the port adapter calls into.  Declared
@@ -71,8 +125,6 @@ import type { CompilerModule } from './compiler-module'
 export interface EditorCompilerHandlers {
   handleCompileArduinoProgram: CompilerModule['handleCompileArduinoProgram']
   handleUploadProgram: CompilerModule['handleUploadProgram']
-  handleCoreInstallation: CompilerModule['handleCoreInstallation']
-  handleLibraryInstallation: CompilerModule['handleLibraryInstallation']
   handleVendorPluginPackaging: CompilerModule['handleVendorPluginPackaging']
 }
 
@@ -99,6 +151,10 @@ export interface EditorCompilerPlatformPortContext {
   /** Whether the user requested a clean rebuild (drives arduino-cli's
    *  `--clean` flag). */
   cleanBuild: boolean
+  /** The editor's static firmware resources at their build-folder paths, so
+   *  `compileArduino` rewrites them only when they changed. Absent: every
+   *  file is written. */
+  staticFirmwareFiles?: Record<string, string>
   /** Bridge methods for runtime API calls (compile-status poll, etc.). */
   mainProcessBridge: {
     makeRuntimeApiRequest: <T = void>(
@@ -153,6 +209,9 @@ export interface EditorCompilerPlatformPortContext {
    * floor known", which the pipeline treats as no constraint.
    */
   getVppRuntimeFloor?: (boardTarget: string) => string | null
+  /** The process's WebAssembly toolchain, which builds the simulator. Injected for the same reason as
+   *  `getVppRuntimeFloor`: the desktop toolchain module needs Electron at load. */
+  wasmCompileService: Pick<WasmCompileService, 'compile'>
   /** Timeout for the post-upload compile-status poll. */
   pollTimeoutMs: number
   /** Interval for the post-upload compile-status poll. */
@@ -224,67 +283,25 @@ export function createEditorCompilerPlatformPort(
       return Promise.resolve(result)
     },
 
-    /**
-     * Arduino-cli core install.  The existing
-     * `handleCoreInstallation` already takes a core id and a log
-     * callback — direct passthrough modulo the log-shape
-     * translation.
-     *
-     * `args.boardManagerUrl` (the VPP's `target.boardManagerUrl`) is
-     * forwarded so vendor cores outside arduino-cli's built-in index
-     * install automatically rather than failing with "Platform not
-     * found".  `handleCoreInstallation` refreshes the index against
-     * that URL before installing.
-     */
-    async installArduinoCore(args: InstallArduinoCoreArgs, log: PlatformLog): Promise<UploadResult> {
-      try {
-        await handlers.handleCoreInstallation(
-          args.coreId,
-          (chunk, level) => {
-            const message = typeof chunk === 'string' ? chunk : chunk.toString()
-            log(message, level ?? 'info')
-          },
-          args.coreVersion,
-          args.boardManagerUrl,
-        )
-        return { ok: true }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        log(`Arduino core install failed: ${message}`, 'error')
-        return { ok: false }
+    /** Writes the request's text files to the build folder (the debugger reads the debug map there), then compiles. */
+    async compileToWasm(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult> {
+      const textFiles: Record<string, string> = {}
+      for (const [path, content] of Object.entries(request.files)) {
+        if (typeof content === 'string') textFiles[path] = content
       }
-    },
-
-    /**
-     * Arduino-cli library install.  Forwards `args.extraLibraries`
-     * (the per-board library list from `BoardBuildInfo`) to
-     * `handleLibraryInstallation`, which combines them with the
-     * editor's `GLOBAL_LIBRARIES` and runs `arduino-cli lib install`
-     * for whatever's missing.  `args.libId` is unused on this path —
-     * kept in the port shape for the legacy single-library callers.
-     */
-    async installArduinoLib(args: InstallArduinoLibArgs, log: PlatformLog): Promise<UploadResult> {
       try {
-        await handlers.handleLibraryInstallation(
-          args.extraLibraries ?? [],
-          (chunk, level) => {
-            const message = typeof chunk === 'string' ? chunk : chunk.toString()
-            log(message, level ?? 'info')
-          },
-          args.thirdPartyLibraries ?? [],
-        )
-        return { ok: true }
+        await syncBuildFolder(context.compilationPath, textFiles, context.staticFirmwareFiles ?? {})
       } catch (error) {
-        // Reached only when the install machinery itself can't run
-        // (arduino-cli binary missing, spawn failure, etc.).  Non-
-        // zero `arduino-cli lib install` exits are warnings inside
-        // `handleLibraryInstallation` and don't throw.  Either way
-        // the build continues — arduino-cli compile is the source of
-        // truth for whether a required header can be found.
-        const message = error instanceof Error ? error.message : String(error)
-        log(`Warning: library install machinery failed: ${message}. Continuing build.`, 'warning')
-        return { ok: true }
+        const message = `Could not write the build folder: ${error instanceof Error ? error.message : String(error)}`
+        log(message, 'error')
+        return {
+          ok: false,
+          error: message,
+          stats: { units: 0, cached: 0, compileMs: 0, linkMs: 0 },
+          diagnostics: [{ message, level: 'error' }],
+        }
       }
+      return context.wasmCompileService.compile(request, log)
     },
 
     /**
@@ -293,31 +310,17 @@ export function createEditorCompilerPlatformPort(
      * existing `handleCompileArduinoProgram`.
      *
      * When a `Baremetal.ino.hex` exists under the FQBN build folder
-     * we read it back into the result `binary` field — the simulator
-     * path needs it in memory to hand to avr8js.  Non-AVR cores
+     * we read it back into the result `binary` field.  Non-AVR cores
      * (RP2040 → `.uf2`, ESP32 / mbed → `.bin`) don't produce a `.hex`
      * and don't need an in-memory binary: arduino-cli's separate
      * `upload` step finds the right artefact on disk under whatever
      * extension the core produced.  In that case we return
      * `{ ok: true, binary: undefined }` and the shared pipeline
-     * proceeds — the simulator branch is the only one that requires
-     * a non-empty binary and it bails there with a clearer error if
-     * .hex is somehow missing on AVR.
+     * proceeds.
      */
     async compileArduino(args: CompileArduinoArgs, log: PlatformLog): Promise<CompileArduinoResult> {
       try {
-        // Materialise every entry in the in-memory file map under
-        // the project's build directory.  Editor's existing flow
-        // wrote these files in scattered places throughout the
-        // compile pipeline; doing it here once preserves the same
-        // on-disk layout arduino-cli expects.
-        await Promise.all(
-          Object.entries(args.files).map(async ([relPath, content]) => {
-            const absPath = join(context.compilationPath, relPath)
-            await fs.mkdir(dirname(absPath), { recursive: true })
-            await fs.writeFile(absPath, content, 'utf-8')
-          }),
-        )
+        await syncBuildFolder(context.compilationPath, args.files, context.staticFirmwareFiles ?? {})
 
         // Invoke the existing handler — it spawns arduino-cli compile
         // with the per-board hals entry's flags.  The canonical
@@ -692,6 +695,7 @@ export function createEditorCompilerPlatformPort(
           args.boardTarget,
           context.normalizedProjectPath,
           context.sourceTargetFolderPath,
+          args.screenConfigInputs,
           // The handler's callback signature accepts `Buffer | string`
           // for the chunk and `'info' | 'error' | undefined` for the
           // log level; PlatformLog wants `string` + `'info' | 'warning'
@@ -762,16 +766,14 @@ function readVppRuntimeFloor(context: EditorCompilerPlatformPortContext, boardTa
  * directory.  arduino-cli writes it to a board-FQBN-specific
  * sub-directory (e.g. `examples/Baremetal/build/arduino.avr.mega/`)
  * derived from the hals.json `platform` field with `:` replaced by
- * `.` — same derivation `compileProgram`'s simulator branch uses to
- * locate the `.hex` it hands to avr8js.
+ * `.`.
  *
- * **Only meaningful for AVR / simulator builds.**  Other cores emit
+ * **Only meaningful for AVR builds.**  Other cores emit
  * different artefact formats — RP2040 writes `.uf2`, ESP32 / mbed
  * write `.bin` — so this helper returns `null` for those and the
  * caller MUST treat null-with-successful-compile as "no in-memory
- * binary to surface, but arduino-cli succeeded."  The simulator path
- * is the only consumer that actually loads the bytes (avr8js
- * requires Intel HEX); for real-board uploads arduino-cli's separate
+ * binary to surface, but arduino-cli succeeded."  For real-board
+ * uploads arduino-cli's separate
  * `upload` step finds its own artefact on disk under whatever
  * extension the core produced, so the editor doesn't need to read
  * it back into memory at all.

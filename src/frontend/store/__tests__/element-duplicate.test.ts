@@ -39,44 +39,29 @@ beforeEach(() => {
 })
 
 describe('serverActions.duplicate', () => {
-  it('copies the server under a new name', () => {
+  // A copy carries the original's protocol, and only one server of a protocol
+  // reaches the device, so duplicating a server is always the second one. The
+  // refusal names the holder, which is what the tree puts in its toast.
+  it('refuses the copy and names the server holding the protocol', () => {
     store.getState().serverActions.create({ name: 'Srv', protocol: 'modbus-tcp' })
 
     const result = store.getState().serverActions.duplicate('Srv', 'Srv_copy')
 
-    expect(result.ok).toBe(true)
-    const names = store.getState().project.data.servers?.map((s) => s.name)
-    expect(names).toEqual(['Srv', 'Srv_copy'])
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('Srv')
+    expect(store.getState().project.data.servers?.map((s) => s.name)).toEqual(['Srv'])
   })
 
-  it('registers the copy so it can be opened and saved', () => {
+  it('leaves no file registered for a copy it refused', () => {
     store.getState().serverActions.create({ name: 'Srv', protocol: 'modbus-tcp' })
     store.getState().serverActions.duplicate('Srv', 'Srv_copy')
 
-    const after = store.getState()
-    expect(after.files['Srv_copy']).toBeDefined()
-    // Persisted on the next save, like every other duplicate.
-    expect(after.files['Srv_copy']?.saved).toBe(false)
-  })
-
-  it('does not share nested config with the original', () => {
-    // A shallow copy would leave both servers pointing at one config object, so
-    // editing the copy would silently edit the original.
-    store.getState().serverActions.create({ name: 'Srv', protocol: 'modbus-tcp' })
-    store.getState().serverActions.duplicate('Srv', 'Srv_copy')
-
-    const servers = store.getState().project.data.servers ?? []
-    const [original, copy] = servers
-    expect(copy).not.toBe(original)
-    for (const key of Object.keys(copy) as (keyof typeof copy)[]) {
-      const value = copy[key]
-      if (value !== null && typeof value === 'object') expect(value).not.toBe(original[key])
-    }
+    expect(store.getState().files['Srv_copy']).toBeUndefined()
   })
 
   it('refuses a name already taken', () => {
     store.getState().serverActions.create({ name: 'Srv', protocol: 'modbus-tcp' })
-    store.getState().serverActions.create({ name: 'Other', protocol: 'modbus-tcp' })
+    store.getState().serverActions.create({ name: 'Other', protocol: 's7comm' })
 
     expect(store.getState().serverActions.duplicate('Srv', 'Other').ok).toBe(false)
   })

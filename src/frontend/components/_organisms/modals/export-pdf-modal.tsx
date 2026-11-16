@@ -417,6 +417,9 @@ const ExportPdfModal = () => {
   const isOpen = modals['export-pdf']?.open || false
   const [step, setStep] = useState<Step>('select')
   const [renderState, setRenderState] = useState<RenderState>({ status: 'idle' })
+  // A ref, not state: gating the render effect on `renderState` would re-run it and
+  // let its cleanup cancel the in-flight render before the bytes arrive.
+  const renderStartedRef = useRef(false)
 
   const projectCaps = projectCapabilities({ type: project.meta.type })
   // SFC has no PrintPou renderer in backend/shared/print (never in scope for
@@ -435,6 +438,7 @@ const ExportPdfModal = () => {
   const close = useCallback(() => {
     modalActions.onOpenChange('export-pdf', false)
     setStep('select')
+    renderStartedRef.current = false
     setRenderState({ status: 'idle' })
     printActions.resetPrintSelection()
   }, [modalActions, printActions])
@@ -450,7 +454,8 @@ const ExportPdfModal = () => {
   }, [])
 
   useEffect(() => {
-    if (step !== 'preview' || renderState.status !== 'idle') return
+    if (step !== 'preview' || renderStartedRef.current) return
+    renderStartedRef.current = true
     setRenderState({ status: 'loading' })
     let cancelled = false
     void renderPrintPdf(store, projectPort).then((result) => {
@@ -460,7 +465,7 @@ const ExportPdfModal = () => {
     return () => {
       cancelled = true
     }
-  }, [store, step, renderState, projectPort])
+  }, [store, step, projectPort])
 
   useEffect(() => {
     if (step !== 'exporting' || renderState.status !== 'ready') return
@@ -479,7 +484,10 @@ const ExportPdfModal = () => {
   }, [store, step, renderState, projectPort, close])
 
   const handleBack = () => {
-    if (step === 'preview') setRenderState({ status: 'idle' })
+    if (step === 'preview') {
+      renderStartedRef.current = false
+      setRenderState({ status: 'idle' })
+    }
     setStep(step === 'options' ? 'select' : 'options')
   }
 

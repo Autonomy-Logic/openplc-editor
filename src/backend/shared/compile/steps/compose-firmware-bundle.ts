@@ -140,7 +140,6 @@ const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
  * Layout produced (paths relative to project root):
  *  - `examples/Baremetal/Baremetal.ino`              — from skeleton
  *  - `src/c_blocks_code.cpp`                         — written when `cBlocks.code !== null`
- *  - `examples/Baremetal/modules/...`                — from skeleton (Arduino library helpers)
  *  - `src/arduino.cpp`                               — from skeleton (HAL adapter, simulator-specific)
  *  - `src/openplc_retain.h`                          — mirrored from `examples/Baremetal/` (vendor-facing contract)
  *  - `src/c_blocks.h`                                — written verbatim from `cBlocks.header`

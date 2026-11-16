@@ -21,22 +21,28 @@
  */
 
 import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
+import { getDesktopPython } from '@root/backend/editor/python/desktop-python-service'
 import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
 import { UserService } from '@root/backend/editor/services'
+import { createDesktopSimulator } from '@root/backend/editor/simulator/desktop-simulator'
+import { preparePythonRuntime } from '@root/backend/shared/python/prepare-python'
 import { APP_VERSION } from '@root/frontend/data/constants/app-version'
 import { createOpenPLCStore, type OpenPLCStore } from '@root/frontend/store'
 import { app } from 'electron'
 
 import { boolFlag, parseArgs, type ParsedArgs, stringFlag } from './args'
 import { cliArgv } from './argv'
-import { buildProject, runBuild } from './commands/build'
+import { buildProject, compileProject, runBuild } from './commands/build'
 import { runCreate } from './commands/create'
 import { type DebugContext, runDebug } from './commands/debug'
 import { runDevices } from './commands/devices'
+import { runInspect } from './commands/inspect'
 import { runInstallCli } from './commands/install-cli'
 import { runPackages } from './commands/packages'
+import { processInterrupt, runSimulate } from './commands/simulate'
 import { runDaemonFromStdin } from './daemon-entry'
 import { ErrorCode, ExitCode, type ExitCodeValue } from './exit-codes'
 import { createProcessReporter, Reporter } from './output'
@@ -70,7 +76,7 @@ const BOOLEAN_FLAGS = [
   'all',
 ] as const
 
-const COMMANDS_WITH_SUBCOMMANDS = ['debug', 'packages'] as const
+const COMMANDS_WITH_SUBCOMMANDS = ['debug', 'inspect', 'packages'] as const
 
 const USAGE = `openplc-cli — headless OpenPLC Editor
 
@@ -81,9 +87,13 @@ Usage
   openplc-cli create --from-json <file>                     (fixture-friendly form)
   openplc-cli install-cli                                   (put openplc-cli on your PATH)
   openplc-cli devices [--timeout <ms>]
+  openplc-cli inspect image <project> [--target <board>] [--verbose]
+                            (I/O image sizes, producers and located vars — no build)
   openplc-cli packages list                                 (boards --target accepts, and their pins)
   openplc-cli packages install <file.vpp|dir>...            (same checks as the GUI: schema + signature)
   openplc-cli compile <project> [--target <board>] [--port <serial>] [--clean]
+  openplc-cli simulate <project> [--clean]                 (build for the OpenPLC Simulator and run it, Python
+                            blocks included; prints its Console until Ctrl+C)
   openplc-cli upload  <project> (--host <address> | --port <serial>) [--target <board>] [--clean] [-y|--yes]
   openplc-cli debug open <project> --target <board> (--host <address> | --port <serial>) [--upload-if-needed]
   openplc-cli debug list
@@ -101,7 +111,7 @@ Credentials (upload, debug)
   or OPENPLC_CREDENTIALS / OPENPLC_USER + OPENPLC_PASSWORD (keeps them out of shell history)
 
 Paths
-  --user-data <dir>  override the editor state directory (arduino-cli config, licence store,
+  --user-data <dir>  override the editor state directory (arduino-cli config, license store,
                      installed VPP packages). Defaults to the same directory the GUI uses.
 
 Output
@@ -109,7 +119,7 @@ Output
   Progress goes to stderr, so stdout carries exactly one JSON document.
 
 Exit codes
-  0 ok · 2 usage · 3 not found · 4 compile failed · 5 connection · 6 auth · 7 target error · 8 timeout · 70 internal`
+  0 ok · 2 usage · 3 not found · 4 compile failed · 5 connection · 6 auth · 7 target error · 8 timeout · 130 interrupted · 70 internal`
 
 /**
  * Point this process at the SAME `userData` directory the editor GUI uses.
@@ -199,10 +209,24 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
       return (await runDevices(args, reporter)).exitCode
     case 'install-cli':
       return (await runInstallCli(args, reporter)).exitCode
+    case 'inspect':
+      return (await runInspect(createOpenPLCStore(), args, reporter)).exitCode
     case 'packages':
       return (await runPackages(args, reporter)).exitCode
     case 'compile':
       return (await runBuild(createOpenPLCStore(), args, reporter, { withUpload: false })).exitCode
+    case 'simulate': {
+      const store = createOpenPLCStore()
+      return (
+        await runSimulate(args, reporter, {
+          build: (request) => compileProject(store, request, reporter),
+          readModule: async (path) => new Uint8Array(await readFile(path)),
+          createSimulator: createDesktopSimulator,
+          loadPython: () => preparePythonRuntime(getDesktopPython().runtime),
+          interrupted: processInterrupt,
+        })
+      ).exitCode
+    }
     case 'upload':
       return (await runBuild(createOpenPLCStore(), args, reporter, { withUpload: true })).exitCode
     case 'debug':

@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 opcua_server.cpp - baremetal OPC-UA server
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 
 STATUS: skeleton. The address space, network seam and scan-loop integration are
 in place on every target; the open62541 core is not wired in yet. Until then

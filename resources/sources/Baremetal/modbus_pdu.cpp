@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 modbus_pdu.cpp - Transport-agnostic Modbus PDU dispatch + per-FC frame shape
-Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include "modbus_pdu.h"

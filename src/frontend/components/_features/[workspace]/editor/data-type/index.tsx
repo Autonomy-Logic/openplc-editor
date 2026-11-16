@@ -1,12 +1,14 @@
 import { ComponentPropsWithoutRef, useEffect, useState } from 'react'
 
 import type { PLCDataType } from '../../../../../../middleware/shared/ports/types'
+import { useIsEditingLocked } from '../../../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../../../store'
 import { extractSearchQuery } from '../../../../../store/slices/search/utils'
 import { InputWithRef } from '../../../../_atoms/input'
 import { ArrayDataType } from '../../../../_molecules/data-types/array'
 import { EnumeratorDataType } from '../../../../_molecules/data-types/enumerated'
 import { StructureDataType } from '../../../../_molecules/data-types/structure'
+import { EditingLockBoundary } from '../../../../_molecules/editing-lock-boundary'
 
 type DatatypeEditorProps = ComponentPropsWithoutRef<'div'> & {
   dataTypeName: string
@@ -22,6 +24,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
     projectActions: { updateDatatype },
     searchQuery,
   } = useOpenPLCStore()
+  const isEditingLocked = useIsEditingLocked()
   const [editorContent, setEditorContent] = useState<PLCDataType>()
   const [isEditing, setIsEditing] = useState(false)
 
@@ -34,6 +37,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
   }, [dataTypes, dataTypeName])
 
   const handleStartEditing = () => {
+    if (isEditingLocked) return
     setIsEditing(true)
   }
 
@@ -51,6 +55,7 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const { value } = e.target
+    if (isEditingLocked) return setIsEditing(false)
     if (dataTypeName !== value) {
       // `updateDatatype` is a full replace.  Spread the current
       // entry so the rename only changes `name` — without this the
@@ -106,9 +111,11 @@ const DataTypeEditor = ({ dataTypeName, ...rest }: DatatypeEditorProps) => {
         </div>
       </div>
       <div aria-label='Data type content container' className='h-full w-full overflow-hidden'>
-        {editorContent?.derivation === 'array' && <ArrayDataType data={editorContent} />}
-        {editorContent?.derivation === 'enumerated' && <EnumeratorDataType data={editorContent} />}
-        {editorContent?.derivation === 'structure' && <StructureDataType dataTypeName={dataTypeName} />}
+        <EditingLockBoundary>
+          {editorContent?.derivation === 'array' && <ArrayDataType data={editorContent} />}
+          {editorContent?.derivation === 'enumerated' && <EnumeratorDataType data={editorContent} />}
+          {editorContent?.derivation === 'structure' && <StructureDataType dataTypeName={dataTypeName} />}
+        </EditingLockBoundary>
       </div>
     </div>
   )

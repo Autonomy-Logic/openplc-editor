@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 ModbusSlave.cpp - Source for Modbus Slave Library
-Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include "ModbusSlave.h"
@@ -10,7 +11,7 @@ Copyright (C) 2022 OpenPLC - Thiago Alves
 // Global Modbus vars — modbus / mb_frame / mb_frame_len moved to modbus_frame.cpp;
 // the serial port/timing globals to modbus_serial.cpp; the TCP server state
 // (mb_server / mb_serverClients / mb_mbap) to modbus_tcp.cpp.
-// init_mbregs / get_discrete / write_discrete moved to modbus_registers.cpp.
+// get_discrete / write_discrete moved to modbus_registers.cpp.
 // mbconfig_serial_iface() and the serial transport moved to modbus_serial.cpp.
 // mbconfig_ethernet_iface() and handle_tcp() moved to modbus_tcp.cpp.
 

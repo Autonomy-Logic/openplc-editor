@@ -1,18 +1,8 @@
-import { z } from 'zod/v4'
-
-const ArduinoCoreControlSchema = z.array(z.record(z.string(), z.string()))
-
-type ArduinoCoreControl = z.infer<typeof ArduinoCoreControlSchema>
-
 // Re-exported from hardware/types so existing import paths under
 // backend/editor/compiler keep working — the schema itself lives next to
 // the resolver that owns the hals.json contract.
 export type { BoardInfo, HalsFile } from '../hardware/types'
 export { BoardInfoSchema, HalsFileSchema } from '../hardware/types'
-
-export { ArduinoCoreControlSchema }
-
-export type { ArduinoCoreControl }
 
 /**
  * What the compile pipeline needs from the channel it reports progress on.

@@ -229,8 +229,21 @@ describe('identity', () => {
     expect(out).toContain('#define S7COMM_ID_MODULE_TYPE "CPU 315-2 PN/DP"')
   })
 
-  it('is simply absent when the project declares none', () => {
+  it('falls back to a generic identity when the project declares none', () => {
+    // The firmware's identity table is guarded on S7COMM_SZL_ENABLED alone, so
+    // leaving these out of an SZL build referenced undefined macros and failed
+    // to compile. A generic answer is the one that keeps the build working.
     const out = generateS7CommHeaderContent({ config: config({ dataBlocks: [db(1)] }), profile: profile() })
+    expect(out).toContain('#define S7COMM_ID_NAME "OpenPLC"')
+    expect(out).toContain('#define S7COMM_ID_SERIAL ""')
+  })
+
+  it('emits nothing when the target has no SZL service to publish it on', () => {
+    const out = generateS7CommHeaderContent({
+      config: config({ dataBlocks: [db(1)] }),
+      profile: profile({ szl: false }),
+    })
+    expect(out).toContain('#define S7COMM_SZL_ENABLED 0')
     expect(out).not.toContain('S7COMM_ID_NAME')
   })
 })

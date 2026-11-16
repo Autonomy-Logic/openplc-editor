@@ -23,12 +23,14 @@ import {
 } from '../../../../middleware/shared/utils/iec-address'
 import { planAliasNormalization } from '../../../../middleware/shared/utils/iec-address/normalize-aliases'
 import {
+  activeKindsFor,
   buildAliasIndex,
   channelKey,
   ethercatConsumerId,
   type IecAddressRegistry,
   migrateToRegistry,
   modbusConsumerId,
+  moduleRegistryChannelId,
   recalculate as recalculateRegistry,
   restoreAliasesFromMemory,
   unpinAllocatableChannels,
@@ -36,17 +38,12 @@ import {
 import type {
   AddressProducerCapabilities,
   BoardInfoLike,
-  TargetCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
-import {
-  ALL_ADDRESS_PRODUCERS_ACTIVE,
-  resolveTargetCapabilities,
-} from '../../../../middleware/shared/utils/target-capabilities'
+import { resolveAddressProducerCapabilities } from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
 import { buildTypeContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
 import { generateIecVariablesToString } from '../../../utils/generate-iec-variables-to-string'
 import { isLegalIdentifier } from '../../../utils/keywords'
-import { DEFAULT_BUFFER_MAPPING } from '../../../utils/modbus/generate-modbus-slave-config'
 import { clampIOGroupLength, resolveIOGroupErrorHandling } from '../../../utils/modbus/io-group'
 import { parseDataTypeFromText } from '../../../utils/PLC/data-type-declarations'
 import { serializeDataTypeToText } from '../../../utils/PLC/data-type-serializer'
@@ -238,6 +235,27 @@ function generateIOPoints(
   return points
 }
 
+/**
+ * Points for a bulk import, each seeded with the first address of its class.
+ * The registry reads only the class from that seed; `recalculateIecAddresses`
+ * then places the whole batch in one pass.
+ */
+function seedIOPoints(
+  functionCode: '1' | '2' | '3' | '4' | '5' | '6' | '15' | '16',
+  length: number,
+  groupName: string,
+): ModbusIOPoint[] {
+  const { type, iecPrefix, isBit } = getFunctionCodeInfo(functionCode)
+  const iecLocation = isBit ? `${iecPrefix}0.0` : `${iecPrefix}0`
+  return Array.from({ length }, (_, i) => ({
+    id: `${groupName}_${i}`,
+    name: `${groupName}_${i}`,
+    type,
+    iecLocation,
+    alias: '',
+  }))
+}
+
 // ---------------------------------------------------------------------------
 // Variables-text ⇄ variables-table reconcile helpers
 // ---------------------------------------------------------------------------
@@ -306,20 +324,6 @@ function readVppEntries(live: ProjectSliceRoot): VppMappingEntry[] {
   )
 }
 
-/** Map the active target's capabilities to the set of consumer kinds that
- *  participate in allocation. A target without pin mapping / VPP simply
- *  omits those kinds, so their addresses free up and the still-active
- *  producers recompact into the space (project-wide recalc on target
- *  switch). */
-function activeKindsFromCapabilities(caps: TargetCapabilities): Set<string> {
-  const kinds = new Set<string>()
-  if (caps.pinMapping) kinds.add('pin-mapping')
-  if (caps.vppIo) kinds.add('vpp-io')
-  if (caps.modbusTcpRemote) kinds.add('modbus-tcp-remote')
-  if (caps.ethercat) kinds.add('ethercat')
-  return kinds
-}
-
 /** The active target's BoardInfo, or `undefined` when the board id doesn't
  *  resolve — a VPP board whose package isn't installed, a project authored on
  *  another machine, or the catalogue not having loaded yet. */
@@ -338,8 +342,7 @@ function resolveBoardInfo(live: ProjectSliceRoot): BoardInfoLike | undefined {
  * silently keeps whatever stale addresses each point already had (DOPE-440).
  */
 function allocationCapabilities(live: ProjectSliceRoot): AddressProducerCapabilities {
-  const boardInfo = resolveBoardInfo(live)
-  return boardInfo ? resolveTargetCapabilities(boardInfo) : ALL_ADDRESS_PRODUCERS_ACTIVE
+  return resolveAddressProducerCapabilities(resolveBoardInfo(live))
 }
 
 /**
@@ -382,12 +385,25 @@ function warnIfTargetUnresolved(live: ProjectSliceRoot): void {
  * Only an UNRESOLVED target gets `undefined`. A resolved board that declares
  * `modbusTcpRemote: false` must still deactivate that kind, so its space frees
  * up and the still-active producers compact into it — that's the deliberate
- * target-switch behaviour documented on `activeKindsFromCapabilities`, and the
+ * target-switch behaviour documented on `activeKindsFor`, and the
  * empty Set an unresolved board used to produce is indistinguishable from it.
  */
 function activeKindsForAllocation(live: ProjectSliceRoot): Set<string> | undefined {
   const boardInfo = resolveBoardInfo(live)
-  return boardInfo ? activeKindsFromCapabilities(resolveTargetCapabilities(boardInfo)) : undefined
+  /* `resolveAddressProducerCapabilities`, the same resolver
+     `allocationCapabilities` uses, and NOT `resolveTargetCapabilities`.
+     Those two answer differently for a board that IS in the catalogue but
+     declares neither a capability block nor a recognised `compiler`: the
+     producer resolver is permissive, the target resolver answers
+     EMPTY_CAPABILITIES. Using the target resolver here made
+     `buildAddressPool` see every producer while `recalculateRegistry` saw
+     none — two answers to the same question, which is the drift
+     `activeKindsFor` was extracted to prevent.
+
+     `undefined` is kept for a genuinely ABSENT boardInfo, because a missing
+     Set means "every kind" to `allocateAddresses` while an empty one means
+     "no producers", and those must not be confused. */
+  return boardInfo ? activeKindsFor(resolveAddressProducerCapabilities(boardInfo)) : undefined
 }
 
 /**
@@ -560,6 +576,17 @@ function applyEthercatAddresses(
         if (!info) continue
         if (info.address) mapping.iecLocation = info.address
         mapping.alias = info.alias
+      }
+      // Module channels live under the same slave consumer, keyed by the
+      // prefixed registry channel id — mirror the migrate side so the
+      // recomputed address + alias flow back onto the on-disk mapping.
+      for (const module of slave.modules ?? []) {
+        for (const mapping of module.channelMappings ?? []) {
+          const info = index.get(channelKey(consumerId, moduleRegistryChannelId(module.id, mapping.channelId)))
+          if (!info) continue
+          if (info.address) mapping.iecLocation = info.address
+          mapping.alias = info.alias
+        }
       }
     }
   }
@@ -1049,12 +1076,29 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
     },
 
+    getVppExtension: (packageId, screenId) => {
+      return getState().project.data.vppExtensions?.[packageId]?.[screenId]
+    },
+    setVppExtension: (packageId, screenId, data) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          if (!slice.project.data.vppExtensions) slice.project.data.vppExtensions = {}
+          if (!slice.project.data.vppExtensions[packageId]) slice.project.data.vppExtensions[packageId] = {}
+          slice.project.data.vppExtensions[packageId][screenId] = data
+        }),
+      )
+    },
+
     // -----------------------------------------------------------------------
     // POU
     // -----------------------------------------------------------------------
     createPou: (dto) => {
       const existing = getState().project.data.pous.find((p) => p.name === dto.data.name)
       if (existing) return fail('POU already exists')
+      // `GVL` is reserved for the global variable namespace used by the Data Hub qualifier wire
+      // format, so allowing a POU with that name would make `GVL.foo` ambiguous between the two
+      // scopes. Case-insensitive because IEC identifiers are case-insensitive on compile.
+      if (dto.data.name.toUpperCase() === 'GVL') return fail('POU name "GVL" is reserved for the global namespace')
 
       setState(
         produce((slice: ProjectSlice) => {
@@ -1926,6 +1970,19 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       const servers = getState().project.data.servers ?? []
       if (servers.some((s) => s.name === dto.data.name)) return fail('Server already exists')
 
+      // ONE SERVER PER PROTOCOL. Each emitter ships one config file built from
+      // the first server of its protocol, so a second one never reaches the
+      // device -- it was only ever refused at build time, after the user had
+      // configured it. A project that already holds two is left alone: the
+      // rule governs creation, and rewriting someone's project on load is not
+      // this editor's call.
+      const sameProtocol = servers.find((s) => s.protocol === dto.data.protocol)
+      if (sameProtocol) {
+        return fail(
+          `A ${dto.data.protocol} server already exists: "${sameProtocol.name}". Only one reaches the device.`,
+        )
+      }
+
       setState(
         produce((slice: ProjectSlice) => {
           if (!slice.project.data.servers) slice.project.data.servers = []
@@ -1978,14 +2035,71 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           if (config.stopBits !== undefined) server.modbusSlaveConfig.stopBits = config.stopBits
           if (config.dataBits !== undefined) server.modbusSlaveConfig.dataBits = config.dataBits
           if (config.bufferMapping) {
-            const base = server.modbusSlaveConfig.bufferMapping ?? DEFAULT_BUFFER_MAPPING
+            /* MERGE OVER WHAT IS STORED, NEVER OVER THE DEFAULTS.
+             *
+             * This used to start from DEFAULT_BUFFER_MAPPING when the server
+             * had no mapping yet, so editing ONE field persisted all eight --
+             * the other seven silently materialised at the old fixed sizes
+             * (8192 bits, 1024 registers). A project that had never asked for
+             * an exposure then carried a full one, and `compute-io-image`
+             * reads a persisted count as a request: the image came back to the
+             * constant this task exists to remove, and BR10 ("the image may
+             * end up smaller, and that is one of the main gains") could never
+             * hold for such a project.
+             *
+             * Absent stays absent. It means "expose whatever the image turns
+             * out to be", which is also what FR16 asks of the server. */
+            const base = server.modbusSlaveConfig.bufferMapping ?? {}
+            const patch = config.bufferMapping
             server.modbusSlaveConfig.bufferMapping = {
-              holdingRegisters: { ...base.holdingRegisters, ...config.bufferMapping.holdingRegisters },
-              coils: { ...base.coils, ...config.bufferMapping.coils },
-              discreteInputs: { ...base.discreteInputs, ...config.bufferMapping.discreteInputs },
-              inputRegisters: { ...base.inputRegisters, ...config.bufferMapping.inputRegisters },
+              ...base,
+              ...(base.holdingRegisters || patch.holdingRegisters
+                ? { holdingRegisters: { ...base.holdingRegisters, ...patch.holdingRegisters } }
+                : {}),
+              ...(base.coils || patch.coils ? { coils: { ...base.coils, ...patch.coils } } : {}),
+              ...(base.discreteInputs || patch.discreteInputs
+                ? { discreteInputs: { ...base.discreteInputs, ...patch.discreteInputs } }
+                : {}),
+              ...(base.inputRegisters || patch.inputRegisters
+                ? { inputRegisters: { ...base.inputRegisters, ...patch.inputRegisters } }
+                : {}),
             }
           }
+        }),
+      )
+      return ok()
+    },
+    clearServerBufferCount: (name, group, field) => {
+      setState(
+        produce((slice: ProjectSlice) => {
+          const config = slice.project.data.servers?.find((s) => s.name === name)?.modbusSlaveConfig
+          const mapping = config?.bufferMapping
+          if (!config || !mapping) return
+          // Enumerated rather than indexed by string: the shape is eight known
+          // fields and a cast would hide a typo in one of them.
+          if (group === 'holdingRegisters' && mapping.holdingRegisters) {
+            if (field === 'qwCount') delete mapping.holdingRegisters.qwCount
+            if (field === 'mwCount') delete mapping.holdingRegisters.mwCount
+            if (field === 'mdCount') delete mapping.holdingRegisters.mdCount
+            if (field === 'mlCount') delete mapping.holdingRegisters.mlCount
+            if (Object.keys(mapping.holdingRegisters).length === 0) delete mapping.holdingRegisters
+          }
+          if (group === 'coils' && mapping.coils) {
+            if (field === 'qxBits') delete mapping.coils.qxBits
+            if (field === 'mxBits') delete mapping.coils.mxBits
+            if (Object.keys(mapping.coils).length === 0) delete mapping.coils
+          }
+          if (group === 'discreteInputs' && mapping.discreteInputs) {
+            if (field === 'ixBits') delete mapping.discreteInputs.ixBits
+            if (Object.keys(mapping.discreteInputs).length === 0) delete mapping.discreteInputs
+          }
+          if (group === 'inputRegisters' && mapping.inputRegisters) {
+            if (field === 'iwCount') delete mapping.inputRegisters.iwCount
+            if (Object.keys(mapping.inputRegisters).length === 0) delete mapping.inputRegisters
+          }
+          // An empty mapping is not the same as no mapping: the first reads as
+          // a server that was configured and the second as one that never was.
+          if (Object.keys(mapping).length === 0) delete config.bufferMapping
         }),
       )
       return ok()
@@ -2236,6 +2350,40 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       )
       return ok()
     },
+    addOpcUaNodes: (name, nodes) => {
+      const server = getState().project.data.servers?.find((s) => s.name === name)
+      if (!server?.opcuaServerConfig) return fail('OPC-UA server not found')
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          const target = slice.project.data.servers?.find((s) => s.name === name)
+          if (!target?.opcuaServerConfig) return
+          const taken = new Set(target.opcuaServerConfig.addressSpace.nodes.map((n) => n.id))
+          for (const node of nodes) {
+            if (taken.has(node.id)) continue
+            taken.add(node.id)
+            target.opcuaServerConfig.addressSpace.nodes.push(node)
+          }
+        }),
+      )
+      return ok()
+    },
+    removeOpcUaNodes: (name, nodeIds) => {
+      const server = getState().project.data.servers?.find((s) => s.name === name)
+      if (!server?.opcuaServerConfig) return fail('OPC-UA server not found')
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          const target = slice.project.data.servers?.find((s) => s.name === name)
+          if (!target?.opcuaServerConfig) return
+          const doomed = new Set(nodeIds)
+          target.opcuaServerConfig.addressSpace.nodes = target.opcuaServerConfig.addressSpace.nodes.filter(
+            (n) => !doomed.has(n.id),
+          )
+        }),
+      )
+      return ok()
+    },
 
     // -----------------------------------------------------------------------
     // Remote devices
@@ -2346,9 +2494,10 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
           ...(device.modbusTcpConfig?.ioGroups ?? []).flatMap((group) =>
             (group.ioPoints ?? []).map((point) => point.alias ?? ''),
           ),
-          ...(device.ethercatConfig?.devices ?? []).flatMap((slave) =>
-            (slave.channelMappings ?? []).map((channel) => channel.alias ?? ''),
-          ),
+          ...(device.ethercatConfig?.devices ?? []).flatMap((slave) => [
+            ...(slave.channelMappings ?? []).map((channel) => channel.alias ?? ''),
+            ...(slave.modules ?? []).flatMap((module) => module.channelMappings.map((channel) => channel.alias ?? '')),
+          ]),
         ]),
       ].filter((alias) => alias.trim() !== '')
 
@@ -2386,6 +2535,9 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
             }
             for (const slave of device.ethercatConfig?.devices ?? []) {
               for (const channel of slave.channelMappings ?? []) channel.alias = remap(channel.alias)
+              for (const module of slave.modules ?? []) {
+                for (const channel of module.channelMappings) channel.alias = remap(channel.alias)
+              }
             }
           }
         }),
@@ -2429,7 +2581,12 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // the device action so the layouts (which render from the store) update.
       const vppEntries = readVppEntries(live)
       if (vppEntries.length > 0) {
-        getState().deviceActions.setVendorScreenData('io-mapping', { entries: applyVppEntries(vppEntries, index) })
+        // Other fields stored with the mapping are kept; only the addresses move.
+        const stored = live.deviceDefinitions.configuration.vendorScreenData?.['io-mapping']
+        getState().deviceActions.setVendorScreenData('io-mapping', {
+          ...(stored && typeof stored === 'object' ? stored : {}),
+          entries: applyVppEntries(vppEntries, index),
+        })
       }
 
       // Modbus ioPoints + EtherCAT channelMappings live in project.data —
@@ -2541,6 +2698,44 @@ const createProjectSlice: StateCreator<ProjectSliceRoot, [], [], ProjectSlice> =
       // Recompact so the groups that followed reclaim the freed addresses.
       getState().projectActions.recalculateIecAddresses()
       return ok()
+    },
+    importIOGroups: (deviceName, groups, options) => {
+      const replace = options?.replace ?? false
+      const live = getState()
+      const target = live.project.data.remoteDevices?.find((d) => d.name === deviceName)
+      if (!target?.modbusTcpConfig) {
+        return { ok: false, title: 'Import failed', message: `Remote device "${deviceName}" was not found.` }
+      }
+
+      // Point ids are `<groupName>_<index>`: a duplicate name on one device
+      // would collide. IEC identifiers are case-insensitive, hence the fold.
+      const names = [...(replace ? [] : target.modbusTcpConfig.ioGroups), ...groups].map((g) => g.name.toLowerCase())
+      const duplicate = names.find((name, index) => names.indexOf(name) !== index)
+      if (duplicate !== undefined) {
+        return {
+          ok: false,
+          title: 'Import failed',
+          message: `More than one IO group would be named "${duplicate}". IO group names must be unique per device.`,
+        }
+      }
+
+      setState(
+        produce((slice: ProjectSlice) => {
+          const device = slice.project.data.remoteDevices?.find((d) => d.name === deviceName)
+          if (!device?.modbusTcpConfig) return
+          if (replace) device.modbusTcpConfig.ioGroups = []
+
+          for (const group of groups) {
+            const length = clampIOGroupLength(group.functionCode, group.length)
+            const errorHandling = resolveIOGroupErrorHandling(group.functionCode, group.errorHandling)
+            const ioPoints = seedIOPoints(group.functionCode, length, group.name)
+            device.modbusTcpConfig.ioGroups.push({ ...group, length, errorHandling, ioPoints })
+          }
+        }),
+      )
+      // One project-wide allocation assigns every address of the batch.
+      getState().projectActions.recalculateIecAddresses()
+      return ok({ imported: groups.length })
     },
     updateIOPointAlias: (deviceName, groupId, pointId, alias) => {
       // Phase 1 — write-time alias-uniqueness gate (global, across

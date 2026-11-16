@@ -1,7 +1,8 @@
 import * as MenuPrimitive from '@radix-ui/react-menubar'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
-import { useCapabilities, useProject } from '../../../../../middleware/shared/providers'
+import { useAppUpdate, useCapabilities, useProject } from '../../../../../middleware/shared/providers'
+import { useIsEditingLocked } from '../../../../hooks/use-editing-lock'
 import { useHandleRemoveTab } from '../../../../hooks/use-remove-tab'
 import { i18n } from '../../../../locales/i18n'
 import { executeExportPlcopen } from '../../../../services/export-actions'
@@ -15,6 +16,9 @@ export const FileMenu = () => {
   const store = useOpenPLCStoreApi()
   const projectPort = useProject()
   const capabilities = useCapabilities()
+  const appUpdate = useAppUpdate()
+  const isEditingLocked = useIsEditingLocked()
+  const [autoCheck, setAutoCheck] = useState(false)
   const {
     project,
     editor: activeEditor,
@@ -34,6 +38,23 @@ export const FileMenu = () => {
   useEffect(() => {
     setSelectedTab(activeEditor.meta.name)
   }, [activeEditor])
+
+  useEffect(() => {
+    if (!appUpdate) return
+    let active = true
+    appUpdate
+      .isAutoCheckEnabled()
+      .then((enabled) => active && setAutoCheck(enabled))
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [appUpdate])
+
+  const handleToggleAutoCheck = (checked: boolean) => {
+    setAutoCheck(checked)
+    appUpdate?.setAutoCheck(checked)
+  }
 
   const { TRIGGER, CONTENT, ITEM, ACCELERATOR, SEPARATOR } = MenuClasses
 
@@ -121,7 +142,14 @@ export const FileMenu = () => {
                 </MenuPrimitive.Item>
               )}
               {capabilities.hasProjectImport && (
-                <MenuPrimitive.Item className={ITEM} onClick={() => openModal('confirm-plcopen-import')}>
+                <MenuPrimitive.Item
+                  className={ITEM}
+                  disabled={isEditingLocked}
+                  onClick={() => {
+                    if (isEditingLocked) return
+                    openModal('confirm-plcopen-import')
+                  }}
+                >
                   <span>{i18n.t('menu:file.submenu.importFromPLCOpenXml')}</span>
                 </MenuPrimitive.Item>
               )}
@@ -148,9 +176,20 @@ export const FileMenu = () => {
             <span className={ACCELERATOR}>{'Ctrl + P'}</span>
           </MenuPrimitive.Item>
           <MenuPrimitive.Separator className={SEPARATOR} />
-          <MenuPrimitive.Item className={ITEM} disabled>
+          <MenuPrimitive.Item className={ITEM} disabled={!appUpdate} onClick={() => appUpdate?.checkNow()}>
             <span>{i18n.t('menu:file.submenu.updates')}</span>
           </MenuPrimitive.Item>
+          {appUpdate && (
+            <MenuPrimitive.CheckboxItem
+              className={ITEM}
+              checked={autoCheck}
+              onCheckedChange={handleToggleAutoCheck}
+              onSelect={(event) => event.preventDefault()}
+            >
+              <span>Check for Updates Automatically</span>
+              <MenuPrimitive.ItemIndicator className={ACCELERATOR}>✓</MenuPrimitive.ItemIndicator>
+            </MenuPrimitive.CheckboxItem>
+          )}
         </MenuPrimitive.Content>
       </MenuPrimitive.Portal>
     </MenuPrimitive.Menu>

@@ -1,6 +1,7 @@
 import { startCase } from 'lodash'
 import { useEffect, useRef, useState } from 'react'
 
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { cn } from '../../../utils/cn'
 import ScrollAreaComponent from '../../ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../select'
@@ -22,6 +23,7 @@ export const GenericSelectCell = ({
   selected?: boolean
   openOnSelectedOption?: boolean
 }) => {
+  const isEditingLocked = useIsEditingLocked()
   const [selectIsOpen, setSelectIsOpen] = useState(false)
   const selectRef = useRef<HTMLDivElement>(null)
 
@@ -44,9 +46,11 @@ export const GenericSelectCell = ({
       <SelectTrigger
         aria-label='generic-table-select'
         placeholder={value}
+        disabled={isEditingLocked}
         className={cn(
           'flex h-full w-full items-center justify-center p-2 font-caption text-cp-sm font-medium text-neutral-850 outline-none dark:text-neutral-300',
           { 'pointer-events-none': !selected },
+          isEditingLocked && 'cursor-not-allowed opacity-60',
         )}
       />
       <SelectContent

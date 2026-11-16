@@ -1,6 +1,7 @@
 import type { PLCPou, PLCVariable, PouType } from '../../../middleware/shared/ports/types'
 import { parseIecStringToVariables } from '../generate-iec-string-to-variables'
 import { getLanguageFromExtension } from './pou-file-extensions'
+import { blankTrivia } from './variable-declarations'
 
 /**
  * Helper function to extract documentation from leading comments
@@ -28,7 +29,6 @@ export const extractDocumentation = (content: string): { documentation: string; 
  * @returns Formatted error message
  */
 const formatParseError = (message: string, lineNumber?: number): string => {
-  /* istanbul ignore next -- lineNumber is reserved for future use; no caller provides it */
   if (lineNumber !== undefined) {
     return `Parse error on line ${lineNumber}: ${message}`
   }
@@ -149,24 +149,112 @@ export const matchPouHeader = (content: string, pouType: string): PouHeaderMatch
   return { text: match[0], name: match[1 + 1], ...(match[3] ? { returnType: match[3] } : {}) }
 }
 
+/** The declaration section of a POU: absent, closed by `END_VAR`, or opened and never closed. */
+export type VariablesSection =
+  | { kind: 'none'; text: ''; bodyStartIndex: number }
+  | { kind: 'declared'; text: string; bodyStartIndex: number }
+  | { kind: 'unterminated'; text: string; bodyStartIndex: number; line: number }
+
+const VAR_KEYWORD_PATTERN = '(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\\b'
+
+const UNTERMINATED_VAR_MESSAGE = 'Declaration block is never closed: missing END_VAR'
+
 /**
- * The POU's declaration text and where its body starts.
+ * Where the declaration text of a block whose keyword sits at `keywordIndex` starts.
  *
- * The text runs from the start of the LINE holding the first `VAR` keyword to
- * the last `END_VAR`, because it is written back to the file verbatim: slicing
- * at the keyword dropped the indentation in front of it and re-indented every
- * POU in the project on the first save.
+ * The start of the keyword's line when only indentation precedes it, so the indentation survives
+ * the round trip; the keyword itself when the line also holds the header (`PROGRAM main VAR`).
+ */
+const declarationStartIndex = (content: string, keywordIndex: number): number => {
+  const lineStart = content.lastIndexOf('\n', keywordIndex) + 1
+  return /^[ \t]*$/.test(content.slice(lineStart, keywordIndex)) ? lineStart : keywordIndex
+}
+
+/**
+ * Start of the first content after the POU header, comments included, or `keywordIndex` when the
+ * header shares its line. Where an unterminated declaration section begins.
+ */
+const unterminatedSectionStart = (content: string, bodyStartIndex: number, keywordIndex: number): number => {
+  const offset = content.slice(bodyStartIndex).search(/\S/)
+  return declarationStartIndex(content, offset === -1 ? keywordIndex : bodyStartIndex + offset)
+}
+
+/**
+ * Index of the VAR-family keyword that opens the content after the POU header, or -1 when the
+ * first token there, past whitespace and comments, is anything else.
+ */
+const leadingVarKeywordIndex = (content: string, bodyStartIndex: number): number => {
+  const tail = blankTrivia(content.slice(bodyStartIndex))
+  const tokenOffset = tail.search(/\S/)
+  if (tokenOffset === -1) return -1
+  const keywordIndex = bodyStartIndex + tokenOffset
+  return new RegExp(`^${VAR_KEYWORD_PATTERN}`, 'i').test(content.slice(keywordIndex)) ? keywordIndex : -1
+}
+
+/** Index of the last word-bounded, case-insensitive `keyword` at or after `fromIndex`, or -1. */
+const lastKeywordIndex = (content: string, keyword: string, fromIndex: number): number => {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(`\\b${escaped}\\b`, 'gi')
+  pattern.lastIndex = fromIndex
+  let lastIndex = -1
+  for (let match = pattern.exec(content); match !== null; match = pattern.exec(content)) {
+    lastIndex = match.index
+  }
+  return lastIndex
+}
+
+/**
+ * Where the text of a declaration block that never reaches `END_VAR` ends.
  *
- * `boundAtGraphicalBody` stops the `END_VAR` scan at the JSON body of a ladder
- * or FBD POU, for the reason spelled out on `findLastEndVarIndex`.
+ * At the JSON body of a graphical POU when `boundAtGraphicalBody` and one exists, otherwise at the
+ * last `endKeyword` of a textual or hybrid POU, otherwise at the end of `content`.
+ */
+const unterminatedSectionEnd = (
+  content: string,
+  fromIndex: number,
+  options: { boundAtGraphicalBody?: boolean; endKeyword?: string },
+): number => {
+  if (options.boundAtGraphicalBody) {
+    const graphicalBodyStart = findGraphicalBodyStartIndex(content, fromIndex)
+    if (graphicalBodyStart !== -1) return graphicalBodyStart
+  }
+  if (options.endKeyword) {
+    const endIndex = lastKeywordIndex(content, options.endKeyword, fromIndex)
+    if (endIndex !== -1) return endIndex
+  }
+  return content.length
+}
+
+/** 1-based line of `index` in `content`. */
+const lineOfIndex = (content: string, index: number): number => {
+  let line = 1
+  for (
+    let newline = content.indexOf('\n');
+    newline !== -1 && newline < index;
+    newline = content.indexOf('\n', newline + 1)
+  ) {
+    line += 1
+  }
+  return line
+}
+
+/**
+ * The POU's declaration section and where its body starts.
+ *
+ * A closed section runs from the line of the first VAR-family keyword to the last `END_VAR`, kept
+ * verbatim because it is written back to the file. A block that never reaches `END_VAR`, whether it
+ * opens right after the header or follows a closed block, is `unterminated`, ends at
+ * `unterminatedSectionEnd` and carries the line of its keyword. `boundAtGraphicalBody` stops the
+ * `END_VAR` scan at the JSON body of a ladder or FBD POU, for the reason spelled out on
+ * `findLastEndVarIndex`.
  */
 export const extractVariablesSection = (
   content: string,
   bodyStartIndex: number,
-  options: { boundAtGraphicalBody?: boolean } = {},
-): { text: string; bodyStartIndex: number } => {
-  const varStartIndex = content.search(/\b(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i)
-  if (varStartIndex === -1) return { text: '', bodyStartIndex }
+  options: { boundAtGraphicalBody?: boolean; endKeyword?: string } = {},
+): VariablesSection => {
+  const varStartIndex = content.search(new RegExp(`\\b${VAR_KEYWORD_PATTERN}`, 'i'))
+  if (varStartIndex === -1) return { kind: 'none', text: '', bodyStartIndex }
 
   const graphicalBodyStart = options.boundAtGraphicalBody ? findGraphicalBodyStartIndex(content, varStartIndex) : -1
   const lastEndVarIndex = findLastEndVarIndex(
@@ -174,17 +262,48 @@ export const extractVariablesSection = (
     varStartIndex,
     graphicalBodyStart === -1 ? undefined : graphicalBodyStart,
   )
-  if (lastEndVarIndex === -1) return { text: '', bodyStartIndex }
+  if (lastEndVarIndex !== -1) {
+    const trailingKeywordIndex = leadingVarKeywordIndex(content, lastEndVarIndex)
+    if (trailingKeywordIndex === -1) {
+      return {
+        kind: 'declared',
+        text: content.slice(declarationStartIndex(content, varStartIndex), lastEndVarIndex),
+        bodyStartIndex: lastEndVarIndex,
+      }
+    }
+    const trailingSectionEnd = unterminatedSectionEnd(content, trailingKeywordIndex, options)
+    return {
+      kind: 'unterminated',
+      text: content.slice(declarationStartIndex(content, varStartIndex), trailingSectionEnd).trimEnd(),
+      bodyStartIndex: trailingSectionEnd,
+      line: lineOfIndex(content, trailingKeywordIndex),
+    }
+  }
 
-  // Back up over the INDENTATION in front of the keyword, and no further. The
-  // line is taken so the user's indentation survives the round trip, but a POU
-  // may be written `PROGRAM main VAR` on one line, and taking that whole line
-  // put the header inside the declarations: the POU failed to parse, opened as
-  // an unparsed fallback, and the next save wrote its header twice.
-  const lineStart = content.lastIndexOf('\n', varStartIndex) + 1
-  const indent = content.slice(lineStart, varStartIndex)
-  const from = /^[ \t]*$/.test(indent) ? lineStart : varStartIndex
-  return { text: content.slice(from, lastEndVarIndex), bodyStartIndex: lastEndVarIndex }
+  const keywordIndex = leadingVarKeywordIndex(content, bodyStartIndex)
+  if (keywordIndex === -1) return { kind: 'none', text: '', bodyStartIndex }
+
+  const sectionEnd = unterminatedSectionEnd(content, keywordIndex, options)
+  return {
+    kind: 'unterminated',
+    text: content.slice(unterminatedSectionStart(content, bodyStartIndex, keywordIndex), sectionEnd).trimEnd(),
+    bodyStartIndex: sectionEnd,
+    line: lineOfIndex(content, keywordIndex),
+  }
+}
+
+/** Number of lines the leading documentation takes in front of `remainingContent`. */
+const documentationLineCount = (content: string, remainingContent: string): number =>
+  lineOfIndex(content, content.length - remainingContent.length) - 1
+
+/**
+ * Throws the line-numbered parse error for a declaration block that never reaches `END_VAR`.
+ * `line` is counted in the content after the leading documentation, which `documentationLines` adds back.
+ */
+const assertSectionTerminated = (section: VariablesSection, documentationLines: number): void => {
+  if (section.kind === 'unterminated') {
+    throw new Error(formatParseError(UNTERMINATED_VAR_MESSAGE, section.line + documentationLines))
+  }
 }
 
 export const parseTextualPouFromString = (content: string, language: string, type: string): PLCPou => {
@@ -211,7 +330,9 @@ export const parseTextualPouFromString = (content: string, language: string, typ
       throw new Error(formatParseError(`Function ${pouName} must have a return type`))
     }
 
-    const section = extractVariablesSection(remainingContent, declarationMatch[0].length)
+    const endKeyword = POU_END_KEYWORDS[type]
+    const section = extractVariablesSection(remainingContent, declarationMatch[0].length, { endKeyword })
+    assertSectionTerminated(section, documentationLineCount(content, remainingContent))
     const variablesString = section.text
     const bodyStartIndex = section.bodyStartIndex
 
@@ -219,7 +340,6 @@ export const parseTextualPouFromString = (content: string, language: string, typ
       ? parseIecStringToVariables(variablesString).map((v) => ({ ...v, debug: false }))
       : []
 
-    const endKeyword = POU_END_KEYWORDS[type]
     const endKeywordRegex = new RegExp(`\\b${endKeyword}\\b`, 'i')
     const endMatch = remainingContent.slice(bodyStartIndex).search(endKeywordRegex)
 
@@ -292,7 +412,9 @@ export const parseHybridPouFromString = (content: string, language: string, type
       throw new Error(formatParseError(`Function ${pouName} must have a return type`))
     }
 
-    const section = extractVariablesSection(remainingContent, declarationMatch[0].length)
+    const endKeyword = POU_END_KEYWORDS[type]
+    const section = extractVariablesSection(remainingContent, declarationMatch[0].length, { endKeyword })
+    assertSectionTerminated(section, documentationLineCount(content, remainingContent))
     const variablesString = section.text
     const bodyStartIndex = section.bodyStartIndex
 
@@ -301,7 +423,6 @@ export const parseHybridPouFromString = (content: string, language: string, type
       : []
 
     // Strip the trailing END keyword from the body content, matching how textual/graphical parsers handle it
-    const endKeyword = POU_END_KEYWORDS[type]
     let bodyContent = remainingContent.slice(bodyStartIndex).trim()
     /* istanbul ignore next -- defensive: type already validated above */
     if (endKeyword) {
@@ -376,6 +497,7 @@ export const parseGraphicalPouFromString = (content: string, language: string, t
     const section = extractVariablesSection(remainingContent, declarationMatch[0].length, {
       boundAtGraphicalBody: true,
     })
+    assertSectionTerminated(section, documentationLineCount(content, remainingContent))
     const variablesString = section.text
     const bodyStartIndex = section.bodyStartIndex
 

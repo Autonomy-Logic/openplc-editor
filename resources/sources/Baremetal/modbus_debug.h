@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 modbus_debug.h - OpenPLC always-on debugger function codes (0x41-0x4B)
-Copyright (C) 2022 OpenPLC - Thiago Alves
 
 The debugger PDU handlers, dispatched from process_mbpacket. Kept ungated: the
 dispatch in modbus_pdu references them unconditionally (the always-on debugger is

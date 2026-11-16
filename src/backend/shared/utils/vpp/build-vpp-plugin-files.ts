@@ -9,7 +9,8 @@
  *
  * What it produces, unchanged from the desktop's original writer:
  *
- *   conf/<pluginName>.json   the generated vendor plugin config
+ *   conf/<pluginName>.json   the generated vendor plugin config (`slots` or `io-ranges` format)
+ *   conf/<pluginName>.station.bin   the configurator's station archive, `io-ranges` only
  *   vpp_plugins.conf         the loader line the runtime reads
  *   vpp_plugin/**            the HAL tree, minus the editor-only files
  *   vpp_plugin/trusted_keys.c   only for a licensable package
@@ -20,14 +21,20 @@
  * not; nothing else about the output may differ between platforms.
  */
 
+import type { VppScreenConfigInputs } from '../../../../middleware/shared/ports/compiler-platform-port'
 import type { PackageManifest, VppModuleDefinition } from '../../../../middleware/shared/ports/types'
+import { configuratorArchiveSchema } from '../../../../middleware/shared/vendor-document/protocol'
+import { generateIoRangesPluginConfig } from './generate-io-ranges-plugin-config'
+import { generateScreenConfigFiles } from './generate-screen-config-files'
 import { generateVendorPluginConfig } from './generate-vendor-plugin-config'
-import { describeVppPinDrift, type InstalledVppIdentity, type VppPackagePin } from './vpp-package-pin'
+import { describeMissingVppPackage, type VppPackagePin } from './vpp-package-pin'
 
 /** Files the editor turns into something else and the runtime must not receive. */
 const EXCLUDED_PLUGIN_FILES = new Set(['config_template.json', 'requirements.txt'])
 
 const CHECKSUM_FILENAME = 'checksum.sha256'
+const STATION_ARCHIVE_SUFFIX = '.station.bin'
+const CONFIGURATOR_KEY = 'configurator'
 const TRUSTED_KEYS_FILENAME = 'trusted_keys.c'
 
 export type VppDevice = PackageManifest['devices'][number]
@@ -53,9 +60,13 @@ export interface BuildVppPluginFilesArgs {
   /** Generated trusted-keys unit for a licensable package; null otherwise. */
   trustedKeysC?: string | null
   /** What the project was authored against, and what is actually being packed. */
-  pin?: { recorded?: VppPackagePin; installed: InstalledVppIdentity | null }
+  pin?: { recorded?: VppPackagePin; installed: VppPackagePin | null }
   /** Lower-case hex sha256 of the given bytes. */
   sha256Hex: (bytes: Uint8Array) => string | Promise<string>
+  /** Id of the package being packed; keys its buckets in `screenConfigInputs.vppExtensions`. */
+  packageId?: string
+  /** Compile outputs for the configs declared in `hal.screenConfigs`; omitted, none are generated. */
+  screenConfigInputs?: VppScreenConfigInputs
 }
 
 export interface BuildVppPluginFilesResult {
@@ -80,6 +91,12 @@ export interface BuildVppPluginFilesResult {
  */
 const PLUGIN_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 
+/** Name the runtime registers the plugin under: `plugin_name`, else `vendor_plugin`; null when it is unsafe. */
+export function resolveConfigTemplatePluginName(configTemplate: Record<string, unknown>): string | null {
+  const name = typeof configTemplate.plugin_name === 'string' ? configTemplate.plugin_name : 'vendor_plugin'
+  return PLUGIN_NAME_PATTERN.test(name) ? name : null
+}
+
 export async function buildVppPluginFiles(args: BuildVppPluginFilesArgs): Promise<BuildVppPluginFilesResult> {
   const { device, packageFiles, vendorScreenData, sha256Hex } = args
   const warnings: string[] = []
@@ -94,12 +111,9 @@ export async function buildVppPluginFiles(args: BuildVppPluginFilesArgs): Promis
     errors,
   })
 
-  // Said here rather than only at authoring: a package can move between the
-  // last time the board screen was open and the upload, and this is the last
-  // point before the driver is built on the device.
   if (args.pin) {
-    const drift = describeVppPinDrift(args.pin.recorded, args.pin.installed)
-    if (drift) warnings.push(drift)
+    const missing = describeMissingVppPackage(args.pin.recorded, args.pin.installed)
+    if (missing) warnings.push(missing)
   }
 
   if (device.target?.type !== 'runtime-v4') {
@@ -131,21 +145,61 @@ export async function buildVppPluginFiles(args: BuildVppPluginFilesArgs): Promis
       return empty()
     }
 
-    const rawPluginName = typeof configTemplate.plugin_name === 'string' ? configTemplate.plugin_name : 'vendor_plugin'
-    if (!PLUGIN_NAME_PATTERN.test(rawPluginName)) {
-      errors.push(`Invalid configTemplate.plugin_name: ${rawPluginName}`)
+    const resolvedPluginName = resolveConfigTemplatePluginName(configTemplate)
+    if (resolvedPluginName === null) {
+      errors.push(`Invalid configTemplate.plugin_name: ${String(configTemplate.plugin_name)}`)
       return empty()
     }
-    pluginName = rawPluginName
+    pluginName = resolvedPluginName
 
-    const finalConfig = generateVendorPluginConfig(
-      configTemplate,
-      vendorScreenData as Parameters<typeof generateVendorPluginConfig>[1],
-      (args.modules ?? []) as Parameters<typeof generateVendorPluginConfig>[2],
-      (args.devicePins ?? []) as Parameters<typeof generateVendorPluginConfig>[3],
-    )
+    let finalConfig: Record<string, unknown>
+    if (device.hal?.pluginConfigFormat === 'io-ranges') {
+      const archive = readConfiguratorArchive(vendorScreenData)
+      if (archive === 'invalid') {
+        errors.push('The I/O configurator station stored in the project is not valid hex data or is too large')
+        return empty(pluginName)
+      }
+      const archiveFileName = `${pluginName}${STATION_ARCHIVE_SUFFIX}`
+      if (archive === null) {
+        warnings.push('The project has no I/O configurator station; the plugin will start with a blank project')
+      }
+      const generated = generateIoRangesPluginConfig(
+        configTemplate,
+        vendorScreenData,
+        args.modules ?? [],
+        archive === null ? null : { fileName: archiveFileName, sha256: await sha256Hex(archive) },
+      )
+      if (!generated.ok) {
+        errors.push(...generated.errors)
+        return empty(pluginName)
+      }
+      finalConfig = generated.config
+      if (archive !== null) files[`conf/${archiveFileName}`] = archive
+    } else {
+      finalConfig = generateVendorPluginConfig(
+        configTemplate,
+        vendorScreenData as Parameters<typeof generateVendorPluginConfig>[1],
+        (args.modules ?? []) as Parameters<typeof generateVendorPluginConfig>[2],
+        (args.devicePins ?? []) as Parameters<typeof generateVendorPluginConfig>[3],
+      )
+    }
 
     files[`conf/${pluginName}.json`] = encodeUtf8(JSON.stringify(finalConfig, null, 2))
+
+    if (args.packageId !== undefined && args.screenConfigInputs !== undefined) {
+      const screenConfigs = generateScreenConfigFiles({
+        pluginName,
+        packageId: args.packageId,
+        screenConfigs: device.hal?.screenConfigs,
+        inputs: args.screenConfigInputs,
+      })
+      if (screenConfigs.errors.length > 0) {
+        errors.push(...screenConfigs.errors)
+        return empty(pluginName)
+      }
+      warnings.push(...screenConfigs.warnings)
+      for (const [path, content] of Object.entries(screenConfigs.files)) files[path] = encodeUtf8(content)
+    }
     // name,path,enabled,type,config_path,venv_path — the deterministic
     // locations compile.sh and apply_vpp_plugin_conf() agree on.
     files['vpp_plugins.conf'] = encodeUtf8(
@@ -227,6 +281,18 @@ export async function buildVppPluginFiles(args: BuildVppPluginFilesArgs): Promis
     warnings,
     errors,
   }
+}
+
+/** The configurator's archive as bytes; null when the project has none. */
+function readConfiguratorArchive(vendorScreenData: Record<string, unknown>): Uint8Array | null | 'invalid' {
+  const record = vendorScreenData[CONFIGURATOR_KEY]
+  if (record === null || typeof record !== 'object') return null
+  const archive = (record as { archive?: unknown }).archive
+  if (archive === undefined || archive === '') return null
+  if (typeof archive !== 'string' || !configuratorArchiveSchema.safeParse(archive).success) return 'invalid'
+  const bytes = new Uint8Array(archive.length / 2)
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(archive.slice(i * 2, i * 2 + 2), 16)
+  return bytes
 }
 
 function posixDirname(path: string): string {

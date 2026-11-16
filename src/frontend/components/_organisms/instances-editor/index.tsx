@@ -256,7 +256,7 @@ const InstancesEditor = () => {
 
   return (
     <div aria-label='instances editor container' className='flex w-full  flex-col gap-4 '>
-      <div aria-label='instances editor actions' className='relative flex h-8 w-full min-w-[1035px]'>
+      <div aria-label='instances editor actions' className='relative flex h-8 w-full'>
         <div
           aria-label='instances editor table actions container'
           className='relative flex h-full w-full items-center justify-between'

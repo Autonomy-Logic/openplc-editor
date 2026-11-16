@@ -36,6 +36,18 @@ const RuntimeLoginModal = () => {
         deviceActions.setRuntimeJwtToken(result.accessToken)
         deviceActions.setRuntimeConnectionStatus('connected')
         deviceActions.setStoredCredentials({ username, password })
+        // EtherDOG feature set for the pre-build capability gate. Not awaited: the modal closes
+        // at once, and until it answers the features stay unknown.
+        void runtime
+          .getRuntimeCapabilities()
+          .then((caps) => {
+            if (!caps.error && caps.features !== null) {
+              deviceActions.setRuntimeFeatures(caps.features)
+            }
+          })
+          .catch(() => {
+            /* already represented as runtimeFeatures === null */
+          })
         modalActions.closeModal()
         setUsername('')
         setPassword('')
@@ -67,7 +79,7 @@ const RuntimeLoginModal = () => {
         modalActions.onOpenChange('runtime-login', open)
       }}
     >
-      <ModalContent className='flex min-h-[380px] w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
+      <ModalContent className='flex w-[400px] select-none flex-col items-center justify-start rounded-lg p-6'>
         <ModalTitle className='mb-4 text-xl font-semibold'>Login to OpenPLC Runtime</ModalTitle>
 
         <p className='mb-6 text-center text-sm text-neutral-600 dark:text-neutral-400'>

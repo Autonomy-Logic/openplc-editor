@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
-openplc_retain.h - Retain-variable storage interface (NODE-94)
-Copyright (C) 2026 OpenPLC - Thiago Alves
+openplc_retain.h - Retain-variable storage interface
 
 The one point of contact for persisting retained variables. The runtime
 MARSHALS; the platform STORES. Nothing here knows what a retained variable is:

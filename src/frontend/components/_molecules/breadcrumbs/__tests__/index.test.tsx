@@ -65,6 +65,7 @@ describe('screens that sit under no branch', () => {
     ['plc-vendor-screen', { type: 'plc-vendor-screen', meta: { name: 'Modbus Setup', screenName: 'Modbus Setup' } }],
     ['plc-package-manager', { type: 'plc-package-manager', meta: { name: 'Package Manager' } }],
     ['plc-library-manager', { type: 'plc-library-manager', meta: { name: 'Library Manager' } }],
+    ['plc-diagnostics', { type: 'plc-diagnostics', meta: { name: 'I/O Image Diagnostics' } }],
   ])('trails %s as Project > screen', (_type, model) => {
     expect(trail(model)).toEqual(['Irrigation Controller', model.meta.name])
   })

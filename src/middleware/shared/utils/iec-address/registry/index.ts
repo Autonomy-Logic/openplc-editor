@@ -9,11 +9,15 @@ export {
 } from './address-space'
 export { allocateAddresses, channelKey } from './allocate'
 export {
+  activeKindsFor,
   ethercatConsumerId,
   ethercatMemoryKey,
+  ethercatModuleMemoryKey,
   migrateToRegistry,
   modbusConsumerId,
   modbusMemoryKey,
+  moduleRegistryChannelId,
+  parseModuleRegistryChannelId,
   recalculateFromLegacy,
   unpinAllocatableChannels,
   vppMemoryKey,

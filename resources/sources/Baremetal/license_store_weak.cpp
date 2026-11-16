@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 license_store_weak.cpp - Weak fallback backend for the license store.
-Copyright (C) 2022 OpenPLC - Thiago Alves
 
 Guarantees the firmware always links even when no platform VPP provides a real
 backend. A VPP that ships license_store_<arch>.cpp defines the STRONG symbols,

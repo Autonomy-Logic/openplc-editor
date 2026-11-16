@@ -183,3 +183,15 @@ describe('createEditorDeviceAdapter', () => {
     expect(window.bridge.deviceReadLicense).not.toHaveBeenCalled()
   })
 })
+
+describe('getVendorDocumentUrl', () => {
+  it('returns the vpp-doc URL of a package file', () => {
+    expect(createEditorDeviceAdapter().getVendorDocumentUrl('com.vendor.pkg', 'configurator/index.html')).toBe(
+      'vpp-doc://com.vendor.pkg/configurator/index.html',
+    )
+  })
+
+  it('returns null for a path leaving the package', () => {
+    expect(createEditorDeviceAdapter().getVendorDocumentUrl('com.vendor.pkg', '../index.html')).toBeNull()
+  })
+})

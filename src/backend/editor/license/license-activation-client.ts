@@ -106,11 +106,11 @@ export async function checkDeviceActivation(input: DeviceActivationInput): Promi
     const data = unwrapHttpEnvelope(raw) as Partial<EdgeActivationResponse> | undefined
 
     if (!data || typeof data.licensed !== 'boolean') {
-      return { licensed: false, error: 'The licence server sent a reply the editor could not read.' }
+      return { licensed: false, error: 'The license server sent a reply the editor could not read.' }
     }
     if (!data.licensed) return { licensed: false, reason: data.reason }
     if (typeof data.license !== 'string') {
-      return { licensed: false, error: 'The licence server reported a licence but sent no licence data.' }
+      return { licensed: false, error: 'The license server reported a license but sent no license data.' }
     }
 
     // `Buffer.from(s, 'base64')` NEVER throws: the decoder silently skips invalid
@@ -122,7 +122,7 @@ export async function checkDeviceActivation(input: DeviceActivationInput): Promi
     if (blob.length !== LIC_BLOB_SIZE) {
       return {
         licensed: false,
-        error: 'The licence server sent licence data the editor could not use.',
+        error: 'The license server sent license data the editor could not use.',
       }
     }
 
@@ -167,7 +167,7 @@ function postJson(url: string, body: unknown): Promise<unknown> {
         res.on('end', () => {
           const status = res.statusCode ?? 0
           if (status < 200 || status >= 300) {
-            reject(new Error(`The licence server refused the request (HTTP ${status}).`))
+            reject(new Error(`The license server refused the request (HTTP ${status}).`))
             return
           }
           try {
@@ -177,14 +177,14 @@ function postJson(url: string, body: unknown): Promise<unknown> {
             // worth keeping OUT of the dialog: the user can act on "the server
             // sent something unreadable", never on a parser's column number.
             console.warn('[license] activation response was not valid JSON:', err)
-            reject(new Error('The licence server sent a reply the editor could not read.'))
+            reject(new Error('The license server sent a reply the editor could not read.'))
           }
         })
       },
     )
 
     req.setTimeout(REQUEST_TIMEOUT_MS, () => {
-      req.destroy(new Error('The licence server did not answer in time.'))
+      req.destroy(new Error('The license server did not answer in time.'))
     })
     req.on('error', (err) => reject(err))
     req.write(payload)

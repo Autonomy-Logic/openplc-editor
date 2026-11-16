@@ -129,6 +129,20 @@ export interface PoolRemoteDeviceInput {
         iecLocation: string
         alias?: string
       }>
+      /**
+       * Modules plugged into a modular coupler (ETG.5001). Each module
+       * carries its own channel mappings claimed under
+       * "<devRef>:<slaveRef>:<moduleId>:<channelId>".
+       */
+      modules?: Array<{
+        id?: string
+        slot?: number
+        channelMappings?: Array<{
+          channelId: string
+          iecLocation: string
+          alias?: string
+        }>
+      }>
     }>
   }
 }
@@ -152,7 +166,7 @@ export interface BuildPoolOptions {
  * ------------------------------------------------------------------ */
 
 const BIT_ADDRESS_REGEX = /^(%[IQM]X)(\d+)\.(\d+)$/
-const WORD_ADDRESS_REGEX = /^(%[IQM][WDL])(\d+)$/
+const WORD_ADDRESS_REGEX = /^(%[IQM][BWDL])(\d+)$/
 
 interface ParsedAddress {
   prefix: string
@@ -240,6 +254,10 @@ export function buildAddressPool(
   }
 
   // 4. EtherCAT channel mappings.
+  //
+  // Ref format: "<devRef>:<slaveRef>:<channelId>" for a plain
+  // slave channel, "<devRef>:<slaveRef>:<moduleId>:<channelId>" for a module channel on
+  // an ETG.5001 modular coupler.
   if (caps.ethercat && inputs.remoteDevices && ignore !== 'ethercat') {
     for (const dev of inputs.remoteDevices) {
       const devRef = dev.deviceName || dev.name || 'unknown-device'
@@ -251,6 +269,19 @@ export function buildAddressPool(
             { kind: 'ethercat', ref: `${devRef}:${slaveRef}:${mapping.channelId}` },
             mapping.alias,
           )
+        }
+        // Modules plugged into a modular coupler. Their channel addresses
+        // live in the same address pool as the coupler's own channels; the ref format
+        // carries a fourth segment so the editor can tell them apart.
+        for (const module of slave.modules ?? []) {
+          const moduleRef = module.id || `slot-${module.slot}`
+          for (const mapping of module.channelMappings ?? []) {
+            claim(
+              mapping.iecLocation,
+              { kind: 'ethercat', ref: `${devRef}:${slaveRef}:${moduleRef}:${mapping.channelId}` },
+              mapping.alias,
+            )
+          }
         }
       }
     }
@@ -285,9 +316,9 @@ export function buildAddressPool(
  *                  address and wants the next allocation to skip it.
  *                  In bulk-allocate loops, threading a mutable "used"
  *                  set alongside the pool is the simplest pattern.
- * @param prefix    IEC 61131-3 prefix, one of "%IX" / "%QX" / "%IW" /
- *                  "%QW" / "%MW" / "%ID" / "%QD" / "%MD" / "%IL" /
- *                  "%QL" / "%ML".
+ * @param prefix    IEC 61131-3 prefix, one of "%IX" / "%QX" / "%IB" /
+ *                  "%QB" / "%MB" / "%IW" / "%QW" / "%MW" / "%ID" /
+ *                  "%QD" / "%MD" / "%IL" / "%QL" / "%ML".
  * @param isBit     True for %IX / %QX (byte.bit addressing); false
  *                  for word/dword/lword addresses.
  * @param startFrom Linear bit index (for bit) or word index (for word)

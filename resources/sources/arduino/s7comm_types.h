@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 s7comm_types.h - shared contracts for the baremetal S7Comm server
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 
 Pure declarations, no storage.  The generated `s7comm_config.h` instantiates
 `S7COMM_AREAS[]` against the record declared here, so this header and

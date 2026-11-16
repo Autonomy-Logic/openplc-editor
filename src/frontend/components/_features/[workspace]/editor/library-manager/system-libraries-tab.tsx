@@ -14,6 +14,7 @@
 import * as Popover from '@radix-ui/react-popover'
 import { MinusIcon } from '@root/frontend/assets/icons/interface/Minus'
 import { PlusIcon } from '@root/frontend/assets/icons/interface/Plus'
+import { useIsEditingLocked } from '@root/frontend/hooks/use-editing-lock'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { buildLibraryTree, type LibraryTreeNode } from '@root/frontend/utils/library-tree'
 import type { InstalledLibrary, SystemLibrary } from '@root/middleware/shared/ports/library-types'
@@ -27,6 +28,7 @@ interface SystemLibrariesTabProps {
 
 const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) => {
   const library = useLibrary()
+  const isEditingLocked = useIsEditingLocked()
   const systemPool = useOpenPLCStore((s) => s.libraries.system)
   const openModal = useOpenPLCStore((s) => s.modalActions.openModal)
   const [selectedName, setSelectedName] = useState<string | null>(null)
@@ -103,7 +105,8 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
                 <button
                   type='button'
                   aria-label='Add library'
-                  className='rounded-md p-1 hover:bg-neutral-100 dark:hover:bg-neutral-900'
+                  disabled={isEditingLocked}
+                  className='rounded-md p-1 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-neutral-900'
                 >
                   <PlusIcon className='!stroke-brand' />
                 </button>
@@ -117,6 +120,7 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
                   <button
                     type='button'
                     onClick={() => void handleImportFromFile()}
+                    disabled={isEditingLocked}
                     className='flex w-full items-center rounded-md px-3 py-2 text-left font-caption text-cp-sm font-medium text-neutral-850 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-850'
                   >
                     Add from file...
@@ -124,6 +128,7 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
                   <button
                     type='button'
                     onClick={handleImportFromInternet}
+                    disabled={isEditingLocked}
                     className='flex w-full items-center rounded-md px-3 py-2 text-left font-caption text-cp-sm font-medium text-neutral-850 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-850'
                   >
                     Add from catalog...
@@ -136,13 +141,13 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
               type='button'
               aria-label='Uninstall library'
               onClick={() => void handleUninstall()}
-              disabled={!canUninstall}
+              disabled={!canUninstall || isEditingLocked}
               title={
                 selectedRow?.bundled
                   ? 'Bundled libraries ship with strucpp and cannot be uninstalled'
                   : 'Uninstall selected library'
               }
-              className='rounded-md p-1 hover:bg-neutral-100 disabled:pointer-events-none disabled:opacity-30 dark:hover:bg-neutral-900'
+              className='rounded-md p-1 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-neutral-900'
             >
               <MinusIcon className='!stroke-brand' />
             </button>
@@ -160,6 +165,7 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
                 key={lib.name}
                 type='button'
                 onClick={() => setSelectedName(lib.name)}
+                data-editing-lock-exempt
                 aria-selected={selectedName === lib.name}
                 className={`flex w-full items-center justify-between border-b border-neutral-100 px-3 py-2 text-left last:border-b-0 dark:border-neutral-800 ${
                   selectedName === lib.name

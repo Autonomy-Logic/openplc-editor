@@ -12,6 +12,7 @@
  * emit-event payloads.
  */
 
+import hals from '../../firmware/hals.json'
 import type { DevicePin } from '../../types/PLC/devices'
 import type { PLCProjectData } from '../../types/PLC/open-plc'
 import type {
@@ -87,9 +88,13 @@ function makePort(overrides: Partial<CompilerPlatformPort> = {}): jest.Mocked<Co
   return {
     computeMd5: jest.fn().mockResolvedValue('a'.repeat(32)),
     transpileToSt: jest.fn().mockResolvedValue({ ok: true, programSt: 'PROGRAM main\nEND_PROGRAM' }),
-    installArduinoCore: jest.fn().mockResolvedValue({ ok: true }),
-    installArduinoLib: jest.fn().mockResolvedValue({ ok: true }),
     compileArduino: jest.fn().mockResolvedValue({ ok: true, binary: new Uint8Array([1, 2, 3]) }),
+    compileToWasm: jest.fn().mockResolvedValue({
+      ok: true,
+      wasm: new Uint8Array([0, 97, 115, 109]),
+      stats: { units: 3, cached: 1, compileMs: 10, linkMs: 2 },
+      diagnostics: [],
+    }),
     uploadRuntimeV4: jest.fn().mockResolvedValue({ ok: true }),
     uploadArduinoBoard: jest.fn().mockResolvedValue({ ok: true }),
     uploadRuntimeV3: jest.fn().mockResolvedValue({ ok: true }),
@@ -114,6 +119,19 @@ const deviceContextFixture: PlatformDeviceContext = {
   jwt: 'jwt-token',
 }
 
+const simulatorSupportFiles: Record<string, string> = {
+  'wasm-sim/sim_main.cpp': '// shim',
+  'wasm-sim/sim_python.cpp': '// python blocks',
+  'wasm-sim/core/api/Common.cpp': '// common',
+  'wasm-sim/core/api/Print.cpp': '// print',
+  'wasm-sim/core/api/Stream.cpp': '// stream',
+  'wasm-sim/core/api/String.cpp': '// string',
+}
+
+/** The files of the simulator compile request the pipeline handed to the port. */
+const simulatorRequestFiles = (port: jest.Mocked<CompilerPlatformPort>): Record<string, string | Uint8Array> =>
+  jest.mocked(port.compileToWasm).mock.calls[0][0].files
+
 function makeArgs(overrides: Partial<RunCompilePipelineArgs> = {}): RunCompilePipelineArgs {
   return {
     projectData: projectDataFixture,
@@ -130,6 +148,7 @@ function makeArgs(overrides: Partial<RunCompilePipelineArgs> = {}): RunCompilePi
     firmwareSkeleton: {
       'examples/Baremetal/Baremetal.ino': '// sketch',
       'src/arduino.cpp': '// hal',
+      ...simulatorSupportFiles,
     },
     strucppRuntimeHeaders: {},
     avrLibStdCppInclude: '/usr/avr/include',
@@ -165,14 +184,14 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('runCompilePipeline — simulator path', () => {
-  it('runs preprocess → ST → strucpp → arduino-compile and returns the firmware binary', async () => {
+  it('runs preprocess → ST → strucpp → simulator compile and returns the WebAssembly module', async () => {
     const port = makePort()
     const { events, emit } = captureEvents()
 
     const result = await runCompilePipeline(makeArgs(), port, emit)
 
     expect(result.success).toBe(true)
-    expect(result.binary).toBeInstanceOf(Uint8Array)
+    expect(result.binary).toEqual(new Uint8Array([0, 97, 115, 109]))
     expect(result.uploaded).toBe(false)
     expect(port.transpileToSt).toHaveBeenCalledTimes(1)
     // The pipeline hands the in-process transpiler the project IR plus
@@ -181,26 +200,30 @@ describe('runCompilePipeline — simulator path', () => {
       expect.objectContaining({ projectData: expect.anything() }),
       expect.any(Function),
     )
-    expect(port.compileArduino).toHaveBeenCalledTimes(1)
+    expect(port.compileToWasm).toHaveBeenCalledTimes(1)
+    expect(port.compileArduino).not.toHaveBeenCalled()
     expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
     expect(port.uploadArduinoBoard).not.toHaveBeenCalled()
     expect(events.map((e) => e.stage)).toContain('done')
+    expect(events.some((e) => e.stage === 'simulator-compile' && e.message.includes('3 files (1 reused)'))).toBe(true)
   })
 
-  it('calls compileArduino with the assembled file map + arduino-cli argv', async () => {
+  it('compiles the assembled firmware files as one simulator request, the sketch as a C++ unit', async () => {
     const port = makePort()
     const { emit } = captureEvents()
     await runCompilePipeline(
       makeArgs({
-        firmwareSkeleton: { 'examples/Baremetal/Baremetal.ino': 'INO' },
+        firmwareSkeleton: { 'examples/Baremetal/Baremetal.ino': 'void setup() {}\n', ...simulatorSupportFiles },
       }),
       port,
       emit,
     )
-    const [callArgs] = port.compileArduino.mock.calls[0]
-    expect(callArgs.files['examples/Baremetal/Baremetal.ino']).toBe('INO')
-    expect(callArgs.files['src/defines.h']).toContain('PROGRAM_MD5')
-    expect(callArgs.argv).toEqual(['compile', '-b', 'arduino:avr:mega'])
+    const [request] = jest.mocked(port.compileToWasm).mock.calls[0]
+    expect(request.files['examples/Baremetal/Baremetal.ino']).toBeUndefined()
+    expect(request.files['examples/Baremetal/Baremetal.cpp']).toContain('void setup() {}')
+    expect(request.files['src/defines.h']).toContain('PROGRAM_MD5')
+    expect(request.units.map((unit) => unit.source)).toContain('examples/Baremetal/Baremetal.cpp')
+    expect(request.output).toBe('simulator.wasm')
   })
 
   it('forwards a positive retainBlobSize into defines.h', async () => {
@@ -224,8 +247,7 @@ describe('runCompilePipeline — simulator path', () => {
     const { emit } = captureEvents()
     await runCompilePipeline(makeArgs({}), port, emit)
 
-    const [callArgs] = port.compileArduino.mock.calls[0]
-    expect(callArgs.files['src/defines.h']).toContain('#define OPLC_RETAIN_BLOB_SIZE 148')
+    expect(simulatorRequestFiles(port)['src/defines.h']).toContain('#define OPLC_RETAIN_BLOB_SIZE 148')
   })
 
   it('omits the define when nothing is retained', async () => {
@@ -234,58 +256,7 @@ describe('runCompilePipeline — simulator path', () => {
     const port = makePort()
     const { emit } = captureEvents()
     await runCompilePipeline(makeArgs({}), port, emit)
-    const [callArgs] = port.compileArduino.mock.calls[0]
-    expect(callArgs.files['src/defines.h']).not.toContain('OPLC_RETAIN_BLOB_SIZE')
-  })
-
-  // Regression: the board's `boardManagerUrl` (VPP `target.boardManagerUrl`)
-  // was resolved onto boardEntry but never forwarded to installArduinoCore,
-  // so vendor cores outside arduino-cli's built-in index could not be
-  // installed — "Platform 'industrialshields:esp32' not found".
-  it('forwards boardEntry.boardManagerUrl to installArduinoCore', async () => {
-    const port = makePort()
-    const { emit } = captureEvents()
-    const boardManagerUrl =
-      'https://apps.industrialshields.com/main/arduino/boards/package_industrialshields_index.json'
-    await runCompilePipeline(
-      makeArgs({
-        isSimulator: false,
-        boardRuntime: 'arduino-cli',
-        boardEntry: {
-          platform: 'industrialshields:esp32:esp32plc',
-          core: 'industrialshields:esp32',
-          boardManagerUrl,
-        },
-      }),
-      port,
-      emit,
-    )
-    expect(port.installArduinoCore).toHaveBeenCalledWith(
-      expect.objectContaining({ coreId: 'industrialshields:esp32', boardManagerUrl }),
-      expect.any(Function),
-    )
-  })
-
-  it('omits boardManagerUrl for boards that do not declare one', async () => {
-    const port = makePort()
-    const { emit } = captureEvents()
-    await runCompilePipeline(makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli' }), port, emit)
-    const [coreArgs] = port.installArduinoCore.mock.calls[0]
-    expect(coreArgs).not.toHaveProperty('boardManagerUrl')
-  })
-
-  it('calls installArduinoCore + installArduinoLib before compileArduino (no-op semantics for web)', async () => {
-    const port = makePort()
-    const { emit } = captureEvents()
-    await runCompilePipeline(makeArgs(), port, emit)
-    // Jest's invocationCallOrder is global, monotonically increasing —
-    // smaller value = called earlier.  This is the canonical way to
-    // assert mock call ordering in jest.
-    const coreOrder = port.installArduinoCore.mock.invocationCallOrder[0]
-    const libOrder = port.installArduinoLib.mock.invocationCallOrder[0]
-    const compileOrder = port.compileArduino.mock.invocationCallOrder[0]
-    expect(coreOrder).toBeLessThan(compileOrder)
-    expect(libOrder).toBeLessThan(compileOrder)
+    expect(simulatorRequestFiles(port)['src/defines.h']).not.toContain('OPLC_RETAIN_BLOB_SIZE')
   })
 
   it('compileOnly returns success without invoking uploadArduinoBoard', async () => {
@@ -357,6 +328,523 @@ describe('runCompilePipeline — blank FBD variable guard', () => {
     // Identifies what the block is wired to rather than raw coordinates.
     expect(validateError?.message).toContain('connected to "blink_out" of "BLINK_PY0"')
     expect(events.some((e) => e.message === 'Stopping compilation process.')).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Step 0a: the I/O image gate
+// ---------------------------------------------------------------------------
+
+describe('runCompilePipeline — I/O image gate', () => {
+  const pouLocating = (location: string) => ({
+    type: 'program',
+    data: {
+      name: 'main',
+      language: 'st',
+      documentation: '',
+      body: { language: 'st', value: '' },
+      variables: [{ name: 'valve', location }],
+    },
+  })
+
+  const withPou = (location: string) =>
+    ({ ...projectDataFixture, pous: [pouLocating(location)] }) as unknown as PLCProjectData
+
+  /** Same, plus a Modbus server stating the memory area the declaration sits
+   *  in. Memory needs a producer like every other area, so a case that is
+   *  about something else entirely has to say where the area comes from. */
+  const withBackedPou = (location: string, bufferMapping: Record<string, Record<string, number>>) =>
+    ({
+      ...projectDataFixture,
+      pous: [pouLocating(location)],
+      servers: [
+        {
+          name: 'mb',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: { enabled: true, transports: ['tcp'], bufferMapping },
+        },
+      ],
+    }) as unknown as PLCProjectData
+
+  /** A real arduino-cli target. The default fixture is the SIMULATOR, which is
+   *  exempt from the gate, so a case about the gate has to say so. */
+  const arduinoArgs = (overrides: Partial<RunCompilePipelineArgs> = {}) =>
+    makeArgs({
+      isSimulator: false,
+      boardRuntime: 'arduino-cli',
+      boardTarget: 'Arduino Mega 2560',
+      boardEntry: {
+        platform: 'arduino:avr:mega',
+        core: 'arduino:avr',
+        define: ['__AVR_ATmega2560__'],
+        compiler: 'arduino-cli',
+      } as RunCompilePipelineArgs['boardEntry'],
+      compileOnly: true,
+      ...overrides,
+    })
+
+  it('WARNS about two writers on one output and still compiles', async () => {
+    // IEC 61131-3 does not forbid declaring one located variable in two POUs,
+    // so the editor does not either -- which write survives is the
+    // programmer's business. What the compile owes them is the fact that the
+    // addresses are global and POU order decides the winner, which neither
+    // declaration shows on its own. So: a warning, and the build carries on.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    const twoWriters = {
+      ...projectDataFixture,
+      pous: [
+        pouLocating('%QW3'),
+        {
+          type: 'program',
+          data: {
+            name: 'second',
+            language: 'st',
+            documentation: '',
+            body: { language: 'st', value: '' },
+            variables: [{ name: 'pump', location: '%QW3' }],
+          },
+        },
+      ],
+    } as unknown as PLCProjectData
+
+    const result = await runCompilePipeline(
+      arduinoArgs({
+        projectData: twoWriters,
+        devicePinMapping: [{ pin: '3', pinType: 'analogOutput', address: '%QW3' }] as DevicePin[],
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    const warned = events.filter((e) => e.message.includes('drive the same output'))
+    expect(warned).toHaveLength(1)
+    expect(warned[0].level).toBe('warning')
+    // Both names, because either one may be the mistake.
+    expect(warned[0].message).toContain('valve')
+    expect(warned[0].message).toContain('pump')
+    // And it never says the compiler refuses it, because it does not.
+    expect(warned[0].message).not.toContain('refuse')
+  })
+
+  it('bails before transpilation when an output declaration has no producer', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    const result = await runCompilePipeline(arduinoArgs({ projectData: withPou('%QW3859') }), port, emit)
+
+    expect(result.success).toBe(false)
+    // The gate sits before Step 1, so nothing downstream ran.
+    expect(port.transpileToSt).not.toHaveBeenCalled()
+    const validateError = events.find((e) => e.stage === 'validate' && e.level === 'error')
+    expect(validateError?.message).toContain('valve at %QW3859')
+    expect(events.some((e) => e.message === 'Stopping compilation process.')).toBe(true)
+  })
+
+  it('names the board when the area does not exist on this target', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    // Bare metal declares no bool_memory, so %MX is not an address there.
+    const result = await runCompilePipeline(arduinoArgs({ projectData: withPou('%MX0.1') }), port, emit)
+
+    expect(result.success).toBe(false)
+    const validateError = events.find((e) => e.stage === 'validate' && e.level === 'error')
+    expect(validateError?.message).toContain('"Arduino Mega 2560" has no %MX area at all')
+  })
+
+  it('accepts %MX on the runtime-v4 branch, which does have bool_memory', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: withBackedPou('%MX0.1', { coils: { mxBits: 8 } }),
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'OpenPLC Runtime v4 (RPi)',
+        // Server exposure is capability-scoped, and the capabilities come from
+        // `boardEntry`, not from `boardRuntime`. Without it the target runs no
+        // Modbus server, the exposure is ignored and the declaration is unbacked.
+        boardEntry: { compiler: 'openplc-compiler' } as RunCompilePipelineArgs['boardEntry'],
+        compileOnly: true,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts a declaration a pin produces', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    const result = await runCompilePipeline(
+      arduinoArgs({
+        projectData: withPou('%QW0'),
+        devicePinMapping: [{ pin: '3', pinType: 'analogOutput', address: '%QW0' }] as DevicePin[],
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+  })
+
+  it('ships the sizes to the device as image.conf', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    await runCompilePipeline(
+      makeArgs({
+        projectData: withBackedPou('%MW7', { holdingRegisters: { mwCount: 8 } }),
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'OpenPLC Runtime v4 (RPi)',
+        // Server exposure is capability-scoped, and the capabilities come from
+        // `boardEntry`, not from `boardRuntime`. Without it the target runs no
+        // Modbus server, the exposure is ignored and the declaration is unbacked.
+        boardEntry: { compiler: 'openplc-compiler' } as RunCompilePipelineArgs['boardEntry'],
+        compileOnly: true,
+      }),
+      port,
+      emit,
+    )
+
+    const materialize = port.materializeRuntimeV4Bundle
+    if (!materialize) throw new Error('the test port must provide materializeRuntimeV4Bundle')
+    const bundle = jest.mocked(materialize).mock.calls[0][0].bundle
+    // %MW7 is one word past index 7, so the table needs eight.
+    expect(bundle['image.conf']).toContain('int_memory=8')
+    // Unconditional, so every area appears — zero included.
+    expect(bundle['image.conf']).toContain('bool_output=0')
+    expect(events.some((e) => e.message.includes('Generated image.conf'))).toBe(true)
+  })
+
+  it('refuses a Runtime v4 build with two enabled Modbus servers, naming them', async () => {
+    // v4 does not compile the macros, but `generateModbusSlaveConfig` writes
+    // ONE conf/modbus_slave.json and the sizer sizes for that one. A second
+    // enabled server is dropped as silently there as it would be in firmware.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    const twoServers = {
+      ...projectDataFixture,
+      pous: [pouLocating('%QW0')],
+      servers: [
+        {
+          name: 'mb_a',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: {
+            enabled: true,
+            transports: ['tcp'],
+            bufferMapping: { holdingRegisters: { qwCount: 4 } },
+          },
+        },
+        {
+          name: 'mb_b',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: {
+            enabled: true,
+            transports: ['tcp'],
+            bufferMapping: { holdingRegisters: { qwCount: 8 } },
+          },
+        },
+      ],
+    } as unknown as PLCProjectData
+
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: twoServers,
+        isSimulator: false,
+        isRuntimeV4: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'OpenPLC Runtime v4 (RPi)',
+        boardEntry: { compiler: 'openplc-compiler', platform: 'openplc:runtime:v4' },
+        compileOnly: true,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(false)
+    const error = events.find((e) => e.stage === 'validate' && e.level === 'error')
+    expect(error?.message).toContain('mb_a')
+    expect(error?.message).toContain('mb_b')
+    expect(port.transpileToSt).not.toHaveBeenCalled()
+  })
+
+  it('lets the simulator carry two enabled Modbus servers', async () => {
+    // The simulator serves none, so a project passing through it is not asked
+    // to turn one off.
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    const twoServers = {
+      ...projectDataFixture,
+      pous: [pouLocating('%QW0')],
+      servers: [
+        {
+          name: 'mb_a',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: {
+            enabled: true,
+            transports: ['tcp'],
+            bufferMapping: { holdingRegisters: { qwCount: 4 } },
+          },
+        },
+        {
+          name: 'mb_b',
+          protocol: 'modbus-tcp',
+          modbusSlaveConfig: {
+            enabled: true,
+            transports: ['tcp'],
+            bufferMapping: { holdingRegisters: { qwCount: 8 } },
+          },
+        },
+      ],
+    } as unknown as PLCProjectData
+
+    const result = await runCompilePipeline(makeArgs({ projectData: twoServers, compileOnly: true }), port, emit)
+
+    expect(result.success).toBe(true)
+  })
+
+  it('builds the simulator with enabled OPC-UA and S7 servers, which it ignores', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+    const withServers = {
+      ...projectDataFixture,
+      servers: [
+        {
+          name: 'OPCUA',
+          protocol: 'opcua',
+          opcuaServerConfig: {
+            server: { enabled: true, name: 'OpenPLC OPC UA Server', port: 4840, endpointPath: '/openplc/opcua' },
+            securityProfiles: [],
+            users: [],
+            addressSpace: { namespaceUri: 'urn:openplc:opcua:namespace', nodes: [] },
+          },
+        },
+        {
+          name: 'S7',
+          protocol: 's7comm',
+          s7commSlaveConfig: { server: { enabled: true, port: 102 }, dataBlocks: [] },
+        },
+      ],
+    } as unknown as PLCProjectData
+
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: withServers,
+        boardEntry: { ...makeArgs().boardEntry, compiler: hals['OpenPLC Simulator'].compiler },
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    const files = simulatorRequestFiles(port)
+    expect(String(files['src/opcua_config.h'] ?? '')).not.toContain('OPCUA_ENABLED 1')
+    expect(String(files['src/s7comm_config.h'] ?? '')).not.toContain('S7COMM_ENABLED 1')
+  })
+
+  it('composes a byte-identical bundle when the same project is compiled twice', async () => {
+    // AC01 asks for the BUNDLE, not for each step. Every emitter being
+    // deterministic on its own does not add up to a reproducible build: one
+    // timestamp, or one map iterated in insertion order, is enough to break it,
+    // and nothing else here compares two whole runs.
+    const compose = async () => {
+      const port = makePort()
+      const { emit } = captureEvents()
+      await runCompilePipeline(
+        makeArgs({
+          projectData: withBackedPou('%MW7', { holdingRegisters: { mwCount: 8 } }),
+          isSimulator: false,
+          isRuntimeV4: true,
+          boardRuntime: 'openplc-compiler',
+          boardTarget: 'OpenPLC Runtime v4 (RPi)',
+          // `platform` is required by the type and unused on the v4 path; the
+          // field that matters is `compiler`, which scopes server exposure.
+          boardEntry: { compiler: 'openplc-compiler', platform: 'openplc:runtime:v4' },
+          compileOnly: true,
+        }),
+        port,
+        emit,
+      )
+      const materialize = port.materializeRuntimeV4Bundle
+      if (!materialize) throw new Error('the test port must provide materializeRuntimeV4Bundle')
+      return jest.mocked(materialize).mock.calls[0][0].bundle
+    }
+
+    const first = await compose()
+    const second = await compose()
+
+    // Stringified rather than compared with toEqual: key order is part of the
+    // bytes, and a reordered bundle is a different file set to anything that
+    // hashes or diffs it.
+    expect(JSON.stringify(second)).toBe(JSON.stringify(first))
+  })
+
+  it('emits the sizes into defines.h on the arduino-cli path', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    await runCompilePipeline(
+      arduinoArgs({
+        projectData: withPou('%QW3'),
+        devicePinMapping: [
+          { pin: '3', pinType: 'analogOutput', address: '%QW3' },
+          { pin: '2', pinType: 'digitalInput', address: '%IX0.0' },
+        ] as DevicePin[],
+      }),
+      port,
+      emit,
+    )
+
+    const files = jest.mocked(port.compileArduino).mock.calls[0][0].files as Record<string, string>
+    const defines = Object.entries(files).find(([name]) => name.endsWith('defines.h'))?.[1] ?? ''
+    expect(defines).toContain('//Process image')
+    // %QW3 is one word past index 3, and one %IX bit rounds to a whole byte.
+    expect(defines).toContain('#define MAX_ANALOG_OUTPUT 4')
+    expect(defines).toContain('#define MAX_DIGITAL_INPUT 8')
+    // Areas the project does not touch are handed zero, not the fallback.
+    expect(defines).toContain('#define MAX_MEMORY_WORD 0')
+  })
+
+  it('says in the build log where each sized area came from', async () => {
+    // The size on its own is untraceable: three contributors can size an area
+    // and the image takes the largest, so %QW = 4 might be the program's
+    // producers or a Modbus config nobody has opened in a year. Naming the
+    // source is what stops the user guessing which one to change.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    await runCompilePipeline(
+      arduinoArgs({
+        projectData: withPou('%QW3'),
+        devicePinMapping: [
+          { pin: '3', pinType: 'analogOutput', address: '%QW3' },
+          { pin: '2', pinType: 'digitalInput', address: '%IX0.0' },
+        ] as DevicePin[],
+      }),
+      port,
+      emit,
+    )
+
+    const lines = events.filter((e) => e.message.includes('sized to')).map((e) => e.message)
+    expect(lines).toEqual(['%IX sized to 1 bit from address producers', '%QW sized to 4 words from address producers'])
+  })
+
+  it('says nothing about sizes for a target that keeps its firmware defaults', async () => {
+    // v3 and the simulator are not sized, so a line here would describe an
+    // image neither of them receives.
+    //
+    // %MW7 and not an output address: memory is its own producer, so it sizes
+    // an area with no pins and no server in the project. An output would size
+    // nothing here whatever the gate did, and the test would pass without
+    // exercising it — which is exactly what it did before this comment.
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    await runCompilePipeline(
+      makeArgs({
+        projectData: withPou('%MW7'),
+        isSimulator: false,
+        isRuntimeV3: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'OpenPLC Runtime v3',
+        compileOnly: true,
+      }),
+      port,
+      emit,
+    )
+
+    expect(events.filter((e) => e.message.includes('sized to'))).toEqual([])
+  })
+
+  it('leaves the simulator defines.h without a process image block', async () => {
+    // It keeps openplc.h's own fallbacks, so its defines.h is byte-identical
+    // to what it was before any of this existed.
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    await runCompilePipeline(makeArgs(), port, emit)
+
+    expect(simulatorRequestFiles(port)['src/defines.h']).not.toContain('Process image')
+  })
+
+  it('exempts the simulator, which has no producers by construction', async () => {
+    // Its capability block hides the pin table and nothing seeds pins, so
+    // PINMASK_DIN is empty and simulator.cpp's I/O loops run zero times.
+    // Gating it would refuse a project for a producer the user cannot create.
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    const result = await runCompilePipeline(makeArgs({ projectData: withPou('%QW3859') }), port, emit)
+
+    expect(result.success).toBe(true)
+  })
+
+  it('exempts runtime v3, whose image we neither size nor know', async () => {
+    const port = makePort()
+    const { emit } = captureEvents()
+
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: withPou('%QW3859'),
+        isSimulator: false,
+        isRuntimeV3: true,
+        boardRuntime: 'openplc-compiler',
+        boardTarget: 'OpenPLC Runtime v3',
+        compileOnly: true,
+      }),
+      port,
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+  })
+
+  it('reports both kinds of mistake in one run', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+
+    const projectData = {
+      ...projectDataFixture,
+      pous: [
+        {
+          type: 'program',
+          data: {
+            name: 'main',
+            language: 'st',
+            documentation: '',
+            body: { language: 'st', value: '' },
+            variables: [
+              { name: 'flag', location: '%MX0.1' },
+              { name: 'valve', location: '%QW7' },
+            ],
+          },
+        },
+      ],
+    } as unknown as PLCProjectData
+
+    await runCompilePipeline(arduinoArgs({ projectData }), port, emit)
+
+    // One fix per compile attempt would turn this into two round trips. The
+    // unbacked report is one line per area plus one remedy line, and the
+    // trailing entry is `bailError`'s own summary line.
+    const errors = events.filter((e) => e.stage === 'validate' && e.level === 'error')
+    expect(errors).toHaveLength(4)
+    expect(errors[0].message).toContain('no %MX area at all')
+    expect(errors[1].message).toContain('Nothing produces %QW on this target')
+    expect(errors[2].message).toContain('the Device, Remote Devices or Servers branches')
+    expect(errors[3].message).toContain('Compilation aborted')
   })
 })
 
@@ -744,7 +1232,13 @@ describe('runCompilePipeline — runtime v4 path', () => {
       emit,
     )
     expect(result.success).toBe(true)
-    expect(port.packageVppPlugin).toHaveBeenCalledWith({ boardTarget: 'SLM-RP4' }, expect.any(Function))
+    expect(port.packageVppPlugin).toHaveBeenCalledWith(
+      {
+        boardTarget: 'SLM-RP4',
+        screenConfigInputs: { vppExtensions: {}, debugMapContent: '{}', instances: [] },
+      },
+      expect.any(Function),
+    )
     expect(callOrder).toEqual(['vpp', 'upload'])
   })
 
@@ -1054,10 +1548,7 @@ describe('runCompilePipeline — strucpp informational outputs', () => {
 })
 
 describe('runCompilePipeline — boardEntry shape variants', () => {
-  it('handles a boardEntry with no platform field (deriveArduinoCoreFromPlatform → empty)', async () => {
-    // When platform isn't set on the entry, the pipeline shouldn't
-    // crash — installArduinoCore is still called (with coreId='') and
-    // the no-op return resolves cleanly.
+  it('handles a boardEntry with no platform field', async () => {
     const port = makePort()
     const { emit } = captureEvents()
     const result = await runCompilePipeline(
@@ -1068,23 +1559,70 @@ describe('runCompilePipeline — boardEntry shape variants', () => {
       emit,
     )
     expect(result.success).toBe(true)
-    expect(port.installArduinoCore).toHaveBeenCalledWith(expect.objectContaining({ coreId: '' }), expect.any(Function))
   })
+})
 
-  it('derives the core id from `platform` (e.g. arduino:avr:mega → arduino:avr)', async () => {
-    const port = makePort()
-    const { emit } = captureEvents()
-    await runCompilePipeline(
-      makeArgs({
-        boardEntry: { platform: 'arduino:avr:mega', core: 'arduino:avr' },
+describe('runCompilePipeline — missing core hint', () => {
+  const failWith = (message: string) =>
+    makePort({
+      compileArduino: jest.fn().mockResolvedValue({
+        ok: false,
+        errors: [{ message, line: 0, column: 0, severity: 'error' }],
       }),
+    })
+  const lastMessage = (events: PipelineProgressEvent[]) => events[events.length - 1]?.message ?? ''
+
+  it('points the desktop user at Reinstall when the board core is missing', async () => {
+    const port = failWith("Error during build: Platform 'FACTS:stm32' not found: platform not installed")
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli', dependencyHintSurface: 'desktop' }),
       port,
       emit,
     )
-    expect(port.installArduinoCore).toHaveBeenCalledWith(
-      expect.objectContaining({ coreId: 'arduino:avr' }),
-      expect.any(Function),
+    expect(result.success).toBe(false)
+    expect(lastMessage(events)).toContain('File > Board Package Manager...')
+    expect(events[events.length - 1].level).toBe('error')
+  })
+
+  it('points the CLI user at packages install when the board core is missing', async () => {
+    const port = failWith("Error during build: Platform 'FACTS:stm32' not found: platform not installed")
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli', dependencyHintSurface: 'cli' }),
+      port,
+      emit,
     )
+    expect(lastMessage(events)).toContain('openplc-cli packages install <file.vpp>')
+  })
+
+  it("adds no hint for a missing header, which may be the user's own include", async () => {
+    const port = failWith('src/c_blocks_code.cpp:3:10: fatal error: NotInstalled.h: No such file or directory')
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli', dependencyHintSurface: 'desktop' }),
+      port,
+      emit,
+    )
+    expect(lastMessage(events)).toBe('Stopping compilation process.')
+  })
+
+  it('adds no hint for a compile error that is not a missing core', async () => {
+    const port = failWith("src/generated.cpp:12:5: error: 'foo' was not declared in this scope")
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(
+      makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli', dependencyHintSurface: 'desktop' }),
+      port,
+      emit,
+    )
+    expect(lastMessage(events)).toBe('Stopping compilation process.')
+  })
+
+  it('adds no hint when the host asks for none', async () => {
+    const port = failWith("Error during build: Platform 'FACTS:stm32' not found: platform not installed")
+    const { events, emit } = captureEvents()
+    await runCompilePipeline(makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli' }), port, emit)
+    expect(lastMessage(events)).toBe('Stopping compilation process.')
   })
 })
 
@@ -1137,19 +1675,43 @@ describe('runCompilePipeline — failure propagation', () => {
       }),
     })
     const { emit } = captureEvents()
-    const result = await runCompilePipeline(makeArgs(), port, emit)
+    const result = await runCompilePipeline(makeArgs({ isSimulator: false, boardRuntime: 'arduino-cli' }), port, emit)
     expect(result.success).toBe(false)
   })
 
-  it('returns success=false when a simulator build produces no .hex binary', async () => {
-    // Simulator targets require the .hex artefact in memory (the loader can't
-    // find it on disk). A compile that reports ok but omits `binary` must fail
-    // with a precise error rather than silently succeeding.
-    const port = makePort({ compileArduino: jest.fn().mockResolvedValue({ ok: true }) })
+  it('returns success=false when the simulator module does not compile', async () => {
+    const port = makePort({
+      compileToWasm: jest.fn().mockResolvedValue({
+        ok: false,
+        error: 'Compilation failed in 1 of 3 file(s)',
+        stats: { units: 3, cached: 0, compileMs: 5, linkMs: 0 },
+        diagnostics: [
+          { message: "src/c_blocks_code.cpp:3:1: error: use of undeclared identifier 'PORTB'", level: 'error' },
+        ],
+      }),
+    })
     const { events, emit } = captureEvents()
     const result = await runCompilePipeline(makeArgs(), port, emit)
     expect(result.success).toBe(false)
-    expect(events.some((e) => e.stage === 'arduino-compile' && /did not produce a \.hex/.test(e.message))).toBe(true)
+    expect(events.some((e) => e.stage === 'simulator-compile' && e.message === 'Simulator compilation failed.')).toBe(
+      true,
+    )
+    expect(port.compileArduino).not.toHaveBeenCalled()
+  })
+
+  it('fails the simulator build before compiling when the skeleton has no simulator support files', async () => {
+    const port = makePort()
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({ firmwareSkeleton: { 'examples/Baremetal/Baremetal.ino': '// sketch' } }),
+      port,
+      emit,
+    )
+    expect(result.success).toBe(false)
+    expect(port.compileToWasm).not.toHaveBeenCalled()
+    expect(events.some((e) => e.stage === 'simulator-compile' && e.message.includes('wasm-sim/sim_main.cpp'))).toBe(
+      true,
+    )
   })
 
   it('returns success=false when uploadRuntimeV4 reports failure', async () => {
@@ -1168,40 +1730,6 @@ describe('runCompilePipeline — failure propagation', () => {
       emit,
     )
     expect(result.success).toBe(false)
-  })
-
-  it('returns success=false when installArduinoCore reports failure', async () => {
-    const port = makePort({
-      installArduinoCore: jest.fn().mockResolvedValue({ ok: false }),
-    })
-    const { emit } = captureEvents()
-    const result = await runCompilePipeline(makeArgs(), port, emit)
-    expect(result.success).toBe(false)
-    expect(port.compileArduino).not.toHaveBeenCalled()
-  })
-
-  it('continues with a warning when installArduinoLib reports failure (does not bail)', async () => {
-    // Library install is opportunistic — the user's target lib may
-    // already be available from a non-managed source (sketchbook,
-    // system install) and arduino-cli compile is the source of
-    // truth for whether a required header can be resolved.  An
-    // adapter returning `{ ok: false }` SHOULD emit a warning and
-    // let the pipeline proceed; the build only fails later if the
-    // missing header genuinely can't be found at compile time.
-    const port = makePort({
-      installArduinoLib: jest.fn().mockResolvedValue({ ok: false }),
-    })
-    const { emit, events } = captureEvents()
-    const result = await runCompilePipeline(makeArgs(), port, emit)
-    // Pipeline proceeded past lib-install — compileArduino fires.
-    expect(port.compileArduino).toHaveBeenCalled()
-    // A warning fired during the lib-install stage explaining the
-    // soft pass-through.
-    expect(events.some((e) => e.stage === 'lib-install' && e.level === 'warning')).toBe(true)
-    // Success/failure is now determined downstream — explicitly not
-    // asserted here because the test fixture's compileArduino mock
-    // controls it.  Just confirm the bail-on-lib-install is gone.
-    expect(typeof result.success).toBe('boolean')
   })
 
   it('returns success=false when generateRuntimeConfs throws (OPC-UA / EtherCAT failure)', async () => {
@@ -1484,6 +2012,7 @@ describe('runCompilePipeline — two enabled Modbus servers', () => {
         projectData: withServers(),
         boardTarget: 'ESP32',
         boardRuntime: 'arduino-cli',
+        boardEntry: { platform: 'esp32:esp32:esp32', core: 'esp32:esp32', define: [], compiler: 'arduino-cli' },
         isSimulator: false,
       }),
       makePort(),
@@ -1504,5 +2033,32 @@ describe('runCompilePipeline — two enabled Modbus servers', () => {
     const { emit } = captureEvents()
     const result = await runCompilePipeline(makeArgs({ projectData: withServers() }), makePort(), emit)
     expect(result.success).toBe(true)
+  })
+
+  it('lets a target that serves no Modbus slave build with several configured', async () => {
+    // Runtime v3 receives neither `conf/modbus_slave.json` nor a Modbus macro,
+    // and the build already says the server configurations will be ignored.
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(
+      makeArgs({
+        projectData: withServers(),
+        boardTarget: 'OpenPLC Runtime v3',
+        boardRuntime: 'openplc-compiler',
+        boardEntry: {
+          platform: 'openplc:runtime',
+          core: 'openplc:runtime',
+          define: [],
+          compiler: 'openplc-compiler',
+          capabilities: { modbusTcpServer: false, modbusRtuServer: false },
+        },
+        isSimulator: false,
+        isRuntimeV3: true,
+      }),
+      makePort(),
+      emit,
+    )
+
+    expect(result.success).toBe(true)
+    expect(events.find((event) => event.message.includes('one Modbus server'))).toBeUndefined()
   })
 })

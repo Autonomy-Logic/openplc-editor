@@ -87,8 +87,9 @@ export function pdoToChannels(device: ESIDevice): ESIChannel[] {
   // Process TxPDOs (inputs - slave to master)
   for (const pdo of assignedPdos(device.txPdo)) {
     for (const entry of pdo.entries) {
-      // Skip padding entries for channel list
-      if (entry.name === 'Padding' && entry.index === '0x0000') {
+      // Any entry at index 0x0000 is padding by EtherCAT convention. Beckhoff
+      // labels it "Padding", WAGO labels it "Gap" — index alone decides.
+      if (entry.index === '0x0000') {
         inputBitOffset += entry.bitLen
         continue
       }
@@ -116,8 +117,8 @@ export function pdoToChannels(device: ESIDevice): ESIChannel[] {
   // Process RxPDOs (outputs - master to slave)
   for (const pdo of assignedPdos(device.rxPdo)) {
     for (const entry of pdo.entries) {
-      // Skip padding entries for channel list
-      if (entry.name === 'Padding' && entry.index === '0x0000') {
+      // Index 0x0000 == padding regardless of vendor label.
+      if (entry.index === '0x0000') {
         outputBitOffset += entry.bitLen
         continue
       }

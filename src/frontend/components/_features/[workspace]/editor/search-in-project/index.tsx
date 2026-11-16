@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 
 import { useOpenPLCStore } from '../../../../../store'
+import type { SearchElementFilter } from '../../../../../utils/PLC/project-search'
+import { searchProject } from '../../../../../utils/PLC/project-search'
 import { InputWithRef } from '../../../../_atoms/input'
 import { useToast } from '../../../[app]/toast/use-toast'
 
@@ -163,7 +165,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       return
     }
 
-    const filterMap = {
+    const filterMap: Record<string, SearchElementFilter> = {
       'data type': 'data-type',
       function: 'function',
       'function block': 'function-block',
@@ -171,239 +173,46 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
       configuration: 'configuration',
     }
 
-    const activeFilters = Object.keys(checkedOptions)
+    const elementFilters = Object.keys(checkedOptions)
       .filter((key) => checkedOptions[key])
-      .map((key) => filterMap[key as keyof typeof filterMap])
+      .map((key) => filterMap[key])
+      .filter((filter): filter is SearchElementFilter => filter !== undefined)
 
-    const countOccurrences = (
-      text: string,
-      searchQuery: string,
-      sensitiveCase: boolean,
-      regularExpressionOption: boolean,
-    ): number => {
-      if (regularExpressionOption) {
-        try {
-          const regex = new RegExp(searchQuery, sensitiveCase ? 'g' : 'gi')
-          const matches = text.match(regex)
-          return matches ? matches.length : 0
-        } catch (e) {
-          if (e instanceof SyntaxError) {
-            toast({
-              title: 'Invalid Regular Expression',
-              description: 'The regular expression provided is invalid.',
-              variant: 'warn',
-            })
-          }
-          return 0
-        }
-      } else {
-        const regex = new RegExp(searchQuery, sensitiveCase ? 'g' : 'gi')
-        const matches = text.match(regex)
-        return matches ? matches.length : 0
-      }
-    }
+    const result = searchProject(data, searchQuery, {
+      caseSensitive: sensitiveCaseOption,
+      regularExpression: regularExpressionOption,
+      elementFilters,
+    })
 
-    const groupedPous = data.pous
-      .filter((pou) => {
-        const pouTypeMatchesFilter = activeFilters.length === 0 || activeFilters.includes(pou.pouType)
-
-        const pouMatches = regularExpressionOption
-          ? countOccurrences(pou.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
-          : sensitiveCaseOption
-            ? pou.name.includes(searchQuery)
-            : pou.name.toLowerCase().includes(searchQuery.toLowerCase())
-
-        const pouVariables = pou.interface?.variables ?? []
-        const variableMatches = pouVariables.some((variable) =>
-          regularExpressionOption
-            ? countOccurrences(variable.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
-            : sensitiveCaseOption
-              ? variable.name.includes(searchQuery)
-              : variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
-        )
-
-        return (
-          pouTypeMatchesFilter &&
-          (pouMatches ||
-            variableMatches ||
-            (['st', 'il'].includes(pou.body.language) &&
-              (() => {
-                try {
-                  const regex = new RegExp(searchQuery, sensitiveCaseOption ? 'g' : 'gi')
-                  const matches = (pou.body.value as string).match(regex)
-                  return matches ? matches.length > 0 : false
-                } catch (error) {
-                  console.error('Invalid regex or error processing body:', error)
-                  return false
-                }
-              })()))
-        )
+    if (!result.ok) {
+      toast({
+        title: 'Invalid Regular Expression',
+        description: 'The regular expression provided is invalid.',
+        variant: 'warn',
       })
-      .reduce(
-        (acc, pou) => {
-          const pouType = pou.pouType
-
-          if (!acc[pouType]) {
-            acc[pouType] = []
-          }
-
-          const pouVariables = pou.interface?.variables ?? []
-          acc[pouType].push({
-            name: pou.name,
-            language: pou.body.language as 'ld' | 'sfc' | 'fbd' | 'il' | 'st' | 'python' | 'cpp',
-            pouType: pou.pouType,
-            body:
-              (['st', 'il'].includes(pou.body.language) &&
-                (() => {
-                  try {
-                    const regex = new RegExp(`\\b(${searchQuery}\\w*)`, sensitiveCaseOption ? 'g' : 'gi')
-                    const matches = (pou.body.value as string).match(regex)
-                    return matches ? matches.join(', ') : ''
-                  } catch (error) {
-                    console.error('Invalid regex or error processing body:', error)
-                    return ''
-                  }
-                })()) ||
-              '',
-            variable: pouVariables
-              .filter((variable) =>
-                regularExpressionOption
-                  ? countOccurrences(variable.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
-                  : sensitiveCaseOption
-                    ? variable.name.includes(searchQuery)
-                    : variable.name.toLowerCase().includes(searchQuery.toLowerCase()),
-              )
-              .map((variable) => variable.name)
-              .join(', '),
-          })
-
-          return acc
-        },
-        {} as Record<
-          string,
-          Array<{
-            name: string
-            language: 'ld' | 'sfc' | 'fbd' | 'il' | 'st' | 'python' | 'cpp'
-            pouType: 'function' | 'function-block' | 'program'
-            body: string
-            variable: string
-          }>
-        >,
-      )
-
-    const filteredDataTypes = data.dataTypes
-      .filter((dataType) => {
-        if (!dataType) return false
-        const dataTypeMatchesFilter = activeFilters.length === 0 || activeFilters.includes('data-type')
-        return (
-          dataTypeMatchesFilter &&
-          (regularExpressionOption
-            ? countOccurrences(dataType.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
-            : sensitiveCaseOption
-              ? dataType.name.includes(searchQuery)
-              : dataType.name.toLowerCase().includes(searchQuery.toLowerCase()))
-        )
-      })
-      .map((dataType) => ({
-        name: dataType.name,
-        type: dataType.derivation,
-      }))
-
-    const resourceGlobalVar = data.configurations.resource.globalVariables.filter((variable) => {
-      const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
-      return (
-        resourceMatchesFilter &&
-        (regularExpressionOption
-          ? countOccurrences(variable.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
-          : sensitiveCaseOption
-            ? variable.name.includes(searchQuery)
-            : variable.name.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    })
-
-    const resourceTasks = data.configurations.resource.tasks.filter((task) => {
-      const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
-      return (
-        resourceMatchesFilter &&
-        (regularExpressionOption
-          ? countOccurrences(task.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
-          : sensitiveCaseOption
-            ? task.name.includes(searchQuery)
-            : task.name.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    })
-
-    const resourceInstances = data.configurations.resource.instances.filter((instance) => {
-      const resourceMatchesFilter = activeFilters.length === 0 || activeFilters.includes('configuration')
-      return (
-        resourceMatchesFilter &&
-        (regularExpressionOption
-          ? countOccurrences(instance.name, searchQuery, sensitiveCaseOption, regularExpressionOption) > 0
-          : sensitiveCaseOption
-            ? instance.name.includes(searchQuery)
-            : instance.name.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    })
-
-    const resource = {
-      globalVariable: resourceGlobalVar.map((variable) => variable.name).join(', '),
-      task: resourceTasks.map((task) => task.name).join(', '),
-      instance: resourceInstances.map((instance) => instance.name).join(', '),
+      return
     }
 
-    const totalMatches =
-      Object.keys(groupedPous).reduce((acc, pouType) => {
-        return (
-          acc +
-          groupedPous[pouType].reduce((innerAcc, pou) => {
-            const nameMatches = countOccurrences(pou.name, searchQuery, sensitiveCaseOption, regularExpressionOption)
-            const variableMatches = countOccurrences(
-              pou.variable,
-              searchQuery,
-              sensitiveCaseOption,
-              regularExpressionOption,
-            )
-            const bodyMatches = ['st', 'il'].includes(pou.language)
-              ? countOccurrences(pou.body, searchQuery, sensitiveCaseOption, regularExpressionOption)
-              : 0
-            return innerAcc + nameMatches + variableMatches + bodyMatches
-          }, 0)
-        )
-      }, 0) +
-      filteredDataTypes.length +
-      resourceGlobalVar.length +
-      resourceTasks.length +
-      resourceInstances.length
-
-    const formattedResults = {
-      searchID: uuidv4(),
-      searchQuery,
-      projectName: meta.name,
-      functions: {
-        pous: groupedPous,
-        dataTypes: filteredDataTypes,
-        resource,
-      },
-      searchCounts: totalMatches,
-    }
-
-    const noResults =
-      Object.keys(groupedPous).length === 0 &&
-      filteredDataTypes.length === 0 &&
-      resourceGlobalVar.length === 0 &&
-      resourceTasks.length === 0
-
-    if (noResults) {
+    if (result.matches.length === 0) {
       toast({
         title: 'No results found',
         description: 'No matches were found for your search.',
         variant: 'warn',
       })
-    } else {
-      setSearchResults(formattedResults)
-      onClose()
+      return
     }
+
+    setSearchResults({
+      searchID: uuidv4(),
+      searchQuery,
+      projectName: meta.name,
+      matches: result.matches,
+      searchCounts: result.matches.length,
+    })
+    onClose()
   }
+
+  const noElementSelected = selectedScope === 'only elements' && !Object.values(checkedOptions).some(Boolean)
 
   const handleSearchQueryChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(event.target.value)
@@ -496,6 +305,7 @@ export default function SearchInProject({ onClose }: SearchInProjectModalProps) 
         <button
           className='h-full w-full items-center rounded-lg bg-brand text-center font-medium text-white disabled:cursor-not-allowed disabled:opacity-50'
           onClick={handleSearch}
+          disabled={noElementSelected}
         >
           Find
         </button>

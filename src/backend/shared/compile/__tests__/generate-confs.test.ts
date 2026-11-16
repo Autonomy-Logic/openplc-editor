@@ -14,6 +14,7 @@
  * elaborate project fixtures.
  */
 
+import { RUNTIME_V4_S7_PROFILE } from '@root/middleware/shared/utils/target-capabilities'
 import type { PLCRemoteDevice, PLCServer } from '../../types/PLC/open-plc'
 
 // Hoist mock declarations so they apply before the shared module
@@ -29,6 +30,7 @@ jest.mock('../../ethercat/generate-ethercat-config', () => ({
   generateEtherdogConfigs: jest.fn(),
 }))
 jest.mock('../../ethercat/validate-ethercat-config', () => ({
+  ...jest.requireActual('../../ethercat/validate-ethercat-config'),
   validateEthercatConfig: jest.fn(),
 }))
 jest.mock('../../../../frontend/utils/modbus/generate-modbus-slave-config', () => ({
@@ -62,7 +64,11 @@ jest.mock('../../../../frontend/utils/get-error-message', () => ({
 
 import { generateModbusMasterConfig } from '../../utils/modbus/generate-modbus-master-config'
 import { generateEthercatConfig, generateEtherdogConfigs } from '../../ethercat/generate-ethercat-config'
-import { validateEthercatConfig } from '../../ethercat/validate-ethercat-config'
+import {
+  DYNAMIC_ETHERDOG_LIMITS,
+  FIXED_ETHERDOG_LIMITS,
+  validateEthercatConfig,
+} from '../../ethercat/validate-ethercat-config'
 import { generateModbusSlaveConfig } from '../../../../frontend/utils/modbus/generate-modbus-slave-config'
 import { generateOpcUaConfig, OpcUaConfigError } from '../../../../frontend/utils/opcua'
 import { generateS7CommConfig } from '../../../../frontend/utils/s7comm'
@@ -84,6 +90,7 @@ function makeInput(overrides?: Partial<GenerateConfsInput>): GenerateConfsInput 
     debugMapContent: '{}',
     log: jest.fn(),
     runtimeVersion: null,
+    s7Profile: RUNTIME_V4_S7_PROFILE,
     ...overrides,
   }
 }
@@ -133,14 +140,14 @@ describe('generateRuntimeConfs — happy path', () => {
     expect(typeof mockedOpcUa.mock.calls[0][3]).toBe('function')
   })
 
-  it('forwards OPC-UA info messages through the log callback as level=info', () => {
+  it('forwards OPC-UA diagnostics through the log callback as level=warning', () => {
     const log = jest.fn()
     mockedOpcUa.mockImplementation((_servers, _dbg, _inst, innerLog) => {
-      innerLog?.('OPC-UA Address Space: 5 node(s) configured')
+      innerLog?.('OPC-UA: tag "Speed" (MAIN:SPEED) was left out of the build')
       return '{"opcua":{}}'
     })
     generateRuntimeConfs(makeInput({ log }))
-    expect(log).toHaveBeenCalledWith('OPC-UA Address Space: 5 node(s) configured', 'info')
+    expect(log).toHaveBeenCalledWith('OPC-UA: tag "Speed" (MAIN:SPEED) was left out of the build', 'warning')
   })
 
   it('forwards Modbus master skip diagnostics through the log callback as level=warning', () => {
@@ -282,7 +289,25 @@ describe('generateRuntimeConfs — EtherCAT format by runtime version', () => {
       expect(result.ethercatIomapping).toBe(split.iomapping)
     }
     expect(mockedEthercatGen).not.toHaveBeenCalled()
-    expect(mockedEthercatValidate).toHaveBeenCalledWith(split.busconfig, split.iomapping)
+    expect(mockedEthercatValidate).toHaveBeenCalledWith(split.busconfig, split.iomapping, FIXED_ETHERDOG_LIMITS)
+  })
+
+  it('validates against the fixed EtherDOG limits on 4.3.0 and 4.3.1', () => {
+    mockedEtherdogGen.mockReturnValue(split)
+    for (const runtimeVersion of ['v4.3.0', 'v4.3.1']) {
+      mockedEthercatValidate.mockClear()
+      generateRuntimeConfs(makeInput({ runtimeVersion }))
+      expect(mockedEthercatValidate).toHaveBeenCalledWith(split.busconfig, split.iomapping, FIXED_ETHERDOG_LIMITS)
+    }
+  })
+
+  it('validates against the dynamic EtherDOG limits from MIN_DYNAMIC_ETHERDOG_RUNTIME_VERSION', () => {
+    mockedEtherdogGen.mockReturnValue(split)
+    for (const runtimeVersion of ['v4.3.2', '4.3.2-rc.1', 'v5.0.0']) {
+      mockedEthercatValidate.mockClear()
+      generateRuntimeConfs(makeInput({ runtimeVersion }))
+      expect(mockedEthercatValidate).toHaveBeenCalledWith(split.busconfig, split.iomapping, DYNAMIC_ETHERDOG_LIMITS)
+    }
   })
 
   it('emits no EtherCAT file at all for an EtherDOG runtime when the project has no EtherCAT', () => {

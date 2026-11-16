@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 s7comm_server.cpp - Siemens S7Comm server for the baremetal runtime
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 
 S7 over ISO-TCP (RFC 1006), TCP port 102. The Settimino S7Server library owns the
 protocol engine; this file owns the sockets, per-connection state, scan-cycle

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EtherCATInfo>
+  <Vendor><Id>#x00000100</Id><Name>Test Drive Vendor</Name></Vendor>
+  <Descriptions>
+    <Devices>
+      <Device Physics="YY">
+        <Type ProductCode="#x00005100" RevisionNo="#x00000001">KS100E-LIKE</Type>
+        <Name>Interpolation drive</Name>
+        <Mailbox><CoE PdoAssign="0" PdoConfig="0" CompleteAccess="0"/></Mailbox>
+        <TxPdo Fixed="1" Mandatory="1" Sm="3">
+          <Index>#x1A00</Index>
+          <Name>TxPDO 0</Name>
+          <Entry><Index>#x6041</Index><SubIndex>0</SubIndex><BitLen>16</BitLen><Name>Statusword</Name><DataType>UINT</DataType></Entry>
+        </TxPdo>
+        <Profile>
+          <Dictionary>
+            <DataTypes>
+              <DataType>
+                <Name>DT60C2</Name>
+                <BitSize>32</BitSize>
+                <SubItem><SubIdx>0</SubIdx><Name>Max sub-index</Name><Type>USINT</Type><BitSize>8</BitSize><BitOffs>0</BitOffs><Flags><Access>ro</Access></Flags></SubItem>
+                <SubItem><SubIdx>1</SubIdx><Name>Interpolation time period value</Name><Type>USINT</Type><BitSize>8</BitSize><BitOffs>16</BitOffs><Flags><Access>rw</Access></Flags></SubItem>
+                <SubItem><SubIdx>2</SubIdx><Name>Interpolation time index</Name><Type>SINT</Type><BitSize>8</BitSize><BitOffs>24</BitOffs><Flags><Access>rw</Access></Flags></SubItem>
+              </DataType>
+            </DataTypes>
+            <Objects>
+              <Object>
+                <Index>#x60C2</Index>
+                <Name>Interpolation time period</Name>
+                <Type>DT60C2</Type>
+                <BitSize>32</BitSize>
+                <Info>
+                  <SubItem><Name>Interpolation time period value</Name><Info><DefaultData>01000000</DefaultData></Info></SubItem>
+                  <SubItem><Name>Interpolation time index</Name><Info><DefaultData>FFFFFFFD</DefaultData></Info></SubItem>
+                </Info>
+              </Object>
+            </Objects>
+          </Dictionary>
+        </Profile>
+      </Device>
+    </Devices>
+  </Descriptions>
+</EtherCATInfo>

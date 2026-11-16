@@ -1,2 +1,2 @@
 export { createSearchSlice } from './slice'
-export type { Project, SearchActions, SearchSlice, SearchState } from './types'
+export type { ProjectSearchEntry, ProjectSearchMatch, SearchActions, SearchSlice, SearchState } from './types'

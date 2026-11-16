@@ -140,6 +140,20 @@ export function isEtherdogCapableRuntime(raw: string | null | undefined): boolea
   return isVersionAtLeast(raw, MIN_ETHERDOG_RUNTIME_VERSION)
 }
 
+/** Minimum runtime version whose EtherDOG sizes slaves, PDOs, channels,
+ *  SDOs and mapped entries from the bus configuration instead of holding
+ *  them in fixed arrays. */
+export const MIN_DYNAMIC_ETHERDOG_RUNTIME_VERSION = '4.3.2'
+
+/**
+ * Returns true iff the runtime's EtherDOG has no fixed per-slave limits
+ * (>= 4.3.2). An unknown version answers false, so the build keeps the
+ * fixed limits that the older EtherDOG runtimes enforce.
+ */
+export function isDynamicEtherdogRuntime(raw: string | null | undefined): boolean {
+  return isVersionAtLeast(raw, MIN_DYNAMIC_ETHERDOG_RUNTIME_VERSION)
+}
+
 /**
  * Human-readable explanation suitable for surfacing as an error
  * when the gate rejects a runtime.  The reported version (or

@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Autonomy / OpenPLC Project
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 import type { PLCDataType, PLCVariable } from '../../../../middleware/shared/ports/types'
 import { generatePythonLspPreamble } from '../generatePythonLspPreamble'
 

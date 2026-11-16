@@ -18,7 +18,12 @@ import type { StrucppRuntime } from '../strucpp-runtime'
 // ---------------------------------------------------------------------------
 
 import { __setStrucppRuntimeForTests } from '../strucpp-runtime'
-import { __TESTING__, libraryBuildFromTranspiledSt, prepareXmlForLibraryBuild } from '../build-pipeline'
+import {
+  __TESTING__,
+  libraryBuildFromTranspiledSt,
+  type PrepareXmlOutcome,
+  prepareXmlForLibraryBuild,
+} from '../build-pipeline'
 
 const STUB = __TESTING__
 const { parseLibraryManifest, stubProgramFor } = __TESTING__
@@ -58,6 +63,11 @@ function makeLibraryProject(overrides: Partial<PLCProject['data']> = {}): PLCPro
       ...overrides,
     } as PLCProject['data'],
   }
+}
+
+function declaredGlobalsOf(result: PrepareXmlOutcome): unknown {
+  if ('error' in result) throw new Error(result.error)
+  return 'declaredGlobals' in result ? result.declaredGlobals : undefined
 }
 
 const VALID_MANIFEST_JSON = JSON.stringify({
@@ -339,6 +349,37 @@ describe('prepareXmlForLibraryBuild', () => {
     const byName = Object.fromEntries(result.knownPous.map((p) => [p.name, p.kind]))
     expect(byName).toEqual({ Add2: 'FUNCTION', Tank: 'FUNCTION_BLOCK', main: 'PROGRAM' })
   })
+
+  it('declares the resource globals, then every GVL that has at least one variable', () => {
+    const global = (name: string) => ({
+      name,
+      type: { definition: 'base-type' as const, value: 'BOOL' as const },
+      location: '',
+      documentation: '',
+      initialValue: null,
+    })
+    const project = makeLibraryProject({
+      configuration: {
+        resource: { tasks: [], instances: [], globalVariables: [global('MotorCmd'), global('KMax')] },
+      },
+      globalVariableLists: [
+        { name: 'Motors', variables: [{ ...global('Cmd'), class: 'global' }] },
+        { name: 'EmptyList', variables: [] },
+        { name: 'Pumps', variables: [{ ...global('Run'), class: 'global' }] },
+      ],
+    })
+
+    expect(declaredGlobalsOf(prepareXmlForLibraryBuild(project, VALID_MANIFEST_JSON))).toEqual([
+      'MotorCmd',
+      'KMax',
+      'Motors',
+      'Pumps',
+    ])
+  })
+
+  it('declares no globals when the project has none', () => {
+    expect(declaredGlobalsOf(prepareXmlForLibraryBuild(makeLibraryProject(), VALID_MANIFEST_JSON))).toEqual([])
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -386,7 +427,7 @@ describe('libraryBuildFromTranspiledSt', () => {
   })
 
   it('drops the stub program file and forwards the remaining POUs to compileStlib', () => {
-    const compileStlib = jest.fn().mockReturnValue({ success: true, archive: { kind: 'fake' } })
+    const compileStlib = jest.fn().mockReturnValue({ success: true, archive: { manifest: {}, dependencies: [] } })
     const strucpp = makeStrucppStub({ compileStlib: compileStlib as unknown as StrucppRuntime['compileStlib'] })
     __setStrucppRuntimeForTests(strucpp)
 
@@ -405,7 +446,7 @@ describe('libraryBuildFromTranspiledSt', () => {
     )
 
     expect(res.success).toBe(true)
-    expect(res.archive).toEqual({ kind: 'fake' })
+    expect(res.archive).toEqual({ manifest: {}, dependencies: [] })
     expect(res.errors).toEqual([])
 
     const [sources, opts] = compileStlib.mock.calls[0]
@@ -509,6 +550,8 @@ describe('libraryBuildFromTranspiledSt', () => {
     )
 
     const programSt =
+      'FUNCTION Add2 : INT\n  VAR_INPUT a : INT; END_VAR\n  Add2 := a + 2;\nEND_FUNCTION\n' +
+      '\n' +
       'FUNCTION_BLOCK Tank\n  VAR sp : INT; END_VAR\n  sp := 1;\nEND_FUNCTION_BLOCK\n' +
       '\n' +
       'PROGRAM main\n  VAR LocalVar : INT; END_VAR\n  LocalVar := 3;\nEND_PROGRAM\n'
@@ -516,6 +559,7 @@ describe('libraryBuildFromTranspiledSt', () => {
     libraryBuildFromTranspiledSt(
       programSt,
       [
+        { name: 'Add2', kind: 'FUNCTION' },
         { name: 'Tank', kind: 'FUNCTION_BLOCK' },
         { name: STUB.STUB_PROGRAM_NAME, kind: 'PROGRAM' },
       ],
@@ -732,9 +776,10 @@ describe('libraryBuildFromTranspiledSt', () => {
   it('coerces a missing strucpp errors field to an empty array', () => {
     __setStrucppRuntimeForTests(
       makeStrucppStub({
-        compileStlib: jest
-          .fn()
-          .mockReturnValue({ success: true, archive: {} }) as unknown as StrucppRuntime['compileStlib'],
+        compileStlib: jest.fn().mockReturnValue({
+          success: true,
+          archive: { manifest: {}, dependencies: [] },
+        }) as unknown as StrucppRuntime['compileStlib'],
       }),
     )
 

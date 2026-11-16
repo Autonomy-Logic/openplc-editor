@@ -3,6 +3,7 @@ import { BrowserWindow, Menu, MenuItemConstructorOptions, nativeTheme, shell } f
 
 import { ProjectService } from '../backend/editor/services'
 import { store } from './modules/store'
+import type { UpdateService } from './modules/updater'
 
 /**
  * Wip: Interface for mac machines menu.
@@ -18,7 +19,10 @@ interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
 export default class MenuBuilder {
   private mainWindow: BrowserWindow
   private projectService: ProjectService
+  private updates: UpdateService | undefined
   private projectOpen = false
+  /** Whether a debug session is open, which makes the editing menu items read-only. */
+  private debuggerActive = false
   private readonly handleDevelopmentContextMenu = (_: Electron.Event, props: Electron.ContextMenuParams): void => {
     if (!this.hasLiveWindow()) return
 
@@ -42,9 +46,34 @@ export default class MenuBuilder {
     { role: 'toggleDevTools' },
   ]
 
-  constructor(mainWindow: BrowserWindow) {
+  constructor(mainWindow: BrowserWindow, updates?: UpdateService) {
     this.mainWindow = mainWindow
     this.projectService = new ProjectService(mainWindow)
+    this.updates = updates
+  }
+
+  /**
+   * "Check for Updates" and its automatic toggle. No accelerator: Ctrl+U is
+   * Monaco's cursor undo, and a menu accelerator would take it from the editor.
+   */
+  private updateItems(): MenuItemConstructorOptions[] {
+    const updates = this.updates
+    return [
+      {
+        label: i18n.t('menu:file.submenu.updates'),
+        enabled: updates !== undefined,
+        click: () => void updates?.checkNow(),
+      },
+      {
+        // English only, like "Board Package Manager...": menu.json is shared with
+        // openplc-web byte for byte, and the web has no updater.
+        label: 'Check for Updates Automatically',
+        type: 'checkbox',
+        checked: updates?.isAutoCheckEnabled() ?? false,
+        enabled: updates !== undefined,
+        click: (item) => updates?.setAutoCheck(item.checked),
+      },
+    ]
   }
 
   private hasLiveWindow(): boolean {
@@ -78,6 +107,17 @@ export default class MenuBuilder {
     if (open === this.projectOpen) return
     this.projectOpen = open
     await this.buildMenu()
+  }
+
+  async setDebuggerActive(active: boolean): Promise<void> {
+    if (active === this.debuggerActive) return
+    this.debuggerActive = active
+    await this.buildMenu()
+  }
+
+  /** True only where the four editing items may act: a project is open and no debug session is. */
+  private get editingAllowed(): boolean {
+    return this.projectOpen && !this.debuggerActive
   }
 
   handleCreateProject() {
@@ -141,6 +181,21 @@ export default class MenuBuilder {
 
   handleSwitchPerspective() {
     this.mainWindow.webContents.send('workspace:switch-perspective-accelerator')
+  }
+
+  handleOpenDiagnostics() {
+    this.mainWindow.webContents.send('workspace:open-diagnostics-accelerator')
+  }
+
+  /**
+   * The developer items, or nothing outside a dev build.
+   *
+   * Returned as a list so a template can spread it: an empty array leaves the
+   * menu byte-for-byte as it was, which is what a release build must see.
+   */
+  private developerMenuItems(): MenuItemConstructorOptions[] {
+    if (process.env.NODE_ENV !== 'development') return []
+    return [{ type: 'separator' }, { label: 'I/O Image Diagnostics', click: () => this.handleOpenDiagnostics() }]
   }
 
   async handleOpenExternalLink(link: string) {
@@ -310,7 +365,7 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:file.submenu.importFromPLCOpenXml'),
           click: () => this.handleImportPlcopenRequest(),
-          enabled: this.projectOpen,
+          enabled: this.editingAllowed,
         },
         { type: 'separator' },
         // Its own group: retrieving is not a save, a close, or an export, and
@@ -339,11 +394,7 @@ export default class MenuBuilder {
           enabled: this.projectOpen,
         },
         { type: 'separator' },
-        {
-          label: i18n.t('menu:file.submenu.updates'),
-          accelerator: 'Cmd+U',
-          enabled: false,
-        },
+        ...this.updateItems(),
         { type: 'separator' },
         {
           label: 'Board Package Manager...',
@@ -360,12 +411,16 @@ export default class MenuBuilder {
         {
           label: i18n.t('menu:edit.submenu.undo'),
           accelerator: 'Cmd+Z',
-          ...(this.projectOpen ? { click: () => this.handleUndoRequest() } : { role: 'undo' }),
+          ...(this.projectOpen
+            ? { click: () => this.handleUndoRequest(), enabled: this.editingAllowed }
+            : { role: 'undo' }),
         },
         {
           label: i18n.t('menu:edit.submenu.redo'),
           accelerator: 'Cmd+Shift+Z',
-          ...(this.projectOpen ? { click: () => this.handleRedoRequest() } : { role: 'redo' }),
+          ...(this.projectOpen
+            ? { click: () => this.handleRedoRequest(), enabled: this.editingAllowed }
+            : { role: 'redo' }),
         },
         { type: 'separator' },
         {
@@ -435,7 +490,7 @@ export default class MenuBuilder {
           accelerator: 'Cmd+backspace',
           // role: 'delete',
           click: () => this.handleDeletePou(),
-          enabled: this.projectOpen,
+          enabled: this.editingAllowed,
         },
       ],
     }
@@ -492,6 +547,7 @@ export default class MenuBuilder {
           sublabel: this.themeSublabel(),
           click: () => this.updateAppTheme(),
         },
+        ...this.developerMenuItems(),
       ],
     }
 
@@ -625,7 +681,7 @@ export default class MenuBuilder {
           {
             label: i18n.t('menu:file.submenu.importFromPLCOpenXml'),
             click: () => this.handleImportPlcopenRequest(),
-            enabled: this.projectOpen,
+            enabled: this.editingAllowed,
           },
           {
             type: 'separator',
@@ -658,11 +714,7 @@ export default class MenuBuilder {
             enabled: this.projectOpen,
           },
           { type: 'separator' },
-          {
-            label: i18n.t('menu:file.submenu.updates'),
-            enabled: false,
-            accelerator: 'Ctrl+U',
-          },
+          ...this.updateItems(),
           { type: 'separator' },
           {
             label: 'Board Package Manager...',
@@ -685,13 +737,13 @@ export default class MenuBuilder {
             label: i18n.t('menu:edit.submenu.undo'),
             accelerator: 'Ctrl+Z',
             click: () => this.handleUndoRequest(),
-            enabled: this.projectOpen,
+            enabled: this.editingAllowed,
           },
           {
             label: i18n.t('menu:edit.submenu.redo'),
             accelerator: 'Ctrl+Shift+Z',
             click: () => this.handleRedoRequest(),
-            enabled: this.projectOpen,
+            enabled: this.editingAllowed,
           },
           { type: 'separator' },
           {
@@ -764,7 +816,7 @@ export default class MenuBuilder {
             label: i18n.t('menu:edit.submenu.deletePou'),
             accelerator: 'Ctrl+Shift+delete',
             click: () => this.handleDeletePou(),
-            enabled: this.projectOpen,
+            enabled: this.editingAllowed,
           },
         ],
       },
@@ -819,6 +871,7 @@ export default class MenuBuilder {
             sublabel: this.themeSublabel(),
             click: () => this.updateAppTheme(),
           },
+          ...this.developerMenuItems(),
         ],
       },
       {

@@ -1,0 +1,561 @@
+{
+  "name": "ecat_bus",
+  "protocol": "ethercat",
+  "ethercatConfig": {
+    "masterConfig": {
+      "enabled": true,
+      "networkInterface": "eth0",
+      "cycleTimeUs": 1000
+    },
+    "devices": [
+      {
+        "id": "drive-1",
+        "position": 1,
+        "name": "Drive1",
+        "esiDeviceRef": {
+          "repositoryItemId": "delta-esi",
+          "deviceIndex": 0
+        },
+        "vendorId": "0x0000477F",
+        "productCode": "0x00000001",
+        "revisionNo": "0x00010001",
+        "addedFrom": "repository",
+        "slaveType": "analog_io",
+        "config": {
+          "startupChecks": {
+            "checkVendorId": true,
+            "checkProductCode": true
+          },
+          "addressing": {
+            "ethercatAddress": 0
+          },
+          "timeouts": {
+            "sdoTimeoutMs": 1000,
+            "initToPreOpTimeoutMs": 3000,
+            "safeOpToOpTimeoutMs": 10000
+          },
+          "watchdog": {
+            "smWatchdogEnabled": true,
+            "smWatchdogMs": 100,
+            "pdiWatchdogEnabled": false,
+            "pdiWatchdogMs": 100
+          },
+          "distributedClocks": {
+            "dcEnabled": false,
+            "dcSyncUnitCycleUs": 0,
+            "dcSync0Enabled": false,
+            "dcSync0CycleUs": 0,
+            "dcSync0ShiftUs": 0,
+            "dcSync1Enabled": false,
+            "dcSync1CycleUs": 0,
+            "dcSync1ShiftUs": 0
+          },
+          "coeFlags": {
+            "pdoAssign": true,
+            "pdoConfig": true,
+            "completeAccess": false
+          }
+        },
+        "channelMappings": [
+          {
+            "channelId": "0x1A00-0x6041-0x00",
+            "iecLocation": "%IW0",
+            "alias": "StatusWord"
+          },
+          {
+            "channelId": "0x1600-0x6040-0x00",
+            "iecLocation": "%QW0",
+            "alias": "ControlWord"
+          }
+        ],
+        "channelInfo": [
+          {
+            "channelId": "0x1A00-0x6041-0x00",
+            "name": "StatusWord",
+            "direction": "input",
+            "pdoIndex": "0x1A00",
+            "entryIndex": "0x6041",
+            "entrySubIndex": "0x00",
+            "dataType": "UINT16",
+            "bitLen": 16,
+            "iecType": "UINT"
+          },
+          {
+            "channelId": "0x1600-0x6040-0x00",
+            "name": "ControlWord",
+            "direction": "output",
+            "pdoIndex": "0x1600",
+            "entryIndex": "0x6040",
+            "entrySubIndex": "0x00",
+            "dataType": "UINT16",
+            "bitLen": 16,
+            "iecType": "UINT"
+          }
+        ],
+        "rxPdos": [
+          {
+            "index": "0x1600",
+            "name": "CSP mode",
+            "assigned": true,
+            "sm": 2,
+            "entries": [
+              {
+                "index": "0x6040",
+                "subIndex": "0x00",
+                "bitLen": 16,
+                "name": "ControlWord",
+                "dataType": "UINT16"
+              }
+            ]
+          },
+          {
+            "index": "0x1601",
+            "name": "CSV mode",
+            "assigned": false,
+            "sm": 2,
+            "entries": [
+              {
+                "index": "0x6040",
+                "subIndex": "0x00",
+                "bitLen": 16,
+                "name": "ControlWord",
+                "dataType": "UINT16"
+              }
+            ]
+          }
+        ],
+        "txPdos": [
+          {
+            "index": "0x1A00",
+            "name": "Status",
+            "assigned": true,
+            "sm": 3,
+            "entries": [
+              {
+                "index": "0x6041",
+                "subIndex": "0x00",
+                "bitLen": 16,
+                "name": "StatusWord",
+                "dataType": "UINT16"
+              }
+            ]
+          }
+        ],
+        "esiInitCmdSdos": [
+          {
+            "index": "0x6060",
+            "subIndex": 0,
+            "value": "8",
+            "defaultValue": "0",
+            "dataType": "USINT",
+            "bitLength": 8,
+            "name": "Mode of operation = CSP",
+            "objectName": "ESI InitCmd"
+          }
+        ],
+        "sdoConfigurations": [
+          {
+            "index": "0x2100",
+            "subIndex": 0,
+            "value": "1",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 1",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2101",
+            "subIndex": 0,
+            "value": "2",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 2",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2102",
+            "subIndex": 0,
+            "value": "3",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 3",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2103",
+            "subIndex": 0,
+            "value": "4",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 4",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2104",
+            "subIndex": 0,
+            "value": "5",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 5",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2105",
+            "subIndex": 0,
+            "value": "6",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 6",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2106",
+            "subIndex": 0,
+            "value": "7",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 7",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2107",
+            "subIndex": 0,
+            "value": "8",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 8",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2108",
+            "subIndex": 0,
+            "value": "9",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 9",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2109",
+            "subIndex": 0,
+            "value": "10",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 10",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x210A",
+            "subIndex": 0,
+            "value": "11",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 11",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x210B",
+            "subIndex": 0,
+            "value": "12",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 12",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x210C",
+            "subIndex": 0,
+            "value": "13",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 13",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x210D",
+            "subIndex": 0,
+            "value": "14",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 14",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x210E",
+            "subIndex": 0,
+            "value": "15",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 15",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x210F",
+            "subIndex": 0,
+            "value": "16",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 16",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2110",
+            "subIndex": 0,
+            "value": "17",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 17",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2111",
+            "subIndex": 0,
+            "value": "18",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 18",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2112",
+            "subIndex": 0,
+            "value": "19",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 19",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2113",
+            "subIndex": 0,
+            "value": "20",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 20",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2114",
+            "subIndex": 0,
+            "value": "21",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 21",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2115",
+            "subIndex": 0,
+            "value": "22",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 22",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2116",
+            "subIndex": 0,
+            "value": "23",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 23",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2117",
+            "subIndex": 0,
+            "value": "24",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 24",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2118",
+            "subIndex": 0,
+            "value": "25",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 25",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2119",
+            "subIndex": 0,
+            "value": "26",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 26",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x211A",
+            "subIndex": 0,
+            "value": "27",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 27",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x211B",
+            "subIndex": 0,
+            "value": "28",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 28",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x211C",
+            "subIndex": 0,
+            "value": "29",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 29",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x211D",
+            "subIndex": 0,
+            "value": "30",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 30",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x211E",
+            "subIndex": 0,
+            "value": "31",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 31",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x211F",
+            "subIndex": 0,
+            "value": "32",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 32",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2120",
+            "subIndex": 0,
+            "value": "33",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 33",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2121",
+            "subIndex": 0,
+            "value": "34",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 34",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2122",
+            "subIndex": 0,
+            "value": "35",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 35",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2123",
+            "subIndex": 0,
+            "value": "36",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 36",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2124",
+            "subIndex": 0,
+            "value": "37",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 37",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2125",
+            "subIndex": 0,
+            "value": "38",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 38",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2126",
+            "subIndex": 0,
+            "value": "39",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 39",
+            "objectName": "User Startup Parameter"
+          },
+          {
+            "index": "0x2127",
+            "subIndex": 0,
+            "value": "40",
+            "defaultValue": "0",
+            "dataType": "UINT16",
+            "bitLength": 16,
+            "name": "Startup parameter 40",
+            "objectName": "User Startup Parameter"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -18,7 +18,7 @@ const DTBaseTypeContainer = () => {
           position='popper'
           side='bottom'
           sideOffset={-28}
-          className='box h-fit w-[--radix-select-trigger-width] overflow-hidden overflow-y-scroll rounded-lg bg-white outline-none dark:bg-neutral-950'
+          className='box h-fit max-h-[300px] w-[--radix-select-trigger-width] overflow-y-auto rounded-lg bg-white outline-none dark:bg-neutral-950'
         >
           {baseTypes.map((type, idx) => {
             return (

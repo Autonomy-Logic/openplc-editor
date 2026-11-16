@@ -23,12 +23,12 @@ describe('composeFirmwareBundle — skeleton passthrough', () => {
     const skeleton = {
       'examples/Baremetal/Baremetal.ino': 'void setup() {}\nvoid loop() {}\n',
       'src/arduino.cpp': '// HAL adapter\n',
-      'examples/Baremetal/modules/Modbus.cpp': '// Modbus helper\n',
+      'examples/Baremetal/Modbus.cpp': '// Modbus helper\n',
     }
     const out = composeFirmwareBundle({ ...baseInput, firmwareSkeleton: skeleton })
     expect(out['examples/Baremetal/Baremetal.ino']).toBe('void setup() {}\nvoid loop() {}\n')
     expect(out['src/arduino.cpp']).toBe('// HAL adapter\n')
-    expect(out['examples/Baremetal/modules/Modbus.cpp']).toBe('// Modbus helper\n')
+    expect(out['examples/Baremetal/Modbus.cpp']).toBe('// Modbus helper\n')
   })
 
   it('overwrites src/c_blocks.h skeleton entry with the cBlocks header input', () => {

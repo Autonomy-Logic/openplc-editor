@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 /*
 modbus_tcp.cpp - Modbus TCP transport (Ethernet / WiFi / ESP ETH)
-Copyright (C) 2022 OpenPLC - Thiago Alves
 */
 
 #include <string.h>       // memset -- wiping a discarded frame

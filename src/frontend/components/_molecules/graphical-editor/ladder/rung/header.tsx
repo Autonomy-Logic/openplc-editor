@@ -10,6 +10,7 @@ import { CloseIcon } from '../../../../../assets/icons/interface/Close'
 import { DragHandleIcon } from '../../../../../assets/icons/interface/DragHandle'
 import { DuplicateIcon } from '../../../../../assets/icons/interface/Duplicate'
 import { StickArrowIcon } from '../../../../../assets/icons/interface/StickArrow'
+import { useIsEditingLocked } from '../../../../../hooks/use-editing-lock'
 import { useOpenPLCStore } from '../../../../../store'
 import type { RungLadderState } from '../../../../../store/slices/ladder'
 import { cn } from '../../../../../utils/cn'
@@ -26,6 +27,7 @@ type RungHeaderProps = {
 
 export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onClick }: RungHeaderProps) => {
   const editorName = useBoundPou()
+  const isEditingLocked = useIsEditingLocked()
   const { addComment, duplicateRung } = useOpenPLCStore((state) => state.ladderFlowActions)
   const openModal = useOpenPLCStore((state) => state.modalActions.openModal)
 
@@ -45,6 +47,7 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
   }, [rung.comment])
 
   const handleRemoveRung = () => {
+    if (isEditingLocked) return
     openModal('confirm-delete-element', rung)
   }
 
@@ -60,13 +63,19 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
         className,
       )}
     >
-      <div {...(draggableHandleProps ?? {})} className='flex items-center'>
-        <DragHandleIcon className='h-7 w-7 cursor-grab fill-[#0464FB] dark:fill-brand-light' />
+      <div {...(isEditingLocked ? {} : (draggableHandleProps ?? {}))} className='flex items-center'>
+        <DragHandleIcon
+          className={cn(
+            'h-7 w-7 fill-[#0464FB] dark:fill-brand-light',
+            isEditingLocked ? 'cursor-not-allowed' : 'cursor-grab',
+          )}
+        />
       </div>
       <div className='flex w-full items-center rounded-lg border border-transparent px-1' ref={containerRef}>
         <HighlightedTextArea
           placeholder='Start typing to add a comment to this rung'
-          textAreaClassName='text-xs'
+          readOnly={isEditingLocked}
+          textAreaClassName={cn('text-xs', isEditingLocked && 'cursor-not-allowed')}
           highlightClassName='text-xs'
           ref={textAreaRef}
           textAreaValue={textAreaValue}
@@ -79,14 +88,16 @@ export const RungHeader = ({ rung, isOpen, draggableHandleProps, className, onCl
         <button
           aria-label='Duplicate body button'
           onClick={() => duplicateRung({ editorName, rungId: rung.id })}
-          className='flex h-full w-7 items-center justify-center rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+          disabled={isEditingLocked}
+          className='flex h-full w-7 items-center justify-center rounded-md p-1 hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-neutral-800'
         >
           <DuplicateIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />
         </button>
         <button
           aria-label='Delete body button'
           onClick={handleRemoveRung}
-          className='flex h-full w-7 items-center justify-center rounded-md p-1 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+          disabled={isEditingLocked}
+          className='flex h-full w-7 items-center justify-center rounded-md p-1 hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-neutral-800'
         >
           <CloseIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />
         </button>

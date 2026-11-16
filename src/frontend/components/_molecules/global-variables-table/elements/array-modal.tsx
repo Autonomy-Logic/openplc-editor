@@ -1,18 +1,22 @@
 import { useEffect, useState } from 'react'
 
 import { baseTypeEnum } from '../../../../../middleware/shared/ports'
+import type { PLCGlobalVariable } from '../../../../../middleware/shared/ports/types'
 import { useOpenPLCStore } from '../../../../store'
+import type { ProjectResponse } from '../../../../store/slices/project/types'
 import { arrayValidation } from '../../../../store/slices/workspace/utils/variables'
 import { hasStringName } from '../../../../utils/safe-upper'
 import { DimensionsModal } from '../../../_atoms/dimensions-modal'
 import { toast } from '../../../_features/[app]/toast/use-toast'
 
 type ArrayModalProps = {
-  variableName: string
-  variableRow?: number
+  /** The type of the row the dialog was opened on. */
+  variableType: PLCGlobalVariable['type']
   arrayModalIsOpen: boolean
   setArrayModalIsOpen: (value: boolean) => void
   closeContainer: () => void
+  /** Writes the new type to the row; the caller routes it to its table. */
+  onSave: (type: PLCGlobalVariable['type']) => ProjectResponse | undefined
 }
 
 type Pou = { type: string; name: string }
@@ -23,19 +27,13 @@ export const GlobalArrayModal = ({
   arrayModalIsOpen,
   closeContainer,
   setArrayModalIsOpen,
-  variableName,
-  variableRow,
+  variableType,
+  onSave,
 }: ArrayModalProps) => {
   const {
     project: {
-      data: {
-        dataTypes,
-        configurations: {
-          resource: { globalVariables },
-        },
-      },
+      data: { dataTypes },
     },
-    projectActions: { updateVariable },
     libraries: sliceLibraries,
   } = useOpenPLCStore()
 
@@ -79,17 +77,14 @@ export const GlobalArrayModal = ({
   const [typeValue, setTypeValue] = useState<string>('dint')
 
   useEffect(() => {
-    const variable = globalVariables.find((variable) => variable.name === variableName)
-    if (!variable) return
-
-    if (variable.type.definition === 'array' && variable.type.data) {
-      setDimensions(variable.type.data.dimensions.map((dimension) => dimension.dimension))
-      setTypeValue(variable.type.data.baseType.value ?? 'dint')
+    if (variableType.definition === 'array' && variableType.data) {
+      setDimensions(variableType.data.dimensions.map((dimension) => dimension.dimension))
+      setTypeValue(variableType.data.baseType.value ?? 'dint')
     } else {
       setDimensions([])
       setTypeValue('dint')
     }
-  }, [variableName, globalVariables])
+  }, [variableType])
 
   const handleAddDimension = () => {
     setDimensions((prev) => [...prev, ''])
@@ -156,23 +151,21 @@ export const GlobalArrayModal = ({
 
     const isBaseType = (baseTypes as readonly string[]).includes(typeValue)
 
-    updateVariable({
-      scope: 'global',
-      rowId: variableRow,
+    const result = onSave({
+      definition: 'array',
+      value: formatArrayName,
       data: {
-        type: {
-          definition: 'array',
-          value: formatArrayName,
-          data: {
-            baseType: {
-              definition: isBaseType ? ('base-type' as const) : ('user-data-type' as const),
-              value: typeValue,
-            },
-            dimensions: dimensionToSave.map((dimension) => ({ dimension: dimension })),
-          },
+        baseType: {
+          definition: isBaseType ? ('base-type' as const) : ('user-data-type' as const),
+          value: typeValue,
         },
+        dimensions: dimensionToSave.map((dimension) => ({ dimension: dimension })),
       },
     })
+    if (!result?.ok) {
+      toast({ title: result?.title, description: result?.message, variant: 'fail' })
+      return
+    }
     setArrayModalIsOpen(false)
     closeContainer()
   }

@@ -19,9 +19,14 @@ export const createTabsSlice: StateCreator<TabsSlice, [], [], TabsSlice> = (setS
     updateTabs: (tab) => {
       setState(
         produce((slice: TabsSlice) => {
-          const tabExists = slice.tabs.find((t) => t.name === tab.name)
-          if (tabExists) return
-          slice.tabs = [...slice.tabs, tab]
+          const idx = slice.tabs.findIndex((t) => t.name === tab.name)
+          if (idx === -1) {
+            slice.tabs = [...slice.tabs, tab]
+            return
+          }
+          // Same display name already open: take the new elementType and path, keep the
+          // stored tab's other fields.
+          slice.tabs[idx] = { ...slice.tabs[idx], ...tab }
         }),
       )
     },

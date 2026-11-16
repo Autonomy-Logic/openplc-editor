@@ -61,6 +61,8 @@ export interface IpcProjectData {
   servers?: PLCProjectData['servers']
   remoteDevices?: PLCProjectData['remoteDevices']
   libraries?: PLCProjectData['libraries']
+  /** Opaque VPP screen data forwarded to the pipeline for runtime emitters. */
+  vppExtensions?: Record<string, Record<string, unknown>>
   originalCppPous?: Array<{ name: string; code: string; variables: unknown[] }>
 }
 
@@ -95,6 +97,7 @@ function toIpcProjectData(data: PLCProjectData & { originalCppPous?: unknown[] }
     servers: data.servers,
     remoteDevices: data.remoteDevices,
     libraries: data.libraries,
+    ...(data.vppExtensions ? { vppExtensions: data.vppExtensions } : {}),
     ...(data.originalCppPous ? { originalCppPous: data.originalCppPous as IpcProjectData['originalCppPous'] } : {}),
   }
 }
@@ -162,6 +165,8 @@ export interface EditorCompilerAdapterDeps {
 
 export function createEditorCompilerAdapter(deps: EditorCompilerAdapterDeps = {}): CompilerPort {
   return {
+    compileToWasm: (request) => window.bridge.wasmToolchainCompile(request),
+
     /**
      * The Build / Build & Upload flow.
      *

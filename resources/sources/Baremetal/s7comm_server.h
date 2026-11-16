@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
 /*
 s7comm_server.h - the baremetal Siemens S7Comm server
-Copyright (C) 2026 Autonomy Logic
+Copyright (c) 2026 Autonomy®
 
 Two calls, matching opcua_server.h's shape because they live the same life:
 one from setup(), one from the scan loop.

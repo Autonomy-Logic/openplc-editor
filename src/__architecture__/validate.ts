@@ -230,6 +230,8 @@ function getLayer(filePath: string): LayerName | null {
   // reachable from adapters/backend/main on both platforms — same `utils` rule
   // set, byte-identical between repos.
   if (rel.startsWith('middleware/shared/runtime-auth/')) return 'utils'
+  // Vendor configurator wire protocol and host client; pure, byte-identical between repos.
+  if (rel.startsWith('middleware/shared/vendor-document/')) return 'utils'
   if (rel.match(/^middleware\/adapters\/[^/]+\/components\//)) return 'adapter-components'
   if (rel.startsWith('middleware/adapters/')) return 'adapters'
 
@@ -435,8 +437,8 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   // Same judgement as `ports/debugger-port.ts` above: hoisting these into
   // ports/types.ts would drag the schema they are inferred from along with it.
   // ---------------------------------------------------------------------------
-  // Pin drift warning — compares the pin a project recorded against the package
-  // actually installed; `describeVppPinDrift` is the one place that is worded.
+  // Missing package warning — `describeMissingVppPackage` is the one place that
+  // words a pinned package that is not installed.
   'frontend/components/_features/[workspace]/editor/device/configuration/board.tsx': ['backend-shared'],
   // Vendor screen actions — parses and runs a screen's declarative actions.
   'frontend/components/_features/[workspace]/editor/device/configuration/vendor-screen/screen-actions.tsx': [
@@ -458,6 +460,12 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   // conversion logic itself stays local (mirrors compiler-adapter.ts's
   // portToSchemaProjectData) and has no other backend-shared dependency.
   'frontend/services/export-actions.ts': ['backend-shared'],
+  // I/O image diagnostics — reads the compile pipeline's own sizer and the two
+  // emitters it feeds (`computeIoImage`, `generateImageConf`,
+  // `generateProcessImageDefines`). The point of the tool is to answer what a
+  // BUILD would produce, so calling anything other than the functions the build
+  // calls would make it a second opinion instead of a preview.
+  'frontend/services/io-diagnostics/index.ts': ['backend-shared'],
 }
 
 // ---------------------------------------------------------------------------

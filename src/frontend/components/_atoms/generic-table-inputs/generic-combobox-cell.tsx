@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowIcon } from '../../../assets/icons/interface/Arrow'
 import { CloseIcon } from '../../../assets/icons/interface/Close'
 import { PlusIcon } from '../../../assets/icons/interface/Plus'
+import { useIsEditingLocked } from '../../../hooks/use-editing-lock'
 import { cn } from '../../../utils/cn'
 import ScrollAreaComponent from '../../ui/scroll-area'
 import { InputWithRef } from '../input'
@@ -46,7 +47,7 @@ export const GenericComboboxCell = ({
   customValueLabel = 'Add custom value',
   clearLabel = 'Clear location',
   showClearOption = true,
-  disabled = false,
+  disabled: disabledProp = false,
   triggerClassName,
   showChevron = false,
 }: {
@@ -89,6 +90,8 @@ export const GenericComboboxCell = ({
   /** Render a dropdown chevron in the trigger (field-style pickers). */
   showChevron?: boolean
 }) => {
+  const isEditingLocked = useIsEditingLocked()
+  const disabled = disabledProp || isEditingLocked
   const [selectIsOpen, setSelectIsOpen] = useState(false)
   const selectRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (c) 2026 Autonomy®
 // s7comm_config.h — placeholder stub.
 //
 // The editor overwrites this file with the project's real S7Comm

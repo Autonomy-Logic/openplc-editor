@@ -44,6 +44,7 @@ export type WorkspaceProjectTreeLeafType =
   | 'user-management'
   | 'persistent-storage'
   | 'ethercat-device'
+  | 'ethercat-module'
   | null
 
 // ---------------------------------------------------------------------------

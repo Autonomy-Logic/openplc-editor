@@ -32,6 +32,17 @@ function isConfigurableRange(index: string): boolean {
   return num >= 0x2000
 }
 
+const INTEGER_TYPE_WIDTHS: Record<string, number> = {
+  SINT: 8,
+  USINT: 8,
+  INT: 16,
+  UINT: 16,
+  DINT: 32,
+  UDINT: 32,
+  LINT: 64,
+  ULINT: 64,
+}
+
 /**
  * Decode an ESI <DefaultData> hex string into a type-aware display value.
  *
@@ -96,6 +107,9 @@ function decodeEsiDefaultData(hex: string | undefined, dataType: string | undefi
     return view.getFloat64(0, true).toString()
   }
 
+  const declaredWidth = INTEGER_TYPE_WIDTHS[dt]
+  if (declaredWidth !== undefined && bitSize !== declaredWidth) return ''
+
   // Integer path -- BigInt avoids precision loss on 64-bit unsigned types.
   let val = 0n
   for (let i = bytes.length - 1; i >= 0; i--) {
@@ -103,10 +117,11 @@ function decodeEsiDefaultData(hex: string | undefined, dataType: string | undefi
   }
 
   const isSigned = dt === 'SINT' || dt === 'INT' || dt === 'DINT' || dt === 'LINT'
-  if (isSigned && bitSize > 0) {
-    const signBit = 1n << BigInt(bitSize - 1)
-    if (val & signBit) {
-      val = val - (1n << BigInt(bitSize))
+  if (bitSize > 0) {
+    const width = 1n << BigInt(bitSize)
+    val &= width - 1n
+    if (isSigned && val & (width >> 1n)) {
+      val -= width
     }
   }
 

@@ -164,7 +164,7 @@ export const CertificateModal = ({ isOpen, onClose, onSave, existingCertificateI
 
   return (
     <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <ModalContent className='h-auto max-h-[90vh] w-[550px]' onClose={onClose}>
+      <ModalContent className='max-h-[90vh] w-[550px]' onClose={onClose}>
         <ModalHeader>
           <ModalTitle>Add Trusted Client Certificate</ModalTitle>
         </ModalHeader>
