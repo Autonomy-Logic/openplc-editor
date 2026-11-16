@@ -9,9 +9,11 @@ import type {
   PythonThreadHandle,
   PythonThreadMechanism,
 } from '../../../../middleware/shared/ports/python-mechanisms'
+import { PythonBlockHost } from '../python-block-host'
 import {
   parsePythonThreadReply,
   parsePythonThreadRequest,
+  PYTHON_NOT_ISOLATED_MESSAGE,
   type PythonInterpreters,
   servePythonThread,
   ThreadedPythonRuntime,
@@ -192,6 +194,55 @@ describe('ThreadedPythonRuntime with servePythonThread', () => {
     })
     await expect(broken.load()).rejects.toThrow('python-runtime.json has no file for numpy.')
     await expect(broken.load()).rejects.toThrow('python-runtime.json has no file for numpy.')
+  })
+})
+
+describe('ThreadedPythonRuntime cross-origin isolation', () => {
+  it('names the reason Python cannot run on a page that is not cross-origin isolated', () => {
+    expect(PYTHON_NOT_ISOLATED_MESSAGE).toBe('Python blocks cannot run here: the page is not cross-origin isolated.')
+  })
+
+  it('rejects at once on a page that is not cross-origin isolated, and never starts the thread', async () => {
+    const threads = inMemoryThread(echoRuntime())
+    const runtime = new ThreadedPythonRuntime({ spawn: () => threads.spawn(), isCrossOriginIsolated: () => false })
+
+    await expect(runtime.load()).rejects.toThrow(PYTHON_NOT_ISOLATED_MESSAGE)
+    await expect(runtime.spawn()).rejects.toThrow(PYTHON_NOT_ISOLATED_MESSAGE)
+
+    expect(threads.spawns).toBe(0)
+  })
+
+  it('starts the thread as before on a cross-origin-isolated page', async () => {
+    const threads = inMemoryThread(echoRuntime())
+    const runtime = new ThreadedPythonRuntime({ spawn: () => threads.spawn(), isCrossOriginIsolated: () => true })
+
+    await runtime.load()
+    const process = await runtime.spawn()
+
+    expect(threads.spawns).toBe(1)
+    expect(process).toBeDefined()
+  })
+
+  it('lets the Python blocks report the reason, with no thread started', async () => {
+    const threads = inMemoryThread(echoRuntime())
+    const runtime = new ThreadedPythonRuntime({ spawn: () => threads.spawn(), isCrossOriginIsolated: () => false })
+    const host = new PythonBlockHost(runtime)
+    const lines: Array<{ line: string; stream: string }> = []
+    host.onLog = (line, stream) => lines.push({ line, stream })
+
+    await host.prepare(1)
+
+    expect(lines).toEqual([{ line: `Python could not be prepared: ${PYTHON_NOT_ISOLATED_MESSAGE}`, stream: 'stderr' }])
+    expect(threads.spawns).toBe(0)
+  })
+
+  it('prepares nothing and starts no thread for a run without Python blocks', async () => {
+    const threads = inMemoryThread(echoRuntime())
+    const host = new PythonBlockHost(new ThreadedPythonRuntime(threads))
+
+    await host.prepare(0)
+
+    expect(threads.spawns).toBe(0)
   })
 })
 
