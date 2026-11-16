@@ -1,11 +1,13 @@
 /**
  * Mechanisms behind the ESI repository port.
  *
- * All repository behaviour is shared (`backend/shared/ethercat/esi-repository-port.ts`
- * and `esi-file-store.ts`). A platform supplies only mechanisms, which make
- * no decisions: where the parser runs, and where rows or files are kept.
+ * All repository behaviour is shared (`backend/shared/device-description/description-repository.ts`,
+ * `backend/shared/ethercat/esi-repository-port.ts` and `esi-file-store.ts`). A platform
+ * supplies only mechanisms, which make no decisions: where the parser runs, and where
+ * rows or files are kept.
  */
 
+import type { DescriptionRowStore, DescriptionStoredRow } from './device-description-repository'
 import type { ESIDevice, ESIModule, ESIRepositoryItemLight } from './esi-types'
 
 /** What an ESI file contributes to its repository row, as the light parse returns it. */
@@ -46,31 +48,10 @@ export interface EsiParserMechanism {
 }
 
 /** A repository row. Stores keep it exactly as given and return it exactly as kept. */
-export interface EsiStoredRow {
-  id: string
-  filename: string
-  /** ISO 8601 UTC */
-  loadedAt: string
-  /** SHA-256 hex of the XML. */
-  contentHash?: string
-  /** Version of the parser output in `summary`; rows from another version are re-parsed. */
-  summaryVersion?: number
-  summary?: ESIRepositorySummary
-}
+export type EsiStoredRow = DescriptionStoredRow<ESIRepositorySummary>
 
 /** Row storage (the Edge backend on the web). Stores and returns rows verbatim. */
-export interface EsiRowStore {
-  list(): Promise<EsiStoredRow[]>
-  /** Keep a new row and its XML; returns the row as kept, whose id the store may have assigned. */
-  insert(row: EsiStoredRow, xml: string): Promise<EsiStoredRow>
-  /** Replace the row with the same id. */
-  update(row: EsiStoredRow): Promise<void>
-  remove(id: string): Promise<void>
-  clear(): Promise<void>
-  readXml(id: string): Promise<string>
-  /** Subscribe to a change of whose repository this is (account, project). */
-  onScopeChanged?(listener: () => void): () => void
-}
+export type EsiRowStore = DescriptionRowStore<ESIRepositorySummary>
 
 /** Text files in one folder (the project's `devices/esi` on the desktop). */
 export interface EsiFileStore {

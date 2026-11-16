@@ -131,10 +131,13 @@ shared code is silently dropped on that platform.
 **Pattern.** The port implementation is a shared factory, `createXxxPort(mechanisms)`,
 and the mechanism interfaces live in `src/middleware/shared/ports/`. Each
 platform's adapter only builds the mechanisms and calls the factory. Reference:
-the ESI repository. Shared: `backend/shared/ethercat/esi-repository-port.ts`
-(hashing, dedup, ids, summaries, caches), `esi-file-store.ts` (index format,
-legacy versions, validation, write order), `esi-parse-ops.ts`, and
-`ports/esi-repository-mechanisms.ts`. Mechanisms: desktop
+the ESI repository. Shared: the format-independent core
+`backend/shared/device-description/description-repository.ts` (rows, hashing,
+dedup, ids, re-reading stale summaries, XML cache) with
+`ports/device-description-repository.ts`, built on by
+`backend/shared/ethercat/esi-repository-port.ts` (ESI summaries, device cache,
+module lookup), `esi-file-store.ts` (index format, legacy versions, validation,
+write order), `esi-parse-ops.ts`, and `ports/esi-repository-mechanisms.ts`. Mechanisms: desktop
 `adapters/editor/esi-adapter.ts` + `backend/editor/ethercat/esi-project-files.ts`
 (file read, write, list, remove); web `adapters/web/esi-adapter.ts` (Edge HTTP)
 + `services/esi/esi.worker.ts`. Test the behaviour once, in a shared test, with
