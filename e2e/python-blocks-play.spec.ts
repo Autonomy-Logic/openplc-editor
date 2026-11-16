@@ -2,59 +2,29 @@
  * Python function blocks on the OpenPLC Simulator (desktop): Play runs each block in its own interpreter next to the
  * PLC. A block with a thread and numpy updates its outputs; one that raises shows its traceback and keeps its last
  * outputs; one that never yields does not hold the PLC; one that opens a socket fails with a traceback; Stop ends
- * them all. Play opens the Debugger tab, so the spec opens the Console tab to read block output. The editor starts
- * with no Python thread; Play on a project with Python blocks starts one, and no clang worker is left once it runs.
+ * them all, so a second Play starts the blocks over. Play opens the Debugger tab, so the spec opens the Console tab to
+ * read block output. Play on a project with Python blocks runs one Python thread, and no clang worker is left once it
+ * runs; that the editor starts with no Python thread is the cold-start case of `wasm-toolchain.spec.ts`.
  *
- * Running needs a production build plus the preload copy; see "Electron e2e" in CLAUDE.md.
+ * The test opens a new project in the worker's editor. Running needs a production build; see "Electron e2e" in
+ * CLAUDE.md.
  */
-import { cpSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
 import { pageText, waitForApp, waitForText } from './helpers/app-console'
-import { launch, quitApp } from './helpers/ethercat-project'
+import { openNewProject, test } from './helpers/editor-session'
 import { countOf, trackWorkerThreads, workerThreads } from './helpers/worker-threads'
 
 const FIXTURE = join(__dirname, 'fixtures', 'python-blocks')
-const PROJECT_NAME = 'python-blocks'
 
 interface Leaf {
   elemIdx: number
   path: string
   type: string
   size: number
-}
-
-function writeProject(slug: string): { userData: string; project: string } {
-  const root = join(realpathSync(tmpdir()), slug)
-  const project = join(root, 'project')
-  const userData = join(root, 'userdata')
-  rmSync(root, { recursive: true, force: true })
-  cpSync(FIXTURE, project, { recursive: true })
-  const history = join(userData, 'User', 'History')
-  const runtime = join(userData, 'User', 'Runtime')
-  mkdirSync(history, { recursive: true })
-  mkdirSync(runtime, { recursive: true })
-  mkdirSync(join(userData, 'arduino', 'data'), { recursive: true })
-  writeFileSync(
-    join(history, 'projects.json'),
-    JSON.stringify([
-      {
-        name: PROJECT_NAME,
-        path: project,
-        projectFilePath: join(project, 'project.json'),
-        createdAt: new Date().toISOString(),
-        lastOpenedAt: new Date().toISOString(),
-      },
-    ]),
-  )
-  writeFileSync(join(history, 'libraries.json'), '[]')
-  for (const control of ['arduino-core-control.json', 'arduino-library-control.json']) {
-    writeFileSync(join(runtime, control), '[]')
-  }
-  return { userData, project }
 }
 
 function readLeaves(project: string): Leaf[] {
@@ -111,61 +81,88 @@ async function readVariables(page: Page, leaves: Leaf[], names: string[]): Promi
   return values
 }
 
-test('Python blocks run beside the PLC: threads and numpy, failures, a block that never yields, no network', async () => {
+/** The Console text after the last "Simulator stopped." line, or `''` while there is none. */
+async function afterLastStop(page: Page): Promise<string> {
+  const text = await pageText(page)
+  const at = text.lastIndexOf('Simulator stopped.')
+  return at < 0 ? '' : text.slice(at)
+}
+
+test('Python blocks run beside the PLC: threads and numpy, failures, a block that never yields, no network', async ({
+  editor,
+}) => {
   test.setTimeout(180000)
-  const { userData, project } = writeProject('openplc-e2e-python-blocks')
-  const { app, page } = await launch(userData)
+  const { app, page } = editor
+  const { path: project } = await openNewProject(editor, FIXTURE, 'python-blocks')
   const names = ['COUNTER', 'PY_COUNT', 'PY_BEATS', 'PY_MEAN', 'FAIL_COUNT', 'SPIN_ENTERED', 'NET_CONNECTED']
-  try {
-    await trackWorkerThreads(app)
-    expect(countOf((await workerThreads(app)).live, 'python-worker.js')).toBe(0)
-    await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
-    const play = page.getByRole('button', { name: 'Play' })
-    await play.click({ timeout: 60000 })
-    await waitForApp(page, () => simulatorRunning(page), { timeout: 90000, message: 'the simulator never started' })
-    const whileRunning = await workerThreads(app)
-    expect(countOf(whileRunning.live, 'python-worker.js')).toBe(1)
-    expect(countOf(whileRunning.live, 'clang-worker.js')).toBe(0)
-    const leaves = readLeaves(project)
-    const read = () => readVariables(page, leaves, names)
+  await trackWorkerThreads(app)
 
-    await expect.poll(async () => (await read())?.PY_COUNT ?? 0, { timeout: 30000 }).toBeGreaterThan(5)
-    const first = await read()
-    await page.waitForTimeout(2000)
-    const later = await read()
-    if (!first || !later) throw new Error('the debugger did not answer')
-    const loopsPerSecond = (later.PY_COUNT - first.PY_COUNT) / 2
-    expect(loopsPerSecond).toBeGreaterThan(6)
-    expect(loopsPerSecond).toBeLessThan(11)
-    expect(later.PY_BEATS).toBeGreaterThan(first.PY_BEATS)
-    expect(later.PY_MEAN).toBeGreaterThan(0)
-    await page.getByRole('tab', { name: 'Console' }).click()
-    await waitForText(page, /\[PyStats\] PyStats started, numpy 2\.3\.2/, { timeout: 30000 })
-
-    await waitForText(page, /\[PyFail\] RuntimeError: planned failure after 30 loops/, { timeout: 30000 })
-    const afterFailure = await read()
-    await page.waitForTimeout(1000)
-    const stillFailed = await read()
-    if (!afterFailure || !stillFailed) throw new Error('the debugger did not answer')
-    expect(stillFailed.FAIL_COUNT).toBe(afterFailure.FAIL_COUNT)
-    expect(stillFailed.FAIL_COUNT).toBeLessThan(30)
-    expect(stillFailed.COUNTER).toBeGreaterThan(afterFailure.COUNTER)
-
-    expect(stillFailed.SPIN_ENTERED).toBe(0)
-
-    await waitForText(page, /\[PySocket\] socket\.gaierror/, { timeout: 30000 })
-    const output = await pageText(page)
-    expect(output).toMatch(/\[PySocket\] raw IP connect failed: \w+/)
-    expect(output).toMatch(/\[PySocket\] host file hidden: \w+/)
-    expect(output).not.toMatch(/raw IP connect succeeded|host file read/)
-    expect(stillFailed.NET_CONNECTED).toBe(0)
-
-    await play.click()
-    await expect.poll(() => simulatorRunning(page), { timeout: 30000 }).toBe(false)
-    const lines = await page.locator('text=/\\[PyStats\\] count=/').count()
-    await page.waitForTimeout(3000)
-    expect(await page.locator('text=/\\[PyStats\\] count=/').count()).toBe(lines)
-  } finally {
-    await quitApp(app, page)
+  const play = page.getByRole('button', { name: 'Play' })
+  await play.click({ timeout: 60000 })
+  await waitForApp(page, () => simulatorRunning(page), { timeout: 90000, message: 'the simulator never started' })
+  const whileRunning = await workerThreads(app)
+  expect(countOf(whileRunning.live, 'python-worker.js')).toBe(1)
+  expect(countOf(whileRunning.live, 'clang-worker.js')).toBe(0)
+  const leaves = readLeaves(project)
+  const read = () => readVariables(page, leaves, names)
+  const loopsAfter = async (from: number, loops: number): Promise<Record<string, number>> => {
+    const sample = { values: (await read()) ?? {} }
+    await expect
+      .poll(
+        async () => {
+          sample.values = (await read()) ?? sample.values
+          return (sample.values.PY_COUNT ?? 0) - from
+        },
+        { timeout: 30000, intervals: [50] },
+      )
+      .toBeGreaterThanOrEqual(loops)
+    return sample.values
   }
+
+  await expect.poll(async () => (await read())?.PY_COUNT ?? 0, { timeout: 30000 }).toBeGreaterThan(5)
+  const first = await read()
+  if (!first) throw new Error('the debugger did not answer')
+  const since = Date.now()
+  const later = await loopsAfter(first.PY_COUNT, 16)
+  const loopsPerSecond = (later.PY_COUNT - first.PY_COUNT) / ((Date.now() - since) / 1000)
+  expect(loopsPerSecond).toBeGreaterThan(6)
+  expect(loopsPerSecond).toBeLessThan(11)
+  expect(later.PY_BEATS).toBeGreaterThan(first.PY_BEATS)
+  expect(later.PY_MEAN).toBeGreaterThan(0)
+  await page.getByRole('tab', { name: 'Console' }).click()
+  await waitForText(page, /\[PyStats\] PyStats started, numpy 2\.3\.2/, { timeout: 30000 })
+
+  await waitForText(page, /\[PyFail\] RuntimeError: planned failure after 30 loops/, { timeout: 30000 })
+  const afterFailure = await read()
+  if (!afterFailure) throw new Error('the debugger did not answer')
+  const stillFailed = await loopsAfter(afterFailure.PY_COUNT, 8)
+  expect(stillFailed.FAIL_COUNT).toBe(afterFailure.FAIL_COUNT)
+  expect(stillFailed.FAIL_COUNT).toBeLessThan(30)
+  expect(stillFailed.COUNTER).toBeGreaterThan(afterFailure.COUNTER)
+
+  expect(stillFailed.SPIN_ENTERED).toBe(0)
+
+  await waitForText(page, /\[PySocket\] socket\.gaierror/, { timeout: 30000 })
+  const output = await pageText(page)
+  expect(output).toMatch(/\[PySocket\] raw IP connect failed: \w+/)
+  expect(output).toMatch(/\[PySocket\] host file hidden: \w+/)
+  expect(output).not.toMatch(/raw IP connect succeeded|host file read/)
+  expect(stillFailed.NET_CONNECTED).toBe(0)
+
+  await play.click()
+  await expect.poll(() => simulatorRunning(page), { timeout: 30000 }).toBe(false)
+  await waitForApp(page, async () => (await afterLastStop(page)) !== '', { message: 'Stop was never reported' })
+
+  await play.click()
+  await waitForApp(page, () => simulatorRunning(page), { timeout: 90000, message: 'the second Play never started' })
+  await page.getByRole('tab', { name: 'Console' }).click()
+  await waitForApp(page, async () => /\[PyStats\] count=\d+/.test(await afterLastStop(page)), {
+    timeout: 30000,
+    message: 'the second run printed no PyStats count',
+  })
+  expect((await afterLastStop(page)).match(/\[PyStats\] count=(\d+)/)?.[1]).toBe('20')
+  expect(countOf((await workerThreads(app)).live, 'python-worker.js')).toBe(1)
+
+  await play.click()
+  await expect.poll(() => simulatorRunning(page), { timeout: 30000 }).toBe(false)
 })

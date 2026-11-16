@@ -5,10 +5,13 @@
  * Python blocks report why.
  *
  * Every wait also watches the process: it fails at once, quoting the output, when the CLI exits or reports an error.
+ * Each test runs its own `openplc-cli simulate` process, since the process is what is tested, in its own folder, so
+ * parallel workers and repeats never share one. Edge cases: a working directory without the Python runtime, and one
+ * without the prepared toolchain.
  * Running needs a production build; see "Electron e2e" in CLAUDE.md.
  */
 import { type ChildProcess, spawn } from 'node:child_process'
-import { cpSync, mkdirSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -22,10 +25,9 @@ const FIXTURE = join(__dirname, 'fixtures', 'python-blocks')
 const CLI_FAILURE = /^error \[|"ok":false|Simulator compilation failed/m
 
 function writeProject(slug: string): { root: string; project: string; userData: string } {
-  const root = join(realpathSync(tmpdir()), slug)
+  const root = mkdtempSync(join(realpathSync(tmpdir()), `${slug}-`))
   const project = join(root, 'project')
   const userData = join(root, 'userdata')
-  rmSync(root, { recursive: true, force: true })
   cpSync(FIXTURE, project, { recursive: true })
   const runtime = join(userData, 'User', 'Runtime')
   mkdirSync(join(userData, 'User', 'History'), { recursive: true })
@@ -63,6 +65,7 @@ class CliRun {
   stdout = ''
   stderr = ''
   exit: number | null | undefined = undefined
+  signal: NodeJS.Signals | null = null
   private readonly child: ChildProcess
 
   constructor(project: string, userData: string, cwd = REPO) {
@@ -72,7 +75,10 @@ class CliRun {
     })
     this.child.stdout?.on('data', (chunk: Buffer) => (this.stdout += chunk.toString()))
     this.child.stderr?.on('data', (chunk: Buffer) => (this.stderr += chunk.toString()))
-    this.child.on('exit', (code) => (this.exit = code))
+    this.child.on('exit', (code, signal) => {
+      this.signal = signal
+      this.exit = code
+    })
   }
 
   get output(): string {
@@ -86,7 +92,10 @@ class CliRun {
       const match = this.output.match(pattern)
       if (match) return match
       if (CLI_FAILURE.test(this.output) || this.exit !== undefined || Date.now() > deadline) {
-        const why = this.exit !== undefined ? `the CLI exited with ${this.exit}` : 'the CLI reported a failure'
+        const why =
+          this.exit !== undefined
+            ? `the CLI exited with ${this.exit}${this.signal ? ` on ${this.signal}` : ''}`
+            : 'the CLI reported a failure'
         throw new Error(`${Date.now() > deadline ? 'timed out' : why} before ${pattern}:\n${this.output.slice(-3000)}`)
       }
       await new Promise((resolve) => setTimeout(resolve, 100))
@@ -143,7 +152,7 @@ test('simulate runs the Python blocks with the PLC, prints their Console and sto
   }
 })
 
-test('simulate runs the PLC when the Python runtime cannot load, and the Python blocks report why', async () => {
+test('no Python runtime: simulate runs the PLC, and the Python blocks report why', async () => {
   test.setTimeout(180000)
   const { root, project, userData } = writeProject('openplc-e2e-cli-simulate-no-python')
   const run = new CliRun(project, userData, mirrorRepo(root, ['vendor/python-runtime']))
@@ -160,7 +169,7 @@ test('simulate runs the PLC when the Python runtime cannot load, and the Python 
   }
 })
 
-test('simulate ends with the reason and a non-zero exit when the toolchain cannot load', async () => {
+test('no toolchain: simulate ends with the reason and a non-zero exit', async () => {
   test.setTimeout(180000)
   const { root, project, userData } = writeProject('openplc-e2e-cli-simulate-no-toolchain')
   const cwd = mirrorRepo(root, ['release/yowasp-clang'])

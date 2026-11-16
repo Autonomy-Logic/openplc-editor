@@ -17,13 +17,17 @@ const STATE_KEY = '__openplcE2eWorkerThreads'
 /**
  * Starts tracking the Electron main process's worker threads by script, through the main process's own inspector
  * (`NodeWorker` domain), which reports every worker thread when it starts and when it has exited; the app needs no
- * test hook. Threads already running are reported first, so `live` right after this call tells which threads the app
- * started before it.
+ * test hook. Threads already running are reported first, so `live` right after the first call tells which threads the
+ * app started before it. Later calls on the same app keep the tracking already running.
  */
 export async function trackWorkerThreads(app: ElectronApplication): Promise<void> {
   await app.evaluate(
     (_electron, key) =>
       new Promise<void>((resolve, reject) => {
+        if (Reflect.get(globalThis, key) !== undefined) {
+          resolve()
+          return
+        }
         const getBuiltin: unknown = Reflect.get(process, 'getBuiltinModule')
         if (typeof getBuiltin !== 'function') {
           reject(new Error('process.getBuiltinModule is not available in the main process.'))
@@ -75,3 +79,17 @@ export function workerThreads(app: ElectronApplication): Promise<WorkerThreads> 
 
 /** How many entries of `scripts` are `script`. */
 export const countOf = (scripts: string[], script: WorkerScript): number => scripts.filter((s) => s === script).length
+
+/** Restarts the peaks: `maxLive` of each script becomes the number of its threads alive now. */
+export async function resetWorkerThreadPeaks(app: ElectronApplication): Promise<void> {
+  await app.evaluate((_electron, key) => {
+    const state: unknown = Reflect.get(globalThis, key)
+    if (typeof state !== 'object' || state === null) throw new Error('Worker threads are not tracked.')
+    const live: unknown = Reflect.get(state, 'live')
+    const peaks: Record<string, number> = {}
+    if (live instanceof Map) {
+      for (const script of live.values()) peaks[String(script)] = (peaks[String(script)] ?? 0) + 1
+    }
+    Reflect.set(state, 'maxLive', peaks)
+  }, STATE_KEY)
+}
