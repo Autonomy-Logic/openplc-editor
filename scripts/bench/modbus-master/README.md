@@ -134,6 +134,27 @@ remote-device build shows the Simulator's "remote devices are ignored" warning; 
 the `/compile-arduino` request of both builds carries `src/modbus_master_config.h` with
 `#define MB_MASTER_ENABLED 0`.
 
+### (g) A NINA OPC-UA build with the debug log compiles
+
+| Check | Project | Board | Command | Status |
+| --- | --- | --- | --- | --- |
+| OPC-UA project for the Nano RP2040 Connect built with `OPCUA_DEBUG_LOG=1` compiles | `tc17-nano-rp2040-connect-s7-opcua` | Nano RP2040 Connect (`arduino:mbed_nano:nanorp2040connect`) | see below | pending, with the compile matrix and the signed RTOP-410 packages |
+
+```sh
+npm run compile:matrix -- /tmp/mm-projects/tc17-nano-rp2040-connect-s7-opcua --user-data <dir> --clean \
+  --board "Nano RP2040 Connect" --out /tmp/mm-g.jsonl
+B=$(echo /tmp/mm-projects/tc17-nano-rp2040-connect-s7-opcua/build/*/)
+resources/bin/<platform>/<arch>/arduino-cli compile --clean --config-file <dir>/User/arduino-cli.yaml \
+  --fqbn arduino:mbed_nano:nanorp2040connect \
+  --build-property "compiler.c.extra_flags=-MMD -c -Wno-incompatible-pointer-types" \
+  --build-property "compiler.cpp.extra_flags=-DOPCUA_DEBUG_LOG=1" \
+  --library "$B/src" "$B/examples/Baremetal/Baremetal.ino"
+```
+
+The matrix run writes the project's sources with `OPCUA_ENABLED 1`; the second command compiles them again with
+the debug log on (`opcua_log.cpp` calls `available()` on `NinaServer` and `port()` on `NinaClient`). Pass: the
+compile exits 0.
+
 ## Bench checks
 
 | Check | Project | Board | Runs |

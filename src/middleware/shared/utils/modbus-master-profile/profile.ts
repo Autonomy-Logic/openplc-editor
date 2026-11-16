@@ -1,7 +1,7 @@
 import type { BoardInfo } from '../../ports/types'
 import { debuggerUart } from '../board-hardware/default-serial'
 import { BOARD_NETWORK_SCREEN, BOARD_SERIAL_SCREEN, findBoardScreen } from '../board-screens'
-import type { TargetCapabilities } from '../target-capabilities'
+import { resolveTargetCapabilities, type TargetCapabilities } from '../target-capabilities'
 
 export type ModbusMasterTransport = 'tcp' | 'rtu'
 
@@ -77,6 +77,11 @@ export function resolveModbusMasterProfile(
     vppScreens: {},
     showBoardLinks: false,
   }
+}
+
+/** The Modbus master profile of a board, resolved with its gating capabilities. */
+export function resolveBoardModbusMasterProfile(board: BoardInfo | undefined): ModbusMasterProfile {
+  return resolveModbusMasterProfile(board, resolveTargetCapabilities(board))
 }
 
 /** True when the target offers a Modbus remote device at all. */

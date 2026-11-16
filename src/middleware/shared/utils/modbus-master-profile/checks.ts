@@ -23,8 +23,8 @@ export type MasterTarget = 'baremetal' | 'runtime-v4' | 'runtime-v3' | 'simulato
 export interface MasterBoard {
   serialPorts?: string[]
   defaultSerial?: string
-  /** RS-485 enable pin per UART, as the build resolves it. */
-  rs485Pins: Record<string, string>
+  /** RS-485 enable pin per UART as stored (`storedRs485Pins`), before the pattern check. */
+  rs485Pins: Record<string, unknown>
 }
 
 export interface CheckModbusMasterInput {
@@ -203,7 +203,10 @@ function reservedUartIssues(
   return issues
 }
 
-function masterUartPinIssues(devices: readonly ModbusRemoteDevice[], rs485Pins: Record<string, string>): MasterIssue[] {
+function masterUartPinIssues(
+  devices: readonly ModbusRemoteDevice[],
+  rs485Pins: Record<string, unknown>,
+): MasterIssue[] {
   const rtuDevices = devices.filter((device) => transportOf(device.modbusTcpConfig) === 'rtu')
   const issues: MasterIssue[] = []
   for (const [uart, shared] of groupBy(rtuDevices, (device) => device.modbusTcpConfig.serialPort || null)) {

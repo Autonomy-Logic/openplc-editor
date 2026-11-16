@@ -45,6 +45,7 @@ export {
   type ModbusMasterProfile,
   type ModbusMasterRtuPorts,
   type ModbusMasterTransport,
+  resolveBoardModbusMasterProfile,
   resolveModbusMasterProfile,
 } from './profile'
 export { resolveReconnect } from './reconnect'
@@ -63,6 +64,7 @@ export {
   screenHasUartPinMap,
   SERIAL_SCREEN_STATE_KEY,
   type SerialScreenState,
+  storedRs485Pins,
   UART_PIN_MAP_FIELD_TYPE,
   withoutLegacyRs485Pin,
 } from './rs485-pins'

@@ -119,8 +119,18 @@ NinaClient::operator bool()
     return sock_ != NO_SOCKET_AVAIL;
 }
 
+uint16_t NinaClient::port()
+{
+    if (sock_ == NO_SOCKET_AVAIL)
+        return 0;
+    uint8_t remote_ip[4] = {0};
+    uint8_t remote_port[2] = {0};
+    WiFiDrv::getRemoteData(sock_, remote_ip, remote_port);
+    return (uint16_t)((remote_port[0] << 8) + remote_port[1]);
+}
+
 NinaServer::NinaServer(uint16_t port)
-    : port_(port), sock_(NO_SOCKET_AVAIL)
+    : port_(port), sock_(NO_SOCKET_AVAIL), last_sock_(NO_SOCKET_AVAIL)
 {
 }
 
@@ -138,6 +148,23 @@ NinaClient NinaServer::accept()
     if (sock_ == NO_SOCKET_AVAIL)
         return NinaClient();
     return NinaClient(ServerDrv::availServer(sock_, true));
+}
+
+NinaClient NinaServer::available()
+{
+    if (sock_ == NO_SOCKET_AVAIL)
+        return NinaClient();
+    if (last_sock_ != NO_SOCKET_AVAIL)
+    {
+        NinaClient last(last_sock_);
+        if (last.connected() && last.available() > 0)
+            return last;
+    }
+    const uint8_t sock = ServerDrv::availServer(sock_);
+    if (sock == NO_SOCKET_AVAIL)
+        return NinaClient();
+    last_sock_ = sock;
+    return NinaClient(sock);
 }
 
 #endif

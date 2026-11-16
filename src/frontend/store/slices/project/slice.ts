@@ -39,12 +39,11 @@ import {
 import {
   createDefaultRemoteDeviceConfig,
   type ModbusMasterProfile,
-  resolveModbusMasterProfile,
+  resolveBoardModbusMasterProfile,
 } from '../../../../middleware/shared/utils/modbus-master-profile'
 import {
   type AddressProducerCapabilities,
   resolveAddressProducerCapabilities,
-  resolveTargetCapabilities,
 } from '../../../../middleware/shared/utils/target-capabilities'
 import { renameDataTypeInDataType, renameDataTypeInVariableType } from '../../../utils/data-type-references'
 import { buildTypeContext, parseIecStringToVariables } from '../../../utils/generate-iec-string-to-variables'
@@ -339,8 +338,7 @@ function resolveBoardInfo(live: ProjectSliceRoot): BoardInfo | undefined {
 
 /** The active target's Modbus master profile; the empty profile when the board does not resolve. */
 function resolveMasterProfile(live: ProjectSliceRoot): ModbusMasterProfile {
-  const boardInfo = resolveBoardInfo(live)
-  return resolveModbusMasterProfile(boardInfo, resolveTargetCapabilities(boardInfo))
+  return resolveBoardModbusMasterProfile(resolveBoardInfo(live))
 }
 
 /**

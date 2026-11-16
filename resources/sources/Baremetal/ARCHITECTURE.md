@@ -288,7 +288,12 @@ no separate confirmation to ask for. `can_send()` answers true for a listener's
 client (up to 65535 bytes), and a write the module refuses returns 0 without
 closing the socket. `stop()` sends the module's stop and frees the receive buffer
 without waiting; the module frees the socket in that exchange and hands out only
-free sockets. Only `baremetal_net` names these classes. The Modbus TCP server keeps
+free sockets. Two members are used by the OPC-UA debug log only
+(`OPCUA_DEBUG_LOG`): `NinaServer::available()`, which mirrors WiFiNINA 2.1.1
+`WiFiServer::available()` (the last socket it returned while that client is
+connected and has data, else `ServerDrv::availServer()` without accepting), and
+`NinaClient::port()`, the peer's port from `WiFiDrv::getRemoteData()`. The
+listeners and the TCP master use `accept()`. Only `baremetal_net` names these classes. The Modbus TCP server keeps
 its own clients and includes in `modbus_tcp.h`.
 
 ### Closing a connection

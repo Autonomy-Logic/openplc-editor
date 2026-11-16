@@ -76,6 +76,7 @@ without a Modbus server impossible.
 #elif defined(BOARD_WIFININA) && defined(MBTCP_WIFI)
     #include <WiFiNINA.h>
     #include <utility/server_drv.h>
+    #include <utility/wifi_drv.h>
     #include <utility/WiFiSocketBuffer.h>
     #define BM_NET_NINA 1
 
@@ -109,6 +110,10 @@ public:
     uint8_t connected() override;
     operator bool() override;
 
+    /** The peer's TCP port, read from the module in one exchange; 0 when the
+     *  client holds no socket. Used by the OPC-UA debug log only. */
+    uint16_t port();
+
     using Print::write;
 
 private:
@@ -129,9 +134,15 @@ public:
     /** The next accepted socket, or a client that tests false. */
     NinaClient accept();
 
+    /** The last socket handed out while it is connected and has data, else a
+     *  socket with data the module reports without accepting it, else a
+     *  client that tests false. Used by the OPC-UA debug log only. */
+    NinaClient available();
+
 private:
     uint16_t port_;
     uint8_t  sock_;
+    uint8_t  last_sock_;
 };
 
 }

@@ -100,6 +100,46 @@ export function resolveRs485Pins(
   return Object.fromEntries(entries)
 }
 
+/**
+ * RS-485 enable pin each UART would take as stored, for the pre-build check.
+ *
+ * Same precedence as `resolveRs485Pins`, without the pattern check: a per-UART value is kept exactly as
+ * stored, whatever its JSON type, and an empty string gives no entry. The entries whose value passes
+ * `isValidRs485Pin` are exactly what `resolveRs485Pins` returns; `state` is never modified.
+ *
+ * @param state Serial screen state as persisted, read as untyped project data.
+ * @param board The board's UARTs, fixed pins and whether it is per-UART aware.
+ * @param rtuServerUart UART of the enabled Modbus RTU server, or `null` when there is none.
+ * @returns Stored value per UART.
+ */
+export function storedRs485Pins(
+  state: SerialScreenState,
+  board: Rs485Board,
+  rtuServerUart: string | null,
+): Record<string, unknown> {
+  const legacy = legacyPin(state.serial)
+
+  if (!board.perUartAware) {
+    return rtuServerUart !== null && legacy !== null ? Object.fromEntries([[rtuServerUart, legacy]]) : {}
+  }
+
+  const fixed = readRs485PinMap(board.rs485FixedPins) ?? {}
+  const perUart: unknown = state.serial?.rs485_en_pins
+  const entries: Array<[string, unknown]> = []
+
+  if (isPlainObject(perUart)) {
+    for (const [uart, pin] of Object.entries(perUart)) {
+      if (!hasOwn(fixed, uart) && pin !== '') entries.push([uart, pin])
+    }
+  } else if (rtuServerUart !== null && !hasOwn(fixed, rtuServerUart) && legacy !== null) {
+    entries.push([rtuServerUart, legacy])
+  }
+
+  for (const [uart, pin] of Object.entries(fixed)) entries.push([uart, pin])
+
+  return Object.fromEntries(entries)
+}
+
 /** Pin `resolveRs485Pins` gives `uart`, or `undefined` when it gives none. */
 export function rs485PinOf(pins: Record<string, string>, uart: string): string | undefined {
   return hasOwn(pins, uart) ? pins[uart] : undefined

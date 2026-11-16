@@ -409,7 +409,9 @@ board, the package and the file) the package's fixed pins win, then `serial.rs48
 `rs485_en_pin` on the RTU server's UART until `rs485_en_pins` is first written, when the store drops the
 legacy pair; a legacy board puts `rs485_en_pin` on the RTU server's UART. Only pins matching
 `^[A-Z]{0,2}\d{1,3}$` reach `defines.h` and `vpp_config.h`; a 4.3.x project's `rs485_en_pin` is trimmed before
-that check, while `rs485_en_pins` entries are checked as entered. Board hardware fields (`serialPorts`,
+that check, while `rs485_en_pins` entries are checked as entered. The pre-build check reads the stored pin of each
+UART an RTU remote device uses (`storedRs485Pins`), before the pattern filter, so a stored pin that fails the
+pattern refuses a baremetal build, naming the UART. Board hardware fields (`serialPorts`,
 `defaultSerial`, `networkInterfaces`, `rs485FixedPins`) come from `boardHardwareFromManifestDevice`
 (`src/middleware/shared/utils/board-hardware/from-manifest-device.ts`) on both platforms.
 

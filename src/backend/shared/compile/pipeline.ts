@@ -42,6 +42,7 @@ import {
   resolveModbusMasterProfile,
   resolveRs485Pins,
   type Rs485Board,
+  storedRs485Pins,
 } from '../../../middleware/shared/utils/modbus-master-profile'
 import { resolveModbusServerProfile } from '../../../middleware/shared/utils/modbus-server-profile'
 import {
@@ -706,7 +707,7 @@ async function runCompilePipelineInner(
     board: {
       ...(boardEntry.serialPorts ? { serialPorts: boardEntry.serialPorts } : {}),
       ...(boardEntry.defaultSerial ? { defaultSerial: boardEntry.defaultSerial } : {}),
-      rs485Pins,
+      rs485Pins: masterTarget === 'baremetal' ? storedRs485Pins(vppModbusState ?? {}, rs485Board, rtuServerUart) : {},
     },
     rtuServerUart,
     networkEnabled:
