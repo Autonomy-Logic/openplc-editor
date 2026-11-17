@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from '@jest/globals'
 
 const repo = join(__dirname, '..', '..')
 const script = join(repo, 'scripts', 'prepare-yowasp-clang.ts')
-const tsNode = join(repo, 'node_modules', '.bin', 'ts-node')
+const tsNodeRegister = join(repo, 'node_modules', 'ts-node', 'register', 'index.js')
 
 const ORIGINAL = 'this.#fetchResources(options.fetchProgress ?? defaultFetchProgress)'
 const PATCHED = 'this.#fetchResources(options.fetchProgress)'
@@ -86,8 +86,8 @@ const snapshot = (dir: string): Record<string, Uint8Array> =>
 function runScript(root: string): Promise<Run> {
   return new Promise((resolve) => {
     execFile(
-      tsNode,
-      [script],
+      process.execPath,
+      ['--require', tsNodeRegister, script],
       {
         cwd: root,
         env: { ...process.env, TS_NODE_TRANSPILE_ONLY: 'true', TS_NODE_PROJECT: join(repo, 'tsconfig.json') },

@@ -4,7 +4,14 @@
  */
 import { describe, expect, it } from '@jest/globals'
 
-import { parsePythonRuntimeManifest, parsePythonThreadInit, pythonThreadInit } from '../python-runtime-files'
+import { presentOnly } from '../../wasm-toolchain/__tests__/fixtures/present-only'
+import {
+  parsePythonRuntimeManifest,
+  parsePythonThreadInit,
+  type PythonRuntimeFilePaths,
+  pythonThreadInit,
+  requirePythonRuntimeFiles,
+} from '../python-runtime-files'
 
 describe('parsePythonRuntimeManifest', () => {
   it('reads the pinned file names', () => {
@@ -61,5 +68,53 @@ describe('parsePythonThreadInit', () => {
     expect(parsePythonThreadInit({ type: 'init', location: { ...urls, packageUrl: 1 } })).toBeNull()
     expect(parsePythonThreadInit({ type: 'init', location: { ...urls, sdkUrl: null } })).toBeNull()
     expect(parsePythonThreadInit({ type: 'init', location: { ...urls, wheelUrl: undefined } })).toBeNull()
+  })
+})
+
+describe('requirePythonRuntimeFiles', () => {
+  const paths: PythonRuntimeFilePaths = {
+    sdkEntry: '/runtime/sdk/dist/index.js',
+    pythonPackage: '/runtime/python-3.13.19.webc',
+    numpyWheel: '/runtime/numpy.whl',
+  }
+
+  it('resolves when the SDK entry, the CPython package and the numpy wheel exist', async () => {
+    const { exists } = presentOnly([paths.sdkEntry, paths.pythonPackage, paths.numpyWheel])
+
+    await expect(requirePythonRuntimeFiles(paths, exists)).resolves.toBeUndefined()
+  })
+
+  it('names the CPython package when only it is missing', async () => {
+    const { exists } = presentOnly([paths.sdkEntry, paths.numpyWheel])
+
+    await expect(requirePythonRuntimeFiles(paths, exists)).rejects.toThrow(
+      'Missing Python runtime file: /runtime/python-3.13.19.webc',
+    )
+  })
+
+  it('names the SDK entry first when none of the files is present', async () => {
+    const { exists } = presentOnly([])
+
+    const error = await requirePythonRuntimeFiles(paths, exists).catch((reason: unknown) => reason)
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error instanceof Error ? error.message : '').toBe('Missing Python runtime file: /runtime/sdk/dist/index.js')
+  })
+
+  it('names the CPython package before the numpy wheel when both are missing', async () => {
+    const { exists } = presentOnly([paths.sdkEntry])
+
+    await expect(requirePythonRuntimeFiles(paths, exists)).rejects.toThrow(
+      'Missing Python runtime file: /runtime/python-3.13.19.webc',
+    )
+  })
+
+  it('asks only for the three runtime files of a paths object that has other fields', async () => {
+    const { asked, exists } = presentOnly([paths.sdkEntry, paths.pythonPackage, paths.numpyWheel])
+    const desktopPaths = { ...paths, workerScript: '/app/dist/python-worker.js' }
+
+    await requirePythonRuntimeFiles(desktopPaths, exists)
+
+    expect([...asked].sort()).toEqual([paths.numpyWheel, paths.pythonPackage, paths.sdkEntry].sort())
   })
 })

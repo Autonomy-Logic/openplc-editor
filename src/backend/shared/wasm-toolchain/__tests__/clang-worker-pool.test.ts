@@ -409,6 +409,51 @@ describe('ClangWorkerPool load failure', () => {
     expect(mechanism.maxAlive).toBe(1)
   })
 
+  it('rejects every queued job with WasmToolchainLoadError when the worker cannot be started', async () => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.spawnError = new Error('no threads')
+    const pool = new ClangWorkerPool(mechanism)
+
+    const errors = await Promise.all([
+      pool.run(job('a.c')).catch((reason: unknown) => reason),
+      pool.run(job('b.c')).catch((reason: unknown) => reason),
+    ])
+
+    for (const error of errors) {
+      expect(error).toBeInstanceOf(WasmToolchainLoadError)
+      expect(messageOf(error)).toBe(
+        'The WebAssembly compiler could not be loaded: the compiler worker could not be started (no threads)',
+      )
+      expect(error instanceof WasmToolchainLoadError ? error.reason : '').toBe(
+        'the compiler worker could not be started (no threads)',
+      )
+    }
+    expect(mechanism.spawnAttempts).toBe(1)
+  })
+
+  it('rejects every run after a worker could not be started without trying again until release', async () => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.spawnError = new Error('no threads')
+    const pool = new ClangWorkerPool(mechanism)
+    const first = await pool.run(job('a.c')).catch((reason: unknown) => reason)
+    expect(first).toBeInstanceOf(WasmToolchainLoadError)
+
+    const later = await pool.run(job('b.c')).catch((reason: unknown) => reason)
+
+    expect(later).toBe(first)
+    expect(mechanism.spawnAttempts).toBe(1)
+    expect(mechanism.loads).toBe(1)
+
+    await pool.release()
+    mechanism.spawnError = null
+    mechanism.answer = succeed
+
+    await expect(pool.run(job('c.c'))).resolves.toMatchObject({ exitCode: 0 })
+    expect(mechanism.spawnAttempts).toBe(2)
+    expect(mechanism.started).toBe(1)
+    expect(mechanism.loads).toBe(1)
+  })
+
   it('reports a worker that does not load within 120 s as a toolchain load failure', async () => {
     jest.useFakeTimers()
     const mechanism = new CountingClangMechanism()

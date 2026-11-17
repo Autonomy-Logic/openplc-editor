@@ -3,24 +3,46 @@
  * @jest-environment node
  * @vitest-environment node
  */
-import { readdirSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it } from '@jest/globals'
 
-import { requireFiles, WASM_TOOLCHAIN_PACKAGE_FILES } from '../toolchain-files'
+import { checkWasmToolchainPackage, requireFiles, WASM_TOOLCHAIN_PACKAGE_FILES } from '../toolchain-files'
+import { patchYowaspLoader } from '../yowasp-loader-patch'
+import { presentOnly } from './fixtures/present-only'
 
 const repo = join(__dirname, '..', '..', '..', '..', '..')
 const installedGen = join(repo, 'node_modules', '@yowasp', 'clang', 'gen')
+const installedBundle = readFileSync(join(installedGen, 'bundle.js'), 'utf8')
 
-/** An `exists` check over a fixed set of present paths, recording what it was asked. */
-const presentOnly = (present: string[]) => {
-  const asked: string[] = []
-  const exists = (path: string): Promise<boolean> => {
-    asked.push(path)
-    return Promise.resolve(present.includes(path))
+/**
+ * A prepared package in memory: `exists` over the present paths, and `readText` answering `bundle` and recording each
+ * path it was asked for.
+ */
+class MemoryPackage {
+  readonly read: string[] = []
+  private readonly files: ReturnType<typeof presentOnly>
+
+  constructor(
+    present: string[],
+    private readonly bundle: string | Error,
+  ) {
+    this.files = presentOnly(present)
   }
-  return { asked, exists }
+
+  get asked(): string[] {
+    return this.files.asked
+  }
+
+  exists(path: string): Promise<boolean> {
+    return this.files.exists(path)
+  }
+
+  readText(path: string): Promise<string> {
+    this.read.push(path)
+    return this.bundle instanceof Error ? Promise.reject(this.bundle) : Promise.resolve(this.bundle)
+  }
 }
 
 describe('WASM_TOOLCHAIN_PACKAGE_FILES', () => {
@@ -78,5 +100,70 @@ describe('requireFiles', () => {
 
     await expect(requireFiles([], exists, 'toolchain')).resolves.toBeUndefined()
     expect(asked).toEqual([])
+  })
+})
+
+describe('checkWasmToolchainPackage', () => {
+  const fileOf = (file: string): string => '/pkg/' + file
+  const every = WASM_TOOLCHAIN_PACKAGE_FILES.map(fileOf)
+  const patched = patchYowaspLoader(installedBundle)
+
+  it('resolves for a package with every listed file and a patched bundle.js', async () => {
+    const io = new MemoryPackage(every, patched)
+
+    await expect(checkWasmToolchainPackage(fileOf, io)).resolves.toBeUndefined()
+  })
+
+  it('asks for every listed file under the package root and reads only gen/bundle.js, once', async () => {
+    const io = new MemoryPackage(every, patched)
+
+    await checkWasmToolchainPackage(fileOf, io)
+
+    expect([...io.asked].sort()).toEqual([...every].sort())
+    expect(io.read).toEqual(['/pkg/gen/bundle.js'])
+  })
+
+  it('names the first missing file in the package list and reads nothing', async () => {
+    const io = new MemoryPackage(
+      every.filter((path) => path !== '/pkg/gen/llvm.core4.wasm' && path !== '/pkg/gen/llvm-resources.tar'),
+      patched,
+    )
+
+    const error = await checkWasmToolchainPackage(fileOf, io).catch((reason: unknown) => reason)
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error instanceof Error ? error.message : '').toBe('Missing toolchain file: /pkg/gen/llvm-resources.tar')
+    expect(io.read).toEqual([])
+  })
+
+  it('reports a missing bundle.js as a missing file without reading it', async () => {
+    const io = new MemoryPackage(
+      every.filter((path) => path !== '/pkg/gen/bundle.js'),
+      patched,
+    )
+
+    await expect(checkWasmToolchainPackage(fileOf, io)).rejects.toThrow('Missing toolchain file: /pkg/gen/bundle.js')
+    expect(io.read).toEqual([])
+  })
+
+  it.each([
+    ['the installed bundle.js', installedBundle],
+    ['a bundle.js with the patched line but no change notice', patched.slice(patched.indexOf('\n') + 1)],
+  ])('refuses %s as a loader that is not patched', async (_label, bundle) => {
+    const io = new MemoryPackage(every, bundle)
+
+    const error = await checkWasmToolchainPackage(fileOf, io).catch((reason: unknown) => reason)
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error instanceof Error ? error.message : '').toBe(
+      "The toolchain's loader is not patched: /pkg/gen/bundle.js",
+    )
+  })
+
+  it('passes on the error of a bundle.js that cannot be read, unchanged', async () => {
+    const unreadable = new Error('EACCES: permission denied')
+    const io = new MemoryPackage(every, unreadable)
+
+    await expect(checkWasmToolchainPackage(fileOf, io)).rejects.toBe(unreadable)
   })
 })

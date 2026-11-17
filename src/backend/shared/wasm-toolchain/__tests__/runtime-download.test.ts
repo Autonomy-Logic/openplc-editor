@@ -3,8 +3,9 @@
  * @jest-environment node
  * @vitest-environment node
  */
-import { afterEach, describe, expect, it } from '@jest/globals'
+import { describe, expect, it } from '@jest/globals'
 
+import { DOWNLOAD_STALL_MS } from '../clang-worker-host'
 import type { WasmToolchainReadiness } from '../prepare-toolchain'
 import { prefetchFiles, startRuntimeDownload } from '../runtime-download'
 
@@ -39,6 +40,9 @@ const flushMicrotasks = async (): Promise<void> => {
   for (let i = 0; i < 20; i++) await Promise.resolve()
 }
 
+/** Resolves after `ms` of real time. */
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
 /** A promise the test settles by hand. */
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (reason: unknown) => void } {
   let resolve: (value: T) => void = () => undefined
@@ -49,10 +53,6 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reje
   })
   return { promise, resolve, reject }
 }
-
-afterEach(() => {
-  jest.useRealTimers()
-})
 
 describe('prefetchFiles', () => {
   const urls = [
@@ -102,13 +102,12 @@ describe('prefetchFiles', () => {
     )
   })
 
-  it('rejects naming the URL that stalled for 30 s by default', async () => {
-    jest.useFakeTimers()
+  it('rejects naming the URL that sent no data for the stall limit it is given, and not before', async () => {
     const open = (url: string): Promise<Response> =>
       Promise.resolve(new Response(url.endsWith('.webc') ? silentBody() : encode('ok')))
 
     let settled = false
-    const failure = prefetchFiles(urls, open)
+    const failure = prefetchFiles(urls, open, 1_000)
       .then(
         () => null,
         (reason: unknown) => reason,
@@ -116,33 +115,19 @@ describe('prefetchFiles', () => {
       .finally(() => {
         settled = true
       })
-    await jest.advanceTimersByTimeAsync(29_999)
-    await flushMicrotasks()
+    await wait(500)
     expect(settled).toBe(false)
 
-    await jest.advanceTimersByTimeAsync(1)
     const reason = await failure
 
     expect(reason).toBeInstanceOf(Error)
     expect(reason instanceof Error ? reason.message : '').toBe(
-      'Download of https://editor.test/p/x.webc stalled: no data for 30 s.',
+      'Download of https://editor.test/p/x.webc stalled: no data for 1 s.',
     )
   })
 
-  it('uses the stall limit it is given', async () => {
-    jest.useFakeTimers()
-    const open = (): Promise<Response> => Promise.resolve(new Response(silentBody()))
-
-    const failure = prefetchFiles(['https://editor.test/t/llvm.core4.wasm'], open, 5_000).then(
-      () => null,
-      (reason: unknown) => reason,
-    )
-    await jest.advanceTimersByTimeAsync(5_000)
-
-    const reason = await failure
-    expect(reason instanceof Error ? reason.message : '').toBe(
-      'Download of https://editor.test/t/llvm.core4.wasm stalled: no data for 5 s.',
-    )
+  it('stalls a download after 30 s without data by default', () => {
+    expect(DOWNLOAD_STALL_MS).toBe(30_000)
   })
 })
 

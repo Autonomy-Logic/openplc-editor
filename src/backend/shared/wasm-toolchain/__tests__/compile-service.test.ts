@@ -1,5 +1,7 @@
 import { describe, expect, it } from '@jest/globals'
 
+import type { WasmClangRunner } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
+
 import { ClangWorkerPool, JOB_DEADLINE_MS } from '../clang-worker-pool'
 import { type CachedWasmObject, compileToWasm } from '../compile-to-wasm'
 import { parseWasmCompileRequest } from '../parse-wasm-compile-request'
@@ -303,6 +305,39 @@ describe('createWasmCompileService over one clang worker', () => {
 
     mechanism.autoReady = true
     await expect(service.compile(units(2))).resolves.toMatchObject({ ok: true })
+    expect(mechanism.alive).toBe(0)
+  })
+
+  it('fails a build whose worker cannot be started once, with no per-file failure and no link, and retries next build', async () => {
+    const mechanism = new CountingClangMechanism()
+    const clang = new FakeRunner(1)
+    mechanism.answer = (job) => clang.run(job)
+    mechanism.spawnError = new Error('no threads')
+    const pool = new ClangWorkerPool(mechanism)
+    const requested: string[][] = []
+    const runner: WasmClangRunner = {
+      concurrency: pool.concurrency,
+      prepare: () => pool.prepare(),
+      run: (job) => {
+        requested.push(job.argv)
+        return pool.run(job)
+      },
+      release: () => pool.release(),
+    }
+    const service = createWasmCompileService(runner)
+    const message =
+      'The WebAssembly compiler could not be loaded: the compiler worker could not be started (no threads)'
+
+    const result = await service.compile(units(3))
+
+    expect(result).toMatchObject({ ok: false, error: message })
+    expect(result.diagnostics).toEqual([{ message, level: 'error' }])
+    expect(requested.filter((argv) => !argv.includes('-c'))).toEqual([])
+    expect(mechanism.spawnAttempts).toBe(1)
+
+    mechanism.spawnError = null
+    await expect(service.compile(units(3))).resolves.toMatchObject({ ok: true })
+    expect(mechanism.spawnAttempts).toBe(2)
     expect(mechanism.alive).toBe(0)
   })
 

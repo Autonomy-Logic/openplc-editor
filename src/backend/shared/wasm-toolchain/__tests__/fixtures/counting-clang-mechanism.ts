@@ -103,6 +103,10 @@ export class CountingClangMechanism implements ClangWorkerMechanism {
   exitMode: FakeClangExit = 'auto'
   answer: FakeClangAnswer | null = null
   holdLoads = false
+  /** The error `spawn()` throws, starting no worker; `null` lets it start one. */
+  spawnError: Error | null = null
+  /** Every `spawn()` call, the throwing ones included. */
+  spawnAttempts = 0
   private readonly heldLoads: Array<() => void> = []
 
   get started(): number {
@@ -133,6 +137,8 @@ export class CountingClangMechanism implements ClangWorkerMechanism {
   }
 
   spawn(): ClangWorkerHandle {
+    this.spawnAttempts++
+    if (this.spawnError) throw this.spawnError
     const worker = new FakeClangWorker(this)
     this.workers.push(worker)
     this.maxAlive = Math.max(this.maxAlive, this.alive)
