@@ -56,26 +56,38 @@ struct hmi_session {
     int sign_out;         /* screen code asked to sign the viewer out this frame */
     int32_t theme;
 
+    /* Panel PIN: empty = none. While locked the host draws the PIN entry instead of the screens. */
+    char pin[HMI_PIN_MAX + 1];
+    char pin_entry[HMI_PIN_MAX + 1];
+    uint32_t relock_ms, last_touch_ms;
+    int locked, pin_wrong, pin_key; /* pin_key: key pressed, 1 + index, 0 = none */
+
     /* Frame: screen_q4 = local_q4 * fk / 65536 + (fox, foy), clipped to (fcx, fcy, fcw, fch) when fclip. */
     int32_t fk, fox, foy, fcx, fcy, fcw, fch;
     int fclip, design;
 };
 
-static hmi_session_t g_default = {.fk = Q16_ONE};
+static hmi_session_t g_default; /* zeroed (.bss); hmi_core_init sets its frame scale */
 static hmi_session_t *S = &g_default;
 
 /* ---- sessions ---- */
 
 hmi_session_t *hmi_session_create(void) {
+#ifdef HMI_STATIC_MEMORY
+    return NULL;
+#else
     hmi_session_t *s = (hmi_session_t *)calloc(1, sizeof(hmi_session_t));
     if (s) s->fk = Q16_ONE;
     return s;
+#endif
 }
 
 void hmi_session_destroy(hmi_session_t *s) {
     if (!s || s == &g_default) return;
     if (S == s) S = &g_default;
+#ifndef HMI_STATIC_MEMORY
     free(s);
+#endif
 }
 
 void hmi_session_use(hmi_session_t *s) { S = s ? s : &g_default; }
@@ -83,6 +95,7 @@ void hmi_session_use(hmi_session_t *s) { S = s ? s : &g_default; }
 size_t hmi_session_size(void) { return sizeof(hmi_session_t); }
 
 void hmi_core_init(int32_t width_lu, int32_t height_lu) {
+    if (S->fk == 0) S->fk = Q16_ONE;
     S->w_lu = width_lu;
     S->h_lu = height_lu;
     S->pq_head = S->pq_tail = 0;
@@ -167,6 +180,7 @@ void hmi_frame_begin(void) {
     hmi_frame_reset();
 
     /* At most one press or release per frame, so a quick tap is seen as both; moves apply in passing. */
+    if (S->pq_head != S->pq_tail) S->last_touch_ms = S->time_ms;
     while (S->pq_head != S->pq_tail) {
         ptr_evt_t e = S->pq[S->pq_head];
         S->pq_head = (S->pq_head + 1) % PTR_QUEUE;
@@ -492,7 +506,7 @@ static int ptr_away(void) {
 
 /* Screen Q4 -> local lu through the frame, rounded toward minus infinity. */
 static int32_t to_local(int32_t screen_q4, int32_t off_q4) {
-    return sat32(floor_div(((int64_t)screen_q4 - off_q4) * Q16_ONE, (int64_t)S->fk * 16));
+    return sat32(floor_div(((int64_t)screen_q4 - off_q4) * Q16_ONE, (int64_t)(S->fk > 0 ? S->fk : Q16_ONE) * 16));
 }
 
 int32_t hmi_ptr_x(void) { return ptr_away() ? HMI_PTR_AWAY : to_local(S->px, S->fox); }
@@ -543,6 +557,13 @@ uint32_t hmi_key_next(void) {
 void hmi_elem_bounds(int32_t id, int32_t x, int32_t y, int32_t w, int32_t h) { hmi_elem_bounds_in(id, x, y, w, h, 0); }
 
 void hmi_elem_bounds_in(int32_t id, int32_t x, int32_t y, int32_t w, int32_t h, int takes_input) {
+#ifdef HMI_STATIC_MEMORY
+    if (!takes_input) return;
+    const int64_t pad = MIN_TOUCH_Q4 / 2, sx = tx(x), sy = ty(y);
+    if (sx - pad >= (int64_t)S->w_lu * 16 || sy - pad >= (int64_t)S->h_lu * 16 || sx + ts(w) + pad <= 0 ||
+        sy + ts(h) + pad <= 0)
+        return;
+#endif
     if (S->bounds_n >= HMI_BOUNDS_MAX) {
         S->status |= HMI_STATUS_BOUNDS_FULL;
         return;
@@ -565,6 +586,9 @@ void hmi_elem_bounds_in(int32_t id, int32_t x, int32_t y, int32_t w, int32_t h, 
         } else {
             S->status |= HMI_STATUS_BOUNDS_FULL;
             takes_input = 0;
+#ifdef HMI_STATIC_MEMORY
+            return;
+#endif
         }
     }
     S->bounds_input[S->bounds_n] = (uint8_t)(takes_input != 0);
@@ -650,3 +674,117 @@ int hmi_page_back(void) {
 
 void hmi_sign_out(void) { S->sign_out = 1; }
 int hmi_frame_sign_out(void) { return S->sign_out; }
+
+/* ---- panel lock ---- */
+
+static void lock_now(void) {
+    S->locked = 1;
+    S->pin_entry[0] = 0;
+    S->pin_wrong = 0;
+    S->pin_key = 0;
+}
+
+void hmi_lock_setup(const char *pin, uint32_t relock_ms) {
+    size_t n = 0;
+    while (pin && pin[n] >= '0' && pin[n] <= '9' && n < HMI_PIN_MAX) n++;
+    if (pin && pin[n] != 0) n = 0;
+    memcpy(S->pin, pin ? pin : "", n);
+    S->pin[n] = 0;
+    S->relock_ms = relock_ms;
+    S->last_touch_ms = S->time_ms;
+    if (n > 0) lock_now();
+    else S->locked = 0;
+}
+
+void hmi_lock(void) {
+    if (S->pin[0]) lock_now();
+}
+
+int hmi_lock_active(void) {
+    if (S->pin[0] && !S->locked && S->relock_ms > 0 && S->time_ms - S->last_touch_ms >= S->relock_ms) lock_now();
+    return S->locked;
+}
+
+/* PIN entry layout in logical units: key i (0..11) is 1-9, clear, 0, OK. */
+typedef struct {
+    int32_t x, y, w, h;
+} lock_rect_t;
+
+static lock_rect_t lock_key_rect(int i) {
+    const int32_t m = 8, gap = 6, top = 72;
+    int32_t kh = (S->h_lu - top - m - 3 * gap) / 4;
+    int32_t width = S->w_lu - 2 * m < 360 ? S->w_lu - 2 * m : 360;
+    int32_t kw = (width - 2 * gap) / 3;
+    int32_t x0 = (S->w_lu - (3 * kw + 2 * gap)) / 2;
+    lock_rect_t r = {x0 + (i % 3) * (kw + gap), top + (i / 3) * (kh + gap), kw, kh};
+    return r;
+}
+
+static int lock_key_at(int32_t x_q4, int32_t y_q4) {
+    for (int i = 0; i < 12; i++) {
+        lock_rect_t r = lock_key_rect(i);
+        if (x_q4 >= (int64_t)r.x * 16 && x_q4 < (int64_t)(r.x + r.w) * 16 && y_q4 >= (int64_t)r.y * 16 &&
+            y_q4 < (int64_t)(r.y + r.h) * 16)
+            return i + 1;
+    }
+    return 0;
+}
+
+static void lock_key(int i) {
+    size_t n = strlen(S->pin_entry);
+    if (i == 9) {
+        S->pin_entry[0] = 0;
+        S->pin_wrong = 0;
+    } else if (i == 11) {
+        if (n > 0 && strcmp(S->pin_entry, S->pin) == 0) {
+            S->locked = 0;
+            S->last_touch_ms = S->time_ms;
+        } else {
+            S->pin_wrong = 1;
+        }
+        S->pin_entry[0] = 0;
+    } else if (n < HMI_PIN_MAX) {
+        S->pin_entry[n] = (char)(i == 10 ? '0' : '1' + i);
+        S->pin_entry[n + 1] = 0;
+        S->pin_wrong = 0;
+    }
+}
+
+void hmi_lock_draw(void) {
+    static const char *const labels[12] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "Clear", "0", "OK"};
+    const uint32_t tok = HMI_COLOR_TOKEN;
+    if (S->pressed) S->pin_key = S->has_ptr ? lock_key_at(S->px, S->py) : 0;
+    if (S->released) {
+        int key = S->has_ptr ? lock_key_at(S->px, S->py) : 0;
+        if (key != 0 && key == S->pin_key) lock_key(key - 1);
+        S->pin_key = 0;
+    }
+    hmi_clear(tok | HMI_TOKEN_BACKGROUND);
+    if (!S->locked) return;
+    hmi_text(S->w_lu / 2, 10, "Enter PIN", -1, 16, HMI_FONT_REGULAR, HMI_ALIGN_CENTER, tok | HMI_TOKEN_TEXT);
+    lock_rect_t k0 = lock_key_rect(0), k2 = lock_key_rect(2);
+    int32_t ex = k0.x, ew = k2.x + k2.w - k0.x;
+    hmi_fill_rect(ex, 34, ew, 30, 6, tok | HMI_TOKEN_SURFACE);
+    hmi_stroke_rect(ex, 34, ew, 30, 6, 1, tok | HMI_TOKEN_BORDER);
+    if (S->pin_wrong) {
+        hmi_text_box(ex, 34, ew, 30, "Wrong PIN", -1, 14, HMI_FONT_REGULAR, HMI_ALIGN_CENTER, HMI_VALIGN_MIDDLE,
+                     tok | HMI_TOKEN_DANGER);
+    } else {
+        char stars[HMI_PIN_MAX + 1];
+        size_t n = strlen(S->pin_entry);
+        memset(stars, '*', n);
+        stars[n] = 0;
+        hmi_text_box(ex, 34, ew, 30, stars, (int)n, 20, HMI_FONT_REGULAR, HMI_ALIGN_CENTER, HMI_VALIGN_MIDDLE,
+                     tok | HMI_TOKEN_TEXT);
+    }
+    for (int i = 0; i < 12; i++) {
+        lock_rect_t r = lock_key_rect(i);
+        int ok = i == 11, held = S->down && S->pin_key == i + 1;
+        uint32_t fill = tok | (ok ? HMI_TOKEN_ACCENT : held ? HMI_TOKEN_FILL : HMI_TOKEN_SURFACE);
+        hmi_fill_rect(r.x, r.y, r.w, r.h, 6, held && ok ? hmi_alpha(fill, 80) : fill);
+        if (!ok) hmi_stroke_rect(r.x, r.y, r.w, r.h, 6, 1, tok | HMI_TOKEN_BORDER);
+        int32_t size = r.h * 45 / 100 < 20 ? r.h * 45 / 100 : 20;
+        hmi_text_box(r.x, r.y, r.w, r.h, labels[i], -1, i == 9 ? size * 3 / 4 : size, HMI_FONT_REGULAR,
+                     HMI_ALIGN_CENTER, HMI_VALIGN_MIDDLE, tok | (ok ? HMI_TOKEN_ON_ACCENT : HMI_TOKEN_TEXT));
+    }
+}

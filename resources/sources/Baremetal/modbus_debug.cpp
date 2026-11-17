@@ -589,3 +589,65 @@ void debugReadLicense(void)
         mb_frame_len = 3;   // [FC][STATUS] only
     }
 }
+
+#ifdef HMI_TEST_READOUT
+#include "hmi_baremetal.h"
+
+// PDU request:  [FC][offset:u32 BE][max:u8]
+// PDU response: [FC][STATUS][total:u32 BE][len:u8][bytes...]
+//
+// Offset 0 holds the current display list, so every chunk comes from one frame;
+// the HMI starts no new frame until the last chunk has been read.
+void hmiGetDisplayList(uint32_t offset, uint8_t max_len)
+{
+    mb_frame[1] = MB_FC_HMI_GET_DL;
+    int32_t total = offset == 0 ? hmi_bm_dl_hold() : -1;
+    int32_t room = (int32_t)MB_RESPONSE_CAPACITY - 8;
+    int32_t want = max_len < room ? (int32_t)max_len : room;
+    int32_t n = hmi_bm_dl_read(offset, &mb_frame[8], want);
+    if (n < 0)
+    {
+        mb_frame[2] = MB_DEBUG_ERROR_OUT_OF_BOUNDS;
+        mb_frame_len = 3;
+        return;
+    }
+    if (total < 0) total = 0;
+    mb_frame[2] = MB_DEBUG_SUCCESS;
+    mb_frame[3] = (uint8_t)((uint32_t)total >> 24);
+    mb_frame[4] = (uint8_t)((uint32_t)total >> 16);
+    mb_frame[5] = (uint8_t)((uint32_t)total >> 8);
+    mb_frame[6] = (uint8_t)total;
+    mb_frame[7] = (uint8_t)n;
+    mb_frame_len = (uint16_t)(8 + n);
+}
+
+// PDU request:  [FC]
+// PDU response: [FC][STATUS][n:u8][n x u32 BE]: frames drawn, bands pushed,
+// scan overruns, last logic frame (us), worst band (us), least free stack of
+// the loop task in bytes (0xFFFFFFFF where the platform cannot tell), why the
+// HMI is off (hmi_bm_off_reason_t, 0 while it runs), touch reads postponed.
+void hmiGetStats(void)
+{
+    hmi_bm_stats_t s;
+    hmi_bm_stats(&s);
+#if defined(ESP_PLATFORM)
+    const uint32_t stack_free = (uint32_t)uxTaskGetStackHighWaterMark(NULL);
+#else
+    const uint32_t stack_free = 0xFFFFFFFFu;
+#endif
+    const uint32_t words[] = {s.frames_drawn, s.bands_pushed, s.scan_overruns, s.last_logic_us, s.worst_band_us,
+                              stack_free, s.off_reason, s.touch_skips};
+    const uint8_t n = (uint8_t)(sizeof words / sizeof words[0]);
+    mb_frame[1] = MB_FC_HMI_GET_STATS;
+    mb_frame[2] = MB_DEBUG_SUCCESS;
+    mb_frame[3] = n;
+    for (uint8_t i = 0; i < n; i++)
+    {
+        mb_frame[4 + i * 4] = (uint8_t)(words[i] >> 24);
+        mb_frame[5 + i * 4] = (uint8_t)(words[i] >> 16);
+        mb_frame[6 + i * 4] = (uint8_t)(words[i] >> 8);
+        mb_frame[7 + i * 4] = (uint8_t)words[i];
+    }
+    mb_frame_len = (uint16_t)(4 + n * 4);
+}
+#endif

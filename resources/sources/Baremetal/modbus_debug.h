@@ -39,5 +39,11 @@ void rebootToBootloader(const uint8_t *magic);
 // side-effect free (unlike 0x4C, which raises the unlock prompt on the device),
 // so the editor can poll it while waiting for the user to unlock.
 void getLockState(void);
+#ifdef HMI_TEST_READOUT
+// FC 0x4E / 0x4F -- test-only HMI readout, compiled in by `openplc-cli compile
+// --hmi-test-readout`: the current display list in chunks, and the HMI task's counters.
+void hmiGetDisplayList(uint32_t offset, uint8_t max_len);
+void hmiGetStats(void);
+#endif
 
 #endif

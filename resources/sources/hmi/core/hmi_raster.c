@@ -355,23 +355,45 @@ static void draw_line(hmi_raster_ctx_t *c, int32_t x1, int32_t y1, int32_t x2, i
 /* ---- polygons: scanline fill, non-zero winding, same sample grid ---- */
 
 /* Per-column coverage differences of one pixel row, grown to the widest clip seen. */
+#ifdef HMI_STATIC_MEMORY
+/* Widest polygon row, in pixels plus one, filled without the heap; wider polygons are not drawn. */
+#ifndef HMI_RASTER_ROW_MAX
+#define HMI_RASTER_ROW_MAX 1025
+#endif
+static int16_t g_diff_static[HMI_RASTER_ROW_MAX];
+static int16_t *g_diff = g_diff_static;
+static int g_diff_cap = HMI_RASTER_ROW_MAX;
+#else
 static int16_t *g_diff;
 static int g_diff_cap;
+#endif
 
 static int16_t *diff_buffer(int n) {
     if (n > g_diff_cap) {
+#ifdef HMI_STATIC_MEMORY
+        return NULL;
+#else
         int16_t *p = (int16_t *)realloc(g_diff, sizeof(int16_t) * (size_t)n);
         if (!p) return NULL;
         g_diff = p;
         g_diff_cap = n;
+#endif
     }
     return g_diff;
 }
 
+/* Q8 coordinates are clamped to Q8_LIMIT, so every field but the running quotient fits 32 bits. */
 typedef struct {
-    int64_t tx, ty, by, uy, aux, q, rem, qs, rs;
+    int64_t q, qs;
+    int32_t tx, ty, by, uy, aux, rem, rs;
     int8_t d, sgn, live;
 } edge_t;
+
+/* Polygon scratch, static so the stack stays small: points in Q8 pixels, edges, and one sample row's crossings. */
+static int32_t g_poly_x[HMI_POLY_MAX], g_poly_y[HMI_POLY_MAX];
+static edge_t g_edges[HMI_POLY_MAX];
+static int64_t g_cross_x[HMI_POLY_MAX];
+static int8_t g_cross_d[HMI_POLY_MAX];
 
 static void fill_poly(hmi_raster_ctx_t *c, const int32_t *xs, const int32_t *ys, int n, uint32_t argb) {
     int32_t minx = xs[0], maxx = xs[0], miny = ys[0], maxy = ys[0];
@@ -388,7 +410,7 @@ static void fill_poly(hmi_raster_ctx_t *c, const int32_t *xs, const int32_t *ys,
     if (!diff) return;
     /* Edges top-down, stepped one sample row (64 Q8) at a time without a division per row:
      * x = tx + sgn * floor(aux * (py - ty) / uy), kept as quotient q and remainder rem. */
-    edge_t e[HMI_POLY_MAX];
+    edge_t *e = g_edges;
     int ne = 0;
     for (int k = 0, l = n - 1; k < n; l = k++) {
         int64_t ax = xs[l], ay = ys[l], bx = xs[k], by = ys[k];
@@ -404,19 +426,19 @@ static void fill_poly(hmi_raster_ctx_t *c, const int32_t *xs, const int32_t *ys,
             d = -1;
         }
         edge_t *E = &e[ne++];
-        E->tx = ax;
-        E->ty = ay;
-        E->by = by;
-        E->uy = by - ay;
+        E->tx = (int32_t)ax;
+        E->ty = (int32_t)ay;
+        E->by = (int32_t)by;
+        E->uy = (int32_t)(by - ay);
         E->d = d;
         E->sgn = (int8_t)(bx < ax ? -1 : 1);
-        E->aux = bx < ax ? ax - bx : bx - ax;
-        E->qs = E->aux * 64 / E->uy;
-        E->rs = E->aux * 64 % E->uy;
+        E->aux = (int32_t)(bx < ax ? ax - bx : bx - ax);
+        E->qs = (int64_t)E->aux * 64 / E->uy;
+        E->rs = (int32_t)((int64_t)E->aux * 64 % E->uy);
         E->live = 0;
     }
-    int64_t cx[HMI_POLY_MAX];
-    int8_t cd[HMI_POLY_MAX];
+    int64_t *cx = g_cross_x;
+    int8_t *cd = g_cross_d;
     for (int y = r.y0; y < r.y1; y++) {
         if (hmi_raster_expired(c)) return;
         memset(diff, 0, sizeof(diff[0]) * (size_t)(w + 1));
@@ -427,9 +449,9 @@ static void fill_poly(hmi_raster_ctx_t *c, const int32_t *xs, const int32_t *ys,
                 edge_t *E = &e[k];
                 if (py < E->ty || py >= E->by) continue;
                 if (!E->live) {
-                    int64_t num = E->aux * (py - E->ty);
+                    int64_t num = (int64_t)E->aux * (py - E->ty);
                     E->q = num / E->uy;
-                    E->rem = num % E->uy;
+                    E->rem = (int32_t)(num % E->uy);
                     E->live = 1;
                 }
                 int64_t x = E->tx + E->sgn * E->q;
@@ -629,7 +651,7 @@ static void draw_cmd(hmi_raster_ctx_t *c, uint8_t op, const uint8_t *p) {
         c->clip = c->band;
         break;
     case HMI_OP_POLY: {
-        int32_t xs[HMI_POLY_MAX], ys[HMI_POLY_MAX];
+        int32_t *xs = g_poly_x, *ys = g_poly_y;
         int n = hmi_rd_u16(p + 4);
         if (n < 3 || n > HMI_POLY_MAX) break; /* cmd_extent rejects these; repeated for the reader */
         for (int i = 0; i < n; i++) {

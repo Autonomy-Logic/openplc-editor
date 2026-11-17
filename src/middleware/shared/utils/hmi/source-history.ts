@@ -4,6 +4,8 @@
  * history is plain data, kept in the store; these functions return a new one.
  */
 
+import { lastOf } from './last-of'
+
 export interface HistoryMerge {
   /** Steps with the same key merge while each comes within `windowMs` of the previous one. */
   key: string
@@ -44,14 +46,14 @@ export function recordStep(
 
 /** The source before the last step and the history after undoing it; null when there is nothing to undo. */
 export function undoStep(history: SourceHistory, current: string): { source: string; history: SourceHistory } | null {
-  const source = history.past.at(-1)
+  const source = lastOf(history.past)
   if (source === undefined) return null
   return { source, history: { past: history.past.slice(0, -1), future: [...history.future, current], lastMerge: null } }
 }
 
 /** The source of the step undone last and the history after redoing it; null when there is nothing to redo. */
 export function redoStep(history: SourceHistory, current: string): { source: string; history: SourceHistory } | null {
-  const source = history.future.at(-1)
+  const source = lastOf(history.future)
   if (source === undefined) return null
   return { source, history: { past: [...history.past, current], future: history.future.slice(0, -1), lastMerge: null } }
 }

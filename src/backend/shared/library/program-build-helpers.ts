@@ -195,8 +195,8 @@ export type CompileLogEmit = (message: string, level: 'info' | 'error', compileE
  * bracketed-prefix click target — every consumer must funnel through
  * here so the shape stays uniform across platforms.
  *
- * Emits a plain "STruC++ compilation failed:" header first (no
- * `compileError` — it's a section break, not navigable), then one
+ * Emits `header` first (no `compileError` — it's a section break,
+ * not navigable), naming the step that failed, then one
  * event per error carrying `err.raw`.  Callers should pass through
  * the diagnostics exactly as returned by `runProgramBuildPipeline`;
  * no preprocessing is required.
@@ -204,8 +204,9 @@ export type CompileLogEmit = (message: string, level: 'info' | 'error', compileE
 export function emitCompileErrorEvents(
   errors: { formatted: string; raw: StrucppCompileError }[],
   emit: CompileLogEmit,
+  header: string,
 ): void {
-  emit('STruC++ compilation failed:', 'error')
+  emit(header, 'error')
   for (const err of errors) {
     // Falsy fallback (`||`) rather than nullish (`??`) so an
     // accidentally-empty `formatted` (defensive, the pipeline never

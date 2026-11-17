@@ -28,7 +28,7 @@ const OVERVIEW = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
     Col : HmiHorizontalStack := (Gap := 12, Padding := 16);
     Speed : HmiSlider := (Parent := 'Col', Caption := 'Speed', Value := 20.0);
     Next : HmiButton := (Parent := 'Col', Text := 'Next');
-    Box : HmiVerticalStack := (Parent := 'Col', PrefHeight := 120);
+    Box : HmiVerticalStack := (Parent := 'Col', PrefHeight := 120, GrowAuto := FALSE);
     Area : HmiDiagram := (Parent := 'Box', GrowAuto := TRUE);
     Tank1 : HmiTank := (Parent := 'Area', X := 20, Y := 10);
   END_VAR
@@ -36,7 +36,7 @@ END_FUNCTION_BLOCK
 `
 const DETAILS = `FUNCTION_BLOCK Details EXTENDS HmiScreen
   VAR
-    Body : HmiHorizontalStack := (Grow := 1, GrowAuto := FALSE);
+    Body : HmiHorizontalStack;
     Back : HmiButton := (Text := 'Back', Parent := 'Body');
   END_VAR
   IF Back.Clicked THEN HMI_Back(); END_IF;
@@ -89,7 +89,7 @@ test.describe('HMI preview mode', () => {
       const overlay = await page.getByTestId('hmi-canvas-overlay').boundingBox()
       if (!col || !overlay) throw new Error('the column is not on the canvas')
       await page.getByTestId('hmi-palette-tab-widgets').click()
-      await htmlDragOver(page, 'hmi-palette-HmiLamp', col.x - overlay.x + 40, col.y - overlay.y + col.height - 6)
+      await htmlDragOver(page, 'hmi-palette-HmiLamp', col.x - overlay.x + 40, col.y - overlay.y + col.height - 20)
       await expect(page.getByTestId('hmi-drop-target')).toContainText('Add to Col')
       await expect(page.getByTestId('hmi-drop-line')).toBeVisible()
       await page.screenshot({ path: join(F.shots, 'drop-marks.png') })

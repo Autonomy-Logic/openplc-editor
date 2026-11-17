@@ -1,5 +1,6 @@
 /**
- * Writes the HMI font table for the C tests through the real font build step.
+ * Writes the HMI font table for the C tests through the real font build step, and prints the variant's
+ * HMI_STB_ARENA_BYTES.
  * Usage: ts-node tests/hmi-core/font-table.ts <out.c> [faces] [variant]
  *   faces: "all" (default), "regular" or "none"; variant: "full" or "compact" (default).
  */
@@ -10,6 +11,7 @@ import { buildHmiFontTableSource, type HmiFontBytes } from '../../src/backend/sh
 import {
   DEFAULT_HMI_FONT_VARIANT,
   HMI_FONT_REGULAR,
+  HMI_STB_ARENA_BYTES,
   type HmiFontVariant,
   VETTED_HMI_FONTS,
 } from '../../src/backend/shared/hmi/fonts/vetted-fonts'
@@ -33,6 +35,7 @@ async function main(): Promise<void> {
     bytes: new Uint8Array(readFileSync(join(FONT_DIR, f.file))),
   }))
   writeFileSync(out, await buildHmiFontTableSource(fonts))
+  console.log(HMI_STB_ARENA_BYTES[variant])
 }
 
 main().catch((err: unknown) => {

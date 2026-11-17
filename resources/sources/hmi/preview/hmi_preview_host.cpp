@@ -190,7 +190,7 @@ HMI_PV_EXPORT("hmi_pv_bounds") const int32_t *hmi_pv_bounds(void) {
     return hmi_bounds_data();
 }
 
-/** Sets a numeric or BOOL live property; returns 0, or -1 when there is no such setter. */
+/** Sets a numeric or BOOL live property; returns 0, or -1 when there is no such setter or its screen is not shown. */
 HMI_PV_EXPORT("hmi_pv_set_num") int32_t hmi_pv_set_num(int32_t screen, int32_t setter, double value) {
     return hmi_unit_set_num(g_unit, screen, setter, value);
 }
@@ -198,7 +198,7 @@ HMI_PV_EXPORT("hmi_pv_set_num") int32_t hmi_pv_set_num(int32_t screen, int32_t s
 /** Buffer of HMI_PV_TEXT_MAX + 1 bytes the page writes a NUL-terminated text into before hmi_pv_set_str. */
 HMI_PV_EXPORT("hmi_pv_text") char *hmi_pv_text(void) { return g_text; }
 
-/** Sets a STRING live property from hmi_pv_text; returns 0, or -1 when there is no such setter. */
+/** Sets a STRING live property from hmi_pv_text; returns 0, or -1 when there is no such setter or its screen is not shown. */
 HMI_PV_EXPORT("hmi_pv_set_str") int32_t hmi_pv_set_str(int32_t screen, int32_t setter) {
     g_text[HMI_PV_TEXT_MAX] = 0;
     return hmi_unit_set_str(g_unit, screen, setter, g_text);

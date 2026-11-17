@@ -54,6 +54,12 @@ int32_t mb_pdu_request_len(const uint8_t *f, uint16_t n)
             return 8;                                   // [id][fc][magic:4][crc:2]
         case MB_FC_GET_LOCK_STATE:
             return 4;                                   // [id][fc][crc:2]
+#ifdef HMI_TEST_READOUT
+        case MB_FC_HMI_GET_DL:
+            return 9;                                   // [id][fc][off:4][max:1][crc:2]
+        case MB_FC_HMI_GET_STATS:
+            return 4;                                   // [id][fc][crc:2]
+#endif
         default:
             return -1;                                  // not one of our function codes
     }
@@ -76,6 +82,10 @@ bool mb_pdu_skips_crc(uint8_t fc)
         case MB_FC_DEBUG_GET_DEVICE_ID:
         case MB_FC_DEBUG_WRITE_LICENSE:
         case MB_FC_DEBUG_READ_LICENSE:
+#ifdef HMI_TEST_READOUT
+        case MB_FC_HMI_GET_DL:
+        case MB_FC_HMI_GET_STATS:
+#endif
             return true;
         default:
             return false;
@@ -95,7 +105,11 @@ bool mb_pdu_is_editor_fc(uint8_t fc)
     // on the Modbus server's public one. Leaving them out of the range did both
     // wrongs at once -- unreachable where they belong, reachable where they do
     // not -- which is why this ends at GET_LOCK_STATE and not at PLC_SET_STATE.
+#ifdef HMI_TEST_READOUT
+    return fc >= MB_FC_DEBUG_INFO && fc <= MB_FC_HMI_GET_STATS;
+#else
     return fc >= MB_FC_DEBUG_INFO && fc <= MB_FC_GET_LOCK_STATE;
+#endif
 }
 
 void process_mbpacket()
@@ -267,6 +281,20 @@ void process_mbpacket()
             // while it waits for the user to clear a programming lock.
             getLockState();
         break;
+
+#ifdef HMI_TEST_READOUT
+        case MB_FC_HMI_GET_DL:
+        {
+            uint32_t offset = (uint32_t)mb_frame[2] << 24 | (uint32_t)mb_frame[3] << 16 |
+                              (uint32_t)mb_frame[4] << 8 | (uint32_t)mb_frame[5];
+            hmiGetDisplayList(offset, mb_frame[6]);
+        }
+        break;
+
+        case MB_FC_HMI_GET_STATS:
+            hmiGetStats();
+        break;
+#endif
 
         default:
             exceptionResponse(fcode, MB_EX_ILLEGAL_FUNCTION);

@@ -94,6 +94,16 @@ describe('widget catalogue', () => {
     expect(widget(catalog.widgets, 'HmiLabel').series).toBeUndefined()
   })
 
+  it("starts containers, shapes, the gauge and the trend growing, from the type's own default", () => {
+    for (const name of ['HmiVerticalStack', 'HmiHorizontalStack', 'HmiDiagram', 'HmiRect', 'HmiGauge', 'HmiTrend']) {
+      const info = widget(catalog.widgets, name)
+      expect(info.typeDefaults).toEqual([{ name: 'GrowAuto', value: 'TRUE' }])
+      expect(info.properties.find((p) => p.name === 'GrowAuto')?.defaultValue).toBe('TRUE')
+    }
+    for (const name of ['HmiButton', 'HmiValue', 'HmiLamp', 'HmiTank'])
+      expect(widget(catalog.widgets, name).properties.find((p) => p.name === 'GrowAuto')?.defaultValue).toBe('FALSE')
+  })
+
   it('gives every widget the inherited properties first, with kind, group and default', () => {
     const label = widget(catalog.widgets, 'HmiLabel')
     expect(label.properties.map((p) => p.name)).toEqual([
@@ -104,8 +114,8 @@ describe('widget catalogue', () => {
       'MaxWidth',
       'MinHeight',
       'MaxHeight',
-      'Grow',
       'GrowAuto',
+      'GrowScale',
       'Floating',
       'X',
       'Y',
@@ -124,7 +134,14 @@ describe('widget catalogue', () => {
       declaredBy: 'HmiElement',
       maxLength: 64,
     })
-    expect(prop('GrowAuto')).toMatchObject({ kind: 'bool', group: 'layout', defaultValue: 'TRUE' })
+    expect(prop('GrowAuto')).toMatchObject({ kind: 'bool', group: 'layout', defaultValue: 'FALSE' })
+    expect(prop('GrowScale')).toMatchObject({
+      kind: 'number',
+      group: 'layout',
+      defaultValue: '1',
+      enabledBy: 'GrowAuto',
+    })
+    expect(label.typeDefaults).toBeUndefined()
     expect(prop('Visible')).toMatchObject({ kind: 'bool', group: 'display', defaultValue: 'TRUE' })
     expect(prop('Text')).toMatchObject({
       kind: 'string',

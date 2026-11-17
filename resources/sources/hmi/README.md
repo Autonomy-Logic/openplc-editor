@@ -15,6 +15,7 @@ and produce the same pixels on each. This folder is mirrored byte for byte in op
 | `core/hmi_raster.c` | Rasterizer, band hashes, deadlines |
 | `core/hmi_text.c` | Fonts, text metrics, glyph cache, text drawing |
 | `core/third_party/` | stb_truetype (see its README) |
+| `baremetal/` | The HMI host of the Baremetal firmware (`hmi_baremetal.c`, `.h`) and the panel driver contract a board's HAL implements (`hmi_panel.h`) |
 | `unit/` | The interface of a generated HMI unit (`hmi_unit.h`) and its preview setters (`hmi_preview.h`) |
 | `preview/` | The editor's preview host (`hmi_preview_host.cpp`): one viewer of a unit in a WebAssembly module, frames rasterized in bands with unchanged bands skipped |
 | `client/` | The Runtime v4 browser client served at `/hmi/`: the sign-in page, `hmi-client.js` (sign-in, token renewal, the `/api/hmi` viewer), socket.io-client 4.8.1 (MIT) and `hmi_client.c`, built with the rasterizer and the unit's font table into `hmi_client.wasm` at each upload |
@@ -24,7 +25,82 @@ and produce the same pixels on each. This folder is mirrored byte for byte in op
 
 Compile the five `core/*.c` files with `core/` on the include path and `-ffp-contract=off`, plus the font table the
 HMI build generates (`hmi_font_table`, from `src/backend/shared/hmi/fonts/font-table-source.ts`; only the faces the
-screens use, in the project's font variant). Text is rasterized from the TrueType outlines on every target. An optional `hmi_config.h` on the include path sets `HMI_DL_CAPACITY`, `HMI_BOUNDS_MAX` and `HMI_BOUNDS_CLIPS_MAX`.
+screens use, in the project's font variant). Text is rasterized from the TrueType outlines on every target. An optional
+`hmi_config.h` on the include path sets `HMI_DL_CAPACITY`, `HMI_BOUNDS_MAX` and `HMI_BOUNDS_CLIPS_MAX`.
+
+Microcontroller builds define `HMI_STATIC_MEMORY`: the core and the unit glue then use no heap at all, so an HMI that
+does not fit fails when the firmware links. Every buffer is static and sized by a macro, with these defaults:
+
+| Macro | Default | Holds |
+|---|---|---|
+| `HMI_DL_CAPACITY` | 16 KB (64 KB with a heap) | The display list of one frame |
+| `HMI_GLYPH_CACHE_BYTES` | 8 KB | Rasterized glyphs |
+| `HMI_GLYPH_SCRATCH_BYTES` | 8 KB | A glyph too big for the cache; bigger glyphs are not drawn, cached or not, and the build warns about text sizes that reach them |
+| `HMI_STB_ARENA_BYTES` | 24 KB | stb_truetype's memory while it rasterizes one glyph |
+| `HMI_RASTER_ROW_MAX` | 1025 | Pixels plus one of the widest polygon row; wider polygons are not drawn |
+| `HMI_BOUNDS_MAX` | 160 (512 with a heap) | Elements a frame records for touch |
+
+There, only input elements that reach the screen (with the 28 lu touch margin) are recorded: nothing but pointer
+arbitration reads bounds on a device. The glyph cache table has one slot per 64 cache bytes (32 to 256). The
+rasterizer keeps its polygon scratch static in every build, so the stack stays small.
+
+`hmi_session_create` returns NULL there (hosts use the default session), and `hmi_unit_create` hands out the one static
+program instance.
+
+On every target, a program instance (one per viewer on Runtime v4, the only one on a panel) holds one screen slot as
+large as the largest screen (`hmi_unit_slot.hpp`, generated). Only the page the viewer shows exists: `HmiMain` builds
+its screen in the slot when the page opens (elements numbered from the page's fixed first id) and destroys it when the
+viewer leaves, so the program needs the largest screen, not all of them. Screen-local state (a trend's history, a
+diagram's pan, unwritten text) restarts when a page opens again; values wired to PLC variables return on the next
+frame. Preview live edits reach only the shown screen. `unit/hmi_unit.h` includes `hmi_config.h` too when it is on the include path, so the unit glue sees the
+same macros. `HMI_ASSERT` checks internal invariants only when `HMI_DEBUG_ASSERTS` is defined (the tests in
+`tests/hmi-core` define it); product builds leave it out.
+
+## Baremetal panels
+
+A firmware build for a board whose package declares the `hmi` capability (a local panel) and a project with screens adds,
+flat under the sketch library `src/`: the five core files, the generated unit (its translation units prefixed `hmi_` so
+they never collide with the PLC program's), `hmi_unit.h`, the font table of the faces the screens draw (plus the regular
+face when the panel has a PIN), `baremetal/`, and an `hmi_config.h` generated from the capability
+(`src/backend/shared/hmi/firmware/`): `HMI_STATIC_MEMORY`, `HMI_DL_CAPACITY`, `HMI_GLYPH_CACHE_BYTES`, `HMI_BAND_BYTES`,
+`HMI_RASTER_ROW_MAX` (panel width + 1), `HMI_STB_ARENA_BYTES` of the font variant (`HMI_STB_ARENA_BYTES` in
+`fonts/vetted-fonts.ts`: 10 KB compact, 24 KB full; `tests/hmi-core` sweeps every glyph at every size against them),
+`HMI_BOUNDS_MAX` (one and a half times the 28 lu touch targets the screen holds, in steps of 16, at least 64) and
+the panel size, density, touch and color format. The fonts' licence goes
+to `HMI-FONTS-LICENSE.txt` in the build folder, not to the firmware. Without screens nothing HMI is added, and
+`Baremetal.ino` compiles the HMI out (`__has_include(<hmi_baremetal.h>)`). Arduino toolchains are gcc, so the pragma
+in `hmi_text.c` keeps fused multiply-add off there. The screens run in `loop()`; on ESP32, `Baremetal.ino` gives that
+task `HMI_BM_LOOP_STACK_BYTES` (16 KB, `hmi_baremetal.h`) instead of the core's 8 KB.
+
+A board's HAL implements `hmi_panel.h`: `hmi_panel_push_band` gets the band as RGBA and may convert it to the panel's
+format in place, so a driver needs no buffer of its own.
+
+`hmi_bm_init` (from `setup()`, before the first scan) brings the panel up, refuses a panel whose size differs from the
+one in `hmi_config.h`, creates the program instance, sets the panel PIN and relock time from the unit, and draws the
+first frame with no deadline, which measures what frames cost. `hmi_bm_task(slack)` runs from the scan loop with the
+time left until the next scan and keeps 1 ms of it free; the HMI may drop frames but never delays a scan, except a
+frame that costs more than a whole gap between scans:
+
+- A logic frame starts once the unit's frame period has passed and only when its learned cost fits; it cannot be
+  split. Frames without screen code (the PIN entry, a blank frame after a screen fault), screen frames and frames that
+  build a screen (the first one, a page change; `hmi_unit_mount_pending`) each have their own learned cost. A frame that
+  builds a screen, or a kind not measured yet, starts only at about the beginning of a gap; so does a frame whose cost
+  exceeds a whole gap, which would otherwise never run.
+- Bands whose hash did not change are neither drawn nor pushed. A band's rows start only when the learned per-row
+  raster and push costs fit; the raster gets a deadline that leaves room for the push, and rows that miss it are
+  dropped and redrawn later in half as many rows, growing back after a clean band.
+- Touch is read every 15 ms, when the learned cost of a read (pressed and released learned apart) fits; otherwise it
+  is read at the next call that has room. A release is reported at the last pressed point.
+
+PLC variables are read and written (soft write, no force) through the firmware's debugger functions
+(`openplc_debug_size`, `_read`, `_write`) at the addresses the build resolves from the program's `debug-map.json`.
+A board without a panel driver links against weak defaults and the HMI stays off.
+
+`openplc-cli compile --hmi-test-readout` (tests only) also defines `HMI_TEST_READOUT`: the firmware then answers the
+debugger function codes 0x4E (the current display list in chunks) and 0x4F (frames drawn, bands pushed, scan overruns,
+last logic frame and worst band in microseconds, the least free stack of the loop task in bytes, 0xFFFFFFFF where
+the platform cannot tell, why the HMI is off (`hmi_bm_off_reason_t`, 0 while it runs) and touch reads postponed).
+Product builds contain neither.
 
 ## Rules that keep the output identical everywhere
 
@@ -56,11 +132,16 @@ Both stacks extend the abstract `HmiStack` (gap, padding and sizing), and every 
 `Parent := '<container name>'`, and the HMI build refuses a screen that declares any other element without one. The
 screen lays its containers out top to bottom. A new screen comes with one `HmiHorizontalStack` that fills it.
 
-A container fills the room its parent gives it: across a stack every child takes the stack's full width or height,
-and along it a container with `GrowAuto` (the default) grows like `Grow := 1`. Children of a stack start from their
-measured size; the space left over goes to the children that grow, in proportion to their grow values, so two
-containers side by side get equal shares of it. A preferred size along the stack (`PrefWidth` in a vertical stack,
-`PrefHeight` in a horizontal one) keeps a container at that size, and `GrowAuto := FALSE` with `Grow` sets its share.
+Across a stack every child takes the stack's full width or height. Along it, children start from their measured size
+(or `PrefWidth`/`PrefHeight`), and the space left over goes to the children with `GrowAuto := TRUE`, in proportion to
+their `GrowScale` (1 by default), so two growing children side by side get equal shares of it. An element with
+`GrowAuto := FALSE` keeps its size and its `GrowScale` is ignored. Containers, shapes, the gauge and the trend start
+with `GrowAuto` on, every other widget with it off; resizing an element along its stack in the designer turns it off.
+
+A widget type sets its own start value for an inherited input with `{attribute 'hmi_default' := 'GrowAuto := TRUE'}`
+on the block, since a derived block cannot redeclare an input: the widget catalogue shows it as the type's default,
+and the HMI build sets it in the screen's generated `Build` on every element that leaves it out of its initializer.
+`{attribute 'hmi_enabled_by' := 'GrowAuto'}` on an input greys it out in the inspector while that BOOL is off.
 
 ## Generated unit
 
@@ -84,6 +165,15 @@ input and checks every frame against `tests/hmi-lib/golden.txt`.
 `npm run test:hmi-preview` (`tests/hmi-preview/run.ts`) builds a sample project's preview with the shared preview
 build and the in-editor WebAssembly toolchain, runs it through the preview host, and checks frames, band skipping,
 live setters, navigation, the widget-block preview and how long rebuilds take after each kind of edit.
+
+`npm run test:hmi-baremetal` (`tests/hmi-baremetal/run.mjs`) builds the core, the sample unit and the baremetal host
+with `HMI_STATIC_MEMORY` and a fake panel, clock and debugger table, and checks in simulated time that the panel shows
+the core's full render of each frame, unchanged bands are not pushed, no call runs past its slack (with a costly touch
+read and costly first frames after unlocking and on a page change), the PIN, relock and touch work, a panel of another
+size leaves the HMI off, product objects of the host and core reference no heap and carry no test readout, and a board
+without a panel driver links with the HMI off. It also builds the firmware's Modbus PDU sources natively against the
+simulator's Arduino stub and checks the framing, routing and answers of the readout codes 0x4E and 0x4F. The test
+programs are sanitized (ASan, UBSan); CI runs it in `ci-hmi-core.yml`.
 
 `npm run test:hmi-unit` (`tests/hmi-unit/run.mjs`) generates a sample project's unit, builds it with this core and a
 C host that uses only `unit/hmi_unit.h` and `unit/hmi_preview.h`, and checks its frames, writes (range clamping

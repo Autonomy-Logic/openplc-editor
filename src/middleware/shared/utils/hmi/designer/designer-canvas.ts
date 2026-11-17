@@ -3,6 +3,7 @@
  * contain others, which element is under the pointer, where a drop lands, and whether an edit can apply live.
  */
 import type { HmiPreviewBounds, HmiPreviewElementId, HmiWidgetCatalog } from '../../../ports/hmi-preview-types'
+import { lastOf } from '../last-of'
 import { descendants } from './designer-edits'
 import type { DesignerElement, DesignerModel } from './designer-model'
 import { stringLiteralValue } from './designer-model'
@@ -29,6 +30,51 @@ export const isContainerType = (catalog: HmiWidgetCatalog, type: string): boolea
 /** Whether a widget lays its children out side by side: a vertical stack or a widget that extends one. */
 export const isSideBySide = (catalog: HmiWidgetCatalog, type: string): boolean =>
   widgetIsA(catalog, type, 'HmiVerticalStack')
+
+/** An element's property as ST text: as written in its initializer, else the widget type's default. */
+export function propertyText(
+  element: DesignerElement,
+  catalog: HmiWidgetCatalog,
+  property: string,
+): string | undefined {
+  const written = element.props.find((p) => same(p.name, property))?.value
+  if (written !== undefined) return written
+  return catalog.widgets.get(upper(element.type))?.properties.find((p) => same(p.name, property))?.defaultValue
+}
+
+/** Whether a property takes effect: TRUE unless the BOOL property that enables it (`enabledBy`) is FALSE. */
+export function propertyEnabled(element: DesignerElement, catalog: HmiWidgetCatalog, property: string): boolean {
+  const info = catalog.widgets.get(upper(element.type))
+  const switchName = info?.properties.find((p) => same(p.name, property))?.enabledBy
+  if (switchName === undefined) return true
+  return (propertyText(element, catalog, switchName) ?? 'FALSE').trim().toUpperCase() === 'TRUE'
+}
+
+/** Input that makes an element take a share of its stack's leftover space. */
+const GROW_AUTO = 'GrowAuto'
+
+/**
+ * What resizing an element writes: the dragged sizes, plus GrowAuto := FALSE when the element grows along the stack
+ * it sits in (the screen's own stack runs top to bottom), so it keeps the size it was given.
+ */
+export function resizeProperties(
+  model: DesignerModel,
+  catalog: HmiWidgetCatalog,
+  element: string,
+  size: { width?: number; height?: number },
+): Array<[string, string]> {
+  const entries: Array<[string, string]> = []
+  if (size.width !== undefined) entries.push(['PrefWidth', String(size.width)])
+  if (size.height !== undefined) entries.push(['PrefHeight', String(size.height)])
+  const el = model.elements.find((e) => same(e.name, element))
+  if (!el) return entries
+  const parent = el.parent === null ? null : model.elements.find((e) => el.parent !== null && same(e.name, el.parent))
+  if (parent === undefined || (parent !== null && !widgetIsA(catalog, parent.type, 'HmiStack'))) return entries
+  const along = parent !== null && isSideBySide(catalog, parent.type) ? size.width : size.height
+  const grows = (propertyText(el, catalog, GROW_AUTO) ?? 'FALSE').trim().toUpperCase() === 'TRUE'
+  if (along !== undefined && grows) entries.push([GROW_AUTO, 'FALSE'])
+  return entries
+}
 
 /** The notice a placement outside every container gets. */
 export const OUTSIDE_CONTAINER_NOTICE = 'Place widgets inside a stack or a diagram'
@@ -155,7 +201,7 @@ export function dropIndicator(
       return b ? [b] : []
     })
   const before = target.before === null ? undefined : boxes.get(target.before.toUpperCase())
-  const last = siblings.at(-1)
+  const last = lastOf(siblings)
   const BAR = 3
   const line = before
     ? row

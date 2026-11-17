@@ -41,6 +41,11 @@ jobs:
       - name: Test the HMI unit generator
         run: node tests/hmi-unit/run.mjs --cc "gcc clang" --sanitize
 
+      # The baremetal host on a simulated panel and clock (touch, PIN, page changes, never past the slack it gets), its
+      # product build free of heap calls, and the Modbus side of the test-only readout, sanitized on gcc and clang.
+      - name: Test the HMI baremetal host
+        run: node tests/hmi-baremetal/run.mjs --cc "gcc clang" --sanitize
+
       # The editor's preview end to end with the WebAssembly toolchain: frames, band skipping, live setters, the
       # widget-block preview and rebuild times. Limits are wider than on a developer machine, where NFR03 is measured.
       - name: Test the HMI preview

@@ -23,7 +23,8 @@ export interface HmiArtefactStepInput {
 
 export type HmiArtefactStepResult = { ok: true; files: HmiArtefactFiles } | { ok: false }
 
-const isStlibArchive = (value: unknown): value is StlibArchive =>
+/** Whether a loaded library archive is a STruC++ `.stlib` archive. */
+export const isStlibArchive = (value: unknown): value is StlibArchive =>
   typeof value === 'object' &&
   value !== null &&
   'manifest' in value &&
@@ -62,3 +63,8 @@ export async function buildHmiArtefactStep(input: HmiArtefactStepInput): Promise
 export const HMI_UNSUPPORTED_RUNTIME =
   'This project has HMI screens, but the runtime on this device does not support them. ' +
   'Update the runtime to upload this project, or remove the screens.'
+
+/** Why a project with screens cannot be built for a board with no local panel. */
+export const hmiNoPanelMessage = (board: string): string =>
+  `The board "${board}" has no display, so it cannot run the project's HMI screens. ` +
+  'Remove the screens or choose a board with a panel.'

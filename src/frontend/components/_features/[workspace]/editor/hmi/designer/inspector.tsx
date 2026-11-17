@@ -23,12 +23,14 @@ import {
   momentaryOf,
   writesMain,
 } from '@root/middleware/shared/utils/hmi/designer/designer-binding'
+import { propertyEnabled } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
 import { seriesCount, stString } from '@root/middleware/shared/utils/hmi/designer/designer-edits'
 import {
   type DesignerElement,
   type DesignerModel,
   stringLiteralValue,
 } from '@root/middleware/shared/utils/hmi/designer/designer-model'
+import { lastOf } from '@root/middleware/shared/utils/hmi/last-of'
 import { useEffect, useState } from 'react'
 
 import { DesignerSelect, Field, FIELD_CLASS } from './parts'
@@ -111,7 +113,7 @@ function PropertyEditor(props: {
     }
     case 'enum': {
       const members = property.enumMembers ?? []
-      const current = written?.split('#').at(-1) ?? NONE
+      const current = (written === undefined ? undefined : lastOf(written.split('#'))) ?? NONE
       return (
         <DesignerSelect
           value={members.find((m) => same(m, current)) ?? NONE}
@@ -119,7 +121,7 @@ function PropertyEditor(props: {
           options={[
             {
               value: NONE,
-              label: `Default${property.defaultValue ? ` (${property.defaultValue.split('#').at(-1)})` : ''}`,
+              label: `Default${property.defaultValue ? ` (${lastOf(property.defaultValue.split('#'))})` : ''}`,
             },
             ...members.map((m) => ({ value: m, label: m })),
           ]}
@@ -224,17 +226,27 @@ export function PropertiesCard(props: {
         !inSeries(p.name),
     )
   const mainProperty = info?.main ? info.properties.find((p) => same(p.name, info.main?.name ?? '')) : undefined
-  const row = (p: HmiWidgetProperty) => (
-    <Field key={p.name} label={p.name} hint={`${p.type}${p.defaultValue ? ` = ${p.defaultValue}` : ''}`}>
-      <PropertyEditor
-        property={p}
-        element={element}
-        model={props.model}
-        catalog={catalog}
-        onChange={(value) => actions.setProperty(element.name, p.name, value)}
-      />
-    </Field>
-  )
+  const row = (p: HmiWidgetProperty) => {
+    const enabled = propertyEnabled(element, catalog, p.name)
+    return (
+      <Field key={p.name} label={p.name} hint={`${p.type}${p.defaultValue ? ` = ${p.defaultValue}` : ''}`}>
+        <fieldset
+          disabled={!enabled}
+          data-testid={`hmi-prop-row-${p.name}`}
+          title={enabled || !p.enabledBy ? undefined : `Takes effect when ${p.enabledBy} is on`}
+          className={cn('min-w-0', !enabled && 'opacity-50')}
+        >
+          <PropertyEditor
+            property={p}
+            element={element}
+            model={props.model}
+            catalog={catalog}
+            onChange={(value) => actions.setProperty(element.name, p.name, value)}
+          />
+        </fieldset>
+      </Field>
+    )
+  }
   const eventCode = (event: string) =>
     props.model.events.find((e) => same(e.element, element.name) && same(e.event, event))?.code ?? ''
   const momentary = info?.momentary

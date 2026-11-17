@@ -1,13 +1,14 @@
 /**
  * HMI Settings: the start screen, frame period, default theme and font; where browsers open the HMI; which roles open
- * each screen; the local panel's PIN and relock; and the project themes, edited token by token beside a live preview
- * drawn by the core.
+ * each screen; the local panel's PIN and relock, on a board that has one; and the project themes, edited token by
+ * token beside a live preview drawn by the core.
  */
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
 import { Label } from '@root/frontend/components/_atoms/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend/components/_atoms/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@root/frontend/components/_atoms/table'
 import { ToggleSwitch } from '@root/frontend/components/_atoms/toggle-switch'
+import { useTargetCapabilities } from '@root/frontend/hooks/use-target-capabilities'
 import { readyRequest } from '@root/frontend/services/hmi-code/plc-libraries'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
@@ -250,6 +251,7 @@ export function HmiSettingsEditor() {
   const applySettings = useOpenPLCStore((s) => s.hmiDesignerActions.applySettings)
   const settings = hmi?.settings
   const address = useHmiAddress()
+  const panel = useTargetCapabilities().hmi ?? null
   const screens = useMemo(() => (hmi?.screens ?? []).map((s) => s.name), [hmi?.screens])
   const [themeName, setThemeName] = useState<string | null>(null)
   const [newTheme, setNewTheme] = useState('')
@@ -357,58 +359,70 @@ export function HmiSettingsEditor() {
             )}
           </Panel>
 
-          <Panel title='Local panel'>
-            <Field label='Require a PIN' error={errors.pin}>
-              <ToggleSwitch
-                aria-label='Require a PIN'
-                checked={settings.pin.enabled || pinOpen}
-                onCheckedChange={(on) => {
-                  setPinOpen(on)
-                  if (!on) apply({ ...settings, pin: { enabled: false, value: '' } }, 'pin')
-                }}
-              />
-            </Field>
-            {(settings.pin.enabled || pinOpen) && (
-              <Field label='PIN' error={errors.pinValue}>
-                <CommitInput
-                  label='PIN'
-                  className='w-32'
-                  inputMode='numeric'
-                  placeholder='4 to 8 digits'
-                  testId='hmi-pin'
-                  value={settings.pin.value}
-                  onCommit={(value) => apply({ ...settings, pin: { enabled: true, value: value.trim() } }, 'pinValue')}
-                />
-              </Field>
-            )}
-            <Field label='Lock again'>
-              <SettingSelect
-                label='Lock again'
-                testId='hmi-relock'
-                value={settings.relock.mode}
-                options={[
-                  { value: 'never', label: 'Only at startup' },
-                  { value: 'idle', label: 'After idle minutes' },
-                ]}
-                onChange={(mode) =>
-                  apply(
-                    { ...settings, relock: mode === 'idle' ? { mode: 'idle', minutes: 10 } : { mode: 'never' } },
-                    'relock',
-                  )
-                }
-              />
-            </Field>
-            {settings.relock.mode === 'idle' && (
-              <Field label='Idle minutes' error={errors.relock}>
-                <CommitInput
-                  label='Idle minutes'
-                  className='w-24'
-                  inputMode='numeric'
-                  testId='hmi-relock-minutes'
-                  value={String(settings.relock.minutes)}
-                  onCommit={(text) => apply({ ...settings, relock: { mode: 'idle', minutes: Number(text) } }, 'relock')}
-                />
-              </Field>
+          <Panel title='Local panel' testId='hmi-local-panel'>
+            {panel === null ? (
+              <p data-testid='hmi-local-panel-none' className='text-xs text-neutral-700 dark:text-neutral-300'>
+                The selected board has no local panel.
+              </p>
+            ) : (
+              <>
+                <Field label='Require a PIN' error={errors.pin}>
+                  <ToggleSwitch
+                    aria-label='Require a PIN'
+                    checked={settings.pin.enabled || pinOpen}
+                    onCheckedChange={(on) => {
+                      setPinOpen(on)
+                      if (!on) apply({ ...settings, pin: { enabled: false, value: '' } }, 'pin')
+                    }}
+                  />
+                </Field>
+                {(settings.pin.enabled || pinOpen) && (
+                  <Field label='PIN' error={errors.pinValue}>
+                    <CommitInput
+                      label='PIN'
+                      className='w-32'
+                      inputMode='numeric'
+                      placeholder='4 to 8 digits'
+                      testId='hmi-pin'
+                      value={settings.pin.value}
+                      onCommit={(value) =>
+                        apply({ ...settings, pin: { enabled: true, value: value.trim() } }, 'pinValue')
+                      }
+                    />
+                  </Field>
+                )}
+                <Field label='Lock again'>
+                  <SettingSelect
+                    label='Lock again'
+                    testId='hmi-relock'
+                    value={settings.relock.mode}
+                    options={[
+                      { value: 'never', label: 'Only at startup' },
+                      { value: 'idle', label: 'After idle minutes' },
+                    ]}
+                    onChange={(mode) =>
+                      apply(
+                        { ...settings, relock: mode === 'idle' ? { mode: 'idle', minutes: 10 } : { mode: 'never' } },
+                        'relock',
+                      )
+                    }
+                  />
+                </Field>
+                {settings.relock.mode === 'idle' && (
+                  <Field label='Idle minutes' error={errors.relock}>
+                    <CommitInput
+                      label='Idle minutes'
+                      className='w-24'
+                      inputMode='numeric'
+                      testId='hmi-relock-minutes'
+                      value={String(settings.relock.minutes)}
+                      onCommit={(text) =>
+                        apply({ ...settings, relock: { mode: 'idle', minutes: Number(text) } }, 'relock')
+                      }
+                    />
+                  </Field>
+                )}
+              </>
             )}
           </Panel>
         </div>

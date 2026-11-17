@@ -194,6 +194,13 @@ static void wide_poly(void) {
     hmi_poly_end();
 }
 
+/* The panel's PIN entry with nothing typed, as a 320x240 panel shows it at startup. */
+static void pin_entry(void) {
+    hmi_lock_setup("1234", 0);
+    hmi_lock_draw();
+    hmi_lock_setup("", 0);
+}
+
 static const scene_t k_scenes[] = {
     {"shapes", 340, 310, 256, 0, 0, shapes},
     {"shapes_2x", 340, 310, 512, 0, 0, shapes},
@@ -209,6 +216,8 @@ static const scene_t k_scenes[] = {
     {"frames", 340, 310, 256, 0, 0, frames},
     {"extremes", 340, 220, 256, 0, 0, extremes},
     {"wide_poly_2x", 640, 400, 512, 0, 0, wide_poly},
+    {"pin_entry", 320, 240, 256, 0, 0, pin_entry},
+    {"pin_entry_2x", 320, 240, 512, 0, 0, pin_entry},
 };
 
 static uint64_t fnv64(const uint8_t *p, size_t n) {
@@ -241,6 +250,10 @@ static int write_dump(const char *dir, const char *name, const uint8_t *px, int 
     int ok = fwrite(head, 1, 8, f) == 8 && fwrite(px, 4, (size_t)w * (size_t)h, f) == (size_t)w * (size_t)h;
     return fclose(f) == 0 && ok;
 }
+
+#if defined(HMI_STATIC_MEMORY) && defined(HMI_TEST_ALLOC_FAIL)
+extern size_t hmi_test_stb_peak;
+#endif
 
 int main(int argc, char **argv) {
     const char *dump = argc > 1 ? argv[1] : NULL;
@@ -285,5 +298,8 @@ int main(int argc, char **argv) {
         free(full);
         free(banded);
     }
+#if defined(HMI_STATIC_MEMORY) && defined(HMI_TEST_ALLOC_FAIL)
+    fprintf(stderr, "stb_truetype arena peak %zu bytes\n", hmi_test_stb_peak);
+#endif
     return failed;
 }

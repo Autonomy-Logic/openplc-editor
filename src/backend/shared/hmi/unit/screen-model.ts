@@ -2,6 +2,7 @@
  * What the HMI build reads from a screen or widget block, from the STruC++ parser's syntax tree: elements declared
  * with their initializer texts, bindings in the body, references to PLC variables and where generated methods go.
  */
+import { lastOf } from '@root/middleware/shared/utils/hmi/last-of'
 import type { FunctionBlockDeclaration, Statement, VariableExpression } from 'strucpp'
 
 import { SourceText } from '../../../../middleware/shared/utils/hmi/st-source-text'
@@ -139,7 +140,7 @@ function modelOf(
     const b = bindingOf(s, text)
     return b ? [b] : []
   })
-  const lastVar = fb.varBlocks.at(-1)
+  const lastVar = lastOf(fb.varBlocks)
   const firstAfter = [...fb.methods.map((m) => m.sourceSpan), ...fb.body.map((s) => s.sourceSpan)]
     .map((span) => text.start(span))
     .sort((a, b) => a - b)[0]

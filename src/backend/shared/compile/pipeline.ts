@@ -40,6 +40,7 @@ import {
   resolveAddressProducerCapabilities,
   resolveTargetCapabilities,
 } from '../../../middleware/shared/utils/target-capabilities'
+import { resolveHmiPanel } from '../../../middleware/shared/utils/target-capabilities/hmi-panel'
 import type { BoardHalsCompileEntry } from '../firmware/build-arduino-cli-args'
 import { buildArduinoCliCompileArgs } from '../firmware/build-arduino-cli-args'
 import { isRetainConfigCapableRuntime, MIN_RETAIN_CONFIG_RUNTIME_VERSION } from '../firmware/runtime-version-gate'
@@ -49,6 +50,8 @@ import {
   describeVppRuntimeMismatch,
   isStrucppCompatibleRuntime,
 } from '../firmware/runtime-version-gate'
+import { composeHmiFirmware } from '../hmi/firmware/compose-hmi-firmware'
+import { hmiRamOverflowMessage } from '../hmi/firmware/ram-overflow'
 import { buildKnownPous, emitCompileErrorEvents } from '../library/program-build-helpers'
 import { runProgramBuildPipeline } from '../library/program-build-pipeline'
 import {
@@ -81,7 +84,7 @@ import { generateDefinesContent } from './steps/generate-defines'
 import { generateImageConf } from './steps/generate-image-conf'
 import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
-import { buildHmiArtefactStep, HMI_UNSUPPORTED_RUNTIME } from './steps/hmi-artefact'
+import { buildHmiArtefactStep, HMI_UNSUPPORTED_RUNTIME, hmiNoPanelMessage, isStlibArchive } from './steps/hmi-artefact'
 import { narrowModbusTransports, selectModbusServer } from './steps/modbus-defines'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
 
@@ -305,8 +308,12 @@ export interface RunCompilePipelineArgs {
   /** Where to tell the user how to repair a missing core when arduino-cli fails on one.
    *  Absent means no hint, for hosts that do not install cores. */
   dependencyHintSurface?: DependencyHintSurface
-  /** The project's HMI (`hmiBuildSources`), null when it has no screens. Runtime v4 builds ship it as `hmi/`. */
+  /** The project's HMI (`hmiBuildSources`), null when it has no screens. Runtime v4 builds ship it as `hmi/`; the
+   *  simulator leaves it out; any other target without an `hmi` capability refuses it before compiling. */
   hmi: HmiBuildSources | null
+  /** Compiles the HMI's test-only display-list readout (function codes 0x4E, 0x4F) into a board firmware with a
+   *  panel. Only `openplc-cli compile --hmi-test-readout` sets it. */
+  hmiTestReadout?: boolean
 }
 
 export interface RunCompilePipelineResult {
@@ -432,6 +439,7 @@ async function runCompilePipelineInner(
     editorVersion,
     dependencyHintSurface,
     hmi,
+    hmiTestReadout,
   } = args
 
   // Resolve the board's effective capabilities from `boardEntry`.
@@ -441,6 +449,10 @@ async function runCompilePipelineInner(
   // optional vpp flag) is compatible — the resolver only reads
   // those fields and treats unknowns as missing.
   const targetCapabilities = resolveTargetCapabilities(boardEntry)
+
+  if (hmi && !isRuntimeV4 && !isSimulator && !targetCapabilities.hmi) {
+    return bailError(emit, 'validate', hmiNoPanelMessage(boardTarget))
+  }
 
   // ---------------------------------------------------------------------
   // Step 0a: Size the I/O image from the project, and refuse a located
@@ -676,6 +688,7 @@ async function runCompilePipelineInner(
       emitCompileErrorEvents(
         stResult.errors.map((e) => ({ formatted: e.message, raw: e as unknown as never })),
         (msg, level, compileError) => emit({ stage: 'st', message: msg, level, compileError }),
+        'Structured Text generation failed:',
       )
     }
     return bailError(emit, 'st', 'Failed to generate Structured Text', stResult.errors)
@@ -711,8 +724,10 @@ async function runCompilePipelineInner(
     emit({ stage: 'st', message: strucppResult.splitterFallbackMessage, level: 'info' })
   }
   if (!strucppResult.success) {
-    emitCompileErrorEvents(strucppResult.errors, (msg, level, compileError) =>
-      emit({ stage: 'st', message: msg, level, compileError }),
+    emitCompileErrorEvents(
+      strucppResult.errors,
+      (msg, level, compileError) => emit({ stage: 'st', message: msg, level, compileError }),
+      'STruC++ compilation failed:',
     )
     return bailError(emit, 'strucpp', 'STruC++ compilation failed')
   }
@@ -1202,6 +1217,36 @@ async function runCompilePipelineInner(
     }
   }
 
+  const hmiPanel = isSimulator ? null : resolveHmiPanel(targetCapabilities.hmi)
+  let hmiFiles: Record<string, string> | undefined
+  let hmiDefines = ''
+  if (hmi && hmiPanel) {
+    const hmiLog = makePlatformLog(emit, 'hmi')
+    hmiLog(`Building the HMI for the board's panel (${hmi.screens.length} screen(s))...`, 'info')
+    const composed = await composeHmiFirmware({
+      sources: hmi,
+      panel: hmiPanel,
+      plcArchives: libraryArchives.filter(isStlibArchive),
+      debugMapJson,
+      md5,
+      instances: (projectData.configuration?.resource?.instances ?? []).map((inst) => ({
+        name: inst.name,
+        program: inst.program,
+      })),
+      hmiSources: await port.readHmiSources(),
+      testReadout: hmiTestReadout === true,
+    })
+    const where = (d: { file: string; line?: number }) => (d.line === undefined ? d.file : `${d.file}:${d.line}`)
+    for (const w of composed.warnings) hmiLog(`${where(w)}: ${w.message}`, 'warning')
+    if (!composed.ok) {
+      for (const e of composed.errors) hmiLog(`${where(e)}: ${e.message}`, 'error')
+      return bailError(emit, 'hmi', 'The HMI could not be built.')
+    }
+    hmiLog(`HMI built: ${composed.tags.length} PLC variable(s)`, 'info')
+    hmiFiles = composed.files
+    hmiDefines = composed.defines
+  }
+
   // Compose firmware bundle (firmware skeleton + strucpp output +
   // c_blocks header/code + defines.h + optional vpp_config.h).
   // Pure function.
@@ -1211,11 +1256,12 @@ async function runCompilePipelineInner(
   const firmwareFiles = composeFirmwareBundle({
     strucppFiles: strucppFilesMap,
     cBlocks,
-    definesH,
+    definesH: definesH + hmiDefines,
     vppConfigH,
     opcuaConfigH,
     s7commConfigH,
     firmwareSkeleton,
+    hmiFiles,
   })
 
   if (isSimulator) return compileSimulatorModule(firmwareFiles, port, emit, md5)
@@ -1250,11 +1296,14 @@ async function runCompilePipelineInner(
       emitCompileErrorEvents(
         compileResult.errors.map((e) => ({ formatted: e.message, raw: e as unknown as never })),
         (msg, level, compileError) => emit({ stage: 'arduino-compile', message: msg, level, compileError }),
+        'Arduino compilation failed:',
       )
     }
+    const output = [...compileOutput, ...(compileResult.errors ?? []).map((e) => e.message)].join('\n')
+    const hmiRam = hmiFiles ? hmiRamOverflowMessage(output) : null
+    if (hmiRam) return bailError(emit, 'arduino-compile', hmiRam, compileResult.errors)
     const failed = bailError(emit, 'arduino-compile', 'Arduino compilation failed', compileResult.errors)
     if (dependencyHintSurface) {
-      const output = [...compileOutput, ...(compileResult.errors ?? []).map((e) => e.message)].join('\n')
       if (detectsMissingArduinoCore(output)) {
         const hint = missingArduinoCoreHint({ surface: dependencyHintSurface })
         emit({ stage: 'error', message: hint, level: 'error' })

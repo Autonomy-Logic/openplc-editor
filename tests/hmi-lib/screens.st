@@ -1,5 +1,6 @@
 (* Test screens for the StandardWidgets headless frames. Build and WriteBack are written by hand the way the HMI build
-   generates them. The globals stand for the PLC variables screens are wired to. *)
+   generates them, and declarations set the type defaults (hmi_default) the build would. The globals stand for the
+   PLC variables screens are wired to. *)
 VAR_GLOBAL
   Run, PumpOn, ValveOpen, Held, GoHome : BOOL;
   Clicks, Shows, Hides, LayoutW1, LayoutW2, LayoutW3, LayoutX4 : DINT;
@@ -12,16 +13,16 @@ END_VAR
 FUNCTION_BLOCK DisplayScreen EXTENDS HmiScreen
   VAR
     Title : HmiLabel := (Text := 'Display widgets', Size := 20, Font := HMI_FONT#Bold);
-    RowA : HmiVerticalStack := (Gap := 8);
-    RowB : HmiVerticalStack := (Gap := 8);
+    RowA : HmiVerticalStack := (Gap := 8, GrowAuto := TRUE);
+    RowB : HmiVerticalStack := (Gap := 8, GrowAuto := TRUE);
     Speed1 : HmiValue := (Caption := 'Speed', Unit := 'rpm', Decimals := 0);
     LampOn : HmiLamp := (Caption := 'Running', Value := TRUE);
     LampOff : HmiLamp := (Caption := 'Fault', OnColor := COLOR.Danger);
-    Gauge1 : HmiGauge := (Caption := 'Load', MinValue := 0.0, MaxValue := 200.0);
+    Gauge1 : HmiGauge := (Caption := 'Load', MinValue := 0.0, MaxValue := 200.0, GrowAuto := TRUE);
     Tank1 : HmiTank := (Caption := 'Level', Unit := 'm', MaxValue := 10.0);
     Readout1 : HmiReadout := (Caption := 'FT-101', Unit := 'GPM');
-    Box : HmiRect := (Fill := COLOR.Accent, Radius := 4, PrefWidth := 60, PrefHeight := 40);
-    Plain : HmiLabel := (Text := 'Right', Align := HMI_ALIGN#Right, TextColor := COLOR.TextMuted, GrowAuto := FALSE, Grow := 1);
+    Box : HmiRect := (Fill := COLOR.Accent, Radius := 4, PrefWidth := 60, PrefHeight := 40, GrowAuto := TRUE);
+    Plain : HmiLabel := (Text := 'Right', Align := HMI_ALIGN#Right, TextColor := COLOR.TextMuted, GrowAuto := TRUE);
   END_VAR
   METHOD PROTECTED OVERRIDE Build : BOOL
     Attach(ADR(Title), 0);
@@ -47,8 +48,8 @@ END_FUNCTION_BLOCK
 (* Page 1: trend and vessel over time. *)
 FUNCTION_BLOCK TrendScreen EXTENDS HmiScreen
   VAR
-    Row : HmiVerticalStack := (Gap := 12, GrowAuto := FALSE, Grow := 1);
-    Trend1 : HmiTrend := (Caption := 'Level', Unit := 'm', MaxValue := 10.0, SampleMs := 80, Pens := 3, Decimals := 2, Color3 := COLOR.Orange);
+    Row : HmiVerticalStack := (Gap := 12, GrowAuto := TRUE);
+    Trend1 : HmiTrend := (Caption := 'Level', Unit := 'm', MaxValue := 10.0, SampleMs := 80, Pens := 3, Decimals := 2, Color3 := COLOR.Orange, GrowAuto := TRUE);
     Vessel1 : HmiVessel := (Caption := 'TK-1', Unit := 'm', MaxValue := 10.0, RateUnit := 'GPM', Capacity := '5000 GAL');
   END_VAR
   METHOD PROTECTED OVERRIDE Build : BOOL
@@ -103,7 +104,7 @@ END_FUNCTION_BLOCK
 (* Page 3: a process diagram, larger than the screen so it pans. *)
 FUNCTION_BLOCK DiagramScreen EXTENDS HmiScreen
   VAR
-    Plant : HmiDiagram := (DesignW := 800, DesignH := 500, MinScalePct := 100, Border := COLOR.Border, GrowAuto := FALSE, Grow := 1);
+    Plant : HmiDiagram := (DesignW := 800, DesignH := 500, MinScalePct := 100, Border := COLOR.Border, GrowAuto := TRUE);
     Tk : HmiVessel := (Caption := 'TK-1', Unit := 'm', MaxValue := 10.0, X := 40, Y := 40, PrefWidth := 100, PrefHeight := 160);
     P1 : HmiPump := (Caption := 'P-1', X := 260, Y := 230, PrefWidth := 48, PrefHeight := 48);
     V1 : HmiValve := (Caption := 'V-1', X := 420, Y := 240);
@@ -146,12 +147,12 @@ END_FUNCTION_BLOCK
 (* Page 4: stack sizing within limits, and a floating element placed by the screen's code. *)
 FUNCTION_BLOCK LayoutScreen EXTENDS HmiScreen
   VAR
-    Row : HmiVerticalStack := (Gap := 10, Padding := 6, Fill := COLOR.Surface, GrowAuto := FALSE, Grow := 1);
-    A : HmiRect := (PrefWidth := 50, GrowAuto := FALSE, Grow := 1, MaxWidth := 120);
-    B : HmiRect := (PrefWidth := 50, GrowAuto := FALSE, Grow := 1, Fill := COLOR.Accent);
-    C : HmiRect := (PrefWidth := 300, MinWidth := 80, Fill := COLOR.Warning, MaxHeight := 60);
+    Row : HmiVerticalStack := (Gap := 10, Padding := 6, Fill := COLOR.Surface, GrowAuto := TRUE);
+    A : HmiRect := (PrefWidth := 50, MaxWidth := 120, GrowAuto := TRUE);
+    B : HmiRect := (PrefWidth := 50, Fill := COLOR.Accent, GrowAuto := TRUE);
+    C : HmiRect := (PrefWidth := 300, MinWidth := 80, Fill := COLOR.Warning, MaxHeight := 60, GrowAuto := TRUE);
     Badge : HmiLabel := (Text := 'Floating', Floating := TRUE, Font := HMI_FONT#Bold);
-    Hidden : HmiRect := (Visible := FALSE, PrefWidth := 500);
+    Hidden : HmiRect := (Visible := FALSE, PrefWidth := 500, GrowAuto := TRUE);
   END_VAR
   METHOD PROTECTED OVERRIDE Build : BOOL
     Attach(ADR(Row), 0);
@@ -199,7 +200,7 @@ END_FUNCTION_BLOCK
 (* Page 6: a diagram allowed to shrink without limit, squeezed to no height, with a control inside. *)
 FUNCTION_BLOCK SqueezedScreen EXTENDS HmiScreen
   VAR
-    Plant : HmiDiagram := (MinScalePct := 0, Floating := TRUE);
+    Plant : HmiDiagram := (MinScalePct := 0, Floating := TRUE, GrowAuto := TRUE);
     Go : HmiButton := (Text := 'Go', X := 10, Y := 10);
   END_VAR
   METHOD PROTECTED OVERRIDE Build : BOOL
@@ -216,13 +217,13 @@ END_FUNCTION_BLOCK
 (* Page 7: shapes beside the rectangle, and animated widgets: fan, conveyor, pump impeller and a blinking lamp. *)
 FUNCTION_BLOCK MotionScreen EXTENDS HmiScreen
   VAR
-    Shapes : HmiVerticalStack := (Gap := 8);
-    Oval : HmiEllipse := (Fill := COLOR.Accent, PrefWidth := 80, PrefHeight := 56);
-    Tri : HmiPolygon := (Fill := COLOR.Warning, PrefWidth := 60, PrefHeight := 56);
-    Hex : HmiPolygon := (Sides := 6, Rotation := 0, Fill := COLOR.Success, PrefWidth := 60, PrefHeight := 56);
-    Star : HmiPolygon := (Sides := 5, InnerPct := 45, Fill := COLOR.Danger, BorderWidth := 0, PrefWidth := 60, PrefHeight := 56);
-    Rule : HmiLine := (Angle := 30, Thickness := 3, PrefWidth := 80, PrefHeight := 40);
-    Moving : HmiVerticalStack := (Gap := 12);
+    Shapes : HmiVerticalStack := (Gap := 8, GrowAuto := TRUE);
+    Oval : HmiEllipse := (Fill := COLOR.Accent, PrefWidth := 80, PrefHeight := 56, GrowAuto := TRUE);
+    Tri : HmiPolygon := (Fill := COLOR.Warning, PrefWidth := 60, PrefHeight := 56, GrowAuto := TRUE);
+    Hex : HmiPolygon := (Sides := 6, Rotation := 0, Fill := COLOR.Success, PrefWidth := 60, PrefHeight := 56, GrowAuto := TRUE);
+    Star : HmiPolygon := (Sides := 5, InnerPct := 45, Fill := COLOR.Danger, BorderWidth := 0, PrefWidth := 60, PrefHeight := 56, GrowAuto := TRUE);
+    Rule : HmiLine := (Angle := 30, Thickness := 3, PrefWidth := 80, PrefHeight := 40, GrowAuto := TRUE);
+    Moving : HmiVerticalStack := (Gap := 12, GrowAuto := TRUE);
     Fan1 : HmiFan := (Caption := 'FAN-1', Value := TRUE);
     Fan2 : HmiFan := (Caption := 'FAN-2', Value := TRUE, Fault := TRUE, Blades := 3);
     Pump1 : HmiPump := (Caption := 'P-2', Value := TRUE, PrefWidth := 56, PrefHeight := 56);
@@ -252,10 +253,10 @@ END_FUNCTION_BLOCK
    horizontal stack. *)
 FUNCTION_BLOCK NestedScreen EXTENDS HmiScreen
   VAR
-    Body : HmiHorizontalStack := (GrowAuto := FALSE, Grow := 1);
-    Split : HmiVerticalStack := (Gap := 12, GrowAuto := FALSE, Grow := 1);
-    Tank2 : HmiTank := (Caption := 'TK-2', Unit := 'm', MaxValue := 10.0, GrowAuto := FALSE, Grow := 1);
-    Side : HmiHorizontalStack := (Gap := 6, Padding := 6, Fill := COLOR.Surface);
+    Body : HmiHorizontalStack := (GrowAuto := TRUE);
+    Split : HmiVerticalStack := (Gap := 12, GrowAuto := TRUE);
+    Tank2 : HmiTank := (Caption := 'TK-2', Unit := 'm', MaxValue := 10.0, GrowAuto := TRUE);
+    Side : HmiHorizontalStack := (Gap := 6, Padding := 6, Fill := COLOR.Surface, GrowAuto := TRUE);
     Fill1 : HmiButton := (Text := 'Fill');
     Drain : HmiButton := (Text := 'Drain');
     Level2 : HmiValue := (Caption := 'Level', Unit := 'm', Decimals := 2);

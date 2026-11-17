@@ -95,6 +95,9 @@ export interface ComposeFirmwareBundleInput {
    *  contents should be byte-identical between repos (enforced by
    *  the Shared Surface Sync CI check). */
   firmwareSkeleton: Record<string, string>
+  /** The HMI of a board with a panel (`composeHmiFirmware`): its files by build-folder path, written last. Absent
+   *  without screens, which leaves the firmware with no HMI. */
+  hmiFiles?: Record<string, string>
 }
 
 /**
@@ -156,7 +159,7 @@ const VENDOR_FACING_CONTRACT_HEADERS = ['openplc_retain.h'] as const
  * has C/C++ POUs — otherwise the static baseline stays.
  */
 export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record<string, string> {
-  const { strucppFiles, cBlocks, definesH, vppConfigH, opcuaConfigH, s7commConfigH, firmwareSkeleton } = input
+  const { strucppFiles, cBlocks, definesH, vppConfigH, opcuaConfigH, s7commConfigH, firmwareSkeleton, hmiFiles } = input
 
   // Skeleton first (every Baremetal.ino, arduino HAL, strucpp
   // runtime header, etc.).  Subsequent overwrites replace specific
@@ -242,6 +245,8 @@ export function composeFirmwareBundle(input: ComposeFirmwareBundleInput): Record
     '#pragma once',
     '',
   ].join('\n')
+
+  if (hmiFiles) Object.assign(files, hmiFiles)
 
   return files
 }

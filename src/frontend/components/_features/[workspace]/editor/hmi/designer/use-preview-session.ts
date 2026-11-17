@@ -71,6 +71,8 @@ export function usePreviewSession({
   const session = useRef<HmiPreviewSession | null>(null)
   const requestRef = useRef(request)
   const builtRef = useRef<Built | null>(null)
+  /** Page the preview showed in its last frame; only that page's screen exists, so only it takes live edits. */
+  const pageRef = useRef(0)
   const generation = useRef(0)
   const frameBusy = useRef(false)
   const [built, setBuilt] = useState<Built | null>(null)
@@ -176,6 +178,7 @@ export function usePreviewSession({
               context.putImageData(new ImageData(new Uint8ClampedArray(rgba), width, rows), 0, y0)
             }
           }
+          pageRef.current = frame.page
           setState((s) =>
             sameBounds(s.bounds, frame.bounds) && s.page === frame.page
               ? s
@@ -208,6 +211,7 @@ export function usePreviewSession({
     const live = liveValue(value)
     if (!entry || !live) return false
     const [, setter] = entry
+    if (setter.screen !== pageRef.current) return false
     if (setter.kind === 'num' && 'number' in live) {
       void running.setNumber(setter.screen, setter.index, live.number).catch(() => undefined)
       return true

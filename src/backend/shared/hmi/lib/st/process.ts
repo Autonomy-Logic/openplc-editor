@@ -39,9 +39,6 @@ FUNCTION_BLOCK HmiPump EXTENDS HmiElement
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := 32 + CapH();
   END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
-  END_METHOD
   METHOD INTERNAL CasingR : DINT
     CasingR := MAX(MIN(Width, Height - CapH()) * 36 / 100, 1);
   END_METHOD
@@ -146,9 +143,6 @@ FUNCTION_BLOCK HmiFan EXTENDS HmiElement
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := 56 + CapH();
   END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
-  END_METHOD
   METHOD PROTECTED OVERRIDE Draw : BOOL
     VAR cx, cy, r, n, i, a : DINT; c : UDINT; END_VAR
     IF LEN(Caption) > 0 THEN
@@ -209,9 +203,6 @@ FUNCTION_BLOCK HmiConveyor EXTENDS HmiElement
   END_METHOD
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := 28 + CapH();
-  END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
   END_METHOD
   METHOD PROTECTED OVERRIDE Draw : BOOL
     VAR bt, bh, rr, x, right, tip, tail : DINT; c : UDINT; END_VAR
@@ -275,9 +266,6 @@ FUNCTION_BLOCK HmiValve EXTENDS HmiElement
     IF LEN(Caption) > 0 THEN
       NaturalHeight := NaturalHeight + 13;
     END_IF;
-  END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
   END_METHOD
   METHOD INTERNAL BodyH : DINT
     BodyH := Height;
@@ -424,9 +412,6 @@ FUNCTION_BLOCK HmiPipe EXTENDS HmiElement
   END_METHOD
   METHOD PROTECTED OVERRIDE PortCount : INT
     PortCount := 0;
-  END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
   END_METHOD
   (* Reads Path into the bends; a part that is not two numbers is skipped. *)
   METHOD PRIVATE ReadPath : BOOL

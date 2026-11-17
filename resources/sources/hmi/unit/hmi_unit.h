@@ -11,6 +11,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#if defined(__has_include)
+#if __has_include("hmi_config.h")
+#include "hmi_config.h"
+#endif
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -93,13 +99,19 @@ int hmi_tag_read(int tag, const void *variable, void *buf);
  */
 int hmi_tag_write(int tag, void *variable, const void *buf);
 
-/** Bytes one program instance needs. */
+/** Bytes one program instance needs: the program and one screen slot as large as the largest screen. */
 size_t hmi_unit_size(void);
-/** A program instance for one viewer, NULL when memory is short. */
+/**
+ * A program instance for one viewer, NULL when memory is short; with HMI_STATIC_MEMORY one static instance at a time.
+ * Only the screen it shows exists, built in the instance's own slot when shown and destroyed when left.
+ */
 void *hmi_unit_create(void);
+/** Ends an instance from hmi_unit_create. */
 void hmi_unit_destroy(void *unit);
 /** Sets the viewer's role (::hmi_role) before its first frame; screens its role is not granted stay closed. */
 void hmi_unit_set_role(void *unit, int role);
+/** Whether the next hmi_unit_frame builds a screen: the first frame, or a page change asked for in the last one. */
+bool hmi_unit_mount_pending(void *unit);
 /**
  * Runs one frame of the viewer's screens; the host brackets it with the viewer's hmi_frame_begin and end.
  * Returns false when the screen code raised an IEC fault (null reference, array bounds): in builds with
