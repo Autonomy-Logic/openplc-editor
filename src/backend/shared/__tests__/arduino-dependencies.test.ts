@@ -12,7 +12,7 @@ import {
   parseInstalledArduinoState,
   planDependencyInstall,
   planDependencyRemoval,
-  SIMULATOR_CORE,
+  STARTUP_ARDUINO_DEPENDENCIES,
 } from '../packages/arduino-dependencies'
 
 type Device = PackageManifest['devices'][number]
@@ -114,17 +114,19 @@ describe('planDependencyRemoval', () => {
     libraries: ['Ethernet', 'EthernetENC', 'P1AM', 'open62541'],
   }
 
-  it('keeps the simulator core and global libraries', () => {
+  it('removes every core no remaining package declares, the AVR core included, and keeps global libraries', () => {
     const plan = planDependencyRemoval(collectArduinoDependencies(MULTI_CORE), [], installed)
-    expect(plan.cores).toEqual(['FACTS:samd'])
-    expect(plan.cores).not.toContain(SIMULATOR_CORE)
+    expect(plan.cores).toEqual(['arduino:avr', 'FACTS:samd'])
     expect(plan.libraries).toEqual(['EthernetENC'])
     expect(GLOBAL_ARDUINO_LIBRARIES).toEqual(expect.arrayContaining(['Ethernet', 'P1AM']))
   })
 
   it('keeps what another installed package declares', () => {
     const other = collectArduinoDependencies({
-      devices: [device('p1am', { platform: 'FACTS:samd:P1AM-200' }, { extraArduinoLibraries: ['EthernetENC'] })],
+      devices: [
+        device('p1am', { platform: 'FACTS:samd:P1AM-200' }, { extraArduinoLibraries: ['EthernetENC'] }),
+        device('uno', { platform: 'arduino:avr:uno' }),
+      ],
     })
     const plan = planDependencyRemoval(collectArduinoDependencies(MULTI_CORE), [other], installed)
     expect(plan).toEqual({ cores: [], libraries: [] })
@@ -174,23 +176,15 @@ describe('detectsMissingArduinoCore', () => {
 
 describe('missingArduinoCoreHint', () => {
   it('sends the desktop user to Reinstall and the CLI user to packages install', () => {
-    expect(missingArduinoCoreHint({ simulator: false, surface: 'desktop' })).toContain(
-      'File > Board Package Manager...',
-    )
-    expect(missingArduinoCoreHint({ simulator: false, surface: 'cli' })).toContain(
-      'openplc-cli packages install <file.vpp>',
-    )
+    expect(missingArduinoCoreHint({ surface: 'desktop' })).toContain('File > Board Package Manager...')
+    expect(missingArduinoCoreHint({ surface: 'cli' })).toContain('openplc-cli packages install <file.vpp>')
   })
+})
 
-  it('names the simulator core and the repair for each surface', () => {
-    const desktop = missingArduinoCoreHint({ simulator: true, surface: 'desktop' })
-    expect(desktop).toContain(SIMULATOR_CORE)
-    expect(desktop).toContain('Start the OpenPLC Editor')
-    expect(desktop).not.toContain('Board Package Manager')
-    const cli = missingArduinoCoreHint({ simulator: true, surface: 'cli' })
-    expect(cli).toContain(SIMULATOR_CORE)
-    expect(cli).toContain('openplc-cli packages install')
-    expect(cli).not.toContain('Start the OpenPLC Editor')
+describe('STARTUP_ARDUINO_DEPENDENCIES', () => {
+  it('installs no core at startup: the simulator needs none and boards bring theirs', () => {
+    expect(STARTUP_ARDUINO_DEPENDENCIES.cores).toEqual([])
+    expect(STARTUP_ARDUINO_DEPENDENCIES.libraries).toEqual(expect.arrayContaining(['Ethernet', 'P1AM']))
   })
 })
 

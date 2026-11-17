@@ -20,6 +20,11 @@ import { GlobalArrayModal } from './elements/array-modal'
 
 type ISelectableCellProps = CellContext<PLCGlobalVariable, unknown> & { editable?: boolean }
 
+type ISelectableTypeCellProps = ISelectableCellProps & {
+  /** Skip the type-change impact analysis and the propagation to POU declarations of the same name. */
+  skipReferenceImpact?: boolean
+}
+
 const createVariableType = (
   definition: PLCVariable['type']['definition'],
   value: string,
@@ -47,7 +52,8 @@ const SelectableTypeCell = ({
   column: { id },
   table,
   editable: editableProp = true,
-}: ISelectableCellProps) => {
+  skipReferenceImpact = false,
+}: ISelectableTypeCellProps) => {
   const isEditingLocked = useIsEditingLocked()
   const editable = editableProp && !isEditingLocked
   const {
@@ -139,7 +145,7 @@ const SelectableTypeCell = ({
     table.options.meta?.updateData(index, id, { definition, value })
 
     const newType = createVariableType(definition, value)
-    if (newType) {
+    if (newType && !skipReferenceImpact) {
       propagateVariableTypeChange(variableName, newType, pous, { updateVariable })
     }
   }
@@ -153,7 +159,7 @@ const SelectableTypeCell = ({
 
     const newType = createVariableType(definition, value)
 
-    if (!newType) {
+    if (!newType || skipReferenceImpact) {
       applyTypeChange(definition, value)
       return
     }
@@ -210,11 +216,11 @@ const SelectableTypeCell = ({
           )
         })()}
       <GlobalArrayModal
-        variableName={variableName}
-        variableRow={index}
+        variableType={currentVariable.type}
         arrayModalIsOpen={arrayModalIsOpen}
         setArrayModalIsOpen={setArrayModalIsOpen}
         closeContainer={() => setPoppoverIsOpen(false)}
+        onSave={(type) => table.options.meta?.updateData(index, id, type)}
       />
       <PrimitiveDropdown.Root onOpenChange={setPoppoverIsOpen} open={poppoverIsOpen}>
         <PrimitiveDropdown.Trigger asChild>

@@ -62,8 +62,7 @@ const INOUT_SUFFIX = '_IO_'
 /**
  * Scan interval for the harness task.  Fast enough that a forced
  * input shows its effect on the next poll (the debugger polls on the
- * order of 100 ms), slow enough that the emulated ATmega2560 is not
- * spending every cycle in the scan loop.
+ * order of 100 ms).
  */
 const DEFAULT_SCAN_INTERVAL = 'T#100ms'
 
@@ -77,13 +76,6 @@ export interface LibraryDebugHarnessBlock {
   pouName: string
   /** Harness variable holding this block's single instance. */
   instanceVariable: string
-}
-
-/** One library POU the harness left out, and why. */
-export interface LibraryDebugHarnessSkip {
-  pouName: string
-  /** Sentence fragment, rendered to the console as a warning. */
-  reason: string
 }
 
 export interface LibraryDebugHarness {
@@ -110,8 +102,6 @@ export interface LibraryDebugHarness {
   taskName: string
   /** Blocks instantiated, in the order they appear in the library. */
   blocks: LibraryDebugHarnessBlock[]
-  /** POUs deliberately left out.  Empty when everything was eligible. */
-  skipped: LibraryDebugHarnessSkip[]
 }
 
 export interface ComposeLibraryDebugHarnessOptions {
@@ -142,7 +132,6 @@ export function composeLibraryDebugHarness(
 ): LibraryDebugHarness {
   const includeSet = options.include === undefined ? null : new Set(options.include.map((name) => name.toUpperCase()))
 
-  const skipped: LibraryDebugHarnessSkip[] = []
   const blocks: LibraryDebugHarnessBlock[] = []
   const variables: PLCVariable[] = []
   const statements: string[] = []
@@ -159,19 +148,6 @@ export function composeLibraryDebugHarness(
       continue
     }
     if (includeSet !== null && !includeSet.has(pou.name.toUpperCase())) continue
-
-    // The AVR simulator ships no Python interpreter.  Preprocessing
-    // for a simulator target lowers a Python POU to a `first_run := 0;`
-    // no-op, so instantiating one would put a block in the debug tree
-    // that looks live and never computes anything — worse than leaving
-    // it out and saying so.
-    if (pou.body.language === 'python') {
-      skipped.push({
-        pouName: pou.name,
-        reason: 'Python blocks cannot run on the simulator, so this block is not in the harness.',
-      })
-      continue
-    }
 
     const instanceVariable = uniqueName(`${pou.name.toUpperCase()}${INSTANCE_SUFFIX}`, taken)
     variables.push(harnessVariable(instanceVariable, { definition: 'derived', value: pou.name }))
@@ -244,7 +220,6 @@ export function composeLibraryDebugHarness(
     instanceName: HARNESS_INSTANCE_NAME,
     taskName: HARNESS_TASK_NAME,
     blocks,
-    skipped,
   }
 }
 

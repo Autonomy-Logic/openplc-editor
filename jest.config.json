@@ -44,6 +44,7 @@
     "src/backend/shared/print/__tests__/fixtures/",
     "src/backend/shared/ethercat/__tests__/fixtures/",
     "src/backend/shared/wasm-toolchain/__tests__/fixtures/",
+    "src/backend/shared/simulator/__tests__/fixtures/",
     "src/backend/editor/wasm-toolchain/__tests__/fixtures/"
   ],
   "transformIgnorePatterns": [

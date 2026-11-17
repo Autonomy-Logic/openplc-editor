@@ -1,11 +1,11 @@
 /**
  * CompilerPort — Abstracts the PLC compilation pipeline.
  *
- * Editor adapter: Delegates to main process via IPC (local tools: STruC++, arduino-cli).
- * Web adapter:    Delegates to remote API at compile.getedge.me (callGenerateSt, callCompileSt, etc.).
+ * Editor adapter: Delegates to main process via IPC (local tools: STruC++, arduino-cli, the WebAssembly toolchain).
+ * Web adapter:    Runs the shared pipeline in the browser (the WebAssembly toolchain for the simulator, WebRTC
+ *                 for Runtime v4 uploads).
  *
  * The UI only knows "compile this project" and receives progress events.
- * The adapter decides whether to call local binaries or remote HTTP endpoints.
  *
  * ## Editor IPC methods replaced:
  *   - window.bridge.runCompileProgram()

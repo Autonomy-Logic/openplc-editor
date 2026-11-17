@@ -915,6 +915,14 @@ const rendererProcessBridge = {
   simulatorLoadFirmware: (hexPath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('simulator:load-firmware', hexPath),
   simulatorStop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('simulator:stop'),
+  simulatorPreparePython: (count: number): Promise<void> => ipcRenderer.invoke('simulator:prepare-python', count),
+  onSimulatorLog: (callback: (line: string, stream: 'stdout' | 'stderr') => void) => {
+    const listener = (_event: IpcRendererEvent, line: unknown, stream: unknown) => {
+      if (typeof line === 'string' && (stream === 'stdout' || stream === 'stderr')) callback(line, stream)
+    }
+    ipcRenderer.on('simulator:log', listener)
+    return () => ipcRenderer.removeListener('simulator:log', listener)
+  },
   simulatorIsRunning: (): Promise<boolean> => ipcRenderer.invoke('simulator:is-running'),
   onSimulatorStopped: (callback: () => void) => {
     const listener = () => callback()

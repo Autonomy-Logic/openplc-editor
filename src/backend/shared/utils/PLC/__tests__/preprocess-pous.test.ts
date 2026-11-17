@@ -109,15 +109,26 @@ describe('preprocessPous — ST/IL passthrough', () => {
 // Python processing
 // ---------------------------------------------------------------------------
 describe('preprocessPous — Python', () => {
-  it('replaces Python POUs with ST stubs in simulator mode', () => {
+  it('runs Python POUs in simulator mode through the stdio exchange, with the same stub', () => {
     const project = makeProjectData([makePythonPou('PyProg', 'print("hello")')])
     const logger = collectLog()
     const { projectData, validationFailed } = preprocessPous(project, true, logger.log)
 
     expect(validationFailed).toBe(false)
     expect(projectData.pous[0].body.language).toBe('st')
-    expect(projectData.pous[0].body.value).toBe('first_run := 0;')
-    expect(logger.messages.some((m) => m.includes('empty stubs for simulator'))).toBe(true)
+    const body = projectData.pous[0].body.value as string
+    expect(body).toContain('python_block_loader(')
+    expect(body).toContain('_sim_stdin.readline()')
+    expect(body).not.toContain('shared_memory.SharedMemory')
+    expect(logger.messages.some((m) => m.includes('Successfully processed'))).toBe(true)
+  })
+
+  it('keeps the shared-memory transport for runtime targets', () => {
+    const project = makeProjectData([makePythonPou('PyProg', 'x = 1')])
+    const { projectData } = preprocessPous(project, false, collectLog().log)
+    const body = projectData.pous[0].body.value as string
+    expect(body).toContain('shared_memory.SharedMemory')
+    expect(body).not.toContain('_sim_stdin')
   })
 
   it('processes Python POUs with full pipeline in non-simulator mode', () => {
@@ -170,8 +181,7 @@ describe('preprocessPous — Python', () => {
     // ST POU should pass through the Python simulator map unchanged
     expect(projectData.pous[0].body.language).toBe('st')
     expect(projectData.pous[0].body.value).toBe('x := 1;')
-    // Python POU should be stubbed
-    expect(projectData.pous[1].body.value).toBe('first_run := 0;')
+    expect(projectData.pous[1].body.value).toContain('python_block_loader(')
   })
 
   it('logs each Python POU found', () => {
