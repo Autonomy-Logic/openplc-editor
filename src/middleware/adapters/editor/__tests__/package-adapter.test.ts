@@ -272,4 +272,24 @@ describe('createEditorPackageAdapter', () => {
       expect(cb).not.toHaveBeenCalled()
     })
   })
+
+  describe('target vPLC load state', () => {
+    it('is always idle', () => {
+      expect(adapter.getTargetLoadState()).toEqual({ status: 'idle' })
+    })
+
+    it('never announces a load state change, even across a retry', async () => {
+      const cb = jest.fn()
+      const off = adapter.onTargetLoadStateChanged(cb)
+      await adapter.retryTargetLoad()
+      off()
+      expect(cb).not.toHaveBeenCalled()
+    })
+
+    it('resolves a retry without touching the installed packages', async () => {
+      await expect(adapter.retryTargetLoad()).resolves.toBeUndefined()
+      expect(window.bridge.listInstalledPackages).not.toHaveBeenCalled()
+      expect(adapter.getTargetLoadState()).toEqual({ status: 'idle' })
+    })
+  })
 })
