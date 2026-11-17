@@ -12,6 +12,7 @@ import {
   isRuntimeFileCacheName,
   isStoredRuntimeFile,
   parseRuntimeFileCacheRef,
+  RUNTIME_FILE_RELOAD_MARKER,
   type RuntimeFileCacheRef,
   runtimeFileCacheName,
   type RuntimeFileSet,
@@ -511,14 +512,24 @@ describe('RuntimeFileCache without a usable store', () => {
 })
 
 describe('RuntimeFileCache discard', () => {
-  it('deletes the cache of the set and no other', async () => {
+  it('replaces the cache of the set with one holding only the reload marker, and touches no other', async () => {
     const stores = new MemoryRuntimeFileStores()
     stores.seed(TOOLCHAIN_CACHE, { [CORE]: 'broken core' })
     stores.seed(PYTHON_CACHE, { [PACKAGE]: 'package' })
 
     await createRuntimeFileCache(stores, server().open).discard(toolchainSet)
 
-    expect(stores.names()).toEqual([PYTHON_CACHE])
+    expect(stores.deleted).toEqual([TOOLCHAIN_CACHE])
+    expect(stores.urlsIn(TOOLCHAIN_CACHE)).toEqual([RUNTIME_FILE_RELOAD_MARKER])
+    expect(stores.urlsIn(PYTHON_CACHE)).toEqual([PACKAGE])
+  })
+
+  it('resolves when writing the reload marker rejects', async () => {
+    const stores = new MemoryRuntimeFileStores()
+    stores.seed(TOOLCHAIN_CACHE, { [CORE]: 'broken core' })
+    stores.failures.put = new Error('storage error')
+
+    await expect(createRuntimeFileCache(stores, server().open).discard(toolchainSet)).resolves.toBeUndefined()
   })
 
   it('resolves without a store', async () => {
@@ -763,5 +774,140 @@ describe('createCacheFirstFetch HTTP cache first', () => {
     expect(calls[0][1]).toBeUndefined()
     expect(stores.opened).toEqual([])
     expect(stores.puts).toEqual([])
+  })
+})
+
+describe('RuntimeFileCache reload after a discard', () => {
+  it('downloads every file of the set with the reload transport on the next store, stores them and drops the marker', async () => {
+    const stores = new MemoryRuntimeFileStores()
+    stores.seed(TOOLCHAIN_CACHE, { [CORE]: 'broken core' })
+    const served = server()
+    const reloaded = server()
+    const cache = createRuntimeFileCache(stores, served.open, { reload: reloaded.open })
+
+    await cache.discard(toolchainSet)
+    await expect(cache.store(toolchainSet)).resolves.toBeUndefined()
+
+    expect(served.opened).toEqual([])
+    expect(sorted(reloaded.opened)).toEqual(sorted(toolchainSet.urls))
+    expect(stores.urlsIn(TOOLCHAIN_CACHE)).toEqual(sorted(STORED_TOOLCHAIN))
+    expect(stores.textOf(TOOLCHAIN_CACHE, CORE)).toBe(servedText(CORE))
+  })
+
+  it('goes back to the default transport once a reloaded store has completed', async () => {
+    const stores = new MemoryRuntimeFileStores()
+    const served = server()
+    const reloaded = server()
+    const cache = createRuntimeFileCache(stores, served.open, { reload: reloaded.open })
+
+    await cache.discard(toolchainSet)
+    await cache.store(toolchainSet)
+    const afterFirst = reloaded.opened.length
+    await cache.store(toolchainSet)
+
+    expect(reloaded.opened).toHaveLength(afterFirst)
+    expect(served.opened).toEqual([BUNDLE])
+  })
+
+  it('reloads on the next page load when an earlier page left the marker', async () => {
+    const stores = new MemoryRuntimeFileStores()
+    stores.seed(PYTHON_CACHE, { [PACKAGE]: 'broken package' })
+    await createRuntimeFileCache(stores, server().open).discard(pythonSet)
+    const served = server()
+    const reloaded = server()
+
+    await createRuntimeFileCache(stores, served.open, { reload: reloaded.open }).store(pythonSet)
+
+    expect(served.opened).toEqual([])
+    expect(sorted(reloaded.opened)).toEqual(sorted(pythonSet.urls))
+    expect(stores.urlsIn(PYTHON_CACHE)).toEqual(sorted(STORED_PYTHON))
+  })
+
+  it('reads the set with the reload transport once after a discard without a store', async () => {
+    const served = server()
+    const reloaded = server()
+    const cache = createRuntimeFileCache(null, served.open, { reload: reloaded.open })
+
+    await cache.discard(toolchainSet)
+    await cache.store(toolchainSet)
+    await cache.store(toolchainSet)
+
+    expect(sorted(reloaded.opened)).toEqual(sorted(toolchainSet.urls))
+    expect(sorted(served.opened)).toEqual(sorted(toolchainSet.urls))
+  })
+
+  it('keeps the marker and the reload when the reloaded store fails', async () => {
+    const stores = new MemoryRuntimeFileStores()
+    const reloaded = server((url) => (url === CORE ? new Response('missing', { status: 404 }) : undefined))
+    const cache = createRuntimeFileCache(stores, server().open, { reload: reloaded.open })
+
+    await cache.discard(toolchainSet)
+    await expect(cache.store(toolchainSet)).rejects.toThrow(CORE)
+
+    expect(stores.urlsIn(TOOLCHAIN_CACHE)).toContain(RUNTIME_FILE_RELOAD_MARKER)
+    expect(cache.ref(toolchainSet).reload).toBe(true)
+  })
+
+  it('marks the reference for reload from a discard until a store completes', async () => {
+    const cache = createRuntimeFileCache(new MemoryRuntimeFileStores(), server().open, { reload: server().open })
+
+    await cache.discard(toolchainSet)
+    const pending = cache.ref(toolchainSet)
+    await cache.store(toolchainSet)
+
+    expect(pending).toEqual({ name: TOOLCHAIN_CACHE, urls: STORED_TOOLCHAIN, reload: true })
+    expect(cache.ref(toolchainSet)).toEqual({ name: TOOLCHAIN_CACHE, urls: STORED_TOOLCHAIN })
+    expect(cache.ref(pythonSet)).toEqual({ name: PYTHON_CACHE, urls: STORED_PYTHON })
+  })
+
+  it('marks the reference for reload once a store has found the marker of an earlier page', async () => {
+    const stores = new MemoryRuntimeFileStores()
+    await createRuntimeFileCache(stores, server().open).discard(pythonSet)
+    const stalled = server((url, signal) =>
+      url === PACKAGE ? basicResponse(silentBody(signal), { status: 200, headers: {} }) : undefined,
+    )
+    const cache = createRuntimeFileCache(stores, server().open, { reload: stalled.open, stallMs: 60_000 })
+
+    void cache.store(pythonSet).catch(() => undefined)
+    for (let turn = 0; turn < 20 && !stalled.opened.includes(PACKAGE); turn++) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    expect(cache.ref(pythonSet).reload).toBe(true)
+  })
+
+  it('reads the reload flag of a reference, and only a true one', () => {
+    expect(parseRuntimeFileCacheRef({ name: TOOLCHAIN_CACHE, urls: [CORE], reload: true })).toEqual({
+      name: TOOLCHAIN_CACHE,
+      urls: [CORE],
+      reload: true,
+    })
+    expect(parseRuntimeFileCacheRef({ name: TOOLCHAIN_CACHE, urls: [CORE], reload: 'yes' })).toEqual({
+      name: TOOLCHAIN_CACHE,
+      urls: [CORE],
+    })
+  })
+})
+
+describe('createCacheFirstFetch with a reload reference', () => {
+  const reloadRef: RuntimeFileCacheRef = { ...toolchainRef, reload: true }
+
+  it('fetches a listed URL from the network with cache reload, without the probe or the store', async () => {
+    const { network, calls } = recordingNetwork(() => new Response('from the HTTP cache'))
+    const stores = storesWithCore()
+
+    const response = await createCacheFirstFetch(stores, reloadRef, network)(CORE, { headers: { 'x-test': '1' } })
+
+    expect(await response.text()).toBe('from network')
+    expect(calls).toStrictEqual([[CORE, { headers: { 'x-test': '1' }, cache: 'reload' }]])
+    expect(stores.opened).toEqual([])
+  })
+
+  it('fetches an unlisted URL unchanged', async () => {
+    const { network, calls } = recordingNetwork()
+
+    await createCacheFirstFetch(storesWithCore(), reloadRef, network)(BUNDLE)
+
+    expect(calls).toStrictEqual([[BUNDLE, undefined]])
   })
 })

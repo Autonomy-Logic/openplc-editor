@@ -102,7 +102,7 @@ test('a C++ block that does not compile: Play shows the error, starts no simulat
   await page.getByRole('tab', { name: 'Console' }).click()
   await waitForText(page, /Compilation failed in \d+ of \d+ file\(s\):/, {
     timeout: 90000,
-    failure: /Failed to start simulator|Something went wrong|Simulator is running/,
+    failure: /could not be loaded|Failed to start simulator|Something went wrong|Simulator is running/,
   })
   const atFailure = await workerThreads(app)
   expect(countOf(atFailure.live, 'clang-worker.js')).toBe(0)

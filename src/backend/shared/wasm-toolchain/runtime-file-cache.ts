@@ -12,11 +12,15 @@ export interface RuntimeFileSet {
   urls: readonly string[]
 }
 
-/** What a worker needs to read a set from the store. */
+/** What a worker needs to read a set from the store; `reload` sends its files past every cache to the network. */
 export interface RuntimeFileCacheRef {
   name: string
   urls: string[]
+  reload?: true
 }
+
+/** The entry that marks a set whose next download must skip the HTTP cache and the store. */
+export const RUNTIME_FILE_RELOAD_MARKER = 'https://openplc-runtime-files.invalid/reload'
 
 const FOLDER = /^([a-z][a-z0-9]*(?:-[a-z][a-z0-9]*)*)-[0-9a-f]{12}$/
 
@@ -70,7 +74,7 @@ export function parseRuntimeFileCacheRef(value: unknown): RuntimeFileCacheRef | 
     if (typeof url !== 'string') return null
     copy.push(url)
   }
-  return { name, urls: copy }
+  return Reflect.get(value, 'reload') === true ? { name, urls: copy, reload: true } : { name, urls: copy }
 }
 
 /** The media type of a response: its `Content-Type` before any `;`, trimmed and lowercased, or `none`. */
@@ -99,9 +103,15 @@ export interface RuntimeFileCache {
    * store it behaves like `prefetchFiles`. Rejects with today's download texts or an admission text.
    */
   store(set: RuntimeFileSet): Promise<void>
-  /** The reference a worker's `init` message carries for this set (only the stored URLs). */
+  /**
+   * The reference a worker's `init` message carries for this set (only the stored URLs), marked `reload` from a
+   * `discard` until a `store` of the set completes.
+   */
   ref(set: RuntimeFileSet): RuntimeFileCacheRef
-  /** Deletes the set's cache, so the next `store` downloads it again; never rejects. */
+  /**
+   * Replaces the set's cache with one holding only the reload marker, so the next `store`, on this page or a later one,
+   * downloads every file of the set past the HTTP cache; never rejects.
+   */
   discard(set: RuntimeFileSet): Promise<void>
 }
 
@@ -118,10 +128,12 @@ interface OpenedSet {
 class StoringRuntimeFileCache implements RuntimeFileCache {
   private queue: Promise<void> = Promise.resolve()
   private storing = true
+  private readonly reloading = new Set<string>()
 
   constructor(
     private readonly stores: RuntimeFileStores | null,
     private readonly open: OpenDownload,
+    private readonly reload: OpenDownload,
     private readonly stallMs: number,
   ) {}
 
@@ -130,25 +142,33 @@ class StoringRuntimeFileCache implements RuntimeFileCache {
     const stored = set.urls.filter(isStoredRuntimeFile)
     const others = set.urls.filter((url) => !isStoredRuntimeFile(url))
     const stores = this.stores
+    if (stores !== null && (await hasReloadMarker(stores, name))) this.reloading.add(set.folder)
+    const reloading = this.reloading.has(set.folder)
+    const open = reloading ? this.reload : this.open
     if (stores === null) {
-      await prefetchFiles([...set.urls], this.open, this.stallMs)
-      return
+      await prefetchFiles([...set.urls], open, this.stallMs)
+    } else {
+      await Promise.all([
+        prefetchFiles(others, open, this.stallMs),
+        this.enqueue(() => this.writeSet(stores, name, folderKind(set.folder), stored, open)),
+      ])
+      if (reloading) await dropReloadMarker(stores, name)
     }
-    await Promise.all([
-      prefetchFiles(others, this.open, this.stallMs),
-      this.enqueue(() => this.writeSet(stores, name, folderKind(set.folder), stored)),
-    ])
+    this.reloading.delete(set.folder)
   }
 
   ref(set: RuntimeFileSet): RuntimeFileCacheRef {
-    return { name: runtimeFileCacheName(set.folder), urls: set.urls.filter(isStoredRuntimeFile) }
+    const ref = { name: runtimeFileCacheName(set.folder), urls: set.urls.filter(isStoredRuntimeFile) }
+    return this.reloading.has(set.folder) ? { ...ref, reload: true } : ref
   }
 
   async discard(set: RuntimeFileSet): Promise<void> {
     const name = runtimeFileCacheName(set.folder)
+    this.reloading.add(set.folder)
     if (this.stores === null) return
     try {
       await this.stores.delete(name)
+      await (await this.stores.open(name)).put(RUNTIME_FILE_RELOAD_MARKER, new Response(null))
     } catch {
       return
     }
@@ -162,18 +182,24 @@ class StoringRuntimeFileCache implements RuntimeFileCache {
   }
 
   /** Stores the missing files of one set, one at a time; reads them without storing when the store cannot be used. */
-  private async writeSet(stores: RuntimeFileStores, name: string, kind: string, urls: string[]): Promise<void> {
+  private async writeSet(
+    stores: RuntimeFileStores,
+    name: string,
+    kind: string,
+    urls: string[],
+    open: OpenDownload,
+  ): Promise<void> {
     const opened = this.storing ? await this.openSet(stores, name, kind, urls) : null
     if (opened === null) {
-      await prefetchFiles(urls, this.open, this.stallMs)
+      await prefetchFiles(urls, open, this.stallMs)
       return
     }
     for (const [index, url] of opened.missing.entries()) {
       if (!this.storing) {
-        await prefetchFiles(opened.missing.slice(index), this.open, this.stallMs)
+        await prefetchFiles(opened.missing.slice(index), open, this.stallMs)
         return
       }
-      await this.writeFile(opened.cache, url)
+      await this.writeFile(opened.cache, url, open)
     }
   }
 
@@ -204,10 +230,10 @@ class StoringRuntimeFileCache implements RuntimeFileCache {
    * Downloads one file and stores the unmodified response once it is admitted, while its clone is read to the end
    * under the stall limit. A failed write stops storing and still counts the file as downloaded.
    */
-  private async writeFile(cache: RuntimeFileStore, url: string): Promise<void> {
+  private async writeFile(cache: RuntimeFileStore, url: string, open: OpenDownload): Promise<void> {
     const pending: { put: Promise<void> | null } = { put: null }
     const openAndPut: OpenDownload = async (target, signal) => {
-      const response = await this.open(target, signal)
+      const response = await open(target, signal)
       const refusal = admissionRefusal(target, response)
       if (refusal !== null) {
         void response.body?.cancel().catch(ignore)
@@ -231,18 +257,38 @@ class StoringRuntimeFileCache implements RuntimeFileCache {
   }
 }
 
+/** Whether the cache `name` holds the reload marker; `false` on a store error. */
+async function hasReloadMarker(stores: RuntimeFileStores, name: string): Promise<boolean> {
+  try {
+    if (!(await stores.keys()).includes(name)) return false
+    return (await (await stores.open(name)).match(RUNTIME_FILE_RELOAD_MARKER)) !== undefined
+  } catch {
+    return false
+  }
+}
+
+/** Deletes the reload marker from the cache `name`; a store error is ignored. */
+async function dropReloadMarker(stores: RuntimeFileStores, name: string): Promise<void> {
+  try {
+    await (await stores.open(name)).delete(RUNTIME_FILE_RELOAD_MARKER)
+  } catch {
+    return
+  }
+}
+
 /**
  * The page's runtime file store over Cache Storage.
  * @param stores The origin's Cache Storage, or `null` where there is none.
  * @param open The platform's transport, in its default cache mode.
- * @param options `stallMs`: how long one download may receive no bytes before it fails.
+ * @param options `stallMs`: how long one download may receive no bytes before it fails. `reload`: the transport that
+ * skips the HTTP cache and refreshes it, used for a set after a discard; `open` when not given.
  */
 export function createRuntimeFileCache(
   stores: RuntimeFileStores | null,
   open: OpenDownload,
-  options: { stallMs?: number } = {},
+  options: { stallMs?: number; reload?: OpenDownload } = {},
 ): RuntimeFileCache {
-  return new StoringRuntimeFileCache(stores, open, options.stallMs ?? DOWNLOAD_STALL_MS)
+  return new StoringRuntimeFileCache(stores, open, options.reload ?? open, options.stallMs ?? DOWNLOAD_STALL_MS)
 }
 
 /** Whether a string parses as an absolute URL. */
@@ -285,8 +331,8 @@ async function storedResponse(stores: RuntimeFileStores, name: string, href: str
 
 /**
  * A `fetch` for a worker: a GET request for one of `ref.urls` is answered from the HTTP cache when it holds the file,
- * otherwise from the store when the entry is there; a miss, any other URL, a missing store or a store error goes to
- * `network` unchanged.
+ * otherwise from the store when the entry is there; with `ref.reload` it goes to `network` with `cache: 'reload'`
+ * instead. A miss, any other URL, a missing store or a store error goes to `network` unchanged.
  */
 export function createCacheFirstFetch(
   stores: RuntimeFileStores | null,
@@ -296,6 +342,7 @@ export function createCacheFirstFetch(
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const href = ref === null ? null : getHref(input, init)
     if (ref !== null && href !== null && ref.urls.includes(href)) {
+      if (ref.reload) return network(input, { ...init, cache: 'reload' })
       const hit =
         (await httpCachedResponse(network, href)) ?? (stores && (await storedResponse(stores, ref.name, href)))
       if (hit) return hit

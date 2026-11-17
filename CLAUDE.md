@@ -452,10 +452,10 @@ that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its r
   `The WebAssembly compiler could not be loaded: <reason>`. Once a worker has loaded, one that fails or runs a job past
   120 s is terminated and the job it ran fails with `The compiler worker stopped (<reason>).` On the web, a worker that
   fails before it reports ready (not one past the 120 s load deadline) also has the toolchain's stored files deleted,
-  so the next build downloads them again.
+  so the next build downloads them again, past the HTTP cache (`cache: 'reload'`).
 - **Web store:** `runtime-file-cache.ts` (`src/backend/shared/wasm-toolchain/`) is the web's Cache Storage store of the
   runtime files and the workers' cache-first `fetch`; its worker `fetch` tries the HTTP cache, then the store, then
-  the network. It ships in the shared surface but the desktop and the CLI do not use it (their files stay on disk).
+  the network. After a load failure deletes a set's stored files, its next download skips both (`cache: 'reload'`). It ships in the shared surface but the desktop and the CLI do not use it (their files stay on disk).
 
 - **Desktop:** one worker thread (`src/backend/editor/wasm-toolchain/`); the worker is its own webpack
   entry, `clang-worker.js`, built next to `main.js`. The renderer reaches it over the `wasm-toolchain:compile` IPC
@@ -514,7 +514,7 @@ kills them all), the thread protocol and the Wasmer runtime. The module starts a
 starts only for a run with Python blocks (the splash only checks its files) and never stops the editor or a run: if it
 cannot load (or takes past 120 s), the PLC runs and each Python block reports the reason on the Console; the failure
 stays for the session. On the web, a load failure also deletes the Python runtime's stored files, so the next page
-load downloads them again. On a page that is not cross-origin isolated (web) it is never started, and the blocks report
+load downloads them again, past the HTTP cache. On a page that is not cross-origin isolated (web) it is never started, and the blocks report
 `Python blocks cannot run here: the page is not cross-origin isolated.` Interpreters
 for a project's blocks boot right
 after its module compiles, and the PLC starts once they are ready (not during the compile: on WebKit that stalls the
