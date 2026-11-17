@@ -40,3 +40,11 @@ jobs:
       # sanitized gcc build.
       - name: Test the HMI unit generator
         run: node tests/hmi-unit/run.mjs --cc "gcc clang" --sanitize
+
+      # The editor's preview end to end with the WebAssembly toolchain: frames, band skipping, live setters, the
+      # widget-block preview and rebuild times. Limits are wider than on a developer machine, where NFR03 is measured.
+      - name: Test the HMI preview
+        run: npx ts-node -T -r tsconfig-paths/register tests/hmi-preview/run.ts
+        env:
+          HMI_PREVIEW_REBUILD_MS: '4000'
+          HMI_PREVIEW_LIVE_MS: '100'

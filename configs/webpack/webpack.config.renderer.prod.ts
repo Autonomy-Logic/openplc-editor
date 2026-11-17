@@ -30,12 +30,15 @@ const configuration: webpack.Configuration = {
 
   target: ['web', 'electron-renderer'],
 
-  entry: [join(webpackPaths.srcPath, 'main.tsx')],
+  entry: {
+    renderer: join(webpackPaths.srcPath, 'main.tsx'),
+    'hmi-preview-worker': join(webpackPaths.srcPath, 'middleware/adapters/editor/hmi-preview.worker.ts'),
+  },
 
   output: {
     path: webpackPaths.distRendererPath,
     publicPath: './',
-    filename: 'renderer.js',
+    filename: '[name].js',
     library: {
       type: 'umd',
     },
@@ -159,6 +162,7 @@ const configuration: webpack.Configuration = {
     new HtmlWebpackPlugin({
       filename: 'index.html',
       template: join(webpackPaths.srcPath, 'index.ejs'),
+      chunks: ['renderer'],
       minify: {
         collapseWhitespace: true,
         removeAttributeQuotes: true,

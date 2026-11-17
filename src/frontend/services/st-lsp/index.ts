@@ -155,7 +155,7 @@ function applyPouVarsDiagnostics(
 }
 
 export function startStLsp(opts: StLspStartOptions): StLspService {
-  const { store, stlibSource, monaco: monacoApi, workerUrlOverride, onCrash } = opts
+  const { store, stlibSource, monaco: monacoApi, workerUrlOverride, onCrash, extraStlibs } = opts
 
   // Resolve the worker URL.  The require lives inside the function
   // so the bundler probe never runs under test (jsdom test envs
@@ -519,6 +519,13 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
         // that did load.
         console.warn(`[strucpp-lsp] failed to load stlib "${source.sourceLabel}":`, err)
       }
+    }
+    if (!extraStlibs) return
+    try {
+      for (const extra of await extraStlibs())
+        await connection.sendRequest(LOAD_STLIB_BUFFER, extra satisfies LoadStlibBufferParams)
+    } catch (err) {
+      console.warn('[strucpp-lsp] failed to load the extra stlibs:', err)
     }
   }
 

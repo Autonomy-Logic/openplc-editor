@@ -189,13 +189,14 @@ FUNCTION_BLOCK HmiStack EXTENDS HmiElement
   END_METHOD
 END_FUNCTION_BLOCK
 
-(* Free placement for process diagrams. Children sit at X, Y in design units (DesignW x DesignH) and the whole drawing,
-   text and lines included, scales to the room the parent gives it. Below MinScalePct it stops shrinking and pans. *)
+(* Free placement for process diagrams. Children sit at X, Y in design units and the whole drawing, text and lines
+   included, scales to the room the parent gives it. Below MinScalePct it stops shrinking and pans. The drawing is
+   DesignW x DesignH, or, where either is 0, as large as its children reach. *)
 {attribute 'hmi_palette' := 'Containers'}
 FUNCTION_BLOCK HmiDiagram EXTENDS HmiStack
   VAR_INPUT
-    DesignW : DINT := 1600;
-    DesignH : DINT := 900;
+    DesignW : DINT := 0;
+    DesignH : DINT := 0;
     (* Smallest scale in percent, at least 1, before the drawing stops shrinking and pans instead. *)
     MinScalePct : DINT := 50;
     (* Snap step the designer uses when moving children, in design units. *)
@@ -208,7 +209,7 @@ FUNCTION_BLOCK HmiDiagram EXTENDS HmiStack
     ScalePct : DINT;
   END_VAR
   VAR
-    kq16, panX, panY, lastX, lastY, offX, offY, cw, ch : DINT;
+    kq16, panX, panY, lastX, lastY, offX, offY, cw, ch, dw, dh : DINT;
     panning : BOOL;
     Parts : ARRAY[0..255] OF POINTER TO HmiElement;
     NP : INT;
@@ -222,11 +223,29 @@ FUNCTION_BLOCK HmiDiagram EXTENDS HmiStack
       AddChild := TRUE;
     END_IF;
   END_METHOD
+  (* The drawing's size in design units: DesignW and DesignH, else the children's reach plus a grid step. *)
+  METHOD PRIVATE Measure : BOOL
+    VAR i : INT; c : POINTER TO HmiElement; ex, ey : DINT; END_VAR
+    ex := 0;
+    ey := 0;
+    IF DesignW <= 0 OR DesignH <= 0 THEN
+      FOR i := 0 TO NP - 1 DO
+        c := Parts[i];
+        ex := MAX(ex, c^.X + c^.Basis(TRUE));
+        ey := MAX(ey, c^.Y + c^.Basis(FALSE));
+      END_FOR;
+    END_IF;
+    dw := SEL(DesignW > 0, MAX(ex + MAX(Grid, 0), 240), DesignW);
+    dh := SEL(DesignH > 0, MAX(ey + MAX(Grid, 0), 140), DesignH);
+    Measure := TRUE;
+  END_METHOD
   METHOD PROTECTED OVERRIDE NaturalWidth : DINT
-    NaturalWidth := DesignW / 2;
+    Measure();
+    NaturalWidth := SEL(DesignW > 0, dw, DesignW / 2);
   END_METHOD
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
-    NaturalHeight := DesignH / 2;
+    Measure();
+    NaturalHeight := SEL(DesignH > 0, dh, DesignH / 2);
   END_METHOD
   (* A diagram takes the room it is given. *)
   METHOD PROTECTED OVERRIDE NaturalGrow : DINT
@@ -245,11 +264,12 @@ FUNCTION_BLOCK HmiDiagram EXTENDS HmiStack
     Top := PY;
     Width := MAX(PW, 0);
     Height := MAX(PH, 0);
-    kq16 := LINT_TO_DINT(MIN(DINT_TO_LINT(Width) * 65536 / MAX(DesignW, 1), DINT_TO_LINT(Height) * 65536 / MAX(DesignH, 1)));
+    Measure();
+    kq16 := LINT_TO_DINT(MIN(DINT_TO_LINT(Width) * 65536 / MAX(dw, 1), DINT_TO_LINT(Height) * 65536 / MAX(dh, 1)));
     kq16 := MAX(kq16, MAX(MinScalePct, 1) * 65536 / 100);
     ScalePct := kq16 * 100 / 65536;
-    cw := LINT_TO_DINT(DINT_TO_LINT(DesignW) * kq16 / 65536);
-    ch := LINT_TO_DINT(DINT_TO_LINT(DesignH) * kq16 / 65536);
+    cw := LINT_TO_DINT(DINT_TO_LINT(dw) * kq16 / 65536);
+    ch := LINT_TO_DINT(DINT_TO_LINT(dh) * kq16 / 65536);
     IF cw <= Width THEN
       offX := (Width - cw) / 2;
       panX := 0;
@@ -310,6 +330,9 @@ FUNCTION_BLOCK HmiDiagram EXTENDS HmiStack
     END_IF;
   END_METHOD
   METHOD PROTECTED OVERRIDE Draw : BOOL
+    IF DesignMode() THEN
+      RecordBounds(-(Id * 8 + 7) - 1, Left + offX, Top + offY, kq16, 0, FALSE);
+    END_IF;
     IF Fill <> COLOR.Transparent THEN
       HMI_FillRect(Left, Top, Width, Height, 0, Fill);
     END_IF;

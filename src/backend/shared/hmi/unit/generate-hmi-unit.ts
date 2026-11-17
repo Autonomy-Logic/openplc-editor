@@ -3,10 +3,18 @@
  * STruC++ with the StandardWidgets library into C++ in namespace `hmi`, plus the C glue every host links
  * (`resources/sources/hmi/unit/hmi_unit.h`): tag table, tag accessors, program instances and settings.
  *
- * Screens use PLC variables as `<POU>.<Name>` or `GVL.<Name>`; the unit holds a mirror of the ones they use, which
- * hosts keep in step with the PLC. `Element.Value := <variable>;` on a two-way widget also writes the operator's
- * change back to the variable, converted to its type.
+ * Screens use PLC variables as `<POU>.<Name>` or `GVL.<Name>`; the unit reads each one through the host's access at
+ * the moment a screen uses it. `Element.Value := <variable>;` on a two-way widget also writes the operator's change
+ * back to the variable, converted to its type, through the host.
  */
+import {
+  checkHmiBlockElements,
+  checkHmiBlockHeader,
+  type HmiCheckBlock,
+  hmiTextLiteral as textLiteral,
+} from '@root/middleware/shared/utils/hmi/block-checks'
+import { widgetIsA as isA } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
+import { maskStComments } from '@root/middleware/shared/utils/hmi/references'
 import { hmiReservedName } from '@root/middleware/shared/utils/hmi/reserved-names'
 import {
   HMI_BUILTIN_THEMES,
@@ -16,50 +24,43 @@ import {
   hmiThemeId,
   screenGrant,
 } from '@root/middleware/shared/utils/hmi/settings'
-import type { StlibArchive } from 'strucpp'
+import type { CompileOptions, StlibArchive } from 'strucpp'
 
+import type {
+  HmiDiagnostic,
+  HmiLibraryArchive,
+  HmiPlcVariable,
+  HmiPreviewSetter,
+  HmiSourceFile,
+  HmiUnitSources,
+} from '../../../../middleware/shared/ports/hmi-preview-types'
 import { loadStrucpp } from '../../library/strucpp-runtime'
 import { buildStandardWidgets } from '../lib/build-standard-widgets'
 import { buildWidgetCatalog, type HmiWidgetCatalog, type HmiWidgetInfo } from '../lib/widget-catalog'
 import { type HmiBlockModel, type HmiElementDecl, parseHmiBlock } from './screen-model'
-
-export interface HmiSourceFile {
-  /** Name as written; the file declares FUNCTION_BLOCK <name>. */
-  name: string
-  source: string
-}
-
-/** A PLC variable screens may use. */
-export interface HmiPlcVariable {
-  /** `<POU>.<Name>` or `GVL.<Name>`. */
-  path: string
-  /** Declared type: an elementary type, or STRING / STRING(n). */
-  type: string
-}
 
 export interface HmiTagAddress {
   arr: number
   elem: number
 }
 
-export interface HmiUnitInput {
-  /** Screens in project order: page numbers and the HMI_SCREEN enumeration follow it. */
-  screens: readonly HmiSourceFile[]
-  widgets: readonly HmiSourceFile[]
-  settings: HmiSettings
-  plcVariables: readonly HmiPlcVariable[]
-  /** Names of the project's POUs and data types, which screens and widget blocks may not reuse. */
-  projectNames: readonly string[]
+export type { HmiDiagnostic, HmiPlcVariable, HmiPreviewSetter, HmiSourceFile, HmiUnitSources }
+
+export interface HmiUnitInput extends HmiUnitSources {
+  /**
+   * Preview only: a widget block shown on an extra screen after the project's, at natural size and stretched, with a
+   * test value on its main input. Product builds leave it out.
+   */
+  widgetPreview?: string
+  /** Preview only: one screen showing every palette widget at natural size, in place of the project's screens. */
+  gallery?: boolean
+  /** Preview only: a sample screen drawn in this theme, in place of the project's screens. */
+  themePreview?: string
+  /** Preview build: the libraries are emitted whole, so their code does not change with the screens. */
+  preview?: boolean
   /** PLC debug-table address of a variable; absent when building without a PLC program (preview). */
   resolve?: (path: string) => HmiTagAddress | null
   plcMd5?: string
-}
-
-export interface HmiDiagnostic {
-  /** Screen or widget block, or `HMI` for the unit as a whole. */
-  file: string
-  line?: number
-  message: string
 }
 
 export interface HmiTag {
@@ -87,14 +88,6 @@ export interface HmiUnitResult {
   preview: HmiPreview
 }
 
-export interface HmiPreviewSetter {
-  /** Page number of the screen. */
-  screen: number
-  /** Setter number within the screen. */
-  index: number
-  kind: 'num' | 'str'
-}
-
 export interface HmiPreview {
   /** Names of `files` grouped into translation units that change independently and can be cached apart. */
   units: { library: string[]; widgets: string[]; screens: Record<string, string[]>; glue: string[] }
@@ -104,15 +97,23 @@ export interface HmiPreview {
   files: Record<string, string>
 }
 
+/**
+ * STruC++ compile options plus `wholeLibraries` (emit the named libraries whole), which releases before it ignore; the
+ * preview is then correct but recompiles the library when the set of widgets in use changes. `externalSources` names
+ * the files whose programs, configuration and globals the host owns.
+ */
+type StrucppCompileOptions = Partial<CompileOptions> & { wholeLibraries?: string[]; externalSources?: string[] }
+
 const UNIT = 'HMI'
 const NAMESPACE = 'hmi'
 const HEADER = 'hmi_unit.hpp'
 const GLUE_FILE = 'hmi_glue.st'
-const MIRROR_FILE = 'hmi_tags.st'
+const PLC_FILE = 'hmi_plc.st'
 const MAIN_FILE = 'hmi_main.st'
-const SCREEN_CAPACITY = 256
-const STACK_CAPACITY = 64
-const DIAGRAM_CAPACITY = 256
+/** Marks the screens and the glue program so they reach the PLC's variables by instance path. */
+const INSTANCE_PATHS = "{attribute 'instance_paths'}"
+/** The configuration and resource every OpenPLC project compiles to, which paths may leave out. */
+const CONFIG_PREFIXES = ['CONFIG0.RES0.', 'CONFIG0.']
 const SCREENS_MAX = 64
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/
 /** Properties that change the element tree; editing them needs a build. */
@@ -238,22 +239,6 @@ function tagType(declared: string): TagType | undefined {
   return maxLength >= 1 && maxLength <= 65535 ? { base: 'STRING', type: TAG_STRING, maxLength } : undefined
 }
 
-/** A plain ST text literal's content, or undefined. */
-function textLiteral(text: string | undefined): string | undefined {
-  const m = text === undefined ? null : /^'([^'$]*)'$/.exec(text.trim())
-  return m ? m[1] : undefined
-}
-
-function isA(catalog: HmiWidgetCatalog, type: string, base: string): boolean {
-  const seen = new Set<string>()
-  for (let t: string | undefined = type.toUpperCase(); t !== undefined && !seen.has(t); ) {
-    if (t === base) return true
-    seen.add(t)
-    t = catalog.widgets.get(t)?.extends.toUpperCase()
-  }
-  return false
-}
-
 const hex = (rgb: string): string => `16#${rgb.slice(1).toUpperCase()}`
 
 class Diagnostics {
@@ -272,30 +257,29 @@ interface ScreenPlan {
   model: HmiBlockModel
   /** Elements in drawing order with their container (undefined for the screen's column). */
   attach: Array<{ element: HmiElementDecl; parent?: HmiElementDecl }>
-  connects: Array<{ pipe: string; source: string; target: string }>
+  connects: Array<{ pipe: string; source: string; target: string; prior: string | null }>
   writeBacks: string[]
   theme: number
 }
 
-/** Elements in drawing order, containers before what they hold, with capacity and Parent checks. */
-function elementTree(plan: ScreenPlan, catalog: HmiWidgetCatalog, d: Diagnostics): void {
-  const { model, file } = plan
+/** What the shared checks read from a parsed screen. */
+const checkBlockOf = (model: HmiBlockModel): HmiCheckBlock => ({
+  name: model.name,
+  extends: model.extends,
+  theme: model.theme ?? null,
+  methods: model.methods,
+  elements: model.elements.map((e) => ({ name: e.name, type: e.type, props: e.propList })),
+})
+
+/** Elements in drawing order, containers before what they hold, and the pipes' ends; the tree is checked before. */
+function elementTree(plan: ScreenPlan, catalog: HmiWidgetCatalog): void {
+  const { model } = plan
   const byName = new Map(model.elements.map((e) => [e.name.toUpperCase(), e]))
   const parentOf = new Map<HmiElementDecl, HmiElementDecl>()
   for (const e of model.elements) {
-    const text = e.props.get('PARENT')
-    if (text === undefined) continue
-    const name = textLiteral(text)
-    if (name === undefined) {
-      d.error(file.name, `${e.name}: Parent must be a text literal naming a container`)
-      continue
-    }
-    if (name === '') continue
-    const parent = byName.get(name.toUpperCase())
-    if (!parent) d.error(file.name, `${e.name}: Parent '${name}' is not an element of this screen`)
-    else if (!isA(catalog, parent.type, 'HMISTACK'))
-      d.error(file.name, `${e.name}: Parent '${name}' is not a container`)
-    else parentOf.set(e, parent)
+    const name = textLiteral(e.props.get('PARENT'))
+    const parent = name ? byName.get(name.toUpperCase()) : undefined
+    if (parent && isA(catalog, parent.type, 'HMISTACK')) parentOf.set(e, parent)
   }
   const visit = (parent: HmiElementDecl | undefined, depth: number): void => {
     for (const e of model.elements) {
@@ -306,36 +290,34 @@ function elementTree(plan: ScreenPlan, catalog: HmiWidgetCatalog, d: Diagnostics
     }
   }
   visit(undefined, 0)
-  for (const e of model.elements)
-    if (!plan.attach.some((a) => a.element === e)) d.error(file.name, `${e.name}: its Parent chain is a cycle`)
-  if (model.elements.length > SCREEN_CAPACITY)
-    d.error(file.name, `${model.elements.length} elements; a screen holds at most ${SCREEN_CAPACITY}`)
-  const held = new Map<HmiElementDecl, number>()
-  for (const a of plan.attach) if (a.parent) held.set(a.parent, (held.get(a.parent) ?? 0) + 1)
-  for (const [container, n] of held) {
-    const cap = isA(catalog, container.type, 'HMIDIAGRAM') ? DIAGRAM_CAPACITY : STACK_CAPACITY
-    if (n > cap) d.error(file.name, `${container.name} holds ${n} elements; at most ${cap}`)
-  }
+  const priorPipe = new Map<string, string>()
   for (const e of model.elements) {
     if (!isA(catalog, e.type, 'HMIPIPE')) continue
     const end = (prop: string): string | undefined => {
       const name = textLiteral(e.props.get(prop))
-      const found = name === undefined ? undefined : byName.get(name.toUpperCase())
-      if (!found)
-        d.error(file.name, `${e.name}: ${prop === 'SOURCE' ? 'Source' : 'Target'} must name an element of this screen`)
-      return found?.name
+      return name === undefined ? undefined : byName.get(name.toUpperCase())?.name
     }
     const source = end('SOURCE')
     const target = end('TARGET')
-    if (source !== undefined && target !== undefined) plan.connects.push({ pipe: e.name, source, target })
+    const parent = textLiteral(e.props.get('PARENT'))?.toUpperCase() ?? ''
+    const prior = priorPipe.get(parent) ?? null
+    priorPipe.set(parent, e.name)
+    if (source !== undefined && target !== undefined) plan.connects.push({ pipe: e.name, source, target, prior })
   }
+}
+
+/** A PLC path as the project's variable list names it, upper case: without the configuration and resource. */
+function shortPath(path: string): string {
+  const upper = path.replace(/\s+/g, '').toUpperCase()
+  const prefix = CONFIG_PREFIXES.find((p) => upper.startsWith(p))
+  return prefix ? upper.slice(prefix.length) : upper
 }
 
 /** Typed write-back of `Element.Value := Variable;` for two-way widgets. */
 function writeBacks(
   plan: ScreenPlan,
   catalog: HmiWidgetCatalog,
-  tags: ReadonlyMap<string, { variable: HmiPlcVariable; type: TagType }>,
+  variables: ReadonlyMap<string, HmiPlcVariable>,
   d: Diagnostics,
 ): void {
   const elements = new Map(plan.model.elements.map((e) => [e.name.toUpperCase(), e]))
@@ -344,18 +326,23 @@ function writeBacks(
     const widget: HmiWidgetInfo | undefined = element ? catalog.widgets.get(element.type.toUpperCase()) : undefined
     const twoWay = widget?.twoWay
     if (!twoWay || twoWay.value.toUpperCase() !== b.property.toUpperCase()) continue
-    const tag = tags.get(b.variable.toUpperCase())
-    if (!tag) continue
+    const variable = variables.get(shortPath(b.variable))
+    const type = variable ? tagType(variable.type) : undefined
+    if (!variable || !type) continue
+    if (variable.constant) {
+      d.error(plan.file.name, `${b.element}.${b.property}: ${b.variable} is a CONSTANT; the operator cannot change it`)
+      continue
+    }
     const source = widget.outputs.find((o) => o.name.toUpperCase() === twoWay.newValue.toUpperCase())
     const from = (source?.type ?? '').toUpperCase()
     const value = `${b.element}.${twoWay.newValue}`
     let converted: { expr: string; guard?: string } | undefined
-    if (from === tag.type.base) converted = { expr: value }
-    else if (NUMERIC.has(from) && NUMERIC.has(tag.type.base)) converted = numericWriteBack(from, tag.type.base, value)
+    if (from === type.base) converted = { expr: value }
+    else if (NUMERIC.has(from) && NUMERIC.has(type.base)) converted = numericWriteBack(from, type.base, value)
     if (converted === undefined) {
       d.error(
         plan.file.name,
-        `${b.element}.${b.property}: a ${from} widget value cannot be written to ${b.variable} (${tag.variable.type})`,
+        `${b.element}.${b.property}: a ${from} widget value cannot be written to ${b.variable} (${variable.type})`,
       )
       continue
     }
@@ -364,6 +351,16 @@ function writeBacks(
       : `${b.element}.${twoWay.changed}`
     plan.writeBacks.push(`IF ${condition} THEN ${b.variable} := ${converted.expr}; END_IF;`)
   }
+  const code = maskStComments(plan.file.source)
+  for (const element of plan.model.elements) {
+    const twoWay = catalog.widgets.get(element.type.toUpperCase())?.twoWay
+    if (!twoWay) continue
+    const assigned = new RegExp(`\\b${element.name}\\s*\\.\\s*${twoWay.value}\\s*:=`, 'i').test(code)
+    if (!assigned)
+      plan.writeBacks.push(
+        `IF ${element.name}.${twoWay.changed} THEN ${element.name}.${twoWay.value} := ${element.name}.${twoWay.newValue}; END_IF;`,
+      )
+  }
 }
 
 /** The screen's source with Build and WriteBack added on the line where its declarations end. */
@@ -371,7 +368,9 @@ function screenSource(plan: ScreenPlan): string {
   const build = [
     `UseTheme(${plan.theme});`,
     ...plan.attach.map((a) => `Attach(ADR(${a.element.name}), ${a.parent ? `ADR(${a.parent.name})` : '0'});`),
-    ...plan.connects.map((c) => `Connect(ADR(${c.pipe}), ADR(${c.source}), ADR(${c.target}));`),
+    ...plan.connects.map(
+      (c) => `Connect(ADR(${c.pipe}), ADR(${c.source}), ADR(${c.target}), ${c.prior ? `ADR(${c.prior})` : '0'});`,
+    ),
   ]
   const generated =
     ` METHOD PROTECTED OVERRIDE Build : BOOL ${build.join(' ')} Build := TRUE; END_METHOD` +
@@ -380,8 +379,7 @@ function screenSource(plan: ScreenPlan): string {
   return `${source.slice(0, plan.model.insertAt)}${generated}${source.slice(plan.model.insertAt)}`
 }
 
-function glueSource(screens: readonly ScreenPlan[], settings: HmiSettings): string {
-  const names = screens.map((s) => s.model.name)
+function glueSource(names: readonly string[], settings: HmiSettings): string {
   const themes = [...HMI_BUILTIN_THEMES, ...settings.themes.map((t) => t.name)]
   return [
     '(* Generated by the HMI build: screens by name, navigation and theme ids. *)',
@@ -410,26 +408,23 @@ function glueSource(screens: readonly ScreenPlan[], settings: HmiSettings): stri
   ].join('\n')
 }
 
-function mirrorSource(tags: ReadonlyArray<{ variable: HmiPlcVariable; type: TagType }>): string {
-  const byPou = new Map<string, { pou: string; fields: string[] }>()
-  for (const { variable, type } of tags) {
-    const [pou, name] = variable.path.split('.')
-    const entry = byPou.get(pou.toUpperCase()) ?? { pou, fields: [] }
-    entry.fields.push(`    ${name} : ${type.base === 'STRING' ? `STRING(${type.maxLength})` : type.base};`)
-    byPou.set(pou.toUpperCase(), entry)
-  }
-  const lines = ['(* Generated by the HMI build: mirror of the PLC variables the screens use. *)']
-  for (const { pou, fields } of byPou.values())
-    lines.push(`TYPE HMI__PLC_${pou} :`, '  STRUCT', ...fields, '  END_STRUCT;', 'END_TYPE')
-  if (byPou.size > 0) {
-    lines.push('VAR_GLOBAL')
-    for (const { pou } of byPou.values()) lines.push(`  ${pou} : HMI__PLC_${pou};`)
-    lines.push('END_VAR')
-  }
-  return `${lines.join('\n')}\n`
+/** Numbers, based and typed literals, TRUE/FALSE and single-quoted strings: what a mirror field may start from. */
+const ST_LITERAL =
+  /^(?:[+-]?\d[\d_]*(?:\.\d[\d_]*)?(?:E[+-]?\d+)?|\d+#[0-9A-F_]+|TRUE|FALSE|[A-Z_]\w*#[\w.]+|'(?:[^'$\n]|\$[^\n])*')$/i
+
+/**
+ * Preview only, where the unit's own storage stands in for the PLC: statements starting each variable screens may use
+ * from its declared initial value, when that is a literal; the others keep their type's default.
+ */
+function previewStarts(variables: readonly HmiPlcVariable[]): string[] {
+  return variables.flatMap((v) => {
+    if (v.constant) return []
+    const initial = v.initialValue?.trim()
+    return initial !== undefined && tagType(v.type) && ST_LITERAL.test(initial) ? [`    ${v.path} := ${initial};`] : []
+  })
 }
 
-function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start: number): string {
+function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start: number, starts: string[]): string {
   const access = (role: (typeof HMI_ROLES)[number] | null): string[] =>
     screens.map(
       (s, i) =>
@@ -447,6 +442,7 @@ function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start
   })
   return [
     '(* Generated by the HMI build: one instance per viewer; the host sets Role before the first frame. *)',
+    INSTANCE_PATHS,
     'PROGRAM HmiMain',
     '  VAR_INPUT',
     '    Role : DINT;',
@@ -457,6 +453,7 @@ function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start
     '    Started : BOOL;',
     '  END_VAR',
     '  IF NOT Started THEN',
+    ...starts,
     ...themes,
     ...screens.map((_, i) => `    Rt.AddScreen(ADR(Scr${i}));`),
     `    Rt.SetStart(${start});`,
@@ -492,32 +489,43 @@ function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start
 
 const cString = (s: string): string => JSON.stringify(s)
 
-function glueCpp(
-  tags: ReadonlyArray<{ variable: HmiPlcVariable; type: TagType; address: HmiTagAddress | null }>,
-  input: HmiUnitInput,
-): string {
-  const member = (v: HmiPlcVariable): string => {
-    const [pou, name] = v.path.split('.')
-    return `${NAMESPACE}::${pou.toUpperCase()}.${name.toUpperCase()}`
-  }
+/** A PLC variable the unit's screens use, by the id STruC++ gave its path. */
+interface UnitTag {
+  /** Canonical path, upper case. */
+  path: string
+  type: TagType
+  address: HmiTagAddress | null
+}
+
+/** C++ type of a tag's variable, as STruC++ declares it. */
+const cppTypeOf = (t: TagType): string =>
+  t.base === 'STRING' ? `strucpp::IECStringVar<${t.maxLength}>` : `strucpp::IEC_${t.base}`
+
+function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput): string {
   const sizeOf = (t: TagType): number => (t.base === 'STRING' ? t.maxLength + 1 : (TAG_WIDTH[t.base] ?? 0))
-  const read = tags.map(({ variable, type }, i) =>
-    type.base === 'STRING'
-      ? `    case ${i}: { const auto s = ${member(variable)}.get(); size_t n = std::min<size_t>(s.length(), ${type.maxLength}); std::memcpy(buf, s.c_str(), n); static_cast<char *>(buf)[n] = 0; return 0; }`
+  const read = tags.map(({ type }, i) => {
+    const v = `static_cast<const ${cppTypeOf(type)} *>(variable)`
+    return type.base === 'STRING'
+      ? `    case ${i}: { const auto s = ${v}->get(); size_t n = std::min<size_t>(s.length(), ${type.maxLength}); std::memcpy(buf, s.c_str(), n); static_cast<char *>(buf)[n] = 0; return 0; }`
       : type.base === 'BOOL'
-        ? `    case ${i}: { uint8_t v = ${member(variable)}.get() ? 1 : 0; std::memcpy(buf, &v, 1); return 0; }`
-        : `    case ${i}: { auto v = ${member(variable)}.get(); std::memcpy(buf, &v, sizeof v); return 0; }`,
-  )
-  const write = tags.map(({ variable, type }, i) =>
-    type.base === 'STRING'
-      ? `    case ${i}: { const char *b = static_cast<const char *>(buf); size_t n = 0; while (n < ${type.maxLength} && b[n] != 0) n++; char s[${type.maxLength + 1}]; std::memcpy(s, b, n); s[n] = 0; ${member(variable)}.set(s); return 0; }`
+        ? `    case ${i}: { uint8_t b = ${v}->get() ? 1 : 0; std::memcpy(buf, &b, 1); return 0; }`
+        : `    case ${i}: { auto x = ${v}->get(); std::memcpy(buf, &x, sizeof x); return 0; }`
+  })
+  const write = tags.map(({ type }, i) => {
+    const v = `static_cast<${cppTypeOf(type)} *>(variable)`
+    return type.base === 'STRING'
+      ? `    case ${i}: { const char *b = static_cast<const char *>(buf); size_t n = 0; while (n < ${type.maxLength} && b[n] != 0) n++; char s[${type.maxLength + 1}]; std::memcpy(s, b, n); s[n] = 0; ${v}->set(s); return 0; }`
       : type.base === 'BOOL'
-        ? `    case ${i}: { uint8_t v; std::memcpy(&v, buf, 1); ${member(variable)}.set(v != 0); return 0; }`
-        : `    case ${i}: { auto v = ${member(variable)}.get(); std::memcpy(&v, buf, sizeof v); ${member(variable)}.set(v); return 0; }`,
-  )
+        ? `    case ${i}: { uint8_t b; std::memcpy(&b, buf, 1); ${v}->set(b != 0); return 0; }`
+        : `    case ${i}: { auto x = ${v}->get(); std::memcpy(&x, buf, sizeof x); ${v}->set(x); return 0; }`
+  })
   const rows = tags.map(
-    ({ variable, type, address }) =>
-      `    {${address?.arr ?? 0}u, ${address?.elem ?? 0}u, ${type.type}, ${type.maxLength}, ${cString(variable.path)}},`,
+    ({ path, type, address }) =>
+      `    {${address?.arr ?? 0}u, ${address?.elem ?? 0}u, ${type.type}, ${type.maxLength}, ${cString(path)}},`,
+  )
+  const stores = tags.map(
+    ({ type }, i) =>
+      `    case ${i}: *static_cast<${cppTypeOf(type)} *>(g_own[${i}]) = *static_cast<const ${cppTypeOf(type)} *>(value); return;`,
   )
   const { settings } = input
   return [
@@ -528,8 +536,45 @@ function glueCpp(
     '',
     '#include "hmi_unit.h"',
     `#include "${HEADER}"`,
+    '#include "iec_external.hpp"',
+    '#include "iec_fault.hpp"',
     '',
     `using HmiProgram = ${NAMESPACE}::Program_HMIMAIN;`,
+    '',
+    'namespace {',
+    'const hmi_tag_access_t *g_access = nullptr;',
+    '/* The variables when no host serves them: the preview, where no PLC runs. */',
+    ...tags.map((t, i) => `${cppTypeOf(t.type)} g_own_${i}{};`),
+    `void *const g_own[${Math.max(tags.length, 1)}] = {${tags.length > 0 ? tags.map((_, i) => `&g_own_${i}`).join(', ') : 'nullptr'}};`,
+    '',
+    "/* The host's values as screens last read them; a failed read keeps the previous value. */",
+    ...tags.map((t, i) => `${cppTypeOf(t.type)} g_read_${i}{};`),
+    `void *const g_read[${Math.max(tags.length, 1)}] = {${tags.length > 0 ? tags.map((_, i) => `&g_read_${i}`).join(', ') : 'nullptr'}};`,
+    `constexpr size_t kTagBufferSize = ${Math.max(1, ...tags.map(({ type }) => sizeOf(type)))};`,
+    '',
+    'void *tag_variable(uint32_t id) {',
+    `    if (id >= ${tags.length}u) return nullptr;`,
+    '    if (!g_access) return g_own[id];',
+    '    alignas(8) unsigned char buf[kTagBufferSize];',
+    '    if (g_access->read(g_access->ctx, static_cast<int>(id), buf)) hmi_tag_write(static_cast<int>(id), g_read[id], buf);',
+    '    return g_read[id];',
+    '}',
+    '}',
+    '',
+    'namespace strucpp {',
+    'void *external_variable(uint32_t id) { return tag_variable(id); }',
+    'void external_store(uint32_t id, const void *value) {',
+    '    if (g_access) {',
+    '        alignas(8) unsigned char buf[kTagBufferSize];',
+    '        if (hmi_tag_read(static_cast<int>(id), value, buf) == 0) g_access->write(g_access->ctx, static_cast<int>(id), buf);',
+    '        return;',
+    '    }',
+    '    switch (id) {',
+    ...stores,
+    '    default: return;',
+    '    }',
+    '}',
+    '}',
     '',
     'extern "C" {',
     `const hmi_tag_t hmi_tags[${Math.max(tags.length, 1)}] = {`,
@@ -541,6 +586,10 @@ function glueCpp(
     `const char hmi_panel_pin[] = ${cString(settings.pin.enabled ? settings.pin.value : '')};`,
     `const uint32_t hmi_relock_minutes = ${settings.relock.mode === 'idle' ? settings.relock.minutes : 0};`,
     '',
+    'void hmi_set_tag_access(const hmi_tag_access_t *access) {',
+    '    g_access = access && access->read && access->write ? access : nullptr;',
+    '}',
+    '',
     'size_t hmi_tag_size(int tag) {',
     '    switch (tag) {',
     ...tags.map(({ type }, i) => `    case ${i}: return ${sizeOf(type)};`),
@@ -548,14 +597,18 @@ function glueCpp(
     '    }',
     '}',
     '',
-    'int hmi_tag_read(int tag, void *buf) {',
+    'int hmi_tag_read(int tag, const void *variable, void *buf) {',
+    '    if (tag < 0 || tag >= hmi_tag_count) return -1;',
+    '    if (!variable) variable = tag_variable(static_cast<uint32_t>(tag));',
     '    switch (tag) {',
     ...read,
     '    default: return -1;',
     '    }',
     '}',
     '',
-    'int hmi_tag_write(int tag, const void *buf) {',
+    'int hmi_tag_write(int tag, void *variable, const void *buf) {',
+    '    if (tag < 0 || tag >= hmi_tag_count) return -1;',
+    '    if (!variable) variable = g_own[tag];',
     '    switch (tag) {',
     ...write,
     '    default: return -1;',
@@ -568,8 +621,18 @@ function glueCpp(
     'void hmi_unit_set_role(void *unit, int role) {',
     '    if (unit) static_cast<HmiProgram *>(unit)->ROLE.set(role);',
     '}',
-    'void hmi_unit_frame(void *unit) {',
-    '    if (unit) static_cast<HmiProgram *>(unit)->run();',
+    'bool hmi_unit_frame(void *unit) {',
+    '    if (!unit) return true;',
+    '#if STRUCPP_HAS_EXCEPTIONS',
+    '    try {',
+    '        static_cast<HmiProgram *>(unit)->run();',
+    '    } catch (...) {',
+    '        return false;',
+    '    }',
+    '#else',
+    '    static_cast<HmiProgram *>(unit)->run();',
+    '#endif',
+    '    return true;',
     '}',
     '}',
     '',
@@ -659,15 +722,22 @@ function previewSetters(
   return { setters, files }
 }
 
-/** Groups unit files into translation units: library, project widgets, one per screen, and the rest. */
+/**
+ * Groups unit and setter files into translation units that change together: the library, the project widgets, each
+ * screen with its setters, and the rest.
+ */
 function previewUnits(files: readonly string[], plans: readonly ScreenPlan[]): HmiPreview['units'] {
   const units: HmiPreview['units'] = { library: [], widgets: [], screens: {}, glue: [] }
-  const screens = new Map(plans.map((p) => [`pou_${p.model.name.toUpperCase()}.cpp`, p.model.name]))
+  const screens = new Map<string, string>()
+  plans.forEach((p, i) => {
+    screens.set(`pou_${p.model.name.toUpperCase()}.cpp`, p.model.name)
+    screens.set(`hmi_preview_${i}.cpp`, p.model.name)
+  })
   for (const f of files.filter((n) => n.endsWith('.cpp'))) {
     const screen = screens.get(f)
     if (f === 'lib_standard_widgets.cpp') units.library.push(f)
     else if (f === 'lib_project_widgets.cpp') units.widgets.push(f)
-    else if (screen !== undefined) units.screens[screen] = [f]
+    else if (screen !== undefined) units.screens[screen] = [...(units.screens[screen] ?? []), f]
     else units.glue.push(f)
   }
   return units
@@ -702,6 +772,206 @@ function checkNames(input: HmiUnitInput, library: ReadonlySet<string>, d: Diagno
   }
 }
 
+/** Parsed PLC library archives by their JSON text, so a preview rebuild does not parse them again. */
+const plcArchiveCache = new Map<string, StlibArchive>()
+const PLC_ARCHIVE_CACHE_SIZE = 64
+
+/** The PLC's library archives, parsed; one that does not load is an error of the unit. */
+function plcArchives(libraries: readonly HmiLibraryArchive[], d: Diagnostics): StlibArchive[] {
+  const strucpp = loadStrucpp()
+  return libraries.flatMap((library) => {
+    const cached = plcArchiveCache.get(library.archiveJson)
+    if (cached) return [cached]
+    try {
+      const archive = strucpp.loadStlibFromString(library.archiveJson, library.name)
+      if (plcArchiveCache.size >= PLC_ARCHIVE_CACHE_SIZE) plcArchiveCache.clear()
+      plcArchiveCache.set(library.archiveJson, archive)
+      return [archive]
+    } catch (error) {
+      d.error(
+        UNIT,
+        `library ${library.name} could not be loaded: ${error instanceof Error ? error.message : String(error)}`,
+      )
+      return []
+    }
+  })
+}
+
+/** The library archives and the widget catalogue a project's widget blocks give, with their errors. */
+export interface HmiWidgetLibrary {
+  archives: StlibArchive[]
+  catalog: HmiWidgetCatalog
+  errors: HmiDiagnostic[]
+}
+
+/**
+ * Compiles a project's widget blocks against StandardWidgets and builds the catalogue of both. Errors leave the
+ * catalogue with the library widgets only.
+ */
+export function compileHmiWidgets(widgets: readonly HmiSourceFile[], library: StlibArchive): HmiWidgetLibrary {
+  const strucpp = loadStrucpp()
+  const archives: StlibArchive[] = [library]
+  const errors: HmiDiagnostic[] = []
+  if (widgets.length > 0) {
+    const compiled = strucpp.compileStlib(
+      widgets.map((w) => ({ fileName: w.name, source: w.source })),
+      { name: 'project-widgets', version: '1.0.0', namespace: 'hmi_project_widgets', dependencies: [library] },
+    )
+    for (const e of compiled.errors) errors.push({ file: e.file ?? UNIT, message: e.message, line: e.line })
+    if (errors.length === 0)
+      archives.push(strucpp.loadStlibFromString(JSON.stringify(compiled.archive), 'project-widgets'))
+  }
+  const catalog = buildWidgetCatalog(archives.map((a) => a.manifest))
+  if (errors.length === 0)
+    for (const w of widgets)
+      if (!catalog.widgets.has(w.name.toUpperCase()))
+        errors.push({
+          file: w.name,
+          message: `${w.name} must be a FUNCTION_BLOCK that extends HmiElement or another widget`,
+        })
+  return { archives, catalog, errors }
+}
+
+/** The catalogue of StandardWidgets and a project's widget blocks, for the designer. */
+export function buildHmiWidgetCatalog(widgets: readonly HmiSourceFile[]): HmiWidgetLibrary {
+  const library = buildStandardWidgets()
+  if (!library.ok)
+    return {
+      archives: [],
+      catalog: buildWidgetCatalog([]),
+      errors: library.errors.map((e) => ({ file: UNIT, message: `StandardWidgets: ${e.message}`, line: e.line })),
+    }
+  return compileHmiWidgets(widgets, library.archive)
+}
+
+/** Name of the screen a widget preview adds; the HMI__ prefix is refused for project names. */
+export const WIDGET_PREVIEW_SCREEN = 'HMI__WidgetPreview'
+
+const PREVIEW_INTEGER_TYPES = new Set(['SINT', 'INT', 'DINT', 'LINT', 'USINT', 'UINT', 'UDINT', 'ULINT'])
+const PREVIEW_REAL_TYPES = new Set(['REAL', 'LREAL'])
+
+/** A value that shows a widget at work: TRUE, 60 % of its MaxValue (else 42), or its name without the Hmi prefix as text. */
+function previewTestValue(info: HmiWidgetInfo): string | undefined {
+  const type = info.main?.direction === 'input' ? info.main.type.toUpperCase() : undefined
+  if (type === undefined) return undefined
+  if (type === 'BOOL') return 'TRUE'
+  if (type.startsWith('STRING')) return `'${info.name.replace(/^Hmi/i, '')}'`
+  const max = Number(info.properties.find((p) => p.name.toUpperCase() === 'MAXVALUE')?.defaultValue)
+  const value = Number.isFinite(max) && max > 0 ? max * 0.6 : 42
+  if (PREVIEW_REAL_TYPES.has(type)) return value.toFixed(1)
+  return PREVIEW_INTEGER_TYPES.has(type) ? String(Math.round(value)) : undefined
+}
+
+/** The screen a widget preview adds: the block at natural size beside a spacer, then stretched over the rest. */
+function widgetPreviewSource(info: HmiWidgetInfo): string {
+  const value = previewTestValue(info)
+  const assign =
+    info.main && value !== undefined
+      ? [`  Natural.${info.main.name} := ${value};`, `  Stretched.${info.main.name} := ${value};`]
+      : []
+  return [
+    `FUNCTION_BLOCK ${WIDGET_PREVIEW_SCREEN} EXTENDS HmiScreen`,
+    '  VAR',
+    '    HMI__Column : HmiStack := (Direction := HMI_DIRECTION#Column, Gap := 16, Padding := 16, Grow := 1, GrowAuto := FALSE);',
+    "    HMI__Row : HmiStack := (Parent := 'HMI__Column', Direction := HMI_DIRECTION#Row, GrowAuto := FALSE);",
+    `    Natural : ${info.name} := (Parent := 'HMI__Row', GrowAuto := FALSE);`,
+    "    HMI__Spacer : HmiStack := (Parent := 'HMI__Row', Grow := 1, GrowAuto := FALSE);",
+    `    Stretched : ${info.name} := (Parent := 'HMI__Column', Grow := 1, GrowAuto := FALSE);`,
+    '  END_VAR',
+    ...assign,
+    'END_FUNCTION_BLOCK',
+    '',
+  ].join('\n')
+}
+
+/** Name of the palette gallery's screen. */
+export const HMI_GALLERY_SCREEN = 'HMI__Gallery'
+const GALLERY_ELEMENT = 'W_'
+
+/** The widget a palette gallery element shows, or null for the gallery's own stacks. */
+export function hmiGalleryWidget(element: string): string | null {
+  return element.startsWith(GALLERY_ELEMENT) ? element.slice(GALLERY_ELEMENT.length) : null
+}
+
+/** The widgets the palette gallery draws: every palette widget and project widget block that is not a stack or a pipe. */
+function galleryWidgets(catalog: HmiWidgetCatalog, projectWidgets: readonly HmiSourceFile[]): HmiWidgetInfo[] {
+  const project = new Set(projectWidgets.map((w) => w.name.toUpperCase()))
+  return [...catalog.widgets.values()].filter(
+    (info) =>
+      (info.palette !== undefined || project.has(info.name.toUpperCase())) &&
+      !['HMISTACK', 'HMIDIAGRAM', 'HMIPIPE'].some((base) => isA(catalog, info.name, base)),
+  )
+}
+
+/** The palette gallery's screen: each widget alone in a row, at natural size, with its test value. */
+function gallerySource(widgets: readonly HmiWidgetInfo[]): string {
+  const declarations = widgets.flatMap((info) => [
+    `    HMI__R_${info.name} : HmiStack := (Parent := 'HMI__Column', Direction := HMI_DIRECTION#Row, GrowAuto := FALSE);`,
+    `    ${GALLERY_ELEMENT}${info.name} : ${info.name} := (Parent := 'HMI__R_${info.name}', GrowAuto := FALSE);`,
+  ])
+  const values = widgets.flatMap((info) => {
+    const value = previewTestValue(info)
+    return info.main && value !== undefined ? [`  ${GALLERY_ELEMENT}${info.name}.${info.main.name} := ${value};`] : []
+  })
+  return [
+    `FUNCTION_BLOCK ${HMI_GALLERY_SCREEN} EXTENDS HmiScreen`,
+    '  VAR',
+    '    HMI__Column : HmiStack := (Direction := HMI_DIRECTION#Column, Gap := 12, Padding := 8, GrowAuto := FALSE);',
+    ...declarations,
+    '  END_VAR',
+    ...values,
+    'END_FUNCTION_BLOCK',
+    '',
+  ].join('\n')
+}
+
+/** Name of the theme preview's screen. */
+export const HMI_THEME_PREVIEW_SCREEN = 'HMI__ThemePreview'
+
+/** The theme preview's screen: controls and values on surface cards, then the fixed colors, in `theme`. */
+function themePreviewSource(theme: string): string {
+  const card = (name: string) =>
+    `    ${name} : HmiStack := (Parent := 'HMI__Column', Direction := HMI_DIRECTION#Row, Gap := 12, Padding := 12, Fill := COLOR.Surface, GrowAuto := FALSE);`
+  const fixed = ['Red', 'Green', 'Blue', 'Yellow', 'Orange', 'Gray'].map(
+    (c) =>
+      `    HMI__${c} : HmiRect := (Parent := 'HMI__Fixed', Fill := COLOR.${c}, PrefWidth := 36, PrefHeight := 20);`,
+  )
+  return [
+    `{attribute 'hmi_theme' := '${theme}'}`,
+    `FUNCTION_BLOCK ${HMI_THEME_PREVIEW_SCREEN} EXTENDS HmiScreen`,
+    '  VAR',
+    '    HMI__Column : HmiStack := (Direction := HMI_DIRECTION#Column, Gap := 12, Padding := 16, Grow := 1, GrowAuto := FALSE);',
+    `    HMI__Title : HmiLabel := (Parent := 'HMI__Column', Text := 'Plant overview', Size := 20, Font := HMI_FONT#Bold);`,
+    card('HMI__Controls'),
+    `    HMI__Start : HmiButton := (Parent := 'HMI__Controls', Text := 'Start');`,
+    `    HMI__Pump : HmiSwitch := (Parent := 'HMI__Controls', Caption := 'Pump', Value := TRUE);`,
+    `    HMI__Running : HmiLamp := (Parent := 'HMI__Controls', Caption := 'Running', Value := TRUE);`,
+    `    HMI__Speed : HmiSlider := (Parent := 'HMI__Controls', Caption := 'Speed', Value := 60.0, Unit := '%', Grow := 1);`,
+    card('HMI__Values'),
+    `    HMI__Level : HmiGauge := (Parent := 'HMI__Values', Caption := 'Level', Value := 62.0);`,
+    `    HMI__Tank : HmiTank := (Parent := 'HMI__Values', Caption := 'Tank', Value := 45.0, Unit := '%');`,
+    `    HMI__Flow : HmiValue := (Parent := 'HMI__Values', Caption := 'Flow', Value := 42.5, Unit := 'm3/h');`,
+    `    HMI__Fixed : HmiStack := (Parent := 'HMI__Column', Direction := HMI_DIRECTION#Row, Gap := 8, GrowAuto := FALSE);`,
+    ...fixed,
+    '  END_VAR',
+    'END_FUNCTION_BLOCK',
+    '',
+  ].join('\n')
+}
+
+/** The navigation and theme declarations the HMI build generates for these screens; empty without screens. */
+export function hmiGlueSource(screens: readonly string[], settings: HmiSettings): string {
+  return screens.length === 0 ? '' : glueSource(screens, settings)
+}
+
+/** Upper-case names of HmiScreen's inputs, variables and methods in a StandardWidgets archive. */
+export function hmiScreenMembers(archive: StlibArchive): ReadonlySet<string> {
+  const base = archive.manifest.functionBlocks.find((fb) => fb.name.toUpperCase() === 'HMISCREEN')
+  return new Set(
+    [...(base?.inputs ?? []), ...(base?.locals ?? []), ...(base?.methods ?? [])].map((m) => m.name.toUpperCase()),
+  )
+}
+
 /** Builds and compiles the HMI unit. */
 export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   const d = new Diagnostics()
@@ -721,108 +991,91 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     for (const e of library.errors) d.error(UNIT, `StandardWidgets: ${e.message}`, e.line)
     return result
   }
-  if (input.screens.length === 0) d.error(UNIT, 'the project has no HMI screens')
+  if (input.screens.length === 0 && input.widgetPreview === undefined && !input.gallery && !input.themePreview)
+    d.error(UNIT, 'the project has no HMI screens')
   if (input.screens.length > SCREENS_MAX) d.error(UNIT, `${input.screens.length} screens; at most ${SCREENS_MAX}`)
   checkNames(input, libraryNames(library.archive), d)
   if (d.errors.length > 0) return result
 
   const strucpp = loadStrucpp()
-  const archives: StlibArchive[] = [library.archive]
-  if (input.widgets.length > 0) {
-    const compiled = strucpp.compileStlib(
-      input.widgets.map((w) => ({ fileName: w.name, source: w.source })),
-      { name: 'project-widgets', version: '1.0.0', namespace: 'hmi_project_widgets', dependencies: [library.archive] },
-    )
-    for (const e of compiled.errors) d.error(e.file ?? UNIT, e.message, e.line)
-    if (d.errors.length > 0) return result
-    archives.push(strucpp.loadStlibFromString(JSON.stringify(compiled.archive), 'project-widgets'))
-  }
-  const catalog = buildWidgetCatalog(archives.map((a) => a.manifest))
-  for (const w of input.widgets)
-    if (!catalog.widgets.has(w.name.toUpperCase()))
-      d.error(w.name, `${w.name} must be a FUNCTION_BLOCK that extends HmiElement or another widget`)
+  const widgetLibrary = compileHmiWidgets(input.widgets, library.archive)
+  for (const e of widgetLibrary.errors) d.error(e.file, e.message, e.line)
+  if (d.errors.length > 0) return result
+  const { archives, catalog } = widgetLibrary
 
-  const screenBase = library.archive.manifest.functionBlocks.find((fb) => fb.name.toUpperCase() === 'HMISCREEN')
-  const screenMembers = new Set(
-    [...(screenBase?.inputs ?? []), ...(screenBase?.locals ?? []), ...(screenBase?.methods ?? [])].map((m) =>
-      m.name.toUpperCase(),
-    ),
-  )
-  const variables = new Map(input.plcVariables.map((v) => [v.path.toUpperCase(), v]))
-  const pous = new Set([...input.plcVariables.map((v) => v.path.split('.')[0].toUpperCase()), 'GVL'])
-  const tags = new Map<string, { variable: HmiPlcVariable; type: TagType }>()
+  const screenMembers = hmiScreenMembers(library.archive)
+  const variables = new Map(input.plcVariables.map((v) => [shortPath(v.path), v]))
   const plans: ScreenPlan[] = []
-  for (const file of input.screens) {
+  const screenFiles = input.gallery
+    ? [{ name: HMI_GALLERY_SCREEN, source: gallerySource(galleryWidgets(catalog, input.widgets)) }]
+    : input.themePreview !== undefined
+      ? [{ name: HMI_THEME_PREVIEW_SCREEN, source: themePreviewSource(input.themePreview) }]
+      : [...input.screens]
+  if (input.widgetPreview !== undefined) {
+    const widget = input.widgets.find((w) => w.name.toUpperCase() === input.widgetPreview?.toUpperCase())
+    const info = widget ? catalog.widgets.get(widget.name.toUpperCase()) : undefined
+    if (info) screenFiles.push({ name: WIDGET_PREVIEW_SCREEN, source: widgetPreviewSource(info) })
+    else d.error(UNIT, `${input.widgetPreview} is not a widget block of the project`)
+  }
+  for (const file of screenFiles) {
     const parsed = parseHmiBlock(file.source, (t) => catalog.widgets.has(t.toUpperCase()))
     if (!parsed.ok) {
       for (const e of parsed.errors) d.error(file.name, e)
       continue
     }
     const { model } = parsed
-    if (model.name.toUpperCase() !== file.name.toUpperCase())
-      d.error(file.name, `the file declares ${model.name}; it must declare FUNCTION_BLOCK ${file.name}`)
-    if (model.extends.toUpperCase() !== 'HMISCREEN') d.error(file.name, `${file.name} must extend HmiScreen`)
-    for (const generated of ['BUILD', 'WRITEBACK'])
-      if (model.methods.has(generated))
-        d.error(file.name, `the HMI build generates ${generated === 'BUILD' ? 'Build' : 'WriteBack'}; remove it`)
-    const themeName = model.theme ?? input.settings.defaultTheme
-    const theme = hmiThemeId(input.settings, themeName)
-    if (theme < 0) d.error(file.name, `unknown theme '${themeName}'`)
-    for (const ref of model.references) {
-      const [pou] = ref.split('.')
-      if (!pous.has(pou)) continue
-      const variable = variables.get(ref)
-      if (!variable) {
-        d.error(file.name, `${ref} is not a PLC variable`)
-        continue
-      }
-      const type = tagType(variable.type)
-      if (!type) d.error(file.name, `${variable.path}: ${variable.type} variables cannot be used on screens`)
-      else tags.set(ref, { variable, type })
-    }
-    for (const e of model.elements)
-      if (screenMembers.has(e.name.toUpperCase()))
-        d.error(file.name, `${e.name}: an element may not be named like a member of HmiScreen`)
+    const block = checkBlockOf(model)
+    const checks = { kind: 'screen' as const, fileName: file.name, catalog, settings: input.settings, screenMembers }
+    for (const f of checkHmiBlockHeader(block, checks)) d.error(file.name, f.message)
+    const theme = hmiThemeId(input.settings, model.theme ?? input.settings.defaultTheme)
+    for (const f of checkHmiBlockElements(block, checks)) d.error(file.name, f.message)
     const plan: ScreenPlan = { file, model, attach: [], connects: [], writeBacks: [], theme }
-    elementTree(plan, catalog, d)
+    elementTree(plan, catalog)
     plans.push(plan)
   }
-  for (const plan of plans) writeBacks(plan, catalog, tags, d)
+  for (const plan of plans) writeBacks(plan, catalog, variables, d)
   const start =
-    input.settings.startScreen === ''
-      ? 0
-      : plans.findIndex((p) => p.model.name.toUpperCase() === input.settings.startScreen.toUpperCase())
+    input.widgetPreview !== undefined || input.gallery || input.themePreview !== undefined
+      ? plans.length - 1
+      : input.settings.startScreen === ''
+        ? 0
+        : plans.findIndex((p) => p.model.name.toUpperCase() === input.settings.startScreen.toUpperCase())
   if (start < 0) d.error(UNIT, `start screen '${input.settings.startScreen}' is not a screen`)
   if (d.errors.length > 0) return result
 
-  const tagList: Array<{ variable: HmiPlcVariable; type: TagType; address: HmiTagAddress | null }> = []
-  for (const t of tags.values()) {
-    const address = input.resolve ? input.resolve(t.variable.path) : null
-    if (input.resolve && address === null)
-      d.warn(UNIT, `${t.variable.path} is not in the PLC program's debug map; the HMI will not sync it`)
-    else tagList.push({ ...t, address })
-  }
   let nextId = 1
   for (const plan of plans) {
     for (const a of plan.attach)
       result.elementIds.push({ id: nextId++, screen: plan.model.name, element: a.element.name })
   }
   const sources: Record<string, string> = {
-    [GLUE_FILE]: glueSource(plans, input.settings),
-    [MIRROR_FILE]: mirrorSource([...tags.values()]),
+    [GLUE_FILE]: glueSource(
+      plans.map((p) => p.model.name),
+      input.settings,
+    ),
+    [PLC_FILE]: input.plcDeclarations ?? '',
   }
-  for (const plan of plans) sources[`${plan.model.name}.st`] = screenSource(plan)
-  sources[MAIN_FILE] = mainSource(plans, input.settings, start)
+  for (const plan of plans) sources[`${plan.model.name}.st`] = `${INSTANCE_PATHS} ${screenSource(plan)}`
+  sources[MAIN_FILE] = mainSource(plans, input.settings, start, input.preview ? previewStarts(input.plcVariables) : [])
   result.sources = sources
   const [first, ...rest] = Object.entries(sources)
-  const compiled = strucpp.compile(first[1], {
+  const widgetLibraries = new Set(archives.map((a) => a.manifest.name.toUpperCase()))
+  const plcLibraries = plcArchives(input.plcLibraries ?? [], d).filter(
+    (a) => !widgetLibraries.has(a.manifest.name.toUpperCase()),
+  )
+  if (d.errors.length > 0) return result
+  const options: StrucppCompileOptions = {
     fileName: first[0],
     additionalSources: rest.map(([fileName, source]) => ({ fileName, source })),
-    libraries: archives,
+    libraries: [...archives, ...plcLibraries],
     namespace: NAMESPACE,
     headerFileName: HEADER,
     separateLibraryFiles: true,
-  })
+    externalInstancePaths: true,
+    externalSources: [PLC_FILE],
+    ...(input.preview ? { wholeLibraries: archives.map((a) => a.manifest.name) } : {}),
+  }
+  const compiled = strucpp.compile(first[1], options)
   for (const e of compiled.errors) {
     const file = (e.file ?? UNIT).replace(/\.st$/, '')
     d.error(sources[e.file ?? ''] !== undefined && !e.file?.startsWith('hmi_') ? file : UNIT, e.message, e.line)
@@ -831,14 +1084,29 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   result.files[HEADER] = compiled.headerCode
   if (compiled.libraryHeader) result.files[compiled.libraryHeader.name] = compiled.libraryHeader.content
   for (const f of compiled.cppFiles) result.files[f.name] = f.content
-  result.files['hmi_unit_glue.cpp'] = glueCpp(tagList, input)
-  result.tags = tagList.map(({ variable, type, address }) => ({
-    path: variable.path,
-    type: type.type,
-    maxLength: type.maxLength,
-    address,
-  }))
-  result.preview = { units: previewUnits(Object.keys(result.files), plans), ...previewSetters(plans, catalog) }
+  const tags: UnitTag[] = []
+  for (const entry of [...(compiled.instancePaths ?? [])].sort((a, b) => a.id - b.id)) {
+    const named = variables.get(shortPath(entry.path))?.path ?? shortPath(entry.path)
+    const type = tagType(entry.type === 'STRING' ? `STRING(${entry.maxLength ?? DEFAULT_STRING_LENGTH})` : entry.type)
+    if (!type) {
+      d.error(UNIT, `${named}: ${entry.type} variables cannot be used on screens`)
+      continue
+    }
+    const address = input.resolve ? input.resolve(entry.path) : null
+    if (input.resolve && address === null) {
+      d.error(UNIT, `${named} has no debug address in the compiled PLC program, so the HMI cannot reach it`)
+      continue
+    }
+    tags.push({ path: entry.path, type, address })
+  }
+  if (d.errors.length > 0) return result
+  result.files['hmi_unit_glue.cpp'] = glueCpp(tags, input)
+  result.tags = tags.map(({ path, type, address }) => ({ path, type: type.type, maxLength: type.maxLength, address }))
+  const setters = previewSetters(plans, catalog)
+  result.preview = {
+    units: previewUnits([...Object.keys(result.files), ...Object.keys(setters.files)], plans),
+    ...setters,
+  }
   result.ok = true
   return result
 }

@@ -174,13 +174,14 @@ test.describe('HMI project model', () => {
         async () => (await page.getByText('HMI Settings', { exact: true }).count()) > 0,
       )
 
-      // A screen opens in the ST editor with its file's text.
+      // A screen opens in the designer; its code view holds the file's text.
       await leaf(page, 'Overview').click()
+      await page.getByRole('button', { name: 'Code', exact: true }).click({ timeout: 30000 })
       await waitFor(page, 'the Overview source', async () => (await editorText(page)).includes('EXTENDS HmiScreen'))
 
-      // HMI Settings opens its placeholder tab.
+      // HMI Settings opens its tab.
       await leaf(page, 'HMI Settings').click()
-      await expect(page.getByTestId('hmi-settings-placeholder')).toBeVisible({ timeout: 10000 })
+      await expect(page.getByTestId('hmi-settings')).toBeVisible({ timeout: 10000 })
 
       // A widget block from the + menu, and a name the HMI library already uses is refused.
       await createFromMenu(page, 'hmi-widget', 'HmiLamp')
@@ -255,6 +256,7 @@ test.describe('HMI project model', () => {
       expect(await leaf(reopened.page, 'Overview').count()).toBe(0)
       expect(await leaf(reopened.page, 'Badge').count()).toBe(0)
       await leaf(reopened.page, 'Details').click()
+      await reopened.page.getByRole('button', { name: 'Code', exact: true }).click({ timeout: 30000 })
       await waitFor(reopened.page, 'the Details source', async () =>
         (await editorText(reopened.page)).includes('HMI_Show(HMI_SCREEN#Home)'),
       )

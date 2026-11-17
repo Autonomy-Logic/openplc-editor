@@ -139,24 +139,22 @@ describe('composeLibraryDebugHarness', () => {
     const harness = composeLibraryDebugHarness(libraryData([fn, functionBlock('Pid')]))
 
     expect(harness.blocks).toEqual([{ pouName: 'Pid', instanceVariable: 'PID_I' }])
-    expect(harness.skipped).toEqual([])
   })
 
-  it('skips Python blocks and says why', () => {
+  it('instantiates Python blocks: the simulator runs them', () => {
     const harness = composeLibraryDebugHarness(
       libraryData([functionBlock('PyBlock', [], { language: 'python' }), functionBlock('Pid')]),
     )
 
-    expect(harness.blocks).toEqual([{ pouName: 'Pid', instanceVariable: 'PID_I' }])
-    expect(harness.skipped).toEqual([
-      { pouName: 'PyBlock', reason: expect.stringContaining('Python blocks cannot run on the simulator') },
+    expect(harness.blocks).toEqual([
+      { pouName: 'PyBlock', instanceVariable: 'PYBLOCK_I' },
+      { pouName: 'Pid', instanceVariable: 'PID_I' },
     ])
   })
 
   it('instantiates C/C++ blocks — they compile into the firmware', () => {
     const harness = composeLibraryDebugHarness(libraryData([functionBlock('CppBlock', [], { language: 'cpp' })]))
     expect(harness.blocks).toEqual([{ pouName: 'CppBlock', instanceVariable: 'CPPBLOCK_I' }])
-    expect(harness.skipped).toEqual([])
   })
 
   it('binds VAR_IN_OUT members to harness locals at the call site', () => {
@@ -186,7 +184,6 @@ describe('composeLibraryDebugHarness', () => {
     )
     expect(harness.blocks.map((b) => b.pouName)).toEqual(['Pid', 'Filter'])
     // A filtered-out block is a choice, not a problem — nothing to warn about.
-    expect(harness.skipped).toEqual([])
   })
 
   it('returns no blocks for a library with nothing instantiable', () => {

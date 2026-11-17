@@ -658,7 +658,11 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       })
     },
 
-    delete: (kind, name) => deleteElement(getState(), name, (n) => getState().projectActions.deleteHmiElement(kind, n)),
+    delete: (kind, name) =>
+      deleteElement(getState(), name, (n) => {
+        getState().projectActions.deleteHmiElement(kind, n)
+        getState().hmiDesignerActions.forgetEntry(kind, n)
+      }),
 
     rename: async (kind, oldName, newName) => {
       const state = getState()
@@ -681,9 +685,10 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
             getState().sharedWorkspaceActions.handleFileAndWorkspaceSavedState(element)
         }
       }
-      return renameElement(getState(), oldName, newName, (o, n) =>
-        getState().projectActions.renameHmiElement(kind, o, n),
-      )
+      return renameElement(getState(), oldName, newName, (o, n) => {
+        getState().projectActions.renameHmiElement(kind, o, n)
+        getState().hmiDesignerActions.renameEntry(kind, o, n)
+      })
     },
 
     respondToPendingRename: (renameReferences) => {
@@ -1084,6 +1089,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       const pendingRename = getState().pendingDatatypeRename
       const pendingHmiRename = getState().pendingHmiRename
       setState({ pendingDatatypeRename: null, pendingDatatypeDelete: null, pendingHmiRename: null })
+      getState().hmiDesignerActions.clear()
       pendingRename?.resolve(false)
       pendingHmiRename?.resolve(null)
       getState().editorActions.clearEditor()

@@ -111,12 +111,16 @@ export class LibraryManagerModule {
    *     packaged builds because strucpp isn't declared in
    *     `release/app/package.json`'s `dependencies`, so
    *     electron-builder prunes it out of the asar.
+   *
+   *   - **Built, not packaged** (`release/app/dist/main/main.js` run directly, as the e2e suite does): the app path is
+   *     `release/app`, which has no strucpp, so the working directory's `node_modules` is read instead.
    */
   private resolveDefaultBundledDir(): string {
     if (app.isPackaged) {
       return join(process.resourcesPath, 'strucpp', 'libs')
     }
-    return join(app.getAppPath(), 'node_modules', 'strucpp', 'libs')
+    const fromApp = join(app.getAppPath(), 'node_modules', 'strucpp', 'libs')
+    return existsSync(fromApp) ? fromApp : join(process.cwd(), 'node_modules', 'strucpp', 'libs')
   }
 
   // -------------------------------------------------------------------------

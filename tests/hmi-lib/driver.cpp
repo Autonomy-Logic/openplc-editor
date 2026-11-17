@@ -27,8 +27,8 @@ const char *g_dump_dir;
 /* Element ids follow the order of Attach calls, across screens. */
 enum : int32_t {
     kStart = 15, kRunSwitch, kSpeedSlider, kSetpointIn, kNameIn, kLocked,
-    kPlant = 21, kPump = 26, kValve = 27,
-    kBack = 35, kHome = 36,
+    kPlant = 21, kPump = 27, kValve = 28,
+    kBack = 36, kHome = 37,
 };
 
 uint64_t fnv(const uint8_t *p, size_t n) {
@@ -200,6 +200,12 @@ int main(int argc, char **argv) {
     frame("squeezed_0");
     tap_at("squeezed", 12, 12);
     frame("squeezed_after");
+
+    /* Shapes and animation: frames 40 ms apart turn the fan and pump, move the belts and flash the lamp. */
+    show(7);
+    frame("motion_0", true);
+    for (int i = 1; i < 7; i++) frame(i == 3 ? "motion_120ms" : "motion_step", i == 3);
+    frame("motion_280ms", true);
 
     /* A second viewer starts on the start page with its own state. */
     hmi_session_t *viewer = hmi_session_create();

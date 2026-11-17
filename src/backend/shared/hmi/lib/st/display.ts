@@ -39,6 +39,109 @@ FUNCTION_BLOCK HmiRect EXTENDS HmiElement
   END_METHOD
 END_FUNCTION_BLOCK
 
+(* Filled ellipse inscribed in the element's rectangle, optionally outlined; a circle when the rectangle is square. *)
+{attribute 'hmi_palette' := 'Shapes'}
+FUNCTION_BLOCK HmiEllipse EXTENDS HmiElement
+  VAR_INPUT
+    {attribute 'hmi_color'}
+    Fill : UDINT := COLOR.Surface;
+    {attribute 'hmi_color'}
+    Border : UDINT := COLOR.Border;
+    BorderWidth : DINT := 1;
+  END_VAR
+  METHOD PROTECTED OVERRIDE NaturalWidth : DINT
+    NaturalWidth := 96;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalHeight : DINT
+    NaturalHeight := 96;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    HMI_FillEllipse(CenterX(), CenterY(), Width / 2, Height / 2, Fill);
+    IF BorderWidth > 0 THEN
+      HMI_StrokeEllipse(CenterX(), CenterY(), Width / 2, Height / 2, BorderWidth, Border);
+    END_IF;
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Regular polygon of 3 to 32 Sides inscribed in the element's rectangle, its first vertex at Rotation degrees
+   (clockwise from 3 o'clock). InnerPct below 100 makes it a star, its inner vertices at that percent of the radius. *)
+{attribute 'hmi_palette' := 'Shapes'}
+FUNCTION_BLOCK HmiPolygon EXTENDS HmiElement
+  VAR_INPUT
+    Sides : DINT := 3;
+    Rotation : DINT := -90;
+    InnerPct : DINT := 100;
+    {attribute 'hmi_color'}
+    Fill : UDINT := COLOR.Surface;
+    {attribute 'hmi_color'}
+    Border : UDINT := COLOR.Border;
+    BorderWidth : DINT := 1;
+  END_VAR
+  METHOD PROTECTED OVERRIDE NaturalWidth : DINT
+    NaturalWidth := 96;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalHeight : DINT
+    NaturalHeight := 96;
+  END_METHOD
+  (* Starts a polygon in color C and adds the vertices. *)
+  METHOD INTERNAL Trace : BOOL
+    VAR_INPUT C : UDINT; END_VAR
+    VAR n, k, i, a, rx, ry, pct : DINT; END_VAR
+    n := LIMIT(3, Sides, 32);
+    pct := LIMIT(0, InnerPct, 100);
+    k := n;
+    IF pct < 100 THEN
+      k := 2 * n;
+    END_IF;
+    rx := Width / 2;
+    ry := Height / 2;
+    HMI_PolyBegin(C);
+    FOR i := 0 TO k - 1 DO
+      a := Rotation + i * 360 / k;
+      IF k > n AND i MOD 2 = 1 THEN
+        HMI_PolyPoint(CenterX() + HMI_Cos(a, rx * pct / 100), CenterY() + HMI_Sin(a, ry * pct / 100));
+      ELSE
+        HMI_PolyPoint(CenterX() + HMI_Cos(a, rx), CenterY() + HMI_Sin(a, ry));
+      END_IF;
+    END_FOR;
+    Trace := TRUE;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    Trace(Fill);
+    HMI_PolyFill();
+    IF BorderWidth > 0 THEN
+      Trace(Border);
+      HMI_PolyStroke(BorderWidth, TRUE);
+    END_IF;
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Straight line through the centre of the element's rectangle at Angle degrees: 0 across, 90 down, 45 diagonal. *)
+{attribute 'hmi_palette' := 'Shapes'}
+FUNCTION_BLOCK HmiLine EXTENDS HmiElement
+  VAR_INPUT
+    Angle : DINT;
+    Thickness : DINT := 2;
+    {attribute 'hmi_color'}
+    LineColor : UDINT := COLOR.Text;
+  END_VAR
+  METHOD PROTECTED OVERRIDE NaturalWidth : DINT
+    NaturalWidth := 160;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalHeight : DINT
+    NaturalHeight := 16;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    VAR dx, dy : DINT; END_VAR
+    dx := HMI_Cos(Angle, MAX(Width / 2 - Thickness / 2, 0));
+    dy := HMI_Sin(Angle, MAX(Height / 2 - Thickness / 2, 0));
+    HMI_Line(CenterX() - dx, CenterY() - dy, CenterX() + dx, CenterY() + dy, Thickness, LineColor);
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
 {attribute 'hmi_palette' := 'Display'}
 FUNCTION_BLOCK HmiLabel EXTENDS HmiElement
   VAR_INPUT
@@ -103,6 +206,8 @@ FUNCTION_BLOCK HmiLamp EXTENDS HmiElement
     {attribute 'hmi_main'}
     Value : BOOL;
     Caption : STRING(64) := 'Lamp';
+    (* Flashes twice a second while on. *)
+    Blink : BOOL;
     {attribute 'hmi_color'}
     OnColor : UDINT := COLOR.Success;
     {attribute 'hmi_color'}
@@ -119,15 +224,16 @@ FUNCTION_BLOCK HmiLamp EXTENDS HmiElement
   END_METHOD
   (* The light keeps its natural 36 lu when the lamp is stretched, centred vertically. *)
   METHOD PROTECTED OVERRIDE Draw : BOOL
-    VAR d, r, cx, cy : DINT; END_VAR
+    VAR d, r, cx, cy : DINT; lit : BOOL; END_VAR
     d := MIN(Height, 36);
     r := MAX(d / 2 - 4, 2);
     cx := Left + d / 2;
     cy := Top + Height / 2;
-    IF Value THEN
+    lit := Value AND NOT (Blink AND (HMI_TimeMs() / 250) MOD 2 = 1);
+    IF lit THEN
       HMI_FillCircle(cx, cy, r + 4, HMI_Alpha(OnColor, 13));
     END_IF;
-    HMI_FillCircle(cx, cy, r, SEL(Value, OffColor, OnColor));
+    HMI_FillCircle(cx, cy, r, SEL(lit, OffColor, OnColor));
     HMI_TextBox(Left + d + 8, Top, Width - d - 8, Height, Caption, 16, HMI_FONT#Regular, HMI_ALIGN#Left,
       HMI_VALIGN#Middle, COLOR.Text);
     Draw := TRUE;

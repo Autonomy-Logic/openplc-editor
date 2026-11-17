@@ -1,6 +1,18 @@
+import { readFileSync } from 'fs'
+import { join } from 'path'
+
 import { hmiSettingsSchema } from '../../../../../middleware/shared/utils/hmi/settings'
-import { generateHmiUnit, type HmiUnitInput, type HmiUnitResult, numericWriteBack } from '../generate-hmi-unit'
-import { DETAILS, OVERVIEW, sampleProject } from './fixtures/sample-project'
+import {
+  generateHmiUnit,
+  HMI_GALLERY_SCREEN,
+  HMI_THEME_PREVIEW_SCREEN,
+  hmiGalleryWidget,
+  type HmiUnitInput,
+  type HmiUnitResult,
+  numericWriteBack,
+  WIDGET_PREVIEW_SCREEN,
+} from '../generate-hmi-unit'
+import { DETAILS, OVERVIEW, PLC_DECLARATIONS, sampleProject } from './fixtures/sample-project'
 
 function messages(result: HmiUnitResult): string[] {
   return result.errors.map((e) => `${e.file}${e.line === undefined ? '' : `:${e.line}`}: ${e.message}`)
@@ -31,32 +43,172 @@ describe('HMI unit generator', () => {
     expect(sample.fonts).toEqual({ variant: 'compact', faces: [0, 1] })
   })
 
-  it('mirrors the PLC variables screens use, with their debug addresses, and warns about unresolved ones', () => {
+  it('reads the PLC variables screens use through the host, listed with their debug addresses', () => {
     expect(sample.tags).toEqual([
-      { path: 'Main.Level', type: 14, maxLength: 0, address: { arr: 0, elem: 3 } },
-      { path: 'Main.Running', type: 1, maxLength: 0, address: { arr: 0, elem: 4 } },
-      { path: 'Main.Speed', type: 3, maxLength: 0, address: { arr: 0, elem: 5 } },
-      { path: 'Main.Tag', type: 16, maxLength: 12, address: { arr: 1, elem: 0 } },
+      { path: 'CONFIG0.RES0.INSTANCE0.MAIN.LEVEL', type: 14, maxLength: 0, address: { arr: 0, elem: 3 } },
+      { path: 'CONFIG0.RES0.INSTANCE0.MAIN.RUNNING', type: 1, maxLength: 0, address: { arr: 0, elem: 4 } },
+      { path: 'CONFIG0.RES0.INSTANCE0.MAIN.SPEED', type: 3, maxLength: 0, address: { arr: 0, elem: 5 } },
+      { path: 'CONFIG0.RES0.INSTANCE0.MAIN.TAG', type: 16, maxLength: 12, address: { arr: 1, elem: 0 } },
+      { path: 'CONFIG0.ALARMON', type: 1, maxLength: 0, address: { arr: 2, elem: 0 } },
     ])
-    expect(sample.warnings).toEqual([
-      { file: 'HMI', message: "GVL.Alarm is not in the PLC program's debug map; the HMI will not sync it" },
+    expect(sample.warnings).toEqual([])
+    const glue = sample.files['hmi_unit_glue.cpp']
+    expect(glue).toContain('{1u, 0u, 16, 12, "CONFIG0.RES0.INSTANCE0.MAIN.TAG"},')
+    expect(glue).toContain('void *external_variable(uint32_t id) { return tag_variable(id); }')
+    expect(glue).toContain('constexpr size_t kTagBufferSize = 13;')
+    expect(glue).toContain(
+      '    if (g_access->read(g_access->ctx, static_cast<int>(id), buf)) hmi_tag_write(static_cast<int>(id), g_read[id], buf);',
+    )
+    expect(glue).toContain('    if (!g_access) return g_own[id];')
+    expect(glue).toContain('    g_access = access && access->read && access->write ? access : nullptr;')
+    expect(glue).toContain('    return g_read[id];')
+    expect(glue).toContain(
+      '        if (hmi_tag_read(static_cast<int>(id), value, buf) == 0) g_access->write(g_access->ctx, static_cast<int>(id), buf);',
+    )
+    expect(glue).not.toContain('g_access->variable')
+    expect(glue).toContain('bool hmi_unit_frame(void *unit) {')
+    expect(glue).toContain('#if STRUCPP_HAS_EXCEPTIONS')
+    expect(glue).toContain('#include "iec_fault.hpp"')
+    expect(glue).toMatch(
+      /try \{\s+static_cast<HmiProgram \*>\(unit\)->run\(\);\s+\} catch \(\.\.\.\) \{\s+return false;/,
+    )
+    expect(glue).toContain(
+      '    case 0: *static_cast<strucpp::IEC_REAL *>(g_own[0]) = *static_cast<const strucpp::IEC_REAL *>(value); return;',
+    )
+    expect(glue).toContain('const char hmi_panel_pin[] = "2468";')
+    expect(glue).toContain('while (n < 12 && b[n] != 0) n++;')
+    expect(Object.keys(sample.sources)).not.toContain('hmi_tags.st')
+    expect(sample.files['pou_OVERVIEW.cpp']).toContain('strucpp::external_read<IEC_REAL>(0)')
+  })
+
+  it('starts the variables from their literal initial values in a preview, and never in a product build', () => {
+    const project = sampleProject()
+    const initial: Record<string, string> = {
+      'instance0.Main.Level': '12.5',
+      'instance0.Main.Running': 'TRUE',
+      'instance0.Main.Speed': 'INT#7',
+      'instance0.Main.Tag': "'Pump $'A$''",
+      AlarmOn: 'Limit > 3',
+    }
+    const plcVariables = project.plcVariables.map((v) => ({ ...v, initialValue: initial[v.path] }))
+    const preview = generateHmiUnit({ ...project, plcVariables, preview: true, resolve: undefined })
+    expect(messages(preview)).toEqual([])
+    const main = preview.sources['hmi_main.st']
+    expect(main).toContain('    instance0.Main.Level := 12.5;')
+    expect(main).toContain('    instance0.Main.Running := TRUE;')
+    expect(main).toContain('    instance0.Main.Speed := INT#7;')
+    expect(main).toContain("    instance0.Main.Tag := 'Pump $'A$'';")
+    expect(main).not.toContain('AlarmOn :=')
+    expect(generateHmiUnit({ ...project, plcVariables }).sources['hmi_main.st']).not.toContain(
+      'instance0.Main.Level :=',
+    )
+  })
+
+  it('never lets an initial value break out of its start statement', () => {
+    const project = sampleProject()
+    for (const initialValue of ['0; END_IF; HMI_Show(0)', "'a'; b := 1", "'open", 'MAX_LEVEL', '1 + 2']) {
+      const result = generateHmiUnit({
+        ...project,
+        preview: true,
+        resolve: undefined,
+        plcVariables: project.plcVariables.map((v) => (v.path === 'instance0.Main.Speed' ? { ...v, initialValue } : v)),
+      })
+      expect(result.sources['hmi_main.st']).not.toContain('instance0.Main.Speed :=')
+    }
+  })
+
+  it('previews a widget block on an extra screen, at natural size and stretched, with a test value', () => {
+    const project = sampleProject()
+    const result = generateHmiUnit({ ...project, screens: [], widgetPreview: 'badge', resolve: undefined })
+    expect(messages(result)).toEqual([])
+    const source =
+      result.sources[`${WIDGET_PREVIEW_SCREEN}.st`] ??
+      Object.values(result.sources).find((t) => t.includes(WIDGET_PREVIEW_SCREEN))
+    expect(source).toContain("Natural : Badge := (Parent := 'HMI__Row', GrowAuto := FALSE);")
+    expect(source).toContain("Stretched : Badge := (Parent := 'HMI__Column', Grow := 1, GrowAuto := FALSE);")
+    expect(source).toContain('Natural.Value := TRUE;')
+    expect(result.preview.units.screens[WIDGET_PREVIEW_SCREEN]).toBeDefined()
+    expect(generateHmiUnit(project).sources).not.toHaveProperty([`${WIDGET_PREVIEW_SCREEN}.st`])
+  })
+
+  it('draws every palette widget and widget block alone on the gallery screen, in place of the project screens', () => {
+    const project = sampleProject()
+    const result = generateHmiUnit({ ...project, gallery: true, resolve: undefined })
+    expect(messages(result)).toEqual([])
+    const shown = result.elementIds.flatMap((e) => {
+      const widget = hmiGalleryWidget(e.element)
+      return widget === null ? [] : [widget]
+    })
+    expect(shown).toEqual(expect.arrayContaining(['HmiLamp', 'HmiTank', 'HmiButton', 'Badge']))
+    expect(shown.some((w) => /^Hmi(Stack|Diagram|Pipe)$/.test(w))).toBe(false)
+    expect(new Set(result.elementIds.map((e) => e.screen))).toEqual(new Set([HMI_GALLERY_SCREEN]))
+    const source = Object.values(result.sources).find((t) => t.includes(`FUNCTION_BLOCK ${HMI_GALLERY_SCREEN}`))
+    expect(source).toContain("W_HmiLamp : HmiLamp := (Parent := 'HMI__R_HmiLamp', GrowAuto := FALSE);")
+    expect(source).toContain('W_HmiLamp.Value := TRUE;')
+    expect(hmiGalleryWidget('HMI__Column')).toBeNull()
+  })
+
+  it('draws a sample screen in a theme, in place of the project screens, and refuses an unknown theme', () => {
+    const project = sampleProject()
+    const settings = {
+      ...project.settings,
+      themes: [{ name: 'Brand', base: 'Autonomy' as const, colors: { Accent: '#E91E63' } }],
+    }
+    const result = generateHmiUnit({ ...project, settings, themePreview: 'Brand', resolve: undefined })
+    expect(messages(result)).toEqual([])
+    expect(new Set(result.elementIds.map((e) => e.screen))).toEqual(new Set([HMI_THEME_PREVIEW_SCREEN]))
+    const source = Object.values(result.sources).find((t) => t.includes(`FUNCTION_BLOCK ${HMI_THEME_PREVIEW_SCREEN}`))
+    expect(source).toContain('HMI__Red : HmiRect')
+    const unknown = generateHmiUnit({ ...project, themePreview: 'Nope', resolve: undefined })
+    expect(messages(unknown).join('\n')).toMatch(/unknown theme 'Nope'/)
+  })
+
+  it('keeps an operator change on a two-way widget that nothing else sets', () => {
+    const result = generateHmiUnit(
+      withScreen(
+        screen(
+          ['    Free : HmiSlider;', '    Wired : HmiSlider;', '    Scaled : HmiSlider;', '    Note : HmiSwitch;'].join(
+            '\n',
+          ),
+          '  Wired.Value := instance0.Main.Level;\n  Scaled.Value := instance0.Main.Level * 2.0;\n  (* Note.Value := TRUE; *)',
+        ),
+      ),
+    )
+    expect(messages(result)).toEqual([])
+    const overview = Object.values(result.sources).find((t) => t.includes('FUNCTION_BLOCK Overview')) ?? ''
+    expect(overview).toContain('IF Free.Changed THEN Free.Value := Free.NewValue; END_IF;')
+    expect(overview).toContain('IF Note.Changed THEN Note.Value := Note.NewValue; END_IF;')
+    expect(overview).not.toContain('Wired.Value := Wired.NewValue')
+    expect(overview).not.toContain('Scaled.Value := Scaled.NewValue')
+  })
+
+  it('refuses to preview a widget block the project does not have', () => {
+    const result = generateHmiUnit({ ...sampleProject(), widgetPreview: 'HmiLamp' })
+    expect(messages(result)).toEqual(['HMI: HmiLamp is not a widget block of the project'])
+  })
+
+  it('refuses a tag the PLC program does not have, so the host never serves it from another address', () => {
+    const project = sampleProject()
+    const result = generateHmiUnit({
+      ...project,
+      resolve: (path) => (path.toUpperCase() === 'CONFIG0.ALARMON' ? null : (project.resolve?.(path) ?? null)),
+    })
+    expect(result.ok).toBe(false)
+    expect(messages(result)).toEqual([
+      'HMI: AlarmOn has no debug address in the compiled PLC program, so the HMI cannot reach it',
     ])
-    expect(sample.sources['hmi_tags.st']).toContain('TYPE HMI__PLC_GVL :')
-    expect(sample.files['hmi_unit_glue.cpp']).toContain('{1u, 0u, 16, 12, "Main.Tag"},')
-    expect(sample.files['hmi_unit_glue.cpp']).not.toContain('GVL.Alarm')
-    expect(sample.files['hmi_unit_glue.cpp']).toContain('const char hmi_panel_pin[] = "2468";')
-    expect(sample.files['hmi_unit_glue.cpp']).toContain('while (n < 12 && b[n] != 0) n++;')
+    expect(result.files['hmi_unit_glue.cpp']).toBeUndefined()
   })
 
   it('keeps every tag without a PLC program, for previews', () => {
     const preview = generateHmiUnit({ ...sampleProject(), resolve: undefined, plcMd5: undefined })
     expect(preview.warnings).toEqual([])
     expect(preview.tags.map((t) => [t.path, t.address])).toEqual([
-      ['Main.Level', null],
-      ['Main.Running', null],
-      ['Main.Speed', null],
-      ['Main.Tag', null],
-      ['GVL.Alarm', null],
+      ['CONFIG0.RES0.INSTANCE0.MAIN.LEVEL', null],
+      ['CONFIG0.RES0.INSTANCE0.MAIN.RUNNING', null],
+      ['CONFIG0.RES0.INSTANCE0.MAIN.SPEED', null],
+      ['CONFIG0.RES0.INSTANCE0.MAIN.TAG', null],
+      ['CONFIG0.ALARMON', null],
     ])
     expect(preview.files['hmi_unit_glue.cpp']).toContain('const char hmi_plc_md5[] = "";')
   })
@@ -69,11 +221,11 @@ describe('HMI unit generator', () => {
     expect(line).toContain(
       'UseTheme(5); Attach(ADR(Col), 0); Attach(ADR(Level), ADR(Col)); Attach(ADR(Run), ADR(Col)); Attach(ADR(Speed), 0);',
     )
-    expect(line).toContain('IF Run.Changed THEN Main.Running := Run.NewValue; END_IF;')
+    expect(line).toContain('IF Run.Changed THEN instance0.Main.Running := Run.NewValue; END_IF;')
     expect(line).toContain(
-      'IF Speed.Changed AND Speed.NewValue = Speed.NewValue THEN Main.Speed := REAL_TO_INT(LIMIT(-32768.0, Speed.NewValue, 32767.0)); END_IF;',
+      'IF Speed.Changed AND Speed.NewValue = Speed.NewValue THEN instance0.Main.Speed := REAL_TO_INT(LIMIT(-32768.0, Speed.NewValue, 32767.0)); END_IF;',
     )
-    expect(line).toContain('IF Name.Changed THEN Main.Tag := Name.NewValue; END_IF;')
+    expect(line).toContain('IF Name.Changed THEN instance0.Main.Tag := Name.NewValue; END_IF;')
     expect(sample.elementIds.slice(0, 3)).toEqual([
       { id: 1, screen: 'Overview', element: 'Col' },
       { id: 2, screen: 'Overview', element: 'Level' },
@@ -102,8 +254,11 @@ describe('HMI unit generator', () => {
     expect(sample.preview.units).toEqual({
       library: ['lib_standard_widgets.cpp'],
       widgets: ['lib_project_widgets.cpp'],
-      screens: { Overview: ['pou_OVERVIEW.cpp'], Details: ['pou_DETAILS.cpp'] },
-      glue: expect.arrayContaining(['configuration.cpp', 'pou_HMIMAIN.cpp', 'hmi_unit_glue.cpp']),
+      screens: {
+        Overview: ['pou_OVERVIEW.cpp', 'hmi_preview_0.cpp'],
+        Details: ['pou_DETAILS.cpp', 'hmi_preview_1.cpp'],
+      },
+      glue: expect.arrayContaining(['configuration.cpp', 'pou_HMIMAIN.cpp', 'hmi_unit_glue.cpp', 'hmi_preview.cpp']),
     })
     const { setters } = sample.preview
     expect(setters['Overview.Level.MaxValue']).toEqual({ screen: 0, index: expect.any(Number), kind: 'num' })
@@ -199,30 +354,60 @@ describe('HMI unit generator', () => {
     ])
   })
 
-  it('refuses PLC variables that do not exist or cannot be mirrored', () => {
-    expect(messages(generateHmiUnit(withScreen(screen('    L : HmiLabel;', '  L.Visible := Main.Nope;'))))).toEqual([
-      'Overview: MAIN.NOPE is not a PLC variable',
+  it('refuses PLC variables that do not exist, are not named by instance or cannot be shown', () => {
+    expect(
+      messages(generateHmiUnit(withScreen(screen('    L : HmiLabel;', '  L.Visible := instance0.Main.Nope;')))),
+    ).toEqual(["Overview:5: Program 'MAIN' has no variable 'NOPE'."])
+    expect(messages(generateHmiUnit(withScreen(screen('    L : HmiLabel;', '  L.Visible := Main.Running;'))))).toEqual([
+      "Overview:5: Cannot access members of program 'MAIN' directly — declare a variable of type 'MAIN' first.",
     ])
     const project = sampleProject()
     const odd = {
       ...project,
-      plcVariables: [
-        ...project.plcVariables,
-        { path: 'Main.Buf', type: 'ARRAY[0..3] OF INT' },
-        { path: 'Main.W', type: 'WSTRING' },
-      ],
+      plcDeclarations: PLC_DECLARATIONS.replace(
+        'Unused : DINT;',
+        'Unused : DINT;\n    Buf : ARRAY[0..3] OF INT;\n    W : WSTRING;',
+      ),
     }
+    const element = generateHmiUnit({
+      ...odd,
+      screens: withScreen(screen('    L : HmiLabel;', '  L.Visible := instance0.Main.Buf[1] > 0;')).screens,
+    })
+    expect(messages(element)).toEqual([])
+    expect(element.tags.map((t) => t.path)).toContain('CONFIG0.RES0.INSTANCE0.MAIN.BUF[1]')
     expect(
       messages(
         generateHmiUnit({
           ...odd,
-          screens: withScreen(screen('    L : HmiLabel;', '  L.Visible := Main.Buf[0] > 0 OR Main.W = "";')).screens,
+          screens: withScreen(screen('    L : HmiLabel;', '  L.Visible := instance0.Main.W = "";')).screens,
         }),
       ),
-    ).toEqual([
-      'Overview: Main.Buf: ARRAY[0..3] OF INT variables cannot be used on screens',
-      'Overview: Main.W: WSTRING variables cannot be used on screens',
-    ])
+    ).toEqual(['HMI: INSTANCE0.MAIN.W: WSTRING variables cannot be used on screens'])
+  })
+
+  it('connects each pipe to the one declared before it in the same container, for its hops', () => {
+    const result = generateHmiUnit(
+      withScreen(
+        screen(
+          [
+            '    D1 : HmiDiagram;',
+            '    D2 : HmiDiagram;',
+            "    A : HmiPump := (Parent := 'D1');",
+            "    B : HmiValve := (Parent := 'D1');",
+            "    C : HmiPump := (Parent := 'D2');",
+            "    E : HmiValve := (Parent := 'D2');",
+            "    P1 : HmiPipe := (Parent := 'D1', Source := 'A', Target := 'B');",
+            "    Q1 : HmiPipe := (Parent := 'D2', Source := 'C', Target := 'E');",
+            "    P2 : HmiPipe := (Parent := 'D1', Source := 'B', Target := 'A', Path := '10,10;10,90');",
+          ].join('\n'),
+        ),
+      ),
+    )
+    expect(messages(result)).toEqual([])
+    const overview = Object.values(result.sources).find((t) => t.includes('FUNCTION_BLOCK Overview')) ?? ''
+    expect(overview).toContain('Connect(ADR(P1), ADR(A), ADR(B), 0);')
+    expect(overview).toContain('Connect(ADR(Q1), ADR(C), ADR(E), 0);')
+    expect(overview).toContain('Connect(ADR(P2), ADR(B), ADR(A), ADR(P1));')
   })
 
   it('checks containers, parents and pipe ends', () => {
@@ -257,10 +442,61 @@ describe('HMI unit generator', () => {
     ])
   })
 
+  it('compiles PLC declarations that use library blocks, with the PLC libraries passed in', () => {
+    const project = sampleProject()
+    const plcDeclarations = project.plcDeclarations?.replace(
+      '    Unused : DINT;\n',
+      '    Unused : DINT;\n    T1 : TON;\n',
+    )
+    const input = {
+      ...withScreen(screen('    Done : HmiLamp;', '  Done.Value := instance0.Main.T1.Q;')),
+      plcDeclarations,
+      preview: true,
+      resolve: undefined,
+    }
+    expect(messages(generateHmiUnit(input))).toContain("HMI:8: Undefined type 'TON' in PROGRAM 'MAIN'")
+    const archiveJson = readFileSync(
+      join(process.cwd(), 'node_modules', 'strucpp', 'libs', 'iec-standard-fb.stlib'),
+      'utf-8',
+    )
+    const result = generateHmiUnit({ ...input, plcLibraries: [{ name: 'iec-standard-fb', archiveJson }] })
+    expect(messages(result)).toEqual([])
+    expect(result.tags.map((t) => t.path)).toContain('CONFIG0.RES0.INSTANCE0.MAIN.T1.Q')
+    expect(Object.values(result.files).some((text) => /\bclass TON\b|\bTON::/.test(text))).toBe(false)
+  })
+
+  it('shows a CONSTANT, never starts it in a preview, and refuses a widget that would write it', () => {
+    const project = sampleProject()
+    const constant = {
+      ...project,
+      plcDeclarations: project.plcDeclarations?.replace(
+        'CONFIGURATION Config0\n',
+        'CONFIGURATION Config0\n  VAR_GLOBAL CONSTANT\n    MaxL : INT := 10;\n  END_VAR\n',
+      ),
+      plcVariables: [
+        ...project.plcVariables,
+        { path: 'MaxL', type: 'INT', initialValue: '10', constant: true as const },
+      ],
+      preview: true,
+      resolve: undefined,
+    }
+    const shown = generateHmiUnit({
+      ...constant,
+      screens: withScreen(screen('    Max : HmiLabel;', '  Max.Text := INT_TO_STRING(MaxL);')).screens,
+    })
+    expect(messages(shown)).toEqual([])
+    expect(shown.sources['hmi_main.st']).not.toContain('MaxL :=')
+    const written = generateHmiUnit({
+      ...constant,
+      screens: withScreen(screen('    S : HmiSlider;', '  S.Value := MaxL;')).screens,
+    })
+    expect(messages(written)).toEqual(['Overview: S.Value: MaxL is a CONSTANT; the operator cannot change it'])
+  })
+
   it('refuses a write-back the variable cannot take', () => {
-    expect(messages(generateHmiUnit(withScreen(screen('    T : HmiTextInput;', '  T.Value := Main.Speed;'))))).toEqual([
-      'Overview: T.Value: a STRING widget value cannot be written to Main.Speed (INT)',
-    ])
+    expect(
+      messages(generateHmiUnit(withScreen(screen('    T : HmiTextInput;', '  T.Value := instance0.Main.Speed;')))),
+    ).toEqual(['Overview: T.Value: a STRING widget value cannot be written to instance0.Main.Speed (INT)'])
   })
 
   it('reports compile errors in a screen at its own line, and widget blocks that are not widgets', () => {

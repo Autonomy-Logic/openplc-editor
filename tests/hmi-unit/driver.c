@@ -1,11 +1,12 @@
 /**
  * @file driver.c
- * A host for the sample project's HMI unit, in C, through hmi_unit.h only: a simulated PLC synced through the tag
- * accessors, one program instance and core session per viewer, scripted input. Prints the tag table and settings,
+ * A host for the sample project's HMI unit, in C, through hmi_unit.h only: a simulated PLC behind the host's tag
+ * access, one program instance and core session per viewer, scripted input. Prints the tag table and settings,
  * then one line per frame with the page and display list hash, and every write a viewer's frame made. With a
  * directory argument, frames whose label ends in '!' are also written there as RGBA for review.
  * Usage: driver [dump-dir]
  */
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,11 +46,6 @@ static void dump(const char *viewer, const char *label, const uint8_t *dl, size_
     free(px);
 }
 
-static int same(int tag, const unsigned char *a, const unsigned char *b) {
-    if (hmi_tags[tag].type == HMI_TAG_STRING) return strcmp((const char *)a, (const char *)b) == 0;
-    return memcmp(a, b, hmi_tag_size(tag)) == 0;
-}
-
 static void print_value(int tag, const unsigned char *v) {
     switch (hmi_tags[tag].type) {
     case HMI_TAG_BOOL: printf("%d", v[0]); break;
@@ -60,11 +56,33 @@ static void print_value(int tag, const unsigned char *v) {
     }
 }
 
-/* One frame of a viewer: PLC values into the mirror, the frame, then the viewer's writes back to the PLC. */
+static int g_writes[64];
+static int g_write_count;
+static int g_reads;
+static int g_unreadable = -1;
+
+/* The simulated PLC: each tag's value in its buffer format, read as screens use it; one tag can be unreadable. */
+static bool plc_read(void *ctx, int tag, void *dest) {
+    (void)ctx;
+    g_reads++;
+    if (tag == g_unreadable) return false;
+    memcpy(dest, g_plc[tag], hmi_tag_size(tag));
+    return true;
+}
+
+static void plc_write(void *ctx, int tag, const void *src) {
+    (void)ctx;
+    memset(g_plc[tag], 0, VALUE_MAX);
+    memcpy(g_plc[tag], src, hmi_tag_size(tag));
+    if (g_write_count < 64) g_writes[g_write_count++] = tag;
+}
+
+static const hmi_tag_access_t g_access = {plc_read, plc_write, NULL};
+
+/* One frame of a viewer, reading the PLC's values as screens use them, then the writes it made. */
 static void frame(viewer_t *v, const char *label) {
-    unsigned char after[VALUE_MAX];
     hmi_session_use(v->session);
-    for (int t = 0; t < hmi_tag_count; t++) hmi_tag_write(t, g_plc[t]);
+    g_write_count = 0;
     hmi_set_time_ms(g_now);
     g_now += 50;
     hmi_frame_begin();
@@ -75,13 +93,9 @@ static void frame(viewer_t *v, const char *label) {
     if (g_dump_dir && label_len > 0 && label[label_len - 1] == '!') dump(v->name, label, dl, len);
     printf("%s %s page=%d dl=%016llx status=%u", v->name, label, (int)hmi_page(),
            (unsigned long long)hmi_frame_hash(), (unsigned)hmi_frame_status());
-    for (int t = 0; t < hmi_tag_count; t++) {
-        memset(after, 0, sizeof after);
-        hmi_tag_read(t, after);
-        if (same(t, after, g_plc[t])) continue;
-        printf(" write %s=", hmi_tags[t].path);
-        print_value(t, after);
-        memcpy(g_plc[t], after, VALUE_MAX);
+    for (int i = 0; i < g_write_count; i++) {
+        printf(" write %s=", hmi_tags[g_writes[i]].path);
+        print_value(g_writes[i], g_plc[g_writes[i]]);
     }
     printf("\n");
 }
@@ -112,6 +126,13 @@ static void tap(viewer_t *v, const char *label, int32_t id) {
     frame(v, up);
 }
 
+static int tag_of(const char *path) {
+    for (int t = 0; t < hmi_tag_count; t++)
+        if (strcmp(hmi_tags[t].path, path) == 0) return t;
+    printf("no tag %s\n", path);
+    exit(1);
+}
+
 static viewer_t viewer(const char *name, int role, int32_t w, int32_t h) {
     viewer_t v = {name, hmi_session_create(), hmi_unit_create()};
     if (!v.session || !v.unit) {
@@ -131,12 +152,14 @@ int main(int argc, char **argv) {
     for (int t = 0; t < hmi_tag_count; t++)
         printf("tag %d %s arr=%u elem=%u type=%u max=%u size=%zu\n", t, hmi_tags[t].path, (unsigned)hmi_tags[t].arr,
                (unsigned)hmi_tags[t].elem, (unsigned)hmi_tags[t].type, (unsigned)hmi_tags[t].max_len, hmi_tag_size(t));
-    if (hmi_tag_read(hmi_tag_count, g_plc[0]) != -1 || hmi_tag_write(-1, g_plc[0]) != -1) printf("unknown tag accepted\n");
+    if (hmi_tag_read(hmi_tag_count, NULL, g_plc[0]) != -1 || hmi_tag_write(-1, NULL, g_plc[0]) != -1)
+        printf("unknown tag accepted\n");
+    hmi_set_tag_access(&g_access);
 
-    /* PLC values: Main.Level 6.5, Main.Tag 'TK-1'. */
+    /* PLC values: instance0.Main.Level 6.5, instance0.Main.Tag 'TK-1'. */
     float level = 6.5f;
-    memcpy(g_plc[0], &level, sizeof level);
-    strcpy((char *)g_plc[3], "TK-1");
+    memcpy(g_plc[tag_of("CONFIG0.RES0.INSTANCE0.MAIN.LEVEL")], &level, sizeof level);
+    strcpy((char *)g_plc[tag_of("CONFIG0.RES0.INSTANCE0.MAIN.TAG")], "TK-1");
 
     viewer_t admin = viewer("admin", HMI_ROLE_ADMIN, 480, 320);
     frame(&admin, "start");
@@ -191,18 +214,60 @@ int main(int argc, char **argv) {
            hmi_unit_set_num(admin.unit, 0, 9999, 1.0), hmi_unit_set_str(NULL, 0, 0, "x"));
     frame(&admin, "live_edit!");
 
+    /* Reads reach the host when a value is used, with no frame; an unreadable tag keeps the value last read. */
+    int level_tag = tag_of("CONFIG0.RES0.INSTANCE0.MAIN.LEVEL");
+    unsigned char got[VALUE_MAX];
+    g_reads = 0;
+    frame(&admin, "reads");
+    printf("frame read the host %s\n", g_reads > 0 ? "yes" : "no");
+    level = 7.25f;
+    memcpy(g_plc[level_tag], &level, sizeof level);
+    g_reads = 0;
+    hmi_tag_read(level_tag, NULL, got);
+    printf("read level=");
+    print_value(level_tag, got);
+    printf(" reads=%d\n", g_reads);
+    g_unreadable = level_tag;
+    level = 9.5f;
+    memcpy(g_plc[level_tag], &level, sizeof level);
+    hmi_tag_read(level_tag, NULL, got);
+    printf("unreadable level=");
+    print_value(level_tag, got);
+    printf("\n");
+    g_unreadable = -1;
+    hmi_tag_read(level_tag, NULL, got);
+    printf("readable again level=");
+    print_value(level_tag, got);
+    printf("\n");
+
+    /* A host STRING buffer with no NUL within max_len + 1 bytes is cut at max_len. */
+    int tag = tag_of("CONFIG0.RES0.INSTANCE0.MAIN.TAG");
+    memcpy(g_plc[tag], "ABCDEFGHIJKLMNOPQRSTUVWXYZ", 26);
+    hmi_tag_read(tag, NULL, got);
+    printf("host cut '%s'\n", (const char *)got);
+
+    /* Access missing a callback counts as none: the unit keeps the variables itself and never calls the host. */
+    static const hmi_tag_access_t half = {plc_read, NULL, NULL};
+    hmi_set_tag_access(&half);
+    g_reads = 0;
+    hmi_tag_read(level_tag, NULL, got);
+    printf("half access reads=%d\n", g_reads);
+
+    /* Without host access the unit keeps the variables itself, as in the preview. */
+    hmi_set_tag_access(NULL);
+
     /* A STRING longer than its declared length is cut; a short one is read only up to its end. */
     unsigned char text[VALUE_MAX] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     unsigned char back[VALUE_MAX];
-    hmi_tag_write(3, text);
-    hmi_tag_read(3, back);
+    hmi_tag_write(tag, NULL, text);
+    hmi_tag_read(tag, NULL, back);
     printf("cut '%s'\n", (const char *)back);
     char *shortText = (char *)malloc(3);
     if (shortText) {
         memcpy(shortText, "AB", 3);
-        hmi_tag_write(3, shortText);
+        hmi_tag_write(tag, NULL, shortText);
         free(shortText);
-        hmi_tag_read(3, back);
+        hmi_tag_read(tag, NULL, back);
         printf("short '%s'\n", (const char *)back);
     }
 

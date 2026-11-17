@@ -238,4 +238,37 @@ END_FUNCTION
 FUNCTION HMI_Back : BOOL
   {external HMI_BACK_result.set(hmi_page_back() != 0); }
 END_FUNCTION
+
+(* Animation clock: while Run, Phase advances Rate units per second (negative runs backwards), wrapping at Period, and
+   holds where it is when Run drops. Call it once per frame; a frame gap counts at most one second. *)
+FUNCTION_BLOCK HmiAnimator
+  VAR_INPUT
+    Run : BOOL;
+    Rate : DINT := 360;
+    Period : DINT := 360;
+  END_VAR
+  VAR_OUTPUT
+    Phase : DINT;
+  END_VAR
+  VAR
+    milli : DINT;
+    last : UDINT;
+    started : BOOL;
+  END_VAR
+  VAR_TEMP
+    now : UDINT;
+    span : DINT;
+  END_VAR
+  now := HMI_TimeMs();
+  span := MAX(Period, 1) * 1000;
+  IF started AND Run THEN
+    milli := (milli + LIMIT(0, UDINT_TO_DINT(now - last), 1000) * LIMIT(-100000, Rate, 100000) MOD span) MOD span;
+    IF milli < 0 THEN
+      milli := milli + span;
+    END_IF;
+  END_IF;
+  last := now;
+  started := TRUE;
+  Phase := milli / 1000;
+END_FUNCTION_BLOCK
 `

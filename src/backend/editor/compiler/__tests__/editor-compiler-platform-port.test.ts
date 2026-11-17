@@ -17,7 +17,7 @@
  * are stubbed since they spawn subprocesses we can't run in CI.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -150,6 +150,7 @@ describe('createEditorCompilerPlatformPort', () => {
         makeRuntimeApiUpload: jest.fn(),
       },
       compressSourceFolder: jest.fn(),
+      wasmCompileService: { compile: jest.fn() },
       pollTimeoutMs: 1000,
       pollIntervalMs: 10,
       startTimeoutMs: 1000,
@@ -165,6 +166,35 @@ describe('createEditorCompilerPlatformPort', () => {
     const md5 = await port.computeMd5('hello world')
     // crypto.createHash('md5').update('hello world').digest('hex')
     expect(md5).toBe('5eb63bbbe01eeed093cb22bb8f5acdc3')
+  })
+
+  it('compileToWasm writes the request text files to the build folder, then compiles with the service', async () => {
+    const result = {
+      ok: true as const,
+      wasm: new Uint8Array([0, 97, 115, 109]),
+      stats: { units: 1, cached: 0, compileMs: 1, linkMs: 1 },
+      diagnostics: [],
+    }
+    const compile = jest.fn().mockResolvedValue(result)
+    const compilationPath = mkdtempSync(join(tmpdir(), 'wasm-build-'))
+    try {
+      const port = createEditorCompilerPlatformPort(
+        makeHandlers(),
+        makeContext({ compilationPath, wasmCompileService: { compile } }),
+      )
+      const request = {
+        files: { 'src/debug-map.json': '{"md5":"x"}', 'src/blob.bin': new Uint8Array([1]) },
+        units: [{ source: 'src/a.cpp', language: 'c++' as const }],
+      }
+      const log = jest.fn()
+
+      await expect(port.compileToWasm(request, log)).resolves.toBe(result)
+      expect(compile).toHaveBeenCalledWith(request, log)
+      expect(readFileSync(join(compilationPath, 'src', 'debug-map.json'), 'utf-8')).toBe('{"md5":"x"}')
+      expect(existsSync(join(compilationPath, 'src', 'blob.bin'))).toBe(false)
+    } finally {
+      rmSync(compilationPath, { recursive: true, force: true })
+    }
   })
 
   // ---- uploadArduinoBoard — port wiring (regression for issue #5) ----

@@ -1,7 +1,13 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import {
   defaultHmiSettings,
+  HMI_BUILTIN_THEME_COLORS,
   HMI_BUILTIN_THEMES,
+  HMI_THEME_TOKENS,
   hmiSettingsSchema,
+  hmiThemeColors,
   hmiThemeId,
   parseHmiSettings,
   screenGrant,
@@ -103,5 +109,37 @@ describe('HMI settings', () => {
 
   it('reports an error without a path for a value that is not an object', () => {
     expect(errorsOf('nope')).toEqual(['Expected object, received string'])
+  })
+})
+
+describe('theme colors', () => {
+  it('match the predefined themes of the C core', () => {
+    const file = ['resources/sources/hmi/core/hmi_theme.c', 'src/assets/firmware/hmi/core/hmi_theme.c']
+      .map((p) => join(process.cwd(), p))
+      .find((p) => existsSync(p))
+    if (!file) throw new Error('hmi_theme.c not found')
+    const rows = [...readFileSync(file, 'utf-8').matchAll(/\/\* \d (\w+) \*\/\s*\{0,([^}]*)\}/g)]
+    expect(rows.map((r) => r[1])).toEqual([...HMI_BUILTIN_THEMES])
+    for (const [, name, values] of rows) {
+      const hex = values
+        .split(',')
+        .map((v) => v.trim())
+        .filter((v) => v !== '')
+        .map((v) => `#${v.slice(2).toUpperCase()}`)
+      const theme = HMI_BUILTIN_THEMES.find((t) => t === name)
+      if (!theme) throw new Error(`unknown theme ${name}`)
+      expect(HMI_THEME_TOKENS.map((t) => HMI_BUILTIN_THEME_COLORS[theme][t])).toEqual(hex)
+    }
+  })
+
+  it('resolve a project theme over its base, and nothing for an unknown theme', () => {
+    const settings = hmiSettingsSchema.parse({
+      themes: [{ name: 'Brand', base: 'Dark', colors: { Accent: '#e91e63' } }],
+    })
+    const colors = hmiThemeColors(settings, 'brand')
+    expect(colors?.Accent).toBe('#E91E63')
+    expect(colors?.Background).toBe(HMI_BUILTIN_THEME_COLORS.Dark.Background)
+    expect(hmiThemeColors(settings, 'Light')).toEqual(HMI_BUILTIN_THEME_COLORS.Light)
+    expect(hmiThemeColors(settings, 'Nope')).toBeNull()
   })
 })

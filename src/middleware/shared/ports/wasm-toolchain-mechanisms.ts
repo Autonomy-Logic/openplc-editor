@@ -36,6 +36,16 @@ export interface WasmClangRunner {
   run(job: WasmClangJob): Promise<WasmClangJobResult>
 }
 
+/**
+ * Durable storage of compiled objects across sessions: opaque records by key, stored and returned verbatim. What a
+ * record holds and when it is still valid is decided by the shared toolchain.
+ */
+export interface WasmObjectStore {
+  readAll(): Promise<Array<[key: string, record: Uint8Array]>>
+  write(key: string, record: Uint8Array): Promise<void>
+  remove(key: string): Promise<void>
+}
+
 /** A message the pool sends a clang worker: run one job. */
 export interface ClangWorkerJobMessage {
   id: number

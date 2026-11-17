@@ -27,6 +27,85 @@ export const HMI_THEME_TOKENS = [
   'OnBar',
 ] as const
 export type HmiThemeToken = (typeof HMI_THEME_TOKENS)[number]
+/** Colors of the predefined themes by token, as the C core defines them (`hmi_theme.c`). */
+export const HMI_BUILTIN_THEME_COLORS: Record<(typeof HMI_BUILTIN_THEMES)[number], Record<HmiThemeToken, string>> = {
+  Autonomy: {
+    Background: '#F7F8FA',
+    Surface: '#FFFFFF',
+    Text: '#121316',
+    TextMuted: '#5E6275',
+    Border: '#C8D0D9',
+    Fill: '#DDE2E8',
+    Accent: '#0464FB',
+    OnAccent: '#FFFFFF',
+    Success: '#16A34A',
+    Warning: '#F59E0B',
+    Danger: '#DC2626',
+    Bar: '#011E4B',
+    OnBar: '#B4D0FE',
+  },
+  Light: {
+    Background: '#FFFFFF',
+    Surface: '#FFFFFF',
+    Text: '#141414',
+    TextMuted: '#5A5A5A',
+    Border: '#969696',
+    Fill: '#EEEEEE',
+    Accent: '#FF8C00',
+    OnAccent: '#FFFFFF',
+    Success: '#008200',
+    Warning: '#C86400',
+    Danger: '#C80000',
+    Bar: '#282828',
+    OnBar: '#EBEBEB',
+  },
+  Dark: {
+    Background: '#14161A',
+    Surface: '#282C32',
+    Text: '#DCDCDC',
+    TextMuted: '#A5AAB4',
+    Border: '#6E737D',
+    Fill: '#282C32',
+    Accent: '#FFAA28',
+    OnAccent: '#14161A',
+    Success: '#78D278',
+    Warning: '#FFB45A',
+    Danger: '#FF5A5A',
+    Bar: '#08090B',
+    OnBar: '#C8CDD7',
+  },
+  Classic: {
+    Background: '#C6D2A8',
+    Surface: '#C6D2A8',
+    Text: '#000000',
+    TextMuted: '#404040',
+    Border: '#848484',
+    Fill: '#B4BF98',
+    Accent: '#FFA400',
+    OnAccent: '#FFFFFF',
+    Success: '#008C00',
+    Warning: '#E67800',
+    Danger: '#FF0000',
+    Bar: '#212421',
+    OnBar: '#C6C6C6',
+  },
+  Ocean: {
+    Background: '#122634',
+    Surface: '#203C4E',
+    Text: '#D7E6F0',
+    TextMuted: '#A0BECD',
+    Border: '#64828C',
+    Fill: '#203C4E',
+    Accent: '#00C8C8',
+    OnAccent: '#0A1E28',
+    Success: '#78D7A0',
+    Warning: '#FFBE6E',
+    Danger: '#FF6E6E',
+    Bar: '#081620',
+    OnBar: '#C8E1EB',
+  },
+}
+
 /** Most themes, predefined ones included. */
 export const HMI_THEMES_MAX = 16
 export const HMI_DEFAULT_THEME = 'Autonomy'
@@ -130,4 +209,18 @@ export function hmiThemeId(settings: HmiSettings, name: string): number {
   if (builtin >= 0) return builtin
   const project = settings.themes.findIndex((t) => t.name.toUpperCase() === name.toUpperCase())
   return project >= 0 ? HMI_BUILTIN_THEMES.length + project : -1
+}
+
+/** A theme's color for each token: a project theme's overrides over its base, a predefined theme's own colors. */
+export function hmiThemeColors(settings: HmiSettings, name: string): Record<HmiThemeToken, string> | null {
+  const builtin = HMI_BUILTIN_THEMES.find((t) => t.toUpperCase() === name.toUpperCase())
+  if (builtin) return HMI_BUILTIN_THEME_COLORS[builtin]
+  const project = settings.themes.find((t) => t.name.toUpperCase() === name.toUpperCase())
+  if (!project) return null
+  const colors = { ...HMI_BUILTIN_THEME_COLORS[project.base] }
+  for (const token of HMI_THEME_TOKENS) {
+    const own = project.colors[token]
+    if (own !== undefined) colors[token] = own.toUpperCase()
+  }
+  return colors
 }

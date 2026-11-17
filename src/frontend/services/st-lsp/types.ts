@@ -138,6 +138,8 @@ export interface StLspStartOptions {
    * don't reach this callback.
    */
   onCrash?: (err: Error) => void
+  /** Archives pushed after the platform's stlibs, as `loadStlibBuffer` payloads: the HMI libraries. */
+  extraStlibs?: () => Promise<Array<{ sourceLabel: string; payload: string }>>
 }
 
 /** Make a synthetic in-memory URI for a POU source. */

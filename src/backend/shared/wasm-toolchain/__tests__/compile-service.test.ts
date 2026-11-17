@@ -6,7 +6,12 @@ import { createWasmCompileService } from '../wasm-compile-service'
 import { BoundedWasmObjectCache } from '../wasm-object-cache'
 import { FakeRunner } from './fixtures/fake-runner'
 
-const bytes = (n: number): CachedWasmObject => ({ object: new Uint8Array(n), dependencies: [['a.c', 'digest']] })
+const bytes = (n: number): CachedWasmObject => ({
+  object: new Uint8Array(n),
+  dependencies: [['a.c', 'digest']],
+  includeNames: ['a.c'],
+  shadowDigest: 'shadow',
+})
 
 describe('BoundedWasmObjectCache', () => {
   it('stores and returns objects with their dependencies', () => {

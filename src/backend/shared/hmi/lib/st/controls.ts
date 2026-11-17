@@ -1,6 +1,6 @@
 /** StandardWidgets ST source: controls. Two-way controls report an operator change as Changed with NewValue. */
-export const CONTROLS_ST = `(* Push button: Pressed while held, Clicked for one frame when released on the button. A wired variable follows
-   Pressed. *)
+export const CONTROLS_ST = `(* Push button: Pressed while held, Clicked for one frame when released on the button, Changed for one frame when
+   Pressed changes, so a wired variable is written on press and release only. *)
 {attribute 'hmi_palette' := 'Controls'}
 FUNCTION_BLOCK HmiButton EXTENDS HmiElement
   VAR_INPUT
@@ -15,6 +15,7 @@ FUNCTION_BLOCK HmiButton EXTENDS HmiElement
     {attribute 'hmi_main'}
     Pressed : BOOL;
     Clicked : BOOL;
+    Changed : BOOL;
   END_VAR
   METHOD PROTECTED OVERRIDE TakesInput : BOOL
     TakesInput := TRUE;
@@ -30,16 +31,20 @@ FUNCTION_BLOCK HmiButton EXTENDS HmiElement
   END_METHOD
   METHOD PROTECTED OVERRIDE Input : BOOL
     Clicked := FALSE;
+    Changed := FALSE;
     IF NOT Visible OR NOT Enabled THEN
+      Changed := Pressed;
       Pressed := FALSE;
       RETURN;
     END_IF;
     IF HMI_PtrPressed() AND PointerOver() THEN
+      Changed := NOT Pressed;
       Pressed := TRUE;
       HMI_PtrConsume();
       Input := TRUE;
     ELSIF Pressed AND NOT HMI_PtrDown() THEN
       Pressed := FALSE;
+      Changed := TRUE;
       Clicked := PointerOver();
     END_IF;
   END_METHOD
@@ -243,7 +248,8 @@ FUNCTION_BLOCK HmiSlider EXTENDS HmiElement
   END_METHOD
 END_FUNCTION_BLOCK
 
-(* Numeric entry: a tap opens the on-screen keyboard; OK delivers NewValue with Changed for one frame. *)
+(* Numeric entry: a tap opens the on-screen keyboard; OK delivers NewValue with Changed for one frame, unless the
+   entry is not a finite number. *)
 {attribute 'hmi_palette' := 'Controls'}
 FUNCTION_BLOCK HmiNumericInput EXTENDS HmiElement
   VAR_INPUT
@@ -271,11 +277,13 @@ FUNCTION_BLOCK HmiNumericInput EXTENDS HmiElement
     NaturalGrow := 0;
   END_METHOD
   METHOD PROTECTED OVERRIDE Input : BOOL
+    VAR_TEMP entry : STRING; END_VAR
     Changed := FALSE;
     Clicked := FALSE;
     IF KeyboardTake() THEN
-      NewValue := HMI_ParseReal(KeyboardText(), Value);
-      Changed := TRUE;
+      entry := KeyboardText();
+      NewValue := HMI_ParseReal(entry, 0.0);
+      Changed := NewValue = HMI_ParseReal(entry, 1.0);
     END_IF;
     IF NOT Visible OR NOT Enabled THEN
       RETURN;

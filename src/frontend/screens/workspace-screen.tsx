@@ -28,7 +28,7 @@ import { RemoteDeviceEditor } from '../components/_features/[workspace]/editor/d
 import { DiagnosticsEditor } from '../components/_features/[workspace]/editor/diagnostics'
 import { DiffViewerEditor } from '../components/_features/[workspace]/editor/diff-viewer'
 import { GraphicalEditor } from '../components/_features/[workspace]/editor/graphical'
-import { HmiCodeEditor, HmiSettingsEditor } from '../components/_features/[workspace]/editor/hmi'
+import { HmiScreenDesigner, HmiSettingsEditor, HmiWidgetEditor } from '../components/_features/[workspace]/editor/hmi'
 import { LibraryManagerEditor } from '../components/_features/[workspace]/editor/library-manager'
 import { LibraryManifestEditor } from '../components/_features/[workspace]/editor/library-manifest'
 import { MonacoEditor } from '../components/_features/[workspace]/editor/monaco'
@@ -645,14 +645,17 @@ const WorkspaceScreen = () => {
                           </HostLockBoundary>
                         )}
                         {editor['type'] === 'plc-library-manifest' && <LibraryManifestEditor />}
-                        {editor['type'] === 'plc-hmi' && (
-                          <HmiCodeEditor
-                            key={`${editor.meta.kind}-${editor.meta.name}`}
-                            name={editor.meta.name}
-                            kind={editor.meta.kind}
-                          />
+                        {editor['type'] === 'plc-hmi' &&
+                          (editor.meta.kind === 'screen' ? (
+                            <HmiScreenDesigner key={`screen-${editor.meta.name}`} name={editor.meta.name} />
+                          ) : (
+                            <HmiWidgetEditor key={`widget-${editor.meta.name}`} name={editor.meta.name} />
+                          ))}
+                        {editor['type'] === 'plc-hmi-settings' && (
+                          <HostLockBoundary type={editor['type']}>
+                            <HmiSettingsEditor />
+                          </HostLockBoundary>
                         )}
-                        {editor['type'] === 'plc-hmi-settings' && <HmiSettingsEditor />}
                         {editor['type'] === 'diff-viewer' && <DiffViewerEditor />}
 
                         <VendorScreenTabs />

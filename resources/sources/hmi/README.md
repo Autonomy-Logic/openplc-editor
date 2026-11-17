@@ -16,6 +16,7 @@ and produce the same pixels on each. This folder is mirrored byte for byte in op
 | `core/hmi_text.c` | Fonts, text metrics, glyph cache, text drawing |
 | `core/third_party/` | stb_truetype (see its README) |
 | `unit/` | The interface of a generated HMI unit (`hmi_unit.h`) and its preview setters (`hmi_preview.h`) |
+| `preview/` | The editor's preview host (`hmi_preview_host.cpp`): one viewer of a unit in a WebAssembly module, frames rasterized in bands with unchanged bands skipped |
 | `fonts/` | The vetted fonts: OpenPLC Sans (default, ASCII and Latin-1) and Liberation Sans (full); see its README |
 
 ## Building
@@ -59,6 +60,10 @@ against `tests/hmi-core/golden.txt` with both font variants, and runs the fuzzer
 `npm run test:hmi-lib` (`tests/hmi-lib/run.mjs`) compiles the library and test screens with STruC++, builds them with
 this core on gcc and clang (plus a build under AddressSanitizer and UndefinedBehaviorSanitizer), drives scripted
 input and checks every frame against `tests/hmi-lib/golden.txt`.
+
+`npm run test:hmi-preview` (`tests/hmi-preview/run.ts`) builds a sample project's preview with the shared preview
+build and the in-editor WebAssembly toolchain, runs it through the preview host, and checks frames, band skipping,
+live setters, navigation, the widget-block preview and how long rebuilds take after each kind of edit.
 
 `npm run test:hmi-unit` (`tests/hmi-unit/run.mjs`) generates a sample project's unit, builds it with this core and a
 C host that uses only `unit/hmi_unit.h` and `unit/hmi_preview.h`, and checks its frames, writes (range clamping

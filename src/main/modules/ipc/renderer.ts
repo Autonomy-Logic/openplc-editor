@@ -591,6 +591,11 @@ const rendererProcessBridge = {
   wasmToolchainCompile: (request: WasmCompileRequest): Promise<WasmCompileResult> =>
     ipcRenderer.invoke('wasm-toolchain:compile', request),
 
+  hmiPreviewReadSources: (): Promise<{ root: string; files: Record<string, Uint8Array> }> =>
+    ipcRenderer.invoke('hmi-preview:read-sources'),
+  hmiPreviewReadRuntimeHeaders: (): Promise<Record<string, string>> =>
+    ipcRenderer.invoke('hmi-preview:read-runtime-headers'),
+
   // ===================== UTILITY METHODS =====================
   getPreviewImage: (image: string, packagePath?: string): Promise<string> =>
     ipcRenderer.invoke('util:get-preview-image', image, packagePath),
@@ -915,6 +920,14 @@ const rendererProcessBridge = {
   simulatorLoadFirmware: (hexPath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('simulator:load-firmware', hexPath),
   simulatorStop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('simulator:stop'),
+  simulatorPreparePython: (count: number): Promise<void> => ipcRenderer.invoke('simulator:prepare-python', count),
+  onSimulatorLog: (callback: (line: string, stream: 'stdout' | 'stderr') => void) => {
+    const listener = (_event: IpcRendererEvent, line: unknown, stream: unknown) => {
+      if (typeof line === 'string' && (stream === 'stdout' || stream === 'stderr')) callback(line, stream)
+    }
+    ipcRenderer.on('simulator:log', listener)
+    return () => ipcRenderer.removeListener('simulator:log', listener)
+  },
   simulatorIsRunning: (): Promise<boolean> => ipcRenderer.invoke('simulator:is-running'),
   onSimulatorStopped: (callback: () => void) => {
     const listener = () => callback()

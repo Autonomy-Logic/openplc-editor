@@ -275,6 +275,8 @@ int32_t hmi_page(void);
 void hmi_set_page(int32_t page);
 /** Shows a page and forgets the history, as when a session starts. */
 void hmi_page_reset(int32_t page);
+/** Whether hmi_page_reset chose the page; the first frame then starts there rather than on the start page. */
+int hmi_page_chosen(void);
 /** Back to the previous page; returns 0 when there is none. */
 int hmi_page_back(void);
 /** Page whose screen the session last showed (see hmi_page_set_shown), -1 before the first. */

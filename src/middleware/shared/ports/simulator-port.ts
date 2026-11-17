@@ -1,40 +1,29 @@
 /**
- * SimulatorPort — Abstracts the built-in AVR simulator (ATmega2560 via avr8js).
+ * SimulatorPort — the OpenPLC Simulator: the project compiled to a WebAssembly module, run with simulated time, and
+ * debugged over its virtual serial line with the same Modbus RTU protocol as a board.
  *
- * Editor adapter: Delegates to main process SimulatorModule via IPC.
- *                 Firmware loaded from disk path. USART0 bridged to ModbusRtuClient.
- * Web adapter:    Delegates to in-browser SimulatorService singleton.
- *                 Firmware loaded from hex string content (from compiler API).
- *                 Uses browser-compatible Uint8Array-based Modbus RTU client.
- *
- * Both adapters share the same underlying avr8js@0.20.0 emulator, but differ
- * in how firmware is loaded and how the virtual serial port is bridged.
- *
- * ## Editor IPC methods replaced:
- *   - window.bridge.simulatorLoadFirmware(hexPath)
- *   - window.bridge.simulatorStop()
- *   - window.bridge.simulatorIsRunning()
- *   - window.bridge.onSimulatorStopped()
- *
- * ## Web service methods replaced:
- *   - simulatorService.loadAndRun(hexContent)
- *   - simulatorService.stop()
- *   - simulatorService.isRunning()
- *   - simulatorService.onStopped()
- *   - simulatorService.connectDebugger()
- *   - simulatorService.disconnectDebugger()
+ * Both platforms run the shared simulator (`backend/shared/simulator/`) in a thread of its own:
+ * - Editor: the main process runs each run in a worker thread; the debugger's Modbus client lives in the main process.
+ * - Web: a Web Worker runs the module; the debug session lives on the page.
  */
 
 import type { SimulatorDebugResult, Unsubscribe } from './types'
 
 export interface SimulatorPort {
   /**
-   * Load firmware and start the simulator.
-   * Editor: receives a file path to the .hex file on disk.
-   * Web: receives the hex content as a string.
-   * The adapter handles the difference.
+   * Starts the simulator with the build's module; resolves once its `setup()` ran.
+   * Editor: the module's path on disk. Web: the module as text, one character per byte (`encodeSimulatorFirmware`).
    */
-  loadFirmware(hexPathOrContent: string): Promise<{ success: boolean; error?: string }>
+  loadFirmware(firmware: string): Promise<{ success: boolean; error?: string }>
+
+  /**
+   * Starts Python interpreters for `count` blocks ahead of the next run; resolves once they are ready, and the next
+   * `loadFirmware` also waits for them. Interpreters left over from earlier runs count.
+   */
+  preparePython(count: number): Promise<void>
+
+  /** Subscribes to the run's output: the program's lines and its Python blocks', with the stream each came on. */
+  onLog(callback: (line: string, stream: 'stdout' | 'stderr') => void): Unsubscribe
 
   /** Stop the simulator. */
   stop(): Promise<{ success: boolean }>

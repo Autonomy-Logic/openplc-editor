@@ -109,19 +109,22 @@ FUNCTION_BLOCK DiagramScreen EXTENDS HmiScreen
     L1 : HmiPipe := (Source := 'Tk', SourcePort := HMI_PORT#Bottom, Target := 'P1', TargetPort := HMI_PORT#Left, Animate := TRUE);
     L2 : HmiPipe := (Source := 'P1', SourcePort := HMI_PORT#Right, Target := 'V1', TargetPort := HMI_PORT#Left);
     L3 : HmiPipe := (Source := 'V1', SourcePort := HMI_PORT#Right, Target := 'Ft', TargetPort := HMI_PORT#Left);
+    L4 : HmiPipe := (Source := 'Tk', SourcePort := HMI_PORT#Right, Target := 'Ft', TargetPort := HMI_PORT#Bottom, Path := '330,136;330,400;600,400');
   END_VAR
   METHOD PROTECTED OVERRIDE Build : BOOL
     Attach(ADR(Plant), 0);
     Attach(ADR(L1), ADR(Plant));
     Attach(ADR(L2), ADR(Plant));
     Attach(ADR(L3), ADR(Plant));
+    Attach(ADR(L4), ADR(Plant));
     Attach(ADR(Tk), ADR(Plant));
     Attach(ADR(P1), ADR(Plant));
     Attach(ADR(V1), ADR(Plant));
     Attach(ADR(Ft), ADR(Plant));
-    Connect(ADR(L1), ADR(Tk), ADR(P1));
-    Connect(ADR(L2), ADR(P1), ADR(V1));
-    Connect(ADR(L3), ADR(V1), ADR(Ft));
+    Connect(ADR(L1), ADR(Tk), ADR(P1), 0);
+    Connect(ADR(L2), ADR(P1), ADR(V1), ADR(L1));
+    Connect(ADR(L3), ADR(V1), ADR(Ft), ADR(L2));
+    Connect(ADR(L4), ADR(Tk), ADR(Ft), ADR(L3));
     Build := TRUE;
   END_METHOD
   METHOD PROTECTED OVERRIDE WriteBack : BOOL
@@ -208,6 +211,41 @@ FUNCTION_BLOCK SqueezedScreen EXTENDS HmiScreen
   END_METHOD
 END_FUNCTION_BLOCK
 
+(* Page 7: shapes beside the rectangle, and animated widgets: fan, conveyor, pump impeller and a blinking lamp. *)
+FUNCTION_BLOCK MotionScreen EXTENDS HmiScreen
+  VAR
+    Shapes : HmiStack := (Direction := HMI_DIRECTION#Row, Gap := 8);
+    Oval : HmiEllipse := (Fill := COLOR.Accent, PrefWidth := 80, PrefHeight := 56);
+    Tri : HmiPolygon := (Fill := COLOR.Warning, PrefWidth := 60, PrefHeight := 56);
+    Hex : HmiPolygon := (Sides := 6, Rotation := 0, Fill := COLOR.Success, PrefWidth := 60, PrefHeight := 56);
+    Star : HmiPolygon := (Sides := 5, InnerPct := 45, Fill := COLOR.Danger, BorderWidth := 0, PrefWidth := 60, PrefHeight := 56);
+    Rule : HmiLine := (Angle := 30, Thickness := 3, PrefWidth := 80, PrefHeight := 40);
+    Moving : HmiStack := (Direction := HMI_DIRECTION#Row, Gap := 12);
+    Fan1 : HmiFan := (Caption := 'FAN-1', Value := TRUE);
+    Fan2 : HmiFan := (Caption := 'FAN-2', Value := TRUE, Fault := TRUE, Blades := 3);
+    Pump1 : HmiPump := (Caption := 'P-2', Value := TRUE, PrefWidth := 56, PrefHeight := 56);
+    Alarm : HmiLamp := (Caption := 'Alarm', Value := TRUE, Blink := TRUE, OnColor := COLOR.Danger);
+    Belt : HmiConveyor := (Caption := 'CV-1', Value := TRUE, PrefWidth := 200);
+    Back : HmiConveyor := (Caption := 'CV-2', Value := TRUE, Reverse := TRUE, Speed := 80, PrefWidth := 200);
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Shapes), 0);
+    Attach(ADR(Oval), ADR(Shapes));
+    Attach(ADR(Tri), ADR(Shapes));
+    Attach(ADR(Hex), ADR(Shapes));
+    Attach(ADR(Star), ADR(Shapes));
+    Attach(ADR(Rule), ADR(Shapes));
+    Attach(ADR(Moving), 0);
+    Attach(ADR(Fan1), ADR(Moving));
+    Attach(ADR(Fan2), ADR(Moving));
+    Attach(ADR(Pump1), ADR(Moving));
+    Attach(ADR(Alarm), ADR(Moving));
+    Attach(ADR(Belt), 0);
+    Attach(ADR(Back), 0);
+    Build := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
 PROGRAM HmiMain
   VAR
     S0 : DisplayScreen;
@@ -217,6 +255,7 @@ PROGRAM HmiMain
     S4 : LayoutScreen;
     S5 : NavScreen;
     S6 : SqueezedScreen;
+    S7 : MotionScreen;
     Rt : HmiRuntime;
     Started : BOOL;
   END_VAR
@@ -230,6 +269,7 @@ PROGRAM HmiMain
     Rt.AddScreen(ADR(S4));
     Rt.AddScreen(ADR(S5));
     Rt.AddScreen(ADR(S6));
+    Rt.AddScreen(ADR(S7));
     Rt.SetStart(0);
     Started := TRUE;
   END_IF;
@@ -241,6 +281,7 @@ PROGRAM HmiMain
     4: S4();
     5: S5();
     6: S6();
+    7: S7();
   END_CASE;
   Rt.EndFrame();
   IF GoHome THEN
