@@ -447,17 +447,19 @@ that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its r
 - **Clang worker:** at most one (`ClangWorkerPool`), running one job at a time. A build starts it, and it ends once no
   build is running or queued, whatever the last build's outcome, so the simulator runs with no clang worker; builds
   that overlap share it. A worker counts from its start until it has exited, and a new one starts only after the
-  previous one exited. A toolchain whose files cannot be got ready, or a worker that fails or does not load within
-  120 s before it reports ready, fails the build with `The WebAssembly compiler could not be loaded: <reason>`. Once a
-  worker has loaded, one that fails or runs a job past 120 s is terminated and the job it ran fails with
-  `The compiler worker stopped (<reason>).`
+  previous one exited. A toolchain whose files cannot be got ready, a worker that cannot be started, or a worker that
+  fails or does not load within 120 s before it reports ready, fails the build with
+  `The WebAssembly compiler could not be loaded: <reason>`. Once a worker has loaded, one that fails or runs a job past
+  120 s is terminated and the job it ran fails with `The compiler worker stopped (<reason>).`
 
 - **Desktop:** one worker thread (`src/backend/editor/wasm-toolchain/`); the worker is its own webpack
   entry, `clang-worker.js`, built next to `main.js`. The renderer reaches it over the `wasm-toolchain:compile` IPC
   channel.
 - **Startup:** while the splash is up the editor only checks that every toolchain file and every Python runtime file
   is present; it starts no clang worker and no Python thread, and compiles nothing. A missing toolchain file keeps the
-  splash up with the reason and a Quit button; a missing Python runtime file only logs a warning.
+  splash up with the reason and a Quit button; a missing Python runtime file only logs a warning. The Python file check
+  is the shared `requirePythonRuntimeFiles` (`src/backend/shared/python/python-runtime-files.ts`); the desktop only
+  reads the files.
 - **CLI:** one worker through the same pool, started by an OpenPLC Simulator build (`compile` for it, or `simulate`).
 - **Loader patch:** `patchYowaspLoader` (`src/backend/shared/wasm-toolchain/yowasp-loader-patch.ts`, shared with
   openplc-web) replaces the one `options.fetchProgress ?? defaultFetchProgress` in the package's `gen/bundle.js`, so a
@@ -468,7 +470,9 @@ that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its r
   everything else byte for byte; it fails when the patch does not apply exactly once, and never writes `node_modules`.
   It runs in `postinstall`, `prestart` and at the start of `build:main`, so `npm run dev`, `npm run build`,
   `npm run package` and the CLI builds always have it. Outside a package the desktop and the CLI load clang from that copy, and
-  the worker's `load()` refuses a `bundle.js` that is not patched (`The toolchain's loader is not patched: <path>`).
+  the worker's `load()` runs the shared `checkWasmToolchainPackage` (`src/backend/shared/wasm-toolchain/toolchain-files.ts`),
+  which refuses a missing file (`Missing toolchain file: <path>`) and a `bundle.js` that is not patched
+  (`The toolchain's loader is not patched: <path>`).
 - **Packaging:** the prepared copy (`release/yowasp-clang`) ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
   entitlement in `assets/entitlements.mac.plist` lets it run under the hardened runtime.
 - **Running a module** happens in main-process worker threads (the simulator, Python), never in the renderer: the

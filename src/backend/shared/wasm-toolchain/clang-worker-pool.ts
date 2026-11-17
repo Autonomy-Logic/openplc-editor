@@ -52,7 +52,10 @@ export const JOB_DEADLINE_MS = 120_000
 export const wasmToolchainLoadMessage = (reason: string): string =>
   `The WebAssembly compiler could not be loaded: ${reason}`
 
-/** The toolchain could not be loaded: its files are missing or broken, or its worker never became ready. */
+/**
+ * The toolchain could not be loaded: its files are missing or broken, or its worker could not be started or never
+ * became ready.
+ */
 export class WasmToolchainLoadError extends Error {
   constructor(readonly reason: string) {
     super(wasmToolchainLoadMessage(reason))
@@ -98,7 +101,8 @@ const ignore = (): void => undefined
  * Runs clang jobs on one worker, one job at a time; jobs wait in a queue. The worker starts with the first job and
  * ends on `release()`. A worker counts from its spawn until its termination has settled, and a new one starts only
  * after the previous one exited. A worker that fails or runs a job past its deadline is terminated and its job fails;
- * one that fails before it is ready fails every job with `WasmToolchainLoadError` until the next `release()`.
+ * one that cannot be started, or fails before it is ready, fails every job with `WasmToolchainLoadError` until the
+ * next `release()`.
  */
 export class ClangWorkerPool implements WasmClangRunner {
   readonly concurrency = 1
@@ -180,12 +184,16 @@ export class ClangWorkerPool implements WasmClangRunner {
     if (next) this.hand(worker, next)
   }
 
-  /** Starts the worker; when it cannot be started, the waiting jobs fail. */
+  /**
+   * Starts the worker. One that cannot be started is a load failure: the waiting jobs fail with
+   * `WasmToolchainLoadError`, and so does every job until the next `release()`.
+   */
   private start(): LiveWorker | null {
     try {
       return this.spawn()
     } catch (error) {
-      const failure = new Error(`The compiler worker could not be started (${reasonOf(error)}).`)
+      const failure = new WasmToolchainLoadError(`the compiler worker could not be started (${reasonOf(error)})`)
+      this.loadFailure = failure
       for (const waiting of this.queue.splice(0)) waiting.reject(failure)
       return null
     }

@@ -5,8 +5,7 @@ import { Worker } from 'node:worker_threads'
 
 import { fileExists } from '@root/backend/editor/utils/file-exists'
 import { ClangWorkerPool } from '@root/backend/shared/wasm-toolchain/clang-worker-pool'
-import { requireFiles, WASM_TOOLCHAIN_PACKAGE_FILES } from '@root/backend/shared/wasm-toolchain/toolchain-files'
-import { isYowaspLoaderPatched } from '@root/backend/shared/wasm-toolchain/yowasp-loader-patch'
+import { checkWasmToolchainPackage } from '@root/backend/shared/wasm-toolchain/toolchain-files'
 import type { ClangWorkerHandle, ClangWorkerMechanism } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 
 export interface WorkerClangRunnerPaths {
@@ -20,16 +19,11 @@ export interface WorkerClangRunnerPaths {
 export function createThreadClangWorkerMechanism(paths: WorkerClangRunnerPaths): ClangWorkerMechanism {
   const bundlePath = join(paths.toolchainDir, 'gen', 'bundle.js')
   return {
-    load: async () => {
-      await requireFiles(
-        WASM_TOOLCHAIN_PACKAGE_FILES.map((file) => join(paths.toolchainDir, file)),
-        fileExists,
-        'toolchain',
-      )
-      if (!isYowaspLoaderPatched(await readFile(bundlePath, 'utf8'))) {
-        throw new Error(`The toolchain's loader is not patched: ${bundlePath}`)
-      }
-    },
+    load: () =>
+      checkWasmToolchainPackage((file) => join(paths.toolchainDir, file), {
+        exists: fileExists,
+        readText: (path) => readFile(path, 'utf8'),
+      }),
     spawn: (): ClangWorkerHandle => {
       const worker = new Worker(paths.workerScript, { workerData: { bundleUrl: pathToFileURL(bundlePath).href } })
       return {

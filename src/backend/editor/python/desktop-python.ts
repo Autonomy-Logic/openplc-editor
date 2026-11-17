@@ -4,8 +4,8 @@ import { Worker } from 'node:worker_threads'
 import { fileExists } from '@root/backend/editor/utils/file-exists'
 import { PythonBlockHost } from '@root/backend/shared/python/python-block-host'
 import { maxPythonInterpreters } from '@root/backend/shared/python/python-memory-budget'
+import { requirePythonRuntimeFiles } from '@root/backend/shared/python/python-runtime-files'
 import { ThreadedPythonRuntime } from '@root/backend/shared/python/python-thread'
-import { requireFiles } from '@root/backend/shared/wasm-toolchain/toolchain-files'
 import type { PythonThreadMechanism } from '@root/middleware/shared/ports/python-mechanisms'
 
 import type { PythonRuntimePaths } from './python-paths'
@@ -59,8 +59,7 @@ export function createDesktopPython(resolvePaths: () => PythonRuntimePaths): Des
     runtime,
     host: new PythonBlockHost(runtime, undefined, maxPythonInterpreters(totalmem())),
     checkFiles: async () => {
-      const paths = resolvePaths()
-      await requireFiles([paths.sdkEntry, paths.pythonPackage, paths.numpyWheel], fileExists, 'Python runtime')
+      await requirePythonRuntimeFiles(resolvePaths(), fileExists)
     },
   }
 }

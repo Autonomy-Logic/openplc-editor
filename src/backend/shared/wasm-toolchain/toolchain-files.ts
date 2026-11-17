@@ -1,3 +1,5 @@
+import { isYowaspLoaderPatched } from './yowasp-loader-patch'
+
 /** The files of the `@yowasp/clang` package a clang worker loads, relative to the package root. */
 export const WASM_TOOLCHAIN_PACKAGE_FILES: readonly string[] = [
   'gen/bundle.js',
@@ -23,4 +25,22 @@ export async function requireFiles(
   const present = await Promise.all(paths.map((path) => exists(path)))
   const missing = paths.find((_, index) => !present[index])
   if (missing !== undefined) throw new Error(`Missing ${what} file: ${missing}`)
+}
+
+/**
+ * Checks a prepared `@yowasp/clang` package: every file of `WASM_TOOLCHAIN_PACKAGE_FILES` is present, and
+ * `gen/bundle.js` carries the loader patch.
+ * @param fileOf The platform path of a file, from its path relative to the package root.
+ * @param io Reads the platform's files.
+ * @throws {Error} `Missing toolchain file: <path>` for the first missing file, or `The toolchain's loader is not patched: <path>`.
+ */
+export async function checkWasmToolchainPackage(
+  fileOf: (relative: string) => string,
+  io: { exists(path: string): Promise<boolean>; readText(path: string): Promise<string> },
+): Promise<void> {
+  await requireFiles(WASM_TOOLCHAIN_PACKAGE_FILES.map(fileOf), (path) => io.exists(path), 'toolchain')
+  const bundle = fileOf('gen/bundle.js')
+  if (!isYowaspLoaderPatched(await io.readText(bundle))) {
+    throw new Error(`The toolchain's loader is not patched: ${bundle}`)
+  }
 }

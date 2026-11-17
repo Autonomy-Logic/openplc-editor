@@ -1,3 +1,5 @@
+import { requireFiles } from '../wasm-toolchain/toolchain-files'
+
 /** The file names `python-runtime.json` pins, which the install script downloads under those names. */
 export interface PinnedPythonFiles {
   python: string
@@ -15,6 +17,27 @@ const pinnedFile = (pins: unknown, key: string): string => {
 export function parsePythonRuntimeManifest(text: string): PinnedPythonFiles {
   const pins: unknown = JSON.parse(text)
   return { python: pinnedFile(pins, 'python'), numpy: pinnedFile(pins, 'numpy') }
+}
+
+/** Where a platform keeps the Python runtime's files. */
+export interface PythonRuntimeFilePaths {
+  /** The Wasmer SDK's entry point. */
+  sdkEntry: string
+  /** The CPython package (WEBC). */
+  pythonPackage: string
+  /** The numpy wheel. */
+  numpyWheel: string
+}
+
+/**
+ * Checks the Python runtime's files are present, starting nothing.
+ * @throws {Error} `Missing Python runtime file: <path>` for the first missing one, in the order SDK entry, CPython package, numpy wheel.
+ */
+export function requirePythonRuntimeFiles(
+  paths: PythonRuntimeFilePaths,
+  exists: (path: string) => Promise<boolean>,
+): Promise<void> {
+  return requireFiles([paths.sdkEntry, paths.pythonPackage, paths.numpyWheel], exists, 'Python runtime')
 }
 
 /** Where a page serves the Python runtime. */
