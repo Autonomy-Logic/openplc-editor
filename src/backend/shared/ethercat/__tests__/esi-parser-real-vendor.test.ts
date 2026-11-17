@@ -1,21 +1,8 @@
-/**
- * Parser checks against byte-exact excerpts of vendor ESI files (the first device and a
- * few modules cut from the shipped XML, nothing else edited). Hand-written fixtures hid
- * how real files encode padding, flags, InitCmds and slot classes.
- */
-
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-
-import { decodeXmlBytes } from '@root/middleware/shared/utils/ethercat/esi-zip-import'
-
 import { parseESIDeviceFull, parseESILight, parseESIModuleFull } from '../esi-parser-main'
-
-const read = (name: string): string =>
-  decodeXmlBytes(new Uint8Array(readFileSync(join(__dirname, 'fixtures', 'esi-real', name))))
+import { readEsiFixture } from './fixtures/esi-repository-test-helpers'
 
 const moduleByIdent = (file: string, ident: string) => {
-  const r = parseESIModuleFull(read(file))
+  const r = parseESIModuleFull(readEsiFixture(file))
   if (!r.success) throw new Error(r.error)
   const m = r.modules?.find((x) => x.ident.toUpperCase() === ident.toUpperCase())
   if (m === undefined) throw new Error(`module ${ident} not in ${file}`)
@@ -24,7 +11,7 @@ const moduleByIdent = (file: string, ident: string) => {
 
 describe('Weidmueller UR20 I/O module library (EtherCATModule root)', () => {
   test('light parse reads the decimal vendor id and plain class names', () => {
-    const r = parseESILight(read('weidmueller-ur20-io.xml'))
+    const r = parseESILight(readEsiFixture('weidmueller-ur20-io.xml'))
     expect(r.success).toBe(true)
     if (!r.success) return
     expect(Number(r.vendor?.id)).toBe(0x230)
@@ -63,7 +50,7 @@ describe('Weidmueller UR20 I/O module library (EtherCATModule root)', () => {
 })
 
 describe('Weidmueller UR20-FBC-EC coupler', () => {
-  const xml = read('weidmueller-ur20-fbc.xml')
+  const xml = readEsiFixture('weidmueller-ur20-fbc.xml')
 
   test('coupler flags, slot classes, module groups and its own InitCmd', () => {
     const r = parseESIDeviceFull(xml, 0)
@@ -90,7 +77,7 @@ describe('Weidmueller UR20-FBC-EC coupler', () => {
 })
 
 describe('WAGO 750-354 coupler with inline module library', () => {
-  const xml = read('wago-750-354.xml')
+  const xml = readEsiFixture('wago-750-354.xml')
 
   test('no PdoAssign/PdoConfig, no ident-list download, `#x0` group PDOs read as absent', () => {
     const r = parseESIDeviceFull(xml, 0)
@@ -119,7 +106,7 @@ describe('WAGO 750-354 coupler with inline module library', () => {
 
 describe('Phoenix Contact AXL F BK EC (ISO-8859-1 files)', () => {
   test('coupler: SlotIndexIncrement 1 and ident-list download', () => {
-    const r = parseESIDeviceFull(read('phoenix-axl-f-bk-ec.xml'), 0)
+    const r = parseESIDeviceFull(readEsiFixture('phoenix-axl-f-bk-ec.xml'), 0)
     if (!r.success || !r.device) throw new Error(r.error)
     expect(r.device.slots).toMatchObject({ slotIndexIncrement: 1, slotPdoIncrement: 1, downloadModuleIdentList: true })
     expect(r.device.slots?.slots[0]?.moduleClasses).toContain('DO_TERM')
@@ -135,14 +122,14 @@ describe('Phoenix Contact AXL F BK EC (ISO-8859-1 files)', () => {
 
 describe('Plain slaves are unaffected', () => {
   test('Beckhoff EK1818: fixed mandatory PDOs, no slots', () => {
-    const r = parseESIDeviceFull(read('beckhoff-ek1818.xml'), 0)
+    const r = parseESIDeviceFull(readEsiFixture('beckhoff-ek1818.xml'), 0)
     if (!r.success || !r.device) throw new Error(r.error)
     expect(r.device.isModularCoupler).toBe(false)
     expect(r.device.rxPdo.every((p) => p.fixed && p.mandatory)).toBe(true)
   })
 
   test('Delta ASDA-A2-E: PdoAssign drive, single-byte InitCmd data keeps its leading zero', () => {
-    const r = parseESIDeviceFull(read('delta-asda2e.xml'), 0)
+    const r = parseESIDeviceFull(readEsiFixture('delta-asda2e.xml'), 0)
     if (!r.success || !r.device) throw new Error(r.error)
     expect(r.device.coeFlags?.pdoAssign).toBe(true)
     expect(r.device.initCmds?.[0]).toMatchObject({ index: '0x6060', subIndex: 0, data: '0x08' })

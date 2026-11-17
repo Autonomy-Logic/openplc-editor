@@ -99,7 +99,6 @@ describe('shared ESI repository port', () => {
     expect(listed.items[1].devices.length).toBeGreaterThan(0)
     expect(updated).toEqual(['legacy', 'older'])
     expect(rows[0]).toMatchObject({ contentHash: await hashText(AXL_MODULES), summaryVersion: ESI_SUMMARY_VERSION })
-    // Up to date now: listing again re-parses nothing.
     await port.loadRepositoryLight()
     expect(updated).toHaveLength(2)
   })

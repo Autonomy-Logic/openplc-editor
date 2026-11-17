@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { z } from 'zod'
@@ -9,12 +9,12 @@ import type {
   SDOConfigurationEntry,
 } from '@root/middleware/shared/ports/esi-types'
 import type { PLCRemoteDevice } from '@root/backend/shared/types/PLC/open-plc'
-import { decodeXmlBytes } from '@root/middleware/shared/utils/ethercat/esi-zip-import'
 
 import { createDefaultSlaveConfig } from '../device-config-defaults'
 import { parseESIDeviceFull, parseESILight, parseESIModuleFull } from '../esi-parser-main'
 import { generateEtherdogConfigs } from '../generate-ethercat-config'
 import { extractDefaultSdoConfigurations } from '../sdo-config-defaults'
+import { readEsiFixture } from './fixtures/esi-repository-test-helpers'
 
 const esi = (dataTypes: string, objects: string): string => `<?xml version="1.0" encoding="UTF-8"?>
 <EtherCATInfo>
@@ -244,7 +244,6 @@ describe('BitSize that does not fit its integer type', () => {
 describe('the vendor ESI fixtures', () => {
   const INTEGER_TYPES = new Set(['SINT', 'USINT', 'INT', 'UINT', 'DINT', 'UDINT', 'LINT', 'ULINT'])
   const fixturesDir = join(__dirname, 'fixtures', 'esi-real')
-  const read = (name: string): string => decodeXmlBytes(new Uint8Array(readFileSync(join(fixturesDir, name))))
 
   const rawDefaultOf = (objects: ESICoEObject[], index: string, subIndex: number): string | undefined => {
     const object = objects.find((o) => o.index === index)
@@ -281,7 +280,7 @@ describe('the vendor ESI fixtures', () => {
   })
 
   test.each(fixtures)('%s: no integer default with a DefaultData decodes to an empty value', (name) => {
-    const xml = read(name)
+    const xml = readEsiFixture(name)
     const emptied: string[] = []
 
     for (const objects of objectSetsOf(xml)) {
