@@ -739,6 +739,33 @@ static void test_raster(void) {
              HMI_RASTER_OK);
 }
 
+/* ---- sign-out requests: per frame and per session ---- */
+
+static void test_sign_out(void) {
+    hmi_session_t *a = hmi_session_create(), *b = hmi_session_create();
+    CHECK(a && b);
+    hmi_session_use(a);
+    hmi_core_init(100, 50);
+    hmi_frame_begin();
+    CHECK_EQ(hmi_frame_sign_out(), 0);
+    hmi_sign_out();
+    size_t len;
+    (void)hmi_frame_end(&len);
+    CHECK_EQ(hmi_frame_sign_out(), 1);
+    hmi_session_use(b);
+    hmi_core_init(100, 50);
+    hmi_frame_begin();
+    (void)hmi_frame_end(&len);
+    CHECK_EQ(hmi_frame_sign_out(), 0);
+    hmi_session_use(a);
+    hmi_frame_begin();
+    CHECK_EQ(hmi_frame_sign_out(), 0);
+    (void)hmi_frame_end(&len);
+    hmi_session_use(NULL);
+    hmi_session_destroy(a);
+    hmi_session_destroy(b);
+}
+
 int main(void) {
     test_trig();
     test_format_int();
@@ -750,6 +777,7 @@ int main(void) {
     test_keys_and_pages();
     test_themes();
     test_sessions();
+    test_sign_out();
     test_text();
     test_text_failures();
     test_raster();

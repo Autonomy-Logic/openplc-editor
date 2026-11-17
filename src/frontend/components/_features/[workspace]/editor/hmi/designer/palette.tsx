@@ -2,8 +2,14 @@
  * The designer's left panel: widgets by palette group, the project's widget blocks apart, to drag onto the canvas or
  * add with a double click; the PLC variables to drop on a widget; and the screen's layers. One search filters each.
  */
+import { ArrowIcon } from '@root/frontend/assets/icons/interface/Arrow'
 import { cn } from '@root/frontend/utils/cn'
 import type { HmiPlcVariable, HmiWidgetCatalog, HmiWidgetInfo } from '@root/middleware/shared/ports/hmi-preview-types'
+import {
+  filterHmiVariableTree,
+  type HmiVariableNode,
+  hmiVariableTree,
+} from '@root/middleware/shared/utils/hmi/plc-variables'
 import { type ReactNode, useMemo } from 'react'
 
 /** Drag data types of the designer. */
@@ -131,6 +137,15 @@ const GroupTitle = ({ children }: { children: ReactNode }) => (
   </h4>
 )
 
+/** Tile labels in words where the type name reads poorly; other tiles show the name without its Hmi prefix. */
+const TILE_LABELS: Readonly<Record<string, string>> = {
+  HMIVERTICALSTACK: 'Vertical stack',
+  HMIHORIZONTALSTACK: 'Horizontal stack',
+}
+
+/** The label of a widget's palette tile. */
+const tileLabel = (name: string): string => TILE_LABELS[name.toUpperCase()] ?? name.replace(/^Hmi/i, '')
+
 function groups(
   catalog: HmiWidgetCatalog,
   projectWidgets: ReadonlySet<string>,
@@ -139,7 +154,9 @@ function groups(
   const byGroup = new Map<string, HmiWidgetInfo[]>()
   for (const info of catalog.widgets.values()) {
     const group = projectWidgets.has(info.name.toUpperCase()) ? PROJECT_GROUP : info.palette
-    if (group === undefined || !info.name.toUpperCase().includes(filter.toUpperCase())) continue
+    const wanted = filter.toUpperCase()
+    const matches = info.name.toUpperCase().includes(wanted) || tileLabel(info.name).toUpperCase().includes(wanted)
+    if (group === undefined || !matches) continue
     byGroup.set(group, [...(byGroup.get(group) ?? []), info])
   }
   return [...byGroup.entries()].sort(([a], [b]) => (a === PROJECT_GROUP ? 1 : b === PROJECT_GROUP ? -1 : 0))
@@ -149,7 +166,15 @@ const STROKE = 'stroke-neutral-700 dark:stroke-neutral-400'
 
 /** Drawn tiles for the widgets the core draws nothing for on their own: the containers and the pipe. */
 const DRAWN_TILES: Record<string, ReactNode> = {
-  HMISTACK: (
+  HMIVERTICALSTACK: (
+    <svg width='56' height='38' viewBox='0 0 56 38' fill='none' strokeWidth='1.5' aria-hidden='true'>
+      <rect x='1' y='1' width='54' height='36' rx='4' className={STROKE} strokeDasharray='3 2' />
+      <rect x='6' y='6' width='12' height='26' rx='2' className='fill-brand-light stroke-brand' />
+      <rect x='22' y='6' width='12' height='26' rx='2' className='fill-brand-light stroke-brand' />
+      <rect x='38' y='6' width='12' height='26' rx='2' className='fill-brand-light stroke-brand' />
+    </svg>
+  ),
+  HMIHORIZONTALSTACK: (
     <svg width='56' height='38' viewBox='0 0 56 38' fill='none' strokeWidth='1.5' aria-hidden='true'>
       <rect x='1' y='1' width='54' height='36' rx='4' className={STROKE} strokeDasharray='3 2' />
       <rect x='6' y='6' width='44' height='7' rx='2' className='fill-brand-light stroke-brand' />
@@ -192,7 +217,7 @@ export function WidgetPalette(props: {
           <GroupTitle>{group}</GroupTitle>
           <div className='grid grid-cols-2 gap-1.5'>
             {widgets.map((w) => {
-              const label = w.name.replace(/^Hmi/i, '')
+              const label = tileLabel(w.name)
               const thumbnail = props.thumbnails.get(w.name.toUpperCase())
               return (
                 <div
@@ -232,46 +257,75 @@ export function WidgetPalette(props: {
   )
 }
 
-/** The PLC variables by program and GVL, with type and initial value, to drop on a widget. */
-export function VariableList(props: { variables: readonly HmiPlcVariable[]; filter: string; disabled: boolean }) {
-  const shown = props.variables.filter((v) => v.path.toUpperCase().includes(props.filter.toUpperCase()))
-  const byOwner = new Map<string, HmiPlcVariable[]>()
-  for (const v of shown) {
-    const owner = v.path.split('.')[0]
-    byOwner.set(owner, [...(byOwner.get(owner) ?? []), v])
-  }
+/**
+ * The PLC variables as a tree by their paths: instances, programs and Global Variable Lists open and close with the
+ * project tree's arrow; a leaf is dropped on a widget. While searching, every matching branch shows open.
+ */
+export function VariableList(props: {
+  variables: readonly HmiPlcVariable[]
+  filter: string
+  disabled: boolean
+  /** Branch keys the user closed. */
+  collapsed: readonly string[]
+  onToggle: (key: string) => void
+}) {
+  const tree = useMemo(() => hmiVariableTree(props.variables), [props.variables])
+  const searching = props.filter !== ''
+  const shown = searching ? filterHmiVariableTree(tree, props.filter) : tree
   if (shown.length === 0)
     return (
       <p className='px-1 font-caption text-xs text-neutral-700'>No program or global variable of an elementary type.</p>
     )
-  return (
-    <div className='flex flex-col gap-3'>
-      {[...byOwner.entries()].map(([owner, variables]) => (
-        <div key={owner}>
-          <GroupTitle>{owner === 'GVL' ? 'Global' : owner}</GroupTitle>
-          <div className='flex flex-col'>
-            {variables.map((v) => (
-              <div
-                key={v.path}
-                draggable={!props.disabled}
-                title={`Drop on a widget to show ${v.path}`}
-                data-testid={`hmi-variable-${v.path}`}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(VARIABLE_MIME, v.path)
-                  e.dataTransfer.effectAllowed = 'link'
-                }}
-                className='flex cursor-grab items-center gap-2 rounded-md px-1.5 py-1.5 font-caption text-xs text-neutral-1000 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900'
-              >
-                <span className='min-w-0 flex-1 truncate'>{v.path.slice(owner.length + 1)}</span>
-                <span className='shrink-0 rounded bg-neutral-100 px-1 text-[10px] font-semibold text-neutral-850 dark:bg-neutral-900 dark:text-neutral-400'>
-                  {v.type}
-                </span>
-                <span className='w-10 shrink-0 truncate text-right text-neutral-700'>{v.initialValue ?? ''}</span>
-              </div>
-            ))}
+  const render = (nodes: readonly HmiVariableNode[], depth: number): ReactNode =>
+    nodes.map((node) => {
+      const indent = { paddingLeft: 4 + depth * 12 }
+      const v = node.variable
+      if (v)
+        return (
+          <div
+            key={node.key}
+            draggable={!props.disabled}
+            title={`Drop on a widget to show ${v.path}`}
+            data-testid={`hmi-variable-${v.path}`}
+            onDragStart={(e) => {
+              e.dataTransfer.setData(VARIABLE_MIME, v.path)
+              e.dataTransfer.effectAllowed = 'link'
+            }}
+            style={indent}
+            className='flex cursor-grab items-center gap-2 rounded-md py-1.5 pr-1.5 font-caption text-xs text-neutral-1000 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900'
+          >
+            <span className='w-4 shrink-0' aria-hidden='true' />
+            <span className='min-w-0 flex-1 truncate'>{node.label}</span>
+            <span className='shrink-0 rounded bg-neutral-100 px-1 text-[10px] font-semibold text-neutral-850 dark:bg-neutral-900 dark:text-neutral-400'>
+              {v.type}
+            </span>
+            <span className='w-10 shrink-0 truncate text-right text-neutral-700'>{v.initialValue ?? ''}</span>
           </div>
+        )
+      const open = searching || !props.collapsed.includes(node.key)
+      return (
+        <div key={node.key}>
+          <button
+            type='button'
+            aria-expanded={open}
+            data-testid={`hmi-variable-node-${node.key}`}
+            onClick={() => props.onToggle(node.key)}
+            style={indent}
+            className='flex w-full items-center gap-2 rounded-md py-1 pr-1.5 text-left font-caption text-xs text-neutral-850 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900'
+          >
+            <ArrowIcon
+              direction='right'
+              className={cn('h-4 w-4 shrink-0 stroke-brand-light transition-all', open && 'rotate-270 stroke-brand')}
+            />
+            <span className='min-w-0 flex-1 truncate font-medium'>{node.label}</span>
+          </button>
+          {open && render(node.children, depth + 1)}
         </div>
-      ))}
+      )
+    })
+  return (
+    <div className='flex flex-col' data-testid='hmi-variable-tree'>
+      {render(shown, 0)}
     </div>
   )
 }

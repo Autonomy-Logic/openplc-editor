@@ -6,6 +6,7 @@ describe('designer actions', () => {
     expect(actionOf('  HMI_Show(HMI_SCREEN#Plant);  ')).toEqual({ kind: 'show', screen: 'Plant' })
     expect(actionOf('HMI_Show( HMI_SCREEN # Plant )')).toEqual({ kind: 'show', screen: 'Plant' })
     expect(actionOf('HMI_Back();')).toEqual({ kind: 'back' })
+    expect(actionOf(' hmi_signout ( ) ')).toEqual({ kind: 'signOut' })
     expect(actionOf('Main.Run := NOT main.run;')).toEqual({ kind: 'toggle', variable: 'Main.Run' })
     expect(actionOf('GVL.Speed := 42;')).toEqual({ kind: 'set', variable: 'GVL.Speed', value: '42' })
     expect(actionOf('Main.Run := NOT Main.Stop;')).toEqual({
@@ -22,6 +23,7 @@ describe('designer actions', () => {
     expect(actionCode({ kind: 'show', screen: 'Plant' })).toBe('HMI_Show(HMI_SCREEN#Plant);')
     expect(actionCode({ kind: 'show', screen: '' })).toBeNull()
     expect(actionCode({ kind: 'back' })).toBe('HMI_Back();')
+    expect(actionCode({ kind: 'signOut' })).toBe('HMI_SignOut();')
     expect(actionCode({ kind: 'set', variable: 'Main.Speed', value: ' 10 ' })).toBe('Main.Speed := 10;')
     expect(actionCode({ kind: 'set', variable: 'Main.Speed', value: '' })).toBeNull()
     expect(actionCode({ kind: 'toggle', variable: 'Main.Run' })).toBe('Main.Run := NOT Main.Run;')

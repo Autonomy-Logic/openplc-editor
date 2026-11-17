@@ -24,6 +24,7 @@
  * `middleware/adapters/web/`.
  */
 
+import { readFolderBytes } from '@root/backend/editor/hmi/hmi-preview-files'
 import {
   ARDUINO_EXPORT_DIR,
   planBuildTreeSync,
@@ -136,6 +137,8 @@ export interface EditorCompilerHandlers {
 export interface EditorCompilerPlatformPortContext {
   /** Project path on disk (without the trailing `project.json`). */
   normalizedProjectPath: string
+  /** The bundled HMI sources folder (`resources/sources/hmi`). */
+  hmiSourcesPath: string
   /** `<projectPath>/build/<boardTarget>/`. */
   compilationPath: string
   /** `<compilationPath>/src/`. */
@@ -302,6 +305,16 @@ export function createEditorCompilerPlatformPort(
         }
       }
       return context.wasmCompileService.compile(request, log)
+    },
+
+    /** Compiles a module only; the build folder is left as it is. */
+    compileWasmModule(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult> {
+      return context.wasmCompileService.compile(request, log)
+    },
+
+    /** The HMI sources folder, read verbatim. */
+    readHmiSources(): Promise<Record<string, Uint8Array>> {
+      return readFolderBytes(context.hmiSourcesPath)
     },
 
     /**
@@ -624,12 +637,12 @@ export function createEditorCompilerPlatformPort(
         if (!result.success) return { success: false as const, error: result.error }
         return { success: true as const, body: result.data }
       }
-      const { version, minEditorVersion, supportsProjectSnapshot } = await probeRuntimeVersion({
+      const probe = await probeRuntimeVersion({
         fetchCapabilities: () => getJson('/api/capabilities'),
         fetchVersion: () => getJson('/api/version'),
         log,
       })
-      return { ok: true, version, minEditorVersion, supportsProjectSnapshot }
+      return { ok: true, ...probe }
     },
 
     /**

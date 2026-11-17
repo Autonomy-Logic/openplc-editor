@@ -1,18 +1,20 @@
 /** The sample project the HMI unit tests build (Jest and tests/hmi-unit): two screens, a widget block, PLC variables and settings. */
 import { hmiSettingsSchema } from '../../../../../../middleware/shared/utils/hmi/settings'
+import { hmiDebugPath } from '../../../artefact/tag-resolver'
 import type { HmiUnitInput } from '../../generate-hmi-unit'
 
 export const OVERVIEW = `{attribute 'hmi_theme' := 'Brand'}
 FUNCTION_BLOCK Overview EXTENDS HmiScreen
   VAR
-    Col : HmiStack := (Direction := HMI_DIRECTION#Row, Gap := 8);
+    Body : HmiHorizontalStack := (Grow := 1, GrowAuto := FALSE);
+    Col : HmiVerticalStack := (Parent := 'Body', Gap := 8);
     Level : HmiTank := (Caption := 'Level', Parent := 'Col', MaxValue := 10.0);
     Run : HmiSwitch := (Caption := 'Run', Parent := 'Col');
-    Speed : HmiSlider := (Caption := 'Speed', MaxValue := 100.0, Step := 5.0);
-    Name : HmiTextInput := (Caption := 'Name', MaxLength := 20);
-    Alarm : Badge := (Caption := 'Alarm');
-    Next : HmiButton := (Text := 'Details');
-    Setpoint : HmiNumericInput := (Caption := 'Speed setpoint', Decimals := 0);
+    Speed : HmiSlider := (Caption := 'Speed', Parent := 'Body', MaxValue := 100.0, Step := 5.0);
+    Name : HmiTextInput := (Caption := 'Name', Parent := 'Body', MaxLength := 20);
+    Alarm : Badge := (Caption := 'Alarm', Parent := 'Body');
+    Next : HmiButton := (Text := 'Details', Parent := 'Body');
+    Setpoint : HmiNumericInput := (Caption := 'Speed setpoint', Parent := 'Body', Decimals := 0);
   END_VAR
   Level.Value := instance0.Main.Level;
   Run.Value := instance0.Main.Running;
@@ -26,8 +28,9 @@ END_FUNCTION_BLOCK
 
 export const DETAILS = `FUNCTION_BLOCK Details EXTENDS HmiScreen
   VAR
-    Back : HmiButton := (Text := 'Back');
-    Shown : HmiLabel;
+    Body : HmiHorizontalStack := (Grow := 1, GrowAuto := FALSE);
+    Back : HmiButton := (Text := 'Back', Parent := 'Body');
+    Shown : HmiLabel := (Parent := 'Body');
   END_VAR
   IF Back.Clicked THEN HMI_Back(); END_IF;
   Shown.Text := instance0.Main.Tag;
@@ -64,16 +67,17 @@ CONFIGURATION Config0
 END_CONFIGURATION
 `
 
-/** Debug-table addresses of the sample PLC program, plus an array element some tests declare. */
+/** Debug-table addresses of the sample PLC program as its debug map names them, plus an array element some tests declare. */
 const DEBUG_MAP = new Map([
-  ['CONFIG0.RES0.INSTANCE0.MAIN.LEVEL', { arr: 0, elem: 3 }],
-  ['CONFIG0.RES0.INSTANCE0.MAIN.RUNNING', { arr: 0, elem: 4 }],
-  ['CONFIG0.RES0.INSTANCE0.MAIN.SPEED', { arr: 0, elem: 5 }],
-  ['CONFIG0.RES0.INSTANCE0.MAIN.TAG', { arr: 1, elem: 0 }],
-  ['CONFIG0.RES0.INSTANCE0.MAIN.UNUSED', { arr: 0, elem: 6 }],
-  ['CONFIG0.RES0.INSTANCE0.MAIN.BUF[1]', { arr: 0, elem: 8 }],
-  ['CONFIG0.ALARMON', { arr: 2, elem: 0 }],
+  ['INSTANCE0.LEVEL', { arr: 0, elem: 3 }],
+  ['INSTANCE0.RUNNING', { arr: 0, elem: 4 }],
+  ['INSTANCE0.SPEED', { arr: 0, elem: 5 }],
+  ['INSTANCE0.TAG', { arr: 1, elem: 0 }],
+  ['INSTANCE0.UNUSED', { arr: 0, elem: 6 }],
+  ['INSTANCE0.BUF[1]', { arr: 0, elem: 8 }],
+  ['ALARMON', { arr: 2, elem: 0 }],
 ])
+const INSTANCES = [{ name: 'instance0', program: 'Main' }]
 
 export function sampleProject(): HmiUnitInput {
   return {
@@ -103,7 +107,7 @@ export function sampleProject(): HmiUnitInput {
     ],
     plcDeclarations: PLC_DECLARATIONS,
     projectNames: ['Main'],
-    resolve: (path) => DEBUG_MAP.get(path.toUpperCase()) ?? null,
+    resolve: (path) => DEBUG_MAP.get(hmiDebugPath(path, INSTANCES)) ?? null,
     plcMd5: '0123456789abcdef0123456789abcdef',
   }
 }

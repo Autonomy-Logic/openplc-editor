@@ -217,6 +217,8 @@ export interface CheckRuntimeVersionResult {
    * that stores snapshots says so.
    */
   supportsProjectSnapshot: boolean
+  /** Whether uploads may carry an `hmi/` folder, from `hmi` at `GET /api/capabilities`; `false` for older runtimes. */
+  supportsHmi: boolean
   /**
    * Oldest editor this runtime accepts programs from, declared at
    * `GET /api/capabilities` (DOPE-448).  `null` means the runtime
@@ -335,6 +337,13 @@ export interface CompilerPlatformPort {
   /** Compiles a request with the in-editor WebAssembly toolchain; the simulator build uses it in place of
    *  arduino-cli.  Both platforms run the same shared compile service, so the request and result are the same. */
   compileToWasm(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult>
+
+  /** Compiles a request with the same toolchain into a module only, leaving the build folder as it is: the HMI
+   *  browser client's module, built beside the program. */
+  compileWasmModule(request: WasmCompileRequest, log: PlatformLog): Promise<WasmCompileResult>
+
+  /** Every file under the HMI sources folder (`core/`, `unit/`, `client/`, `fonts/`) by path, as text or bytes. */
+  readHmiSources(): Promise<Record<string, string | Uint8Array>>
 
   /** Step 13a of the editor pipeline (runtime v4 path).  Upload
    *  the strucpp bundle. */

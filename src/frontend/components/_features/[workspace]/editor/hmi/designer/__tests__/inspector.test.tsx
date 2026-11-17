@@ -1,6 +1,6 @@
-import type { HmiWidgetCatalog, HmiWidgetInfo } from '@root/middleware/shared/ports/hmi-preview-types'
+import type { HmiPlcVariable, HmiWidgetCatalog, HmiWidgetInfo } from '@root/middleware/shared/ports/hmi-preview-types'
 import { parseDesignerBlock } from '@root/middleware/shared/utils/hmi/designer/designer-model'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { type InspectorActions, PropertiesCard } from '../inspector'
 
@@ -34,6 +34,7 @@ function setup(source: string) {
       renamed.push(name)
     },
     remove: ignore,
+    removeSeries: ignore,
   }
   const element = parsed.model.elements[0]
   if (!element) throw new Error('fixture has no element')
@@ -95,5 +96,106 @@ describe('PropertiesCard', () => {
     fireEvent.click(screen.getByTestId('hmi-show-in-code'))
     expect(result.renamed).toEqual(['Heading'])
     expect(result.shown).toEqual(['Title'])
+  })
+})
+
+const prop = (name: string, extra: Partial<HmiWidgetInfo['properties'][number]> = {}) => ({
+  name,
+  type: 'REAL',
+  kind: 'number' as const,
+  group: 'data' as const,
+  declaredBy: 'HmiTrend',
+  ...extra,
+})
+const TREND: HmiWidgetInfo = {
+  name: 'HmiTrend',
+  library: 'StandardWidgets',
+  extends: 'HmiElement',
+  properties: [
+    prop('Value'),
+    prop('Value2'),
+    prop('Value3'),
+    prop('Pens', { type: 'INT', group: 'display', defaultValue: '1' }),
+    prop('Caption', { type: 'STRING', kind: 'string' }),
+    prop('AccentColor', { type: 'UDINT', kind: 'color', group: 'display' }),
+    prop('Color2', { type: 'UDINT', kind: 'color', group: 'display' }),
+    prop('Color3', { type: 'UDINT', kind: 'color', group: 'display' }),
+  ],
+  outputs: [],
+  main: { name: 'Value', direction: 'input', type: 'REAL' },
+  events: [],
+  series: { count: 'Pens', values: ['Value', 'Value2', 'Value3'], colors: ['AccentColor', 'Color2', 'Color3'] },
+}
+
+function trend(decl: string, body = '', variables: HmiPlcVariable[] = []) {
+  const source = `FUNCTION_BLOCK S EXTENDS HmiScreen\n  VAR\n    ${decl}\n  END_VAR\n${body}END_FUNCTION_BLOCK\n`
+  const parsed = parseDesignerBlock(source, (type) => type.toUpperCase() === 'HMITREND')
+  if (!parsed.ok) throw new Error('fixture does not parse')
+  const set: Array<[string, string, string | null]> = []
+  const removed: Array<[string, number]> = []
+  const ignore = () => undefined
+  const element = parsed.model.elements[0]
+  if (!element) throw new Error('fixture has no element')
+  render(
+    <PropertiesCard
+      model={parsed.model}
+      element={element}
+      catalog={{ widgets: new Map([['HMITREND', TREND]]), colors: ['Accent'] }}
+      variables={variables}
+      screens={[]}
+      actions={{
+        setProperty: (e, p, v) => {
+          set.push([e, p, v])
+        },
+        bind: ignore,
+        setEvent: ignore,
+        rename: ignore,
+        remove: ignore,
+        removeSeries: (e, i) => {
+          removed.push([e, i])
+        },
+      }}
+      locked={false}
+      onShowInCode={ignore}
+    />,
+  )
+  return { set, removed }
+}
+
+describe('PropertiesCard series', () => {
+  it('shows one row per series with its variable and colour, the first one without a remove button', () => {
+    const { set, removed } = trend('T : HmiTrend := (Pens := 2);')
+    expect(screen.getByTestId('hmi-series-1')).toBeTruthy()
+    expect(screen.getByTestId('hmi-series-2')).toBeTruthy()
+    expect(screen.queryByTestId('hmi-series-3')).toBeNull()
+    expect(screen.queryByTestId('hmi-series-1-remove')).toBeNull()
+    expect(screen.getByTestId('hmi-main-binding')).toBeTruthy()
+    expect(screen.getByTestId('hmi-series-2-binding')).toBeTruthy()
+    expect(screen.getByTestId('hmi-series-2-color').querySelector('[data-testid="hmi-prop-Color2"]')).not.toBeNull()
+    expect(screen.queryByTestId('hmi-prop-Value2')).toBeNull()
+    expect(screen.queryByTestId('hmi-prop-Pens')).toBeNull()
+    expect(screen.getByTestId('hmi-prop-Caption')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('hmi-series-2-remove'))
+    expect(removed).toEqual([['T', 1]])
+    fireEvent.click(screen.getByTestId('hmi-series-add'))
+    expect(set).toEqual([['T', 'Pens', '3']])
+  })
+
+  it('starts from the default count and disables adding at the maximum', () => {
+    trend('T : HmiTrend;')
+    expect(screen.getByTestId('hmi-series-1')).toBeTruthy()
+    expect(screen.queryByTestId('hmi-series-2')).toBeNull()
+    cleanup()
+    trend('T : HmiTrend := (Pens := 3);')
+    expect(screen.getByTestId('hmi-series-add').hasAttribute('disabled')).toBe(true)
+    fireEvent.click(screen.getByTestId('hmi-prop-tab-style'))
+    expect(screen.queryByTestId('hmi-prop-Color2')).toBeNull()
+  })
+
+  it('shows a series bound to a multi-dimensional array element', () => {
+    trend('T : HmiTrend := (Pens := 2);', '  T.Value2 := instance0.Main.M[2,1];\n', [
+      { path: 'instance0.Main.M[2,1]', type: 'REAL' },
+    ])
+    expect(screen.getByTestId('hmi-series-2-binding').textContent).toContain('instance0.Main.M[2,1]')
   })
 })

@@ -27,6 +27,8 @@ export interface HmiProject {
   screens: Record<string, string>
   widgets?: Record<string, string>
   startScreen: string
+  /** The device's IP in devices/configuration.json; empty by default. */
+  runtimeIpAddress?: string
 }
 
 const APP_FAILURES = [/Failed to open project/i, /Something went wrong/i, /could not be loaded/i]
@@ -73,7 +75,7 @@ export function writeHmiFixture(f: HmiFixture, project: HmiProject): void {
     JSON.stringify({
       deviceBoard: 'OpenPLC Runtime v4',
       communicationPort: '',
-      runtimeIpAddress: '',
+      runtimeIpAddress: project.runtimeIpAddress ?? '',
       selectedPlatformOptions: {},
     }),
   )

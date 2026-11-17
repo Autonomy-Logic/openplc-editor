@@ -1,6 +1,7 @@
 /**
- * HMI Settings: the start screen, frame period, default theme and font; which roles open each screen; the local
- * panel's PIN and relock; and the project themes, edited token by token beside a live preview drawn by the core.
+ * HMI Settings: the start screen, frame period, default theme and font; where browsers open the HMI; which roles open
+ * each screen; the local panel's PIN and relock; and the project themes, edited token by token beside a live preview
+ * drawn by the core.
  */
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
 import { Label } from '@root/frontend/components/_atoms/label'
@@ -10,7 +11,10 @@ import { ToggleSwitch } from '@root/frontend/components/_atoms/toggle-switch'
 import { readyRequest } from '@root/frontend/services/hmi-code/plc-libraries'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
+import { isOpenPLCRuntimeV4Target } from '@root/frontend/utils/device'
 import { toast } from '@root/frontend/utils/toast'
+import { useCapabilities } from '@root/middleware/shared/providers/platform-context'
+import { HMI_ADDRESS_PLACEHOLDER, hmiAddress } from '@root/middleware/shared/utils/hmi/address'
 import { screensUsingTheme } from '@root/middleware/shared/utils/hmi/references'
 import {
   HMI_BUILTIN_THEMES,
@@ -70,6 +74,19 @@ function Field(props: { label: string; children: ReactNode; error?: string; widt
       {props.error && <p className='pl-[136px] text-xs text-red-600 dark:text-red-400'>{props.error}</p>}
     </div>
   )
+}
+
+/**
+ * Where a browser opens the HMI of the project's Runtime v4 device, or null for other targets. The address is the
+ * device's IP where the editor reaches it directly; elsewhere it is not known here, so the row shows its pattern.
+ */
+function useHmiAddress(): string | null {
+  const capabilities = useCapabilities()
+  const board = useOpenPLCStore((s) => s.deviceDefinitions.configuration.deviceBoard)
+  const boardInfo = useOpenPLCStore((s) => s.deviceAvailableOptions.availableBoards.get(board))
+  const ip = useOpenPLCStore((s) => s.deviceDefinitions.configuration.runtimeIpAddress)
+  if (!isOpenPLCRuntimeV4Target(board, boardInfo)) return null
+  return (capabilities.hasOrchestratorDevices ? null : hmiAddress(ip)) ?? HMI_ADDRESS_PLACEHOLDER
 }
 
 function SettingSelect(props: {
@@ -232,6 +249,7 @@ export function HmiSettingsEditor() {
   const hmi = useOpenPLCStore((s) => s.project.data.hmi)
   const applySettings = useOpenPLCStore((s) => s.hmiDesignerActions.applySettings)
   const settings = hmi?.settings
+  const address = useHmiAddress()
   const screens = useMemo(() => (hmi?.screens ?? []).map((s) => s.name), [hmi?.screens])
   const [themeName, setThemeName] = useState<string | null>(null)
   const [newTheme, setNewTheme] = useState('')
@@ -327,6 +345,16 @@ export function HmiSettingsEditor() {
                 }}
               />
             </Field>
+            {address !== null && (
+              <Field label='HMI address' width='w-auto'>
+                <span
+                  data-testid='hmi-address'
+                  className='select-text whitespace-nowrap font-caption text-xs font-medium text-neutral-850 dark:text-neutral-300'
+                >
+                  {address}
+                </span>
+              </Field>
+            )}
           </Panel>
 
           <Panel title='Local panel'>

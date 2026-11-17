@@ -25,10 +25,10 @@ const F = hmiFixture('hmi-preview-mode')
 
 const OVERVIEW = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
   VAR
-    Col : HmiStack := (Direction := HMI_DIRECTION#Column, Gap := 12, Padding := 16);
+    Col : HmiHorizontalStack := (Gap := 12, Padding := 16);
     Speed : HmiSlider := (Parent := 'Col', Caption := 'Speed', Value := 20.0);
     Next : HmiButton := (Parent := 'Col', Text := 'Next');
-    Box : HmiStack := (Parent := 'Col', PrefHeight := 120);
+    Box : HmiVerticalStack := (Parent := 'Col', PrefHeight := 120);
     Area : HmiDiagram := (Parent := 'Box', GrowAuto := TRUE);
     Tank1 : HmiTank := (Parent := 'Area', X := 20, Y := 10);
   END_VAR
@@ -36,7 +36,8 @@ END_FUNCTION_BLOCK
 `
 const DETAILS = `FUNCTION_BLOCK Details EXTENDS HmiScreen
   VAR
-    Back : HmiButton := (Text := 'Back');
+    Body : HmiHorizontalStack := (Grow := 1, GrowAuto := FALSE);
+    Back : HmiButton := (Text := 'Back', Parent := 'Body');
   END_VAR
   IF Back.Clicked THEN HMI_Back(); END_IF;
 END_FUNCTION_BLOCK

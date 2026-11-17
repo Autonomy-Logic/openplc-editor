@@ -29,7 +29,7 @@ const F = hmiFixture('hmi-button-binding')
 
 const OVERVIEW = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
   VAR
-    Row : HmiStack := (Direction := HMI_DIRECTION#Row, Gap := 24, Padding := 24, GrowAuto := FALSE);
+    Row : HmiVerticalStack := (Gap := 24, Padding := 24, GrowAuto := FALSE);
     Jog : HmiButton := (Parent := 'Row', Text := 'Jog', PrefWidth := 160);
     Light : HmiLamp := (Parent := 'Row', Caption := 'Run');
   END_VAR
@@ -128,7 +128,9 @@ test.describe('HMI button binding', () => {
       await waitFor(page, 'the rebuilt preview', async () => rebuilt(page, before), 60000)
       await save(app)
       await waitFor(page, 'the binding on disk', async () => screenOnDisk(F, 'Overview').includes('NOT Jog.Pressed'))
-      expect(screenOnDisk(F, 'Overview')).toMatch(/IF Jog\.Changed THEN\s+instance0\.Main\.Run := NOT Jog\.Pressed;\s+END_IF;/)
+      expect(screenOnDisk(F, 'Overview')).toMatch(
+        /IF Jog\.Changed THEN\s+instance0\.Main\.Run := NOT Jog\.Pressed;\s+END_IF;/,
+      )
 
       before = await status(page)
       await page.getByTestId('hmi-preview-mode').click()

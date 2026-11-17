@@ -269,7 +269,9 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
     VAR_INPUT Horizontal : BOOL; END_VAR
     MaxAlong := SEL(Horizontal, MaxHeight, MaxWidth);
   END_METHOD
+  (* Share of leftover space along a stack running horizontally (Horizontal) or vertically. *)
   METHOD INTERNAL GetGrow : DINT
+    VAR_INPUT Horizontal : BOOL; END_VAR
     IF NOT Visible THEN
       GetGrow := 0;
     ELSIF GrowAuto THEN

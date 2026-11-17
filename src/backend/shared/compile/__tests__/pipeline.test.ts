@@ -12,6 +12,7 @@
  * emit-event payloads.
  */
 
+import { hmiSettingsSchema } from '../../../../middleware/shared/utils/hmi/settings'
 import hals from '../../firmware/hals.json'
 import type { DevicePin } from '../../types/PLC/devices'
 import type { PLCProjectData } from '../../types/PLC/open-plc'
@@ -70,12 +71,19 @@ jest.mock('../steps/generate-confs', () => ({
   })),
 }))
 
+jest.mock('../../hmi/artefact/compose-hmi-artefact', () => ({
+  ...jest.requireActual('../../hmi/artefact/compose-hmi-artefact'),
+  composeHmiArtefact: jest.fn(),
+}))
+
+import { composeHmiArtefact } from '../../hmi/artefact/compose-hmi-artefact'
 import { runProgramBuildPipeline } from '../../library/program-build-pipeline'
 import { isStrucppCompatibleRuntime } from '../../firmware/runtime-version-gate'
 import { generateRuntimeConfs } from '../steps/generate-confs'
 
 import { runCompilePipeline, type RunCompilePipelineArgs, type PipelineProgressEvent } from '../pipeline'
 
+const mockedComposeHmi = composeHmiArtefact as jest.MockedFunction<typeof composeHmiArtefact>
 const mockedConfs = generateRuntimeConfs as jest.MockedFunction<typeof generateRuntimeConfs>
 const mockedStrucpp = runProgramBuildPipeline as jest.MockedFunction<typeof runProgramBuildPipeline>
 const mockedVersionGate = isStrucppCompatibleRuntime as jest.MockedFunction<typeof isStrucppCompatibleRuntime>
@@ -101,6 +109,13 @@ function makePort(overrides: Partial<CompilerPlatformPort> = {}): jest.Mocked<Co
     checkRuntimeVersion: jest.fn().mockResolvedValue({ ok: true, version: '4.1.0' }),
     packageVppPlugin: jest.fn().mockResolvedValue({ files: {} }),
     materializeRuntimeV4Bundle: jest.fn().mockResolvedValue({ written: 0 }),
+    compileWasmModule: jest.fn().mockResolvedValue({
+      ok: true,
+      wasm: new Uint8Array([0, 97, 115, 109]),
+      stats: { units: 1, cached: 0, compileMs: 1, linkMs: 1 },
+      diagnostics: [],
+    }),
+    readHmiSources: jest.fn().mockResolvedValue({}),
     ...overrides,
   } as jest.Mocked<CompilerPlatformPort>
 }
@@ -153,6 +168,7 @@ function makeArgs(overrides: Partial<RunCompilePipelineArgs> = {}): RunCompilePi
     strucppRuntimeHeaders: {},
     avrLibStdCppInclude: '/usr/avr/include',
     arduinoCliParallel: false,
+    hmi: null,
     ...overrides,
   }
 }
@@ -2060,5 +2076,141 @@ describe('runCompilePipeline — two enabled Modbus servers', () => {
 
     expect(result.success).toBe(true)
     expect(events.find((event) => event.message.includes('one Modbus server'))).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// HMI artefact of a Runtime v4 build
+// ---------------------------------------------------------------------------
+
+describe('runCompilePipeline — HMI', () => {
+  const hmiSources = {
+    screens: [{ name: 'Overview', source: 'FUNCTION_BLOCK Overview EXTENDS HmiScreen\nEND_FUNCTION_BLOCK\n' }],
+    widgets: [],
+    settings: hmiSettingsSchema.parse({}),
+    plcVariables: [],
+    projectNames: [],
+  }
+  const v4 = (overrides: Partial<RunCompilePipelineArgs> = {}) =>
+    makeArgs({
+      isSimulator: false,
+      isRuntimeV4: true,
+      boardRuntime: 'openplc-compiler',
+      deviceContext: deviceContextFixture,
+      ...overrides,
+    })
+  const runtime = (supportsHmi: boolean) =>
+    jest.fn().mockResolvedValue({ ok: true, version: '4.3.2', supportsProjectSnapshot: true, supportsHmi })
+  const uploaded = (port: jest.Mocked<CompilerPlatformPort>) =>
+    jest.mocked(port.uploadRuntimeV4).mock.calls[0][0].bundle
+  const written = (port: jest.Mocked<CompilerPlatformPort>) => {
+    const materialize = port.materializeRuntimeV4Bundle
+    if (!materialize) throw new Error('the test port must provide materializeRuntimeV4Bundle')
+    return jest.mocked(materialize).mock.calls[0][0].bundle
+  }
+
+  beforeEach(() => {
+    mockedComposeHmi.mockResolvedValue({
+      ok: true,
+      files: { 'hmi/manifest.json': '{"format": 1}\n', 'hmi/client/hmi_client.wasm': new Uint8Array([0, 97]) },
+      tags: [],
+      warnings: [{ file: 'HMI', message: 'a warning' }],
+    })
+  })
+
+  it('ships the built HMI in the bundle it writes and uploads', async () => {
+    const port = makePort({
+      checkRuntimeVersion: runtime(true),
+      readHmiSources: jest.fn().mockResolvedValue({ x: 'y' }),
+    })
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(v4({ hmi: hmiSources }), port, emit)
+
+    expect(result.success).toBe(true)
+    expect(written(port)['hmi/client/hmi_client.wasm']).toEqual(new Uint8Array([0, 97]))
+    expect(uploaded(port)['hmi/manifest.json']).toBe('{"format": 1}\n')
+    const input = mockedComposeHmi.mock.calls[0][0]
+    expect(input.sources).toBe(hmiSources)
+    expect(input.md5).toBe('a'.repeat(32))
+    expect(input.hmiSources).toEqual({ x: 'y' })
+    expect(events).toContainEqual(
+      expect.objectContaining({ stage: 'hmi', level: 'warning', message: 'HMI: a warning' }),
+    )
+  })
+
+  it('compiles the client module through compileWasmModule, never the build-folder compile', async () => {
+    const port = makePort({ checkRuntimeVersion: runtime(true) })
+    mockedComposeHmi.mockImplementationOnce(async (input) => {
+      await input.compile({ files: {}, units: [] })
+      return { ok: true, files: {}, tags: [], warnings: [] }
+    })
+    await runCompilePipeline(v4({ hmi: hmiSources }), port, captureEvents().emit)
+    expect(port.compileWasmModule).toHaveBeenCalledTimes(1)
+    expect(port.compileToWasm).not.toHaveBeenCalled()
+  })
+
+  it('stops the build when the HMI does not build, before anything is written or uploaded', async () => {
+    mockedComposeHmi.mockResolvedValueOnce({
+      ok: false,
+      errors: [{ file: 'Overview', line: 3, message: 'Undeclared variable' }],
+      warnings: [],
+    })
+    const port = makePort({ checkRuntimeVersion: runtime(true) })
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(v4({ hmi: hmiSources }), port, emit)
+
+    expect(result.success).toBe(false)
+    expect(port.materializeRuntimeV4Bundle).not.toHaveBeenCalled()
+    expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
+    expect(events).toContainEqual(
+      expect.objectContaining({ stage: 'hmi', level: 'error', message: 'Overview:3: Undeclared variable' }),
+    )
+  })
+
+  it('refuses a project with screens for a runtime without HMI support, before building the HMI', async () => {
+    const port = makePort({ checkRuntimeVersion: runtime(false) })
+    const { events, emit } = captureEvents()
+    const result = await runCompilePipeline(v4({ hmi: hmiSources }), port, emit)
+
+    expect(result.success).toBe(false)
+    expect(mockedComposeHmi).not.toHaveBeenCalled()
+    expect(port.materializeRuntimeV4Bundle).not.toHaveBeenCalled()
+    expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
+    expect(events.some((e) => /does not support them/.test(e.message))).toBe(true)
+  })
+
+  it('removes the device HMI when the project has no screens and the runtime supports HMI', async () => {
+    const port = makePort({ checkRuntimeVersion: runtime(true) })
+    const result = await runCompilePipeline(v4(), port, captureEvents().emit)
+
+    expect(result.success).toBe(true)
+    expect(mockedComposeHmi).not.toHaveBeenCalled()
+    expect(uploaded(port)['hmi/manifest.json']).toBe('{"format": 1, "remove": true}\n')
+  })
+
+  it('sends no hmi/ to a runtime without HMI support when the project has no screens', async () => {
+    const port = makePort({ checkRuntimeVersion: runtime(false) })
+    const result = await runCompilePipeline(v4(), port, captureEvents().emit)
+
+    expect(result.success).toBe(true)
+    expect(Object.keys(uploaded(port)).some((path) => path.startsWith('hmi/'))).toBe(false)
+  })
+
+  it('builds the HMI in a compile-only build with no device, so it is checked before any upload', async () => {
+    const port = makePort()
+    const result = await runCompilePipeline(
+      v4({ hmi: hmiSources, compileOnly: true, deviceContext: undefined }),
+      port,
+      captureEvents().emit,
+    )
+    expect(result.success).toBe(true)
+    expect(mockedComposeHmi).toHaveBeenCalledTimes(1)
+    expect(written(port)['hmi/manifest.json']).toBe('{"format": 1}\n')
+  })
+
+  it('leaves the HMI out of a simulator build', async () => {
+    const port = makePort()
+    await runCompilePipeline(makeArgs({ hmi: hmiSources }), port, captureEvents().emit)
+    expect(mockedComposeHmi).not.toHaveBeenCalled()
   })
 })

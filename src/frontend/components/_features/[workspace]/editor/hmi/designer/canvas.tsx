@@ -9,6 +9,7 @@ import {
   dropIndicator,
   type DropTarget,
   dropTarget,
+  EDGE_BAND_PX,
   elementAt,
   widgetIsA,
 } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
@@ -111,6 +112,7 @@ export function DesignerCanvas(props: {
   const width = device.width * zoom
   const height = device.height * zoom
   const handle = HANDLE_RADIUS / zoom
+  const band = EDGE_BAND_PX / zoom
 
   const toLu = (clientX: number, clientY: number): Point => {
     const rect = overlay.current?.getBoundingClientRect()
@@ -251,7 +253,7 @@ export function DesignerCanvas(props: {
       }
       case 'move': {
         const moved = gesture.moved || Math.hypot(p.x - gesture.startX, p.y - gesture.startY) * zoom > DRAG_THRESHOLD
-        if (moved && model) setDrop(dropTarget(model, catalog, elements, p.x, p.y, gesture.name))
+        if (moved && model) setDrop(dropTarget(model, catalog, elements, p.x, p.y, gesture.name, band))
         if (moved !== gesture.moved) setGesture({ ...gesture, moved })
         return
       }
@@ -337,7 +339,7 @@ export function DesignerCanvas(props: {
     if (!types.includes(WIDGET_MIME) && !types.includes(VARIABLE_MIME)) return
     e.preventDefault()
     const p = toLu(e.clientX, e.clientY)
-    if (types.includes(WIDGET_MIME)) setDrop(dropTarget(model, catalog, elements, p.x, p.y))
+    if (types.includes(WIDGET_MIME)) setDrop(dropTarget(model, catalog, elements, p.x, p.y, null, band))
     else setHover(elementAt(elements, p.x, p.y))
   }
 
@@ -348,7 +350,7 @@ export function DesignerCanvas(props: {
     const widget = e.dataTransfer.getData(WIDGET_MIME)
     const variable = e.dataTransfer.getData(VARIABLE_MIME)
     if (widget) {
-      const target = dropTarget(model, catalog, elements, p.x, p.y)
+      const target = dropTarget(model, catalog, elements, p.x, p.y, null, band)
       const container = target.parent ? elementOf(target.parent) : undefined
       const frame = container ? records.frames.get(container.name.toUpperCase()) : undefined
       if (container && frame && widgetIsA(catalog, container.type, 'HmiDiagram')) {
@@ -367,7 +369,7 @@ export function DesignerCanvas(props: {
   const selected = props.mode === 'design' ? props.selection[0] : undefined
   const selectedStyle = selected ? style(selected) : null
   const moving = gesture?.kind === 'move' ? gesture.name : null
-  const indicator = drop && model ? dropIndicator(model, elements, drop, moving) : null
+  const indicator = drop && model ? dropIndicator(model, catalog, elements, drop, moving) : null
   const scaled = (r: { x: number; y: number; width: number; height: number }) => ({
     left: r.x * zoom,
     top: r.y * zoom,
@@ -385,125 +387,126 @@ export function DesignerCanvas(props: {
       ? portAt(records.ports, gesture.to, handle, (q) => !same(q.element, gesture.from.element))
       : null
   return (
-    <div
-      className={cn(
-        'relative shrink-0 rounded-lg shadow-[0_6px_24px_rgba(1,30,75,0.14)]',
-        props.mode === 'run' && 'ring-[3px] ring-brand',
-      )}
-      style={{ width, height }}
-      data-testid='hmi-canvas'
-      data-mode={props.mode}
-    >
-      <canvas
-        ref={props.canvas}
-        className='absolute inset-0 h-full w-full rounded-lg'
-        style={{ imageRendering: 'auto' }}
-      />
+    <div className='box shrink-0 rounded-lg'>
       <div
-        ref={overlay}
-        className={cn('absolute inset-0', props.mode === 'design' ? 'cursor-default' : 'cursor-pointer')}
-        data-testid='hmi-canvas-overlay'
-        tabIndex={0}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerLeave={() => setHover(null)}
-        onDoubleClick={onDoubleClick}
-        onDragOver={onDragOver}
-        onDragLeave={() => setDrop(null)}
-        onDrop={onDrop}
+        className={cn('relative shrink-0 rounded-lg', props.mode === 'run' && 'ring-[3px] ring-brand')}
+        style={{ width, height }}
+        data-testid='hmi-canvas'
+        data-mode={props.mode}
       >
-        {props.mode === 'design' && hover && hover !== selected && style(hover) && (
-          <div
-            className='border-brand/70 pointer-events-none absolute border border-dashed'
-            style={style(hover) ?? undefined}
-          />
-        )}
-        {indicator && drop && (
-          <div
-            className='pointer-events-none absolute rounded-sm border-2 border-green-500 bg-green-500/10'
-            style={indicator.box ? scaled(indicator.box) : { left: 0, top: 0, width, height }}
-            data-testid='hmi-drop-target'
-          >
-            <span className='absolute left-1 top-1 whitespace-nowrap rounded bg-green-600 px-1.5 py-0.5 font-caption text-[10px] font-medium text-white'>
-              {moving ? 'Move to' : 'Add to'} {drop.parent ?? 'the screen'}
-            </span>
-          </div>
-        )}
-        {indicator?.line && (
-          <div
-            className='pointer-events-none absolute rounded-full bg-green-600'
-            style={scaled(indicator.line)}
-            data-testid='hmi-drop-line'
-          />
-        )}
-        {selectedStyle && (
-          <div
-            className='pointer-events-none absolute border-2 border-brand'
-            style={selectedStyle}
-            data-testid={`hmi-selected-${selected}`}
-          >
-            <span className='absolute -top-[21px] left-[-2px] whitespace-nowrap rounded-t bg-brand px-1.5 py-0.5 font-caption text-[11px] font-semibold text-white'>
-              {selected}
-            </span>
-            {!props.locked && !selectedPipe && (
-              <>
-                <div
-                  className='pointer-events-auto absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 cursor-ew-resize rounded-sm border border-brand bg-white'
-                  data-testid='hmi-grow-right'
-                  onPointerDown={startResize('right')}
-                />
-                <div
-                  className='pointer-events-auto absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 cursor-ns-resize rounded-sm border border-brand bg-white'
-                  data-testid='hmi-grow-bottom'
-                  onPointerDown={startResize('bottom')}
-                />
-                <div
-                  className='pointer-events-auto absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-brand bg-white'
-                  data-testid='hmi-grow-corner'
-                  onPointerDown={startResize('corner')}
-                />
-              </>
-            )}
-          </div>
-        )}
-        {shownPorts.map((q) => (
-          <div
-            key={`${q.element}:${q.port}`}
-            className={cn(
-              'pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-brand',
-              wireTarget && same(wireTarget.element, q.element) && wireTarget.port === q.port ? 'bg-brand' : 'bg-white',
-            )}
-            style={{ left: q.x * zoom, top: q.y * zoom }}
-            data-testid={`hmi-port-${q.element}-${q.port}`}
-          />
-        ))}
-        {selectedPipe?.bends.map((b, i) => {
-          const c = toCanvas(selectedPipe.frame, gesture?.kind === 'bend' ? (gesture.bends[i] ?? b) : b)
-          return (
+        <canvas
+          ref={props.canvas}
+          className='absolute inset-0 h-full w-full rounded-lg'
+          style={{ imageRendering: 'auto' }}
+        />
+        <div
+          ref={overlay}
+          className={cn('absolute inset-0', props.mode === 'design' ? 'cursor-default' : 'cursor-pointer')}
+          data-testid='hmi-canvas-overlay'
+          tabIndex={0}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={() => setHover(null)}
+          onDoubleClick={onDoubleClick}
+          onDragOver={onDragOver}
+          onDragLeave={() => setDrop(null)}
+          onDrop={onDrop}
+        >
+          {props.mode === 'design' && hover && hover !== selected && style(hover) && (
             <div
-              key={i}
-              className='pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-sm border-2 border-brand bg-white'
-              style={{ left: c.x * zoom, top: c.y * zoom }}
-              data-testid={`hmi-bend-${i}`}
+              className='border-brand/70 pointer-events-none absolute border border-dashed'
+              style={style(hover) ?? undefined}
             />
-          )
-        })}
-        {gesture?.kind === 'wire' && (
-          <svg className='pointer-events-none absolute inset-0' width={width} height={height}>
-            <line
-              x1={gesture.from.x * zoom}
-              y1={gesture.from.y * zoom}
-              x2={(wireTarget ?? gesture.to).x * zoom}
-              y2={(wireTarget ?? gesture.to).y * zoom}
-              className='stroke-brand'
-              strokeWidth={2}
-              strokeDasharray='4 3'
+          )}
+          {indicator && drop && (
+            <div
+              className='pointer-events-none absolute rounded-sm border-2 border-green-500 bg-green-500/10'
+              style={indicator.box ? scaled(indicator.box) : { left: 0, top: 0, width, height }}
+              data-testid='hmi-drop-target'
+            >
+              <span className='absolute left-1 top-1 whitespace-nowrap rounded bg-green-600 px-1.5 py-0.5 font-caption text-[10px] font-medium text-white'>
+                {moving ? 'Move to' : 'Add to'} {drop.parent ?? 'the screen'}
+              </span>
+            </div>
+          )}
+          {indicator?.line && (
+            <div
+              className='pointer-events-none absolute rounded-full bg-green-600'
+              style={scaled(indicator.line)}
+              data-testid='hmi-drop-line'
             />
-          </svg>
-        )}
+          )}
+          {selectedStyle && (
+            <div
+              className='pointer-events-none absolute border-2 border-brand'
+              style={selectedStyle}
+              data-testid={`hmi-selected-${selected}`}
+            >
+              <span className='absolute -top-[21px] left-[-2px] whitespace-nowrap rounded-t bg-brand px-1.5 py-0.5 font-caption text-[11px] font-semibold text-white'>
+                {selected}
+              </span>
+              {!props.locked && !selectedPipe && (
+                <>
+                  <div
+                    className='pointer-events-auto absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 cursor-ew-resize rounded-sm border border-brand bg-white'
+                    data-testid='hmi-grow-right'
+                    onPointerDown={startResize('right')}
+                  />
+                  <div
+                    className='pointer-events-auto absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 cursor-ns-resize rounded-sm border border-brand bg-white'
+                    data-testid='hmi-grow-bottom'
+                    onPointerDown={startResize('bottom')}
+                  />
+                  <div
+                    className='pointer-events-auto absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-brand bg-white'
+                    data-testid='hmi-grow-corner'
+                    onPointerDown={startResize('corner')}
+                  />
+                </>
+              )}
+            </div>
+          )}
+          {shownPorts.map((q) => (
+            <div
+              key={`${q.element}:${q.port}`}
+              className={cn(
+                'pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-brand',
+                wireTarget && same(wireTarget.element, q.element) && wireTarget.port === q.port
+                  ? 'bg-brand'
+                  : 'bg-white',
+              )}
+              style={{ left: q.x * zoom, top: q.y * zoom }}
+              data-testid={`hmi-port-${q.element}-${q.port}`}
+            />
+          ))}
+          {selectedPipe?.bends.map((b, i) => {
+            const c = toCanvas(selectedPipe.frame, gesture?.kind === 'bend' ? (gesture.bends[i] ?? b) : b)
+            return (
+              <div
+                key={i}
+                className='pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-sm border-2 border-brand bg-white'
+                style={{ left: c.x * zoom, top: c.y * zoom }}
+                data-testid={`hmi-bend-${i}`}
+              />
+            )
+          })}
+          {gesture?.kind === 'wire' && (
+            <svg className='pointer-events-none absolute inset-0' width={width} height={height}>
+              <line
+                x1={gesture.from.x * zoom}
+                y1={gesture.from.y * zoom}
+                x2={(wireTarget ?? gesture.to).x * zoom}
+                y2={(wireTarget ?? gesture.to).y * zoom}
+                className='stroke-brand'
+                strokeWidth={2}
+                strokeDasharray='4 3'
+              />
+            </svg>
+          )}
+        </div>
+        {props.loading !== null && <PreviewLoading step={props.loading} />}
       </div>
-      {props.loading !== null && <PreviewLoading step={props.loading} />}
     </div>
   )
 }

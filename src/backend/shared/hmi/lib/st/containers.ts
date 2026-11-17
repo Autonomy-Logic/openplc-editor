@@ -1,25 +1,52 @@
-/** StandardWidgets ST source: the containers, HmiStack and HmiDiagram. */
-export const CONTAINERS_ST = `(* Arranges its children in a row or a column. Sizes start from each child's measured size, then leftover space goes
-   to the children that grow and missing space is taken from all of them, within each child's minimum and maximum. *)
-{attribute 'hmi_palette' := 'Containers'}
-FUNCTION_BLOCK HmiStack EXTENDS HmiElement
+/** StandardWidgets ST source: the containers, HmiVerticalStack, HmiHorizontalStack and HmiDiagram, and their bases. */
+export const CONTAINERS_ST = `(* Base of every element that holds others; only containers may sit directly on a screen. *)
+FUNCTION_BLOCK ABSTRACT HmiContainer EXTENDS HmiElement
   VAR_INPUT
-    Direction : HMI_DIRECTION := HMI_DIRECTION#Auto;
-    Gap : DINT := 8;
-    Padding : DINT := 0;
     {attribute 'hmi_color'}
     Fill : UDINT := COLOR.Transparent;
+  END_VAR
+
+  (* Takes a child; FALSE when full. *)
+  METHOD INTERNAL AddChild : BOOL
+    VAR_INPUT Child : POINTER TO HmiElement; END_VAR
+    AddChild := FALSE;
+  END_METHOD
+  (* A container fills the room its parent gives it. *)
+  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
+    NaturalGrow := 1;
+  END_METHOD
+  (* With GrowAuto, a preferred size along the stack keeps the container at that size. *)
+  METHOD INTERNAL OVERRIDE GetGrow : DINT
+    VAR_INPUT Horizontal : BOOL; END_VAR
+    IF NOT Visible THEN
+      GetGrow := 0;
+    ELSIF NOT GrowAuto THEN
+      GetGrow := MAX(Grow, 0);
+    ELSIF SEL(Horizontal, PrefHeight, PrefWidth) > 0 THEN
+      GetGrow := 0;
+    ELSE
+      GetGrow := NaturalGrow();
+    END_IF;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Base of the stacks. Sizes start from each child's measured size, then leftover space goes to the children that
+   grow and missing space is taken from all of them, within each child's minimum and maximum. *)
+FUNCTION_BLOCK ABSTRACT HmiStack EXTENDS HmiContainer
+  VAR_INPUT
+    Gap : DINT := 8;
+    Padding : DINT := 0;
   END_VAR
   VAR
     Kids : ARRAY[0..63] OF POINTER TO HmiElement;
     N : INT;
   END_VAR
 
-  (* Children run along a row. *)
-  METHOD INTERNAL IsRow : BOOL
-    IsRow := Direction = HMI_DIRECTION#Row OR (Direction = HMI_DIRECTION#Auto AND Width >= Height);
+  (* TRUE: children side by side, left to right; FALSE: top to bottom. *)
+  METHOD PROTECTED SideBySide : BOOL
+    SideBySide := FALSE;
   END_METHOD
-  METHOD INTERNAL AddChild : BOOL
+  METHOD INTERNAL OVERRIDE AddChild : BOOL
     VAR_INPUT Child : POINTER TO HmiElement; END_VAR
     IF N < 64 THEN
       Kids[N] := Child;
@@ -49,7 +76,7 @@ FUNCTION_BLOCK HmiStack EXTENDS HmiElement
     Top := PY;
     Width := MAX(PW, 0);
     Height := MAX(PH, 0);
-    horiz := IsRow();
+    horiz := SideBySide();
     IF horiz THEN
       main := Width - 2 * Padding;
       cross := Height - 2 * Padding;
@@ -83,7 +110,7 @@ FUNCTION_BLOCK HmiStack EXTENDS HmiElement
       FOR i := 0 TO N - 1 DO
         IF NOT fixed[i] THEN
           IF free > 0 THEN
-            sumW := sumW + Kids[i]^.GetGrow();
+            sumW := sumW + Kids[i]^.GetGrow(horiz);
           ELSE
             sumW := sumW + size[i];
           END_IF;
@@ -98,7 +125,7 @@ FUNCTION_BLOCK HmiStack EXTENDS HmiElement
         want[i] := size[i];
         IF NOT fixed[i] THEN
           IF free > 0 THEN
-            w := Kids[i]^.GetGrow();
+            w := Kids[i]^.GetGrow(horiz);
           ELSE
             w := size[i];
           END_IF;
@@ -151,7 +178,7 @@ FUNCTION_BLOCK HmiStack EXTENDS HmiElement
   METHOD INTERNAL Natural : DINT
     VAR_INPUT Horizontal : BOOL; END_VAR
     VAR i : INT; along : BOOL; acc : DINT; c : POINTER TO HmiElement; END_VAR
-    along := (Direction <> HMI_DIRECTION#Column) = Horizontal;
+    along := SideBySide() = Horizontal;
     FOR i := 0 TO N - 1 DO
       c := Kids[i];
       IF c^.Visible AND NOT c^.Floating THEN
@@ -177,10 +204,6 @@ FUNCTION_BLOCK HmiStack EXTENDS HmiElement
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := Natural(FALSE);
   END_METHOD
-  (* Containers keep their natural size unless told to grow. *)
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
-  END_METHOD
   METHOD PROTECTED OVERRIDE Draw : BOOL
     IF Fill <> COLOR.Transparent THEN
       HMI_FillRect(Left, Top, Width, Height, 10, Fill);
@@ -189,11 +212,24 @@ FUNCTION_BLOCK HmiStack EXTENDS HmiElement
   END_METHOD
 END_FUNCTION_BLOCK
 
+(* Lays its children out side by side, left to right, each as tall as the stack. *)
+{attribute 'hmi_palette' := 'Containers'}
+FUNCTION_BLOCK HmiVerticalStack EXTENDS HmiStack
+  METHOD PROTECTED OVERRIDE SideBySide : BOOL
+    SideBySide := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Lays its children out top to bottom, each as wide as the stack. *)
+{attribute 'hmi_palette' := 'Containers'}
+FUNCTION_BLOCK HmiHorizontalStack EXTENDS HmiStack
+END_FUNCTION_BLOCK
+
 (* Free placement for process diagrams. Children sit at X, Y in design units and the whole drawing, text and lines
    included, scales to the room the parent gives it. Below MinScalePct it stops shrinking and pans. The drawing is
    DesignW x DesignH, or, where either is 0, as large as its children reach. *)
 {attribute 'hmi_palette' := 'Containers'}
-FUNCTION_BLOCK HmiDiagram EXTENDS HmiStack
+FUNCTION_BLOCK HmiDiagram EXTENDS HmiContainer
   VAR_INPUT
     DesignW : DINT := 0;
     DesignH : DINT := 0;
@@ -246,10 +282,6 @@ FUNCTION_BLOCK HmiDiagram EXTENDS HmiStack
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     Measure();
     NaturalHeight := SEL(DesignH > 0, dh, DesignH / 2);
-  END_METHOD
-  (* A diagram takes the room it is given. *)
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 1;
   END_METHOD
   METHOD PROTECTED OVERRIDE TakesInput : BOOL
     TakesInput := CanPan();

@@ -6,7 +6,7 @@ TYPE HMI_VALIGN : (Top := 0, Middle := 1, Bottom := 2); END_TYPE
 TYPE HMI_FONT : (Regular := 0, Bold := 1); END_TYPE
 (* Connection ports of an element, and the direction a pipe leaves them. *)
 TYPE HMI_PORT : (Top := 0, Right := 1, Bottom := 2, Left := 3); END_TYPE
-(* Stack direction and widget orientation; Auto is a row when wider than tall, a column otherwise. *)
+(* Widget orientation; Auto is a row when wider than tall, a column otherwise. *)
 TYPE HMI_DIRECTION : (Row := 0, Column := 1, Auto := 2); END_TYPE
 
 (* Semantic colors follow the screen's theme; fixed colors are the same on every theme. *)

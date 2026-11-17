@@ -2,6 +2,7 @@
  * The designer's edits of a screen or widget block. Each one changes only the declarations, properties and
  * statements it is about, as text patches on the source, and leaves every other character as it was.
  */
+import type { HmiWidgetSeries } from '../../../ports/hmi-preview-types'
 import { type DesignerElement, type DesignerModel, type DesignerSpan, parseDesignerBlock } from './designer-model'
 
 export type DesignerEdit = { ok: true; source: string } | { ok: false; message: string }
@@ -129,6 +130,19 @@ export function elementNameProblem(model: DesignerModel, name: string): string |
   if (!IDENTIFIER.test(name)) return `${name} is not a valid name`
   if (model.members.has(name.toUpperCase())) return `${model.name} already has a member named ${name}`
   return null
+}
+
+/** The containers `name` sits in, from its parent outwards; a Parent cycle ends the walk. */
+export function ancestors(model: DesignerModel, name: string): string[] {
+  const out: string[] = []
+  let current = findElement(model, name)
+  while (current?.parent) {
+    const parent = findElement(model, current.parent)
+    if (!parent || same(parent.name, name) || out.some((n) => same(n, parent.name))) break
+    out.push(parent.name)
+    current = parent
+  }
+  return out
 }
 
 /** The elements under `name` (its children, theirs, ...), in declaration order. */
@@ -279,7 +293,10 @@ export function renameElement(
   return ok(applyPatches(source, patches))
 }
 
-/** Binds a property to a PLC variable (a global, `List.Member` or `Instance.Program.Var`), or unbinds it when null. */
+/**
+ * Binds a property to a PLC variable (a global, `List.Member` or `Instance.Program.Var`, with `.Field` and `[i]`
+ * parts below it), or unbinds it when null.
+ */
 export function setBinding(
   source: string,
   model: DesignerModel,
@@ -289,7 +306,7 @@ export function setBinding(
 ): DesignerEdit {
   const target = editable(model, element)
   if (typeof target === 'string') return refuse(target)
-  if (variable !== null && !/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$/.test(variable))
+  if (variable !== null && !/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|\[-?\d+(?:,-?\d+)*\])*$/.test(variable))
     return refuse(`${variable} is not a PLC variable`)
   const existing = model.bindings.find((b) => same(b.element, element) && same(b.property, property))
   const line = variable === null ? '' : bindingStatement(model, target.name, property, variable)
@@ -376,4 +393,60 @@ export function pasteDeclarations(
   const patches: Patch[] = [{ start: at, end: at, text: block }]
   if (body !== '') patches.push({ start: model.statementAt, end: model.statementAt, text: body })
   return ok(applyPatches(source, patches))
+}
+
+/** How many series an element shows: its count property, else `fallback`, kept within 1 and the widget's maximum. */
+export function seriesCount(element: DesignerElement, series: HmiWidgetSeries, fallback: number): number {
+  const written = element.props.find((p) => same(p.name, series.count))?.value
+  const n = written === undefined ? fallback : Number.parseInt(written, 10)
+  return Math.min(Math.max(Number.isFinite(n) ? n : 1, 1), series.values.length)
+}
+
+/**
+ * Removes series `index` (from 1; the first series stays) of an element showing `count` series: the later series move
+ * down one with their binding, literal value and colour (an unset colour as its own default, from `defaultOf`), and the
+ * count drops by one. `isWidget` reads the source between steps.
+ */
+export function removeSeries(
+  source: string,
+  model: DesignerModel,
+  element: string,
+  series: HmiWidgetSeries,
+  count: number,
+  index: number,
+  isWidget: (type: string) => boolean,
+  defaultOf: (property: string) => string | undefined = () => undefined,
+): DesignerEdit {
+  const target = editable(model, element)
+  if (typeof target === 'string') return refuse(target)
+  if (index < 1 || index >= count || count > series.values.length)
+    return refuse(`${element} has no series ${index + 1}`)
+  const bound = (property: string) =>
+    model.bindings.find((b) => same(b.element, element) && same(b.property, property))?.variable ?? null
+  const written = (property: string) => target.props.find((p) => same(p.name, property))?.value
+  const steps: Array<(src: string, m: DesignerModel) => DesignerEdit> = []
+  const put = (property: string, value: string | undefined) =>
+    steps.push((src, m) =>
+      value === undefined ? removeProperty(src, m, element, property) : setProperty(src, m, element, property, value),
+    )
+  for (let j = index; j < count; j++) {
+    const moved = j + 1 < count
+    const variable = moved ? bound(series.values[j + 1]) : null
+    steps.push((src, m) => setBinding(src, m, element, series.values[j], variable))
+    put(series.values[j], moved ? written(series.values[j + 1]) : undefined)
+    const colour = moved ? (written(series.colors[j + 1]) ?? defaultOf(series.colors[j + 1])) : undefined
+    put(series.colors[j], colour)
+  }
+  steps.push((src, m) => setProperty(src, m, element, series.count, String(count - 1)))
+  let next = source
+  let current = model
+  for (const step of steps) {
+    const result = step(next, current)
+    if (!result.ok) return result
+    next = result.source
+    const reparsed = parseDesignerBlock(next, isWidget)
+    if (!reparsed.ok) return refuse(`${element}: the edited code does not parse`)
+    current = reparsed.model
+  }
+  return ok(next)
 }

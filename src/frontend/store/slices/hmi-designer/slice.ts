@@ -22,6 +22,7 @@ const newEntry = (): HmiDesignerEntry => ({
   zoom: null,
   selection: [],
   lastValidSource: null,
+  collapsedLayers: [],
 })
 
 /** What a screen or widget block without designer state reads; one object, so a store selector returning it is stable. */
@@ -58,6 +59,7 @@ export const createHmiDesignerSlice: StateCreator<HmiDesignerRootState, [], [], 
 
   return {
     hmiDesigner: {},
+    hmiVariablesCollapsed: [],
     hmiDesignerActions: {
       applySource: (kind, name, source, merge) => {
         const current = sourceOf(getState(), kind, name)
@@ -113,6 +115,28 @@ export const createHmiDesignerSlice: StateCreator<HmiDesignerRootState, [], [], 
             delete state.hmiDesigner[hmiDesignerKey(kind, name)]
           }),
         ),
+      toggleLayer: (kind, name, element) =>
+        update(kind, name, (entry) => {
+          const key = element.toUpperCase()
+          entry.collapsedLayers = entry.collapsedLayers.includes(key)
+            ? entry.collapsedLayers.filter((e) => e !== key)
+            : [...entry.collapsedLayers, key]
+        }),
+      toggleVariableNode: (key) =>
+        setState(
+          produce((state: HmiDesignerRootState) => {
+            const at = state.hmiVariablesCollapsed.indexOf(key)
+            if (at >= 0) state.hmiVariablesCollapsed.splice(at, 1)
+            else state.hmiVariablesCollapsed.push(key)
+          }),
+        ),
+      expandLayers: (kind, name, elements) => {
+        const keys = new Set(elements.map((e) => e.toUpperCase()))
+        if (!hmiDesignerEntry(getState(), kind, name).collapsedLayers.some((e) => keys.has(e))) return
+        update(kind, name, (entry) => {
+          entry.collapsedLayers = entry.collapsedLayers.filter((e) => !keys.has(e))
+        })
+      },
       clear: () => setState({ hmiDesigner: {} }),
     },
   }

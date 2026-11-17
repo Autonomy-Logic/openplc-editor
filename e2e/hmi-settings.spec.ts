@@ -28,7 +28,7 @@ const F = hmiFixture('hmi-settings')
 
 const OVERVIEW = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
   VAR
-    Row : HmiStack := (Direction := HMI_DIRECTION#Row, Gap := 40, Padding := 40, GrowAuto := FALSE);
+    Row : HmiVerticalStack := (Gap := 40, Padding := 40, GrowAuto := FALSE);
     AccentBox : HmiRect := (Parent := 'Row', Fill := COLOR.Accent, PrefWidth := 160, PrefHeight := 100);
     RedBox : HmiRect := (Parent := 'Row', Fill := COLOR.Red, PrefWidth := 160, PrefHeight := 100);
   END_VAR
@@ -86,6 +86,7 @@ test.describe('HMI Settings', () => {
 
       await leaf(page, 'HMI Settings').click()
       await expect(page.getByTestId('hmi-settings')).toBeVisible({ timeout: 10000 })
+      await expect(page.getByTestId('hmi-address')).toHaveText('https://<device IP>:8443/hmi/')
       await page.getByTestId('hmi-theme-new-name').fill('Brand')
       await page.getByTestId('hmi-theme-new-name').press('Enter')
       await page.getByTestId('hmi-theme-add').click()
@@ -127,6 +128,25 @@ test.describe('HMI Settings', () => {
         roles: { Overview: { engineer: true, operator: true, viewer: false } },
         pin: { enabled: true, value: '2468' },
       })
+    } finally {
+      app.process().kill('SIGKILL')
+    }
+  })
+
+  test("shows where browsers open the HMI: the device's address on Runtime v4 (FR15)", async () => {
+    writeHmiFixture(F, {
+      main: 'PROGRAM Main\n  VAR\n    Run : BOOL;\n  END_VAR\n  Run := Run;\nEND_PROGRAM\n',
+      screens: { Overview: OVERVIEW },
+      startScreen: 'Overview',
+      runtimeIpAddress: '192.168.1.20',
+    })
+    const { app, page } = await launchHmiApp(F)
+    try {
+      await page.getByText(F.name, { exact: true }).first().click({ timeout: 30000 })
+      await waitFor(page, 'the HMI branch', async () => (await leaf(page, 'HMI Settings').count()) > 0)
+      await leaf(page, 'HMI Settings').click()
+      await expect(page.getByTestId('hmi-address')).toHaveText('https://192.168.1.20:8443/hmi/', { timeout: 10000 })
+      await page.getByTestId('hmi-settings').screenshot({ path: join(F.shots, 'fr15-address.png') })
     } finally {
       app.process().kill('SIGKILL')
     }

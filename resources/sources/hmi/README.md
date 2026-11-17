@@ -17,6 +17,7 @@ and produce the same pixels on each. This folder is mirrored byte for byte in op
 | `core/third_party/` | stb_truetype (see its README) |
 | `unit/` | The interface of a generated HMI unit (`hmi_unit.h`) and its preview setters (`hmi_preview.h`) |
 | `preview/` | The editor's preview host (`hmi_preview_host.cpp`): one viewer of a unit in a WebAssembly module, frames rasterized in bands with unchanged bands skipped |
+| `client/` | The Runtime v4 browser client served at `/hmi/`: the sign-in page, `hmi-client.js` (sign-in, token renewal, the `/api/hmi` viewer), socket.io-client 4.8.1 (MIT) and `hmi_client.c`, built with the rasterizer and the unit's font table into `hmi_client.wasm` at each upload |
 | `fonts/` | The vetted fonts: OpenPLC Sans (default, ASCII and Latin-1) and Liberation Sans (full); see its README |
 
 ## Building
@@ -41,6 +42,25 @@ Screens are ST built on StandardWidgets, an ST library over these primitives: th
 widgets, the on-screen keyboard, the screen base and the runtime the generated glue drives. It lives in
 `src/backend/shared/hmi/lib/` (shared surface) and is compiled by STruC++ as its own library; its `{external}` code
 includes `hmi_core.h`.
+
+Layout is built from containers, which nest freely:
+
+| Container | Lays its children out |
+|---|---|
+| `HmiVerticalStack` | side by side, left to right |
+| `HmiHorizontalStack` | top to bottom |
+| `HmiDiagram` | at their X, Y in design units, scaled to the room it gets |
+
+Both stacks extend the abstract `HmiStack` (gap, padding and sizing), and every container extends the abstract
+`HmiContainer`. Only containers may sit directly on a screen: an element is put in one with
+`Parent := '<container name>'`, and the HMI build refuses a screen that declares any other element without one. The
+screen lays its containers out top to bottom. A new screen comes with one `HmiHorizontalStack` that fills it.
+
+A container fills the room its parent gives it: across a stack every child takes the stack's full width or height,
+and along it a container with `GrowAuto` (the default) grows like `Grow := 1`. Children of a stack start from their
+measured size; the space left over goes to the children that grow, in proportion to their grow values, so two
+containers side by side get equal shares of it. A preferred size along the stack (`PrefWidth` in a vertical stack,
+`PrefHeight` in a horizontal one) keeps a container at that size, and `GrowAuto := FALSE` with `Grow` sets its share.
 
 ## Generated unit
 

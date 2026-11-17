@@ -17,7 +17,7 @@ const F = hmiFixture('hmi-code-view')
 
 const PLANT = `FUNCTION_BLOCK Plant EXTENDS HmiScreen
   VAR
-    Row : HmiStack := (Direction := HMI_DIRECTION#Row);
+    Row : HmiVerticalStack;
     Light : HmiLamp := (Parent := 'Row');
   END_VAR
   Light.Value := instance0.Main.Run;

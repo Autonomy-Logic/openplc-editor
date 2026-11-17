@@ -224,11 +224,11 @@ describe('createEditorCompilerAdapter', () => {
         // Args layout (verbatim, in order):
         //   projectPath, boardTarget, boardCore, compileOnly,
         //   projectData, runtimeIpAddress, runtimeJwtToken,
-        //   cleanBuild, communicationPort, vendorScreenData.
+        //   cleanBuild, communicationPort, vendorScreenData, hmi.
         // `vendorScreenData` is the 10th slot — threaded through to
         // the shared compile pipeline for `vpp_config.h` emission on
         // arduino-cli VPP boards (Arduino Opta, P1AM).  `null` when
-        // the caller didn't supply one (non-VPP build).
+        // the caller didn't supply one (non-VPP build). `hmi` is null for a project without screens.
         [
           '/path/to/project',
           'Arduino Mega',
@@ -238,6 +238,7 @@ describe('createEditorCompilerAdapter', () => {
           null,
           null,
           false,
+          null,
           null,
           null,
         ],

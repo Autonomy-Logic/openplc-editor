@@ -16,6 +16,8 @@ export interface HmiDesignerEntry {
   selection: string[]
   /** The last source that parsed, shown while the code does not. */
   lastValidSource: string | null
+  /** Containers collapsed in the Layers panel, by upper-case name. */
+  collapsedLayers: string[]
 }
 
 export type HmiDesignerState = Record<string, HmiDesignerEntry>
@@ -39,10 +41,18 @@ export interface HmiDesignerActions {
   /** Follows a renamed screen or widget block. */
   renameEntry: (kind: HmiElementKind, oldName: string, newName: string) => void
   forgetEntry: (kind: HmiElementKind, name: string) => void
+  /** Collapses or expands a container's children in the Layers panel. */
+  toggleLayer: (kind: HmiElementKind, name: string, element: string) => void
+  /** Opens or closes a branch of the Variables tab. */
+  toggleVariableNode: (key: string) => void
+  /** Expands these containers in the Layers panel. */
+  expandLayers: (kind: HmiElementKind, name: string, elements: readonly string[]) => void
   clear: () => void
 }
 
 export interface HmiDesignerSlice {
   hmiDesigner: HmiDesignerState
+  /** Branches of the Variables tab the user closed, for the session; shared by every screen. */
+  hmiVariablesCollapsed: string[]
   hmiDesignerActions: HmiDesignerActions
 }

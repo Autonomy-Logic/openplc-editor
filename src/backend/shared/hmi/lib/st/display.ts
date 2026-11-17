@@ -337,15 +337,38 @@ FUNCTION_BLOCK HmiTank EXTENDS HmiElement
   END_METHOD
 END_FUNCTION_BLOCK
 
-(* Time graph of Value, and of Value2 when Pens = 2, sampled every SampleMs into 120 points. History starts with the
-   screen and is not logged. *)
+(* Time graph of up to 8 series, Value then Value2 to Value8 as Pens counts them, each in its colour, sampled every
+   SampleMs into 120 points. History starts with the screen and is not logged. *)
 {attribute 'hmi_palette' := 'Display'}
 FUNCTION_BLOCK HmiTrend EXTENDS HmiElement
   VAR_INPUT
+    (* Series 1; series 2 to 8 are Value2 to Value8, drawn while Pens counts them. *)
     {attribute 'hmi_main'}
+    {attribute 'hmi_series' := 'value'}
     Value : REAL;
     {attribute 'hmi_group' := 'data'}
+    {attribute 'hmi_series' := 'value'}
     Value2 : REAL;
+    {attribute 'hmi_group' := 'data'}
+    {attribute 'hmi_series' := 'value'}
+    Value3 : REAL;
+    {attribute 'hmi_group' := 'data'}
+    {attribute 'hmi_series' := 'value'}
+    Value4 : REAL;
+    {attribute 'hmi_group' := 'data'}
+    {attribute 'hmi_series' := 'value'}
+    Value5 : REAL;
+    {attribute 'hmi_group' := 'data'}
+    {attribute 'hmi_series' := 'value'}
+    Value6 : REAL;
+    {attribute 'hmi_group' := 'data'}
+    {attribute 'hmi_series' := 'value'}
+    Value7 : REAL;
+    {attribute 'hmi_group' := 'data'}
+    {attribute 'hmi_series' := 'value'}
+    Value8 : REAL;
+    (* Number of series drawn, 1 to 8. *)
+    {attribute 'hmi_series' := 'count'}
     Pens : INT := 1;
     MinValue : REAL := 0.0;
     MaxValue : REAL := 100.0;
@@ -354,13 +377,35 @@ FUNCTION_BLOCK HmiTrend EXTENDS HmiElement
     Caption : STRING(64);
     Decimals : INT := 1;
     Unit : STRING(16);
+    (* Colour of series 1 and of the caption's value; series 2 to 8 take Color2 to Color8. *)
     {attribute 'hmi_color'}
+    {attribute 'hmi_series' := 'color'}
     AccentColor : UDINT := COLOR.Accent;
     {attribute 'hmi_color'}
+    {attribute 'hmi_series' := 'color'}
     Color2 : UDINT := COLOR.Success;
+    {attribute 'hmi_color'}
+    {attribute 'hmi_series' := 'color'}
+    Color3 : UDINT := COLOR.Warning;
+    {attribute 'hmi_color'}
+    {attribute 'hmi_series' := 'color'}
+    Color4 : UDINT := COLOR.Danger;
+    {attribute 'hmi_color'}
+    {attribute 'hmi_series' := 'color'}
+    Color5 : UDINT := COLOR.Blue;
+    {attribute 'hmi_color'}
+    {attribute 'hmi_series' := 'color'}
+    Color6 : UDINT := COLOR.Orange;
+    {attribute 'hmi_color'}
+    {attribute 'hmi_series' := 'color'}
+    Color7 : UDINT := COLOR.Gray;
+    {attribute 'hmi_color'}
+    {attribute 'hmi_series' := 'color'}
+    Color8 : UDINT := COLOR.Text;
   END_VAR
   VAR
-    s1, s2 : ARRAY[0..119] OF REAL;
+    (* 120 samples per series, series after series. *)
+    s : ARRAY[0..959] OF REAL;
     head, count : INT;
     lastMs : UDINT;
     started : BOOL;
@@ -371,16 +416,48 @@ FUNCTION_BLOCK HmiTrend EXTENDS HmiElement
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := 160;
   END_METHOD
+  METHOD INTERNAL PenCount : INT
+    PenCount := LIMIT(1, Pens, 8);
+  END_METHOD
+  METHOD INTERNAL PenValue : REAL
+    VAR_INPUT P : INT; END_VAR
+    CASE P OF
+      2: PenValue := Value2;
+      3: PenValue := Value3;
+      4: PenValue := Value4;
+      5: PenValue := Value5;
+      6: PenValue := Value6;
+      7: PenValue := Value7;
+      8: PenValue := Value8;
+    ELSE
+      PenValue := Value;
+    END_CASE;
+  END_METHOD
+  METHOD INTERNAL PenColor : UDINT
+    VAR_INPUT P : INT; END_VAR
+    CASE P OF
+      2: PenColor := Color2;
+      3: PenColor := Color3;
+      4: PenColor := Color4;
+      5: PenColor := Color5;
+      6: PenColor := Color6;
+      7: PenColor := Color7;
+      8: PenColor := Color8;
+    ELSE
+      PenColor := AccentColor;
+    END_CASE;
+  END_METHOD
   METHOD INTERNAL Sample : BOOL
-    VAR now : UDINT; END_VAR
+    VAR now : UDINT; p : INT; END_VAR
     now := HMI_TimeMs();
     IF started AND now - lastMs < SampleMs THEN
       RETURN;
     END_IF;
     started := TRUE;
     lastMs := now;
-    s1[head] := Value;
-    s2[head] := Value2;
+    FOR p := 1 TO 8 DO
+      s[(p - 1) * 120 + head] := PenValue(p);
+    END_FOR;
     head := (head + 1) MOD 120;
     IF count < 120 THEN
       count := count + 1;
@@ -400,11 +477,7 @@ FUNCTION_BLOCK HmiTrend EXTENDS HmiElement
       n := MIN(64, count - i);
       FOR k := 0 TO n - 1 DO
         idx := (head - count + i + k + 240) MOD 120;
-        IF Which = 2 THEN
-          v := s2[idx];
-        ELSE
-          v := s1[idx];
-        END_IF;
+        v := s[(Which - 1) * 120 + idx];
         HMI_PolyPoint(PX + PW * INT_TO_DINT(i + k) / 119, PY + PH - PH * HMI_PerMille(v, Lo, Hi) / 1000);
       END_FOR;
       HMI_PolyStroke(2, FALSE);
@@ -413,21 +486,19 @@ FUNCTION_BLOCK HmiTrend EXTENDS HmiElement
     Pen := TRUE;
   END_METHOD
   METHOD PROTECTED OVERRIDE Draw : BOOL
-    VAR lo, hi : REAL; i, k : INT; px, py, pw, ph, capH, g : DINT; END_VAR
+    VAR lo, hi : REAL; i, k, p : INT; px, py, pw, ph, capH, g : DINT; END_VAR
     Sample();
     lo := MinValue;
     hi := MaxValue;
     IF AutoRange AND count > 0 THEN
-      lo := s1[(head + 119) MOD 120];
+      lo := s[(head + 119) MOD 120];
       hi := lo;
       FOR i := 0 TO count - 1 DO
         k := (head - count + i + 240) MOD 120;
-        lo := MIN(lo, s1[k]);
-        hi := MAX(hi, s1[k]);
-        IF Pens = 2 THEN
-          lo := MIN(lo, s2[k]);
-          hi := MAX(hi, s2[k]);
-        END_IF;
+        FOR p := 1 TO PenCount() DO
+          lo := MIN(lo, s[(p - 1) * 120 + k]);
+          hi := MAX(hi, s[(p - 1) * 120 + k]);
+        END_FOR;
       END_FOR;
       IF hi - lo < 0.0001 THEN
         hi := lo + 1.0;
@@ -455,10 +526,9 @@ FUNCTION_BLOCK HmiTrend EXTENDS HmiElement
     HMI_Text(px - 6, py - 6, HMI_FormatReal(hi, Decimals), 10, HMI_FONT#Regular, HMI_ALIGN#Right, COLOR.TextMuted);
     HMI_Text(px - 6, py + ph - 6, HMI_FormatReal(lo, Decimals), 10, HMI_FONT#Regular, HMI_ALIGN#Right, COLOR.TextMuted);
     HMI_Clip(px, py - 2, pw + 1, ph + 4);
-    Pen(1, lo, hi, px, py, pw, ph, AccentColor);
-    IF Pens = 2 THEN
-      Pen(2, lo, hi, px, py, pw, ph, Color2);
-    END_IF;
+    FOR p := 1 TO PenCount() DO
+      Pen(p, lo, hi, px, py, pw, ph, PenColor(p));
+    END_FOR;
     HMI_Unclip();
     Draw := TRUE;
   END_METHOD

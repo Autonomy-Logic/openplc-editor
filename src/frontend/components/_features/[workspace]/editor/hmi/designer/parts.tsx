@@ -1,5 +1,6 @@
 /** Small building blocks of the HMI designer, in the editor's own styles. */
 import { HMI_BUILD_STEPS, type HmiBuildStep } from '@root/middleware/shared/ports/hmi-preview-types'
+import { Background, ControlButton, ReactFlowProvider } from '@xyflow/react'
 import type { ReactNode } from 'react'
 
 import { cn } from '../../../../../../utils/cn'
@@ -99,8 +100,24 @@ export function ToolButton(props: {
   )
 }
 
-const CONTROL_CLASS =
-  'flex h-[26px] w-[26px] items-center justify-center rounded-[25%] border border-[#d0d0d0] bg-[#f5f5f5] hover:bg-[#e0e0e0] dark:border-neutral-900 dark:bg-neutral-900 dark:hover:bg-neutral-800'
+/** The FBD editor's frame of a canvas area: its border in both themes. */
+export const CANVAS_AREA_CLASS = 'rounded-lg border dark:border-neutral-800'
+
+/** A flow scope as the flow library's own wrapper sets it: filling its box and stacking its background behind it. */
+const FLOW_SCOPE = 'react-flow relative z-0 h-full w-full overflow-hidden'
+
+/** The FBD editor's dotted background, the flow library's own component in a flow scope, behind a canvas area. */
+export function CanvasBackdrop(props: { id: string }) {
+  return (
+    <div className='pointer-events-none absolute inset-0' aria-hidden='true'>
+      <div className={FLOW_SCOPE}>
+        <ReactFlowProvider>
+          <Background id={props.id} />
+        </ReactFlowProvider>
+      </div>
+    </div>
+  )
+}
 
 const ControlIcon = ({ d, active = false }: { d: string; active?: boolean }) => (
   <svg
@@ -131,74 +148,71 @@ export function CanvasControls(props: {
   onPreview: () => void
 }) {
   return (
-    <div className='absolute bottom-3 left-3 z-10 flex flex-col items-start gap-[3px]'>
-      <button
-        type='button'
-        aria-label='Zoom in'
-        title='Zoom in'
-        data-testid='hmi-zoom-in'
-        onClick={props.onZoomIn}
-        className={CONTROL_CLASS}
-      >
-        <ControlIcon d='M12 5v14M5 12h14' />
-      </button>
-      <button
-        type='button'
-        aria-label='Zoom out'
-        title='Zoom out'
-        data-testid='hmi-zoom-out'
-        onClick={props.onZoomOut}
-        className={CONTROL_CLASS}
-      >
-        <ControlIcon d='M5 12h14' />
-      </button>
-      <button
-        type='button'
-        aria-label='Fit the screen'
-        title='Fit the screen'
-        data-testid='hmi-zoom-fit'
-        onClick={props.onFit}
-        className={CONTROL_CLASS}
-      >
-        <ControlIcon d='M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5' />
-      </button>
-      <button
-        type='button'
-        aria-label='Preview mode'
-        title='Preview mode: operate the screen'
-        aria-pressed={props.preview}
-        data-testid='hmi-preview-mode'
-        onClick={props.onPreview}
-        className={cn(CONTROL_CLASS, props.preview && '!border-brand-medium !bg-brand')}
-      >
-        <ControlIcon d={HAND} active={props.preview} />
-      </button>
-      <span
-        className='mt-1 flex h-[22px] items-center rounded-[5px] border border-[#d0d0d0] bg-[#f5f5f5] px-1.5 font-caption text-[11px] font-semibold text-neutral-850 dark:border-neutral-900 dark:bg-neutral-900 dark:text-neutral-300'
-        data-testid='hmi-zoom'
-      >
-        {Math.round(props.zoom * 100)}%
-      </span>
+    <div className='pointer-events-none absolute inset-0 z-10'>
+      <div className={FLOW_SCOPE}>
+        <div className='react-flow__panel react-flow__controls bottom left pointer-events-auto'>
+          <ControlButton aria-label='Zoom in' title='Zoom in' data-testid='hmi-zoom-in' onClick={props.onZoomIn}>
+            <ControlIcon d='M12 5v14M5 12h14' />
+          </ControlButton>
+          <ControlButton aria-label='Zoom out' title='Zoom out' data-testid='hmi-zoom-out' onClick={props.onZoomOut}>
+            <ControlIcon d='M5 12h14' />
+          </ControlButton>
+          <ControlButton
+            aria-label='Fit the screen'
+            title='Fit the screen'
+            data-testid='hmi-zoom-fit'
+            onClick={props.onFit}
+          >
+            <ControlIcon d='M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5' />
+          </ControlButton>
+          <ControlButton
+            aria-label='Preview mode'
+            title='Preview mode: operate the screen'
+            aria-pressed={props.preview}
+            data-testid='hmi-preview-mode'
+            onClick={props.onPreview}
+            className={cn(props.preview && '!bg-brand')}
+          >
+            <ControlIcon d={HAND} active={props.preview} />
+          </ControlButton>
+          <span
+            className='react-flow__controls-button !w-auto px-1.5 font-caption text-[11px] font-semibold text-neutral-850 dark:text-neutral-300'
+            data-testid='hmi-zoom'
+          >
+            {Math.round(props.zoom * 100)}%
+          </span>
+        </div>
+      </div>
     </div>
   )
 }
 
-/** The short notice at the top of the canvas while it is shown. */
-export function PreviewNotice(props: { visible: boolean }) {
+/** A short notice at the top of the canvas, faded in while visible. */
+function CanvasNotice(props: { visible: boolean; text: string; testId: string }) {
   return (
     <div
       role='status'
       aria-live='polite'
-      data-testid='hmi-preview-notice'
+      data-testid={props.testId}
       data-visible={props.visible}
       className={cn(
         'pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-lg bg-[rgba(1,30,75,0.9)] px-3.5 py-2 font-caption text-[13px] text-white shadow-lg transition-opacity duration-300',
         props.visible ? 'opacity-100' : 'opacity-0',
       )}
     >
-      Preview mode, press Esc to exit
+      {props.text}
     </div>
   )
+}
+
+/** The notice of preview mode while it is shown. */
+export function PreviewNotice(props: { visible: boolean }) {
+  return <CanvasNotice visible={props.visible} text='Preview mode, press Esc to exit' testId='hmi-preview-notice' />
+}
+
+/** Why the last placement was refused, while shown. */
+export function PlacementNotice(props: { visible: boolean; text: string }) {
+  return <CanvasNotice visible={props.visible} text={props.text} testId='hmi-placement-notice' />
 }
 
 const STEP_LABELS: Record<HmiBuildStep, string> = {

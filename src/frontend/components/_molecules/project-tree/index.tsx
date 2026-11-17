@@ -351,7 +351,7 @@ const ProjectTreeExpandableLeaf = ({
       <div
         className={cn(
           'group flex cursor-pointer flex-row items-center py-1 pl-[36px] hover:bg-slate-50 dark:hover:bg-neutral-900',
-          name === label && 'bg-slate-50 dark:bg-neutral-900',
+          name === label && 'bg-neutral-100 dark:bg-neutral-900',
         )}
       >
         <ArrowIcon
@@ -897,7 +897,7 @@ const ProjectTreeLeaf = ({
     <li
       className={cn(
         'group flex cursor-pointer flex-row items-center py-1 pl-[58px] hover:bg-slate-50 dark:hover:bg-neutral-900',
-        name === label && 'bg-slate-50 dark:bg-neutral-900',
+        name === label && 'bg-neutral-100 dark:bg-neutral-900',
       )}
       onClick={(e) => {
         handleLeafSelection()

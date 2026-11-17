@@ -1,6 +1,6 @@
 import { type HmiBlockModel, parseHmiBlock } from '../screen-model'
 
-const WIDGETS = new Set(['HMILABEL', 'HMISTACK', 'HMISWITCH'])
+const WIDGETS = new Set(['HMILABEL', 'HMIVERTICALSTACK', 'HMISWITCH'])
 const isWidget = (type: string): boolean => WIDGETS.has(type.toUpperCase())
 
 function model(source: string): HmiBlockModel {
@@ -13,7 +13,7 @@ describe('HMI screen model', () => {
   const SCREEN = `{attribute 'hmi_theme' := 'Dark'}
 FUNCTION_BLOCK Main_Screen EXTENDS HmiScreen
   VAR
-    Col : HmiStack := (Gap := 4);
+    Col : HmiVerticalStack := (Gap := 4);
     A, B : HmiLabel := (Text := 'Hi', Parent := 'Col');
     Run : HmiSwitch;
     Count : INT;
@@ -33,7 +33,7 @@ END_FUNCTION_BLOCK`
     expect(m.extends).toBe('HMISCREEN')
     expect(m.theme).toBe('Dark')
     expect(m.elements.map((e) => [e.name, e.type, Object.fromEntries(e.props)])).toEqual([
-      ['Col', 'HmiStack', { GAP: '4' }],
+      ['Col', 'HmiVerticalStack', { GAP: '4' }],
       ['A', 'HmiLabel', { TEXT: "'Hi'", PARENT: "'Col'" }],
       ['B', 'HmiLabel', { TEXT: "'Hi'", PARENT: "'Col'" }],
       ['Run', 'HmiSwitch', {}],

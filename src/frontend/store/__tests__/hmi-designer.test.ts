@@ -104,4 +104,30 @@ describe('HMI designer state', () => {
     store.getState().sharedWorkspaceActions.clearStatesOnCloseProject()
     expect(store.getState().hmiDesigner).toEqual({})
   })
+
+  it('keeps the Layers panel collapsed containers per screen, and expands them on request', () => {
+    store.getState().hmiActions.create('screen', 'Details')
+    const { hmiDesignerActions } = store.getState()
+    expect(entry().collapsedLayers).toEqual([])
+    hmiDesignerActions.toggleLayer('screen', 'Overview', 'Body')
+    hmiDesignerActions.toggleLayer('screen', 'Overview', 'Side')
+    expect(entry().collapsedLayers).toEqual(['BODY', 'SIDE'])
+    expect(hmiDesignerEntry(store.getState(), 'screen', 'Details').collapsedLayers).toEqual([])
+    hmiDesignerActions.toggleLayer('screen', 'Overview', 'side')
+    expect(entry().collapsedLayers).toEqual(['BODY'])
+    const before = store.getState().hmiDesigner
+    hmiDesignerActions.expandLayers('screen', 'Overview', ['Other'])
+    expect(store.getState().hmiDesigner).toBe(before)
+    hmiDesignerActions.expandLayers('screen', 'Overview', ['Body'])
+    expect(entry().collapsedLayers).toEqual([])
+  })
+
+  it('keeps the closed branches of the Variables tab for the session', () => {
+    const { hmiDesignerActions } = store.getState()
+    expect(store.getState().hmiVariablesCollapsed).toEqual([])
+    hmiDesignerActions.toggleVariableNode('instance0')
+    hmiDesignerActions.toggleVariableNode('#globals')
+    hmiDesignerActions.toggleVariableNode('instance0')
+    expect(store.getState().hmiVariablesCollapsed).toEqual(['#globals'])
+  })
 })

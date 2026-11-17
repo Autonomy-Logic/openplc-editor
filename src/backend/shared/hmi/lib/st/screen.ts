@@ -199,8 +199,8 @@ FUNCTION_BLOCK HmiScreen
     Count : INT;
     ThemeId : DINT;
     NextId : DINT;
-    (* Elements without a Parent go into the screen's own column. *)
-    Root : HmiStack := (Direction := HMI_DIRECTION#Column, Padding := 12, Gap := 8);
+    (* Containers without a Parent go into the screen's own horizontal stack, top to bottom. *)
+    Root : HmiHorizontalStack := (Padding := 12, Gap := 8);
   END_VAR
 
   (* Switches the screen to another theme from the next frame; the build names themes HMI_THEME_<Name>. *)
@@ -226,9 +226,9 @@ FUNCTION_BLOCK HmiScreen
   METHOD PROTECTED WriteBack : BOOL
     WriteBack := TRUE;
   END_METHOD
-  (* Adds an element, drawn after the ones added before it, inside Parent or else the screen's column. *)
+  (* Adds an element, drawn after the ones added before it, inside Parent or else the screen's own stack. *)
   METHOD PROTECTED Attach : BOOL
-    VAR_INPUT Element : POINTER TO HmiElement; Parent : POINTER TO HmiStack; END_VAR
+    VAR_INPUT Element : POINTER TO HmiElement; Parent : POINTER TO HmiContainer; END_VAR
     IF Element = 0 OR Count >= 256 THEN
       RETURN;
     END_IF;

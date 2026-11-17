@@ -239,6 +239,12 @@ FUNCTION HMI_Back : BOOL
   {external HMI_BACK_result.set(hmi_page_back() != 0); }
 END_FUNCTION
 
+(* Signs the operator out of this display once the frame ends: the device ends the session and the display returns to
+   its sign-in form. Displays without accounts ignore it. *)
+FUNCTION HMI_SignOut : BOOL
+  {external hmi_sign_out(); HMI_SIGNOUT_result.set(true); }
+END_FUNCTION
+
 (* Animation clock: while Run, Phase advances Rate units per second (negative runs backwards), wrapping at Period, and
    holds where it is when Run drops. Call it once per frame; a frame gap counts at most one second. *)
 FUNCTION_BLOCK HmiAnimator

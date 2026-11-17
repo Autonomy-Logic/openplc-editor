@@ -87,6 +87,7 @@ function makeArgs(overrides: Partial<RunCompilePipelineArgs> = {}): RunCompilePi
     strucppRuntimeHeaders: {},
     avrLibStdCppInclude: '',
     arduinoCliParallel: false,
+    hmi: null,
     deviceContext,
     ...overrides,
   }
