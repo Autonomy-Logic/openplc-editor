@@ -235,7 +235,7 @@ const DebugTagTable = ({ onForceVariable }: DebugTagTableProps) => {
             <button
               type='button'
               aria-label={`Force ${row.name} true`}
-              className='h-5 w-5 rounded border border-neutral-300 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-850'
+              className='h-5 w-5 rounded border border-neutral-300 text-neutral-1000 hover:bg-neutral-100 dark:border-neutral-600 dark:text-neutral-50 dark:hover:bg-neutral-850'
               onClick={() => handleForceBool(row, true)}
             >
               1
@@ -243,7 +243,7 @@ const DebugTagTable = ({ onForceVariable }: DebugTagTableProps) => {
             <button
               type='button'
               aria-label={`Force ${row.name} false`}
-              className='h-5 w-5 rounded border border-neutral-300 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-850'
+              className='h-5 w-5 rounded border border-neutral-300 text-neutral-1000 hover:bg-neutral-100 dark:border-neutral-600 dark:text-neutral-50 dark:hover:bg-neutral-850'
               onClick={() => handleForceBool(row, false)}
             >
               0
@@ -252,7 +252,7 @@ const DebugTagTable = ({ onForceVariable }: DebugTagTableProps) => {
         ) : (
           <input
             aria-label={`Force value for ${row.name}`}
-            className='h-5 w-20 rounded border border-neutral-300 bg-transparent px-1 outline-none focus:border-brand dark:border-neutral-700'
+            className='h-5 w-20 rounded border border-neutral-300 bg-white px-1 text-neutral-1000 outline-none focus:border-brand dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-50'
             value={forceDrafts[row.compositeKey] ?? ''}
             onChange={(event) =>
               setForceDrafts((previous) => ({ ...previous, [row.compositeKey]: event.target.value }))
@@ -266,7 +266,7 @@ const DebugTagTable = ({ onForceVariable }: DebugTagTableProps) => {
           <button
             type='button'
             aria-label={`Release ${row.name}`}
-            className='h-5 rounded border border-neutral-300 px-1 text-brand hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-850'
+            className='h-5 rounded border border-neutral-300 px-1 text-brand hover:bg-neutral-100 dark:border-neutral-600 dark:text-brand-light dark:hover:bg-neutral-850'
             onClick={() => handleRelease(row)}
           >
             release
@@ -281,7 +281,7 @@ const DebugTagTable = ({ onForceVariable }: DebugTagTableProps) => {
       <div className='flex flex-wrap items-center gap-2'>
         <select
           aria-label='Monitor view'
-          className='h-7 rounded-md border border-neutral-200 bg-transparent px-2 outline-none dark:border-neutral-800'
+          className='h-7 rounded-md border border-neutral-200 bg-white px-2 text-neutral-1000 outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-50'
           value={activeView}
           onChange={(event) => setActiveView(event.target.value)}
         >
@@ -337,7 +337,7 @@ const DebugTagTable = ({ onForceVariable }: DebugTagTableProps) => {
                   key={row.compositeKey}
                   className={cn(
                     'border-b border-neutral-100 dark:border-neutral-850',
-                    isForced && 'bg-green-100 dark:bg-green-900/30',
+                    isForced && 'bg-blue-50 shadow-[inset_3px_0_0_var(--primary-default)] dark:bg-blue-950/50',
                   )}
                 >
                   <td className='px-2 py-1' style={{ paddingLeft: `${8 + row.depth * 14}px` }}>
@@ -363,7 +363,7 @@ const DebugTagTable = ({ onForceVariable }: DebugTagTableProps) => {
                   <td className='px-2 py-1'>
                     <select
                       aria-label={`Area of ${row.name}`}
-                      className='h-6 rounded border border-neutral-200 bg-transparent px-1 outline-none dark:border-neutral-800'
+                      className='h-6 rounded border border-neutral-200 bg-white px-1 text-neutral-1000 outline-none dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-50'
                       value={row.area}
                       onChange={(event) => handleAreaChange(row.compositeKey, event.target.value)}
                     >
