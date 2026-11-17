@@ -70,6 +70,8 @@ function debuggerPort(log: PortCallLog): DebuggerPort {
 function simulatorPort(log: PortCallLog): SimulatorPort {
   return {
     loadFirmware: () => rejects(log, 'simulator.loadFirmware'),
+    preparePython: () => rejects(log, 'simulator.preparePython'),
+    onLog: () => subscribes(log, 'simulator.onLog'),
     stop: () => rejects(log, 'simulator.stop'),
     isRunning: () => throws(log, 'simulator.isRunning'),
     onStopped: () => subscribes(log, 'simulator.onStopped'),
