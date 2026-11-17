@@ -624,7 +624,8 @@ void hmiGetDisplayList(uint32_t offset, uint8_t max_len)
 // PDU request:  [FC]
 // PDU response: [FC][STATUS][n:u8][n x u32 BE]: frames drawn, bands pushed,
 // scan overruns, last logic frame (us), worst band (us), least free stack of
-// the loop task in bytes (0xFFFFFFFF where the platform cannot tell).
+// the loop task in bytes (0xFFFFFFFF where the platform cannot tell), why the
+// HMI is off (hmi_bm_off_reason_t, 0 while it runs), touch reads postponed.
 void hmiGetStats(void)
 {
     hmi_bm_stats_t s;
@@ -635,7 +636,7 @@ void hmiGetStats(void)
     const uint32_t stack_free = 0xFFFFFFFFu;
 #endif
     const uint32_t words[] = {s.frames_drawn, s.bands_pushed, s.scan_overruns, s.last_logic_us, s.worst_band_us,
-                              stack_free};
+                              stack_free, s.off_reason, s.touch_skips};
     const uint8_t n = (uint8_t)(sizeof words / sizeof words[0]);
     mb_frame[1] = MB_FC_HMI_GET_STATS;
     mb_frame[2] = MB_DEBUG_SUCCESS;

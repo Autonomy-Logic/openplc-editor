@@ -89,6 +89,8 @@ export interface HmiUnitResult {
   elementIds: Array<{ id: number; screen: string; element: string }>
   /** Faces of the font table the unit needs. */
   fonts: { variant: HmiSettings['fontVariant']; faces: number[] }
+  /** Literal text sizes of screen elements (a widget's `Size`), in screen units, for checks against a panel. */
+  textSizes: Array<{ screen: string; element: string; size: number }>
   /** What only the editor's preview uses (`resources/sources/hmi/unit/hmi_preview.h`). */
   preview: HmiPreview
 }
@@ -526,6 +528,8 @@ function mainSource(
     '    Slot : LWORD;',
     '    Want, Was : DINT;',
     '    Started : BOOL;',
+    '    (* TRUE when the next frame builds a screen; the unit glue reads it. *)',
+    '    MountNext : BOOL := TRUE;',
     '  END_VAR',
     '  IF NOT Started THEN',
     ...starts,
@@ -556,6 +560,8 @@ function mainSource(
     '  IF HMI__Request >= 0 THEN',
     '    Rt.Show(HMI__Request);',
     '  END_IF;',
+    '  Want := Rt.Wanted();',
+    '  MountNext := Want >= 0 AND Want <> Rt.Mounted();',
     'END_PROGRAM',
     '',
     'CONFIGURATION HmiConfig',
@@ -782,6 +788,9 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput, classes: readonl
     '#endif',
     'void hmi_unit_set_role(void *unit, int role) {',
     '    if (unit) static_cast<HmiUnit *>(unit)->program.ROLE.set(role);',
+    '}',
+    'bool hmi_unit_mount_pending(void *unit) {',
+    '    return unit && static_cast<HmiUnit *>(unit)->program.MOUNTNEXT.get();',
     '}',
     'bool hmi_unit_frame(void *unit) {',
     '    if (!unit) return true;',
@@ -1182,6 +1191,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     tags: [],
     elementIds: [],
     fonts: { variant: input.settings.fontVariant, faces: [...HMI_ALL_FACES] },
+    textSizes: [],
     preview: { units: { library: [], widgets: [], screens: {}, glue: [] }, setters: {}, files: {} },
   }
   const library = buildStandardWidgets()
@@ -1248,6 +1258,11 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     firstIds.push(nextId)
     for (const a of plan.attach)
       result.elementIds.push({ id: nextId++, screen: plan.model.name, element: a.element.name })
+    for (const e of plan.model.elements) {
+      const size = /^\s*(\d+)\s*$/.exec(e.props.get('SIZE') ?? '')
+      const sized = catalog.widgets.get(e.type.toUpperCase())?.properties.some((p) => p.name.toUpperCase() === 'SIZE')
+      if (size && sized) result.textSizes.push({ screen: plan.model.name, element: e.name, size: Number(size[1]) })
+    }
   }
   const sources: Record<string, string> = {
     [GLUE_FILE]: glueSource(

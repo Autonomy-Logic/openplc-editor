@@ -2,8 +2,8 @@
  * @file hmi_baremetal.c
  * @brief HMI host of the Baremetal firmware (hmi_baremetal.h): one viewer on the default session, PLC variables through
  *        the firmware's debugger functions, and a scheduler that starts a work unit only when its learned cost fits
- *        in the scan's slack. Work units: a logic frame, which cannot be split, and rows of a changed band, which are
- *        rasterized against a deadline and dropped, to be redrawn in fewer rows, when it passes.
+ *        in the scan's slack. Work units: a touch read, a logic frame, which cannot be split, and rows of a changed band,
+ *        which are rasterized against a deadline and dropped, to be redrawn in fewer rows, when it passes.
  */
 #include "hmi_baremetal.h"
 
@@ -51,6 +51,9 @@
 /** Life cycle of the host. */
 typedef enum { BM_OFF, BM_IDLE, BM_RASTER } bm_state_t;
 
+/** Kinds of logic frame, each with its own learned cost: no screen code (PIN entry, fault), a screen, a screen mount. */
+typedef enum { FRAME_BARE, FRAME_SCREEN, FRAME_MOUNT, FRAME_KINDS } frame_kind_t;
+
 /** Everything the host keeps between calls. */
 typedef struct {
     bm_state_t state;
@@ -70,7 +73,9 @@ typedef struct {
     bool drawn_once, hash_valid;
     int band_y;
     bool band_aborted;
-    uint32_t est_logic_us;
+    uint32_t est_frame_us[FRAME_KINDS];
+    uint32_t est_touch_up_us, est_touch_down_us;
+    uint32_t gap_us, last_slack_us;
     uint32_t hash_us;
     uint32_t push_row_q8;
     bool held;
@@ -197,6 +202,12 @@ static int band_slot(int y) {
     return g.tracked ? y / g.rows : 0;
 }
 
+/** Kind of the next logic frame. */
+static frame_kind_t next_frame_kind(void) {
+    if (hmi_lock_active() || g.faulted) return FRAME_BARE;
+    return hmi_unit_mount_pending(g.unit) ? FRAME_MOUNT : FRAME_SCREEN;
+}
+
 /** What a logic frame draws: the PIN entry while the panel is locked, else the screens, blank after a fault. */
 static void draw_frame(void) {
     if (hmi_lock_active()) {
@@ -228,7 +239,7 @@ static void mark_dirty_bands(void) {
  * Runs one logic frame, locking the panel when its screen code signed out; afterwards the host rasterizes it unless its
  * display list is unchanged.
  */
-static void logic_frame(void) {
+static void logic_frame(frame_kind_t kind) {
     uint32_t t0 = now_us();
     g.last_frame_ms = g.ms;
     hmi_set_time_ms(g.ms);
@@ -246,7 +257,24 @@ static void logic_frame(void) {
     }
     uint32_t took = now_us() - t0;
     g.stats.last_logic_us = took;
-    learn(&g.est_logic_us, took);
+    learn(&g.est_frame_us[kind], took);
+}
+
+/**
+ * Whether a logic frame of this kind starts in the slack left since t0. A mount, whose cost changes with the page, and a
+ * kind not measured yet start only at about the beginning of a gap between two scans; so does a frame whose learned
+ * cost exceeds a whole gap, which would otherwise never run.
+ */
+static bool frame_fits(frame_kind_t kind, uint32_t t0, uint32_t slack_us) {
+    uint32_t spent = now_us() - t0;
+    if (spent >= slack_us) return false;
+    uint32_t left = slack_us - spent;
+    uint32_t est = g.est_frame_us[kind];
+    uint32_t cost = HMI_BM_GUARD_US + est + est / 8u;
+    uint32_t full = g.gap_us - g.gap_us / 8u;
+    bool gap_start = left >= full;
+    if ((kind == FRAME_MOUNT || est == 0) && !gap_start) return false;
+    return cost < left || (gap_start && cost >= full);
 }
 
 /** Whether row y needs drawing in the current frame. */
@@ -350,11 +378,19 @@ static int32_t px_to_q4(int px, int32_t offset) {
     return (int32_t)(((int64_t)(px - offset) * 4096) / g.scale_q8);
 }
 
-static void poll_touch(void) {
+/** Reads the touch panel when a read is due and its learned cost, pressed or released, fits in the slack left since t0. */
+static void poll_touch(uint32_t t0, uint32_t slack_us) {
     if (g.ms - g.last_touch_ms < HMI_BM_TOUCH_MS) return;
+    uint32_t est = g.est_touch_down_us > g.est_touch_up_us ? g.est_touch_down_us : g.est_touch_up_us;
+    if (now_us() - t0 + HMI_BM_GUARD_US + est + est / 8u >= slack_us) {
+        g.stats.touch_skips++;
+        return;
+    }
     g.last_touch_ms = g.ms;
     int x = 0, y = 0;
+    uint32_t r0 = now_us();
     bool down = hmi_panel_read_touch(&x, &y);
+    learn(down ? &g.est_touch_down_us : &g.est_touch_up_us, now_us() - r0);
     if (down) {
         hmi_input_pointer(g.touch_down ? HMI_PTR_MOVE : HMI_PTR_DOWN, px_to_q4(x, g.offx), px_to_q4(y, g.offy));
         g.touch_x = x;
@@ -365,17 +401,27 @@ static void poll_touch(void) {
     g.touch_down = down;
 }
 
+/** Leaves the HMI off for reason. */
+static bool stay_off(hmi_bm_off_reason_t reason) {
+    g.state = BM_OFF;
+    g.stats.off_reason = (uint32_t)reason;
+    return false;
+}
+
 bool hmi_bm_init(hmi_bm_clock_fn clock_us) {
     memset(&g, 0, sizeof g);
-    if (!clock_us) return false;
+    if (!clock_us) return stay_off(HMI_BM_OFF_NO_CLOCK);
     g.clock = clock_us;
     int w = 0, h = 0;
-    if (!hmi_panel_init(&w, &h) || w <= 0 || h <= 0) return false;
+    if (!hmi_panel_init(&w, &h) || w <= 0 || h <= 0) return stay_off(HMI_BM_OFF_NO_PANEL);
+#if defined(HMI_PANEL_WIDTH) && defined(HMI_PANEL_HEIGHT)
+    if (w != HMI_PANEL_WIDTH || h != HMI_PANEL_HEIGHT) return stay_off(HMI_BM_OFF_PANEL_SIZE);
+#endif
     const int density = HMI_PANEL_DENSITY > 0 ? HMI_PANEL_DENSITY : 1;
     const int32_t lw = w / density, lh = h / density;
-    if (lw <= 0 || lh <= 0) return false;
+    if (lw <= 0 || lh <= 0) return stay_off(HMI_BM_OFF_PANEL_SIZE);
     g.rows = (int)(HMI_BAND_BYTES / ((uint32_t)w * 4u));
-    if (g.rows <= 0) return false;
+    if (g.rows <= 0) return stay_off(HMI_BM_OFF_BAND_BUFFER);
     if (g.rows > h) g.rows = h;
     g.pw = w;
     g.ph = h;
@@ -390,11 +436,11 @@ bool hmi_bm_init(hmi_bm_clock_fn clock_us) {
     hmi_lock_setup(hmi_panel_pin, hmi_relock_minutes * 60000u);
     hmi_set_tag_access(&g_access);
     g.unit = hmi_unit_create();
-    if (!g.unit) return false;
+    if (!g.unit) return stay_off(HMI_BM_OFF_NO_UNIT);
     hmi_unit_set_role(g.unit, HMI_ROLE_ADMIN);
 
     g.last_us = now_us();
-    logic_frame();
+    logic_frame(next_frame_kind());
     if (g.state == BM_RASTER) draw_whole_frame();
     g.state = BM_IDLE;
     return true;
@@ -405,17 +451,19 @@ bool hmi_bm_active(void) {
 }
 
 void hmi_bm_task(uint32_t slack_us) {
-    if (g.state == BM_OFF || slack_us <= HMI_BM_GUARD_US) return;
+    if (g.state == BM_OFF) return;
+    if (slack_us > g.last_slack_us) learn(&g.gap_us, slack_us);
+    g.last_slack_us = slack_us;
+    if (slack_us <= HMI_BM_GUARD_US) return;
     uint32_t t0 = now_us();
     tick();
     if (g.held && g.ms - g.held_ms >= HMI_BM_HOLD_MS) g.held = false;
-    poll_touch();
+    poll_touch(t0, slack_us);
     if (g.state == BM_RASTER) {
         raster_slice(t0, slack_us);
     } else if (!g.held && g.ms - g.last_frame_ms >= hmi_frame_ms) {
-        uint32_t spent = now_us() - t0;
-        uint32_t need = spent + HMI_BM_GUARD_US + g.est_logic_us + g.est_logic_us / 8u;
-        if (need < slack_us) logic_frame();
+        frame_kind_t kind = next_frame_kind();
+        if (frame_fits(kind, t0, slack_us)) logic_frame(kind);
     }
     if (now_us() - t0 > slack_us) g.stats.scan_overruns++;
 }

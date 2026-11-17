@@ -35,7 +35,10 @@ function code(source: string): string {
   )
 }
 
-/** A top-level block of a source: its name in upper case, or null for TYPE blocks, and its code. */
+/**
+ * A top-level block of a source: its name in upper case, or null for code that is always reached (TYPE blocks, and the
+ * text outside every POU, such as VAR_GLOBAL and CONFIGURATION), and its code.
+ */
 interface Pou {
   name: string | null
   body: string
@@ -44,12 +47,15 @@ interface Pou {
 function pous(source: string): Pou[] {
   const out: Pou[] = []
   const block = /\b(FUNCTION_BLOCK|FUNCTION|PROGRAM|INTERFACE|TYPE)\b([\s\S]*?)\bEND_\1\b/gi
-  for (const m of code(source).matchAll(block)) {
+  const text = code(source)
+  for (const m of text.matchAll(block)) {
     const kind = m[1].toUpperCase()
     const name =
       kind === 'TYPE' ? null : (/^\s*(?:(?:ABSTRACT|FINAL|PUBLIC|INTERNAL)\s+)*(\w+)/i.exec(m[2])?.[1] ?? null)
     out.push({ name: name?.toUpperCase() ?? null, body: m[0] })
   }
+  const outside = text.replace(block, (m) => m.replace(/[^\n]/g, ' '))
+  if (outside.trim() !== '') out.push({ name: null, body: outside })
   return out
 }
 

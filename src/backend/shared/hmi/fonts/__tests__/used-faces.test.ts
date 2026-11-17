@@ -47,6 +47,15 @@ describe('hmiUsedFontFaces', () => {
     expect(faces([fb('S', 'r : Runtime; e : Entry;')], pool, gates)).toEqual([1])
   })
 
+  it('counts the faces of globals and configurations outside every POU', () => {
+    const screen = fb('S', 'HMI_Text(0, 0, s, 9, G, 0, 0);')
+    expect(faces([screen, 'VAR_GLOBAL\n  G : HMI_FONT := BOLD;\nEND_VAR\n'])).toEqual([1])
+    expect(
+      faces([screen, 'CONFIGURATION C\n  VAR_GLOBAL G : HMI_FONT := HMI_FONT#Bold; END_VAR\nEND_CONFIGURATION\n']),
+    ).toEqual([1])
+    expect(faces([screen], ['VAR_GLOBAL G : HMI_FONT := TO_HMI_FONT(1); END_VAR'])).toEqual([...HMI_ALL_FACES])
+  })
+
   it("does not count the HMI_FONT type's own enumerators", () => {
     expect(faces([], ['TYPE HMI_FONT : (Regular := 0, Bold := 1); END_TYPE'])).toEqual([])
   })

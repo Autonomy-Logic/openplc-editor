@@ -2,6 +2,7 @@ import {
   HMI_DEFAULT_BAND_BYTES,
   HMI_DEFAULT_DISPLAY_LIST_BYTES,
   HMI_DEFAULT_GLYPH_CACHE_BYTES,
+  hmiPanelCapabilitySchema,
   resolveHmiPanel,
 } from '../hmi-panel'
 import {
@@ -72,6 +73,18 @@ describe('the hmi capability', () => {
     ['a string', 'panel'],
   ])('rejects a panel with %s', (_case, declared) => {
     expect(resolveHmiPanel(declared)).toBeNull()
+  })
+
+  it('refuses a band buffer smaller than one RGBA row of the panel', () => {
+    expect(resolveHmiPanel({ ...PANEL, bandBytes: 3199 })).toBeNull()
+    expect(resolveHmiPanel({ ...PANEL, bandBytes: 3200 })?.bandBytes).toBe(3200)
+    const parsed = hmiPanelCapabilitySchema.safeParse({ ...PANEL, bandBytes: 1024 })
+    expect(parsed.success).toBe(false)
+    if (parsed.success) return
+    expect(parsed.error.issues[0]).toMatchObject({
+      path: ['bandBytes'],
+      message: 'The HMI band buffer (bandBytes 1024) holds less than one panel row (3200 bytes for a width of 800)',
+    })
   })
 
   it('resolves a board whose declared panel does not validate as having none', () => {

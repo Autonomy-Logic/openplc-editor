@@ -558,7 +558,6 @@ void hmi_elem_bounds(int32_t id, int32_t x, int32_t y, int32_t w, int32_t h) { h
 
 void hmi_elem_bounds_in(int32_t id, int32_t x, int32_t y, int32_t w, int32_t h, int takes_input) {
 #ifdef HMI_STATIC_MEMORY
-    /* Only pointer arbitration reads bounds on a device: keep input elements that reach the screen. */
     if (!takes_input) return;
     const int64_t pad = MIN_TOUCH_Q4 / 2, sx = tx(x), sy = ty(y);
     if (sx - pad >= (int64_t)S->w_lu * 16 || sy - pad >= (int64_t)S->h_lu * 16 || sx + ts(w) + pad <= 0 ||

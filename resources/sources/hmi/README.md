@@ -35,7 +35,7 @@ does not fit fails when the firmware links. Every buffer is static and sized by 
 |---|---|---|
 | `HMI_DL_CAPACITY` | 16 KB (64 KB with a heap) | The display list of one frame |
 | `HMI_GLYPH_CACHE_BYTES` | 8 KB | Rasterized glyphs |
-| `HMI_GLYPH_SCRATCH_BYTES` | 8 KB | A glyph too big for the cache; bigger glyphs are not drawn |
+| `HMI_GLYPH_SCRATCH_BYTES` | 8 KB | A glyph too big for the cache; bigger glyphs are not drawn, cached or not, and the build warns about text sizes that reach them |
 | `HMI_STB_ARENA_BYTES` | 24 KB | stb_truetype's memory while it rasterizes one glyph |
 | `HMI_RASTER_ROW_MAX` | 1025 | Pixels plus one of the widest polygon row; wider polygons are not drawn |
 | `HMI_BOUNDS_MAX` | 160 (512 with a heap) | Elements a frame records for touch |
@@ -75,17 +75,22 @@ task `HMI_BM_LOOP_STACK_BYTES` (16 KB, `hmi_baremetal.h`) instead of the core's 
 A board's HAL implements `hmi_panel.h`: `hmi_panel_push_band` gets the band as RGBA and may convert it to the panel's
 format in place, so a driver needs no buffer of its own.
 
-`hmi_bm_init` (from `setup()`, before the first scan) brings the panel up, creates the program instance, sets the panel
-PIN and relock time from the unit, and draws the first frame with no deadline, which measures what frames cost.
-`hmi_bm_task(slack)` runs from the scan loop with the time left until the next scan and keeps 1 ms of it free; the
-HMI may drop frames but never delays a scan:
+`hmi_bm_init` (from `setup()`, before the first scan) brings the panel up, refuses a panel whose size differs from the
+one in `hmi_config.h`, creates the program instance, sets the panel PIN and relock time from the unit, and draws the
+first frame with no deadline, which measures what frames cost. `hmi_bm_task(slack)` runs from the scan loop with the
+time left until the next scan and keeps 1 ms of it free; the HMI may drop frames but never delays a scan, except a
+frame that costs more than a whole gap between scans:
 
-- A logic frame (the PIN entry while locked, else the screens; a screen fault leaves a blank frame) starts once the
-  unit's frame period has passed and only when its learned cost fits; it cannot be split.
+- A logic frame starts once the unit's frame period has passed and only when its learned cost fits; it cannot be
+  split. Frames without screen code (the PIN entry, a blank frame after a screen fault), screen frames and frames that
+  build a screen (the first one, a page change; `hmi_unit_mount_pending`) each have their own learned cost. A frame that
+  builds a screen, or a kind not measured yet, starts only at about the beginning of a gap; so does a frame whose cost
+  exceeds a whole gap, which would otherwise never run.
 - Bands whose hash did not change are neither drawn nor pushed. A band's rows start only when the learned per-row
   raster and push costs fit; the raster gets a deadline that leaves room for the push, and rows that miss it are
   dropped and redrawn later in half as many rows, growing back after a clean band.
-- Touch is read every 15 ms; a release is reported at the last pressed point.
+- Touch is read every 15 ms, when the learned cost of a read (pressed and released learned apart) fits; otherwise it
+  is read at the next call that has room. A release is reported at the last pressed point.
 
 PLC variables are read and written (soft write, no force) through the firmware's debugger functions
 (`openplc_debug_size`, `_read`, `_write`) at the addresses the build resolves from the program's `debug-map.json`.
@@ -93,8 +98,9 @@ A board without a panel driver links against weak defaults and the HMI stays off
 
 `openplc-cli compile --hmi-test-readout` (tests only) also defines `HMI_TEST_READOUT`: the firmware then answers the
 debugger function codes 0x4E (the current display list in chunks) and 0x4F (frames drawn, bands pushed, scan overruns,
-last logic frame and worst band in microseconds, and the least free stack of the loop task in bytes, 0xFFFFFFFF where
-the platform cannot tell). Product builds contain neither.
+last logic frame and worst band in microseconds, the least free stack of the loop task in bytes, 0xFFFFFFFF where
+the platform cannot tell, why the HMI is off (`hmi_bm_off_reason_t`, 0 while it runs) and touch reads postponed).
+Product builds contain neither.
 
 ## Rules that keep the output identical everywhere
 
@@ -162,9 +168,12 @@ live setters, navigation, the widget-block preview and how long rebuilds take af
 
 `npm run test:hmi-baremetal` (`tests/hmi-baremetal/run.mjs`) builds the core, the sample unit and the baremetal host
 with `HMI_STATIC_MEMORY` and a fake panel, clock and debugger table, and checks in simulated time that the panel shows
-the core's full render of each frame, unchanged bands are not pushed, no call runs past its slack, the PIN, relock and
-touch work, product objects of the host and core reference no heap and carry no test readout, and a board without a
-panel driver links with the HMI off.
+the core's full render of each frame, unchanged bands are not pushed, no call runs past its slack (with a costly touch
+read and costly first frames after unlocking and on a page change), the PIN, relock and touch work, a panel of another
+size leaves the HMI off, product objects of the host and core reference no heap and carry no test readout, and a board
+without a panel driver links with the HMI off. It also builds the firmware's Modbus PDU sources natively against the
+simulator's Arduino stub and checks the framing, routing and answers of the readout codes 0x4E and 0x4F. The test
+programs are sanitized (ASan, UBSan); CI runs it in `ci-hmi-core.yml`.
 
 `npm run test:hmi-unit` (`tests/hmi-unit/run.mjs`) generates a sample project's unit, builds it with this core and a
 C host that uses only `unit/hmi_unit.h` and `unit/hmi_preview.h`, and checks its frames, writes (range clamping

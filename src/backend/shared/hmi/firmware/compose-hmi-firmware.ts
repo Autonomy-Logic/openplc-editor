@@ -5,12 +5,16 @@
  * `__has_include(<hmi_baremetal.h>)`, so a build without these files has no HMI.
  */
 import type { HmiBuildSources, HmiDiagnostic } from '../../../../middleware/shared/ports/hmi-preview-types'
-import type { ResolvedHmiPanel } from '../../../../middleware/shared/utils/target-capabilities/hmi-panel'
+import {
+  hmiBandBelowRowMessage,
+  type ResolvedHmiPanel,
+} from '../../../../middleware/shared/utils/target-capabilities/hmi-panel'
 import { type HmiProgramInstance, hmiTagResolver } from '../artefact/tag-resolver'
 import { hmiFontTableFromSources } from '../fonts/font-table-source'
-import { HMI_FONT_REGULAR } from '../fonts/vetted-fonts'
+import { hmiFontBoxes, hmiLargestTextSize } from '../fonts/glyph-box'
+import { HMI_FONT_REGULAR, type HmiFontVariant, vettedHmiFont } from '../fonts/vetted-fonts'
 import { generateHmiUnit, type HmiTag } from '../unit/generate-hmi-unit'
-import { hmiConfigHeader } from './hmi-config-header'
+import { HMI_GLYPH_SCRATCH_BYTES, hmiConfigHeader } from './hmi-config-header'
 
 type StlibArchive = NonNullable<Parameters<typeof generateHmiUnit>[0]['plcArchives']>[number]
 
@@ -67,8 +71,36 @@ export function hmiFirmwareFaces(faces: readonly number[], pinEnabled: boolean):
   return [...all].sort((a, b) => a - b)
 }
 
+/**
+ * Largest text size, in screen units, whose glyphs a static build draws on the panel in every face compiled in; null
+ * when a face's file is missing from the sources.
+ */
+export function hmiLargestPanelTextSize(
+  faces: readonly number[],
+  variant: HmiFontVariant,
+  density: number,
+  hmiSources: Readonly<Record<string, string | Uint8Array>>,
+): number | null {
+  let largest: number | null = null
+  for (const id of faces) {
+    const file = vettedHmiFont(id, variant)?.file
+    const bytes = file === undefined ? undefined : hmiSources[`fonts/${file}`]
+    if (!(bytes instanceof Uint8Array)) return null
+    const size = hmiLargestTextSize(hmiFontBoxes(bytes), density, HMI_GLYPH_SCRATCH_BYTES)
+    largest = largest === null ? size : Math.min(largest, size)
+  }
+  return largest
+}
+
 /** Builds the HMI files of a firmware with screens. */
 export async function composeHmiFirmware(input: ComposeHmiFirmwareInput): Promise<ComposeHmiFirmwareResult> {
+  if (input.panel.bandBytes < input.panel.width * 4) {
+    return {
+      ok: false,
+      errors: [{ file: UNIT, message: hmiBandBelowRowMessage(input.panel.bandBytes, input.panel.width) }],
+      warnings: [],
+    }
+  }
   const unit = generateHmiUnit({
     ...input.sources,
     plcArchives: input.plcArchives,
@@ -93,11 +125,20 @@ export async function composeHmiFirmware(input: ComposeHmiFirmwareInput): Promis
     files[`src/${path.slice(path.indexOf('/') + 1)}`] = text(content)
   }
   for (const [name, content] of Object.entries(unit.files)) files[`src/${hmiFirmwareUnitFileName(name)}`] = content
+  const faces = hmiFirmwareFaces(unit.fonts.faces, input.sources.settings.pin.enabled)
   try {
-    const faces = hmiFirmwareFaces(unit.fonts.faces, input.sources.settings.pin.enabled)
     files['src/hmi_fonts.c'] = await hmiFontTableFromSources(faces, unit.fonts.variant, input.hmiSources)
   } catch (error) {
     return fail(error instanceof Error ? error.message : String(error))
+  }
+  const warnings = [...unit.warnings]
+  const largest = hmiLargestPanelTextSize(faces, unit.fonts.variant, input.panel.density, input.hmiSources)
+  for (const t of unit.textSizes) {
+    if (largest === null || t.size <= largest) continue
+    warnings.push({
+      file: t.screen,
+      message: `${t.element}: text size ${t.size} is larger than this board's panel draws (${largest}); its glyphs are not drawn on the device`,
+    })
   }
   files['src/hmi_config.h'] = hmiConfigHeader(input.panel, unit.fonts.variant, { testReadout: input.testReadout })
   const license = input.hmiSources[FONTS_LICENSE]
@@ -109,6 +150,6 @@ export async function composeHmiFirmware(input: ComposeHmiFirmwareInput): Promis
     files,
     defines: input.testReadout ? '\n#define HMI_TEST_READOUT 1\n' : '',
     tags: unit.tags,
-    warnings: unit.warnings,
+    warnings,
   }
 }

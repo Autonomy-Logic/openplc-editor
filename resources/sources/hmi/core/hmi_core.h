@@ -243,7 +243,10 @@ int32_t hmi_ptr_owner(void);
 
 /** Records an element's bounds (local lu) for designers and pointer arbitration. */
 void hmi_elem_bounds(int32_t id, int32_t x, int32_t y, int32_t w, int32_t h);
-/** Same, marking whether the element takes pointer input. */
+/**
+ * Same, marking whether the element takes pointer input. With HMI_STATIC_MEMORY only input elements that reach the
+ * screen are kept, since only pointer arbitration reads bounds on a device.
+ */
 void hmi_elem_bounds_in(int32_t id, int32_t x, int32_t y, int32_t w, int32_t h, int takes_input);
 int hmi_bounds_count(void);
 /** count * 5 values: id, then x, y, w, h in Q4 screen units. */

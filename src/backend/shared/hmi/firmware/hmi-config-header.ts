@@ -10,6 +10,9 @@ export interface HmiConfigHeaderOptions {
   testReadout?: boolean
 }
 
+/** Largest glyph bitmap, in pixels, a static build draws (`HMI_GLYPH_SCRATCH_BYTES`). */
+export const HMI_GLYPH_SCRATCH_BYTES = 8192
+
 /** Smallest touch target in screen units (`HMI_MIN_TOUCH_LU`). */
 const MIN_TOUCH_LU = 28
 
@@ -37,6 +40,7 @@ export function hmiConfigHeader(
     '#define HMI_STATIC_MEMORY 1',
     `#define HMI_DL_CAPACITY ${panel.displayListBytes}`,
     `#define HMI_GLYPH_CACHE_BYTES ${panel.glyphCacheBytes}`,
+    `#define HMI_GLYPH_SCRATCH_BYTES ${HMI_GLYPH_SCRATCH_BYTES}`,
     `#define HMI_BAND_BYTES ${panel.bandBytes}`,
     `#define HMI_STB_ARENA_BYTES ${HMI_STB_ARENA_BYTES[fontVariant]}`,
     `#define HMI_BOUNDS_MAX ${hmiBoundsCapacity(panel)}`,

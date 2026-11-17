@@ -22,12 +22,18 @@
 #define CLOCK_STEP_US 2u
 #define DEBUG_READ_US 30u
 #define PUSH_ROW_US 120u
-#define TOUCH_READ_US 20u
+#define TOUCH_UP_US 20u
+#define TOUCH_DOWN_US 1500u
 #define IDLE_LOOP_US 25u
 #define TAG_SLOTS 16
 #define WIRE_MAX 256
 
 static uint32_t g_now;
+static int g_panel_w = PANEL_W, g_panel_h = PANEL_H;
+static uint32_t g_read_extra_us;
+/** Charged once to the first Details frame: a read of Tag that does not follow Speed, as it does on Overview. */
+static uint32_t g_details_extra_us;
+static int g_tag_slot = -1, g_speed_slot = -1, g_prev_read_slot = -1;
 static uint8_t g_fb[PANEL_H][PANEL_W * 4];
 static uint8_t g_ref[PANEL_H][PANEL_W * 4];
 static bool g_touch;
@@ -55,8 +61,8 @@ static uint32_t fake_clock(void) {
 }
 
 bool hmi_panel_init(int *width, int *height) {
-    *width = PANEL_W;
-    *height = PANEL_H;
+    *width = g_panel_w;
+    *height = g_panel_h;
     return true;
 }
 
@@ -73,7 +79,7 @@ void hmi_panel_push_band(int y0, int rows, uint8_t *rgba, int width) {
 }
 
 bool hmi_panel_read_touch(int *x, int *y) {
-    g_now += TOUCH_READ_US;
+    g_now += g_touch ? TOUCH_DOWN_US : TOUCH_UP_US;
     if (!g_touch) return false;
     *x = g_touch_x;
     *y = g_touch_y;
@@ -95,7 +101,14 @@ uint16_t openplc_debug_size(uint8_t arr, uint16_t elem) {
 
 uint16_t openplc_debug_read(uint8_t arr, uint16_t elem, uint8_t *dest) {
     uint16_t n = openplc_debug_size(arr, elem);
-    g_now += DEBUG_READ_US;
+    int slot = slot_of(arr, elem);
+    g_now += DEBUG_READ_US + g_read_extra_us;
+    g_read_extra_us = 0;
+    if (slot >= 0 && slot == g_tag_slot && g_prev_read_slot != g_speed_slot) {
+        g_now += g_details_extra_us;
+        g_details_extra_us = 0;
+    }
+    g_prev_read_slot = slot;
     g_reads++;
     if (n > 0) memcpy(dest, g_wire[slot_of(arr, elem)], n);
     return n;
@@ -207,6 +220,16 @@ static bool element_px(int32_t id, int *x, int *y) {
 }
 
 int main(void) {
+    hmi_bm_stats_t off;
+    g_panel_w = PANEL_H;
+    g_panel_h = PANEL_W;
+    CHECK(!hmi_bm_init(fake_clock), "a panel reporting another size than the build's started the HMI");
+    hmi_bm_stats(&off);
+    CHECK(off.off_reason == HMI_BM_OFF_PANEL_SIZE && !hmi_bm_active(), "panel size mismatch: off reason %u",
+          (unsigned)off.off_reason);
+    g_panel_w = PANEL_W;
+    g_panel_h = PANEL_H;
+
     CHECK(hmi_bm_init(fake_clock), "hmi_bm_init failed");
     CHECK(hmi_bm_active(), "the HMI is not active after init");
     check_panel("first frame");
@@ -221,9 +244,11 @@ int main(void) {
     tap_key(3);
     tap_key(5);
     tap_key(7);
+    g_read_extra_us = 5800u;
     tap_key(11);
     run_cycles(20, 10000u, 3000u);
     CHECK(g_reads > 0, "the right PIN did not unlock the panel");
+    CHECK(g_read_extra_us == 0, "the first screen frame after unlocking did not run");
     CHECK(g_writes == 0, "unlocking wrote %u tags", g_writes);
     printf("unlocked: %u tag reads\n", g_reads);
 
@@ -249,6 +274,18 @@ int main(void) {
     CHECK(g_last_write_tag == running && g_wire[running][0] == 1, "tapping Run did not write it (last write %d)",
           g_last_write_tag);
 
+    g_tag_slot = tag_named(".TAG");
+    g_speed_slot = tag_named(".SPEED");
+    CHECK(element_px(ID_OVERVIEW_NEXT, &x, &y), "Details is not drawn");
+    g_details_extra_us = 5800u;
+    tap_px(x, y, 80u);
+    run_cycles(20, 10000u, 3000u);
+    CHECK(g_details_extra_us == 0, "the Details screen was not opened");
+    CHECK(element_px(ID_DETAILS_BACK, &x, &y), "Back is not drawn on Details");
+    tap_px(x, y, 80u);
+    run_cycles(20, 10000u, 3000u);
+    printf("opened Details and went back\n");
+
     CHECK(element_px(ID_OVERVIEW_LEAVE, &x, &y), "Sign out is not drawn");
     tap_px(x, y, 80u);
     run_cycles(10, 10000u, 3000u);
@@ -263,6 +300,20 @@ int main(void) {
     run_cycles(20, 10000u, 3000u);
     CHECK(g_reads > signed_out, "the PIN did not unlock the panel after signing out");
     printf("signed out and unlocked again\n");
+
+    hmi_bm_stats_t pressed;
+    hmi_bm_stats(&pressed);
+    g_touch = true;
+    g_touch_x = 2;
+    g_touch_y = 2;
+    run_cycles(40, 5000u, 3000u);
+    g_touch = false;
+    run_cycles(10, 10000u, 3000u);
+    hmi_bm_stats_t after_pressed;
+    hmi_bm_stats(&after_pressed);
+    CHECK(after_pressed.touch_skips > pressed.touch_skips, "a touch read that does not fit in 2 ms was not postponed");
+    printf("tight slack while pressed: %u touch reads postponed\n",
+           (unsigned)(after_pressed.touch_skips - pressed.touch_skips));
 
     hmi_bm_stats_t tight;
     hmi_bm_stats(&tight);

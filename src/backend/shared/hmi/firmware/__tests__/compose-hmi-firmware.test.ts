@@ -105,6 +105,46 @@ describe('composeHmiFirmware', () => {
     expect(result.errors.map((e) => e.message).join('\n')).toMatch(/has no debug address/)
   })
 
+  it('warns about a literal text size larger than the panel draws, and only then', async () => {
+    const withSize = (size: number): ComposeHmiFirmwareInput => {
+      const sample = sampleProject()
+      const screens = sample.screens.map((s) =>
+        s.name === 'Details'
+          ? {
+              ...s,
+              source: s.source.replace(
+                "Shown : HmiLabel := (Parent := 'Body')",
+                `Shown : HmiLabel := (Parent := 'Body', Size := ${size})`,
+              ),
+            }
+          : s,
+      )
+      if (screens.every((s) => !s.source.includes(`Size := ${size}`)))
+        throw new Error('the sample Details screen changed')
+      return input({ sources: { ...sample, screens } })
+    }
+    const large = await composeHmiFirmware(withSize(120))
+    if (!large.ok) throw new Error(JSON.stringify(large.errors))
+    expect(large.warnings).toContainEqual({
+      file: 'Details',
+      message:
+        "Shown: text size 120 is larger than this board's panel draws (103); its glyphs are not drawn on the device",
+    })
+    const fits = await composeHmiFirmware(withSize(100))
+    if (!fits.ok) throw new Error(JSON.stringify(fits.errors))
+    expect(fits.warnings.map((w) => w.message).join('\n')).not.toMatch(/text size/)
+  })
+
+  it('refuses a band buffer smaller than one panel row', async () => {
+    if (!PANEL) throw new Error('the test panel does not validate')
+    const result = await composeHmiFirmware(input({ panel: { ...PANEL, width: 800, bandBytes: 1024 } }))
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.errors[0].message).toBe(
+      'The HMI band buffer (bandBytes 1024) holds less than one panel row (3200 bytes for a width of 800)',
+    )
+  })
+
   it('fails without the baremetal host in the HMI sources', async () => {
     const { 'baremetal/hmi_baremetal.c': _host, ...rest } = HMI_SOURCES
     const result = await composeHmiFirmware(input({ hmiSources: rest }))

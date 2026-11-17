@@ -110,6 +110,8 @@ void *hmi_unit_create(void);
 void hmi_unit_destroy(void *unit);
 /** Sets the viewer's role (::hmi_role) before its first frame; screens its role is not granted stay closed. */
 void hmi_unit_set_role(void *unit, int role);
+/** Whether the next hmi_unit_frame builds a screen: the first frame, or a page change asked for in the last one. */
+bool hmi_unit_mount_pending(void *unit);
 /**
  * Runs one frame of the viewer's screens; the host brackets it with the viewer's hmi_frame_begin and end.
  * Returns false when the screen code raised an IEC fault (null reference, array bounds): in builds with

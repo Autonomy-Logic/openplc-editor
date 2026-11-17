@@ -30,7 +30,15 @@ export const HMI_PANEL_MAX_BUFFER_BYTES = 1048576
 const dimension = z.number().int().min(1).max(HMI_PANEL_MAX_DIMENSION)
 const bufferBytes = z.number().int().min(HMI_PANEL_MIN_BUFFER_BYTES).max(HMI_PANEL_MAX_BUFFER_BYTES)
 
-/** A declared `hmi` block. Unknown keys are refused, so a misspelt size never falls back to its default unnoticed. */
+/** Message when a band buffer holds less than one RGBA row of a panel `width` pixels wide. */
+export function hmiBandBelowRowMessage(bandBytes: number, width: number): string {
+  return `The HMI band buffer (bandBytes ${bandBytes}) holds less than one panel row (${width * 4} bytes for a width of ${width})`
+}
+
+/**
+ * A declared `hmi` block. Unknown keys are refused, so a misspelt size never falls back to its default unnoticed, and
+ * so is a band buffer smaller than one RGBA row, with which the panel cannot be drawn.
+ */
 export const hmiPanelCapabilitySchema = z
   .object({
     width: dimension,
@@ -43,6 +51,16 @@ export const hmiPanelCapabilitySchema = z
     bandBytes: bufferBytes.optional(),
   })
   .strict()
+  .superRefine((panel, ctx) => {
+    const band = panel.bandBytes ?? HMI_DEFAULT_BAND_BYTES
+    if (band < panel.width * 4) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['bandBytes'],
+        message: hmiBandBelowRowMessage(band, panel.width),
+      })
+    }
+  })
 
 /** A panel profile with every buffer size filled in. */
 export type ResolvedHmiPanel = Required<HmiPanelCapability>

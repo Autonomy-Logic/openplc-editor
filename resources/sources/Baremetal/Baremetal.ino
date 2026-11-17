@@ -46,8 +46,7 @@
 #include "opcua_log.h"
 #include "s7comm_server.h"   // brings in s7comm_config.h -> S7COMM_ENABLED
 
-// HMI on the board's panel: the build adds its host to the library only when the
-// project has screens and the board declares a panel, so other builds are unchanged.
+// HMI host on the board's panel, present when the build adds it to the library.
 #if defined(__has_include)
 #if __has_include(<hmi_baremetal.h>)
 #include <hmi_baremetal.h>
@@ -58,7 +57,7 @@
 #define HMI_ENABLED 0
 #endif
 #if HMI_ENABLED && defined(ESP_PLATFORM)
-// The screens run in loop(); their code needs more than the core's default 8 KB loop task stack.
+// Stack of the loop() task, which runs the screens.
 SET_LOOP_TASK_STACK_SIZE(HMI_BM_LOOP_STACK_BYTES);
 #endif
 

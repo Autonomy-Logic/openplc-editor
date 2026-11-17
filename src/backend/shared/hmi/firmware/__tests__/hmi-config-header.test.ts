@@ -24,6 +24,7 @@ describe('hmiConfigHeader', () => {
       HMI_STATIC_MEMORY: '1',
       HMI_DL_CAPACITY: '16384',
       HMI_GLYPH_CACHE_BYTES: '8192',
+      HMI_GLYPH_SCRATCH_BYTES: '8192',
       HMI_BAND_BYTES: '20480',
       HMI_STB_ARENA_BYTES: '10240',
       HMI_BOUNDS_MAX: '160',

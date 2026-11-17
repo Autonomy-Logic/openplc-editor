@@ -307,9 +307,15 @@ static const uint8_t *scratch_glyph(stbtt_fontinfo *f, int cp, float scale, floa
     return g_alloc_failed ? NULL : g_scratch;
 }
 
-/* The gw x gh coverage bitmap of a glyph, from the cache or freshly rasterized; NULL when memory is short. */
+/*
+ * The gw x gh coverage bitmap of a glyph, from the cache or freshly rasterized; NULL when memory is short, and with
+ * HMI_STATIC_MEMORY for a glyph larger than the scratch buffer, the largest the stb_truetype arena is sized for.
+ */
 static const uint8_t *glyph(stbtt_fontinfo *f, int font, int cp, float scale, float sx, float sy, int gw, int gh) {
     int need = gw * gh;
+#ifdef HMI_STATIC_MEMORY
+    if (need > HMI_GLYPH_SCRATCH_BYTES) return NULL;
+#endif
     if (need > HMI_GLYPH_CACHE_BYTES / 4 || !gc_ready()) return scratch_glyph(f, cp, scale, sx, sy, gw, gh);
     const uint32_t k[4] = {((uint32_t)font << 24) ^ (uint32_t)cp, float_bits(scale), float_bits(sx), float_bits(sy)};
     uint32_t h = (k[0] * 2654435761u) ^ (k[1] * 2246822519u) ^ (k[2] * 3266489917u) ^ (k[3] * 668265263u);
