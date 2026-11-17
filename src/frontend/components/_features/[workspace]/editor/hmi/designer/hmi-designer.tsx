@@ -25,6 +25,7 @@ import {
   insertionParent,
   isContainerType,
   placementRefusal,
+  resizeProperties,
 } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
 import {
   copyElements,
@@ -57,6 +58,7 @@ import {
 } from '@root/middleware/shared/utils/hmi/designer/designer-edits'
 import { type DesignerModel, parseDesignerBlock } from '@root/middleware/shared/utils/hmi/designer/designer-model'
 import { HMI_DEVICE_PRESETS, hmiDevicePreset } from '@root/middleware/shared/utils/hmi/device-presets'
+import { lastOf } from '@root/middleware/shared/utils/hmi/last-of'
 import { hmiLibraryBlocks, hmiPlcVariables } from '@root/middleware/shared/utils/hmi/plc-variables'
 import { defaultHmiSettings, HMI_BUILTIN_THEMES } from '@root/middleware/shared/utils/hmi/settings'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -470,10 +472,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     },
     resize: (element, size, commit) => {
       if (!model) return
-      const entries: Array<[string, string]> = []
-      if (size.width !== undefined) entries.push(['PrefWidth', String(size.width)])
-      if (size.height !== undefined) entries.push(['PrefHeight', String(size.height)])
-      setLiveAndCommit(element, entries, commit)
+      setLiveAndCommit(element, resizeProperties(model, catalog, element, size), commit)
     },
     place: (element, at, commit) =>
       setLiveAndCommit(
@@ -720,7 +719,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
             )}
             <CanvasControls
               zoom={zoom}
-              onZoomIn={() => zoomTo(ZOOM_STEPS.find((z) => z > zoom + 0.01) ?? ZOOM_STEPS.at(-1) ?? 3)}
+              onZoomIn={() => zoomTo(ZOOM_STEPS.find((z) => z > zoom + 0.01) ?? lastOf(ZOOM_STEPS) ?? 3)}
               onZoomOut={() => zoomTo([...ZOOM_STEPS].reverse().find((z) => z < zoom - 0.01) ?? ZOOM_STEPS[0])}
               onFit={() => zoomTo(null)}
               preview={mode === 'run'}

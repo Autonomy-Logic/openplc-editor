@@ -5,6 +5,7 @@
 import type { FunctionBlockDeclaration, SourceSpan, Statement, VarDeclaration, VariableExpression } from 'strucpp'
 import { parse } from 'strucpp'
 
+import { lastOf } from '../last-of'
 import { SourceText } from '../st-source-text'
 
 export interface DesignerSpan {
@@ -242,7 +243,7 @@ function bodyParts(
       const c = plainField(s.condition, text)
       if (!c || !elements.has(c[0].toUpperCase())) continue
       const first = s.thenStatements[0]
-      const last = s.thenStatements.at(-1)
+      const last = lastOf(s.thenStatements)
       const code = first && last ? text.text.slice(text.start(first.sourceSpan), text.end(last.sourceSpan)) : ''
       events.push({ element: c[0], event: c[1], code, lines: lines(statement) })
     }
@@ -265,8 +266,8 @@ function modelOf(
   const { bindings, events } = bodyParts(fb, text, elementNames)
 
   const varBlocks = fb.varBlocks.filter((b) => b.blockType === 'VAR')
-  const lastVar = varBlocks.at(-1)
-  const lastDecl = lastVar?.declarations.at(-1)
+  const lastVar = lastOf(varBlocks)
+  const lastDecl = lastVar ? lastOf(lastVar.declarations) : undefined
   let declarationAt: number
   let declarationIndent: string
   if (lastVar && lastDecl) {
@@ -283,7 +284,7 @@ function modelOf(
 
   const fbEnd = text.end(fb.sourceSpan)
   const endKeyword = source.toUpperCase().lastIndexOf('END_FUNCTION_BLOCK', fbEnd)
-  const lastStatement = fb.body.at(-1)
+  const lastStatement = lastOf(fb.body)
   const statementAt = lastStatement
     ? linesOf(source, { start: text.start(lastStatement.sourceSpan), end: text.end(lastStatement.sourceSpan) }).end
     : source.lastIndexOf('\n', endKeyword - 1) + 1

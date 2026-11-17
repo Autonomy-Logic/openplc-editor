@@ -22,7 +22,10 @@ import { createHeadlessCompileBridge, createProgressChannel } from './headless-b
  * reaches the upload or status calls, so `compile` needs no credentials and no
  * device.
  */
-export function createCliCompileTransport(runtime: RuntimeApiClient | null): CompileProgramTransport {
+export function createCliCompileTransport(
+  runtime: RuntimeApiClient | null,
+  options: { hmiTestReadout?: boolean } = {},
+): CompileProgramTransport {
   return {
     getAvailableBoards: () => new HardwareModule().getAvailableBoards(),
 
@@ -40,7 +43,7 @@ export function createCliCompileTransport(runtime: RuntimeApiClient | null): Com
         onClose: () => onMessage({ closePort: true }),
       })
 
-      void new CompilerModule({ dependencyHintSurface: 'cli' })
+      void new CompilerModule({ dependencyHintSurface: 'cli', hmiTestReadout: options.hmiTestReadout ?? false })
         .compileProgram(compileArgs, channel, createHeadlessCompileBridge(runtime))
         .catch((error: unknown) => {
           onMessage({ logLevel: 'error', message: error instanceof Error ? error.message : String(error) })

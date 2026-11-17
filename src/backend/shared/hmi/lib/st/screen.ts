@@ -37,9 +37,12 @@ FUNCTION_BLOCK HmiKeyboard
   METHOD INTERNAL AppendCode : BOOL
     VAR_INPUT Code : UDINT; END_VAR
     {external
-      std::string t(hmi_kbd_text());
-      t.push_back((char)CODE.get());
-      hmi_kbd_set_text(t.c_str(), (int)t.size());
+      char t[HMI_KBD_TEXT_MAX];
+      const char *s = hmi_kbd_text();
+      int n = 0;
+      while (s[n] != 0 && n < HMI_KBD_TEXT_MAX - 2) { t[n] = s[n]; n++; }
+      t[n++] = (char)CODE.get();
+      hmi_kbd_set_text(t, n);
     }
     AppendCode := TRUE;
   END_METHOD
@@ -301,6 +304,9 @@ FUNCTION_BLOCK HmiRuntime
     Current : DINT := -1;
     Keyboard : HmiKeyboard;
     Denied : ARRAY[0..63] OF BOOL;
+    (* Pages built on demand: the first element id of each, and the page whose screen is mounted, -1 = none. *)
+    FirstIds : ARRAY[0..63] OF DINT;
+    MountedPage : DINT := -1;
   END_VAR
 
   (* Adds a screen; its page number is the order of the calls, from 0. Returns -1 when full. *)
@@ -314,6 +320,57 @@ FUNCTION_BLOCK HmiRuntime
     NextId := Screen^.Setup(NextId);
     AddScreen := Count;
     Count := Count + 1;
+  END_METHOD
+  (* Adds a page whose screen exists only while shown (Mount); its elements are numbered from FirstId. *)
+  METHOD AddPage : DINT
+    VAR_INPUT FirstId : DINT; END_VAR
+    AddPage := -1;
+    IF Count >= 64 THEN
+      RETURN;
+    END_IF;
+    Screens[Count] := NULL;
+    FirstIds[Count] := FirstId;
+    AddPage := Count;
+    Count := Count + 1;
+  END_METHOD
+  (* Page this frame will show, -1 when the viewer may open none; BeginFrame then shows the same page. *)
+  METHOD Wanted : DINT
+    VAR page : DINT; END_VAR
+    Wanted := -1;
+    IF Count = 0 THEN
+      RETURN;
+    END_IF;
+    page := CurrentPage();
+    IF (Shown() < 0 AND NOT PageChosen()) OR NOT CanShow(page) THEN
+      page := Entry();
+    END_IF;
+    Wanted := page;
+  END_METHOD
+  (* Page whose screen is mounted, -1 when none is. *)
+  METHOD Mounted : DINT
+    Mounted := MountedPage;
+  END_METHOD
+  (* Leaves the mounted page before its screen is destroyed: its OnHide runs if it was shown. *)
+  METHOD Release : BOOL
+    IF MountedPage >= 0 THEN
+      IF Shown() = MountedPage AND Screens[MountedPage] <> 0 THEN
+        Screens[MountedPage]^.RunHide();
+      END_IF;
+      Screens[MountedPage] := NULL;
+      MountedPage := -1;
+    END_IF;
+    Release := TRUE;
+  END_METHOD
+  (* Gives page Page the screen just built for it and builds its elements. *)
+  METHOD Mount : BOOL
+    VAR_INPUT Page : DINT; Screen : POINTER TO HmiScreen; END_VAR
+    IF Page < 0 OR Page >= Count OR Screen = 0 THEN
+      RETURN;
+    END_IF;
+    Screens[Page] := Screen;
+    Screen^.Setup(FirstIds[Page]);
+    MountedPage := Page;
+    Mount := TRUE;
   END_METHOD
   (* Whether the viewer may open page Page; every page is allowed until denied. *)
   METHOD SetAccess : BOOL
@@ -413,11 +470,16 @@ FUNCTION_BLOCK HmiRuntime
       END_IF;
       ResetPage(page);
     END_IF;
+    IF Screens[page] = 0 THEN
+      RETURN;
+    END_IF;
     Screens[page]^.ApplyTheme();
     Keyboard.Handle();
     IF page <> shown THEN
       IF shown >= 0 AND shown < Count THEN
-        Screens[shown]^.RunHide();
+        IF Screens[shown] <> 0 THEN
+          Screens[shown]^.RunHide();
+        END_IF;
       END_IF;
       Screens[page]^.RunShow();
       SetShown(page);

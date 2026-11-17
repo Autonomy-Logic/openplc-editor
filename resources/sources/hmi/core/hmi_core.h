@@ -71,7 +71,7 @@ enum hmi_ptr_kind { HMI_PTR_DOWN = 0, HMI_PTR_MOVE = 1, HMI_PTR_UP = 2 };
 /** Everything one viewer needs. Hosts with one viewer use the default session and never create one. */
 typedef struct hmi_session hmi_session_t;
 
-/** Allocates a session (NULL when memory is short). Its screen size is 0 until hmi_core_init. */
+/** Allocates a session (NULL when memory is short, always NULL with HMI_STATIC_MEMORY). Screen size is 0 until hmi_core_init. */
 hmi_session_t *hmi_session_create(void);
 /** Frees a session created by hmi_session_create; the session in use falls back to the default one. */
 void hmi_session_destroy(hmi_session_t *s);
@@ -283,10 +283,32 @@ int hmi_page_back(void);
 int32_t hmi_page_shown(void);
 /** Records the page whose screen the session shows, so screens learn when they are shown and hidden. */
 void hmi_page_set_shown(int32_t page);
-/** Asks the host to sign the session's viewer out once the frame ends; a host without accounts ignores it. */
+/** Asks the host to sign the session's viewer out once the frame ends; a local panel host locks it (hmi_lock). */
 void hmi_sign_out(void);
 /** Whether the current frame called hmi_sign_out; cleared by hmi_frame_begin. */
 int hmi_frame_sign_out(void);
+/** Locks the panel so the next frames show the PIN entry; nothing happens without a panel PIN (hmi_lock_setup). */
+void hmi_lock(void);
+
+/* ------------------------------------------------------------------------------------------------------------ */
+/* Panel PIN (hosts of a local panel)                                                                           */
+/* ------------------------------------------------------------------------------------------------------------ */
+
+/** Most digits of a panel PIN. */
+#define HMI_PIN_MAX 8
+
+/**
+ * Sets the session's panel PIN (1 to HMI_PIN_MAX digits; anything else means no PIN) and locks the panel when there is
+ * one. relock_ms > 0 locks it again that long after the last touch; 0 locks only here and on hmi_lock.
+ */
+void hmi_lock_setup(const char *pin, uint32_t relock_ms);
+/** Whether this frame shows the PIN entry instead of the screens; call after hmi_frame_begin. Relocks an idle panel. */
+int hmi_lock_active(void);
+/**
+ * Draws the PIN entry and takes its taps, between hmi_frame_begin and hmi_frame_end, in place of the screens. The right
+ * PIN unlocks at once; a wrong one is refused with no delay.
+ */
+void hmi_lock_draw(void);
 
 /* ------------------------------------------------------------------------------------------------------------ */
 /* Rasterizer (not thread safe: glyph cache and scratch buffers are shared)                                    */

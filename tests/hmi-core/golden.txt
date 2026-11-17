@@ -12,6 +12,8 @@ full themes 340x245 ac681c3a274307ef
 full frames 340x310 774ba34a4135bf90
 full extremes 340x220 bb56def85a3862db
 full wide_poly_2x 1280x800 669a631deac6b85f
+full pin_entry 320x240 cace327bcf3958da
+full pin_entry_2x 640x480 24f12c8042e62e9e
 compact shapes 340x310 86e8654b020fa2d7
 compact shapes_2x 680x620 08ddc74e04e85b87
 compact shapes_1_5x_offset 510x465 17887c1f2567521a
@@ -26,3 +28,5 @@ compact themes 340x245 ac681c3a274307ef
 compact frames 340x310 774ba34a4135bf90
 compact extremes 340x220 bb56def85a3862db
 compact wide_poly_2x 1280x800 669a631deac6b85f
+compact pin_entry 320x240 cace327bcf3958da
+compact pin_entry_2x 640x480 24f12c8042e62e9e

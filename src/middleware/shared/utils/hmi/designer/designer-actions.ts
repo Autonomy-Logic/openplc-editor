@@ -9,6 +9,7 @@ export type HmiAction =
   | { kind: 'show'; screen: string }
   | { kind: 'back' }
   | { kind: 'signOut' }
+  | { kind: 'lock' }
   | { kind: 'set'; variable: string; value: string }
   | { kind: 'toggle'; variable: string }
   | { kind: 'code'; code: string }
@@ -21,6 +22,7 @@ export const HMI_ACTIONS: ReadonlyArray<{ kind: HmiActionKind; label: string }> 
   { kind: 'show', label: 'Show a screen' },
   { kind: 'back', label: 'Go back' },
   { kind: 'signOut', label: 'Sign out' },
+  { kind: 'lock', label: 'Lock the panel' },
   { kind: 'set', label: 'Set a variable' },
   { kind: 'toggle', label: 'Toggle a variable' },
   { kind: 'code', label: 'ST code' },
@@ -30,6 +32,7 @@ const VARIABLE = '[A-Za-z_]\\w*\\.[A-Za-z_]\\w*'
 const SHOW = /^HMI_Show\s*\(\s*HMI_SCREEN\s*#\s*([A-Za-z_]\w*)\s*\)\s*;?$/i
 const BACK = /^HMI_Back\s*\(\s*\)\s*;?$/i
 const SIGN_OUT = /^HMI_SignOut\s*\(\s*\)\s*;?$/i
+const LOCK = /^HMI_Lock\s*\(\s*\)\s*;?$/i
 const TOGGLE = new RegExp(`^(${VARIABLE})\\s*:=\\s*NOT\\s+(${VARIABLE})\\s*;?$`, 'i')
 const SET = new RegExp(`^(${VARIABLE})\\s*:=\\s*([^;]+?)\\s*;?$`, 'i')
 
@@ -41,6 +44,7 @@ export function actionOf(code: string): HmiAction {
   if (show) return { kind: 'show', screen: show[1] }
   if (BACK.test(text)) return { kind: 'back' }
   if (SIGN_OUT.test(text)) return { kind: 'signOut' }
+  if (LOCK.test(text)) return { kind: 'lock' }
   const toggle = TOGGLE.exec(text)
   if (toggle && toggle[1].toUpperCase() === toggle[2].toUpperCase()) return { kind: 'toggle', variable: toggle[1] }
   const set = SET.exec(text)
@@ -59,6 +63,8 @@ export function actionCode(action: HmiAction): string | null {
       return 'HMI_Back();'
     case 'signOut':
       return 'HMI_SignOut();'
+    case 'lock':
+      return 'HMI_Lock();'
     case 'set':
       return action.variable === '' || action.value.trim() === ''
         ? null
@@ -83,6 +89,7 @@ export function actionOfKind(kind: HmiActionKind, from: HmiAction): HmiAction {
       return { kind, screen: from.kind === 'show' ? from.screen : '' }
     case 'back':
     case 'signOut':
+    case 'lock':
       return { kind }
     case 'set':
       return { kind, variable: 'variable' in from ? from.variable : '', value: from.kind === 'set' ? from.value : '' }

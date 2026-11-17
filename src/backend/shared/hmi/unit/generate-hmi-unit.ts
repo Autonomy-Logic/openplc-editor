@@ -36,7 +36,9 @@ import type {
   HmiUnitSources,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
 import { loadStrucpp } from '../../library/strucpp-runtime'
+import { HMI_ALL_FACES, hmiUsedFontFaces } from '../fonts/used-faces'
 import { buildStandardWidgets } from '../lib/build-standard-widgets'
+import { STANDARD_WIDGETS_SOURCES } from '../lib/standard-widgets'
 import { buildWidgetCatalog, type HmiWidgetCatalog, type HmiWidgetInfo } from '../lib/widget-catalog'
 import { type HmiBlockModel, type HmiElementDecl, parseHmiBlock } from './screen-model'
 
@@ -113,6 +115,11 @@ const HEADER = 'hmi_unit.hpp'
 const GLUE_FILE = 'hmi_glue.st'
 const PLC_FILE = 'hmi_plc.st'
 const MAIN_FILE = 'hmi_main.st'
+/** C++ header with the program instance and the slot its shown screen is built in. */
+const SLOT_HEADER = 'hmi_unit_slot.hpp'
+const SLOT_OPEN = 'hmi_unit_screen_open'
+const SLOT_BODY = 'hmi_unit_screen_body'
+const SCREEN_CPP_BASE = 'HMISCREEN'
 /** Marks the screens and the glue program so they reach the PLC's variables by instance path. */
 const INSTANCE_PATHS = "{attribute 'instance_paths'}"
 /** The configuration and resource every OpenPLC project compiles to, which paths may leave out. */
@@ -260,6 +267,8 @@ interface ScreenPlan {
   model: HmiBlockModel
   /** Elements in drawing order with their container (undefined for the screen's own stack). */
   attach: Array<{ element: HmiElementDecl; parent?: HmiElementDecl }>
+  /** `Element.Input := Value;` for each type default (`typeDefaults`) the element's initializer leaves out. */
+  defaults: string[]
   connects: Array<{ pipe: string; source: string; target: string; prior: string | null }>
   writeBacks: string[]
   theme: number
@@ -293,6 +302,9 @@ function elementTree(plan: ScreenPlan, catalog: HmiWidgetCatalog): void {
     }
   }
   visit(undefined, 0)
+  for (const e of model.elements)
+    for (const d of catalog.widgets.get(e.type.toUpperCase())?.typeDefaults ?? [])
+      if (!e.props.has(d.name.toUpperCase())) plan.defaults.push(`${e.name}.${d.name} := ${d.value};`)
   const priorPipe = new Map<string, string>()
   for (const e of model.elements) {
     if (!isA(catalog, e.type, 'HMIPIPE')) continue
@@ -404,6 +416,7 @@ function writeBacks(
 function screenSource(plan: ScreenPlan): string {
   const build = [
     `UseTheme(${plan.theme});`,
+    ...plan.defaults,
     ...plan.attach.map((a) => `Attach(ADR(${a.element.name}), ${a.parent ? `ADR(${a.parent.name})` : '0'});`),
     ...plan.connects.map(
       (c) => `Connect(ADR(${c.pipe}), ADR(${c.source}), ADR(${c.target}), ${c.prior ? `ADR(${c.prior})` : '0'});`,
@@ -441,6 +454,23 @@ function glueSource(names: readonly string[], settings: HmiSettings): string {
     ...names.map((n, i) => `    ${i}: HMI_CurrentScreen := HMI_SCREEN#${n};`),
     '  END_CASE;',
     'END_FUNCTION',
+    '(* Destroys the screen of page Previous in the slot at address Slot and builds the screen of page Page there. *)',
+    'FUNCTION HMI__ScreenOpen : POINTER TO HmiScreen',
+    '  VAR_INPUT Slot : LWORD; Page, Previous : DINT; END_VAR',
+    '  {external',
+    `    ${SCREEN_CPP_BASE} *${SLOT_OPEN}(uint64_t slot, int32_t page, int32_t previous);`,
+    `    HMI__SCREENOPEN_result = ${SLOT_OPEN}(SLOT.get(), PAGE.get(), PREVIOUS.get());`,
+    '  }',
+    'END_FUNCTION',
+    '(* Runs the body of the screen of page Page, built in the slot at address Slot. *)',
+    'FUNCTION HMI__ScreenBody : BOOL',
+    '  VAR_INPUT Slot : LWORD; Page : DINT; END_VAR',
+    '  {external',
+    `    void ${SLOT_BODY}(uint64_t slot, int32_t page);`,
+    `    ${SLOT_BODY}(SLOT.get(), PAGE.get());`,
+    '    HMI__SCREENBODY_result.set(true);',
+    '  }',
+    'END_FUNCTION',
     '',
   ].join('\n')
 }
@@ -461,7 +491,13 @@ function previewStarts(variables: readonly HmiPlcVariable[]): string[] {
   })
 }
 
-function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start: number, starts: string[]): string {
+function mainSource(
+  screens: readonly ScreenPlan[],
+  firstIds: readonly number[],
+  settings: HmiSettings,
+  start: number,
+  starts: string[],
+): string {
   const access = (role: (typeof HMI_ROLES)[number] | null): string[] =>
     screens.map(
       (s, i) =>
@@ -486,13 +522,15 @@ function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start
     '  END_VAR',
     '  VAR',
     '    Rt : HmiRuntime;',
-    ...screens.map((s, i) => `    Scr${i} : ${s.model.name};`),
+    '    (* Address of the slot the shown screen is built in; the unit glue sets it. *)',
+    '    Slot : LWORD;',
+    '    Want, Was : DINT;',
     '    Started : BOOL;',
     '  END_VAR',
     '  IF NOT Started THEN',
     ...starts,
     ...themes,
-    ...screens.map((_, i) => `    Rt.AddScreen(ADR(Scr${i}));`),
+    ...firstIds.map((id) => `    Rt.AddPage(${id});`),
     `    Rt.SetStart(${start});`,
     '    CASE Role OF',
     '      0: ;',
@@ -504,10 +542,16 @@ function mainSource(screens: readonly ScreenPlan[], settings: HmiSettings, start
     '  END_IF;',
     '  HMI__Request := -1;',
     '  HMI__Page := Rt.CurrentPage();',
+    '  Want := Rt.Wanted();',
+    '  IF Want >= 0 AND Want <> Rt.Mounted() THEN',
+    '    Was := Rt.Mounted();',
+    '    Rt.Release();',
+    '    Rt.Mount(Want, HMI__ScreenOpen(Slot, Want, Was));',
+    '  END_IF;',
     '  HMI__Page := Rt.BeginFrame();',
-    '  CASE HMI__Page OF',
-    ...screens.map((_, i) => `    ${i}: Scr${i}();`),
-    '  END_CASE;',
+    '  IF HMI__Page >= 0 THEN',
+    '    HMI__ScreenBody(Slot, HMI__Page);',
+    '  END_IF;',
     '  Rt.EndFrame();',
     '  IF HMI__Request >= 0 THEN',
     '    Rt.Show(HMI__Request);',
@@ -538,7 +582,32 @@ interface UnitTag {
 const cppTypeOf = (t: TagType): string =>
   t.base === 'STRING' ? `strucpp::IECStringVar<${t.maxLength}>` : `strucpp::IEC_${t.base}`
 
-function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput): string {
+/**
+ * The program instance with its screen slot: one per viewer, so viewers can show different screens. The slot holds
+ * the shown page's screen and is as large as the largest one.
+ */
+function slotHeader(classes: readonly string[]): string {
+  const types = classes.map((c) => `${NAMESPACE}::${c}`)
+  return [
+    '/* Generated by the HMI build: a program instance and the slot its shown screen is built in. */',
+    '#pragma once',
+    '#include <algorithm>',
+    '#include <cstddef>',
+    '',
+    `#include "${HEADER}"`,
+    '',
+    `constexpr std::size_t kHmiSlotSize = std::max<std::size_t>({1, ${types.map((t) => `sizeof(${t})`).join(', ')}});`,
+    `constexpr std::size_t kHmiSlotAlign = std::max<std::size_t>({alignof(std::max_align_t), ${types.map((t) => `alignof(${t})`).join(', ')}});`,
+    '',
+    'struct HmiUnit {',
+    `    ${NAMESPACE}::Program_HMIMAIN program;`,
+    '    alignas(kHmiSlotAlign) unsigned char slot[kHmiSlotSize];',
+    '};',
+    '',
+  ].join('\n')
+}
+
+function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput, classes: readonly string[]): string {
   const sizeOf = (t: TagType): number => (t.base === 'STRING' ? t.maxLength + 1 : (TAG_WIDTH[t.base] ?? 0))
   const read = tags.map(({ type }, i) => {
     const v = `static_cast<const ${cppTypeOf(type)} *>(variable)`
@@ -568,15 +637,48 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput): string {
   return [
     '/* Generated by the HMI build: the C side of hmi_unit.h. */',
     '#include <algorithm>',
+    '#include <cstdint>',
     '#include <cstring>',
     '#include <new>',
     '',
     '#include "hmi_unit.h"',
     `#include "${HEADER}"`,
+    `#include "${SLOT_HEADER}"`,
     '#include "iec_external.hpp"',
     '#include "iec_fault.hpp"',
     '',
-    `using HmiProgram = ${NAMESPACE}::Program_HMIMAIN;`,
+    `namespace ${NAMESPACE} {`,
+    `${SCREEN_CPP_BASE} *${SLOT_OPEN}(uint64_t slot, int32_t page, int32_t previous) {`,
+    '    void *at = reinterpret_cast<void *>(static_cast<std::uintptr_t>(slot));',
+    '    if (!at) return nullptr;',
+    '    switch (previous) {',
+    ...classes.map((c, i) => `    case ${i}: static_cast<${c} *>(at)->~${c}(); break;`),
+    '    default: break;',
+    '    }',
+    '    switch (page) {',
+    ...classes.map((c, i) => `    case ${i}: return new (at) ${c}();`),
+    '    default: return nullptr;',
+    '    }',
+    '}',
+    `void ${SLOT_BODY}(uint64_t slot, int32_t page) {`,
+    '    void *at = reinterpret_cast<void *>(static_cast<std::uintptr_t>(slot));',
+    '    if (!at) return;',
+    '    switch (page) {',
+    ...classes.map((c, i) => `    case ${i}: (*static_cast<${c} *>(at))(); break;`),
+    '    default: break;',
+    '    }',
+    '}',
+    '}',
+    '',
+    '/* Gives a new instance its slot. */',
+    'static HmiUnit *hmi_unit_start(HmiUnit *u) {',
+    '    u->program.SLOT.set(static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(u->slot)));',
+    '    return u;',
+    '}',
+    '/* Destroys the screen built in the slot, if any. */',
+    'static void hmi_unit_close_screen(HmiUnit *u) {',
+    `    ${NAMESPACE}::${SLOT_OPEN}(u->program.SLOT.get(), -1, u->program.RT.MOUNTED().get());`,
+    '}',
     '',
     'namespace {',
     'const hmi_tag_access_t *g_access = nullptr;',
@@ -652,22 +754,45 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput): string {
     '    }',
     '}',
     '',
-    'size_t hmi_unit_size(void) { return sizeof(HmiProgram); }',
-    'void *hmi_unit_create(void) { return new (std::nothrow) HmiProgram(); }',
-    'void hmi_unit_destroy(void *unit) { delete static_cast<HmiProgram *>(unit); }',
+    'size_t hmi_unit_size(void) { return sizeof(HmiUnit); }',
+    '#if defined(HMI_STATIC_MEMORY)',
+    'alignas(HmiUnit) static unsigned char g_unit_storage[sizeof(HmiUnit)];',
+    'static bool g_unit_live = false;',
+    'void *hmi_unit_create(void) {',
+    '    if (g_unit_live) return nullptr;',
+    '    g_unit_live = true;',
+    '    return hmi_unit_start(new (g_unit_storage) HmiUnit());',
+    '}',
+    'void hmi_unit_destroy(void *unit) {',
+    '    if (!unit) return;',
+    '    hmi_unit_close_screen(static_cast<HmiUnit *>(unit));',
+    '    static_cast<HmiUnit *>(unit)->~HmiUnit();',
+    '    g_unit_live = false;',
+    '}',
+    '#else',
+    'void *hmi_unit_create(void) {',
+    '    HmiUnit *u = new (std::nothrow) HmiUnit();',
+    '    return u ? hmi_unit_start(u) : nullptr;',
+    '}',
+    'void hmi_unit_destroy(void *unit) {',
+    '    if (!unit) return;',
+    '    hmi_unit_close_screen(static_cast<HmiUnit *>(unit));',
+    '    delete static_cast<HmiUnit *>(unit);',
+    '}',
+    '#endif',
     'void hmi_unit_set_role(void *unit, int role) {',
-    '    if (unit) static_cast<HmiProgram *>(unit)->ROLE.set(role);',
+    '    if (unit) static_cast<HmiUnit *>(unit)->program.ROLE.set(role);',
     '}',
     'bool hmi_unit_frame(void *unit) {',
     '    if (!unit) return true;',
     '#if STRUCPP_HAS_EXCEPTIONS',
     '    try {',
-    '        static_cast<HmiProgram *>(unit)->run();',
+    '        static_cast<HmiUnit *>(unit)->program.run();',
     '    } catch (...) {',
     '        return false;',
     '    }',
     '#else',
-    '    static_cast<HmiProgram *>(unit)->run();',
+    '    static_cast<HmiUnit *>(unit)->program.run();',
     '#endif',
     '    return true;',
     '}',
@@ -680,10 +805,10 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput): string {
 function previewSetters(
   plans: readonly ScreenPlan[],
   catalog: HmiWidgetCatalog,
+  classes: readonly string[],
 ): Pick<HmiPreview, 'setters' | 'files'> {
   const setters: Record<string, HmiPreviewSetter> = {}
   const files: Record<string, string> = {}
-  const program = `${NAMESPACE}::Program_HMIMAIN`
   plans.forEach((plan, i) => {
     const num: string[] = []
     const str: string[] = []
@@ -698,7 +823,7 @@ function previewSetters(
               : undefined
         if (kind === undefined) continue
         const list = kind === 'num' ? num : str
-        const member = `p->SCR${i}.${element.name.toUpperCase()}.${p.name.toUpperCase()}`
+        const member = `s->${element.name.toUpperCase()}.${p.name.toUpperCase()}`
         setters[`${plan.model.name}.${element.name}.${p.name}`] = { screen: i, index: list.length, kind }
         list.push(
           kind === 'num'
@@ -712,9 +837,18 @@ function previewSetters(
       '#include <type_traits>',
       '',
       `#include "${HEADER}"`,
+      `#include "${SLOT_HEADER}"`,
+      '',
+      `/* The screen of page ${i} when it is the one built in the slot, else null. */`,
+      `static ${NAMESPACE}::${classes[i]} *hmi_preview_screen_${i}(void *unit) {`,
+      '    auto *u = static_cast<HmiUnit *>(unit);',
+      `    if (u->program.RT.MOUNTED().get() != ${i}) return nullptr;`,
+      `    return reinterpret_cast<${NAMESPACE}::${classes[i]} *>(u->slot);`,
+      '}',
       '',
       `extern "C" int hmi_preview_set_num_${i}(void *unit, int setter, double value) {`,
-      `    auto *p = static_cast<${program} *>(unit);`,
+      `    auto *s = hmi_preview_screen_${i}(unit);`,
+      '    if (!s) return -1;',
       '    switch (setter) {',
       ...num,
       '    default: return -1;',
@@ -722,7 +856,8 @@ function previewSetters(
       '}',
       '',
       `extern "C" int hmi_preview_set_str_${i}(void *unit, int setter, const char *value) {`,
-      `    auto *p = static_cast<${program} *>(unit);`,
+      `    auto *s = hmi_preview_screen_${i}(unit);`,
+      '    if (!s) return -1;',
       '    switch (setter) {',
       ...str,
       '    default: return -1;',
@@ -911,11 +1046,11 @@ function widgetPreviewSource(info: HmiWidgetInfo): string {
   return [
     `FUNCTION_BLOCK ${WIDGET_PREVIEW_SCREEN} EXTENDS HmiScreen`,
     '  VAR',
-    '    HMI__Column : HmiHorizontalStack := (Gap := 16, Padding := 16, Grow := 1, GrowAuto := FALSE);',
+    '    HMI__Column : HmiHorizontalStack := (Gap := 16, Padding := 16);',
     "    HMI__Row : HmiVerticalStack := (Parent := 'HMI__Column', GrowAuto := FALSE);",
     `    Natural : ${info.name} := (Parent := 'HMI__Row', GrowAuto := FALSE);`,
-    "    HMI__Spacer : HmiVerticalStack := (Parent := 'HMI__Row', Grow := 1, GrowAuto := FALSE);",
-    `    Stretched : ${info.name} := (Parent := 'HMI__Column', Grow := 1, GrowAuto := FALSE);`,
+    "    HMI__Spacer : HmiVerticalStack := (Parent := 'HMI__Row');",
+    `    Stretched : ${info.name} := (Parent := 'HMI__Column', GrowAuto := TRUE);`,
     '  END_VAR',
     ...assign,
     'END_FUNCTION_BLOCK',
@@ -979,13 +1114,13 @@ function themePreviewSource(theme: string): string {
     `{attribute 'hmi_theme' := '${theme}'}`,
     `FUNCTION_BLOCK ${HMI_THEME_PREVIEW_SCREEN} EXTENDS HmiScreen`,
     '  VAR',
-    '    HMI__Column : HmiHorizontalStack := (Gap := 12, Padding := 16, Grow := 1, GrowAuto := FALSE);',
+    '    HMI__Column : HmiHorizontalStack := (Gap := 12, Padding := 16);',
     `    HMI__Title : HmiLabel := (Parent := 'HMI__Column', Text := 'Plant overview', Size := 20, Font := HMI_FONT#Bold);`,
     card('HMI__Controls'),
     `    HMI__Start : HmiButton := (Parent := 'HMI__Controls', Text := 'Start');`,
     `    HMI__Pump : HmiSwitch := (Parent := 'HMI__Controls', Caption := 'Pump', Value := TRUE);`,
     `    HMI__Running : HmiLamp := (Parent := 'HMI__Controls', Caption := 'Running', Value := TRUE);`,
-    `    HMI__Speed : HmiSlider := (Parent := 'HMI__Controls', Caption := 'Speed', Value := 60.0, Unit := '%', Grow := 1);`,
+    `    HMI__Speed : HmiSlider := (Parent := 'HMI__Controls', Caption := 'Speed', Value := 60.0, Unit := '%');`,
     card('HMI__Values'),
     `    HMI__Level : HmiGauge := (Parent := 'HMI__Values', Caption := 'Level', Value := 62.0);`,
     `    HMI__Tank : HmiTank := (Parent := 'HMI__Values', Caption := 'Tank', Value := 45.0, Unit := '%');`,
@@ -1011,6 +1146,30 @@ export function hmiScreenMembers(archive: StlibArchive): ReadonlySet<string> {
   )
 }
 
+/** StandardWidgets blocks that draw only after a call opens them. */
+const GATED_BLOCKS: ReadonlyMap<string, RegExp> = new Map([['HMIKEYBOARD', /\bKeyboardOpen\s*\(/i]])
+
+/** Face the panel's PIN entry draws with (`hmi_lock_draw` in the core). */
+const PIN_ENTRY_FACE = 0
+
+/**
+ * Faces the build compiles in: those the screens can reach, plus the PIN entry's when a PIN is set, or every face for
+ * previews, whose values change live.
+ */
+function buildFaces(input: HmiUnitInput, sources: Record<string, string>): number[] {
+  if (input.preview || input.gallery || input.themePreview !== undefined || input.widgetPreview !== undefined)
+    return [...HMI_ALL_FACES]
+  const faces = hmiUsedFontFaces({
+    roots: Object.entries(sources)
+      .filter(([name]) => name !== PLC_FILE)
+      .map(([name, source]) => ({ name, source })),
+    pool: [...STANDARD_WIDGETS_SOURCES.map((s) => ({ name: s.fileName, source: s.source })), ...input.widgets],
+    gates: GATED_BLOCKS,
+  })
+  if (!input.settings.pin.enabled || faces.includes(PIN_ENTRY_FACE)) return faces
+  return [...faces, PIN_ENTRY_FACE].sort((a, b) => a - b)
+}
+
 /** Builds and compiles the HMI unit. */
 export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   const d = new Diagnostics()
@@ -1022,7 +1181,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     sources: {},
     tags: [],
     elementIds: [],
-    fonts: { variant: input.settings.fontVariant, faces: [0, 1] },
+    fonts: { variant: input.settings.fontVariant, faces: [...HMI_ALL_FACES] },
     preview: { units: { library: [], widgets: [], screens: {}, glue: [] }, setters: {}, files: {} },
   }
   const library = buildStandardWidgets()
@@ -1069,7 +1228,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     for (const f of checkHmiBlockHeader(block, checks)) d.error(file.name, f.message)
     const theme = hmiThemeId(input.settings, model.theme ?? input.settings.defaultTheme)
     for (const f of checkHmiBlockElements(block, checks)) d.error(file.name, f.message)
-    const plan: ScreenPlan = { file, model, attach: [], connects: [], writeBacks: [], theme }
+    const plan: ScreenPlan = { file, model, attach: [], defaults: [], connects: [], writeBacks: [], theme }
     elementTree(plan, catalog)
     plans.push(plan)
   }
@@ -1084,7 +1243,9 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   if (d.errors.length > 0) return result
 
   let nextId = 1
+  const firstIds: number[] = []
   for (const plan of plans) {
+    firstIds.push(nextId)
     for (const a of plan.attach)
       result.elementIds.push({ id: nextId++, screen: plan.model.name, element: a.element.name })
   }
@@ -1096,8 +1257,15 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     [PLC_FILE]: input.plcDeclarations ?? '',
   }
   for (const plan of plans) sources[`${plan.model.name}.st`] = `${INSTANCE_PATHS} ${screenSource(plan)}`
-  sources[MAIN_FILE] = mainSource(plans, input.settings, start, input.preview ? previewStarts(input.plcVariables) : [])
+  sources[MAIN_FILE] = mainSource(
+    plans,
+    firstIds,
+    input.settings,
+    start,
+    input.preview ? previewStarts(input.plcVariables) : [],
+  )
   result.sources = sources
+  result.fonts = { variant: input.settings.fontVariant, faces: buildFaces(input, sources) }
   const [first, ...rest] = Object.entries(sources)
   const widgetLibraries = new Set(archives.map((a) => a.manifest.name.toUpperCase()))
   const plcLibraries = [...plcArchives(input.plcLibraries ?? [], d), ...(input.plcArchives ?? [])].filter(
@@ -1140,9 +1308,11 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     tags.push({ path: entry.path, type, address })
   }
   if (d.errors.length > 0) return result
-  result.files['hmi_unit_glue.cpp'] = glueCpp(tags, input)
+  const classes = plans.map((p) => p.model.name.toUpperCase())
+  result.files[SLOT_HEADER] = slotHeader(classes)
+  result.files['hmi_unit_glue.cpp'] = glueCpp(tags, input, classes)
   result.tags = tags.map(({ path, type, address }) => ({ path, type: type.type, maxLength: type.maxLength, address }))
-  const setters = previewSetters(plans, catalog)
+  const setters = previewSetters(plans, catalog, classes)
   result.preview = {
     units: previewUnits([...Object.keys(result.files), ...Object.keys(setters.files)], plans),
     ...setters,

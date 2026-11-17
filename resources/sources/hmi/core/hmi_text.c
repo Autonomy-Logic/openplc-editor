@@ -19,6 +19,19 @@ static int g_alloc_failed;
 #ifdef HMI_TEST_ALLOC_FAIL
 int hmi_test_alloc_fail; /* test builds: allocations fail while non-zero */
 #endif
+#ifdef HMI_STATIC_MEMORY
+/* Bytes stb_truetype may use while it rasterizes one glyph, all released before it returns. The default covers every
+ * drawable glyph of both font variants; hmi_config.h sets the need of the variant the firmware carries. */
+#ifndef HMI_STB_ARENA_BYTES
+#define HMI_STB_ARENA_BYTES (24 * 1024)
+#endif
+static _Alignas(8) uint8_t g_stb_arena[HMI_STB_ARENA_BYTES];
+static size_t g_stb_used, g_stb_last;
+#ifdef HMI_TEST_ALLOC_FAIL
+size_t hmi_test_stb_peak; /* test builds: most arena bytes one rasterization used */
+#endif
+static void stb_arena_reset(void) { g_stb_used = g_stb_last = 0; }
+#endif
 static void *stb_alloc(size_t n) {
 #ifdef HMI_TEST_ALLOC_FAIL
     if (hmi_test_alloc_fail) {
@@ -26,12 +39,35 @@ static void *stb_alloc(size_t n) {
         return NULL;
     }
 #endif
+#ifdef HMI_STATIC_MEMORY
+    size_t at = (g_stb_used + 7u) & ~(size_t)7u;
+    if (n > HMI_STB_ARENA_BYTES - at || at > HMI_STB_ARENA_BYTES) {
+        g_alloc_failed = 1;
+        return NULL;
+    }
+    g_stb_last = at;
+    g_stb_used = at + n;
+#ifdef HMI_TEST_ALLOC_FAIL
+    if (g_stb_used > hmi_test_stb_peak) hmi_test_stb_peak = g_stb_used;
+#endif
+    return g_stb_arena + at;
+#else
     void *p = malloc(n);
     if (!p) g_alloc_failed = 1;
     return p;
+#endif
+}
+#ifdef HMI_STATIC_MEMORY
+/* Releases the newest block only; older blocks go with the reset before the next glyph. */
+static void stb_release(void *p) {
+    if (p == g_stb_arena + g_stb_last && g_stb_last < g_stb_used) g_stb_used = g_stb_last;
 }
 #define STBTT_malloc(x, u) ((void)(u), stb_alloc(x))
+#define STBTT_free(x, u) ((void)(u), stb_release(x))
+#else
+#define STBTT_malloc(x, u) ((void)(u), stb_alloc(x))
 #define STBTT_free(x, u) ((void)(u), free(x))
+#endif
 
 /* stb_truetype allocates edges in blocks of this many; small blocks fit the fragmented heap of microcontrollers. */
 #ifndef STBTT_HHEAP_CHUNK
@@ -173,7 +209,9 @@ int32_t hmi_font_line_height_q4(int font, int32_t size_q4) {
 #ifndef HMI_GLYPH_CACHE_RESERVE
 #define HMI_GLYPH_CACHE_RESERVE (16 * 1024)
 #endif
-#define GC_SLOTS 256
+/* Table slots: one per 64 bytes of arena, 32 to 256, so a small cache does not carry a large table. */
+#define GC_SLOTS                                                                                                       \
+    (HMI_GLYPH_CACHE_BYTES / 64 < 32 ? 32 : HMI_GLYPH_CACHE_BYTES / 64 > 256 ? 256 : HMI_GLYPH_CACHE_BYTES / 64)
 #define GC_PROBES 8
 
 typedef struct {
@@ -182,13 +220,29 @@ typedef struct {
 } gc_entry_t;
 
 static gc_entry_t g_gc[GC_SLOTS];
-static uint8_t *g_gc_arena;
 static int32_t g_gc_used, g_gc_count;
+#ifdef HMI_STATIC_MEMORY
+static uint8_t g_gc_static[HMI_GLYPH_CACHE_BYTES];
+static uint8_t *g_gc_arena = g_gc_static;
+#else
+static uint8_t *g_gc_arena;
 static int g_gc_disabled;
+#endif
 
 /* Scratch for glyphs the cache cannot hold. */
+#ifdef HMI_STATIC_MEMORY
+/* Largest glyph bitmap, in pixels, drawn without the cache; bigger glyphs are not drawn. */
+#ifndef HMI_GLYPH_SCRATCH_BYTES
+#define HMI_GLYPH_SCRATCH_BYTES (8 * 1024)
+#endif
+static unsigned char g_scratch_static[HMI_GLYPH_SCRATCH_BYTES];
+static unsigned char *g_scratch = g_scratch_static;
+static int g_scratch_cap = HMI_GLYPH_SCRATCH_BYTES;
+static int g_gc_cleared;
+#else
 static unsigned char *g_scratch;
 static int g_scratch_cap;
+#endif
 
 static uint32_t float_bits(float f) {
     uint32_t u;
@@ -203,6 +257,13 @@ static void gc_clear(void) {
 }
 
 static int gc_ready(void) {
+#ifdef HMI_STATIC_MEMORY
+    if (!g_gc_cleared) {
+        gc_clear();
+        g_gc_cleared = 1;
+    }
+    return 1;
+#else
     if (g_gc_arena) return 1;
     if (g_gc_disabled) return 0;
     void *probe = malloc(HMI_GLYPH_CACHE_BYTES + HMI_GLYPH_CACHE_RESERVE);
@@ -216,6 +277,7 @@ static int gc_ready(void) {
     }
     gc_clear();
     return 1;
+#endif
 }
 
 #ifdef HMI_TEST_ALLOC_FAIL
@@ -228,12 +290,19 @@ void hmi_test_glyph_cache_clear(void) {
 static const uint8_t *scratch_glyph(stbtt_fontinfo *f, int cp, float scale, float sx, float sy, int gw, int gh) {
     int need = gw * gh;
     if (need > g_scratch_cap) {
+#ifdef HMI_STATIC_MEMORY
+        return NULL;
+#else
         unsigned char *p = (unsigned char *)realloc(g_scratch, (size_t)need);
         if (!p) return NULL;
         g_scratch = p;
         g_scratch_cap = need;
+#endif
     }
     g_alloc_failed = 0;
+#ifdef HMI_STATIC_MEMORY
+    stb_arena_reset();
+#endif
     stbtt_MakeCodepointBitmapSubpixel(f, g_scratch, gw, gh, gw, scale, scale, sx, sy, cp);
     return g_alloc_failed ? NULL : g_scratch;
 }
@@ -251,6 +320,9 @@ static const uint8_t *glyph(stbtt_fontinfo *f, int font, int cp, float scale, fl
             if (e->off < 0) {
                 uint8_t *bm = g_gc_arena + g_gc_used;
                 g_alloc_failed = 0;
+#ifdef HMI_STATIC_MEMORY
+                stb_arena_reset();
+#endif
                 stbtt_MakeCodepointBitmapSubpixel(f, bm, gw, gh, gw, scale, scale, sx, sy, cp);
                 if (g_alloc_failed) return NULL; /* incomplete bitmap: not cached, not drawn */
                 memcpy(e->key, k, sizeof k);

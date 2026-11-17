@@ -112,6 +112,10 @@ enum {
     MB_FC_PLC_SET_STATE       = 0x4B, // Set the runtime run/stop state
     MB_FC_REBOOT_BOOTLOADER   = 0x4C, // Reboot the device into its firmware bootloader (magic-guarded)
     MB_FC_GET_LOCK_STATE      = 0x4D, // Read the device's programming-lock state (read-only)
+#ifdef HMI_TEST_READOUT
+    MB_FC_HMI_GET_DL          = 0x4E, // Tests only: read the HMI's current display list in chunks
+    MB_FC_HMI_GET_STATS       = 0x4F, // Tests only: read the HMI task's counters
+#endif
 };
 
 //Exception Codes

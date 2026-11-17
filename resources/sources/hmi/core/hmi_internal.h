@@ -11,8 +11,12 @@
 
 #include "hmi_core.h"
 
-/* Internal invariants; checked in test and fuzz builds, compiled out with NDEBUG. */
+/* Internal invariants; checked only in builds that define HMI_DEBUG_ASSERTS (tests, fuzzing). */
+#ifdef HMI_DEBUG_ASSERTS
 #define HMI_ASSERT(cond) assert(cond)
+#else
+#define HMI_ASSERT(cond) ((void)0)
+#endif
 
 /* Optional per-build sizes (display list capacity, bounds table), generated with the HMI unit. */
 #if defined(__has_include)
@@ -21,11 +25,21 @@
 #endif
 #endif
 
+/* HMI_STATIC_MEMORY: no heap; every buffer below is static and sized by these macros (microcontroller builds). */
 #ifndef HMI_DL_CAPACITY
+#ifdef HMI_STATIC_MEMORY
+#define HMI_DL_CAPACITY (16 * 1024)
+#else
 #define HMI_DL_CAPACITY (64 * 1024)
 #endif
+#endif
+/* Element bounds per frame; HMI_STATIC_MEMORY builds keep only input elements on screen, so need far fewer. */
 #ifndef HMI_BOUNDS_MAX
+#ifdef HMI_STATIC_MEMORY
+#define HMI_BOUNDS_MAX 160
+#else
 #define HMI_BOUNDS_MAX 512
+#endif
 #endif
 /* Distinct frame clips per frame that bounds can refer to (scaled diagrams); entries past it take no input. */
 #ifndef HMI_BOUNDS_CLIPS_MAX

@@ -338,7 +338,7 @@ describe('emitCompileErrorEvents', () => {
     // (success path is gated elsewhere), but if they do, the header
     // alone is still useful and the loop must not throw.
     const calls: Array<{ msg: string; level: string; raw?: StrucppCompileError }> = []
-    emitCompileErrorEvents([], (msg, level, raw) => calls.push({ msg, level, raw }))
+    emitCompileErrorEvents([], (msg, level, raw) => calls.push({ msg, level, raw }), 'STruC++ compilation failed:')
     expect(calls).toEqual([{ msg: 'STruC++ compilation failed:', level: 'error', raw: undefined }])
   })
 
@@ -354,7 +354,7 @@ describe('emitCompileErrorEvents', () => {
       { formatted: '[Bar / variable x]\nbar.st:2:1: error: second', raw: e2 },
     ]
     const calls: Array<{ msg: string; level: string; raw?: StrucppCompileError }> = []
-    emitCompileErrorEvents(diags, (msg, level, raw) => calls.push({ msg, level, raw }))
+    emitCompileErrorEvents(diags, (msg, level, raw) => calls.push({ msg, level, raw }), 'STruC++ compilation failed:')
     expect(calls).toHaveLength(3)
     expect(calls[0]).toEqual({ msg: 'STruC++ compilation failed:', level: 'error', raw: undefined })
     expect(calls[1]).toEqual({ msg: diags[0].formatted, level: 'error', raw: e1 })
@@ -372,8 +372,14 @@ describe('emitCompileErrorEvents', () => {
       { formatted: '', raw: eEmpty }, // empty formatted + empty message → last-resort literal
     ]
     const calls: Array<{ msg: string; level: string; raw?: StrucppCompileError }> = []
-    emitCompileErrorEvents(diags, (msg, level, raw) => calls.push({ msg, level, raw }))
+    emitCompileErrorEvents(diags, (msg, level, raw) => calls.push({ msg, level, raw }), 'STruC++ compilation failed:')
     expect(calls[1]).toEqual({ msg: 'has message', level: 'error', raw: eOk })
     expect(calls[2]).toEqual({ msg: 'unknown error', level: 'error', raw: eEmpty })
+  })
+
+  it('opens with the header the caller names for the step that failed', () => {
+    const calls: Array<{ msg: string; level: string; raw?: StrucppCompileError }> = []
+    emitCompileErrorEvents([], (msg, level, raw) => calls.push({ msg, level, raw }), 'Arduino compilation failed:')
+    expect(calls).toEqual([{ msg: 'Arduino compilation failed:', level: 'error', raw: undefined }])
   })
 })

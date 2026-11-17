@@ -26,9 +26,6 @@ FUNCTION_BLOCK HmiButton EXTENDS HmiElement
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := 44;
   END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
-  END_METHOD
   METHOD PROTECTED OVERRIDE Input : BOOL
     Clicked := FALSE;
     Changed := FALSE;
@@ -87,9 +84,6 @@ FUNCTION_BLOCK HmiSwitch EXTENDS HmiElement
   END_METHOD
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := 44;
-  END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
   END_METHOD
   METHOD PROTECTED OVERRIDE Input : BOOL
     Changed := FALSE;
@@ -162,9 +156,6 @@ FUNCTION_BLOCK HmiSlider EXTENDS HmiElement
   END_METHOD
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := SEL(Orientation = HMI_DIRECTION#Column, 40, 160) + CapH();
-  END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
   END_METHOD
   (* Position of the thumb along the track for a per-mille value. *)
   METHOD INTERNAL TrackPos : DINT
@@ -273,9 +264,6 @@ FUNCTION_BLOCK HmiNumericInput EXTENDS HmiElement
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := 60;
   END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
-  END_METHOD
   METHOD PROTECTED OVERRIDE Input : BOOL
     VAR_TEMP entry : STRING; END_VAR
     Changed := FALSE;
@@ -333,9 +321,6 @@ FUNCTION_BLOCK HmiTextInput EXTENDS HmiElement
   END_METHOD
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := 60;
-  END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
   END_METHOD
   METHOD PROTECTED OVERRIDE Input : BOOL
     Changed := FALSE;

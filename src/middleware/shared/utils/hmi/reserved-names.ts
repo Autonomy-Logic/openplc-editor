@@ -24,6 +24,7 @@ export const HMI_LIBRARY_NAMES: readonly string[] = [
   'HMI_FormatValue',
   'HMI_Hit',
   'HMI_Line',
+  'HMI_Lock',
   'HMI_ParseReal',
   'HMI_PerMille',
   'HMI_PolyBegin',

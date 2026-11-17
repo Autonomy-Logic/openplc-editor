@@ -1,7 +1,7 @@
 /**
  * HMI Settings and themes in the built app (TC04): a project theme made from Autonomy with its own Accent, previewed
  * live in HMI Settings, then picked for a screen, changes the screen's semantic colors only; a fixed color stays the
- * same. The role grid and the local-panel PIN are saved with the project.
+ * same. The role grid is saved with the project; Runtime v4 has no local panel, so HMI Settings offers no PIN.
  *
  * Running it needs a production build plus the preload at the path a NON-packaged app looks for it; see "Electron
  * e2e" in CLAUDE.md.
@@ -68,7 +68,7 @@ async function choose(page: Page, testId: string, option: string): Promise<void>
 test.describe('HMI Settings', () => {
   test.setTimeout(180000)
 
-  test('themes a screen with a project theme, and saves the role grid and the PIN (TC04)', async () => {
+  test('themes a screen with a project theme, and saves the role grid (TC04)', async () => {
     writeHmiFixture(F, {
       main: 'PROGRAM Main\n  VAR\n    Run : BOOL;\n  END_VAR\n  Run := Run;\nEND_PROGRAM\n',
       screens: { Overview: OVERVIEW },
@@ -97,9 +97,8 @@ test.describe('HMI Settings', () => {
         ((await page.getByTestId('hmi-theme-preview').getAttribute('data-preview')) ?? '').startsWith('ready'),
       )
       await page.getByTestId('hmi-role-Overview-operator').check()
-      await page.getByRole('checkbox', { name: 'Require a PIN' }).check({ force: true })
-      await page.getByTestId('hmi-pin').fill('2468')
-      await page.getByTestId('hmi-pin').press('Enter')
+      await expect(page.getByTestId('hmi-local-panel-none')).toBeVisible()
+      await expect(page.getByRole('checkbox', { name: 'Require a PIN' })).toHaveCount(0)
       await page.waitForTimeout(800)
       await page.screenshot({ path: join(F.shots, 'tc04-settings.png') })
       await page.getByTestId('hmi-themes').scrollIntoViewIfNeeded()
@@ -126,7 +125,6 @@ test.describe('HMI Settings', () => {
       expect(settingsOnDisk()).toMatchObject({
         themes: [{ name: 'Brand', base: 'Autonomy', colors: { Accent: '#E91E63' } }],
         roles: { Overview: { engineer: true, operator: true, viewer: false } },
-        pin: { enabled: true, value: '2468' },
       })
     } finally {
       app.process().kill('SIGKILL')

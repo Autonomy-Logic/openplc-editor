@@ -146,6 +146,27 @@ export interface S7TargetProfile {
   buffers: readonly string[]
 }
 
+/**
+ * A display the board drives itself. Buffer sizes left out take the defaults in `hmi-panel.ts`, which
+ * `resolveTargetCapabilities` fills in.
+ */
+export interface HmiPanelCapability {
+  /** Panel width in pixels. */
+  width: number
+  /** Panel height in pixels. */
+  height: number
+  /** Integer UI scale, at least 1. */
+  density: number
+  touch: boolean
+  colorFormat: 'rgb565' | 'rgb888'
+  /** Static display-list capacity in bytes. */
+  displayListBytes?: number
+  /** Static glyph cache in bytes. */
+  glyphCacheBytes?: number
+  /** Static band buffer in bytes. */
+  bandBytes?: number
+}
+
 export interface TargetCapabilities {
   /* ---------------------------------------------------------------
    * Address producers — sources that allocate IEC addresses and
@@ -205,6 +226,9 @@ export interface TargetCapabilities {
    *  declares only what it overrides; `resolveTargetCapabilities` fills the rest
    *  from `DEFAULT_S7_PROFILE`. */
   s7?: S7TargetProfile
+
+  /** The board's local display, or null when it has none. Absent reads as none. */
+  hmi?: HmiPanelCapability | null
 
   /* ---------------------------------------------------------------
    * Build / runtime behavior

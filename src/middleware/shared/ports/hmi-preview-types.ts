@@ -166,8 +166,10 @@ export interface HmiWidgetProperty {
   type: string
   kind: HmiPropertyKind
   group: HmiPropertyGroup
-  /** Default value as ST text. */
+  /** Default value as ST text: the widget type's own (`typeDefaults`) when it sets one, else the declared one. */
   defaultValue?: string
+  /** BOOL property that must be TRUE for this one to take effect. */
+  enabledBy?: string
   /** Length of a STRING(n) property. */
   maxLength?: number
   /** Members of an enumerated property, as written. */
@@ -209,6 +211,8 @@ export interface HmiWidgetInfo {
   events: readonly string[]
   /** Data series the widget draws, each a value bound to a variable and a colour; the count says how many show. */
   series?: HmiWidgetSeries
+  /** Inherited inputs the type starts with another value: the build sets them on elements that do not set them. */
+  typeDefaults?: ReadonlyArray<{ name: string; value: string }>
 }
 
 /** A widget's series: inputs marked `hmi_series`, in declaration order; the first value is the main input. */

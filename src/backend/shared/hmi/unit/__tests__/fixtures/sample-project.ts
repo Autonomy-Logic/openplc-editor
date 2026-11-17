@@ -6,7 +6,7 @@ import type { HmiUnitInput } from '../../generate-hmi-unit'
 export const OVERVIEW = `{attribute 'hmi_theme' := 'Brand'}
 FUNCTION_BLOCK Overview EXTENDS HmiScreen
   VAR
-    Body : HmiHorizontalStack := (Grow := 1, GrowAuto := FALSE);
+    Body : HmiHorizontalStack;
     Col : HmiVerticalStack := (Parent := 'Body', Gap := 8);
     Level : HmiTank := (Caption := 'Level', Parent := 'Col', MaxValue := 10.0);
     Run : HmiSwitch := (Caption := 'Run', Parent := 'Col');
@@ -28,7 +28,7 @@ END_FUNCTION_BLOCK
 
 export const DETAILS = `FUNCTION_BLOCK Details EXTENDS HmiScreen
   VAR
-    Body : HmiHorizontalStack := (Grow := 1, GrowAuto := FALSE);
+    Body : HmiHorizontalStack;
     Back : HmiButton := (Text := 'Back', Parent := 'Body');
     Shown : HmiLabel := (Parent := 'Body');
   END_VAR

@@ -3,6 +3,7 @@
  * statements it is about, as text patches on the source, and leaves every other character as it was.
  */
 import type { HmiWidgetSeries } from '../../../ports/hmi-preview-types'
+import { lastOf } from '../last-of'
 import { type DesignerElement, type DesignerModel, type DesignerSpan, parseDesignerBlock } from './designer-model'
 
 export type DesignerEdit = { ok: true; source: string } | { ok: false; message: string }
@@ -57,7 +58,7 @@ function propertyPatches(element: DesignerElement, property: string, value: stri
   if (existing) return [{ ...existing.valueSpan, text: value }]
   if (!element.initializer)
     return [{ start: element.typeEnd, end: element.typeEnd, text: ` := (${property} := ${value})` }]
-  const last = element.props.at(-1)
+  const last = lastOf(element.props)
   if (!last) return [{ ...element.initializer, text: `(${property} := ${value})` }]
   return [{ start: last.span.end, end: last.span.end, text: `, ${property} := ${value}` }]
 }
@@ -174,7 +175,7 @@ function placement(model: DesignerModel, parent: string | null, before: string |
     parent === null
       ? model.elements
       : [...model.elements.filter((e) => same(e.name, parent)), ...descendants(model, parent)]
-  const last = subtree.filter((e) => ignore === undefined || !same(e.name, ignore)).at(-1)
+  const last = lastOf(subtree.filter((e) => ignore === undefined || !same(e.name, ignore)))
   return last ? last.lines.end : model.declarationAt
 }
 

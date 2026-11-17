@@ -22,7 +22,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..', '..')
 const CORE = join(ROOT, 'resources', 'sources', 'hmi', 'core')
 const CORE_SOURCES = ['hmi_core.c', 'hmi_theme.c', 'hmi_math.c', 'hmi_raster.c', 'hmi_text.c']
-const CFLAGS = ['-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', '-ffp-contract=off']
+const CFLAGS = ['-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', '-ffp-contract=off', '-DHMI_DEBUG_ASSERTS']
 const SANITIZE = [
   '-O1',
   '-g',
@@ -30,6 +30,9 @@ const SANITIZE = [
   '-fno-sanitize-recover=all',
   '-fno-omit-frame-pointer',
 ]
+/* Microcontroller builds: no heap, default static sizes but rows as wide as the widest scene (1280 px); the test-only
+ * define reports the stb_truetype arena peak. */
+const STATIC_DEFINES = ['-DHMI_STATIC_MEMORY', '-DHMI_RASTER_ROW_MAX=1281', '-DHMI_TEST_ALLOC_FAIL']
 /* Unit builds may force stb_truetype allocations to fail. */
 const UNIT_DEFINES = ['-DHMI_TEST_ALLOC_FAIL']
 /* Font tables: [variant, faces]. Unit tests run with each; scenes with the two complete ones. */
@@ -76,18 +79,20 @@ function must(r, what) {
   return r.stdout
 }
 
-/* Font tables through the real font build step. */
+/* Font tables through the real font build step, and the stb_truetype arena each variant is given on a device. */
 function fontTables(dir) {
   const tables = {}
+  const arena = {}
   for (const [variant, faces] of TABLES) {
     const out = join(dir, `fonts_${key(variant, faces)}.c`)
-    must(
+    const printed = must(
       run('npx', ['ts-node', '-T', join(HERE, 'font-table.ts'), out, faces, variant], { cwd: ROOT }),
       `font table ${variant} ${faces}`,
     )
     tables[key(variant, faces)] = out
+    arena[variant] = Number(printed.trim())
   }
-  return tables
+  return { tables, arena }
 }
 
 function nativeBuild(cc, flags, sources, out, extra = []) {
@@ -96,6 +101,22 @@ function nativeBuild(cc, flags, sources, out, extra = []) {
     `${cc} ${basename(out)}`,
   )
   return out
+}
+
+/* Heap functions the core's objects reference when built with HMI_STATIC_MEMORY. */
+function heapSymbols(cc, work) {
+  const objects = CORE_SOURCES.map((source) => {
+    const out = join(work, `static_${basename(cc)}_${source.replace(/\.c$/, '.o')}`)
+    must(run(cc, [...CFLAGS, '-DHMI_STATIC_MEMORY', `-I${CORE}`, '-c', join(CORE, source), '-o', out]), `${cc} ${source}`)
+    return out
+  })
+  const symbols = must(run('nm', ['-u', ...objects]), 'nm')
+  const found = new Set()
+  for (const line of symbols.split('\n')) {
+    const m = /\b_?(malloc|calloc|realloc|free|aligned_alloc|posix_memalign)\s*$/.exec(line.trim())
+    if (m) found.add(m[1])
+  }
+  return [...found].sort()
 }
 
 /* Virtual file tree for the WebAssembly clang. */
@@ -144,7 +165,7 @@ async function main() {
     failed = true
   }
   try {
-    const tables = fontTables(work)
+    const { tables, arena } = fontTables(work)
     const targets = [] // { name, scenes: { variant: path }, units: { table key: path } }
     for (const cc of opts.cc) {
       const name = basename(cc)
@@ -156,6 +177,32 @@ async function main() {
           [join(HERE, 'scenes.c'), tables[key(variant, 'all')]],
           join(work, `scenes_${name}_${variant}`),
         )
+      const staticScenes = {}
+      for (const variant of VARIANTS)
+        staticScenes[variant] = nativeBuild(
+          cc,
+          [...CFLAGS, ...STATIC_DEFINES],
+          [join(HERE, 'scenes.c'), tables[key(variant, 'all')]],
+          join(work, `scenes_static_${name}_${variant}`),
+        )
+      for (const variant of VARIANTS) {
+        /* Every glyph at every size, with an arena too large to fail, against the arena the variant gets. */
+        const sweep = nativeBuild(
+          cc,
+          [...CFLAGS, ...STATIC_DEFINES, '-DHMI_STB_ARENA_BYTES=262144'],
+          [join(HERE, 'arena.c'), tables[key(variant, 'all')]],
+          join(work, `arena_${name}_${variant}`),
+        )
+        const r = runTarget(sweep)
+        const peak = Number(r.stdout.trim())
+        if (r.status !== 0 || !Number.isInteger(arena[variant])) fail(`${name} arena sweep (${variant}):\n${r.stderr}`)
+        else if (peak > arena[variant])
+          fail(`${name}: a ${variant} glyph needs ${peak} arena bytes, HMI_STB_ARENA_BYTES gives ${arena[variant]}`)
+        else console.log(`${name} arena sweep (${variant} fonts): peak ${peak} of ${arena[variant]} bytes`)
+      }
+      const heap = heapSymbols(cc, work)
+      if (heap.length > 0) fail(`${name}: the HMI_STATIC_MEMORY core still references ${heap.join(', ')}`)
+      else console.log(`${name}: the HMI_STATIC_MEMORY core references no heap function`)
       const units = {}
       for (const [variant, faces] of TABLES)
         units[key(variant, faces)] = nativeBuild(
@@ -164,7 +211,7 @@ async function main() {
           [join(HERE, 'unit.c'), tables[key(variant, faces)]],
           join(work, `unit_${name}_${key(variant, faces)}`),
         )
-      targets.push({ name, scenes, units })
+      targets.push({ name, scenes, units, staticScenes })
     }
     if (opts.wasm) {
       const tree = wasmTree(tables)
@@ -210,6 +257,17 @@ async function main() {
           .split('\n')
           .map((line) => `${variant} ${line}\n`)
           .join('')
+      }
+      for (const variant of t.staticScenes ? VARIANTS : []) {
+        const r = runTarget(t.staticScenes[variant])
+        const own = lines
+          .split('\n')
+          .filter((line) => line.startsWith(`${variant} `))
+          .map((line) => line.slice(variant.length + 1))
+          .join('\n')
+        if (r.status !== 0) fail(`${t.name} static scenes (${variant} fonts):\n${r.stderr}${r.stdout}`)
+        else if (r.stdout.trim() !== own.trim()) fail(`${t.name} static scenes (${variant} fonts) differ:\n${r.stdout}`)
+        else console.log(`${t.name} static scenes (${variant} fonts): same pixels; ${r.stderr.trim()}`)
       }
       reference ??= lines
       if (lines !== reference) fail(`${t.name} scenes differ from ${targets[0].name}:\n${lines}`)
@@ -282,7 +340,7 @@ async function main() {
       const cc = opts.cc[0]
       const unit = nativeBuild(
         cc,
-        ['-std=c11', ...SANITIZE, ...UNIT_DEFINES, '-Wall', '-Wextra', '-Werror'],
+        ['-std=c11', ...SANITIZE, ...UNIT_DEFINES, '-DHMI_DEBUG_ASSERTS', '-Wall', '-Wextra', '-Werror'],
         [join(HERE, 'unit.c'), tables[key('full', 'all')]],
         join(work, 'unit_san'),
       )
@@ -291,7 +349,7 @@ async function main() {
       else console.log(`sanitized unit: ${r.stdout.trim()}`)
       const fuzz = nativeBuild(
         cc,
-        ['-std=c11', ...SANITIZE, '-Wall', '-Wextra', '-Werror'],
+        ['-std=c11', ...SANITIZE, '-DHMI_DEBUG_ASSERTS', '-Wall', '-Wextra', '-Werror'],
         [join(HERE, 'fuzz.c'), tables[key('compact', 'all')]],
         join(work, 'fuzz_san'),
       )

@@ -167,7 +167,7 @@ FUNCTION HMI_Hit : BOOL
 END_FUNCTION
 
 (* Formats a REAL with Decimals (0..6) decimals, rounding half to even. *)
-FUNCTION HMI_FormatReal : STRING
+FUNCTION HMI_FormatReal : STRING(48)
   VAR_INPUT Value : REAL; Decimals : INT; END_VAR
   {external
     char buf[48];
@@ -176,7 +176,7 @@ FUNCTION HMI_FormatReal : STRING
   }
 END_FUNCTION
 
-FUNCTION HMI_FormatInt : STRING
+FUNCTION HMI_FormatInt : STRING(16)
   VAR_INPUT Value : DINT; END_VAR
   {external
     char buf[16];
@@ -186,8 +186,8 @@ FUNCTION HMI_FormatInt : STRING
 END_FUNCTION
 
 (* A value with its unit, as value widgets show it ("12.5 FT"), or the number alone without a unit. *)
-FUNCTION HMI_FormatValue : STRING
-  VAR_INPUT Value : REAL; Decimals : INT; Unit : STRING; END_VAR
+FUNCTION HMI_FormatValue : STRING(65)
+  VAR_INPUT Value : REAL; Decimals : INT; Unit : STRING(16); END_VAR
   IF LEN(Unit) > 0 THEN
     HMI_FormatValue := CONCAT(HMI_FormatReal(Value, Decimals), CONCAT(' ', Unit));
   ELSE
@@ -240,9 +240,15 @@ FUNCTION HMI_Back : BOOL
 END_FUNCTION
 
 (* Signs the operator out of this display once the frame ends: the device ends the session and the display returns to
-   its sign-in form. Displays without accounts ignore it. *)
+   its sign-in form. A local panel locks to its PIN entry; one without a PIN ignores it. *)
 FUNCTION HMI_SignOut : BOOL
   {external hmi_sign_out(); HMI_SIGNOUT_result.set(true); }
+END_FUNCTION
+
+(* Locks the local panel: it shows the PIN entry until the PIN is entered again. Panels without a PIN and displays
+   that are not a local panel ignore it. *)
+FUNCTION HMI_Lock : BOOL
+  {external hmi_lock(); HMI_LOCK_result.set(true); }
 END_FUNCTION
 
 (* Animation clock: while Run, Phase advances Rate units per second (negative runs backwards), wrapping at Period, and

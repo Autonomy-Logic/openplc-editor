@@ -518,7 +518,7 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
 
 ### Debugging
 
-- **Protocol:** Custom Modbus PDU: function codes 0x41-0x45 for variable read/write, and 0x46-0x4D for status, version, licensing, run/stop state, bootloader reboot and lock state (`resources/sources/Baremetal/modbus_types.h`)
+- **Protocol:** Custom Modbus PDU: function codes 0x41-0x45 for variable read/write, and 0x46-0x4D for status, version, licensing, run/stop state, bootloader reboot and lock state (`resources/sources/Baremetal/modbus_types.h`). A firmware built with `openplc-cli compile --hmi-test-readout` also answers the test-only HMI codes 0x4E and 0x4F (`resources/sources/hmi/README.md`)
 - **Transports:** Modbus TCP, Modbus RTU, WebSocket, or virtual serial (simulator)
 - **Simulator:** the project's WebAssembly module (`src/backend/shared/simulator/`): `WasmSimulatorModule` runs it
   with simulated time (one scan period per scan, never ahead of the wall clock, in steps of at most 10 ms so the

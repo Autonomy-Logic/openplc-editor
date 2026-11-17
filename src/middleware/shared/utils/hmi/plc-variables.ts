@@ -45,6 +45,13 @@ const isElementary = (type: string): boolean => {
   return ELEMENTARY.has(t) || /^W?STRING\s*[([]\s*\d+\s*[)\]]$/.test(t)
 }
 
+/** The elementary type a variable type names, upper case: a base type or a sized string such as `STRING(20)`. */
+function elementaryOf(type: PLCVariableType): string | null {
+  if (type.definition === 'base-type') return type.value.toUpperCase()
+  if (type.definition !== 'array' && isElementary(type.value)) return type.value.trim().toUpperCase()
+  return null
+}
+
 /** A function block's pins a screen may read: its inputs and outputs, by name and type. */
 export interface HmiBlockPins {
   inputs: ReadonlyArray<{ name: string; type: string }>
@@ -198,7 +205,8 @@ function expandType(
   seen: readonly string[],
   output = false,
 ): void {
-  if (type.definition === 'base-type') emit(path, type.value.toUpperCase(), output)
+  const elementary = elementaryOf(type)
+  if (elementary !== null) emit(path, elementary, output)
   else if (type.definition === 'array') {
     if (type.data) expandArray(path, type.data.baseType, type.data.dimensions, at, emit, seen, output)
   } else expandNamed(path, type.value, at, emit, seen, output)
@@ -225,11 +233,12 @@ export function hmiPlcVariables(
       ...(v.flag === 'constant' ? { constant: true as const } : {}),
       ...(global ? { scope: 'global' as const } : {}),
     }
-    if (v.type.definition === 'base-type') {
+    const elementary = elementaryOf(v.type)
+    if (elementary !== null) {
       const initial = v.initialValue?.trim()
       variables.push({
         path,
-        type: v.type.value.toUpperCase(),
+        type: elementary,
         ...(initial ? { initialValue: initial } : {}),
         ...marks,
       })

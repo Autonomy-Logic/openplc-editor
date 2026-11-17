@@ -205,6 +205,15 @@ int main(int argc, char **argv) {
     /* The admin's state is its own. */
     frame(&admin, "admin_after");
 
+    /* Viewers show different screens at once, each built in its own instance's slot; a hidden screen takes no edit. */
+    tap(&admin, "next_again", ID_OVERVIEW_NEXT);
+    frame(&op, "op_on_overview");
+    frame(&admin, "admin_on_details");
+    frame(&op, "op_still_overview");
+    printf("hidden screen setter=%d\n", hmi_unit_set_num(admin.unit, 0, SET_OVERVIEW_LEVEL_MAXVALUE, 5.0));
+    tap(&admin, "back_again", ID_DETAILS_BACK);
+    frame(&admin, "admin_back");
+
     /* Preview: literal properties change without a build; unknown screens and setters are refused. */
     int rc = hmi_unit_set_num(admin.unit, 0, SET_OVERVIEW_LEVEL_MAXVALUE, 20.0);
     rc |= hmi_unit_set_num(admin.unit, 0, SET_OVERVIEW_COL_GAP, 40.0);

@@ -61,6 +61,43 @@ describe('hmiPlcVariables', () => {
     ])
   })
 
+  it('lists a sized string declared as written in the source, below a struct too', () => {
+    const sized = { definition: 'user-data-type' as const, value: 'STRING(20)' }
+    const variables = hmiPlcVariables({
+      pous: [
+        {
+          name: 'Main',
+          pouType: 'program',
+          body: { language: 'st', value: '' },
+          interface: {
+            variables: [
+              v('Note', '', { type: sized, initialValue: "'shift A'" }),
+              v('Batch', '', { type: { definition: 'user-data-type', value: 'Recipe' } }),
+            ],
+          },
+        },
+      ],
+      dataTypes: [
+        {
+          name: 'Recipe',
+          derivation: 'structure',
+          variable: [{ name: 'Label', type: { definition: 'user-data-type', value: 'wstring[8]' } }],
+        },
+      ],
+      configurations: {
+        resource: {
+          tasks: [],
+          instances: [{ name: 'instance0', task: 'task0', program: 'Main' }],
+          globalVariables: [],
+        },
+      },
+    })
+    expect(variables).toEqual([
+      { path: 'instance0.Main.Note', type: 'STRING(20)', initialValue: "'shift A'" },
+      { path: 'instance0.Main.Batch.Label', type: 'WSTRING[8]' },
+    ])
+  })
+
   it('marks a CONSTANT, so screens read it and never write it', () => {
     const variables = hmiPlcVariables({
       pous: [],

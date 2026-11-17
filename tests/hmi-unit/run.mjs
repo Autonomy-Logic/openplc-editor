@@ -77,20 +77,21 @@ function generate(work) {
   return { unit, fonts }
 }
 
-function build(cc, work, { unit, fonts }, sanitize = false) {
-  const name = `${basename(cc)}${sanitize ? '-sanitized' : ''}`
+function build(cc, work, { unit, fonts }, sanitize = false, variant = null) {
+  const name = `${basename(cc)}${sanitize ? '-sanitized' : ''}${variant ? `-${variant.name}` : ''}`
+  const defines = variant?.defines ?? []
   const objects = []
   const compileC = (src, flags) => {
     const obj = join(work, `${name}_${basename(src, '.c')}.o`)
     must(
-      run(cc, [...withSanitizer(flags, sanitize), `-I${CORE}`, `-I${UNIT_API}`, `-I${unit}`, '-c', src, '-o', obj]),
+      run(cc, [...withSanitizer(flags, sanitize), ...defines, `-I${CORE}`, `-I${UNIT_API}`, `-I${unit}`, '-c', src, '-o', obj]),
       `${cc} ${basename(src)}`,
     )
     objects.push(obj)
   }
   for (const s of CORE_SOURCES) compileC(join(CORE, s), CFLAGS)
   compileC(fonts, ['-std=c11', '-O2', '-ffp-contract=off'])
-  compileC(join(HERE, 'driver.c'), CFLAGS)
+  compileC(join(HERE, variant?.driver ?? 'driver.c'), CFLAGS)
   const cxx = CXX[basename(cc)] ?? cc
   const out = join(work, `driver_${name}`)
   const cpp = readdirSync(unit)
@@ -99,6 +100,7 @@ function build(cc, work, { unit, fonts }, sanitize = false) {
   must(
     run(cxx, [
       ...withSanitizer(CXXFLAGS, sanitize),
+      ...defines,
       `-I${RUNTIME_INCLUDE}`,
       `-I${CORE}`,
       `-I${UNIT_API}`,
@@ -150,6 +152,17 @@ function main() {
       if (r.stdout !== first) fail(`${target.name} output differs from ${opts.cc[0]}`)
       else console.log(`${target.name}: ${r.stdout.trim().split('\n').length} lines`)
     }
+    /* The microcontroller layout (HMI_STATIC_MEMORY) must draw what a heap build of the same host draws. */
+    const heap = { name: 'single', driver: 'static_driver.c', defines: [] }
+    const fixed = { name: 'static', driver: 'static_driver.c', defines: ['-DHMI_STATIC_MEMORY'] }
+    const outputs = [heap, fixed].map((variant) => {
+      const target = build(opts.cc[0], work, generated, false, variant)
+      const r = run(target.out)
+      if (r.status !== 0) fail(`${target.name} driver:\n${r.stderr}${r.stdout}`)
+      return r.stdout
+    })
+    if (outputs[0] !== outputs[1]) fail(`HMI_STATIC_MEMORY output differs from the heap build:\n${outputs[1]}`)
+    else console.log(`HMI_STATIC_MEMORY: same frames as the heap build (${outputs[1].trim().split('\n').length} lines)`)
     if (first !== null) {
       reference += first
       if (opts.update) {

@@ -766,6 +766,84 @@ static void test_sign_out(void) {
     hmi_session_destroy(b);
 }
 
+/* One frame of a locked panel: the PIN entry when locked, else nothing (the screens). Returns the lock state after. */
+static int lock_frame(uint32_t now) {
+    size_t len;
+    hmi_set_time_ms(now);
+    hmi_frame_begin();
+    if (hmi_lock_active()) hmi_lock_draw();
+    (void)hmi_frame_end(&len);
+    CHECK_EQ(hmi_frame_status(), 0u);
+    return hmi_lock_active();
+}
+
+/* Taps PIN key i (0..8 digits 1-9, 9 clear, 10 digit 0, 11 OK) of a 320x240 panel: down and up in two frames. */
+static void lock_tap(int i, uint32_t now) {
+    int32_t x = 8 + (i % 3) * 103 + 48, y = 72 + (i / 3) * 41 + 17;
+    hmi_input_pointer(HMI_PTR_DOWN, x * 16, y * 16);
+    (void)lock_frame(now);
+    hmi_input_pointer(HMI_PTR_UP, x * 16, y * 16);
+    (void)lock_frame(now);
+}
+
+static void test_lock(void) {
+    hmi_session_t *s = hmi_session_create();
+    CHECK(s != NULL);
+    hmi_session_use(s);
+    hmi_core_init(320, 240);
+    hmi_set_time_ms(0);
+    hmi_lock_setup("1234", 60000);
+    CHECK_EQ(lock_frame(0), 1);
+    /* Wrong PIN: refused, and the right one works at once after it. */
+    for (int i = 0; i < 4; i++) lock_tap(4, 100);
+    lock_tap(11, 100);
+    CHECK_EQ(lock_frame(100), 1);
+    lock_tap(0, 100);
+    lock_tap(1, 100);
+    lock_tap(2, 100);
+    lock_tap(3, 100);
+    lock_tap(11, 100);
+    CHECK_EQ(lock_frame(100), 0);
+    /* Idle relock 60 s after the last touch. */
+    CHECK_EQ(lock_frame(60099), 0);
+    CHECK_EQ(lock_frame(60100), 1);
+    /* Clear drops the digits typed so far; a press that ends on another key types nothing. */
+    lock_tap(0, 61000);
+    lock_tap(9, 61000);
+    hmi_input_pointer(HMI_PTR_DOWN, (8 + 48) * 16, (72 + 17) * 16);
+    (void)lock_frame(61000);
+    hmi_input_pointer(HMI_PTR_UP, (8 + 103 + 48) * 16, (72 + 17) * 16);
+    (void)lock_frame(61000);
+    lock_tap(0, 61000);
+    lock_tap(1, 61000);
+    lock_tap(2, 61000);
+    lock_tap(3, 61000);
+    lock_tap(11, 61000);
+    CHECK_EQ(lock_frame(61000), 0);
+    /* A screen locks the panel. */
+    hmi_frame_begin();
+    hmi_lock();
+    size_t len;
+    (void)hmi_frame_end(&len);
+    CHECK_EQ(lock_frame(61100), 1);
+    /* Relock 0: locks only at setup and on hmi_lock. */
+    hmi_lock_setup("12345678", 0);
+    for (int i = 0; i < 8; i++) lock_tap(i, 0);
+    lock_tap(11, 0);
+    CHECK_EQ(lock_frame(0), 0);
+    CHECK_EQ(lock_frame(4000000000u), 0);
+    /* No PIN, or one that is not 1 to 8 digits: never locked, and hmi_lock does nothing. */
+    const char *none[] = {"", "12a4", "123456789", NULL};
+    for (int i = 0; i < 4; i++) {
+        hmi_lock_setup(none[i], 1000);
+        CHECK_EQ(lock_frame(0), 0);
+        hmi_lock();
+        CHECK_EQ(lock_frame(5000), 0);
+    }
+    hmi_session_use(NULL);
+    hmi_session_destroy(s);
+}
+
 int main(void) {
     test_trig();
     test_format_int();
@@ -778,6 +856,7 @@ int main(void) {
     test_themes();
     test_sessions();
     test_sign_out();
+    test_lock();
     test_text();
     test_text_failures();
     test_raster();

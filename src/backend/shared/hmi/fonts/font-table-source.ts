@@ -72,3 +72,21 @@ export async function buildHmiFontTableSource(fonts: readonly HmiFontBytes[]): P
   )
   return parts.join('\n')
 }
+
+/**
+ * C source of the font table for `faces` in `variant`, each face read from the HMI sources folder (`fonts/<file>`).
+ * Throws HmiFontError for a face the folder does not hold, and as buildHmiFontTableSource does.
+ */
+export async function hmiFontTableFromSources(
+  faces: readonly number[],
+  variant: HmiFontVariant,
+  hmiSources: Readonly<Record<string, string | Uint8Array>>,
+): Promise<string> {
+  const fonts = faces.map((id) => {
+    const vetted = vettedHmiFont(id, variant)
+    const file = vetted ? hmiSources[`fonts/${vetted.file}`] : undefined
+    if (!vetted || file === undefined) throw new HmiFontError(`Font ${id} (${variant}) is not bundled`)
+    return { id, variant, bytes: typeof file === 'string' ? new TextEncoder().encode(file) : file }
+  })
+  return buildHmiFontTableSource(fonts)
+}

@@ -15,6 +15,7 @@ END_FUNCTION
 
 (* Filled rectangle, optionally rounded and outlined. *)
 {attribute 'hmi_palette' := 'Shapes'}
+{attribute 'hmi_default' := 'GrowAuto := TRUE'}
 FUNCTION_BLOCK HmiRect EXTENDS HmiElement
   VAR_INPUT
     {attribute 'hmi_color'}
@@ -41,6 +42,7 @@ END_FUNCTION_BLOCK
 
 (* Filled ellipse inscribed in the element's rectangle, optionally outlined; a circle when the rectangle is square. *)
 {attribute 'hmi_palette' := 'Shapes'}
+{attribute 'hmi_default' := 'GrowAuto := TRUE'}
 FUNCTION_BLOCK HmiEllipse EXTENDS HmiElement
   VAR_INPUT
     {attribute 'hmi_color'}
@@ -67,6 +69,7 @@ END_FUNCTION_BLOCK
 (* Regular polygon of 3 to 32 Sides inscribed in the element's rectangle, its first vertex at Rotation degrees
    (clockwise from 3 o'clock). InnerPct below 100 makes it a star, its inner vertices at that percent of the radius. *)
 {attribute 'hmi_palette' := 'Shapes'}
+{attribute 'hmi_default' := 'GrowAuto := TRUE'}
 FUNCTION_BLOCK HmiPolygon EXTENDS HmiElement
   VAR_INPUT
     Sides : DINT := 3;
@@ -120,6 +123,7 @@ END_FUNCTION_BLOCK
 
 (* Straight line through the centre of the element's rectangle at Angle degrees: 0 across, 90 down, 45 diagonal. *)
 {attribute 'hmi_palette' := 'Shapes'}
+{attribute 'hmi_default' := 'GrowAuto := TRUE'}
 FUNCTION_BLOCK HmiLine EXTENDS HmiElement
   VAR_INPUT
     Angle : DINT;
@@ -159,9 +163,6 @@ FUNCTION_BLOCK HmiLabel EXTENDS HmiElement
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := Size * 3 / 2 + 8;
   END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
-  END_METHOD
   METHOD PROTECTED OVERRIDE Draw : BOOL
     HMI_TextBox(Left, Top, Width, Height, Text, Size, Font, Align, HMI_VALIGN#Middle, TextColor);
     Draw := TRUE;
@@ -185,9 +186,6 @@ FUNCTION_BLOCK HmiValue EXTENDS HmiElement
   END_METHOD
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := 64;
-  END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
   END_METHOD
   METHOD PROTECTED OVERRIDE Draw : BOOL
     HMI_FillRect(Left, Top, Width, Height, 8, COLOR.Surface);
@@ -219,9 +217,6 @@ FUNCTION_BLOCK HmiLamp EXTENDS HmiElement
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := 36;
   END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
-  END_METHOD
   (* The light keeps its natural 36 lu when the lamp is stretched, centred vertically. *)
   METHOD PROTECTED OVERRIDE Draw : BOOL
     VAR d, r, cx, cy : DINT; lit : BOOL; END_VAR
@@ -242,6 +237,7 @@ END_FUNCTION_BLOCK
 
 (* 270-degree arc gauge; the arc eases toward the value. *)
 {attribute 'hmi_palette' := 'Display'}
+{attribute 'hmi_default' := 'GrowAuto := TRUE'}
 FUNCTION_BLOCK HmiGauge EXTENDS HmiElement
   VAR_INPUT
     {attribute 'hmi_main'}
@@ -318,9 +314,6 @@ FUNCTION_BLOCK HmiTank EXTENDS HmiElement
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := 200;
   END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
-  END_METHOD
   METHOD PROTECTED OVERRIDE Draw : BOOL
     VAR ih, lh : DINT; END_VAR
     ih := MAX(Height - 28, 0);
@@ -340,6 +333,7 @@ END_FUNCTION_BLOCK
 (* Time graph of up to 8 series, Value then Value2 to Value8 as Pens counts them, each in its colour, sampled every
    SampleMs into 120 points. History starts with the screen and is not logged. *)
 {attribute 'hmi_palette' := 'Display'}
+{attribute 'hmi_default' := 'GrowAuto := TRUE'}
 FUNCTION_BLOCK HmiTrend EXTENDS HmiElement
   VAR_INPUT
     (* Series 1; series 2 to 8 are Value2 to Value8, drawn while Pens counts them. *)
@@ -559,9 +553,6 @@ FUNCTION_BLOCK HmiReadout EXTENDS HmiElement
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := Size + 8 + CapH();
   END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
-  END_METHOD
   METHOD PROTECTED OVERRIDE PortY : DINT
     VAR_INPUT Port : HMI_PORT; END_VAR
     IF Port = HMI_PORT#Top THEN
@@ -622,9 +613,6 @@ FUNCTION_BLOCK HmiVessel EXTENDS HmiElement
   END_METHOD
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
     NaturalHeight := LabelH() + 70;
-  END_METHOD
-  METHOD PROTECTED OVERRIDE NaturalGrow : DINT
-    NaturalGrow := 0;
   END_METHOD
   (* Ports sit on the body, not on the label block. *)
   METHOD PROTECTED OVERRIDE PortY : DINT

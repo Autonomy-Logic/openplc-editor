@@ -30,7 +30,7 @@ const G = hmiFixture('hmi-layout-code')
 const MAIN = 'PROGRAM Main\n  VAR\n    Level : REAL := 6.5;\n  END_VAR\n  Level := Level;\nEND_PROGRAM\n'
 const START = `FUNCTION_BLOCK Start EXTENDS HmiScreen
   VAR
-    Body : HmiHorizontalStack := (Grow := 1, GrowAuto := FALSE);
+    Body : HmiHorizontalStack;
     Title : HmiLabel := (Text := 'Start', Parent := 'Body');
   END_VAR
 END_FUNCTION_BLOCK

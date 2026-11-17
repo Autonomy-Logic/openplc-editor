@@ -12,7 +12,8 @@
 extern "C" {
 #endif
 
-/** Sets numeric or BOOL setter `setter` of screen `screen` (page number); returns 0, or -1 when there is none. */
+/** Sets numeric or BOOL setter `setter` of screen `screen` (page number); returns 0, or -1 when there is none or the
+ * screen is not the one built in the unit's slot (not shown). */
 int hmi_unit_set_num(void *unit, int screen, int setter, double value);
 /** Sets STRING setter `setter` of screen `screen`; a longer text is cut to the property's length. */
 int hmi_unit_set_str(void *unit, int screen, int setter, const char *value);

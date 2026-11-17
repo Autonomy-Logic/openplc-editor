@@ -9,8 +9,7 @@ import type {
   WasmCompileResult,
   WasmToolchainFiles,
 } from '../../../../middleware/shared/ports/wasm-toolchain-types'
-import { buildHmiFontTableSource } from '../fonts/font-table-source'
-import { vettedHmiFont } from '../fonts/vetted-fonts'
+import { hmiFontTableFromSources } from '../fonts/font-table-source'
 import { generateHmiUnit, type HmiTag } from '../unit/generate-hmi-unit'
 import { type HmiProgramInstance, hmiTagResolver } from './tag-resolver'
 
@@ -55,8 +54,6 @@ export const HMI_CLIENT_LINK_FLAGS = ['-mexec-model=reactor', `-Wl,--max-memory=
 
 const decoder = new TextDecoder()
 const text = (content: string | Uint8Array): string => (typeof content === 'string' ? content : decoder.decode(content))
-const bytes = (content: string | Uint8Array): Uint8Array =>
-  typeof content === 'string' ? new TextEncoder().encode(content) : content
 
 /** The removal artefact: only a manifest that tells the runtime to drop its HMI. */
 export function hmiRemovalArtefact(): HmiArtefactFiles {
@@ -83,13 +80,7 @@ export async function composeHmiArtefact(input: ComposeHmiArtefactInput): Promis
 
   let fontTable: string
   try {
-    const fonts = unit.fonts.faces.map((id) => {
-      const vetted = vettedHmiFont(id, unit.fonts.variant)
-      const file = vetted ? source(`fonts/${vetted.file}`) : undefined
-      if (!vetted || file === undefined) throw new Error(`Font ${id} (${unit.fonts.variant}) is not bundled`)
-      return { id, variant: unit.fonts.variant, bytes: bytes(file) }
-    })
-    fontTable = await buildHmiFontTableSource(fonts)
+    fontTable = await hmiFontTableFromSources(unit.fonts.faces, unit.fonts.variant, input.hmiSources)
   } catch (error) {
     return fail(error instanceof Error ? error.message : String(error), unit.warnings)
   }

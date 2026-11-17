@@ -34,7 +34,7 @@ const PT = 'TYPE Pt :\n  STRUCT\n    X : REAL;\n    Y : INT;\n  END_STRUCT;\nEND
 const OVERVIEW = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
   VAR
     Body : HmiHorizontalStack;
-    Row : HmiVerticalStack := (Parent := 'Body', PrefHeight := 80);
+    Row : HmiVerticalStack := (Parent := 'Body', PrefHeight := 80, GrowAuto := FALSE);
     Lamp1 : HmiLamp := (Parent := 'Row', Caption := 'Run');
     Shown : HmiValue := (Parent := 'Row', Caption := 'P.X');
     Item : HmiSlider := (Parent := 'Row', Caption := 'Arr[2]');

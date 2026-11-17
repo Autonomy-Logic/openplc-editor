@@ -83,7 +83,7 @@ describe('HMI unit generator', () => {
     expect(glue).toContain('#if STRUCPP_HAS_EXCEPTIONS')
     expect(glue).toContain('#include "iec_fault.hpp"')
     expect(glue).toMatch(
-      /try \{\s+static_cast<HmiProgram \*>\(unit\)->run\(\);\s+\} catch \(\.\.\.\) \{\s+return false;/,
+      /try \{\s+static_cast<HmiUnit \*>\(unit\)->program\.run\(\);\s+\} catch \(\.\.\.\) \{\s+return false;/,
     )
     expect(glue).toContain(
       '    case 0: *static_cast<strucpp::IEC_REAL *>(g_own[0]) = *static_cast<const strucpp::IEC_REAL *>(value); return;',
@@ -130,6 +130,20 @@ describe('HMI unit generator', () => {
     }
   })
 
+  it("sets a type's own default on elements that leave it out, before attaching them", () => {
+    const result = generateHmiUnit(sampleProject())
+    expect(messages(result)).toEqual([])
+    const overview = result.sources['Overview.st']
+    const build = /METHOD PROTECTED OVERRIDE Build : BOOL(.*?)END_METHOD/s.exec(overview)?.[1] ?? ''
+    expect(build).toContain('Body.GrowAuto := TRUE;')
+    expect(build).toContain('Col.GrowAuto := TRUE;')
+    expect(build).not.toContain('Level.GrowAuto')
+    expect(build.indexOf('Col.GrowAuto')).toBeLessThan(build.indexOf('Attach('))
+    const gallery = generateHmiUnit({ ...sampleProject(), gallery: true, resolve: undefined })
+    const source = Object.values(gallery.sources).find((t) => t.includes(`FUNCTION_BLOCK ${HMI_GALLERY_SCREEN}`))
+    expect(source).not.toContain('HMI__Column.GrowAuto')
+  })
+
   it('previews a widget block on an extra screen, at natural size and stretched, with a test value', () => {
     const project = sampleProject()
     const result = generateHmiUnit({ ...project, screens: [], widgetPreview: 'badge', resolve: undefined })
@@ -138,7 +152,7 @@ describe('HMI unit generator', () => {
       result.sources[`${WIDGET_PREVIEW_SCREEN}.st`] ??
       Object.values(result.sources).find((t) => t.includes(WIDGET_PREVIEW_SCREEN))
     expect(source).toContain("Natural : Badge := (Parent := 'HMI__Row', GrowAuto := FALSE);")
-    expect(source).toContain("Stretched : Badge := (Parent := 'HMI__Column', Grow := 1, GrowAuto := FALSE);")
+    expect(source).toContain("Stretched : Badge := (Parent := 'HMI__Column', GrowAuto := TRUE);")
     expect(source).toContain('Natural.Value := TRUE;')
     expect(result.preview.units.screens[WIDGET_PREVIEW_SCREEN]).toBeDefined()
     expect(generateHmiUnit(project).sources).not.toHaveProperty([`${WIDGET_PREVIEW_SCREEN}.st`])
@@ -232,7 +246,7 @@ describe('HMI unit generator', () => {
     const line = overview.split('\n').find((l) => l.includes('METHOD PROTECTED OVERRIDE Build'))
     expect(line?.trimStart().startsWith('END_VAR')).toBe(true)
     expect(line).toContain(
-      'UseTheme(5); Attach(ADR(Body), 0); Attach(ADR(Col), ADR(Body)); Attach(ADR(Level), ADR(Col)); ' +
+      'UseTheme(5); Body.GrowAuto := TRUE; Col.GrowAuto := TRUE; Attach(ADR(Body), 0); Attach(ADR(Col), ADR(Body)); Attach(ADR(Level), ADR(Col)); ' +
         'Attach(ADR(Run), ADR(Col)); Attach(ADR(Speed), ADR(Body));',
     )
     expect(line).toContain('IF Run.Changed THEN instance0.Main.Running := Run.NewValue; END_IF;')
@@ -256,12 +270,37 @@ describe('HMI unit generator', () => {
     expect(main).toContain('Rt.SetThemeColor(5, 7, 16#7C3AED);')
     expect(main).toContain('Rt.SetStart(0);')
     expect(main).toContain('TASK HmiTask(INTERVAL := T#50ms, PRIORITY := 1);')
-    expect(main).toContain('  HMI__Page := Rt.CurrentPage();\n  HMI__Page := Rt.BeginFrame();')
+    expect(main).toContain('  HMI__Page := Rt.CurrentPage();\n  Want := Rt.Wanted();')
+    expect(main).toContain('    Rt.Mount(Want, HMI__ScreenOpen(Slot, Want, Was));')
+    expect(main).toContain(
+      '  HMI__Page := Rt.BeginFrame();\n  IF HMI__Page >= 0 THEN\n    HMI__ScreenBody(Slot, HMI__Page);',
+    )
     const operator = main.slice(main.indexOf('      2:'), main.indexOf('      3:'))
     expect(operator).toContain('Rt.SetAccess(0, TRUE);')
     expect(operator).toContain('Rt.SetAccess(1, FALSE);')
     const unknown = main.slice(main.indexOf('    ELSE'), main.indexOf('    END_CASE;'))
     expect(unknown).toContain('Rt.SetAccess(0, FALSE);')
+  })
+
+  it('builds only the shown screen, in a slot of each program instance, with the ids it would have had', () => {
+    const main = sample.sources['hmi_main.st']
+    const firstOf = (screen: string) =>
+      Math.min(...sample.elementIds.filter((e) => e.screen === screen).map((e) => e.id))
+    expect(main).toContain(`    Rt.AddPage(${firstOf('Overview')});\n    Rt.AddPage(${firstOf('Details')});`)
+    expect(main).not.toMatch(/Scr\d+ :/)
+    const slot = sample.files['hmi_unit_slot.hpp']
+    expect(slot).toContain('std::max<std::size_t>({1, sizeof(hmi::OVERVIEW), sizeof(hmi::DETAILS)})')
+    expect(slot).toMatch(
+      /struct HmiUnit \{\s+hmi::Program_HMIMAIN program;\s+alignas\(kHmiSlotAlign\) unsigned char slot\[kHmiSlotSize\];/,
+    )
+    const glue = sample.files['hmi_unit_glue.cpp']
+    expect(glue).toContain('case 0: static_cast<OVERVIEW *>(at)->~OVERVIEW(); break;')
+    expect(glue).toContain('case 1: return new (at) DETAILS();')
+    expect(glue).toContain('size_t hmi_unit_size(void) { return sizeof(HmiUnit); }')
+    expect(glue).toContain('u->program.SLOT.set(static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(u->slot)));')
+    expect(sample.preview.files['hmi_preview_1.cpp']).toContain(
+      'if (u->program.RT.MOUNTED().get() != 1) return nullptr;',
+    )
   })
 
   it('gives the preview its translation units and the live setters of literal properties', () => {

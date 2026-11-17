@@ -30,7 +30,7 @@ INTERFACE IHmiElement
 END_INTERFACE
 
 (* Base of every visual element. Containers place elements; an element knows its own size. Widget authors override
-   the PROTECTED methods: Draw, Input, NaturalWidth, NaturalHeight, NaturalGrow, TakesInput, Prepare and the ports. *)
+   the PROTECTED methods: Draw, Input, NaturalWidth, NaturalHeight, TakesInput, Prepare and the ports. *)
 FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
   VAR_INPUT
     (* Container this element sits in, by name; empty means the screen. Read by the HMI build. *)
@@ -51,12 +51,14 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
     MinHeight : DINT;
     {attribute 'hmi_group' := 'layout'}
     MaxHeight : DINT;
-    (* Share of the space left over in the container, used when GrowAuto is FALSE. *)
+    (* TRUE: takes a share of the space left over in its stack (GrowScale); FALSE: keeps its natural or preferred
+       size. A type may set its own default with hmi_default. *)
     {attribute 'hmi_group' := 'layout'}
-    Grow : DINT;
-    (* TRUE: the element's own choice of growing (NaturalGrow) instead of Grow. *)
+    GrowAuto : BOOL := FALSE;
+    (* Share of the space left over in the stack, relative to the other growing elements; used when GrowAuto is TRUE. *)
     {attribute 'hmi_group' := 'layout'}
-    GrowAuto : BOOL := TRUE;
+    {attribute 'hmi_enabled_by' := 'GrowAuto'}
+    GrowScale : DINT := 1;
     (* Left out of container layout; the screen's code places it with Place. *)
     {attribute 'hmi_group' := 'layout'}
     Floating : BOOL;
@@ -81,6 +83,9 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
     FK : DINT := 65536;
     FOX, FOY, FCX, FCY, FCW, FCH : DINT;
     FClip, Framed, ShowPorts : BOOL;
+    (* Scratch of the stack placing this element: its size along the stack, the size a pass wants, settled. *)
+    LaySize, LayWant : DINT;
+    LayFixed : BOOL;
   END_VAR
 
   METHOD Right : DINT
@@ -108,6 +113,30 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
   METHOD Contains : BOOL
     VAR_INPUT PX, PY : DINT; END_VAR
     Contains := PX >= Left AND PX < Left + Width AND PY >= Top AND PY < Top + Height;
+  END_METHOD
+  METHOD INTERNAL GetLaySize : DINT
+    GetLaySize := LaySize;
+  END_METHOD
+  METHOD INTERNAL SetLaySize : BOOL
+    VAR_INPUT V : DINT; END_VAR
+    LaySize := V;
+    SetLaySize := TRUE;
+  END_METHOD
+  METHOD INTERNAL GetLayWant : DINT
+    GetLayWant := LayWant;
+  END_METHOD
+  METHOD INTERNAL SetLayWant : BOOL
+    VAR_INPUT V : DINT; END_VAR
+    LayWant := V;
+    SetLayWant := TRUE;
+  END_METHOD
+  METHOD INTERNAL IsLayFixed : BOOL
+    IsLayFixed := LayFixed;
+  END_METHOD
+  METHOD INTERNAL SetLayFixed : BOOL
+    VAR_INPUT V : BOOL; END_VAR
+    LayFixed := V;
+    SetLayFixed := TRUE;
   END_METHOD
   (* The pointer is on the element. Touch areas are at least 28 lu on screen; where they overlap, the element under
      the pointer wins, else the nearest one. *)
@@ -168,10 +197,6 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
   END_METHOD
   METHOD PROTECTED NaturalHeight : DINT
     NaturalHeight := 0;
-  END_METHOD
-  (* Share of leftover space the element takes when GrowAuto is TRUE. *)
-  METHOD PROTECTED NaturalGrow : DINT
-    NaturalGrow := 1;
   END_METHOD
   (* TRUE for controls: their touch area takes part in pointer arbitration. *)
   METHOD PROTECTED TakesInput : BOOL
@@ -272,12 +297,10 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
   (* Share of leftover space along a stack running horizontally (Horizontal) or vertically. *)
   METHOD INTERNAL GetGrow : DINT
     VAR_INPUT Horizontal : BOOL; END_VAR
-    IF NOT Visible THEN
-      GetGrow := 0;
-    ELSIF GrowAuto THEN
-      GetGrow := NaturalGrow();
+    IF Visible AND GrowAuto THEN
+      GetGrow := MAX(GrowScale, 0);
     ELSE
-      GetGrow := MAX(Grow, 0);
+      GetGrow := 0;
     END_IF;
   END_METHOD
   (* Frame the element draws through, set by its container before Place. Ports: also report connection ports. *)

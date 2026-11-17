@@ -60,6 +60,15 @@ function attribute(entry: { attributes?: LibraryFBEntry['attributes'] }, name: s
   return entry.attributes?.find((a) => a.name.toLowerCase() === name)
 }
 
+/** `Name := Value` pairs of an hmi_default attribute, comma separated; values are literals without commas. */
+function defaultsOf(entry: { attributes?: LibraryFBEntry['attributes'] }): Array<{ name: string; value: string }> {
+  const text = attribute(entry, 'hmi_default')?.value ?? ''
+  return text.split(',').flatMap((part) => {
+    const m = /^\s*([A-Za-z_]\w*)\s*:=\s*(\S(?:.*\S)?)\s*$/.exec(part)
+    return m ? [{ name: m[1], value: m[2] }] : []
+  })
+}
+
 function isGroup(value: string | undefined): value is HmiPropertyGroup {
   return GROUPS.some((g) => g === value)
 }
@@ -105,6 +114,8 @@ function propertyOf(
     declaredBy,
   }
   if (v.initialValue !== undefined) property.defaultValue = v.initialValue
+  const enabledBy = attribute(v, 'hmi_enabled_by')?.value
+  if (enabledBy) property.enabledBy = enabledBy
   if (typeof v.maxLength === 'number') property.maxLength = v.maxLength
   if (enumMembers) property.enumMembers = enumMembers
   return property
@@ -129,11 +140,22 @@ function widgetOf(
   const output = (key: string): ManifestVar | undefined => outputs.find((o) => o.name.toUpperCase() === key)
   const changed = output(CHANGED)
   const newValue = output(NEW_VALUE)
+  const typeDefaults = new Map<string, { name: string; value: string }>()
+  for (const c of chain.slice(1))
+    for (const d of defaultsOf(c.fb)) {
+      const input = inputs.find((i) => i.v.name.toUpperCase() === d.name.toUpperCase())
+      if (input) typeDefaults.set(d.name.toUpperCase(), { name: written(input.v), value: d.value })
+    }
+  const properties = inputs.map((i) => {
+    const property = propertyOf(i.v, i.by, types, marked?.v === i.v)
+    const own = typeDefaults.get(i.v.name.toUpperCase())
+    return own ? { ...property, defaultValue: own.value } : property
+  })
   const widget: HmiWidgetInfo = {
     name: written(located.fb),
     library: located.library,
     extends: located.fb.extends ?? '',
-    properties: inputs.map((i) => propertyOf(i.v, i.by, types, marked?.v === i.v)),
+    properties,
     outputs: outputs.map((o) => ({ name: written(o), type: o.type })),
     events: outputs
       .filter((o) => o.type.toUpperCase() === 'BOOL' && o !== changed && o !== newValue && o !== marked?.v)
@@ -153,6 +175,7 @@ function widgetOf(
   const colors = seriesOf('color')
   if (count !== undefined && values.length > 0 && values.length === colors.length)
     widget.series = { count, values, colors }
+  if (typeDefaults.size > 0) widget.typeDefaults = [...typeDefaults.values()]
   return widget
 }
 
@@ -163,7 +186,10 @@ function widgetOf(
  * - `hmi_main` on an input or output: what a dropped variable is wired to;
  * - `hmi_group` on an input: its inspector group (`data`, `display` or `layout`);
  * - `hmi_color` on an input: a color; `hmi_element_ref` on an input: the name of another element;
- * - `hmi_series` on inputs: `value` and `color` per data series, in order, and `count` for how many show.
+ * - `hmi_series` on inputs: `value` and `color` per data series, in order, and `count` for how many show;
+ * - `hmi_default` on a block: `Name := Value, ...` the block's own start values for inherited inputs, which the build
+ *   sets on elements that leave them out (a derived block cannot redeclare an input);
+ * - `hmi_enabled_by` on an input: the BOOL input that must be TRUE for it to take effect.
  * A main input with `Changed` and `NewValue` outputs is two-way; a main BOOL output with `Changed` is momentary; other
  * BOOL outputs are events.
  */

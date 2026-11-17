@@ -21,6 +21,13 @@ export type HmiFontVariant = 'full' | 'compact'
 /** Variant a project uses unless its HMI settings choose another. */
 export const DEFAULT_HMI_FONT_VARIANT: HmiFontVariant = 'compact'
 
+/**
+ * Bytes stb_truetype needs to rasterize the most demanding drawable glyph of each variant (`HMI_STB_ARENA_BYTES` of a
+ * microcontroller build), with the core's default glyph scratch. `tests/hmi-core` sweeps every glyph at every size
+ * against these values.
+ */
+export const HMI_STB_ARENA_BYTES: Readonly<Record<HmiFontVariant, number>> = { full: 24576, compact: 10240 }
+
 export interface VettedHmiFont {
   id: HmiFontId
   variant: HmiFontVariant

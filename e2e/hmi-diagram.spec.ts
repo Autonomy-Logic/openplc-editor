@@ -28,7 +28,7 @@ const F = hmiFixture('hmi-diagram')
 
 const PLANT = `FUNCTION_BLOCK Plant EXTENDS HmiScreen
   VAR
-    Area : HmiDiagram := (DesignW := 600, DesignH := 360, Grid := 10, Grow := 1, GrowAuto := FALSE);
+    Area : HmiDiagram := (DesignW := 600, DesignH := 360, Grid := 10);
     T1 : HmiVessel := (Parent := 'Area', Caption := 'T-1', X := 40, Y := 60, PrefWidth := 80, PrefHeight := 120);
     T2 : HmiVessel := (Parent := 'Area', Caption := 'T-2', X := 480, Y := 60, PrefWidth := 80, PrefHeight := 120);
     Ft : HmiReadout := (Parent := 'Area', Caption := 'FT', X := 260, Y := 10);

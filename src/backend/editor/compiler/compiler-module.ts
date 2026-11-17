@@ -335,8 +335,12 @@ class CompilerModule {
   /** How a build that fails on a missing core tells the user to repair it. */
   readonly dependencyHintSurface: DependencyHintSurface
 
-  constructor(options: { dependencyHintSurface?: DependencyHintSurface } = {}) {
+  /** Whether board firmware with HMI screens gets the test-only display-list readout; only the CLI sets it. */
+  readonly hmiTestReadout: boolean
+
+  constructor(options: { dependencyHintSurface?: DependencyHintSurface; hmiTestReadout?: boolean } = {}) {
     this.dependencyHintSurface = options.dependencyHintSurface ?? 'desktop'
+    this.hmiTestReadout = options.hmiTestReadout ?? false
     this.binaryDirectoryPath = this.#constructBinaryDirectoryPath()
     this.sourceDirectoryPath = this.#constructSourceDirectoryPath()
 
@@ -919,7 +923,7 @@ class CompilerModule {
       // (`message, level, compileError?`) — no adapter needed.
       // Throw afterwards so the outer catch posts only the
       // high-level marker line without re-dumping every error blob.
-      emitCompileErrorEvents(result.errors, handleOutputData)
+      emitCompileErrorEvents(result.errors, handleOutputData, 'STruC++ compilation failed:')
       throw new Error('STruC++ compilation failed')
     }
 
@@ -2605,6 +2609,7 @@ class CompilerModule {
         editorVersion: APP_VERSION,
         dependencyHintSurface: this.dependencyHintSurface,
         hmi: parsedHmi.hmi,
+        hmiTestReadout: this.hmiTestReadout,
       },
       platformPort,
       (event) => {
