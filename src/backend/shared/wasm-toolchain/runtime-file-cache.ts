@@ -264,6 +264,16 @@ function getHref(input: RequestInfo | URL, init: RequestInit | undefined): strin
   return (init?.method ?? input.method).toUpperCase() === 'GET' ? input.url : null
 }
 
+/** The HTTP cache's answer for `href`, or `undefined` when it has none, refuses the lookup or answers non-`ok`. */
+async function httpCachedResponse(network: typeof fetch, href: string): Promise<Response | undefined> {
+  try {
+    const response = await network(href, { cache: 'only-if-cached', mode: 'same-origin' })
+    return response.ok ? response : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** The stored response for `href` in the cache `name`, or `undefined` on a miss or a store error. */
 async function storedResponse(stores: RuntimeFileStores, name: string, href: string): Promise<Response | undefined> {
   try {
@@ -274,8 +284,9 @@ async function storedResponse(stores: RuntimeFileStores, name: string, href: str
 }
 
 /**
- * A `fetch` for a worker: a request for one of `ref.urls` is answered from the store when the entry is there; a miss,
- * any other URL, a missing store or a store error goes to `network` unchanged.
+ * A `fetch` for a worker: a GET request for one of `ref.urls` is answered from the HTTP cache when it holds the file,
+ * otherwise from the store when the entry is there; a miss, any other URL, a missing store or a store error goes to
+ * `network` unchanged.
  */
 export function createCacheFirstFetch(
   stores: RuntimeFileStores | null,
@@ -283,12 +294,11 @@ export function createCacheFirstFetch(
   network: typeof fetch,
 ): typeof fetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    if (stores && ref) {
-      const href = getHref(input, init)
-      if (href !== null && ref.urls.includes(href)) {
-        const hit = await storedResponse(stores, ref.name, href)
-        if (hit) return hit
-      }
+    const href = ref === null ? null : getHref(input, init)
+    if (ref !== null && href !== null && ref.urls.includes(href)) {
+      const hit =
+        (await httpCachedResponse(network, href)) ?? (stores && (await storedResponse(stores, ref.name, href)))
+      if (hit) return hit
     }
     return network(input, init)
   }

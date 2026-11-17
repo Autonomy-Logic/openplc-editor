@@ -454,8 +454,8 @@ that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its r
   fails before it reports ready (not one past the 120 s load deadline) also has the toolchain's stored files deleted,
   so the next build downloads them again.
 - **Web store:** `runtime-file-cache.ts` (`src/backend/shared/wasm-toolchain/`) is the web's Cache Storage store of the
-  runtime files and the workers' cache-first `fetch`; it ships in the shared surface but the desktop and the CLI do not
-  use it (their files stay on disk).
+  runtime files and the workers' cache-first `fetch`; its worker `fetch` tries the HTTP cache, then the store, then
+  the network. It ships in the shared surface but the desktop and the CLI do not use it (their files stay on disk).
 
 - **Desktop:** one worker thread (`src/backend/editor/wasm-toolchain/`); the worker is its own webpack
   entry, `clang-worker.js`, built next to `main.js`. The renderer reaches it over the `wasm-toolchain:compile` IPC
