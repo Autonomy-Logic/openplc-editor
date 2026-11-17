@@ -25,7 +25,7 @@ export interface VppTargetLoader<TVerified extends { contentHash: string }> {
   getTarget(): VppLoaderTarget | null
   /** The verified package of the target, downloading it when needed; null when there is no target or the load failed. Concurrent calls share one download. */
   load(): Promise<TVerified | null>
-  /** Clears an error (transport, verification or canceled) and loads again. */
+  /** Clears the kept error of the target, whatever its reason, and loads again. */
   retry(): Promise<TVerified | null>
   /** Aborts the running download; state becomes error with reason 'canceled'. No-op when nothing is downloading. */
   cancel(): void
@@ -67,9 +67,9 @@ function formatDuration(ms: number): string {
 /**
  * Loads, verifies and caches the package of one targeted vPLC at a time, over platform mechanisms.
  *
- * A download is aborted after `stallTimeoutMs` without bytes or `maxDurationMs` in total. Transport
- * failures and cancels are not cached; a verification failure is, for its content hash, until
- * `retry()` or a change of target. A superseded download never reaches the cache, the state or a caller.
+ * A download is aborted after `stallTimeoutMs` without bytes or `maxDurationMs` in total. An error of
+ * the target, whatever its reason, is kept until `retry()` or a change of target: meanwhile `load()`
+ * resolves null without a download. A superseded download never reaches the cache, the state or a caller.
  */
 export function createVppTargetLoader<TVerified extends { contentHash: string }>(
   mechanisms: VppTargetMechanisms<TVerified>,
@@ -80,7 +80,7 @@ export function createVppTargetLoader<TVerified extends { contentHash: string }>
 
   let target: VppLoaderTarget | null = null
   let cached: TVerified | null = null
-  let failedVerificationHash: string | null = null
+  let errorKept = false
   let active: ActiveDownload<TVerified> | null = null
   let state: VppTargetLoadState = { status: 'idle' }
   const subscribers = new Set<(state: VppTargetLoadState) => void>()
@@ -135,6 +135,7 @@ export function createVppTargetLoader<TVerified extends { contentHash: string }>
       if (reason !== 'canceled') {
         console.error(`[vpp-target-loader] could not load the package of vPLC ${current.deviceId}: ${message}`)
       }
+      errorKept = true
       end(null, { status: 'error', reason, message })
     }
 
@@ -177,7 +178,6 @@ export function createVppTargetLoader<TVerified extends { contentHash: string }>
       }
       if (settled) return
       if (!verified.ok) {
-        failedVerificationHash = current.contentHash
         fail('verification', verified.error)
         return
       }
@@ -194,7 +194,7 @@ export function createVppTargetLoader<TVerified extends { contentHash: string }>
     const current = target
     if (!current) return Promise.resolve(null)
     if (cached?.contentHash === current.contentHash) return Promise.resolve(cached)
-    if (failedVerificationHash === current.contentHash) return Promise.resolve(null)
+    if (errorKept) return Promise.resolve(null)
     if (active) return active.promise
     active = startDownload(current)
     return active.promise
@@ -205,7 +205,7 @@ export function createVppTargetLoader<TVerified extends { contentHash: string }>
       if (isSameVppLoaderTarget(target, next)) return
       target = next
       active?.stop('superseded')
-      failedVerificationHash = null
+      errorKept = false
       if (cached?.contentHash !== next?.contentHash) cached = null
       setState(next && cached ? { status: 'ready' } : { status: 'idle' })
     },
@@ -215,7 +215,7 @@ export function createVppTargetLoader<TVerified extends { contentHash: string }>
     load,
 
     retry(): Promise<TVerified | null> {
-      failedVerificationHash = null
+      errorKept = false
       return load()
     },
 
