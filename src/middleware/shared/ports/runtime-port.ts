@@ -278,10 +278,7 @@ export interface BootloaderPort {
 }
 
 export interface PluginCommandArgs {
-  /**
-   * Fetch the EtherDOG features the connected runtime advertises. `features: []` means no EtherCAT features advertised;
-   * `features: null` means the runtime could not be reached.
-   */
+  /** Plugin name as `vpp_plugins.conf` registered it. */
   plugin: string
   command: string
   params?: Record<string, unknown>
@@ -293,11 +290,7 @@ export interface RuntimePort {
   /** The bootloader on this device, when one is present. */
   bootloader: BootloaderPort
 
-  /**
-   * Invoke a VPP plugin command (`discover`, `test`, `status`) on the connected device through `POST
-   * /api/plugin-command`. `ok: false` means the command did not do what was asked. Optional: a platform with no device
-   * transport omits it.
-   */
+  /** Set the target device for subsequent API calls. */
   setDeviceContext?(context: { agentId: string; deviceId: string } | null): void
 
   /** Authenticate with the runtime. Returns JWT on success. */
@@ -310,11 +303,8 @@ export interface RuntimePort {
   getUsersInfo(): Promise<UsersInfoResult>
 
   /**
-   * Fetch the EtherDOG features the connected runtime advertises.
-   * Called after a successful connect so the pre-build capability gate can
-   * refuse a project that uses features the runtime does not support.
-   * `features: []` means "no EtherCAT features advertised"; `features: null`
-   * means the runtime could not be reached at all.
+   * Fetch the EtherDOG features the connected runtime advertises. `features: []` means no EtherCAT features advertised;
+   * `features: null` means the runtime could not be reached.
    */
   getRuntimeCapabilities(): Promise<RuntimeCapabilitiesResult>
 
@@ -355,17 +345,9 @@ export interface RuntimePort {
   clearCredentials(): Promise<{ success: boolean }>
 
   /**
-   * Invoke a VPP plugin command on the connected device — the `discover`,
-   * `test` and `status` actions a vendor screen declares.
-   *
-   * Rides the runtime's existing `POST /api/plugin-command` catch-all with the
-   * body it already accepts; no runtime change is involved. That route answers
-   * HTTP 200 even for a plugin failure, with the reason in an `error` key, so
-   * the outcome here is already interpreted — `ok: false` means the command
-   * did not do what was asked, whether the transport or the plugin said so.
-   *
-   * Optional: a platform with no device transport omits it, and the screen
-   * renders its device actions disabled instead of offering a dead button.
+   * Invoke a VPP plugin command (`discover`, `test`, `status`) on the connected device through `POST
+   * /api/plugin-command`. `ok: false` means the command did not do what was asked. Optional: a platform with no device
+   * transport omits it.
    */
   sendPluginCommand?(args: PluginCommandArgs): Promise<PluginCommandOutcome>
 
