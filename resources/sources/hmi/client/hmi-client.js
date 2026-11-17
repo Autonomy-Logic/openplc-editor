@@ -17,8 +17,9 @@
   var RENEW_RETRY_MS = 30 * 1000
   /** Ask again after the device was busy or a screen faulted. */
   var REOPEN_DELAY_MS = 5 * 1000
-  /** Connect again after the device refused the connection while the token is still valid. */
+  /** First wait before asking again after the device refused the connection; it doubles up to the maximum. */
   var RECONNECT_DELAY_MS = 2 * 1000
+  var RECONNECT_DELAY_MAX_MS = 60 * 1000
   var MAX_SEQUENCE = 9007199254740991
 
   var NOTICES = {
@@ -175,12 +176,15 @@
     var wasm = null
     var pressed = false
     var pendingMove = null
+    var lastPoint = { x: 0, y: 0 }
+    var retryDelay = RECONNECT_DELAY_MS
 
     /** Shows a notice over the last frame, dimmed and not operable, or hides it when text is null. */
     function showNotice(text) {
       notice.textContent = text || ''
       notice.hidden = !text
       screen.classList.toggle('stale', !!text)
+      if (text && pressed) release(null)
     }
 
     function showForm(text) {
@@ -200,15 +204,20 @@
       renewTimer = setTimeout(renew, delay)
     }
 
-    /** Renews the token; resolves once the renewal settled, whatever its outcome. */
+    /**
+     * Renews the token; resolves once the renewal settled, whatever its outcome. A reply for a token that was
+     * replaced or dropped meanwhile (sign-out, a newer renewal) is ignored.
+     */
     function renew() {
-      if (!token) return Promise.resolve()
-      if (!tokenUsable(token, Date.now())) {
+      var sent = token
+      if (!sent) return Promise.resolve()
+      if (!tokenUsable(sent, Date.now())) {
         showForm('Your session expired. Sign in again.')
         return Promise.resolve()
       }
-      return fetch('/api/renew', { method: 'POST', headers: { Authorization: 'Bearer ' + token } })
+      return fetch('/api/renew', { method: 'POST', headers: { Authorization: 'Bearer ' + sent } })
         .then(function (response) {
+          if (token !== sent) return null
           if (response.status === 401 || response.status === 403) {
             showForm('Your session ended. Sign in again.')
             return null
@@ -217,15 +226,22 @@
           return response.json()
         })
         .then(function (body) {
-          if (!body) return
+          if (!body || token !== sent) return
           if (typeof body.access_token !== 'string') throw new Error('renew without a token')
           token = body.access_token
           writeToken(token)
           scheduleRenew(renewDelayMs(token, Date.now()))
         })
         .catch(function () {
-          scheduleRenew(RENEW_RETRY_MS)
+          if (token === sent) scheduleRenew(RENEW_RETRY_MS)
         })
+    }
+
+    /** Asks the device about the session after a refused connection, waiting longer each time. */
+    function scheduleSessionCheck() {
+      clearTimeout(reopenTimer)
+      reopenTimer = setTimeout(checkSession, retryDelay)
+      retryDelay = Math.min(retryDelay * 2, RECONNECT_DELAY_MAX_MS)
     }
 
     function signedIn(newToken) {
@@ -299,6 +315,7 @@
         reconnectionDelayMax: 5000,
       })
       socket.on('connect', function () {
+        retryDelay = RECONNECT_DELAY_MS
         sequencer.reset()
         sendViewport()
       })
@@ -308,17 +325,10 @@
           return
         }
         showNotice(NOTICES.offline)
-        // A refusal by the server is not retried by socket.io itself; the token may have just been renewed.
-        if (socket && !socket.active) {
-          var refused = socket
-          reopenTimer = setTimeout(function () {
-            if (socket === refused) refused.connect()
-          }, RECONNECT_DELAY_MS)
-        }
+        if (socket && !socket.active) scheduleSessionCheck()
       })
       socket.on('disconnect', function (reason) {
         if (reason === 'io server disconnect') {
-          // The runtime refused the token on a re-check; it may have been renewed meanwhile.
           checkSession()
           return
         }
@@ -339,6 +349,7 @@
       })
     }
 
+    /** Shows the form when the device has ended the session; connects again otherwise. */
     function checkSession() {
       fetch('/api/whoami', { headers: { Authorization: 'Bearer ' + token } })
         .then(function (response) {
@@ -352,7 +363,12 @@
 
     function draw(bytes) {
       if (!wasm) return
-      var data = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : new Uint8Array(bytes.buffer || bytes)
+      var data =
+        bytes instanceof ArrayBuffer
+          ? new Uint8Array(bytes)
+          : ArrayBuffer.isView(bytes)
+            ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+            : new Uint8Array(bytes)
       var exports = wasm.exports
       var target = exports.hmi_client_dl(data.length)
       if (!target) return
@@ -386,23 +402,26 @@
       canvas.setPointerCapture(event.pointerId)
       canvas.focus()
       var p = canvasPoint(event)
+      lastPoint = p
       send(pointerEvent(0, p.x, p.y, sequencer.next()))
     })
     canvas.addEventListener('pointermove', function (event) {
       if (!pressed) return
       var first = pendingMove === null
       pendingMove = canvasPoint(event)
+      lastPoint = pendingMove
       if (first)
         root.requestAnimationFrame(function () {
           if (pendingMove && pressed) send(pointerEvent(1, pendingMove.x, pendingMove.y, sequencer.next()))
           pendingMove = null
         })
     })
-    var release = function (event) {
+    /** Ends a press at the event's point, or at the last point known when a notice takes the screen away. */
+    function release(event) {
       if (!pressed) return
       pressed = false
       pendingMove = null
-      var p = canvasPoint(event)
+      var p = event ? canvasPoint(event) : lastPoint
       send(pointerEvent(2, p.x, p.y, sequencer.next()))
     }
     canvas.addEventListener('pointerup', release)

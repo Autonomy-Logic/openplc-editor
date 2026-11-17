@@ -62,6 +62,7 @@ const POUS: PLCPou[] = [
         v('P', { definition: 'user-data-type', value: 'Pt' }),
         v('Arr', array('INT', ['0..3'])),
         v('Big', array('INT', ['0..99'])),
+        v('Flags', array('BOOL', ['0..99'])),
         v('M', array('REAL', ['1..2', '0..1'])),
         v('Ps', array('Pt', ['0..1'], 'user-data-type')),
         v('F', named('MyFb')),
@@ -92,7 +93,7 @@ FUNCTION_BLOCK MyFb
 END_FUNCTION_BLOCK
 PROGRAM Main
   VAR
-    T1 : TON; P : Pt; Arr : ARRAY[0..3] OF INT; Big : ARRAY[0..99] OF INT; M : ARRAY[1..2, 0..1] OF REAL;
+    T1 : TON; P : Pt; Arr : ARRAY[0..3] OF INT; Big : ARRAY[0..99] OF INT; Flags : ARRAY[0..99] OF BOOL; M : ARRAY[1..2, 0..1] OF REAL;
     Ps : ARRAY[0..1] OF Pt; F : MyFb;
   END_VAR
   VAR CONSTANT Limit : INT := 5; END_VAR
@@ -241,4 +242,98 @@ describe('nested HMI variables', () => {
     })
     expect(result.errors.map((e) => e.message)).toEqual(['S.Value: G.X is a CONSTANT; the operator cannot change it'])
   })
+
+  /** The preview build of a screen whose body binds `body`, its elements in a stack. */
+  const preview = (elements: string[], body: string[]) =>
+    generateHmiUnit({
+      screens: [
+        {
+          name: 'Overview',
+          source: [
+            'FUNCTION_BLOCK Overview EXTENDS HmiScreen',
+            '  VAR',
+            '    Body : HmiHorizontalStack;',
+            ...elements.map((e) => `    ${e} := (Parent := 'Body');`),
+            '  END_VAR',
+            ...body.map((b) => `  ${b}`),
+            'END_FUNCTION_BLOCK',
+            '',
+          ].join('\n'),
+        },
+      ],
+      widgets: [],
+      settings: hmiSettingsSchema.parse({}),
+      plcVariables: variables,
+      plcDeclarations: DECLARATIONS,
+      plcLibraries: [{ name: 'iec-standard-fb', archiveJson: ARCHIVE_JSON }],
+      projectNames: ['Main', 'MyFb', 'Pt', 'Sub'],
+      preview: true,
+    })
+  const messages = (result: ReturnType<typeof generateHmiUnit>) => result.errors.map((e) => e.message)
+
+  it('refuses a two-way widget on a variable past the listed elements, and builds a one-way one', () => {
+    expect(messages(preview(['S : HmiSlider'], ['S.Value := instance0.Main.Big[40];']))).toEqual([
+      "S.Value: instance0.Main.Big[40] is not in the HMI's variable list (arrays list their first 32 elements, and only arrays with literal bounds); a two-way widget cannot write it",
+    ])
+    expect(messages(preview(['L : HmiLamp'], ['L.Value := instance0.Main.Flags[40];']))).toEqual([])
+  })
+
+  it('refuses a two-way widget on a function block output, and writes a block input', () => {
+    expect(
+      messages(
+        preview(
+          ['A : HmiSwitch', 'Q : HmiSwitch', 'In : HmiSwitch'],
+          ['A.Value := instance0.Main.F.B;', 'Q.Value := instance0.Main.T1.Q;', 'In.Value := instance0.Main.T1.IN;'],
+        ),
+      ),
+    ).toEqual([
+      'A.Value: instance0.Main.F.B is an output of a function block; a two-way widget cannot write it',
+      'Q.Value: instance0.Main.T1.Q is an output of a function block; a two-way widget cannot write it',
+    ])
+    expect(messages(preview(['L : HmiLamp'], ['L.Value := instance0.Main.F.B;']))).toEqual([])
+  })
+
+  it('marks block outputs and what is below them, and configuration globals', () => {
+    const of = (path: string) => variables.find((x) => x.path === path)
+    expect(of('instance0.Main.F.B')?.blockOutput).toBe(true)
+    expect(of('instance0.Main.T1.ET')?.blockOutput).toBe(true)
+    expect(of('instance0.Main.T1.IN')?.blockOutput).toBeUndefined()
+    expect(of('instance0.Main.F.A')?.blockOutput).toBeUndefined()
+    expect(of('G.Inner.Z')?.scope).toBe('global')
+    expect(of('instance0.Main.P.X')?.scope).toBeUndefined()
+  })
+
+  it('names the two stacks in place of an HmiStack declared in a widget block', () => {
+    const result = generateHmiUnit({
+      ...sampleBase(),
+      widgets: [
+        {
+          name: 'Panel',
+          source:
+            'FUNCTION_BLOCK Panel EXTENDS HmiElement\n  VAR\n    Box : HmiStack;\n  END_VAR\nEND_FUNCTION_BLOCK\n',
+        },
+      ],
+    })
+    expect(result.errors.map((e) => `${e.file}: ${e.message}`)).toEqual([
+      'Panel: Box: HmiStack is the base of the stacks; declare Box as HmiVerticalStack (children side by side) or HmiHorizontalStack (children top to bottom), without Direction',
+    ])
+  })
 })
+
+/** A buildable project with one stacked screen and no PLC program, for widget block checks. */
+function sampleBase() {
+  return {
+    screens: [
+      {
+        name: 'Overview',
+        source:
+          'FUNCTION_BLOCK Overview EXTENDS HmiScreen\n  VAR\n    Body : HmiHorizontalStack;\n  END_VAR\nEND_FUNCTION_BLOCK\n',
+      },
+    ],
+    widgets: [],
+    settings: hmiSettingsSchema.parse({}),
+    plcVariables: [],
+    projectNames: [],
+    preview: true,
+  }
+}

@@ -21,6 +21,10 @@ export interface HmiPlcVariable {
   initialValue?: string
   /** Declared CONSTANT: screens may read it, never write it. */
   constant?: true
+  /** An output of a function block instance, or below one: screens may read it, never write it. */
+  blockOutput?: true
+  /** A configuration global, or a field or element below one. */
+  scope?: 'global'
 }
 
 /** A STruC++ library archive, as the JSON text of its `.stlib`. */

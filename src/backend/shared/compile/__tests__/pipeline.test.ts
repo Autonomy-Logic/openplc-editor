@@ -2167,12 +2167,14 @@ describe('runCompilePipeline — HMI', () => {
     )
   })
 
-  it('refuses to upload a project with screens to a runtime without HMI support', async () => {
+  it('refuses a project with screens for a runtime without HMI support, before building the HMI', async () => {
     const port = makePort({ checkRuntimeVersion: runtime(false) })
     const { events, emit } = captureEvents()
     const result = await runCompilePipeline(v4({ hmi: hmiSources }), port, emit)
 
     expect(result.success).toBe(false)
+    expect(mockedComposeHmi).not.toHaveBeenCalled()
+    expect(port.materializeRuntimeV4Bundle).not.toHaveBeenCalled()
     expect(port.uploadRuntimeV4).not.toHaveBeenCalled()
     expect(events.some((e) => /does not support them/.test(e.message))).toBe(true)
   })

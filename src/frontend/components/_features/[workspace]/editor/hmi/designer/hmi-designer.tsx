@@ -18,12 +18,7 @@ import type {
   HmiWidgetCatalog,
 } from '@root/middleware/shared/ports/hmi-preview-types'
 import { useHmiPreview, usePlatform } from '@root/middleware/shared/providers'
-import {
-  canBind,
-  momentaryCode,
-  momentaryOf,
-  writesMain,
-} from '@root/middleware/shared/utils/hmi/designer/designer-binding'
+import { bindRefusal, momentaryCode, momentaryOf } from '@root/middleware/shared/utils/hmi/designer/designer-binding'
 import {
   canvasElements,
   type DropTarget,
@@ -413,7 +408,10 @@ export function HmiScreenDesigner({ name }: { name: string }) {
       const series = info?.series
       if (!model || !target || !series) return
       const fallback = Number.parseInt(info.properties.find((p) => same(p.name, series.count))?.defaultValue ?? '1', 10)
-      apply(removeSeries(source, model, element, series, seriesCount(target, series, fallback), index, isWidget))
+      const defaultOf = (property: string) => info.properties.find((p) => same(p.name, property))?.defaultValue
+      apply(
+        removeSeries(source, model, element, series, seriesCount(target, series, fallback), index, isWidget, defaultOf),
+      )
     },
   }
 
@@ -445,26 +443,12 @@ export function HmiScreenDesigner({ name }: { name: string }) {
       const type = model?.elements.find((e) => same(e.name, element))?.type
       const info = type ? catalog.widgets.get(type.toUpperCase()) : undefined
       const main = info?.main
-      if (!model || !main) {
-        toast({ title: 'Not wired', description: `${element} has no input a variable can show`, variant: 'warn' })
-        return
-      }
       const plcVariable = request.plcVariables.find((v) => same(v.path, variable))
-      const declared = plcVariable?.type
-      if (plcVariable?.constant && writesMain(info)) {
-        toast({
-          title: 'Not wired',
-          description: `${variable} is a CONSTANT; ${element} would write it`,
-          variant: 'warn',
-        })
-        return
-      }
-      if (declared !== undefined && !canBind(main, declared)) {
-        toast({
-          title: 'Not wired',
-          description: `${element}.${main.name} takes ${main.type}; ${variable} is ${declared}`,
-          variant: 'warn',
-        })
+      const refusal = info
+        ? bindRefusal(element, info, variable, plcVariable)
+        : `${element} has no input a variable can show`
+      if (!model || !info || !main || refusal !== null) {
+        toast({ title: 'Not wired', description: refusal ?? `${element} cannot be wired`, variant: 'warn' })
         return
       }
       const momentary = info.momentary

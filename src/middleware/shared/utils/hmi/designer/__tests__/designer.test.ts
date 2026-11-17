@@ -528,20 +528,20 @@ describe('designer clipboard payloads', () => {
   })
 })
 
-describe('designer trend series', () => {
-  const SERIES = { count: 'Pens', values: ['Value', 'Value2', 'Value3'], colors: ['AccentColor', 'Color2', 'Color3'] }
-  const TREND = [
-    'FUNCTION_BLOCK S EXTENDS HmiScreen',
-    '  VAR',
-    '    T : HmiTrend := (Pens := 3, Color2 := COLOR.Red, Color3 := COLOR.Blue);',
-    '  END_VAR',
-    '  T.Value := instance0.Main.A;',
-    '  T.Value2 := instance0.Main.B;',
-    '  T.Value3 := instance0.Main.C;',
-    'END_FUNCTION_BLOCK',
-    '',
-  ].join('\n')
+const SERIES = { count: 'Pens', values: ['Value', 'Value2', 'Value3'], colors: ['AccentColor', 'Color2', 'Color3'] }
+const TREND = [
+  'FUNCTION_BLOCK S EXTENDS HmiScreen',
+  '  VAR',
+  '    T : HmiTrend := (Pens := 3, Color2 := COLOR.Red, Color3 := COLOR.Blue);',
+  '  END_VAR',
+  '  T.Value := instance0.Main.A;',
+  '  T.Value2 := instance0.Main.B;',
+  '  T.Value3 := instance0.Main.C;',
+  'END_FUNCTION_BLOCK',
+  '',
+].join('\n')
 
+describe('designer trend series', () => {
   it('counts the series shown, within one and the maximum', () => {
     const t = parse(TREND).elements[0]
     expect(seriesCount(t, SERIES, 1)).toBe(3)
@@ -586,6 +586,13 @@ describe('designer bindings to nested variables', () => {
     '',
   ].join('\n')
 
+  it('binds and reads back a multi-dimensional array element', () => {
+    const source = edited(setBinding(SCREEN_N, parse(SCREEN_N), 'N', 'Value', 'instance0.Main.M[2,1]'))
+    expect(source).toContain('N.Value := instance0.Main.M[2,1];')
+    expect(parse(source).bindings.map((b) => b.variable)).toEqual(['instance0.Main.M[2,1]'])
+    expect(setBinding(SCREEN_N, parse(SCREEN_N), 'N', 'Value', 'instance0.Main.M[2,]').ok).toBe(false)
+  })
+
   it('binds and reads back a block pin, a struct field and an array element, and refuses an expression', () => {
     let source = SCREEN_N
     for (const [element, variable] of [
@@ -602,5 +609,35 @@ describe('designer bindings to nested variables', () => {
     expect(setBinding(SCREEN_N, parse(SCREEN_N), 'N', 'Value', 'instance0.Main.Arr[i]').ok).toBe(false)
     const indexed = parse(SCREEN_N.replace('END_VAR\n', 'END_VAR\n  N.Value := instance0.Main.Arr[i];\n'))
     expect(indexed.bindings).toEqual([])
+  })
+
+  it('moves a later series bound to a multi-dimensional element down', () => {
+    const source = TREND.replace('T.Value3 := instance0.Main.C;', 'T.Value3 := instance0.Main.M[2,1];')
+    const out = edited(removeSeries(source, parse(source), 'T', SERIES, 3, 1, isWidget))
+    expect(parse(out).bindings.map((b) => [b.property, b.variable])).toEqual([
+      ['Value', 'instance0.Main.A'],
+      ['Value2', 'instance0.Main.M[2,1]'],
+    ])
+  })
+
+  it("keeps a moved series' default colour, and moves a literal value", () => {
+    const source = [
+      'FUNCTION_BLOCK S EXTENDS HmiScreen',
+      '  VAR',
+      '    T : HmiTrend := (Pens := 3, Color2 := COLOR.Red, Value3 := 4.5);',
+      '  END_VAR',
+      '  T.Value2 := instance0.Main.B;',
+      'END_FUNCTION_BLOCK',
+      '',
+    ].join('\n')
+    const defaults: Record<string, string> = { Color2: 'COLOR.Success', Color3: 'COLOR.Warning' }
+    const out = edited(removeSeries(source, parse(source), 'T', SERIES, 3, 1, isWidget, (p) => defaults[p]))
+    const after = parse(out)
+    expect(after.bindings.map((b) => b.property)).toEqual([])
+    expect(after.elements[0].props.map((p) => [p.name, p.value])).toEqual([
+      ['Pens', '2'],
+      ['Color2', 'COLOR.Warning'],
+      ['Value2', '4.5'],
+    ])
   })
 })

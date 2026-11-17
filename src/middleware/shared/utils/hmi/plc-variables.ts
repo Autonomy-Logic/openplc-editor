@@ -11,7 +11,7 @@ const HIDDEN_CLASSES = new Set(['temp', 'external'])
 /** Elements listed per array; larger arrays list their first ones only. */
 export const HMI_ARRAY_ELEMENTS_MAX = 32
 /** How deep function blocks and structs are followed. */
-const NESTING_MAX = 6
+export const HMI_NESTING_MAX = 6
 /** Elementary types, as library manifests spell them. */
 const ELEMENTARY = new Set([
   'BOOL',
@@ -129,34 +129,47 @@ interface Lookup {
   library: ReadonlyMap<string, HmiBlockPins>
 }
 
-type Emit = (path: string, type: string) => void
+/** Takes a leaf: its path, type and whether it is a block output or below one. */
+type Emit = (path: string, type: string, output: boolean) => void
 
 /** The leaves under a value of a named type: struct fields, block pins or array elements; none for other types. */
-function expandNamed(path: string, name: string, at: Lookup, emit: Emit, seen: readonly string[]): void {
+function expandNamed(
+  path: string,
+  name: string,
+  at: Lookup,
+  emit: Emit,
+  seen: readonly string[],
+  output = false,
+): void {
   const key = name.trim().toUpperCase()
-  if (seen.length >= NESTING_MAX || seen.includes(key)) return
+  if (seen.length >= HMI_NESTING_MAX || seen.includes(key)) return
   const inner = [...seen, key]
   const dt = at.dataTypes.get(key)
   if (dt?.derivation === 'structure') {
-    for (const field of dt.variable) expandType(`${path}.${field.name}`, field.type, at, emit, inner)
+    for (const field of dt.variable) expandType(`${path}.${field.name}`, field.type, at, emit, inner, output)
     return
   }
   if (dt?.derivation === 'array') {
-    expandArray(path, dt.baseType, dt.dimensions, at, emit, inner)
+    expandArray(path, dt.baseType, dt.dimensions, at, emit, inner, output)
     return
   }
   const pou = at.blocks.get(key)
   if (pou) {
     for (const v of pou.interface?.variables ?? [])
-      if (v.class === 'input' || v.class === 'output') expandType(`${path}.${v.name}`, v.type, at, emit, inner)
+      if (v.class === 'input' || v.class === 'output')
+        expandType(`${path}.${v.name}`, v.type, at, emit, inner, output || v.class === 'output')
     return
   }
   const pins = at.library.get(key)
   if (pins)
-    for (const pin of [...pins.inputs, ...pins.outputs]) {
-      if (isElementary(pin.type)) emit(`${path}.${pin.name}`, pin.type.toUpperCase())
-      else expandNamed(`${path}.${pin.name}`, pin.type, at, emit, inner)
-    }
+    for (const [list, isOutput] of [
+      [pins.inputs, false],
+      [pins.outputs, true],
+    ] as const)
+      for (const pin of list) {
+        if (isElementary(pin.type)) emit(`${path}.${pin.name}`, pin.type.toUpperCase(), output || isOutput)
+        else expandNamed(`${path}.${pin.name}`, pin.type, at, emit, inner, output || isOutput)
+      }
 }
 
 function expandArray(
@@ -166,21 +179,29 @@ function expandArray(
   at: Lookup,
   emit: Emit,
   seen: readonly string[],
+  output = false,
 ): void {
   const ranges = bounds(dimensions)
   if (!ranges) return
   for (const tuple of indexTuples(ranges, HMI_ARRAY_ELEMENTS_MAX)) {
     const item = `${path}[${tuple.join(',')}]`
-    if (element.definition === 'base-type') emit(item, element.value.toUpperCase())
-    else expandNamed(item, element.value, at, emit, seen)
+    if (element.definition === 'base-type') emit(item, element.value.toUpperCase(), output)
+    else expandNamed(item, element.value, at, emit, seen, output)
   }
 }
 
-function expandType(path: string, type: PLCVariableType, at: Lookup, emit: Emit, seen: readonly string[]): void {
-  if (type.definition === 'base-type') emit(path, type.value.toUpperCase())
+function expandType(
+  path: string,
+  type: PLCVariableType,
+  at: Lookup,
+  emit: Emit,
+  seen: readonly string[],
+  output = false,
+): void {
+  if (type.definition === 'base-type') emit(path, type.value.toUpperCase(), output)
   else if (type.definition === 'array') {
-    if (type.data) expandArray(path, type.data.baseType, type.data.dimensions, at, emit, seen)
-  } else expandNamed(path, type.value, at, emit, seen)
+    if (type.data) expandArray(path, type.data.baseType, type.data.dimensions, at, emit, seen, output)
+  } else expandNamed(path, type.value, at, emit, seen, output)
 }
 
 /**
@@ -198,20 +219,30 @@ export function hmiPlcVariables(
     library: libraryBlocks,
   }
   const variables: HmiPlcVariable[] = []
-  const add = (path: string, v: PLCVariable) => {
+  const add = (path: string, v: PLCVariable, global = false) => {
     if (v.class !== undefined && HIDDEN_CLASSES.has(v.class)) return
-    const constant = v.flag === 'constant' ? { constant: true as const } : {}
+    const marks = {
+      ...(v.flag === 'constant' ? { constant: true as const } : {}),
+      ...(global ? { scope: 'global' as const } : {}),
+    }
     if (v.type.definition === 'base-type') {
       const initial = v.initialValue?.trim()
       variables.push({
         path,
         type: v.type.value.toUpperCase(),
         ...(initial ? { initialValue: initial } : {}),
-        ...constant,
+        ...marks,
       })
       return
     }
-    expandType(path, v.type, at, (leaf, type) => variables.push({ path: leaf, type, ...constant }), [])
+    expandType(
+      path,
+      v.type,
+      at,
+      (leaf, type, output) =>
+        variables.push({ path: leaf, type, ...marks, ...(output ? { blockOutput: true as const } : {}) }),
+      [],
+    )
   }
   const { resource } = project.configurations
   for (const instance of resource.instances) {
@@ -221,7 +252,7 @@ export function hmiPlcVariables(
     if (!pou) continue
     for (const v of pou.interface?.variables ?? []) add(`${instance.name}.${pou.name}.${v.name}`, v)
   }
-  for (const v of resource.globalVariables) add(v.name, v)
+  for (const v of resource.globalVariables) add(v.name, v, true)
   for (const list of project.globalVariableLists ?? []) for (const v of list.variables) add(`${list.name}.${v.name}`, v)
   return variables
 }
@@ -240,7 +271,8 @@ export const HMI_GLOBALS_NODE = '#globals'
 
 /**
  * The variables as a tree by their paths' parts: instances, programs, Global Variable Lists, block instances, structs
- * and arrays (`[i]` parts); configuration globals, whose paths have no dot, under one Globals branch. First seen, first.
+ * and arrays (`[i]` parts); configuration globals, with what is below them, under one Globals branch. First seen,
+ * first.
  */
 export function hmiVariableTree(variables: readonly HmiPlcVariable[]): HmiVariableNode[] {
   const roots: HmiVariableNode[] = []
@@ -248,7 +280,7 @@ export function hmiVariableTree(variables: readonly HmiPlcVariable[]): HmiVariab
   for (const variable of variables) {
     const parts = pathParts(variable.path)
     let level = roots
-    if (parts.length === 1) {
+    if (variable.scope === 'global' || parts.length === 1) {
       if (!roots.includes(globals)) roots.push(globals)
       level = globals.children
     }

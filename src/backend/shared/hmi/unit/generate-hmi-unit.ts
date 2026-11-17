@@ -14,6 +14,7 @@ import {
   hmiTextLiteral as textLiteral,
 } from '@root/middleware/shared/utils/hmi/block-checks'
 import { isContainerType, widgetIsA as isA } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
+import { HMI_ARRAY_ELEMENTS_MAX, HMI_NESTING_MAX } from '@root/middleware/shared/utils/hmi/plc-variables'
 import { maskStComments } from '@root/middleware/shared/utils/hmi/references'
 import { hmiReservedName } from '@root/middleware/shared/utils/hmi/reserved-names'
 import {
@@ -327,6 +328,13 @@ function shortPath(path: string): string {
   return prefix ? upper.slice(prefix.length) : upper
 }
 
+/** Why a path the HMI's variable list leaves out is not there, as far as its shape tells. */
+function unlistedReason(path: string): string {
+  if (path.includes('['))
+    return `arrays list their first ${HMI_ARRAY_ELEMENTS_MAX} elements, and only arrays with literal bounds`
+  return `function blocks and structs are listed ${HMI_NESTING_MAX} levels deep, without in-outs and internal variables`
+}
+
 /** Typed write-back of `Element.Value := Variable;` for two-way widgets. */
 function writeBacks(
   plan: ScreenPlan,
@@ -341,10 +349,25 @@ function writeBacks(
     const twoWay = widget?.twoWay
     if (!twoWay || twoWay.value.toUpperCase() !== b.property.toUpperCase()) continue
     const variable = variables.get(shortPath(b.variable))
-    const type = variable ? tagType(variable.type) : undefined
-    if (!variable || !type) continue
+    if (!variable) {
+      d.error(
+        plan.file.name,
+        `${b.element}.${b.property}: ${b.variable} is not in the HMI's variable list (${unlistedReason(b.variable)}); ` +
+          'a two-way widget cannot write it',
+      )
+      continue
+    }
+    const type = tagType(variable.type)
+    if (!type) continue
     if (variable.constant) {
       d.error(plan.file.name, `${b.element}.${b.property}: ${b.variable} is a CONSTANT; the operator cannot change it`)
+      continue
+    }
+    if (variable.blockOutput) {
+      d.error(
+        plan.file.name,
+        `${b.element}.${b.property}: ${b.variable} is an output of a function block; a two-way widget cannot write it`,
+      )
       continue
     }
     const source = widget.outputs.find((o) => o.name.toUpperCase() === twoWay.newValue.toUpperCase())
@@ -825,8 +848,10 @@ export interface HmiWidgetLibrary {
 export function compileHmiWidgets(widgets: readonly HmiSourceFile[], library: StlibArchive): HmiWidgetLibrary {
   const strucpp = loadStrucpp()
   const archives: StlibArchive[] = [library]
-  const errors: HmiDiagnostic[] = []
-  if (widgets.length > 0) {
+  const errors: HmiDiagnostic[] = widgets.flatMap((w) =>
+    stackBaseErrors(w.source).map((message) => ({ file: w.name, message })),
+  )
+  if (widgets.length > 0 && errors.length === 0) {
     const compiled = strucpp.compileStlib(
       widgets.map((w) => ({ fileName: w.name, source: w.source })),
       { name: 'project-widgets', version: '1.0.0', namespace: 'hmi_project_widgets', dependencies: [library] },

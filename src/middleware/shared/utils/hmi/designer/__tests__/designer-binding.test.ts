@@ -1,5 +1,5 @@
 import type { HmiWidgetBinding } from '../../../../ports/hmi-preview-types'
-import { bindableVariables, canBind, momentaryCode, momentaryOf, writesMain } from '../designer-binding'
+import { bindableVariables, bindRefusal, canBind, momentaryCode, momentaryOf, writesMain } from '../designer-binding'
 
 const pressed: HmiWidgetBinding = { name: 'Pressed', direction: 'output', type: 'BOOL' }
 const level: HmiWidgetBinding = { name: 'Value', direction: 'input', type: 'REAL' }
@@ -72,5 +72,44 @@ describe('designer binding', () => {
     expect(momentaryOf('Main.Run := Start.Clicked;', 'Start', momentary)).toBeNull()
     expect(momentaryOf('Main.Run := TRUE;', 'Start', momentary)).toBeNull()
     expect(momentaryOf('Main.Run := Start.Pressed; Main.B := 1;', 'Start', momentary)).toBeNull()
+  })
+
+  it('keeps block outputs and constants off bindings that write, and allows them on ones that only show', () => {
+    const vars = [
+      { path: 'instance0.Main.F.B', type: 'BOOL', blockOutput: true as const },
+      { path: 'instance0.Main.F.A', type: 'BOOL' },
+      { path: 'Limit', type: 'BOOL', constant: true as const },
+    ]
+    const sw = { name: 'Value', direction: 'input' as const, type: 'BOOL' }
+    expect(bindableVariables(sw, vars, true).map((v) => v.path)).toEqual(['instance0.Main.F.A'])
+    expect(bindableVariables(sw, vars, false).map((v) => v.path)).toEqual([
+      'instance0.Main.F.B',
+      'instance0.Main.F.A',
+      'Limit',
+    ])
+    const toggle = { main: sw, twoWay: { value: 'Value', changed: 'Changed', newValue: 'NewValue' } }
+    expect(bindRefusal('S', toggle, 'instance0.Main.F.B', vars[0])).toBe(
+      'instance0.Main.F.B is an output of a function block; S would write it',
+    )
+    expect(bindRefusal('S', toggle, 'Limit', vars[2])).toBe('Limit is a CONSTANT; S would write it')
+    expect(bindRefusal('S', toggle, 'instance0.Main.F.A', vars[1])).toBeNull()
+    expect(bindRefusal('L', { main: sw }, 'instance0.Main.F.B', vars[0])).toBeNull()
+    expect(bindRefusal('B', { main: pressed, momentary }, 'instance0.Main.F.B', vars[0])).toContain(
+      'output of a function block',
+    )
+    expect(bindRefusal('N', { main: level }, 'X', { path: 'X', type: 'STRING' })).toBe(
+      'N.Value takes REAL; X is STRING',
+    )
+    expect(bindRefusal('N', { main: level }, 'instance0.Main.M[2,1]', undefined)).toBeNull()
+    expect(bindRefusal('N', {}, 'X', undefined)).toBe('N has no input a variable can show')
+  })
+
+  it('reads a momentary binding to an array element, multi-dimensional included', () => {
+    const code = momentaryCode('B', momentary, { variable: 'instance0.Main.M[2,1]', whilePressed: true })
+    expect(momentaryOf(code, 'B', momentary)).toEqual({ variable: 'instance0.Main.M[2,1]', whilePressed: true })
+    expect(momentaryOf('instance0.Main.Arr[ 3 ] := NOT B.Pressed;', 'B', momentary)).toEqual({
+      variable: 'instance0.Main.Arr[3]',
+      whilePressed: false,
+    })
   })
 })

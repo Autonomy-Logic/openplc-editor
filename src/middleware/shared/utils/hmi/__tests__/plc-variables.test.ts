@@ -56,7 +56,7 @@ describe('hmiPlcVariables', () => {
       { path: 'instance0.Main.Name', type: 'STRING' },
       { path: 'spare.Main.Level', type: 'REAL', initialValue: '12.5' },
       { path: 'spare.Main.Name', type: 'STRING' },
-      { path: 'Alarm', type: 'BOOL', initialValue: 'TRUE' },
+      { path: 'Alarm', type: 'BOOL', initialValue: 'TRUE', scope: 'global' },
       { path: 'GVL.Output1', type: 'BOOL' },
     ])
   })
@@ -76,8 +76,8 @@ describe('hmiPlcVariables', () => {
       },
     })
     expect(variables).toEqual([
-      { path: 'MaxL', type: 'INT', initialValue: '10', constant: true },
-      { path: 'Run', type: 'BOOL' },
+      { path: 'MaxL', type: 'INT', initialValue: '10', constant: true, scope: 'global' },
+      { path: 'Run', type: 'BOOL', scope: 'global' },
     ])
   })
 })
@@ -133,6 +133,18 @@ describe('hmiVariableTree', () => {
     expect(ps.key).toBe('instance0.Main.Ps')
     expect(ps.children[0].key).toBe('instance0.Main.Ps[1]')
     expect(ps.children[0].children[0].variable?.path).toBe('instance0.Main.Ps[1].X')
+  })
+
+  it('puts configuration globals and what is below them under Globals', () => {
+    const tree = hmiVariableTree([
+      { path: 'G.Inner.Z', type: 'BOOL', scope: 'global' },
+      { path: 'AlarmOn', type: 'BOOL', scope: 'global' },
+      { path: 'Plant.Pressure', type: 'REAL' },
+    ])
+    expect(shape(tree)).toEqual([
+      ['Globals', [['G', [['Inner', ['Z']]]], 'AlarmOn']],
+      ['Plant', ['Pressure']],
+    ])
   })
 
   it('keeps only the matching variables and the branches leading to them', () => {

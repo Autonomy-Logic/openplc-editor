@@ -1,4 +1,4 @@
-import type { HmiWidgetCatalog, HmiWidgetInfo } from '@root/middleware/shared/ports/hmi-preview-types'
+import type { HmiPlcVariable, HmiWidgetCatalog, HmiWidgetInfo } from '@root/middleware/shared/ports/hmi-preview-types'
 import { parseDesignerBlock } from '@root/middleware/shared/utils/hmi/designer/designer-model'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
@@ -127,8 +127,8 @@ const TREND: HmiWidgetInfo = {
   series: { count: 'Pens', values: ['Value', 'Value2', 'Value3'], colors: ['AccentColor', 'Color2', 'Color3'] },
 }
 
-function trend(decl: string) {
-  const source = `FUNCTION_BLOCK S EXTENDS HmiScreen\n  VAR\n    ${decl}\n  END_VAR\nEND_FUNCTION_BLOCK\n`
+function trend(decl: string, body = '', variables: HmiPlcVariable[] = []) {
+  const source = `FUNCTION_BLOCK S EXTENDS HmiScreen\n  VAR\n    ${decl}\n  END_VAR\n${body}END_FUNCTION_BLOCK\n`
   const parsed = parseDesignerBlock(source, (type) => type.toUpperCase() === 'HMITREND')
   if (!parsed.ok) throw new Error('fixture does not parse')
   const set: Array<[string, string, string | null]> = []
@@ -141,7 +141,7 @@ function trend(decl: string) {
       model={parsed.model}
       element={element}
       catalog={{ widgets: new Map([['HMITREND', TREND]]), colors: ['Accent'] }}
-      variables={[]}
+      variables={variables}
       screens={[]}
       actions={{
         setProperty: (e, p, v) => {
@@ -190,5 +190,12 @@ describe('PropertiesCard series', () => {
     expect(screen.getByTestId('hmi-series-add').hasAttribute('disabled')).toBe(true)
     fireEvent.click(screen.getByTestId('hmi-prop-tab-style'))
     expect(screen.queryByTestId('hmi-prop-Color2')).toBeNull()
+  })
+
+  it('shows a series bound to a multi-dimensional array element', () => {
+    trend('T : HmiTrend := (Pens := 2);', '  T.Value2 := instance0.Main.M[2,1];\n', [
+      { path: 'instance0.Main.M[2,1]', type: 'REAL' },
+    ])
+    expect(screen.getByTestId('hmi-series-2-binding').textContent).toContain('instance0.Main.M[2,1]')
   })
 })

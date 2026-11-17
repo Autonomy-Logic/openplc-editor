@@ -306,7 +306,7 @@ export function setBinding(
 ): DesignerEdit {
   const target = editable(model, element)
   if (typeof target === 'string') return refuse(target)
-  if (variable !== null && !/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|\[-?\d+\])*$/.test(variable))
+  if (variable !== null && !/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*|\[-?\d+(?:,-?\d+)*\])*$/.test(variable))
     return refuse(`${variable} is not a PLC variable`)
   const existing = model.bindings.find((b) => same(b.element, element) && same(b.property, property))
   const line = variable === null ? '' : bindingStatement(model, target.name, property, variable)
@@ -404,7 +404,8 @@ export function seriesCount(element: DesignerElement, series: HmiWidgetSeries, f
 
 /**
  * Removes series `index` (from 1; the first series stays) of an element showing `count` series: the later series move
- * down one, bindings and colours included, and the count drops by one. `isWidget` reads the source between steps.
+ * down one with their binding, literal value and colour (an unset colour as its own default, from `defaultOf`), and the
+ * count drops by one. `isWidget` reads the source between steps.
  */
 export function removeSeries(
   source: string,
@@ -414,6 +415,7 @@ export function removeSeries(
   count: number,
   index: number,
   isWidget: (type: string) => boolean,
+  defaultOf: (property: string) => string | undefined = () => undefined,
 ): DesignerEdit {
   const target = editable(model, element)
   if (typeof target === 'string') return refuse(target)
@@ -421,17 +423,19 @@ export function removeSeries(
     return refuse(`${element} has no series ${index + 1}`)
   const bound = (property: string) =>
     model.bindings.find((b) => same(b.element, element) && same(b.property, property))?.variable ?? null
-  const colour = (property: string) => target.props.find((p) => same(p.name, property))?.value
+  const written = (property: string) => target.props.find((p) => same(p.name, property))?.value
   const steps: Array<(src: string, m: DesignerModel) => DesignerEdit> = []
-  for (let j = index; j < count; j++) {
-    const variable = j + 1 < count ? bound(series.values[j + 1]) : null
-    const next = j + 1 < count ? colour(series.colors[j + 1]) : undefined
-    steps.push((src, m) => setBinding(src, m, element, series.values[j], variable))
+  const put = (property: string, value: string | undefined) =>
     steps.push((src, m) =>
-      next === undefined
-        ? removeProperty(src, m, element, series.colors[j])
-        : setProperty(src, m, element, series.colors[j], next),
+      value === undefined ? removeProperty(src, m, element, property) : setProperty(src, m, element, property, value),
     )
+  for (let j = index; j < count; j++) {
+    const moved = j + 1 < count
+    const variable = moved ? bound(series.values[j + 1]) : null
+    steps.push((src, m) => setBinding(src, m, element, series.values[j], variable))
+    put(series.values[j], moved ? written(series.values[j + 1]) : undefined)
+    const colour = moved ? (written(series.colors[j + 1]) ?? defaultOf(series.colors[j + 1])) : undefined
+    put(series.colors[j], colour)
   }
   steps.push((src, m) => setProperty(src, m, element, series.count, String(count - 1)))
   let next = source

@@ -884,7 +884,8 @@ async function runCompilePipelineInner(
       level: 'info',
     })
 
-    // The HMI travels in the upload as `hmi/`, built against this program's debug map and MD5.
+    if (hmi && versionCheck && !versionCheck.supportsHmi)
+      return bailError(emit, 'runtime-version', HMI_UNSUPPORTED_RUNTIME)
     const hmiStep = await buildHmiArtefactStep({
       hmi,
       runtimeSupportsHmi: versionCheck ? versionCheck.supportsHmi : null,
@@ -984,9 +985,6 @@ async function runCompilePipelineInner(
         }),
       )
     }
-
-    // Refused before the upload: an older runtime rejects the client's files and would fail the whole upload.
-    if (hmi && !versionCheck.supportsHmi) return bailError(emit, 'runtime-version', HMI_UNSUPPORTED_RUNTIME)
 
     // Persistent storage was configured, but this runtime has no built-in store
     // to configure. The upload still succeeds and retain.conf still installs —

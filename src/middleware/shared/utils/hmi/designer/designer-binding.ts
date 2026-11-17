@@ -40,13 +40,39 @@ export function writesMain(info: Pick<HmiWidgetInfo, 'main' | 'twoWay' | 'moment
   return info.main?.direction === 'output' || info.twoWay !== undefined || info.momentary !== undefined
 }
 
-/** The variables that can be wired to `main`; constants only when the binding never writes. */
+/** Why a binding that writes may not write `variable`, or null when it may: constants and block outputs are read-only. */
+export function readOnlyReason(variable: HmiPlcVariable): string | null {
+  if (variable.constant) return `${variable.path} is a CONSTANT`
+  if (variable.blockOutput) return `${variable.path} is an output of a function block`
+  return null
+}
+
+/** The variables that can be wired to `main`; read-only ones only when the binding never writes. */
 export function bindableVariables(
   main: HmiWidgetBinding,
   variables: readonly HmiPlcVariable[],
   writes: boolean,
 ): HmiPlcVariable[] {
-  return variables.filter((v) => canBind(main, v.type) && !(writes && v.constant))
+  return variables.filter((v) => canBind(main, v.type) && !(writes && readOnlyReason(v) !== null))
+}
+
+/**
+ * Why `variable` cannot be wired to the main binding of `element`, a widget of `info`, or null when it can: a read-only
+ * variable on a binding that writes, or a type the binding does not take. An unknown variable is left to the build.
+ */
+export function bindRefusal(
+  element: string,
+  info: Pick<HmiWidgetInfo, 'main' | 'twoWay' | 'momentary'>,
+  path: string,
+  variable: HmiPlcVariable | undefined,
+): string | null {
+  const main = info.main
+  if (!main) return `${element} has no input a variable can show`
+  if (!variable) return null
+  const readOnly = writesMain(info) ? readOnlyReason(variable) : null
+  if (readOnly !== null) return `${readOnly}; ${element} would write it`
+  if (!canBind(main, variable.type)) return `${element}.${main.name} takes ${main.type}; ${path} is ${variable.type}`
+  return null
 }
 
 /** A variable wired to a momentary output, and the value it takes while the output is on. */
@@ -57,8 +83,8 @@ export interface HmiMomentaryBinding {
 
 type Momentary = NonNullable<HmiWidgetInfo['momentary']>
 
-/** A global, `List.Member` or `Instance.Program.Var`: identifiers joined by dots. */
-const VARIABLE = '[A-Za-z_]\\w*(?:\\s*\\.\\s*[A-Za-z_]\\w*)*'
+/** A global, `List.Member` or `Instance.Program.Var`: identifiers joined by dots, with integer subscripts. */
+const VARIABLE = '[A-Za-z_]\\w*(?:\\s*\\.\\s*[A-Za-z_]\\w*|\\s*\\[\\s*-?\\d+(?:\\s*,\\s*-?\\d+)*\\s*\\])*'
 
 /** The binding an element's `Changed` code is, or null when the code is anything else. */
 export function momentaryOf(code: string, element: string, momentary: Momentary): HmiMomentaryBinding | null {
