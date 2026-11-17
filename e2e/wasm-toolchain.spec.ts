@@ -19,6 +19,7 @@ import { join, resolve } from 'node:path'
 import type { ElectronApplication, Page } from '@playwright/test'
 import { _electron as electron, expect } from '@playwright/test'
 
+import { failFastOn } from './helpers/app-console'
 import { compileThroughPort, runAnswer } from './helpers/compiler-port'
 import { shutdown } from './helpers/electron-editor'
 import {
@@ -27,7 +28,9 @@ import {
   freshProfile,
   launchEditor,
   mainWindowShown,
+  openNewProject,
   test,
+  waitForStartup,
 } from './helpers/editor-session'
 import { countOf, resetWorkerThreadPeaks, trackWorkerThreads, workerThreads } from './helpers/worker-threads'
 
@@ -87,6 +90,22 @@ const answerRequest = (value: number, token: string) => ({
   linkFlags: ['-mexec-model=reactor'],
 })
 
+const SIMULATOR_PROJECT = join(
+  __dirname,
+  '..',
+  'src',
+  'backend',
+  'shared',
+  'simulator',
+  '__tests__',
+  'fixtures',
+  'simulator-project',
+)
+
+/** App failures that end an expected failed compile at once; its own compiler error is what the case asserts. */
+const NOT_THE_COMPILE =
+  /build failed|Failed to start simulator|could not be loaded|could not start|Something went wrong/i
+
 const LOADER_NOTICE =
   '// This file was changed from the @yowasp/clang package: a run given no fetchProgress gets no default progress callback.\n'
 
@@ -114,6 +133,7 @@ async function startsNothing(app: ElectronApplication): Promise<void> {
  * share one, and no Python thread starts.
  */
 async function compilesThroughThePort(app: ElectronApplication, page: Page): Promise<void> {
+  const compile = (request: unknown, failure?: RegExp) => failFastOn(page, compileThroughPort(page, request), failure)
   await trackWorkerThreads(app)
   await resetWorkerThreadPeaks(app)
   const token = `t${Date.now()}${Math.random().toString(36).slice(2)}`
@@ -121,29 +141,26 @@ async function compilesThroughThePort(app: ElectronApplication, page: Page): Pro
   const request = answerProgram(token)
 
   const beforeFirst = await startedClangWorkers(app)
-  const first = await compileThroughPort(page, request)
+  const first = await compile(request)
   expect(first.messages).toEqual([])
   expect(first.ok).toBe(true)
   expect(await runAnswer(first.wasm)).toBe(42)
   expect(await startedClangWorkers(app)).toBeGreaterThan(beforeFirst)
   await expect.poll(() => liveClangWorkers(app), { timeout: 10000 }).toBe(0)
 
-  const again = await compileThroughPort(page, request)
+  const again = await compile(request)
   expect(again).toMatchObject({ ok: true, cached: 2 })
 
-  const broken = await compileThroughPort(page, {
-    files: { 'x.c': `int f( { /* ${token} */` },
-    units: [{ source: 'x.c', language: 'c' }],
-  })
+  const broken = await compile(
+    { files: { 'x.c': `int f( { /* ${token} */` }, units: [{ source: 'x.c', language: 'c' }] },
+    NOT_THE_COMPILE,
+  )
   expect(broken.ok).toBe(false)
   expect(broken.messages.some((m) => m.includes('x.c:1:'))).toBe(true)
   await expect.poll(() => liveClangWorkers(app), { timeout: 10000 }).toBe(0)
 
   const startedBefore = await startedClangWorkers(app)
-  const [seven, eight] = await Promise.all([
-    compileThroughPort(page, answerRequest(7, token)),
-    compileThroughPort(page, answerRequest(8, token)),
-  ])
+  const [seven, eight] = await Promise.all([compile(answerRequest(7, token)), compile(answerRequest(8, token))])
   expect([seven.ok, eight.ok]).toEqual([true, true])
   expect([await runAnswer(seven.wasm), await runAnswer(eight.wasm)]).toEqual([7, 8])
   const afterBoth = await workerThreads(app)
@@ -151,10 +168,10 @@ async function compilesThroughThePort(app: ElectronApplication, page: Page): Pro
   expect(afterBoth.maxLive['clang-worker.js']).toBe(1)
   await expect.poll(() => liveClangWorkers(app), { timeout: 10000 }).toBe(0)
 
-  const invalid = await compileThroughPort(page, {
-    files: { '__proto__/x.c': 'int x;' },
-    units: [{ source: '__proto__/x.c', language: 'c' }],
-  })
+  const invalid = await compile(
+    { files: { '__proto__/x.c': 'int x;' }, units: [{ source: '__proto__/x.c', language: 'c' }] },
+    NOT_THE_COMPILE,
+  )
   expect(invalid.ok).toBe(false)
   expect(invalid.messages).toEqual(["Invalid toolchain file path '__proto__/x.c': '__proto__' is not allowed."])
   expect(countOf((await workerThreads(app)).started, 'python-worker.js')).toBe(pythonBefore)
@@ -173,6 +190,7 @@ test.describe('WebAssembly toolchain (desktop)', () => {
   })
 
   test('each build runs on one clang worker that ends with it, and two builds at once share it', async ({ editor }) => {
+    await openNewProject(editor, SIMULATOR_PROJECT, 'compile-port')
     await compilesThroughThePort(editor.app, editor.page)
   })
 
@@ -182,8 +200,7 @@ test.describe('WebAssembly toolchain (desktop)', () => {
     mkdirSync(cwd, { recursive: true })
     const app = await launchIn(cwd, PACKAGED_APP)
     try {
-      const page = await windowByUrl(app, 'index.html')
-      await expect.poll(() => mainWindowShown(app), { timeout: 120000 }).toBe(true)
+      const page = await waitForStartup(app)
       await startsNothing(app)
       await compilesThroughThePort(app, page)
       const resourcesPath = await app.evaluate(() => process.resourcesPath)

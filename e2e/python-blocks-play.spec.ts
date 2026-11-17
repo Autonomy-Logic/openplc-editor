@@ -98,8 +98,11 @@ test('Python blocks run beside the PLC: threads and numpy, failures, a block tha
   await trackWorkerThreads(app)
 
   const play = page.getByRole('button', { name: 'Play' })
+  const openConsole = () => page.getByRole('tab', { name: 'Console' }).click()
   await play.click({ timeout: 60000 })
+  await openConsole()
   await waitForApp(page, () => simulatorRunning(page), { timeout: 90000, message: 'the simulator never started' })
+  await openConsole()
   const whileRunning = await workerThreads(app)
   expect(countOf(whileRunning.live, 'python-worker.js')).toBe(1)
   expect(countOf(whileRunning.live, 'clang-worker.js')).toBe(0)
@@ -107,19 +110,21 @@ test('Python blocks run beside the PLC: threads and numpy, failures, a block tha
   const read = () => readVariables(page, leaves, names)
   const loopsAfter = async (from: number, loops: number): Promise<Record<string, number>> => {
     const sample = { values: (await read()) ?? {} }
-    await expect
-      .poll(
-        async () => {
-          sample.values = (await read()) ?? sample.values
-          return (sample.values.PY_COUNT ?? 0) - from
-        },
-        { timeout: 30000, intervals: [50] },
-      )
-      .toBeGreaterThanOrEqual(loops)
+    await waitForApp(
+      page,
+      async () => {
+        sample.values = (await read()) ?? sample.values
+        return (sample.values.PY_COUNT ?? 0) - from >= loops
+      },
+      { timeout: 30000, intervals: [50], message: `PY_COUNT never advanced ${loops} loops past ${from}` },
+    )
     return sample.values
   }
 
-  await expect.poll(async () => (await read())?.PY_COUNT ?? 0, { timeout: 30000 }).toBeGreaterThan(5)
+  await waitForApp(page, async () => ((await read())?.PY_COUNT ?? 0) > 5, {
+    timeout: 30000,
+    message: 'the Python block never counted past 5',
+  })
   const first = await read()
   if (!first) throw new Error('the debugger did not answer')
   const since = Date.now()
@@ -129,7 +134,6 @@ test('Python blocks run beside the PLC: threads and numpy, failures, a block tha
   expect(loopsPerSecond).toBeLessThan(11)
   expect(later.PY_BEATS).toBeGreaterThan(first.PY_BEATS)
   expect(later.PY_MEAN).toBeGreaterThan(0)
-  await page.getByRole('tab', { name: 'Console' }).click()
   await waitForText(page, /\[PyStats\] PyStats started, numpy 2\.3\.2/, { timeout: 30000 })
 
   await waitForText(page, /\[PyFail\] RuntimeError: planned failure after 30 loops/, { timeout: 30000 })
@@ -150,12 +154,16 @@ test('Python blocks run beside the PLC: threads and numpy, failures, a block tha
   expect(stillFailed.NET_CONNECTED).toBe(0)
 
   await play.click()
-  await expect.poll(() => simulatorRunning(page), { timeout: 30000 }).toBe(false)
+  await waitForApp(page, async () => !(await simulatorRunning(page)), {
+    timeout: 30000,
+    message: 'Stop never stopped the simulator',
+  })
   await waitForApp(page, async () => (await afterLastStop(page)) !== '', { message: 'Stop was never reported' })
 
   await play.click()
+  await openConsole()
   await waitForApp(page, () => simulatorRunning(page), { timeout: 90000, message: 'the second Play never started' })
-  await page.getByRole('tab', { name: 'Console' }).click()
+  await openConsole()
   await waitForApp(page, async () => /\[PyStats\] count=\d+/.test(await afterLastStop(page)), {
     timeout: 30000,
     message: 'the second run printed no PyStats count',
@@ -164,5 +172,8 @@ test('Python blocks run beside the PLC: threads and numpy, failures, a block tha
   expect(countOf((await workerThreads(app)).live, 'python-worker.js')).toBe(1)
 
   await play.click()
-  await expect.poll(() => simulatorRunning(page), { timeout: 30000 }).toBe(false)
+  await waitForApp(page, async () => !(await simulatorRunning(page)), {
+    timeout: 30000,
+    message: 'the second Stop never stopped the simulator',
+  })
 })

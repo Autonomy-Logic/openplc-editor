@@ -11,11 +11,12 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { test as base, type ElectronApplication, expect, type Page } from '@playwright/test'
+import { _electron as electron, test as base, type ElectronApplication, expect, type Page } from '@playwright/test'
 
-import { launch, shutdown } from './electron-editor'
+import { shutdown } from './electron-editor'
 
 const RELEASE_APP = join(__dirname, '..', '..', 'release', 'app')
+const MAIN = join(RELEASE_APP, 'dist', 'main', 'main.js')
 
 export interface EditorSession {
   app: ElectronApplication
@@ -61,12 +62,57 @@ export const mainWindowShown = (app: ElectronApplication): Promise<boolean> =>
     BrowserWindow.getAllWindows().some((w) => w.webContents.getURL().includes('index.html') && w.isVisible()),
   )
 
-/** Launches the built editor on a new profile and waits until its main window is shown. */
+/**
+ * Waits until the editor's main window is shown and returns it. Fails at once, quoting the reason, when the startup
+ * error splash appears or the app exits first.
+ * @throws {Error} `The editor could not start: <reason>`, `The editor exited during startup (<code>).`, or a timeout.
+ */
+export async function waitForStartup(app: ElectronApplication, timeout = 120000): Promise<Page> {
+  const proc = app.process()
+  const deadline = Date.now() + timeout
+  for (;;) {
+    if (proc.exitCode !== null || proc.signalCode !== null) {
+      throw new Error(`The editor exited during startup (${proc.exitCode ?? proc.signalCode}).`)
+    }
+    const splash = app.windows().find((w) => w.url().includes('error='))
+    if (splash) {
+      const shown = await splash
+        .locator('body')
+        .innerText()
+        .catch(() => '')
+      throw new Error(`The editor could not start: ${shown || new URL(splash.url()).searchParams.get('error')}`)
+    }
+    const main = app.windows().find((w) => w.url().includes('index.html'))
+    if (main && (await mainWindowShown(app).catch(() => false))) {
+      await main.waitForLoadState('domcontentloaded')
+      return main
+    }
+    if (Date.now() > deadline) throw new Error(`The editor's main window was not shown within ${timeout} ms.`)
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+}
+
+/**
+ * Launches the built editor on a new profile and waits until its main window is shown, sized past the mobile
+ * breakpoint. Closes the app when startup fails, then rethrows.
+ */
 export async function launchEditor(label: string): Promise<EditorSession> {
   copyPreload()
-  const session = await launch(freshProfile(label))
-  await expect.poll(() => mainWindowShown(session.app), { timeout: 120000 }).toBe(true)
-  return session
+  const app = await electron.launch({
+    args: [MAIN, `--user-data-dir=${freshProfile(label)}`],
+    env: { ...process.env, NODE_ENV: 'production' },
+  })
+  try {
+    const page = await waitForStartup(app)
+    await app.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows().find((b) => b.webContents.getURL().includes('index.html'))
+      win?.setSize(1500, 950)
+    })
+    return { app, page }
+  } catch (error) {
+    await shutdown(app)
+    throw error
+  }
 }
 
 /** One editor per Playwright worker, shared by the worker's tests; each test opens its own new project. */
