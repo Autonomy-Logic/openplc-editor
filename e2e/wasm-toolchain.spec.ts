@@ -1,32 +1,47 @@
 /**
  * The in-editor WebAssembly toolchain on the desktop.
  *
- * The editor loads clang while the splash is up and only then shows the main window; the renderer compiles
- * through its CompilerPort and gets a module back. A toolchain that cannot load keeps the splash up with
- * the reason and a Quit button.
+ * While the splash is up the editor only checks that the toolchain's files are there, starting no clang worker, and
+ * then shows the main window. The renderer compiles through its CompilerPort: each build runs on one clang worker
+ * thread that has ended when the build resolves, and two builds at once share it. A toolchain whose files are
+ * missing keeps the splash up with the missing file and a Quit button.
  *
- * Running needs a production build plus the preload copy; see "Electron e2e" in CLAUDE.md.
+ * The build cases share the worker's editor. Edge cases that launch their own editor: the cold start (startup worker
+ * counts), the missing toolchain (another working directory) and the packaged app.
+ *
+ * Running needs a production build; see "Electron e2e" in CLAUDE.md.
  * Opt-in: E2E_PACKAGED_APP, the executable of a packaged build (`npm run package`), also runs the compile case
- * against that build, where clang ships as an extra resource outside the asar archive.
+ * against that build, where the patched clang package ships as an extra resource outside the asar archive.
  */
-import { existsSync, mkdirSync, realpathSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import type { ElectronApplication, Page } from '@playwright/test'
-import { _electron as electron, expect, test } from '@playwright/test'
+import { _electron as electron, expect } from '@playwright/test'
 
+import { failFastOn } from './helpers/app-console'
 import { compileThroughPort, runAnswer } from './helpers/compiler-port'
+import { shutdown } from './helpers/electron-editor'
+import {
+  copyPreload,
+  freshDirectory,
+  freshProfile,
+  launchEditor,
+  mainWindowShown,
+  openNewProject,
+  test,
+  waitForStartup,
+} from './helpers/editor-session'
+import { countOf, resetWorkerThreadPeaks, trackWorkerThreads, workerThreads } from './helpers/worker-threads'
 
-const ROOT = join(realpathSync(tmpdir()), 'openplc-e2e-wasm-toolchain')
 const MAIN = join(__dirname, '..', 'release', 'app', 'dist', 'main', 'main.js')
 // Resolved before launching from another directory, so a repository-relative path works too.
 const PACKAGED_APP = process.env.E2E_PACKAGED_APP ? resolve(__dirname, '..', process.env.E2E_PACKAGED_APP) : ''
 
-function launch(slug: string, cwd?: string, executablePath?: string): Promise<ElectronApplication> {
-  const userData = join(ROOT, slug, 'userdata')
-  rmSync(join(ROOT, slug), { recursive: true, force: true })
-  mkdirSync(userData, { recursive: true })
+/** Launches an editor of its own on a new profile from `cwd`, the packaged executable when given. */
+function launchIn(cwd: string, executablePath?: string): Promise<ElectronApplication> {
+  copyPreload()
+  const userData = freshProfile('wasm-toolchain')
   return electron.launch({
     ...(executablePath
       ? { executablePath, args: [`--user-data-dir=${userData}`] }
@@ -51,17 +66,12 @@ async function windowByUrl(app: ElectronApplication, part: string): Promise<Page
   )
 }
 
-/** True once the main window has been shown, which the editor does only after the toolchain is ready. */
-const mainWindowShown = (app: ElectronApplication): Promise<boolean> =>
-  app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows().some((w) => w.webContents.getURL().includes('index.html') && w.isVisible()),
-  )
-
-const REQUEST = {
+/** A two-unit C and C++ request whose `answer` returns 42; `token` makes its sources new to the session cache. */
+const answerProgram = (token: string) => ({
   files: {
-    'core.c': 'int core(void) { return 41; }',
+    'core.c': `int core(void) { return 41; } /* ${token} */`,
     'main.cpp':
-      '#include <string>\nextern "C" int core(void);\n' +
+      `#include <string>\n/* ${token} */\nextern "C" int core(void);\n` +
       'extern "C" __attribute__((export_name("answer"))) int answer() { std::string s("x"); return core() + (int)s.size(); }',
   },
   units: [
@@ -69,56 +79,135 @@ const REQUEST = {
     { source: 'main.cpp', language: 'c++' as const, flags: ['-std=gnu++17', '-fno-exceptions'] },
   ],
   linkFlags: ['-mexec-model=reactor'],
+})
+
+/** A one-unit request returning `value` from `answer`; `token` makes it new to the session cache. */
+const answerRequest = (value: number, token: string) => ({
+  files: {
+    [`answer${value}.c`]: `__attribute__((export_name("answer"))) int answer(void) { return ${value}; } /* ${token} */`,
+  },
+  units: [{ source: `answer${value}.c`, language: 'c' as const, flags: ['-std=c99'] }],
+  linkFlags: ['-mexec-model=reactor'],
+})
+
+const SIMULATOR_PROJECT = join(
+  __dirname,
+  '..',
+  'src',
+  'backend',
+  'shared',
+  'simulator',
+  '__tests__',
+  'fixtures',
+  'simulator-project',
+)
+
+/** App failures that end an expected failed compile at once; its own compiler error is what the case asserts. */
+const NOT_THE_COMPILE =
+  /build failed|Failed to start simulator|could not be loaded|could not start|Something went wrong/i
+
+const LOADER_NOTICE =
+  '// This file was changed from the @yowasp/clang package: a run given no fetchProgress gets no default progress callback.\n'
+
+/** Clang worker threads alive now, as the inspector has reported them. */
+async function liveClangWorkers(app: ElectronApplication): Promise<number> {
+  return countOf((await workerThreads(app)).live, 'clang-worker.js')
+}
+
+/** Clang worker threads started since tracking began. */
+async function startedClangWorkers(app: ElectronApplication): Promise<number> {
+  return countOf((await workerThreads(app)).started, 'clang-worker.js')
+}
+
+/** Right after startup: no clang worker and no Python thread exist. */
+async function startsNothing(app: ElectronApplication): Promise<void> {
+  await trackWorkerThreads(app)
+  const atStartup = await workerThreads(app)
+  expect(countOf(atStartup.live, 'clang-worker.js')).toBe(0)
+  expect(countOf(atStartup.live, 'python-worker.js')).toBe(0)
+}
+
+/**
+ * Compiles, recompiles from the cache, reports a syntax error, runs two builds at once and refuses an invalid path,
+ * all through the CompilerPort. Each build runs on one clang worker that has ended once it resolves; the two at once
+ * share one, and no Python thread starts.
+ */
+async function compilesThroughThePort(app: ElectronApplication, page: Page): Promise<void> {
+  const compile = (request: unknown, failure?: RegExp) => failFastOn(page, compileThroughPort(page, request), failure)
+  await trackWorkerThreads(app)
+  await resetWorkerThreadPeaks(app)
+  const token = `t${Date.now()}${Math.random().toString(36).slice(2)}`
+  const pythonBefore = countOf((await workerThreads(app)).started, 'python-worker.js')
+  const request = answerProgram(token)
+
+  const beforeFirst = await startedClangWorkers(app)
+  const first = await compile(request)
+  expect(first.messages).toEqual([])
+  expect(first.ok).toBe(true)
+  expect(await runAnswer(first.wasm)).toBe(42)
+  expect(await startedClangWorkers(app)).toBeGreaterThan(beforeFirst)
+  await expect.poll(() => liveClangWorkers(app), { timeout: 10000 }).toBe(0)
+
+  const again = await compile(request)
+  expect(again).toMatchObject({ ok: true, cached: 2 })
+
+  const broken = await compile(
+    { files: { 'x.c': `int f( { /* ${token} */` }, units: [{ source: 'x.c', language: 'c' }] },
+    NOT_THE_COMPILE,
+  )
+  expect(broken.ok).toBe(false)
+  expect(broken.messages.some((m) => m.includes('x.c:1:'))).toBe(true)
+  await expect.poll(() => liveClangWorkers(app), { timeout: 10000 }).toBe(0)
+
+  const startedBefore = await startedClangWorkers(app)
+  const [seven, eight] = await Promise.all([compile(answerRequest(7, token)), compile(answerRequest(8, token))])
+  expect([seven.ok, eight.ok]).toEqual([true, true])
+  expect([await runAnswer(seven.wasm), await runAnswer(eight.wasm)]).toEqual([7, 8])
+  const afterBoth = await workerThreads(app)
+  expect(countOf(afterBoth.started, 'clang-worker.js') - startedBefore).toBe(1)
+  expect(afterBoth.maxLive['clang-worker.js']).toBe(1)
+  await expect.poll(() => liveClangWorkers(app), { timeout: 10000 }).toBe(0)
+
+  const invalid = await compile(
+    { files: { '__proto__/x.c': 'int x;' }, units: [{ source: '__proto__/x.c', language: 'c' }] },
+    NOT_THE_COMPILE,
+  )
+  expect(invalid.ok).toBe(false)
+  expect(invalid.messages).toEqual(["Invalid toolchain file path '__proto__/x.c': '__proto__' is not allowed."])
+  expect(countOf((await workerThreads(app)).started, 'python-worker.js')).toBe(pythonBefore)
 }
 
 test.describe('WebAssembly toolchain (desktop)', () => {
   test.setTimeout(180000)
 
-  const compilesThroughThePort = async (app: ElectronApplication): Promise<void> => {
-    const page = await windowByUrl(app, 'index.html')
-    await expect.poll(() => mainWindowShown(app), { timeout: 120000 }).toBe(true)
-
-    const first = await compileThroughPort(page, REQUEST)
-    expect(first.messages).toEqual([])
-    expect(first.ok).toBe(true)
-    expect(await runAnswer(first.wasm)).toBe(42)
-
-    const again = await compileThroughPort(page, REQUEST)
-    expect(again).toMatchObject({ ok: true, cached: 2 })
-
-    const broken = await compileThroughPort(page, {
-      files: { 'x.c': 'int f( {' },
-      units: [{ source: 'x.c', language: 'c' }],
-    })
-    expect(broken.ok).toBe(false)
-    expect(broken.messages.some((m) => m.includes('x.c:1:'))).toBe(true)
-
-    const invalid = await compileThroughPort(page, {
-      files: { '__proto__/x.c': 'int x;' },
-      units: [{ source: '__proto__/x.c', language: 'c' }],
-    })
-    expect(invalid.ok).toBe(false)
-    expect(invalid.messages).toEqual(["Invalid toolchain file path '__proto__/x.c': '__proto__' is not allowed."])
-  }
-
-  test('shows the editor once clang is loaded and compiles through the CompilerPort', async () => {
-    const app = await launch('ready')
+  test('cold start: the editor starts no clang worker and no Python thread', async () => {
+    const { app } = await launchEditor('cold-start')
     try {
-      await compilesThroughThePort(app)
+      await startsNothing(app)
     } finally {
-      app.process().kill('SIGKILL')
+      await shutdown(app)
     }
   })
 
-  test('compiles in a packaged build', async () => {
+  test('each build runs on one clang worker that ends with it, and two builds at once share it', async ({ editor }) => {
+    await openNewProject(editor, SIMULATOR_PROJECT, 'compile-port')
+    await compilesThroughThePort(editor.app, editor.page)
+  })
+
+  test('packaged app: starts no clang worker and compiles with the patched loader', async () => {
     test.skip(PACKAGED_APP === '', 'Set E2E_PACKAGED_APP to a packaged build to run this case.')
-    const cwd = join(ROOT, 'packaged', 'cwd')
-    rmSync(join(ROOT, 'packaged'), { recursive: true, force: true })
+    const cwd = join(freshDirectory('packaged'), 'cwd')
     mkdirSync(cwd, { recursive: true })
-    const app = await launch('packaged-run', cwd, PACKAGED_APP)
+    const app = await launchIn(cwd, PACKAGED_APP)
     try {
-      await compilesThroughThePort(app)
+      const page = await waitForStartup(app)
+      await startsNothing(app)
+      await compilesThroughThePort(app, page)
       const resourcesPath = await app.evaluate(() => process.resourcesPath)
+      const bundle = readFileSync(join(resourcesPath, 'yowasp-clang', 'gen', 'bundle.js'), 'utf8')
+      expect(bundle.startsWith(LOADER_NOTICE)).toBe(true)
+      expect(bundle).toContain('this.#fetchResources(options.fetchProgress)')
+      expect(bundle).not.toContain('this.#fetchResources(options.fetchProgress ?? defaultFetchProgress)')
       const licenses = join(resourcesPath, 'yowasp-clang', 'licenses')
       for (const file of [
         'LICENSE.txt',
@@ -134,16 +223,20 @@ test.describe('WebAssembly toolchain (desktop)', () => {
     }
   })
 
-  test('keeps the splash up with the reason when clang cannot load, and Quit closes the app', async () => {
-    const cwd = join(ROOT, 'missing', 'cwd')
-    rmSync(join(ROOT, 'missing'), { recursive: true, force: true })
+  test('missing toolchain: keeps the splash up naming the missing file, and Quit closes the app', async () => {
+    const cwd = join(freshDirectory('missing-toolchain'), 'cwd')
     mkdirSync(cwd, { recursive: true })
-    const app = await launch('missing-run', cwd)
+    const app = await launchIn(cwd)
     const proc = app.process()
     try {
       const splash = await windowByUrl(app, 'error=')
       await expect(splash.getByText('OpenPLC Editor could not start')).toBeVisible()
       await expect(splash.getByText(/The WebAssembly compiler could not be loaded/)).toBeVisible()
+      await expect(
+        splash.getByText(`Missing toolchain file: ${join(cwd, 'release', 'yowasp-clang', 'gen', 'bundle.js')}`, {
+          exact: false,
+        }),
+      ).toBeVisible()
       expect(await mainWindowShown(app)).toBe(false)
 
       const exited = new Promise<number | null>((resolve) => proc.once('exit', (code) => resolve(code)))

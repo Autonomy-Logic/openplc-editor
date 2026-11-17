@@ -24,7 +24,7 @@
       "to": "./strucpp/libs"
     },
     {
-      "from": "./node_modules/@yowasp/clang",
+      "from": "./release/yowasp-clang",
       "to": "./yowasp-clang",
       "filter": ["package.json", "README.md", "gen/**"]
     },
