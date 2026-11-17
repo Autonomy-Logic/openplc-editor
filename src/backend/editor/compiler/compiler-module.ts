@@ -186,6 +186,7 @@ import JSZip from 'jszip'
 
 import type { VppScreenConfigInputs } from '../../../middleware/shared/ports/compiler-platform-port'
 import type { PersistentStorageSettings, PlatformOption } from '../../../middleware/shared/ports/types'
+import { parseHmiBuildSources } from '../../../middleware/shared/utils/hmi/build-sources-schema'
 import { BoardInfoResolver } from '../../shared/hardware/board-info-resolver'
 import { findVppDeviceByBoardName } from '../../shared/hardware/find-vpp-device'
 import { persistentStorageSchema } from '../../shared/types/PLC/devices/configuration'
@@ -1922,6 +1923,7 @@ class CompilerModule {
       cleanBuild,
       communicationPort,
       vendorScreenData,
+      hmiArg,
     ] = args as [
       string,
       string,
@@ -1933,7 +1935,17 @@ class CompilerModule {
       boolean | undefined,
       string | null | undefined,
       Record<string, unknown> | undefined,
+      unknown,
     ]
+    const parsedHmi = parseHmiBuildSources(hmiArg)
+    if (!parsedHmi.ok) {
+      _mainProcessPort.postMessage({
+        logLevel: 'error',
+        message: `The project's HMI could not be read: ${parsedHmi.error}\nStopping compilation process.`,
+      })
+      _mainProcessPort.close()
+      return
+    }
 
     // VPP integrity gate (DOPE-539). FIRST, before the manifest is read for
     // anything else: from here on this method trusts the package directory for
@@ -2285,6 +2297,7 @@ class CompilerModule {
       },
       {
         normalizedProjectPath,
+        hmiSourcesPath: join(this.sourceDirectoryPath, 'hmi'),
         compilationPath,
         sourceTargetFolderPath,
         boardTarget,
@@ -2591,6 +2604,7 @@ class CompilerModule {
         // host app, not about the compile.
         editorVersion: APP_VERSION,
         dependencyHintSurface: this.dependencyHintSurface,
+        hmi: parsedHmi.hmi,
       },
       platformPort,
       (event) => {

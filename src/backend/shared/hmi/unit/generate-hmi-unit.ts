@@ -13,7 +13,7 @@ import {
   type HmiCheckBlock,
   hmiTextLiteral as textLiteral,
 } from '@root/middleware/shared/utils/hmi/block-checks'
-import { widgetIsA as isA } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
+import { isContainerType, widgetIsA as isA } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
 import { maskStComments } from '@root/middleware/shared/utils/hmi/references'
 import { hmiReservedName } from '@root/middleware/shared/utils/hmi/reserved-names'
 import {
@@ -60,6 +60,8 @@ export interface HmiUnitInput extends HmiUnitSources {
   preview?: boolean
   /** PLC debug-table address of a variable; absent when building without a PLC program (preview). */
   resolve?: (path: string) => HmiTagAddress | null
+  /** The PLC's libraries already loaded, as the program build has them; used with `plcLibraries`. */
+  plcArchives?: readonly StlibArchive[]
   plcMd5?: string
 }
 
@@ -255,7 +257,7 @@ class Diagnostics {
 interface ScreenPlan {
   file: HmiSourceFile
   model: HmiBlockModel
-  /** Elements in drawing order with their container (undefined for the screen's column). */
+  /** Elements in drawing order with their container (undefined for the screen's own stack). */
   attach: Array<{ element: HmiElementDecl; parent?: HmiElementDecl }>
   connects: Array<{ pipe: string; source: string; target: string; prior: string | null }>
   writeBacks: string[]
@@ -279,7 +281,7 @@ function elementTree(plan: ScreenPlan, catalog: HmiWidgetCatalog): void {
   for (const e of model.elements) {
     const name = textLiteral(e.props.get('PARENT'))
     const parent = name ? byName.get(name.toUpperCase()) : undefined
-    if (parent && isA(catalog, parent.type, 'HMISTACK')) parentOf.set(e, parent)
+    if (parent && isContainerType(catalog, parent.type)) parentOf.set(e, parent)
   }
   const visit = (parent: HmiElementDecl | undefined, depth: number): void => {
     for (const e of model.elements) {
@@ -304,6 +306,18 @@ function elementTree(plan: ScreenPlan, catalog: HmiWidgetCatalog): void {
     priorPipe.set(parent, e.name)
     if (source !== undefined && target !== undefined) plan.connects.push({ pipe: e.name, source, target, prior })
   }
+}
+
+/** `Name : HmiStack` in code: the abstract base of the stacks, which a screen cannot declare. */
+const STACK_BASE_DECLARATION = /\b([A-Za-z_]\w*)\s*:\s*HmiStack\b/gi
+
+/** What a declaration of the stack base must become, one message per element. */
+function stackBaseErrors(source: string): string[] {
+  return [...maskStComments(source).matchAll(STACK_BASE_DECLARATION)].map(
+    ([, name]) =>
+      `${name}: HmiStack is the base of the stacks; declare ${name} as HmiVerticalStack (children side by side) or ` +
+      'HmiHorizontalStack (children top to bottom), without Direction',
+  )
 }
 
 /** A PLC path as the project's variable list names it, upper case: without the configuration and resource. */
@@ -872,10 +886,10 @@ function widgetPreviewSource(info: HmiWidgetInfo): string {
   return [
     `FUNCTION_BLOCK ${WIDGET_PREVIEW_SCREEN} EXTENDS HmiScreen`,
     '  VAR',
-    '    HMI__Column : HmiStack := (Direction := HMI_DIRECTION#Column, Gap := 16, Padding := 16, Grow := 1, GrowAuto := FALSE);',
-    "    HMI__Row : HmiStack := (Parent := 'HMI__Column', Direction := HMI_DIRECTION#Row, GrowAuto := FALSE);",
+    '    HMI__Column : HmiHorizontalStack := (Gap := 16, Padding := 16, Grow := 1, GrowAuto := FALSE);',
+    "    HMI__Row : HmiVerticalStack := (Parent := 'HMI__Column', GrowAuto := FALSE);",
     `    Natural : ${info.name} := (Parent := 'HMI__Row', GrowAuto := FALSE);`,
-    "    HMI__Spacer : HmiStack := (Parent := 'HMI__Row', Grow := 1, GrowAuto := FALSE);",
+    "    HMI__Spacer : HmiVerticalStack := (Parent := 'HMI__Row', Grow := 1, GrowAuto := FALSE);",
     `    Stretched : ${info.name} := (Parent := 'HMI__Column', Grow := 1, GrowAuto := FALSE);`,
     '  END_VAR',
     ...assign,
@@ -906,7 +920,7 @@ function galleryWidgets(catalog: HmiWidgetCatalog, projectWidgets: readonly HmiS
 /** The palette gallery's screen: each widget alone in a row, at natural size, with its test value. */
 function gallerySource(widgets: readonly HmiWidgetInfo[]): string {
   const declarations = widgets.flatMap((info) => [
-    `    HMI__R_${info.name} : HmiStack := (Parent := 'HMI__Column', Direction := HMI_DIRECTION#Row, GrowAuto := FALSE);`,
+    `    HMI__R_${info.name} : HmiVerticalStack := (Parent := 'HMI__Column', GrowAuto := FALSE);`,
     `    ${GALLERY_ELEMENT}${info.name} : ${info.name} := (Parent := 'HMI__R_${info.name}', GrowAuto := FALSE);`,
   ])
   const values = widgets.flatMap((info) => {
@@ -916,7 +930,7 @@ function gallerySource(widgets: readonly HmiWidgetInfo[]): string {
   return [
     `FUNCTION_BLOCK ${HMI_GALLERY_SCREEN} EXTENDS HmiScreen`,
     '  VAR',
-    '    HMI__Column : HmiStack := (Direction := HMI_DIRECTION#Column, Gap := 12, Padding := 8, GrowAuto := FALSE);',
+    '    HMI__Column : HmiHorizontalStack := (Gap := 12, Padding := 8, GrowAuto := FALSE);',
     ...declarations,
     '  END_VAR',
     ...values,
@@ -931,7 +945,7 @@ export const HMI_THEME_PREVIEW_SCREEN = 'HMI__ThemePreview'
 /** The theme preview's screen: controls and values on surface cards, then the fixed colors, in `theme`. */
 function themePreviewSource(theme: string): string {
   const card = (name: string) =>
-    `    ${name} : HmiStack := (Parent := 'HMI__Column', Direction := HMI_DIRECTION#Row, Gap := 12, Padding := 12, Fill := COLOR.Surface, GrowAuto := FALSE);`
+    `    ${name} : HmiVerticalStack := (Parent := 'HMI__Column', Gap := 12, Padding := 12, Fill := COLOR.Surface, GrowAuto := FALSE);`
   const fixed = ['Red', 'Green', 'Blue', 'Yellow', 'Orange', 'Gray'].map(
     (c) =>
       `    HMI__${c} : HmiRect := (Parent := 'HMI__Fixed', Fill := COLOR.${c}, PrefWidth := 36, PrefHeight := 20);`,
@@ -940,7 +954,7 @@ function themePreviewSource(theme: string): string {
     `{attribute 'hmi_theme' := '${theme}'}`,
     `FUNCTION_BLOCK ${HMI_THEME_PREVIEW_SCREEN} EXTENDS HmiScreen`,
     '  VAR',
-    '    HMI__Column : HmiStack := (Direction := HMI_DIRECTION#Column, Gap := 12, Padding := 16, Grow := 1, GrowAuto := FALSE);',
+    '    HMI__Column : HmiHorizontalStack := (Gap := 12, Padding := 16, Grow := 1, GrowAuto := FALSE);',
     `    HMI__Title : HmiLabel := (Parent := 'HMI__Column', Text := 'Plant overview', Size := 20, Font := HMI_FONT#Bold);`,
     card('HMI__Controls'),
     `    HMI__Start : HmiButton := (Parent := 'HMI__Controls', Text := 'Start');`,
@@ -951,7 +965,7 @@ function themePreviewSource(theme: string): string {
     `    HMI__Level : HmiGauge := (Parent := 'HMI__Values', Caption := 'Level', Value := 62.0);`,
     `    HMI__Tank : HmiTank := (Parent := 'HMI__Values', Caption := 'Tank', Value := 45.0, Unit := '%');`,
     `    HMI__Flow : HmiValue := (Parent := 'HMI__Values', Caption := 'Flow', Value := 42.5, Unit := 'm3/h');`,
-    `    HMI__Fixed : HmiStack := (Parent := 'HMI__Column', Direction := HMI_DIRECTION#Row, Gap := 8, GrowAuto := FALSE);`,
+    `    HMI__Fixed : HmiVerticalStack := (Parent := 'HMI__Column', Gap := 8, GrowAuto := FALSE);`,
     ...fixed,
     '  END_VAR',
     'END_FUNCTION_BLOCK',
@@ -1024,6 +1038,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
       continue
     }
     const { model } = parsed
+    for (const message of stackBaseErrors(file.source)) d.error(file.name, message)
     const block = checkBlockOf(model)
     const checks = { kind: 'screen' as const, fileName: file.name, catalog, settings: input.settings, screenMembers }
     for (const f of checkHmiBlockHeader(block, checks)) d.error(file.name, f.message)
@@ -1060,7 +1075,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   result.sources = sources
   const [first, ...rest] = Object.entries(sources)
   const widgetLibraries = new Set(archives.map((a) => a.manifest.name.toUpperCase()))
-  const plcLibraries = plcArchives(input.plcLibraries ?? [], d).filter(
+  const plcLibraries = [...plcArchives(input.plcLibraries ?? [], d), ...(input.plcArchives ?? [])].filter(
     (a) => !widgetLibraries.has(a.manifest.name.toUpperCase()),
   )
   if (d.errors.length > 0) return result

@@ -146,6 +146,13 @@ function widgetOf(
     widget.twoWay = { value: main.name, changed: written(changed), newValue: written(newValue) }
   if (main?.direction === 'output' && main.type.toUpperCase() === 'BOOL' && changed)
     widget.momentary = { value: main.name, changed: written(changed) }
+  const seriesOf = (role: string) =>
+    inputs.filter((i) => attribute(i.v, 'hmi_series')?.value === role).map((i) => written(i.v))
+  const [count] = seriesOf('count')
+  const values = seriesOf('value')
+  const colors = seriesOf('color')
+  if (count !== undefined && values.length > 0 && values.length === colors.length)
+    widget.series = { count, values, colors }
   return widget
 }
 
@@ -155,7 +162,8 @@ function widgetOf(
  * - `hmi_palette` on a block: its palette group;
  * - `hmi_main` on an input or output: what a dropped variable is wired to;
  * - `hmi_group` on an input: its inspector group (`data`, `display` or `layout`);
- * - `hmi_color` on an input: a color; `hmi_element_ref` on an input: the name of another element.
+ * - `hmi_color` on an input: a color; `hmi_element_ref` on an input: the name of another element;
+ * - `hmi_series` on inputs: `value` and `color` per data series, in order, and `count` for how many show.
  * A main input with `Changed` and `NewValue` outputs is two-way; a main BOOL output with `Changed` is momentary; other
  * BOOL outputs are events.
  */

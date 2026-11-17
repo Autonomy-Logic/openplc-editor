@@ -115,12 +115,15 @@ export function writeHmiFiles(hmi: ProjectHmi | undefined): HmiProjectFile[] {
   ]
 }
 
-/** Source of a new screen. */
+/** Name of the horizontal stack a new screen comes with. */
+export const NEW_SCREEN_STACK = 'HorizontalStack1'
+
+/** Source of a new screen: one horizontal stack that fills it, which the screen's widgets go into. */
 export function newHmiScreenSource(name: string): string {
   return [
     `FUNCTION_BLOCK ${name} EXTENDS HmiScreen`,
     '  VAR',
-    `    Title : HmiLabel := (Text := '${name}', Size := 20, Font := HMI_FONT#Bold);`,
+    `    ${NEW_SCREEN_STACK} : HmiHorizontalStack;`,
     '  END_VAR',
     'END_FUNCTION_BLOCK',
     '',

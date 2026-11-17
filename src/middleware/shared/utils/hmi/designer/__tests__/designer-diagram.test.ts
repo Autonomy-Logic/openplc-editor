@@ -31,8 +31,8 @@ const CATALOG: HmiWidgetCatalog = {
   widgets: new Map(
     [
       widget('HmiElement', ''),
-      widget('HmiStack', 'HmiElement'),
-      widget('HmiDiagram', 'HmiStack', [
+      widget('HmiHorizontalStack', 'HmiStack'),
+      widget('HmiDiagram', 'HmiContainer', [
         { name: 'Grid', type: 'DINT', kind: 'number', group: 'display', defaultValue: '10', declaredBy: 'HmiDiagram' },
       ]),
       widget('HmiVessel', 'HmiElement'),
@@ -44,7 +44,7 @@ const CATALOG: HmiWidgetCatalog = {
 
 const SCREEN = `FUNCTION_BLOCK S EXTENDS HmiScreen
   VAR
-    Col : HmiStack;
+    Col : HmiHorizontalStack;
     Plant : HmiDiagram := (Grid := 20);
     Free : HmiDiagram;
     A : HmiVessel := (Parent := 'Plant', X := 40, Y := 30);

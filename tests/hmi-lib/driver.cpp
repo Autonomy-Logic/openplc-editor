@@ -207,6 +207,14 @@ int main(int argc, char **argv) {
     for (int i = 1; i < 7; i++) frame(i == 3 ? "motion_120ms" : "motion_step", i == 3);
     frame("motion_280ms", true);
 
+    /* Nested stacks: the tank on the left, the buttons top to bottom on its right. */
+    show(8);
+    frame("nested_0");
+    frame("nested", true);
+    std::printf("nested tank_x=%d tank_w=%d side_x=%d fill_x=%d fill_y=%d drain_y=%d\n",
+                (int)strucpp::NESTTANKX.get(), (int)strucpp::NESTTANKW.get(), (int)strucpp::NESTSIDEX.get(),
+                (int)strucpp::NESTFILLX.get(), (int)strucpp::NESTFILLY.get(), (int)strucpp::NESTDRAINY.get());
+
     /* A second viewer starts on the start page with its own state. */
     hmi_session_t *viewer = hmi_session_create();
     hmi_session_use(viewer);

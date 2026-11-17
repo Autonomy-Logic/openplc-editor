@@ -68,10 +68,20 @@ function plainField(v: VariableExpression): string | undefined {
   return `${v.name}.${v.fieldAccess[0]}`
 }
 
-/** A variable named by plain fields only: a global, `List.Member`, `Instance.Program.Var` or the long form. */
+/**
+ * A variable named by fields and integer-literal subscripts only: a global, `List.Member`,
+ * `Instance.Program.Var`, `Block.Pin`, `Struct.Field`, `Array[3]` or `Matrix[2,1]`, or the long form.
+ */
 function plainPath(v: VariableExpression): boolean {
-  if (v.subscripts.length > 0 || v.isDereference) return false
-  return v.accessChain === undefined || v.accessChain.every((step) => step.kind === 'field')
+  if (v.isDereference) return false
+  if (v.accessChain === undefined) return v.subscripts.length === 0
+  return v.accessChain.every(
+    (step) =>
+      step.kind === 'field' ||
+      (step.kind === 'subscript' &&
+        step.indices.length > 0 &&
+        step.indices.every((index) => index.kind === 'LiteralExpression')),
+  )
 }
 
 function bindingOf(statement: Statement, text: SourceText): HmiBinding | undefined {

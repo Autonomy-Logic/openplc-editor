@@ -25,7 +25,8 @@ function consumerErrors(source: string): string[] {
 }
 
 const FR18_WIDGETS = [
-  'HmiStack',
+  'HmiVerticalStack',
+  'HmiHorizontalStack',
   'HmiDiagram',
   'HmiLabel',
   'HmiValue',
@@ -136,10 +137,20 @@ END_FUNCTION_BLOCK`),
   END_METHOD
 END_FUNCTION_BLOCK
 FUNCTION_BLOCK Main EXTENDS HmiScreen
-  VAR B : Badge; S : HmiStack; END_VAR
+  VAR B : Badge; S : HmiVerticalStack; END_VAR
   METHOD PROTECTED OVERRIDE Build : BOOL Attach(ADR(S), 0); Attach(ADR(B), ADR(S)); Build := TRUE; END_METHOD
   METHOD PROTECTED OVERRIDE OnShow : BOOL B.Value := TRUE; OnShow := TRUE; END_METHOD
 END_FUNCTION_BLOCK`),
+    ).toEqual([])
+  })
+})
+
+describe('containers', () => {
+  it('cannot instantiate the stack and container bases, only the two stacks and the diagram', () => {
+    expect(consumerErrors('PROGRAM P VAR s : HmiStack; END_VAR END_PROGRAM')).not.toEqual([])
+    expect(consumerErrors('PROGRAM P VAR c : HmiContainer; END_VAR END_PROGRAM')).not.toEqual([])
+    expect(
+      consumerErrors('PROGRAM P VAR v : HmiVerticalStack; h : HmiHorizontalStack; d : HmiDiagram; END_VAR END_PROGRAM'),
     ).toEqual([])
   })
 })

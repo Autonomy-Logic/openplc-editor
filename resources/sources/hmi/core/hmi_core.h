@@ -283,6 +283,10 @@ int hmi_page_back(void);
 int32_t hmi_page_shown(void);
 /** Records the page whose screen the session shows, so screens learn when they are shown and hidden. */
 void hmi_page_set_shown(int32_t page);
+/** Asks the host to sign the session's viewer out once the frame ends; a host without accounts ignores it. */
+void hmi_sign_out(void);
+/** Whether the current frame called hmi_sign_out; cleared by hmi_frame_begin. */
+int hmi_frame_sign_out(void);
 
 /* ------------------------------------------------------------------------------------------------------------ */
 /* Rasterizer (not thread safe: glyph cache and scratch buffers are shared)                                    */

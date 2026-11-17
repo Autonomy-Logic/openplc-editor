@@ -153,8 +153,8 @@ async function main(): Promise<void> {
       ? {
           ...s,
           source: s.source.replace(
-            '    Shown : HmiLabel;',
-            "    Shown : HmiLabel;\n    Note : HmiLabel := (Text := 'Note');",
+            "    Shown : HmiLabel := (Parent := 'Body');",
+            "    Shown : HmiLabel := (Parent := 'Body');\n    Note : HmiLabel := (Text := 'Note', Parent := 'Body');",
           ),
         }
       : s,
@@ -163,7 +163,13 @@ async function main(): Promise<void> {
   const withNewType = sampleProject()
   withNewType.screens = withNewType.screens.map((s) =>
     s.name === 'Details'
-      ? { ...s, source: s.source.replace('    Shown : HmiLabel;', '    Shown : HmiLabel;\n    Dial : HmiGauge;') }
+      ? {
+          ...s,
+          source: s.source.replace(
+            "    Shown : HmiLabel := (Parent := 'Body');",
+            "    Shown : HmiLabel := (Parent := 'Body');\n    Dial : HmiGauge := (Parent := 'Body');",
+          ),
+        }
       : s,
   )
   await timed('rebuild after adding an element of a widget type no screen used', withNewType)
@@ -172,7 +178,8 @@ async function main(): Promise<void> {
     ...withScreen.screens,
     {
       name: 'Extra',
-      source: 'FUNCTION_BLOCK Extra EXTENDS HmiScreen\n  VAR\n    L : HmiLabel;\n  END_VAR\nEND_FUNCTION_BLOCK\n',
+      source:
+        "FUNCTION_BLOCK Extra EXTENDS HmiScreen\n  VAR\n    S : HmiHorizontalStack;\n    L : HmiLabel := (Parent := 'S');\n  END_VAR\nEND_FUNCTION_BLOCK\n",
     },
   ]
   await timed('rebuild after adding a screen', withScreen)

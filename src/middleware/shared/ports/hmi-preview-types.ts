@@ -47,6 +47,9 @@ export interface HmiUnitSources {
   projectNames: readonly string[]
 }
 
+/** The project's HMI as a device build compiles it; the PLC libraries come from the program build. */
+export type HmiBuildSources = Omit<HmiUnitSources, 'plcLibraries'>
+
 /** A preview build of the project's screens, or of one widget block when `widgetPreview` names it. */
 export interface HmiPreviewRequest extends HmiUnitSources {
   widgetPreview?: string
@@ -200,6 +203,18 @@ export interface HmiWidgetInfo {
   momentary?: { value: string; changed: string }
   /** BOOL outputs set for one frame when something happens (Clicked). */
   events: readonly string[]
+  /** Data series the widget draws, each a value bound to a variable and a colour; the count says how many show. */
+  series?: HmiWidgetSeries
+}
+
+/** A widget's series: inputs marked `hmi_series`, in declaration order; the first value is the main input. */
+export interface HmiWidgetSeries {
+  /** The input that says how many series show. */
+  count: string
+  /** One value input per series, as written. */
+  values: readonly string[]
+  /** One colour input per series, as written. */
+  colors: readonly string[]
 }
 
 export interface HmiWidgetCatalog {

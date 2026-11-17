@@ -4,9 +4,14 @@ import {
   type CanvasElement,
   dropIndicator,
   dropTarget,
+  EDGE_BAND_PX,
   elementAt,
+  insertionParent,
   isContainerType,
+  isSideBySide,
   liveValue,
+  OUTSIDE_CONTAINER_NOTICE,
+  placementRefusal,
   widgetIsA,
 } from '../designer-canvas'
 import { parseDesignerBlock } from '../designer-model'
@@ -23,8 +28,10 @@ const CATALOG: HmiWidgetCatalog = {
   widgets: new Map(
     [
       widget('HmiElement', ''),
-      widget('HmiStack', 'HmiElement'),
-      widget('HmiDiagram', 'HmiStack'),
+      widget('HmiVerticalStack', 'HmiStack'),
+      widget('HmiHorizontalStack', 'HmiStack'),
+      widget('HmiDiagram', 'HmiContainer'),
+      widget('Tiles', 'HmiVerticalStack'),
       widget('HmiLamp', 'HmiElement'),
       widget('Loop', 'Loop'),
     ].map((w) => [w.name.toUpperCase(), w]),
@@ -34,8 +41,8 @@ const CATALOG: HmiWidgetCatalog = {
 
 const SCREEN = `FUNCTION_BLOCK S EXTENDS HmiScreen
   VAR
-    Col : HmiStack := (Direction := HMI_DIRECTION#Column);
-    Row : HmiStack := (Parent := 'Col', Direction := HMI_DIRECTION#Row);
+    Col : HmiHorizontalStack;
+    Row : HmiVerticalStack := (Parent := 'Col');
     A : HmiLamp := (Parent := 'Row');
     B : HmiLamp := (Parent := 'Row');
     C : HmiLamp := (Parent := 'Col');
@@ -57,11 +64,39 @@ const ELEMENTS: CanvasElement[] = [
 
 describe('designer canvas', () => {
   it('follows the EXTENDS chain, cycles included', () => {
-    expect(widgetIsA(CATALOG, 'HmiDiagram', 'hmistack')).toBe(true)
+    expect(widgetIsA(CATALOG, 'Tiles', 'hmistack')).toBe(true)
     expect(widgetIsA(CATALOG, 'HmiLamp', 'HmiStack')).toBe(false)
     expect(widgetIsA(CATALOG, 'Loop', 'HmiStack')).toBe(false)
-    expect(isContainerType(CATALOG, 'HmiDiagram')).toBe(true)
+  })
+
+  it('knows the containers and which of them lay children side by side', () => {
+    for (const type of ['HmiVerticalStack', 'HmiHorizontalStack', 'HmiDiagram', 'Tiles'])
+      expect(isContainerType(CATALOG, type)).toBe(true)
     expect(isContainerType(CATALOG, 'HmiLamp')).toBe(false)
+    expect(isSideBySide(CATALOG, 'HmiVerticalStack')).toBe(true)
+    expect(isSideBySide(CATALOG, 'Tiles')).toBe(true)
+    expect(isSideBySide(CATALOG, 'HmiHorizontalStack')).toBe(false)
+    expect(isSideBySide(CATALOG, 'HmiDiagram')).toBe(false)
+  })
+
+  it('refuses anything but containers on the screen itself', () => {
+    expect(placementRefusal(CATALOG, ['HmiLamp'], null)).toBe(OUTSIDE_CONTAINER_NOTICE)
+    expect(placementRefusal(CATALOG, ['HmiVerticalStack', 'HmiLamp'], null)).toBe(OUTSIDE_CONTAINER_NOTICE)
+    expect(placementRefusal(CATALOG, ['HmiVerticalStack', 'HmiDiagram'], null)).toBeNull()
+    expect(placementRefusal(CATALOG, ['HmiLamp'], 'Row')).toBeNull()
+  })
+
+  it("adds into the selected container, the selection's container, else the first container on the screen", () => {
+    const m = model()
+    const element = (name: string) => m.elements.find((e) => e.name === name) ?? null
+    expect(insertionParent(m, CATALOG, element('Row'))).toBe('Row')
+    expect(insertionParent(m, CATALOG, element('A'))).toBe('Row')
+    expect(insertionParent(m, CATALOG, null)).toBe('Col')
+    const bare = parseDesignerBlock('FUNCTION_BLOCK S EXTENDS HmiScreen\nEND_FUNCTION_BLOCK\n', (t) =>
+      CATALOG.widgets.has(t.toUpperCase()),
+    )
+    if (!bare.ok) throw new Error('bare screen does not parse')
+    expect(insertionParent(bare.model, CATALOG, null)).toBeNull()
   })
 
   it('applies literals live and leaves anything else to a build', () => {
@@ -114,6 +149,54 @@ describe('designer canvas', () => {
     expect(dropTarget(m, CATALOG, ELEMENTS, 500, 500)).toEqual({ parent: null, before: null })
   })
 
+  it('drops beside a container in its edge bands, along its parent direction', () => {
+    const m = model()
+    expect(dropTarget(m, CATALOG, ELEMENTS, 100, 2, null, 5)).toEqual({ parent: 'Col', before: 'Row' })
+    expect(dropTarget(m, CATALOG, ELEMENTS, 100, 48, null, 5)).toEqual({ parent: 'Col', before: 'C' })
+    expect(dropTarget(m, CATALOG, ELEMENTS, 100, 48, 'C', 5)).toEqual({ parent: 'Col', before: null })
+    expect(dropTarget(m, CATALOG, ELEMENTS, 2, 25, null, 5)).toEqual({ parent: 'Row', before: 'A' })
+    expect(dropTarget(m, CATALOG, ELEMENTS, 100, 198, null, 5)).toEqual({ parent: null, before: null })
+    expect(dropTarget(m, CATALOG, ELEMENTS, 100, 2, null, 0)).toEqual({ parent: 'Row', before: 'B' })
+    expect(EDGE_BAND_PX).toBeGreaterThan(0)
+  })
+
+  it('uses the left and right bands in a side-by-side parent, keeps bands to a quarter, and none in a diagram', () => {
+    const parsed = parseDesignerBlock(
+      [
+        'FUNCTION_BLOCK S EXTENDS HmiScreen',
+        '  VAR',
+        '    Row : HmiVerticalStack;',
+        "    S1 : HmiHorizontalStack := (Parent := 'Row');",
+        "    S2 : HmiHorizontalStack := (Parent := 'Row');",
+        '    Plant : HmiDiagram;',
+        "    Box : HmiHorizontalStack := (Parent := 'Plant');",
+        '  END_VAR',
+        'END_FUNCTION_BLOCK',
+        '',
+      ].join('\n'),
+      (t) => CATALOG.widgets.has(t.toUpperCase()),
+    )
+    if (!parsed.ok) throw new Error('fixture does not parse')
+    const m = parsed.model
+    const elements: CanvasElement[] = [
+      { name: 'Row', box: { id: 1, x: 0, y: 0, width: 200, height: 50 } },
+      { name: 'S1', box: { id: 2, x: 0, y: 0, width: 100, height: 50 } },
+      { name: 'S2', box: { id: 3, x: 100, y: 0, width: 100, height: 50 } },
+      { name: 'Plant', box: { id: 4, x: 0, y: 60, width: 200, height: 100 } },
+      { name: 'Box', box: { id: 5, x: 10, y: 70, width: 40, height: 40 } },
+    ]
+    expect(dropTarget(m, CATALOG, elements, 98, 25, null, 5)).toEqual({ parent: 'Row', before: 'S2' })
+    expect(dropTarget(m, CATALOG, elements, 102, 25, null, 5)).toEqual({ parent: 'Row', before: 'S2' })
+    expect(dropTarget(m, CATALOG, elements, 198, 25, null, 5)).toEqual({ parent: 'Row', before: null })
+    expect(dropTarget(m, CATALOG, elements, 50, 2, null, 5)).toEqual({ parent: 'S1', before: null })
+    expect(dropTarget(m, CATALOG, elements, 30, 25, null, 40)).toEqual({ parent: 'S1', before: null })
+    expect(dropTarget(m, CATALOG, elements, 11, 71, null, 5)).toEqual({ parent: 'Box', before: null })
+    expect(dropIndicator(m, CATALOG, elements, { parent: 'Row', before: 'S2' })).toEqual({
+      box: elements[0].box,
+      line: { x: 96, y: 0, width: 3, height: 50 },
+    })
+  })
+
   it('never drops a moving container into itself or its own containers', () => {
     expect(dropTarget(model(), CATALOG, ELEMENTS, 190, 10, 'Row')).toEqual({ parent: 'Col', before: 'C' })
     expect(dropTarget(model(), CATALOG, ELEMENTS, 190, 10, 'Col')).toEqual({ parent: null, before: null })
@@ -121,23 +204,23 @@ describe('designer canvas', () => {
 
   it('marks the container and a bar where the drop goes, along its direction', () => {
     const m = model()
-    expect(dropIndicator(m, ELEMENTS, { parent: 'Row', before: 'B' })).toEqual({
+    expect(dropIndicator(m, CATALOG, ELEMENTS, { parent: 'Row', before: 'B' })).toEqual({
       box: ELEMENTS[1].box,
       line: { x: 96, y: 0, width: 3, height: 50 },
     })
-    expect(dropIndicator(m, ELEMENTS, { parent: 'Col', before: null }).line).toEqual({
+    expect(dropIndicator(m, CATALOG, ELEMENTS, { parent: 'Col', before: null }).line).toEqual({
       x: 0,
       y: 101,
       width: 200,
       height: 3,
     })
-    expect(dropIndicator(m, ELEMENTS, { parent: 'Row', before: null }, 'B').line).toEqual({
+    expect(dropIndicator(m, CATALOG, ELEMENTS, { parent: 'Row', before: null }, 'B').line).toEqual({
       x: 101,
       y: 0,
       width: 3,
       height: 50,
     })
-    expect(dropIndicator(m, ELEMENTS, { parent: null, before: null })).toEqual({
+    expect(dropIndicator(m, CATALOG, ELEMENTS, { parent: null, before: null })).toEqual({
       box: null,
       line: { x: 0, y: 201, width: 200, height: 3 },
     })

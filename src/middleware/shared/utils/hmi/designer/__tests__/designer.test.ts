@@ -3,6 +3,9 @@ import { generateHmiUnit } from '../../../../../../backend/shared/hmi/unit/gener
 import { copyElements, parseDesignerClipboard, pasteElements } from '../designer-clipboard'
 import {
   addElement,
+  ancestors,
+  removeSeries,
+  seriesCount,
   deleteElements,
   type DesignerEdit,
   moveElement,
@@ -24,10 +27,11 @@ const SCREEN = `{attribute 'hmi_theme' := 'Brand'}
 FUNCTION_BLOCK Overview EXTENDS HmiScreen
   VAR
     (* the main column *)
-    Col : HmiStack := (Direction := HMI_DIRECTION#Column, Gap := 8);
+    Col : HmiHorizontalStack := (Gap := 8);
     Level : HmiTank := (Caption := 'Level', Parent := 'Col', MaxValue := 10.0); (* fill level *)
     Run : HmiSwitch := (Parent := 'Col');
-    Next : HmiButton;
+    Bar : HmiVerticalStack;
+    Next : HmiButton := (Parent := 'Bar');
     Count : INT;
   END_VAR
   METHOD Busy : BOOL
@@ -71,10 +75,11 @@ describe('designer model', () => {
     expect(model.name).toBe('Overview')
     expect(model.theme).toBe('Brand')
     expect(model.elements.map((e) => [e.name, e.type, e.parent])).toEqual([
-      ['Col', 'HmiStack', null],
+      ['Col', 'HmiHorizontalStack', null],
       ['Level', 'HmiTank', 'Col'],
       ['Run', 'HmiSwitch', 'Col'],
-      ['Next', 'HmiButton', null],
+      ['Bar', 'HmiVerticalStack', null],
+      ['Next', 'HmiButton', 'Bar'],
     ])
     expect(model.elements[1].props.map((p) => [p.name, p.value])).toEqual([
       ['Caption', "'Level'"],
@@ -135,7 +140,12 @@ describe('designer edits', () => {
     const source = edited(setProperty(SCREEN, model, 'Level', 'MaxValue', '20.0'))
     expect(source).toBe(SCREEN.replace('MaxValue := 10.0', 'MaxValue := 20.0'))
     const added = edited(setProperty(SCREEN, model, 'Next', 'Text', "'Details'"))
-    expect(added).toBe(SCREEN.replace('Next : HmiButton;', "Next : HmiButton := (Text := 'Details');"))
+    expect(added).toBe(
+      SCREEN.replace(
+        "Next : HmiButton := (Parent := 'Bar');",
+        "Next : HmiButton := (Parent := 'Bar', Text := 'Details');",
+      ),
+    )
     const appended = edited(setProperty(SCREEN, model, 'Run', 'Caption', "'Run'"))
     expect(appended).toBe(
       SCREEN.replace(
@@ -163,7 +173,7 @@ describe('designer edits', () => {
     expect(inCol.ok && inCol.name).toBe('Label1')
     const source = edited(inCol)
     expect(source).toContain(
-      "    Run : HmiSwitch := (Parent := 'Col');\n    Label1 : HmiLabel := (Parent := 'Col', Text := 'Hi');\n    Next : HmiButton;",
+      "    Run : HmiSwitch := (Parent := 'Col');\n    Label1 : HmiLabel := (Parent := 'Col', Text := 'Hi');\n    Bar : HmiVerticalStack;",
     )
     expect(
       parse(source)
@@ -172,9 +182,9 @@ describe('designer edits', () => {
     ).toEqual(['Level', 'Run', 'Label1'])
     expect(buildErrors(source)).toEqual([])
     const first = edited(addElement(SCREEN, model, { type: 'HmiLamp', parent: 'Col', before: 'Level', name: 'Alarm' }))
-    expect(parse(first).elements.map((e) => e.name)).toEqual(['Col', 'Alarm', 'Level', 'Run', 'Next'])
+    expect(parse(first).elements.map((e) => e.name)).toEqual(['Col', 'Alarm', 'Level', 'Run', 'Bar', 'Next'])
     const root = edited(addElement(SCREEN, model, { type: 'HmiLabel', parent: null }))
-    expect(root).toContain('    Next : HmiButton;\n    Label1 : HmiLabel;\n    Count : INT;')
+    expect(root).toContain("    Next : HmiButton := (Parent := 'Bar');\n    Label1 : HmiLabel;\n    Count : INT;")
   })
 
   it('refuses a taken or invalid name, and a parent that is not an element', () => {
@@ -200,8 +210,23 @@ describe('designer edits', () => {
     )
   })
 
+  it('lists the containers an element sits in, from its parent outwards', () => {
+    expect(ancestors(model, 'Level')).toEqual(['Col'])
+    expect(ancestors(model, 'Col')).toEqual([])
+    expect(ancestors(model, 'Nope')).toEqual([])
+    const nested = parse(SCREEN.replace('Bar : HmiVerticalStack;', "Bar : HmiVerticalStack := (Parent := 'Col');"))
+    expect(ancestors(nested, 'Next')).toEqual(['Bar', 'Col'])
+    const cycle = parse(
+      SCREEN.replace(
+        'Col : HmiHorizontalStack := (Gap := 8);',
+        "Col : HmiHorizontalStack := (Gap := 8, Parent := 'Level');",
+      ),
+    )
+    expect(ancestors(cycle, 'Level')).toEqual(['Col'])
+  })
+
   it('deletes an element with everything under it, its bindings and its handlers', () => {
-    const source = edited(deleteElements(SCREEN, model, ['Col', 'Next']))
+    const source = edited(deleteElements(SCREEN, model, ['Col', 'Bar']))
     const after = parse(source)
     expect(after.elements.map((e) => e.name)).toEqual([])
     expect(after.bindings).toEqual([])
@@ -218,7 +243,8 @@ describe('designer edits', () => {
       ['Run', null],
       ['Col', null],
       ['Level', 'Col'],
-      ['Next', null],
+      ['Bar', null],
+      ['Next', 'Bar'],
     ])
     const intoCol = edited(moveElement(SCREEN, model, 'Next', 'Col', 'Level'))
     expect(parse(intoCol).elements.map((e) => [e.name, e.parent])).toEqual([
@@ -226,6 +252,7 @@ describe('designer edits', () => {
       ['Next', 'Col'],
       ['Level', 'Col'],
       ['Run', 'Col'],
+      ['Bar', null],
     ])
     expect(buildErrors(intoCol)).toEqual([])
     expect(moveElement(SCREEN, model, 'Col', 'Level', null)).toEqual({
@@ -242,7 +269,8 @@ describe('designer edits', () => {
       ['Main_Col', null],
       ['Level', 'Main_Col'],
       ['Run', 'Main_Col'],
-      ['Next', null],
+      ['Bar', null],
+      ['Next', 'Bar'],
     ])
     const button = edited(renameElement(SCREEN, model, 'Next', 'GoOn'))
     expect(parse(button).events.map((e) => e.element)).toEqual(['GoOn'])
@@ -303,10 +331,10 @@ describe('designer clipboard', () => {
   })
 
   it('pastes into the same screen under fresh names, keeping the copy wired', () => {
-    const clip = copyElements(model, ['Col', 'Next'])
+    const clip = copyElements(model, ['Col', 'Bar'])
     if (!clip) throw new Error('nothing copied')
     const result = pasteElements(SCREEN, model, clip, null)
-    expect(result.ok && result.names).toEqual(['Col1', 'Level1', 'Run1', 'Next1'])
+    expect(result.ok && result.names).toEqual(['Col1', 'Level1', 'Run1', 'Bar1', 'Next1'])
     const source = edited(result)
     const after = parse(source)
     expect(after.elements.filter((e) => e.parent === 'Col1').map((e) => e.name)).toEqual(['Level1', 'Run1'])
@@ -316,7 +344,8 @@ describe('designer clipboard', () => {
   })
 
   it('pastes into another block under a parent, keeping free names, and rewires element references', () => {
-    const target = 'FUNCTION_BLOCK Info EXTENDS HmiScreen\n  VAR\n    Box : HmiStack;\n  END_VAR\nEND_FUNCTION_BLOCK\n'
+    const target =
+      'FUNCTION_BLOCK Info EXTENDS HmiScreen\n  VAR\n    Box : HmiHorizontalStack;\n  END_VAR\nEND_FUNCTION_BLOCK\n'
     const clip = copyElements(model, ['Col'])
     if (!clip) throw new Error('nothing copied')
     clip.elements[1].props.push(['Follow', "'Run'"])
@@ -450,7 +479,7 @@ describe('designer edits that are refused', () => {
   })
 
   it('writes a first property as a new initializer, and declares into a new VAR block when the screen has none', () => {
-    expect(edited(setProperty(SCREEN, model, 'Next', 'Text', "'Go'"))).toContain("Next : HmiButton := (Text := 'Go');")
+    expect(edited(setProperty(SCREEN, model, 'Bar', 'Gap', '4'))).toContain('Bar : HmiVerticalStack := (Gap := 4);')
     const bare = 'FUNCTION_BLOCK Bare EXTENDS HmiScreen\nEND_FUNCTION_BLOCK\n'
     const added = edited(addElement(bare, parse(bare), { type: 'HmiLamp', parent: null }))
     expect(added).toMatch(/VAR\n\s+Lamp1 : HmiLamp;\n\s*END_VAR/)
@@ -494,7 +523,84 @@ describe('designer clipboard payloads', () => {
   })
 
   it('copies nothing that is locked to the code view', () => {
-    const locked = parse(SCREEN.replace('Next : HmiButton;', 'Next, Prev : HmiButton;'))
+    const locked = parse(SCREEN.replace("Next : HmiButton := (Parent := 'Bar');", 'Next, Prev : HmiButton;'))
     expect(copyElements(locked, ['Next'])).toBeNull()
+  })
+})
+
+describe('designer trend series', () => {
+  const SERIES = { count: 'Pens', values: ['Value', 'Value2', 'Value3'], colors: ['AccentColor', 'Color2', 'Color3'] }
+  const TREND = [
+    'FUNCTION_BLOCK S EXTENDS HmiScreen',
+    '  VAR',
+    '    T : HmiTrend := (Pens := 3, Color2 := COLOR.Red, Color3 := COLOR.Blue);',
+    '  END_VAR',
+    '  T.Value := instance0.Main.A;',
+    '  T.Value2 := instance0.Main.B;',
+    '  T.Value3 := instance0.Main.C;',
+    'END_FUNCTION_BLOCK',
+    '',
+  ].join('\n')
+
+  it('counts the series shown, within one and the maximum', () => {
+    const t = parse(TREND).elements[0]
+    expect(seriesCount(t, SERIES, 1)).toBe(3)
+    const bare = parse(TREND.replace('Pens := 3, ', '')).elements[0]
+    expect(seriesCount(bare, SERIES, 1)).toBe(1)
+    expect(seriesCount(parse(TREND.replace('Pens := 3', 'Pens := 9')).elements[0], SERIES, 1)).toBe(3)
+    expect(seriesCount(parse(TREND.replace('Pens := 3', 'Pens := 0')).elements[0], SERIES, 1)).toBe(1)
+  })
+
+  it('removes a middle series, moving the next one down with its variable and colour', () => {
+    const out = edited(removeSeries(TREND, parse(TREND), 'T', SERIES, 3, 1, isWidget))
+    const after = parse(out)
+    expect(after.bindings.map((b) => [b.property, b.variable])).toEqual([
+      ['Value', 'instance0.Main.A'],
+      ['Value2', 'instance0.Main.C'],
+    ])
+    expect(after.elements[0].props.map((p) => [p.name, p.value])).toEqual([
+      ['Pens', '2'],
+      ['Color2', 'COLOR.Blue'],
+    ])
+  })
+
+  it('removes the last series, and refuses to remove the first', () => {
+    const out = edited(removeSeries(TREND, parse(TREND), 'T', SERIES, 3, 2, isWidget))
+    expect(parse(out).bindings.map((b) => b.property)).toEqual(['Value', 'Value2'])
+    expect(out).toContain('Color2 := COLOR.Red')
+    expect(out).not.toContain('Color3')
+    expect(removeSeries(TREND, parse(TREND), 'T', SERIES, 3, 0, isWidget).ok).toBe(false)
+    expect(removeSeries(TREND, parse(TREND), 'T', SERIES, 3, 3, isWidget).ok).toBe(false)
+  })
+})
+
+describe('designer bindings to nested variables', () => {
+  const SCREEN_N = [
+    'FUNCTION_BLOCK S EXTENDS HmiScreen',
+    '  VAR',
+    '    Body : HmiHorizontalStack;',
+    "    L : HmiLamp := (Parent := 'Body');",
+    "    N : HmiSlider := (Parent := 'Body');",
+    '  END_VAR',
+    'END_FUNCTION_BLOCK',
+    '',
+  ].join('\n')
+
+  it('binds and reads back a block pin, a struct field and an array element, and refuses an expression', () => {
+    let source = SCREEN_N
+    for (const [element, variable] of [
+      ['L', 'instance0.Main.T1.Q'],
+      ['N', 'instance0.Main.Arr[3]'],
+    ] as const)
+      source = edited(setBinding(source, parse(source), element, 'Value', variable))
+    source = edited(setBinding(source, parse(source), 'L', 'Visible', 'GVL.S.Field'))
+    expect(parse(source).bindings.map((b) => [b.element, b.property, b.variable])).toEqual([
+      ['L', 'Value', 'instance0.Main.T1.Q'],
+      ['N', 'Value', 'instance0.Main.Arr[3]'],
+      ['L', 'Visible', 'GVL.S.Field'],
+    ])
+    expect(setBinding(SCREEN_N, parse(SCREEN_N), 'N', 'Value', 'instance0.Main.Arr[i]').ok).toBe(false)
+    const indexed = parse(SCREEN_N.replace('END_VAR\n', 'END_VAR\n  N.Value := instance0.Main.Arr[i];\n'))
+    expect(indexed.bindings).toEqual([])
   })
 })

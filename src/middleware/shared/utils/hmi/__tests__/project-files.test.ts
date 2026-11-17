@@ -3,6 +3,7 @@ import {
   HMI_SETTINGS_PATH,
   hmiScreenPath,
   hmiWidgetPath,
+  NEW_SCREEN_STACK,
   newHmiScreenSource,
   newHmiWidgetSource,
   readHmiFiles,
@@ -90,6 +91,19 @@ describe('HMI project files', () => {
 
   it('starts a screen and a widget block from templates named after them', () => {
     expect(newHmiScreenSource('Main')).toMatch(/^FUNCTION_BLOCK Main EXTENDS HmiScreen\n/)
+  })
+
+  it('starts a screen with one horizontal stack that fills it, and nothing else', () => {
+    expect(newHmiScreenSource('Main')).toBe(
+      [
+        'FUNCTION_BLOCK Main EXTENDS HmiScreen',
+        '  VAR',
+        `    ${NEW_SCREEN_STACK} : HmiHorizontalStack;`,
+        '  END_VAR',
+        'END_FUNCTION_BLOCK',
+        '',
+      ].join('\n'),
+    )
     expect(newHmiWidgetSource('Gauge2')).toMatch(/^FUNCTION_BLOCK Gauge2 EXTENDS HmiElement\n/)
   })
 })

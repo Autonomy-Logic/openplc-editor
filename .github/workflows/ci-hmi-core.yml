@@ -48,3 +48,10 @@ jobs:
         env:
           HMI_PREVIEW_REBUILD_MS: '4000'
           HMI_PREVIEW_LIVE_MS: '100'
+
+      # The hmi/ folder of a Runtime v4 upload from the sample project, and the browser client's WebAssembly module
+      # drawing a display list to the same pixels as the core built natively.
+      - name: Test the HMI artefact and browser client
+        run: npx ts-node -T -r tsconfig-paths/register tests/hmi-client/run.ts
+        env:
+          HMI_CLIENT_CC: gcc

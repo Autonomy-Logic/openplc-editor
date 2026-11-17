@@ -23,7 +23,7 @@ import {
   momentaryOf,
   writesMain,
 } from '@root/middleware/shared/utils/hmi/designer/designer-binding'
-import { stString } from '@root/middleware/shared/utils/hmi/designer/designer-edits'
+import { seriesCount, stString } from '@root/middleware/shared/utils/hmi/designer/designer-edits'
 import {
   type DesignerElement,
   type DesignerModel,
@@ -39,6 +39,8 @@ export interface InspectorActions {
   setEvent: (element: string, event: string, code: string | null) => void
   rename: (element: string, newName: string) => void
   remove: (element: string) => void
+  /** Removes a data series (from 1; the first stays), moving the later ones down. */
+  removeSeries: (element: string, index: number) => void
 }
 
 const NONE = '__none__'
@@ -210,9 +212,16 @@ export function PropertiesCard(props: {
   const info: HmiWidgetInfo | undefined = catalog.widgets.get(element.type.toUpperCase())
   const binding = (property: string) =>
     props.model.bindings.find((b) => same(b.element, element.name) && same(b.property, property))?.variable
+  const series = info?.series
+  const inSeries = (name: string) =>
+    series !== undefined && [series.count, ...series.values, ...series.colors].some((n) => same(n, name))
   const editable = (group: HmiWidgetProperty['group']) =>
     (info?.properties ?? []).filter(
-      (p) => p.group === group && !MANAGED.has(p.name.toUpperCase()) && !(info?.main && same(info.main.name, p.name)),
+      (p) =>
+        p.group === group &&
+        !MANAGED.has(p.name.toUpperCase()) &&
+        !(info?.main && same(info.main.name, p.name)) &&
+        !inSeries(p.name),
     )
   const mainProperty = info?.main ? info.properties.find((p) => same(p.name, info.main?.name ?? '')) : undefined
   const row = (p: HmiWidgetProperty) => (
@@ -245,6 +254,69 @@ export function PropertiesCard(props: {
       case 'data': {
         const rows = editable('data')
         if (!info?.main && rows.length === 0) return <Empty>This widget shows no data.</Empty>
+        if (info?.main && series) {
+          const countProperty = info.properties.find((p) => same(p.name, series.count))
+          const count = seriesCount(element, series, Number.parseInt(countProperty?.defaultValue ?? '1', 10))
+          const choices = [
+            { value: NONE, label: 'Not bound' },
+            ...bindableVariables(info.main, props.variables, writesMain(info)).map((v) => ({
+              value: v.path,
+              label: `${v.path} : ${v.type}`,
+            })),
+          ]
+          return (
+            <>
+              {series.values.slice(0, count).map((value, i) => {
+                const colour = info.properties.find((p) => same(p.name, series.colors[i]))
+                return (
+                  <div key={value} className='flex flex-col gap-1' data-testid={`hmi-series-${i + 1}`}>
+                    <Field label={`Series ${i + 1}`}>
+                      <DesignerSelect
+                        value={(i === 0 ? mainBound : binding(value)) ?? NONE}
+                        testId={i === 0 ? 'hmi-main-binding' : `hmi-series-${i + 1}-binding`}
+                        options={choices}
+                        onChange={(v) =>
+                          i === 0
+                            ? bindMain(v === NONE ? null : v)
+                            : actions.bind(element.name, value, v === NONE ? null : v)
+                        }
+                      />
+                    </Field>
+                    <div className='flex items-end gap-2'>
+                      <div className='min-w-0 flex-1' data-testid={`hmi-series-${i + 1}-color`}>
+                        {colour && row(colour)}
+                      </div>
+                      {i > 0 && (
+                        <button
+                          type='button'
+                          aria-label={`Remove series ${i + 1}`}
+                          title={`Remove series ${i + 1}`}
+                          data-testid={`hmi-series-${i + 1}-remove`}
+                          disabled={props.locked}
+                          onClick={() => actions.removeSeries(element.name, i)}
+                          className='mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-neutral-300 text-neutral-850 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-850 dark:text-neutral-300 dark:hover:bg-neutral-900'
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+              <button
+                type='button'
+                data-testid='hmi-series-add'
+                disabled={props.locked || count >= series.values.length}
+                title={count >= series.values.length ? `At most ${series.values.length} series` : 'Add a series'}
+                onClick={() => actions.setProperty(element.name, series.count, String(count + 1))}
+                className='h-7 rounded-md border border-dashed border-neutral-300 font-caption text-xs text-neutral-850 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-850 dark:text-neutral-300 dark:hover:bg-neutral-900'
+              >
+                + Add series
+              </button>
+              {rows.map(row)}
+            </>
+          )
+        }
         return (
           <>
             {info?.main && (

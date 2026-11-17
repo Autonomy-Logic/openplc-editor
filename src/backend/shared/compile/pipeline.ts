@@ -31,6 +31,7 @@ import type {
   PlatformLog,
   RuntimeV4Bundle,
 } from '../../../middleware/shared/ports/compiler-platform-port'
+import type { HmiBuildSources } from '../../../middleware/shared/ports/hmi-preview-types'
 import type { StructuredCompileError } from '../../../middleware/shared/ports/types'
 import { composeRuntimeV4Bundle } from '../../../middleware/shared/utils/library/compose-runtime-v4-bundle'
 import { resolveModbusServerProfile } from '../../../middleware/shared/utils/modbus-server-profile'
@@ -80,6 +81,7 @@ import { generateDefinesContent } from './steps/generate-defines'
 import { generateImageConf } from './steps/generate-image-conf'
 import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
+import { buildHmiArtefactStep, HMI_UNSUPPORTED_RUNTIME } from './steps/hmi-artefact'
 import { narrowModbusTransports, selectModbusServer } from './steps/modbus-defines'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
 
@@ -102,6 +104,7 @@ export interface PipelineProgressEvent {
     | 'confs'
     | 'firmware-bundle'
     | 'runtime-v4-bundle'
+    | 'hmi'
     | 'embed-c-blocks'
     | 'arduino-compile'
     | 'simulator-compile'
@@ -302,6 +305,8 @@ export interface RunCompilePipelineArgs {
   /** Where to tell the user how to repair a missing core when arduino-cli fails on one.
    *  Absent means no hint, for hosts that do not install cores. */
   dependencyHintSurface?: DependencyHintSurface
+  /** The project's HMI (`hmiBuildSources`), null when it has no screens. Runtime v4 builds ship it as `hmi/`. */
+  hmi: HmiBuildSources | null
 }
 
 export interface RunCompilePipelineResult {
@@ -426,6 +431,7 @@ async function runCompilePipelineInner(
     vendorScreenData,
     editorVersion,
     dependencyHintSurface,
+    hmi,
   } = args
 
   // Resolve the board's effective capabilities from `boardEntry`.
@@ -878,6 +884,20 @@ async function runCompilePipelineInner(
       level: 'info',
     })
 
+    // The HMI travels in the upload as `hmi/`, built against this program's debug map and MD5.
+    const hmiStep = await buildHmiArtefactStep({
+      hmi,
+      runtimeSupportsHmi: versionCheck ? versionCheck.supportsHmi : null,
+      libraryArchives,
+      debugMapJson,
+      md5,
+      instances,
+      port,
+      log: makePlatformLog(emit, 'hmi'),
+    })
+    if (!hmiStep.ok) return bailError(emit, 'hmi', 'The HMI could not be built.')
+    Object.assign(bundle, hmiStep.files)
+
     // Write the bundle out BEFORE the compile-only branch, so `compile` and
     // `upload` leave the same artifacts on disk. Until this existed, the bundle
     // only ever reached disk as a side effect of the upload, and a compile-only
@@ -964,6 +984,9 @@ async function runCompilePipelineInner(
         }),
       )
     }
+
+    // Refused before the upload: an older runtime rejects the client's files and would fail the whole upload.
+    if (hmi && !versionCheck.supportsHmi) return bailError(emit, 'runtime-version', HMI_UNSUPPORTED_RUNTIME)
 
     // Persistent storage was configured, but this runtime has no built-in store
     // to configure. The upload still succeeds and retain.conf still installs —

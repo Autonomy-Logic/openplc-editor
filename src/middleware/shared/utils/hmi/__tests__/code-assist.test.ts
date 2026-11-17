@@ -22,8 +22,11 @@ const CATALOG: HmiWidgetCatalog = {
   widgets: new Map(
     [
       widget('HmiElement', ''),
-      widget('HmiStack', 'HmiElement', [
-        prop('Direction', { type: 'HMI_DIRECTION', kind: 'enum', enumMembers: ['Auto', 'Row', 'Column'] }),
+      widget('HmiVerticalStack', 'HmiStack'),
+      widget('HmiHorizontalStack', 'HmiStack'),
+      widget('HmiDiagram', 'HmiContainer'),
+      widget('HmiSlider', 'HmiElement', [
+        prop('Orientation', { type: 'HMI_DIRECTION', kind: 'enum', enumMembers: ['Auto', 'Row', 'Column'] }),
       ]),
       widget('HmiLamp', 'HmiElement', [
         prop('Blink', { type: 'BOOL', kind: 'bool', group: 'display' }),
@@ -45,8 +48,8 @@ const labels = (text: string) => at(text)?.map((i) => i.label) ?? null
 
 const SCREEN = (decl: string) => `FUNCTION_BLOCK S EXTENDS HmiScreen
   VAR
-    Col : HmiStack := (Direction := HMI_DIRECTION#Column);
-    Row : HmiStack := (Parent := 'Col');
+    Col : HmiHorizontalStack;
+    Row : HmiVerticalStack := (Parent := 'Col');
     A : HmiLamp;
 ${decl}
   END_VAR
@@ -62,7 +65,7 @@ describe('HMI code assist', () => {
   })
 
   it('offers values of enumerated, BOOL and color properties', () => {
-    expect(labels(SCREEN('    S : HmiStack := (Direction := |'))).toEqual([
+    expect(labels(SCREEN('    S : HmiSlider := (Orientation := |'))).toEqual([
       'HMI_DIRECTION#Auto',
       'HMI_DIRECTION#Row',
       'HMI_DIRECTION#Column',
@@ -75,7 +78,12 @@ describe('HMI code assist', () => {
 
   it('offers containers for Parent and elements for pipe ends, never the element itself', () => {
     expect(labels(SCREEN("    L : HmiLamp := (Parent := '|"))).toEqual(['Col', 'Row'])
-    expect(labels(SCREEN("    Row2 : HmiStack := (Parent := 'R|"))).toEqual(['Col', 'Row'])
+    expect(labels(SCREEN("    Row2 : HmiVerticalStack := (Parent := 'R|"))).toEqual(['Col', 'Row'])
+    expect(labels(SCREEN("    D : HmiDiagram := (Parent := 'Row');\n    L : HmiLamp := (Parent := '|"))).toEqual([
+      'Col',
+      'Row',
+      'D',
+    ])
     expect(labels(SCREEN("    P : HmiPipe := (Source := '|"))).toEqual(['Col', 'Row', 'A'])
   })
 

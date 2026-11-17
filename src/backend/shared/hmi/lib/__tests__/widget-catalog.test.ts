@@ -39,7 +39,8 @@ describe('widget catalogue', () => {
   it('lists the library widgets with their palette group, and nothing that is not a widget', () => {
     const palette = Object.fromEntries([...catalog.widgets.values()].map((w) => [w.name, w.palette]))
     expect(palette).toEqual({
-      HmiStack: 'Containers',
+      HmiVerticalStack: 'Containers',
+      HmiHorizontalStack: 'Containers',
       HmiDiagram: 'Containers',
       HmiRect: 'Shapes',
       HmiEllipse: 'Shapes',
@@ -64,7 +65,33 @@ describe('widget catalogue', () => {
       HmiValve: 'Process',
       HmiPipe: 'Process',
     })
-    expect(widget(catalog.widgets, 'HmiDiagram').extends).toBe('HMISTACK')
+    expect(widget(catalog.widgets, 'HmiDiagram').extends).toBe('HMICONTAINER')
+    expect(widget(catalog.widgets, 'HmiVerticalStack').extends).toBe('HMISTACK')
+    expect(widget(catalog.widgets, 'HmiHorizontalStack').extends).toBe('HMISTACK')
+  })
+
+  it('gives both stacks the container and stack properties, and no direction', () => {
+    for (const name of ['HmiVerticalStack', 'HmiHorizontalStack']) {
+      const own = widget(catalog.widgets, name).properties.filter(
+        (p) => p.group !== 'layout' && p.declaredBy !== 'HmiElement',
+      )
+      expect(own.map((p) => [p.name, p.declaredBy])).toEqual([
+        ['Fill', 'HmiContainer'],
+        ['Gap', 'HmiStack'],
+        ['Padding', 'HmiStack'],
+      ])
+    }
+  })
+
+  it('lists the trend series: the value and colour of each, and the count', () => {
+    const trend = widget(catalog.widgets, 'HmiTrend')
+    expect(trend.series).toEqual({
+      count: 'Pens',
+      values: ['Value', 'Value2', 'Value3', 'Value4', 'Value5', 'Value6', 'Value7', 'Value8'],
+      colors: ['AccentColor', 'Color2', 'Color3', 'Color4', 'Color5', 'Color6', 'Color7', 'Color8'],
+    })
+    expect(trend.main?.name).toBe('Value')
+    expect(widget(catalog.widgets, 'HmiLabel').series).toBeUndefined()
   })
 
   it('gives every widget the inherited properties first, with kind, group and default', () => {

@@ -20,7 +20,9 @@ import {
   injectLibraryBlocks,
 } from '../../../backend/shared/library/inject-library-blocks'
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
+import { hmiBuildSources } from '../../../frontend/utils/PLC/hmi-build-sources'
 import type { CompileProgramArgs } from '../../shared/ports/compiler-port'
+import type { HmiBuildSources } from '../../shared/ports/hmi-preview-types'
 import type { StlibArchiveDTO } from '../../shared/ports/library-port'
 import type { BoardInfo, CompileProgressEvent, CompileResult, StructuredCompileError } from '../../shared/ports/types'
 import { resolveTargetCapabilities } from '../../shared/utils/target-capabilities'
@@ -63,6 +65,8 @@ export type CompileProgramIpcArgs = [
    * `vppIo` capability; non-VPP boards ignore this slot and it is a no-op.
    */
   vendorScreenData: Record<string, unknown> | null,
+  /** The project's HMI (`hmiBuildSources`), null when it has no screens; checked in the main process. */
+  hmi: HmiBuildSources | null,
 ]
 
 /**
@@ -193,6 +197,7 @@ export async function compileProgramFlow(
       args.cleanBuild ?? false,
       args.communicationPort ?? null,
       args.vendorScreenData ?? null,
+      hmiBuildSources(args.projectData, archives),
     ]
 
     transport.runCompileProgram(compileArgs, (data: Record<string, unknown>) => {

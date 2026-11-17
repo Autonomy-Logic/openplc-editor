@@ -35,7 +35,7 @@ const SHOTS = F.shots
 const OVERVIEW = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
   VAR
     (* keep this comment *)
-    Col : HmiStack := (Direction := HMI_DIRECTION#Column, Gap := 8, Padding := 8);
+    Col : HmiHorizontalStack := (Gap := 8, Padding := 8);
     Title : HmiLabel := (Text := 'Overview', Parent := 'Col');
     Level : HmiTank := (Caption := 'Level', Parent := 'Col', MaxValue := 10.0);
   END_VAR
@@ -44,7 +44,8 @@ END_FUNCTION_BLOCK
 `
 const DETAILS = `FUNCTION_BLOCK Details EXTENDS HmiScreen
   VAR
-    Back : HmiButton := (Text := 'Back');
+    Body : HmiHorizontalStack := (Grow := 1, GrowAuto := FALSE);
+    Back : HmiButton := (Text := 'Back', Parent := 'Body');
   END_VAR
   IF Back.Clicked THEN HMI_Back(); END_IF;
 END_FUNCTION_BLOCK
@@ -117,7 +118,7 @@ test.describe('HMI designer', () => {
         page,
         'hmi-palette-HmiLamp',
         colBox.x - canvasBox.x + colBox.width / 2,
-        colBox.y - canvasBox.y + colBox.height - 3,
+        colBox.y - canvasBox.y + colBox.height - 24,
       )
       await expect(page.getByTestId('hmi-selected-Lamp1')).toBeVisible({ timeout: 10000 })
       await waitFor(page, 'the rebuilt preview', async () => (await status(page)).startsWith('ready'))

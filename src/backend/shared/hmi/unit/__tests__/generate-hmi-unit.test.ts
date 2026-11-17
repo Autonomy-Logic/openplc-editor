@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
 
+import { NEW_SCREEN_STACK, newHmiScreenSource } from '../../../../../middleware/shared/utils/hmi/project-files'
 import { hmiSettingsSchema } from '../../../../../middleware/shared/utils/hmi/settings'
 import {
   generateHmiUnit,
@@ -24,8 +25,20 @@ function withScreen(source: string, extra: Partial<HmiUnitInput> = {}): HmiUnitI
   return { ...project, screens: [{ name: 'Overview', source }, project.screens[1]], ...extra }
 }
 
+/** Puts each declaration without a Parent in the screen's stack `Body`, containers excepted. */
+const inBody = (vars: string): string =>
+  vars
+    .split('\n')
+    .map((line) => {
+      const m = /^(\s+\w+ : (\w+))(?: := \((.*)\))?;$/.exec(line)
+      if (!m || /(Stack|Diagram)$/.test(m[2]) || /\bParent :=/.test(line)) return line
+      return m[3] === undefined ? `${m[1]} := (Parent := 'Body');` : `${m[1]} := (Parent := 'Body', ${m[3]});`
+    })
+    .join('\n')
+
+/** A screen Overview with a horizontal stack `Body` holding the declarations that have no Parent. */
 const screen = (vars: string, body = ''): string =>
-  `FUNCTION_BLOCK Overview EXTENDS HmiScreen\n  VAR\n${vars}\n  END_VAR\n${body}\nEND_FUNCTION_BLOCK\n`
+  `FUNCTION_BLOCK Overview EXTENDS HmiScreen\n  VAR\n    Body : HmiHorizontalStack;\n${inBody(vars)}\n  END_VAR\n${body}\nEND_FUNCTION_BLOCK\n`
 
 describe('HMI unit generator', () => {
   let sample: HmiUnitResult
@@ -219,7 +232,8 @@ describe('HMI unit generator', () => {
     const line = overview.split('\n').find((l) => l.includes('METHOD PROTECTED OVERRIDE Build'))
     expect(line?.trimStart().startsWith('END_VAR')).toBe(true)
     expect(line).toContain(
-      'UseTheme(5); Attach(ADR(Col), 0); Attach(ADR(Level), ADR(Col)); Attach(ADR(Run), ADR(Col)); Attach(ADR(Speed), 0);',
+      'UseTheme(5); Attach(ADR(Body), 0); Attach(ADR(Col), ADR(Body)); Attach(ADR(Level), ADR(Col)); ' +
+        'Attach(ADR(Run), ADR(Col)); Attach(ADR(Speed), ADR(Body));',
     )
     expect(line).toContain('IF Run.Changed THEN instance0.Main.Running := Run.NewValue; END_IF;')
     expect(line).toContain(
@@ -227,11 +241,11 @@ describe('HMI unit generator', () => {
     )
     expect(line).toContain('IF Name.Changed THEN instance0.Main.Tag := Name.NewValue; END_IF;')
     expect(sample.elementIds.slice(0, 3)).toEqual([
-      { id: 1, screen: 'Overview', element: 'Col' },
-      { id: 2, screen: 'Overview', element: 'Level' },
-      { id: 3, screen: 'Overview', element: 'Run' },
+      { id: 1, screen: 'Overview', element: 'Body' },
+      { id: 2, screen: 'Overview', element: 'Col' },
+      { id: 3, screen: 'Overview', element: 'Level' },
     ])
-    expect(sample.elementIds.at(-1)).toEqual({ id: 10, screen: 'Details', element: 'Shown' })
+    expect(sample.elementIds.at(-1)).toEqual({ id: 12, screen: 'Details', element: 'Shown' })
   })
 
   it('generates navigation by name, theme ids and the role grid', () => {
@@ -279,7 +293,9 @@ describe('HMI unit generator', () => {
   })
 
   it('refuses element names that are members of HmiScreen', () => {
-    expect(messages(generateHmiUnit(withScreen(screen('    Layout : HmiLabel;\n    Root : HmiStack;'))))).toEqual([
+    expect(
+      messages(generateHmiUnit(withScreen(screen('    Layout : HmiLabel;\n    Root : HmiVerticalStack;')))),
+    ).toEqual([
       'Overview: Layout: an element may not be named like a member of HmiScreen',
       'Overview: Root: an element may not be named like a member of HmiScreen',
     ])
@@ -357,9 +373,9 @@ describe('HMI unit generator', () => {
   it('refuses PLC variables that do not exist, are not named by instance or cannot be shown', () => {
     expect(
       messages(generateHmiUnit(withScreen(screen('    L : HmiLabel;', '  L.Visible := instance0.Main.Nope;')))),
-    ).toEqual(["Overview:5: Program 'MAIN' has no variable 'NOPE'."])
+    ).toEqual(["Overview:6: Program 'MAIN' has no variable 'NOPE'."])
     expect(messages(generateHmiUnit(withScreen(screen('    L : HmiLabel;', '  L.Visible := Main.Running;'))))).toEqual([
-      "Overview:5: Cannot access members of program 'MAIN' directly — declare a variable of type 'MAIN' first.",
+      "Overview:6: Cannot access members of program 'MAIN' directly — declare a variable of type 'MAIN' first.",
     ])
     const project = sampleProject()
     const odd = {
@@ -420,8 +436,8 @@ describe('HMI unit generator', () => {
                 "    A : HmiLabel := (Parent := 'Missing');",
                 "    B : HmiLabel := (Parent := 'A');",
                 '    C : HmiLabel := (Parent := Main.Tag);',
-                "    S1 : HmiStack := (Parent := 'S2');",
-                "    S2 : HmiStack := (Parent := 'S1');",
+                "    S1 : HmiVerticalStack := (Parent := 'S2');",
+                "    S2 : HmiHorizontalStack := (Parent := 'S1');",
                 "    P : HmiPipe := (Source := 'A', Target := 'Nowhere');",
               ].join('\n'),
             ),
@@ -437,9 +453,92 @@ describe('HMI unit generator', () => {
       'Overview: P: Target must name an element of this screen',
     ])
     const labels = Array.from({ length: 65 }, (_, i) => `    L${i} : HmiLabel := (Parent := 'Col');`).join('\n')
-    expect(messages(generateHmiUnit(withScreen(screen(`    Col : HmiStack;\n${labels}`))))).toEqual([
+    expect(messages(generateHmiUnit(withScreen(screen(`    Col : HmiVerticalStack;\n${labels}`))))).toEqual([
       'Overview: Col holds 65 elements; at most 64',
     ])
+  })
+
+  it('refuses elements outside every container, naming each element and the screen', () => {
+    const source = [
+      'FUNCTION_BLOCK Overview EXTENDS HmiScreen',
+      '  VAR',
+      '    Side : HmiVerticalStack;',
+      '    Plant : HmiDiagram;',
+      "    Pump : HmiPump := (Parent := 'Plant');",
+      "    Lamp : HmiLamp := (Caption := 'On');",
+      '    Tank : HmiTank;',
+      '  END_VAR',
+      'END_FUNCTION_BLOCK',
+      '',
+    ].join('\n')
+    const result = generateHmiUnit(withScreen(source))
+    expect(result.ok).toBe(false)
+    expect(messages(result)).toEqual([
+      "Overview: Lamp: only containers may sit directly on screen Overview; put Lamp in a vertical stack, horizontal stack or diagram with Parent := '<container name>'",
+      "Overview: Tank: only containers may sit directly on screen Overview; put Tank in a vertical stack, horizontal stack or diagram with Parent := '<container name>'",
+    ])
+  })
+
+  it('builds a new screen from its template, and a widget dropped into its stack', () => {
+    expect(messages(generateHmiUnit(withScreen(newHmiScreenSource('Overview'))))).toEqual([])
+    const filled = newHmiScreenSource('Overview').replace(
+      '  END_VAR',
+      `    Tank1 : HmiTank := (Parent := '${NEW_SCREEN_STACK}');\n  END_VAR`,
+    )
+    expect(messages(generateHmiUnit(withScreen(filled)))).toEqual([])
+  })
+
+  it('reads every trend series bound to a variable, and an older two-pen trend as before', () => {
+    const result = generateHmiUnit(
+      withScreen(
+        screen(
+          '    T : HmiTrend := (Pens := 3, Color3 := COLOR.Orange);\n    Old : HmiTrend := (Pens := 2, Color2 := COLOR.Red);',
+          '  T.Value := instance0.Main.Level;\n  T.Value2 := instance0.Main.Speed;\n  T.Value3 := instance0.Main.Level;\n  Old.Value2 := instance0.Main.Level;',
+        ),
+      ),
+    )
+    expect(messages(result)).toEqual([])
+    expect(result.tags.map((t) => t.path)).toEqual(
+      expect.arrayContaining(['CONFIG0.RES0.INSTANCE0.MAIN.LEVEL', 'CONFIG0.RES0.INSTANCE0.MAIN.SPEED']),
+    )
+  })
+
+  it('lays several containers and nested containers out from the screen root', () => {
+    const result = generateHmiUnit(
+      withScreen(
+        [
+          'FUNCTION_BLOCK Overview EXTENDS HmiScreen',
+          '  VAR',
+          '    Top : HmiHorizontalStack;',
+          "    Split : HmiVerticalStack := (Parent := 'Top');",
+          "    Tank : HmiTank := (Parent := 'Split');",
+          "    Side : HmiHorizontalStack := (Parent := 'Split');",
+          "    Go : HmiButton := (Parent := 'Side');",
+          "    Plant : HmiDiagram := (Parent := 'Side');",
+          '    Bottom : HmiVerticalStack;',
+          '  END_VAR',
+          'END_FUNCTION_BLOCK',
+          '',
+        ].join('\n'),
+      ),
+    )
+    expect(messages(result)).toEqual([])
+    const overview = Object.values(result.sources).find((t) => t.includes('FUNCTION_BLOCK Overview')) ?? ''
+    expect(overview).toContain(
+      'Attach(ADR(Top), 0); Attach(ADR(Split), ADR(Top)); Attach(ADR(Tank), ADR(Split)); Attach(ADR(Side), ADR(Split)); ' +
+        'Attach(ADR(Go), ADR(Side)); Attach(ADR(Plant), ADR(Side)); Attach(ADR(Bottom), 0);',
+    )
+  })
+
+  it('names the two stacks in place of an HmiStack declaration', () => {
+    const source = screen(
+      "    Col : HmiStack := (Direction := HMI_DIRECTION#Row);\n    L : HmiLabel := (Parent := 'Col');",
+    )
+    expect(messages(generateHmiUnit(withScreen(source)))).toEqual(
+      expect.arrayContaining([
+        'Overview: Col: HmiStack is the base of the stacks; declare Col as HmiVerticalStack (children side by side) or HmiHorizontalStack (children top to bottom), without Direction',
+      ]),
+    )
   })
 
   it('compiles PLC declarations that use library blocks, with the PLC libraries passed in', () => {
@@ -501,7 +600,7 @@ describe('HMI unit generator', () => {
 
   it('reports compile errors in a screen at its own line, and widget blocks that are not widgets', () => {
     const broken = generateHmiUnit(withScreen(screen('    L : HmiLabel;', '  L.Size := Undeclared;')))
-    expect(messages(broken)).toEqual(["Overview:5: Undeclared variable 'UNDECLARED'"])
+    expect(messages(broken)).toEqual(["Overview:6: Undeclared variable 'UNDECLARED'"])
     const project = sampleProject()
     const helper = generateHmiUnit({
       ...project,

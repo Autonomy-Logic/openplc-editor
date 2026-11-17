@@ -19,9 +19,9 @@ const FIXTURE = join(ROOT, 'project')
 const USER_DATA = join(ROOT, 'userdata')
 
 const OVERVIEW =
-  "FUNCTION_BLOCK Overview EXTENDS HmiScreen\n  VAR\n    Title : HmiLabel := (Text := 'Overview');\n  END_VAR\nEND_FUNCTION_BLOCK\n"
+  "FUNCTION_BLOCK Overview EXTENDS HmiScreen\n  VAR\n    Body : HmiHorizontalStack;\n    Title : HmiLabel := (Text := 'Overview', Parent := 'Body');\n  END_VAR\nEND_FUNCTION_BLOCK\n"
 const DETAILS =
-  'FUNCTION_BLOCK Details EXTENDS HmiScreen\n  VAR\n    Back : HmiButton;\n  END_VAR\n  IF Back.Clicked THEN HMI_Show(HMI_SCREEN#Overview); END_IF;\nEND_FUNCTION_BLOCK\n'
+  "FUNCTION_BLOCK Details EXTENDS HmiScreen\n  VAR\n    Body : HmiHorizontalStack;\n    Back : HmiButton := (Parent := 'Body');\n  END_VAR\n  IF Back.Clicked THEN HMI_Show(HMI_SCREEN#Overview); END_IF;\nEND_FUNCTION_BLOCK\n"
 const SETTINGS = { startScreen: 'Overview', roles: { Overview: { engineer: true, operator: true, viewer: true } } }
 
 /** Messages the app shows when it failed; seeing one ends the test at once. */

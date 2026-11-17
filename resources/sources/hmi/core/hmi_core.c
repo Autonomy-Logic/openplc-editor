@@ -53,6 +53,7 @@ struct hmi_session {
     int page_hist_n;
     int32_t page_shown_1; /* page last shown + 1; 0 = none yet */
     int page_chosen;      /* hmi_page_reset ran */
+    int sign_out;         /* screen code asked to sign the viewer out this frame */
     int32_t theme;
 
     /* Frame: screen_q4 = local_q4 * fk / 65536 + (fox, foy), clipped to (fcx, fcy, fcw, fch) when fclip. */
@@ -151,6 +152,7 @@ void hmi_frame_begin(void) {
     S->len = 0;
     S->cmds = 0;
     S->status = 0;
+    S->sign_out = 0;
     put_u32(HMI_DL_MAGIC);
     put_u16(HMI_DL_VERSION);
     put_u16(0);
@@ -645,3 +647,6 @@ int hmi_page_back(void) {
     S->page = S->page_hist[--S->page_hist_n];
     return 1;
 }
+
+void hmi_sign_out(void) { S->sign_out = 1; }
+int hmi_frame_sign_out(void) { return S->sign_out; }

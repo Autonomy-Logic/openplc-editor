@@ -153,12 +153,21 @@ function plainField(v: VariableExpression, text: SourceText): [string, string] |
   return b === undefined ? null : [a, b]
 }
 
-/** A variable named by plain fields only, as written without spaces: a global, `List.Member` or `Instance.Program.Var`. */
+/**
+ * A variable named by fields and integer-literal subscripts only, as written without spaces: a global,
+ * `List.Member`, `Instance.Program.Var`, `Block.Pin`, `Struct.Field`, `Array[3]` or `Matrix[2,1]`.
+ */
 function plainPath(v: VariableExpression, text: SourceText): string | null {
-  if (v.subscripts.length > 0 || v.isDereference) return null
-  if (v.accessChain !== undefined && v.accessChain.some((step) => step.kind !== 'field')) return null
+  if (v.isDereference) return null
+  if (v.accessChain === undefined ? v.subscripts.length > 0 : !v.accessChain.every(plainStep)) return null
   return text.slice(v.sourceSpan).replace(/\s+/g, '')
 }
+
+const plainStep = (step: NonNullable<VariableExpression['accessChain']>[number]): boolean =>
+  step.kind === 'field' ||
+  (step.kind === 'subscript' &&
+    step.indices.length > 0 &&
+    step.indices.every((index) => index.kind === 'LiteralExpression'))
 
 function elementsOf(
   fb: FunctionBlockDeclaration,

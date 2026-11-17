@@ -3,7 +3,7 @@
  * capacities, pipe ends and element properties. Reported by the build and marked in the code view.
  */
 import type { HmiWidgetCatalog } from '../../ports/hmi-preview-types'
-import { widgetIsA } from './designer/designer-canvas'
+import { isContainerType, widgetIsA } from './designer/designer-canvas'
 import { type HmiSettings, hmiThemeId } from './settings'
 
 export interface HmiCheckSpan {
@@ -99,7 +99,7 @@ export function checkHmiBlockHeader(block: HmiCheckBlock, ctx: HmiCheckContext):
   return out
 }
 
-/** Element names, properties, the Parent tree, capacities and pipe ends. */
+/** Element names, properties, the Parent tree, containers at a screen's root, capacities and pipe ends. */
 export function checkHmiBlockElements(block: HmiCheckBlock, ctx: HmiCheckContext): HmiCheckFinding[] {
   const out: HmiCheckFinding[] = []
   const at = (message: string, span: HmiCheckSpan | undefined) => out.push(span ? { message, span } : { message })
@@ -130,10 +130,21 @@ export function checkHmiBlockElements(block: HmiCheckBlock, ctx: HmiCheckContext
     if (name === '') continue
     const parent = byName.get(name.toUpperCase())
     if (!parent) at(`${e.name}: Parent '${name}' is not an element of this screen`, prop.valueSpan)
-    else if (!widgetIsA(catalog, parent.type, 'HMISTACK'))
+    else if (!isContainerType(catalog, parent.type))
       at(`${e.name}: Parent '${name}' is not a container`, prop.valueSpan)
     else parentOf.set(e, parent)
   }
+  if (ctx.kind === 'screen')
+    for (const e of block.elements) {
+      const parent = propOf(e, 'PARENT')
+      const atRoot = parent === undefined || hmiTextLiteral(parent.value) === ''
+      if (atRoot && catalog.widgets.has(e.type.toUpperCase()) && !isContainerType(catalog, e.type))
+        at(
+          `${e.name}: only containers may sit directly on screen ${ctx.fileName}; ` +
+            `put ${e.name} in a vertical stack, horizontal stack or diagram with Parent := '<container name>'`,
+          e.nameSpan,
+        )
+    }
   for (const e of block.elements) {
     const seen = new Set<HmiCheckElement>([e])
     let p = parentOf.get(e)

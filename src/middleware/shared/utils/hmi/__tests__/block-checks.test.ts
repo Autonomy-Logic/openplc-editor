@@ -22,8 +22,9 @@ const CATALOG: HmiWidgetCatalog = {
   widgets: new Map(
     [
       widget('HmiElement', ''),
-      widget('HmiStack', 'HmiElement', ['Gap']),
-      widget('HmiDiagram', 'HmiStack'),
+      widget('HmiVerticalStack', 'HmiStack', ['Gap']),
+      widget('HmiHorizontalStack', 'HmiStack', ['Gap']),
+      widget('HmiDiagram', 'HmiContainer'),
       widget('HmiLabel', 'HmiElement', ['Text']),
       widget('HmiPipe', 'HmiElement', ['Source', 'Target']),
     ].map((w) => [w.name.toUpperCase(), w]),
@@ -62,7 +63,9 @@ const at = (source: string, span: { start: number; end: number } | undefined) =>
 
 describe('HMI block checks', () => {
   it('accepts a well-formed screen', () => {
-    const { block } = screen("    Col : HmiStack;\n    L : HmiLabel := (Parent := 'Col', Text := 'Hi');")
+    const { block } = screen(
+      "    Col : HmiHorizontalStack;\n    Row : HmiVerticalStack := (Parent := 'Col');\n    L : HmiLabel := (Parent := 'Row', Text := 'Hi');",
+    )
     expect(checkHmiBlock(block, CTX)).toEqual([])
   })
 
@@ -100,7 +103,9 @@ describe('HMI block checks', () => {
   })
 
   it('marks an unknown property at its name', () => {
-    const { block, source } = screen("    L : HmiLabel := (Text := 'Hi', Bogus := 3);")
+    const { block, source } = screen(
+      "    S : HmiVerticalStack;\n    L : HmiLabel := (Parent := 'S', Text := 'Hi', Bogus := 3);",
+    )
     const findings = checkHmiBlockElements(block, CTX)
     expect(findings.map((f) => [f.message, at(source, f.span)])).toEqual([
       ['L: Bogus is not a property of HmiLabel', 'Bogus'],
@@ -113,8 +118,8 @@ describe('HMI block checks', () => {
         "    A : HmiLabel := (Parent := 'Missing');",
         "    B : HmiLabel := (Parent := 'A');",
         '    C : HmiLabel := (Parent := Main.Tag);',
-        "    S1 : HmiStack := (Parent := 'S2');",
-        "    S2 : HmiStack := (Parent := 'S1');",
+        "    S1 : HmiVerticalStack := (Parent := 'S2');",
+        "    S2 : HmiHorizontalStack := (Parent := 'S1');",
         "    In : HmiLabel := (Parent := 'S1');",
         "    P : HmiPipe := (Source := 'A', Target := 'Nowhere');",
         '    Root : HmiLabel;',
@@ -125,6 +130,14 @@ describe('HMI block checks', () => {
       ["A: Parent 'Missing' is not an element of this screen", "'Missing'"],
       ["B: Parent 'A' is not a container", "'A'"],
       ['C: Parent must be a text literal naming a container', 'Main.Tag'],
+      [
+        "P: only containers may sit directly on screen Overview; put P in a vertical stack, horizontal stack or diagram with Parent := '<container name>'",
+        'P',
+      ],
+      [
+        "Root: only containers may sit directly on screen Overview; put Root in a vertical stack, horizontal stack or diagram with Parent := '<container name>'",
+        'Root',
+      ],
       ['S1: its Parent chain is a cycle', 'S1'],
       ['S2: its Parent chain is a cycle', 'S2'],
       ['In: its Parent chain is a cycle', 'In'],
@@ -132,9 +145,39 @@ describe('HMI block checks', () => {
     ])
   })
 
+  it('keeps every element but containers off the screen root, naming the element and the screen', () => {
+    const { block, source } = screen(
+      [
+        '    Main : HmiHorizontalStack;',
+        '    Side : HmiVerticalStack;',
+        '    Plant : HmiDiagram;',
+        "    Inside : HmiLabel := (Parent := 'Main');",
+        '    Loose : HmiLabel;',
+        "    Empty : HmiLabel := (Parent := '');",
+      ].join('\n'),
+    )
+    expect(checkHmiBlockElements(block, CTX).map((f) => [f.message, at(source, f.span)])).toEqual([
+      [
+        "Loose: only containers may sit directly on screen Overview; put Loose in a vertical stack, horizontal stack or diagram with Parent := '<container name>'",
+        'Loose',
+      ],
+      [
+        "Empty: only containers may sit directly on screen Overview; put Empty in a vertical stack, horizontal stack or diagram with Parent := '<container name>'",
+        'Empty',
+      ],
+    ])
+  })
+
+  it('lets a widget block hold elements without a container', () => {
+    const { block } = blockOf(
+      'FUNCTION_BLOCK Badge EXTENDS HmiElement\n  VAR\n    L : HmiLabel;\n  END_VAR\nEND_FUNCTION_BLOCK\n',
+    )
+    expect(checkHmiBlockElements(block, { ...CTX, kind: 'widget', fileName: 'Badge' })).toEqual([])
+  })
+
   it('checks how many elements a container holds', () => {
     const labels = Array.from({ length: 65 }, (_, i) => `    L${i} : HmiLabel := (Parent := 'Col');`).join('\n')
-    const { block, source } = screen(`    Col : HmiStack;\n${labels}`)
+    const { block, source } = screen(`    Col : HmiVerticalStack;\n${labels}`)
     expect(checkHmiBlockElements(block, CTX).map((f) => [f.message, at(source, f.span)])).toEqual([
       ['Col holds 65 elements; at most 64', 'Col'],
     ])

@@ -1,0 +1,95 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #f7f8fa;
+  color: #1f2937;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+#screen {
+  position: fixed;
+  inset: 0;
+}
+
+#surface {
+  display: block;
+  touch-action: none;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The last frame while a notice shows: no longer live, and not operable. */
+#screen.stale #surface {
+  opacity: 0.4;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+
+.panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 32px));
+  padding: 24px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+#sign-in h1 {
+  margin: 0 0 16px;
+  font-size: 20px;
+}
+
+#sign-in label {
+  display: block;
+  margin: 12px 0 4px;
+  font-size: 14px;
+}
+
+#sign-in input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+}
+
+#sign-in-message {
+  min-height: 20px;
+  margin: 12px 0;
+  font-size: 14px;
+  color: #b91c1c;
+}
+
+#sign-in button {
+  width: 100%;
+  padding: 10px;
+  font: inherit;
+  color: #ffffff;
+  background: #0464fb;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#sign-in button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+#notice {
+  text-align: center;
+  font-size: 16px;
+}

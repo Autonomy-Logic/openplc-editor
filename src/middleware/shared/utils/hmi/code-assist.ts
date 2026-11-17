@@ -3,7 +3,7 @@
  * element names for Parent, Source and Target, and theme names. Works while the code does not parse.
  */
 import type { HmiWidgetCatalog, HmiWidgetInfo, HmiWidgetProperty } from '../../ports/hmi-preview-types'
-import { widgetIsA } from './designer/designer-canvas'
+import { isContainerType } from './designer/designer-canvas'
 import { maskStComments } from './references'
 import { HMI_BUILTIN_THEMES, type HmiSettings } from './settings'
 
@@ -112,7 +112,7 @@ export function hmiCompletions(
     const containersOnly = named[1].toUpperCase() === 'PARENT'
     return declaredElements(text, catalog)
       .filter((e) => e.name.toUpperCase() !== owner.element.toUpperCase())
-      .filter((e) => !containersOnly || widgetIsA(catalog, e.info.name, 'HMISTACK'))
+      .filter((e) => !containersOnly || isContainerType(catalog, e.info.name))
       .map((e) => ({ label: e.name, insertText: e.name, kind: 'element', detail: e.info.name }))
   }
 
