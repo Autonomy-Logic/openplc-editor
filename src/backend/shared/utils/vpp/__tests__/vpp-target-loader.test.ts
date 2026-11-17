@@ -555,6 +555,100 @@ describe('createVppTargetLoader with the target cleared', () => {
   })
 })
 
+describe('createVppTargetLoader cancel', () => {
+  it('aborts the running download and reports it as canceled', async () => {
+    const { loader, fetch } = await startLoading()
+
+    loader.cancel()
+    await flushMicrotasks()
+
+    expect(fetch.signal.aborted).toBe(true)
+    expect(loader.getState()).toEqual({ status: 'error', reason: 'canceled', message: expect.any(String) })
+  })
+
+  it('resolves every pending load with null', async () => {
+    const { loader, loading } = await startLoading()
+    const second = loader.load()
+
+    loader.cancel()
+
+    await expect(Promise.all([loading, second])).resolves.toEqual([null, null])
+  })
+
+  it('downloads again on the next load after a cancel', async () => {
+    const { host, loader, loading } = await startLoading()
+    loader.cancel()
+    await loading
+
+    const again = loader.load()
+    await flushMicrotasks()
+    host.fetchAt(1).succeed(BYTES_A)
+
+    await expect(again).resolves.toEqual({ contentHash: TARGET_A.contentHash, bytes: BYTES_A })
+    expect(loader.getState()).toEqual({ status: 'ready' })
+  })
+
+  it('downloads again on retry after a cancel', async () => {
+    const { host, loader, loading } = await startLoading()
+    loader.cancel()
+    await loading
+
+    const retrying = loader.retry()
+    await flushMicrotasks()
+    host.fetchAt(1).succeed(BYTES_A)
+
+    await expect(retrying).resolves.toEqual({ contentHash: TARGET_A.contentHash, bytes: BYTES_A })
+    expect(host.fetches).toHaveLength(2)
+  })
+
+  it('does nothing with no target', () => {
+    const { loader } = setup()
+
+    loader.cancel()
+
+    expect(loader.getState()).toEqual({ status: 'idle' })
+  })
+
+  it('does nothing while the archive is being verified', async () => {
+    const { host, loader } = setup()
+    host.verification = 'hold'
+    loader.setTarget(TARGET_A)
+    const loading = loader.load()
+    await flushMicrotasks()
+    host.fetchAt(0).succeed(BYTES_A)
+    await flushMicrotasks()
+
+    loader.cancel()
+    expect(loader.getState()).toEqual({ status: 'verifying' })
+
+    host.releaseVerifications()
+    await expect(loading).resolves.toEqual({ contentHash: TARGET_A.contentHash, bytes: BYTES_A })
+    expect(loader.getState()).toEqual({ status: 'ready' })
+  })
+
+  it('does nothing once the package is ready', async () => {
+    const { host, loader, loading, fetch } = await startLoading()
+    fetch.succeed(BYTES_A)
+    const first = await loading
+
+    loader.cancel()
+
+    expect(loader.getState()).toEqual({ status: 'ready' })
+    await expect(loader.load()).resolves.toBe(first)
+    expect(host.fetches).toHaveLength(1)
+  })
+
+  it('does nothing after a failed download', async () => {
+    const { loader, loading, fetch } = await startLoading()
+    fetch.fail(new Error('Network Error'))
+    await loading
+
+    loader.cancel()
+
+    expect(loader.getState()).toMatchObject({ status: 'error', reason: 'transfer' })
+  })
+})
+
 describe('createVppTargetLoader timers', () => {
   const settles: Array<[string, (ctx: Awaited<ReturnType<typeof startLoading>>) => Promise<unknown>]> = [
     [
@@ -599,6 +693,13 @@ describe('createVppTargetLoader timers', () => {
       async ({ loader }) => {
         loader.setTarget(null)
         await flushMicrotasks()
+      },
+    ],
+    [
+      'a canceled download',
+      ({ loader, loading }) => {
+        loader.cancel()
+        return loading
       },
     ],
   ]

@@ -291,5 +291,10 @@ describe('createEditorPackageAdapter', () => {
       expect(window.bridge.listInstalledPackages).not.toHaveBeenCalled()
       expect(adapter.getTargetLoadState()).toEqual({ status: 'idle' })
     })
+
+    it('ignores a cancel and stays idle', () => {
+      adapter.cancelTargetLoad()
+      expect(adapter.getTargetLoadState()).toEqual({ status: 'idle' })
+    })
   })
 })
