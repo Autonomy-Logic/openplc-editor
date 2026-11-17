@@ -5,7 +5,7 @@ import type { PackagePort } from '@root/middleware/shared/ports/package-port'
 import { EDITOR_CAPABILITIES, WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import type { PlatformPorts } from '@root/middleware/shared/providers/types'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { Board } from '../board'
 
@@ -209,6 +209,27 @@ describe('Board device list', () => {
 
       expect(await screen.findByText(/is not installed/)).toBeTruthy()
       expect(getPackagePin).not.toHaveBeenCalled()
+    })
+
+    it('re-pins to a newer installed package without a warning', async () => {
+      const { deviceActions } = store.getState()
+      deviceActions.setDeviceBoard(VPP_BOARD_NAME)
+      deviceActions.setVppPackagePin(VPP_BOARD_NAME, {
+        packageId: 'com.acme.backplane',
+        version: '1.0.0',
+        contentHash: 'sha256:old',
+      })
+      const installed = { packageId: 'com.acme.backplane', version: '1.1.0', contentHash: 'sha256:new' }
+      const getPackagePin = jest.fn(() => Promise.resolve(installed))
+
+      renderBoard(null, EDITOR_CAPABILITIES, stubPort<PackagePort>({ getPackagePin }))
+
+      await waitFor(() =>
+        expect(store.getState().deviceDefinitions.configuration.vppPackagePinsByBoard?.[VPP_BOARD_NAME]).toEqual(
+          installed,
+        ),
+      )
+      expect(screen.queryByTestId('vpp-pin-drift')).toBeNull()
     })
   })
 })

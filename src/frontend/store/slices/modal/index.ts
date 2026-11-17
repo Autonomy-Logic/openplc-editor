@@ -1,2 +1,3 @@
+export { graphicalElementModalFor } from './graphical-element-modal'
 export { createModalSlice } from './slice'
-export type { ModalActions, ModalSlice, ModalsState, ModalTypes } from './types'
+export type { GraphicalElementModalData, ModalActions, ModalSlice, ModalsState, ModalTypes } from './types'

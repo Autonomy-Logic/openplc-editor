@@ -892,6 +892,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
       getState().workspaceActions.clearWorkspace()
       getState().fileActions.clearFiles()
       getState().consoleActions.clearLogs()
+      getState().consoleActions.closeProjectConsole()
       getState().historyActions.clearHistory()
       getState().searchActions.clearSearch()
       getState().modalActions.closeModal()
@@ -904,6 +905,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
     handleOpenProjectResponse: (data) => {
       cancelFlowWriteBacks()
       getState().sharedWorkspaceActions.clearStatesOnCloseProject()
+      getState().consoleActions.openProjectConsole()
       getState().workspaceActions.setEditingState('saved')
       getState().versionControlActions.setHeadContent(null)
       getState().workspaceActions.setCanEdit(data.canEdit !== false)

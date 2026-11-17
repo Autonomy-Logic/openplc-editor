@@ -1,3 +1,5 @@
+import type { Node } from '@xyflow/react'
+
 import type { PLCVariable, VariableClass } from '../../../../middleware/shared/ports/types'
 
 // Modal types, a superset of both editor and web.
@@ -29,7 +31,7 @@ export type ModalTypes =
   | 'debugger-message'
   | 'debugger-ip-input'
   | 'missing-libraries'
-  /** Browse the autonomy-edge public library catalog, with multi-select. */
+  /** Browses the autonomy-edge public library catalog with multi-select; the install confirmation opens on top. */
   | 'public-catalog-browser'
   /** Confirmation step chained off `public-catalog-browser` — lists
    *  the user's selection and runs the install on confirm. */
@@ -40,10 +42,8 @@ export type ModalTypes =
    *  item. Acts on whatever project is currently open — no targeted
    *  data payload (unlike `confirm-delete-project`). */
   | 'confirm-plcopen-import'
-  /**
-   * "Add variable" on a GENERIC block pin (`ANY`, `ANY_NUM`, …) in a graphical editor. Data shape:
-   * `CreateGraphicalVariableModalData`.
-   */
+  /** "Add variable" on a generic block pin (`ANY`, `ANY_NUM`, …) of a graphical editor, where the user
+   *  picks name, class and type. Data shape: `CreateGraphicalVariableModalData`. */
   | 'create-graphical-variable'
   /** File > Print / Preview wizard: select POUs, choose render mode
    *  and page policy, preview, export. Preview is an alias into this
@@ -53,9 +53,7 @@ export type ModalTypes =
    *  wizard's options step, reachable without starting an export. */
   | 'page-setup'
 
-/**
- * Payload of the `create-graphical-variable` modal. `onConfirm` creates and binds the variable on the caller's side.
- */
+/** Payload of the `create-graphical-variable` modal; `onConfirm` creates the variable and binds it to the node. */
 export type CreateGraphicalVariableModalData = {
   /** Declared type of the pin the box sits on (e.g. `ANY`, `ANY_NUM`). */
   pinType: string
@@ -68,9 +66,12 @@ export type CreateGraphicalVariableModalData = {
     class: VariableClass
     type: { definition: PLCVariable['type']['definition']; value: string }
   }) => void
-  /** Undo the box's provisional state when the dialog is abandoned. */
+  /** Undoes the box's provisional state: the raw reference bound to the typed text when the dialog opened. */
   onCancel?: () => void
 }
+
+/** Payload of the graphical element dialogs: the node and the POU whose editor owns it. */
+export type GraphicalElementModalData = { pouName: string; node: Node }
 
 export type ModalsState = Record<ModalTypes, { open: boolean; data: unknown }>
 

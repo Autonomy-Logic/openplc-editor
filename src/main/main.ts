@@ -20,9 +20,11 @@ import {
   createArduinoDependencyServices,
 } from '../backend/editor/package-manager/vpp-dependency-service'
 import { clearCloudBuildRoot } from '../backend/editor/project/cloud-build-workspace'
+import { getDesktopPython } from '../backend/editor/python/desktop-python-service'
 import { logger, PouService, ProjectService, UserService } from '../backend/editor/services'
 import { resolveHtmlPath } from '../backend/editor/utils'
 import { getDesktopWasmCompileService } from '../backend/editor/wasm-toolchain/desktop-wasm-toolchain'
+import { preparePythonRuntime } from '../backend/shared/python/prepare-python'
 import { getErrorMessage } from '../frontend/utils/get-error-message'
 import type { EdgeOAuthProviderId } from '../middleware/shared/ports/edge-account-port'
 import { VENDOR_DOCUMENT_SCHEME } from '../middleware/shared/vendor-document/document-url'
@@ -143,8 +145,8 @@ function bringMainWindowToFront(): void {
 }
 
 /**
- * Handles a provider sign-in that lands from the system browser: adopts the tokens and tells the renderer there is a
- * session to read.
+ * Runs a provider sign-in in the system browser, adopts its tokens in the main process, then tells the renderer there
+ * is a session to read and brings the main window to the front.
  */
 async function completeProviderSignIn(provider: EdgeOAuthProviderId): Promise<void> {
   try {
@@ -243,8 +245,12 @@ const createMainWindow = async () => {
       mainWindow.minimize()
     }
     const minimumSplash = new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 3000))
-    void Promise.all([minimumSplash, getDesktopWasmCompileService().prepare()])
-      .then(([, toolchain]) => {
+    void Promise.all([
+      minimumSplash,
+      getDesktopWasmCompileService().prepare(),
+      preparePythonRuntime({ load: () => getDesktopPython().checkFiles() }),
+    ])
+      .then(([, toolchain, python]) => {
         if (splash === null) {
           mainWindow?.destroy()
           return
@@ -253,7 +259,9 @@ const createMainWindow = async () => {
           showStartupFailure(toolchain.message)
           return
         }
-        logger.info(`WebAssembly toolchain ready in ${Math.round(toolchain.ms)} ms`)
+        logger.info(`WebAssembly toolchain files checked in ${Math.round(toolchain.ms)} ms`)
+        if (python.ok) logger.info(`Python runtime files checked in ${Math.round(python.ms)} ms`)
+        else logger.warn(python.message)
         splash.close()
         mainWindow?.show()
       })
@@ -262,7 +270,6 @@ const createMainWindow = async () => {
       })
   })
 
-  /** Keeps the splash up with the reason the editor cannot start; closing it quits. */
   const showStartupFailure = (message: string) => {
     logger.error(message)
     mainWindow?.destroy()
@@ -428,9 +435,6 @@ app
       VENDOR_DOCUMENT_SCHEME,
       createVendorDocumentHandler({ listPackages: () => packages.listInstalled() }),
     )
-    getDesktopWasmCompileService()
-      .prepare()
-      .catch((error: unknown) => logger.error('WebAssembly toolchain: ' + getErrorMessage(error)))
     void createMainWindow()
     void clearCloudBuildRoot().catch((error: unknown) =>
       logger.warn('Could not clear the cloud build scratch directory: ' + getErrorMessage(error)),
@@ -444,8 +448,8 @@ app
   .catch((err: unknown) => logger.error(getErrorMessage(err)))
 
 /**
- * Install the `openplc-cli` shim on first run. Only the disk-image / translocation case is shown to the user;
- * everything else goes to the log.
+ * Installs the `openplc-cli` shim on the first run of a packaged app. A warning, such as a disk-image or translocated
+ * launch, is shown in a dialog; every other outcome goes to the log.
  */
 async function installCliShimOnFirstRun(): Promise<void> {
   if (!app.isPackaged) return

@@ -130,17 +130,31 @@ export async function launch(
     args: [join(__dirname, '..', '..', 'release', 'app', 'dist', 'main', 'main.js'), `--user-data-dir=${userData}`],
     env: { ...process.env, NODE_ENV: 'production', ...env },
   })
-  // The app opens a splash window first; pick the real one by URL.
+  // The app opens a splash window first and closes it once startup succeeds (the main window can be visible before
+  // that). A startup failure keeps the splash up with the reason in its `error` query: fail with it at once.
   const deadline = Date.now() + 60000
   while (Date.now() < deadline) {
-    for (const w of app.windows()) {
-      try {
-        if (w.url().includes('index.html')) {
-          await w.waitForLoadState('domcontentloaded')
-          return { app, page: w }
+    const windows = await app
+      .evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((w) => ({ url: w.webContents.getURL() })))
+      .catch(() => [])
+    const startupError = windows
+      .map((w) => (w.url.includes('splash') ? new URL(w.url).searchParams.get('error') : null))
+      .find((error) => error)
+    if (startupError) {
+      app.process().kill('SIGKILL')
+      throw new Error(`The editor could not start: ${startupError}`)
+    }
+    const started = windows.some((w) => w.url.includes('index.html')) && !windows.some((w) => w.url.includes('splash'))
+    if (started) {
+      for (const w of app.windows()) {
+        try {
+          if (w.url().includes('index.html')) {
+            await w.waitForLoadState('domcontentloaded')
+            return { app, page: w }
+          }
+        } catch {
+          /* window is closing; skip it */
         }
-      } catch {
-        /* window is closing; skip it */
       }
     }
     await new Promise((r) => setTimeout(r, 500))

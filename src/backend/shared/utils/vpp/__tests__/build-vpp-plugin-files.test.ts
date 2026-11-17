@@ -261,7 +261,24 @@ describe('buildVppPluginFiles', () => {
     expect(({} as Record<string, unknown>).pollutedToo).toBeUndefined()
   })
 
-  it('warns at pack time when the installed package moved since the project pinned it', async () => {
+  it('says nothing at pack time when the installed package moved since the project pinned it', async () => {
+    const result = await buildVppPluginFiles({
+      device: makeDevice(),
+      packageFiles: makePackageFiles(),
+      packageSignature: SIGNATURE,
+      vendorScreenData: {},
+      pin: {
+        recorded: { packageId: 'com.synergy-logic.slm-rp4', version: '0.3.0', contentHash: 'sha256:old' },
+        installed: { packageId: 'com.synergy-logic.slm-rp4', version: '0.3.1', contentHash: 'sha256:new' },
+      },
+      sha256Hex,
+    })
+
+    expect(result.warnings).toEqual([])
+    expect(Object.keys(result.files)).toContain('vpp_plugins.conf')
+  })
+
+  it('warns at pack time when the pinned package is not installed', async () => {
     const result = await buildVppPluginFiles({
       device: makeDevice(),
       packageFiles: makePackageFiles(),
@@ -269,15 +286,12 @@ describe('buildVppPluginFiles', () => {
       vendorScreenData: {},
       pin: {
         recorded: { packageId: 'com.synergy-logic.slm-rp4', version: '0.3.1', contentHash: 'sha256:old' },
-        installed: { packageId: 'com.synergy-logic.slm-rp4', version: '0.3.1', contentHash: 'sha256:new' },
+        installed: null,
       },
       sha256Hex,
     })
 
-    // Warned, not refused: the user may have meant to rebuild against the new
-    // package, and the bundle is still coherent.
-    expect(result.warnings.join('\n')).toContain('republished')
-    expect(Object.keys(result.files)).toContain('vpp_plugins.conf')
+    expect(result.warnings.join('\n')).toContain('is not installed')
   })
 
   it('says nothing at pack time for a project that predates pinning', async () => {

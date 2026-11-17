@@ -437,8 +437,8 @@ const KNOWN_EXCEPTIONS: Record<string, LayerName[]> = {
   // Same judgement as `ports/debugger-port.ts` above: hoisting these into
   // ports/types.ts would drag the schema they are inferred from along with it.
   // ---------------------------------------------------------------------------
-  // Pin drift warning — compares the pin a project recorded against the package
-  // actually installed; `describeVppPinDrift` is the one place that is worded.
+  // Missing package warning — `describeMissingVppPackage` is the one place that
+  // words a pinned package that is not installed.
   'frontend/components/_features/[workspace]/editor/device/configuration/board.tsx': ['backend-shared'],
   // Vendor screen actions — parses and runs a screen's declarative actions.
   'frontend/components/_features/[workspace]/editor/device/configuration/vendor-screen/screen-actions.tsx': [

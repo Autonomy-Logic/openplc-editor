@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
-import { describeVppPinDrift, type VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
+import { describeMissingVppPackage, type VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
 import type { RuntimeProvisioningOperation } from '@root/middleware/shared/ports/runtime-provisioning-port'
 import { useCapabilities, useDevice, usePackages } from '@root/middleware/shared/providers/platform-context'
 import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
@@ -251,13 +251,12 @@ const Board = memo(function () {
       targetVpp !== undefined ? Promise.resolve<VppPackagePin | null>(targetVpp) : packages.getPackagePin(vppPackageId)
     void authoritative.then((installed) => {
       if (cancelled) return
-      const recorded = recordedPins?.[deviceBoard]
-      if (!recorded && installed) {
+      if (installed) {
         setVppPackagePin(deviceBoard, installed)
         setPinDrift(null)
         return
       }
-      setPinDrift(describeVppPinDrift(recorded, installed))
+      setPinDrift(describeMissingVppPackage(recordedPins?.[deviceBoard], null))
     })
     return () => {
       cancelled = true

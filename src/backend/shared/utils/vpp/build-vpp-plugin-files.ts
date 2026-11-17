@@ -27,7 +27,7 @@ import { configuratorArchiveSchema } from '../../../../middleware/shared/vendor-
 import { generateIoRangesPluginConfig } from './generate-io-ranges-plugin-config'
 import { generateScreenConfigFiles } from './generate-screen-config-files'
 import { generateVendorPluginConfig } from './generate-vendor-plugin-config'
-import { describeVppPinDrift, type InstalledVppIdentity, type VppPackagePin } from './vpp-package-pin'
+import { describeMissingVppPackage, type VppPackagePin } from './vpp-package-pin'
 
 /** Files the editor turns into something else and the runtime must not receive. */
 const EXCLUDED_PLUGIN_FILES = new Set(['config_template.json', 'requirements.txt'])
@@ -60,7 +60,7 @@ export interface BuildVppPluginFilesArgs {
   /** Generated trusted-keys unit for a licensable package; null otherwise. */
   trustedKeysC?: string | null
   /** What the project was authored against, and what is actually being packed. */
-  pin?: { recorded?: VppPackagePin; installed: InstalledVppIdentity | null }
+  pin?: { recorded?: VppPackagePin; installed: VppPackagePin | null }
   /** Lower-case hex sha256 of the given bytes. */
   sha256Hex: (bytes: Uint8Array) => string | Promise<string>
   /** Id of the package being packed; keys its buckets in `screenConfigInputs.vppExtensions`. */
@@ -111,12 +111,9 @@ export async function buildVppPluginFiles(args: BuildVppPluginFilesArgs): Promis
     errors,
   })
 
-  // Said here rather than only at authoring: a package can move between the
-  // last time the board screen was open and the upload, and this is the last
-  // point before the driver is built on the device.
   if (args.pin) {
-    const drift = describeVppPinDrift(args.pin.recorded, args.pin.installed)
-    if (drift) warnings.push(drift)
+    const missing = describeMissingVppPackage(args.pin.recorded, args.pin.installed)
+    if (missing) warnings.push(missing)
   }
 
   if (device.target?.type !== 'runtime-v4') {
