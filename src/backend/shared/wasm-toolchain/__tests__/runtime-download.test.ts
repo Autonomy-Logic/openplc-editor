@@ -8,32 +8,9 @@ import { describe, expect, it } from '@jest/globals'
 import { DOWNLOAD_STALL_MS } from '../clang-worker-host'
 import type { WasmToolchainReadiness } from '../prepare-toolchain'
 import { prefetchFiles, startRuntimeDownload } from '../runtime-download'
+import { silentBody, trackedBody } from './fixtures/download-bodies'
 
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text)
-
-/** A body that hands out `chunks` one read at a time and records whether it was read to its end. */
-function trackedBody(chunks: string[]): { body: ReadableStream<Uint8Array>; fullyRead: () => boolean } {
-  let next = 0
-  let ended = false
-  const body = new ReadableStream<Uint8Array>(
-    {
-      pull(controller) {
-        if (next < chunks.length) {
-          controller.enqueue(encode(chunks[next++]))
-          return
-        }
-        ended = true
-        controller.close()
-      },
-    },
-    { highWaterMark: 0 },
-  )
-  return { body, fullyRead: () => ended }
-}
-
-/** A body that never sends a byte. */
-const silentBody = (): ReadableStream<Uint8Array> =>
-  new ReadableStream<Uint8Array>({ pull: () => new Promise<void>(() => undefined) }, { highWaterMark: 0 })
 
 /** Lets every queued promise callback run. */
 const flushMicrotasks = async (): Promise<void> => {

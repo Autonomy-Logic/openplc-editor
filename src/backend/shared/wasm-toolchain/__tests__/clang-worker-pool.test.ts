@@ -7,7 +7,12 @@ import {
   WasmToolchainLoadError,
   WORKER_LOAD_DEADLINE_MS,
 } from '../clang-worker-pool'
-import { CountingClangMechanism, FakeClangWorker, flushMicrotasks } from './fixtures/counting-clang-mechanism'
+import {
+  CountingClangMechanism,
+  FakeClangWorker,
+  flushMicrotasks,
+  withoutDiscard,
+} from './fixtures/counting-clang-mechanism'
 
 const job = (source = 'a.c') => ({ argv: ['clang', '-c', source], tree: { [source]: 'int a;' } })
 
@@ -468,5 +473,156 @@ describe('ClangWorkerPool load failure', () => {
     expect(error).toBeInstanceOf(WasmToolchainLoadError)
     expect(messageOf(error)).toBe('The WebAssembly compiler could not be loaded: it did not load within 120 s')
     expect(mechanism.started).toBe(1)
+  })
+})
+
+/** Starts a run on a worker that never reports ready, makes the worker fail, and returns the run's rejection. */
+async function failBeforeReady(pool: ClangWorkerPool, mechanism: CountingClangMechanism): Promise<unknown> {
+  mechanism.autoReady = false
+  const run = pool.run(job('a.c')).catch((reason: unknown) => reason)
+  await flushMicrotasks()
+  worker(mechanism, 0).fail('cannot load')
+  return run
+}
+
+describe('ClangWorkerPool stored files after a load failure', () => {
+  it('discards the stored files once when the worker fails before ready, and fails every run until release', async () => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.autoReady = false
+    const pool = new ClangWorkerPool(mechanism)
+    const first = pool.run(job('a.c')).catch((reason: unknown) => reason)
+    const queued = pool.run(job('b.c')).catch((reason: unknown) => reason)
+    await flushMicrotasks()
+
+    worker(mechanism, 0).fail('cannot load')
+    const later = await pool.run(job('c.c')).catch((reason: unknown) => reason)
+
+    for (const error of [await first, await queued, later]) {
+      expect(error).toBeInstanceOf(WasmToolchainLoadError)
+      expect(messageOf(error)).toBe('The WebAssembly compiler could not be loaded: cannot load')
+    }
+    expect(mechanism.discards).toBe(1)
+    expect(mechanism.loads).toBe(1)
+  })
+
+  it('after release, waits for the discard to settle, loads the files again and runs the job', async () => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.holdDiscards = true
+    const pool = new ClangWorkerPool(mechanism)
+    expect(await failBeforeReady(pool, mechanism)).toBeInstanceOf(WasmToolchainLoadError)
+    await pool.release()
+    mechanism.autoReady = true
+    mechanism.answer = succeed
+
+    const next = pool.run(job('d.c'))
+    await flushMicrotasks()
+
+    expect(mechanism.loads).toBe(1)
+    expect(mechanism.started).toBe(1)
+    mechanism.settleDiscards()
+    await expect(next).resolves.toMatchObject({ exitCode: 0 })
+    expect(mechanism.loads).toBe(2)
+    expect(mechanism.discards).toBe(1)
+  })
+
+  it.each([
+    ['rejects', false],
+    ['throws', true],
+  ])('loads the files again after release when the discard %s', async (_label, throws) => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.discardError = new Error('storage error')
+    mechanism.discardThrows = throws
+    const pool = new ClangWorkerPool(mechanism)
+    expect(await failBeforeReady(pool, mechanism)).toBeInstanceOf(WasmToolchainLoadError)
+    await pool.release()
+    mechanism.autoReady = true
+    mechanism.answer = succeed
+
+    await expect(pool.run(job('d.c'))).resolves.toMatchObject({ exitCode: 0 })
+
+    expect(mechanism.discards).toBe(1)
+    expect(mechanism.loads).toBe(2)
+  })
+
+  it('loads the files again after release with a mechanism that has no discard', async () => {
+    const mechanism = new CountingClangMechanism()
+    const pool = new ClangWorkerPool(withoutDiscard(mechanism))
+    expect(await failBeforeReady(pool, mechanism)).toBeInstanceOf(WasmToolchainLoadError)
+    await pool.release()
+    mechanism.autoReady = true
+    mechanism.answer = succeed
+
+    await expect(pool.run(job('d.c'))).resolves.toMatchObject({ exitCode: 0 })
+
+    expect(mechanism.loads).toBe(2)
+    expect(mechanism.discards).toBe(0)
+  })
+
+  it('neither discards nor loads again after a worker that missed the load deadline', async () => {
+    jest.useFakeTimers()
+    const mechanism = new CountingClangMechanism()
+    mechanism.autoReady = false
+    const pool = new ClangWorkerPool(mechanism, { loadDeadlineMs: 1_000 })
+
+    const error = await advanceUntilSettled(
+      pool.run(job()).catch((reason: unknown) => reason),
+      1_000,
+    )
+    expect(messageOf(error)).toBe('The WebAssembly compiler could not be loaded: it did not load within 1 s')
+    await advanceUntilSettled(pool.release(), 1)
+    mechanism.autoReady = true
+    mechanism.answer = succeed
+
+    await expect(advanceUntilSettled(pool.run(job('b.c')), 1)).resolves.toMatchObject({ exitCode: 0 })
+    expect(mechanism.discards).toBe(0)
+    expect(mechanism.loads).toBe(1)
+  })
+
+  it('neither discards nor loads again after a job ran past its deadline', async () => {
+    jest.useFakeTimers()
+    const mechanism = new CountingClangMechanism()
+    const pool = new ClangWorkerPool(mechanism, { jobDeadlineMs: 1_000 })
+
+    const error = await advanceUntilSettled(
+      pool.run(job()).catch((reason: unknown) => reason),
+      1_000,
+    )
+    expect(messageOf(error)).toBe('The compiler worker stopped (a job ran longer than 1 s).')
+    await advanceUntilSettled(pool.release(), 1)
+    mechanism.answer = succeed
+
+    await expect(advanceUntilSettled(pool.run(job('b.c')), 1)).resolves.toMatchObject({ exitCode: 0 })
+    expect(mechanism.discards).toBe(0)
+    expect(mechanism.loads).toBe(1)
+  })
+
+  it('neither discards nor loads again after the worker fails once it is ready', async () => {
+    const mechanism = new CountingClangMechanism()
+    const pool = new ClangWorkerPool(mechanism)
+    const run = pool.run(job()).catch((reason: unknown) => reason)
+    await flushMicrotasks()
+
+    worker(mechanism, 0).fail('exit code 3')
+    expect(messageOf(await run)).toBe('The compiler worker stopped (exit code 3).')
+    await pool.release()
+    mechanism.answer = succeed
+
+    await expect(pool.run(job('b.c'))).resolves.toMatchObject({ exitCode: 0 })
+    expect(mechanism.discards).toBe(0)
+    expect(mechanism.loads).toBe(1)
+  })
+
+  it('neither discards nor loads again after the worker could not be started', async () => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.spawnError = new Error('no threads')
+    const pool = new ClangWorkerPool(mechanism)
+    expect(await pool.run(job()).catch((reason: unknown) => reason)).toBeInstanceOf(WasmToolchainLoadError)
+    await pool.release()
+    mechanism.spawnError = null
+    mechanism.answer = succeed
+
+    await expect(pool.run(job('b.c'))).resolves.toMatchObject({ exitCode: 0 })
+    expect(mechanism.discards).toBe(0)
+    expect(mechanism.loads).toBe(1)
   })
 })

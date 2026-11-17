@@ -107,7 +107,16 @@ export class CountingClangMechanism implements ClangWorkerMechanism {
   spawnError: Error | null = null
   /** Every `spawn()` call, the throwing ones included. */
   spawnAttempts = 0
+  /** Every `discard()` call. */
+  discards = 0
+  /** The error `discard()` fails with; `null` lets it resolve. */
+  discardError: Error | null = null
+  /** Whether `discard()` throws `discardError` at once instead of returning a rejected promise. */
+  discardThrows = false
+  /** Whether `discard()` waits for `settleDiscards()` before it settles. */
+  holdDiscards = false
   private readonly heldLoads: Array<() => void> = []
+  private readonly heldDiscards: Array<() => void> = []
 
   get started(): number {
     return this.workers.length
@@ -136,6 +145,23 @@ export class CountingClangMechanism implements ClangWorkerMechanism {
     for (const settle of this.heldLoads.splice(0)) settle()
   }
 
+  /** Deletes the stored files: counts the call, then settles as `discardError`, `discardThrows` and `holdDiscards` say. */
+  discard(): Promise<void> {
+    this.discards++
+    if (this.discardThrows && this.discardError) throw this.discardError
+    if (this.holdDiscards) {
+      return new Promise<void>((resolve, reject) => {
+        this.heldDiscards.push(() => (this.discardError ? reject(this.discardError) : resolve()))
+      })
+    }
+    return this.discardError ? Promise.reject(this.discardError) : Promise.resolve()
+  }
+
+  /** Settles every discard held while `holdDiscards` was set: rejects with `discardError` when set, resolves otherwise. */
+  settleDiscards(): void {
+    for (const settle of this.heldDiscards.splice(0)) settle()
+  }
+
   spawn(): ClangWorkerHandle {
     this.spawnAttempts++
     if (this.spawnError) throw this.spawnError
@@ -145,6 +171,11 @@ export class CountingClangMechanism implements ClangWorkerMechanism {
     if (this.autoReady) void Promise.resolve().then(() => worker.send({ type: 'ready' }))
     return worker
   }
+}
+
+/** The same mechanism with no `discard`, as the desktop and the CLI have. */
+export function withoutDiscard(mechanism: CountingClangMechanism): ClangWorkerMechanism {
+  return { load: () => mechanism.load(), spawn: () => mechanism.spawn() }
 }
 
 /** Lets pending promise callbacks run, without timers, so the test works under fake timers too. */

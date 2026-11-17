@@ -40,25 +40,49 @@ describe('parsePythonThreadInit', () => {
     wheelUrl: '/python-runtime/numpy.whl',
   }
 
-  it('reads the URLs from the message the page sends', () => {
-    expect(parsePythonThreadInit(pythonThreadInit(urls))).toEqual(urls)
+  const cache = {
+    name: 'openplc-runtime-files/python-runtime-0123456789ab',
+    urls: ['/python-runtime/python-3.13.19.webc', '/python-runtime/numpy.whl'],
+  }
+
+  it('reads the whole init message the page sends, with no cache reference when none is given', () => {
+    expect(parsePythonThreadInit(pythonThreadInit(urls))).toEqual({ type: 'init', location: urls, cache: null })
+  })
+
+  it('carries the cache reference from the page to the thread', () => {
+    expect(parsePythonThreadInit(pythonThreadInit(urls, cache))).toEqual({ type: 'init', location: urls, cache })
   })
 
   it('reads an init message that says nothing about compression, and returns only the three URLs', () => {
     const parsed = parsePythonThreadInit({ type: 'init', location: { ...urls } })
 
-    expect(parsed).toEqual(urls)
-    expect(Object.keys(parsed ?? {}).sort()).toEqual(['packageUrl', 'sdkUrl', 'wheelUrl'])
+    expect(parsed?.location).toEqual(urls)
+    expect(Object.keys(parsed?.location ?? {}).sort()).toEqual(['packageUrl', 'sdkUrl', 'wheelUrl'])
   })
 
   it('does not carry a compression flag a page still sends', () => {
     const parsed = parsePythonThreadInit({ type: 'init', location: { ...urls, packageCompressed: true } })
 
-    expect(Object.keys(parsed ?? {}).sort()).toEqual(['packageUrl', 'sdkUrl', 'wheelUrl'])
+    expect(Object.keys(parsed?.location ?? {}).sort()).toEqual(['packageUrl', 'sdkUrl', 'wheelUrl'])
   })
 
-  it('sends only the three URLs in the init message', () => {
-    expect(pythonThreadInit(urls)).toStrictEqual({ type: 'init', location: urls })
+  it('sends only the three URLs and the cache reference in the init message', () => {
+    expect(pythonThreadInit(urls)).toStrictEqual({ type: 'init', location: urls, cache: null })
+    expect(pythonThreadInit(urls, cache)).toStrictEqual({ type: 'init', location: urls, cache })
+  })
+
+  it.each([
+    ['missing', {}],
+    ['null', { cache: null }],
+    ['named outside the runtime file caches', { cache: { ...cache, name: 'workbox-precache-v1' } }],
+    ['with urls that are not a list', { cache: { ...cache, urls: 'numpy.whl' } }],
+    ['with a url that is not a string', { cache: { ...cache, urls: [null] } }],
+  ])('reads a cache reference that is %s as no cache', (_label, extra) => {
+    expect(parsePythonThreadInit({ type: 'init', location: { ...urls }, ...extra })).toEqual({
+      type: 'init',
+      location: urls,
+      cache: null,
+    })
   })
 
   it('ignores other messages and an init with a missing or mistyped field', () => {

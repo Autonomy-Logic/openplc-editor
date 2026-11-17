@@ -7,6 +7,7 @@ import {
   type ClangWorkerPort,
   isClangWorkerJob,
   isYowaspClang,
+  parseClangWorkerInit,
   runClangJob,
   serveClangWorker,
   type YowaspClang,
@@ -188,5 +189,38 @@ describe('message checks', () => {
     [null, false],
   ])('job %j -> %s', (value, expected) => {
     expect(isClangWorkerJob(value)).toBe(expected)
+  })
+})
+
+describe('parseClangWorkerInit', () => {
+  const baseUrl = 'https://editor.test/assets/wasm-toolchain-0123456789ab/'
+  const cache = {
+    name: 'openplc-runtime-files/wasm-toolchain-0123456789ab',
+    urls: [`${baseUrl}llvm.core.wasm`, `${baseUrl}llvm-resources.tar`],
+  }
+
+  it('reads the toolchain folder and the cache reference', () => {
+    expect(parseClangWorkerInit({ type: 'init', baseUrl, cache })).toEqual({ type: 'init', baseUrl, cache })
+  })
+
+  it.each([
+    ['missing', {}],
+    ['null', { cache: null }],
+    ['named outside the runtime file caches', { cache: { ...cache, name: 'workbox-precache-v1' } }],
+    ['with urls that are not a list', { cache: { ...cache, urls: 'llvm.core.wasm' } }],
+    ['with a url that is not a string', { cache: { ...cache, urls: [1] } }],
+    ['not an object', { cache: 'openplc-runtime-files/wasm-toolchain-0123456789ab' }],
+  ])('reads a cache reference that is %s as no cache', (_label, extra) => {
+    expect(parseClangWorkerInit({ type: 'init', baseUrl, ...extra })).toEqual({ type: 'init', baseUrl, cache: null })
+  })
+
+  it.each([
+    ['no baseUrl', { type: 'init', cache }],
+    ['a baseUrl that is not a string', { type: 'init', baseUrl: 1, cache }],
+    ['another type', { type: 'job', baseUrl, cache }],
+    ['no object', null],
+    ['a string', 'init'],
+  ])('reads a message with %s as no init', (_label, value) => {
+    expect(parseClangWorkerInit(value)).toBeNull()
   })
 })

@@ -197,6 +197,111 @@ describe('ThreadedPythonRuntime with servePythonThread', () => {
   })
 })
 
+/** How a counting `discard` ends: it resolves, rejects, or throws at once. */
+type DiscardOutcome = 'resolve' | 'reject' | 'throw'
+
+/** `mechanism` with a `discard` that counts its calls and ends as `outcome` says. */
+function withDiscard(
+  mechanism: PythonThreadMechanism,
+  outcome: DiscardOutcome = 'resolve',
+): PythonThreadMechanism & { discards: number; discard(): Promise<void> } {
+  const counted = {
+    discards: 0,
+    spawn: () => mechanism.spawn(),
+    isCrossOriginIsolated: () => mechanism.isCrossOriginIsolated?.() !== false,
+    discard: (): Promise<void> => {
+      counted.discards++
+      if (outcome === 'throw') throw new Error('storage error')
+      return outcome === 'reject' ? Promise.reject(new Error('storage error')) : Promise.resolve()
+    },
+  }
+  return counted
+}
+
+describe('ThreadedPythonRuntime stored files after a load failure', () => {
+  it('discards the stored files once when the thread reports it could not load, and fails as before', async () => {
+    const mechanism = withDiscard(inMemoryThread(() => Promise.reject(new Error('package missing'))))
+    const runtime = new ThreadedPythonRuntime(mechanism)
+
+    await expect(runtime.load()).rejects.toThrow('package missing')
+    await expect(runtime.spawn()).rejects.toThrow('package missing')
+
+    expect(mechanism.discards).toBe(1)
+  })
+
+  it('discards the stored files once when the thread stops before it is ready', async () => {
+    const threads = inMemoryThread(() => new Promise<PythonInterpreters>(() => undefined))
+    const mechanism = withDiscard(threads)
+    const runtime = new ThreadedPythonRuntime(mechanism)
+    const loading = runtime.load()
+    await next()
+
+    threads.threads[0].crash('killed')
+
+    await expect(loading).rejects.toThrow('The Python thread stopped: killed')
+    expect(mechanism.discards).toBe(1)
+  })
+
+  it.each(['reject', 'throw'] as const)(
+    'reports the same load failure when the discard fails with %s',
+    async (outcome) => {
+      const mechanism = withDiscard(
+        inMemoryThread(() => Promise.reject(new Error('package missing'))),
+        outcome,
+      )
+      const runtime = new ThreadedPythonRuntime(mechanism)
+
+      await expect(runtime.load()).rejects.toThrow('package missing')
+      await expect(runtime.load()).rejects.toThrow('package missing')
+
+      expect(mechanism.discards).toBe(1)
+    },
+  )
+
+  it('does not discard after the load deadline', async () => {
+    const mechanism = withDiscard(inMemoryThread(() => new Promise<PythonInterpreters>(() => undefined)))
+    const runtime = new ThreadedPythonRuntime(mechanism, 20)
+
+    await expect(runtime.load()).rejects.toThrow('The Python runtime did not load within 0 s.')
+
+    expect(mechanism.discards).toBe(0)
+  })
+
+  it('does not discard when the thread cannot be started', async () => {
+    const mechanism = withDiscard({
+      spawn: () => Promise.reject(new Error('the worker script could not be loaded')),
+    })
+    const runtime = new ThreadedPythonRuntime(mechanism)
+
+    await expect(runtime.load()).rejects.toThrow('the worker script could not be loaded')
+
+    expect(mechanism.discards).toBe(0)
+  })
+
+  it('does not discard when the thread stops after it is ready', async () => {
+    const threads = inMemoryThread(echoRuntime())
+    const mechanism = withDiscard(threads)
+    const runtime = new ThreadedPythonRuntime(mechanism)
+    await runtime.load()
+
+    threads.threads[0].crash('out of memory')
+    await runtime.load()
+
+    expect(mechanism.discards).toBe(0)
+  })
+
+  it('does not discard on a page that is not cross-origin isolated', async () => {
+    const threads = inMemoryThread(echoRuntime())
+    const mechanism = withDiscard({ spawn: () => threads.spawn(), isCrossOriginIsolated: () => false })
+    const runtime = new ThreadedPythonRuntime(mechanism)
+
+    await expect(runtime.load()).rejects.toThrow(PYTHON_NOT_ISOLATED_MESSAGE)
+
+    expect(mechanism.discards).toBe(0)
+    expect(threads.spawns).toBe(0)
+  })
+})
+
 describe('ThreadedPythonRuntime cross-origin isolation', () => {
   it('names the reason Python cannot run on a page that is not cross-origin isolated', () => {
     expect(PYTHON_NOT_ISOLATED_MESSAGE).toBe('Python blocks cannot run here: the page is not cross-origin isolated.')
