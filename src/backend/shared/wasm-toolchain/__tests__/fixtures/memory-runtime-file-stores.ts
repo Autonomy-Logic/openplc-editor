@@ -21,7 +21,7 @@ export function quotaExceeded(): Error {
 
 /**
  * In-memory Cache Storage. `put` reads the body it is given to its end before the entry exists, `match` answers a
- * fresh copy each time, and each operation can be made to reject through `failures`. Records the deleted cache names,
+ * fresh copy each time, and each operation can be made to reject through `failures`. Records the opened and removed cache names,
  * every `put` call in order and the most `put` calls in progress at once.
  */
 export class MemoryRuntimeFileStores implements RuntimeFileStores {
@@ -33,11 +33,14 @@ export class MemoryRuntimeFileStores implements RuntimeFileStores {
   readonly putResponses: Response[] = []
   /** Every cache name deleted through `delete`, in order. */
   readonly deleted: string[] = []
+  /** Every cache name passed to `open`, in order, the rejected calls included. */
+  readonly opened: string[] = []
   activePuts = 0
   maxActivePuts = 0
   private readonly caches = new Map<string, Map<string, StoredEntry>>()
 
   open(name: string): Promise<RuntimeFileStore> {
+    this.opened.push(name)
     const failure = this.failures.open
     if (failure) return Promise.reject(failure)
     return Promise.resolve(this.storeOf(name))

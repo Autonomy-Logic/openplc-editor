@@ -125,15 +125,45 @@ const sorted = (urls: readonly string[]): string[] => [...urls].sort()
 
 const messageOf = (reason: unknown): string => (reason instanceof Error ? reason.message : String(reason))
 
-/** A network `fetch` that records its arguments and answers `from network`. */
-function recordingNetwork() {
+/** The options of the HTTP cache probe, and nothing else. */
+const PROBE_INIT = { cache: 'only-if-cached', mode: 'same-origin' }
+
+/** How the network answers the HTTP cache probe: with a response, a rejection or a synchronous throw. */
+type ProbeAnswer = (() => Response) | 'reject' | 'throw'
+
+/**
+ * A network `fetch` that records its arguments. The HTTP cache probe (`cache: 'only-if-cached'`) is answered as `probe`
+ * says, a `504` by default; any other call answers `from network`.
+ */
+function recordingNetwork(probe: ProbeAnswer = () => new Response(null, { status: 504 })) {
   const calls: Array<[RequestInfo | URL, RequestInit | undefined]> = []
   const network = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     calls.push([input, init])
-    return Promise.resolve(new Response('from network'))
+    if (init?.cache !== 'only-if-cached') return Promise.resolve(new Response('from network'))
+    if (probe === 'throw') throw new TypeError('only-if-cached can be set only with same-origin mode')
+    if (probe === 'reject') return Promise.reject(new TypeError('Failed to fetch'))
+    return Promise.resolve(probe())
   }
   return { network, calls }
 }
+
+/** Stores whose toolchain cache holds `llvm.core.wasm` and `bundle.js`. */
+const storesWithCore = (): MemoryRuntimeFileStores => {
+  const stores = new MemoryRuntimeFileStores()
+  stores.seed(TOOLCHAIN_CACHE, { [CORE]: 'stored core', [BUNDLE]: 'stored bundle' })
+  return stores
+}
+
+/** A reference listing `llvm.core.wasm` and `llvm-resources.tar` of the toolchain cache. */
+const toolchainRef: RuntimeFileCacheRef = { name: TOOLCHAIN_CACHE, urls: [CORE, RESOURCES] }
+
+/** The ways a probe misses: a `504`, another non-ok status, a rejection and a synchronous throw. */
+const PROBE_MISSES: Array<[string, ProbeAnswer]> = [
+  ['a 504', () => new Response(null, { status: 504 })],
+  ['a 404', () => new Response('missing', { status: 404 })],
+  ['a rejection', 'reject'],
+  ['a synchronous throw', 'throw'],
+]
 
 describe('runtime file cache names', () => {
   it('names the cache of a folder under openplc-runtime-files/', () => {
@@ -505,29 +535,24 @@ describe('RuntimeFileCache discard', () => {
 })
 
 describe('createCacheFirstFetch', () => {
-  const ref: RuntimeFileCacheRef = { name: TOOLCHAIN_CACHE, urls: [CORE, RESOURCES] }
-
-  const storesWithCore = (): MemoryRuntimeFileStores => {
-    const stores = new MemoryRuntimeFileStores()
-    stores.seed(TOOLCHAIN_CACHE, { [CORE]: 'stored core', [BUNDLE]: 'stored bundle' })
-    return stores
-  }
-
   it.each([
     ['a string', () => CORE],
     ['a URL', () => new URL(CORE)],
     ['a GET Request', () => new Request(CORE)],
-  ])('answers a listed URL given as %s from the store, without the network', async (_label, input) => {
-    const { network, calls } = recordingNetwork()
-    const stores = storesWithCore()
-    const cacheFirst = createCacheFirstFetch(stores, ref, network)
+  ])(
+    'answers a listed URL given as %s from the store after an HTTP cache miss, with only the probe on the network',
+    async (_label, input) => {
+      const { network, calls } = recordingNetwork()
+      const stores = storesWithCore()
+      const cacheFirst = createCacheFirstFetch(stores, toolchainRef, network)
 
-    const response = await cacheFirst(input())
+      const response = await cacheFirst(input())
 
-    expect(await response.text()).toBe('stored core')
-    expect(calls).toEqual([])
-    expect(stores.puts).toEqual([])
-  })
+      expect(await response.text()).toBe('stored core')
+      expect(calls).toStrictEqual([[CORE, PROBE_INIT]])
+      expect(stores.puts).toEqual([])
+    },
+  )
 
   it.each([
     ['a URL', () => new URL(SDK_WASM)],
@@ -548,41 +573,51 @@ describe('createCacheFirstFetch', () => {
       expect(await response.text()).toBe('from network')
       expect(calls).toHaveLength(1)
       expect(calls[0][0]).toBe(request)
+      expect(stores.puts).toEqual([])
     },
   )
 
   it.each([
-    ['a listed URL with no entry', () => storesWithCore(), ref, () => RESOURCES],
-    ['a URL the reference does not list, though the store holds it', () => storesWithCore(), ref, () => BUNDLE],
+    ['a listed URL with no entry', true, () => storesWithCore(), toolchainRef, () => RESOURCES],
+    ['a listed URL with no store', true, () => null, toolchainRef, () => CORE],
     [
-      'a request that is not a GET',
-      () => storesWithCore(),
-      ref,
-      () => new Request(CORE, { method: 'POST', body: 'x' }),
-    ],
-    ['no store', () => null, ref, () => CORE],
-    ['no reference', () => storesWithCore(), null, () => CORE],
-    [
-      'a store that refuses to open',
+      'a listed URL in a store that refuses to open',
+      true,
       () => {
         const stores = storesWithCore()
         stores.failures.open = new Error('storage error')
         return stores
       },
-      ref,
+      toolchainRef,
       () => new URL(CORE),
     ],
     [
-      'a store whose match rejects',
+      'a listed URL in a store whose match rejects',
+      true,
       () => {
         const stores = storesWithCore()
         stores.failures.match = new Error('storage error')
         return stores
       },
-      ref,
+      toolchainRef,
       () => CORE,
     ],
-  ])('sends %s to the network with the original arguments', async (_label, stores, reference, input) => {
+    [
+      'a URL the reference does not list, though the store holds it',
+      false,
+      () => storesWithCore(),
+      toolchainRef,
+      () => BUNDLE,
+    ],
+    [
+      'a request that is not a GET',
+      false,
+      () => storesWithCore(),
+      toolchainRef,
+      () => new Request(CORE, { method: 'POST', body: 'x' }),
+    ],
+    ['a request with no reference', false, () => storesWithCore(), null, () => CORE],
+  ])('sends %s to the network with the original arguments', async (_label, probed, stores, reference, input) => {
     const { network, calls } = recordingNetwork()
     const given = stores()
     const cacheFirst = createCacheFirstFetch(given, reference, network)
@@ -592,9 +627,141 @@ describe('createCacheFirstFetch', () => {
     const response = await cacheFirst(request, init)
 
     expect(await response.text()).toBe('from network')
+    expect(calls).toHaveLength(probed ? 2 : 1)
+    expect(calls[calls.length - 1][0]).toBe(request)
+    expect(calls[calls.length - 1][1]).toBe(init)
+    expect(given?.puts ?? []).toEqual([])
+  })
+})
+
+describe('createCacheFirstFetch HTTP cache first', () => {
+  it('probes the HTTP cache first for a listed URL and returns its answer without opening the store', async () => {
+    const { network, calls } = recordingNetwork(() => new Response('from the HTTP cache'))
+    const stores = storesWithCore()
+    const cacheFirst = createCacheFirstFetch(stores, toolchainRef, network)
+
+    const response = await cacheFirst(new URL(CORE), { headers: { 'x-test': '1' } })
+
+    expect(await response.text()).toBe('from the HTTP cache')
+    expect(calls).toStrictEqual([[CORE, PROBE_INIT]])
+    expect(stores.opened).toEqual([])
+    expect(stores.puts).toEqual([])
+  })
+
+  it.each(PROBE_MISSES)(
+    'takes a probe answered with %s as a miss and answers from the store',
+    async (_label, probe) => {
+      const { network, calls } = recordingNetwork(probe)
+      const stores = storesWithCore()
+      const cacheFirst = createCacheFirstFetch(stores, toolchainRef, network)
+
+      const response = await cacheFirst(CORE)
+
+      expect(await response.text()).toBe('stored core')
+      expect(calls).toStrictEqual([[CORE, PROBE_INIT]])
+      expect(stores.puts).toEqual([])
+    },
+  )
+
+  it.each(PROBE_MISSES)(
+    'takes a probe answered with %s as a miss and, with no entry, fetches with the original arguments',
+    async (_label, probe) => {
+      const { network, calls } = recordingNetwork(probe)
+      const stores = storesWithCore()
+      const cacheFirst = createCacheFirstFetch(stores, toolchainRef, network)
+      const request = new URL(RESOURCES)
+      const init: RequestInit = { headers: { 'x-test': '1' } }
+
+      const response = await cacheFirst(request, init)
+
+      expect(await response.text()).toBe('from network')
+      expect(calls).toHaveLength(2)
+      expect(calls[0]).toStrictEqual([RESOURCES, PROBE_INIT])
+      expect(calls[1][0]).toBe(request)
+      expect(calls[1][1]).toBe(init)
+      expect(stores.puts).toEqual([])
+    },
+  )
+
+  it.each([
+    ['a string', () => CORE],
+    ['a URL', () => new URL(CORE)],
+    ['a GET Request', () => new Request(CORE)],
+  ])('probes a listed URL given as %s with its href string', async (_label, input) => {
+    const { network, calls } = recordingNetwork(() => new Response('from the HTTP cache'))
+    const stores = storesWithCore()
+    const cacheFirst = createCacheFirstFetch(stores, toolchainRef, network)
+
+    await cacheFirst(input())
+
+    expect(calls).toHaveLength(1)
+    expect(typeof calls[0][0]).toBe('string')
+    expect(calls[0]).toStrictEqual([CORE, PROBE_INIT])
+    expect(stores.puts).toEqual([])
+  })
+
+  it('probes a listed URL without a store, then fetches it with the original arguments on a miss', async () => {
+    const { network, calls } = recordingNetwork()
+    const cacheFirst = createCacheFirstFetch(null, toolchainRef, network)
+    const init: RequestInit = { headers: { 'x-test': '1' } }
+
+    const response = await cacheFirst(CORE, init)
+
+    expect(await response.text()).toBe('from network')
+    expect(calls).toHaveLength(2)
+    expect(calls[0]).toStrictEqual([CORE, PROBE_INIT])
+    expect(calls[1][0]).toBe(CORE)
+    expect(calls[1][1]).toBe(init)
+  })
+
+  it('returns the HTTP cache answer for a listed URL without a store', async () => {
+    const { network, calls } = recordingNetwork(() => new Response('from the HTTP cache'))
+
+    const response = await createCacheFirstFetch(null, toolchainRef, network)(CORE)
+
+    expect(await response.text()).toBe('from the HTTP cache')
+    expect(calls).toStrictEqual([[CORE, PROBE_INIT]])
+  })
+
+  const unprobed: Array<[string, RuntimeFileCacheRef | null, () => RequestInfo | URL]> = [
+    ['an unlisted URL', toolchainRef, () => BUNDLE],
+    ['a request that is not a GET', toolchainRef, () => new Request(CORE, { method: 'POST', body: 'x' })],
+    ['a request with no reference', null, () => CORE],
+  ]
+
+  it.each(unprobed)(
+    'makes no probe for %s and fetches it once with the original arguments',
+    async (_label, reference, input) => {
+      const { network, calls } = recordingNetwork(() => new Response('from the HTTP cache'))
+      const stores = storesWithCore()
+      const cacheFirst = createCacheFirstFetch(stores, reference, network)
+      const request = input()
+      const init: RequestInit = { headers: { 'x-test': '1' } }
+
+      const response = await cacheFirst(request, init)
+
+      expect(await response.text()).toBe('from network')
+      expect(calls).toHaveLength(1)
+      expect(calls[0][0]).toBe(request)
+      expect(calls[0][1]).toBe(init)
+      expect(stores.puts).toEqual([])
+    },
+  )
+
+  it('makes no probe for the Wasmer SDK module of a Python set, even when the store holds an entry for it', async () => {
+    const { network, calls } = recordingNetwork(() => new Response('from the HTTP cache'))
+    const stores = new MemoryRuntimeFileStores()
+    stores.seed(PYTHON_CACHE, { [SDK_WASM]: 'planted module' })
+    const pythonRef = createRuntimeFileCache(stores, server().open).ref(pythonSet)
+    const request = new URL(SDK_WASM)
+
+    const response = await createCacheFirstFetch(stores, pythonRef, network)(request)
+
+    expect(await response.text()).toBe('from network')
     expect(calls).toHaveLength(1)
     expect(calls[0][0]).toBe(request)
-    expect(calls[0][1]).toBe(init)
-    expect(given?.puts ?? []).toEqual([])
+    expect(calls[0][1]).toBeUndefined()
+    expect(stores.opened).toEqual([])
+    expect(stores.puts).toEqual([])
   })
 })
