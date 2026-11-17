@@ -83,6 +83,9 @@ interface Running extends Queued {
   timer: Timer
 }
 
+/** Why a worker failed: it reported an error, or it ran past a deadline. */
+type FailureCause = 'error' | 'deadline'
+
 /** Where the worker is in its life: loading the toolchain, waiting for a job, or running one. */
 type WorkerState = { kind: 'loading'; loadTimer: Timer } | { kind: 'idle' } | { kind: 'busy'; running: Running }
 
@@ -102,7 +105,8 @@ const ignore = (): void => undefined
  * ends on `release()`. A worker counts from its spawn until its termination has settled, and a new one starts only
  * after the previous one exited. A worker that fails or runs a job past its deadline is terminated and its job fails;
  * one that cannot be started, or fails before it is ready, fails every job with `WasmToolchainLoadError` until the
- * next `release()`.
+ * next `release()`. A worker error before it is ready also discards the toolchain's stored files and clears the kept
+ * `prepare()`, so the next load runs again.
  */
 export class ClangWorkerPool implements WasmClangRunner {
   readonly concurrency = 1
@@ -113,6 +117,7 @@ export class ClangWorkerPool implements WasmClangRunner {
   private queue: Queued[] = []
   private prepared: Promise<void> | null = null
   private loadFailure: WasmToolchainLoadError | null = null
+  private discarding: Promise<void> | null = null
   private nextId = 1
 
   constructor(
@@ -162,8 +167,26 @@ export class ClangWorkerPool implements WasmClangRunner {
     await this.stopping
   }
 
+  /** Waits for a discard of the stored files to settle, whatever its outcome, then gets the files ready. */
   private async loadFiles(): Promise<void> {
+    const discarding = this.discarding
+    if (discarding) {
+      await discarding
+      if (this.discarding === discarding) this.discarding = null
+    }
     await this.mechanism.load()
+  }
+
+  /** Starts deleting the toolchain's stored files through the mechanism, when it can; a failure is ignored. */
+  private discardFiles(): void {
+    if (!this.mechanism.discard) return
+    let discarded: Promise<void>
+    try {
+      discarded = this.mechanism.discard()
+    } catch (error) {
+      discarded = Promise.reject(error instanceof Error ? error : new Error(String(error)))
+    }
+    this.discarding = discarded.then(ignore, ignore)
   }
 
   /**
@@ -203,7 +226,7 @@ export class ClangWorkerPool implements WasmClangRunner {
   private hand(worker: LiveWorker, queued: Queued): void {
     const id = this.nextId++
     const timer = setTimeout(
-      () => this.fail(worker, `a job ran longer than ${seconds(this.jobDeadlineMs)}`),
+      () => this.fail(worker, `a job ran longer than ${seconds(this.jobDeadlineMs)}`, 'deadline'),
       this.jobDeadlineMs,
     )
     worker.state = { kind: 'busy', running: { ...queued, id, timer } }
@@ -223,13 +246,13 @@ export class ClangWorkerPool implements WasmClangRunner {
   private spawn(): LiveWorker {
     const handle = this.mechanism.spawn()
     const loadTimer = setTimeout(
-      () => this.fail(worker, `it did not load within ${seconds(this.loadDeadlineMs)}`),
+      () => this.fail(worker, `it did not load within ${seconds(this.loadDeadlineMs)}`, 'deadline'),
       this.loadDeadlineMs,
     )
     const worker: LiveWorker = { handle, state: { kind: 'loading', loadTimer } }
     this.worker = worker
     handle.onMessage((raw) => this.receive(worker, raw))
-    handle.onFailure((reason) => this.fail(worker, reason))
+    handle.onFailure((reason) => this.fail(worker, reason, 'error'))
     handle.setBusy?.(false)
     return worker
   }
@@ -258,9 +281,10 @@ export class ClangWorkerPool implements WasmClangRunner {
 
   /**
    * Terminates the current worker after a failure. The job it ran fails with the reason; when it never became ready,
-   * the toolchain counts as not loadable until the next `release()`.
+   * the toolchain counts as not loadable until the next `release()`, and after an error its stored files are discarded
+   * and the kept `prepare()` is cleared.
    */
-  private fail(worker: LiveWorker, reason: string): void {
+  private fail(worker: LiveWorker, reason: string, cause: FailureCause): void {
     if (worker !== this.worker) return
     this.worker = null
     const state = worker.state
@@ -268,6 +292,10 @@ export class ClangWorkerPool implements WasmClangRunner {
       case 'loading':
         clearTimeout(state.loadTimer)
         this.loadFailure = new WasmToolchainLoadError(reason)
+        if (cause === 'error') {
+          this.prepared = null
+          this.discardFiles()
+        }
         break
       case 'busy':
         clearTimeout(state.running.timer)

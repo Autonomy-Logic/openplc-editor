@@ -65,9 +65,12 @@ export interface ClangWorkerHandle {
 
 export interface ClangWorkerMechanism {
   /**
-   * Gets the toolchain's files ready before any worker starts: checks every file is there (desktop) or downloads them
-   * (web). Rejects with the reason when it cannot, naming the first missing file on the desktop.
+   * Gets the toolchain's files ready before any worker starts: checks every file is there (desktop) or stores them in
+   * Cache Storage, downloading the missing ones (web). Rejects with the reason when it cannot, naming the first missing
+   * file on the desktop.
    */
   load(): Promise<void>
   spawn(): ClangWorkerHandle
+  /** Deletes the toolchain's stored files, so the next load downloads them again. */
+  discard?(): Promise<void>
 }

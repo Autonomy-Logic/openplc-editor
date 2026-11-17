@@ -13,6 +13,8 @@ export interface PythonThreadMechanism {
   spawn(): PythonThreadHandle | Promise<PythonThreadHandle>
   /** Whether the page is cross-origin isolated, as the browser reports it. Platforms that are not a page omit it. */
   isCrossOriginIsolated?(): boolean
+  /** Deletes the Python runtime's stored files, so the next page load downloads them again. */
+  discard?(): Promise<void>
 }
 
 /** The thread's side of the channel. */

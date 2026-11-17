@@ -174,7 +174,8 @@ export const PYTHON_NOT_ISOLATED_MESSAGE = 'Python blocks cannot run here: the p
 /**
  * The main side: the Python thread, started once by `load()` and kept for the session. A thread that dies after
  * loading ends its interpreters, and the next `load()` starts a new one. A runtime that could not load stays failed
- * for the session, so later runs do not wait on it again: their Python blocks report the same reason.
+ * for the session, so later runs do not wait on it again: their Python blocks report the same reason. A thread that
+ * reports a load failure, or stops before it is ready, also has the runtime's stored files discarded.
  */
 export class ThreadedPythonRuntime implements PythonInterpreters {
   private thread: PythonThreadHandle | null = null
@@ -235,7 +236,10 @@ export class ThreadedPythonRuntime implements PythonInterpreters {
       thread.onFailure((reason) => {
         clearTimeout(deadline)
         if (this.thread === thread || !loaded) this.lose(thread, `The Python thread stopped: ${reason}`)
-        if (!loaded) reject(new Error(`The Python thread stopped: ${reason}`))
+        if (!loaded) {
+          this.discardFiles()
+          reject(new Error(`The Python thread stopped: ${reason}`))
+        }
         loaded = true
       })
       thread.onMessage((value) => {
@@ -254,6 +258,7 @@ export class ThreadedPythonRuntime implements PythonInterpreters {
           clearTimeout(deadline)
           loaded = true
           this.lose(thread, message.message)
+          this.discardFiles()
           reject(new Error(message.message))
           return
         }
@@ -289,6 +294,16 @@ export class ThreadedPythonRuntime implements PythonInterpreters {
         return
       default:
         return
+    }
+  }
+
+  /** Deletes the runtime's stored files through the mechanism, when it can; a failure is ignored. */
+  private discardFiles(): void {
+    if (!this.mechanism.discard) return
+    try {
+      void this.mechanism.discard().catch(() => undefined)
+    } catch {
+      return
     }
   }
 

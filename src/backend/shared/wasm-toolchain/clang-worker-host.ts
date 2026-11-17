@@ -5,6 +5,7 @@ import type {
 } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 
 import type { ClangWorkerReply } from './clang-worker-pool'
+import { parseRuntimeFileCacheRef, type RuntimeFileCacheRef } from './runtime-file-cache'
 
 /** How a worker talks to the page or process that started it. */
 export interface ClangWorkerPort {
@@ -36,6 +37,19 @@ export const isClangWorkerJob = (value: unknown): value is ClangWorkerJobMessage
   value.argv.every((arg) => typeof arg === 'string') &&
   isRecord(value.tree) &&
   !ArrayBuffer.isView(value.tree)
+
+/** The first message a page sends its clang worker: the toolchain folder and where its stored files are. */
+export interface ClangWorkerInit {
+  type: 'init'
+  baseUrl: string
+  cache: RuntimeFileCacheRef | null
+}
+
+/** The init message, or `null` for any other message. */
+export function parseClangWorkerInit(value: unknown): ClangWorkerInit | null {
+  if (!isRecord(value) || value.type !== 'init' || typeof value.baseUrl !== 'string') return null
+  return { type: 'init', baseUrl: value.baseUrl, cache: parseRuntimeFileCacheRef(value.cache) }
+}
 
 /**
  * Runs one clang invocation; a non-zero exit is a result, anything else that goes wrong rejects. `argv` starts with

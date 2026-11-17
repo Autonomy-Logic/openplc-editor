@@ -1,3 +1,4 @@
+import { parseRuntimeFileCacheRef, type RuntimeFileCacheRef } from '../wasm-toolchain/runtime-file-cache'
 import { requireFiles } from '../wasm-toolchain/toolchain-files'
 
 /** The file names `python-runtime.json` pins, which the install script downloads under those names. */
@@ -50,19 +51,24 @@ export interface PythonRuntimeUrls {
   wheelUrl: string
 }
 
-/** The first message a page sends its Python thread. */
+/** The first message a page sends its Python thread: where the runtime is served and where its stored files are. */
 export interface PythonThreadInit {
   type: 'init'
   location: PythonRuntimeUrls
+  cache: RuntimeFileCacheRef | null
 }
 
-export const pythonThreadInit = (location: PythonRuntimeUrls): PythonThreadInit => ({
+export const pythonThreadInit = (
+  location: PythonRuntimeUrls,
+  cache: RuntimeFileCacheRef | null = null,
+): PythonThreadInit => ({
   type: 'init',
   location: { ...location },
+  cache: cache && { name: cache.name, urls: [...cache.urls] },
 })
 
-/** The runtime's URLs from an `init` message, or `null` for any other message. */
-export function parsePythonThreadInit(message: unknown): PythonRuntimeUrls | null {
+/** The init message, or `null` for any other message; a missing or malformed cache reference reads as `null`. */
+export function parsePythonThreadInit(message: unknown): PythonThreadInit | null {
   if (typeof message !== 'object' || message === null || Reflect.get(message, 'type') !== 'init') return null
   const where: unknown = Reflect.get(message, 'location')
   if (typeof where !== 'object' || where === null) return null
@@ -70,5 +76,9 @@ export function parsePythonThreadInit(message: unknown): PythonRuntimeUrls | nul
   const packageUrl: unknown = Reflect.get(where, 'packageUrl')
   const wheelUrl: unknown = Reflect.get(where, 'wheelUrl')
   if (typeof sdkUrl !== 'string' || typeof packageUrl !== 'string' || typeof wheelUrl !== 'string') return null
-  return { sdkUrl, packageUrl, wheelUrl }
+  return {
+    type: 'init',
+    location: { sdkUrl, packageUrl, wheelUrl },
+    cache: parseRuntimeFileCacheRef(Reflect.get(message, 'cache')),
+  }
 }
