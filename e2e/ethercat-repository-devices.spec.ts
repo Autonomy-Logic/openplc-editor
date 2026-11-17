@@ -2,8 +2,9 @@ import { readFileSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { type ElectronApplication, expect, type Page, test } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
 
+import { saveProject } from './helpers/electron-editor'
 import { EK1818_STATION, launch, PROJECT_NAME, quitApp, writeEthercatProject } from './helpers/ethercat-project'
 
 const DRIVE_ESI = join(__dirname, 'fixtures', 'ethercat-defaultdata', '11111111-2222-4333-8444-555555555555.xml')
@@ -31,14 +32,6 @@ function storedDevices(project: string): StoredDevice[] {
     readFileSync(join(project, 'devices', 'remote', 'ecat_bus.json'), 'utf-8'),
   )
   return bus.ethercatConfig.devices
-}
-
-/** Sends the Save Project accelerator, which Playwright's keyboard never reaches. */
-async function saveProject(app: ElectronApplication): Promise<void> {
-  await app.evaluate(({ BrowserWindow }) => {
-    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))
-    win?.webContents.send('project:save-accelerator')
-  })
 }
 
 /** Adds the repository device found by @p search through the bus editor's Add Device modal. */
