@@ -2,7 +2,7 @@
  * createThreadPythonMechanism against real worker threads running tiny scripts from a temporary directory.
  * @jest-environment node
  */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
@@ -11,7 +11,7 @@ import { afterAll, afterEach, describe, expect, it, jest } from '@jest/globals'
 
 import type { PythonThreadHandle, PythonThreadMechanism } from '@root/middleware/shared/ports/python-mechanisms'
 
-import { createThreadPythonMechanism } from '../desktop-python'
+import { createDesktopPython, createThreadPythonMechanism } from '../desktop-python'
 import type { PythonRuntimePaths } from '../python-paths'
 
 const root = mkdtempSync(join(tmpdir(), 'desktop-python-'))
@@ -115,5 +115,62 @@ describe('createThreadPythonMechanism', () => {
     await terminate.mock.results[0].value
     await new Promise((resolve) => setImmediate(resolve))
     expect(failures).toEqual([])
+  })
+})
+
+describe('createDesktopPython checkFiles', () => {
+  function runtimeFiles(name: string, present: Array<'sdkEntry' | 'pythonPackage' | 'numpyWheel'>): PythonRuntimePaths {
+    const dir = join(root, name)
+    mkdirSync(dir, { recursive: true })
+    const paths: PythonRuntimePaths = {
+      workerScript: join(dir, 'python-worker.js'),
+      sdkEntry: join(dir, 'node.js'),
+      pythonPackage: join(dir, 'python.webc'),
+      numpyWheel: join(dir, 'numpy.whl'),
+    }
+    for (const key of present) writeFileSync(paths[key], '')
+    return paths
+  }
+
+  it('resolves when the SDK entry, the Python package and the numpy wheel are present', async () => {
+    const paths = runtimeFiles('complete', ['sdkEntry', 'pythonPackage', 'numpyWheel'])
+    const python = createDesktopPython(() => paths)
+
+    await expect(python.checkFiles()).resolves.toBeUndefined()
+  })
+
+  it('rejects naming the missing Python runtime file, and starts no thread', async () => {
+    const paths = runtimeFiles('no-package', ['sdkEntry', 'numpyWheel'])
+    const resolvePaths = jest.fn(() => paths)
+    const python = createDesktopPython(resolvePaths)
+
+    await expect(python.checkFiles()).rejects.toThrow(`Missing Python runtime file: ${paths.pythonPackage}`)
+
+    expect(resolvePaths).toHaveBeenCalledTimes(1)
+  })
+
+  it('names the first missing file, in the order SDK entry, Python package, numpy wheel', async () => {
+    const paths = runtimeFiles('none', [])
+    const python = createDesktopPython(() => paths)
+
+    await expect(python.checkFiles()).rejects.toThrow(`Missing Python runtime file: ${paths.sdkEntry}`)
+  })
+
+  it('rejects with the reason the runtime paths cannot be resolved', async () => {
+    const python = createDesktopPython(() => {
+      throw new Error('python-runtime.json has no file for numpy.')
+    })
+
+    await expect(python.checkFiles()).rejects.toThrow('python-runtime.json has no file for numpy.')
+  })
+
+  it('starts no thread when every file is present, resolving the paths only for the check', async () => {
+    const paths = runtimeFiles('complete-no-thread', ['sdkEntry', 'pythonPackage', 'numpyWheel'])
+    const resolvePaths = jest.fn(() => paths)
+    const python = createDesktopPython(resolvePaths)
+
+    await python.checkFiles()
+
+    expect(resolvePaths).toHaveBeenCalledTimes(1)
   })
 })

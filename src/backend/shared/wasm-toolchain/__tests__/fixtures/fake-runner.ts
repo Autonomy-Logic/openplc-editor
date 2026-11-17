@@ -21,6 +21,7 @@ export class FakeRunner implements WasmClangRunner {
   active = 0
   maxActive = 0
   prepared = 0
+  released = 0
 
   constructor(
     readonly concurrency = 2,
@@ -32,6 +33,11 @@ export class FakeRunner implements WasmClangRunner {
   prepare(): Promise<void> {
     this.prepared++
     return this.prepareError ? Promise.reject(this.prepareError) : Promise.resolve()
+  }
+
+  release(): Promise<void> {
+    this.released++
+    return Promise.resolve()
   }
 
   async run(job: WasmClangJob): Promise<WasmClangJobResult> {

@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { parsePythonRuntimeManifest, type PinnedPythonFiles } from '@root/backend/shared/python/python-runtime-files'
+import {
+  parsePythonRuntimeManifest,
+  type PinnedPythonFiles,
+  type PythonRuntimeFilePaths,
+} from '@root/backend/shared/python/python-runtime-files'
 
 export interface PythonRuntimeLocation {
   isPackaged: boolean
@@ -11,12 +15,8 @@ export interface PythonRuntimeLocation {
   mainDir: string
 }
 
-export interface PythonRuntimePaths {
+export interface PythonRuntimePaths extends PythonRuntimeFilePaths {
   workerScript: string
-  /** The Wasmer SDK's Node entry point. */
-  sdkEntry: string
-  pythonPackage: string
-  numpyWheel: string
 }
 
 /** The file names `python-runtime.json` pins, which the install script downloads under those names. */

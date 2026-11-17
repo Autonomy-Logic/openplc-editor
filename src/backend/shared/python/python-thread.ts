@@ -168,10 +168,14 @@ interface PendingSpawn {
 /** How long the Python thread may take to load its runtime before the load fails. */
 export const PYTHON_LOAD_DEADLINE_MS = 120000
 
+/** Why Python cannot run on a page that is not cross-origin isolated. */
+export const PYTHON_NOT_ISOLATED_MESSAGE = 'Python blocks cannot run here: the page is not cross-origin isolated.'
+
 /**
  * The main side: the Python thread, started once by `load()` and kept for the session. A thread that dies after
  * loading ends its interpreters, and the next `load()` starts a new one. A runtime that could not load stays failed
- * for the session, so later runs do not wait on it again: their Python blocks report the same reason.
+ * for the session, so later runs do not wait on it again: their Python blocks report the same reason. A thread that
+ * reports a load failure, or stops before it is ready, also has the runtime's stored files discarded.
  */
 export class ThreadedPythonRuntime implements PythonInterpreters {
   private thread: PythonThreadHandle | null = null
@@ -186,8 +190,13 @@ export class ThreadedPythonRuntime implements PythonInterpreters {
     private readonly loadDeadlineMs = PYTHON_LOAD_DEADLINE_MS,
   ) {}
 
-  /** Starts the thread and waits for its runtime; rejects with the reason it could not load. */
+  /**
+   * Starts the thread and waits for its runtime; rejects with the reason it could not load. On a page that is not
+   * cross-origin isolated it rejects at once with `PYTHON_NOT_ISOLATED_MESSAGE` and starts nothing.
+   */
   load(): Promise<void> {
+    if (this.mechanism.isCrossOriginIsolated?.() === false)
+      return Promise.reject(new Error(PYTHON_NOT_ISOLATED_MESSAGE))
     if (this.loadFailure) return Promise.reject(this.loadFailure)
     this.loading ??= this.startThread().catch((error: unknown) => {
       this.loadFailure = error instanceof Error ? error : new Error(String(error))
@@ -227,7 +236,10 @@ export class ThreadedPythonRuntime implements PythonInterpreters {
       thread.onFailure((reason) => {
         clearTimeout(deadline)
         if (this.thread === thread || !loaded) this.lose(thread, `The Python thread stopped: ${reason}`)
-        if (!loaded) reject(new Error(`The Python thread stopped: ${reason}`))
+        if (!loaded) {
+          this.discardFiles()
+          reject(new Error(`The Python thread stopped: ${reason}`))
+        }
         loaded = true
       })
       thread.onMessage((value) => {
@@ -246,6 +258,7 @@ export class ThreadedPythonRuntime implements PythonInterpreters {
           clearTimeout(deadline)
           loaded = true
           this.lose(thread, message.message)
+          this.discardFiles()
           reject(new Error(message.message))
           return
         }
@@ -281,6 +294,16 @@ export class ThreadedPythonRuntime implements PythonInterpreters {
         return
       default:
         return
+    }
+  }
+
+  /** Deletes the runtime's stored files through the mechanism, when it can; a failure is ignored. */
+  private discardFiles(): void {
+    if (!this.mechanism.discard) return
+    try {
+      void this.mechanism.discard().catch(() => undefined)
+    } catch {
+      return
     }
   }
 
