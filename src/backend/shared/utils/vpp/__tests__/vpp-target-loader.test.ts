@@ -305,87 +305,88 @@ describe('createVppTargetLoader transfer failure', () => {
   })
 })
 
-describe('createVppTargetLoader transport failures are not cached', () => {
-  const failures: Array<[string, (fetch: ArchiveFetch) => Promise<void>]> = [
+describe('createVppTargetLoader verification failure', () => {
+  it('reports a verification error and resolves null', async () => {
+    const { host, loader, loading, fetch } = await startLoading()
+    host.verification = 'fail'
+    fetch.succeed(BYTES_A)
+
+    await expect(loading).resolves.toBeNull()
+    expect(loader.getState()).toEqual({ status: 'error', reason: 'verification', message: expect.any(String) })
+  })
+})
+
+describe('createVppTargetLoader keeps an error of the current target', () => {
+  const failures: Array<[string, (ctx: Awaited<ReturnType<typeof startLoading>>) => Promise<unknown>]> = [
     ['stalled', () => jest.advanceTimersByTimeAsync(STALL_MS)],
     [
       'timeout',
-      async (fetch) => {
+      async ({ fetch }) => {
         await keepSendingBytes(fetch, MAX_MS - PROGRESS_STEP_MS)
         await jest.advanceTimersByTimeAsync(PROGRESS_STEP_MS)
       },
     ],
     [
       'transfer',
-      async (fetch) => {
+      ({ fetch, loading }) => {
         fetch.fail(new Error('Network Error'))
-        await flushMicrotasks()
+        return loading
+      },
+    ],
+    [
+      'verification',
+      ({ host, fetch, loading }) => {
+        host.verification = 'fail'
+        fetch.succeed(BYTES_A)
+        return loading
+      },
+    ],
+    [
+      'canceled',
+      ({ loader, loading }) => {
+        loader.cancel()
+        return loading
       },
     ],
   ]
 
-  it.each(failures)('downloads again on the next load after a %s error', async (reason, fail) => {
-    const { host, loader, loading, fetch } = await startLoading()
-    await fail(fetch)
-    await loading
-    expect(loader.getState()).toMatchObject({ status: 'error', reason })
+  /** Loads TARGET_A once into an error with `reason`, then lets the host serve and verify again. */
+  async function failLoading(reason: string, fail: (typeof failures)[number][1]) {
+    const ctx = await startLoading()
+    await fail(ctx)
+    await ctx.loading
+    await flushMicrotasks()
+    ctx.host.verification = 'pass'
+    const failed = ctx.loader.getState()
+    expect(failed).toEqual({ status: 'error', reason, message: expect.any(String) })
+    return { host: ctx.host, loader: ctx.loader, failed }
+  }
+
+  it.each(failures)('resolves null with no fetch on the next load after a %s error', async (reason, fail) => {
+    const { host, loader, failed } = await failLoading(reason, fail)
 
     const again = loader.load()
     await flushMicrotasks()
-    host.fetchAt(1).succeed(BYTES_A)
-
-    await expect(again).resolves.toEqual({ contentHash: TARGET_A.contentHash, bytes: BYTES_A })
-    expect(host.fetches).toHaveLength(2)
-    expect(loader.getState()).toEqual({ status: 'ready' })
-  })
-})
-
-describe('createVppTargetLoader verification failure', () => {
-  /** Loads TARGET_A once with a verifier that refuses it. */
-  async function failVerification() {
-    const { host, loader, loading, fetch } = await startLoading()
-    host.verification = 'fail'
-    fetch.succeed(BYTES_A)
-    const result = await loading
-    host.verification = 'pass'
-    return { host, loader, result }
-  }
-
-  it('reports a verification error and resolves null', async () => {
-    const { loader, result } = await failVerification()
-
-    expect(result).toBeNull()
-    expect(loader.getState()).toEqual({ status: 'error', reason: 'verification', message: expect.any(String) })
-  })
-
-  it('does not download the same content hash again on the next load', async () => {
-    const { host, loader } = await failVerification()
-
-    await expect(loader.load()).resolves.toBeNull()
 
     expect(host.fetches).toHaveLength(1)
-    expect(loader.getState()).toMatchObject({ status: 'error', reason: 'verification' })
+    expect(loader.getState()).toEqual(failed)
+    await expect(again).resolves.toBeNull()
   })
 
-  it('downloads again after a change of target', async () => {
-    const { host, loader } = await failVerification()
+  it.each(failures)('keeps a %s error when the same device and content hash are set again', async (reason, fail) => {
+    const { host, loader, failed } = await failLoading(reason, fail)
 
-    loader.setTarget(TARGET_B)
-    const loading = loader.load()
+    loader.setTarget({ ...TARGET_A })
+    const again = loader.load()
     await flushMicrotasks()
-    host.fetchAt(1).succeed(BYTES_B)
 
-    await expect(loading).resolves.toEqual({ contentHash: TARGET_B.contentHash, bytes: BYTES_B })
+    expect(host.fetches).toHaveLength(1)
+    expect(loader.getState()).toEqual(failed)
+    await expect(again).resolves.toBeNull()
   })
-})
 
-describe('createVppTargetLoader retry', () => {
-  it('clears a verification error and downloads again', async () => {
-    const { host, loader, loading, fetch } = await startLoading()
-    host.verification = 'fail'
-    fetch.succeed(BYTES_A)
-    await loading
-    host.verification = 'pass'
+  it.each(failures)('clears a %s error on retry and downloads again', async (reason, fail) => {
+    const { host, loader } = await failLoading(reason, fail)
 
     const retrying = loader.retry()
     await flushMicrotasks()
@@ -393,20 +394,34 @@ describe('createVppTargetLoader retry', () => {
     host.fetchAt(1).succeed(BYTES_A)
 
     await expect(retrying).resolves.toEqual({ contentHash: TARGET_A.contentHash, bytes: BYTES_A })
+    expect(host.fetches).toHaveLength(2)
     expect(loader.getState()).toEqual({ status: 'ready' })
   })
 
-  it('downloads again after a stalled download', async () => {
-    const { host, loader, loading } = await startLoading()
-    await jest.advanceTimersByTimeAsync(STALL_MS)
-    await loading
+  it.each(failures)('downloads the package of another device after a %s error', async (reason, fail) => {
+    const { host, loader } = await failLoading(reason, fail)
 
-    const retrying = loader.retry()
+    loader.setTarget(TARGET_B)
+    const loading = loader.load()
+    await flushMicrotasks()
+    expect(host.fetchAt(1).archivePath).toBe(TARGET_B.archivePath)
+    host.fetchAt(1).succeed(BYTES_B)
+
+    await expect(loading).resolves.toEqual({ contentHash: TARGET_B.contentHash, bytes: BYTES_B })
+    expect(loader.getState()).toEqual({ status: 'ready' })
+  })
+
+  it.each(failures)('downloads again for another content hash of the device after a %s error', async (reason, fail) => {
+    const { host, loader } = await failLoading(reason, fail)
+    const updated: VppLoaderTarget = { ...TARGET_A, contentHash: 'sha256:a2a2' }
+
+    loader.setTarget(updated)
+    const loading = loader.load()
     await flushMicrotasks()
     host.fetchAt(1).succeed(BYTES_A)
 
-    await expect(retrying).resolves.toEqual({ contentHash: TARGET_A.contentHash, bytes: BYTES_A })
-    expect(loader.getState()).toEqual({ status: 'ready' })
+    await expect(loading).resolves.toEqual({ contentHash: updated.contentHash, bytes: BYTES_A })
+    expect(host.fetches).toHaveLength(2)
   })
 })
 
@@ -573,32 +588,6 @@ describe('createVppTargetLoader cancel', () => {
     loader.cancel()
 
     await expect(Promise.all([loading, second])).resolves.toEqual([null, null])
-  })
-
-  it('downloads again on the next load after a cancel', async () => {
-    const { host, loader, loading } = await startLoading()
-    loader.cancel()
-    await loading
-
-    const again = loader.load()
-    await flushMicrotasks()
-    host.fetchAt(1).succeed(BYTES_A)
-
-    await expect(again).resolves.toEqual({ contentHash: TARGET_A.contentHash, bytes: BYTES_A })
-    expect(loader.getState()).toEqual({ status: 'ready' })
-  })
-
-  it('downloads again on retry after a cancel', async () => {
-    const { host, loader, loading } = await startLoading()
-    loader.cancel()
-    await loading
-
-    const retrying = loader.retry()
-    await flushMicrotasks()
-    host.fetchAt(1).succeed(BYTES_A)
-
-    await expect(retrying).resolves.toEqual({ contentHash: TARGET_A.contentHash, bytes: BYTES_A })
-    expect(host.fetches).toHaveLength(2)
   })
 
   it('does nothing with no target', () => {
