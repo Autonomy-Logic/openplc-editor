@@ -49,8 +49,8 @@ jest.mock('../../../../backend/editor/hardware', () => ({ HardwareModule: jest.f
 jest.mock('../../../menu', () => ({ __esModule: true, default: jest.fn() }))
 jest.mock('../../store', () => ({ store: { get: jest.fn(), set: jest.fn(), delete: jest.fn() } }))
 jest.mock('../../../../backend/editor/utils', () => ({ getOpenProjectPath: jest.fn(), getProjectPath: jest.fn() }))
-jest.mock('../../../../backend/shared/simulator/simulator-module', () => ({
-  SimulatorModule: jest.fn(() => ({ stop: jest.fn() })),
+jest.mock('../../../../backend/editor/simulator/desktop-simulator', () => ({
+  createDesktopSimulator: jest.fn(() => ({ stop: jest.fn(), isRunning: jest.fn(() => false) })),
 }))
 
 const CHANNEL = 'bootloader:get-capabilities'
