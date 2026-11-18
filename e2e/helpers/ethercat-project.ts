@@ -172,14 +172,20 @@ export async function connectRuntime(page: Page, user: string, pass: string): Pr
   await page.getByRole('button', { name: 'Disconnect', exact: true }).waitFor({ timeout: 60000 })
 }
 
-/** Quits through the app's own prompt, answering Yes; kills the process if it does not end. */
+/**
+ * Quits through the app's own prompt, answering "Close without saving" when the project has unsaved changes and
+ * "Yes" otherwise; kills the process if it does not end.
+ */
 export async function quitApp(app: ElectronApplication, page: Page): Promise<void> {
   const closed = new Promise<void>((resolve) => app.once('close', () => resolve()))
   await app.evaluate(({ app: electronApp }) => electronApp.quit()).catch(() => undefined)
-  await page
-    .getByRole('button', { name: 'Yes', exact: true })
+  const answered = page
+    .getByRole('button', { name: 'Close without saving', exact: true })
+    .or(page.getByRole('button', { name: 'Yes', exact: true }))
+    .first()
     .click({ timeout: 10000 })
     .catch(() => undefined)
+  await Promise.race([answered, closed])
   const ended = await Promise.race([
     closed.then(() => true),
     new Promise<boolean>((r) => setTimeout(() => r(false), 15000)),
