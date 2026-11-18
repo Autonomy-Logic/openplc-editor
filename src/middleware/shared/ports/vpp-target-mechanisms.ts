@@ -1,11 +1,3 @@
-/**
- * Mechanisms behind the targeted vPLC's package loader.
- *
- * The loader's behaviour (timers, state, retry, cancel, caching) is shared
- * (`backend/shared/utils/vpp/vpp-target-loader.ts`). A platform supplies only
- * the archive download and the archive verifier, which make no decisions.
- */
-
 /** Bytes of the archive received so far. */
 export interface ArchiveDownloadProgress {
   loaded: number
