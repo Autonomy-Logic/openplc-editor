@@ -8,6 +8,8 @@ TYPE HMI_FONT : (Regular := 0, Bold := 1); END_TYPE
 TYPE HMI_PORT : (Top := 0, Right := 1, Bottom := 2, Left := 3); END_TYPE
 (* Widget orientation; Auto is a row when wider than tall, a column otherwise. *)
 TYPE HMI_DIRECTION : (Row := 0, Column := 1, Auto := 2); END_TYPE
+(* How a date is written: Long 'Tue 18 Nov 2026', Iso '2026-11-18', DayMonth '18/11/2026', MonthDay '11/18/2026'. *)
+TYPE HMI_DATE_STYLE : (Long := 0, Iso := 1, DayMonth := 2, MonthDay := 3); END_TYPE
 
 (* Semantic colors follow the screen's theme; fixed colors are the same on every theme. *)
 TYPE HMI_COLORS :

@@ -215,6 +215,14 @@ int main(int argc, char **argv) {
                 (int)strucpp::NESTTANKX.get(), (int)strucpp::NESTTANKW.get(), (int)strucpp::NESTSIDEX.get(),
                 (int)strucpp::NESTFILLX.get(), (int)strucpp::NESTFILLY.get(), (int)strucpp::NESTDRAINY.get());
 
+    /* Indicators, then the thermometer, a level meter and the clock and date of a fixed DT. */
+    show(9);
+    frame("indicators_0");
+    frame("indicators", true);
+    show(10);
+    frame("time_0");
+    frame("time", true);
+
     /* A second viewer starts on the start page with its own state. */
     hmi_session_t *viewer = hmi_session_create();
     hmi_session_use(viewer);

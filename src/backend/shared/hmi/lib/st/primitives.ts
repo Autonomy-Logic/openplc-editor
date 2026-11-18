@@ -257,6 +257,57 @@ FUNCTION HMI_Calibrate : BOOL
   {external hmi_calibrate(); HMI_CALIBRATE_result.set(true); }
 END_FUNCTION
 
+(* Nanoseconds since 1970-01-01 00:00 of a DT, as stored. *)
+FUNCTION HMI_DTNanos : LINT
+  VAR_INPUT Value : DT; END_VAR
+  {external HMI_DTNANOS_result.set(static_cast<int64_t>(VALUE.get())); }
+END_FUNCTION
+
+(* Calendar parts of a DT: the date (proleptic Gregorian), the time of day to the millisecond and the weekday, 0 for
+   Sunday. Call it with the DT once per frame. *)
+FUNCTION_BLOCK HmiCalendar
+  VAR_INPUT
+    Value : DT;
+  END_VAR
+  VAR_OUTPUT
+    Year, Month, Day, Hour, Minute, Second, Millisecond, WeekDay : DINT;
+  END_VAR
+  VAR_TEMP
+    ns, days, rem, z, era, doe, yoe, doy, mp : LINT;
+  END_VAR
+  ns := HMI_DTNanos(Value);
+  days := ns / 86400000000000;
+  IF ns MOD 86400000000000 < 0 THEN
+    days := days - 1;
+  END_IF;
+  rem := (ns - days * 86400000000000) / 1000000;
+  Hour := LINT_TO_DINT(rem / 3600000);
+  Minute := LINT_TO_DINT(rem / 60000 MOD 60);
+  Second := LINT_TO_DINT(rem / 1000 MOD 60);
+  Millisecond := LINT_TO_DINT(rem MOD 1000);
+  WeekDay := LINT_TO_DINT(((days MOD 7) + 11) MOD 7);
+  z := days + 719468;
+  IF z >= 0 THEN
+    era := z / 146097;
+  ELSE
+    era := (z - 146096) / 146097;
+  END_IF;
+  doe := z - era * 146097;
+  yoe := (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+  doy := doe - (365 * yoe + yoe / 4 - yoe / 100);
+  mp := (5 * doy + 2) / 153;
+  Day := LINT_TO_DINT(doy - (153 * mp + 2) / 5 + 1);
+  IF mp < 10 THEN
+    Month := LINT_TO_DINT(mp + 3);
+  ELSE
+    Month := LINT_TO_DINT(mp - 9);
+  END_IF;
+  Year := LINT_TO_DINT(yoe + era * 400);
+  IF Month <= 2 THEN
+    Year := Year + 1;
+  END_IF;
+END_FUNCTION_BLOCK
+
 (* Animation clock: while Run, Phase advances Rate units per second (negative runs backwards), wrapping at Period, and
    holds where it is when Run drops. Call it once per frame; a frame gap counts at most one second. *)
 FUNCTION_BLOCK HmiAnimator

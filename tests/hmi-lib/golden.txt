@@ -87,5 +87,9 @@ motion_280ms page=7 dl=add2c092324df531 status=0 run=1 held=0 clicks=1 pump=1 va
 nested_0 page=8 dl=168b89b36502ef38 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
 nested page=8 dl=168b89b36502ef38 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=64fb34439cd46ac5
 nested tank_x=12 tank_w=184 side_x=208 fill_x=214 fill_y=18 drain_y=68
+indicators_0 page=9 dl=4052fd3ad234b79d status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+indicators page=9 dl=4052fd3ad234b79d status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=7851b14138f34645
+time_0 page=10 dl=8747b713df00259d status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+time page=10 dl=8747b713df00259d status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=a4843da3e26caae0
 viewer2 page=0 dl=82e5db7c1e6a59fc status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=1defe384ea0c4669
-viewer1_after page=8 dl=168b89b36502ef38 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+viewer1_after page=10 dl=8747b713df00259d status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2

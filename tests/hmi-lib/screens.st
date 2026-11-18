@@ -7,6 +7,8 @@ VAR_GLOBAL
   NestTankX, NestTankW, NestSideX, NestFillX, NestFillY, NestDrainY : DINT;
   Speed, Level, Setpoint, Flow : REAL;
   Name : STRING(16) := 'Tank 1';
+  State : INT := 1;
+  Now : DT := DT#2026-11-18-14:32:07;
 END_VAR
 
 (* Page 0: display widgets and a shape. *)
@@ -284,6 +286,64 @@ FUNCTION_BLOCK NestedScreen EXTENDS HmiScreen
   Level2.Value := Level;
 END_FUNCTION_BLOCK
 
+(* Page 9: indicators. *)
+FUNCTION_BLOCK IndicatorScreen EXTENDS HmiScreen
+  VAR
+    Col : HmiHorizontalStack := (Gap := 8, Padding := 8, GrowAuto := TRUE);
+    Lamp : HmiMultiLamp := (Caption := 'Mixer M-1');
+    Bar : HmiBarGraph := (Caption := 'Pressure', Unit := 'bar', MaxValue := 10.0, LowZone := 1.5, HighZone := 8.0,
+      ShowSetpoint := TRUE, Setpoint := 7.0);
+    Prog : HmiProgress := (Caption := 'Batch');
+    Leds : HmiVerticalStack := (Gap := 12);
+    L1 : HmiLed := (Caption := 'Power', Value := TRUE);
+    L2 : HmiLed := (Caption := 'Warn', Value := TRUE, OnColor := COLOR.Warning);
+    L3 : HmiLed := (Caption := 'Trip');
+    Seg : HmiSevenSegment := (Digits := 5, Decimals := 1);
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Col), 0);
+    Attach(ADR(Lamp), ADR(Col));
+    Attach(ADR(Bar), ADR(Col));
+    Attach(ADR(Prog), ADR(Col));
+    Attach(ADR(Leds), ADR(Col));
+    Attach(ADR(L1), ADR(Leds));
+    Attach(ADR(L2), ADR(Leds));
+    Attach(ADR(L3), ADR(Leds));
+    Attach(ADR(Seg), ADR(Col));
+    Build := TRUE;
+  END_METHOD
+  Lamp.Value := State;
+  Bar.Value := Level;
+  Prog.Value := 42.0;
+  Seg.Value := Speed;
+END_FUNCTION_BLOCK
+
+(* Page 10: a thermometer, a level meter, the clock and the date and time of a DT. *)
+FUNCTION_BLOCK TimeScreen EXTENDS HmiScreen
+  VAR
+    Row : HmiVerticalStack := (Gap := 8, Padding := 8, GrowAuto := TRUE);
+    Thermo : HmiThermometer;
+    Meter : HmiBarGraph := (Caption := 'Tank', Unit := 'm', MaxValue := 10.0, Orientation := HMI_DIRECTION#Column,
+      HighZone := 9.0);
+    Right : HmiHorizontalStack := (Gap := 8);
+    Face : HmiClock;
+    Stamp : HmiDateTime;
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Row), 0);
+    Attach(ADR(Thermo), ADR(Row));
+    Attach(ADR(Meter), ADR(Row));
+    Attach(ADR(Right), ADR(Row));
+    Attach(ADR(Face), ADR(Right));
+    Attach(ADR(Stamp), ADR(Right));
+    Build := TRUE;
+  END_METHOD
+  Thermo.Value := 63.0;
+  Meter.Value := Level;
+  Face.Value := Now;
+  Stamp.Value := Now;
+END_FUNCTION_BLOCK
+
 PROGRAM HmiMain
   VAR
     S0 : DisplayScreen;
@@ -295,6 +355,8 @@ PROGRAM HmiMain
     S6 : SqueezedScreen;
     S7 : MotionScreen;
     S8 : NestedScreen;
+    S9 : IndicatorScreen;
+    S10 : TimeScreen;
     Rt : HmiRuntime;
     Started : BOOL;
   END_VAR
@@ -310,6 +372,8 @@ PROGRAM HmiMain
     Rt.AddScreen(ADR(S6));
     Rt.AddScreen(ADR(S7));
     Rt.AddScreen(ADR(S8));
+    Rt.AddScreen(ADR(S9));
+    Rt.AddScreen(ADR(S10));
     Rt.SetStart(0);
     Started := TRUE;
   END_IF;
@@ -323,6 +387,8 @@ PROGRAM HmiMain
     6: S6();
     7: S7();
     8: S8();
+    9: S9();
+    10: S10();
   END_CASE;
   Rt.EndFrame();
   IF GoHome THEN
