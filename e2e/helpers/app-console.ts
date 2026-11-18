@@ -28,6 +28,8 @@ export interface WaitForAppOptions {
   failure?: RegExp
   /** Shown when the wait times out. */
   message?: string
+  /** Poll intervals in ms; Playwright's default backs off to 1 s. */
+  intervals?: number[]
 }
 
 /**
@@ -37,7 +39,7 @@ export interface WaitForAppOptions {
 export async function waitForApp(
   page: Page,
   condition: () => Promise<boolean>,
-  { timeout = 60000, failure = APP_FAILURE, message }: WaitForAppOptions = {},
+  { timeout = 60000, failure = APP_FAILURE, message, intervals }: WaitForAppOptions = {},
 ): Promise<void> {
   await expect
     .poll(
@@ -46,7 +48,7 @@ export async function waitForApp(
         await failIfAppReportedFailure(page, failure)
         return false
       },
-      { timeout, message },
+      { timeout, message, intervals },
     )
     .toBe(true)
 }
@@ -57,4 +59,25 @@ export function waitForText(page: Page, pattern: RegExp, options: WaitForAppOpti
     message: `the page never showed ${pattern}`,
     ...options,
   })
+}
+
+/**
+ * Resolves as `work` does, but rejects at once, quoting the page, when the app reports a failure matching `failure`
+ * before `work` settles. For waits inside one call, such as a compile through a port, that `waitForApp` cannot poll.
+ */
+export async function failFastOn<T>(page: Page, work: Promise<T>, failure: RegExp = APP_FAILURE): Promise<T> {
+  const state = { settled: false }
+  const watch = (async (): Promise<never> => {
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+      if (state.settled) return new Promise<never>(() => undefined)
+      await failIfAppReportedFailure(page, failure)
+    }
+  })()
+  void watch.catch(() => undefined)
+  try {
+    return await Promise.race([work, watch])
+  } finally {
+    state.settled = true
+  }
 }
