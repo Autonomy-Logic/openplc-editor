@@ -292,6 +292,11 @@ int main(int argc, char **argv) {
     frame("dial_up");
     inputs("dial_up");
 
+    /* Process symbols joined by pipes at their ports. */
+    show(12);
+    frame("symbols_0");
+    frame("symbols", true);
+
     /* A second viewer starts on the start page with its own state. */
     hmi_session_t *viewer = hmi_session_create();
     hmi_session_use(viewer);

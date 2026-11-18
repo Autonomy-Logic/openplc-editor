@@ -161,5 +161,7 @@ dial_right latch=1 jog=0 hoa=1 mode=2 rinse=1 recipe=5 batch=270.0 dial=85.0
 dial_move page=11 dl=fead2f9c074eb2f3 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=101cecc622aae67c
 dial_up page=11 dl=fead2f9c074eb2f3 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
 dial_up latch=1 jog=0 hoa=1 mode=2 rinse=1 recipe=5 batch=270.0 dial=50.0
+symbols_0 page=12 dl=18474168a7fc0c8b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+symbols page=12 dl=18474168a7fc0c8b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=957f6fa6a6ad6c8d
 viewer2 page=0 dl=82e5db7c1e6a59fc status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=1defe384ea0c4669
-viewer1_after page=11 dl=fead2f9c074eb2f3 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+viewer1_after page=12 dl=1c2003049f2bbc8b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2

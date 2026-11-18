@@ -403,6 +403,61 @@ FUNCTION_BLOCK InputScreen EXTENDS HmiScreen
   Speed2.Value := Dial;
 END_FUNCTION_BLOCK
 
+(* Page 12: the drawn process symbols, joined by pipes at their ports. *)
+FUNCTION_BLOCK SymbolScreen EXTENDS HmiScreen
+  VAR
+    Area : HmiDiagram := (DesignW := 464, DesignH := 304, GrowAuto := TRUE);
+    Si : HmiSilo := (Caption := 'SI-1', X := 10, Y := 10, PrefWidth := 60, PrefHeight := 150);
+    Cv : HmiCheckValve := (X := 96, Y := 196);
+    Fcv : HmiControlValve := (Caption := 'FCV-2', X := 150, Y := 166);
+    It : HmiInstrument := (Tag := 'FIC', Loop := '102', Unit := 'm3/h', X := 150, Y := 40);
+    Tw : HmiThreeWayValve := (X := 240, Y := 172);
+    Hx : HmiHeatExchanger := (Caption := 'E-1', X := 200, Y := 250, PrefWidth := 96, PrefHeight := 48);
+    Tk : HmiVessel := (Unit := 'm', MaxValue := 10.0, ShowLabels := FALSE, X := 350, Y := 60, PrefWidth := 90, PrefHeight := 160);
+    Ag : HmiAgitator := (X := 375, Y := 36, PrefWidth := 40, PrefHeight := 70);
+    Mo : HmiMotor := (Caption := 'M-1', X := 360, Y := 236);
+    L1 : HmiPipe := (Source := 'Si', SourcePort := HMI_PORT#Bottom, Target := 'Cv', TargetPort := HMI_PORT#Left);
+    L2 : HmiPipe := (Source := 'Cv', SourcePort := HMI_PORT#Right, Target := 'Fcv', TargetPort := HMI_PORT#Left);
+    L3 : HmiPipe := (Source := 'Fcv', SourcePort := HMI_PORT#Right, Target := 'Tw', TargetPort := HMI_PORT#Left);
+    L4 : HmiPipe := (Source := 'Tw', SourcePort := HMI_PORT#Right, Target := 'Tk', TargetPort := HMI_PORT#Left);
+    L5 : HmiPipe := (Source := 'Tw', SourcePort := HMI_PORT#Bottom, Target := 'Hx', TargetPort := HMI_PORT#Top);
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Area), 0);
+    Attach(ADR(L1), ADR(Area));
+    Attach(ADR(L2), ADR(Area));
+    Attach(ADR(L3), ADR(Area));
+    Attach(ADR(L4), ADR(Area));
+    Attach(ADR(L5), ADR(Area));
+    Attach(ADR(Si), ADR(Area));
+    Attach(ADR(Cv), ADR(Area));
+    Attach(ADR(Fcv), ADR(Area));
+    Attach(ADR(It), ADR(Area));
+    Attach(ADR(Tw), ADR(Area));
+    Attach(ADR(Hx), ADR(Area));
+    Attach(ADR(Tk), ADR(Area));
+    Attach(ADR(Ag), ADR(Area));
+    Attach(ADR(Mo), ADR(Area));
+    Connect(ADR(L1), ADR(Si), ADR(Cv), 0);
+    Connect(ADR(L2), ADR(Cv), ADR(Fcv), ADR(L1));
+    Connect(ADR(L3), ADR(Fcv), ADR(Tw), ADR(L2));
+    Connect(ADR(L4), ADR(Tw), ADR(Tk), ADR(L3));
+    Connect(ADR(L5), ADR(Tw), ADR(Hx), ADR(L4));
+    Build := TRUE;
+  END_METHOD
+  Si.Value := Level * 10.0;
+  Fcv.Value := 62.0;
+  It.Value := Flow;
+  Tk.Value := Level;
+  Ag.Value := Run;
+  Mo.Value := Run;
+  L1.Value := TRUE;
+  L2.Value := TRUE;
+  L3.Value := TRUE;
+  L4.Value := NOT Tw.Value;
+  L5.Value := Tw.Value;
+END_FUNCTION_BLOCK
+
 PROGRAM HmiMain
   VAR
     S0 : DisplayScreen;
@@ -417,6 +472,7 @@ PROGRAM HmiMain
     S9 : IndicatorScreen;
     S10 : TimeScreen;
     S11 : InputScreen;
+    S12 : SymbolScreen;
     Rt : HmiRuntime;
     Started : BOOL;
   END_VAR
@@ -435,6 +491,7 @@ PROGRAM HmiMain
     Rt.AddScreen(ADR(S9));
     Rt.AddScreen(ADR(S10));
     Rt.AddScreen(ADR(S11));
+    Rt.AddScreen(ADR(S12));
     Rt.SetStart(0);
     Started := TRUE;
   END_IF;
@@ -451,6 +508,7 @@ PROGRAM HmiMain
     9: S9();
     10: S10();
     11: S11();
+    12: S12();
   END_CASE;
   Rt.EndFrame();
   IF GoHome THEN

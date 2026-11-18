@@ -376,6 +376,614 @@ FUNCTION_BLOCK HmiValve EXTENDS HmiSymbol
   END_METHOD
 END_FUNCTION_BLOCK
 
+(* Electric motor: OnColor running, OffColor stopped, FaultColor on fault; the shaft points right unless ShaftLeft. A tap
+   asks for the opposite state. *)
+{attribute 'hmi_palette' := 'Process'}
+FUNCTION_BLOCK HmiMotor EXTENDS HmiSymbol
+  VAR_INPUT
+    {attribute 'hmi_main'}
+    Value : BOOL;
+    {attribute 'hmi_group' := 'data'}
+    Fault : BOOL;
+    Caption : STRING(64);
+    ShaftLeft : BOOL;
+    {attribute 'hmi_color'}
+    OnColor : UDINT := COLOR.Success;
+    {attribute 'hmi_color'}
+    OffColor : UDINT := COLOR.Gray;
+    {attribute 'hmi_color'}
+    FaultColor : UDINT := COLOR.Danger;
+  END_VAR
+  VAR_OUTPUT
+    Clicked : BOOL;
+    Changed : BOOL;
+    NewValue : BOOL;
+  END_VAR
+  METHOD PROTECTED OVERRIDE TakesInput : BOOL
+    TakesInput := TRUE;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE PortCount : INT
+    PortCount := 0;
+  END_METHOD
+  METHOD INTERNAL CapH : DINT
+    IF LEN(Caption) > 0 THEN
+      CapH := 15;
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalWidth : DINT
+    NaturalWidth := MAX(72, HMI_TextWidth(Caption, 11, HMI_FONT#Bold) + 4);
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalHeight : DINT
+    NaturalHeight := 46 + CapH();
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Input : BOOL
+    Changed := FALSE;
+    Clicked := FALSE;
+    IF NOT Visible OR NOT Enabled THEN
+      RETURN;
+    END_IF;
+    IF HMI_PtrPressed() AND PointerOver() THEN
+      HMI_PtrConsume();
+      Changed := TRUE;
+      Clicked := TRUE;
+      NewValue := NOT Value;
+      Input := TRUE;
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    VAR c : UDINT; x : DINT; END_VAR
+    c := OffColor;
+    IF Fault THEN
+      c := FaultColor;
+    ELSIF Value THEN
+      c := OnColor;
+    END_IF;
+    Fit(1100, 700, Left, Top + CapH(), Width, Height - CapH(), ShaftLeft, FALSE);
+    IF LEN(Caption) > 0 THEN
+      HMI_Text(Left + Width / 2, PY(0, 40) - CapH(), Caption, 11, HMI_FONT#Bold, HMI_ALIGN#Center, COLOR.Text);
+    END_IF;
+    Part(180, 580, 160, 80, 10, COLOR.Gray, TRUE);
+    Part(580, 580, 160, 80, 10, COLOR.Gray, TRUE);
+    Part(40, 180, 80, 340, 30, c, TRUE);
+    Part(120, 120, 660, 460, 70, c, FALSE);
+    ShadeBelow(120, 120, 660, 460, 70, 440);
+    FOR x := 220 TO 700 BY 80 DO
+      Seg(x, 150, x, 550, 20, Shade());
+    END_FOR;
+    Edge(120, 120, 660, 460, 70);
+    Part(340, 40, 220, 90, 20, c, TRUE);
+    Part(780, 300, 220, 100, 20, COLOR.Border, TRUE);
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Agitator for the top of a vessel: gear motor, shaft and two pitched blades that turn while Value is on. OnColor running,
+   OffColor stopped, FaultColor on fault. *)
+{attribute 'hmi_palette' := 'Process'}
+FUNCTION_BLOCK HmiAgitator EXTENDS HmiSymbol
+  VAR_INPUT
+    {attribute 'hmi_main'}
+    Value : BOOL;
+    {attribute 'hmi_group' := 'data'}
+    Fault : BOOL;
+    {attribute 'hmi_color'}
+    OnColor : UDINT := COLOR.Success;
+    {attribute 'hmi_color'}
+    OffColor : UDINT := COLOR.Gray;
+    {attribute 'hmi_color'}
+    FaultColor : UDINT := COLOR.Danger;
+    (* Turns the blades while running. *)
+    Animate : BOOL := TRUE;
+  END_VAR
+  VAR
+    spin : HmiAnimator;
+  END_VAR
+  METHOD PROTECTED OVERRIDE PortCount : INT
+    PortCount := 0;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalWidth : DINT
+    NaturalWidth := 48;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalHeight : DINT
+    NaturalHeight := 72;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    VAR c : UDINT; w, y : DINT; END_VAR
+    c := OffColor;
+    IF Fault THEN
+      c := FaultColor;
+    ELSIF Value THEN
+      c := OnColor;
+    END_IF;
+    spin(Run := Value AND NOT Fault AND Animate, Rate := 360);
+    Fit(800, 1200, Left, Top, Width, Height, FALSE, FALSE);
+    Part(370, 380, 60, 640, 10, COLOR.Border, TRUE);
+    w := HMI_Cos(spin.Phase, 220);
+    FOR y := 660 TO 960 BY 300 DO
+      Quad(400 - w, y, 400 + w, y + 80, 400 + w, y + 140, 400 - w, y + 60, c, TRUE);
+    END_FOR;
+    Part(240, 40, 320, 260, 50, c, FALSE);
+    ShadeBelow(240, 40, 320, 260, 50, 200);
+    Edge(240, 40, 320, 260, 50);
+    Part(180, 300, 440, 80, 20, COLOR.Gray, TRUE);
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Control valve: globe body with a diaphragm actuator showing the opening Value in percent. OnColor while open,
+   OffColor closed; Row for a horizontal pipe run, Column for a vertical one. *)
+{attribute 'hmi_palette' := 'Process'}
+FUNCTION_BLOCK HmiControlValve EXTENDS HmiSymbol
+  VAR_INPUT
+    {attribute 'hmi_main'}
+    Value : REAL;
+    Orientation : HMI_DIRECTION := HMI_DIRECTION#Row;
+    Caption : STRING(64);
+    {attribute 'hmi_color'}
+    OnColor : UDINT := COLOR.Success;
+    {attribute 'hmi_color'}
+    OffColor : UDINT := COLOR.Gray;
+  END_VAR
+  METHOD INTERNAL Vertical : BOOL
+    Vertical := Orientation = HMI_DIRECTION#Column;
+  END_METHOD
+  METHOD INTERNAL CapH : DINT
+    IF LEN(Caption) > 0 THEN
+      CapH := 13;
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalWidth : DINT
+    NaturalWidth := MAX(60, HMI_TextWidth(Caption, 10, HMI_FONT#Bold) + 4);
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalHeight : DINT
+    NaturalHeight := 60 + CapH();
+  END_METHOD
+  METHOD INTERNAL Layout : BOOL
+    Fit(1000, 1000, Left, Top, Width, Height - CapH(), FALSE, Vertical());
+    Layout := TRUE;
+  END_METHOD
+  (* Pipe ends along the run, the actuator across it. *)
+  METHOD INTERNAL PortAt : DINT
+    VAR_INPUT Port : HMI_PORT; Y : BOOL; END_VAR
+    VAR side : HMI_PORT; END_VAR
+    side := Port;
+    IF Vertical() THEN
+      IF Port = HMI_PORT#Top THEN
+        side := HMI_PORT#Left;
+      ELSIF Port = HMI_PORT#Bottom THEN
+        side := HMI_PORT#Right;
+      ELSIF Port = HMI_PORT#Right THEN
+        side := HMI_PORT#Top;
+      ELSE
+        side := HMI_PORT#Bottom;
+      END_IF;
+    END_IF;
+    IF side = HMI_PORT#Left THEN
+      PortAt := SEL(Y, 20, 780);
+    ELSIF side = HMI_PORT#Right THEN
+      PortAt := SEL(Y, 980, 780);
+    ELSIF side = HMI_PORT#Top THEN
+      PortAt := SEL(Y, 500, 80);
+    ELSE
+      PortAt := SEL(Y, 500, 920);
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE PortX : DINT
+    VAR_INPUT Port : HMI_PORT; END_VAR
+    Layout();
+    PortX := PX(PortAt(Port, FALSE), PortAt(Port, TRUE));
+  END_METHOD
+  METHOD PROTECTED OVERRIDE PortY : DINT
+    VAR_INPUT Port : HMI_PORT; END_VAR
+    Layout();
+    PortY := PY(PortAt(Port, FALSE), PortAt(Port, TRUE));
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    VAR c : UDINT; x0, y0, x1, y1 : DINT; END_VAR
+    c := SEL(Value > 0.0, OffColor, OnColor);
+    Layout();
+    IF CapH() > 0 THEN
+      HMI_Text(Left + Width / 2, Top + Height - CapH() + 1, Caption, 10, HMI_FONT#Bold, HMI_ALIGN#Center, COLOR.Text);
+    END_IF;
+    Part(20, 700, 140, 160, 20, COLOR.Border, TRUE);
+    Part(840, 700, 140, 160, 20, COLOR.Border, TRUE);
+    Part(140, 640, 60, 280, 20, COLOR.Gray, TRUE);
+    Part(800, 640, 60, 280, 20, COLOR.Gray, TRUE);
+    Quad(200, 640, 500, 780, 200, 920, 200, 920, c, TRUE);
+    Quad(800, 640, 500, 780, 800, 920, 800, 920, c, TRUE);
+    Disc(500, 780, 50, c, TRUE);
+    Part(470, 380, 60, 360, 10, COLOR.Border, TRUE);
+    Part(360, 400, 280, 50, 20, COLOR.Gray, TRUE);
+    Part(220, 80, 560, 300, 150, c, TRUE);
+    Part(200, 320, 600, 60, 20, COLOR.Gray, TRUE);
+    x0 := PX(240, 120);
+    y0 := PY(240, 120);
+    x1 := PX(760, 320);
+    y1 := PY(760, 320);
+    HMI_TextBox(MIN(x0, x1), MIN(y0, y1), ABS(x1 - x0), ABS(y1 - y0),
+      CONCAT(HMI_FormatInt(REAL_TO_DINT(LIMIT(0.0, Value, 100.0))), '%'), MAX(PL(110), 8), HMI_FONT#Bold,
+      HMI_ALIGN#Center, HMI_VALIGN#Middle, COLOR.OnAccent);
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Check valve: the arrow shows the flow it lets through, left to right unless Reverse. OnColor while Value, else
+   OffColor; Row for a horizontal pipe run, Column for a vertical one. *)
+{attribute 'hmi_palette' := 'Process'}
+FUNCTION_BLOCK HmiCheckValve EXTENDS HmiSymbol
+  VAR_INPUT
+    {attribute 'hmi_main'}
+    Value : BOOL := TRUE;
+    Reverse : BOOL;
+    Orientation : HMI_DIRECTION := HMI_DIRECTION#Row;
+    {attribute 'hmi_color'}
+    OnColor : UDINT := COLOR.Success;
+    {attribute 'hmi_color'}
+    OffColor : UDINT := COLOR.Gray;
+  END_VAR
+  METHOD INTERNAL Vertical : BOOL
+    Vertical := Orientation = HMI_DIRECTION#Column;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalWidth : DINT
+    NaturalWidth := SEL(Vertical(), 60, 30);
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalHeight : DINT
+    NaturalHeight := SEL(Vertical(), 30, 60);
+  END_METHOD
+  METHOD INTERNAL Layout : BOOL
+    Fit(1000, 500, Left, Top, Width, Height, Reverse, Vertical());
+    Layout := TRUE;
+  END_METHOD
+  (* The two pipe ends along the run; across it, the middle of the body. *)
+  METHOD INTERNAL PortAt : DINT
+    VAR_INPUT Port : HMI_PORT; Y : BOOL; END_VAR
+    VAR first : BOOL; END_VAR
+    IF Vertical() THEN
+      first := Port = HMI_PORT#Top;
+      IF Port = HMI_PORT#Left OR Port = HMI_PORT#Right THEN
+        PortAt := SEL(Y, 500, SEL(Port = HMI_PORT#Left, 400, 100));
+        RETURN;
+      END_IF;
+    ELSE
+      first := Port = HMI_PORT#Left;
+      IF Port = HMI_PORT#Top OR Port = HMI_PORT#Bottom THEN
+        PortAt := SEL(Y, 500, SEL(Port = HMI_PORT#Top, 400, 100));
+        RETURN;
+      END_IF;
+    END_IF;
+    PortAt := SEL(Y, SEL(first <> Reverse, 980, 20), 250);
+  END_METHOD
+  METHOD PROTECTED OVERRIDE PortX : DINT
+    VAR_INPUT Port : HMI_PORT; END_VAR
+    Layout();
+    PortX := PX(PortAt(Port, FALSE), PortAt(Port, TRUE));
+  END_METHOD
+  METHOD PROTECTED OVERRIDE PortY : DINT
+    VAR_INPUT Port : HMI_PORT; END_VAR
+    Layout();
+    PortY := PY(PortAt(Port, FALSE), PortAt(Port, TRUE));
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    VAR c : UDINT; END_VAR
+    c := SEL(Value, OffColor, OnColor);
+    Layout();
+    Part(20, 170, 160, 160, 20, COLOR.Border, TRUE);
+    Part(820, 170, 160, 160, 20, COLOR.Border, TRUE);
+    Part(160, 110, 60, 280, 20, COLOR.Gray, TRUE);
+    Part(780, 110, 60, 280, 20, COLOR.Gray, TRUE);
+    Part(220, 100, 560, 300, 120, c, FALSE);
+    ShadeBelow(220, 100, 560, 300, 120, 280);
+    Edge(220, 100, 560, 300, 120);
+    Quad(360, 190, 600, 250, 360, 310, 360, 310, COLOR.Surface, TRUE);
+    Seg(600, 150, 600, 350, 30, COLOR.Text);
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Three-way valve: the common port at the bottom joins the left port, or the right one while Value. The open path is
+   OnColor and the closed port OffColor. A tap asks for the other path. *)
+{attribute 'hmi_palette' := 'Process'}
+FUNCTION_BLOCK HmiThreeWayValve EXTENDS HmiSymbol
+  VAR_INPUT
+    {attribute 'hmi_main'}
+    Value : BOOL;
+    Caption : STRING(64);
+    {attribute 'hmi_color'}
+    OnColor : UDINT := COLOR.Success;
+    {attribute 'hmi_color'}
+    OffColor : UDINT := COLOR.Gray;
+  END_VAR
+  VAR_OUTPUT
+    Clicked : BOOL;
+    Changed : BOOL;
+    NewValue : BOOL;
+  END_VAR
+  METHOD PROTECTED OVERRIDE TakesInput : BOOL
+    TakesInput := TRUE;
+  END_METHOD
+  METHOD INTERNAL CapH : DINT
+    IF LEN(Caption) > 0 THEN
+      CapH := 13;
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalWidth : DINT
+    NaturalWidth := MAX(60, HMI_TextWidth(Caption, 10, HMI_FONT#Bold) + 4);
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalHeight : DINT
+    NaturalHeight := 54 + CapH();
+  END_METHOD
+  METHOD INTERNAL Layout : BOOL
+    Fit(1000, 900, Left, Top + CapH(), Width, Height - CapH(), FALSE, FALSE);
+    Layout := TRUE;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE PortX : DINT
+    VAR_INPUT Port : HMI_PORT; END_VAR
+    Layout();
+    IF Port = HMI_PORT#Left THEN
+      PortX := PX(20, 300);
+    ELSIF Port = HMI_PORT#Right THEN
+      PortX := PX(980, 300);
+    ELSE
+      PortX := PX(500, 300);
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE PortY : DINT
+    VAR_INPUT Port : HMI_PORT; END_VAR
+    Layout();
+    IF Port = HMI_PORT#Top THEN
+      PortY := PY(500, 160);
+    ELSIF Port = HMI_PORT#Bottom THEN
+      PortY := PY(500, 880);
+    ELSE
+      PortY := PY(20, 300);
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Input : BOOL
+    Changed := FALSE;
+    Clicked := FALSE;
+    IF NOT Visible OR NOT Enabled THEN
+      RETURN;
+    END_IF;
+    IF HMI_PtrPressed() AND PointerOver() THEN
+      HMI_PtrConsume();
+      Changed := TRUE;
+      Clicked := TRUE;
+      NewValue := NOT Value;
+      Input := TRUE;
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    Layout();
+    IF CapH() > 0 THEN
+      HMI_Text(Left + Width / 2, PY(0, 160) - CapH(), Caption, 10, HMI_FONT#Bold, HMI_ALIGN#Center, COLOR.Text);
+    END_IF;
+    Part(20, 220, 140, 160, 20, COLOR.Border, TRUE);
+    Part(840, 220, 140, 160, 20, COLOR.Border, TRUE);
+    Part(420, 740, 160, 140, 20, COLOR.Border, TRUE);
+    Part(140, 160, 60, 280, 20, COLOR.Gray, TRUE);
+    Part(800, 160, 60, 280, 20, COLOR.Gray, TRUE);
+    Part(360, 680, 280, 60, 20, COLOR.Gray, TRUE);
+    Quad(200, 160, 500, 300, 200, 440, 200, 440, SEL(Value, OnColor, OffColor), TRUE);
+    Quad(800, 160, 500, 300, 800, 440, 800, 440, SEL(Value, OffColor, OnColor), TRUE);
+    Quad(360, 680, 500, 300, 640, 680, 640, 680, OnColor, TRUE);
+    Disc(500, 300, 50, OnColor, TRUE);
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Shell-and-tube heat exchanger. Ports: Left and Right are the tube-side nozzles on the channel heads, Top and Bottom
+   the shell-side nozzles. The heads are OnColor in service, else OffColor; the tubes are TubeColor. *)
+{attribute 'hmi_palette' := 'Process'}
+FUNCTION_BLOCK HmiHeatExchanger EXTENDS HmiSymbol
+  VAR_INPUT
+    {attribute 'hmi_main'}
+    Value : BOOL := TRUE;
+    Caption : STRING(64);
+    {attribute 'hmi_color'}
+    OnColor : UDINT := COLOR.Success;
+    {attribute 'hmi_color'}
+    OffColor : UDINT := COLOR.Gray;
+    {attribute 'hmi_color'}
+    TubeColor : UDINT := COLOR.Orange;
+  END_VAR
+  METHOD INTERNAL CapH : DINT
+    IF LEN(Caption) > 0 THEN
+      CapH := 15;
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalWidth : DINT
+    NaturalWidth := MAX(84, HMI_TextWidth(Caption, 11, HMI_FONT#Bold) + 4);
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalHeight : DINT
+    NaturalHeight := 42 + CapH();
+  END_METHOD
+  METHOD INTERNAL Layout : BOOL
+    Fit(1400, 700, Left, Top + CapH(), Width, Height - CapH(), FALSE, FALSE);
+    Layout := TRUE;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE PortX : DINT
+    VAR_INPUT Port : HMI_PORT; END_VAR
+    Layout();
+    IF Port = HMI_PORT#Left THEN
+      PortX := PX(120, 40);
+    ELSIF Port = HMI_PORT#Right THEN
+      PortX := PX(1280, 660);
+    ELSIF Port = HMI_PORT#Top THEN
+      PortX := PX(360, 40);
+    ELSE
+      PortX := PX(1040, 660);
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE PortY : DINT
+    VAR_INPUT Port : HMI_PORT; END_VAR
+    Layout();
+    PortY := PY(0, SEL(Port = HMI_PORT#Left OR Port = HMI_PORT#Top, 660, 40));
+  END_METHOD
+  (* The tube-side nozzles leave upward and downward, like the shell-side ones. *)
+  METHOD PROTECTED OVERRIDE PortDir : HMI_PORT
+    VAR_INPUT Port : HMI_PORT; END_VAR
+    IF Port = HMI_PORT#Left OR Port = HMI_PORT#Top THEN
+      PortDir := HMI_PORT#Top;
+    ELSE
+      PortDir := HMI_PORT#Bottom;
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    VAR c : UDINT; y : DINT; END_VAR
+    c := SEL(Value, OffColor, OnColor);
+    Layout();
+    IF LEN(Caption) > 0 THEN
+      HMI_Text(Left + Width / 2, PY(0, 40) - CapH(), Caption, 11, HMI_FONT#Bold, HMI_ALIGN#Center, COLOR.Text);
+    END_IF;
+    Part(300, 40, 120, 160, 10, COLOR.Border, TRUE);
+    Part(980, 500, 120, 160, 10, COLOR.Border, TRUE);
+    Part(360, 520, 80, 140, 10, COLOR.Gray, TRUE);
+    Part(860, 520, 80, 140, 10, COLOR.Gray, TRUE);
+    Part(160, 160, 1080, 380, 190, COLOR.Border, TRUE);
+    FOR y := 250 TO 450 BY 50 DO
+      Seg(260, y, 1140, y, 20, TubeColor);
+    END_FOR;
+    Part(60, 40, 120, 160, 10, c, TRUE);
+    Part(1220, 500, 120, 160, 10, c, TRUE);
+    Part(40, 180, 160, 340, 60, c, TRUE);
+    Part(1200, 180, 160, 340, 60, c, TRUE);
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Silo with a cone hopper, filled to Value between MinValue and MaxValue in FillColor, with the value on its shell.
+   Ports: the fill nozzle on top and the outlet at the bottom. *)
+{attribute 'hmi_palette' := 'Process'}
+FUNCTION_BLOCK HmiSilo EXTENDS HmiSymbol
+  VAR_INPUT
+    {attribute 'hmi_main'}
+    Value : REAL;
+    MinValue : REAL := 0.0;
+    MaxValue : REAL := 100.0;
+    Decimals : INT := 0;
+    Unit : STRING(16) := '%';
+    Caption : STRING(64);
+    {attribute 'hmi_color'}
+    FillColor : UDINT := COLOR.Warning;
+  END_VAR
+  METHOD INTERNAL CapH : DINT
+    IF LEN(Caption) > 0 THEN
+      CapH := 15;
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalWidth : DINT
+    NaturalWidth := MAX(52, HMI_TextWidth(Caption, 11, HMI_FONT#Bold) + 4);
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalHeight : DINT
+    NaturalHeight := 96 + CapH();
+  END_METHOD
+  METHOD INTERNAL Layout : BOOL
+    Fit(800, 1500, Left, Top + CapH(), Width, Height - CapH(), FALSE, FALSE);
+    Layout := TRUE;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE PortX : DINT
+    VAR_INPUT Port : HMI_PORT; END_VAR
+    Layout();
+    IF Port = HMI_PORT#Left THEN
+      PortX := PX(120, 500);
+    ELSIF Port = HMI_PORT#Right THEN
+      PortX := PX(680, 500);
+    ELSE
+      PortX := PX(400, 500);
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE PortY : DINT
+    VAR_INPUT Port : HMI_PORT; END_VAR
+    Layout();
+    IF Port = HMI_PORT#Top THEN
+      PortY := PY(400, 80);
+    ELSIF Port = HMI_PORT#Bottom THEN
+      PortY := PY(400, 1300);
+    ELSE
+      PortY := PY(400, 500);
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    VAR ly : DINT; END_VAR
+    Layout();
+    IF LEN(Caption) > 0 THEN
+      HMI_Text(Left + Width / 2, PY(0, 80) - CapH(), Caption, 11, HMI_FONT#Bold, HMI_ALIGN#Center, COLOR.Text);
+    END_IF;
+    Seg(180, 900, 140, 1460, 30, COLOR.Text);
+    Seg(620, 900, 660, 1460, 30, COLOR.Text);
+    Seg(160, 1280, 640, 1280, 20, COLOR.Text);
+    Part(340, 1200, 120, 100, 10, COLOR.Gray, TRUE);
+    Part(120, 80, 560, 900, 160, COLOR.Border, TRUE);
+    Quad(120, 920, 680, 920, 460, 1220, 340, 1220, COLOR.Border, TRUE);
+    ly := PY(0, 1200 - 1100 * HMI_PerMille(Value, MinValue, MaxValue) / 1000);
+    HMI_Clip(Left, ly, Width, MAX(PY(0, 1220) - ly, 0));
+    Part(150, 110, 500, 870, 140, FillColor, FALSE);
+    Quad(150, 920, 650, 920, 446, 1192, 354, 1192, FillColor, FALSE);
+    HMI_Unclip();
+    HMI_TextBox(PX(120, 0), PY(0, 300), PX(680, 0) - PX(120, 0), PY(0, 500) - PY(0, 300),
+      HMI_FormatValue(Value, Decimals, Unit), MAX(PL(130), 8), HMI_FONT#Bold, HMI_ALIGN#Center, HMI_VALIGN#Middle,
+      COLOR.Text);
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Instrument tag in ISA style: the function letters over the loop number in a bubble, the measured Value under it.
+   AlarmColor rings the bubble while Alarm. *)
+{attribute 'hmi_palette' := 'Process'}
+FUNCTION_BLOCK HmiInstrument EXTENDS HmiElement
+  VAR_INPUT
+    {attribute 'hmi_main'}
+    Value : REAL;
+    Tag : STRING(8) := 'FT';
+    Loop : STRING(16) := '101';
+    Decimals : INT := 1;
+    Unit : STRING(16);
+    ShowValue : BOOL := TRUE;
+    {attribute 'hmi_group' := 'data'}
+    Alarm : BOOL;
+    {attribute 'hmi_color'}
+    ValueColor : UDINT := COLOR.Accent;
+    {attribute 'hmi_color'}
+    AlarmColor : UDINT := COLOR.Danger;
+  END_VAR
+  METHOD PROTECTED OVERRIDE PortCount : INT
+    PortCount := 0;
+  END_METHOD
+  METHOD INTERNAL ValH : DINT
+    IF ShowValue THEN
+      ValH := 26;
+    END_IF;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalWidth : DINT
+    NaturalWidth := MAX(56, HMI_TextWidth(HMI_FormatValue(Value, Decimals, Unit), 12, HMI_FONT#Bold) + 12);
+  END_METHOD
+  METHOD PROTECTED OVERRIDE NaturalHeight : DINT
+    NaturalHeight := 56 + ValH();
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Draw : BOOL
+    VAR cx, cy, r, w : DINT; ring : UDINT; END_VAR
+    r := MAX(MIN(Width, Height - ValH()) / 2 - 1, 8);
+    cx := Left + Width / 2;
+    cy := Top + r + 1;
+    w := MAX(r / 18, 1);
+    ring := SEL(Alarm, COLOR.Text, AlarmColor);
+    HMI_FillCircle(cx, cy, r, ring);
+    HMI_FillCircle(cx, cy, r - w - SEL(Alarm, 0, w), COLOR.Surface);
+    HMI_FillRect(cx - r + w, cy, (r - w) * 2, w, 0, COLOR.Text);
+    HMI_TextBox(cx - r, cy - r * 3 / 4, r * 2, r * 3 / 4, Tag, MAX(r * 7 / 15, 8), HMI_FONT#Bold, HMI_ALIGN#Center,
+      HMI_VALIGN#Middle, COLOR.Text);
+    HMI_TextBox(cx - r, cy + w, r * 2, r * 3 / 4, Loop, MAX(r * 2 / 5, 8), HMI_FONT#Regular, HMI_ALIGN#Center,
+      HMI_VALIGN#Middle, COLOR.Text);
+    IF ShowValue THEN
+      HMI_FillRect(Left, Top + Height - 22, Width, 22, 4, COLOR.Surface);
+      HMI_StrokeRect(Left, Top + Height - 22, Width, 22, 4, 1, COLOR.Border);
+      HMI_TextBox(Left, Top + Height - 22, Width, 22, HMI_FormatValue(Value, Decimals, Unit), 12, HMI_FONT#Bold,
+        HMI_ALIGN#Center, HMI_VALIGN#Middle, ValueColor);
+    END_IF;
+    Draw := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
 (* Pipe between two elements' ports, routed with right angles, also through the bends in Path. Source and Target name
    elements of the same diagram; the HMI build connects them. Value TRUE means flowing. A pipe that crosses one
    declared before it in the same container hops over it. *)

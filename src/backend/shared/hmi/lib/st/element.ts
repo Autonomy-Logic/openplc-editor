@@ -570,6 +570,24 @@ FUNCTION_BLOCK HmiSymbol EXTENDS HmiElement
     HMI_Line(PX(DX1, DY1), PY(DX1, DY1), PX(DX2, DY2), PY(DX2, DY2), MAX(1, PL(DWidth)), C);
     Seg := TRUE;
   END_METHOD
+  (* Polygon part through four design points, a triangle when the last two are equal; Outline strokes its edge. *)
+  METHOD PROTECTED Quad : BOOL
+    VAR_INPUT X1, Y1, X2, Y2, X3, Y3, X4, Y4 : DINT; Fill : UDINT; Outline : BOOL; END_VAR
+    VAR k : INT; END_VAR
+    FOR k := 0 TO SEL(Outline, 0, 1) DO
+      HMI_PolyBegin(SEL(k = 0, COLOR.Text, Fill));
+      HMI_PolyPoint(PX(X1, Y1), PY(X1, Y1));
+      HMI_PolyPoint(PX(X2, Y2), PY(X2, Y2));
+      HMI_PolyPoint(PX(X3, Y3), PY(X3, Y3));
+      HMI_PolyPoint(PX(X4, Y4), PY(X4, Y4));
+      IF k = 0 THEN
+        HMI_PolyFill();
+      ELSE
+        HMI_PolyStroke(Stroke(), TRUE);
+      END_IF;
+    END_FOR;
+    Quad := TRUE;
+  END_METHOD
   (* Hub of a turning wheel: N spokes of length DR from (DX, DY) at Phase degrees, and the axle. *)
   METHOD PROTECTED Spokes : BOOL
     VAR_INPUT DX, DY, DR, N, Phase : DINT; END_VAR

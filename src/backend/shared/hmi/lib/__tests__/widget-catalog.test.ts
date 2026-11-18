@@ -79,6 +79,14 @@ describe('widget catalogue', () => {
       HmiFan: 'Process',
       HmiConveyor: 'Process',
       HmiValve: 'Process',
+      HmiMotor: 'Process',
+      HmiAgitator: 'Process',
+      HmiControlValve: 'Process',
+      HmiCheckValve: 'Process',
+      HmiThreeWayValve: 'Process',
+      HmiHeatExchanger: 'Process',
+      HmiSilo: 'Process',
+      HmiInstrument: 'Process',
       HmiPipe: 'Process',
     })
     expect(widget(catalog.widgets, 'HmiDiagram').extends).toBe('HMICONTAINER')
