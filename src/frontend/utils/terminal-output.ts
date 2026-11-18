@@ -45,6 +45,12 @@ const ESC = '\u001B'
 // eslint-disable-next-line no-control-regex -- matching the ESC control byte is the entire point
 const ANSI_PATTERN = /\u001B(?:\[([0-9;?]*)([@-~])|\][\s\S]*?(?:\u0007|\u001B\\)|[@-_])?/g
 
+// eslint-disable-next-line no-control-regex
+const CUT_SEQUENCE_PATTERN = /\u001B(?:\[[0-9;?]*|\](?:(?!\u0007|\u001B\\)[\s\S])*)$/
+
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u0008\u000A-\u001F\u007F-\u009F]/g
+
 /**
  * SGR foreground colours, standard (30-37) and bright (90-97).
  *
@@ -86,6 +92,10 @@ export function hasAnsi(text: string): boolean {
  */
 export function stripAnsi(text: string): string {
   return hasAnsi(text) ? text.replace(ANSI_PATTERN, '') : text
+}
+
+export function plainTerminalLine(text: string): string {
+  return stripAnsi(text.replace(CUT_SEQUENCE_PATTERN, '')).replace(CONTROL_CHARACTER_PATTERN, '')
 }
 
 /**

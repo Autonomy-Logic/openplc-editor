@@ -37,7 +37,15 @@ import { decideHostKey, parseHostKeyFile } from './host-key-file'
 import type { DeviceClass, RuntimeFacts, SystemFacts } from './inspection'
 import { archSupport, classifyRuntime, parseRuntimeFacts, parseSystemFacts, systemSupport } from './inspection'
 import { classifyInstallerExit, parseInstallerPoll, parsePrepareInstaller } from './installer'
-import { createConsoleBound, createDialogTail, createLinePipeline, POLL_READ_BYTES, scrubPassword } from './output'
+import {
+  createConsoleBound,
+  createDialogTail,
+  createLinePipeline,
+  POLL_READ_BYTES,
+  scrubPassword,
+  toConsoleLine,
+  toProgressLine,
+} from './output'
 
 export const SSH_SESSION_TIMEOUT_MS = 20_000
 
@@ -316,8 +324,9 @@ export function createRuntimeProvisioningService(
     enterPhase(context, 'starting', false)
     const result = await exec(context, session, START_COMMANDS[target], START_COMMAND_TIMEOUT_MS)
     if (result.exitCode !== 0) {
-      const lastLines = commandOutputLines(result, context.credentials.password)
-      for (const message of lastLines) emit({ type: 'console', level: 'info', message })
+      const password = context.credentials.password
+      const lastLines = commandOutputLines(result, password)
+      for (const line of lastLines) emit({ type: 'console', level: 'info', message: toConsoleLine(line, password) })
       return { kind: 'start-failed', lastLines }
     }
     return waitForRuntime(context, 'start', [])
@@ -328,16 +337,19 @@ export function createRuntimeProvisioningService(
     session: SshSession,
     dir: string,
   ): Promise<RuntimeProvisioningOutcome> {
-    const pipeline = createLinePipeline(context.credentials.password)
+    const password = context.credentials.password
+    const pipeline = createLinePipeline(password)
     const consoleBound = createConsoleBound()
     const tail = createDialogTail()
     const publish = (lines: string[]): void => {
       for (const line of lines) {
-        emit({ type: 'output', line })
+        emit({ type: 'output', line: toProgressLine(line, password) })
         tail.push(line)
-        for (const message of consoleBound.accept(line)) emit({ type: 'console', level: 'info', message })
+        for (const message of consoleBound.accept(toConsoleLine(line, password)))
+          emit({ type: 'console', level: 'info', message })
       }
     }
+    const progressLines = (): string[] => tail.lines().map((line) => toProgressLine(line, password))
     const followStartedAt = mechanisms.clock.now()
     let decoder = new TextDecoder()
     let logStarted = false
@@ -362,8 +374,8 @@ export function createRuntimeProvisioningService(
         publish(pipeline.push(decoder.decode(), { startsMidLine: false }))
         publish(pipeline.end())
         const verdict = classifyInstallerExit(poll.exit, tail.lines())
-        if (verdict === 'ok') return waitForRuntime(context, 'install', tail.lines())
-        if (verdict === 'installer-failed') return { kind: 'installer-failed', lastLines: tail.lines() }
+        if (verdict === 'ok') return waitForRuntime(context, 'install', progressLines())
+        if (verdict === 'installer-failed') return { kind: 'installer-failed', lastLines: progressLines() }
         const docker = await exec(context, session, PROVISIONING_COMMANDS.dockerPresent)
         return { kind: 'download-failed', dockerPresent: reportsDocker(docker) }
       }

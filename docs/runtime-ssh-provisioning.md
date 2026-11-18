@@ -52,8 +52,10 @@ console line and the audit entry are in the editor console before the dialog sho
    - install: the official installer is downloaded from `https://runtime.getedge.me` over HTTPS only,
      with `--connect-timeout 20 --max-time 120`, into a fresh `mktemp -d` folder. A download that fails or
      passes either limit gives "No internet access". The installer is then run detached with `setsid`, so
-     it keeps running when the SSH session ends. The editor reads its log once a second and shows the
-     lines. It stops following and reports the result as unknown when the installer log stays empty for 60
+     it keeps running when the SSH session ends. The editor reads its log once a second. The dialog shows
+     the latest line, and after a failed install the last lines, as plain text, without terminal colour
+     codes or other control characters; the editor console shows every line, with its colours. It stops
+     following and reports the result as unknown when the installer log stays empty for 60
      reads in a row, or when the installer is still running 60 minutes after it started;
    - a runtime already running: nothing is changed.
 9. The editor then waits for the runtime to answer on TCP 8443, checking every 2 s for at most 120 s. When
@@ -128,7 +130,9 @@ The offer dialog lists what will be done on the device:
   the console or to a log file. The editor drops them when the operation ends: they are not kept for a
   later operation and are never reused to reconnect.
 - The password is scrubbed from every line of device output before it is shown, sent to the renderer or
-  logged.
+  logged. The lines the dialog shows are scrubbed again after their colour codes and control characters
+  are removed; a console line that would show the password once its codes are removed is shown that way
+  too, without its colours.
 - A non-root account runs each administrative command as
   `/usr/bin/sudo -S -k -p '' sh -c 'exec </dev/null; <command>'`, with the password written to sudo's
   standard input. `-k` ignores any cached sudo credentials and `-p ''` prints no prompt. The whole command

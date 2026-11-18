@@ -1,3 +1,5 @@
+import { plainTerminalLine } from '@root/frontend/utils/terminal-output'
+
 export const LINE_CHAR_LIMIT = 4096
 
 export const DIALOG_LINE_LIMIT = 200
@@ -21,8 +23,17 @@ export function scrubPassword(text: string, password: string): string {
   return removed
 }
 
-function truncateLine(line: string): string {
-  return line.length > LINE_CHAR_LIMIT ? `${line.slice(0, LINE_CHAR_LIMIT)}${LINE_TRUNCATION_MARKER}` : line
+function truncateLine(line: string, longest = LINE_CHAR_LIMIT): string {
+  return line.length > longest ? `${line.slice(0, LINE_CHAR_LIMIT)}${LINE_TRUNCATION_MARKER}` : line
+}
+
+export function toProgressLine(line: string, password: string): string {
+  return truncateLine(scrubPassword(plainTerminalLine(line), password), LINE_CHAR_LIMIT + LINE_TRUNCATION_MARKER.length)
+}
+
+export function toConsoleLine(line: string, password: string): string {
+  const plain = plainTerminalLine(line)
+  return scrubPassword(plain, password) === plain ? line : toProgressLine(line, password)
 }
 
 export function createLinePipeline(password: string): {
