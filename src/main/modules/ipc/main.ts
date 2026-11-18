@@ -2406,10 +2406,35 @@ class MainProcessBridge implements MainIpcModule {
   handleWasmToolchainCompile = (_event: IpcMainInvokeEvent, request: unknown): Promise<WasmCompileResult> =>
     getDesktopWasmCompileService().compileRequest(request)
 
-  handleWasmToolchainHold = (_event: IpcMainInvokeEvent, holder: unknown, held: unknown): Promise<void> =>
-    typeof holder === 'string' && typeof held === 'boolean'
-      ? getDesktopWasmCompileService().setHeld(holder, held)
-      : Promise.reject(new Error('wasm-toolchain:hold takes a holder name and a boolean'))
+  handleWasmToolchainHold = (event: IpcMainInvokeEvent, holder: unknown, held: unknown): Promise<void> => {
+    if (typeof holder !== 'string' || typeof held !== 'boolean')
+      return Promise.reject(new Error('wasm-toolchain:hold takes a holder name and a boolean'))
+    const owner = `renderer-${event.sender.id}`
+    this.releaseHoldsWhenPageEnds(event.sender, owner)
+    return getDesktopWasmCompileService().setHeld(holder, held, owner)
+  }
+
+  /** Pages whose toolchain holds are let go when the page navigates, reloads, crashes or closes. */
+  private readonly holdOwnerPages = new Set<number>()
+
+  /** Lets go of a page's toolchain holds when it navigates, reloads, crashes or closes, which runs none of its cleanup. */
+  private releaseHoldsWhenPageEnds(contents: WebContents, owner: string): void {
+    if (this.holdOwnerPages.has(contents.id)) return
+    this.holdOwnerPages.add(contents.id)
+    const release = () => {
+      getDesktopWasmCompileService()
+        .releaseOwner(owner)
+        .catch(() => undefined)
+    }
+    contents.on('did-start-navigation', (details) => {
+      if (details.isMainFrame && !details.isSameDocument) release()
+    })
+    contents.on('render-process-gone', release)
+    contents.once('destroyed', () => {
+      this.holdOwnerPages.delete(contents.id)
+      release()
+    })
+  }
 
   handleHmiPreviewReadSources = async (): Promise<{ root: string; files: Record<string, Uint8Array> }> => ({
     root: '',

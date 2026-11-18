@@ -39,6 +39,11 @@ export interface WasmClangRunner {
    */
   setHeld?(held: boolean): void
   /**
+   * Forgets a load failure when no job is running or queued, so the next job tries to start a worker again; ends no
+   * worker. A held toolchain calls it where an unheld one would release.
+   */
+  retry?(): void
+  /**
    * Ends the workers when no job is running or queued; resolves once they have exited, at once when there are none.
    * Ends nothing while jobs remain.
    */

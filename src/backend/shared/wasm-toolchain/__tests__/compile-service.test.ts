@@ -231,6 +231,34 @@ describe('createWasmCompileService over one clang worker', () => {
     expect(mechanism.alive).toBe(0)
   })
 
+  it("lets go of one page's holds and keeps another's", async () => {
+    const { mechanism, service } = setup()
+    await service.setHeld('hmi-editor', true, 'page-1')
+    await service.setHeld('hmi-editor', true, 'page-2')
+    expect((await service.compile(units(2))).ok).toBe(true)
+
+    await service.releaseOwner('page-1')
+    expect(mechanism.alive).toBe(1)
+    await service.releaseOwner('page-2')
+
+    expect(mechanism.alive).toBe(0)
+  })
+
+  it('retries a toolchain that could not load on the next build while held', async () => {
+    const { mechanism, service } = setup()
+    await service.setHeld('hmi-editor', true)
+    mechanism.spawnError = new Error('no memory for the worker')
+
+    expect((await service.compile(units(2))).ok).toBe(false)
+    mechanism.spawnError = null
+    const retried = await service.compile(units(2))
+
+    expect(retried.ok).toBe(true)
+    expect(mechanism.spawnAttempts).toBe(2)
+    expect(mechanism.alive).toBe(1)
+    await service.setHeld('hmi-editor', false)
+  })
+
   it('leaves no clang worker alive once a successful build resolves', async () => {
     const { mechanism, service } = setup()
 

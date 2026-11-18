@@ -112,8 +112,8 @@ const LIMIT_TTL_MS = 1000
  * loading at a time. A worker counts from its spawn until its termination has settled, and no worker starts while one
  * is stopping. A worker that fails or runs a job past its deadline is terminated and its job fails. When the only
  * worker cannot be started, or fails before it is ready, every job fails with `WasmToolchainLoadError` until the next
- * `release()`, and after an error the toolchain's stored files are discarded and the kept `prepare()` is cleared; a
- * further worker that fails that way only stops the pool growing until the next `release()`.
+ * `release()` or `retry()`, and after an error the toolchain's stored files are discarded and the kept `prepare()` is
+ * cleared; a further worker that fails that way only stops the pool growing until then.
  */
 export class ClangWorkerPool implements WasmClangRunner {
   private readonly loadDeadlineMs: number
@@ -170,6 +170,13 @@ export class ClangWorkerPool implements WasmClangRunner {
       this.queue.push({ job, resolve, reject })
       this.dispatch()
     })
+  }
+
+  /** Forgets a load failure when no job is running or queued, so the next job starts a worker again; ends none. */
+  retry(): void {
+    if (this.queue.length > 0 || this.workers.some((w) => w.state.kind === 'busy')) return
+    this.loadFailure = null
+    this.growthFailed = false
   }
 
   /**
