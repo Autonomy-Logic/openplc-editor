@@ -180,7 +180,9 @@ The browser runs the screens; the device serves values. A Runtime v4 upload's `h
   and a panel). The host keeps each tag's value as the device last sent it; a screen's write changes the local value
   at once and is queued for the device, and a value the device sent before it processed that write (its write count
   is behind) is skipped. Its exports also give each frame's element bounds, for effects a browser may draw over the
-  screens later.
+  screens later. It holds every screen of the project, so the runtime serves it only with a signed-in account's token;
+  `hmi-client.js` fetches it with `Authorization: Bearer` after sign-in and returns to the form when it is refused. The
+  other client files (sign-in page, script, style, socket.io, licences) carry nothing of the project and stay public.
 - `src/hmi_access.h` and the generated `src/hmi_access.c`: data only, no screen code. The tag table with debug
   addresses, each screen's sorted read and write lists and role bits, the program MD5 and the frame period. The
   runtime's HMI host serves a viewer only the tags of the screen it shows when its role may open it, and applies only

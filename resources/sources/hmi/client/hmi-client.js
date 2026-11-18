@@ -268,6 +268,9 @@
       live = false
       token = null
       writeToken(null)
+      compiled = null
+      compiling = null
+      hmi = null
       screen.hidden = true
       showNotice(null)
       message.textContent = text || ''
@@ -455,14 +458,35 @@
         })
     }
 
-    /** The compiled hmi.wasm, fetched once. */
+    /**
+     * The compiled hmi.wasm, fetched once per session with the token: the device serves the project's screens only
+     * to a signed-in account. Rejects with an error whose `refused` is true when the device refuses the token.
+     */
     function hmiModule() {
       if (compiled) return Promise.resolve(compiled)
-      if (!compiling)
-        compiling = WebAssembly.compileStreaming(fetch('hmi.wasm')).then(function (m) {
-          compiled = m
-          return m
+      if (!compiling) {
+        var sent = token
+        compiling = fetch('hmi.wasm', { headers: { Authorization: 'Bearer ' + sent }, cache: 'no-store' })
+          .then(function (response) {
+            if (response.status === 401 || response.status === 403) {
+              var refused = new Error('hmi.wasm refused')
+              refused.refused = true
+              throw refused
+            }
+            if (!response.ok) throw new Error('hmi.wasm ' + response.status)
+            return response.arrayBuffer()
+          })
+          .then(function (bytes) {
+            return WebAssembly.compile(bytes)
+          })
+          .then(function (m) {
+            if (token === sent) compiled = m
+            return m
+          })
+        compiling.catch(function () {
+          compiling = null
         })
+      }
       return compiling
     }
 
@@ -481,8 +505,9 @@
           role = newRole
           return true
         })
-        .catch(function () {
-          showNotice(NOTICES.unsupported)
+        .catch(function (error) {
+          if (error && error.refused) showForm('Your session ended. Sign in again.')
+          else showNotice(NOTICES.unsupported)
           return false
         })
     }
@@ -631,10 +656,6 @@
     root.addEventListener('resize', function () {
       fitCanvas()
       if (hmi) hmi.hmi_bh_resize(viewWidth(), viewHeight())
-    })
-
-    hmiModule().catch(function () {
-      showNotice(NOTICES.unsupported)
     })
 
     if (token && tokenUsable(token, Date.now())) {

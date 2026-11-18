@@ -46,6 +46,7 @@ interface FakeResponse {
   ok: boolean
   status: number
   json: () => Promise<unknown>
+  arrayBuffer: () => Promise<ArrayBuffer>
   headers: { get: (name: string) => string | null }
 }
 
@@ -53,6 +54,7 @@ const respond = (status: number, body: unknown = {}): FakeResponse => ({
   ok: status >= 200 && status < 300,
   status,
   json: () => Promise.resolve(body),
+  arrayBuffer: () => Promise.resolve(new Uint8Array([0, 97, 115, 109]).buffer),
   headers: { get: () => null },
 })
 
@@ -108,6 +110,8 @@ class FakeModule {
 interface Page {
   sockets: FakeSocket[]
   calls: string[]
+  /** The Authorization header of each request, by path, in order. */
+  auth: Map<string, Array<string | undefined>>
   module: FakeModule
   /** Answers the next request to `path`; requests not answered stay pending. */
   answer: (path: string, response: FakeResponse) => void
@@ -121,6 +125,7 @@ function loadPage(stored: string | null): Page {
   if (stored) localStorage.setItem(TOKEN_KEY, stored)
   const sockets: FakeSocket[] = []
   const calls: string[] = []
+  const auth = new Map<string, Array<string | undefined>>()
   const pending = new Map<string, Array<(r: FakeResponse) => void>>()
   Object.assign(window, {
     io: () => {
@@ -130,8 +135,9 @@ function loadPage(stored: string | null): Page {
     },
   })
   Object.assign(globalThis, {
-    fetch: (path: string) => {
+    fetch: (path: string, init?: { headers?: Record<string, string> }) => {
       calls.push(path)
+      auth.set(path, [...(auth.get(path) ?? []), init?.headers?.Authorization])
       return new Promise<FakeResponse>((resolve) => {
         const queue = pending.get(path) ?? []
         queue.push(resolve)
@@ -141,13 +147,14 @@ function loadPage(stored: string | null): Page {
   })
   const module = new FakeModule()
   Object.assign(WebAssembly, {
-    compileStreaming: () => Promise.resolve({}),
+    compile: () => Promise.resolve({}),
     instantiate: () => Promise.resolve({ exports: module.exports() }),
   })
   new Function('window', readFileSync(join(CLIENT_DIR, 'hmi-client.js'), 'utf8'))(window)
   return {
     sockets,
     calls,
+    auth,
     module,
     answer: (path, response) => {
       const resolve = pending.get(path)?.shift()
@@ -158,7 +165,7 @@ function loadPage(stored: string | null): Page {
 }
 
 const settle = async () => {
-  for (let i = 0; i < 5; i++) await Promise.resolve()
+  for (let i = 0; i < 20; i++) await Promise.resolve()
 }
 const formShown = () => !(document.getElementById('sign-in')?.hidden ?? true)
 
@@ -240,9 +247,29 @@ describe('the HMI browser client page', () => {
     socket.connected = true
     socket.fire('connect')
     socket.fire('hmi_status', { state: 'live', role: 2 })
+    page.answer('hmi.wasm', respond(200))
     await settle()
     return page
   }
+
+  it('fetches the screens only once signed in, with the token, and returns to the form when refused', async () => {
+    const page = loadPage(null)
+    await settle()
+    expect(page.calls).not.toContain('hmi.wasm')
+    const live = await livePage()
+    expect(live.auth.get('hmi.wasm')).toEqual([`Bearer ${token(now() + 900, 'b')}`])
+
+    const refused = loadPage(token(now() + 900, 'a'))
+    refused.answer('/api/renew', respond(200, { access_token: token(now() + 900, 'c') }))
+    await settle()
+    refused.sockets[0].connected = true
+    refused.sockets[0].fire('hmi_status', { state: 'live', role: 2 })
+    refused.answer('hmi.wasm', respond(401))
+    await settle()
+    expect(formShown()).toBe(true)
+    expect(document.getElementById('sign-in-message')?.textContent).toBe('Your session ended. Sign in again.')
+    expect(refused.module.role).toBe(-1)
+  })
 
   it('opens the viewer, runs the screens with the role the device sent and shows the screen shown', async () => {
     const page = await livePage()
@@ -315,5 +342,30 @@ describe('the HMI browser client page', () => {
     expect(document.getElementById('sign-in-message')?.textContent).toBe('Signed out.')
     expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
     expect(page.sockets[0].closed).toBe(true)
+  })
+
+  it('fetches the screens again with the new token after signing in again', async () => {
+    const page = await livePage()
+    page.module.signOut = 1
+    await jest.advanceTimersByTimeAsync(60)
+    expect(formShown()).toBe(true)
+    for (const [id, value] of [
+      ['username', 'op'],
+      ['password', 'pw'],
+    ]) {
+      const input = document.getElementById(id)
+      if (input instanceof HTMLInputElement) input.value = value
+    }
+    document.getElementById('sign-in')?.dispatchEvent(new Event('submit'))
+    page.answer('/api/login', respond(200, { access_token: token(now() + 900, 'd') }))
+    await settle()
+    const socket = page.sockets[page.sockets.length - 1]
+    socket.connected = true
+    socket.fire('hmi_status', { state: 'live', role: 2 })
+    await settle()
+    expect(page.auth.get('hmi.wasm')).toEqual([
+      `Bearer ${token(now() + 900, 'b')}`,
+      `Bearer ${token(now() + 900, 'd')}`,
+    ])
   })
 })
