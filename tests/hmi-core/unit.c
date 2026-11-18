@@ -873,36 +873,40 @@ static void cal_tap(int32_t x, int32_t y, int n) {
     (void)cal_frame();
 }
 
-static void test_touch_calibration(void) {
-    static const int32_t targets[5][2] = {{30, 30}, {290, 30}, {290, 210}, {30, 210}, {160, 120}};
-    int32_t raw[10], x, y;
-    hmi_session_t *s = hmi_session_create();
-    CHECK(s != NULL);
-    hmi_session_use(s);
-    hmi_core_init(320, 240);
-    CHECK_EQ(hmi_cal_point(100, 100, &x, &y), 0);
-    /* Without setup, a screen asking for calibration changes nothing. */
+/** Calibration targets of a 320x240 screen, in the order the screen asks for them. */
+static const int32_t k_cal_targets[5][2] = {{30, 30}, {290, 30}, {290, 210}, {30, 210}, {160, 120}};
+
+static void cal_needs_setup(void) {
     hmi_calibrate();
     CHECK_EQ(cal_frame(), 0);
     hmi_cal_setup(1);
     hmi_calibrate();
     CHECK_EQ(cal_frame(), 1);
-    /* A press too short to sample is not a target; taps out of order make the calibration start over. */
+}
+
+static void cal_starts_over_after_a_short_press_and_targets_out_of_order(void) {
+    int32_t raw[10];
+    const int swapped[5] = {1, 0, 2, 3, 4};
     hmi_cal_raw(500, 500, 1);
     hmi_cal_raw(0, 0, 0);
-    const int swapped[5] = {1, 0, 2, 3, 4};
-    for (int i = 0; i < 5; i++) cal_tap(targets[swapped[i]][0], targets[swapped[i]][1], 8);
+    for (int i = 0; i < 5; i++) cal_tap(k_cal_targets[swapped[i]][0], k_cal_targets[swapped[i]][1], 8);
     CHECK_EQ(cal_frame(), 1);
     CHECK_EQ(hmi_cal_take(raw), 0);
-    for (int i = 0; i < 5; i++) cal_tap(targets[i][0], targets[i][1], 8);
+}
+
+static void cal_finishes_after_five_targets(int32_t raw[10]) {
+    for (int i = 0; i < 5; i++) cal_tap(k_cal_targets[i][0], k_cal_targets[i][1], 8);
     CHECK_EQ(cal_frame(), 0);
     CHECK_EQ(hmi_cal_take(raw), 1);
     CHECK_EQ(hmi_cal_take(raw), 0);
-    /* Every target lands where it was asked for, although the panel bends between them; the rest stays close. */
+}
+
+static void cal_lands_targets_exactly_and_follows_a_bending_panel(const int32_t raw[10]) {
+    int32_t x, y;
     for (int i = 0; i < 5; i++) {
         CHECK_EQ(hmi_cal_point(raw[i * 2], raw[i * 2 + 1], &x, &y), 1);
-        CHECK(x >= targets[i][0] * 16 - 16 && x <= targets[i][0] * 16 + 16);
-        CHECK(y >= targets[i][1] * 16 - 16 && y <= targets[i][1] * 16 + 16);
+        CHECK(x >= k_cal_targets[i][0] * 16 - 16 && x <= k_cal_targets[i][0] * 16 + 16);
+        CHECK(y >= k_cal_targets[i][1] * 16 - 16 && y <= k_cal_targets[i][1] * 16 + 16);
     }
     const int32_t probe[6][2] = {{0, 0}, {319, 0}, {160, 239}, {77, 141}, {250, 60}, {160, 30}};
     for (int i = 0; i < 6; i++) {
@@ -912,9 +916,10 @@ static void test_touch_calibration(void) {
         CHECK(x >= probe[i][0] * 16 - 12 * 16 && x <= probe[i][0] * 16 + 12 * 16);
         CHECK(y >= probe[i][1] * 16 - 12 * 16 && y <= probe[i][1] * 16 + 12 * 16);
     }
-    /* Stored points are checked like fresh ones: a centre outside the corners, or presses that barely moved, are
-       refused and the calibration in use stays. */
-    int32_t bad[10];
+}
+
+static void cal_refuses_stored_points_with_the_centre_outside_or_no_spread(const int32_t raw[10]) {
+    int32_t bad[10], x, y;
     memcpy(bad, raw, sizeof bad);
     bad[8] = raw[0] + (raw[0] - raw[8]);
     bad[9] = raw[1] + (raw[1] - raw[9]);
@@ -924,6 +929,20 @@ static void test_touch_calibration(void) {
     CHECK_EQ(hmi_cal_point(raw[8], raw[9], &x, &y), 1);
     CHECK(x >= 159 * 16 && x <= 161 * 16 && y >= 119 * 16 && y <= 121 * 16);
     CHECK_EQ(hmi_cal_use(raw), 1);
+}
+
+static void test_touch_calibration(void) {
+    int32_t raw[10], x, y;
+    hmi_session_t *s = hmi_session_create();
+    CHECK(s != NULL);
+    hmi_session_use(s);
+    hmi_core_init(320, 240);
+    CHECK_EQ(hmi_cal_point(100, 100, &x, &y), 0);
+    cal_needs_setup();
+    cal_starts_over_after_a_short_press_and_targets_out_of_order();
+    cal_finishes_after_five_targets(raw);
+    cal_lands_targets_exactly_and_follows_a_bending_panel(raw);
+    cal_refuses_stored_points_with_the_centre_outside_or_no_spread(raw);
     hmi_session_use(NULL);
     hmi_session_destroy(s);
 }
