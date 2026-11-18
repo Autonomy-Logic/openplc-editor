@@ -39,11 +39,16 @@ async function endOfLine(page: Page, line: number): Promise<void> {
   await page.keyboard.press('End')
 }
 
-/** Where the first occurrence of a word is on screen, located by its column in the monospace line. */
+/** Where the first occurrence of a word is on screen, from one read of its line (Monaco may re-render it between two). */
 async function wordBox(page: Page, word: string): Promise<{ x: number; y: number; width: number; height: number }> {
   const line = page.locator('[data-testid="hmi-code-editor"] .view-line', { hasText: word }).first()
-  const text = (await line.innerText()).replace(/\u00a0/g, ' ')
-  const box = await line.locator(':scope > span').first().boundingBox()
+  const { text, box } = await line.evaluate((el) => {
+    const r = el.querySelector(':scope > span')?.getBoundingClientRect()
+    return {
+      text: (el.textContent ?? '').replace(/\u00a0/g, ' '),
+      box: r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null,
+    }
+  })
   if (!box || text.length === 0) throw new Error(`no line shows ${word}`)
   const charWidth = box.width / text.trimEnd().length
   return { x: box.x + text.indexOf(word) * charWidth, y: box.y, width: word.length * charWidth, height: box.height }
