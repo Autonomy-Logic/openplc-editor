@@ -159,7 +159,7 @@ void hmi_fill_circle(int32_t cx, int32_t cy, int32_t r, uint32_t color);
 void hmi_stroke_circle(int32_t cx, int32_t cy, int32_t r, int32_t width, uint32_t color);
 /** Arc of radius r and stroke width, from a0 to a1 degrees clockwise. */
 void hmi_arc(int32_t cx, int32_t cy, int32_t r, int32_t width, int32_t a0_deg, int32_t a1_deg, uint32_t color);
-/** Filled ellipse, a 32-point polygon from a constant table. */
+/** Filled ellipse: a circle when rx equals ry, otherwise a 60-point polygon. */
 void hmi_ellipse(int32_t cx, int32_t cy, int32_t rx, int32_t ry, uint32_t color);
 void hmi_stroke_ellipse(int32_t cx, int32_t cy, int32_t rx, int32_t ry, int32_t width, uint32_t color);
 /** Text with its top at y, anchored at x by align (::hmi_align). len < 0 means NUL terminated. */
