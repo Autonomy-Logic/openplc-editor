@@ -129,3 +129,4 @@ pay-per-token API key:
 - **Report says *Assessment incomplete*:** section 4a lists advisories nothing
   accounted for. Each one needs either a dependency bump or a documented
   `not_affected` determination with its id recorded in `report-config.json`.
+
