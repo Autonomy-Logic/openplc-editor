@@ -1,6 +1,7 @@
 /**
- * Animated widgets and shapes in the built app: the palette offers the ellipse, polygon, line, fan and conveyor, and on
- * the running preview a fan that is on turns while one that is off stays still.
+ * Animated widgets and shapes in the built app: the palette offers the ellipse, polygon, line, fan, conveyor and the
+ * drawn process symbols, and on the running preview a fan that is on turns while one that is off stays still, and a
+ * running agitator turns its blades.
  *
  * Running it needs a production build plus the preload at the path a NON-packaged app looks for it; see "Electron
  * e2e" in CLAUDE.md.
@@ -28,6 +29,7 @@ const PLANT = `FUNCTION_BLOCK Plant EXTENDS HmiScreen
     Spinning : HmiFan := (Parent := 'Row', Caption := 'On', Value := TRUE, PrefWidth := 96, PrefHeight := 111);
     Still : HmiFan := (Parent := 'Row', Caption := 'Off', PrefWidth := 96, PrefHeight := 111);
     Star : HmiPolygon := (Parent := 'Row', Sides := 5, InnerPct := 45, Fill := COLOR.Warning);
+    Mixer : HmiAgitator := (Parent := 'Row', Value := TRUE, PrefWidth := 60, PrefHeight := 100);
   END_VAR
 END_FUNCTION_BLOCK
 `
@@ -72,7 +74,9 @@ test.describe('HMI animation', () => {
       await leaf(page, 'Plant').click()
       await waitFor(page, 'the preview', async () => (await status(page)).startsWith('ready'), 60000)
 
-      for (const widget of ['HmiEllipse', 'HmiPolygon', 'HmiLine', 'HmiFan', 'HmiConveyor'])
+      const symbols = ['HmiMotor', 'HmiAgitator', 'HmiControlValve', 'HmiCheckValve', 'HmiThreeWayValve', 'HmiSilo']
+      symbols.push('HmiHeatExchanger', 'HmiInstrument')
+      for (const widget of ['HmiEllipse', 'HmiPolygon', 'HmiLine', 'HmiFan', 'HmiConveyor', ...symbols])
         await expect(page.getByTestId(`hmi-palette-${widget}`)).toHaveCount(1)
 
       await pickLayer(page, 'Spinning')
@@ -88,6 +92,10 @@ test.describe('HMI animation', () => {
       const still = await pixelsOf(page, 'hmi-selected-Still')
       await page.waitForTimeout(600)
       expect(await pixelsOf(page, 'hmi-selected-Still')).toBe(still)
+
+      await pickLayer(page, 'Mixer')
+      const blades = await pixelsOf(page, 'hmi-selected-Mixer')
+      await waitFor(page, 'the agitator to turn', async () => (await pixelsOf(page, 'hmi-selected-Mixer')) !== blades)
     } finally {
       app.process().kill('SIGKILL')
     }
