@@ -1,6 +1,6 @@
 export type PythonRuntimeReadiness = { ok: true; ms: number } | { ok: false; message: string }
 
-/** Loads the Python runtime at editor start, booting no interpreter. A failure carries the startup screen's message. */
+/** Runs a Python runtime load or file check, booting no interpreter. A failure carries the message to report. */
 export async function preparePythonRuntime(runtime: { load(): Promise<void> }): Promise<PythonRuntimeReadiness> {
   const start = performance.now()
   try {

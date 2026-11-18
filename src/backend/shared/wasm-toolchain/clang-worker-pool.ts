@@ -43,249 +43,287 @@ export function parseClangWorkerReply(value: unknown): ClangWorkerReply | null {
   return null
 }
 
-/** Cores assumed when the platform does not say how many it has. */
-const UNKNOWN_CORES = 2
-
-/** Most workers: leave one core to the editor, and stop at four, where more workers stopped paying off. */
-export const clangWorkerCount = (cores: number | undefined): number =>
-  Math.max(1, Math.min(4, (cores && cores > 0 ? cores : UNKNOWN_CORES) - 1))
-
 /** How long a worker may take to load the toolchain before it counts as failed. */
 export const WORKER_LOAD_DEADLINE_MS = 120_000
 /** How long one clang job may run before its worker counts as stuck. */
 export const JOB_DEADLINE_MS = 120_000
 
+/** The message a toolchain that could not be loaded is reported with. */
+export const wasmToolchainLoadMessage = (reason: string): string =>
+  `The WebAssembly compiler could not be loaded: ${reason}`
+
+/**
+ * The toolchain could not be loaded: its files are missing or broken, or its worker could not be started or never
+ * became ready.
+ */
+export class WasmToolchainLoadError extends Error {
+  constructor(readonly reason: string) {
+    super(wasmToolchainLoadMessage(reason))
+    this.name = 'WasmToolchainLoadError'
+  }
+}
+
 export interface ClangWorkerPoolOptions {
-  /** Most workers the pool grows to. */
-  maxWorkers: number
   loadDeadlineMs?: number
   jobDeadlineMs?: number
 }
 
 type Timer = ReturnType<typeof setTimeout>
 
-/** A job waiting for a worker. */
+/** A job waiting for the worker. */
 interface Queued {
   job: WasmClangJob
   resolve: (result: WasmClangJobResult) => void
   reject: (error: Error) => void
 }
 
-/** The job a worker is running, with the deadline that started when it was handed over. */
+/** The job the worker is running, with the deadline that started when it was handed over. */
 interface Running extends Queued {
   id: number
   timer: Timer
 }
 
-/** Where a worker is in its life: loading the toolchain, waiting for a job, running one, or out of the pool. */
-type SlotState =
-  | { kind: 'loading'; loadTimer: Timer }
-  | { kind: 'idle' }
-  | { kind: 'busy'; running: Running }
-  | { kind: 'failed' }
+/** Why a worker failed: it reported an error, or it ran past a deadline. */
+type FailureCause = 'error' | 'deadline'
 
-interface Slot {
+/** Where the worker is in its life: loading the toolchain, waiting for a job, or running one. */
+type WorkerState = { kind: 'loading'; loadTimer: Timer } | { kind: 'idle' } | { kind: 'busy'; running: Running }
+
+interface LiveWorker {
   handle: ClangWorkerHandle
-  /** Settles once the worker has loaded, or with the reason it never will. */
-  ready: Promise<void>
-  markReady: () => void
-  markFailed: (error: Error) => void
-  state: SlotState
+  state: WorkerState
 }
-
-const isLoaded = (slot: Slot): boolean => slot.state.kind === 'idle' || slot.state.kind === 'busy'
 
 const seconds = (ms: number): string => `${Math.round(ms / 1000)} s`
 
+const reasonOf = (error: unknown): string => (error instanceof Error ? error.message : String(error))
+
+const ignore = (): void => undefined
+
 /**
- * Runs clang jobs on a pool of workers, each with its own copy of the toolchain, one job per worker at a time.
- * Jobs wait in the pool's queue for a free worker. It starts with one worker and adds one, up to `maxWorkers`,
- * while jobs are waiting. A worker that fails, takes too long to load, or runs a job past its deadline is
- * terminated and dropped, and its job fails. A job's deadline starts when a worker takes it.
+ * Runs clang jobs on one worker, one job at a time; jobs wait in a queue. The worker starts with the first job and
+ * ends on `release()`. A worker counts from its spawn until its termination has settled, and a new one starts only
+ * after the previous one exited. A worker that fails or runs a job past its deadline is terminated and its job fails;
+ * one that cannot be started, or fails before it is ready, fails every job with `WasmToolchainLoadError` until the
+ * next `release()`. A worker error before it is ready also discards the toolchain's stored files and clears the kept
+ * `prepare()`, so the next load runs again.
  */
 export class ClangWorkerPool implements WasmClangRunner {
-  readonly concurrency: number
+  readonly concurrency = 1
   private readonly loadDeadlineMs: number
   private readonly jobDeadlineMs: number
-  private slots: Slot[] = []
+  private worker: LiveWorker | null = null
+  private stopping: Promise<void> | null = null
   private queue: Queued[] = []
   private prepared: Promise<void> | null = null
+  private loadFailure: WasmToolchainLoadError | null = null
+  private discarding: Promise<void> | null = null
   private nextId = 1
 
   constructor(
     private readonly mechanism: ClangWorkerMechanism,
-    options: ClangWorkerPoolOptions,
+    options: ClangWorkerPoolOptions = {},
   ) {
-    this.concurrency = Math.max(1, options.maxWorkers)
     this.loadDeadlineMs = options.loadDeadlineMs ?? WORKER_LOAD_DEADLINE_MS
     this.jobDeadlineMs = options.jobDeadlineMs ?? JOB_DEADLINE_MS
   }
 
-  /**
-   * Gets the toolchain's files ready and starts the first worker; resolves once it has loaded. On failure it stops
-   * every worker and rejects with the reason loading failed, also when stopping them fails too.
-   */
+  /** Gets the toolchain's files ready through the mechanism, starting no worker. A failure is not kept. */
   prepare(): Promise<void> {
-    this.prepared ??= this.start().catch(async (error: unknown) => {
+    this.prepared ??= this.loadFiles().catch((error: unknown) => {
       this.prepared = null
-      await this.terminate().catch(() => undefined)
       throw error
     })
     return this.prepared
   }
 
+  /** Runs one job on the worker. A toolchain that cannot load rejects with `WasmToolchainLoadError`. */
   async run(job: WasmClangJob): Promise<WasmClangJobResult> {
-    await this.prepare()
+    if (this.loadFailure) throw this.loadFailure
+    try {
+      await this.prepare()
+    } catch (error) {
+      throw new WasmToolchainLoadError(reasonOf(error))
+    }
     return new Promise<WasmClangJobResult>((resolve, reject) => {
       this.queue.push({ job, resolve, reject })
       this.dispatch()
     })
   }
 
-  /** Stops every worker; running and waiting jobs fail. */
-  async terminate(): Promise<void> {
-    const slots = this.slots
-    this.slots = []
-    this.prepared = null
-    const stopped = new Error('The compiler was stopped.')
-    for (const slot of slots) this.settle(slot, stopped)
-    for (const waiting of this.queue.splice(0)) waiting.reject(stopped)
-    await Promise.all(slots.map((slot) => Promise.resolve(slot.handle.terminate())))
+  /**
+   * Ends the worker when no job is running or queued, and forgets a load failure; resolves once the worker has
+   * exited. While jobs remain it ends nothing.
+   */
+  async release(): Promise<void> {
+    const worker = this.worker
+    if (this.queue.length > 0 || worker?.state.kind === 'busy') return
+    this.loadFailure = null
+    if (worker) {
+      this.worker = null
+      if (worker.state.kind === 'loading') clearTimeout(worker.state.loadTimer)
+      this.stop(worker.handle)
+    }
+    await this.stopping
   }
 
-  private async start(): Promise<void> {
+  /** Waits for a discard of the stored files to settle, whatever its outcome, then gets the files ready. */
+  private async loadFiles(): Promise<void> {
+    const discarding = this.discarding
+    if (discarding) {
+      await discarding
+      if (this.discarding === discarding) this.discarding = null
+    }
     await this.mechanism.load()
-    await this.spawn().ready
+  }
+
+  /** Starts deleting the toolchain's stored files through the mechanism, when it can; a failure is ignored. */
+  private discardFiles(): void {
+    if (!this.mechanism.discard) return
+    let discarded: Promise<void>
+    try {
+      discarded = this.mechanism.discard()
+    } catch (error) {
+      discarded = Promise.reject(error instanceof Error ? error : new Error(String(error)))
+    }
+    this.discarding = discarded.then(ignore, ignore)
   }
 
   /**
-   * Hands waiting jobs to free workers, and starts more workers while jobs still wait. When a worker cannot be
-   * started and no worker is left in the pool, the waiting jobs fail.
+   * Hands the next job to the idle worker, starting one when none is alive and none is stopping. After a load failure
+   * the waiting jobs fail with it.
    */
   private dispatch(): void {
-    for (const slot of this.slots) {
-      if (this.queue.length === 0) return
-      if (slot.state.kind === 'idle') {
-        const next = this.queue.shift()
-        if (next) this.hand(slot, next)
-      }
+    if (this.queue.length === 0) return
+    if (this.loadFailure) {
+      const failure = this.loadFailure
+      for (const waiting of this.queue.splice(0)) waiting.reject(failure)
+      return
     }
-    const loading = this.slots.filter((s) => s.state.kind === 'loading').length
-    let missing = Math.min(this.queue.length - loading, this.concurrency - this.slots.length)
-    for (; missing > 0; missing--) {
-      try {
-        this.spawn()
-      } catch (error) {
-        if (this.slots.length === 0) {
-          const reason = error instanceof Error ? error.message : String(error)
-          const failure = new Error(`The compiler worker could not be started (${reason}).`)
-          for (const waiting of this.queue.splice(0)) waiting.reject(failure)
-        }
-        return
-      }
+    if (this.stopping) return
+    const worker = this.worker ?? this.start()
+    if (worker?.state.kind !== 'idle') return
+    const next = this.queue.shift()
+    if (next) this.hand(worker, next)
+  }
+
+  /**
+   * Starts the worker. One that cannot be started is a load failure: the waiting jobs fail with
+   * `WasmToolchainLoadError`, and so does every job until the next `release()`.
+   */
+  private start(): LiveWorker | null {
+    try {
+      return this.spawn()
+    } catch (error) {
+      const failure = new WasmToolchainLoadError(`the compiler worker could not be started (${reasonOf(error)})`)
+      this.loadFailure = failure
+      for (const waiting of this.queue.splice(0)) waiting.reject(failure)
+      return null
     }
   }
 
-  /** Gives a job to an idle worker. If the job cannot be posted, only that job fails and the worker stays. */
-  private hand(slot: Slot, queued: Queued): void {
+  /** Gives a job to the idle worker. If the job cannot be posted, only that job fails and the worker stays. */
+  private hand(worker: LiveWorker, queued: Queued): void {
     const id = this.nextId++
     const timer = setTimeout(
-      () => this.fail(slot, `a job ran longer than ${seconds(this.jobDeadlineMs)}`),
+      () => this.fail(worker, `a job ran longer than ${seconds(this.jobDeadlineMs)}`, 'deadline'),
       this.jobDeadlineMs,
     )
-    slot.state = { kind: 'busy', running: { ...queued, id, timer } }
-    slot.handle.setBusy?.(true)
+    worker.state = { kind: 'busy', running: { ...queued, id, timer } }
+    worker.handle.setBusy?.(true)
     try {
-      slot.handle.post({ id, argv: queued.job.argv, tree: queued.job.tree })
+      worker.handle.post({ id, argv: queued.job.argv, tree: queued.job.tree })
     } catch (error) {
       clearTimeout(timer)
-      if (slot.state.kind === 'busy') slot.state = { kind: 'idle' }
-      slot.handle.setBusy?.(false)
+      worker.state = { kind: 'idle' }
+      worker.handle.setBusy?.(false)
       queued.reject(error instanceof Error ? error : new Error(String(error)))
       this.dispatch()
     }
   }
 
   /** Starts a worker, marked idle so it does not keep the process alive until it is handed a job. */
-  private spawn(): Slot {
+  private spawn(): LiveWorker {
     const handle = this.mechanism.spawn()
-    let markReady: () => void = () => undefined
-    let markFailed: (error: Error) => void = () => undefined
-    const ready = new Promise<void>((resolve, reject) => {
-      markReady = resolve
-      markFailed = reject
-    })
-    ready.catch(() => undefined)
     const loadTimer = setTimeout(
-      () => this.fail(slot, `it did not load within ${seconds(this.loadDeadlineMs)}`),
+      () => this.fail(worker, `it did not load within ${seconds(this.loadDeadlineMs)}`, 'deadline'),
       this.loadDeadlineMs,
     )
-    const slot: Slot = { handle, ready, markReady, markFailed, state: { kind: 'loading', loadTimer } }
-    this.slots.push(slot)
-
-    handle.onMessage((raw) => {
-      const reply = parseClangWorkerReply(raw)
-      if (!reply) return
-      if (reply.type === 'ready') {
-        if (slot.state.kind !== 'loading') return
-        clearTimeout(slot.state.loadTimer)
-        slot.state = { kind: 'idle' }
-        slot.markReady()
-        this.dispatch()
-        return
-      }
-      if (slot.state.kind !== 'busy' || slot.state.running.id !== reply.id) return
-      const running = slot.state.running
-      clearTimeout(running.timer)
-      slot.state = { kind: 'idle' }
-      slot.handle.setBusy?.(false)
-      if (reply.type === 'result') running.resolve(reply.result)
-      else running.reject(new Error(reply.message))
-      this.dispatch()
-    })
-    handle.onFailure((reason) => this.fail(slot, reason))
+    const worker: LiveWorker = { handle, state: { kind: 'loading', loadTimer } }
+    this.worker = worker
+    handle.onMessage((raw) => this.receive(worker, raw))
+    handle.onFailure((reason) => this.fail(worker, reason, 'error'))
     handle.setBusy?.(false)
-    return slot
+    return worker
   }
 
-  /**
-   * Takes a worker out of the pool for good: it is terminated and the job it held fails. When it never loaded and no
-   * loaded worker is left, the waiting jobs fail as well instead of starting workers that would fail the same way.
-   */
-  private fail(slot: Slot, reason: string): void {
-    if (slot.state.kind === 'failed') return
-    const error = new Error(`The compiler worker stopped (${reason}).`)
-    const wasLoaded = isLoaded(slot)
-    this.settle(slot, error)
-    this.slots = this.slots.filter((s) => s !== slot)
-    void Promise.resolve(slot.handle.terminate()).catch(() => undefined)
-    if (!wasLoaded && !this.slots.some(isLoaded)) {
-      for (const waiting of this.queue.splice(0)) waiting.reject(error)
+  /** Handles a reply of the current worker; replies of a worker no longer current are ignored. */
+  private receive(worker: LiveWorker, raw: unknown): void {
+    if (worker !== this.worker) return
+    const reply = parseClangWorkerReply(raw)
+    if (!reply) return
+    if (reply.type === 'ready') {
+      if (worker.state.kind !== 'loading') return
+      clearTimeout(worker.state.loadTimer)
+      worker.state = { kind: 'idle' }
+      this.dispatch()
       return
     }
+    if (worker.state.kind !== 'busy' || worker.state.running.id !== reply.id) return
+    const running = worker.state.running
+    clearTimeout(running.timer)
+    worker.state = { kind: 'idle' }
+    worker.handle.setBusy?.(false)
+    if (reply.type === 'result') running.resolve(reply.result)
+    else running.reject(new Error(reply.message))
     this.dispatch()
   }
 
-  /** Marks a worker failed, stops its timer and fails the job it held. */
-  private settle(slot: Slot, error: Error): void {
-    const previous = slot.state
-    slot.state = { kind: 'failed' }
-    slot.markFailed(error)
-    switch (previous.kind) {
+  /**
+   * Terminates the current worker after a failure. The job it ran fails with the reason; when it never became ready,
+   * the toolchain counts as not loadable until the next `release()`, and after an error its stored files are discarded
+   * and the kept `prepare()` is cleared.
+   */
+  private fail(worker: LiveWorker, reason: string, cause: FailureCause): void {
+    if (worker !== this.worker) return
+    this.worker = null
+    const state = worker.state
+    switch (state.kind) {
       case 'loading':
-        clearTimeout(previous.loadTimer)
-        return
+        clearTimeout(state.loadTimer)
+        this.loadFailure = new WasmToolchainLoadError(reason)
+        if (cause === 'error') {
+          this.prepared = null
+          this.discardFiles()
+        }
+        break
       case 'busy':
-        clearTimeout(previous.running.timer)
-        previous.running.reject(error)
-        return
+        clearTimeout(state.running.timer)
+        state.running.reject(new Error(`The compiler worker stopped (${reason}).`))
+        break
       case 'idle':
-      case 'failed':
-        return
+        break
       default: {
-        const unreachable: never = previous
+        const unreachable: never = state
         return unreachable
       }
     }
+    this.stop(worker.handle)
+    this.dispatch()
+  }
+
+  /** Terminates a worker; it counts as stopping until its termination has settled, then waiting jobs go on. */
+  private stop(handle: ClangWorkerHandle): void {
+    let exit: Promise<unknown>
+    try {
+      exit = Promise.resolve(handle.terminate())
+    } catch {
+      exit = Promise.resolve()
+    }
+    const stopping: Promise<void> = exit.then(ignore, ignore).then(() => {
+      if (this.stopping === stopping) this.stopping = null
+      this.dispatch()
+    })
+    this.stopping = stopping
   }
 }
