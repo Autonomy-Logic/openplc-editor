@@ -253,6 +253,9 @@ describe('the HMI browser client page', () => {
       { t: 's', p: 0, n: 1 },
     ])
     expect(document.getElementById('notice')?.hidden).toBe(true)
+    const canvas = document.getElementById('surface')
+    expect(canvas?.style.width).toBe(`${window.innerWidth}px`)
+    expect(canvas?.style.height).toBe(`${window.innerHeight}px`)
     const frames = page.module.frames
     await jest.advanceTimersByTimeAsync(500)
     expect(page.module.frames).toBeGreaterThanOrEqual(frames + 9)

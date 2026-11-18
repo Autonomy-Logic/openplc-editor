@@ -495,6 +495,7 @@
         if (!ok || !socket || !hmi) return
         hmi.hmi_bh_reset_writes()
         hmi.hmi_bh_out_clear()
+        fitCanvas()
         shownPage = -1
         live = true
         showNotice(null)
@@ -563,6 +564,12 @@
       return Math.min(8192, Math.max(1, Math.round(root.innerHeight)))
     }
 
+    /** Sizes the canvas to the window before anything is drawn, so no press falls outside it. */
+    function fitCanvas() {
+      canvas.style.width = viewWidth() + 'px'
+      canvas.style.height = viewHeight() + 'px'
+    }
+
     function draw() {
       var ratio = Math.min(8, Math.max(0.25, root.devicePixelRatio || 1))
       var w = viewWidth()
@@ -622,6 +629,7 @@
     })
 
     root.addEventListener('resize', function () {
+      fitCanvas()
       if (hmi) hmi.hmi_bh_resize(viewWidth(), viewHeight())
     })
 
