@@ -408,6 +408,14 @@ describe('runtime commercial license', () => {
     await waitFor(() => expect(licenseValue()).toBe('Commercial'))
   })
 
+  it('shows MIT for an older runtime, with no buy link or notice', async () => {
+    licenseState({ status: 'mit', hardwareId: null })
+    render(<RuntimeStatusEditor />)
+    await waitFor(() => expect(licenseValue()).toBe('MIT'))
+    expect(screen.queryByRole('button', { name: 'Buy licences' })).toBeNull()
+    expect(screen.queryByText(new RegExp(DISCLAIMER_START))).toBeNull()
+  })
+
   it('hides the field when the runtime reports no license', async () => {
     licenseState({ status: 'unknown' })
     render(<RuntimeStatusEditor />)

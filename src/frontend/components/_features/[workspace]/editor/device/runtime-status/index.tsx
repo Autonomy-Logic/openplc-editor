@@ -339,6 +339,8 @@ function describeRuntimeLicense(
   switch (license.status) {
     case 'licensed':
       return 'Commercial'
+    case 'mit':
+      return 'MIT'
     case 'unlicensed':
       if (license.checking) return 'Checking for a license…'
       if (license.awaitingPurchase) return 'GPLv3, waiting for purchase confirmation'

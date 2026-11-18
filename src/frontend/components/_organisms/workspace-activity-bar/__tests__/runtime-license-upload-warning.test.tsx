@@ -91,8 +91,8 @@ describe('Build and upload — runtime commercial licence warning', () => {
     expect(compileProgram).toHaveBeenCalledWith(expect.objectContaining({ compileOnly: false }), expect.any(Function))
   })
 
-  it('prints nothing for a licensed target, an unknown status or a paid VPP', async () => {
-    for (const status of ['licensed', 'unknown', 'vpp-flow', null] as const) {
+  it('prints nothing for a licensed target, an MIT runtime, an unknown status or a paid VPP', async () => {
+    for (const status of ['licensed', 'mit', 'unknown', 'vpp-flow', null] as const) {
       cleanup()
       store = createTestStore()
       renderBar(status)

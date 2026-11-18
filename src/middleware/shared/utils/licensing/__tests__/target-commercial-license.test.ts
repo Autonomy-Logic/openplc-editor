@@ -3,6 +3,7 @@ import {
   buildRuntimeLicenseBuyUrl,
   COMMERCIAL_LICENSE_DISCLAIMER,
   commercialLicenseConsoleLines,
+  isMitLicensedRuntime,
   resolveTargetCommercialLicense,
 } from '../target-commercial-license'
 
@@ -49,6 +50,51 @@ describe('resolveTargetCommercialLicense', () => {
 
   it('shows nothing for a runtime that does not report a licence', () => {
     expect(resolveTargetCommercialLicense({ mode: 'user', vppLicense: null, runtimeLicense: null })).toBe('unknown')
+  })
+})
+
+describe('isMitLicensedRuntime', () => {
+  it.each(['4.3.2', 'v4.3.9', '4.0.0', 'v4', '4.3', ' v4.3.2 ', '4.3.9-rc.2'])('is MIT for runtime %p', (version) => {
+    expect(isMitLicensedRuntime(version)).toBe(true)
+  })
+
+  it.each(['4.4.0', 'v4.4.0', '4.4.0-rc.1', 'v4.4.0-rc.1', '4.4', '4.10.0', 'v4.4.1', '5.0.0'])(
+    'is not MIT for runtime %p',
+    (version) => {
+      expect(isMitLicensedRuntime(version)).toBe(false)
+    },
+  )
+
+  it.each([null, undefined, '', 'dev', 'garbage', '4.1 beta', '3.0.0'])('is not MIT for %p', (version) => {
+    expect(isMitLicensedRuntime(version)).toBe(false)
+  })
+})
+
+describe('resolveTargetCommercialLicense with a runtime version', () => {
+  it('resolves an older runtime to MIT whatever the licence or VPP says', () => {
+    for (const mode of ['user', 'vendor', 'vpp'] as const) {
+      for (const runtimeLicense of ['gpl', 'commercial', null] as const) {
+        expect(
+          resolveTargetCommercialLicense({ mode, vppLicense: DEMO, runtimeLicense, runtimeVersion: 'v4.3.2' }),
+        ).toBe('mit')
+      }
+    }
+  })
+
+  it('keeps the normal check from 4.4.0 and for a missing or unreadable version', () => {
+    for (const runtimeVersion of ['4.4.0', 'v4.4.0', '4.4.0-rc.1', '4.10.0', null, 'dev', undefined]) {
+      expect(
+        resolveTargetCommercialLicense({ mode: 'user', vppLicense: null, runtimeLicense: 'gpl', runtimeVersion }),
+      ).toBe('unlicensed')
+      expect(
+        resolveTargetCommercialLicense({
+          mode: 'user',
+          vppLicense: null,
+          runtimeLicense: 'commercial',
+          runtimeVersion,
+        }),
+      ).toBe('licensed')
+    }
   })
 })
 

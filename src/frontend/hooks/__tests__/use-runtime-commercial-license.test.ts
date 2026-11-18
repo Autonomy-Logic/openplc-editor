@@ -108,9 +108,10 @@ function setupBoard(boardName = ARDUINO_BOARD) {
   deviceActions.setDeviceConnectionStatus('connected', '/dev/ttyACM0', 'rtu')
 }
 
-function setup(opts: { boardName?: string; license?: 'commercial' | 'gpl' | null } = {}) {
+function setup(opts: { boardName?: string; license?: 'commercial' | 'gpl' | null; version?: string | null } = {}) {
   store = createTestStore()
   const { deviceActions } = store.getState()
+  if (opts.version !== undefined) deviceActions.setRuntimeVersion(opts.version)
   deviceActions.setAvailableOptions({
     availableBoards: new Map([
       [RUNTIME_BOARD, board()],
@@ -295,6 +296,61 @@ describe('useRuntimeCommercialLicenseOwner', () => {
     expect(result.current.status).toBe('unknown')
     expect(dialog()?.open ?? false).toBe(false)
     expect(store.getState().modals['runtime-connection-lost']?.open ?? false).toBe(false)
+  })
+})
+
+describe('runtime older than the dual licence', () => {
+  it.each(['4.3.2', 'v4.3.9'])('shows %p as MIT without checking or showing the dialog', async (version) => {
+    setup({ version, license: 'gpl' })
+    const { result } = renderOwner()
+    await flush()
+    expect(runtimeMock.syncRuntimeLicenses).not.toHaveBeenCalled()
+    expect(runtimeMock.getHardwareId).not.toHaveBeenCalled()
+    expect(result.current.status).toBe('mit')
+    expect(result.current.checking).toBe(false)
+    expect(result.current.hardwareId).toBeNull()
+    expect(result.current.buyUrl).toBeNull()
+    expect(dialog()?.open ?? false).toBe(false)
+  })
+
+  it('ignores a VPP licence mode for an older runtime', async () => {
+    getManifest.mockResolvedValue(manifestWith('vpp'))
+    setup({ boardName: VPP_BOARD, version: 'v4.3.2' })
+    const { result } = renderOwner()
+    await flush()
+    expect(result.current.status).toBe('mit')
+    expect(runtimeMock.syncRuntimeLicenses).not.toHaveBeenCalled()
+  })
+
+  it('stops a purchase watch for an older runtime', async () => {
+    setup({ version: '4.3.2' })
+    store.getState().deviceActions.setRuntimeLicensePurchaseWatch(Date.now() + 60_000)
+    const { result } = renderOwner()
+    await flush()
+    expect(result.current.awaitingPurchase).toBe(false)
+    expect(runtimeMock.syncRuntimeLicenses).not.toHaveBeenCalled()
+  })
+
+  it.each(['4.4.0', 'v4.4.0', '4.4.0-rc.1', '4.10.0', null, 'dev'])(
+    'keeps the normal check for runtime version %p',
+    async (version) => {
+      setup({ version, license: 'gpl' })
+      const { result } = renderOwner()
+      await flush()
+      expect(runtimeMock.syncRuntimeLicenses).toHaveBeenCalledTimes(1)
+      expect(result.current.status).toBe('unlicensed')
+      expect((dialog()?.data as DialogData).message).toBe(COMMERCIAL_LICENSE_DISCLAIMER)
+    },
+  )
+
+  it('does not apply to a built-in board', async () => {
+    getManifest.mockResolvedValue(manifestWith('user'))
+    setupBoard()
+    store.getState().deviceActions.setRuntimeVersion('v4.3.2')
+    const { result } = renderOwner()
+    await flush()
+    expect(refreshLicense).toHaveBeenCalledTimes(1)
+    expect(result.current.status).toBe('unlicensed')
   })
 })
 

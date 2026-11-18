@@ -9,7 +9,8 @@
  * the stored licence, verify it, and recover it from Edge when missing. It
  * resolves the status from the board's `runtimeLicense`, the VPP licence state
  * and the runtime licence found, stores it, and opens the disclaimer dialog for
- * an unlicensed target.
+ * an unlicensed target. A runtime older than `DUAL_LICENSE_MIN_RUNTIME_VERSION`
+ * resolves to `mit` with no licence check.
  *
  * `useRuntimeCommercialLicense` is what the views read: the stored status and
  * the buy action. Nothing here blocks build, upload, start or debug.
@@ -21,6 +22,7 @@ import {
   BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID,
   buildRuntimeLicenseBuyUrl,
   COMMERCIAL_LICENSE_DISCLAIMER,
+  isMitLicensedRuntime,
   resolveTargetCommercialLicense,
   type RuntimeCommercialLicense,
   type TargetCommercialLicenseStatus,
@@ -75,12 +77,13 @@ export function useRuntimeCommercialLicense(): RuntimeCommercialLicenseView {
   const hardwareId = runtimeHardwareId ?? boardDeviceId
   const idLabel = runtimeHardwareId === null && boardDeviceId !== null ? 'Device ID' : 'Hardware ID'
   const buyUrl = useMemo(() => {
+    if (status === 'mit') return null
     const baseUrl = system.getEdgeFrontendUrl()
     if (runtimeHardwareId) return buildRuntimeLicenseBuyUrl(baseUrl, runtimeHardwareId)
     if (boardDeviceId)
       return buildLicenseBuyUrl({ baseUrl, vppId: BAREMETAL_RUNTIME_LICENSE_PRODUCT_ID, deviceId: boardDeviceId })
     return null
-  }, [system, runtimeHardwareId, boardDeviceId])
+  }, [status, system, runtimeHardwareId, boardDeviceId])
 
   const buy = useCallback(async () => {
     if (!buyUrl) return
@@ -118,6 +121,8 @@ export function useRuntimeCommercialLicenseOwner(): void {
       : null
   const connected = target !== null
   const runtimeLicense = useOpenPLCStore((state) => state.runtimeConnection.license)
+  const runtimeVersion = useOpenPLCStore((state) => state.runtimeConnection.runtimeVersion)
+  const mitRuntime = target === 'runtime' && isMitLicensedRuntime(runtimeVersion)
   const boardLicense = useOpenPLCStore((state) => state.runtimeCommercialLicense.boardLicense)
   const packageId = boardInfo?.vpp?.packageId
   const vppLicense = useOpenPLCStore((state) => state.deviceLicense.report?.outcome ?? null)
@@ -174,6 +179,10 @@ export function useRuntimeCommercialLicenseOwner(): void {
   const deliverToRuntime = useCallback(
     async (isCurrent: () => boolean) => {
       const { deviceActions, consoleActions } = store.getState()
+      if (mitRuntime) {
+        deviceActions.setRuntimeHardwareId(null)
+        return
+      }
       const result = await runtime.syncRuntimeLicenses?.()
       if (!isCurrent()) return
       if (!result) {
@@ -211,14 +220,20 @@ export function useRuntimeCommercialLicenseOwner(): void {
         )
       }
     },
-    [runtime, store],
+    [mitRuntime, runtime, store],
   )
 
   const deliverRef = useRef(deliverToRuntime)
   deliverRef.current = target === 'board' ? deliverToBoard : deliverToRuntime
 
   const deliveryKey =
-    target === 'runtime' ? 'runtime' : target === 'board' && mode !== null ? `board:${packageId ?? ''}:${mode}` : null
+    target === 'runtime'
+      ? mitRuntime
+        ? 'runtime:mit'
+        : 'runtime'
+      : target === 'board' && mode !== null
+        ? `board:${packageId ?? ''}:${mode}`
+        : null
 
   // The dialog waits for this connection's delivery, so a licence still on its way never shows as GPLv3.
   const [delivered, setDelivered] = useState(false)
@@ -233,7 +248,7 @@ export function useRuntimeCommercialLicenseOwner(): void {
       return
     }
     let cancelled = false
-    if (deliveryKey === 'runtime') deviceActions.setRuntimeLicense(null)
+    if (deliveryKey.startsWith('runtime')) deviceActions.setRuntimeLicense(null)
     deviceActions.setRuntimeLicenseChecking(true)
     void deliverRef
       .current(() => !cancelled)
@@ -253,6 +268,7 @@ export function useRuntimeCommercialLicenseOwner(): void {
           mode,
           vppLicense,
           runtimeLicense: target === 'board' ? boardLicense : runtimeLicense,
+          runtimeVersion: target === 'runtime' ? runtimeVersion : null,
         })
       : null
   useEffect(() => {
@@ -289,7 +305,7 @@ export function useRuntimeCommercialLicenseOwner(): void {
 
   useEffect(() => {
     if (awaitingPurchaseUntil === null) return
-    if (status === 'licensed' || !connected) {
+    if (status === 'licensed' || status === 'mit' || !connected) {
       store.getState().deviceActions.setRuntimeLicensePurchaseWatch(null)
       return
     }
