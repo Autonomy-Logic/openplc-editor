@@ -2,6 +2,7 @@ import Toaster from '@root/frontend/components/_features/[app]/toast/toaster'
 import { Console } from '@root/frontend/components/_organisms/console'
 import type { OpenPLCStore } from '@root/frontend/store'
 import { createStoreWrapper, createTestPorts, createTestStore } from '@root/frontend/store/testing'
+import { createTestPackagesPort } from '@root/frontend/store/testing-packages'
 import { getMemoryState, toast } from '@root/frontend/utils/toast'
 import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { WriteProjectFiles } from '@root/middleware/shared/ports/project-port'
@@ -125,6 +126,7 @@ function renderBar(options: { canEdit: boolean; withConsole?: boolean }) {
       disconnect: () => Promise.resolve({ success: true }),
     },
     project: { saveProject },
+    packages: createTestPackagesPort({ status: 'idle' }).port,
   })
   render(
     <>

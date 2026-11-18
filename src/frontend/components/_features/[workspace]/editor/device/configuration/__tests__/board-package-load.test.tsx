@@ -5,7 +5,7 @@ import { createTestPackagesPort, type TestPackagesPort } from '@root/frontend/st
 import { WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
 import type { VppTargetLoadState } from '@root/middleware/shared/ports/vpp-target-mechanisms'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 
 import { Board } from '../board'
 
@@ -108,8 +108,10 @@ describe('Board picker while the vPLC package is not loaded', () => {
   it('disables a listed vendor board with the reason after a failed load', () => {
     renderBoard(createTestPackagesPort(CANCELED), { vendorBoardResolved: true })
 
-    expect(optionWith(VPP_BOARD_NAME)?.getAttribute('data-disabled')).not.toBeNull()
-    expect(screen.getByText(DID_NOT_LOAD)).toBeTruthy()
+    const row = optionWith(VPP_BOARD_NAME)
+    if (!(row instanceof HTMLElement)) throw new Error('the vendor board rendered no row')
+    expect(row.getAttribute('data-disabled')).not.toBeNull()
+    expect(within(row).getByText(DID_NOT_LOAD)).toBeTruthy()
   })
 
   it('leaves an ordinary board alone after a failed load', () => {
