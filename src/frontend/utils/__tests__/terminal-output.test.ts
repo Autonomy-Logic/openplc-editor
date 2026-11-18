@@ -1,4 +1,4 @@
-import { collapseCarriageReturns, hasAnsi, parseAnsi, stripAnsi } from '../terminal-output'
+import { collapseCarriageReturns, hasAnsi, parseAnsi, plainTerminalLine, stripAnsi } from '../terminal-output'
 
 const ESC = '\u001B'
 const BEL = '\u0007'
@@ -140,5 +140,90 @@ describe('collapseCarriageReturns', () => {
   it('handles CRLF without swallowing the line', () => {
     // Split on \n happens before this, leaving a trailing \r on Windows output.
     expect(collapseCarriageReturns('Windows line\r')).toBe('Windows line')
+  })
+})
+
+function removedControlCodePoints(text: string): number[] {
+  return Array.from(text)
+    .map((character) => character.codePointAt(0) ?? 0)
+    .filter((code) => (code <= 0x1f && code !== 0x09) || (code >= 0x7f && code <= 0x9f))
+}
+
+const PLAIN_TERMINAL_LINES: [string, string, string][] = [
+  ['a blue [INFO] line', `${ESC}[0;34m[INFO]${ESC}[0m Docker daemon is running`, '[INFO] Docker daemon is running'],
+  ['a green [SUCCESS] line', `${ESC}[0;32m[SUCCESS]${ESC}[0m Runtime is up`, '[SUCCESS] Runtime is up'],
+  [
+    'a yellow [WARNING] line',
+    `${ESC}[1;33m[WARNING]${ESC}[0m The runtime has not reported healthy after 300s. Check:`,
+    '[WARNING] The runtime has not reported healthy after 300s. Check:',
+  ],
+  [
+    'a red [ERROR] line',
+    `${ESC}[0;31m[ERROR]${ESC}[0m Could not download the Docker installer.`,
+    '[ERROR] Could not download the Docker installer.',
+  ],
+  [
+    'SGR, an OSC hyperlink, an erase-in-line and a two-byte escape',
+    `${ESC}[1m${ESC}[92mok${ESC}[0m ${ESC}]8;;https://example.com${BEL}link${ESC}]8;;${BEL} ${ESC}[2Kdone${ESC}M`,
+    'ok link done',
+  ],
+  ['a stray ESC at the end', `Pulling${ESC}`, 'Pulling'],
+  ['a CSI cut right after its bracket', `Pulling${ESC}[`, 'Pulling'],
+  ['a CSI cut inside its parameters', `Pulling${ESC}[0;3`, 'Pulling'],
+  ['an OSC with no terminator', `see ${ESC}]8;;https://example.com`, 'see '],
+  ['an ESC that starts no sequence', `a${ESC}zb`, 'azb'],
+  ['C0, DEL and C1 control characters', `a${BEL}b\u0000c\u0008d\u007Fe\u009Bf\u0085g\rh`, 'abcdefgh'],
+  ['a tab', 'a\tb', 'a\tb'],
+  [
+    'an installer line with no codes (TC43)',
+    '[3/6] Pulling ghcr.io/autonomy-logic/openplc-runtime:latest',
+    '[3/6] Pulling ghcr.io/autonomy-logic/openplc-runtime:latest',
+  ],
+  [
+    'markup-like text with a literal backslash and n',
+    'Step 4/6: <docker> **pull** \\n 50% & done',
+    'Step 4/6: <docker> **pull** \\n 50% & done',
+  ],
+  [
+    'bracketed code text with no escape character',
+    '[0;34m[INFO][0m text with no escape character',
+    '[0;34m[INFO][0m text with no escape character',
+  ],
+  ['non-ASCII letters and emoji', 'Instalação concluída ✓ 🎉', 'Instalação concluída ✓ 🎉'],
+  ['a replacement character', 'bad byte \uFFFD kept', 'bad byte \uFFFD kept'],
+  ['a lone reset', `${ESC}[0m`, ''],
+  ['an empty text', '', ''],
+]
+
+describe('plainTerminalLine', () => {
+  it.each(PLAIN_TERMINAL_LINES)('turns %s into plain text', (_name, input, expected) => {
+    expect(plainTerminalLine(input)).toBe(expected)
+  })
+
+  it.each(PLAIN_TERMINAL_LINES)('is idempotent for %s', (_name, input) => {
+    const plain = plainTerminalLine(input)
+
+    expect(plainTerminalLine(plain)).toBe(plain)
+  })
+
+  it.each(PLAIN_TERMINAL_LINES)('leaves no ESC and no removed control character for %s', (_name, input) => {
+    const plain = plainTerminalLine(input)
+
+    expect(plain).not.toContain(ESC)
+    expect(removedControlCodePoints(plain)).toEqual([])
+  })
+
+  it.each(PLAIN_TERMINAL_LINES)('is never longer than the input for %s', (_name, input) => {
+    expect(plainTerminalLine(input).length).toBeLessThanOrEqual(input.length)
+  })
+
+  it('returns a text with nothing to remove unchanged', () => {
+    const text = `[1/6] Checking Docker\t${'é✓'.repeat(2048)}`
+
+    expect(plainTerminalLine(text)).toBe(text)
+  })
+
+  it('leaves stripAnsi unchanged for a CSI cut inside its parameters', () => {
+    expect(stripAnsi(`a${ESC}[0;3`)).toBe('a0;3')
   })
 })

@@ -14,6 +14,7 @@ import type {
   RuntimeProvisioningRunRequest,
   SshProbeFailureReason,
 } from '../../../../middleware/shared/ports/runtime-provisioning-port'
+import { stripAnsi } from '../../../../frontend/utils/terminal-output'
 import type { AuditOperation, AuditOutcome } from '../audit'
 import { formatAuditLine } from '../audit'
 import type { DeviceCommand } from '../commands'
@@ -1424,6 +1425,103 @@ describe('installer output never leaks the password (AS-09)', () => {
     expect(outcome.kind).toBe('installer-failed')
     expect(outputLines(device)).toHaveLength(2)
     expect([...outputLines(device), ...consoleMessages(device), ...lastLinesOf(outcome)].join('\n')).not.toContain('a')
+  })
+})
+
+describe('device output with terminal colour codes', () => {
+  const ESC = '\u001B'
+  const INFO_LINE = `${ESC}[0;34m[INFO]${ESC}[0m Docker daemon is running`
+  const STEP_LINE = `${ESC}[0;34m[INFO]${ESC}[0m Step 1`
+  const ERROR_LINE = `${ESC}[0;31m[ERROR]${ESC}[0m Something else failed`
+  const SPLIT_PASSWORD_LINE = `echo S3cr${ESC}[0m3t-Pi! ok`
+  const RUNTIME_STOPPED = runtimeOutput({ docker: 'active', bootloader: 'running', runtimeContainer: 'stopped' })
+
+  function textsWithoutCodes(device: FakeDevice, outcome: RuntimeProvisioningOutcome): string[] {
+    const eventTexts = events(device).flatMap((event) =>
+      Object.values(event).filter((value): value is string => typeof value === 'string'),
+    )
+    return [...eventTexts, ...lastLinesOf(outcome)].map(stripAnsi)
+  }
+
+  it('shows the latest installer line without its colour codes and keeps them in the console', async () => {
+    const { device, service } = setup({
+      polls: [
+        { exit: 'running', text: `${INFO_LINE}\n` },
+        { exit: 0, text: '' },
+      ],
+    })
+
+    await service.run(REQUEST)
+
+    expect(outputLines(device)).toEqual(['[INFO] Docker daemon is running'])
+    expect(consoleMessages(device)).toEqual([INFO_LINE])
+  })
+
+  it('reports a failed install with its last lines without colour codes, keeping them in the console (AC09.5)', async () => {
+    const { device, service } = setup({
+      polls: [{ exit: 'running', text: `${STEP_LINE}\n` }, { exit: 'running', text: `${ERROR_LINE}\n` }, { exit: 2 }],
+    })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({
+      kind: 'installer-failed',
+      lastLines: ['[INFO] Step 1', '[ERROR] Something else failed'],
+    })
+    expect(consoleMessages(device)).toEqual([STEP_LINE, ERROR_LINE])
+  })
+
+  it('reports an install whose runtime does not answer with its last lines without colour codes', async () => {
+    const { service } = setup({
+      polls: [{ exit: 'running', text: `${INFO_LINE}\n` }, { exit: 0 }],
+      runtimeAnswersAfterMs: null,
+    })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({
+      kind: 'not-started',
+      operation: 'install',
+      lastLines: ['[INFO] Docker daemon is running'],
+    })
+  })
+
+  it('still classifies a download failure from a red [ERROR] line as written', async () => {
+    const { service } = setup({
+      polls: [
+        { exit: 'running', text: `${ESC}[0;31m[ERROR]${ESC}[0m Could not download the Docker installer.\n` },
+        { exit: 1 },
+      ],
+    })
+
+    const outcome = await service.run(REQUEST)
+
+    expect(outcome.kind).toBe('download-failed')
+  })
+
+  it('never shows an installer password split by a colour code in the dialog, the console or the last lines (M14)', async () => {
+    const { device, service } = setup({ polls: [{ exit: 'running', text: `${SPLIT_PASSWORD_LINE}\n` }, { exit: 2 }] })
+
+    const outcome = await service.run(REQUEST)
+
+    expect(outputLines(device)).toEqual([`echo ${PASSWORD_MASK} ok`])
+    expect(consoleMessages(device)).toEqual([`echo ${PASSWORD_MASK} ok`])
+    expect(lastLinesOf(outcome)).toEqual([`echo ${PASSWORD_MASK} ok`])
+    expect(textsWithoutCodes(device, outcome).filter((text) => text.includes(PASSWORD))).toEqual([])
+  })
+
+  it('sends a failed start command line to the console with its codes, unless it would show the password', async () => {
+    const { device, service } = setup({
+      runtime: RUNTIME_STOPPED,
+      commands: {
+        startRuntimeContainer: {
+          exitCode: 1,
+          stdout: `${ESC}[0;31mFailed${ESC}[0m to start\n${SPLIT_PASSWORD_LINE}\n`,
+        },
+      },
+    })
+
+    await expect(service.run(REQUEST)).resolves.toEqual({
+      kind: 'start-failed',
+      lastLines: [`${ESC}[0;31mFailed${ESC}[0m to start`, SPLIT_PASSWORD_LINE],
+    })
+    expect(consoleMessages(device)).toEqual([`${ESC}[0;31mFailed${ESC}[0m to start`, `echo ${PASSWORD_MASK} ok`])
   })
 })
 

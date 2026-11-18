@@ -10,9 +10,18 @@ import {
   PASSWORD_MASK,
   POLL_READ_BYTES,
   scrubPassword,
+  toConsoleLine,
+  toProgressLine,
 } from '../output'
 
 const PASSWORD = 'S3cr3t-Pi!'
+const ESC = '\u001B'
+const BEL = '\u0007'
+const INFO_LINE = `${ESC}[0;34m[INFO]${ESC}[0m Docker daemon is running`
+const MASKED_INFO_LINE = `${ESC}[0;34m[INFO]${ESC}[0m token ${PASSWORD_MASK}`
+const PLAIN_LINE = '[3/6] Pulling ghcr.io/autonomy-logic/openplc-runtime:latest'
+const SPLIT_BY_COLOUR_CODE = `echo S3cr${ESC}[0m3t-Pi! ok`
+const SPLIT_BY_CONTROL_CHARACTER = `echo S3cr${BEL}3t-Pi! ok`
 const FROM_START = { startsMidLine: false }
 
 function truncated(line: string): string {
@@ -359,5 +368,53 @@ describe('installer output end to end through the bounds', () => {
     expect(result.dialog[0]).toBe('line 9851')
     expect(result.dialog[150]).toBe(truncated(original[10_000]))
     expect(result.latest).toBe('line 10050')
+  })
+})
+
+describe('toProgressLine', () => {
+  it.each([
+    ['removes the colour codes of an installer line', INFO_LINE, '[INFO] Docker daemon is running'],
+    ['keeps the mask of a line the pipeline already scrubbed', MASKED_INFO_LINE, `[INFO] token ${PASSWORD_MASK}`],
+    ['scrubs a password split by a colour code', SPLIT_BY_COLOUR_CODE, `echo ${PASSWORD_MASK} ok`],
+    ['scrubs a password split by a control character', SPLIT_BY_CONTROL_CHARACTER, `echo ${PASSWORD_MASK} ok`],
+    ['returns a line with nothing to remove and no password unchanged', PLAIN_LINE, PLAIN_LINE],
+  ])('%s', (_name, line, expected) => {
+    expect(toProgressLine(line, PASSWORD)).toBe(expected)
+  })
+
+  it('cuts a line the second scrub lengthened to 4,096 characters plus the marker, with no part of the password (M17)', () => {
+    const line = `a${BEL}b`.repeat(1365)
+
+    const progress = toProgressLine(line, 'ab')
+
+    expect(line).toHaveLength(LINE_CHAR_LIMIT - 1)
+    expect(progress).toHaveLength(LINE_CHAR_LIMIT + LINE_TRUNCATION_MARKER.length)
+    expect(progress.endsWith(LINE_TRUNCATION_MARKER)).toBe(true)
+    expect(progress).not.toContain('ab')
+  })
+
+  it('returns a line already cut at 4,096 characters with nothing to remove unchanged', () => {
+    const line = truncated('x'.repeat(LINE_CHAR_LIMIT + 10))
+
+    expect(toProgressLine(line, PASSWORD)).toBe(line)
+  })
+})
+
+describe('toConsoleLine', () => {
+  it.each([
+    ['keeps the colour codes of a line without the password', INFO_LINE, INFO_LINE],
+    ['keeps the colour codes of a line the pipeline already scrubbed', MASKED_INFO_LINE, MASKED_INFO_LINE],
+    ['returns a plain line unchanged', PLAIN_LINE, PLAIN_LINE],
+    ['scrubs a password split by a colour code, without colours', SPLIT_BY_COLOUR_CODE, `echo ${PASSWORD_MASK} ok`],
+    [
+      'scrubs a password split by a control character, without colours',
+      SPLIT_BY_CONTROL_CHARACTER,
+      `echo ${PASSWORD_MASK} ok`,
+    ],
+  ])('%s', (_name, line, expected) => {
+    const message = toConsoleLine(line, PASSWORD)
+
+    expect(message).toBe(expected)
+    expect([line, toProgressLine(line, PASSWORD)]).toContain(message)
   })
 })

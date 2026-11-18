@@ -938,6 +938,16 @@ describe('the ended stage', () => {
     expect(shownText()).not.toContain('was started')
   })
 
+  it('shows the last lines of a failed install exactly as received, one per line (AC09.5)', () => {
+    const lastLines = ['[INFO] Step 1', '[ERROR] Something else failed']
+    endWith({ kind: 'installer-failed', lastLines }, lastLines)
+    renderDialog()
+
+    expect(screen.getByTestId('runtime-provisioning-last-lines').textContent).toBe(
+      '[INFO] Step 1\n[ERROR] Something else failed',
+    )
+  })
+
   it('offers no way to accept a changed host key (TC26, BR15)', () => {
     endWith({ kind: 'host-key-changed', target: `${DEVICE_IP}:22` })
     renderDialog()
