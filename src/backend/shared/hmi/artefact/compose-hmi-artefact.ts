@@ -1,16 +1,19 @@
 /**
- * The `hmi/` folder of a Runtime v4 upload (`docs/HMI.md` in openplc-runtime): the generated unit with the HMI core
- * and its font table under `src/`, the browser client under `client/` with the WebAssembly module that draws its
- * display lists, and `manifest.json`. A project without screens gets the manifest that removes a device's HMI.
+ * The `hmi/` folder of a Runtime v4 upload (`docs/HMI.md` in openplc-runtime). The browser runs the screens: the
+ * client under `client/` carries `hmi.wasm`, the whole HMI (generated unit, HMI core, font table and the browser host)
+ * built as WebAssembly. The device only serves PLC values: `src/` holds the host-side manifest (`hmi_access.h` and the
+ * generated `hmi_access.c`) with the tag table and the tags each screen reads and writes. A project without screens
+ * gets the manifest that removes a device's HMI.
  */
 import type { HmiBuildSources, HmiDiagnostic } from '../../../../middleware/shared/ports/hmi-preview-types'
 import type {
   WasmCompileRequest,
   WasmCompileResult,
-  WasmToolchainFiles,
+  WasmCompileUnit,
 } from '../../../../middleware/shared/ports/wasm-toolchain-types'
 import { hmiFontTableFromSources } from '../fonts/font-table-source'
-import { generateHmiUnit, type HmiTag } from '../unit/generate-hmi-unit'
+import { generateHmiUnit, type HmiPageTags, type HmiTag } from '../unit/generate-hmi-unit'
+import { hmiHostManifestSource } from './host-manifest'
 import { type HmiProgramInstance, hmiTagResolver } from './tag-resolver'
 
 type StlibArchive = NonNullable<Parameters<typeof generateHmiUnit>[0]['plcArchives']>[number]
@@ -30,27 +33,51 @@ export interface ComposeHmiArtefactInput {
   instances: readonly HmiProgramInstance[]
   /** Every file under the HMI sources folder (`core/`, `unit/`, `client/`, `fonts/`), text or bytes. */
   hmiSources: Readonly<Record<string, string | Uint8Array>>
+  /** STruC++ runtime headers by path, `strucpp_runtime/include/<file>`, as the program build has them. */
+  runtimeHeaders: Readonly<Record<string, string>>
   /** Compiles the client's WebAssembly module. */
   compile: (request: WasmCompileRequest) => Promise<WasmCompileResult>
 }
 
 export type ComposeHmiArtefactResult =
-  | { ok: true; files: HmiArtefactFiles; tags: HmiTag[]; warnings: HmiDiagnostic[] }
+  | { ok: true; files: HmiArtefactFiles; tags: HmiTag[]; pages: HmiPageTags[]; warnings: HmiDiagnostic[] }
   | { ok: false; errors: HmiDiagnostic[]; warnings: HmiDiagnostic[] }
 
 const ROOT = 'hmi'
 const UNIT = 'HMI'
-export const HMI_INSTALL_MANIFEST = '{"format": 1}\n'
-export const HMI_REMOVE_MANIFEST = '{"format": 1, "remove": true}\n'
+export const HMI_INSTALL_MANIFEST = '{"format": 2}\n'
+export const HMI_REMOVE_MANIFEST = '{"format": 2, "remove": true}\n'
 /** Client files shipped as they are, from `client/` of the HMI sources. */
 const CLIENT_FILES = ['index.html', 'hmi.css', 'hmi-client.js', 'socket.io.min.js', 'socket.io-LICENSE.txt']
-const CLIENT_HOST = 'client/hmi_client.c'
+const BROWSER_HOST = 'client/hmi_browser_host.cpp'
+const ACCESS_HEADER = 'unit/hmi_access.h'
+const UNIT_HEADER = 'unit/hmi_unit.h'
 const FONTS_LICENSE = 'fonts/LICENSE.txt'
-/** Core files the client module draws with. */
-const CLIENT_CORE_SOURCES = ['hmi_raster.c', 'hmi_text.c', 'hmi_math.c']
+const CORE_SOURCES = ['hmi_core.c', 'hmi_theme.c', 'hmi_math.c', 'hmi_raster.c', 'hmi_text.c']
+/** Where the module's sources sit in the compile request. */
+const MODULE_HMI = 'hmi'
+const MODULE_UNIT = 'unit'
+const MODULE_FONTS = `${MODULE_UNIT}/hmi_fonts.c`
+const RUNTIME_INCLUDE = 'strucpp_runtime/include'
+export const HMI_CLIENT_MODULE = 'hmi.wasm'
 const CLIENT_MAX_MEMORY = 512 * 1024 * 1024
-export const HMI_CLIENT_C_FLAGS = ['-std=c11', '-O2', '-ffp-contract=off', '-Icore']
-export const HMI_CLIENT_LINK_FLAGS = ['-mexec-model=reactor', `-Wl,--max-memory=${CLIENT_MAX_MEMORY}`]
+const CLIENT_STACK_SIZE = 1024 * 1024
+const INCLUDES = [`-I${RUNTIME_INCLUDE}`, `-I${MODULE_HMI}/core`, `-I${MODULE_HMI}/unit`, `-I${MODULE_UNIT}`]
+/** C flags of the core: the ones its golden tests use, so the browser draws the same pixels as every other target. */
+export const HMI_CLIENT_C_FLAGS = ['-std=c11', '-O2', '-ffp-contract=off', ...INCLUDES]
+export const HMI_CLIENT_CXX_FLAGS = [
+  '-std=gnu++17',
+  '-O2',
+  '-fno-exceptions',
+  '-fno-rtti',
+  '-ffp-contract=off',
+  ...INCLUDES,
+]
+export const HMI_CLIENT_LINK_FLAGS = [
+  '-mexec-model=reactor',
+  `-Wl,--max-memory=${CLIENT_MAX_MEMORY}`,
+  `-Wl,-z,stack-size=${CLIENT_STACK_SIZE}`,
+]
 
 const decoder = new TextDecoder()
 const text = (content: string | Uint8Array): string => (typeof content === 'string' ? content : decoder.decode(content))
@@ -60,9 +87,40 @@ export function hmiRemovalArtefact(): HmiArtefactFiles {
   return { [`${ROOT}/manifest.json`]: HMI_REMOVE_MANIFEST }
 }
 
+/** The compile request of the browser module: the unit's C++ files, the core, the font table and the browser host. */
+export function hmiClientModuleRequest(
+  unitFiles: Readonly<Record<string, string>>,
+  fontTable: string,
+  hmiSources: Readonly<Record<string, string>>,
+  runtimeHeaders: Readonly<Record<string, string>>,
+): WasmCompileRequest {
+  const files: WasmCompileRequest['files'] = {}
+  for (const [path, content] of Object.entries(runtimeHeaders)) files[path] = content
+  for (const [path, content] of Object.entries(hmiSources)) files[`${MODULE_HMI}/${path}`] = content
+  for (const [name, content] of Object.entries(unitFiles)) files[`${MODULE_UNIT}/${name}`] = content
+  files[MODULE_FONTS] = fontTable
+  const units: WasmCompileUnit[] = [
+    ...CORE_SOURCES.map((name): WasmCompileUnit => ({ source: `${MODULE_HMI}/core/${name}`, language: 'c' })),
+    { source: MODULE_FONTS, language: 'c' },
+    ...Object.keys(unitFiles)
+      .filter((name) => name.endsWith('.cpp'))
+      .sort()
+      .map((name): WasmCompileUnit => ({ source: `${MODULE_UNIT}/${name}`, language: 'c++' })),
+    { source: `${MODULE_HMI}/${BROWSER_HOST}`, language: 'c++' },
+  ]
+  return {
+    files,
+    units,
+    cFlags: HMI_CLIENT_C_FLAGS,
+    cxxFlags: HMI_CLIENT_CXX_FLAGS,
+    linkFlags: HMI_CLIENT_LINK_FLAGS,
+    output: HMI_CLIENT_MODULE,
+  }
+}
+
 /** Builds the artefact of a project with screens. */
 export async function composeHmiArtefact(input: ComposeHmiArtefactInput): Promise<ComposeHmiArtefactResult> {
-  if (!input.sources) return { ok: true, files: hmiRemovalArtefact(), tags: [], warnings: [] }
+  if (!input.sources) return { ok: true, files: hmiRemovalArtefact(), tags: [], pages: [], warnings: [] }
   const fail = (message: string, warnings: HmiDiagnostic[] = []): ComposeHmiArtefactResult => ({
     ok: false,
     errors: [{ file: UNIT, message }],
@@ -78,6 +136,23 @@ export async function composeHmiArtefact(input: ComposeHmiArtefactInput): Promis
   })
   if (!unit.ok) return { ok: false, errors: unit.errors, warnings: unit.warnings }
 
+  const manifest = hmiHostManifestSource({
+    tags: unit.tags,
+    pages: unit.pages,
+    md5: input.md5,
+    periodMs: input.sources.settings.framePeriodMs,
+  })
+  if (!manifest.ok) return fail(manifest.error, unit.warnings)
+
+  const moduleSources: Record<string, string> = {}
+  for (const [path, content] of Object.entries(input.hmiSources))
+    if (/^core\/.*\.[ch]$/.test(path) || path.startsWith('unit/') || path === BROWSER_HOST)
+      moduleSources[path] = text(content)
+  for (const required of [UNIT_HEADER, ACCESS_HEADER, BROWSER_HOST])
+    if (moduleSources[required] === undefined) return fail(`The HMI sources have no ${required}`, unit.warnings)
+  if (!Object.keys(moduleSources).some((p) => p.startsWith('core/')))
+    return fail('The HMI sources have no core/', unit.warnings)
+
   let fontTable: string
   try {
     fontTable = await hmiFontTableFromSources(unit.fonts.faces, unit.fonts.variant, input.hmiSources)
@@ -85,16 +160,11 @@ export async function composeHmiArtefact(input: ComposeHmiArtefactInput): Promis
     return fail(error instanceof Error ? error.message : String(error), unit.warnings)
   }
 
-  const files: HmiArtefactFiles = { [`${ROOT}/manifest.json`]: HMI_INSTALL_MANIFEST }
-  for (const [name, content] of Object.entries(unit.files)) files[`${ROOT}/src/${name}`] = content
-  files[`${ROOT}/src/hmi_fonts.c`] = fontTable
-  const unitHeader = source('unit/hmi_unit.h')
-  if (unitHeader === undefined) return fail('The HMI sources have no unit/hmi_unit.h', unit.warnings)
-  files[`${ROOT}/src/hmi_unit.h`] = text(unitHeader)
-  const coreFiles = Object.entries(input.hmiSources).filter(([path]) => /^core\/.*\.[ch]$/.test(path))
-  if (coreFiles.length === 0) return fail('The HMI sources have no core/', unit.warnings)
-  for (const [path, content] of coreFiles) files[`${ROOT}/src/${path}`] = text(content)
-
+  const files: HmiArtefactFiles = {
+    [`${ROOT}/manifest.json`]: HMI_INSTALL_MANIFEST,
+    [`${ROOT}/src/hmi_access.h`]: moduleSources[ACCESS_HEADER],
+    [`${ROOT}/src/hmi_access.c`]: manifest.source,
+  }
   for (const name of CLIENT_FILES) {
     const content = source(`client/${name}`)
     if (content === undefined) return fail(`The HMI sources have no client/${name}`, unit.warnings)
@@ -104,28 +174,16 @@ export async function composeHmiArtefact(input: ComposeHmiArtefactInput): Promis
   if (fontsLicense === undefined) return fail(`The HMI sources have no ${FONTS_LICENSE}`, unit.warnings)
   files[`${ROOT}/client/fonts-LICENSE.txt`] = text(fontsLicense)
 
-  const host = source(CLIENT_HOST)
-  if (host === undefined) return fail(`The HMI sources have no ${CLIENT_HOST}`, unit.warnings)
-  const wasmFiles: WasmToolchainFiles = { 'client/hmi_client.c': text(host), 'client/hmi_fonts.c': fontTable }
-  for (const [path, content] of coreFiles) wasmFiles[path] = text(content)
-  const compiled = await input.compile({
-    files: wasmFiles,
-    units: [
-      ...CLIENT_CORE_SOURCES.map((name) => ({ source: `core/${name}`, language: 'c' as const })),
-      { source: 'client/hmi_fonts.c', language: 'c' },
-      { source: 'client/hmi_client.c', language: 'c' },
-    ],
-    cFlags: HMI_CLIENT_C_FLAGS,
-    linkFlags: HMI_CLIENT_LINK_FLAGS,
-    output: 'hmi_client.wasm',
-  })
+  const compiled = await input.compile(
+    hmiClientModuleRequest(unit.files, fontTable, moduleSources, input.runtimeHeaders),
+  )
   if (!compiled.ok) {
     const details = compiled.diagnostics.filter((d) => d.level === 'error').map((d) => d.message)
     return fail(
-      `The HMI browser client did not compile: ${details.length > 0 ? details.join('\n') : compiled.error}`,
+      `The HMI browser module did not compile: ${details.length > 0 ? details.join('\n') : compiled.error}`,
       unit.warnings,
     )
   }
-  files[`${ROOT}/client/hmi_client.wasm`] = compiled.wasm
-  return { ok: true, files, tags: unit.tags, warnings: unit.warnings }
+  files[`${ROOT}/client/${HMI_CLIENT_MODULE}`] = compiled.wasm
+  return { ok: true, files, tags: unit.tags, pages: unit.pages, warnings: unit.warnings }
 }

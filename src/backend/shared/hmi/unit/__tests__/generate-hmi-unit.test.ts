@@ -241,6 +241,42 @@ describe('HMI unit generator', () => {
     expect(messages(unknown).join('\n')).toMatch(/unknown theme 'Nope'/)
   })
 
+  it('lists the tags each screen reads and writes, and the roles that may open it, for the runtime host', () => {
+    expect(sample.pages).toEqual([
+      { name: 'Overview', reads: [0, 1, 2, 3, 4], writes: [1, 2, 3], roles: 0b1111 },
+      { name: 'Details', reads: [3], writes: [], roles: 0b0011 },
+    ])
+    expect(sample.tags.map((t) => t.path)).toEqual([
+      'CONFIG0.RES0.INSTANCE0.MAIN.LEVEL',
+      'CONFIG0.RES0.INSTANCE0.MAIN.RUNNING',
+      'CONFIG0.RES0.INSTANCE0.MAIN.SPEED',
+      'CONFIG0.RES0.INSTANCE0.MAIN.TAG',
+      'CONFIG0.ALARMON',
+    ])
+  })
+
+  it('counts a plain assignment as a write, a bit assignment as a read and a write, and conditions as reads', () => {
+    const result = generateHmiUnit(
+      withScreen(
+        screen(
+          '    Go : HmiButton;',
+          [
+            '  IF Go.Clicked AND instance0.Main.Running THEN',
+            '    instance0.Main.Speed := 3;',
+            '    instance0.Main.Unused.2 := TRUE;',
+            '  END_IF;',
+          ].join('\n'),
+        ),
+      ),
+    )
+    expect(messages(result)).toEqual([])
+    const index = (name: string) => result.tags.findIndex((t) => t.path.endsWith(`.${name}`))
+    const [overview] = result.pages
+    expect(overview.writes).toEqual([index('SPEED'), index('UNUSED')].sort((a, b) => a - b))
+    expect(overview.reads).toEqual([index('RUNNING'), index('UNUSED')].sort((a, b) => a - b))
+    expect(result.pages[1].writes).toEqual([])
+  })
+
   it('keeps an operator change on a two-way widget that nothing else sets', () => {
     const result = generateHmiUnit(
       withScreen(

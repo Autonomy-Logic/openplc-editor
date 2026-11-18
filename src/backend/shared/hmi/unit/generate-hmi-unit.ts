@@ -41,6 +41,7 @@ import { HMI_ALL_FACES, hmiUsedFontFaces } from '../fonts/used-faces'
 import { buildStandardWidgets } from '../lib/build-standard-widgets'
 import { STANDARD_WIDGETS_SOURCES } from '../lib/standard-widgets'
 import { buildWidgetCatalog, type HmiWidgetCatalog, type HmiWidgetInfo } from '../lib/widget-catalog'
+import { hmiPageAccess } from './page-access'
 import { type HmiBlockModel, type HmiElementDecl, parseHmiBlock } from './screen-model'
 
 export interface HmiTagAddress {
@@ -77,6 +78,17 @@ export interface HmiTag {
   address: HmiTagAddress | null
 }
 
+/** What one screen reaches, for a host that serves a viewer only the tags of the screen it shows. */
+export interface HmiPageTags {
+  /** The screen's name. */
+  name: string
+  /** Indexes into `tags` the screen reads and writes, ascending. */
+  reads: number[]
+  writes: number[]
+  /** Roles that may open the screen, one bit per `hmi_role` (bit 0 admin, always set). */
+  roles: number
+}
+
 export interface HmiUnitResult {
   ok: boolean
   errors: HmiDiagnostic[]
@@ -86,6 +98,8 @@ export interface HmiUnitResult {
   /** Generated ST, by file name, as compiled. */
   sources: Record<string, string>
   tags: HmiTag[]
+  /** Each screen's tags and roles, by page number. */
+  pages: HmiPageTags[]
   /** Element of each bounds id the core reports, for designers. */
   elementIds: Array<{ id: number; screen: string; element: string }>
   /** Faces of the font table the unit needs. */
@@ -1222,6 +1236,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     files: {},
     sources: {},
     tags: [],
+    pages: [],
     elementIds: [],
     fonts: { variant: input.settings.fontVariant, faces: [...HMI_ALL_FACES] },
     textSizes: [],
@@ -1360,6 +1375,16 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   result.files[SLOT_HEADER] = slotHeader(classes)
   result.files['hmi_unit_glue.cpp'] = glueCpp(tags, input, classes)
   result.tags = tags.map(({ path, type, address }) => ({ path, type: type.type, maxLength: type.maxLength, address }))
+  if (!compiled.ast) {
+    d.error(UNIT, 'STruC++ returned no syntax tree, so the tags each screen reaches are unknown')
+    return result
+  }
+  const access = hmiPageAccess(compiled.ast, classes, strucpp.walkAST)
+  result.pages = plans.map((plan, i) => {
+    const grant = screenGrant(input.settings, plan.model.name)
+    const roles = HMI_ROLES.reduce((bits, role, r) => (grant[role] ? bits | (1 << (r + 1)) : bits), 1)
+    return { name: plan.model.name, reads: access[i].reads, writes: access[i].writes, roles }
+  })
   const setters = previewSetters(plans, catalog, classes)
   result.preview = {
     units: previewUnits([...Object.keys(result.files), ...Object.keys(setters.files)], plans),

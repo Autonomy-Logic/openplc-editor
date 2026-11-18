@@ -1,0 +1,74 @@
+/**
+ * @file hmi_access.h
+ * @brief What an HMI build gives the Runtime v4 HMI host: the PLC variables the screens use, which screen reads and
+ *        writes which of them, and which roles may open each screen. The host serves a browser viewer only the tags
+ *        of the screen it shows and applies only that screen's writes; the browser runs the screens themselves.
+ *        Generated as data only (`hmi_access.c`); the host never runs screen code.
+ */
+#ifndef HMI_ACCESS_H
+#define HMI_ACCESS_H
+
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** Value types of tags: the values of hmi_tag_type in hmi_unit.h. */
+enum hmi_access_type {
+    HMI_ACCESS_BOOL = 1,
+    HMI_ACCESS_SINT,
+    HMI_ACCESS_INT,
+    HMI_ACCESS_DINT,
+    HMI_ACCESS_LINT,
+    HMI_ACCESS_USINT,
+    HMI_ACCESS_UINT,
+    HMI_ACCESS_UDINT,
+    HMI_ACCESS_ULINT,
+    HMI_ACCESS_BYTE,
+    HMI_ACCESS_WORD,
+    HMI_ACCESS_DWORD,
+    HMI_ACCESS_LWORD,
+    HMI_ACCESS_REAL,
+    HMI_ACCESS_LREAL,
+    HMI_ACCESS_STRING,
+    HMI_ACCESS_TIME,
+    HMI_ACCESS_LTIME,
+    HMI_ACCESS_DATE,
+    HMI_ACCESS_TOD,
+    HMI_ACCESS_DT
+};
+
+/** A PLC variable screens use; its index in hmi_access_tags is its tag id. */
+typedef struct {
+    uint32_t arr;     /**< PLC debug-table array */
+    uint32_t elem;    /**< PLC debug-table element */
+    uint8_t type;     /**< ::hmi_access_type */
+    uint16_t max_len; /**< declared length of a STRING, 0 otherwise */
+    const char *path; /**< canonical path, upper case, for logs */
+} hmi_access_tag_t;
+
+/** One screen, by page number: the tags it reads and writes (ascending tag ids) and the roles that may open it. */
+typedef struct {
+    const uint16_t *reads;
+    uint16_t read_count;
+    const uint16_t *writes;
+    uint16_t write_count;
+    /** One bit per role (bit 0 admin, 1 engineer, 2 operator, 3 viewer); admin is always set. */
+    uint8_t roles;
+} hmi_access_page_t;
+
+extern const hmi_access_tag_t hmi_access_tags[];
+extern const int hmi_access_tag_count;
+extern const hmi_access_page_t hmi_access_pages[];
+extern const int hmi_access_page_count;
+/** MD5 of the PLC program the screens were built against. */
+extern const char hmi_access_plc_md5[];
+/** The screens' frame period from HMI Settings, in milliseconds: how often values are sent. */
+extern const uint32_t hmi_access_period_ms;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

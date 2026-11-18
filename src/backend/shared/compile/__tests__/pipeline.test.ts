@@ -2128,8 +2128,9 @@ describe('runCompilePipeline — HMI', () => {
   beforeEach(() => {
     mockedComposeHmi.mockResolvedValue({
       ok: true,
-      files: { 'hmi/manifest.json': '{"format": 1}\n', 'hmi/client/hmi_client.wasm': new Uint8Array([0, 97]) },
+      files: { 'hmi/manifest.json': '{"format": 2}\n', 'hmi/client/hmi.wasm': new Uint8Array([0, 97]) },
       tags: [],
+      pages: [],
       warnings: [{ file: 'HMI', message: 'a warning' }],
     })
   })
@@ -2140,15 +2141,17 @@ describe('runCompilePipeline — HMI', () => {
       readHmiSources: jest.fn().mockResolvedValue({ x: 'y' }),
     })
     const { events, emit } = captureEvents()
-    const result = await runCompilePipeline(v4({ hmi: hmiSources }), port, emit)
+    const headers = { 'strucpp_runtime/include/iec_types.hpp': '// types' }
+    const result = await runCompilePipeline(v4({ hmi: hmiSources, strucppRuntimeHeaders: headers }), port, emit)
 
     expect(result.success).toBe(true)
-    expect(written(port)['hmi/client/hmi_client.wasm']).toEqual(new Uint8Array([0, 97]))
-    expect(uploaded(port)['hmi/manifest.json']).toBe('{"format": 1}\n')
+    expect(written(port)['hmi/client/hmi.wasm']).toEqual(new Uint8Array([0, 97]))
+    expect(uploaded(port)['hmi/manifest.json']).toBe('{"format": 2}\n')
     const input = mockedComposeHmi.mock.calls[0][0]
     expect(input.sources).toBe(hmiSources)
     expect(input.md5).toBe('a'.repeat(32))
     expect(input.hmiSources).toEqual({ x: 'y' })
+    expect(input.runtimeHeaders).toEqual(headers)
     expect(events).toContainEqual(
       expect.objectContaining({ stage: 'hmi', level: 'warning', message: 'HMI: a warning' }),
     )
@@ -2158,7 +2161,7 @@ describe('runCompilePipeline — HMI', () => {
     const port = makePort({ checkRuntimeVersion: runtime(true) })
     mockedComposeHmi.mockImplementationOnce(async (input) => {
       await input.compile({ files: {}, units: [] })
-      return { ok: true, files: {}, tags: [], warnings: [] }
+      return { ok: true, files: {}, tags: [], pages: [], warnings: [] }
     })
     await runCompilePipeline(v4({ hmi: hmiSources }), port, captureEvents().emit)
     expect(port.compileWasmModule).toHaveBeenCalledTimes(1)
@@ -2201,7 +2204,7 @@ describe('runCompilePipeline — HMI', () => {
 
     expect(result.success).toBe(true)
     expect(mockedComposeHmi).not.toHaveBeenCalled()
-    expect(uploaded(port)['hmi/manifest.json']).toBe('{"format": 1, "remove": true}\n')
+    expect(uploaded(port)['hmi/manifest.json']).toBe('{"format": 2, "remove": true}\n')
   })
 
   it('sends no hmi/ to a runtime without HMI support when the project has no screens', async () => {
@@ -2221,7 +2224,7 @@ describe('runCompilePipeline — HMI', () => {
     )
     expect(result.success).toBe(true)
     expect(mockedComposeHmi).toHaveBeenCalledTimes(1)
-    expect(written(port)['hmi/manifest.json']).toBe('{"format": 1}\n')
+    expect(written(port)['hmi/manifest.json']).toBe('{"format": 2}\n')
   })
 
   it('leaves the HMI out of a simulator build', async () => {

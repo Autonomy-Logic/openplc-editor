@@ -1,7 +1,8 @@
 /**
- * OpenPLC HMI browser client: signs in with the runtime's accounts, keeps the token renewed, opens a viewer on the
- * /api/hmi Socket.IO namespace and draws the display lists it receives with hmi_client.wasm. Signing out is a button
- * of the project's screens (HMI_SignOut), so the client draws nothing over them; notices dim the last frame.
+ * OpenPLC HMI browser client: signs in with the runtime's accounts, keeps the token renewed and runs the project's
+ * screens in this page with hmi.wasm (the HMI unit, core and fonts), drawing them locally. The device serves PLC
+ * values over the /api/hmi Socket.IO namespace for the screen shown and applies or refuses its writes. Signing out is
+ * a button of the project's screens (HMI_SignOut), so the client draws nothing over them; notices dim the last frame.
  *
  * The pure part (HmiClientLogic) is also loaded by the editor's unit tests; the page part starts only in a browser.
  */
@@ -15,20 +16,23 @@
   var RENEW_MIN_DELAY_MS = 10 * 1000
   /** Retry a renewal that could not reach the device. */
   var RENEW_RETRY_MS = 30 * 1000
-  /** Ask again after the device was busy or a screen faulted. */
+  /** Ask again after the device was busy, or start the screens again after a screen fault. */
   var REOPEN_DELAY_MS = 5 * 1000
   /** First wait before asking again after the device refused the connection; it doubles up to the maximum. */
   var RECONNECT_DELAY_MS = 2 * 1000
   var RECONNECT_DELAY_MAX_MS = 60 * 1000
+  /** How long a newly shown screen waits for its first values before it is drawn anyway. */
+  var FIRST_VALUES_WAIT_MS = 1000
   var MAX_SEQUENCE = 9007199254740991
 
   var NOTICES = {
     stopped: 'PLC stopped',
     out_of_date: 'HMI out of date, rebuild the project',
     busy: 'Device busy, try later',
-    fault: 'The screen stopped on an error; reopening',
+    fault: 'The screen stopped on an error; restarting',
     unavailable: 'No HMI installed',
     offline: 'Device unreachable, reconnecting',
+    unsupported: 'This browser cannot run the HMI',
   }
 
   /** The payload of a JWT, or null when it is not one. */
@@ -81,7 +85,7 @@
     return 'Could not sign in (' + status + ').'
   }
 
-  /** The code point an `in` key event carries for a keyboard event, or 0 when the key is not sent. */
+  /** The code point a key event gives the screens, or 0 when the key is not passed on. */
   function keyCode(event) {
     if (!event || event.ctrlKey || event.metaKey || event.altKey) return 0
     if (event.key === 'Enter') return 13
@@ -107,20 +111,56 @@
     }
   }
 
-  /** The `in` event of a viewport of width x height CSS pixels at a device pixel ratio. */
-  function viewportEvent(width, height, ratio, n) {
-    var w = Math.min(8192, Math.max(1, Math.round(width)))
-    var h = Math.min(8192, Math.max(1, Math.round(height)))
-    var d = Math.min(8, Math.max(0.25, ratio || 1))
-    return { t: 'v', w: w, h: h, d: d, n: n }
+  /** The `in` event that opens the viewer on the device. */
+  function openEvent(n) {
+    return { t: 'o', n: n }
   }
 
-  /** The `in` event of a pointer at CSS pixel (x, y); kind 0 down, 1 move, 2 up. */
-  function pointerEvent(kind, x, y, n) {
-    var clamp = function (v) {
-      return Math.max(-100000, Math.min(100000, v))
+  /** The `in` event that asks for the values of screen `page`. */
+  function showEvent(page, n) {
+    return { t: 's', p: page, n: n }
+  }
+
+  /** The `in` event of a screen's write of tag `tag`; `value` is its bytes as the runtime takes them. */
+  function writeEvent(tag, value, n) {
+    return { t: 'w', g: tag, v: value, n: n }
+  }
+
+  /**
+   * Splits the write records hmi.wasm queued (`u16 tag, u16 len, bytes`, little endian) into { tag, value } pairs,
+   * each value a copy; null when the records are cut short.
+   */
+  function parseWrites(bytes) {
+    var out = []
+    var off = 0
+    while (off < bytes.length) {
+      if (bytes.length - off < 4) return null
+      var tag = bytes[off] | (bytes[off + 1] << 8)
+      var len = bytes[off + 2] | (bytes[off + 3] << 8)
+      if (bytes.length - off - 4 < len) return null
+      out.push({ tag: tag, value: bytes.slice(off + 4, off + 4 + len) })
+      off += 4 + len
     }
-    return { t: 'p', k: kind, x: clamp(x), y: clamp(y), n: n }
+    return out
+  }
+
+  /** CSS pixels to the screens' Q4 logical units (1/16 of a CSS pixel), clamped. */
+  function toQ4(v) {
+    var q = Math.round(v * 16)
+    return Math.max(-16777216, Math.min(16777216, q))
+  }
+
+  /** The role code of a `live` status (0 admin to 3 viewer), or -1 when it carries none. */
+  function roleCode(status) {
+    var role = status && status.role
+    return typeof role === 'number' && role >= 0 && role <= 3 && Math.floor(role) === role ? role : -1
+  }
+
+  /** The bytes of a binary Socket.IO payload as a Uint8Array view. */
+  function bytesOf(data) {
+    if (data instanceof ArrayBuffer) return new Uint8Array(data)
+    if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+    return new Uint8Array(0)
   }
 
   var logic = {
@@ -132,10 +172,16 @@
     signInMessage: signInMessage,
     keyCode: keyCode,
     createSequencer: createSequencer,
-    viewportEvent: viewportEvent,
-    pointerEvent: pointerEvent,
+    openEvent: openEvent,
+    showEvent: showEvent,
+    writeEvent: writeEvent,
+    parseWrites: parseWrites,
+    toQ4: toQ4,
+    roleCode: roleCode,
+    bytesOf: bytesOf,
     RENEW_RETRY_MS: RENEW_RETRY_MS,
     REOPEN_DELAY_MS: REOPEN_DELAY_MS,
+    FIRST_VALUES_WAIT_MS: FIRST_VALUES_WAIT_MS,
   }
   root.HmiClientLogic = logic
 
@@ -158,6 +204,19 @@
     }
   }
 
+  /** WASI imports answered as not supported: the module has no files, clock or environment. */
+  function wasiStubs() {
+    var handler = {
+      get: function (_target, name) {
+        return function () {
+          if (name === 'proc_exit') throw new Error('hmi.wasm exited')
+          return 52
+        }
+      },
+    }
+    return new Proxy({}, handler)
+  }
+
   function start(doc) {
     var el = function (id) {
       return doc.getElementById(id)
@@ -171,13 +230,23 @@
     var token = readToken()
     var renewTimer = 0
     var reopenTimer = 0
+    var frameTimer = 0
     var socket = null
     var sequencer = createSequencer()
-    var wasm = null
-    var pressed = false
-    var pendingMove = null
-    var lastPoint = { x: 0, y: 0 }
     var retryDelay = RECONNECT_DELAY_MS
+    var t0 = Date.now()
+
+    /** The compiled module once fetched, the running instance's exports and the role it runs as. */
+    var compiled = null
+    var compiling = null
+    var hmi = null
+    var role = -1
+    var live = false
+    var shownPage = -1
+    var awaitingPage = -1
+    var awaitingSince = 0
+    var pressed = false
+    var lastPoint = { x: 0, y: 0 }
 
     /** Shows a notice over the last frame, dimmed and not operable, or hides it when text is null. */
     function showNotice(text) {
@@ -187,9 +256,16 @@
       if (text && pressed) release(null)
     }
 
+    function stopFrames() {
+      clearTimeout(frameTimer)
+      frameTimer = 0
+    }
+
     function showForm(text) {
       closeSocket()
+      stopFrames()
       clearTimeout(renewTimer)
+      live = false
       token = null
       writeToken(null)
       screen.hidden = true
@@ -235,6 +311,16 @@
         .catch(function () {
           if (token === sent) scheduleRenew(RENEW_RETRY_MS)
         })
+    }
+
+    /** Ends the session on the device, as a screen's Sign out button asks, and returns to the form. */
+    function signOut() {
+      var sent = token
+      showForm('Signed out.')
+      if (!sent) return
+      fetch('/api/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + sent } }).catch(function () {
+        /* the form shows already, and this browser no longer holds the token */
+      })
     }
 
     /** Asks the device about the session after a refused connection, waiting longer each time. */
@@ -292,8 +378,8 @@
       if (socket && socket.connected) socket.emit('in', event)
     }
 
-    function sendViewport() {
-      send(viewportEvent(root.innerWidth, root.innerHeight, root.devicePixelRatio, sequencer.next()))
+    function sendOpen() {
+      send(openEvent(sequencer.next()))
     }
 
     function closeSocket() {
@@ -305,9 +391,16 @@
       }
     }
 
+    /** Stops the screens until the device is live again; the last frame stays, dimmed. */
+    function pause(state) {
+      live = false
+      stopFrames()
+      showNotice(noticeFor(state))
+    }
+
     function openSocket() {
       closeSocket()
-      showNotice(NOTICES.offline)
+      pause('offline')
       socket = root.io('/api/hmi', {
         auth: function (callback) {
           callback({ token: token })
@@ -317,35 +410,36 @@
       socket.on('connect', function () {
         retryDelay = RECONNECT_DELAY_MS
         sequencer.reset()
-        sendViewport()
+        sendOpen()
       })
       socket.on('connect_error', function () {
         if (!token || !tokenUsable(token, Date.now())) {
           showForm('Your session expired. Sign in again.')
           return
         }
-        showNotice(NOTICES.offline)
+        pause('offline')
         if (socket && !socket.active) scheduleSessionCheck()
       })
       socket.on('disconnect', function (reason) {
-        if (reason === 'io server disconnect') {
-          checkSession()
-          return
-        }
-        showNotice(NOTICES.offline)
+        pause('offline')
+        if (reason === 'io server disconnect') checkSession()
       })
       socket.on('hmi_status', function (status) {
         var state = status && status.state
-        showNotice(noticeFor(state))
         clearTimeout(reopenTimer)
-        if (state === 'busy' || state === 'fault') reopenTimer = setTimeout(sendViewport, REOPEN_DELAY_MS)
+        if (state === 'live') {
+          becomeLive(roleCode(status))
+          return
+        }
+        pause(state)
+        if (state === 'busy') reopenTimer = setTimeout(sendOpen, REOPEN_DELAY_MS)
       })
-      socket.on('hmi_signed_out', function () {
-        showForm('Signed out.')
-      })
-      socket.on('dl', function (bytes, ack) {
-        draw(bytes)
+      socket.on('hmi_values', function (bytes, ack) {
+        applyValues(bytesOf(bytes))
         if (typeof ack === 'function') ack()
+      })
+      socket.on('hmi_refused', function (refused) {
+        if (root.console) root.console.warn('HMI: the device refused', refused)
       })
     }
 
@@ -361,26 +455,121 @@
         })
     }
 
-    function draw(bytes) {
-      if (!wasm) return
-      var data =
-        bytes instanceof ArrayBuffer
-          ? new Uint8Array(bytes)
-          : ArrayBuffer.isView(bytes)
-            ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-            : new Uint8Array(bytes)
-      var exports = wasm.exports
-      var target = exports.hmi_client_dl(data.length)
+    /** The compiled hmi.wasm, fetched once. */
+    function hmiModule() {
+      if (compiled) return Promise.resolve(compiled)
+      if (!compiling)
+        compiling = WebAssembly.compileStreaming(fetch('hmi.wasm')).then(function (m) {
+          compiled = m
+          return m
+        })
+      return compiling
+    }
+
+    /** Starts the screens for a role in a new instance; resolves false when the browser cannot run them. */
+    function startScreens(newRole) {
+      hmi = null
+      return hmiModule()
+        .then(function (m) {
+          return WebAssembly.instantiate(m, { wasi_snapshot_preview1: wasiStubs() })
+        })
+        .then(function (instance) {
+          var x = instance.exports
+          if (typeof x._initialize === 'function') x._initialize()
+          if (x.hmi_bh_init(viewWidth(), viewHeight(), newRole) !== 0) throw new Error('hmi.wasm out of memory')
+          hmi = x
+          role = newRole
+          return true
+        })
+        .catch(function () {
+          showNotice(NOTICES.unsupported)
+          return false
+        })
+    }
+
+    /** The device opened the viewer: the screens run with its role, and the shown screen asks for its values. */
+    function becomeLive(newRole) {
+      if (newRole < 0) return
+      var ready = hmi && role === newRole ? Promise.resolve(true) : startScreens(newRole)
+      ready.then(function (ok) {
+        if (!ok || !socket || !hmi) return
+        hmi.hmi_bh_reset_writes()
+        hmi.hmi_bh_out_clear()
+        shownPage = -1
+        live = true
+        showNotice(null)
+        stopFrames()
+        frame()
+      })
+    }
+
+    function applyValues(bytes) {
+      if (!hmi || bytes.length === 0) return
+      var target = hmi.hmi_bh_in(bytes.length)
       if (!target) return
-      new Uint8Array(exports.memory.buffer, target, data.length).set(data)
-      var size = exports.hmi_client_dl_size(data.length)
-      if (!size) return
+      new Uint8Array(hmi.memory.buffer, target, bytes.length).set(bytes)
+      var page = hmi.hmi_bh_values(bytes.length)
+      if (page >= 0 && page === awaitingPage) awaitingPage = -1
+    }
+
+    /** A screen fault traps the module: the screens start again after a pause, as the same role. */
+    function fault() {
+      hmi = null
+      pause('fault')
+      reopenTimer = setTimeout(sendOpen, REOPEN_DELAY_MS)
+    }
+
+    function sendWrites() {
+      var len = hmi.hmi_bh_out_len()
+      if (len === 0) return
+      var writes = parseWrites(new Uint8Array(hmi.memory.buffer, hmi.hmi_bh_out(), len))
+      hmi.hmi_bh_out_clear()
+      if (!writes) return
+      for (var i = 0; i < writes.length; i++) send(writeEvent(writes[i].tag, writes[i].value, sequencer.next()))
+    }
+
+    function frame() {
+      frameTimer = 0
+      if (!live || !hmi) return
+      var started = Date.now()
+      try {
+        hmi.hmi_bh_frame((started - t0) >>> 0)
+      } catch (e) {
+        fault()
+        return
+      }
+      sendWrites()
+      if (hmi.hmi_bh_sign_out()) {
+        signOut()
+        return
+      }
+      var page = hmi.hmi_bh_page()
+      if (page >= 0 && page !== shownPage) {
+        shownPage = page
+        awaitingPage = page
+        awaitingSince = started
+        send(showEvent(page, sequencer.next()))
+      }
+      if (awaitingPage < 0 || started - awaitingSince >= FIRST_VALUES_WAIT_MS) draw()
+      var period = Math.max(10, hmi.hmi_bh_frame_ms())
+      frameTimer = setTimeout(frame, Math.max(0, period - (Date.now() - started)))
+    }
+
+    function viewWidth() {
+      return Math.min(8192, Math.max(1, Math.round(root.innerWidth)))
+    }
+
+    function viewHeight() {
+      return Math.min(8192, Math.max(1, Math.round(root.innerHeight)))
+    }
+
+    function draw() {
       var ratio = Math.min(8, Math.max(0.25, root.devicePixelRatio || 1))
-      var w = size & 0xffff
-      var h = size >>> 16
+      var w = viewWidth()
+      var h = viewHeight()
       var pw = Math.round(w * ratio)
       var ph = Math.round(h * ratio)
-      var pixels = exports.hmi_client_render(data.length, pw, ph, Math.round(ratio * 256))
+      var pixels = hmi.hmi_bh_render(pw, ph, Math.round(ratio * 256))
       if (!pixels) return
       if (canvas.width !== pw || canvas.height !== ph) {
         canvas.width = pw
@@ -388,8 +577,11 @@
         canvas.style.width = w + 'px'
         canvas.style.height = h + 'px'
       }
-      var rgba = new Uint8ClampedArray(exports.memory.buffer, pixels, pw * ph * 4)
-      context.putImageData(new ImageData(new Uint8ClampedArray(rgba), pw, ph), 0, 0)
+      var y0 = hmi.hmi_bh_dirty_y0()
+      var rows = hmi.hmi_bh_dirty_rows()
+      if (rows <= 0) return
+      var rgba = new Uint8ClampedArray(hmi.memory.buffer, pixels + y0 * pw * 4, pw * rows * 4)
+      context.putImageData(new ImageData(new Uint8ClampedArray(rgba), pw, rows), 0, y0)
     }
 
     function canvasPoint(event) {
@@ -397,57 +589,45 @@
       return { x: event.clientX - rect.left, y: event.clientY - rect.top }
     }
 
+    function pointer(kind, p) {
+      if (live && hmi) hmi.hmi_bh_pointer(kind, toQ4(p.x), toQ4(p.y))
+    }
+
     canvas.addEventListener('pointerdown', function (event) {
       pressed = true
       canvas.setPointerCapture(event.pointerId)
       canvas.focus()
-      var p = canvasPoint(event)
-      lastPoint = p
-      send(pointerEvent(0, p.x, p.y, sequencer.next()))
+      lastPoint = canvasPoint(event)
+      pointer(0, lastPoint)
     })
     canvas.addEventListener('pointermove', function (event) {
       if (!pressed) return
-      var first = pendingMove === null
-      pendingMove = canvasPoint(event)
-      lastPoint = pendingMove
-      if (first)
-        root.requestAnimationFrame(function () {
-          if (pendingMove && pressed) send(pointerEvent(1, pendingMove.x, pendingMove.y, sequencer.next()))
-          pendingMove = null
-        })
+      lastPoint = canvasPoint(event)
+      pointer(1, lastPoint)
     })
     /** Ends a press at the event's point, or at the last point known when a notice takes the screen away. */
     function release(event) {
       if (!pressed) return
       pressed = false
-      pendingMove = null
-      var p = event ? canvasPoint(event) : lastPoint
-      send(pointerEvent(2, p.x, p.y, sequencer.next()))
+      pointer(2, event ? canvasPoint(event) : lastPoint)
     }
     canvas.addEventListener('pointerup', release)
     canvas.addEventListener('pointercancel', release)
     canvas.addEventListener('keydown', function (event) {
-      if (!notice.hidden) return
+      if (!notice.hidden || !hmi) return
       var c = keyCode(event)
       if (!c) return
       event.preventDefault()
-      send({ t: 'k', c: c, n: sequencer.next() })
+      hmi.hmi_bh_key(c)
     })
 
-    var resizeTimer = 0
     root.addEventListener('resize', function () {
-      clearTimeout(resizeTimer)
-      resizeTimer = setTimeout(sendViewport, 150)
+      if (hmi) hmi.hmi_bh_resize(viewWidth(), viewHeight())
     })
 
-    WebAssembly.instantiateStreaming(fetch('hmi_client.wasm'), { wasi_snapshot_preview1: wasiStubs() })
-      .then(function (result) {
-        wasm = result.instance
-        if (typeof wasm.exports._initialize === 'function') wasm.exports._initialize()
-      })
-      .catch(function () {
-        showNotice('This browser cannot draw the HMI')
-      })
+    hmiModule().catch(function () {
+      showNotice(NOTICES.unsupported)
+    })
 
     if (token && tokenUsable(token, Date.now())) {
       form.hidden = true
@@ -459,19 +639,6 @@
     } else {
       showForm(null)
     }
-  }
-
-  /** WASI imports answered as not supported: the client module has no files, clock or environment. */
-  function wasiStubs() {
-    var handler = {
-      get: function (_target, name) {
-        return function () {
-          if (name === 'proc_exit') throw new Error('hmi_client.wasm exited')
-          return 52
-        }
-      },
-    }
-    return new Proxy({}, handler)
   }
 
   if (typeof document !== 'undefined' && root.document === document && typeof root.io === 'function') {

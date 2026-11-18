@@ -72,6 +72,7 @@ npm run test:hmi-core    # HMI C core: golden scenes (gcc, clang, WebAssembly), 
 npm run test:hmi-lib     # HMI widget library: headless frames of test screens (gcc, clang, sanitizers) against golden.txt
 npm run test:hmi-unit    # HMI unit generator: a sample project's unit run by a C host (gcc, clang, sanitizers)
 npm run test:hmi-baremetal # HMI baremetal host in simulated time and the readout's Modbus side (gcc, clang, sanitizers)
+npm run test:hmi-client  # Runtime v4 HMI artefact: hmi.wasm driven as the browser does, same pixels as a native build
 
 npm run validate:arch    # Architecture layer dependency validation
 ```
@@ -588,6 +589,11 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
   and runs them in a Worker (`createHmiPreviewPort`; host `resources/sources/hmi/preview/`). `tests/hmi-preview/run.ts`
   (`npm run test:hmi-preview`, same CI job) does it with the real toolchain and checks rebuild times. The port also
   draws the palette's thumbnails from a generated gallery screen (`hmi-thumbnails.ts`).
+- **HMI on Runtime v4:** the browser runs the screens. `src/backend/shared/hmi/artefact/` builds the upload's `hmi/`:
+  `client/hmi.wasm` (unit, core, fonts and `resources/sources/hmi/client/hmi_browser_host.cpp`) and, for the device,
+  only the data manifest `src/hmi_access.c` (`resources/sources/hmi/unit/hmi_access.h`): each screen's read and write
+  tag lists (`unit/page-access.ts`) and roles, which the runtime's host enforces. `tests/hmi-client/run.ts`
+  (`npm run test:hmi-client`) builds it with the real toolchain.
 - **HMI designer:** `src/frontend/components/_features/[workspace]/editor/hmi/designer/` edits a screen's ST as text
   patches (`src/middleware/shared/utils/hmi/designer/`), with undo in the `hmiDesigner` store slice. In a diagram it
   places symbols on the grid, draws pipes from port to port and edits their bends (`designer-diagram.ts`), from the

@@ -1,18 +1,24 @@
 /**
  * The HMI artefact of a Runtime v4 upload, outside the app: composes the sample project's `hmi/` folder with the real
- * WebAssembly clang, loads the browser client's module and checks that it draws a display list to the same pixels as
- * the core built natively, as the runtime builds it.
+ * WebAssembly clang and drives the browser module (`hmi.wasm`: unit, core, fonts and browser host) as hmi-client.js
+ * does: values in, screen frames, taps and the writes they queue, the write count that holds back stale values, the
+ * read and write lists of the host-side manifest, and the same pixels as the same sources built natively.
  *
  *   npx ts-node -T -r tsconfig-paths/register tests/hmi-client/run.ts
  *
- * HMI_CLIENT_CC names the native C compiler (default cc).
+ * HMI_CLIENT_CXX names the native C++ compiler (default c++), HMI_CLIENT_CC the C compiler (default cc).
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { cpus, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { composeHmiArtefact } from '../../src/backend/shared/hmi/artefact/compose-hmi-artefact'
+import {
+  composeHmiArtefact,
+  HMI_CLIENT_MODULE,
+  HMI_INSTALL_MANIFEST,
+} from '../../src/backend/shared/hmi/artefact/compose-hmi-artefact'
+import { generateHmiUnit } from '../../src/backend/shared/hmi/unit/generate-hmi-unit'
 import { sampleProject } from '../../src/backend/shared/hmi/unit/__tests__/fixtures/sample-project'
 import { isYowaspClang, runClangJob } from '../../src/backend/shared/wasm-toolchain/clang-worker-host'
 import { type CachedWasmObject, compileToWasm } from '../../src/backend/shared/wasm-toolchain/compile-to-wasm'
@@ -21,7 +27,12 @@ import type { WasmCompileRequest } from '../../src/middleware/shared/ports/wasm-
 
 const ROOT = join(__dirname, '..', '..')
 const HMI = join(ROOT, 'resources', 'sources', 'hmi')
+const RUNTIME = join(ROOT, 'node_modules', 'strucpp', 'src', 'runtime', 'include')
+const CXX = process.env.HMI_CLIENT_CXX ?? 'c++'
 const CC = process.env.HMI_CLIENT_CC ?? 'cc'
+const MD5 = '0123456789abcdef0123456789abcdef'
+const OPERATOR = 2
+const VIEWER = 3
 
 const failures: string[] = []
 const check = (ok: boolean, what: string): void => {
@@ -39,6 +50,13 @@ function readAll(dir: string, prefix = ''): Record<string, Uint8Array> {
   return out
 }
 
+function runtimeHeaders(): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const name of readdirSync(RUNTIME))
+    out[`strucpp_runtime/include/${name}`] = readFileSync(join(RUNTIME, name), 'utf8')
+  return out
+}
+
 async function runner(): Promise<WasmClangRunner> {
   const clang: unknown = await import('@yowasp/clang')
   if (!isYowaspClang(clang)) throw new Error('@yowasp/clang is not the expected module')
@@ -49,37 +67,6 @@ async function runner(): Promise<WasmClangRunner> {
   }
 }
 
-/** A display list with every kind of shape and both faces, `width` x `height` logical units. */
-function displayList(width: number, height: number): Uint8Array {
-  const out: number[] = []
-  const u8 = (v: number) => out.push(v & 0xff)
-  const u16 = (v: number) => {
-    u8(v)
-    u8(v >> 8)
-  }
-  const u32 = (v: number) => {
-    u16(v & 0xffff)
-    u16(v >>> 16)
-  }
-  const q4 = (v: number) => u32(Math.round(v * 16) | 0)
-  const commands: Array<() => void> = [
-    () => (u8(1), u32(0xfff7f8fa)),
-    () => (u8(2), q4(20), q4(20), q4(200), q4(60), q4(8), u32(0xff0464fb)),
-    () => (u8(3), q4(20), q4(100), q4(200), q4(60), q4(12), q4(2), u32(0xff111827)),
-    () => (u8(4), q4(240), q4(20), q4(300), q4(160), q4(3), u32(0xffdc2626)),
-    () => (u8(5), q4(380), q4(80), q4(40), u32(0x8016a34a)),
-    () => (u8(6), q4(380), q4(200), q4(40), q4(6), u32(0 * 64), u32(270 * 64), u32(0xfff59e0b)),
-    ...[0, 1].map((font) => () => {
-      const text = new TextEncoder().encode(font === 0 ? 'Level 42.5 %' : 'Pump ÄÖÜ')
-      u8(7), q4(30), q4(190 + font * 30), q4(18), u8(font), u8(0), u32(0xff1f2937), u16(text.length)
-      text.forEach(u8)
-    }),
-  ]
-  u32(0x4c444d48), u16(1), u16(0), u32(width), u32(height), u32(commands.length)
-  commands.forEach((c) => c())
-  return new Uint8Array(out)
-}
-
 /** FNV-1a over the bytes, as the native driver prints it. */
 function fnv(bytes: Uint8Array): string {
   let h = 0x811c9dc5
@@ -87,18 +74,174 @@ function fnv(bytes: Uint8Array): string {
   return h.toString(16).padStart(8, '0')
 }
 
-const NATIVE_DRIVER = `#include <stdio.h>
-#include <stdlib.h>
-#include "hmi_core.h"
-int main(int argc, char **argv) {
-    FILE *f = fopen(argv[1], "rb"); static unsigned char dl[1 << 16]; size_t n = fread(dl, 1, sizeof dl, f); fclose(f);
-    int w = atoi(argv[2]), h = atoi(argv[3]), q8 = atoi(argv[4]);
-    unsigned char *rgba = calloc((size_t)w * h, 4);
-    if (hmi_raster_render(dl, n, rgba, w, h, w, 0, h, q8, 0, 0) != HMI_RASTER_OK) return 2;
-    unsigned h32 = 0x811c9dc5u; for (size_t i = 0; i < (size_t)w * h * 4; i++) h32 = (h32 ^ rgba[i]) * 0x01000193u;
-    printf("%08x\\n", h32); return 0;
+/** A VALUES payload as the runtime sends it: `u16 page, u32 writes, u16 count` and `u16 tag, u16 len, bytes`. */
+function values(page: number, writes: number, records: Array<[number, number[]]>): Uint8Array {
+  const out: number[] = []
+  const u16 = (v: number) => out.push(v & 0xff, (v >> 8) & 0xff)
+  u16(page)
+  u16(writes & 0xffff)
+  u16(writes >>> 16)
+  u16(records.length)
+  for (const [tag, bytes] of records) {
+    u16(tag)
+    u16(bytes.length)
+    out.push(...bytes)
+  }
+  return new Uint8Array(out)
+}
+
+const f32 = (v: number): number[] => [...new Uint8Array(new Float32Array([v]).buffer)]
+const text = (s: string): number[] => [...new TextEncoder().encode(s)]
+
+/** The scripted session both builds run: [what, args] steps, one frame of 100 ms after each. */
+const SCRIPT: ReadonlyArray<{ values?: Uint8Array; tap?: string }> = [
+  {
+    values: values(0, 0, [
+      [0, f32(6.5)],
+      [1, [1]],
+      [2, [40, 0]],
+      [3, text('Pump A')],
+      [4, [1]],
+    ]),
+  },
+  { tap: 'RUN' },
+  {},
+  {
+    values: values(0, 1, [
+      [1, [0]],
+      [0, f32(7.25)],
+    ]),
+  },
+]
+
+/** The native driver: runs SCRIPT on the browser host built natively and prints a pixel hash per step. */
+function nativeDriver(script: typeof SCRIPT, ids: Record<string, number>): string {
+  const steps = script
+    .map((step, i) => {
+      const lines: string[] = []
+      if (step.values) {
+        lines.push(
+          `{ static const uint8_t v[] = {${[...step.values].join(',')}}; uint8_t *in = hmi_bh_in(${step.values.length}); memcpy(in, v, sizeof v); hmi_bh_values(${step.values.length}); }`,
+        )
+      }
+      if (step.tap) lines.push(`tap(${ids[step.tap]}, ${i * 100 + 50});`)
+      lines.push(`hmi_bh_frame(${(i + 1) * 100}); render_hash();`)
+      return lines.join('\n    ')
+    })
+    .join('\n    ')
+  return `#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+extern "C" {
+int32_t hmi_bh_init(int32_t, int32_t, int32_t);
+uint32_t hmi_bh_frame(uint32_t);
+uint8_t *hmi_bh_render(int32_t, int32_t, int32_t);
+uint8_t *hmi_bh_in(uint32_t);
+int32_t hmi_bh_values(uint32_t);
+void hmi_bh_pointer(int32_t, int32_t, int32_t);
+int32_t hmi_bh_bounds_count(void);
+const int32_t *hmi_bh_bounds(void);
+}
+static void render_hash() {
+    for (int scale = 1; scale <= 2; scale++) {
+        const int w = 480 * scale, h = 320 * scale;
+        uint8_t *p = hmi_bh_render(w, h, 256 * scale);
+        unsigned x = 0x811c9dc5u;
+        for (size_t i = 0; p && i < (size_t)w * h * 4; i++) x = (x ^ p[i]) * 0x01000193u;
+        printf("%08x\\n", x);
+    }
+}
+static void tap(int32_t id, uint32_t at) {
+    const int32_t *b = hmi_bh_bounds();
+    for (int i = 0; i < hmi_bh_bounds_count(); i++, b += 5) {
+        if (b[0] != id) continue;
+        const int32_t x = b[1] + b[3] / 2, y = b[2] + b[4] / 2;
+        hmi_bh_pointer(0, x, y);
+        hmi_bh_frame(at);
+        hmi_bh_pointer(2, x, y);
+        return;
+    }
+    printf("element %d not drawn\\n", (int)id);
+}
+int main() {
+    if (hmi_bh_init(480, 320, ${OPERATOR}) != 0) return 2;
+    hmi_bh_frame(0);
+    ${steps}
+    return 0;
 }
 `
+}
+
+interface Bh {
+  memory: WebAssembly.Memory
+  fn: (name: string) => (...args: number[]) => number
+}
+
+async function instantiate(wasm: Uint8Array, role: number): Promise<Bh> {
+  const module = await WebAssembly.compile(wasm)
+  const wasi: Record<string, () => number> = {}
+  for (const i of WebAssembly.Module.imports(module)) wasi[i.name] = () => 52
+  const instance = await WebAssembly.instantiate(module, { wasi_snapshot_preview1: wasi })
+  const exports = instance.exports
+  const memory = exports.memory
+  if (!(memory instanceof WebAssembly.Memory)) throw new Error('no memory export')
+  const fn = (name: string) => {
+    const value = exports[name]
+    if (typeof value !== 'function') throw new Error(`no export ${name}`)
+    return (...args: number[]) => Number(Reflect.apply(value, undefined, args))
+  }
+  if (typeof exports._initialize === 'function') fn('_initialize')()
+  if (fn('hmi_bh_init')(480, 320, role) !== 0) throw new Error('hmi_bh_init failed')
+  fn('hmi_bh_frame')(0)
+  return { memory, fn }
+}
+
+function send(bh: Bh, payload: Uint8Array): number {
+  const at = bh.fn('hmi_bh_in')(payload.length)
+  new Uint8Array(bh.memory.buffer, at, payload.length).set(payload)
+  return bh.fn('hmi_bh_values')(payload.length)
+}
+
+function tap(bh: Bh, id: number, at: number): boolean {
+  const count = bh.fn('hmi_bh_bounds_count')()
+  const b = new Int32Array(bh.memory.buffer, bh.fn('hmi_bh_bounds')(), count * 5)
+  for (let i = 0; i < count; i++) {
+    if (b[i * 5] !== id) continue
+    const x = b[i * 5 + 1] + Math.trunc(b[i * 5 + 3] / 2)
+    const y = b[i * 5 + 2] + Math.trunc(b[i * 5 + 4] / 2)
+    bh.fn('hmi_bh_pointer')(0, x, y)
+    bh.fn('hmi_bh_frame')(at)
+    bh.fn('hmi_bh_pointer')(2, x, y)
+    return true
+  }
+  return false
+}
+
+/** The writes queued since the last clear, as [tag, bytes]. */
+function writes(bh: Bh): Array<[number, number[]]> {
+  const len = bh.fn('hmi_bh_out_len')()
+  const bytes = new Uint8Array(bh.memory.buffer, bh.fn('hmi_bh_out')(), len)
+  const out: Array<[number, number[]]> = []
+  for (let off = 0; off < len; ) {
+    const tag = bytes[off] | (bytes[off + 1] << 8)
+    const n = bytes[off + 2] | (bytes[off + 3] << 8)
+    out.push([tag, [...bytes.slice(off + 4, off + 4 + n)]])
+    off += 4 + n
+  }
+  bh.fn('hmi_bh_out_clear')()
+  return out
+}
+
+function renderHashes(bh: Bh): string[] {
+  const out: string[] = []
+  for (const scale of [1, 2]) {
+    const w = 480 * scale
+    const h = 320 * scale
+    const p = bh.fn('hmi_bh_render')(w, h, 256 * scale)
+    out.push(p === 0 ? 'none' : fnv(new Uint8Array(bh.memory.buffer, p, w * h * 4)))
+  }
+  return out
+}
 
 async function main(): Promise<void> {
   const clang = await runner()
@@ -112,119 +255,178 @@ async function main(): Promise<void> {
     ['INSTANCE0.TAG', 1, 0],
     ['ALARMON', 2, 0],
   ].map(([path, arrayIdx, elemIdx]) => ({ path, arrayIdx, elemIdx, type: 'BOOL', size: 1 }))
+  const headers = runtimeHeaders()
+  let request: WasmCompileRequest | null = null
 
   const start = performance.now()
   const artefact = await composeHmiArtefact({
     sources: project,
     plcArchives: [],
     debugMapJson: JSON.stringify({ version: 2, md5: 'x', leaves }),
-    md5: '0123456789abcdef0123456789abcdef',
+    md5: MD5,
     instances: [{ name: 'instance0', program: 'Main' }],
     hmiSources: readAll(HMI),
-    compile,
+    runtimeHeaders: headers,
+    compile: (r) => {
+      request = r
+      return compile(r)
+    },
   })
   if (!artefact.ok) throw new Error(artefact.errors.map((e) => `${e.file}: ${e.message}`).join('\n'))
   console.log(`artefact composed in ${Math.round(performance.now() - start)} ms`)
   const files = artefact.files
-  check(files['hmi/manifest.json'] === '{"format": 1}\n', 'the manifest installs the HMI')
+  check(files['hmi/manifest.json'] === HMI_INSTALL_MANIFEST, 'the manifest installs a format 2 HMI')
+  const names = Object.keys(files).sort()
   check(
-    artefact.tags.every((t) => t.address !== null),
-    'every tag has a debug address',
+    JSON.stringify(names.filter((n) => n.startsWith('hmi/src/'))) ===
+      JSON.stringify(['hmi/src/hmi_access.c', 'hmi/src/hmi_access.h']),
+    'the device gets only the host-side manifest, no screen code',
   )
   for (const name of [
-    'hmi/src/hmi_unit_glue.cpp',
-    'hmi/src/hmi_unit.h',
-    'hmi/src/hmi_fonts.c',
-    'hmi/src/core/hmi_core.c',
-    'hmi/src/core/third_party/stb_truetype.h',
-    'hmi/client/index.html',
-    'hmi/client/hmi-client.js',
-    'hmi/client/hmi.css',
-    'hmi/client/socket.io.min.js',
-    'hmi/client/socket.io-LICENSE.txt',
-    'hmi/client/fonts-LICENSE.txt',
-    'hmi/client/hmi_client.wasm',
+    'index.html',
+    'hmi-client.js',
+    'hmi.css',
+    'socket.io.min.js',
+    'socket.io-LICENSE.txt',
+    'fonts-LICENSE.txt',
+    HMI_CLIENT_MODULE,
   ])
-    check(files[name] !== undefined, `the artefact has ${name}`)
-  const names = Object.keys(files)
+    check(files[`hmi/client/${name}`] !== undefined, `the artefact has client/${name}`)
   check(
-    names.every((n) =>
-      /^hmi\/(manifest\.json|src\/[A-Za-z0-9._\/-]+\.(c|h|cpp|hpp)|client\/[A-Za-z0-9._-]{1,64})$/.test(n),
-    ),
+    names.every((n) => /^hmi\/(manifest\.json|src\/[A-Za-z0-9._-]+\.[ch]|client\/[A-Za-z0-9._-]{1,64})$/.test(n)),
     'every path passes the runtime upload rules',
   )
   check(
     names.filter((n) => n.startsWith('hmi/client/')).every((n) => /\.(html|js|css|wasm|txt|ttf)$/.test(n)),
     'client files have only the extensions the runtime serves',
   )
-  const html = String(files['hmi/client/index.html'])
-  check(!/<script>|<style|\sstyle=|\son[a-z]+=/i.test(html), 'index.html has no inline script or style (CSP)')
-
-  const wasm = files['hmi/client/hmi_client.wasm']
-  if (!(wasm instanceof Uint8Array)) throw new Error('hmi_client.wasm is not bytes')
-  const module = await WebAssembly.compile(wasm)
-  const imports = WebAssembly.Module.imports(module)
+  const access = String(files['hmi/src/hmi_access.c'])
+  check(access.includes(`const char hmi_access_plc_md5[] = "${MD5}";`), 'the manifest carries the program MD5')
   check(
-    imports.every((i) => i.module === 'wasi_snapshot_preview1' && i.kind === 'function'),
-    'the client module imports only WASI functions',
+    access.includes('static const uint16_t reads_0[5] = {0, 1, 2, 3, 4};') &&
+      access.includes('static const uint16_t writes_0[3] = {1, 2, 3};') &&
+      access.includes('static const uint16_t reads_1[1] = {3};') &&
+      access.includes('static const uint16_t writes_1[1] = {0};') &&
+      access.includes('{reads_1, 1, writes_1, 0, 3}, /* Details */'),
+    'each screen lists the tags it reads and writes, and the roles that may open it',
   )
-  const wasi: Record<string, () => number> = {}
-  for (const i of imports) wasi[i.name] = () => 52
-  const instance = await WebAssembly.instantiate(module, { wasi_snapshot_preview1: wasi })
-  const exports = instance.exports
-  const memory = exports.memory
-  const fn = (name: string): ((...args: number[]) => number) => {
-    const value = exports[name]
-    if (typeof value !== 'function') throw new Error(`no export ${name}`)
-    return (...args: number[]) => Number(Reflect.apply(value, undefined, args))
-  }
-  if (!(memory instanceof WebAssembly.Memory)) throw new Error('no memory export')
-  if (typeof exports._initialize === 'function') fn('_initialize')()
-  const dl = displayList(480, 320)
-  const target = fn('hmi_client_dl')(dl.length)
-  new Uint8Array(memory.buffer, target, dl.length).set(dl)
-  const size = fn('hmi_client_dl_size')(dl.length)
-  check((size & 0xffff) === 480 && size >>> 16 === 320, 'hmi_client_dl_size reads the logical size')
-  check(fn('hmi_client_dl')(0) === 0 && fn('hmi_client_dl')(5 * 1024 * 1024) === 0, 'refuses empty and oversized lists')
 
+  /* The manifest compiles as C on its own, as the runtime builds it. */
   const work = mkdtempSync(join(tmpdir(), 'hmi-client-'))
   try {
-    const coreDir = join(HMI, 'core')
-    writeFileSync(join(work, 'fonts.c'), String(files['hmi/src/hmi_fonts.c']))
-    writeFileSync(join(work, 'driver.c'), NATIVE_DRIVER)
-    writeFileSync(join(work, 'dl.bin'), dl)
-    const exe = join(work, 'driver')
+    writeFileSync(join(work, 'hmi_access.c'), access)
+    writeFileSync(join(work, 'hmi_access.h'), String(files['hmi/src/hmi_access.h']))
     execFileSync(CC, [
       '-std=c11',
-      '-O2',
-      '-ffp-contract=off',
-      `-I${coreDir}`,
-      ...['hmi_raster.c', 'hmi_text.c', 'hmi_math.c'].map((f) => join(coreDir, f)),
-      join(work, 'fonts.c'),
-      join(work, 'driver.c'),
-      '-lm',
+      '-Wall',
+      '-Wextra',
+      '-Werror',
+      '-c',
+      join(work, 'hmi_access.c'),
       '-o',
-      exe,
+      join(work, 'a.o'),
     ])
-    for (const [ratio, label] of [
-      [1, '1x'],
-      [2, '2x'],
-      [1.5, '1.5x'],
-    ] as const) {
-      const pw = Math.round(480 * ratio)
-      const ph = Math.round(320 * ratio)
-      const q8 = Math.round(ratio * 256)
-      const pixels = fn('hmi_client_render')(dl.length, pw, ph, q8)
-      const browser = pixels === 0 ? 'none' : fnv(new Uint8Array(memory.buffer, pixels, pw * ph * 4))
-      const native = execFileSync(exe, [join(work, 'dl.bin'), String(pw), String(ph), String(q8)])
-        .toString()
-        .trim()
-      check(browser === native, `the client draws the same pixels as the native core at ${label} (${browser})`)
+    check(true, 'hmi_access.c compiles as C11 with -Wall -Wextra -Werror')
+
+    const wasm = files[`hmi/client/${HMI_CLIENT_MODULE}`]
+    if (!(wasm instanceof Uint8Array)) throw new Error('hmi.wasm is not bytes')
+    const module = await WebAssembly.compile(wasm)
+    check(
+      WebAssembly.Module.imports(module).every((i) => i.module === 'wasi_snapshot_preview1' && i.kind === 'function'),
+      'the module imports only WASI functions',
+    )
+    const unit = generateHmiUnit({ ...project, plcMd5: MD5 })
+    const ids = Object.fromEntries(
+      unit.elementIds.filter((e) => e.screen === 'Overview').map((e) => [e.element.toUpperCase(), e.id]),
+    )
+
+    const bh = await instantiate(wasm, OPERATOR)
+    check(bh.fn('hmi_bh_frame_ms')() === 50, 'the module reports the frame period')
+    check(bh.fn('hmi_bh_page')() === 0, 'the start screen shows')
+    check(send(bh, values(0, 0, [[1, [1]]])) === 0, 'VALUES are applied and name their page')
+    bh.fn('hmi_bh_frame')(100)
+    check(tap(bh, ids.RUN, 150), 'the switch is drawn')
+    bh.fn('hmi_bh_frame')(200)
+    check(
+      JSON.stringify(writes(bh)) === JSON.stringify([[1, [0]]]),
+      'a tap on a switch that is on queues Running := FALSE',
+    )
+    bh.fn('hmi_bh_frame')(250)
+    check(writes(bh).length === 0, 'the written value is kept until the device answers')
+    send(bh, values(0, 0, [[1, [1]]]))
+    bh.fn('hmi_bh_frame')(300)
+    tap(bh, ids.RUN, 350)
+    bh.fn('hmi_bh_frame')(400)
+    check(
+      JSON.stringify(writes(bh)) === JSON.stringify([[1, [1]]]),
+      'a value sent before the device processed the write is skipped (the switch toggles from its own write)',
+    )
+    send(bh, values(0, 2, [[1, [0]]]))
+    bh.fn('hmi_bh_frame')(450)
+    tap(bh, ids.RUN, 500)
+    bh.fn('hmi_bh_frame')(550)
+    check(JSON.stringify(writes(bh)) === JSON.stringify([[1, [1]]]), 'a value sent after it is applied')
+    check(send(bh, values(0, 0, [[1, [1, 2]]])) === 0, 'a value of the wrong width is skipped')
+    check(send(bh, values(0, 0, [[99, [1]]])) === -1, 'an unknown tag is refused whole')
+    check(
+      send(bh, values(0, 0, [[3, text('much too long for STRING(12)')]])) === 0,
+      'a STRING past its length is skipped',
+    )
+    const cut = values(0, 0, [[1, [1]]])
+    check(send(bh, cut.slice(0, cut.length - 1)) === -1, 'a cut message is refused')
+    tap(bh, ids.NEXT, 600)
+    bh.fn('hmi_bh_frame')(650)
+    check(bh.fn('hmi_bh_page')() === 0, 'an operator may not open Details: the unit keeps its role grid')
+    const admin = await instantiate(wasm, 0)
+    tap(admin, ids.NEXT, 50)
+    admin.fn('hmi_bh_frame')(100)
+    admin.fn('hmi_bh_frame')(150)
+    check(admin.fn('hmi_bh_page')() === 1, 'an admin opens Details with the same tap')
+
+    const viewer = await instantiate(wasm, VIEWER)
+    check(viewer.fn('hmi_bh_page')() === 0, 'a viewer starts on Overview, which its role is granted')
+
+    /* Same pixels as the same sources built natively. */
+    const wasmHashes: string[] = []
+    const replay = await instantiate(wasm, OPERATOR)
+    SCRIPT.forEach((step, i) => {
+      if (step.values) send(replay, step.values)
+      if (step.tap) tap(replay, ids[step.tap], i * 100 + 50)
+      replay.fn('hmi_bh_frame')((i + 1) * 100)
+      wasmHashes.push(...renderHashes(replay))
+    })
+    const compiled: WasmCompileRequest | null = request
+    if (!compiled) throw new Error('no compile request')
+    const src = join(work, 'src')
+    for (const [path, content] of Object.entries(compiled.files)) {
+      mkdirSync(join(src, path, '..'), { recursive: true })
+      writeFileSync(join(src, path), content)
     }
-    check(fn('hmi_client_render')(dl.length, 0, 10, 256) === 0, 'refuses an empty surface')
-    const bad = fn('hmi_client_dl')(dl.length)
-    new Uint8Array(memory.buffer, bad, 4).set([0, 0, 0, 0])
-    check(fn('hmi_client_render')(dl.length, 10, 10, 256) === 0, 'refuses a list without the magic')
+    writeFileSync(join(src, 'driver.cpp'), nativeDriver(SCRIPT, ids))
+    const objects: string[] = []
+    for (const unitFile of compiled.units) {
+      const object = join(work, `${objects.length}.o`)
+      const c = unitFile.language === 'c'
+      execFileSync(c ? CC : CXX, [
+        ...(c ? (compiled.cFlags ?? []) : (compiled.cxxFlags ?? [])).filter((f) => !f.startsWith('-I')),
+        ...(c ? (compiled.cFlags ?? []) : (compiled.cxxFlags ?? []))
+          .filter((f) => f.startsWith('-I'))
+          .map((f) => `-I${join(src, f.slice(2))}`),
+        '-w',
+        '-c',
+        join(src, unitFile.source),
+        '-o',
+        object,
+      ])
+      objects.push(object)
+    }
+    const exe = join(work, 'driver')
+    execFileSync(CXX, ['-std=gnu++17', '-O2', join(src, 'driver.cpp'), ...objects, '-lm', '-o', exe])
+    const nativeHashes = execFileSync(exe).toString().trim().split('\n')
+    check(
+      JSON.stringify(nativeHashes) === JSON.stringify(wasmHashes),
+      `the browser draws the same pixels as the native build, 1x and 2x, through values, a tap and a write (${wasmHashes.length} frames)`,
+    )
   } finally {
     rmSync(work, { recursive: true, force: true })
   }
