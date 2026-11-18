@@ -61,6 +61,11 @@ const versionFloor = z
   .min(1)
   .refine(isValidVersion, { message: 'must be a version like "4.3.2", "4.3", "4" or "v4.3.2"' })
 
+/** Values of `package.runtimeLicense`; mirrors openplc-packages' `schema/manifest.schema.json`. */
+export const RUNTIME_LICENSE_MODES = ['user', 'vpp', 'vendor'] as const satisfies readonly RuntimeLicenseMode[]
+
+const runtimeLicense = z.enum(RUNTIME_LICENSE_MODES)
+
 /**
  * A vendor board-manager index URL must be one we are willing to hand to
  * arduino-cli as `--additional-urls`.
@@ -83,11 +88,6 @@ const versionFloor = z
  * same constraint, so a package that would be refused here cannot be built
  * there either.
  */
-/** Values of `package.runtimeLicense`; mirrors openplc-packages' `schema/manifest.schema.json`. */
-export const RUNTIME_LICENSE_MODES = ['user', 'vpp', 'vendor'] as const satisfies readonly RuntimeLicenseMode[]
-
-const runtimeLicense = z.enum(RUNTIME_LICENSE_MODES)
-
 const boardManagerUrl = z.string().refine(
   (value) => {
     try {
