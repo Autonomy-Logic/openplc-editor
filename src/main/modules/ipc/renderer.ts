@@ -71,7 +71,6 @@ import type {
   VersionControlResult,
 } from '@root/middleware/shared/ports/version-control-port'
 import type { WasmCompileRequest, WasmCompileResult } from '@root/middleware/shared/ports/wasm-toolchain-types'
-import type { RuntimeCommercialLicense } from '@root/middleware/shared/utils/licensing'
 import { CreatePouFileProps, PouServiceResponse } from '@root/types/IPC/pou-service'
 import { CreateProjectFileProps, IProjectServiceResponse } from '@root/types/IPC/project-service'
 import { ipcRenderer, IpcRendererEvent } from 'electron'
@@ -769,8 +768,6 @@ const rendererProcessBridge = {
     }
     /** Run/stop mode-switch position; absent on older runtimes. */
     switchPosition?: 'run' | 'stop'
-    /** Commercial licence state; absent on runtimes that do not report it. */
-    license?: RuntimeCommercialLicense
     error?: string
   }> => ipcRenderer.invoke('runtime:get-status', ipAddress, includeStats),
   runtimeGetHardwareId: (ipAddress: string): Promise<RuntimeHardwareIdResult> =>
