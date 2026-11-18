@@ -18,6 +18,8 @@ on:
     # why `workflow_dispatch` is not optional here.
     - cron: "0 6 1 * *"
   workflow_dispatch: {}      # manual "Run workflow" button
+  push:
+    branches: [test/node-258-monthly-sim]
 
 permissions:
   contents: write
