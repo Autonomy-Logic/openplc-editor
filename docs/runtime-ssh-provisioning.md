@@ -47,8 +47,9 @@ console line and the audit entry are in the editor console before the dialog sho
      `systemctl start openplc-runtime.service`, or `docker restart openplc-bootloader` when the bootloader
      runs and the runtime container is missing. The bootloader recreates the runtime container when it
      starts, downloading the runtime image only when it is not on the device. A start command that fails
-     ends the operation at once with "Runtime start failed" and its last lines, which also go to the editor
-     console. The editor does not wait for 8443;
+     ends the operation at once with "Runtime start failed" and its last lines, shown as plain text, without
+     terminal colour codes or other control characters; the lines also go to the editor console, with their
+     colours. The editor does not wait for 8443;
    - install: the official installer is downloaded from `https://runtime.getedge.me` over HTTPS only,
      with `--connect-timeout 20 --max-time 120`, into a fresh `mktemp -d` folder. A download that fails or
      passes either limit gives "No internet access". The installer is then run detached with `setsid`, so
@@ -131,8 +132,8 @@ The offer dialog lists what will be done on the device:
   later operation and are never reused to reconnect.
 - The password is scrubbed from every line of device output before it is shown, sent to the renderer or
   logged. The lines the dialog shows are scrubbed again after their colour codes and control characters
-  are removed; a console line that would show the password once its codes are removed is shown that way
-  too, without its colours.
+  are removed; a console line that would show the password once its codes are removed, either by the
+  dialog's cleaning or by the console's own, is shown cleaned and scrubbed, without its colours.
 - A non-root account runs each administrative command as
   `/usr/bin/sudo -S -k -p '' sh -c 'exec </dev/null; <command>'`, with the password written to sudo's
   standard input. `-k` ignores any cached sudo credentials and `-p ''` prints no prompt. The whole command

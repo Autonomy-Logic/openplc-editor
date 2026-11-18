@@ -325,9 +325,9 @@ export function createRuntimeProvisioningService(
     const result = await exec(context, session, START_COMMANDS[target], START_COMMAND_TIMEOUT_MS)
     if (result.exitCode !== 0) {
       const password = context.credentials.password
-      const lastLines = commandOutputLines(result, password)
-      for (const line of lastLines) emit({ type: 'console', level: 'info', message: toConsoleLine(line, password) })
-      return { kind: 'start-failed', lastLines }
+      const outputLines = commandOutputLines(result, password)
+      for (const line of outputLines) emit({ type: 'console', level: 'info', message: toConsoleLine(line, password) })
+      return { kind: 'start-failed', lastLines: outputLines.map((line) => toProgressLine(line, password)) }
     }
     return waitForRuntime(context, 'start', [])
   }

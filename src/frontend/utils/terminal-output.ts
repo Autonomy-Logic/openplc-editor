@@ -46,7 +46,10 @@ const ESC = '\u001B'
 const ANSI_PATTERN = /\u001B(?:\[([0-9;?]*)([@-~])|\][\s\S]*?(?:\u0007|\u001B\\)|[@-_])?/g
 
 // eslint-disable-next-line no-control-regex
-const CUT_SEQUENCE_PATTERN = /\u001B(?:\[[0-9;?]*|\](?:(?!\u0007|\u001B\\)[\s\S])*)$/
+const ESCAPE_WITHOUT_OSC_PATTERN = /\u001B(?:\[[0-9;?]*[@-~]|[@-_])?/g
+
+// eslint-disable-next-line no-control-regex
+const CUT_CSI_PATTERN = /\u001B\[[0-9;?]*$/
 
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u0008\u000A-\u001F\u007F-\u009F]/g
@@ -91,11 +94,23 @@ export function hasAnsi(text: string): boolean {
  * colour exists at all.
  */
 export function stripAnsi(text: string): string {
-  return hasAnsi(text) ? text.replace(ANSI_PATTERN, '') : text
+  if (!hasAnsi(text)) return text
+  const oscStart = unterminatedOscStart(text)
+  if (oscStart < 0) return text.replace(ANSI_PATTERN, '')
+  return (
+    text.slice(0, oscStart).replace(ANSI_PATTERN, '') + text.slice(oscStart).replace(ESCAPE_WITHOUT_OSC_PATTERN, '')
+  )
+}
+
+function unterminatedOscStart(text: string): number {
+  const lastTerminator = Math.max(text.lastIndexOf('\u0007'), text.lastIndexOf(`${ESC}\\`))
+  return text.indexOf(`${ESC}]`, lastTerminator + 1)
 }
 
 export function plainTerminalLine(text: string): string {
-  return stripAnsi(text.replace(CUT_SEQUENCE_PATTERN, '')).replace(CONTROL_CHARACTER_PATTERN, '')
+  const oscStart = unterminatedOscStart(text)
+  const uncut = oscStart < 0 ? text.replace(CUT_CSI_PATTERN, '') : text.slice(0, oscStart)
+  return stripAnsi(uncut).replace(CONTROL_CHARACTER_PATTERN, '')
 }
 
 /**

@@ -1,4 +1,4 @@
-import { plainTerminalLine } from '@root/frontend/utils/terminal-output'
+import { plainTerminalLine, stripAnsi } from '@root/frontend/utils/terminal-output'
 
 export const LINE_CHAR_LIMIT = 4096
 
@@ -32,8 +32,10 @@ export function toProgressLine(line: string, password: string): string {
 }
 
 export function toConsoleLine(line: string, password: string): string {
-  const plain = plainTerminalLine(line)
-  return scrubPassword(plain, password) === plain ? line : toProgressLine(line, password)
+  const revealsNothing = (text: string): boolean => scrubPassword(text, password) === text
+  return revealsNothing(plainTerminalLine(line)) && revealsNothing(stripAnsi(line))
+    ? line
+    : toProgressLine(line, password)
 }
 
 export function createLinePipeline(password: string): {
