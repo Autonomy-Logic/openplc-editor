@@ -16,6 +16,10 @@ full pin_entry 320x240 cace327bcf3958da
 full pin_entry_2x 640x480 24f12c8042e62e9e
 full touch_calibration 320x240 a675a8eadf3f1a39
 full touch_calibration_2x 640x480 131e0aa515fc41af
+full splash 320x240 fd288ee738616f8d
+full splash_holding 320x240 ae86567ad4106613
+full splash_480x320 480x320 a9e596435cfa012a
+full splash_800x480 800x480 731077f341bf9a6f
 compact shapes 340x310 86e8654b020fa2d7
 compact shapes_2x 680x620 08ddc74e04e85b87
 compact shapes_1_5x_offset 510x465 17887c1f2567521a
@@ -34,3 +38,7 @@ compact pin_entry 320x240 cace327bcf3958da
 compact pin_entry_2x 640x480 24f12c8042e62e9e
 compact touch_calibration 320x240 a675a8eadf3f1a39
 compact touch_calibration_2x 640x480 131e0aa515fc41af
+compact splash 320x240 fd288ee738616f8d
+compact splash_holding 320x240 ae86567ad4106613
+compact splash_480x320 480x320 a9e596435cfa012a
+compact splash_800x480 800x480 731077f341bf9a6f

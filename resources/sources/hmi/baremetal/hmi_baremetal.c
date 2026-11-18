@@ -42,8 +42,10 @@
 #ifndef HMI_PANEL_TOUCH_CAL
 #define HMI_PANEL_TOUCH_CAL 0
 #endif
-/** How long a press held from startup takes to open the touch calibration screen. */
-#define HMI_BM_CAL_HOLD_MS 5000u
+/** How long the startup screen shows when nothing presses it. */
+#define HMI_BM_SPLASH_MS 3000u
+/** How long a press that starts on the startup screen is held to open the touch calibration. */
+#define HMI_BM_SPLASH_HOLD_MS 5000u
 
 /** Bands the panel in hmi_config.h needs; a panel reporting more is drawn whole every frame. */
 #if defined(HMI_PANEL_WIDTH) && defined(HMI_PANEL_HEIGHT) && (HMI_BAND_BYTES / (HMI_PANEL_WIDTH * 4)) > 0
@@ -73,7 +75,9 @@ typedef struct {
     bool touch_down;
     int32_t touch_qx, touch_qy;
     int32_t lw, lh;
-    bool cal_ok, cal_seen, cal_wait_up, boot_hold;
+    bool cal_ok, cal_seen, cal_wait_up;
+    bool splash, splash_down, splash_press;
+    uint32_t splash_press_ms;
     const uint8_t *dl;
     size_t dl_len;
     uint64_t dl_hash;
@@ -211,15 +215,19 @@ static int band_slot(int y) {
 
 /** Kind of the next logic frame. */
 static frame_kind_t next_frame_kind(void) {
-    if (hmi_cal_active() || hmi_lock_active() || g.faulted) return FRAME_BARE;
+    if (g.splash || hmi_cal_active() || hmi_lock_active() || g.faulted) return FRAME_BARE;
     return hmi_unit_mount_pending(g.unit) ? FRAME_MOUNT : FRAME_SCREEN;
 }
 
 /**
- * What a logic frame draws: the touch calibration while it runs, the PIN entry while the panel is locked, else the
- * screens, blank after a fault.
+ * What a logic frame draws: the startup screen first, then the touch calibration while it runs, the PIN entry while
+ * the panel is locked, else the screens, blank after a fault.
  */
 static void draw_frame(void) {
+    if (g.splash) {
+        hmi_splash_draw(HMI_PANEL_TOUCH_CAL && g.splash_press);
+        return;
+    }
     if (hmi_cal_active()) {
         hmi_cal_draw();
         return;
@@ -468,18 +476,9 @@ static int32_t clamp_q4(int32_t v, int32_t lu) {
 
 /**
  * Routes a raw reading: to the calibration screen while it shows (a press already down when it opened is ignored
- * until released), or through the calibration to the screens. False when the screens get nothing. A press held from
- * startup for HMI_BM_CAL_HOLD_MS opens the calibration.
+ * until released), or through the calibration to the screens. False when the screens get nothing.
  */
 static bool cal_route(bool down, int32_t rx, int32_t ry, int32_t *qx, int32_t *qy) {
-    if (g.boot_hold) {
-        if (!down) {
-            g.boot_hold = false;
-        } else if (g.ms >= HMI_BM_CAL_HOLD_MS) {
-            g.boot_hold = false;
-            hmi_calibrate();
-        }
-    }
     if (hmi_cal_active()) {
         if (!g.cal_seen) {
             g.cal_seen = true;
@@ -507,6 +506,36 @@ static bool cal_route(bool down, int32_t rx, int32_t ry, int32_t *qx, int32_t *q
 }
 #endif
 
+/** Ends the startup screen; a panel without a usable calibration then shows the calibration screen. */
+static void splash_end(void) {
+    g.splash = false;
+#if HMI_PANEL_TOUCH_CAL
+    if (!g.cal_ok) hmi_calibrate();
+#endif
+}
+
+/**
+ * A touch reading while the startup screen shows, which never reaches the screens: a press that starts within
+ * HMI_BM_SPLASH_MS and lasts HMI_BM_SPLASH_HOLD_MS opens the calibration on a panel that has one.
+ */
+static void splash_touch(bool down) {
+    g.splash_down = down;
+    if (!down) {
+        g.splash_press = false;
+        return;
+    }
+    if (!g.splash_press && g.ms < HMI_BM_SPLASH_MS) {
+        g.splash_press = true;
+        g.splash_press_ms = g.ms;
+    }
+#if HMI_PANEL_TOUCH_CAL
+    if (g.splash_press && g.ms - g.splash_press_ms >= HMI_BM_SPLASH_HOLD_MS) {
+        g.splash = false;
+        hmi_calibrate();
+    }
+#endif
+}
+
 /** Reads the touch panel when a read is due and its learned cost, pressed or released, fits in the slack left since t0. */
 static void poll_touch(uint32_t t0, uint32_t slack_us) {
     if (g.ms - g.last_touch_ms < HMI_BM_TOUCH_MS) return;
@@ -522,11 +551,19 @@ static void poll_touch(uint32_t t0, uint32_t slack_us) {
     int32_t rx = 0, ry = 0;
     bool down = hmi_panel_read_touch_raw(&rx, &ry);
     learn(down ? &g.est_touch_down_us : &g.est_touch_up_us, now_us() - r0);
+    if (g.splash) {
+        splash_touch(down);
+        return;
+    }
     if (!cal_route(down, rx, ry, &qx, &qy)) return;
 #else
     int x = 0, y = 0;
     bool down = hmi_panel_read_touch(&x, &y);
     learn(down ? &g.est_touch_down_us : &g.est_touch_up_us, now_us() - r0);
+    if (g.splash) {
+        splash_touch(down);
+        return;
+    }
     if (down) {
         qx = px_to_q4(x, g.offx);
         qy = px_to_q4(y, g.offy);
@@ -573,10 +610,8 @@ bool hmi_bm_init(hmi_bm_clock_fn clock_us) {
 #if HMI_PANEL_TOUCH_CAL
     hmi_cal_setup(1);
     g.cal_ok = hmi_touch_cal_mode != 2 && cal_load();
-    int32_t rx = 0, ry = 0;
-    g.boot_hold = hmi_panel_read_touch_raw(&rx, &ry);
-    if (!g.cal_ok) hmi_calibrate();
 #endif
+    g.splash = true;
     hmi_set_tag_access(&g_access);
     g.unit = hmi_unit_create();
     if (!g.unit) return stay_off(HMI_BM_OFF_NO_UNIT);
@@ -602,6 +637,7 @@ void hmi_bm_task(uint32_t slack_us) {
     tick();
     if (g.held && g.ms - g.held_ms >= HMI_BM_HOLD_MS) g.held = false;
     poll_touch(t0, slack_us);
+    if (g.splash && !g.splash_down && g.ms >= HMI_BM_SPLASH_MS) splash_end();
     if (g.state == BM_RASTER) {
         raster_slice(t0, slack_us);
     } else if (!g.held && g.ms - g.last_frame_ms >= hmi_frame_ms) {

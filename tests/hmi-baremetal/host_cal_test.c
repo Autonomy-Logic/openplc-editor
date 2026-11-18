@@ -4,12 +4,17 @@
  * resistive touch reports raw readings mirrored and skewed, and a fake non-volatile store kept in a file, so run.mjs
  * can restart the firmware against the same store.
  *
- *   host_cal_test <store-file> calibrate|stored|hold|miss
+ *   host_cal_test <store-file> calibrate|stored|hold|miss|splash|short
  *
- *   calibrate  the calibration screen shows at startup; five taps calibrate and store it, then the PIN entry works
- *   stored     the stored calibration is used: no calibration screen, and the PIN entry works at once
- *   hold       with a stored calibration, a press held from startup for 5 s opens the calibration screen
+ *   calibrate  the startup screen shows for 3 s, then the calibration screen; five taps calibrate and store it, then
+ *              the PIN entry (or, without a PIN, the screens) works
+ *   stored     the stored calibration is used: no calibration screen after the startup screen
+ *   hold       with a stored calibration, a press held from startup for 5 s opens the calibration screen, and the
+ *              screens never run meanwhile
  *   miss       targets tapped out of order start the calibration over; the next five calibrate
+ *   splash     with a stored calibration and no PIN, the screens start only once the startup screen's 3 s are over
+ *   short      with a stored calibration and no PIN, a press on the startup screen held past 3 s but released before
+ *              5 s keeps it up until released, opens no calibration, and never reaches the screens
  *
  * Exits non-zero on the first failed check.
  */
@@ -36,7 +41,7 @@ static uint32_t g_now;
 static const char *g_store;
 static bool g_touch;
 static int g_touch_x, g_touch_y;
-static unsigned g_reads, g_store_writes;
+static unsigned g_reads, g_writes, g_store_writes;
 static unsigned g_overruns;
 static int g_failures;
 
@@ -119,6 +124,7 @@ uint8_t openplc_debug_write(uint8_t arr, uint16_t elem, const uint8_t *bytes, ui
     (void)elem;
     (void)bytes;
     (void)len;
+    g_writes++;
     return OPENPLC_DEBUG_STATUS_OK;
 }
 
@@ -156,10 +162,11 @@ static void calibrate(void) {
     for (int i = 0; i < 5; i++) tap(targets[i][0], targets[i][1]);
 }
 
-/** Enters the sample project's PIN 2468 and checks that the screens run afterwards. */
+/** Enters the sample project's PIN 2468, when the build has a PIN, and checks that the screens run afterwards. */
 static void unlock(const char *when) {
     static const int keys[5] = {1, 3, 5, 7, 11};
-    for (int k = 0; k < 5; k++) tap(8 + (keys[k] % 3) * 103 + 48, 72 + (keys[k] / 3) * 41 + 17);
+    if (hmi_panel_pin[0] != 0)
+        for (int k = 0; k < 5; k++) tap(8 + (keys[k] % 3) * 103 + 48, 72 + (keys[k] / 3) * 41 + 17);
     unsigned reads = g_reads;
     run_cycles(20);
     CHECK(g_reads > reads, "%s: the PIN did not unlock the panel", when);
@@ -167,7 +174,7 @@ static void unlock(const char *when) {
 
 int main(int argc, char **argv) {
     if (argc != 3) {
-        printf("usage: host_cal_test <store-file> calibrate|stored|hold|miss\n");
+        printf("usage: host_cal_test <store-file> calibrate|stored|hold|miss|splash|short\n");
         return 2;
     }
     g_store = argv[1];
@@ -180,13 +187,16 @@ int main(int argc, char **argv) {
     }
     CHECK(hmi_bm_init(fake_clock), "hmi_bm_init failed");
     run_cycles(5);
+    CHECK(!hmi_cal_active() && g_reads == 0, "the startup screen did not show first");
 
     if (strcmp(scenario, "stored") == 0) {
+        run_cycles(300);
         CHECK(!hmi_cal_active(), "a stored calibration was not used");
         unlock("stored");
         CHECK(g_store_writes == 0, "a stored calibration was written again");
     } else if (strcmp(scenario, "calibrate") == 0 || strcmp(scenario, "miss") == 0) {
-        CHECK(hmi_cal_active(), "the calibration screen did not show at startup");
+        run_cycles(300);
+        CHECK(hmi_cal_active(), "the calibration screen did not follow the startup screen");
         CHECK(g_reads == 0, "the screens ran before the touch was calibrated");
         if (strcmp(scenario, "miss") == 0) {
             tap(290, 30);
@@ -201,16 +211,34 @@ int main(int argc, char **argv) {
         CHECK(g_store_writes == 1, "the calibration was written %u times", g_store_writes);
         unlock(scenario);
     } else if (hold) {
-        CHECK(!hmi_cal_active(), "a stored calibration was not used");
         run_cycles(400);
         CHECK(!hmi_cal_active(), "the calibration opened before 5 s");
+        CHECK(g_reads == 0 && g_writes == 0, "the screens ran under a press held from startup");
         run_cycles(150);
         CHECK(hmi_cal_active(), "a press held from startup for 5 s did not open the calibration");
+        CHECK(g_reads == 0 && g_writes == 0, "the screens ran under a press held from startup");
         g_touch = false;
         run_cycles(10);
         calibrate();
         CHECK(!hmi_cal_active() && g_store_writes == 1, "the calibration opened by a held press did not finish");
         unlock("hold");
+    } else if (strcmp(scenario, "splash") == 0) {
+        run_cycles(250);
+        CHECK(g_reads == 0, "the screens ran during the startup screen");
+        run_cycles(80);
+        CHECK(g_reads > 0 && !hmi_cal_active(), "the screens did not start after the startup screen");
+    } else if (strcmp(scenario, "short") == 0) {
+        run_cycles(100);
+        g_touch = true;
+        g_touch_x = 160;
+        g_touch_y = 120;
+        run_cycles(250);
+        CHECK(g_reads == 0, "the startup screen ended under a press");
+        g_touch = false;
+        run_cycles(30);
+        CHECK(g_reads > 0, "the screens did not start once the press was released");
+        CHECK(!hmi_cal_active() && g_store_writes == 0, "a press shorter than 5 s opened the calibration");
+        CHECK(g_writes == 0, "a press on the startup screen wrote %u tags", g_writes);
     } else {
         printf("unknown scenario %s\n", scenario);
         return 2;

@@ -155,14 +155,10 @@ describe('composeHmiFirmware', () => {
 })
 
 describe('hmiFirmwareFaces', () => {
-  it('adds the PIN entry face when the panel has a PIN', () => {
-    expect(hmiFirmwareFaces([HMI_FONT_BOLD], true)).toEqual([HMI_FONT_REGULAR, HMI_FONT_BOLD])
-    expect(hmiFirmwareFaces([], true)).toEqual([HMI_FONT_REGULAR])
-  })
-
-  it('keeps only the screens faces without a PIN', () => {
-    expect(hmiFirmwareFaces([HMI_FONT_BOLD], false)).toEqual([HMI_FONT_BOLD])
-    expect(hmiFirmwareFaces([], false)).toEqual([])
+  it("adds the regular face the panel's own screens draw with", () => {
+    expect(hmiFirmwareFaces([HMI_FONT_BOLD])).toEqual([HMI_FONT_REGULAR, HMI_FONT_BOLD])
+    expect(hmiFirmwareFaces([])).toEqual([HMI_FONT_REGULAR])
+    expect(hmiFirmwareFaces([HMI_FONT_REGULAR, HMI_FONT_BOLD])).toEqual([HMI_FONT_REGULAR, HMI_FONT_BOLD])
   })
 })
 

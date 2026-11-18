@@ -75,6 +75,11 @@ task `HMI_BM_LOOP_STACK_BYTES` (16 KB, `hmi_baremetal.h`) instead of the core's 
 A board's HAL implements `hmi_panel.h`: `hmi_panel_push_band` gets the band as RGBA and may convert it to the panel's
 format in place, so a driver needs no buffer of its own.
 
+Every local panel starts on the core's startup screen (`hmi_splash_draw`): the Autonomy logo, drawn as polygons and
+rounded rectangles in its own colours whatever the theme, so it needs no image and no font. It shows for 3 s
+(`HMI_BM_SPLASH_MS`), and longer while a press that began on it is held; no touch on it reaches the PIN entry or the
+screens. The panel firmware always compiles in the regular face, which the startup, calibration and PIN screens use.
+
 A panel whose touch needs calibrating (capability `touchCalibration`, `HMI_PANEL_TOUCH_CAL`) reports raw readings
 through `hmi_panel_read_touch_raw` and keeps the calibration through `hmi_panel_store_read`/`_write` (a record of
 `HMI_PANEL_STORE_BYTES`: magic, version, the build id, the five raw points, CRC-32). The core's calibration screen
@@ -83,9 +88,11 @@ one press. The map is four triangles meeting at the centre target, each mapped e
 centre, so every target lands exactly and a panel whose readings bend between targets is followed; points that fold
 the map (a press out of order, a centre outside the corners, presses that barely moved) start the calibration over.
 The host calibrates at startup when the HMI Settings mode asks for it: `once` (only when no valid record is stored),
-`upload` (also when the stored record was made under another build, `hmi_build_id`) or `boot` (every startup). A press
-held from startup for 5 s, or `HMI_Calibrate()` from a screen (the designer's "Calibrate touch" action, or any
-condition such as a PLC input), opens the calibration again.
+`upload` (also when the stored record was made under another build, `hmi_build_id`) or `boot` (every startup), right
+after the startup screen. A press that begins on the startup screen and is held for 5 s (`HMI_BM_SPLASH_HOLD_MS`), or
+`HMI_Calibrate()` from a screen (the designer's "Calibrate touch" action, or any condition such as a PLC input), opens
+the calibration again. The record is written in the touch read that finishes a calibration, outside the slack budget,
+so that one scan may run late.
 
 `hmi_bm_init` (from `setup()`, before the first scan) brings the panel up, refuses a panel whose size differs from the
 one in `hmi_config.h`, creates the program instance, sets the panel PIN and relock time from the unit, and draws the

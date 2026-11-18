@@ -10,8 +10,8 @@
  *   - the firmware's Modbus PDU layer frames, routes and answers the test-only readout codes 0x4E and 0x4F
  *     (pdu_test.cpp, built against the simulator's Arduino stub);
  *   - a panel whose touch needs calibrating calibrates at startup, keeps its calibration in the store across restarts
- *     as each calibration mode says, starts over after a missed target and opens the calibration on a press held
- *     from startup (host_cal_test.c, one binary per mode).
+ *     as each calibration mode says, starts over after a missed target, shows the startup screen first and opens the
+ *     calibration on a press held there, which never reaches the screens (host_cal_test.c, one binary per mode).
  * --sanitize builds the test programs with AddressSanitizer and UndefinedBehaviorSanitizer.
  * Needs STruC++ installed (`npm run setup:strucpp`).
  *
@@ -125,7 +125,7 @@ function link(cc, out, objects, extra = []) {
 }
 
 const UNIT_GLUE = 'hmi_unit_glue.cpp'
-const CAL_MODES = ['once', 'upload', 'upload-next', 'boot']
+const CAL_MODES = ['once', 'upload', 'upload-next', 'boot', 'nopin']
 
 /** Builds host_cal_test once per calibration mode (the unit glue differs), against the calibrating panel's config. */
 function buildCalTests(cc, work, gen, extra) {
@@ -192,6 +192,11 @@ function runCalTests(exes, work, name) {
   step('upload-next', 'stored')
   step('boot', 'calibrate')
   step('boot', 'calibrate')
+  fresh()
+  step('nopin', 'calibrate')
+  step('nopin', 'splash')
+  step('nopin', 'short')
+  step('nopin', 'hold')
   return failures
 }
 

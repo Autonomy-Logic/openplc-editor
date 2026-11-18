@@ -314,6 +314,16 @@ int hmi_lock_active(void);
 void hmi_lock_draw(void);
 
 /* ------------------------------------------------------------------------------------------------------------ */
+/* Startup screen (hosts of a local panel)                                                                      */
+/* ------------------------------------------------------------------------------------------------------------ */
+
+/**
+ * Draws the startup screen, between hmi_frame_begin and hmi_frame_end, in place of everything else: the Autonomy logo
+ * in its own colours whatever the theme, and, when holding is nonzero, a line saying a held press calibrates the touch.
+ */
+void hmi_splash_draw(int holding);
+
+/* ------------------------------------------------------------------------------------------------------------ */
 /* Touch calibration (hosts of a local panel whose touch reports raw readings)                                  */
 /* ------------------------------------------------------------------------------------------------------------ */
 

@@ -796,6 +796,112 @@ void hmi_lock_draw(void) {
     }
 }
 
+/* ---- startup screen ---- */
+
+#define SPLASH_BACKGROUND 0xFFFFFFu
+#define SPLASH_MARK 0x0066FCu
+#define SPLASH_NAME 0x000000u
+#define SPLASH_HINT 0x5B6472u
+/** Size of the drawing the mark's points are given in. */
+#define SPLASH_MARK_W 671
+#define SPLASH_MARK_H 448
+#define SPLASH_MARK_POINTS 18
+/** Box of the wordmark's letters in its drawing's units: left, top, width and cap height. */
+#define SPLASH_NAME_X 6
+#define SPLASH_NAME_Y 7
+#define SPLASH_NAME_W 1194
+#define SPLASH_NAME_H 215
+
+/** Outline of the mark's left chevron, in its drawing's units; the right one is its mirror image. */
+static const int16_t splash_chevron[SPLASH_MARK_POINTS * 2] = {
+    224, 1,   272, 49,  141, 180, 136, 185, 130, 190, 121, 195, 113, 198, 105, 200, 63,  200,
+    63,  248, 105, 248, 114, 250, 126, 255, 133, 260, 140, 267, 272, 399, 224, 447, 1,   224,
+};
+
+/**
+ * Shapes of the wordmark AUTONOMY, letter by letter, in its drawing's units: per shape a kind (0 polygon, 1 rounded
+ * rectangle), a colour (0 ink, 1 background, which cuts counters) and then the points (count first) or x, y, w, h and
+ * radius.
+ */
+static const int16_t splash_name[] = {
+    0, 0, 4,  53,   7,    79,   7,    127,  222,  6,    222,
+    0, 1, 3,  66,   65,   83,   148,  49,   148,
+    0, 1, 4,  44,   176,  88,   176,  97,   223,  35,   223,
+    1, 0, 168, 7,   100,  217,  50,
+    1, 0, 168, 7,   100,  60,   0,
+    1, 1, 198, -1,  39,   195,  19,
+    1, 1, 198, -1,  39,   60,   0,
+    1, 0, 305, 7,   103,  30,   0,
+    1, 0, 341, 7,   31,   215,  0,
+    1, 0, 440, 5,   103,  220,  51,
+    1, 1, 471, 36,  41,   158,  20,
+    1, 0, 594, 7,   31,   215,  0,
+    1, 0, 671, 7,   31,   215,  0,
+    0, 0, 4,  593,  7,    622,  7,    703,  222,  674,  222,
+    1, 0, 752, 5,   103,  220,  51,
+    1, 1, 783, 36,  41,   158,  20,
+    1, 0, 908, 7,   30,   215,  0,
+    1, 0, 1016, 7,  31,   215,  0,
+    0, 0, 7,  909,  7,    938,  7,    977,  121,  1016, 7,    1046, 7,    983,  184,  969,  184,
+    0, 0, 9,  1086, 7,    1118, 7,    1143, 88,   1168, 7,    1200, 7,    1158, 135,  1158, 222,
+    1128, 222, 1128, 135,
+};
+
+/** One chevron of the mark, scaled by num / den with its drawing's top left at (x0, y0), mirrored when mirror != 0. */
+static void splash_chevron_draw(int32_t x0, int32_t y0, int32_t num, int32_t den, int mirror) {
+    hmi_poly_begin(SPLASH_MARK);
+    for (int i = 0; i < SPLASH_MARK_POINTS; i++) {
+        int32_t px = splash_chevron[i * 2], py = splash_chevron[i * 2 + 1];
+        if (mirror) px = SPLASH_MARK_W - px;
+        hmi_poly_point(x0 + px * num / den, y0 + py * num / den);
+    }
+    hmi_poly_end();
+}
+
+/** The wordmark with its cap height scaled to cap and its letters' top left at (x0, y0). */
+static void splash_name_draw(int32_t x0, int32_t y0, int32_t cap) {
+#define SX(u) (x0 + ((int32_t)(u) - SPLASH_NAME_X) * cap / SPLASH_NAME_H)
+#define SY(v) (y0 + ((int32_t)(v) - SPLASH_NAME_Y) * cap / SPLASH_NAME_H)
+    size_t i = 0;
+    while (i < sizeof splash_name / sizeof splash_name[0]) {
+        const int16_t *v = &splash_name[i];
+        const uint32_t color = v[1] ? SPLASH_BACKGROUND : SPLASH_NAME;
+        if (v[0] == 0) {
+            hmi_poly_begin(color);
+            for (int k = 0; k < v[2]; k++) hmi_poly_point(SX(v[3 + k * 2]), SY(v[4 + k * 2]));
+            hmi_poly_end();
+            i += 3u + (size_t)v[2] * 2u;
+        } else {
+            const int32_t x = SX(v[2]), y = SY(v[3]);
+            hmi_fill_rect(x, y, SX(v[2] + v[4]) - x, SY(v[3] + v[5]) - y, v[6] * cap / SPLASH_NAME_H, color);
+            i += 7u;
+        }
+    }
+#undef SX
+#undef SY
+}
+
+void hmi_splash_draw(int holding) {
+    const int32_t w = S->w_lu, h = S->h_lu;
+    hmi_clear(SPLASH_BACKGROUND);
+    int32_t mark_h = h * 30 / 100;
+    int32_t cap = mark_h * 30 / 100;
+    if (cap * SPLASH_NAME_W / SPLASH_NAME_H > w * 80 / 100) {
+        cap = w * 80 / 100 * SPLASH_NAME_H / SPLASH_NAME_W;
+        mark_h = cap * 100 / 30;
+    }
+    const int32_t mark_w = mark_h * SPLASH_MARK_W / SPLASH_MARK_H;
+    const int32_t name_w = cap * SPLASH_NAME_W / SPLASH_NAME_H;
+    const int32_t gap = mark_h / 5;
+    const int32_t top = (h - (mark_h + gap + cap)) / 2;
+    splash_chevron_draw((w - mark_w) / 2, top, mark_h, SPLASH_MARK_H, 0);
+    splash_chevron_draw((w - mark_w) / 2, top, mark_h, SPLASH_MARK_H, 1);
+    splash_name_draw((w - name_w) / 2, top + mark_h + gap, cap);
+    if (holding)
+        hmi_text(w / 2, h - 30, "Keep holding to calibrate the touch", -1, 14, HMI_FONT_REGULAR, HMI_ALIGN_CENTER,
+                 SPLASH_HINT);
+}
+
 /* ---- touch calibration ---- */
 
 void hmi_cal_setup(int enabled) {

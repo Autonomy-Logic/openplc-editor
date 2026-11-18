@@ -212,6 +212,14 @@ static void touch_calibration(void) {
     hmi_cal_setup(0);
 }
 
+static void splash(void) {
+    hmi_splash_draw(0);
+}
+
+static void splash_holding(void) {
+    hmi_splash_draw(1);
+}
+
 static const scene_t k_scenes[] = {
     {"shapes", 340, 310, 256, 0, 0, shapes},
     {"shapes_2x", 340, 310, 512, 0, 0, shapes},
@@ -231,6 +239,10 @@ static const scene_t k_scenes[] = {
     {"pin_entry_2x", 320, 240, 512, 0, 0, pin_entry},
     {"touch_calibration", 320, 240, 256, 0, 0, touch_calibration},
     {"touch_calibration_2x", 320, 240, 512, 0, 0, touch_calibration},
+    {"splash", 320, 240, 256, 0, 0, splash},
+    {"splash_holding", 320, 240, 256, 0, 0, splash_holding},
+    {"splash_480x320", 480, 320, 256, 0, 0, splash},
+    {"splash_800x480", 800, 480, 256, 0, 0, splash},
 };
 
 static uint64_t fnv64(const uint8_t *p, size_t n) {

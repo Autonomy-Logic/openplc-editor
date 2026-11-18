@@ -2,7 +2,7 @@
  * Generates what run.mjs builds the baremetal host test with, through the real shared build steps: the sample project's
  * unit, its Overview screen with a sign-out button, (`unit/`, with `ids.h`), its font table as the firmware build chooses it (`fonts.c`), and the panel's
  * `hmi_config.h` for a product build (`product/`), a test-readout build (`readout/`) and a test-readout build of a panel
- * whose touch needs calibrating (`readout-cal/`), and the unit glue of that panel for each calibration mode
+ * whose touch needs calibrating (`readout-cal/`), and the unit glue of that panel for each calibration mode and without a PIN
  * (`glue/<mode>/`, plus `glue/upload-next/`, the upload mode after the program changed).
  * Usage: ts-node -r tsconfig-paths/register tests/hmi-baremetal/generate.ts <out-dir>
  */
@@ -51,7 +51,7 @@ async function main(): Promise<void> {
 
   const fonts: Record<string, Uint8Array> = {}
   for (const file of readdirSync(FONT_DIR)) fonts[`fonts/${file}`] = new Uint8Array(readFileSync(join(FONT_DIR, file)))
-  const faces = hmiFirmwareFaces(unit.fonts.faces, project.settings.pin.enabled)
+  const faces = hmiFirmwareFaces(unit.fonts.faces)
   writeFileSync(join(out, 'fonts.c'), await hmiFontTableFromSources(faces, unit.fonts.variant, fonts))
 
   const panel = resolveHmiPanel({ width: 320, height: 240, density: 1, touch: true, colorFormat: 'rgb565' })
@@ -73,13 +73,19 @@ async function main(): Promise<void> {
     writeFileSync(join(out, dir, 'hmi_config.h'), hmiConfigHeader(testPanel, unit.fonts.variant, { testReadout }))
   }
 
-  for (const [name, mode, plcMd5] of [
-    ['once', 'once', project.plcMd5],
-    ['upload', 'upload', project.plcMd5],
-    ['upload-next', 'upload', 'fedcba9876543210fedcba9876543210'],
-    ['boot', 'boot', project.plcMd5],
+  for (const [name, mode, plcMd5, pin] of [
+    ['once', 'once', project.plcMd5, true],
+    ['upload', 'upload', project.plcMd5, true],
+    ['upload-next', 'upload', 'fedcba9876543210fedcba9876543210', true],
+    ['boot', 'boot', project.plcMd5, true],
+    ['nopin', 'once', project.plcMd5, false],
   ] as const) {
-    const variant = generateHmiUnit({ ...project, plcMd5, settings: { ...project.settings, touchCalibration: { mode } } })
+    const settings = {
+      ...project.settings,
+      touchCalibration: { mode },
+      pin: pin ? project.settings.pin : { enabled: false, value: '' },
+    }
+    const variant = generateHmiUnit({ ...project, plcMd5, settings })
     if (!variant.ok) throw new Error(variant.errors.map((e) => `${e.file}: ${e.message}`).join('\n'))
     for (const [file, text] of Object.entries(variant.files))
       if (file !== GLUE && text !== unit.files[file]) throw new Error(`calibration mode ${name} changed ${file}`)
