@@ -458,6 +458,49 @@ test('the installer lines written just before it fails reach the editor console'
   }
 })
 
+/** Asserts the console run of @p text is styled with a colour other than the rest of its console line. */
+async function expectColouredInConsole(screen: RuntimeProvisioningPage, text: string): Promise<void> {
+  const run = screen.page.getByText(text, { exact: true })
+  await expect(run).toHaveCount(1)
+  const colours = await run.evaluate((element) => {
+    const line = element.closest('p')
+    return {
+      run: getComputedStyle(element).color,
+      line: line === null ? null : getComputedStyle(line).color,
+    }
+  })
+  expect(colours.line).not.toBeNull()
+  expect(colours.run).not.toBe(colours.line)
+}
+
+test('installer lines with terminal colour codes show as plain text in the dialog and keep their colour in the console', async () => {
+  test.setTimeout(180000)
+  const { device, screen } = await startOperation('coloured-lines', freshDeviceProfile())
+  try {
+    await installerStarted(device)
+    device.installer.write('\u001b[0;34m[INFO]\u001b[0m Docker daemon is running')
+    await expect(screen.latestLine).toHaveText('[INFO] Docker daemon is running')
+    device.installer.write('\u001b[0;31m[ERROR]\u001b[0m Something else failed')
+    device.installer.finish(2)
+    await expect(screen.dialog).toContainText('Installer failed', { timeout: 30000 })
+    await expect(screen.lastLines).toHaveText('[INFO] Docker daemon is running\n[ERROR] Something else failed')
+    await screen.close.click()
+    await expect(screen.dialog).toBeHidden()
+
+    await expect(screen.page.getByText('[INFO] Docker daemon is running')).toHaveCount(1)
+    await expect(screen.page.getByText('[ERROR] Something else failed')).toHaveCount(1)
+    await expectColouredInConsole(screen, '[INFO]')
+    await expectColouredInConsole(screen, '[ERROR]')
+    const windowText = await screen.bodyText()
+    expect(windowText).not.toContain('\u001b')
+    expect(windowText).not.toContain('[0;34m')
+    expect(windowText).not.toContain('[0;31m')
+  } finally {
+    await screen.quit()
+    await device.close()
+  }
+})
+
 test('the audit entry of an operation reaches the editor console', async () => {
   test.setTimeout(180000)
   const emptyKeys = (paths: ProvisioningPaths): void => writeFileSync(hostKeyFilePath(paths), '')
