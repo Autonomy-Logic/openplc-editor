@@ -1,3 +1,4 @@
+import { plainTerminalLine, stripAnsi } from '../../../../frontend/utils/terminal-output'
 import {
   CONSOLE_LINE_LIMIT,
   createConsoleBound,
@@ -401,20 +402,88 @@ describe('toProgressLine', () => {
 })
 
 describe('toConsoleLine', () => {
-  it.each([
-    ['keeps the colour codes of a line without the password', INFO_LINE, INFO_LINE],
-    ['keeps the colour codes of a line the pipeline already scrubbed', MASKED_INFO_LINE, MASKED_INFO_LINE],
-    ['returns a plain line unchanged', PLAIN_LINE, PLAIN_LINE],
-    ['scrubs a password split by a colour code, without colours', SPLIT_BY_COLOUR_CODE, `echo ${PASSWORD_MASK} ok`],
+  const OSC_OPENERS_ENDING_IN_BEL = `${ESC}]`.repeat(2047) + BEL
+  const OSC_OPENERS_WITHOUT_TERMINATOR = `${ESC}]`.repeat(2048)
+  const CONSOLE_LINES: [string, string, string, string][] = [
+    ['keeps the colour codes of a line without the password', INFO_LINE, PASSWORD, INFO_LINE],
+    ['keeps the colour codes of a line the pipeline already scrubbed', MASKED_INFO_LINE, PASSWORD, MASKED_INFO_LINE],
+    ['returns a plain line unchanged', PLAIN_LINE, PASSWORD, PLAIN_LINE],
+    [
+      'scrubs a password split by a colour code, without colours',
+      SPLIT_BY_COLOUR_CODE,
+      PASSWORD,
+      `echo ${PASSWORD_MASK} ok`,
+    ],
     [
       'scrubs a password split by a control character, without colours',
       SPLIT_BY_CONTROL_CHARACTER,
+      PASSWORD,
       `echo ${PASSWORD_MASK} ok`,
     ],
-  ])('%s', (_name, line, expected) => {
-    const message = toConsoleLine(line, PASSWORD)
+    ['cleans a password completed by a cut CSI (F17-1)', `run hunter${ESC}[2`, 'hunter2', 'run hunter'],
+    ['cleans a password completed by an OSC with no terminator (F17-1)', `x Sec${ESC}]ret1`, 'Secret1', 'x Sec'],
+    [
+      'cleans a password split by an OSC with no terminator (F17-1)',
+      `echo S3cr${ESC}]3t-Pi! ok`,
+      PASSWORD,
+      'echo S3cr',
+    ],
+    [
+      'keeps the codes of an OSC with no terminator that shows no password',
+      `see ${ESC}]8;;https://example.com`,
+      PASSWORD,
+      `see ${ESC}]8;;https://example.com`,
+    ],
+    ['keeps the codes of a cut CSI that shows no password', `Pulling${ESC}[0;3`, PASSWORD, `Pulling${ESC}[0;3`],
+    ['keeps a line of 2,047 OSC openers ending in BEL', OSC_OPENERS_ENDING_IN_BEL, PASSWORD, OSC_OPENERS_ENDING_IN_BEL],
+    [
+      'keeps a line of 2,048 OSC openers with no terminator',
+      OSC_OPENERS_WITHOUT_TERMINATOR,
+      PASSWORD,
+      OSC_OPENERS_WITHOUT_TERMINATOR,
+    ],
+  ]
+
+  it.each(CONSOLE_LINES)('%s', (_name, line, password, expected) => {
+    const message = toConsoleLine(line, password)
 
     expect(message).toBe(expected)
-    expect([line, toProgressLine(line, PASSWORD)]).toContain(message)
+    expect([line, toProgressLine(line, password)]).toContain(message)
+  })
+
+  it.each(CONSOLE_LINES)(
+    'never shows the password, read as the console or as the dialog cleans it, for: %s (M14)',
+    (_name, line, password) => {
+      const message = toConsoleLine(line, password)
+
+      expect([line, toProgressLine(line, password)]).toContain(message)
+      expect([stripAnsi(message), plainTerminalLine(message)].filter((text) => text.includes(password))).toEqual([])
+    },
+  )
+
+  it('sends the console a password the pipeline left completed by a cut CSI as cleaned text (F17-1)', () => {
+    const [line] = createLinePipeline('hunter2').push(`run hunter${ESC}[2\n`, FROM_START)
+
+    const message = toConsoleLine(line, 'hunter2')
+
+    expect(line).toBe(`run hunter${ESC}[2`)
+    expect(message).toBe('run hunter')
+    expect(stripAnsi(message)).not.toContain('hunter2')
+  })
+
+  it('handles 200 lines of 2,047 OSC openers ending in BEL in under a second', () => {
+    const started = Date.now()
+    for (let call = 0; call < 200 && Date.now() - started < 1000; call += 1)
+      toConsoleLine(OSC_OPENERS_ENDING_IN_BEL, PASSWORD)
+
+    expect(Date.now() - started).toBeLessThan(1000)
+  })
+
+  it('handles 200 lines of 2,048 OSC openers with no terminator in under a second', () => {
+    const started = Date.now()
+    for (let call = 0; call < 200 && Date.now() - started < 1000; call += 1)
+      toConsoleLine(OSC_OPENERS_WITHOUT_TERMINATOR, PASSWORD)
+
+    expect(Date.now() - started).toBeLessThan(1000)
   })
 })

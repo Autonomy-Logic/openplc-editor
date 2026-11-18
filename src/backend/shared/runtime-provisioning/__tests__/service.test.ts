@@ -14,7 +14,7 @@ import type {
   RuntimeProvisioningRunRequest,
   SshProbeFailureReason,
 } from '../../../../middleware/shared/ports/runtime-provisioning-port'
-import { stripAnsi } from '../../../../frontend/utils/terminal-output'
+import { plainTerminalLine, stripAnsi } from '../../../../frontend/utils/terminal-output'
 import type { AuditOperation, AuditOutcome } from '../audit'
 import { formatAuditLine } from '../audit'
 import type { DeviceCommand } from '../commands'
@@ -172,7 +172,9 @@ function hostKeyFile(host: string, port: number, key: string, keyType = 'ssh-ed2
 }
 
 function lastLinesOf(outcome: RuntimeProvisioningOutcome): string[] {
-  return outcome.kind === 'not-started' || outcome.kind === 'installer-failed' ? outcome.lastLines : []
+  return outcome.kind === 'not-started' || outcome.kind === 'installer-failed' || outcome.kind === 'start-failed'
+    ? outcome.lastLines
+    : []
 }
 
 function pollCount(device: FakeDevice): number {
@@ -1430,17 +1432,32 @@ describe('installer output never leaks the password (AS-09)', () => {
 
 describe('device output with terminal colour codes', () => {
   const ESC = '\u001B'
+  const BEL = '\u0007'
   const INFO_LINE = `${ESC}[0;34m[INFO]${ESC}[0m Docker daemon is running`
   const STEP_LINE = `${ESC}[0;34m[INFO]${ESC}[0m Step 1`
   const ERROR_LINE = `${ESC}[0;31m[ERROR]${ESC}[0m Something else failed`
   const SPLIT_PASSWORD_LINE = `echo S3cr${ESC}[0m3t-Pi! ok`
   const RUNTIME_STOPPED = runtimeOutput({ docker: 'active', bootloader: 'running', runtimeContainer: 'stopped' })
 
-  function textsWithoutCodes(device: FakeDevice, outcome: RuntimeProvisioningOutcome): string[] {
+  function deviceTexts(device: FakeDevice, outcome: RuntimeProvisioningOutcome): string[] {
     const eventTexts = events(device).flatMap((event) =>
       Object.values(event).filter((value): value is string => typeof value === 'string'),
     )
-    return [...eventTexts, ...lastLinesOf(outcome)].map(stripAnsi)
+    return [...eventTexts, ...lastLinesOf(outcome)]
+  }
+
+  function textsWithoutCodes(device: FakeDevice, outcome: RuntimeProvisioningOutcome): string[] {
+    return deviceTexts(device, outcome).map(stripAnsi)
+  }
+
+  function textsAsTheDialogCleans(device: FakeDevice, outcome: RuntimeProvisioningOutcome): string[] {
+    return deviceTexts(device, outcome).map(plainTerminalLine)
+  }
+
+  function textsShowing(password: string, device: FakeDevice, outcome: RuntimeProvisioningOutcome): string[] {
+    return [...textsWithoutCodes(device, outcome), ...textsAsTheDialogCleans(device, outcome)].filter((text) =>
+      text.includes(password),
+    )
   }
 
   it('shows the latest installer line without its colour codes and keeps them in the console', async () => {
@@ -1506,7 +1523,7 @@ describe('device output with terminal colour codes', () => {
     expect(textsWithoutCodes(device, outcome).filter((text) => text.includes(PASSWORD))).toEqual([])
   })
 
-  it('sends a failed start command line to the console with its codes, unless it would show the password', async () => {
+  it('reports a failed start command with plain last lines and sends its lines to the console with their codes, unless they would show the password', async () => {
     const { device, service } = setup({
       runtime: RUNTIME_STOPPED,
       commands: {
@@ -1519,10 +1536,48 @@ describe('device output with terminal colour codes', () => {
 
     await expect(service.run(REQUEST)).resolves.toEqual({
       kind: 'start-failed',
-      lastLines: [`${ESC}[0;31mFailed${ESC}[0m to start`, SPLIT_PASSWORD_LINE],
+      lastLines: ['Failed to start', `echo ${PASSWORD_MASK} ok`],
     })
     expect(consoleMessages(device)).toEqual([`${ESC}[0;31mFailed${ESC}[0m to start`, `echo ${PASSWORD_MASK} ok`])
   })
+
+  it('never shows a failed start command password split by BEL in the console or the last lines (F17-3, M14)', async () => {
+    const { device, service } = setup({
+      runtime: RUNTIME_STOPPED,
+      commands: {
+        startRuntimeContainer: {
+          exitCode: 1,
+          stdout: `${ESC}[0;31mFailed${ESC}[0m to start\necho S3cr${BEL}3t-Pi! ok\n`,
+        },
+      },
+    })
+
+    const outcome = await service.run(REQUEST)
+
+    expect(outcome).toEqual({ kind: 'start-failed', lastLines: ['Failed to start', `echo ${PASSWORD_MASK} ok`] })
+    expect(consoleMessages(device)).toEqual([`${ESC}[0;31mFailed${ESC}[0m to start`, `echo ${PASSWORD_MASK} ok`])
+    expect(textsShowing(PASSWORD, device, outcome)).toEqual([])
+  })
+
+  it.each([
+    ['completed by a cut CSI', 'hunter2', `run hunter${ESC}[2`, 'run hunter'],
+    ['completed by an OSC with no terminator', 'Secret1', `x Sec${ESC}]ret1`, 'x Sec'],
+  ])(
+    'never shows an installer password %s in the console, the dialog or the last lines (F17-1, M14)',
+    async (_name, password, line, cleaned) => {
+      const { device, service } = setup({
+        devicePassword: password,
+        polls: [{ exit: 'running', text: `${line}\n` }, { exit: 2 }],
+      })
+
+      const outcome = await service.run({ ...REQUEST, password })
+
+      expect(consoleMessages(device)).toEqual([cleaned])
+      expect(outputLines(device)).toEqual([cleaned])
+      expect(outcome).toEqual({ kind: 'installer-failed', lastLines: [cleaned] })
+      expect(textsShowing(password, device, outcome)).toEqual([])
+    },
+  )
 })
 
 describe('installer output decoded as one UTF-8 stream across polls (M15, AS-09)', () => {

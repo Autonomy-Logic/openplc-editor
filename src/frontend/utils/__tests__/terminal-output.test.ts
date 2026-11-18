@@ -10,6 +10,32 @@ const ARDUINO_SUMMARY =
   `${ESC}[92mUsed platform${ESC}[0m ${ESC}[92mVersion${ESC}[0m ${ESC}[90mPath${ESC}[0m\n` +
   `${ESC}[93marduino:avr${ESC}[0m   1.8.8   ${ESC}[90m/Users/x/Arduino15/packages/arduino/hardware/avr/1.8.8${ESC}[0m`
 
+const OSC_OPENERS_ENDING_IN_BEL = `${ESC}]`.repeat(2047) + BEL
+const OSC_OPENERS_WITHOUT_TERMINATOR = `${ESC}]`.repeat(2048)
+
+const CUT_SEQUENCE_LINES: [string, string, string, string][] = [
+  ['2,047 OSC openers ending in BEL', OSC_OPENERS_ENDING_IN_BEL, '', ''],
+  ['2,048 OSC openers with no terminator', OSC_OPENERS_WITHOUT_TERMINATOR, '', ''],
+  ['819 OSC openers each followed by a cut CSI, ending in BEL', `${ESC}]${ESC}[0`.repeat(819) + BEL, '', ''],
+  [
+    'an OSC hyperlink followed by an OSC with no terminator',
+    `see ${ESC}]8;;u${BEL}link${ESC}]8;;`,
+    'see link',
+    'see link8;;',
+  ],
+  ['an OSC ended by ST followed by an OSC with no terminator', `a${ESC}]x${ESC}\\b${ESC}]y`, 'ab', 'aby'],
+  [
+    'OSCs ended by ST and by BEL followed by an OSC with no terminator',
+    `${ESC}]a${ESC}\\ ${ESC}]b${BEL} ${ESC}]c`,
+    '  ',
+    '  c',
+  ],
+  ['a CSI cut after an OSC ended by BEL', `a${ESC}]x${BEL}b${ESC}[1`, 'ab', 'ab1'],
+  ['a CSI cut inside an OSC with no terminator', `a${ESC}]x${ESC}[0;3`, 'a', 'ax0;3'],
+  ['a password completed by an OSC with no terminator', `x Sec${ESC}]ret1`, 'x Sec', 'x Secret1'],
+  ['a password completed by a cut CSI', `run hunter${ESC}[2`, 'run hunter', 'run hunter2'],
+]
+
 describe('hasAnsi', () => {
   it('is false for ordinary output and true once an escape appears', () => {
     expect(hasAnsi('Sketch uses 924 bytes')).toBe(false)
@@ -59,6 +85,17 @@ describe('stripAnsi — non-CSI escapes', () => {
   it('leaves no escape byte behind in mixed output', () => {
     const mixed = `${ESC}[92mok${ESC}[0m ${ESC}]8;;https://x${BEL}link${ESC}]8;;${BEL} ${ESC}`
     expect(stripAnsi(mixed)).not.toContain(ESC)
+  })
+
+  it.each(CUT_SEQUENCE_LINES)('keeps its result for %s', (_name, input, _plain, expected) => {
+    expect(stripAnsi(input)).toBe(expected)
+  })
+
+  it('strips 300 lines of 2,048 OSC openers with no terminator in under a second', () => {
+    const started = Date.now()
+    for (let call = 0; call < 300 && Date.now() - started < 1000; call += 1) stripAnsi(OSC_OPENERS_WITHOUT_TERMINATOR)
+
+    expect(Date.now() - started).toBeLessThan(1000)
   })
 })
 
@@ -193,6 +230,7 @@ const PLAIN_TERMINAL_LINES: [string, string, string][] = [
   ['a replacement character', 'bad byte \uFFFD kept', 'bad byte \uFFFD kept'],
   ['a lone reset', `${ESC}[0m`, ''],
   ['an empty text', '', ''],
+  ...CUT_SEQUENCE_LINES.map(([name, input, plain]): [string, string, string] => [name, input, plain]),
 ]
 
 describe('plainTerminalLine', () => {
@@ -225,5 +263,13 @@ describe('plainTerminalLine', () => {
 
   it('leaves stripAnsi unchanged for a CSI cut inside its parameters', () => {
     expect(stripAnsi(`a${ESC}[0;3`)).toBe('a0;3')
+  })
+
+  it('cleans 200 lines of 2,047 OSC openers ending in BEL in under a second', () => {
+    const started = Date.now()
+    for (let call = 0; call < 200 && Date.now() - started < 1000; call += 1)
+      plainTerminalLine(OSC_OPENERS_ENDING_IN_BEL)
+
+    expect(Date.now() - started).toBeLessThan(1000)
   })
 })
