@@ -3,11 +3,17 @@ import { join } from 'node:path'
 
 import type { Locator, Page } from '@playwright/test'
 
-/** Text of the synthetic drive ESI in e2e/fixtures/ethercat-defaultdata. */
-export const DRIVE_ESI_XML = readFileSync(
-  join(__dirname, '..', 'fixtures', 'ethercat-defaultdata', '11111111-2222-4333-8444-555555555555.xml'),
-  'utf-8',
+/** Absolute path of the synthetic drive ESI fixture. */
+export const DRIVE_ESI_PATH = join(
+  __dirname,
+  '..',
+  'fixtures',
+  'ethercat-defaultdata',
+  '11111111-2222-4333-8444-555555555555.xml',
 )
+
+/** Text of the synthetic drive ESI at {@link DRIVE_ESI_PATH}. */
+export const DRIVE_ESI_XML = readFileSync(DRIVE_ESI_PATH, 'utf-8')
 
 /** {@link DRIVE_ESI_XML} with @p vendorName as its vendor and @p productCode as its product code. */
 export function driveEsiVariant(vendorName: string, productCode: string): string {
