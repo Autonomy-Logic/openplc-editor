@@ -207,15 +207,21 @@ const EditSessionClientSchema = z.object({
 
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 
-/** Runtime licence keys of one product plus the `OPENPLC_RUNTIME_LICENSE_DEV_KEY` development key, if set. */
 let devKeyCollisionWarned = false
+let devKeyAcceptedLogged = false
+/** Runtime licence keys of one product plus the `OPENPLC_RUNTIME_LICENSE_DEV_KEY` development key, if set. */
 const runtimeKeysWithDevKey = (keys: RuntimeLicenseKeys) => {
   const devKey = parseRuntimeLicenseDevKey(process.env.OPENPLC_RUNTIME_LICENSE_DEV_KEY)
-  if (devKey && Object.prototype.hasOwnProperty.call(keys, devKey.keyId) && !devKeyCollisionWarned) {
-    devKeyCollisionWarned = true
-    logger.warn(
-      `OPENPLC_RUNTIME_LICENSE_DEV_KEY ignored: key_id ${devKey.keyId} belongs to a shipped key; use another key_id.`,
-    )
+  if (devKey && Object.prototype.hasOwnProperty.call(keys, devKey.keyId)) {
+    if (!devKeyCollisionWarned) {
+      devKeyCollisionWarned = true
+      logger.warn(
+        `OPENPLC_RUNTIME_LICENSE_DEV_KEY ignored: key_id ${devKey.keyId} belongs to a shipped key; use another key_id.`,
+      )
+    }
+  } else if (devKey && !devKeyAcceptedLogged) {
+    devKeyAcceptedLogged = true
+    logger.info(`OPENPLC_RUNTIME_LICENSE_DEV_KEY accepted as development key_id ${devKey.keyId}.`)
   }
   return withRuntimeLicenseDevKey(keys, devKey)
 }
@@ -598,13 +604,11 @@ class MainProcessBridge implements MainIpcModule {
         // Run/stop mode-switch position. Absent on runtimes older than the
         // run/stop interface — treat undefined as "no gating".
         switchPosition?: 'run' | 'stop'
-        license?: unknown
       }>(ipAddress, endpoint, (data: string) => {
         const response = JSON.parse(data) as {
           status: string
           timing_stats?: TimingStatsResponse
           switchPosition?: 'run' | 'stop'
-          license?: unknown
         }
         return response
       })

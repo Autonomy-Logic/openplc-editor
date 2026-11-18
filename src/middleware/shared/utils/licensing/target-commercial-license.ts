@@ -21,7 +21,7 @@ export const COMMERCIAL_LICENSE_DISCLAIMER =
  * - `unlicensed`: GPLv3; the disclaimer is shown.
  * - `vpp-flow`: paid VPP without a valid licence; the VPP purchase flow speaks instead of the disclaimer.
  * - `mit`: an OpenPLC Runtime v4 older than `DUAL_LICENSE_MIN_RUNTIME_VERSION`; covered by the MIT licence, no licence check.
- * - `unknown`: not enough information (the runtime does not report a licence); nothing is shown.
+ * - `unknown`: not enough information (no runtime licence was verified); nothing is shown.
  */
 export type TargetCommercialLicenseStatus = 'licensed' | 'unlicensed' | 'vpp-flow' | 'mit' | 'unknown'
 
@@ -47,7 +47,7 @@ export interface TargetCommercialLicenseInput {
   mode: RuntimeLicenseMode
   /** The VPP licence state the editor holds for this device, or null when none was read. */
   vppLicense: DeviceLicenseState | null
-  /** The `license` value of the runtime's `/api/status`, or null when it reports none. */
+  /** The runtime licence the editor verified from `GET /api/runtime-license`, or null when none was verified. */
   runtimeLicense: RuntimeCommercialLicense | null
   /** Version the connected OpenPLC Runtime reports; null or omitted for a built-in board. */
   runtimeVersion?: string | null
