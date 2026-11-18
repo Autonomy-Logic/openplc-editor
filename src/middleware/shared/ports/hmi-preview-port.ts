@@ -54,4 +54,9 @@ export interface HmiPreviewPort {
     scale: number,
   ): Promise<HmiThumbnailResult>
   openSession(): HmiPreviewSession
+  /**
+   * Keeps the WebAssembly toolchain loaded between builds while an HMI editor is open, and lets more than one worker
+   * compile when the platform's memory allows; false lets it go.
+   */
+  holdToolchain(held: boolean): Promise<void>
 }

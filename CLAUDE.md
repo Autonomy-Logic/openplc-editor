@@ -456,9 +456,15 @@ that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its r
   removed. That build waits for the store to load; a store that cannot be read only costs the reuse.
 - **Precompiled headers:** a request may list `precompiledHeaders`, built first and cached like units; a unit names
   one with `pch`, and its digest is part of that unit's cache key.
-- **Clang worker:** at most one (`ClangWorkerPool`), running one job at a time. A build starts it, and it ends once no
-  build is running or queued, whatever the last build's outcome, so the simulator runs with no clang worker; builds
-  that overlap share it. A worker counts from its start until it has exited, and a new one starts only after the
+- **Clang worker:** one (`ClangWorkerPool`), running one job at a time, started by a build and ended once no build is
+  running or queued, whatever the last build's outcome, so the simulator runs with no clang worker; builds that overlap
+  share it. While an HMI tab is open (screen, widget block or HMI Settings), the workspace holds the toolchain
+  (`useHoldHmiToolchain` -> `HmiPreviewPort.holdToolchain` -> `WasmCompileService.setHeld`): the workers stay loaded
+  between builds, and the pool grows, one loading at a time while jobs wait, to `clangWorkerLimit`
+  (`worker-limit.ts`): one more per 640 MB of available memory beyond a 1 GB reserve, at most four and one less than
+  the processors, and one when the platform cannot tell its memory. Available memory is `vm_stat` on macOS,
+  `MemAvailable` on Linux, `os.freemem()` on Windows and a quarter of `navigator.deviceMemory` on the web (none on
+  Safari and iOS, so one worker there). The hold ends when the last HMI tab closes. A worker counts from its start until it has exited, and a new one starts only after the
   previous one exited. A toolchain whose files cannot be got ready, a worker that cannot be started, or a worker that
   fails or does not load within 120 s before it reports ready, fails the build with
   `The WebAssembly compiler could not be loaded: <reason>`. Once a worker has loaded, one that fails or runs a job past

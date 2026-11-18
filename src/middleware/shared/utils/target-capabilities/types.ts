@@ -158,7 +158,13 @@ export interface HmiPanelCapability {
   /** Integer UI scale, at least 1. */
   density: number
   touch: boolean
-  colorFormat: 'rgb565' | 'rgb888'
+  /** Pixel format the panel takes; the board's HAL converts the RGBA bands to it. */
+  colorFormat: 'rgb565' | 'rgb666' | 'rgb888'
+  /**
+   * The touch panel reports raw readings that need calibrating (resistive panels): the HAL implements
+   * `hmi_panel_read_touch_raw` and `hmi_panel_store_read`/`_write`, and the core's calibration screen maps them.
+   */
+  touchCalibration?: boolean
   /** Static display-list capacity in bytes. */
   displayListBytes?: number
   /** Static glyph cache in bytes. */

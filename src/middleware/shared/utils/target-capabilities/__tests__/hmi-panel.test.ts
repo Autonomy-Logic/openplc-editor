@@ -20,6 +20,7 @@ describe('the hmi capability', () => {
     const caps = resolveTargetCapabilities({ compiler: 'arduino-cli', capabilities: { hmi: PANEL } })
     expect(caps.hmi).toEqual({
       ...PANEL,
+      touchCalibration: false,
       displayListBytes: HMI_DEFAULT_DISPLAY_LIST_BYTES,
       glyphCacheBytes: HMI_DEFAULT_GLYPH_CACHE_BYTES,
       bandBytes: HMI_DEFAULT_BAND_BYTES,
@@ -38,7 +39,14 @@ describe('the hmi capability', () => {
       bandBytes: 65536,
     } as const
     const caps = resolveTargetCapabilities({ compiler: 'arduino-cli', capabilities: { hmi: declared } })
-    expect(caps.hmi).toEqual(declared)
+    expect(caps.hmi).toEqual({ ...declared, touchCalibration: false })
+  })
+
+  it('keeps a raw touch panel that needs calibrating, and the 18-bit format', () => {
+    const declared = { ...PANEL, colorFormat: 'rgb666', touchCalibration: true } as const
+    expect(resolveHmiPanel(declared)).toMatchObject({ colorFormat: 'rgb666', touchCalibration: true })
+    expect(resolveHmiPanel({ ...PANEL, colorFormat: 'rgb555' })).toBeNull()
+    expect(resolveHmiPanel({ ...PANEL, touchCalibration: 'yes' })).toBeNull()
   })
 
   it.each([

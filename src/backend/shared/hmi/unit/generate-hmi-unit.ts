@@ -21,6 +21,7 @@ import {
   HMI_BUILTIN_THEMES,
   HMI_ROLES,
   HMI_THEME_TOKENS,
+  HMI_TOUCH_CALIBRATION_MODES,
   type HmiSettings,
   hmiThemeId,
   screenGrant,
@@ -576,6 +577,19 @@ function mainSource(
 
 const cString = (s: string): string => JSON.stringify(s)
 
+/** 64-bit FNV-1a of text, as 16 hex digits. */
+function fnv64(text: string): string {
+  let h = 0xcbf29ce484222325n
+  for (const byte of new TextEncoder().encode(text)) h = ((h ^ BigInt(byte)) * 0x100000001b3n) & 0xffffffffffffffffn
+  return h.toString(16).padStart(16, '0')
+}
+
+/** Identity of a build: changes whenever the PLC program, a screen, a widget block or the settings change. */
+export function hmiBuildId(input: HmiUnitInput): string {
+  const files = [...input.screens, ...input.widgets].map((f) => `${f.name}\u0000${f.source}`)
+  return fnv64([input.plcMd5 ?? '', JSON.stringify(input.settings), ...files].join('\u0001'))
+}
+
 /** A PLC variable the unit's screens use, by the id STruC++ gave its path. */
 interface UnitTag {
   /** Canonical path, upper case. */
@@ -730,6 +744,8 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput, classes: readonl
     `const uint32_t hmi_frame_ms = ${settings.framePeriodMs};`,
     `const char hmi_panel_pin[] = ${cString(settings.pin.enabled ? settings.pin.value : '')};`,
     `const uint32_t hmi_relock_minutes = ${settings.relock.mode === 'idle' ? settings.relock.minutes : 0};`,
+    `const uint8_t hmi_touch_cal_mode = ${HMI_TOUCH_CALIBRATION_MODES.indexOf(settings.touchCalibration.mode)};`,
+    `const char hmi_build_id[] = ${cString(hmiBuildId(input))};`,
     '',
     'void hmi_set_tag_access(const hmi_tag_access_t *access) {',
     '    g_access = access && access->read && access->write ? access : nullptr;',

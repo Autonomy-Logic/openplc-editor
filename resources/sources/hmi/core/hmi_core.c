@@ -62,6 +62,13 @@ struct hmi_session {
     uint32_t relock_ms, last_touch_ms;
     int locked, pin_wrong, pin_key; /* pin_key: key pressed, 1 + index, 0 = none */
 
+    /* Touch calibration: samples of the press on the current target, the targets' points, the finished map. */
+    int cal_enabled, cal_active, cal_failed, cal_done, cal_target, cal_down, cal_n;
+    int32_t cal_sx[HMI_CAL_SAMPLES], cal_sy[HMI_CAL_SAMPLES];
+    int32_t cal_raw[HMI_CAL_TARGETS * 2];
+    int32_t cal_pts[HMI_CAL_TARGETS * 2];
+    int cal_ok;
+
     /* Frame: screen_q4 = local_q4 * fk / 65536 + (fox, foy), clipped to (fcx, fcy, fcw, fch) when fclip. */
     int32_t fk, fox, foy, fcx, fcy, fcw, fch;
     int fclip, design;
@@ -787,4 +794,288 @@ void hmi_lock_draw(void) {
         hmi_text_box(r.x, r.y, r.w, r.h, labels[i], -1, i == 9 ? size * 3 / 4 : size, HMI_FONT_REGULAR,
                      HMI_ALIGN_CENTER, HMI_VALIGN_MIDDLE, tok | (ok ? HMI_TOKEN_ON_ACCENT : HMI_TOKEN_TEXT));
     }
+}
+
+/* ---- startup screen ---- */
+
+#define SPLASH_BACKGROUND 0xFFFFFFu
+#define SPLASH_MARK 0x0066FCu
+#define SPLASH_NAME 0x000000u
+#define SPLASH_HINT 0x5B6472u
+/** Size of the drawing the mark's points are given in. */
+#define SPLASH_MARK_W 671
+#define SPLASH_MARK_H 448
+#define SPLASH_MARK_POINTS 18
+/** Box of the wordmark's letters in its drawing's units: left, top, width and cap height. */
+#define SPLASH_NAME_X 6
+#define SPLASH_NAME_Y 7
+#define SPLASH_NAME_W 1194
+#define SPLASH_NAME_H 215
+
+/** Outline of the mark's left chevron, in its drawing's units; the right one is its mirror image. */
+static const int16_t splash_chevron[SPLASH_MARK_POINTS * 2] = {
+    224, 1,   272, 49,  141, 180, 136, 185, 130, 190, 121, 195, 113, 198, 105, 200, 63,  200,
+    63,  248, 105, 248, 114, 250, 126, 255, 133, 260, 140, 267, 272, 399, 224, 447, 1,   224,
+};
+
+/**
+ * Shapes of the wordmark AUTONOMY, letter by letter, in its drawing's units: per shape a kind (0 polygon, 1 rounded
+ * rectangle), a colour (0 ink, 1 background, which cuts counters) and then the points (count first) or x, y, w, h and
+ * radius.
+ */
+static const int16_t splash_name[] = {
+    0, 0, 4,  53,   7,    79,   7,    127,  222,  6,    222,
+    0, 1, 3,  66,   65,   83,   148,  49,   148,
+    0, 1, 4,  44,   176,  88,   176,  97,   223,  35,   223,
+    1, 0, 168, 7,   100,  217,  50,
+    1, 0, 168, 7,   100,  60,   0,
+    1, 1, 198, -1,  39,   195,  19,
+    1, 1, 198, -1,  39,   60,   0,
+    1, 0, 305, 7,   103,  30,   0,
+    1, 0, 341, 7,   31,   215,  0,
+    1, 0, 440, 5,   103,  220,  51,
+    1, 1, 471, 36,  41,   158,  20,
+    1, 0, 594, 7,   31,   215,  0,
+    1, 0, 671, 7,   31,   215,  0,
+    0, 0, 4,  593,  7,    622,  7,    703,  222,  674,  222,
+    1, 0, 752, 5,   103,  220,  51,
+    1, 1, 783, 36,  41,   158,  20,
+    1, 0, 908, 7,   30,   215,  0,
+    1, 0, 1016, 7,  31,   215,  0,
+    0, 0, 7,  909,  7,    938,  7,    977,  121,  1016, 7,    1046, 7,    983,  184,  969,  184,
+    0, 0, 9,  1086, 7,    1118, 7,    1143, 88,   1168, 7,    1200, 7,    1158, 135,  1158, 222,
+    1128, 222, 1128, 135,
+};
+
+/** One chevron of the mark, scaled by num / den with its drawing's top left at (x0, y0), mirrored when mirror != 0. */
+static void splash_chevron_draw(int32_t x0, int32_t y0, int32_t num, int32_t den, int mirror) {
+    hmi_poly_begin(SPLASH_MARK);
+    for (int i = 0; i < SPLASH_MARK_POINTS; i++) {
+        int32_t px = splash_chevron[i * 2], py = splash_chevron[i * 2 + 1];
+        if (mirror) px = SPLASH_MARK_W - px;
+        hmi_poly_point(x0 + px * num / den, y0 + py * num / den);
+    }
+    hmi_poly_end();
+}
+
+/** The wordmark with its cap height scaled to cap and its letters' top left at (x0, y0). */
+static void splash_name_draw(int32_t x0, int32_t y0, int32_t cap) {
+#define SX(u) (x0 + ((int32_t)(u) - SPLASH_NAME_X) * cap / SPLASH_NAME_H)
+#define SY(v) (y0 + ((int32_t)(v) - SPLASH_NAME_Y) * cap / SPLASH_NAME_H)
+    size_t i = 0;
+    while (i < sizeof splash_name / sizeof splash_name[0]) {
+        const int16_t *v = &splash_name[i];
+        const uint32_t color = v[1] ? SPLASH_BACKGROUND : SPLASH_NAME;
+        if (v[0] == 0) {
+            hmi_poly_begin(color);
+            for (int k = 0; k < v[2]; k++) hmi_poly_point(SX(v[3 + k * 2]), SY(v[4 + k * 2]));
+            hmi_poly_end();
+            i += 3u + (size_t)v[2] * 2u;
+        } else {
+            const int32_t x = SX(v[2]), y = SY(v[3]);
+            hmi_fill_rect(x, y, SX(v[2] + v[4]) - x, SY(v[3] + v[5]) - y, v[6] * cap / SPLASH_NAME_H, color);
+            i += 7u;
+        }
+    }
+#undef SX
+#undef SY
+}
+
+void hmi_splash_draw(int holding) {
+    const int32_t w = S->w_lu, h = S->h_lu;
+    hmi_clear(SPLASH_BACKGROUND);
+    int32_t mark_h = h * 30 / 100;
+    int32_t cap = mark_h * 30 / 100;
+    if (cap * SPLASH_NAME_W / SPLASH_NAME_H > w * 80 / 100) {
+        cap = w * 80 / 100 * SPLASH_NAME_H / SPLASH_NAME_W;
+        mark_h = cap * 100 / 30;
+    }
+    const int32_t mark_w = mark_h * SPLASH_MARK_W / SPLASH_MARK_H;
+    const int32_t name_w = cap * SPLASH_NAME_W / SPLASH_NAME_H;
+    const int32_t gap = mark_h / 5;
+    const int32_t top = (h - (mark_h + gap + cap)) / 2;
+    splash_chevron_draw((w - mark_w) / 2, top, mark_h, SPLASH_MARK_H, 0);
+    splash_chevron_draw((w - mark_w) / 2, top, mark_h, SPLASH_MARK_H, 1);
+    splash_name_draw((w - name_w) / 2, top + mark_h + gap, cap);
+    if (holding)
+        hmi_text(w / 2, h - 30, "Keep holding to calibrate the touch", -1, 14, HMI_FONT_REGULAR, HMI_ALIGN_CENTER,
+                 SPLASH_HINT);
+}
+
+/* ---- touch calibration ---- */
+
+void hmi_cal_setup(int enabled) {
+    S->cal_enabled = enabled != 0;
+    if (!S->cal_enabled) S->cal_active = 0;
+}
+
+void hmi_calibrate(void) {
+    if (!S->cal_enabled || S->cal_active) return;
+    S->cal_active = 1;
+    S->cal_failed = 0;
+    S->cal_done = 0;
+    S->cal_target = 0;
+    S->cal_down = 0;
+    S->cal_n = 0;
+}
+
+int hmi_cal_active(void) { return S->cal_active; }
+
+/* Centre of target i in logical units: the corners inset by an eighth of the short side, then the centre. */
+static void cal_target_at(int i, int32_t *x, int32_t *y) {
+    int32_t side = S->w_lu < S->h_lu ? S->w_lu : S->h_lu;
+    int32_t in = side / 8 > 20 ? side / 8 : 20;
+    static const int8_t corner[HMI_CAL_TARGETS][2] = {{0, 0}, {1, 0}, {1, 1}, {0, 1}, {-1, -1}};
+    if (corner[i][0] < 0) {
+        *x = S->w_lu / 2;
+        *y = S->h_lu / 2;
+        return;
+    }
+    *x = corner[i][0] ? S->w_lu - in : in;
+    *y = corner[i][1] ? S->h_lu - in : in;
+}
+
+static int32_t median_of(int32_t *v, int n) {
+    for (int a = 1; a < n; a++)
+        for (int b = a; b > 0 && v[b] < v[b - 1]; b--) {
+            int32_t t = v[b];
+            v[b] = v[b - 1];
+            v[b - 1] = t;
+        }
+    return v[n / 2];
+}
+
+/* Cross product of (ax, ay) and (bx, by). */
+static int64_t cross64(int64_t ax, int64_t ay, int64_t bx, int64_t by) { return ax * by - ay * bx; }
+
+/* Smallest area, in squared raw units, of the four triangles together; less means the presses barely moved. */
+#define CAL_MIN_AREA 40000
+/* Smallest share of that total any one triangle may have, as 1 in CAL_MIN_SHARE. */
+#define CAL_MIN_SHARE 16
+
+/*
+ * Whether raw points (corners in screen order, then the centre) determine a map: every triangle of two neighbouring
+ * corners and the centre turns the same way and is not too thin, so the centre lies inside the corners and no press
+ * was out of order.
+ */
+static int cal_points_valid(const int32_t *p) {
+    const int64_t cx = p[8], cy = p[9];
+    int64_t area[4], total = 0;
+    int sign = 0;
+    for (int i = 0; i < 4; i++) {
+        const int j = (i + 1) % 4;
+        area[i] = cross64(p[i * 2] - cx, p[i * 2 + 1] - cy, p[j * 2] - cx, p[j * 2 + 1] - cy);
+        const int s = area[i] > 0 ? 1 : area[i] < 0 ? -1 : 0;
+        if (s == 0 || (sign != 0 && s != sign)) return 0;
+        sign = s;
+        total += area[i] * s;
+    }
+    if (total < CAL_MIN_AREA) return 0;
+    for (int i = 0; i < 4; i++)
+        if (area[i] * sign * CAL_MIN_SHARE < total) return 0;
+    return 1;
+}
+
+static int64_t div_round(int64_t n, int64_t d) {
+    if (d < 0) {
+        n = -n;
+        d = -d;
+    }
+    return n >= 0 ? (n + d / 2) / d : -((-n + d / 2) / d);
+}
+
+int hmi_cal_point(int32_t rx, int32_t ry, int32_t *x_q4, int32_t *y_q4) {
+    if (!S->cal_ok) return 0;
+    const int32_t *p = S->cal_pts;
+    const int64_t cx = p[8], cy = p[9], dx = rx - cx, dy = ry - cy;
+    int32_t tc_x, tc_y;
+    cal_target_at(4, &tc_x, &tc_y);
+    int sector = 0;
+    for (int i = 0; i < 4; i++) {
+        const int j = (i + 1) % 4;
+        const int64_t ax = p[i * 2] - cx, ay = p[i * 2 + 1] - cy, bx = p[j * 2] - cx, by = p[j * 2 + 1] - cy;
+        const int64_t a = cross64(ax, ay, bx, by);
+        if ((a > 0 && cross64(ax, ay, dx, dy) >= 0 && cross64(dx, dy, bx, by) >= 0) ||
+            (a < 0 && cross64(ax, ay, dx, dy) <= 0 && cross64(dx, dy, bx, by) <= 0)) {
+            sector = i;
+            break;
+        }
+    }
+    const int j = (sector + 1) % 4;
+    const int64_t ax = p[sector * 2] - cx, ay = p[sector * 2 + 1] - cy, bx = p[j * 2] - cx, by = p[j * 2 + 1] - cy;
+    const int64_t a = cross64(ax, ay, bx, by), u = cross64(dx, dy, bx, by), v = cross64(ax, ay, dx, dy);
+    int32_t ti_x, ti_y, tj_x, tj_y;
+    cal_target_at(sector, &ti_x, &ti_y);
+    cal_target_at(j, &tj_x, &tj_y);
+    *x_q4 = (int32_t)(tc_x * 16 + div_round(u * (ti_x - tc_x) * 16 + v * (tj_x - tc_x) * 16, a));
+    *y_q4 = (int32_t)(tc_y * 16 + div_round(u * (ti_y - tc_y) * 16 + v * (tj_y - tc_y) * 16, a));
+    return 1;
+}
+
+int hmi_cal_use(const int32_t raw[HMI_CAL_TARGETS * 2]) {
+    if (!cal_points_valid(raw)) return 0;
+    memcpy(S->cal_pts, raw, sizeof S->cal_pts);
+    S->cal_ok = 1;
+    return 1;
+}
+
+/* Takes the targets' points when they determine a map; otherwise the calibration starts over. */
+static void cal_finish(void) {
+    S->cal_target = 0;
+    if (!hmi_cal_use(S->cal_raw)) {
+        S->cal_failed = 1;
+        return;
+    }
+    S->cal_active = 0;
+    S->cal_done = 1;
+    S->last_touch_ms = S->time_ms;
+}
+
+void hmi_cal_raw(int32_t x, int32_t y, int down) {
+    if (!S->cal_active) return;
+    if (down) {
+        if (!S->cal_down) S->cal_n = 0;
+        S->cal_down = 1;
+        if (S->cal_n < HMI_CAL_SAMPLES) {
+            S->cal_sx[S->cal_n] = x;
+            S->cal_sy[S->cal_n] = y;
+            S->cal_n++;
+        }
+        return;
+    }
+    if (!S->cal_down) return;
+    S->cal_down = 0;
+    if (S->cal_n < 3) return;
+    S->cal_raw[S->cal_target * 2] = median_of(S->cal_sx, S->cal_n);
+    S->cal_raw[S->cal_target * 2 + 1] = median_of(S->cal_sy, S->cal_n);
+    S->cal_failed = 0;
+    if (++S->cal_target == HMI_CAL_TARGETS) cal_finish();
+}
+
+int hmi_cal_take(int32_t raw[HMI_CAL_TARGETS * 2]) {
+    if (!S->cal_done) return 0;
+    S->cal_done = 0;
+    memcpy(raw, S->cal_pts, sizeof S->cal_pts);
+    return 1;
+}
+
+void hmi_cal_draw(void) {
+    const uint32_t tok = HMI_COLOR_TOKEN;
+    char step[24];
+    int32_t x, y;
+    hmi_clear(tok | HMI_TOKEN_BACKGROUND);
+    if (!S->cal_active) return;
+    hmi_text(S->w_lu / 2, S->h_lu / 2 - 44, "Touch calibration", -1, 16, HMI_FONT_REGULAR, HMI_ALIGN_CENTER,
+             tok | HMI_TOKEN_TEXT);
+    hmi_text(S->w_lu / 2, S->h_lu / 2 + 26, S->cal_failed ? "Missed. Tap each cross again" : "Tap the centre of the cross",
+             -1, 14, HMI_FONT_REGULAR, HMI_ALIGN_CENTER, tok | (S->cal_failed ? HMI_TOKEN_DANGER : HMI_TOKEN_TEXT_MUTED));
+    step[0] = (char)('1' + S->cal_target);
+    memcpy(step + 1, " of 5", 6);
+    hmi_text(S->w_lu / 2, S->h_lu / 2 + 46, step, -1, 14, HMI_FONT_REGULAR, HMI_ALIGN_CENTER,
+             tok | HMI_TOKEN_TEXT_MUTED);
+    cal_target_at(S->cal_target, &x, &y);
+    if (S->cal_down) hmi_fill_circle(x, y, 10, tok | HMI_TOKEN_ACCENT);
+    hmi_stroke_circle(x, y, 10, 2, tok | HMI_TOKEN_ACCENT);
+    hmi_line(x - 18, y, x + 18, y, 2, tok | HMI_TOKEN_TEXT);
+    hmi_line(x, y - 18, x, y + 18, 2, tok | HMI_TOKEN_TEXT);
 }

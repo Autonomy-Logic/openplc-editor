@@ -64,11 +64,12 @@ export function hmiFirmwareUnitFileName(name: string): string {
   return name.endsWith('.cpp') && !name.startsWith('hmi_') ? `hmi_${name}` : name
 }
 
-/** Faces the firmware compiles in: those the screens draw, plus the PIN entry's face when the panel has a PIN. */
-export function hmiFirmwareFaces(faces: readonly number[], pinEnabled: boolean): number[] {
-  const all = new Set(faces)
-  if (pinEnabled) all.add(HMI_FONT_REGULAR)
-  return [...all].sort((a, b) => a - b)
+/**
+ * Faces the firmware compiles in: those the screens draw, plus the regular face the panel's own screens (startup,
+ * calibration, PIN entry) draw with.
+ */
+export function hmiFirmwareFaces(faces: readonly number[]): number[] {
+  return [...new Set([...faces, HMI_FONT_REGULAR])].sort((a, b) => a - b)
 }
 
 /**
@@ -125,7 +126,7 @@ export async function composeHmiFirmware(input: ComposeHmiFirmwareInput): Promis
     files[`src/${path.slice(path.indexOf('/') + 1)}`] = text(content)
   }
   for (const [name, content] of Object.entries(unit.files)) files[`src/${hmiFirmwareUnitFileName(name)}`] = content
-  const faces = hmiFirmwareFaces(unit.fonts.faces, input.sources.settings.pin.enabled)
+  const faces = hmiFirmwareFaces(unit.fonts.faces)
   try {
     files['src/hmi_fonts.c'] = await hmiFontTableFromSources(faces, unit.fonts.variant, input.hmiSources)
   } catch (error) {

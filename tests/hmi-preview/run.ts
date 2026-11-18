@@ -7,7 +7,6 @@
  *
  * HMI_PREVIEW_REBUILD_MS and HMI_PREVIEW_LIVE_MS override the limits (1500 and 50) on slow machines.
  */
-import { cpus } from 'node:os'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -79,9 +78,10 @@ async function runner(): Promise<WasmClangRunner> {
   const clang: unknown = await import('@yowasp/clang')
   if (!isYowaspClang(clang)) throw new Error('@yowasp/clang is not the expected module')
   return {
-    concurrency: Math.max(1, Math.min(4, cpus().length - 1)),
+    concurrency: 1,
     prepare: () => Promise.resolve(),
     run: (job) => runClangJob(clang, job.argv, job.tree),
+    release: () => Promise.resolve(),
   }
 }
 

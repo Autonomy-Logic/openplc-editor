@@ -38,6 +38,18 @@ describe('HmiSettingsEditor — Local panel', () => {
     expect(screen.getByRole('checkbox', { name: 'Require a PIN' })).toBeTruthy()
     expect(screen.getByTestId('hmi-relock')).toBeTruthy()
     expect(screen.queryByTestId('hmi-local-panel-none')).toBeNull()
+    expect(screen.queryByTestId('hmi-touch-calibration')).toBeNull()
+  })
+
+  it('offers when to calibrate the touch only on a panel whose touch needs it', () => {
+    renderWithBoard({
+      compiler: 'arduino-cli',
+      core: 'esp32:esp32',
+      preview: 'board.png',
+      specs: {},
+      capabilities: { hmi: { ...PANEL, touchCalibration: true } },
+    })
+    expect(screen.getByTestId('hmi-touch-calibration').textContent).toContain('Once')
   })
 
   it('says the board has no panel, and offers no panel options, on a board without one', () => {

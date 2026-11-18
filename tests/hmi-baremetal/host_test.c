@@ -2,7 +2,8 @@
  * @file host_test.c
  * Drives the baremetal HMI host (resources/sources/hmi/baremetal) as Baremetal.ino does, in simulated time: a fake
  * 320x240 panel that keeps the pushed pixels, a fake clock that advances with the work done, and a fake debugger
- * table for the sample project's tags. Exits non-zero on the first failed check.
+ * table for the sample project's tags. The startup screen shows first and ignores taps. Exits non-zero on the first
+ * failed check.
  */
 #include <stdbool.h>
 #include <stdio.h>
@@ -234,7 +235,13 @@ int main(void) {
     CHECK(hmi_bm_active(), "the HMI is not active after init");
     check_panel("first frame");
 
-    run_cycles(50, 10000u, 3000u);
+    tap_key(1);
+    tap_key(3);
+    tap_key(5);
+    tap_key(7);
+    tap_key(11);
+    run_cycles(250, 10000u, 3000u);
+    CHECK(g_reads == 0 && g_writes == 0, "taps on the startup screen reached the PIN entry");
     CHECK(g_reads == 0 && g_writes == 0, "locked panel read %u and wrote %u tags", g_reads, g_writes);
     tap_key(0);
     tap_key(1);

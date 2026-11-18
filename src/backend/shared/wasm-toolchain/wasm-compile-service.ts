@@ -31,6 +31,13 @@ export interface WasmCompileService {
   compile(request: WasmCompileRequest, log?: PlatformLog): Promise<WasmCompileResult>
   /** Checks a request that crossed a process or worker boundary, then compiles it as `compile` does. */
   compileRequest(value: unknown, log?: PlatformLog): Promise<WasmCompileResult>
+  /**
+   * Holds the toolchain for `holder` (an open HMI editor) on behalf of `owner` (a page), or lets it go. While anyone
+   * holds it the workers stay loaded between builds and may grow past one; once nobody does and no build runs, they end.
+   */
+  setHeld(holder: string, held: boolean, owner?: string): Promise<void>
+  /** Lets go every hold `owner` took, as when its page reloads or closes without letting go. */
+  releaseOwner(owner: string): Promise<void>
 }
 
 const rejected = (error: string): WasmCompileResult => ({
@@ -42,8 +49,9 @@ const rejected = (error: string): WasmCompileResult => ({
 
 /**
  * The toolchain a platform exposes: one runner, one session cache that outlives its workers, one readiness. Builds in
- * flight share the runner's worker; when the last one ends, whatever its outcome, the runner is released. With a
- * store, objects also outlive the session: the first build fills the cache from the store before it compiles.
+ * flight share the runner's workers; when the last one ends, whatever its outcome, and nobody holds the toolchain, the
+ * runner is released. With a store, objects also outlive the session: the first build fills the cache from the store
+ * before it compiles.
  */
 export function createWasmCompileService(
   runner: WasmClangRunner,
@@ -60,6 +68,9 @@ export function createWasmCompileService(
   let readiness: Promise<WasmToolchainReadiness> | null = null
   let restored: Promise<void> | null = null
   let inFlight = 0
+  const holders = new Set<string>()
+  const holderKey = (holder: string, owner: string | undefined): string =>
+    owner === undefined ? `\u0001${holder}` : `${owner}\u0000${holder}`
 
   const restore = (): Promise<void> => {
     if (!persistent) return Promise.resolve()
@@ -81,7 +92,10 @@ export function createWasmCompileService(
       return await work()
     } finally {
       inFlight--
-      if (inFlight === 0) await runner.release()
+      if (inFlight === 0) {
+        if (holders.size === 0) await runner.release()
+        else runner.retry?.()
+      }
     }
   }
 
@@ -93,8 +107,28 @@ export function createWasmCompileService(
     return readiness
   }
 
+  const holdersChanged = async (): Promise<void> => {
+    runner.setHeld?.(holders.size > 0)
+    if (holders.size === 0 && inFlight === 0) await runner.release()
+  }
+
+  const setHeld = (holder: string, held: boolean, owner?: string): Promise<void> => {
+    const key = holderKey(holder, owner)
+    if (held) holders.add(key)
+    else holders.delete(key)
+    return holdersChanged()
+  }
+
+  const releaseOwner = (owner: string): Promise<void> => {
+    const prefix = `${owner}\u0000`
+    for (const key of [...holders]) if (key.startsWith(prefix)) holders.delete(key)
+    return holdersChanged()
+  }
+
   return {
     prepare,
+    setHeld,
+    releaseOwner,
     compile: (request, compileLog) => build(() => compileToWasm(request, { runner, cache, log: compileLog })),
     compileRequest: (value, compileLog) =>
       build(() => {

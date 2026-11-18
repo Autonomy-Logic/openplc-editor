@@ -50,6 +50,7 @@ export function hmiConfigHeader(
     `#define HMI_PANEL_DENSITY ${panel.density}`,
     `#define HMI_PANEL_TOUCH ${panel.touch ? 1 : 0}`,
     `#define HMI_PANEL_RGB565 ${panel.colorFormat === 'rgb565' ? 1 : 0}`,
+    `#define HMI_PANEL_TOUCH_CAL ${panel.touch && panel.touchCalibration ? 1 : 0}`,
     ...(options.testReadout ? ['#define HMI_TEST_READOUT 1'] : []),
     '',
     '#endif',

@@ -79,6 +79,10 @@ extern const uint32_t hmi_frame_ms;
 extern const char hmi_panel_pin[];
 /** Idle minutes after which an unlocked panel locks again; 0 means only at startup. */
 extern const uint32_t hmi_relock_minutes;
+/** When a panel whose touch needs calibrating is calibrated: 0 once, 1 after every program upload, 2 on every boot. */
+extern const uint8_t hmi_touch_cal_mode;
+/** Identity of this build: changes with the PLC program, the screens, the widget blocks and the settings. */
+extern const char hmi_build_id[];
 
 /**
  * Installs the host's access to the PLC's variables, kept by reference. NULL, or access missing either callback, makes

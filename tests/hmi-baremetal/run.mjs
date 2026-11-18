@@ -8,14 +8,17 @@
  *   - the host draws what the core renders, skips unchanged bands, takes touch, PIN and relock right and never runs
  *     past the slack it is given, in simulated time (host_test.c);
  *   - the firmware's Modbus PDU layer frames, routes and answers the test-only readout codes 0x4E and 0x4F
- *     (pdu_test.cpp, built against the simulator's Arduino stub).
+ *     (pdu_test.cpp, built against the simulator's Arduino stub);
+ *   - a panel whose touch needs calibrating calibrates at startup, keeps its calibration in the store across restarts
+ *     as each calibration mode says, starts over after a missed target, shows the startup screen first and opens the
+ *     calibration on a press held there, which never reaches the screens (host_cal_test.c, one binary per mode).
  * --sanitize builds the test programs with AddressSanitizer and UndefinedBehaviorSanitizer.
  * Needs STruC++ installed (`npm run setup:strucpp`).
  *
  *   node tests/hmi-baremetal/run.mjs [--cc "gcc clang"] [--sanitize]
  */
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -89,12 +92,12 @@ function buildC(cc, work, gen, variant, extra = []) {
   return { objects, includes }
 }
 
-/** Compiles the unit's C++ against the hmi_config.h of variant, with extra flags. */
-function buildUnit(cc, work, gen, variant, includes, extra = []) {
+/** Compiles the unit's C++ against the hmi_config.h of variant, with extra flags; skip names files left out. */
+function buildUnit(cc, work, gen, variant, includes, extra = [], skip = []) {
   const cxx = CXX[basename(cc)] ?? cc
   const unitDir = join(gen, 'unit')
   return readdirSync(unitDir)
-    .filter((f) => f.endsWith('.cpp'))
+    .filter((f) => f.endsWith('.cpp') && !skip.includes(f))
     .map((f) => {
       const obj = join(work, `${basename(cc)}_${variant}_unit_${basename(f, '.cpp')}.o`)
       must(
@@ -119,6 +122,82 @@ function link(cc, out, objects, extra = []) {
   const cxx = CXX[basename(cc)] ?? cc
   must(run(cxx, [...extra, ...objects, '-lm', '-o', out]), `link ${basename(out)}`)
   return out
+}
+
+const UNIT_GLUE = 'hmi_unit_glue.cpp'
+const CAL_MODES = ['once', 'upload', 'upload-next', 'boot', 'nopin']
+
+/** Builds host_cal_test once per calibration mode (the unit glue differs), against the calibrating panel's config. */
+function buildCalTests(cc, work, gen, extra) {
+  const name = basename(cc)
+  const cxx = CXX[name] ?? cc
+  const c = buildC(cc, work, gen, 'readout-cal', extra)
+  const unit = buildUnit(cc, work, gen, 'readout-cal', c.includes, extra, [UNIT_GLUE])
+  const driver = join(work, `${name}_host_cal_test.o`)
+  must(
+    run(cc, [...CFLAGS, ...extra, `-I${join(gen, 'unit')}`, ...c.includes, '-c', join(HERE, 'host_cal_test.c'), '-o', driver]),
+    'host_cal_test.c',
+  )
+  const exes = {}
+  for (const mode of CAL_MODES) {
+    const glue = join(work, `${name}_glue_${mode}.o`)
+    must(
+      run(cxx, [
+        ...CXXFLAGS,
+        ...extra,
+        `-I${RUNTIME_INCLUDE}`,
+        `-I${join(gen, 'unit')}`,
+        ...c.includes,
+        '-c',
+        join(gen, 'glue', mode, UNIT_GLUE),
+        '-o',
+        glue,
+      ]),
+      `${cxx} ${UNIT_GLUE} (${mode})`,
+    )
+    exes[mode] = link(
+      cc,
+      join(work, `${name}_host_cal_test_${mode}`),
+      [driver, ...c.objects.core, c.objects.host, c.objects.fonts, ...unit, glue],
+      extra,
+    )
+  }
+  return exes
+}
+
+/** Runs the calibration scenarios across restarts that share one store file per mode; returns the failures. */
+function runCalTests(exes, work, name) {
+  const failures = []
+  const store = join(work, `${name}_panel_store.bin`)
+  const step = (mode, scenario) => {
+    const r = run(exes[mode], [store, scenario])
+    process.stdout.write(`${name}: cal ${mode}: ${r.stdout}`)
+    if (r.status !== 0) failures.push(`${name} calibration ${mode} ${scenario} (exit ${r.status})\n${r.stderr}`)
+  }
+  const fresh = () => rmSync(store, { force: true })
+  fresh()
+  step('once', 'calibrate')
+  step('once', 'stored')
+  const bytes = readFileSync(store)
+  bytes[30] ^= 0xff
+  writeFileSync(store, bytes)
+  step('once', 'calibrate')
+  step('once', 'hold')
+  fresh()
+  step('once', 'miss')
+  fresh()
+  step('upload', 'calibrate')
+  step('upload', 'stored')
+  step('upload-next', 'calibrate')
+  step('upload-next', 'stored')
+  step('boot', 'calibrate')
+  step('boot', 'calibrate')
+  fresh()
+  step('nopin', 'calibrate')
+  step('nopin', 'splash')
+  step('nopin', 'short')
+  step('nopin', 'hold')
+  return failures
 }
 
 /** Builds and runs the Modbus PDU test of the readout codes; returns its result. */
@@ -211,6 +290,7 @@ function main() {
       const pdu = runPduTest(cc, work, san)
       process.stdout.write(pdu.stdout.split('\n').map((l) => (l ? `${name}: ${l}` : l)).join('\n'))
       if (pdu.status !== 0) fail(`${name} PDU test (exit ${pdu.status})\n${pdu.stderr}`)
+      for (const f of runCalTests(buildCalTests(cc, work, gen, san), work, name)) fail(f)
     }
   } finally {
     rmSync(work, { recursive: true, force: true })

@@ -10,6 +10,7 @@ export const HMI_LIBRARY_NAMES: readonly string[] = [
   'HMI_Alpha',
   'HMI_Arc',
   'HMI_Back',
+  'HMI_Calibrate',
   'HMI_Clear',
   'HMI_Clip',
   'HMI_COLORS',
