@@ -221,6 +221,8 @@ describe('HMI unit generator', () => {
     const source = Object.values(result.sources).find((t) => t.includes(`FUNCTION_BLOCK ${HMI_GALLERY_SCREEN}`))
     expect(source).toContain("W_HmiLamp : HmiLamp := (Parent := 'HMI__R_HmiLamp', GrowAuto := FALSE);")
     expect(source).toContain('W_HmiLamp.Value := TRUE;')
+    expect(source).toContain('W_HmiGauge.Value := 60.0;')
+    expect(source).toContain('W_HmiSelector.Value := 1;')
     expect(hmiGalleryWidget('HMI__Column')).toBeNull()
   })
 

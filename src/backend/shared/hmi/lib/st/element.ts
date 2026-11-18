@@ -30,7 +30,7 @@ INTERFACE IHmiElement
 END_INTERFACE
 
 (* Base of every visual element. Containers place elements; an element knows its own size. Widget authors override
-   the PROTECTED methods: Draw, Input, NaturalWidth, NaturalHeight, TakesInput, Prepare and the ports. *)
+   the PROTECTED methods: Draw, Input, NaturalWidth, NaturalHeight, TakesInput, Prepare, the popup and the ports. *)
 FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
   VAR_INPUT
     (* Container this element sits in, by name; empty means the screen. Read by the HMI build. *)
@@ -86,6 +86,8 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
     (* Scratch of the stack placing this element: its size along the stack, the size a pass wants, settled. *)
     LaySize, LayWant : DINT;
     LayFixed : BOOL;
+    (* The element's popup is open. *)
+    PopupUp : BOOL;
   END_VAR
 
   METHOD Right : DINT
@@ -212,6 +214,24 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
   (* Runs every frame, topmost element first, also when hidden or disabled; TRUE when it took the pointer. *)
   METHOD PROTECTED Input : BOOL
     Input := FALSE;
+  END_METHOD
+  (* While the popup is open: runs before every element's Input, without the container's clip; TRUE when it took the
+     pointer. *)
+  METHOD PROTECTED PopupInput : BOOL
+    PopupInput := FALSE;
+  END_METHOD
+  (* While the popup is open: draws over every element, without the container's clip. *)
+  METHOD PROTECTED DrawPopup : BOOL
+    DrawPopup := FALSE;
+  END_METHOD
+  (* Opens or closes the element's popup; it also closes when the element is hidden or disabled. *)
+  METHOD PROTECTED SetPopup : BOOL
+    VAR_INPUT Open : BOOL; END_VAR
+    PopupUp := Open;
+    SetPopup := TRUE;
+  END_METHOD
+  METHOD PROTECTED PopupOpen : BOOL
+    PopupOpen := PopupUp;
   END_METHOD
   METHOD PROTECTED PortCount : INT
     PortCount := 4;
@@ -413,6 +433,31 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
     IF Framed THEN
       ResetFrame();
     END_IF;
+  END_METHOD
+  (* The element's frame without its clip. *)
+  METHOD INTERNAL ApplyOpenFrame : BOOL
+    {external hmi_frame_set(FK.get(), FOX.get(), FOY.get(), 0, 0, 0, 0, 0); }
+    ApplyOpenFrame := TRUE;
+  END_METHOD
+  METHOD INTERNAL HandlePopup : BOOL
+    IF NOT PopupUp THEN
+      RETURN;
+    END_IF;
+    IF NOT Visible OR NOT Enabled THEN
+      PopupUp := FALSE;
+      RETURN;
+    END_IF;
+    ApplyOpenFrame();
+    HandlePopup := PopupInput();
+    ResetFrame();
+  END_METHOD
+  METHOD INTERNAL RenderPopup : BOOL
+    IF NOT PopupUp OR NOT Visible THEN
+      RETURN;
+    END_IF;
+    ApplyOpenFrame();
+    RenderPopup := DrawPopup();
+    ResetFrame();
   END_METHOD
 END_FUNCTION_BLOCK
 

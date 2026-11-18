@@ -301,6 +301,9 @@ FUNCTION_BLOCK HmiScreen
   METHOD INTERNAL RunInput : BOOL
     VAR i : INT; END_VAR
     FOR i := Count - 1 TO 0 BY -1 DO
+      Items[i]^.HandlePopup();
+    END_FOR;
+    FOR i := Count - 1 TO 0 BY -1 DO
       Items[i]^.HandleInput();
     END_FOR;
     RunInput := WriteBack();
@@ -313,6 +316,9 @@ FUNCTION_BLOCK HmiScreen
     HMI_Clear(Background);
     FOR i := 0 TO Count - 1 DO
       Items[i]^.Render();
+    END_FOR;
+    FOR i := 0 TO Count - 1 DO
+      Items[i]^.RenderPopup();
     END_FOR;
     RunDraw := TRUE;
   END_METHOD

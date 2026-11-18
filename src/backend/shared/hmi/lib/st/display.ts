@@ -703,6 +703,7 @@ END_FUNCTION_BLOCK
 FUNCTION_BLOCK HmiMultiLamp EXTENDS HmiElement
   VAR_INPUT
     {attribute 'hmi_main'}
+    {attribute 'hmi_preview' := '1'}
     Value : INT;
     Caption : STRING(64) := 'Status';
     States : STRING(160) := 'Stopped;Running;Fault';
@@ -724,25 +725,7 @@ FUNCTION_BLOCK HmiMultiLamp EXTENDS HmiElement
   (* Name of state I, empty past the last one. *)
   METHOD INTERNAL StateName : STRING(64)
     VAR_INPUT I : INT; END_VAR
-    VAR rest : STRING(160); k, n : INT; END_VAR
-    rest := States;
-    n := 0;
-    StateName := '';
-    WHILE n <= I AND LEN(rest) > 0 DO
-      k := FIND(rest, ';');
-      IF k = 0 THEN
-        IF n = I THEN
-          StateName := rest;
-        END_IF;
-        rest := '';
-      ELSE
-        IF n = I THEN
-          StateName := MID(rest, k - 1, 1);
-        END_IF;
-        rest := MID(rest, LEN(rest) - k, k + 1);
-      END_IF;
-      n := n + 1;
-    END_WHILE;
+    StateName := HMI_ListItem(States, I);
   END_METHOD
   METHOD INTERNAL StateColor : UDINT
     VAR_INPUT I : INT; END_VAR

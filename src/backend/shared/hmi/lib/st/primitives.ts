@@ -223,6 +223,46 @@ FUNCTION HMI_Truncate : STRING
   END_IF;
 END_FUNCTION
 
+(* Item I, from 0, of a list separated by ';'; empty past the last one. *)
+FUNCTION HMI_ListItem : STRING(64)
+  VAR_INPUT List : STRING; I : INT; END_VAR
+  VAR rest : STRING; k, n : INT; END_VAR
+  rest := List;
+  HMI_ListItem := '';
+  WHILE n <= I AND LEN(rest) > 0 DO
+    k := FIND(rest, ';');
+    IF k = 0 THEN
+      IF n = I THEN
+        HMI_ListItem := rest;
+      END_IF;
+      rest := '';
+    ELSE
+      IF n = I THEN
+        HMI_ListItem := MID(rest, k - 1, 1);
+      END_IF;
+      rest := MID(rest, LEN(rest) - k, k + 1);
+    END_IF;
+    n := n + 1;
+  END_WHILE;
+END_FUNCTION
+
+(* Number of items in a list separated by ';'; 0 when it is empty. *)
+FUNCTION HMI_ListCount : INT
+  VAR_INPUT List : STRING; END_VAR
+  VAR rest : STRING; k : INT; END_VAR
+  IF LEN(List) = 0 THEN
+    RETURN;
+  END_IF;
+  rest := List;
+  HMI_ListCount := 1;
+  k := FIND(rest, ';');
+  WHILE k > 0 DO
+    HMI_ListCount := HMI_ListCount + 1;
+    rest := MID(rest, LEN(rest) - k, k + 1);
+    k := FIND(rest, ';');
+  END_WHILE;
+END_FUNCTION
+
 (* Amp * sin(Deg) and Amp * cos(Deg), rounded, from the core's one-degree table. *)
 FUNCTION HMI_Sin : DINT
   VAR_INPUT Deg, Amp : DINT; END_VAR

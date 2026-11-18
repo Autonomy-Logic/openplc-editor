@@ -67,6 +67,14 @@ describe('widget catalogue', () => {
       HmiSlider: 'Controls',
       HmiNumericInput: 'Controls',
       HmiTextInput: 'Controls',
+      HmiToggleButton: 'Controls',
+      HmiLampButton: 'Controls',
+      HmiSelector: 'Controls',
+      HmiOptionButtons: 'Controls',
+      HmiDropDown: 'Controls',
+      HmiStepper: 'Controls',
+      HmiKnob: 'Controls',
+      HmiCheckBox: 'Controls',
       HmiPump: 'Process',
       HmiFan: 'Process',
       HmiConveyor: 'Process',
@@ -150,6 +158,8 @@ describe('widget catalogue', () => {
       enabledBy: 'GrowAuto',
     })
     expect(label.typeDefaults).toBeUndefined()
+    expect(label.properties.some((p) => p.previewValue !== undefined)).toBe(false)
+    expect(widget(catalog.widgets, 'HmiDropDown').properties.find((p) => p.name === 'Value')?.previewValue).toBe('0')
     expect(prop('Visible')).toMatchObject({ kind: 'bool', group: 'display', defaultValue: 'TRUE' })
     expect(prop('Text')).toMatchObject({
       kind: 'string',

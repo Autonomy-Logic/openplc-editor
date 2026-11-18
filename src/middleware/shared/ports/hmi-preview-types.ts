@@ -170,6 +170,8 @@ export interface HmiWidgetProperty {
   defaultValue?: string
   /** BOOL property that must be TRUE for this one to take effect. */
   enabledBy?: string
+  /** Value as ST text that previews and palette thumbnails give the property, from `hmi_preview`. */
+  previewValue?: string
   /** Length of a STRING(n) property. */
   maxLength?: number
   /** Members of an enumerated property, as written. */

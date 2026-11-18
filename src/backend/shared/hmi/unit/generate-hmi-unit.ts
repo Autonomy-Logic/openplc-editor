@@ -1061,10 +1061,15 @@ export const WIDGET_PREVIEW_SCREEN = 'HMI__WidgetPreview'
 const PREVIEW_INTEGER_TYPES = new Set(['SINT', 'INT', 'DINT', 'LINT', 'USINT', 'UINT', 'UDINT', 'ULINT'])
 const PREVIEW_REAL_TYPES = new Set(['REAL', 'LREAL'])
 
-/** A value that shows a widget at work: TRUE, 60 % of its MaxValue (else 42), or its name without the Hmi prefix as text. */
+/**
+ * A value that shows a widget at work: its main input's `hmi_preview`, else TRUE, 60 % of its MaxValue (else 42), or
+ * its name without the Hmi prefix as text.
+ */
 function previewTestValue(info: HmiWidgetInfo): string | undefined {
   const type = info.main?.direction === 'input' ? info.main.type.toUpperCase() : undefined
   if (type === undefined) return undefined
+  const own = info.properties.find((p) => p.name.toUpperCase() === info.main?.name.toUpperCase())?.previewValue
+  if (own !== undefined) return own
   if (type === 'BOOL') return 'TRUE'
   if (type.startsWith('STRING')) return `'${info.name.replace(/^Hmi/i, '')}'`
   const max = Number(info.properties.find((p) => p.name.toUpperCase() === 'MAXVALUE')?.defaultValue)

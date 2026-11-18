@@ -91,5 +91,75 @@ indicators_0 page=9 dl=4052fd3ad234b79d status=0 run=1 held=0 clicks=1 pump=1 va
 indicators page=9 dl=4052fd3ad234b79d status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=7851b14138f34645
 time_0 page=10 dl=8747b713df00259d status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
 time page=10 dl=8747b713df00259d status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=a4843da3e26caae0
+inputs_0 page=11 dl=407d67120b48f7f1 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+inputs page=11 dl=407d67120b48f7f1 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=0a84f8d69339ecc9
+toggle_down page=11 dl=51efd2c967885a40 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+toggle_up page=11 dl=51efd2c967885a40 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+toggle latch=1 jog=0 hoa=0 mode=1 rinse=0 recipe=1 batch=250.0 dial=40.0
+jog_down page=11 dl=5226794b9b54eb6e status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+jog_lit page=11 dl=5226794b9b54eb6e status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=962e13bc838a4e3c
+jog_held latch=1 jog=1 hoa=0 mode=1 rinse=0 recipe=1 batch=250.0 dial=40.0
+jog_up page=11 dl=51efd2c967885a40 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+jog_released latch=1 jog=0 hoa=0 mode=1 rinse=0 recipe=1 batch=250.0 dial=40.0
+hand_right_down page=11 dl=707d539c172c4459 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+hand_right_up page=11 dl=707d539c172c4459 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+hand_right2_down page=11 dl=d5e6d3b0d7168312 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+hand_right2_up page=11 dl=d5e6d3b0d7168312 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+hand_auto latch=1 jog=0 hoa=2 mode=1 rinse=0 recipe=1 batch=250.0 dial=40.0
+hand_left_down page=11 dl=707d539c172c4459 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+hand_left_up page=11 dl=707d539c172c4459 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+hand_off latch=1 jog=0 hoa=1 mode=1 rinse=0 recipe=1 batch=250.0 dial=40.0
+mode_off_down page=11 dl=d91392f9ab44cde9 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+mode_off_up page=11 dl=d91392f9ab44cde9 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+rinse_down page=11 dl=cf6dfa18aaf0f096 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+rinse_up page=11 dl=cf6dfa18aaf0f096 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+mode_rinse latch=1 jog=0 hoa=1 mode=2 rinse=1 recipe=1 batch=250.0 dial=40.0
+recipe_open_down page=11 dl=047bc3eea9beb601 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+recipe_open_up page=11 dl=047bc3eea9beb601 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+recipe_list page=11 dl=047bc3eea9beb601 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=e18228e3e3d2fbee
+recipe_press page=11 dl=047bc3eea9beb601 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+recipe_scrolled page=11 dl=ec978e028875bff5 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=a1458ebb04dd0955
+recipe_drag_up page=11 dl=ec978e028875bff5 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+recipe_after_drag latch=1 jog=0 hoa=1 mode=2 rinse=1 recipe=1 batch=250.0 dial=40.0
+recipe_pick_down page=11 dl=ec978e028875bff5 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+recipe_pick_up page=11 dl=2fd8610ecb7c82a0 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+recipe_closed page=11 dl=2fd8610ecb7c82a0 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=aa55831522c25cc8
+recipe_picked latch=1 jog=0 hoa=1 mode=2 rinse=1 recipe=5 batch=250.0 dial=40.0
+recipe_reopen_down page=11 dl=db48cfafe0947670 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+recipe_reopen_up page=11 dl=db48cfafe0947670 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+recipe_outside_down page=11 dl=2fd8610ecb7c82a0 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+recipe_outside_up page=11 dl=2fd8610ecb7c82a0 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+recipe_dismissed page=11 dl=2fd8610ecb7c82a0 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+recipe_dismissed latch=1 jog=0 hoa=1 mode=2 rinse=1 recipe=5 batch=250.0 dial=40.0
+batch_hold page=11 dl=3148689ac745af9b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=3148689ac745af9b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=3148689ac745af9b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=3148689ac745af9b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=3148689ac745af9b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=3148689ac745af9b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=3148689ac745af9b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=3148689ac745af9b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=3148689ac745af9b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=3148689ac745af9b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=3148689ac745af9b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=3148689ac745af9b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=3148689ac745af9b status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=9dcf2febea189876 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=9dcf2febea189876 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=9dcf2febea189876 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=9dcf2febea189876 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=9553c1d29195cfb9 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_hold page=11 dl=9553c1d29195cfb9 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_held page=11 dl=9553c1d29195cfb9 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=c021d3ea4b64bf18
+batch_up page=11 dl=fe9e2f3d9a15f3f9 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_repeat latch=1 jog=0 hoa=1 mode=2 rinse=1 recipe=5 batch=280.0 dial=40.0
+batch_minus_down page=11 dl=15c4d7694c726a9c status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_minus_up page=11 dl=deef8a19efa7b1b6 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+batch_minus latch=1 jog=0 hoa=1 mode=2 rinse=1 recipe=5 batch=270.0 dial=40.0
+dial_down page=11 dl=d411789d06759c39 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+dial_right latch=1 jog=0 hoa=1 mode=2 rinse=1 recipe=5 batch=270.0 dial=85.0
+dial_move page=11 dl=fead2f9c074eb2f3 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=101cecc622aae67c
+dial_up page=11 dl=fead2f9c074eb2f3 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+dial_up latch=1 jog=0 hoa=1 mode=2 rinse=1 recipe=5 batch=270.0 dial=50.0
 viewer2 page=0 dl=82e5db7c1e6a59fc status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2 raster=0 px=1defe384ea0c4669
-viewer1_after page=10 dl=8747b713df00259d status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2
+viewer1_after page=11 dl=fead2f9c074eb2f3 status=0 run=1 held=0 clicks=1 pump=1 valve=1 speed=120.00 setpoint=42.507 name='PUMP STATION' shows=2 hides=2

@@ -116,6 +116,8 @@ function propertyOf(
   if (v.initialValue !== undefined) property.defaultValue = v.initialValue
   const enabledBy = attribute(v, 'hmi_enabled_by')?.value
   if (enabledBy) property.enabledBy = enabledBy
+  const previewValue = attribute(v, 'hmi_preview')?.value
+  if (previewValue) property.previewValue = previewValue
   if (typeof v.maxLength === 'number') property.maxLength = v.maxLength
   if (enumMembers) property.enumMembers = enumMembers
   return property
@@ -189,7 +191,8 @@ function widgetOf(
  * - `hmi_series` on inputs: `value` and `color` per data series, in order, and `count` for how many show;
  * - `hmi_default` on a block: `Name := Value, ...` the block's own start values for inherited inputs, which the build
  *   sets on elements that leave them out (a derived block cannot redeclare an input);
- * - `hmi_enabled_by` on an input: the BOOL input that must be TRUE for it to take effect.
+ * - `hmi_enabled_by` on an input: the BOOL input that must be TRUE for it to take effect;
+ * - `hmi_preview` on the main input: the value previews and palette thumbnails show, for one a test value misleads.
  * A main input with `Changed` and `NewValue` outputs is two-way; a main BOOL output with `Changed` is momentary; other
  * BOOL outputs are events.
  */

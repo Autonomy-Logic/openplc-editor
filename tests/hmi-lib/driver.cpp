@@ -29,6 +29,7 @@ enum : int32_t {
     kStart = 15, kRunSwitch, kSpeedSlider, kSetpointIn, kNameIn, kLocked,
     kPlant = 21, kPump = 27, kValve = 28,
     kBack = 36, kHome = 37,
+    kToggle = 77, kJog = 78, kRinse = 82, kRecipes = 84,
 };
 
 uint64_t fnv(const uint8_t *p, size_t n) {
@@ -106,6 +107,14 @@ void keys(const char *text) {
 }
 
 void show(int32_t page) { hmi_set_page(page); }
+
+/* The input screen's variables. */
+void inputs(const char *label) {
+    std::printf("%s latch=%d jog=%d hoa=%d mode=%d rinse=%d recipe=%d batch=%.1f dial=%.1f\n", label,
+                (int)strucpp::LATCH.get(), (int)strucpp::JOG.get(), (int)strucpp::HOA.get(), (int)strucpp::MODE.get(),
+                (int)strucpp::RINSE.get(), (int)strucpp::RECIPE.get(), (double)strucpp::BATCH.get(),
+                (double)strucpp::DIAL.get());
+}
 
 }  // namespace
 
@@ -222,6 +231,66 @@ int main(int argc, char **argv) {
     show(10);
     frame("time_0");
     frame("time", true);
+
+    /* Latching, selecting and stepping controls; the drop-down list opens over the screen and scrolls. */
+    show(11);
+    frame("inputs_0");
+    frame("inputs", true);
+    tap("toggle", kToggle);
+    inputs("toggle");
+    {
+        int32_t x, y;
+        centre_of(kJog, &x, &y);
+        press(x, y);
+        frame("jog_down");
+        frame("jog_lit", true);
+        inputs("jog_held");
+        release(x, y);
+        frame("jog_up");
+        inputs("jog_released");
+    }
+    tap_at("hand_right", 350, 80);
+    tap_at("hand_right2", 350, 80);
+    inputs("hand_auto");
+    tap_at("hand_left", 260, 80);
+    inputs("hand_off");
+    tap_at("mode_off", 212, 132);
+    tap("rinse", kRinse);
+    inputs("mode_rinse");
+    /* Drop-down at 480 x 320: the list opens above the field, 4 of 6 rows from (20, 20), 32 lu each. */
+    tap("recipe_open", kRecipes);
+    frame("recipe_list", true);
+    press(100, 100);
+    frame("recipe_press");
+    move(100, 36);
+    frame("recipe_scrolled", true);
+    release(100, 36);
+    frame("recipe_drag_up");
+    inputs("recipe_after_drag");
+    tap_at("recipe_pick", 100, 136);
+    frame("recipe_closed", true);
+    inputs("recipe_picked");
+    tap("recipe_reopen", kRecipes);
+    tap_at("recipe_outside", 440, 300);
+    frame("recipe_dismissed");
+    inputs("recipe_dismissed");
+    /* Stepper: plus at (347, 202), held for repeats; then minus at (214, 202). */
+    press(347, 202);
+    for (int i = 0; i < 20; i++) frame(i == 19 ? "batch_held" : "batch_hold", i == 19);
+    release(347, 202);
+    frame("batch_up");
+    inputs("batch_repeat");
+    tap_at("batch_minus", 214, 202);
+    inputs("batch_minus");
+    /* Knob centred at (420, 203): pointing right is 83 %, snapped to 85; straight up is 50. */
+    press(450, 203);
+    frame("dial_down");
+    inputs("dial_right");
+    move(420, 170);
+    frame("dial_move", true);
+    release(420, 170);
+    frame("dial_up");
+    inputs("dial_up");
 
     /* A second viewer starts on the start page with its own state. */
     hmi_session_t *viewer = hmi_session_create();

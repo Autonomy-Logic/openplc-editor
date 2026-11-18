@@ -9,6 +9,11 @@ VAR_GLOBAL
   Name : STRING(16) := 'Tank 1';
   State : INT := 1;
   Now : DT := DT#2026-11-18-14:32:07;
+  Latch, Jog, Rinse : BOOL;
+  Mode, Recipe : INT := 1;
+  Hoa : INT;
+  Batch : REAL := 250.0;
+  Dial : REAL := 40.0;
 END_VAR
 
 (* Page 0: display widgets and a shape. *)
@@ -344,6 +349,60 @@ FUNCTION_BLOCK TimeScreen EXTENDS HmiScreen
   Stamp.Value := Now;
 END_FUNCTION_BLOCK
 
+(* Page 11: the latching, selecting and stepping controls, and a drop-down whose list opens over the screen. *)
+FUNCTION_BLOCK InputScreen EXTENDS HmiScreen
+  VAR
+    Col : HmiHorizontalStack := (Gap := 8, Padding := 8, GrowAuto := TRUE);
+    RowA : HmiVerticalStack := (Gap := 12);
+    RowB : HmiVerticalStack := (Gap := 12);
+    RowC : HmiVerticalStack := (Gap := 12);
+    Toggle : HmiToggleButton := (OnText := 'PUMP ON', OffText := 'PUMP OFF', MaxHeight := 44);
+    JogBtn : HmiLampButton := (Text := 'JOG');
+    Hand : HmiSelector;
+    Modes : HmiOptionButtons;
+    RinseBox : HmiCheckBox := (Caption := 'Rinse');
+    Recipes : HmiDropDown := (Caption := 'Recipe', Options := 'Soup;Broth;Sauce;Cream;Stock;Water',
+      MaxHeight := 60);
+    Batcher : HmiStepper := (Caption := 'Batch', Step := 10.0, MaxValue := 300.0, Unit := 'kg',
+      MaxHeight := 64);
+    Speed2 : HmiKnob := (Caption := 'Dial', Step := 5.0, PrefWidth := 90, PrefHeight := 104);
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Col), 0);
+    Attach(ADR(RowA), ADR(Col));
+    Attach(ADR(Toggle), ADR(RowA));
+    Attach(ADR(JogBtn), ADR(RowA));
+    Attach(ADR(Hand), ADR(RowA));
+    Attach(ADR(RowB), ADR(Col));
+    Attach(ADR(Modes), ADR(RowB));
+    Attach(ADR(RinseBox), ADR(RowB));
+    Attach(ADR(RowC), ADR(Col));
+    Attach(ADR(Recipes), ADR(RowC));
+    Attach(ADR(Batcher), ADR(RowC));
+    Attach(ADR(Speed2), ADR(RowC));
+    Build := TRUE;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE WriteBack : BOOL
+    IF Toggle.Changed THEN Latch := Toggle.NewValue; END_IF;
+    IF Hand.Changed THEN Hoa := Hand.NewValue; END_IF;
+    IF Modes.Changed THEN Mode := Modes.NewValue; END_IF;
+    IF RinseBox.Changed THEN Rinse := RinseBox.NewValue; END_IF;
+    IF Recipes.Changed THEN Recipe := Recipes.NewValue; END_IF;
+    IF Batcher.Changed THEN Batch := Batcher.NewValue; END_IF;
+    IF Speed2.Changed THEN Dial := Speed2.NewValue; END_IF;
+    Jog := JogBtn.Pressed;
+    WriteBack := TRUE;
+  END_METHOD
+  Toggle.Value := Latch;
+  JogBtn.Lamp := Jog;
+  Hand.Value := Hoa;
+  Modes.Value := Mode;
+  RinseBox.Value := Rinse;
+  Recipes.Value := Recipe;
+  Batcher.Value := Batch;
+  Speed2.Value := Dial;
+END_FUNCTION_BLOCK
+
 PROGRAM HmiMain
   VAR
     S0 : DisplayScreen;
@@ -357,6 +416,7 @@ PROGRAM HmiMain
     S8 : NestedScreen;
     S9 : IndicatorScreen;
     S10 : TimeScreen;
+    S11 : InputScreen;
     Rt : HmiRuntime;
     Started : BOOL;
   END_VAR
@@ -374,6 +434,7 @@ PROGRAM HmiMain
     Rt.AddScreen(ADR(S8));
     Rt.AddScreen(ADR(S9));
     Rt.AddScreen(ADR(S10));
+    Rt.AddScreen(ADR(S11));
     Rt.SetStart(0);
     Started := TRUE;
   END_IF;
@@ -389,6 +450,7 @@ PROGRAM HmiMain
     8: S8();
     9: S9();
     10: S10();
+    11: S11();
   END_CASE;
   Rt.EndFrame();
   IF GoHome THEN
