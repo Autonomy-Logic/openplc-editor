@@ -1,4 +1,4 @@
-import { COMMERCIAL_LICENSE_DISCLAIMER } from '@root/middleware/shared/utils/licensing'
+import { COMMERCIAL_LICENSE_DISCLAIMER, MIT_LICENSE_NOTICE } from '@root/middleware/shared/utils/licensing'
 import { fireEvent, render, screen } from '@testing-library/react'
 
 import { RuntimeCommercialLicenseStatus } from '../runtime-commercial-license-status'
@@ -57,6 +57,19 @@ describe('RuntimeCommercialLicenseStatus', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Runtime license status' }))
     expect(screen.getAllByText('Commercial license').length).toBeGreaterThan(0)
     expect(screen.queryByText(COMMERCIAL_LICENSE_DISCLAIMER)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Buy licences' })).toBeNull()
+  })
+
+  it('shows an MIT runtime without the disclaimer or a purchase link', () => {
+    render(
+      <RuntimeCommercialLicenseStatus status='mit' hardwareId={null} buyUrl={URL} awaitingPurchase onBuy={jest.fn()} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Runtime license status' }))
+    expect(screen.getAllByText('MIT license')).toHaveLength(2)
+    expect(screen.getByText(MIT_LICENSE_NOTICE)).toBeTruthy()
+    expect(screen.queryByText('GPLv3')).toBeNull()
+    expect(screen.queryByText(COMMERCIAL_LICENSE_DISCLAIMER)).toBeNull()
+    expect(screen.queryByText(/Waiting for the purchase/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Buy licences' })).toBeNull()
   })
 

@@ -4,6 +4,7 @@
  * decides what the editor shows; nothing is ever blocked by it.
  */
 
+import { compareParsedVersions, parseVersion } from '../../../../frontend/utils/semver'
 import type { DeviceLicenseState } from '../../ports/device-port'
 import type { RuntimeLicenseMode } from '../../ports/types'
 import { frameConsoleNotice } from './console-notice'
@@ -19,9 +20,27 @@ export const COMMERCIAL_LICENSE_DISCLAIMER =
  * - `licensed`: commercial licence in place (vendor-paid VPP, paid VPP with a valid licence, or a runtime licence).
  * - `unlicensed`: GPLv3; the disclaimer is shown.
  * - `vpp-flow`: paid VPP without a valid licence; the VPP purchase flow speaks instead of the disclaimer.
+ * - `mit`: an OpenPLC Runtime v4 older than `DUAL_LICENSE_MIN_RUNTIME_VERSION`; covered by the MIT licence, no licence check.
  * - `unknown`: not enough information (no runtime licence was verified); nothing is shown.
  */
-export type TargetCommercialLicenseStatus = 'licensed' | 'unlicensed' | 'vpp-flow' | 'unknown'
+export type TargetCommercialLicenseStatus = 'licensed' | 'unlicensed' | 'vpp-flow' | 'mit' | 'unknown'
+
+/** First OpenPLC Runtime version under the GPLv3 or commercial licence. */
+export const DUAL_LICENSE_MIN_RUNTIME_VERSION = '4.4.0'
+
+/** Text shown for a runtime covered by the MIT licence. */
+export const MIT_LICENSE_NOTICE = 'The OpenPLC Runtime version on this target is covered by the MIT license.'
+
+/**
+ * True for an OpenPLC Runtime v4 version below `DUAL_LICENSE_MIN_RUNTIME_VERSION`.
+ * Pre-release suffixes do not count (`4.4.0-rc.1` is 4.4.0); a missing or unreadable version answers false.
+ */
+export function isMitLicensedRuntime(runtimeVersion: string | null | undefined): boolean {
+  const version = parseVersion(runtimeVersion)
+  const minimum = parseVersion(DUAL_LICENSE_MIN_RUNTIME_VERSION)
+  if (!version || !minimum || version.major !== minimum.major) return false
+  return compareParsedVersions(version, minimum) < 0
+}
 
 export interface TargetCommercialLicenseInput {
   /** `package.runtimeLicense` of the board's VPP; `user` for a board without one or a package without the field. */
@@ -30,13 +49,17 @@ export interface TargetCommercialLicenseInput {
   vppLicense: DeviceLicenseState | null
   /** The runtime licence the editor verified from `GET /api/runtime-license`, or null when none was verified. */
   runtimeLicense: RuntimeCommercialLicense | null
+  /** Version the connected OpenPLC Runtime reports; null or omitted for a built-in board. */
+  runtimeVersion?: string | null
 }
 
 export function resolveTargetCommercialLicense({
   mode,
   vppLicense,
   runtimeLicense,
+  runtimeVersion,
 }: TargetCommercialLicenseInput): TargetCommercialLicenseStatus {
+  if (isMitLicensedRuntime(runtimeVersion)) return 'mit'
   if (mode === 'vendor') return 'licensed'
   if (mode === 'vpp') return vppLicense?.state === 'licensed' ? 'licensed' : 'vpp-flow'
   if (runtimeLicense === 'commercial') return 'licensed'

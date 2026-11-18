@@ -1,12 +1,12 @@
 /**
  * Commercial licence of the connected runtime or built-in board, next to "Connected" on the
- * device screen: "Commercial license" or "GPLv3", with the disclaimer, the
+ * device screen: "Commercial license", "MIT license" or "GPLv3", with the disclaimer, the
  * hardware ID and the purchase link in a popover. Renders nothing while the
  * status is unknown or a paid VPP's own licence flow is speaking.
  */
 
 import * as Popover from '@radix-ui/react-popover'
-import { COMMERCIAL_LICENSE_DISCLAIMER } from '@root/middleware/shared/utils/licensing'
+import { COMMERCIAL_LICENSE_DISCLAIMER, MIT_LICENSE_NOTICE } from '@root/middleware/shared/utils/licensing'
 import { useState } from 'react'
 
 import type { RuntimeCommercialLicenseView } from '../../../../../../../hooks/use-runtime-commercial-license'
@@ -27,11 +27,24 @@ export function RuntimeCommercialLicenseStatus({
   onBuy,
 }: RuntimeCommercialLicenseStatusProps) {
   const [copied, setCopied] = useState(false)
-  if (status !== 'licensed' && status !== 'unlicensed') return null
+  if (status !== 'licensed' && status !== 'unlicensed' && status !== 'mit') return null
 
-  const licensed = status === 'licensed'
+  const mit = status === 'mit'
+  const licensed = status === 'licensed' || mit
   const Icon = licensed ? ShieldLicensedIcon : ShieldUnlicensedIcon
-  const label = licensed ? 'Commercial license' : awaitingPurchase ? 'Waiting for purchase…' : 'GPLv3'
+  const title = mit ? 'MIT license' : licensed ? 'Commercial license' : 'No commercial license'
+  const label = mit
+    ? 'MIT license'
+    : licensed
+      ? 'Commercial license'
+      : awaitingPurchase
+        ? 'Waiting for purchase…'
+        : 'GPLv3'
+  const description = mit
+    ? MIT_LICENSE_NOTICE
+    : licensed
+      ? 'The OpenPLC Runtime on this target is covered by a commercial license.'
+      : COMMERCIAL_LICENSE_DISCLAIMER
 
   return (
     <Popover.Root>
@@ -60,13 +73,9 @@ export function RuntimeCommercialLicenseStatus({
               <Icon />
             </span>
             <div className='min-w-0'>
-              <p className='font-caption text-cp-base font-semibold text-neutral-950 dark:text-white'>
-                {licensed ? 'Commercial license' : 'No commercial license'}
-              </p>
+              <p className='font-caption text-cp-base font-semibold text-neutral-950 dark:text-white'>{title}</p>
               <p className='break-words font-caption text-cp-sm text-neutral-600 dark:text-neutral-400'>
-                {licensed
-                  ? 'The OpenPLC Runtime on this target is covered by a commercial license.'
-                  : COMMERCIAL_LICENSE_DISCLAIMER}
+                {description}
               </p>
             </div>
           </div>
