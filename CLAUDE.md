@@ -427,7 +427,8 @@ Platform-specific binaries in `/resources/bin/[platform]/[arch]/`. Board configs
 
 **Pre-build gates.** `evaluateVppBackplaneGate`
 (`src/middleware/shared/utils/build-gate/vpp-backplane-gate.ts`, shared with openplc-web) refuses when: the
-project's board is not among the selected vPLC's boards; a vendor board is used with no vPLC selected on a
+selected vPLC's package is still loading or did not load (checked first); the project's board is not among the
+selected vPLC's boards; a vendor board is used with no vPLC selected on a
 host whose vPLCs provide the vendor boards; the vPLC reports `backplaneAccess: false`; or the vPLC's package
 is `null` or differs from the board's. In `src/frontend/components/_organisms/workspace-activity-bar/default.tsx`,
 `handleBuild` runs it before `evaluatePreBuildPlcGate`, and `handleMd5Verification` runs it before offering an upload.
