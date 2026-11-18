@@ -1,4 +1,5 @@
 import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
+import { createTestPackagesPort } from '@root/frontend/store/testing-packages'
 import type { LibraryPort } from '@root/middleware/shared/ports/library-port'
 import type { PackagePort } from '@root/middleware/shared/ports/package-port'
 import { EDITOR_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
@@ -44,7 +45,10 @@ const ports: PlatformPorts = {
   versionControl: stubPort(),
   navigation: stubPort(),
   library: stubPort<LibraryPort>({ listInstalled: () => Promise.resolve([]) }),
-  packages: stubPort<PackagePort>({ listInstalled: () => Promise.resolve([]) }),
+  packages: stubPort<PackagePort>({
+    ...createTestPackagesPort({ status: 'idle' }).port,
+    listInstalled: () => Promise.resolve([]),
+  }),
   capabilities: EDITOR_CAPABILITIES,
 }
 
