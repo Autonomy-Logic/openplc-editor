@@ -1,69 +1,33 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { expect, type Locator, type Page, test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
+import {
+  DRIVE_ESI_XML,
+  driveEsiVariant,
+  openRepositoryTab,
+  readStoredEsi,
+  repositoryRow,
+  shownFilenames,
+  storedFilenames,
+} from './helpers/esi-repository'
 import { EK1818_STATION, launch, PROJECT_NAME, quitApp, writeEthercatProject } from './helpers/ethercat-project'
-
-const DRIVE_XML = readFileSync(
-  join(__dirname, 'fixtures', 'ethercat-defaultdata', '11111111-2222-4333-8444-555555555555.xml'),
-  'utf-8',
-)
 
 /** ESI files the test imports, by name; the copy has the same content as drive-a.xml. */
 const ESI_FILES: Record<string, string> = {
-  'drive-a.xml': DRIVE_XML,
-  'drive-a-copy.xml': DRIVE_XML,
-  'drive-b.xml': DRIVE_XML.replace('Test Drive Vendor', 'Second Vendor').replace('#x00005100', '#x00005200'),
-  'drive-c.xml': DRIVE_XML.replace('Test Drive Vendor', 'Third Vendor').replace('#x00005100', '#x00005300'),
+  'drive-a.xml': DRIVE_ESI_XML,
+  'drive-a-copy.xml': DRIVE_ESI_XML,
+  'drive-b.xml': driveEsiVariant('Second Vendor', '#x00005200'),
+  'drive-c.xml': driveEsiVariant('Third Vendor', '#x00005300'),
   'broken.xml': '<EtherCATInfo><Vendor>',
-}
-
-/** The project's ESI folder as stored on disk: the index rows and the XML files beside it. */
-interface StoredEsi {
-  rows: Array<{ id: string; filename: string }>
-  xmlFiles: string[]
-}
-
-/** Reads `devices/esi` of the project; a missing folder or index reads as empty. */
-function readStoredEsi(esiDir: string): StoredEsi {
-  if (!existsSync(esiDir)) return { rows: [], xmlFiles: [] }
-  const indexPath = join(esiDir, 'repository.json')
-  const index: { items: Array<{ id: string; filename: string }> } = existsSync(indexPath)
-    ? JSON.parse(readFileSync(indexPath, 'utf-8'))
-    : { items: [] }
-  return {
-    rows: index.items.map(({ id, filename }) => ({ id, filename })),
-    xmlFiles: readdirSync(esiDir)
-      .filter((name) => name.endsWith('.xml'))
-      .sort(),
-  }
-}
-
-/** Filenames of the stored rows, sorted. */
-function storedFilenames(esiDir: string): string[] {
-  return readStoredEsi(esiDir)
-    .rows.map((row) => row.filename)
-    .sort()
 }
 
 /** Asserts every stored row has its `<id>.xml` file and no other XML file is in the folder. */
 function expectOneXmlPerRow(esiDir: string): void {
   const { rows, xmlFiles } = readStoredEsi(esiDir)
   expect(xmlFiles).toEqual(rows.map((row) => `${row.id}.xml`).sort())
-}
-
-/** The repository table row of the file named @p filename. */
-function repositoryRow(page: Page, filename: string): Locator {
-  return page.locator(`[data-testid="esi-repository-row"][data-filename="${filename}"]`)
-}
-
-/** Filenames of the rows the repository table shows, sorted. */
-async function shownFilenames(page: Page): Promise<string[]> {
-  const rows = page.getByTestId('esi-repository-row')
-  const names = await rows.evaluateAll((elements) => elements.map((e) => e.getAttribute('data-filename') ?? ''))
-  return names.sort()
 }
 
 test('ESI files are imported once, rejected when malformed, removed and cleared', async () => {
@@ -78,8 +42,7 @@ test('ESI files are imported once, rejected when malformed, removed and cleared'
   const { app, page } = await launch(userData)
   try {
     await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
-    await page.getByText('ecat_bus', { exact: true }).first().dblclick({ timeout: 60000 })
-    await page.getByTestId('ethercat-tab-repository').click({ timeout: 60000 })
+    await openRepositoryTab(page)
     await expect(page.getByTestId('esi-repository-empty')).toBeVisible({ timeout: 30000 })
     expect(storedFilenames(esiDir)).toEqual([])
     const input = page.getByTestId('esi-upload-input')
@@ -91,7 +54,7 @@ test('ESI files are imported once, rejected when malformed, removed and cleared'
     expect(storedFilenames(esiDir)).toEqual(['drive-a.xml', 'drive-b.xml'])
     expectOneXmlPerRow(esiDir)
     const driveA = readStoredEsi(esiDir).rows.find((row) => row.filename === 'drive-a.xml')
-    expect(readFileSync(join(esiDir, `${driveA?.id}.xml`), 'utf-8')).toBe(DRIVE_XML)
+    expect(readFileSync(join(esiDir, `${driveA?.id}.xml`), 'utf-8')).toBe(DRIVE_ESI_XML)
     await expect(page.getByTestId('esi-upload-errors')).toHaveCount(0)
 
     await input.setInputFiles([join(uploads, 'drive-a-copy.xml'), join(uploads, 'drive-c.xml')])
