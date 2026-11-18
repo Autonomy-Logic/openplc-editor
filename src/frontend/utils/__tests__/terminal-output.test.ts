@@ -273,3 +273,13 @@ describe('plainTerminalLine', () => {
     expect(Date.now() - started).toBeLessThan(1000)
   })
 })
+
+describe('parseAnsi and stripAnsi', () => {
+  it.each(PLAIN_TERMINAL_LINES)('renders %s as the same text as stripAnsi', (_name, input) => {
+    expect(
+      parseAnsi(input)
+        .map((s) => s.text)
+        .join(''),
+    ).toBe(stripAnsi(input))
+  })
+})
