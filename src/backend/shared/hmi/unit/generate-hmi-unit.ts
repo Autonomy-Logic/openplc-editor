@@ -151,6 +151,10 @@ const TAG_TYPES = [
   'LREAL',
 ] as const
 const TAG_STRING = TAG_TYPES.length + 1
+/** Time and date tag types, in `hmi_tag_type` order after STRING; every one is an 8-byte integer. */
+const TIME_TAG_TYPES = ['TIME', 'LTIME', 'DATE', 'TOD', 'DT'] as const
+/** Long names of time types, by the short name tags use. */
+const TIME_ALIASES: Readonly<Record<string, string>> = { TIME_OF_DAY: 'TOD', DATE_AND_TIME: 'DT' }
 /** Bytes of each elementary tag type's value. */
 const TAG_WIDTH: Readonly<Record<string, number>> = {
   BOOL: 1,
@@ -168,6 +172,11 @@ const TAG_WIDTH: Readonly<Record<string, number>> = {
   ULINT: 8,
   LWORD: 8,
   LREAL: 8,
+  TIME: 8,
+  LTIME: 8,
+  DATE: 8,
+  TOD: 8,
+  DT: 8,
 }
 const NUMERIC: ReadonlySet<string> = new Set<string>(TAG_TYPES.filter((t) => t !== 'BOOL'))
 /** Range of each integer type. */
@@ -243,9 +252,12 @@ interface TagType {
 }
 
 function tagType(declared: string): TagType | undefined {
-  const t = declared.trim().toUpperCase()
+  const upper = declared.trim().toUpperCase()
+  const t = TIME_ALIASES[upper] ?? upper
   const elementary = TAG_TYPES.findIndex((x) => x === t)
   if (elementary >= 0) return { base: t, type: elementary + 1, maxLength: 0 }
+  const time = TIME_TAG_TYPES.findIndex((x) => x === t)
+  if (time >= 0) return { base: t, type: TAG_STRING + 1 + time, maxLength: 0 }
   const str = /^STRING\s*(?:[([]\s*(\d+)\s*[)\]])?$/.exec(t)
   if (!str) return undefined
   const maxLength = str[1] !== undefined ? Number(str[1]) : DEFAULT_STRING_LENGTH

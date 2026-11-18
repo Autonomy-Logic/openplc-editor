@@ -3,6 +3,7 @@ import { join } from 'path'
 
 import { NEW_SCREEN_STACK, newHmiScreenSource } from '../../../../../middleware/shared/utils/hmi/project-files'
 import { hmiSettingsSchema } from '../../../../../middleware/shared/utils/hmi/settings'
+import { hmiDebugPath } from '../../artefact/tag-resolver'
 import {
   generateHmiUnit,
   HMI_GALLERY_SCREEN,
@@ -54,6 +55,54 @@ describe('HMI unit generator', () => {
     )
     expect(sample.files['hmi_unit.hpp']).toContain('namespace hmi {')
     expect(sample.fonts).toEqual({ variant: 'compact', faces: [0, 1] })
+  })
+
+  it('reads TIME, DATE, TOD and DT variables as 8-byte tags, by their long names too', () => {
+    const project = sampleProject()
+    project.plcDeclarations = PLC_DECLARATIONS.replace(
+      '    Unused : DINT;',
+      '    Unused : DINT;\n    Stamp : DATE_AND_TIME;\n    Shift : TIME_OF_DAY;\n    Cycle : TIME;\n    Day : DATE;',
+    )
+    project.plcVariables = [
+      ...(project.plcVariables ?? []),
+      { path: 'instance0.Main.Stamp', type: 'DATE_AND_TIME' },
+      { path: 'instance0.Main.Shift', type: 'TIME_OF_DAY' },
+      { path: 'instance0.Main.Cycle', type: 'TIME' },
+      { path: 'instance0.Main.Day', type: 'DATE' },
+    ]
+    const addresses: Record<string, { arr: number; elem: number }> = {
+      'INSTANCE0.STAMP': { arr: 3, elem: 0 },
+      'INSTANCE0.SHIFT': { arr: 3, elem: 1 },
+      'INSTANCE0.CYCLE': { arr: 3, elem: 2 },
+      'INSTANCE0.DAY': { arr: 3, elem: 3 },
+    }
+    project.resolve = (path) => addresses[hmiDebugPath(path, [{ name: 'instance0', program: 'Main' }])] ?? null
+    project.screens = [
+      {
+        name: 'Overview',
+        source: screen(
+          '    Face : HmiClock;\n    Stamp : HmiDateTime;\n    T : TOD;\n    C : TIME;\n    D : DATE;',
+          '  Face.Value := instance0.Main.Stamp;\n  Stamp.Value := instance0.Main.Stamp;\n  T := instance0.Main.Shift;\n' +
+            '  C := instance0.Main.Cycle;\n  D := instance0.Main.Day;',
+        ),
+      },
+    ]
+    project.settings = hmiSettingsSchema.parse({ startScreen: 'Overview' })
+
+    const result = generateHmiUnit(project)
+
+    expect(messages(result)).toEqual([])
+    expect(result.tags.map(({ path, type, maxLength }) => [path, type, maxLength])).toEqual([
+      ['CONFIG0.RES0.INSTANCE0.MAIN.STAMP', 21, 0],
+      ['CONFIG0.RES0.INSTANCE0.MAIN.SHIFT', 20, 0],
+      ['CONFIG0.RES0.INSTANCE0.MAIN.CYCLE', 17, 0],
+      ['CONFIG0.RES0.INSTANCE0.MAIN.DAY', 19, 0],
+    ])
+    const glue = result.files['hmi_unit_glue.cpp']
+    expect(glue).toContain('strucpp::IEC_DT g_own_0{};')
+    expect(glue).toContain('strucpp::IEC_TOD g_own_1{};')
+    expect(glue).toContain('    case 0: return 8;')
+    expect(glue).toContain('constexpr size_t kTagBufferSize = 8;')
   })
 
   it('reads the PLC variables screens use through the host, listed with their debug addresses', () => {

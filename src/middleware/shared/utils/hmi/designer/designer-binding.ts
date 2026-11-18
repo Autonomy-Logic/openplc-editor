@@ -21,10 +21,13 @@ const NUMERIC: ReadonlySet<string> = new Set([
   'LREAL',
 ])
 
-/** Upper-case elementary type, with STRING(n) as STRING. */
+/** Long names of time types, by the short name widgets declare. */
+const TIME_ALIASES: Readonly<Record<string, string>> = { TIME_OF_DAY: 'TOD', DATE_AND_TIME: 'DT' }
+
+/** Upper-case elementary type, with STRING(n) as STRING and long time type names shortened. */
 const baseType = (type: string): string => {
   const t = type.trim().toUpperCase()
-  return /^STRING\s*([([]\s*\d+\s*[)\]])?$/.test(t) ? 'STRING' : t
+  return /^STRING\s*([([]\s*\d+\s*[)\]])?$/.test(t) ? 'STRING' : (TIME_ALIASES[t] ?? t)
 }
 
 /** Whether a variable of `type` can be wired to `main`: the same type, or any number to a numeric input. */
