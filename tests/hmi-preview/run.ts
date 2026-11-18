@@ -5,7 +5,11 @@
  *
  *   npx ts-node -T -r tsconfig-paths/register tests/hmi-preview/run.ts
  *
- * HMI_PREVIEW_REBUILD_MS and HMI_PREVIEW_LIVE_MS override the limits (1500 and 50) on slow machines.
+ * It also adds elements to a running module without a build and checks that each is drawn without a compile, with the
+ * frame and bounds of the module the edit then builds, and prints where each build spent its time.
+ *
+ * HMI_PREVIEW_REBUILD_MS, HMI_PREVIEW_LIVE_MS and HMI_PREVIEW_LIVE_ADD_MS override the limits (1500, 50 and 50) on
+ * slow machines.
  */
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -14,7 +18,7 @@ import { buildHmiPreview, type HmiPreviewResources } from '../../src/backend/sha
 import { createHmiPreviewPort } from '../../src/backend/shared/hmi/preview/hmi-preview-port'
 import { serveHmiPreview } from '../../src/backend/shared/hmi/preview/preview-worker'
 import { HmiPreviewInstance } from '../../src/backend/shared/hmi/preview/preview-instance'
-import { WIDGET_PREVIEW_SCREEN } from '../../src/backend/shared/hmi/unit/generate-hmi-unit'
+import { buildHmiWidgetCatalog, WIDGET_PREVIEW_SCREEN } from '../../src/backend/shared/hmi/unit/generate-hmi-unit'
 import { sampleProject } from '../../src/backend/shared/hmi/unit/__tests__/fixtures/sample-project'
 import { isYowaspClang, runClangJob } from '../../src/backend/shared/wasm-toolchain/clang-worker-host'
 import { type CachedWasmObject, compileToWasm } from '../../src/backend/shared/wasm-toolchain/compile-to-wasm'
@@ -24,13 +28,22 @@ import type {
   HmiPreviewWorkerScope,
 } from '../../src/middleware/shared/ports/hmi-preview-mechanisms'
 import type { WasmClangRunner, WasmObjectStore } from '../../src/middleware/shared/ports/wasm-toolchain-mechanisms'
+import type { HmiPreviewBuild } from '../../src/middleware/shared/ports/hmi-preview-types'
 import type { WasmCompileRequest } from '../../src/middleware/shared/ports/wasm-toolchain-types'
+import { addElement } from '../../src/middleware/shared/utils/hmi/designer/designer-edits'
+import { planLiveElements } from '../../src/middleware/shared/utils/hmi/designer/designer-live'
+import { type DesignerModel, parseDesignerBlock } from '../../src/middleware/shared/utils/hmi/designer/designer-model'
+import {
+  formatHmiPreviewTimings,
+  type HmiPreviewRunTimings,
+} from '../../src/middleware/shared/utils/hmi/preview-timings'
 
 const ROOT = join(__dirname, '..', '..')
 const HMI = join(ROOT, 'resources', 'sources', 'hmi')
 const RUNTIME = join(ROOT, 'node_modules', 'strucpp', 'src', 'runtime', 'include')
 const REBUILD_MS = Number(process.env.HMI_PREVIEW_REBUILD_MS ?? 1500)
 const LIVE_MS = Number(process.env.HMI_PREVIEW_LIVE_MS ?? 50)
+const LIVE_ADD_MS = Number(process.env.HMI_PREVIEW_LIVE_ADD_MS ?? 50)
 const WIDTH = 800
 const HEIGHT = 480
 
@@ -87,6 +100,23 @@ async function runner(): Promise<WasmClangRunner> {
 
 const elapsed = (start: number): number => Math.round(performance.now() - start)
 
+/** Starts a built module and draws its first frame, timing both. */
+async function startAndDraw(wasm: Uint8Array): Promise<HmiPreviewRunTimings> {
+  let start = performance.now()
+  const instance = await HmiPreviewInstance.create(wasm, WIDTH, HEIGHT)
+  const startMs = performance.now() - start
+  start = performance.now()
+  instance.frame(0)
+  instance.render(WIDTH, HEIGHT, 1)
+  return { startMs, firstFrameMs: performance.now() - start }
+}
+
+/** Prints where a build spent its time, with the start and first frame of its module. */
+async function breakdown(what: string, build: HmiPreviewBuild): Promise<void> {
+  if (!build.ok || !build.timings) return
+  console.log(`  ${what}: ${formatHmiPreviewTimings(build.timings, build.stats, await startAndDraw(build.wasm))}`)
+}
+
 type Listener = (event: MessageEvent<unknown>) => void
 
 /** A Worker in this process: messages cross with structuredClone and transfers, asynchronously, as between threads. */
@@ -114,6 +144,173 @@ function inProcessWorker(serve: boolean): HmiPreviewWorkerHandle {
   }
 }
 
+/** A screen with a diagram, for elements dropped at a position. */
+const PLANT = `FUNCTION_BLOCK Plant EXTENDS HmiScreen
+  VAR
+    Body : HmiHorizontalStack;
+    Diagram : HmiDiagram := (Parent := 'Body', DesignW := 400, DesignH := 240);
+    Tank : HmiTank := (Parent := 'Diagram', X := 20, Y := 20, Caption := 'T1');
+  END_VAR
+END_FUNCTION_BLOCK
+`
+
+type Compile = (request: WasmCompileRequest) => ReturnType<typeof compileToWasm>
+
+/** A frame drawn in full: the first render of a module, with every later render's changed rows copied in. */
+class FullFrame {
+  readonly rgba = new Uint8ClampedArray(WIDTH * HEIGHT * 4)
+  constructor(private readonly instance: HmiPreviewInstance) {}
+  draw(): void {
+    this.instance.frame(0)
+    const pixels = this.instance.render(WIDTH, HEIGHT, 1)
+    if (pixels) this.rgba.set(pixels.rgba, pixels.y0 * WIDTH * 4)
+  }
+}
+
+/**
+ * Elements added to a running preview from the designer's edit, without a build: each is drawn at once, without a
+ * compile, and the frame and the elements' bounds equal those of the module the edit then builds.
+ */
+async function liveElementChecks(files: HmiPreviewResources, compile: Compile): Promise<void> {
+  let compiles = 0
+  const counted: Compile = (request) => {
+    compiles++
+    return compile(request)
+  }
+  const { catalog } = buildHmiWidgetCatalog(sampleProject().widgets)
+  const isWidget = (type: string) => catalog.widgets.has(type.toUpperCase())
+  const parse = (source: string): DesignerModel => {
+    const parsed = parseDesignerBlock(source, isWidget)
+    if (!parsed.ok) throw new Error(parsed.errors.map((e) => e.message).join('\n'))
+    return parsed.model
+  }
+  const base = { ...sampleProject(), screens: [...sampleProject().screens, { name: 'Plant', source: PLANT }] }
+  const before = await buildHmiPreview(base, files, counted)
+  if (!before.ok) throw new Error('the live elements base did not build')
+
+  type Edit = (source: string, model: DesignerModel) => { source: string; names: string[] }
+  const add =
+    (...specs: Parameters<typeof addElement>[2][]): Edit =>
+    (source, model) => {
+      const names: string[] = []
+      let text = source
+      let current = model
+      for (const spec of specs) {
+        const result = addElement(text, current, spec)
+        if (!result.ok || !result.name) throw new Error(result.ok ? 'no name' : result.message)
+        names.push(result.name)
+        text = result.source
+        current = parse(text)
+      }
+      return { source: text, names }
+    }
+  const cases: Array<[string, string, Edit]> = [
+    [
+      'a label dropped at the end of a stack',
+      'Details',
+      add({ type: 'HmiLabel', parent: 'Body', props: [['Text', "'Note'"]] }),
+    ],
+    [
+      'a gauge dropped before a sibling, with its type default',
+      'Details',
+      add({ type: 'HmiGauge', parent: 'Body', before: 'Shown' }),
+    ],
+    [
+      'a widget block dropped into a nested stack',
+      'Overview',
+      add({ type: 'Badge', parent: 'Col', before: 'Run', props: [['Caption', "'New'"]] }),
+    ],
+    [
+      'a lamp dropped on a diagram at a position',
+      'Plant',
+      add({
+        type: 'HmiLamp',
+        parent: 'Diagram',
+        props: [
+          ['X', '200'],
+          ['Y', '120'],
+        ],
+      }),
+    ],
+    [
+      'a stack pasted with a label inside',
+      'Details',
+      add(
+        { type: 'HmiVerticalStack', parent: 'Body', before: 'Back' },
+        { type: 'HmiLabel', parent: 'VerticalStack1', props: [['Text', "'In'"]] },
+      ),
+    ],
+  ]
+  for (const [what, screen, edit] of cases) {
+    const page = before.pages[screen]
+    const running = await HmiPreviewInstance.create(before.wasm, WIDTH, HEIGHT)
+    running.design(true)
+    running.show(page)
+    const live = new FullFrame(running)
+    live.draw()
+    const source = base.screens.find((s) => s.name === screen)?.source ?? ''
+    const edited = edit(source, parse(source))
+    const ids = new Map(
+      before.elementIds.filter((e) => e.screen === screen).map((e) => [e.element.toUpperCase(), e.id]),
+    )
+    const compilesBefore = compiles
+    const start = performance.now()
+    const plan = planLiveElements({
+      model: parse(edited.source),
+      added: edited.names,
+      catalog,
+      factory: before.factory,
+      idOf: (name) => ids.get(name.toUpperCase()),
+    })
+    const added = plan ? running.addLive(plan.elements) : null
+    live.draw()
+    const ms = performance.now() - start
+    check(
+      added !== null && compiles === compilesBefore && ms <= LIVE_ADD_MS,
+      `${what}: drawn without a compile within ${LIVE_ADD_MS} ms (${ms.toFixed(2)} ms)`,
+    )
+
+    const project = {
+      ...base,
+      screens: base.screens.map((s) => (s.name === screen ? { ...s, source: edited.source } : s)),
+    }
+    const after = await buildHmiPreview(project, files, counted)
+    if (!after.ok || !added || !plan) {
+      check(false, `${what}: the edit builds`)
+      continue
+    }
+    const rebuilt = await HmiPreviewInstance.create(after.wasm, WIDTH, HEIGHT)
+    rebuilt.design(true)
+    rebuilt.show(page)
+    const reference = new FullFrame(rebuilt)
+    reference.draw()
+    reference.draw()
+    const same = live.rgba.every((byte, i) => byte === reference.rgba[i])
+    check(same, `${what}: the frame equals the rebuilt module's`)
+    const box = (instance: HmiPreviewInstance, id: number | undefined) => {
+      const b = instance.bounds().find((x) => x.id === id)
+      return b ? `${b.x},${b.y},${b.width},${b.height}` : 'none'
+    }
+    const boxes = plan.names.map((name, i) => {
+      const id = after.elementIds.find((e) => e.screen === screen && e.element === name)?.id
+      return [box(running, added[i]), box(rebuilt, id)]
+    })
+    if (screen === 'Details') {
+      running.show(before.pages.Overview)
+      running.frame(0)
+      const left = !running.setLiveNumber(added[0], 0, 1)
+      running.show(page)
+      running.frame(0)
+      running.removeLive(added)
+      check(left && running.bounds().every((b) => !added.includes(b.id)), `${what}: leaving the screen ends it`)
+    }
+    check(
+      boxes.every(([a, b]) => a !== 'none' && a === b),
+      `${what}: the new elements have the rebuilt module's bounds (${boxes.map((b) => b.join(' / ')).join('; ')})`,
+    )
+  }
+}
+
 async function main(): Promise<void> {
   const clang = await runner()
   const cache = new Map<string, CachedWasmObject>()
@@ -124,6 +321,7 @@ async function main(): Promise<void> {
   const cold = await buildHmiPreview(sampleProject(), files, compile)
   if (!cold.ok) throw new Error(`cold build failed:\n${cold.errors.map((e) => `${e.file}: ${e.message}`).join('\n')}`)
   console.log(`cold build ${elapsed(start)} ms, ${cold.stats.units} units`)
+  await breakdown('cold build', cold)
 
   const edited = sampleProject()
   edited.screens = edited.screens.map((s) =>
@@ -134,19 +332,23 @@ async function main(): Promise<void> {
   const rebuildMs = elapsed(start)
   if (!rebuilt.ok) throw new Error('rebuild failed')
   console.log(`rebuild after an edit ${rebuildMs} ms, ${rebuilt.stats.cached} of ${rebuilt.stats.units} units cached`)
+  await breakdown('rebuild after an edit', rebuilt)
   check(
     rebuilt.stats.cached >= rebuilt.stats.units - 3,
     'an edit of one screen recompiles at most that screen, its setters and the glue',
   )
   check(rebuildMs <= REBUILD_MS, `rebuild after an edit within ${REBUILD_MS} ms`)
 
-  const timed = async (what: string, input: Parameters<typeof buildHmiPreview>[0]): Promise<void> => {
+  const timed = async (what: string, input: Parameters<typeof buildHmiPreview>[0]): Promise<HmiPreviewBuild> => {
     const t = performance.now()
     const build = await buildHmiPreview(input, files, compile)
     const ms = elapsed(t)
     console.log(`${what}: ${ms} ms${build.ok ? `, ${build.stats.cached} of ${build.stats.units} units cached` : ''}`)
+    await breakdown(what, build)
     check(build.ok && ms <= REBUILD_MS, `${what} within ${REBUILD_MS} ms`)
+    return build
   }
+  await timed('rebuild of the sample project', sampleProject())
   const withElement = sampleProject()
   withElement.screens = withElement.screens.map((s) =>
     s.name === 'Details'
@@ -159,7 +361,11 @@ async function main(): Promise<void> {
         }
       : s,
   )
-  await timed('rebuild after adding an element', withElement)
+  const added = await timed('rebuild after adding an element', withElement)
+  check(
+    added.ok && added.stats.cached === added.stats.units - 2,
+    'adding an element to one screen recompiles that screen and the glue, not the other screens',
+  )
   const withNewType = sampleProject()
   withNewType.screens = withNewType.screens.map((s) =>
     s.name === 'Details'
@@ -245,6 +451,8 @@ async function main(): Promise<void> {
       'the stretched copy is larger than the natural one',
     )
   }
+
+  await liveElementChecks(files, compile)
 
   const port = createHmiPreviewPort(
     {

@@ -41,11 +41,20 @@ export interface WasmCompileRequest {
   output?: string
 }
 
+/** One precompiled header or unit of a build: how long it took and whether its object came from the cache. */
+export interface WasmCompileJobTiming {
+  source: string
+  ms: number
+  cached: boolean
+}
+
 export interface WasmCompileStats {
   units: number
   cached: number
   compileMs: number
   linkMs: number
+  /** Every precompiled header, then every unit, in request order. */
+  jobs?: WasmCompileJobTiming[]
 }
 
 /** One line of compiler output, or a message about the build itself. */

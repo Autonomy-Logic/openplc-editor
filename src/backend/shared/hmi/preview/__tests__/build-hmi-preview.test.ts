@@ -48,6 +48,7 @@ describe('buildHmiPreviewRequest', () => {
     'lib_standard_widgets.cpp': '#include "hmi_unit_libraries.hpp"\n#include <vector>',
     'pou_MAIN.cpp': '// main',
     'hmi_preview_0.cpp': '// setters',
+    'hmi_preview_factory.cpp': '// factory',
     'configuration.cpp': '// config',
   }
   const groups = {
@@ -55,6 +56,7 @@ describe('buildHmiPreviewRequest', () => {
     widgets: [],
     screens: { Main: ['pou_MAIN.cpp', 'hmi_preview_0.cpp'] },
     glue: ['configuration.cpp'],
+    factory: ['hmi_preview_factory.cpp'],
   }
   const request = buildHmiPreviewRequest(unitFiles, groups, '// fonts', resources)
 
@@ -85,8 +87,17 @@ describe('buildHmiPreviewRequest', () => {
       ['groups/library.cpp', 'c++', 'unit/hmi_preview_pch.hpp'],
       ['groups/screen_Main.cpp', 'c++', 'unit/hmi_preview_pch.hpp'],
       ['groups/glue.cpp', 'c++', 'unit/hmi_preview_pch.hpp'],
+      ['groups/factory.cpp', 'c++', 'unit/hmi_preview_pch.hpp'],
       ['hmi/preview/hmi_preview_host.cpp', 'c++', 'unit/hmi_preview_pch.hpp'],
     ])
+  })
+
+  it("compiles the factory table with the live elements' code, which it finds on its own include path", () => {
+    expect(request.files['groups/factory.cpp']).toBe(
+      '#include "hmi_preview_factory.cpp"\n#include "hmi_preview_live.cpp"\n',
+    )
+    expect(request.units.find((u) => u.source === 'groups/factory.cpp')?.flags).toEqual(['-Ihmi/preview'])
+    expect(request.units.filter((u) => u.flags !== undefined)).toHaveLength(1)
   })
 
   it("precompiles the core header and the runtime headers the unit's headers include, once", () => {
@@ -116,6 +127,28 @@ describe('buildHmiPreview', () => {
     expect(requests).toHaveLength(1)
     expect(Object.keys(requests[0].files)).toContain('groups/screen_Overview.cpp')
     expect(String(requests[0].files['unit/hmi_preview_fonts.c'])).toContain('hmi_font_table')
+  })
+
+  it("compiles each screen against a header without the other screens' classes", async () => {
+    const { requests, compile } = capture()
+    await buildHmiPreview(sampleProject(), resources, compile)
+    const files = requests[0].files
+    const overview = String(files['unit/hmi_screen_OVERVIEW.hpp'])
+    expect(overview).toContain('class OVERVIEW : public HMISCREEN {')
+    expect(overview).not.toContain('class DETAILS : public')
+    expect(String(files['unit/pou_OVERVIEW.cpp'])).toContain('#include "hmi_screen_OVERVIEW.hpp"')
+    expect(String(files['unit/hmi_preview_0.cpp'])).toContain('#include "hmi_screen_OVERVIEW.hpp"')
+    expect(String(files['unit/hmi_unit_glue.cpp'])).toContain('#include "hmi_unit.hpp"')
+  })
+
+  it('returns the widget types the module adds without a build, and how long each step took', async () => {
+    const { compile } = capture()
+    const build = await buildHmiPreview(sampleProject(), resources, compile)
+    if (!build.ok) throw new Error('the build failed')
+    expect(build.factory.types.HMILABEL?.setters.TEXT).toMatchObject({ kind: 'str' })
+    expect(build.factory.types.BADGE).toBeDefined()
+    expect(build.timings.generateMs).toBeGreaterThan(0)
+    expect(build.timings.totalMs).toBeGreaterThanOrEqual(build.timings.generateMs + build.timings.toolchainMs)
   })
 
   it('builds a widget block on its own screen after the project screens', async () => {

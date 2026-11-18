@@ -112,13 +112,14 @@ HMI_PV_EXPORT("hmi_pv_page") int32_t hmi_pv_page(void) {
     return hmi_page();
 }
 
-/** Runs one frame at time_ms; returns the display list length. */
+/** Runs one frame at time_ms; returns the display list length. A frame that builds another screen ends live elements. */
 HMI_PV_EXPORT("hmi_pv_frame") uint32_t hmi_pv_frame(uint32_t time_ms) {
     hmi_session_use(g_session);
     hmi_set_time_ms(time_ms);
     hmi_frame_begin();
     hmi_unit_frame(g_unit);
     g_dl = hmi_frame_end(&g_dl_len);
+    hmi_unit_live_sync(g_unit);
     return static_cast<uint32_t>(g_dl_len);
 }
 
@@ -202,4 +203,27 @@ HMI_PV_EXPORT("hmi_pv_text") char *hmi_pv_text(void) { return g_text; }
 HMI_PV_EXPORT("hmi_pv_set_str") int32_t hmi_pv_set_str(int32_t screen, int32_t setter) {
     g_text[HMI_PV_TEXT_MAX] = 0;
     return hmi_unit_set_str(g_unit, screen, setter, g_text);
+}
+
+/**
+ * Adds an element of factory type `type` to the shown screen (hmi_unit_live_add); returns its element id, or -1. Its
+ * inputs are set with hmi_pv_live_set_num and _str before the next frame.
+ */
+HMI_PV_EXPORT("hmi_pv_live_add")
+int32_t hmi_pv_live_add(int32_t type, int32_t parent, int32_t parent_kind, int32_t before, int32_t draw_before) {
+    return hmi_unit_live_add(g_unit, type, parent, parent_kind, before, draw_before);
+}
+
+HMI_PV_EXPORT("hmi_pv_live_set_num") int32_t hmi_pv_live_set_num(int32_t element, int32_t setter, double value) {
+    return hmi_unit_live_set_num(g_unit, element, setter, value);
+}
+
+/** Sets a STRING input of a live element from hmi_pv_text. */
+HMI_PV_EXPORT("hmi_pv_live_set_str") int32_t hmi_pv_live_set_str(int32_t element, int32_t setter) {
+    g_text[HMI_PV_TEXT_MAX] = 0;
+    return hmi_unit_live_set_str(g_unit, element, setter, g_text);
+}
+
+HMI_PV_EXPORT("hmi_pv_live_remove") int32_t hmi_pv_live_remove(int32_t element) {
+    return hmi_unit_live_remove(g_unit, element);
 }

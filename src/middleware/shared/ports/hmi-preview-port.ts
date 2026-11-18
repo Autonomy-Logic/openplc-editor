@@ -6,6 +6,7 @@ import type {
   HmiBuildStep,
   HmiCatalogResult,
   HmiCodeContext,
+  HmiLiveElement,
   HmiPointerKind,
   HmiPreviewBuild,
   HmiPreviewFrame,
@@ -33,9 +34,19 @@ export interface HmiPreviewSession {
   resize(width: number, height: number): Promise<void>
   pointer(kind: HmiPointerKind, x: number, y: number): Promise<void>
   key(code: number): Promise<void>
-  /** Applies a live property edit; false when the module has no such setter. */
-  setNumber(screen: number, setter: number, value: number): Promise<boolean>
-  setText(screen: number, setter: number, value: string): Promise<boolean>
+  /**
+   * Applies a live property edit; false when the module has no such setter. With `element`, the setter is a factory
+   * setter of that live element.
+   */
+  setNumber(screen: number, setter: number, value: number, element?: number): Promise<boolean>
+  setText(screen: number, setter: number, value: string, element?: number): Promise<boolean>
+  /**
+   * Adds elements to the shown screen without a build, in order; their element ids, or null when the module could not
+   * add them all (it then added none). They last until the next module starts or the screen is left.
+   */
+  add(elements: readonly HmiLiveElement[]): Promise<number[] | null>
+  /** Takes live elements off the screen, the last added first. */
+  remove(elements: readonly number[]): Promise<void>
   /** Called when the running module stops: a fault in screen code, a crashed Worker or a call that took too long. */
   onStop(listener: (reason: string) => void): () => void
   close(): void

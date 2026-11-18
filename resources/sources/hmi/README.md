@@ -16,8 +16,8 @@ and produce the same pixels on each. This folder is mirrored byte for byte in op
 | `core/hmi_text.c` | Fonts, text metrics, glyph cache, text drawing |
 | `core/third_party/` | stb_truetype (see its README) |
 | `baremetal/` | The HMI host of the Baremetal firmware (`hmi_baremetal.c`, `.h`) and the panel driver contract a board's HAL implements (`hmi_panel.h`) |
-| `unit/` | The interface of a generated HMI unit (`hmi_unit.h`) and its preview setters (`hmi_preview.h`) |
-| `preview/` | The editor's preview host (`hmi_preview_host.cpp`): one viewer of a unit in a WebAssembly module, frames rasterized in bands with unchanged bands skipped |
+| `unit/` | The interface of a generated HMI unit (`hmi_unit.h`), its preview setters and live elements (`hmi_preview.h`) and the preview's factory table (`hmi_preview_factory.h`) |
+| `preview/` | The editor's preview host (`hmi_preview_host.cpp`): one viewer of a unit in a WebAssembly module, frames rasterized in bands with unchanged bands skipped; and its live elements (`hmi_preview_live.cpp`), added to the shown screen without a build |
 | `client/` | The Runtime v4 browser client served at `/hmi/`: the sign-in page, `hmi-client.js` (sign-in, token renewal, the `/api/hmi` viewer), socket.io-client 4.8.1 (MIT) and `hmi_client.c`, built with the rasterizer and the unit's font table into `hmi_client.wasm` at each upload |
 | `fonts/` | The vetted fonts: OpenPLC Sans (default, ASCII and Latin-1) and Liberation Sans (full); see its README |
 
@@ -169,6 +169,13 @@ role, the tag table with read and write accessors for the PLC variables screens 
 panel PIN and relock time. `unit/hmi_preview.h` adds the live property setters only the editor's preview links. The
 editor's generator (`src/backend/shared/hmi/unit/`) writes the unit.
 
+`hmi_preview.h` also lets the preview add elements without a build (`hmi_unit_live_add`). A preview build compiles the
+libraries whole and generates a factory table (`unit/hmi_preview_factory.h`, `hmi_preview_factory.cpp`): every widget
+type and one setter per input it sets live. `preview/hmi_preview_live.cpp` creates an element from it, inserts it into
+its container's children and the screen's drawing list where the next build attaches it, and numbers it after the
+screen's elements; the host frees live elements when the shown screen is left. Product builds (firmware, Runtime v4,
+the CLI) generate no factory and never link either file.
+
 ## Tests (in openplc-editor)
 
 `npm run test:hmi-core` (or `node tests/hmi-core/run.mjs`, see the options at the top of that file) builds the
@@ -183,7 +190,11 @@ input and checks every frame against `tests/hmi-lib/golden.txt`.
 
 `npm run test:hmi-preview` (`tests/hmi-preview/run.ts`) builds a sample project's preview with the shared preview
 build and the in-editor WebAssembly toolchain, runs it through the preview host, and checks frames, band skipping,
-live setters, navigation, the widget-block preview and how long rebuilds take after each kind of edit.
+live setters, navigation, the widget-block preview and how long rebuilds take after each kind of edit. It adds
+elements to a running module without a build (in a stack, before a sibling, on a diagram, a widget block, a container
+with a child) and checks that each is drawn within `HMI_PREVIEW_LIVE_ADD_MS` (50 ms) without a compile and that the
+frame and the elements' bounds equal those of the module the edit then builds. It prints where each build spent its
+time.
 
 `npm run test:hmi-baremetal` (`tests/hmi-baremetal/run.mjs`) builds the core, the sample unit and the baremetal host
 with `HMI_STATIC_MEMORY` and a fake panel, clock and debugger table, and checks in simulated time that the panel shows

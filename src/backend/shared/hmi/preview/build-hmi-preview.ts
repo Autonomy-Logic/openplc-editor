@@ -6,6 +6,7 @@ import type {
   HmiBuildStep,
   HmiPreviewBuild,
   HmiPreviewRequest,
+  HmiPreviewTimings,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
 import type {
   WasmCompileRequest,
@@ -21,6 +22,7 @@ import {
   type HmiPreview,
   WIDGET_PREVIEW_SCREEN,
 } from '../unit/generate-hmi-unit'
+import { splitScreenHeaders } from './split-screen-headers'
 
 /** What the preview build reads besides the project: the files every preview compiles in. */
 export interface HmiPreviewResources {
@@ -43,6 +45,11 @@ const PCH = `${UNIT_DIR}/hmi_preview_pch.hpp`
 const GROUP_DIR = 'groups'
 const FONT_TABLE = `${UNIT_DIR}/hmi_preview_fonts.c`
 const HOST = `${HMI_DIR}/preview/hmi_preview_host.cpp`
+/** The live elements' code, compiled with the factory table it reads: both change only with the widget blocks. */
+const LIVE_SOURCE = 'hmi_preview_live.cpp'
+const FACTORY_GROUP = 'groups/factory.cpp'
+/** The factory group's own include path, where it finds the live elements' code. */
+const FACTORY_FLAGS = [`-I${HMI_DIR}/preview`]
 const CORE_SOURCES = ['hmi_core.c', 'hmi_theme.c', 'hmi_math.c', 'hmi_raster.c', 'hmi_text.c']
 /** Upper bound of the module's memory: a 2560 x 1600 surface at density 2 and the unit fit with room to spare. */
 export const HMI_PREVIEW_MAX_MEMORY = 128 * 1024 * 1024
@@ -107,6 +114,7 @@ function groupUnits(groups: HmiPreview['units']): Record<string, string> {
     if (files.length === 0) continue
     wrappers[`${GROUP_DIR}/${name}.cpp`] = `${files.map((f) => `#include "${f}"`).join('\n')}\n`
   }
+  wrappers[FACTORY_GROUP] = [...groups.factory, LIVE_SOURCE].map((f) => `#include "${f}"\n`).join('')
   return wrappers
 }
 
@@ -131,7 +139,12 @@ export function buildHmiPreviewRequest(
   const units: WasmCompileUnit[] = [
     ...CORE_SOURCES.map((name): WasmCompileUnit => ({ source: `${HMI_DIR}/core/${name}`, language: 'c' })),
     { source: FONT_TABLE, language: 'c' },
-    ...Object.keys(wrappers).map((source): WasmCompileUnit => ({ source, language: 'c++', pch: PCH })),
+    ...Object.keys(wrappers).map(
+      (source): WasmCompileUnit =>
+        source === FACTORY_GROUP
+          ? { source, language: 'c++', pch: PCH, flags: FACTORY_FLAGS }
+          : { source, language: 'c++', pch: PCH },
+    ),
     { source: HOST, language: 'c++', pch: PCH },
   ]
   return {
@@ -157,11 +170,27 @@ export async function buildHmiPreview(
   compile: HmiPreviewCompile,
   onStep?: (step: HmiBuildStep) => void,
 ): Promise<HmiPreviewBuild> {
+  const started = performance.now()
+  const timings: HmiPreviewTimings = {
+    sourcesMs: 0,
+    generateMs: 0,
+    widgetsMs: 0,
+    strucppMs: 0,
+    fontsMs: 0,
+    toolchainMs: 0,
+    totalMs: 0,
+  }
+  const done = (): HmiPreviewTimings => ({ ...timings, totalMs: performance.now() - started })
   onStep?.('generate')
   await nextTask()
+  const generateStart = performance.now()
   const generated = generateHmiUnit({ ...input, preview: true, resolve: undefined, plcMd5: undefined })
-  if (!generated.ok) return { ok: false, errors: generated.errors, warnings: generated.warnings }
+  timings.generateMs = performance.now() - generateStart
+  timings.widgetsMs = generated.timings.widgetsMs
+  timings.strucppMs = generated.timings.strucppMs
+  if (!generated.ok) return { ok: false, errors: generated.errors, warnings: generated.warnings, timings: done() }
 
+  const fontsStart = performance.now()
   let fontTable: string
   try {
     const fonts = await Promise.all(
@@ -174,17 +203,20 @@ export async function buildHmiPreview(
     fontTable = await buildHmiFontTableSource(fonts)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return { ok: false, errors: [{ file: UNIT, message }], warnings: generated.warnings }
+    return { ok: false, errors: [{ file: UNIT, message }], warnings: generated.warnings, timings: done() }
   }
+  timings.fontsMs = performance.now() - fontsStart
 
   const request = buildHmiPreviewRequest(
-    { ...generated.files, ...generated.preview.files },
+    splitScreenHeaders({ ...generated.files, ...generated.preview.files }, generated.preview.units.screens),
     generated.preview.units,
     fontTable,
     resources,
   )
   onStep?.('compile')
+  const toolchainStart = performance.now()
   const result = await compile(request)
+  timings.toolchainMs = performance.now() - toolchainStart
   if (!result.ok) {
     const errors = result.diagnostics
       .filter((d) => d.level === 'error')
@@ -194,6 +226,7 @@ export async function buildHmiPreview(
       errors: errors.length > 0 ? errors : [{ file: UNIT, message: result.error }],
       warnings: generated.warnings,
       stats: result.stats,
+      timings: done(),
     }
   }
   const names = input.gallery
@@ -207,7 +240,9 @@ export async function buildHmiPreview(
     pages: Object.fromEntries(names.map((name, page) => [name, page])),
     setters: generated.preview.setters,
     elementIds: generated.elementIds,
+    factory: generated.preview.factory,
     warnings: generated.warnings,
     stats: result.stats,
+    timings: done(),
   }
 }

@@ -6,6 +6,7 @@ import { ClangWorkerPool } from '../clang-worker-pool'
 import { type CachedWasmObject, compileToWasm, type WasmCompileRequest } from '../compile-to-wasm'
 import { CountingClangMechanism, flushMicrotasks } from './fixtures/counting-clang-mechanism'
 import { FakeRunner } from './fixtures/fake-runner'
+import { isFileBytes, readTreeFile } from '../file-tree'
 
 const request = (overrides: Partial<WasmCompileRequest> = {}): WasmCompileRequest => ({
   files: {
@@ -257,6 +258,37 @@ describe('compileToWasm', () => {
       const result = await compileToWasm(withHeader('#include "core/core.h"\n#define MORE 1'), { runner, cache })
       expect(result.stats.cached).toBe(1)
       expect(compiledSources(runner)).toEqual(['app/main.cpp'])
+    })
+
+    it('keys units by what their header was built from, so a header rebuilt with other bytes keeps them', async () => {
+      const cache = new Map<string, CachedWasmObject>()
+      await compileToWasm(withHeader(), { runner: headerRunner(), cache })
+      const header = [...cache.entries()].find(([, entry]) => decode(entry.object).includes('c++-header'))
+      if (header) cache.delete(header[0])
+      const inner = headerRunner()
+      const stamped: WasmClangRunner = {
+        concurrency: inner.concurrency,
+        prepare: () => inner.prepare(),
+        release: () => inner.release(),
+        run: async (job) => {
+          const result = await inner.run(job)
+          const out = job.argv[job.argv.indexOf('-o') + 1]
+          const bytes = readTreeFile(result.tree, out)
+          if (!out.endsWith('.pch') || !isFileBytes(bytes)) return result
+          const objects = result.tree.__objects
+          if (typeof objects === 'string' || isFileBytes(objects)) return result
+          const rebuilt = new Uint8Array([...bytes, 0x2a])
+          return {
+            ...result,
+            tree: { ...result.tree, __objects: { ...objects, [out.slice(out.indexOf('/') + 1)]: rebuilt } },
+          }
+        },
+      }
+      const result = await compileToWasm(withHeader(), { runner: stamped, cache })
+      expect(header).toBeDefined()
+      expect(result.ok).toBe(true)
+      expect(result.stats.cached).toBe(2)
+      expect(inner.jobs.filter((j) => j.argv.includes('-c'))).toEqual([])
     })
 
     it('stops before the units when a header fails', async () => {

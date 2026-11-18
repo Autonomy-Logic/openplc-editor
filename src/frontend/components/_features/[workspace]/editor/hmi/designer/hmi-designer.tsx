@@ -284,6 +284,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const [fit, area] = useFitZoom(device.width, device.height)
   const zoom = entry.zoom ?? fit
+  const declared = useMemo(() => model?.elements.map((e) => e.name), [model])
   const preview = usePreviewSession({
     request: readyRequest(request),
     screen: name,
@@ -291,6 +292,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     design: mode === 'design',
     framePeriodMs: request.settings.framePeriodMs,
     canvas,
+    declared,
   })
   const elements = useMemo(
     () => (model && preview.built ? canvasElements(preview.bounds, preview.built.elementIds, name, model) : []),
@@ -368,6 +370,11 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   )
 
   const select = useCallback((names: string[]) => actions.select(kind, name, names), [actions, name])
+  /** Shows the elements an applied edit added before its build, when the running preview can. */
+  const showAdded = (edited: string, names: readonly string[]) => {
+    const after = parseDesignerBlock(edited, isWidget)
+    if (after.ok) preview.addLive(name, after.model, names, catalog)
+  }
   const modelNow = useRef(model)
   modelNow.current = model
   useEffect(() => {
@@ -399,7 +406,9 @@ export function HmiScreenDesigner({ name }: { name: string }) {
         catalog.widgets
           .get(type.toUpperCase())
           ?.properties.some((p) => same(p.name, property) && p.kind === 'elementRef') ?? false
-      if (apply(renameElement(source, model, element, newName, { refersToElement: refers }))) select([newName])
+      const result = renameElement(source, model, element, newName, { refersToElement: refers })
+      if (result.ok) preview.renameLive(name, element, newName)
+      if (apply(result)) select([newName])
     },
     remove: (element) => {
       if (model && apply(deleteElements(source, model, withTheirPipes(model, catalog, [element])))) select([])
@@ -434,7 +443,9 @@ export function HmiScreenDesigner({ name }: { name: string }) {
           ]
         : []
       const result = addElement(source, model, { type, parent: target.parent, before: target.before, props })
-      if (apply(result) && result.ok && result.name) select([result.name])
+      if (!apply(result) || !result.ok || !result.name) return
+      showAdded(result.source, [result.name])
+      select([result.name])
     },
     move: (element, target) => {
       const type = model?.elements.find((e) => same(e.name, element))?.type
@@ -540,7 +551,9 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     )
       return
     const result = pasteElements(source, model, clip, parent, null)
-    if (apply(result) && result.ok && result.names) select(result.names.slice(0, 1))
+    if (!apply(result) || !result.ok || !result.names) return
+    showAdded(result.source, result.names)
+    select(result.names.slice(0, 1))
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {

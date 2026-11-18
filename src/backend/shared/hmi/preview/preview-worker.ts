@@ -4,6 +4,7 @@
  */
 import type { HmiPreviewWorkerScope } from '../../../../middleware/shared/ports/hmi-preview-mechanisms'
 import type {
+  HmiLiveElement,
   HmiPointerKind,
   HmiPreviewReply,
   HmiPreviewRequestMessage,
@@ -14,6 +15,36 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
 const isPointerKind = (value: unknown): value is HmiPointerKind =>
   value === 'down' || value === 'move' || value === 'up'
+
+const isInteger = (value: unknown): value is number => isNumber(value) && Number.isInteger(value)
+
+/** A live element's input values, or null when one is malformed. */
+function parseValues<T extends number | string>(
+  value: unknown,
+  isValue: (v: unknown) => v is T,
+): Array<{ setter: number; value: T }> | null {
+  if (!Array.isArray(value)) return null
+  const values: Array<{ setter: number; value: T }> = []
+  for (const entry of value) {
+    if (!isRecord(entry) || !isInteger(entry.setter) || !isValue(entry.value)) return null
+    values.push({ setter: entry.setter, value: entry.value })
+  }
+  return values
+}
+
+const isString = (value: unknown): value is string => typeof value === 'string'
+
+function parseLiveElement(value: unknown): HmiLiveElement | null {
+  if (!isRecord(value)) return null
+  const { type, parent, parentKind, before, drawBefore } = value
+  if (!isInteger(type) || !isInteger(before) || !isInteger(drawBefore) || !isRecord(parent)) return null
+  if (parentKind !== 'stack' && parentKind !== 'diagram') return null
+  const container = isInteger(parent.id) ? { id: parent.id } : isInteger(parent.added) ? { added: parent.added } : null
+  const numbers = parseValues(value.numbers, isNumber)
+  const texts = parseValues(value.texts, isString)
+  if (!container || !numbers || !texts) return null
+  return { type, parent: container, parentKind, before, drawBefore, numbers, texts }
+}
 
 /** Checks a message that crossed the Worker boundary. */
 export function parseHmiPreviewRequest(value: unknown): HmiPreviewRequestMessage | null {
@@ -45,13 +76,33 @@ export function parseHmiPreviewRequest(value: unknown): HmiPreviewRequestMessage
         : null
     case 'key':
       return isNumber(value.code) ? { id, type: 'key', code: value.code } : null
-    case 'setNumber':
-      return isNumber(value.screen) && isNumber(value.setter) && isNumber(value.value)
-        ? { id, type: 'setNumber', screen: value.screen, setter: value.setter, value: value.value }
-        : null
-    case 'setText':
-      return isNumber(value.screen) && isNumber(value.setter) && typeof value.value === 'string'
-        ? { id, type: 'setText', screen: value.screen, setter: value.setter, value: value.value }
+    case 'setNumber': {
+      const { screen, setter, element } = value
+      if (!isNumber(screen) || !isNumber(setter) || !isNumber(value.value)) return null
+      if (element !== undefined && !isInteger(element)) return null
+      const request = { id, type: 'setNumber' as const, screen, setter, value: value.value }
+      return element === undefined ? request : { ...request, element }
+    }
+    case 'setText': {
+      const { screen, setter, element } = value
+      if (!isNumber(screen) || !isNumber(setter) || typeof value.value !== 'string') return null
+      if (element !== undefined && !isInteger(element)) return null
+      const request = { id, type: 'setText' as const, screen, setter, value: value.value }
+      return element === undefined ? request : { ...request, element }
+    }
+    case 'add': {
+      if (!Array.isArray(value.elements)) return null
+      const elements: HmiLiveElement[] = []
+      for (const entry of value.elements) {
+        const element = parseLiveElement(entry)
+        if (!element) return null
+        elements.push(element)
+      }
+      return { id, type: 'add', elements }
+    }
+    case 'remove':
+      return Array.isArray(value.elements) && value.elements.every(isInteger)
+        ? { id, type: 'remove', elements: value.elements.filter(isInteger) }
         : null
     default:
       return null
@@ -93,16 +144,25 @@ async function answer(
     case 'key':
       instance.key(request.code)
       break
-    case 'setNumber':
-      return {
-        reply: { id, ok: true, applied: instance.setNumber(request.screen, request.setter, request.value) },
-        transfer: [],
-      }
-    case 'setText':
-      return {
-        reply: { id, ok: true, applied: instance.setText(request.screen, request.setter, request.value) },
-        transfer: [],
-      }
+    case 'setNumber': {
+      const { screen, setter, value, element } = request
+      const applied =
+        element === undefined
+          ? instance.setNumber(screen, setter, value)
+          : instance.setLiveNumber(element, setter, value)
+      return { reply: { id, ok: true, applied }, transfer: [] }
+    }
+    case 'setText': {
+      const { screen, setter, value, element } = request
+      const applied =
+        element === undefined ? instance.setText(screen, setter, value) : instance.setLiveText(element, setter, value)
+      return { reply: { id, ok: true, applied }, transfer: [] }
+    }
+    case 'add':
+      return { reply: { id, ok: true, added: instance.addLive(request.elements) ?? [] }, transfer: [] }
+    case 'remove':
+      instance.removeLive(request.elements)
+      break
   }
   return { reply: { id, ok: true }, transfer: [] }
 }

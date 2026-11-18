@@ -5,6 +5,7 @@ import type {
   WasmClangRunner,
 } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 import type {
+  WasmCompileJobTiming,
   WasmCompileRequest,
   WasmCompileResult,
   WasmCompileStats,
@@ -21,6 +22,7 @@ import { parseDependencyFile } from './dependency-file'
 import { filesToTree, filesTreeProblem, isFileBytes, readTreeFile, toolchainPathProblem } from './file-tree'
 
 export type {
+  WasmCompileJobTiming,
   WasmCompileRequest,
   WasmCompileResult,
   WasmCompileStats,
@@ -115,7 +117,7 @@ function validate(request: WasmCompileRequest): string | null {
   return null
 }
 
-/** A built precompiled header: where units find it, and the digest of its bytes. */
+/** A built precompiled header: where units find it, and a digest that stands for its bytes. */
 interface BuiltHeader {
   path: string
   digest: string
@@ -274,14 +276,30 @@ interface CompileContext {
   loadFailures: WasmToolchainLoadError[]
   report: Report
   stats: WasmCompileStats
+  /** Each job's timing by its planned object path. */
+  timings: Map<string, WasmCompileJobTiming>
+  /** What each object was built from, by its planned object path: see {@link inputDigest}. */
+  inputs: Map<string, string>
 }
+
+/**
+ * A digest of everything an object was built from: its cache key, the digest of every request file it read and the
+ * request paths that could have shadowed them. Equal inputs build the same object, so this stands for its bytes
+ * without reading them.
+ */
+const inputDigest = (key: string, entry: Pick<CachedWasmObject, 'dependencies' | 'shadowDigest'>): string =>
+  new ContentHash()
+    .update(key)
+    .update(entry.dependencies.map(([path, digest]) => `${path}\u0000${digest}`).join('\u0001'))
+    .update(entry.shadowDigest)
+    .digest()
 
 /**
  * Takes each job's output from the cache while its dependencies are unchanged and no file that could hide one of them
  * was added or removed, and compiles the rest, largest first.
  */
 async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToTree>, ctx: CompileContext) {
-  const { runner, cache, digestOf, shadowOf, objects, failures, loadFailures, report, stats } = ctx
+  const { runner, cache, digestOf, shadowOf, objects, failures, loadFailures, report, stats, timings, inputs } = ctx
   const pending: PlannedUnit[] = []
   for (const p of jobs) {
     const hit = cache?.get(p.key)
@@ -291,7 +309,9 @@ async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToT
       shadowOf(hit.includeNames) === hit.shadowDigest
     ) {
       objects.set(p.object, hit.object)
+      inputs.set(p.object, inputDigest(p.key, hit))
       stats.cached++
+      timings.set(p.object, { source: p.unit.source, ms: 0, cached: true })
     } else {
       pending.push(p)
     }
@@ -299,7 +319,9 @@ async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToT
   pending.sort((x, y) => y.size - x.size)
   await runLimited(pending, runner.concurrency, async (p) => {
     if (loadFailures.length > 0) return
+    const started = performance.now()
     const result = await runSafely(runner, { argv: p.argv, tree })
+    timings.set(p.object, { source: p.unit.source, ms: performance.now() - started, cached: false })
     if (result instanceof WasmToolchainLoadError) {
       loadFailures.push(result)
       return
@@ -308,7 +330,13 @@ async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToT
     if (isFileBytes(object)) {
       objects.set(p.object, object)
       const built = dependenciesOf(result, p, digestOf)
-      if (built) cache?.set(p.key, { object, ...built, shadowDigest: shadowOf(built.includeNames) })
+      if (built) {
+        const entry = { object, ...built, shadowDigest: shadowOf(built.includeNames) }
+        cache?.set(p.key, entry)
+        inputs.set(p.object, inputDigest(p.key, entry))
+      } else {
+        inputs.set(p.object, new ContentHash().update(object).digest())
+      }
       reportStderr(report, result.stderr, 'warning')
       return
     }
@@ -352,8 +380,22 @@ export async function compileToWasm(
   const objects = new Map<string, Uint8Array>()
   const failures: string[] = []
   const loadFailures: WasmToolchainLoadError[] = []
+  const timings = new Map<string, WasmCompileJobTiming>()
+  const inputs = new Map<string, string>()
   const build = (jobs: PlannedUnit[], tree: ReturnType<typeof filesToTree>): Promise<void> =>
-    compileJobs(jobs, tree, { runner, cache, digestOf, shadowOf, objects, failures, loadFailures, report, stats })
+    compileJobs(jobs, tree, {
+      runner,
+      cache,
+      digestOf,
+      shadowOf,
+      objects,
+      failures,
+      loadFailures,
+      report,
+      stats,
+      timings,
+      inputs,
+    })
 
   const headerJobs = planHeaders(request)
   const unitFiles: WasmToolchainFiles = { ...request.files }
@@ -364,12 +406,17 @@ export async function compileToWasm(
       const bytes = objects.get(job.object)
       if (!bytes) continue
       unitFiles[job.object] = bytes
-      headers.set(job.unit.source, { path: job.object, digest: new ContentHash().update(bytes).digest() })
+      const digest = inputs.get(job.object) ?? new ContentHash().update(bytes).digest()
+      headers.set(job.unit.source, { path: job.object, digest })
     }
   }
   const planned = planUnits(request, headers)
   if (failures.length === 0 && loadFailures.length === 0) await build(planned, filesToTree(unitFiles))
   stats.compileMs = performance.now() - compileStart
+  stats.jobs = [...headerJobs, ...planned].flatMap((p) => {
+    const timing = timings.get(p.object)
+    return timing ? [timing] : []
+  })
 
   const total = headerJobs.length + planned.length
   if (loadFailures.length > 0) return fail(loadFailures[0].message)

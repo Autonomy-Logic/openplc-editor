@@ -38,6 +38,11 @@ function parseReply(value: unknown): HmiPreviewReply | null {
   if (value.ok !== true) return null
   const reply: Success = { id: value.id, ok: true }
   if (typeof value.applied === 'boolean') reply.applied = value.applied
+  if (Array.isArray(value.added)) {
+    const added = value.added.filter((id): id is number => typeof id === 'number' && Number.isInteger(id))
+    if (added.length !== value.added.length) return null
+    reply.added = added
+  }
   const frame = parseFrame(value.frame)
   if (frame) reply.frame = frame
   return reply
@@ -184,11 +189,20 @@ export function createHmiPreviewSession(
     async key(code) {
       await call({ type: 'key', code })
     },
-    async setNumber(screen, setter, value) {
-      return (await call({ type: 'setNumber', screen, setter, value })).applied === true
+    async setNumber(screen, setter, value, element) {
+      const message = element === undefined ? { screen, setter, value } : { screen, setter, value, element }
+      return (await call({ type: 'setNumber', ...message })).applied === true
     },
-    async setText(screen, setter, value) {
-      return (await call({ type: 'setText', screen, setter, value })).applied === true
+    async setText(screen, setter, value, element) {
+      const message = element === undefined ? { screen, setter, value } : { screen, setter, value, element }
+      return (await call({ type: 'setText', ...message })).applied === true
+    },
+    async add(elements) {
+      const added = (await call({ type: 'add', elements: [...elements] })).added ?? []
+      return added.length === elements.length && added.length > 0 ? added : null
+    },
+    async remove(elements) {
+      await call({ type: 'remove', elements: [...elements] })
     },
     onStop(listener) {
       listeners.add(listener)

@@ -4,6 +4,7 @@
  */
 
 import type {
+  HmiLiveElement,
   HmiPointerKind,
   HmiPreviewBounds,
   HmiPreviewPixels,
@@ -33,7 +34,14 @@ interface HostFunctions {
   hmi_pv_set_num: NumericFunction
   hmi_pv_text: NumericFunction
   hmi_pv_set_str: NumericFunction
+  hmi_pv_live_add: NumericFunction
+  hmi_pv_live_set_num: NumericFunction
+  hmi_pv_live_set_str: NumericFunction
+  hmi_pv_live_remove: NumericFunction
 }
+
+/** `hmi_live_container` of hmi_preview.h. */
+const LIVE_CONTAINER: Record<HmiLiveElement['parentKind'], number> = { stack: 1, diagram: 2 }
 
 /** Longest text a STRING setter takes (`HMI_PV_TEXT_MAX`). */
 const TEXT_MAX = 255
@@ -98,6 +106,10 @@ export class HmiPreviewInstance {
       hmi_pv_set_num: bind('hmi_pv_set_num'),
       hmi_pv_text: bind('hmi_pv_text'),
       hmi_pv_set_str: bind('hmi_pv_set_str'),
+      hmi_pv_live_add: bind('hmi_pv_live_add'),
+      hmi_pv_live_set_num: bind('hmi_pv_live_set_num'),
+      hmi_pv_live_set_str: bind('hmi_pv_live_set_str'),
+      hmi_pv_live_remove: bind('hmi_pv_live_remove'),
     }
     const preview = new HmiPreviewInstance(memory, call)
     if (preview.call.hmi_pv_init(width, height) !== 0) throw new Error('The preview does not fit in memory')
@@ -163,10 +175,61 @@ export class HmiPreviewInstance {
 
   /** Sets a STRING live property of a screen, cut to TEXT_MAX bytes; false when it has no such setter. */
   setText(screen: number, setter: number, value: string): boolean {
+    this.writeText(value)
+    return this.call.hmi_pv_set_str(screen, setter) === 0
+  }
+
+  /** Sets a numeric or BOOL input of a live element by its factory setter; false when it has no such setter. */
+  setLiveNumber(element: number, setter: number, value: number): boolean {
+    return this.call.hmi_pv_live_set_num(element, setter, value) === 0
+  }
+
+  /** Sets a STRING input of a live element, cut to TEXT_MAX bytes; false when it has no such setter. */
+  setLiveText(element: number, setter: number, value: string): boolean {
+    this.writeText(value)
+    return this.call.hmi_pv_live_set_str(element, setter) === 0
+  }
+
+  /**
+   * Adds elements to the shown screen without a build, in order, with their inputs set; returns their element ids.
+   * When one cannot be added or set, the ones added are taken off again and the result is null.
+   */
+  addLive(elements: readonly HmiLiveElement[]): number[] | null {
+    const added: number[] = []
+    for (const element of elements) {
+      const parent = 'id' in element.parent ? element.parent.id : added[element.parent.added]
+      const id =
+        parent === undefined
+          ? -1
+          : this.call.hmi_pv_live_add(
+              element.type,
+              parent,
+              LIVE_CONTAINER[element.parentKind],
+              element.before,
+              element.drawBefore,
+            )
+      const set =
+        id > 0 &&
+        element.numbers.every(({ setter, value }) => this.setLiveNumber(id, setter, value)) &&
+        element.texts.every(({ setter, value }) => this.setLiveText(id, setter, value))
+      if (id > 0) added.push(id)
+      if (!set) {
+        this.removeLive(added)
+        return null
+      }
+    }
+    return added
+  }
+
+  /** Takes live elements off the screen, the last added first; unknown ids are skipped. */
+  removeLive(elements: readonly number[]): void {
+    for (const id of [...elements].reverse()) this.call.hmi_pv_live_remove(id)
+  }
+
+  private writeText(value: string): void {
     const bytes = new TextEncoder().encode(value).subarray(0, TEXT_MAX)
     const buffer = new Uint8Array(this.memory.buffer, this.call.hmi_pv_text(), TEXT_MAX + 1)
     buffer.set(bytes)
     buffer[bytes.length] = 0
-    return this.call.hmi_pv_set_str(screen, setter) === 0
   }
 }
