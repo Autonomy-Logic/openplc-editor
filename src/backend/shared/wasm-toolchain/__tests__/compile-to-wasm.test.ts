@@ -1,6 +1,10 @@
 import { describe, expect, it } from '@jest/globals'
 
+import type { WasmClangRunner } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
+
+import { ClangWorkerPool } from '../clang-worker-pool'
 import { type CachedWasmObject, compileToWasm, type WasmCompileRequest } from '../compile-to-wasm'
+import { CountingClangMechanism, flushMicrotasks } from './fixtures/counting-clang-mechanism'
 import { FakeRunner } from './fixtures/fake-runner'
 
 const request = (overrides: Partial<WasmCompileRequest> = {}): WasmCompileRequest => ({
@@ -271,5 +275,56 @@ describe('compileToWasm', () => {
     expect(result).toMatchObject({ ok: false, error: message })
     expect(log).toEqual([[message, 'error']])
     expect(runner.jobs).toHaveLength(0)
+  })
+})
+
+describe('compileToWasm when the toolchain cannot load', () => {
+  it('fails with the load message as an error diagnostic, and runs no link job', async () => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.autoReady = false
+    const pool = new ClangWorkerPool(mechanism)
+    const jobs: string[][] = []
+    const runner: WasmClangRunner = {
+      concurrency: pool.concurrency,
+      prepare: () => pool.prepare(),
+      release: () => pool.release(),
+      run: (job) => {
+        jobs.push(job.argv)
+        return pool.run(job)
+      },
+    }
+    const log: Array<[string, string]> = []
+
+    const compiling = compileToWasm(request(), { runner, log: (m, l) => log.push([m, l]) })
+    for (let round = 0; round < 200 && mechanism.started === 0; round++) await flushMicrotasks()
+    mechanism.workers[0]?.fail('llvm.core.wasm is not valid WebAssembly')
+    const result = await compiling
+
+    const message = 'The WebAssembly compiler could not be loaded: llvm.core.wasm is not valid WebAssembly'
+    expect(result).toMatchObject({ ok: false, error: message })
+    expect(result.diagnostics).toContainEqual({ message, level: 'error' })
+    expect(log).toContainEqual([message, 'error'])
+    expect(jobs.filter((argv) => !argv.includes('-c'))).toEqual([])
+    expect(mechanism.workers.flatMap((w) => w.posted)).toEqual([])
+  })
+
+  it('keeps the per-file failure message for a job that fails after the worker loaded', async () => {
+    const mechanism = new CountingClangMechanism()
+    const pool = new ClangWorkerPool(mechanism)
+
+    const compiling = compileToWasm(request(), { runner: pool })
+    for (let round = 0; round < 200 && (mechanism.workers[0]?.posted.length ?? 0) === 0; round++) {
+      await flushMicrotasks()
+    }
+    mechanism.workers[0]?.fail('exit code 3')
+    for (let round = 0; round < 200 && (mechanism.workers[1]?.posted.length ?? 0) === 0; round++) {
+      await flushMicrotasks()
+    }
+    mechanism.workers[1]?.fail('exit code 3')
+    const result = await compiling
+
+    expect(result.ok).toBe(false)
+    expect(result.ok ? '' : result.error).toMatch(/^Compilation failed in 2 of 2 file\(s\): /)
+    await pool.release()
   })
 })
