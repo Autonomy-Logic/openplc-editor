@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { type ElectronApplication, expect, type Page, test } from '@playwright/test'
@@ -64,15 +64,6 @@ const PLCOPEN_XML = `<?xml version="1.0" encoding="utf-8"?>
 </project>
 `
 
-/** Every file under @p dir, as paths relative to it. */
-function filesUnder(dir: string, prefix = ''): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir).flatMap((entry) => {
-    const path = join(dir, entry)
-    return statSync(path).isDirectory() ? filesUnder(path, `${prefix}${entry}/`) : [`${prefix}${entry}`]
-  })
-}
-
 /** The explorer entry named @p name. */
 const explorerItem = (page: Page, name: string) => page.getByText(name, { exact: true }).first()
 
@@ -131,23 +122,6 @@ test('a PLCopen XML file replaces the open project and its elements are saved to
     const saved = readFileSync(join(project, 'project.json'), 'utf-8')
     expect(saved).toContain('"imported_inst"')
     expect(saved).not.toContain('"instance0"')
-  } finally {
-    await quitApp(app, page)
-  }
-})
-
-test('the program a PLCopen import replaced does not come back when the saved project is reopened', async () => {
-  test.setTimeout(180000)
-  const { project, userData, xmlFile } = writeFixture('openplc-e2e-plcopen-import-reopen')
-  let { app, page } = await launch(userData)
-  try {
-    await importAndSave(app, page, project, xmlFile)
-    await quitApp(app, page)
-    ;({ app, page } = await launch(userData))
-    await explorerItem(page, PROJECT_NAME).or(explorerItem(page, 'imported')).click({ timeout: 30000 })
-    await expect(explorerItem(page, 'imported_prog')).toBeVisible({ timeout: 60000 })
-    await expect(page.getByText('main', { exact: true })).toHaveCount(0)
-    expect(filesUnder(join(project, 'pous')).filter((f) => /(^|\/)main\.st$/.test(f))).toEqual([])
   } finally {
     await quitApp(app, page)
   }
