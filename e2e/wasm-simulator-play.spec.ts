@@ -1,17 +1,21 @@
 /**
  * Play on the OpenPLC Simulator: the editor builds the project to a WebAssembly module, runs it in a worker thread
- * and connects the debugger to it, so live values arrive; Play again stops it.
+ * and connects the debugger to it, so live values arrive; Play again stops it. The build runs on one clang worker
+ * thread, which has ended once the simulator runs, and a project without Python blocks starts no Python thread. That
+ * the editor starts with neither is the cold-start case of `wasm-toolchain.spec.ts`. A C++ block that does not
+ * compile fails the build: the Console shows the compiler error, the simulator does not start, and no clang worker is
+ * left once the failure is shown.
  *
- * Running needs a production build plus the preload copy; see "Electron e2e" in CLAUDE.md.
+ * Each test opens a new project in the worker's editor. Running needs a production build; see "Electron e2e" in
+ * CLAUDE.md.
  */
-import { cpSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { type Page, test } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 
-import { waitForApp } from './helpers/app-console'
-import { launch, quitApp } from './helpers/ethercat-project'
+import { pageText, waitForApp, waitForText } from './helpers/app-console'
+import { openNewProject, test } from './helpers/editor-session'
+import { countOf, resetWorkerThreadPeaks, trackWorkerThreads, workerThreads } from './helpers/worker-threads'
 
 const FIXTURE = join(
   __dirname,
@@ -24,39 +28,9 @@ const FIXTURE = join(
   'fixtures',
   'simulator-project',
 )
-const PROJECT_NAME = 'simulator-fixture'
+const CPP_COMPILE_ERROR = join(__dirname, 'fixtures', 'cpp-compile-error')
 /** INSTANCE0.COUNTER in the fixture's debug map: array 0, element 0. */
 const COUNTER = 0
-
-function writeProject(slug: string): { userData: string } {
-  const root = join(realpathSync(tmpdir()), slug)
-  const project = join(root, 'project')
-  const userData = join(root, 'userdata')
-  rmSync(root, { recursive: true, force: true })
-  cpSync(FIXTURE, project, { recursive: true })
-  const history = join(userData, 'User', 'History')
-  const runtime = join(userData, 'User', 'Runtime')
-  mkdirSync(history, { recursive: true })
-  mkdirSync(runtime, { recursive: true })
-  mkdirSync(join(userData, 'arduino', 'data'), { recursive: true })
-  writeFileSync(
-    join(history, 'projects.json'),
-    JSON.stringify([
-      {
-        name: PROJECT_NAME,
-        path: project,
-        projectFilePath: join(project, 'project.json'),
-        createdAt: new Date().toISOString(),
-        lastOpenedAt: new Date().toISOString(),
-      },
-    ]),
-  )
-  writeFileSync(join(history, 'libraries.json'), '[]')
-  for (const control of ['arduino-core-control.json', 'arduino-library-control.json']) {
-    writeFileSync(join(runtime, control), '[]')
-  }
-  return { userData }
-}
 
 const simulatorRunning = (page: Page): Promise<boolean> =>
   page.evaluate(async () => {
@@ -79,27 +53,62 @@ const readCounter = (page: Page): Promise<number | null> =>
     return data[0] + data[1] * 256 + data[2] * 65536 + data[3] * 16777216
   }, COUNTER)
 
-test('Play builds the project, runs it as WebAssembly with live values, and Play again stops it', async () => {
+test('Play builds the project, runs it as WebAssembly with live values, and Play again stops it', async ({
+  editor,
+}) => {
   test.setTimeout(180000)
-  const { userData } = writeProject('openplc-e2e-wasm-simulator-play')
-  const { app, page } = await launch(userData)
-  try {
-    await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
-    const play = page.getByRole('button', { name: 'Play' })
-    const started = Date.now()
-    await play.click({ timeout: 60000 })
+  const { app, page } = editor
+  await openNewProject(editor, FIXTURE, 'simulator-fixture')
+  await trackWorkerThreads(app)
+  await resetWorkerThreadPeaks(app)
+  const before = await workerThreads(app)
+  expect(countOf(before.live, 'clang-worker.js')).toBe(0)
 
-    await waitForApp(page, () => simulatorRunning(page), { timeout: 90000, message: 'the simulator never started' })
-    await waitForApp(page, async () => ((await readCounter(page)) ?? 0) > 0, { message: 'no live values' })
-    const playToLiveMs = Date.now() - started
-    const first = (await readCounter(page)) ?? 0
-    await waitForApp(page, async () => ((await readCounter(page)) ?? 0) > first, { timeout: 30000 })
-    test.info().annotations.push({ type: 'play-to-live-ms', description: String(playToLiveMs) })
-    console.log(`Play to live values: ${playToLiveMs} ms`)
+  const play = page.getByRole('button', { name: 'Play' })
+  const started = Date.now()
+  await play.click({ timeout: 60000 })
+  await page.getByRole('tab', { name: 'Console' }).click()
 
-    await play.click()
-    await waitForApp(page, async () => !(await simulatorRunning(page)), { timeout: 30000 })
-  } finally {
-    await quitApp(app, page)
-  }
+  await waitForApp(page, () => simulatorRunning(page), { timeout: 90000, message: 'the simulator never started' })
+  const whileRunning = await workerThreads(app)
+  expect(countOf(whileRunning.live, 'clang-worker.js')).toBe(0)
+  expect(countOf(whileRunning.started, 'clang-worker.js')).toBeGreaterThan(countOf(before.started, 'clang-worker.js'))
+  expect(whileRunning.maxLive['clang-worker.js']).toBe(1)
+  expect(countOf(whileRunning.live, 'simulator-worker.js')).toBe(1)
+  expect(countOf(whileRunning.started, 'python-worker.js')).toBe(countOf(before.started, 'python-worker.js'))
+  await page.getByRole('tab', { name: 'Console' }).click()
+  await waitForApp(page, async () => ((await readCounter(page)) ?? 0) > 0, { message: 'no live values' })
+  const playToLiveMs = Date.now() - started
+  const first = (await readCounter(page)) ?? 0
+  await waitForApp(page, async () => ((await readCounter(page)) ?? 0) > first, { timeout: 30000 })
+  test.info().annotations.push({ type: 'play-to-live-ms', description: String(playToLiveMs) })
+  console.log(`Play to live values: ${playToLiveMs} ms`)
+
+  await play.click()
+  await waitForApp(page, async () => !(await simulatorRunning(page)), { timeout: 30000 })
+})
+
+test('a C++ block that does not compile: Play shows the error, starts no simulator and leaves no clang worker', async ({
+  editor,
+}) => {
+  test.setTimeout(180000)
+  const { app, page } = editor
+  await openNewProject(editor, CPP_COMPILE_ERROR, 'cpp-compile-error')
+  await trackWorkerThreads(app)
+  await resetWorkerThreadPeaks(app)
+  const before = await workerThreads(app)
+
+  await page.getByRole('button', { name: 'Play' }).click({ timeout: 60000 })
+  await page.getByRole('tab', { name: 'Console' }).click()
+  await waitForText(page, /Compilation failed in \d+ of \d+ file\(s\):/, {
+    timeout: 90000,
+    failure: /could not be loaded|Failed to start simulator|Something went wrong|Simulator is running/,
+  })
+  const atFailure = await workerThreads(app)
+  expect(countOf(atFailure.live, 'clang-worker.js')).toBe(0)
+  expect(countOf(atFailure.started, 'clang-worker.js')).toBeGreaterThan(countOf(before.started, 'clang-worker.js'))
+  expect(atFailure.maxLive['clang-worker.js']).toBe(1)
+  expect(await pageText(page)).toMatch(/error: expected expression/)
+  expect(await simulatorRunning(page)).toBe(false)
+  expect(await pageText(page)).not.toContain('Simulator is running.')
 })

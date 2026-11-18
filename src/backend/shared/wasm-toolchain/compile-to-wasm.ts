@@ -13,6 +13,7 @@ import type {
   WasmToolchainFiles,
 } from '@root/middleware/shared/ports/wasm-toolchain-types'
 
+import { WasmToolchainLoadError } from './clang-worker-pool'
 import { ContentHash } from './content-hash'
 import { parseDependencyFile } from './dependency-file'
 import { filesToTree, filesTreeProblem, isFileBytes, readTreeFile, toolchainPathProblem } from './file-tree'
@@ -122,11 +123,18 @@ const describeFailure = (exitCode: number, missing: string): string =>
       ? 'clang could not be run.'
       : `clang exited with code ${exitCode}.`
 
-/** A runner that could not run the job counts as a failed job, with the reason as its stderr. */
-async function runSafely(runner: WasmClangRunner, job: WasmClangJob): Promise<WasmClangJobResult> {
+/**
+ * A runner that could not run the job counts as a failed job, with the reason as its stderr. A toolchain that could
+ * not be loaded is returned as its error instead, since it fails the whole build.
+ */
+async function runSafely(
+  runner: WasmClangRunner,
+  job: WasmClangJob,
+): Promise<WasmClangJobResult | WasmToolchainLoadError> {
   try {
     return await runner.run(job)
   } catch (error) {
+    if (error instanceof WasmToolchainLoadError) return error
     return { exitCode: -1, stderr: error instanceof Error ? error.message : String(error), stdout: '', tree: {} }
   }
 }
@@ -183,8 +191,8 @@ function dependenciesOf(
 /**
  * Compiles C and C++ translation units to objects with clang running as WebAssembly, then links them into one
  * WebAssembly module. An object comes from `cache` while every file it was built from is unchanged. Units are
- * compiled largest first.
- * Diagnostics go to `log` and to the result.
+ * compiled largest first. A toolchain that cannot be loaded fails the build with its own message, and nothing is
+ * linked. Diagnostics go to `log` and to the result.
  */
 export async function compileToWasm(
   request: WasmCompileRequest,
@@ -210,6 +218,7 @@ export async function compileToWasm(
   const digestOf = digestsOf(request.files)
   const objects = new Map<string, Uint8Array>()
   const failures: string[] = []
+  const loadFailures: WasmToolchainLoadError[] = []
 
   const pending: PlannedUnit[] = []
   for (const p of planned) {
@@ -224,7 +233,12 @@ export async function compileToWasm(
   pending.sort((x, y) => y.size - x.size)
 
   await runLimited(pending, runner.concurrency, async (p) => {
+    if (loadFailures.length > 0) return
     const result = await runSafely(runner, { argv: p.argv, tree })
+    if (result instanceof WasmToolchainLoadError) {
+      loadFailures.push(result)
+      return
+    }
     const object = result.exitCode === 0 ? readTreeFile(result.tree, p.object) : undefined
     if (isFileBytes(object)) {
       objects.set(p.object, object)
@@ -238,6 +252,7 @@ export async function compileToWasm(
   })
   stats.compileMs = performance.now() - compileStart
 
+  if (loadFailures.length > 0) return fail(loadFailures[0].message)
   if (failures.length > 0) {
     return fail(`Compilation failed in ${failures.length} of ${planned.length} file(s): ${failures.join(' ')}`)
   }
@@ -261,6 +276,7 @@ export async function compileToWasm(
     tree: filesToTree(linkFiles),
   })
   stats.linkMs = performance.now() - linkStart
+  if (link instanceof WasmToolchainLoadError) return fail(link.message)
 
   const wasm = link.exitCode === 0 ? readTreeFile(link.tree, LINK_OUTPUT) : undefined
   if (!isFileBytes(wasm)) {

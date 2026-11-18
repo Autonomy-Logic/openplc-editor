@@ -7,32 +7,10 @@ import { runInNewContext } from 'node:vm'
 
 import { describe, expect, it } from '@jest/globals'
 
-import { decodeToolchainResource, downloadWithStallLimit, loadToolchainResources } from '../clang-worker-host'
+import { downloadWithStallLimit } from '../clang-worker-host'
 import { parseWasmCompileRequest } from '../parse-wasm-compile-request'
 
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text)
-
-describe('decodeToolchainResource', () => {
-  const gzip = async (bytes: Uint8Array): Promise<Uint8Array> =>
-    new Uint8Array(
-      await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer(),
-    )
-
-  it('decompresses a gzip resource', async () => {
-    const raw = encode('\u0000asm toolchain')
-    expect(await decodeToolchainResource(await gzip(raw), true)).toEqual(raw)
-  })
-
-  it('keeps a resource the server already decompressed', async () => {
-    const raw = encode('\u0000asm toolchain')
-    expect(await decodeToolchainResource(raw, true)).toBe(raw)
-  })
-
-  it('keeps every resource when the build stores them uncompressed', async () => {
-    const raw = new Uint8Array([0x1f, 0x8b, 0])
-    expect(await decodeToolchainResource(raw, false)).toBe(raw)
-  })
-})
 
 /** A response whose body sends `chunks`, waiting `gapMs` before each, then ends unless `hang` is set. */
 function slowResponse(chunks: string[], gapMs: number, hang = false, status = 200): Response {
@@ -93,31 +71,6 @@ describe('downloadWithStallLimit', () => {
     await expect(
       downloadWithStallLimit('u', () => Promise.resolve(new Response('missing', { status: 404 })), 1000),
     ).rejects.toThrow('Could not download u (HTTP 404).')
-  })
-})
-
-describe('loadToolchainResources', () => {
-  it('downloads each resource once and keys it by name', async () => {
-    const downloaded: string[] = []
-    const files = await loadToolchainResources(
-      [
-        { name: 'a.wasm', url: 'https://x/a.wasm.gz' },
-        { name: 'b.tar', url: 'https://x/b.tar.gz' },
-      ],
-      false,
-      (url) => {
-        downloaded.push(url)
-        return Promise.resolve(new Response(encode(url)))
-      },
-    )
-    expect(downloaded).toEqual(['https://x/a.wasm.gz', 'https://x/b.tar.gz'])
-    expect(files).toEqual({ 'a.wasm': encode('https://x/a.wasm.gz'), 'b.tar': encode('https://x/b.tar.gz') })
-  })
-
-  it('fails when one download fails', async () => {
-    await expect(
-      loadToolchainResources([{ name: 'a.wasm', url: 'u' }], true, () => Promise.reject(new Error('network down'))),
-    ).rejects.toThrow('network down')
   })
 })
 

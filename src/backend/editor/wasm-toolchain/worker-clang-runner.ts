@@ -1,16 +1,17 @@
-import { access } from 'node:fs/promises'
-import { availableParallelism } from 'node:os'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Worker } from 'node:worker_threads'
 
-import { clangWorkerCount, ClangWorkerPool } from '@root/backend/shared/wasm-toolchain/clang-worker-pool'
+import { fileExists } from '@root/backend/editor/utils/file-exists'
+import { ClangWorkerPool } from '@root/backend/shared/wasm-toolchain/clang-worker-pool'
+import { checkWasmToolchainPackage } from '@root/backend/shared/wasm-toolchain/toolchain-files'
 import type { ClangWorkerHandle, ClangWorkerMechanism } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 
 export interface WorkerClangRunnerPaths {
   /** The built worker script (`clang-worker.js`, from `clang-worker.ts`). */
   workerScript: string
-  /** The root of the `@yowasp/clang` package, holding `gen/bundle.js` and its WebAssembly files. */
+  /** The root of the prepared `@yowasp/clang` package, holding the patched `gen/bundle.js` and its WebAssembly files. */
   toolchainDir: string
 }
 
@@ -18,7 +19,11 @@ export interface WorkerClangRunnerPaths {
 export function createThreadClangWorkerMechanism(paths: WorkerClangRunnerPaths): ClangWorkerMechanism {
   const bundlePath = join(paths.toolchainDir, 'gen', 'bundle.js')
   return {
-    load: () => access(bundlePath),
+    load: () =>
+      checkWasmToolchainPackage((file) => join(paths.toolchainDir, file), {
+        exists: fileExists,
+        readText: (path) => readFile(path, 'utf8'),
+      }),
     spawn: (): ClangWorkerHandle => {
       const worker = new Worker(paths.workerScript, { workerData: { bundleUrl: pathToFileURL(bundlePath).href } })
       return {
@@ -35,9 +40,9 @@ export function createThreadClangWorkerMechanism(paths: WorkerClangRunnerPaths):
   }
 }
 
-/** Runs clang in a pool of up to `maxWorkers` worker threads, each with its own copy of the toolchain loaded. */
+/** Runs clang on one worker thread, started by a job and ended on `release()`. */
 export class WorkerClangRunner extends ClangWorkerPool {
-  constructor(paths: WorkerClangRunnerPaths, maxWorkers: number = clangWorkerCount(availableParallelism())) {
-    super(createThreadClangWorkerMechanism(paths), { maxWorkers })
+  constructor(paths: WorkerClangRunnerPaths) {
+    super(createThreadClangWorkerMechanism(paths))
   }
 }
