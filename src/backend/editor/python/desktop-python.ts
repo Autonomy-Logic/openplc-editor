@@ -1,8 +1,10 @@
 import { totalmem } from 'node:os'
 import { Worker } from 'node:worker_threads'
 
+import { fileExists } from '@root/backend/editor/utils/file-exists'
 import { PythonBlockHost } from '@root/backend/shared/python/python-block-host'
 import { maxPythonInterpreters } from '@root/backend/shared/python/python-memory-budget'
+import { requirePythonRuntimeFiles } from '@root/backend/shared/python/python-runtime-files'
 import { ThreadedPythonRuntime } from '@root/backend/shared/python/python-thread'
 import type { PythonThreadMechanism } from '@root/middleware/shared/ports/python-mechanisms'
 
@@ -46,10 +48,18 @@ export function createThreadPythonMechanism(resolvePaths: () => PythonRuntimePat
 export interface DesktopPython {
   runtime: ThreadedPythonRuntime
   host: PythonBlockHost
+  /** Checks the Python runtime's files are present, starting no thread; rejects naming the first missing file. */
+  checkFiles(): Promise<void>
 }
 
 /** The process's Python runtime and the block host that uses it. */
 export function createDesktopPython(resolvePaths: () => PythonRuntimePaths): DesktopPython {
   const runtime = new ThreadedPythonRuntime(createThreadPythonMechanism(resolvePaths))
-  return { runtime, host: new PythonBlockHost(runtime, undefined, maxPythonInterpreters(totalmem())) }
+  return {
+    runtime,
+    host: new PythonBlockHost(runtime, undefined, maxPythonInterpreters(totalmem())),
+    checkFiles: async () => {
+      await requirePythonRuntimeFiles(resolvePaths(), fileExists)
+    },
+  }
 }

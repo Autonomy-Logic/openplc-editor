@@ -443,30 +443,54 @@ clang, lld and libc++ run inside the editor as WebAssembly (`@yowasp/clang`, pin
 `package.json`); no native compiler is involved. `CompilerPort.compileToWasm(request)` compiles C and C++
 translation units into one module and returns its bytes and the compiler's diagnostics; a bad request comes back
 as diagnostics too, never as a rejection. The logic is shared and byte-identical with openplc-web, in
-`src/backend/shared/wasm-toolchain/`: compile and link, the worker pool, the worker host, and the check of requests
+`src/backend/shared/wasm-toolchain/`: compile and link, the clang worker's runner, the worker host, and the check of requests
 that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its runtime headers.
 
 - **Object cache:** per unit, for the session (256 MB, least recently used first). Each object is kept with the
   request files clang says it read (`-MD`) and the names of all its dependencies, toolchain headers included. It is
   reused while those files are unchanged and no file carrying one of those names was added or removed; other added
   or removed files leave it valid.
-- **Objects across sessions:** once the toolchain is ready the cache is filled from a store (desktop:
+- **Objects across sessions:** the first build fills the cache from a store (desktop:
   `userData/User/WasmObjects/`, web: IndexedDB `openplc-wasm-objects`) and every new object is written through, at
   most 192 MB, oldest first. Records of another toolchain (a different `clang --version`) or damaged ones are
-  removed. Compiles wait for the store to load; a store that cannot be read only costs the reuse.
+  removed. That build waits for the store to load; a store that cannot be read only costs the reuse.
 - **Precompiled headers:** a request may list `precompiledHeaders`, built first and cached like units; a unit names
   one with `pch`, and its digest is part of that unit's cache key.
-- **Worker pool:** starts with one worker and adds one, up to `clangWorkerCount` (four at most), when every worker
-  is busy. A worker that fails, does not load within 120 s, or runs a job past 120 s is terminated and dropped,
-  and its jobs fail.
+- **Clang worker:** at most one (`ClangWorkerPool`), running one job at a time. A build starts it, and it ends once no
+  build is running or queued, whatever the last build's outcome, so the simulator runs with no clang worker; builds
+  that overlap share it. A worker counts from its start until it has exited, and a new one starts only after the
+  previous one exited. A toolchain whose files cannot be got ready, a worker that cannot be started, or a worker that
+  fails or does not load within 120 s before it reports ready, fails the build with
+  `The WebAssembly compiler could not be loaded: <reason>`. Once a worker has loaded, one that fails or runs a job past
+  120 s is terminated and the job it ran fails with `The compiler worker stopped (<reason>).` On the web, a worker that
+  fails before it reports ready (not one past the 120 s load deadline) also has the toolchain's stored files deleted,
+  so the next build downloads them again, past the HTTP cache (`cache: 'reload'`).
+- **Web store:** `runtime-file-cache.ts` (`src/backend/shared/wasm-toolchain/`) is the web's Cache Storage store of the
+  runtime files and the workers' cache-first `fetch`; its worker `fetch` tries the HTTP cache, then the store, then
+  the network. After a load failure deletes a set's stored files, its next download skips both (`cache: 'reload'`). It ships in the shared surface but the desktop and the CLI do not use it (their files stay on disk).
 
-- **Desktop:** up to four worker threads (`src/backend/editor/wasm-toolchain/`); the worker is its own webpack
+- **Desktop:** one worker thread (`src/backend/editor/wasm-toolchain/`); the worker is its own webpack
   entry, `clang-worker.js`, built next to `main.js`. The renderer reaches it over the `wasm-toolchain:compile` IPC
   channel.
-- **Startup:** the toolchain loads while the splash is up, and the main window appears only once it is ready. If it
-  cannot load, the splash shows the reason with a Quit button.
-- **CLI:** the toolchain loads on first use, so only an OpenPLC Simulator build (`compile` for it, or `simulate`) loads it.
-- **Packaging:** the package ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
+- **Startup:** while the splash is up the editor only checks that every toolchain file and every Python runtime file
+  is present; it starts no clang worker and no Python thread, and compiles nothing. A missing toolchain file keeps the
+  splash up with the reason and a Quit button; a missing Python runtime file only logs a warning. The Python file check
+  is the shared `requirePythonRuntimeFiles` (`src/backend/shared/python/python-runtime-files.ts`); the desktop only
+  reads the files.
+- **CLI:** one worker through the same pool, started by an OpenPLC Simulator build (`compile` for it, or `simulate`).
+- **Loader patch:** `patchYowaspLoader` (`src/backend/shared/wasm-toolchain/yowasp-loader-patch.ts`, shared with
+  openplc-web) replaces the one `options.fetchProgress ?? defaultFetchProgress` in the package's `gen/bundle.js`, so a
+  run with no `fetchProgress` (the shared host passes none) compiles each module straight from its URL and logs
+  nothing, and adds a one-line change notice at the top of `bundle.js`; `third-party-licenses/yowasp-clang/README.md`
+  names the patched line. `scripts/prepare-yowasp-clang.ts` writes the prepared copy `release/yowasp-clang/`
+  (git-ignored): `package.json`, `README.md` and `gen/**` of `node_modules/@yowasp/clang`, `gen/bundle.js` patched,
+  everything else byte for byte; it fails when the patch does not apply exactly once, and never writes `node_modules`.
+  It runs in `postinstall`, `prestart` and at the start of `build:main`, so `npm run dev`, `npm run build`,
+  `npm run package` and the CLI builds always have it. Outside a package the desktop and the CLI load clang from that copy, and
+  the worker's `load()` runs the shared `checkWasmToolchainPackage` (`src/backend/shared/wasm-toolchain/toolchain-files.ts`),
+  which refuses a missing file (`Missing toolchain file: <path>`) and a `bundle.js` that is not patched
+  (`The toolchain's loader is not patched: <path>`).
+- **Packaging:** the prepared copy (`release/yowasp-clang`) ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
   entitlement in `assets/entitlements.mac.plist` lets it run under the hardened runtime.
 - **Running a module** happens in main-process worker threads (the simulator, Python), or, for the HMI preview, in a
   Worker started from its own renderer bundle (`hmi-preview-worker.js`, a second entry of the renderer webpack
@@ -487,8 +511,10 @@ The desktop writes the module to `<build>/OpenPLC Simulator/simulator.wasm`. The
 from Play; `e2e/wasm-simulator-build.spec.ts` builds through `openplc-cli compile`.
 
 **Updating the toolchain:** change the exact `@yowasp/clang` version in `package.json` in both repos (with both
-lockfiles, `pnpm-lock.yaml` included on the web), then run `e2e/wasm-toolchain.spec.ts` in both repos, including
-the packaged-app case (`E2E_PACKAGED_APP`). The npm package carries no licence files, so the texts for YoWASP, LLVM and
+lockfiles, `pnpm-lock.yaml` included on the web), then run `yowasp-loader-patch.test.ts`
+(`src/backend/shared/wasm-toolchain/__tests__/`) in both repos, which fails when the new `bundle.js` drops or moves the
+patched line (re-check the patch then, in both repos), and `e2e/wasm-toolchain.spec.ts` in both repos, including the
+packaged-app case (`E2E_PACKAGED_APP`). The npm package carries no licence files, so the texts for YoWASP, LLVM and
 wasi-libc live in `third-party-licenses/yowasp-clang/` (in both repos, with their sources in its README)
 and ship next to the toolchain; refresh them from the commits the new release was built from.
 
@@ -499,8 +525,11 @@ to `main.js`; `src/backend/editor/python/`). The logic is shared and byte-identi
 wrapper's stdio transport, Console lines prefixed `[Block]`, a block that ends or fails keeps its last outputs, Stop
 kills them all), the thread protocol and the Wasmer runtime. The module starts a block through
 `wasm-sim/sim_python.cpp` (`env.host_python_block`), force-included header `wasm-sim/stub/iec_python.h`. The runtime
-loads during the splash but never stops the editor or a run: if it cannot load (or takes past 120 s), the editor opens,
-the PLC runs, and each Python block reports the reason on the Console; the failure stays for the session. Interpreters
+starts only for a run with Python blocks (the splash only checks its files) and never stops the editor or a run: if it
+cannot load (or takes past 120 s), the PLC runs and each Python block reports the reason on the Console; the failure
+stays for the session. On the web, a load failure also deletes the Python runtime's stored files, so the next page
+load downloads them again, past the HTTP cache. On a page that is not cross-origin isolated (web) it is never started, and the blocks report
+`Python blocks cannot run here: the page is not cross-origin isolated.` Interpreters
 for a project's blocks boot right
 after its module compiles, and the PLC starts once they are ready (not during the compile: on WebKit that stalls the
 in-browser compiler). `openplc-cli simulate` (`src/cli/commands/simulate.ts`) runs the same simulator and loads

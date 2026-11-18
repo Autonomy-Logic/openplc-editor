@@ -14,3 +14,22 @@ the submodules it pins.
   https://github.com/WebAssembly/wasi-libc/tree/ac020b86fd44bafe60aa4fa12f407d16e3731329
 
 When the `@yowasp/clang` version changes, refresh these from the commits that release was built from.
+
+## Modification
+
+`gen/bundle.js` is shipped modified (Apache License 2.0, section 4(b)). The line
+
+```js
+this.#fetchResources(options.fetchProgress ?? defaultFetchProgress)
+```
+
+is replaced with
+
+```js
+this.#fetchResources(options.fetchProgress)
+```
+
+so a run given no `fetchProgress` gets no default progress callback, and a first line stating the change is added.
+The change is applied by `patchYowaspLoader` (`src/backend/shared/wasm-toolchain/yowasp-loader-patch.ts`) in the web
+build and in the desktop's prepared copy. Every other file of the package is shipped unchanged. When the
+`@yowasp/clang` version changes, re-check this section against the new `gen/bundle.js`.

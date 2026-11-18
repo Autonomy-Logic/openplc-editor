@@ -1,9 +1,3 @@
-/**
- * What a platform provides to run Python function blocks: a long-lived thread that loads the Python runtime once and
- * runs `servePythonThread`, and the thread's side of its message channel. Everything else is shared
- * (`backend/shared/python/`).
- */
-
 /** The main side of the Python thread. */
 export interface PythonThreadHandle {
   post(message: unknown): void
@@ -17,6 +11,10 @@ export interface PythonThreadHandle {
 export interface PythonThreadMechanism {
   /** Starts the thread; a platform may load the thread's code first, so this may resolve later. */
   spawn(): PythonThreadHandle | Promise<PythonThreadHandle>
+  /** Whether the page is cross-origin isolated, as the browser reports it. Platforms that are not a page omit it. */
+  isCrossOriginIsolated?(): boolean
+  /** Deletes the Python runtime's stored files, so the next page load downloads them again. */
+  discard?(): Promise<void>
 }
 
 /** The thread's side of the channel. */
