@@ -2,25 +2,40 @@ name: CI - Build
 
 on:
   workflow_call:
+    inputs:
+      skip:
+        description: Skip the steps because the same check already passed locally (the job still ends green).
+        type: boolean
+        default: false
 
 jobs:
   build:
     name: Build Check
     runs-on: ubuntu-latest
+    # Skipped per step, not with a job `if:`, so the job still ends green under
+    # its required check name and the jobs that `needs:` it (format) still run.
     steps:
+      - name: Skipped, already passed locally
+        if: ${{ inputs.skip }}
+        run: echo "Skipped because MisterFlow ran this check locally on this exact head commit and set the commit status misterflow/local-ci to success on it."
+
       - name: Checkout repository
+        if: ${{ !inputs.skip }}
         uses: actions/checkout@v4
 
       - name: Setup Node.js
+        if: ${{ !inputs.skip }}
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'npm'
 
       - name: Install dependencies
+        if: ${{ !inputs.skip }}
         run: npm ci --ignore-scripts
 
       - name: Download strucpp binaries
+        if: ${{ !inputs.skip }}
         # tsc needs the strucpp package to resolve the types imported
         # from `backend/shared/library/strucpp-runtime.ts` and friends.
         # Run the binary downloader directly (skipping the rest of
@@ -29,4 +44,5 @@ jobs:
         run: npx ts-node scripts/download-binaries.ts
 
       - name: Type check
+        if: ${{ !inputs.skip }}
         run: npx tsc --noEmit

@@ -22,10 +22,14 @@ async function toolchainIdentity(runner: WasmClangRunner): Promise<string> {
 }
 
 export interface WasmCompileService {
-  /** Loads the toolchain. Called once at editor start; later calls return the same readiness. */
+  /**
+   * Gets the toolchain's files ready, starting no worker. A success is kept and later calls return it; a failure is
+   * not, so the next call tries again.
+   */
   prepare(): Promise<WasmToolchainReadiness>
+  /** Compiles a request; once no other build is running, it resolves only after the clang worker has ended. */
   compile(request: WasmCompileRequest, log?: PlatformLog): Promise<WasmCompileResult>
-  /** Checks a request that crossed a process or worker boundary, then compiles it. */
+  /** Checks a request that crossed a process or worker boundary, then compiles it as `compile` does. */
   compileRequest(value: unknown, log?: PlatformLog): Promise<WasmCompileResult>
 }
 
@@ -37,8 +41,9 @@ const rejected = (error: string): WasmCompileResult => ({
 })
 
 /**
- * The toolchain a platform exposes: one runner, one session cache, one readiness. With a store, objects also outlive
- * the session: once the toolchain is ready the cache is filled from the store, and compiles wait for that.
+ * The toolchain a platform exposes: one runner, one session cache that outlives its workers, one readiness. Builds in
+ * flight share the runner's worker; when the last one ends, whatever its outcome, the runner is released. With a
+ * store, objects also outlive the session: the first build fills the cache from the store before it compiles.
  */
 export function createWasmCompileService(
   runner: WasmClangRunner,
@@ -53,33 +58,50 @@ export function createWasmCompileService(
     : null
   const cache: WasmObjectCache = persistent ?? memory
   let readiness: Promise<WasmToolchainReadiness> | null = null
-  let restored: Promise<void> = Promise.resolve()
+  let restored: Promise<void> | null = null
+  let inFlight = 0
+
+  const restore = (): Promise<void> => {
+    if (!persistent) return Promise.resolve()
+    restored ??= toolchainIdentity(runner)
+      .then((identity) => persistent.load(identity))
+      .catch((error: unknown) =>
+        log?.(
+          `Compiled objects of earlier sessions could not be read: ${error instanceof Error ? error.message : String(error)}`,
+          'warning',
+        ),
+      )
+    return restored
+  }
+
+  const build = async (work: () => Promise<WasmCompileResult>): Promise<WasmCompileResult> => {
+    inFlight++
+    try {
+      await restore()
+      return await work()
+    } finally {
+      inFlight--
+      if (inFlight === 0) await runner.release()
+    }
+  }
+
   const prepare = (): Promise<WasmToolchainReadiness> => {
-    readiness ??= prepareWasmToolchain(runner).then((ready) => {
-      if (ready.ok && persistent) {
-        restored = toolchainIdentity(runner)
-          .then((identity) => persistent.load(identity))
-          .catch((error: unknown) =>
-            log?.(
-              `Compiled objects of earlier sessions could not be read: ${error instanceof Error ? error.message : String(error)}`,
-              'warning',
-            ),
-          )
-      }
-      return ready
+    readiness ??= prepareWasmToolchain(runner).then((result) => {
+      if (!result.ok) readiness = null
+      return result
     })
     return readiness
   }
-  const compile = async (request: WasmCompileRequest, compileLog?: PlatformLog): Promise<WasmCompileResult> => {
-    await restored
-    return compileToWasm(request, { runner, cache, log: compileLog })
-  }
+
   return {
     prepare,
-    compile,
-    compileRequest: (value, log) => {
-      const parsed = parseWasmCompileRequest(value)
-      return parsed.ok ? compile(parsed.request, log) : Promise.resolve(rejected(parsed.error))
-    },
+    compile: (request, compileLog) => build(() => compileToWasm(request, { runner, cache, log: compileLog })),
+    compileRequest: (value, compileLog) =>
+      build(() => {
+        const parsed = parseWasmCompileRequest(value)
+        return parsed.ok
+          ? compileToWasm(parsed.request, { runner, cache, log: compileLog })
+          : Promise.resolve(rejected(parsed.error))
+      }),
   }
 }

@@ -1,8 +1,5 @@
-/**
- * Where the bundled Python runtime's files are: the names `python-runtime.json` pins (the desktop reads them to find
- * the downloaded files), and the URLs a web page serves them from, which its Python thread receives first in an
- * `init` message. Platforms read and send these; the checks live here.
- */
+import { parseRuntimeFileCacheRef, type RuntimeFileCacheRef } from '../wasm-toolchain/runtime-file-cache'
+import { requireFiles } from '../wasm-toolchain/toolchain-files'
 
 /** The file names `python-runtime.json` pins, which the install script downloads under those names. */
 export interface PinnedPythonFiles {
@@ -23,45 +20,65 @@ export function parsePythonRuntimeManifest(text: string): PinnedPythonFiles {
   return { python: pinnedFile(pins, 'python'), numpy: pinnedFile(pins, 'numpy') }
 }
 
+/** Where a platform keeps the Python runtime's files. */
+export interface PythonRuntimeFilePaths {
+  /** The Wasmer SDK's entry point. */
+  sdkEntry: string
+  /** The CPython package (WEBC). */
+  pythonPackage: string
+  /** The numpy wheel. */
+  numpyWheel: string
+}
+
+/**
+ * Checks the Python runtime's files are present, starting nothing.
+ * @throws {Error} `Missing Python runtime file: <path>` for the first missing one, in the order SDK entry, CPython package, numpy wheel.
+ */
+export function requirePythonRuntimeFiles(
+  paths: PythonRuntimeFilePaths,
+  exists: (path: string) => Promise<boolean>,
+): Promise<void> {
+  return requireFiles([paths.sdkEntry, paths.pythonPackage, paths.numpyWheel], exists, 'Python runtime')
+}
+
 /** Where a page serves the Python runtime. */
 export interface PythonRuntimeUrls {
   /** The Wasmer SDK's browser entry point. */
   sdkUrl: string
   /** The CPython package (WEBC). */
   packageUrl: string
-  /** Whether the package is served gzip-compressed. */
-  packageCompressed: boolean
   /** The numpy wheel. */
   wheelUrl: string
 }
 
-/** The first message a page sends its Python thread. */
+/** The first message a page sends its Python thread: where the runtime is served and where its stored files are. */
 export interface PythonThreadInit {
   type: 'init'
   location: PythonRuntimeUrls
+  cache: RuntimeFileCacheRef | null
 }
 
-export const pythonThreadInit = (location: PythonRuntimeUrls): PythonThreadInit => ({
+export const pythonThreadInit = (
+  location: PythonRuntimeUrls,
+  cache: RuntimeFileCacheRef | null = null,
+): PythonThreadInit => ({
   type: 'init',
   location: { ...location },
+  cache: cache && { name: cache.name, urls: [...cache.urls] },
 })
 
-/** The runtime's URLs from an `init` message, or `null` for any other message. */
-export function parsePythonThreadInit(message: unknown): PythonRuntimeUrls | null {
+/** The init message, or `null` for any other message; a missing or malformed cache reference reads as `null`. */
+export function parsePythonThreadInit(message: unknown): PythonThreadInit | null {
   if (typeof message !== 'object' || message === null || Reflect.get(message, 'type') !== 'init') return null
   const where: unknown = Reflect.get(message, 'location')
   if (typeof where !== 'object' || where === null) return null
   const sdkUrl: unknown = Reflect.get(where, 'sdkUrl')
   const packageUrl: unknown = Reflect.get(where, 'packageUrl')
-  const packageCompressed: unknown = Reflect.get(where, 'packageCompressed')
   const wheelUrl: unknown = Reflect.get(where, 'wheelUrl')
-  if (
-    typeof sdkUrl !== 'string' ||
-    typeof packageUrl !== 'string' ||
-    typeof packageCompressed !== 'boolean' ||
-    typeof wheelUrl !== 'string'
-  ) {
-    return null
+  if (typeof sdkUrl !== 'string' || typeof packageUrl !== 'string' || typeof wheelUrl !== 'string') return null
+  return {
+    type: 'init',
+    location: { sdkUrl, packageUrl, wheelUrl },
+    cache: parseRuntimeFileCacheRef(Reflect.get(message, 'cache')),
   }
-  return { sdkUrl, packageUrl, packageCompressed, wheelUrl }
 }

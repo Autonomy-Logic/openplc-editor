@@ -11,31 +11,27 @@ export type ConsoleFilters = {
 }
 
 /**
- * A log as the store holds it: the caller's {@link LogObject} plus the `id`
- * the slice minted for it. The id exists only so the console's list has a
- * stable React key — nothing outside the renderer reads it, which is why
- * callers neither supply nor see it.
+ * A log as the store holds it: the caller's {@link LogObject} plus the `id` the slice gives it, the Console list's
+ * React key.
  */
 export type LogEntry = LogObject & { id: string }
 
 export type ConsoleState = {
   logs: LogEntry[]
   filters: ConsoleFilters
-  // Monotonic nonce bumped each time something (e.g. a build start) wants the
-  // console to become visible and re-attach to the tail. Consumers compare it
-  // to the previous value and, on change, reveal the console panel and perform
-  // a single "kick to bottom" so auto-follow resumes — without overriding the
-  // user's manual scroll position at any other time.
+  /** A nonce bumped when the Console should be revealed and scrolled once to its latest line. */
   followRequestId: number
+  /** Logs kept by `addLogWhenProjectOpen` until a project opens, oldest first. */
+  logsAwaitingProject: LogObject[]
+  /** Whether a project is open on the Console: set by `openProjectConsole`, cleared by `closeProjectConsole`. */
+  projectConsoleOpen: boolean
 }
 
 /** Per-write directives for {@link ConsoleActions.addLog}. */
 export type AddLogOptions = {
   /**
-   * This line came from a carriage-return redraw, so it overwrites the
-   * in-place line above it when that line is still open (`transient`).
-   * A write directive rather than entity state — whether the line stays
-   * open afterwards is recorded on the entry itself.
+   * The line comes from a carriage-return redraw and overwrites the line above it while that line is open
+   * (`transient`).
    */
   redraw?: boolean
 }
@@ -48,6 +44,12 @@ export type ConsoleActions = {
   setTimestampFormat: (format: TimestampFormat) => void
   // Reveal the console and kick it to the latest line (re-engaging auto-follow).
   requestConsoleFollow: () => void
+  /** Adds `log` now when a project is open on the Console; otherwise keeps it and adds it at the next `openProjectConsole`. */
+  addLogWhenProjectOpen: (log: LogObject) => void
+  /** Marks a project open on the Console and adds every kept log once, in the order kept, then forgets them. */
+  openProjectConsole: () => void
+  /** Marks no project open on the Console; kept logs stay kept. */
+  closeProjectConsole: () => void
 }
 
 export type ConsoleSlice = ConsoleState & {
