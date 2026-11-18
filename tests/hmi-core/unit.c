@@ -844,6 +844,90 @@ static void test_lock(void) {
     hmi_session_destroy(s);
 }
 
+/*
+ * Raw readings of a panel mounted mirrored in X and rotated a little, whose second channel also bends toward one edge
+ * in the middle, as a CrowPanel's does: what a resistive controller reports for a Q4 point of a 320x240 screen.
+ */
+static void raw_of(int32_t qx, int32_t qy, int32_t *rx, int32_t *ry) {
+    int64_t y = qy / 16, bend = (120 * 120 - (y - 120) * (y - 120)) / 60;
+    *rx = 3900 - qx * 11 / 16 + qy / 64;
+    *ry = (int32_t)(250 + qy * 14 / 16 + qx / 80 - bend);
+}
+
+/* One calibration frame; returns whether the calibration screen still shows. */
+static int cal_frame(void) {
+    size_t len;
+    hmi_frame_begin();
+    if (hmi_cal_active()) hmi_cal_draw();
+    (void)hmi_frame_end(&len);
+    CHECK_EQ(hmi_frame_status(), 0u);
+    return hmi_cal_active();
+}
+
+/* A press on logical point (x, y) through raw_of, held for n readings. */
+static void cal_tap(int32_t x, int32_t y, int n) {
+    int32_t rx, ry;
+    raw_of(x * 16, y * 16, &rx, &ry);
+    for (int i = 0; i < n; i++) hmi_cal_raw(rx + (i % 3) - 1, ry - (i % 2), 1);
+    hmi_cal_raw(0, 0, 0);
+    (void)cal_frame();
+}
+
+static void test_touch_calibration(void) {
+    static const int32_t targets[5][2] = {{30, 30}, {290, 30}, {290, 210}, {30, 210}, {160, 120}};
+    int32_t raw[10], x, y;
+    hmi_session_t *s = hmi_session_create();
+    CHECK(s != NULL);
+    hmi_session_use(s);
+    hmi_core_init(320, 240);
+    CHECK_EQ(hmi_cal_point(100, 100, &x, &y), 0);
+    /* Without setup, a screen asking for calibration changes nothing. */
+    hmi_calibrate();
+    CHECK_EQ(cal_frame(), 0);
+    hmi_cal_setup(1);
+    hmi_calibrate();
+    CHECK_EQ(cal_frame(), 1);
+    /* A press too short to sample is not a target; taps out of order make the calibration start over. */
+    hmi_cal_raw(500, 500, 1);
+    hmi_cal_raw(0, 0, 0);
+    const int swapped[5] = {1, 0, 2, 3, 4};
+    for (int i = 0; i < 5; i++) cal_tap(targets[swapped[i]][0], targets[swapped[i]][1], 8);
+    CHECK_EQ(cal_frame(), 1);
+    CHECK_EQ(hmi_cal_take(raw), 0);
+    for (int i = 0; i < 5; i++) cal_tap(targets[i][0], targets[i][1], 8);
+    CHECK_EQ(cal_frame(), 0);
+    CHECK_EQ(hmi_cal_take(raw), 1);
+    CHECK_EQ(hmi_cal_take(raw), 0);
+    /* Every target lands where it was asked for, although the panel bends between them; the rest stays close. */
+    for (int i = 0; i < 5; i++) {
+        CHECK_EQ(hmi_cal_point(raw[i * 2], raw[i * 2 + 1], &x, &y), 1);
+        CHECK(x >= targets[i][0] * 16 - 16 && x <= targets[i][0] * 16 + 16);
+        CHECK(y >= targets[i][1] * 16 - 16 && y <= targets[i][1] * 16 + 16);
+    }
+    const int32_t probe[6][2] = {{0, 0}, {319, 0}, {160, 239}, {77, 141}, {250, 60}, {160, 30}};
+    for (int i = 0; i < 6; i++) {
+        int32_t rx, ry;
+        raw_of(probe[i][0] * 16, probe[i][1] * 16, &rx, &ry);
+        CHECK_EQ(hmi_cal_point(rx, ry, &x, &y), 1);
+        CHECK(x >= probe[i][0] * 16 - 12 * 16 && x <= probe[i][0] * 16 + 12 * 16);
+        CHECK(y >= probe[i][1] * 16 - 12 * 16 && y <= probe[i][1] * 16 + 12 * 16);
+    }
+    /* Stored points are checked like fresh ones: a centre outside the corners, or presses that barely moved, are
+       refused and the calibration in use stays. */
+    int32_t bad[10];
+    memcpy(bad, raw, sizeof bad);
+    bad[8] = raw[0] + (raw[0] - raw[8]);
+    bad[9] = raw[1] + (raw[1] - raw[9]);
+    CHECK_EQ(hmi_cal_use(bad), 0);
+    for (int i = 0; i < 10; i++) bad[i] = 2000 + (i % 3) * 20;
+    CHECK_EQ(hmi_cal_use(bad), 0);
+    CHECK_EQ(hmi_cal_point(raw[8], raw[9], &x, &y), 1);
+    CHECK(x >= 159 * 16 && x <= 161 * 16 && y >= 119 * 16 && y <= 121 * 16);
+    CHECK_EQ(hmi_cal_use(raw), 1);
+    hmi_session_use(NULL);
+    hmi_session_destroy(s);
+}
+
 int main(void) {
     test_trig();
     test_format_int();
@@ -857,6 +941,7 @@ int main(void) {
     test_sessions();
     test_sign_out();
     test_lock();
+    test_touch_calibration();
     test_text();
     test_text_failures();
     test_raster();

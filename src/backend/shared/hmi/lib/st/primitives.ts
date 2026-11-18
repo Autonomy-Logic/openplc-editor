@@ -251,6 +251,12 @@ FUNCTION HMI_Lock : BOOL
   {external hmi_lock(); HMI_LOCK_result.set(true); }
 END_FUNCTION
 
+(* Shows the local panel's touch calibration screen from the next frame, before the PIN entry; screens may call it on
+   any condition, such as a PLC input. Panels whose touch needs no calibrating and other displays ignore it. *)
+FUNCTION HMI_Calibrate : BOOL
+  {external hmi_calibrate(); HMI_CALIBRATE_result.set(true); }
+END_FUNCTION
+
 (* Animation clock: while Run, Phase advances Rate units per second (negative runs backwards), wrapping at Period, and
    holds where it is when Run drops. Call it once per frame; a frame gap counts at most one second. *)
 FUNCTION_BLOCK HmiAnimator

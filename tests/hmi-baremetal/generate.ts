@@ -1,7 +1,9 @@
 /**
  * Generates what run.mjs builds the baremetal host test with, through the real shared build steps: the sample project's
  * unit, its Overview screen with a sign-out button, (`unit/`, with `ids.h`), its font table as the firmware build chooses it (`fonts.c`), and the panel's
- * `hmi_config.h` for a product build (`product/`) and a test-readout build (`readout/`).
+ * `hmi_config.h` for a product build (`product/`), a test-readout build (`readout/`) and a test-readout build of a panel
+ * whose touch needs calibrating (`readout-cal/`), and the unit glue of that panel for each calibration mode
+ * (`glue/<mode>/`, plus `glue/upload-next/`, the upload mode after the program changed).
  * Usage: ts-node -r tsconfig-paths/register tests/hmi-baremetal/generate.ts <out-dir>
  */
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -15,6 +17,8 @@ import { OVERVIEW, sampleProject } from '../../src/backend/shared/hmi/unit/__tes
 import { resolveHmiPanel } from '../../src/middleware/shared/utils/target-capabilities/hmi-panel'
 
 const FONT_DIR = join(__dirname, '..', '..', 'resources', 'sources', 'hmi', 'fonts')
+/** The unit file that carries the settings and the program MD5. */
+const GLUE = 'hmi_unit_glue.cpp'
 
 /** The sample Overview screen with a Leave button that signs out. */
 function overviewWithSignOut(): string {
@@ -51,13 +55,36 @@ async function main(): Promise<void> {
   writeFileSync(join(out, 'fonts.c'), await hmiFontTableFromSources(faces, unit.fonts.variant, fonts))
 
   const panel = resolveHmiPanel({ width: 320, height: 240, density: 1, touch: true, colorFormat: 'rgb565' })
-  if (!panel) throw new Error('the test panel does not validate')
-  for (const [dir, testReadout] of [
-    ['product', false],
-    ['readout', true],
+  const calPanel = resolveHmiPanel({
+    width: 320,
+    height: 240,
+    density: 1,
+    touch: true,
+    colorFormat: 'rgb565',
+    touchCalibration: true,
+  })
+  if (!panel || !calPanel) throw new Error('the test panel does not validate')
+  for (const [dir, testPanel, testReadout] of [
+    ['product', panel, false],
+    ['readout', panel, true],
+    ['readout-cal', calPanel, true],
   ] as const) {
     mkdirSync(join(out, dir), { recursive: true })
-    writeFileSync(join(out, dir, 'hmi_config.h'), hmiConfigHeader(panel, unit.fonts.variant, { testReadout }))
+    writeFileSync(join(out, dir, 'hmi_config.h'), hmiConfigHeader(testPanel, unit.fonts.variant, { testReadout }))
+  }
+
+  for (const [name, mode, plcMd5] of [
+    ['once', 'once', project.plcMd5],
+    ['upload', 'upload', project.plcMd5],
+    ['upload-next', 'upload', 'fedcba9876543210fedcba9876543210'],
+    ['boot', 'boot', project.plcMd5],
+  ] as const) {
+    const variant = generateHmiUnit({ ...project, plcMd5, settings: { ...project.settings, touchCalibration: { mode } } })
+    if (!variant.ok) throw new Error(variant.errors.map((e) => `${e.file}: ${e.message}`).join('\n'))
+    for (const [file, text] of Object.entries(variant.files))
+      if (file !== GLUE && text !== unit.files[file]) throw new Error(`calibration mode ${name} changed ${file}`)
+    mkdirSync(join(out, 'glue', name), { recursive: true })
+    writeFileSync(join(out, 'glue', name, GLUE), variant.files[GLUE])
   }
 }
 

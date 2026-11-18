@@ -314,6 +314,42 @@ int hmi_lock_active(void);
 void hmi_lock_draw(void);
 
 /* ------------------------------------------------------------------------------------------------------------ */
+/* Touch calibration (hosts of a local panel whose touch reports raw readings)                                  */
+/* ------------------------------------------------------------------------------------------------------------ */
+
+/** Targets the calibration screen asks for: the four corners, then the centre. */
+#define HMI_CAL_TARGETS 5
+/** Most raw readings kept from one press on a target; its median is the target's point. */
+#define HMI_CAL_SAMPLES 32
+
+/** Enables the calibration screen for the session; off by default, so hmi_calibrate does nothing without a panel. */
+void hmi_cal_setup(int enabled);
+/** Shows the calibration screen from the next frame, before the PIN entry; ignored unless enabled. */
+void hmi_calibrate(void);
+/** Whether frames show the calibration screen; meanwhile the host passes raw readings to hmi_cal_raw, not pointers. */
+int hmi_cal_active(void);
+/** A raw touch reading while calibrating: down with its readings, or up, which ends the press on the target. */
+void hmi_cal_raw(int32_t x, int32_t y, int down);
+/** Draws the calibration screen, between hmi_frame_begin and hmi_frame_end, in place of the PIN entry and screens. */
+void hmi_cal_draw(void);
+/**
+ * Returns 1 once after a calibration finished and copies its raw points, x and y per target in the order the screen
+ * asks for them, to raw; 0 otherwise. The session already uses it (hmi_cal_point); a host stores the points.
+ */
+int hmi_cal_take(int32_t raw[HMI_CAL_TARGETS * 2]);
+/**
+ * Takes stored raw points of a calibration as the session's, after checking them as the calibration screen does:
+ * returns 0, and changes nothing, for points that do not determine a usable map.
+ */
+int hmi_cal_use(const int32_t raw[HMI_CAL_TARGETS * 2]);
+/**
+ * Maps a raw reading to Q4 logical units through the session's calibration: four triangles meet at the centre target,
+ * each mapped exactly from its two corners and the centre, so the targets land exactly and a panel that bends between
+ * them is followed. Returns 0 without a calibration.
+ */
+int hmi_cal_point(int32_t rx, int32_t ry, int32_t *x_q4, int32_t *y_q4);
+
+/* ------------------------------------------------------------------------------------------------------------ */
 /* Rasterizer (not thread safe: glyph cache and scratch buffers are shared)                                    */
 /* ------------------------------------------------------------------------------------------------------------ */
 

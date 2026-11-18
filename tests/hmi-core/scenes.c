@@ -201,6 +201,17 @@ static void pin_entry(void) {
     hmi_lock_setup("", 0);
 }
 
+/* The touch calibration screen on its second target, pressed, as a 320x240 panel shows it. */
+static void touch_calibration(void) {
+    hmi_cal_setup(1);
+    hmi_calibrate();
+    for (int i = 0; i < 3; i++) hmi_cal_raw(100, 100, 1);
+    hmi_cal_raw(0, 0, 0);
+    hmi_cal_raw(3000, 100, 1);
+    hmi_cal_draw();
+    hmi_cal_setup(0);
+}
+
 static const scene_t k_scenes[] = {
     {"shapes", 340, 310, 256, 0, 0, shapes},
     {"shapes_2x", 340, 310, 512, 0, 0, shapes},
@@ -218,6 +229,8 @@ static const scene_t k_scenes[] = {
     {"wide_poly_2x", 640, 400, 512, 0, 0, wide_poly},
     {"pin_entry", 320, 240, 256, 0, 0, pin_entry},
     {"pin_entry_2x", 320, 240, 512, 0, 0, pin_entry},
+    {"touch_calibration", 320, 240, 256, 0, 0, touch_calibration},
+    {"touch_calibration_2x", 320, 240, 512, 0, 0, touch_calibration},
 };
 
 static uint64_t fnv64(const uint8_t *p, size_t n) {

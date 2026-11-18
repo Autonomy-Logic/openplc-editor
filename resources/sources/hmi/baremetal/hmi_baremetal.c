@@ -39,6 +39,11 @@
 #define HMI_BM_FAULT_COLOR 0x000000u
 /** Largest debugger value the host converts: a STRING's length byte and its payload window. */
 #define HMI_BM_WIRE_MAX 256u
+#ifndef HMI_PANEL_TOUCH_CAL
+#define HMI_PANEL_TOUCH_CAL 0
+#endif
+/** How long a press held from startup takes to open the touch calibration screen. */
+#define HMI_BM_CAL_HOLD_MS 5000u
 
 /** Bands the panel in hmi_config.h needs; a panel reporting more is drawn whole every frame. */
 #if defined(HMI_PANEL_WIDTH) && defined(HMI_PANEL_HEIGHT) && (HMI_BAND_BYTES / (HMI_PANEL_WIDTH * 4)) > 0
@@ -66,7 +71,9 @@ typedef struct {
     uint32_t last_us, us_acc, ms;
     uint32_t last_frame_ms, last_touch_ms;
     bool touch_down;
-    int touch_x, touch_y;
+    int32_t touch_qx, touch_qy;
+    int32_t lw, lh;
+    bool cal_ok, cal_seen, cal_wait_up, boot_hold;
     const uint8_t *dl;
     size_t dl_len;
     uint64_t dl_hash;
@@ -204,12 +211,19 @@ static int band_slot(int y) {
 
 /** Kind of the next logic frame. */
 static frame_kind_t next_frame_kind(void) {
-    if (hmi_lock_active() || g.faulted) return FRAME_BARE;
+    if (hmi_cal_active() || hmi_lock_active() || g.faulted) return FRAME_BARE;
     return hmi_unit_mount_pending(g.unit) ? FRAME_MOUNT : FRAME_SCREEN;
 }
 
-/** What a logic frame draws: the PIN entry while the panel is locked, else the screens, blank after a fault. */
+/**
+ * What a logic frame draws: the touch calibration while it runs, the PIN entry while the panel is locked, else the
+ * screens, blank after a fault.
+ */
 static void draw_frame(void) {
+    if (hmi_cal_active()) {
+        hmi_cal_draw();
+        return;
+    }
     if (hmi_lock_active()) {
         hmi_lock_draw();
         return;
@@ -373,10 +387,125 @@ static void raster_slice(uint32_t t0, uint32_t slack_us) {
     }
 }
 
+#if !HMI_PANEL_TOUCH_CAL
 /** Panel pixels to Q4 logical units. */
 static int32_t px_to_q4(int px, int32_t offset) {
     return (int32_t)(((int64_t)(px - offset) * 4096) / g.scale_q8);
 }
+#endif
+
+/** Sends the touch state to the core as pointer input, in Q4 logical units. */
+static void send_pointer(bool down, int32_t qx, int32_t qy) {
+    if (down) {
+        hmi_input_pointer(g.touch_down ? HMI_PTR_MOVE : HMI_PTR_DOWN, qx, qy);
+        g.touch_qx = qx;
+        g.touch_qy = qy;
+    } else if (g.touch_down) {
+        hmi_input_pointer(HMI_PTR_UP, g.touch_qx, g.touch_qy);
+    }
+    g.touch_down = down;
+}
+
+#if HMI_PANEL_TOUCH_CAL
+/**
+ * Calibration record in the panel store: magic, version, build id, the raw point of each calibration target, then a
+ * CRC-32 of the bytes before it.
+ */
+#define CAL_REC_MAGIC 0x434D4948u
+#define CAL_REC_VERSION 2u
+#define CAL_REC_BUILD 16
+#define CAL_REC_POINTS (5 + CAL_REC_BUILD)
+#define CAL_REC_BYTES (CAL_REC_POINTS + 4 * 2 * HMI_CAL_TARGETS + 4)
+_Static_assert(CAL_REC_BYTES <= HMI_PANEL_STORE_BYTES, "the calibration record must fit the panel store");
+
+static uint32_t crc32_of(const uint8_t *p, size_t n) {
+    uint32_t c = 0xFFFFFFFFu;
+    for (size_t i = 0; i < n; i++) {
+        c ^= p[i];
+        for (int k = 0; k < 8; k++) c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1u)));
+    }
+    return ~c;
+}
+
+static void put32(uint8_t *p, uint32_t v) {
+    for (int i = 0; i < 4; i++) p[i] = (uint8_t)(v >> (8 * i));
+}
+
+static uint32_t get32(const uint8_t *p) {
+    return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+
+/**
+ * Takes the stored calibration when it is intact, still determines a map and, in the upload mode, was made under this
+ * build.
+ */
+static bool cal_load(void) {
+    uint8_t rec[HMI_PANEL_STORE_BYTES];
+    int32_t pts[HMI_CAL_TARGETS * 2];
+    memset(rec, 0, sizeof rec);
+    if (!hmi_panel_store_read(rec, sizeof rec)) return false;
+    if (get32(rec) != CAL_REC_MAGIC || rec[4] != CAL_REC_VERSION) return false;
+    if (get32(rec + CAL_REC_BYTES - 4) != crc32_of(rec, CAL_REC_BYTES - 4)) return false;
+    if (hmi_touch_cal_mode == 1 && strncmp((const char *)rec + 5, hmi_build_id, CAL_REC_BUILD) != 0) return false;
+    for (int i = 0; i < HMI_CAL_TARGETS * 2; i++) pts[i] = (int32_t)get32(rec + CAL_REC_POINTS + 4 * i);
+    return hmi_cal_use(pts) != 0;
+}
+
+static void cal_save(const int32_t *pts) {
+    uint8_t rec[HMI_PANEL_STORE_BYTES];
+    memset(rec, 0, sizeof rec);
+    put32(rec, CAL_REC_MAGIC);
+    rec[4] = CAL_REC_VERSION;
+    strncpy((char *)rec + 5, hmi_build_id, CAL_REC_BUILD);
+    for (int i = 0; i < HMI_CAL_TARGETS * 2; i++) put32(rec + CAL_REC_POINTS + 4 * i, (uint32_t)pts[i]);
+    put32(rec + CAL_REC_BYTES - 4, crc32_of(rec, CAL_REC_BYTES - 4));
+    (void)hmi_panel_store_write(rec, sizeof rec);
+}
+
+static int32_t clamp_q4(int32_t v, int32_t lu) {
+    return v < 0 ? 0 : v >= lu * 16 ? lu * 16 - 1 : v;
+}
+
+/**
+ * Routes a raw reading: to the calibration screen while it shows (a press already down when it opened is ignored
+ * until released), or through the calibration to the screens. False when the screens get nothing. A press held from
+ * startup for HMI_BM_CAL_HOLD_MS opens the calibration.
+ */
+static bool cal_route(bool down, int32_t rx, int32_t ry, int32_t *qx, int32_t *qy) {
+    if (g.boot_hold) {
+        if (!down) {
+            g.boot_hold = false;
+        } else if (g.ms >= HMI_BM_CAL_HOLD_MS) {
+            g.boot_hold = false;
+            hmi_calibrate();
+        }
+    }
+    if (hmi_cal_active()) {
+        if (!g.cal_seen) {
+            g.cal_seen = true;
+            g.cal_wait_up = down;
+            send_pointer(false, 0, 0);
+        }
+        if (g.cal_wait_up) {
+            if (!down) g.cal_wait_up = false;
+            return false;
+        }
+        hmi_cal_raw(rx, ry, down ? 1 : 0);
+        int32_t pts[HMI_CAL_TARGETS * 2];
+        if (hmi_cal_take(pts)) {
+            g.cal_ok = true;
+            cal_save(pts);
+        }
+        return false;
+    }
+    g.cal_seen = false;
+    int32_t x, y;
+    if (!g.cal_ok || !hmi_cal_point(rx, ry, &x, &y)) return false;
+    *qx = clamp_q4(x, g.lw);
+    *qy = clamp_q4(y, g.lh);
+    return true;
+}
+#endif
 
 /** Reads the touch panel when a read is due and its learned cost, pressed or released, fits in the slack left since t0. */
 static void poll_touch(uint32_t t0, uint32_t slack_us) {
@@ -387,18 +516,23 @@ static void poll_touch(uint32_t t0, uint32_t slack_us) {
         return;
     }
     g.last_touch_ms = g.ms;
-    int x = 0, y = 0;
+    int32_t qx = 0, qy = 0;
     uint32_t r0 = now_us();
+#if HMI_PANEL_TOUCH_CAL
+    int32_t rx = 0, ry = 0;
+    bool down = hmi_panel_read_touch_raw(&rx, &ry);
+    learn(down ? &g.est_touch_down_us : &g.est_touch_up_us, now_us() - r0);
+    if (!cal_route(down, rx, ry, &qx, &qy)) return;
+#else
+    int x = 0, y = 0;
     bool down = hmi_panel_read_touch(&x, &y);
     learn(down ? &g.est_touch_down_us : &g.est_touch_up_us, now_us() - r0);
     if (down) {
-        hmi_input_pointer(g.touch_down ? HMI_PTR_MOVE : HMI_PTR_DOWN, px_to_q4(x, g.offx), px_to_q4(y, g.offy));
-        g.touch_x = x;
-        g.touch_y = y;
-    } else if (g.touch_down) {
-        hmi_input_pointer(HMI_PTR_UP, px_to_q4(g.touch_x, g.offx), px_to_q4(g.touch_y, g.offy));
+        qx = px_to_q4(x, g.offx);
+        qy = px_to_q4(y, g.offy);
     }
-    g.touch_down = down;
+#endif
+    send_pointer(down, qx, qy);
 }
 
 /** Leaves the HMI off for reason. */
@@ -430,10 +564,19 @@ bool hmi_bm_init(hmi_bm_clock_fn clock_us) {
     g.scale_q8 = (int32_t)density * 256;
     g.offx = (w - lw * density) / 2;
     g.offy = (h - lh * density) / 2;
+    g.lw = lw;
+    g.lh = lh;
 
     hmi_session_use(NULL);
     hmi_core_init(lw, lh);
     hmi_lock_setup(hmi_panel_pin, hmi_relock_minutes * 60000u);
+#if HMI_PANEL_TOUCH_CAL
+    hmi_cal_setup(1);
+    g.cal_ok = hmi_touch_cal_mode != 2 && cal_load();
+    int32_t rx = 0, ry = 0;
+    g.boot_hold = hmi_panel_read_touch_raw(&rx, &ry);
+    if (!g.cal_ok) hmi_calibrate();
+#endif
     hmi_set_tag_access(&g_access);
     g.unit = hmi_unit_create();
     if (!g.unit) return stay_off(HMI_BM_OFF_NO_UNIT);
@@ -507,5 +650,23 @@ __attribute__((weak)) void hmi_panel_push_band(int y0, int rows, uint8_t *rgba, 
 __attribute__((weak)) bool hmi_panel_read_touch(int *x, int *y) {
     (void)x;
     (void)y;
+    return false;
+}
+
+__attribute__((weak)) bool hmi_panel_read_touch_raw(int32_t *x, int32_t *y) {
+    (void)x;
+    (void)y;
+    return false;
+}
+
+__attribute__((weak)) bool hmi_panel_store_read(uint8_t *buf, size_t len) {
+    (void)buf;
+    (void)len;
+    return false;
+}
+
+__attribute__((weak)) bool hmi_panel_store_write(const uint8_t *buf, size_t len) {
+    (void)buf;
+    (void)len;
     return false;
 }
