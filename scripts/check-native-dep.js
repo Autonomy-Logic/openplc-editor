@@ -6,9 +6,18 @@ import { dependencies } from '../package.json';
 
 if (dependencies) {
   const dependenciesKeys = Object.keys(dependencies);
+  // Lockfile entries; a native module marked dev, optional or devOptional is required by no production dependency.
+  const lockPackages = fs.existsSync('package-lock.json')
+    ? JSON.parse(fs.readFileSync('package-lock.json', 'utf8')).packages ?? {}
+    : {};
+  const productionOnly = (folder) => {
+    const entry = lockPackages[`node_modules/${folder}`];
+    return !(entry && (entry.dev || entry.optional || entry.devOptional));
+  };
   const nativeDeps = fs
     .readdirSync('node_modules')
-    .filter((folder) => fs.existsSync(`node_modules/${folder}/binding.gyp`));
+    .filter((folder) => fs.existsSync(`node_modules/${folder}/binding.gyp`))
+    .filter(productionOnly);
   if (nativeDeps.length === 0) {
     process.exit(0);
   }
