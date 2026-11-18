@@ -222,6 +222,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
     },
   })
   const simulatorRunning = simulatorRun.isRunning
+  const simulatorBusy = simulatorRun.isBusy
 
   // A serial debug session lives on the device connection: it shares that
   // client, so when the link drops (unplug, reset, liveness failure, or the user
@@ -577,7 +578,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             if (event.firmwarePath && isSimulatorBoard) {
               const attachDebugger = pendingSimulatorDebugRef.current
               pendingSimulatorDebugRef.current = false
-              void simulatorRun.launch(event.firmwarePath, { attachDebugger })
+              void simulatorRun.launch(event.firmwarePath, { attachDebugger, projectData: freshProjectData })
             }
           },
         )
@@ -817,14 +818,11 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
 
     const harness = composeLibraryDebugHarness(store.getState().project.data)
 
-    for (const skip of harness.skipped) {
-      addLog({ level: 'warning', message: `${skip.pouName}: ${skip.reason}` })
-    }
     if (harness.blocks.length === 0) {
       addLog({
         level: 'error',
         message:
-          'Nothing to debug: this library has no function blocks the simulator can run. ' +
+          'Nothing to debug: this library has no function blocks. ' +
           'Add a function block — to exercise a function, write one that calls it.',
       })
       return
@@ -867,11 +865,13 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             // below. Without this the harness would stay installed with no
             // emulator behind it, and the watch list would keep showing a
             // generated program that is not running.
-            void simulatorRun.launch(event.firmwarePath, { attachDebugger: true }).then((launched) => {
-              if (!launched) {
-                store.getState().workspaceActions.setDebugHarness(null)
-              }
-            })
+            void simulatorRun
+              .launch(event.firmwarePath, { attachDebugger: true, projectData: harness.projectData })
+              .then((launched) => {
+                if (!launched) {
+                  store.getState().workspaceActions.setDebugHarness(null)
+                }
+              })
           }
         },
       )
@@ -1521,10 +1521,10 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           >
             <PlayButton
               onClick={isSimulatorBoard ? () => void handleSimulatorControl() : () => void handlePlcControl()}
-              disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing : plcControlBlocked}
+              disabled={isSimulatorBoard ? isCompiling || isDebuggerProcessing || simulatorBusy : plcControlBlocked}
               className={cn(
                 isSimulatorBoard
-                  ? isCompiling || isDebuggerProcessing
+                  ? isCompiling || isDebuggerProcessing || simulatorBusy
                     ? disabledButtonClass
                     : ''
                   : plcControlBlocked
@@ -1544,9 +1544,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
           <TooltipSidebarWrapperButton tooltipContent='Debugger'>
             <DebuggerButton
               onClick={() => void handleDebuggerClick()}
-              disabled={isDebuggerProcessing}
+              disabled={isDebuggerProcessing || simulatorBusy}
               isActive={isDebuggerVisible}
-              className={cn(isDebuggerProcessing && disabledButtonClass)}
+              className={cn((isDebuggerProcessing || simulatorBusy) && disabledButtonClass)}
             />
           </TooltipSidebarWrapperButton>
         </>
@@ -1573,9 +1573,9 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
         >
           <DebuggerButton
             onClick={() => void handleDebugLibrary()}
-            disabled={isCompiling}
+            disabled={isCompiling || simulatorBusy}
             isActive={isDebuggerVisible}
-            className={cn(isCompiling && disabledButtonClass)}
+            className={cn((isCompiling || simulatorBusy) && disabledButtonClass)}
           />
         </TooltipSidebarWrapperButton>
       )}

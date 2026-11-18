@@ -51,7 +51,8 @@ External contributors without Jira access follow CONTRIBUTING.md; GitHub Issues 
 **Package manager:** `npm` (not pnpm)
 
 ```bash
-npm install              # Install deps + download binaries + build DLL cache
+npm install              # Install deps + download binaries + Python runtime + build DLL cache
+npm run setup:python     # Fetch the pinned Python runtime into vendor/python-runtime/ (python-runtime.json)
 npm run dev              # Full dev mode (main + renderer + Electron, port 1313)
 npm run build            # Production build (main + renderer)
 npm run build:main       # Electron main process only
@@ -82,6 +83,7 @@ so it must be installed first or they fail with `TS2307: Cannot find module
 
 ```bash
 npm ci --ignore-scripts && npm run setup:strucpp   # required first, or tsc/jest can't resolve 'strucpp'
+npm run setup:python                               # the pinned Python runtime (vendor/python-runtime/), skipped by --ignore-scripts
 npx tsc --noEmit                                   # ci-build:       Build Check
 npx prettier --check "./src/**/*.{ts,tsx}"         # ci-format:      Format Check
 npx eslint "./src/**/*.{ts,tsx}"                   # ci-lint:        Lint Check
@@ -158,6 +160,7 @@ spec is a local check. `e2e/` drives the real Electron app through `_electron.la
 and three things bite before any assertion:
 
 ```bash
+npm run setup:python                                   # the Python runtime the simulator runs, if not installed
 OPENPLC_E2E_DEBUG_SEAM=1 npm run build                 # main + renderer
 mkdir -p release/app/configs/dll
 cp release/app/dist/main/preload.js release/app/configs/dll/preload.js
@@ -185,6 +188,15 @@ and closes a debug session with no PLC attached. Any other build drops the branc
 - **An unsigned fixture package is removed when a project opens.** A suite that installs one
   (`e2e/fixtures/vendor-configurator/`) replaces the `packages:verify-signatures` handler with a
   no-op once the bridge has registered it, as `e2e/vendor-configurator.spec.ts` does.
+
+**Never wait on a dead app.** Every wait for a build, a Play, a running simulator or a Console line must also
+read what the app shows and fail at once when it reports a failure: use `e2e/helpers/app-console.ts`
+(`waitForApp`, `waitForText`; identical in both repos) instead of polling a success condition alone. Most specs
+finish in under 3 minutes: set `test.setTimeout` near 180 s and each wait in tens of seconds, and run with
+`--global-timeout` (or in the background). Prove it with a negative control: break the fixture and expect a failure
+within seconds that quotes the Console. The Console is readable only while its tab is open; Play opens the debugger
+tab, so click the `Console` tab before reading block output.
+`launch()` (`e2e/helpers/ethercat-project.ts`) throws at once when the splash shows a startup failure.
 
 Every open tab keeps its Monaco editor mounted (hidden with `display: none`), so read
 body text from `.view-lines:visible`, never `.view-lines` alone.
@@ -229,7 +241,7 @@ The codebase uses **dependency inversion** via port interfaces. Frontend code ne
 | `CompilerPort` | PLC compilation pipeline |
 | `RuntimePort` | Remote PLC runtime control (login, start/stop, status) |
 | `DebuggerPort` | Debug protocol (read/write variables, MD5 verification) |
-| `SimulatorPort` | Built-in AVR simulator |
+| `SimulatorPort` | Built-in OpenPLC Simulator (WebAssembly) |
 | `ProjectPort` | Project CRUD operations |
 | `DevicePort` | Board discovery, serial ports |
 | `OrchestratorPort` | Device fleet management (web-only) |
@@ -381,6 +393,7 @@ PLCProjectData -> Preprocess POUs -> ST transpiler (in-process) -> strucpp -> C+
                                                     defines.h (pins, Modbus, MD5)
                                                                            |
                                                     Arduino CLI / openplc-compiler -> firmware
+                                                    WebAssembly toolchain -> simulator.wasm (OpenPLC Simulator)
 ```
 
 Structured Text is generated in-process by the TS transpiler
@@ -426,38 +439,109 @@ clang, lld and libc++ run inside the editor as WebAssembly (`@yowasp/clang`, pin
 `package.json`); no native compiler is involved. `CompilerPort.compileToWasm(request)` compiles C and C++
 translation units into one module and returns its bytes and the compiler's diagnostics; a bad request comes back
 as diagnostics too, never as a rejection. The logic is shared and byte-identical with openplc-web, in
-`src/backend/shared/wasm-toolchain/`: compile and link, the worker pool, the worker host, and the check of requests
+`src/backend/shared/wasm-toolchain/`: compile and link, the clang worker's runner, the worker host, and the check of requests
 that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its runtime headers.
 
 - **Object cache:** per unit, for the session (256 MB, least recently used first). Each object is kept with the
   request files clang says it read (`-MD`), and reused while they are unchanged and no file was added or removed.
-- **Worker pool:** starts with one worker and adds one, up to `clangWorkerCount` (four at most), when every worker
-  is busy. A worker that fails, does not load within 120 s, or runs a job past 120 s is terminated and dropped,
-  and its jobs fail.
+- **Clang worker:** at most one (`ClangWorkerPool`), running one job at a time. A build starts it, and it ends once no
+  build is running or queued, whatever the last build's outcome, so the simulator runs with no clang worker; builds
+  that overlap share it. A worker counts from its start until it has exited, and a new one starts only after the
+  previous one exited. A toolchain whose files cannot be got ready, a worker that cannot be started, or a worker that
+  fails or does not load within 120 s before it reports ready, fails the build with
+  `The WebAssembly compiler could not be loaded: <reason>`. Once a worker has loaded, one that fails or runs a job past
+  120 s is terminated and the job it ran fails with `The compiler worker stopped (<reason>).` On the web, a worker that
+  fails before it reports ready (not one past the 120 s load deadline) also has the toolchain's stored files deleted,
+  so the next build downloads them again, past the HTTP cache (`cache: 'reload'`).
+- **Web store:** `runtime-file-cache.ts` (`src/backend/shared/wasm-toolchain/`) is the web's Cache Storage store of the
+  runtime files and the workers' cache-first `fetch`; its worker `fetch` tries the HTTP cache, then the store, then
+  the network. After a load failure deletes a set's stored files, its next download skips both (`cache: 'reload'`). It ships in the shared surface but the desktop and the CLI do not use it (their files stay on disk).
 
-- **Desktop:** up to four worker threads (`src/backend/editor/wasm-toolchain/`); the worker is its own webpack
+- **Desktop:** one worker thread (`src/backend/editor/wasm-toolchain/`); the worker is its own webpack
   entry, `clang-worker.js`, built next to `main.js`. The renderer reaches it over the `wasm-toolchain:compile` IPC
   channel.
-- **Startup:** the toolchain loads while the splash is up, and the main window appears only once it is ready. If it
-  cannot load, the splash shows the reason with a Quit button.
-- **CLI:** no `openplc-cli` command compiles to WebAssembly yet, so the CLI never loads the toolchain. The service
-  loads it on first use, which is how a future CLI command will get it.
-- **Packaging:** the package ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
+- **Startup:** while the splash is up the editor only checks that every toolchain file and every Python runtime file
+  is present; it starts no clang worker and no Python thread, and compiles nothing. A missing toolchain file keeps the
+  splash up with the reason and a Quit button; a missing Python runtime file only logs a warning. The Python file check
+  is the shared `requirePythonRuntimeFiles` (`src/backend/shared/python/python-runtime-files.ts`); the desktop only
+  reads the files.
+- **CLI:** one worker through the same pool, started by an OpenPLC Simulator build (`compile` for it, or `simulate`).
+- **Loader patch:** `patchYowaspLoader` (`src/backend/shared/wasm-toolchain/yowasp-loader-patch.ts`, shared with
+  openplc-web) replaces the one `options.fetchProgress ?? defaultFetchProgress` in the package's `gen/bundle.js`, so a
+  run with no `fetchProgress` (the shared host passes none) compiles each module straight from its URL and logs
+  nothing, and adds a one-line change notice at the top of `bundle.js`; `third-party-licenses/yowasp-clang/README.md`
+  names the patched line. `scripts/prepare-yowasp-clang.ts` writes the prepared copy `release/yowasp-clang/`
+  (git-ignored): `package.json`, `README.md` and `gen/**` of `node_modules/@yowasp/clang`, `gen/bundle.js` patched,
+  everything else byte for byte; it fails when the patch does not apply exactly once, and never writes `node_modules`.
+  It runs in `postinstall`, `prestart` and at the start of `build:main`, so `npm run dev`, `npm run build`,
+  `npm run package` and the CLI builds always have it. Outside a package the desktop and the CLI load clang from that copy, and
+  the worker's `load()` runs the shared `checkWasmToolchainPackage` (`src/backend/shared/wasm-toolchain/toolchain-files.ts`),
+  which refuses a missing file (`Missing toolchain file: <path>`) and a `bundle.js` that is not patched
+  (`The toolchain's loader is not patched: <path>`).
+- **Packaging:** the prepared copy (`release/yowasp-clang`) ships as the extra resource `yowasp-clang`, outside the asar archive, with its licences under `yowasp-clang/licenses/`. The `allow-jit`
   entitlement in `assets/entitlements.mac.plist` lets it run under the hardened runtime.
-- **Running a module** is the caller's job. Instantiating one in the renderer needs `'wasm-unsafe-eval'` in the
-  renderer CSP (`src/index.ejs`), which is not there today.
+- **Running a module** happens in main-process worker threads (the simulator, Python), never in the renderer: the
+  renderer CSP (`src/index.ejs`) has no `'wasm-unsafe-eval'`.
+
+**Simulator build.** The OpenPLC Simulator target builds with this toolchain, not arduino-cli: the pipeline's
+simulator branch (`compileSimulatorModule` in `src/backend/shared/compile/pipeline.ts`) turns the composed firmware
+files into one request (`steps/build-simulator-wasm-request.ts`) and calls `CompilerPlatformPort.compileToWasm`. The
+sketch becomes `examples/Baremetal/Baremetal.cpp` with `Arduino.h` included and Arduino-style prototypes
+(`steps/ino-prototypes.ts`); the network stack and the Modbus TCP, OPC UA and S7 units are left out, Modbus RTU stays
+for the debugger. The firmware skeleton carries `resources/sources/wasm-sim/`: the host shim `sim_main.cpp`, a stub `Arduino.h` and the
+ArduinoCore-API (LGPL-2.1, commit `0f4e57ea`, licence in `wasm-sim/core/`). The module is a reactor that imports
+`env.host_clock_us` and `env.host_uart_write` and exports `sim_setup`, `sim_loop`, `sim_uart_receive` and
+`sim_scan_period_us`; time moves only when the host advances it. The simulator has no pins: its `defines.h` declares
+none and `resources/sources/hal/simulator.cpp` does no I/O. No Arduino core is installed for it.
+The desktop writes the module to `<build>/OpenPLC Simulator/simulator.wasm`. The editor builds the simulator only
+from Play; `e2e/wasm-simulator-build.spec.ts` builds through `openplc-cli compile`.
 
 **Updating the toolchain:** change the exact `@yowasp/clang` version in `package.json` in both repos (with both
-lockfiles, `pnpm-lock.yaml` included on the web), then run `e2e/wasm-toolchain.spec.ts` in both repos, including
-the packaged-app case (`E2E_PACKAGED_APP`). The npm package carries no licence files, so the texts for YoWASP, LLVM and
+lockfiles, `pnpm-lock.yaml` included on the web), then run `yowasp-loader-patch.test.ts`
+(`src/backend/shared/wasm-toolchain/__tests__/`) in both repos, which fails when the new `bundle.js` drops or moves the
+patched line (re-check the patch then, in both repos), and `e2e/wasm-toolchain.spec.ts` in both repos, including the
+packaged-app case (`E2E_PACKAGED_APP`). The npm package carries no licence files, so the texts for YoWASP, LLVM and
 wasi-libc live in `third-party-licenses/yowasp-clang/` (in both repos, with their sources in its README)
 and ship next to the toolchain; refresh them from the commits the new release was built from.
+
+**Python blocks in the simulator.** Each Python block instance runs in its own CPython 3.13 interpreter (WASIX build,
+run by the Wasmer SDK, no network), in one long-lived worker thread of the main process (`python-worker.js`, built next
+to `main.js`; `src/backend/editor/python/`). The logic is shared and byte-identical with openplc-web in
+`src/backend/shared/python/`: the block host (one interpreter per instance, the runtime's 100 ms exchange over the
+wrapper's stdio transport, Console lines prefixed `[Block]`, a block that ends or fails keeps its last outputs, Stop
+kills them all), the thread protocol and the Wasmer runtime. The module starts a block through
+`wasm-sim/sim_python.cpp` (`env.host_python_block`), force-included header `wasm-sim/stub/iec_python.h`. The runtime
+starts only for a run with Python blocks (the splash only checks its files) and never stops the editor or a run: if it
+cannot load (or takes past 120 s), the PLC runs and each Python block reports the reason on the Console; the failure
+stays for the session. On the web, a load failure also deletes the Python runtime's stored files, so the next page
+load downloads them again, past the HTTP cache. On a page that is not cross-origin isolated (web) it is never started, and the blocks report
+`Python blocks cannot run here: the page is not cross-origin isolated.` Interpreters
+for a project's blocks boot right
+after its module compiles, and the PLC starts once they are ready (not during the compile: on WebKit that stalls the
+in-browser compiler). `openplc-cli simulate` (`src/cli/commands/simulate.ts`) runs the same simulator and loads
+Python only for a project with Python blocks; a toolchain that cannot load ends it (exit 4), a Python runtime that cannot
+load does not. A run keeps at most as many interpreters as fit in half of the computer's memory
+(`python-memory-budget.ts`).
+
+- **Assets:** the CPython package and the numpy wheel are pinned by sha256 in `python-runtime.json` and fetched at
+  install time into `vendor/python-runtime/` (`npm run setup:python`, part of `postinstall`; never committed, the
+  package is 161 MB). A packaged app ships them, with the Wasmer SDK and the licences in
+  `third-party-licenses/python-runtime/`, as the extra resources `python-runtime` and `wasmer-sdk`; users download
+  nothing.
+- **Updating:** change the pins in `python-runtime.json` in both repos (and the exact `@wasmer/sdk` version with both
+  lockfiles), run `setup:python -- --force`, refresh the licence texts, then run `e2e/python-blocks-play.spec.ts` in
+  both repos (WebKit included on the web) and `e2e/cli-simulate.spec.ts` in the editor.
 
 ### Debugging
 
 - **Protocol:** Custom Modbus PDU: function codes 0x41-0x45 for variable read/write, and 0x46-0x4D for status, version, licensing, run/stop state, bootloader reboot and lock state (`resources/sources/Baremetal/modbus_types.h`)
 - **Transports:** Modbus TCP, Modbus RTU, WebSocket, or virtual serial (simulator)
-- **Simulator:** AVR8JS emulator (`src/backend/shared/simulator/`) emulates ATmega2560
+- **Simulator:** the project's WebAssembly module (`src/backend/shared/simulator/`): `WasmSimulatorModule` runs it
+  with simulated time (one scan period per scan, never ahead of the wall clock, in steps of at most 10 ms so the
+  serial service runs between scans), in a worker thread (`ThreadedSimulator` + `serveSimulatorThread`; desktop entry
+  `src/backend/editor/simulator/simulator-worker.ts`, built as `simulator-worker.js`). The debugger's Modbus RTU client
+  talks to it through `VirtualSerialPort`. Test fixtures, and how to rebuild them, are in
+  `src/backend/shared/simulator/__tests__/fixtures/README.md`.
 - **Flow:** Compile with debug symbols (.dbg file + MD5) -> connect debugger -> poll variables
 
 ## Testing
@@ -493,7 +577,7 @@ and ship next to the toolchain; refresh them from the commits the new release wa
 
 ## Key Technologies
 
-- **Electron 35** / **React 18** / **TypeScript** (target ES2022)
+- **Electron 37** (the last line that still runs on macOS 11) / **React 18** / **TypeScript** (target ES2022)
 - **Webpack** (not Vite) with separate main/renderer/preload configs
 - **Zustand 5** + **Immer** for state management
 - **Monaco Editor** for code editing (ST, IL, Python, C++)
@@ -502,7 +586,6 @@ and ship next to the toolchain; refresh them from the commits the new release wa
 - **Tailwind CSS 3** + **Radix UI** for styling
 - **Zod** for schema validation
 - **i18next** for internationalization
-- **avr8js** for Arduino simulation
 - **Axios** for HTTP requests
 - **Socket.io** for real-time communication
 - **Winston** for structured logging (main process)

@@ -53,8 +53,8 @@ jest.mock('../../../backend/editor/utils', () => ({
   getProjectPath: jest.fn(),
 }))
 
-jest.mock('../../../backend/shared/simulator/simulator-module', () => ({
-  SimulatorModule: jest.fn(() => ({ stop: jest.fn() })),
+jest.mock('../../../backend/editor/simulator/desktop-simulator', () => ({
+  createDesktopSimulator: jest.fn(() => ({ stop: jest.fn(), isRunning: jest.fn(() => false) })),
 }))
 
 const createBridge = (mainWindow: { isDestroyed: jest.Mock; isMaximized: jest.Mock }) =>

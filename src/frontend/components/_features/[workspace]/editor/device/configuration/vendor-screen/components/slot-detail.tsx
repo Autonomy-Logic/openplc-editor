@@ -1,9 +1,19 @@
 import { useDevice } from '@root/middleware/shared/providers/platform-context'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 
-function SlotDetailPane({ children }: { children: ReactNode }) {
+/** Scrolling pane of the selected slot. `scrollResetKey` brings it back to the top whenever the slot it shows changes. */
+function SlotDetailPane({ children, scrollResetKey }: { children: ReactNode; scrollResetKey?: string | number }) {
+  const paneRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (paneRef.current) paneRef.current.scrollTop = 0
+  }, [scrollResetKey])
+
   return (
-    <div className='flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-md border border-neutral-200 p-4 dark:border-neutral-700'>
+    <div
+      ref={paneRef}
+      className='flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto rounded-md border border-neutral-200 p-4 dark:border-neutral-700'
+    >
       {children}
     </div>
   )
@@ -56,7 +66,13 @@ function ModulePicture({ image, packagePath, alt }: { image?: string; packagePat
   }, [image, packagePath, devicePort])
 
   if (!dataUrl) return null
-  return <img src={dataUrl} alt={alt} className='h-80 w-80 shrink-0 self-start object-contain' />
+  return (
+    <img
+      src={dataUrl}
+      alt={alt}
+      className='h-auto max-h-[min(20rem,30vh)] w-auto max-w-[40%] self-start object-contain'
+    />
+  )
 }
 
 export { ModulePicture, ModuleSummary, SlotDetailHeading, SlotDetailPane }
