@@ -215,6 +215,22 @@ describe('createWasmCompileService over one clang worker', () => {
     expect(mechanism.started).toBe(0)
   })
 
+  it('keeps the worker loaded between builds while held, and ends it once the hold ends', async () => {
+    const { mechanism, service } = setup()
+
+    await service.setHeld('hmi-editor', true)
+    expect((await service.compile(units(2))).ok).toBe(true)
+    expect(mechanism.alive).toBe(1)
+    expect((await service.compile(units(3))).ok).toBe(true)
+    expect(mechanism.started).toBe(1)
+    await service.setHeld('other', true)
+    await service.setHeld('hmi-editor', false)
+    expect(mechanism.alive).toBe(1)
+    await service.setHeld('other', false)
+
+    expect(mechanism.alive).toBe(0)
+  })
+
   it('leaves no clang worker alive once a successful build resolves', async () => {
     const { mechanism, service } = setup()
 

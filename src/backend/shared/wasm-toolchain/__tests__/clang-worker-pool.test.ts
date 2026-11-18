@@ -626,3 +626,96 @@ describe('ClangWorkerPool stored files after a load failure', () => {
     expect(mechanism.loads).toBe(1)
   })
 })
+
+describe('ClangWorkerPool while held', () => {
+  const GIB = 1024 * 1024 * 1024
+  const MIB = 1024 * 1024
+
+  it('runs on one worker while not held, whatever memory is free', async () => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.memory = 64 * GIB
+    mechanism.coreCount = 16
+    const pool = new ClangWorkerPool(mechanism)
+
+    for (let i = 0; i < 4; i++) void pool.run(job(`u${i}.c`))
+    await flushMicrotasks()
+
+    expect(pool.concurrency).toBe(1)
+    expect(mechanism.started).toBe(1)
+  })
+
+  it('grows one worker at a time while jobs wait, to the limit the free memory allows', async () => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.memory = GIB + 2 * 640 * MIB
+    mechanism.coreCount = 8
+    const pool = new ClangWorkerPool(mechanism)
+    pool.setHeld(true)
+
+    const runs = Array.from({ length: 5 }, (_, i) => pool.run(job(`u${i}.c`)))
+    await flushMicrotasks()
+
+    expect(pool.concurrency).toBe(3)
+    expect(mechanism.started).toBe(3)
+    expect(mechanism.workers.map((w) => w.posted.length)).toEqual([1, 1, 1])
+    for (let round = 0; round < 3; round++) {
+      for (const w of mechanism.workers) w.answerNext()
+      await flushMicrotasks()
+    }
+    await expect(Promise.all(runs)).resolves.toHaveLength(5)
+    expect(mechanism.started).toBe(3)
+  })
+
+  it('stays on one worker where the platform cannot tell its free memory', async () => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.coreCount = 8
+    const pool = new ClangWorkerPool(mechanism)
+    pool.setHeld(true)
+
+    for (let i = 0; i < 4; i++) void pool.run(job(`u${i}.c`))
+    await flushMicrotasks()
+
+    expect(pool.concurrency).toBe(1)
+    expect(mechanism.started).toBe(1)
+  })
+
+  it('stops growing, and keeps the workers it has, when a further worker cannot be started', async () => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.memory = 16 * GIB
+    mechanism.coreCount = 8
+    mechanism.autoReady = false
+    const pool = new ClangWorkerPool(mechanism)
+    pool.setHeld(true)
+
+    const first = pool.run(job('a.c'))
+    const second = pool.run(job('b.c'))
+    await flushMicrotasks()
+    mechanism.spawnError = new Error('out of threads')
+    worker(mechanism, 0).send({ type: 'ready' })
+    await flushMicrotasks()
+    worker(mechanism, 0).answerNext()
+    await flushMicrotasks()
+    worker(mechanism, 0).answerNext()
+
+    await expect(first).resolves.toMatchObject({ exitCode: 0 })
+    await expect(second).resolves.toMatchObject({ exitCode: 0 })
+    expect(mechanism.spawnAttempts).toBe(2)
+    expect(mechanism.started).toBe(1)
+    expect(pool.concurrency).toBe(1)
+  })
+
+  it('ends every worker on release once nothing runs', async () => {
+    const mechanism = new CountingClangMechanism()
+    mechanism.memory = 16 * GIB
+    mechanism.coreCount = 8
+    mechanism.answer = succeed
+    const pool = new ClangWorkerPool(mechanism)
+    pool.setHeld(true)
+
+    await Promise.all(Array.from({ length: 6 }, (_, i) => pool.run(job(`u${i}.c`))))
+    expect(mechanism.alive).toBeGreaterThan(1)
+    pool.setHeld(false)
+    await pool.release()
+
+    expect(mechanism.alive).toBe(0)
+  })
+})

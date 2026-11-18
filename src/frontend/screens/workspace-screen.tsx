@@ -1,4 +1,5 @@
 import * as Tabs from '@radix-ui/react-tabs'
+import { useHoldHmiToolchain } from '@root/frontend/hooks/use-hold-hmi-toolchain'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImperativePanelHandle } from 'react-resizable-panels'
 import { useShallow } from 'zustand/react/shallow'
@@ -190,6 +191,7 @@ const WorkspaceScreen = () => {
   }, [projectPath, rawLoadedContent, loadedSerialized, initBaseline, store])
 
   useRuntimePolling()
+  useHoldHmiToolchain()
   useRestoreProjectTargetDevice()
   // Mirrors a baremetal target's run/stop state from the held device link's existing liveness tick (no timer of its own).
   useDevicePlcState()

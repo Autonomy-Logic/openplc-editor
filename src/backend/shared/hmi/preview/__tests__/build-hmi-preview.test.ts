@@ -13,7 +13,7 @@ import {
   HMI_PREVIEW_LINK_FLAGS,
   type HmiPreviewResources,
 } from '../build-hmi-preview'
-import { createHmiPreviewPort, hmiPreviewResources } from '../hmi-preview-port'
+import { createHmiPreviewPort, HMI_TOOLCHAIN_HOLDER, hmiPreviewResources } from '../hmi-preview-port'
 import { testWorker } from './fixtures/support'
 
 /* The bundled fonts: resources/sources/hmi/fonts in the editor, src/assets/firmware/hmi/fonts on the web. */
@@ -204,6 +204,7 @@ describe('createHmiPreviewPort', () => {
       fonts[`fonts/${file}`] = new Uint8Array(readFileSync(join(FONTS, file)))
     const { compile } = capture()
     let workers = 0
+    const holds: [string, boolean][] = []
     const mechanisms: HmiPreviewMechanisms = {
       readHmiSources: () => {
         reads++
@@ -215,6 +216,10 @@ describe('createHmiPreviewPort', () => {
       startWorker: () => {
         workers++
         return testWorker()
+      },
+      holdToolchain: (holder, held) => {
+        holds.push([holder, held])
+        return Promise.resolve()
       },
     }
     const port = createHmiPreviewPort(mechanisms)
@@ -230,5 +235,11 @@ describe('createHmiPreviewPort', () => {
     await expect(session.frame(0, { width: 1, height: 1, scale: 1 })).rejects.toThrow('No preview module is running')
     expect(workers).toBe(0)
     session.close()
+    await port.holdToolchain(true)
+    await port.holdToolchain(false)
+    expect(holds).toEqual([
+      [HMI_TOOLCHAIN_HOLDER, true],
+      [HMI_TOOLCHAIN_HOLDER, false],
+    ])
   })
 })

@@ -31,6 +31,8 @@ export interface HmiPreviewMechanisms {
   /** The STruC++ runtime headers (`iec_*.hpp`, ...), keyed by any path; only the file name counts. */
   readStrucppRuntimeHeaders(): Promise<Record<string, string>>
   compileToWasm(request: WasmCompileRequest): Promise<WasmCompileResult>
+  /** Holds the platform's WebAssembly toolchain for `holder`, or lets it go (`WasmCompileService.setHeld`). */
+  holdToolchain(holder: string, held: boolean): Promise<void>
   /** Starts a Worker running the preview's worker script. */
   startWorker(): HmiPreviewWorkerHandle
 }

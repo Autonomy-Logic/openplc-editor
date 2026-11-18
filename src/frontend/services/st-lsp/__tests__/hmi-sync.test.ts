@@ -37,6 +37,7 @@ function previewPort(): HmiPreviewPort {
     openSession: () => {
       throw new Error('not used')
     },
+    holdToolchain: () => Promise.resolve(),
   }
 }
 

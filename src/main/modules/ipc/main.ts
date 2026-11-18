@@ -1036,6 +1036,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('util:read-debug-file', this.handleReadDebugFile)
 
     this.registerHandle('wasm-toolchain:compile', this.handleWasmToolchainCompile)
+    this.registerHandle('wasm-toolchain:hold', this.handleWasmToolchainHold)
     this.registerHandle('hmi-preview:read-sources', this.handleHmiPreviewReadSources)
     this.registerHandle('hmi-preview:read-runtime-headers', this.handleHmiPreviewReadRuntimeHeaders)
 
@@ -2404,6 +2405,11 @@ class MainProcessBridge implements MainIpcModule {
   // Utility handlers
   handleWasmToolchainCompile = (_event: IpcMainInvokeEvent, request: unknown): Promise<WasmCompileResult> =>
     getDesktopWasmCompileService().compileRequest(request)
+
+  handleWasmToolchainHold = (_event: IpcMainInvokeEvent, holder: unknown, held: unknown): Promise<void> =>
+    typeof holder === 'string' && typeof held === 'boolean'
+      ? getDesktopWasmCompileService().setHeld(holder, held)
+      : Promise.reject(new Error('wasm-toolchain:hold takes a holder name and a boolean'))
 
   handleHmiPreviewReadSources = async (): Promise<{ root: string; files: Record<string, Uint8Array> }> => ({
     root: '',

@@ -13,6 +13,7 @@ export function createEditorHmiPreviewAdapter(): HmiPreviewPort {
     readHmiSources: () => window.bridge.hmiPreviewReadSources(),
     readStrucppRuntimeHeaders: () => window.bridge.hmiPreviewReadRuntimeHeaders(),
     compileToWasm: (request) => window.bridge.wasmToolchainCompile(request),
+    holdToolchain: (holder, held) => window.bridge.wasmToolchainHold(holder, held),
     startWorker: () => new Worker(new URL(WORKER_SCRIPT, window.location.href), { name: 'hmi-preview' }),
   })
 }

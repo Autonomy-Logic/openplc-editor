@@ -60,6 +60,9 @@ export function hmiPreviewResources(
   }
 }
 
+/** Who holds the toolchain while an HMI editor is open. */
+export const HMI_TOOLCHAIN_HOLDER = 'hmi-editor'
+
 export function createHmiPreviewPort(
   mechanisms: HmiPreviewMechanisms,
   sessionOptions: HmiPreviewSessionOptions = {},
@@ -132,6 +135,7 @@ export function createHmiPreviewPort(
       return thumbnailCache.result
     },
     openSession: () => createHmiPreviewSession(() => mechanisms.startWorker(), sessionOptions),
+    holdToolchain: (held) => mechanisms.holdToolchain(HMI_TOOLCHAIN_HOLDER, held),
   }
   return port
 }

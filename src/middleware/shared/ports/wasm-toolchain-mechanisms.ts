@@ -21,7 +21,7 @@ export interface WasmClangJobResult {
 }
 
 export interface WasmClangRunner {
-  /** Jobs run one at a time: always 1. */
+  /** Jobs that may run at once: 1, or more while held and the memory allows (`setHeld`). */
   readonly concurrency: number
   /**
    * Gets the toolchain's files ready through the mechanism; starts no worker. A success is kept; a failure is not, so
@@ -29,13 +29,18 @@ export interface WasmClangRunner {
    */
   prepare(): Promise<void>
   /**
-   * Runs one job on the one worker, starting it when none is alive, after a stopping worker has exited. Rejects only
-   * when the job could not run, never for a compile error.
+   * Runs one job on a worker, starting one when none is idle and the limit allows, after a stopping worker has exited.
+   * Rejects only when the job could not run, never for a compile error.
    */
   run(job: WasmClangJob): Promise<WasmClangJobResult>
   /**
-   * Ends the worker when no job is running or queued; resolves once it has exited, at once when there is none. Ends
-   * nothing while jobs remain.
+   * While held, jobs may run on more than one worker, as many as the platform's free memory allows; otherwise on one.
+   * Releasing the hold ends nothing by itself.
+   */
+  setHeld?(held: boolean): void
+  /**
+   * Ends the workers when no job is running or queued; resolves once they have exited, at once when there are none.
+   * Ends nothing while jobs remain.
    */
   release(): Promise<void>
 }
@@ -83,4 +88,8 @@ export interface ClangWorkerMechanism {
   spawn(): ClangWorkerHandle
   /** Deletes the toolchain's stored files, so the next load downloads them again. */
   discard?(): Promise<void>
+  /** Memory the platform can hand out now, in bytes, read from the OS; undefined when it cannot tell. */
+  availableMemoryBytes?(): number | undefined
+  /** Processors of the machine; undefined when unknown. */
+  cores?(): number | undefined
 }

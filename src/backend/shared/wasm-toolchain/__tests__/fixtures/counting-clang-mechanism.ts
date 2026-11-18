@@ -115,6 +115,10 @@ export class CountingClangMechanism implements ClangWorkerMechanism {
   discardThrows = false
   /** Whether `discard()` waits for `settleDiscards()` before it settles. */
   holdDiscards = false
+  /** What `availableMemoryBytes()` reports; undefined as on a platform that cannot tell. */
+  memory: number | undefined = undefined
+  /** What `cores()` reports. */
+  coreCount: number | undefined = undefined
   private readonly heldLoads: Array<() => void> = []
   private readonly heldDiscards: Array<() => void> = []
 
@@ -160,6 +164,14 @@ export class CountingClangMechanism implements ClangWorkerMechanism {
   /** Settles every discard held while `holdDiscards` was set: rejects with `discardError` when set, resolves otherwise. */
   settleDiscards(): void {
     for (const settle of this.heldDiscards.splice(0)) settle()
+  }
+
+  availableMemoryBytes(): number | undefined {
+    return this.memory
+  }
+
+  cores(): number | undefined {
+    return this.coreCount
   }
 
   spawn(): ClangWorkerHandle {
