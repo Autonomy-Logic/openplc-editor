@@ -40,6 +40,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Persisted for the push in "Open Pull Request"; see SECURITY_BOT_TOKEN there.
+          token: ${{ secrets.SECURITY_BOT_TOKEN || github.token }}
 
       - name: Month stamp
         id: m
@@ -158,11 +160,12 @@ jobs:
             --out "security/${{ steps.m.outputs.month }}" \
             --date "${{ steps.m.outputs.month }}"
 
-      - name: Render PDF
-        uses: browser-actions/setup-chrome@v1
-        id: chrome
+      # Chrome preinstalled on the runner image: this repository only allows
+      # GitHub-owned and verified third-party actions.
       - name: Assemble dated folder
         run: |
+          CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)
+          [ -n "$CHROME" ] || { echo "::error::no Chrome binary on the runner"; exit 1; }
           MONTH="${{ steps.m.outputs.month }}"
           DIR="security/$MONTH"
           cp /tmp/out/vulnerabilities.csv "$DIR/"
@@ -176,7 +179,7 @@ jobs:
           # --disable-javascript: the report HTML is a static document written from
           # report-config.json (AI-authored) — no JS should ever run while rendering
           # it with local file:// access. Defense-in-depth on top of the HTML escaping.
-          "${{ steps.chrome.outputs.chrome-path }}" --headless=new --no-sandbox --disable-dev-shm-usage \
+          "$CHROME" --headless=new --no-sandbox --disable-dev-shm-usage \
             --disable-javascript --disable-gpu --no-pdf-header-footer \
             --run-all-compositor-stages-before-draw --virtual-time-budget=5000 \
             --print-to-pdf="${REPORT%.html}.pdf" "file://$PWD/$REPORT"
@@ -186,29 +189,39 @@ jobs:
           printf '%s\n' "$MONTH" > security/LATEST
 
       # ---- delivery: open the PR for review ----
+      # Plain git + gh instead of a third-party PR action (not on this
+      # repository's allowed-actions list). Re-runs in the same month force-push
+      # the branch, which updates the PR already open for it.
       - name: Open Pull Request
-        uses: peter-evans/create-pull-request@v6
-        with:
+        env:
           # A PR opened with the default GITHUB_TOKEN does NOT trigger other
-          # workflows (so the gate/lint/tests would never run on the monthly PR).
-          # Set a SECURITY_BOT_TOKEN secret (a GitHub App installation token or a
-          # fine-grained PAT with contents+PR write) to make checks run; it falls
-          # back to GITHUB_TOKEN if unset (PR still opens, just without checks).
-          token: ${{ secrets.SECURITY_BOT_TOKEN || github.token }}
-          # The scheduled run starts from the default branch (main), so the PR targets
-          # main. Merging it does not count as a release: the release flows ignore
-          # commits that only touch security/ and osv-scanner.toml.
-          base: main
-          branch: chore/security-${{ steps.m.outputs.month }}
-          title: "chore(security): monthly vulnerability report — ${{ steps.m.outputs.month }}"
-          labels: supply-chain, security
-          commit-message: "chore(security): vulnerability report ${{ steps.m.outputs.month }}"
-          body: |
-            Automated monthly vulnerability snapshot for **${{ github.event.repository.name }}** — `security/${{ steps.m.outputs.month }}/`.
+          # workflows. Set SECURITY_BOT_TOKEN (GitHub App token or fine-grained
+          # PAT with contents+PR write) to make checks run on the monthly PR.
+          GH_TOKEN: ${{ secrets.SECURITY_BOT_TOKEN || github.token }}
+          MONTH: ${{ steps.m.outputs.month }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          BRANCH="chore/security-$MONTH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add security osv-scanner.toml
+          if git diff --cached --quiet; then echo "No changes to propose."; exit 0; fi
+          git commit -q -m "chore(security): vulnerability report $MONTH"
+          # Pushes with the token the checkout step persisted (same as GH_TOKEN).
+          git push -q --force origin "HEAD:refs/heads/$BRANCH"
+          if [ -n "$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number')" ]; then
+            echo "PR for $BRANCH already open; branch updated."; exit 0
+          fi
+          cat > /tmp/pr-body.md <<EOF
+          Automated monthly vulnerability snapshot for **${REPO_NAME}** — \`security/${MONTH}/\`.
 
-            - No SBOM here: it is generated once per release by `security-sbom.yml` and archived on `security-archive`.
-            - Dependencies scanned against OSV (same source as Dependabot), honoring `osv-scanner.toml` (the VEX baseline).
-            - New advisories (if any) were triaged by Claude and reflected in `report-config.json` / `osv-scanner.toml` — **review those diffs**. Suppressions written by the automated step carry `AI-TRIAGED [unreviewed]` in their `reason`; clearing that marker is the reviewer's acknowledgement.
-            - Any advisory the triage did **not** account for is listed in section **4a — Untriaged in This Scan** of the report, and the report says so in its executive summary.
+          - No SBOM here: it is generated once per release by \`security-sbom.yml\` and archived on \`security-archive\`.
+          - Dependencies scanned against OSV (same source as Dependabot), honoring \`osv-scanner.toml\` (the VEX baseline).
+          - New advisories (if any) were triaged by Claude and reflected in \`report-config.json\` / \`osv-scanner.toml\` — **review those diffs**. Suppressions written by the automated step carry \`AI-TRIAGED [unreviewed]\` in their \`reason\`; clearing that marker is the reviewer's acknowledgement.
+          - Any advisory the triage did **not** account for is listed in section **4a — Untriaged in This Scan** of the report, and the report says so in its executive summary.
 
-            Nothing is merged automatically. Approve to archive this month's snapshot.
+          Nothing is merged automatically. Approve to archive this month's snapshot.
+          EOF
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore(security): monthly vulnerability report — $MONTH" --body-file /tmp/pr-body.md

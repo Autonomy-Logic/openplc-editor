@@ -83,16 +83,17 @@ jobs:
             --out /tmp/out \
             --date "$(TZ=UTC git log -1 --date=format-local:%Y-%m-%d --format=%cd)"
 
-      - name: Set up Chrome
-        uses: browser-actions/setup-chrome@v1
-        id: chrome
+      # Chrome preinstalled on the runner image: this repository only allows
+      # GitHub-owned and verified third-party actions.
       - name: Render PDF
         run: |
+          CHROME=$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)
+          [ -n "$CHROME" ] || { echo "::error::no Chrome binary on the runner"; exit 1; }
           REPORT="${{ steps.report.outputs.html }}"
           [ -f "$REPORT" ] || { echo "::error::report HTML not found at '$REPORT'"; exit 1; }
           # --no-sandbox / --disable-dev-shm-usage: required for headless Chrome on
           # GitHub runners. --disable-javascript: the report is a static document.
-          "${{ steps.chrome.outputs.chrome-path }}" --headless=new --no-sandbox --disable-dev-shm-usage \
+          "$CHROME" --headless=new --no-sandbox --disable-dev-shm-usage \
             --disable-javascript --disable-gpu --no-pdf-header-footer \
             --run-all-compositor-stages-before-draw --virtual-time-budget=5000 \
             --print-to-pdf="${REPORT%.html}.pdf" "file://$REPORT"
