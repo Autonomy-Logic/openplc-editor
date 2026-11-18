@@ -30,7 +30,7 @@ INTERFACE IHmiElement
 END_INTERFACE
 
 (* Base of every visual element. Containers place elements; an element knows its own size. Widget authors override
-   the PROTECTED methods: Draw, Input, NaturalWidth, NaturalHeight, TakesInput, Prepare and the ports. *)
+   the PROTECTED methods: Draw, Input, NaturalWidth, NaturalHeight, TakesInput, Prepare, the popup and the ports. *)
 FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
   VAR_INPUT
     (* Container this element sits in, by name; empty means the screen. Read by the HMI build. *)
@@ -86,6 +86,8 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
     (* Scratch of the stack placing this element: its size along the stack, the size a pass wants, settled. *)
     LaySize, LayWant : DINT;
     LayFixed : BOOL;
+    (* The element's popup is open. *)
+    PopupUp : BOOL;
   END_VAR
 
   METHOD Right : DINT
@@ -213,6 +215,24 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
   METHOD PROTECTED Input : BOOL
     Input := FALSE;
   END_METHOD
+  (* While the popup is open: runs before every element's Input, without the container's clip; TRUE when it took the
+     pointer. *)
+  METHOD PROTECTED PopupInput : BOOL
+    PopupInput := FALSE;
+  END_METHOD
+  (* While the popup is open: draws over every element, without the container's clip. *)
+  METHOD PROTECTED DrawPopup : BOOL
+    DrawPopup := FALSE;
+  END_METHOD
+  (* Opens or closes the element's popup; it also closes when the element is hidden or disabled. *)
+  METHOD PROTECTED SetPopup : BOOL
+    VAR_INPUT Open : BOOL; END_VAR
+    PopupUp := Open;
+    SetPopup := TRUE;
+  END_METHOD
+  METHOD PROTECTED PopupOpen : BOOL
+    PopupOpen := PopupUp;
+  END_METHOD
   METHOD PROTECTED PortCount : INT
     PortCount := 4;
   END_METHOD
@@ -269,6 +289,10 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
   END_METHOD
   METHOD INTERNAL ElementId : DINT
     ElementId := Id;
+  END_METHOD
+  (* Whether the screen draws this element under its container's other children, as pipes under the equipment. *)
+  METHOD INTERNAL Underlay : BOOL
+    Underlay := FALSE;
   END_METHOD
   METHOD INTERNAL SetId : BOOL
     VAR_INPUT NewId : DINT; END_VAR
@@ -409,6 +433,171 @@ FUNCTION_BLOCK ABSTRACT HmiElement IMPLEMENTS IHmiElement
     IF Framed THEN
       ResetFrame();
     END_IF;
+  END_METHOD
+  (* The element's frame without its clip. *)
+  METHOD INTERNAL ApplyOpenFrame : BOOL
+    {external hmi_frame_set(FK.get(), FOX.get(), FOY.get(), 0, 0, 0, 0, 0); }
+    ApplyOpenFrame := TRUE;
+  END_METHOD
+  METHOD INTERNAL HandlePopup : BOOL
+    IF NOT PopupUp THEN
+      RETURN;
+    END_IF;
+    IF NOT Visible OR NOT Enabled THEN
+      PopupUp := FALSE;
+      RETURN;
+    END_IF;
+    ApplyOpenFrame();
+    HandlePopup := PopupInput();
+    ResetFrame();
+  END_METHOD
+  METHOD INTERNAL RenderPopup : BOOL
+    IF NOT PopupUp OR NOT Visible THEN
+      RETURN;
+    END_IF;
+    ApplyOpenFrame();
+    RenderPopup := DrawPopup();
+    ResetFrame();
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Base of the drawn process symbols: parts are given on a design grid of DW x DH units (tenths of the reference
+   drawing), scaled uniformly into a box and centred, optionally mirrored left to right and turned a quarter clockwise. *)
+FUNCTION_BLOCK HmiSymbol EXTENDS HmiElement
+  VAR
+    sk, sox, soy, sdw, sdh : DINT;
+    sflip, sturn : BOOL;
+  END_VAR
+  (* Fits a DW x DH design into the box at (BL, BT) of BW x BH: Flip mirrors it, Turn rotates it clockwise. *)
+  METHOD PROTECTED Fit : BOOL
+    VAR_INPUT DW, DH, BL, BT, BW, BH : DINT; Flip, Turn : BOOL; END_VAR
+    VAR w, h : DINT; END_VAR
+    sdw := MAX(DW, 1);
+    sdh := MAX(DH, 1);
+    sflip := Flip;
+    sturn := Turn;
+    w := SEL(Turn, sdw, sdh);
+    h := SEL(Turn, sdh, sdw);
+    sk := MAX(1, MIN(MAX(BW, 0) * 1000 / w, MAX(BH, 0) * 1000 / h));
+    sox := BL + (BW - w * sk / 1000) / 2;
+    soy := BT + (BH - h * sk / 1000) / 2;
+    Fit := TRUE;
+  END_METHOD
+  (* Screen X of design point (DX, DY). *)
+  METHOD PROTECTED PX : DINT
+    VAR_INPUT DX, DY : DINT; END_VAR
+    IF sturn THEN
+      PX := sox + PL(sdh - DY);
+    ELSE
+      PX := sox + PL(SEL(sflip, DX, sdw - DX));
+    END_IF;
+  END_METHOD
+  (* Screen Y of design point (DX, DY). *)
+  METHOD PROTECTED PY : DINT
+    VAR_INPUT DX, DY : DINT; END_VAR
+    IF sturn THEN
+      PY := soy + PL(SEL(sflip, DX, sdw - DX));
+    ELSE
+      PY := soy + PL(DY);
+    END_IF;
+  END_METHOD
+  (* A design length on screen, rounded. *)
+  METHOD PROTECTED PL : DINT
+    VAR_INPUT D : DINT; END_VAR
+    PL := (D * sk + 500) / 1000;
+  END_METHOD
+  (* Outline width: 1.5 reference units, at least one screen unit. *)
+  METHOD PROTECTED Stroke : DINT
+    Stroke := MAX(1, PL(15));
+  END_METHOD
+  (* Translucent dark overlay that gives a part its shaded side. *)
+  METHOD PROTECTED Shade : UDINT
+    Shade := HMI_Alpha(COLOR.Black, 22);
+  END_METHOD
+  (* Rounded rectangle part, filled, then outlined when Outline. *)
+  METHOD PROTECTED Part : BOOL
+    VAR_INPUT DX, DY, DW, DH, DR : DINT; Fill : UDINT; Outline : BOOL; END_VAR
+    VAR x0, y0, x1, y1 : DINT; END_VAR
+    x0 := PX(DX, DY);
+    y0 := PY(DX, DY);
+    x1 := PX(DX + DW, DY + DH);
+    y1 := PY(DX + DW, DY + DH);
+    HMI_FillRect(MIN(x0, x1), MIN(y0, y1), ABS(x1 - x0), ABS(y1 - y0), PL(DR), Fill);
+    IF Outline THEN
+      HMI_StrokeRect(MIN(x0, x1), MIN(y0, y1), ABS(x1 - x0), ABS(y1 - y0), PL(DR), Stroke(), COLOR.Text);
+    END_IF;
+    Part := TRUE;
+  END_METHOD
+  (* Shades a rounded rectangle part below design row FromY, following its rounded corners. *)
+  METHOD PROTECTED ShadeBelow : BOOL
+    VAR_INPUT DX, DY, DW, DH, DR, FromY : DINT; END_VAR
+    VAR x0, y0, x1, y1, cy : DINT; END_VAR
+    x0 := PX(DX, DY);
+    y0 := PY(DX, DY);
+    x1 := PX(DX + DW, DY + DH);
+    y1 := PY(DX + DW, DY + DH);
+    cy := PY(DX, FromY);
+    HMI_Clip(MIN(x0, x1), cy, ABS(x1 - x0), MAX(y0, y1) - cy);
+    HMI_FillRect(MIN(x0, x1), MIN(y0, y1), ABS(x1 - x0), ABS(y1 - y0), PL(DR), Shade());
+    HMI_Unclip();
+    ShadeBelow := TRUE;
+  END_METHOD
+  (* Outline of a rounded rectangle part. *)
+  METHOD PROTECTED Edge : BOOL
+    VAR_INPUT DX, DY, DW, DH, DR : DINT; END_VAR
+    VAR x0, y0, x1, y1 : DINT; END_VAR
+    x0 := PX(DX, DY);
+    y0 := PY(DX, DY);
+    x1 := PX(DX + DW, DY + DH);
+    y1 := PY(DX + DW, DY + DH);
+    HMI_StrokeRect(MIN(x0, x1), MIN(y0, y1), ABS(x1 - x0), ABS(y1 - y0), PL(DR), Stroke(), COLOR.Text);
+    Edge := TRUE;
+  END_METHOD
+  (* Circle part, filled; with Outline the outline lies inside the edge, as on rectangle parts. *)
+  METHOD PROTECTED Disc : BOOL
+    VAR_INPUT DX, DY, DR : DINT; Fill : UDINT; Outline : BOOL; END_VAR
+    IF Outline THEN
+      HMI_FillCircle(PX(DX, DY), PY(DX, DY), PL(DR), COLOR.Text);
+      HMI_FillCircle(PX(DX, DY), PY(DX, DY), MAX(PL(DR) - Stroke(), 0), Fill);
+    ELSE
+      HMI_FillCircle(PX(DX, DY), PY(DX, DY), PL(DR), Fill);
+    END_IF;
+    Disc := TRUE;
+  END_METHOD
+  (* Line between two design points, DWidth design units wide. *)
+  METHOD PROTECTED Seg : BOOL
+    VAR_INPUT DX1, DY1, DX2, DY2, DWidth : DINT; C : UDINT; END_VAR
+    HMI_Line(PX(DX1, DY1), PY(DX1, DY1), PX(DX2, DY2), PY(DX2, DY2), MAX(1, PL(DWidth)), C);
+    Seg := TRUE;
+  END_METHOD
+  (* Polygon part through four design points, a triangle when the last two are equal; Outline strokes its edge. *)
+  METHOD PROTECTED Quad : BOOL
+    VAR_INPUT X1, Y1, X2, Y2, X3, Y3, X4, Y4 : DINT; Fill : UDINT; Outline : BOOL; END_VAR
+    VAR k : INT; END_VAR
+    FOR k := 0 TO SEL(Outline, 0, 1) DO
+      HMI_PolyBegin(SEL(k = 0, COLOR.Text, Fill));
+      HMI_PolyPoint(PX(X1, Y1), PY(X1, Y1));
+      HMI_PolyPoint(PX(X2, Y2), PY(X2, Y2));
+      HMI_PolyPoint(PX(X3, Y3), PY(X3, Y3));
+      HMI_PolyPoint(PX(X4, Y4), PY(X4, Y4));
+      IF k = 0 THEN
+        HMI_PolyFill();
+      ELSE
+        HMI_PolyStroke(Stroke(), TRUE);
+      END_IF;
+    END_FOR;
+    Quad := TRUE;
+  END_METHOD
+  (* Hub of a turning wheel: N spokes of length DR from (DX, DY) at Phase degrees, and the axle. *)
+  METHOD PROTECTED Spokes : BOOL
+    VAR_INPUT DX, DY, DR, N, Phase : DINT; END_VAR
+    VAR i, a : DINT; END_VAR
+    FOR i := 0 TO N - 1 DO
+      a := Phase + i * 360 / MAX(N, 1);
+      Seg(DX, DY, DX + HMI_Cos(a, DR), DY + HMI_Sin(a, DR), 18, COLOR.Text);
+    END_FOR;
+    Disc(DX, DY, DR * 3 / 10, COLOR.Text, FALSE);
+    Spokes := TRUE;
   END_METHOD
 END_FUNCTION_BLOCK
 `

@@ -54,15 +54,39 @@ describe('widget catalogue', () => {
       HmiTrend: 'Display',
       HmiReadout: 'Display',
       HmiVessel: 'Display',
+      HmiMultiLamp: 'Display',
+      HmiBarGraph: 'Display',
+      HmiProgress: 'Display',
+      HmiLed: 'Display',
+      HmiSevenSegment: 'Display',
+      HmiThermometer: 'Display',
+      HmiDateTime: 'Display',
+      HmiClock: 'Display',
       HmiButton: 'Controls',
       HmiSwitch: 'Controls',
       HmiSlider: 'Controls',
       HmiNumericInput: 'Controls',
       HmiTextInput: 'Controls',
+      HmiToggleButton: 'Controls',
+      HmiLampButton: 'Controls',
+      HmiSelector: 'Controls',
+      HmiOptionButtons: 'Controls',
+      HmiDropDown: 'Controls',
+      HmiStepper: 'Controls',
+      HmiKnob: 'Controls',
+      HmiCheckBox: 'Controls',
       HmiPump: 'Process',
       HmiFan: 'Process',
       HmiConveyor: 'Process',
       HmiValve: 'Process',
+      HmiMotor: 'Process',
+      HmiAgitator: 'Process',
+      HmiControlValve: 'Process',
+      HmiCheckValve: 'Process',
+      HmiThreeWayValve: 'Process',
+      HmiHeatExchanger: 'Process',
+      HmiSilo: 'Process',
+      HmiInstrument: 'Process',
       HmiPipe: 'Process',
     })
     expect(widget(catalog.widgets, 'HmiDiagram').extends).toBe('HMICONTAINER')
@@ -142,6 +166,8 @@ describe('widget catalogue', () => {
       enabledBy: 'GrowAuto',
     })
     expect(label.typeDefaults).toBeUndefined()
+    expect(label.properties.some((p) => p.previewValue !== undefined)).toBe(false)
+    expect(widget(catalog.widgets, 'HmiDropDown').properties.find((p) => p.name === 'Value')?.previewValue).toBe('0')
     expect(prop('Visible')).toMatchObject({ kind: 'bool', group: 'display', defaultValue: 'TRUE' })
     expect(prop('Text')).toMatchObject({
       kind: 'string',

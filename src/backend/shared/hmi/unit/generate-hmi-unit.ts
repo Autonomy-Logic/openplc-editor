@@ -151,6 +151,10 @@ const TAG_TYPES = [
   'LREAL',
 ] as const
 const TAG_STRING = TAG_TYPES.length + 1
+/** Time and date tag types, in `hmi_tag_type` order after STRING; every one is an 8-byte integer. */
+const TIME_TAG_TYPES = ['TIME', 'LTIME', 'DATE', 'TOD', 'DT'] as const
+/** Long names of time types, by the short name tags use. */
+const TIME_ALIASES: Readonly<Record<string, string>> = { TIME_OF_DAY: 'TOD', DATE_AND_TIME: 'DT' }
 /** Bytes of each elementary tag type's value. */
 const TAG_WIDTH: Readonly<Record<string, number>> = {
   BOOL: 1,
@@ -168,6 +172,11 @@ const TAG_WIDTH: Readonly<Record<string, number>> = {
   ULINT: 8,
   LWORD: 8,
   LREAL: 8,
+  TIME: 8,
+  LTIME: 8,
+  DATE: 8,
+  TOD: 8,
+  DT: 8,
 }
 const NUMERIC: ReadonlySet<string> = new Set<string>(TAG_TYPES.filter((t) => t !== 'BOOL'))
 /** Range of each integer type. */
@@ -243,9 +252,12 @@ interface TagType {
 }
 
 function tagType(declared: string): TagType | undefined {
-  const t = declared.trim().toUpperCase()
+  const upper = declared.trim().toUpperCase()
+  const t = TIME_ALIASES[upper] ?? upper
   const elementary = TAG_TYPES.findIndex((x) => x === t)
   if (elementary >= 0) return { base: t, type: elementary + 1, maxLength: 0 }
+  const time = TIME_TAG_TYPES.findIndex((x) => x === t)
+  if (time >= 0) return { base: t, type: TAG_STRING + 1 + time, maxLength: 0 }
   const str = /^STRING\s*(?:[([]\s*(\d+)\s*[)\]])?$/.exec(t)
   if (!str) return undefined
   const maxLength = str[1] !== undefined ? Number(str[1]) : DEFAULT_STRING_LENGTH
@@ -1049,10 +1061,15 @@ export const WIDGET_PREVIEW_SCREEN = 'HMI__WidgetPreview'
 const PREVIEW_INTEGER_TYPES = new Set(['SINT', 'INT', 'DINT', 'LINT', 'USINT', 'UINT', 'UDINT', 'ULINT'])
 const PREVIEW_REAL_TYPES = new Set(['REAL', 'LREAL'])
 
-/** A value that shows a widget at work: TRUE, 60 % of its MaxValue (else 42), or its name without the Hmi prefix as text. */
+/**
+ * A value that shows a widget at work: its main input's `hmi_preview`, else TRUE, 60 % of its MaxValue (else 42), or
+ * its name without the Hmi prefix as text.
+ */
 function previewTestValue(info: HmiWidgetInfo): string | undefined {
   const type = info.main?.direction === 'input' ? info.main.type.toUpperCase() : undefined
   if (type === undefined) return undefined
+  const own = info.properties.find((p) => p.name.toUpperCase() === info.main?.name.toUpperCase())?.previewValue
+  if (own !== undefined) return own
   if (type === 'BOOL') return 'TRUE'
   if (type.startsWith('STRING')) return `'${info.name.replace(/^Hmi/i, '')}'`
   const max = Number(info.properties.find((p) => p.name.toUpperCase() === 'MAXVALUE')?.defaultValue)

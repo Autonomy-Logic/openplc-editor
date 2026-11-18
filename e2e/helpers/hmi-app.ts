@@ -247,3 +247,23 @@ export async function centre(page: Page, testId: string): Promise<{ x: number; y
   if (!box) throw new Error(`${testId} is not on the page`)
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
 }
+
+/** Whether the preview shows the accent color anywhere on a vertical strip of the page. */
+export async function accentOnStrip(page: Page, x: number, top: number, bottom: number): Promise<boolean> {
+  return page.evaluate(
+    ({ x, top, bottom }) => {
+      const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="hmi-canvas"] canvas')
+      const context = canvas?.getContext('2d')
+      if (!canvas || !context) throw new Error('no preview canvas')
+      const rect = canvas.getBoundingClientRect()
+      const px = Math.round(((x - rect.left) * canvas.width) / rect.width)
+      const y0 = Math.round(((top - rect.top) * canvas.height) / rect.height)
+      const y1 = Math.round(((bottom - rect.top) * canvas.height) / rect.height)
+      const data = context.getImageData(px, y0, 1, y1 - y0).data
+      for (let i = 0; i < data.length; i += 4)
+        if (data[i] < 40 && data[i + 1] > 80 && data[i + 1] < 120 && data[i + 2] > 230) return true
+      return false
+    },
+    { x, top, bottom },
+  )
+}

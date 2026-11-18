@@ -455,26 +455,38 @@ void hmi_poly_stroke(int32_t width, int closed) {
     if (closed && n > 2) line_q4(S->poly[n - 1][0], S->poly[n - 1][1], S->poly[0][0], S->poly[0][1], width, S->poly_color);
 }
 
-/* The 32 points of an ellipse in local Q4. */
-static void ellipse_points(int32_t cx, int32_t cy, int32_t rx, int32_t ry, int32_t pts[32][2]) {
-    for (int i = 0; i < 32; i++) {
-        pts[i][0] = sat32((int64_t)cx * 16 + floor_div((int64_t)rx * 16 * hmi_circle32[i][0] + 8192, 16384));
-        pts[i][1] = sat32((int64_t)cy * 16 + floor_div((int64_t)ry * 16 * hmi_circle32[i][1] + 8192, 16384));
+/** Points of an ellipse that is not a circle: one every 6 degrees, within HMI_POLY_MAX. */
+#define ELLIPSE_POINTS 60
+
+/* The ELLIPSE_POINTS points of an ellipse in local Q4. */
+static void ellipse_points(int32_t cx, int32_t cy, int32_t rx, int32_t ry, int32_t pts[ELLIPSE_POINTS][2]) {
+    for (int i = 0; i < ELLIPSE_POINTS; i++) {
+        const int32_t deg = i * (360 / ELLIPSE_POINTS);
+        pts[i][0] = sat32((int64_t)cx * 16 + floor_div((int64_t)rx * 16 * hmi_cos(deg, 16384) + 8192, 16384));
+        pts[i][1] = sat32((int64_t)cy * 16 + floor_div((int64_t)ry * 16 * hmi_sin(deg, 16384) + 8192, 16384));
     }
 }
 
 void hmi_ellipse(int32_t cx, int32_t cy, int32_t rx, int32_t ry, uint32_t c) {
-    int32_t pts[32][2];
+    if (rx == ry) {
+        hmi_fill_circle(cx, cy, rx, c);
+        return;
+    }
+    int32_t pts[ELLIPSE_POINTS][2];
     ellipse_points(cx, cy, rx, ry, pts);
-    emit_poly((const int32_t (*)[2])pts, 32, color(c));
+    emit_poly((const int32_t (*)[2])pts, ELLIPSE_POINTS, color(c));
 }
 
 void hmi_stroke_ellipse(int32_t cx, int32_t cy, int32_t rx, int32_t ry, int32_t width, uint32_t c) {
-    int32_t pts[32][2];
+    if (rx == ry) {
+        hmi_stroke_circle(cx, cy, rx, width, c);
+        return;
+    }
+    int32_t pts[ELLIPSE_POINTS][2];
     ellipse_points(cx, cy, rx, ry, pts);
     uint32_t argb = color(c);
-    for (int i = 0; i < 32; i++) {
-        int j = (i + 1) % 32;
+    for (int i = 0; i < ELLIPSE_POINTS; i++) {
+        int j = (i + 1) % ELLIPSE_POINTS;
         line_q4(pts[i][0], pts[i][1], pts[j][0], pts[j][1], width, argb);
     }
 }

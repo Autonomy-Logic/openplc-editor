@@ -25,6 +25,17 @@ describe('designer binding', () => {
     expect(canBind(text, 'DINT')).toBe(false)
   })
 
+  it('wires time variables by their short or long type names, and no numbers to them', () => {
+    const stamp: HmiWidgetBinding = { name: 'Value', direction: 'input', type: 'DT' }
+    const shift: HmiWidgetBinding = { name: 'Value', direction: 'input', type: 'TOD' }
+    expect(canBind(stamp, 'DT')).toBe(true)
+    expect(canBind(stamp, 'DATE_AND_TIME')).toBe(true)
+    expect(canBind(shift, 'TIME_OF_DAY')).toBe(true)
+    expect(canBind(stamp, 'TOD')).toBe(false)
+    expect(canBind(stamp, 'LINT')).toBe(false)
+    expect(canBind(level, 'TIME')).toBe(false)
+  })
+
   it('lists the variables that fit', () => {
     const variables = [
       { path: 'Main.Run', type: 'BOOL' },

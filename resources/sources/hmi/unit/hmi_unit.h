@@ -41,7 +41,12 @@ enum hmi_tag_type {
     HMI_TAG_LWORD,
     HMI_TAG_REAL,
     HMI_TAG_LREAL,
-    HMI_TAG_STRING /**< up to max_len bytes, NUL terminated in buffers */
+    HMI_TAG_STRING, /**< up to max_len bytes, NUL terminated in buffers */
+    HMI_TAG_TIME,   /**< 8 bytes, signed nanoseconds */
+    HMI_TAG_LTIME,  /**< 8 bytes, signed nanoseconds */
+    HMI_TAG_DATE,   /**< 8 bytes, days since 1970-01-01 */
+    HMI_TAG_TOD,    /**< 8 bytes, nanoseconds since midnight */
+    HMI_TAG_DT      /**< 8 bytes, nanoseconds since 1970-01-01 00:00 */
 };
 
 typedef struct {

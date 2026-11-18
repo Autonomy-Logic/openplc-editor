@@ -7,6 +7,13 @@ VAR_GLOBAL
   NestTankX, NestTankW, NestSideX, NestFillX, NestFillY, NestDrainY : DINT;
   Speed, Level, Setpoint, Flow : REAL;
   Name : STRING(16) := 'Tank 1';
+  State : INT := 1;
+  Now : DT := DT#2026-11-18-14:32:07;
+  Latch, Jog, Rinse : BOOL;
+  Mode, Recipe : INT := 1;
+  Hoa : INT;
+  Batch : REAL := 250.0;
+  Dial : REAL := 40.0;
 END_VAR
 
 (* Page 0: display widgets and a shape. *)
@@ -110,7 +117,7 @@ FUNCTION_BLOCK DiagramScreen EXTENDS HmiScreen
     V1 : HmiValve := (Caption := 'V-1', X := 420, Y := 240);
     Ft : HmiReadout := (Caption := 'FT', Unit := 'GPM', X := 560, Y := 230);
     L1 : HmiPipe := (Source := 'Tk', SourcePort := HMI_PORT#Bottom, Target := 'P1', TargetPort := HMI_PORT#Left, Animate := TRUE);
-    L2 : HmiPipe := (Source := 'P1', SourcePort := HMI_PORT#Right, Target := 'V1', TargetPort := HMI_PORT#Left);
+    L2 : HmiPipe := (Source := 'P1', SourcePort := HMI_PORT#Top, Target := 'V1', TargetPort := HMI_PORT#Left);
     L3 : HmiPipe := (Source := 'V1', SourcePort := HMI_PORT#Right, Target := 'Ft', TargetPort := HMI_PORT#Left);
     L4 : HmiPipe := (Source := 'Tk', SourcePort := HMI_PORT#Right, Target := 'Ft', TargetPort := HMI_PORT#Bottom, Path := '330,136;330,400;600,400');
   END_VAR
@@ -284,6 +291,173 @@ FUNCTION_BLOCK NestedScreen EXTENDS HmiScreen
   Level2.Value := Level;
 END_FUNCTION_BLOCK
 
+(* Page 9: indicators. *)
+FUNCTION_BLOCK IndicatorScreen EXTENDS HmiScreen
+  VAR
+    Col : HmiHorizontalStack := (Gap := 8, Padding := 8, GrowAuto := TRUE);
+    Lamp : HmiMultiLamp := (Caption := 'Mixer M-1');
+    Bar : HmiBarGraph := (Caption := 'Pressure', Unit := 'bar', MaxValue := 10.0, LowZone := 1.5, HighZone := 8.0,
+      ShowSetpoint := TRUE, Setpoint := 7.0);
+    Prog : HmiProgress := (Caption := 'Batch');
+    Leds : HmiVerticalStack := (Gap := 12);
+    L1 : HmiLed := (Caption := 'Power', Value := TRUE);
+    L2 : HmiLed := (Caption := 'Warn', Value := TRUE, OnColor := COLOR.Warning);
+    L3 : HmiLed := (Caption := 'Trip');
+    Seg : HmiSevenSegment := (Digits := 5, Decimals := 1);
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Col), 0);
+    Attach(ADR(Lamp), ADR(Col));
+    Attach(ADR(Bar), ADR(Col));
+    Attach(ADR(Prog), ADR(Col));
+    Attach(ADR(Leds), ADR(Col));
+    Attach(ADR(L1), ADR(Leds));
+    Attach(ADR(L2), ADR(Leds));
+    Attach(ADR(L3), ADR(Leds));
+    Attach(ADR(Seg), ADR(Col));
+    Build := TRUE;
+  END_METHOD
+  Lamp.Value := State;
+  Bar.Value := Level;
+  Prog.Value := 42.0;
+  Seg.Value := Speed;
+END_FUNCTION_BLOCK
+
+(* Page 10: a thermometer, a level meter, the clock and the date and time of a DT. *)
+FUNCTION_BLOCK TimeScreen EXTENDS HmiScreen
+  VAR
+    Row : HmiVerticalStack := (Gap := 8, Padding := 8, GrowAuto := TRUE);
+    Thermo : HmiThermometer;
+    Meter : HmiBarGraph := (Caption := 'Tank', Unit := 'm', MaxValue := 10.0, Orientation := HMI_DIRECTION#Column,
+      HighZone := 9.0);
+    Right : HmiHorizontalStack := (Gap := 8);
+    Face : HmiClock;
+    Stamp : HmiDateTime;
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Row), 0);
+    Attach(ADR(Thermo), ADR(Row));
+    Attach(ADR(Meter), ADR(Row));
+    Attach(ADR(Right), ADR(Row));
+    Attach(ADR(Face), ADR(Right));
+    Attach(ADR(Stamp), ADR(Right));
+    Build := TRUE;
+  END_METHOD
+  Thermo.Value := 63.0;
+  Meter.Value := Level;
+  Face.Value := Now;
+  Stamp.Value := Now;
+END_FUNCTION_BLOCK
+
+(* Page 11: the latching, selecting and stepping controls, and a drop-down whose list opens over the screen. *)
+FUNCTION_BLOCK InputScreen EXTENDS HmiScreen
+  VAR
+    Col : HmiHorizontalStack := (Gap := 8, Padding := 8, GrowAuto := TRUE);
+    RowA : HmiVerticalStack := (Gap := 12);
+    RowB : HmiVerticalStack := (Gap := 12);
+    RowC : HmiVerticalStack := (Gap := 12);
+    Toggle : HmiToggleButton := (OnText := 'PUMP ON', OffText := 'PUMP OFF', MaxHeight := 44);
+    JogBtn : HmiLampButton := (Text := 'JOG');
+    Hand : HmiSelector;
+    Modes : HmiOptionButtons;
+    RinseBox : HmiCheckBox := (Caption := 'Rinse');
+    Recipes : HmiDropDown := (Caption := 'Recipe', Options := 'Soup;Broth;Sauce;Cream;Stock;Water',
+      MaxHeight := 60);
+    Batcher : HmiStepper := (Caption := 'Batch', Step := 10.0, MaxValue := 300.0, Unit := 'kg',
+      MaxHeight := 64);
+    Speed2 : HmiKnob := (Caption := 'Dial', Step := 5.0, PrefWidth := 90, PrefHeight := 104);
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Col), 0);
+    Attach(ADR(RowA), ADR(Col));
+    Attach(ADR(Toggle), ADR(RowA));
+    Attach(ADR(JogBtn), ADR(RowA));
+    Attach(ADR(Hand), ADR(RowA));
+    Attach(ADR(RowB), ADR(Col));
+    Attach(ADR(Modes), ADR(RowB));
+    Attach(ADR(RinseBox), ADR(RowB));
+    Attach(ADR(RowC), ADR(Col));
+    Attach(ADR(Recipes), ADR(RowC));
+    Attach(ADR(Batcher), ADR(RowC));
+    Attach(ADR(Speed2), ADR(RowC));
+    Build := TRUE;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE WriteBack : BOOL
+    IF Toggle.Changed THEN Latch := Toggle.NewValue; END_IF;
+    IF Hand.Changed THEN Hoa := Hand.NewValue; END_IF;
+    IF Modes.Changed THEN Mode := Modes.NewValue; END_IF;
+    IF RinseBox.Changed THEN Rinse := RinseBox.NewValue; END_IF;
+    IF Recipes.Changed THEN Recipe := Recipes.NewValue; END_IF;
+    IF Batcher.Changed THEN Batch := Batcher.NewValue; END_IF;
+    IF Speed2.Changed THEN Dial := Speed2.NewValue; END_IF;
+    Jog := JogBtn.Pressed;
+    WriteBack := TRUE;
+  END_METHOD
+  Toggle.Value := Latch;
+  JogBtn.Lamp := Jog;
+  Hand.Value := Hoa;
+  Modes.Value := Mode;
+  RinseBox.Value := Rinse;
+  Recipes.Value := Recipe;
+  Batcher.Value := Batch;
+  Speed2.Value := Dial;
+END_FUNCTION_BLOCK
+
+(* Page 12: the drawn process symbols, joined by pipes at their ports. *)
+FUNCTION_BLOCK SymbolScreen EXTENDS HmiScreen
+  VAR
+    Area : HmiDiagram := (DesignW := 464, DesignH := 304, GrowAuto := TRUE);
+    Si : HmiSilo := (Caption := 'SI-1', X := 10, Y := 10, PrefWidth := 60, PrefHeight := 150);
+    Cv : HmiCheckValve := (X := 96, Y := 196);
+    Fcv : HmiControlValve := (Caption := 'FCV-2', X := 150, Y := 166);
+    It : HmiInstrument := (Tag := 'FIC', Loop := '102', Unit := 'm3/h', X := 150, Y := 40);
+    Tw : HmiThreeWayValve := (X := 240, Y := 172);
+    Hx : HmiHeatExchanger := (Caption := 'E-1', X := 200, Y := 250, PrefWidth := 96, PrefHeight := 48);
+    Tk : HmiVessel := (Unit := 'm', MaxValue := 10.0, ShowLabels := FALSE, X := 350, Y := 60, PrefWidth := 90, PrefHeight := 160);
+    Ag : HmiAgitator := (X := 375, Y := 36, PrefWidth := 40, PrefHeight := 70);
+    Mo : HmiMotor := (Caption := 'M-1', X := 360, Y := 236);
+    L1 : HmiPipe := (Source := 'Si', SourcePort := HMI_PORT#Bottom, Target := 'Cv', TargetPort := HMI_PORT#Left);
+    L2 : HmiPipe := (Source := 'Cv', SourcePort := HMI_PORT#Right, Target := 'Fcv', TargetPort := HMI_PORT#Left);
+    L3 : HmiPipe := (Source := 'Fcv', SourcePort := HMI_PORT#Right, Target := 'Tw', TargetPort := HMI_PORT#Left);
+    L4 : HmiPipe := (Source := 'Tw', SourcePort := HMI_PORT#Right, Target := 'Tk', TargetPort := HMI_PORT#Left);
+    L5 : HmiPipe := (Source := 'Tw', SourcePort := HMI_PORT#Bottom, Target := 'Hx', TargetPort := HMI_PORT#Top);
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Area), 0);
+    Attach(ADR(L1), ADR(Area));
+    Attach(ADR(L2), ADR(Area));
+    Attach(ADR(L3), ADR(Area));
+    Attach(ADR(L4), ADR(Area));
+    Attach(ADR(L5), ADR(Area));
+    Attach(ADR(Si), ADR(Area));
+    Attach(ADR(Cv), ADR(Area));
+    Attach(ADR(Fcv), ADR(Area));
+    Attach(ADR(It), ADR(Area));
+    Attach(ADR(Tw), ADR(Area));
+    Attach(ADR(Hx), ADR(Area));
+    Attach(ADR(Tk), ADR(Area));
+    Attach(ADR(Ag), ADR(Area));
+    Attach(ADR(Mo), ADR(Area));
+    Connect(ADR(L1), ADR(Si), ADR(Cv), 0);
+    Connect(ADR(L2), ADR(Cv), ADR(Fcv), ADR(L1));
+    Connect(ADR(L3), ADR(Fcv), ADR(Tw), ADR(L2));
+    Connect(ADR(L4), ADR(Tw), ADR(Tk), ADR(L3));
+    Connect(ADR(L5), ADR(Tw), ADR(Hx), ADR(L4));
+    Build := TRUE;
+  END_METHOD
+  Si.Value := Level * 10.0;
+  Fcv.Value := 62.0;
+  It.Value := Flow;
+  Tk.Value := Level;
+  Ag.Value := Run;
+  Mo.Value := Run;
+  L1.Value := TRUE;
+  L2.Value := TRUE;
+  L3.Value := TRUE;
+  L4.Value := NOT Tw.Value;
+  L5.Value := Tw.Value;
+END_FUNCTION_BLOCK
+
 PROGRAM HmiMain
   VAR
     S0 : DisplayScreen;
@@ -295,6 +469,10 @@ PROGRAM HmiMain
     S6 : SqueezedScreen;
     S7 : MotionScreen;
     S8 : NestedScreen;
+    S9 : IndicatorScreen;
+    S10 : TimeScreen;
+    S11 : InputScreen;
+    S12 : SymbolScreen;
     Rt : HmiRuntime;
     Started : BOOL;
   END_VAR
@@ -310,6 +488,10 @@ PROGRAM HmiMain
     Rt.AddScreen(ADR(S6));
     Rt.AddScreen(ADR(S7));
     Rt.AddScreen(ADR(S8));
+    Rt.AddScreen(ADR(S9));
+    Rt.AddScreen(ADR(S10));
+    Rt.AddScreen(ADR(S11));
+    Rt.AddScreen(ADR(S12));
     Rt.SetStart(0);
     Started := TRUE;
   END_IF;
@@ -323,6 +505,10 @@ PROGRAM HmiMain
     6: S6();
     7: S7();
     8: S8();
+    9: S9();
+    10: S10();
+    11: S11();
+    12: S12();
   END_CASE;
   Rt.EndFrame();
   IF GoHome THEN

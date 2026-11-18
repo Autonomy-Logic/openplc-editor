@@ -81,9 +81,6 @@ int64_t hmi_text_units(int font, const char *s, int len, int32_t *units_per_em);
 /** Decodes one UTF-8 code point at s[*i] and advances *i; an invalid byte decodes as itself (Latin-1). */
 int hmi_utf8_next(const unsigned char *s, int len, int *i);
 
-/** Unit circle in 32 steps, Q14 (cos, sin), defined in hmi_math.c. */
-extern const int16_t hmi_circle32[32][2];
-
 /** Resolves a color (fixed or theme token, with transparency) to ARGB through theme `theme`. */
 uint32_t hmi_color_resolve(uint32_t color, int32_t theme);
 

@@ -223,6 +223,46 @@ FUNCTION HMI_Truncate : STRING
   END_IF;
 END_FUNCTION
 
+(* Item I, from 0, of a list separated by ';'; empty past the last one. *)
+FUNCTION HMI_ListItem : STRING(64)
+  VAR_INPUT List : STRING; I : INT; END_VAR
+  VAR rest : STRING; k, n : INT; END_VAR
+  rest := List;
+  HMI_ListItem := '';
+  WHILE n <= I AND LEN(rest) > 0 DO
+    k := FIND(rest, ';');
+    IF k = 0 THEN
+      IF n = I THEN
+        HMI_ListItem := rest;
+      END_IF;
+      rest := '';
+    ELSE
+      IF n = I THEN
+        HMI_ListItem := MID(rest, k - 1, 1);
+      END_IF;
+      rest := MID(rest, LEN(rest) - k, k + 1);
+    END_IF;
+    n := n + 1;
+  END_WHILE;
+END_FUNCTION
+
+(* Number of items in a list separated by ';'; 0 when it is empty. *)
+FUNCTION HMI_ListCount : INT
+  VAR_INPUT List : STRING; END_VAR
+  VAR rest : STRING; k : INT; END_VAR
+  IF LEN(List) = 0 THEN
+    RETURN;
+  END_IF;
+  rest := List;
+  HMI_ListCount := 1;
+  k := FIND(rest, ';');
+  WHILE k > 0 DO
+    HMI_ListCount := HMI_ListCount + 1;
+    rest := MID(rest, LEN(rest) - k, k + 1);
+    k := FIND(rest, ';');
+  END_WHILE;
+END_FUNCTION
+
 (* Amp * sin(Deg) and Amp * cos(Deg), rounded, from the core's one-degree table. *)
 FUNCTION HMI_Sin : DINT
   VAR_INPUT Deg, Amp : DINT; END_VAR
@@ -256,6 +296,57 @@ END_FUNCTION
 FUNCTION HMI_Calibrate : BOOL
   {external hmi_calibrate(); HMI_CALIBRATE_result.set(true); }
 END_FUNCTION
+
+(* Nanoseconds since 1970-01-01 00:00 of a DT, as stored. *)
+FUNCTION HMI_DTNanos : LINT
+  VAR_INPUT Value : DT; END_VAR
+  {external HMI_DTNANOS_result.set(static_cast<int64_t>(VALUE.get())); }
+END_FUNCTION
+
+(* Calendar parts of a DT: the date (proleptic Gregorian), the time of day to the millisecond and the weekday, 0 for
+   Sunday. Call it with the DT once per frame. *)
+FUNCTION_BLOCK HmiCalendar
+  VAR_INPUT
+    Value : DT;
+  END_VAR
+  VAR_OUTPUT
+    Year, Month, Day, Hour, Minute, Second, Millisecond, WeekDay : DINT;
+  END_VAR
+  VAR_TEMP
+    ns, days, rem, z, era, doe, yoe, doy, mp : LINT;
+  END_VAR
+  ns := HMI_DTNanos(Value);
+  days := ns / 86400000000000;
+  IF ns MOD 86400000000000 < 0 THEN
+    days := days - 1;
+  END_IF;
+  rem := (ns - days * 86400000000000) / 1000000;
+  Hour := LINT_TO_DINT(rem / 3600000);
+  Minute := LINT_TO_DINT(rem / 60000 MOD 60);
+  Second := LINT_TO_DINT(rem / 1000 MOD 60);
+  Millisecond := LINT_TO_DINT(rem MOD 1000);
+  WeekDay := LINT_TO_DINT(((days MOD 7) + 11) MOD 7);
+  z := days + 719468;
+  IF z >= 0 THEN
+    era := z / 146097;
+  ELSE
+    era := (z - 146096) / 146097;
+  END_IF;
+  doe := z - era * 146097;
+  yoe := (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+  doy := doe - (365 * yoe + yoe / 4 - yoe / 100);
+  mp := (5 * doy + 2) / 153;
+  Day := LINT_TO_DINT(doy - (153 * mp + 2) / 5 + 1);
+  IF mp < 10 THEN
+    Month := LINT_TO_DINT(mp + 3);
+  ELSE
+    Month := LINT_TO_DINT(mp - 9);
+  END_IF;
+  Year := LINT_TO_DINT(yoe + era * 400);
+  IF Month <= 2 THEN
+    Year := Year + 1;
+  END_IF;
+END_FUNCTION_BLOCK
 
 (* Animation clock: while Run, Phase advances Rate units per second (negative runs backwards), wrapping at Period, and
    holds where it is when Run drops. Call it once per frame; a frame gap counts at most one second. *)
