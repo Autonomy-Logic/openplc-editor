@@ -110,7 +110,7 @@ FUNCTION_BLOCK DiagramScreen EXTENDS HmiScreen
     V1 : HmiValve := (Caption := 'V-1', X := 420, Y := 240);
     Ft : HmiReadout := (Caption := 'FT', Unit := 'GPM', X := 560, Y := 230);
     L1 : HmiPipe := (Source := 'Tk', SourcePort := HMI_PORT#Bottom, Target := 'P1', TargetPort := HMI_PORT#Left, Animate := TRUE);
-    L2 : HmiPipe := (Source := 'P1', SourcePort := HMI_PORT#Right, Target := 'V1', TargetPort := HMI_PORT#Left);
+    L2 : HmiPipe := (Source := 'P1', SourcePort := HMI_PORT#Top, Target := 'V1', TargetPort := HMI_PORT#Left);
     L3 : HmiPipe := (Source := 'V1', SourcePort := HMI_PORT#Right, Target := 'Ft', TargetPort := HMI_PORT#Left);
     L4 : HmiPipe := (Source := 'Tk', SourcePort := HMI_PORT#Right, Target := 'Ft', TargetPort := HMI_PORT#Bottom, Path := '330,136;330,400;600,400');
   END_VAR

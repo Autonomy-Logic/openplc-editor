@@ -78,6 +78,7 @@ export const HMI_LIBRARY_NAMES: readonly string[] = [
   'HmiSlider',
   'HmiStack',
   'HmiSwitch',
+  'HmiSymbol',
   'HmiTank',
   'HmiTextInput',
   'HmiTrend',

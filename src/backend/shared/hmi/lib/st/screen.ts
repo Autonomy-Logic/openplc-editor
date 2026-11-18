@@ -232,10 +232,35 @@ FUNCTION_BLOCK HmiScreen
   (* Adds an element, drawn after the ones added before it, inside Parent or else the screen's own stack. *)
   METHOD PROTECTED Attach : BOOL
     VAR_INPUT Element : POINTER TO HmiElement; Parent : POINTER TO HmiContainer; END_VAR
+    VAR slot, i : INT; END_VAR
     IF Element = 0 OR Count >= 256 THEN
       RETURN;
     END_IF;
-    Items[Count] := Element;
+    slot := Count;
+    IF Element^.Underlay() THEN
+      slot := 0;
+      IF Parent <> 0 THEN
+        FOR i := 0 TO Count - 1 DO
+          IF Items[i]^.ElementId() = Parent^.ElementId() THEN
+            slot := i + 1;
+          END_IF;
+        END_FOR;
+      END_IF;
+      i := slot;
+      slot := Count;
+      WHILE i < Count DO
+        IF NOT Items[i]^.Underlay() THEN
+          slot := i;
+          i := Count;
+        ELSE
+          i := i + 1;
+        END_IF;
+      END_WHILE;
+      FOR i := Count TO slot + 1 BY -1 DO
+        Items[i] := Items[i - 1];
+      END_FOR;
+    END_IF;
+    Items[slot] := Element;
     Count := Count + 1;
     Element^.SetId(NextId);
     NextId := NextId + 1;

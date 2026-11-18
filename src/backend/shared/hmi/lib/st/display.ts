@@ -315,7 +315,7 @@ FUNCTION_BLOCK HmiTank EXTENDS HmiElement
     NaturalHeight := 200;
   END_METHOD
   METHOD PROTECTED OVERRIDE Draw : BOOL
-    VAR ih, lh : DINT; END_VAR
+    VAR ih, lh : DINT; text : STRING(65); END_VAR
     ih := MAX(Height - 28, 0);
     lh := ih * HMI_PerMille(Value, MinValue, MaxValue) / 1000;
     HMI_FillRect(Left, Top, Width, ih, 12, COLOR.Fill);
@@ -323,8 +323,12 @@ FUNCTION_BLOCK HmiTank EXTENDS HmiElement
     HMI_FillRect(Left, Top, Width, ih, 12, AccentColor);
     HMI_Unclip();
     HMI_StrokeRect(Left, Top, Width, ih, 12, 2, COLOR.Border);
-    HMI_TextBox(Left, Top, Width, ih, HMI_FormatValue(Value, Decimals, Unit), 18, HMI_FONT#Bold, HMI_ALIGN#Center,
-      HMI_VALIGN#Middle, COLOR.Text);
+    text := HMI_FormatValue(Value, Decimals, Unit);
+    HMI_Clip(Left, Top, Width, ih - lh);
+    HMI_TextBox(Left, Top, Width, ih, text, 18, HMI_FONT#Bold, HMI_ALIGN#Center, HMI_VALIGN#Middle, COLOR.Text);
+    HMI_Clip(Left, Top + ih - lh, Width, lh);
+    HMI_TextBox(Left, Top, Width, ih, text, 18, HMI_FONT#Bold, HMI_ALIGN#Center, HMI_VALIGN#Middle, COLOR.OnAccent);
+    HMI_Unclip();
     HMI_Text(Left + Width / 2, Top + Height - 20, Caption, 14, HMI_FONT#Regular, HMI_ALIGN#Center, COLOR.TextMuted);
     Draw := TRUE;
   END_METHOD
@@ -577,9 +581,10 @@ FUNCTION_BLOCK HmiReadout EXTENDS HmiElement
   END_METHOD
 END_FUNCTION_BLOCK
 
-(* Cylindrical vessel with its label block (caption, level, rate) and capacity badge. *)
+(* Vertical tank with its label block (caption, level, rate): a steel shell with a domed top on two legs, the level in a
+   sight glass, and the capacity on the shell. *)
 {attribute 'hmi_palette' := 'Display'}
-FUNCTION_BLOCK HmiVessel EXTENDS HmiElement
+FUNCTION_BLOCK HmiVessel EXTENDS HmiSymbol
   VAR_INPUT
     {attribute 'hmi_main'}
     Value : REAL;
@@ -609,22 +614,37 @@ FUNCTION_BLOCK HmiVessel EXTENDS HmiElement
     END_IF;
   END_METHOD
   METHOD PROTECTED OVERRIDE NaturalWidth : DINT
-    NaturalWidth := 100;
+    NaturalWidth := 64;
   END_METHOD
   METHOD PROTECTED OVERRIDE NaturalHeight : DINT
-    NaturalHeight := LabelH() + 70;
+    NaturalHeight := LabelH() + 107;
   END_METHOD
-  (* Ports sit on the body, not on the label block. *)
+  (* Fits the drawing, 80 x 134 reference units, under the label block. *)
+  METHOD INTERNAL Layout : BOOL
+    Fit(800, 1340, Left, Top + LabelH(), Width, Height - LabelH(), FALSE, FALSE);
+    Layout := TRUE;
+  END_METHOD
+  (* Ports sit on the shell: the top of the dome, the bottom between the legs and halfway up each side. *)
+  METHOD PROTECTED OVERRIDE PortX : DINT
+    VAR_INPUT Port : HMI_PORT; END_VAR
+    Layout();
+    IF Port = HMI_PORT#Left THEN
+      PortX := PX(100, 700);
+    ELSIF Port = HMI_PORT#Right THEN
+      PortX := PX(700, 700);
+    ELSE
+      PortX := PX(400, 700);
+    END_IF;
+  END_METHOD
   METHOD PROTECTED OVERRIDE PortY : DINT
     VAR_INPUT Port : HMI_PORT; END_VAR
-    VAR bt : DINT; END_VAR
-    bt := Top + LabelH();
+    Layout();
     IF Port = HMI_PORT#Top THEN
-      PortY := bt;
+      PortY := PY(400, 60);
     ELSIF Port = HMI_PORT#Bottom THEN
-      PortY := Top + Height;
+      PortY := PY(400, 1220);
     ELSE
-      PortY := bt + (Top + Height - bt) / 2;
+      PortY := PY(400, 700);
     END_IF;
   END_METHOD
   METHOD INTERNAL Badge : BOOL
@@ -637,7 +657,7 @@ FUNCTION_BLOCK HmiVessel EXTENDS HmiElement
     Badge := TRUE;
   END_METHOD
   METHOD PROTECTED OVERRIDE Draw : BOOL
-    VAR bt, bb, e, cx, pm, ly, bw, a : DINT; END_VAR
+    VAR pm, ly, k, bw, cx, cy, rx : DINT; END_VAR
     IF ShowLabels THEN
       HMI_Text(Left + Width / 2, Top, Caption, 12, HMI_FONT#Bold, HMI_ALIGN#Center, COLOR.Text);
       Badge(Top + 17, HMI_FormatValue(Value, Decimals, Unit));
@@ -645,35 +665,32 @@ FUNCTION_BLOCK HmiVessel EXTENDS HmiElement
         Badge(Top + 34, HMI_FormatValue(Rate, Decimals, RateUnit));
       END_IF;
     END_IF;
-    bt := Top + LabelH();
-    bb := Top + Height;
-    e := MAX(MIN(Width * 13 / 100, (bb - bt) / 5), 1);
-    cx := Left + Width / 2;
+    Layout();
+    Part(160, 1180, 80, 160, 10, COLOR.Gray, TRUE);
+    Part(560, 1180, 80, 160, 10, COLOR.Gray, TRUE);
+    rx := (PX(700, 300) - PX(100, 300)) / 2;
+    cx := PX(100, 300) + rx;
+    HMI_FillRect(cx - rx, PY(0, 300), 2 * rx, PY(0, 1220) - PY(0, 300), 0, Fill);
+    HMI_StrokeRect(cx - rx, PY(0, 300), 2 * rx, PY(0, 1220) - PY(0, 300), 0, Stroke(), COLOR.Text);
+    HMI_FillEllipse(cx, PY(400, 300), rx, PL(240), COLOR.Text);
+    HMI_FillEllipse(cx, PY(400, 300), MAX(rx - Stroke(), 0), MAX(PL(240) - Stroke(), 0), Fill);
+    HMI_FillRect(PX(100, 300) + Stroke(), PY(400, 300), 2 * rx - 2 * Stroke(), PL(250), 0, Fill);
+    Part(160, 240, 50, 940, 25, HMI_Alpha(COLOR.White, 55), FALSE);
+    Part(320, 340, 160, 840, 30, COLOR.Surface, TRUE);
     pm := HMI_PerMille(Value, MinValue, MaxValue);
-    (* Body, then the liquid: its column, the front half of the bottom and its surface at the level. *)
-    HMI_FillRect(Left, bt + e, Width, bb - bt - 2 * e, 0, Fill);
-    HMI_FillEllipse(cx, bb - e, Width / 2, e, Fill);
     IF pm > 0 THEN
-      ly := bb - e - (bb - bt - 2 * e) * pm / 1000;
-      HMI_FillRect(Left, ly, Width, bb - e - ly, 0, AccentColor);
-      HMI_FillEllipse(cx, bb - e, Width / 2, e, AccentColor);
-      HMI_FillEllipse(cx, ly, Width / 2, e, AccentColor);
-      HMI_FillEllipse(cx, ly, Width / 2, e, HMI_Alpha(COLOR.White, 30));
+      ly := 1170 - 820 * pm / 1000;
+      Part(335, ly, 130, 1170 - ly, 20, AccentColor, FALSE);
     END_IF;
-    (* Outline: the open top, the sides and the front of the bottom. *)
-    HMI_FillEllipse(cx, bt + e, Width / 2, e * 92 / 100, COLOR.Border);
-    HMI_StrokeEllipse(cx, bt + e, Width / 2, e, 1, COLOR.TextMuted);
-    HMI_Line(Left, bt + e, Left, bb - e, 1, COLOR.TextMuted);
-    HMI_Line(Left + Width, bt + e, Left + Width, bb - e, 1, COLOR.TextMuted);
-    HMI_PolyBegin(COLOR.TextMuted);
-    FOR a := 0 TO 12 DO
-      HMI_PolyPoint(cx + HMI_Cos(a * 15, Width / 2), bb - e + HMI_Sin(a * 15, e));
+    FOR k := 1 TO 4 DO
+      Seg(500, 340 + 840 * k / 5, 540, 340 + 840 * k / 5, 12, COLOR.Text);
     END_FOR;
-    HMI_PolyStroke(1, FALSE);
     IF LEN(Capacity) > 0 THEN
+      cx := PX(400, 0);
+      cy := PY(0, 1100);
       bw := HMI_TextWidth(Capacity, 9, HMI_FONT#Regular) + 8;
-      HMI_FillRect(cx - bw / 2, bb - e - 15, bw, 12, 1, COLOR.Surface);
-      HMI_TextBox(cx - bw / 2, bb - e - 15, bw, 12, Capacity, 9, HMI_FONT#Regular, HMI_ALIGN#Center, HMI_VALIGN#Middle,
+      HMI_FillRect(cx - bw / 2, cy - 6, bw, 12, 1, COLOR.Surface);
+      HMI_TextBox(cx - bw / 2, cy - 6, bw, 12, Capacity, 9, HMI_FONT#Regular, HMI_ALIGN#Center, HMI_VALIGN#Middle,
         COLOR.Text);
     END_IF;
     Draw := TRUE;
