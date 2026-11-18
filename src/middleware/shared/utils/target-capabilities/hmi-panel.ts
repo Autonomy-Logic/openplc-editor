@@ -45,7 +45,8 @@ export const hmiPanelCapabilitySchema = z
     height: dimension,
     density: z.number().int().min(1).max(HMI_PANEL_MAX_DENSITY),
     touch: z.boolean(),
-    colorFormat: z.enum(['rgb565', 'rgb888']),
+    colorFormat: z.enum(['rgb565', 'rgb666', 'rgb888']),
+    touchCalibration: z.boolean().optional(),
     displayListBytes: bufferBytes.optional(),
     glyphCacheBytes: bufferBytes.optional(),
     bandBytes: bufferBytes.optional(),
@@ -76,6 +77,7 @@ export function resolveHmiPanel(declared: unknown): ResolvedHmiPanel | null {
   const panel = parsed.data
   return {
     ...panel,
+    touchCalibration: panel.touchCalibration ?? false,
     displayListBytes: panel.displayListBytes ?? HMI_DEFAULT_DISPLAY_LIST_BYTES,
     glyphCacheBytes: panel.glyphCacheBytes ?? HMI_DEFAULT_GLYPH_CACHE_BYTES,
     bandBytes: panel.bandBytes ?? HMI_DEFAULT_BAND_BYTES,

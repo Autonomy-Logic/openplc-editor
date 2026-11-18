@@ -29,7 +29,13 @@ describe('HMI settings', () => {
       themes: [],
       defaultTheme: 'Autonomy',
       fontVariant: 'compact',
+      touchCalibration: { mode: 'once' },
     })
+  })
+
+  it('takes the touch calibration modes and refuses others', () => {
+    for (const mode of ['once', 'upload', 'boot']) expect(errorsOf({ touchCalibration: { mode } })).toEqual([])
+    expect(errorsOf({ touchCalibration: { mode: 'never' } })).toHaveLength(1)
   })
 
   it('keeps the frame period between 20 and 1000 ms', () => {

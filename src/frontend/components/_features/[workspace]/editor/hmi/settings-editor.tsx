@@ -1,6 +1,6 @@
 /**
  * HMI Settings: the start screen, frame period, default theme and font; where browsers open the HMI; which roles open
- * each screen; the local panel's PIN and relock, on a board that has one; and the project themes, edited token by
+ * each screen; the local panel's PIN, relock and touch calibration, on a board that has one; and the project themes, edited token by
  * token beside a live preview drawn by the core.
  */
 import { Checkbox } from '@root/frontend/components/_atoms/checkbox'
@@ -23,6 +23,7 @@ import {
   HMI_ROLES,
   HMI_THEME_TOKENS,
   HMI_THEMES_MAX,
+  HMI_TOUCH_CALIBRATION_MODES,
   type HmiProjectTheme,
   type HmiSettings,
   hmiThemeColors,
@@ -419,6 +420,24 @@ export function HmiSettingsEditor() {
                       onCommit={(text) =>
                         apply({ ...settings, relock: { mode: 'idle', minutes: Number(text) } }, 'relock')
                       }
+                    />
+                  </Field>
+                )}
+                {panel.touch && panel.touchCalibration && (
+                  <Field label='Touch calibration'>
+                    <SettingSelect
+                      label='Touch calibration'
+                      testId='hmi-touch-calibration'
+                      value={settings.touchCalibration.mode}
+                      options={[
+                        { value: 'once', label: 'Once' },
+                        { value: 'upload', label: 'After every program upload' },
+                        { value: 'boot', label: 'On every boot' },
+                      ]}
+                      onChange={(mode) => {
+                        const picked = HMI_TOUCH_CALIBRATION_MODES.find((m) => m === mode)
+                        if (picked) apply({ ...settings, touchCalibration: { mode: picked } }, 'touchCalibration')
+                      }}
                     />
                   </Field>
                 )}

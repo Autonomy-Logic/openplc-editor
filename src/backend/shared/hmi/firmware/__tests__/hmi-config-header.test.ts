@@ -34,8 +34,13 @@ describe('hmiConfigHeader', () => {
       HMI_PANEL_DENSITY: '1',
       HMI_PANEL_TOUCH: '1',
       HMI_PANEL_RGB565: '1',
+      HMI_PANEL_TOUCH_CAL: '0',
     })
     expect(d.HMI_TEST_READOUT).toBeUndefined()
+    expect(defines(hmiConfigHeader(panel({ touchCalibration: true }), 'compact')).HMI_PANEL_TOUCH_CAL).toBe('1')
+    expect(
+      defines(hmiConfigHeader(panel({ touch: false, touchCalibration: true }), 'compact')).HMI_PANEL_TOUCH_CAL,
+    ).toBe('0')
   })
 
   it('takes the sizes a board declares', () => {

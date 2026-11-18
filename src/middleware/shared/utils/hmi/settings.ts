@@ -1,6 +1,6 @@
 /**
- * HMI Settings (`hmi/settings.json`): start screen, frame period, role grid, local-panel PIN and relock, project
- * themes, the default theme and the font variant. The HMI address is not stored: it is shown from the target.
+ * HMI Settings (`hmi/settings.json`): start screen, frame period, role grid, local-panel PIN, relock and touch
+ * calibration, project themes, the default theme and the font variant. The HMI address is not stored: it is shown from the target.
  */
 import { z } from 'zod'
 
@@ -110,6 +110,11 @@ export const HMI_BUILTIN_THEME_COLORS: Record<(typeof HMI_BUILTIN_THEMES)[number
 export const HMI_THEMES_MAX = 16
 export const HMI_DEFAULT_THEME = 'Autonomy'
 export const HMI_FONT_VARIANTS = ['compact', 'full'] as const
+/**
+ * When a local panel whose touch needs calibrating shows the calibration screen: once (until it is erased or asked
+ * for), after every program upload, or on every boot. Order is the id the unit gives the C host.
+ */
+export const HMI_TOUCH_CALIBRATION_MODES = ['once', 'upload', 'boot'] as const
 
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/
 const COLOR_RGB = /^#[0-9A-Fa-f]{6}$/
@@ -156,6 +161,7 @@ export const hmiSettingsSchema = z
       .default([]),
     defaultTheme: z.string().default(HMI_DEFAULT_THEME),
     fontVariant: z.enum(HMI_FONT_VARIANTS).default('compact'),
+    touchCalibration: z.object({ mode: z.enum(HMI_TOUCH_CALIBRATION_MODES).default('once') }).default({ mode: 'once' }),
   })
   .superRefine((s, ctx) => {
     if (s.pin.enabled ? !PIN.test(s.pin.value) : s.pin.value !== '' && !PIN.test(s.pin.value))
