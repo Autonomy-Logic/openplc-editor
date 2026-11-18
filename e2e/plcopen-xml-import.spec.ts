@@ -3,7 +3,8 @@ import { join } from 'node:path'
 
 import { type ElectronApplication, expect, type Page, test } from '@playwright/test'
 
-import { launch, quitApp } from './helpers/ethercat-project'
+import { saveProject, sendToMainWindow } from './helpers/electron-editor'
+import { findFile, launch, quitApp } from './helpers/ethercat-project'
 import { writeStProgramProject } from './helpers/st-program-project'
 
 const PROJECT_NAME = 'plcopen-import-target'
@@ -72,14 +73,6 @@ function filesUnder(dir: string, prefix = ''): string[] {
   })
 }
 
-/** Sends a native menu accelerator to the main window; Playwright's keyboard never reaches those. */
-async function sendAccelerator(app: ElectronApplication, channel: string): Promise<void> {
-  await app.evaluate(({ BrowserWindow }, name) => {
-    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))
-    win?.webContents.send(name)
-  }, channel)
-}
-
 /** The explorer entry named @p name. */
 const explorerItem = (page: Page, name: string) => page.getByText(name, { exact: true }).first()
 
@@ -103,7 +96,7 @@ async function importAndSave(app: ElectronApplication, page: Page, project: stri
   await explorerItem(page, PROJECT_NAME).click({ timeout: 30000 })
   await expect(explorerItem(page, 'main')).toBeVisible({ timeout: 60000 })
 
-  await sendAccelerator(app, 'project:import-plcopen-accelerator')
+  await sendToMainWindow(app, 'project:import-plcopen-accelerator')
   await expect(page.getByText('Import PLCopen XML?')).toBeVisible({ timeout: 30000 })
   await page.getByRole('button', { name: 'Import PLCopen XML', exact: true }).click()
 
@@ -114,7 +107,7 @@ async function importAndSave(app: ElectronApplication, page: Page, project: stri
   await expect(page.getByText('main', { exact: true })).toHaveCount(0)
   await expect(explorerItem(page, 'PumpMode')).toBeVisible()
 
-  await sendAccelerator(app, 'project:save-accelerator')
+  await saveProject(app)
   await expect
     .poll(() => readFileSync(join(project, 'project.json'), 'utf-8').includes('"fast_task"'), { timeout: 30000 })
     .toBe(true)
@@ -127,9 +120,9 @@ test('a PLCopen XML file replaces the open project and its elements are saved to
   try {
     await importAndSave(app, page, project, xmlFile)
 
-    const programFile = filesUnder(join(project, 'pous')).find((f) => f.includes('imported_prog')) ?? ''
+    const programFile = findFile(join(project, 'pous'), 'imported_prog.st') ?? ''
     expect(programFile).not.toBe('')
-    const program = readFileSync(join(project, 'pous', programFile), 'utf-8')
+    const program = readFileSync(programFile, 'utf-8')
     expect(program).toContain('pump_count := pump_count + 1;')
     expect(program).toMatch(/pump_count\s*:\s*INT/)
 

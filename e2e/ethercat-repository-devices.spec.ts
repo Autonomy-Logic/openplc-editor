@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { expect, type Page, test } from '@playwright/test'
 
 import { saveProject } from './helpers/electron-editor'
+import { openRepositoryTab } from './helpers/esi-repository'
 import { EK1818_STATION, launch, PROJECT_NAME, quitApp, writeEthercatProject } from './helpers/ethercat-project'
 
 const DRIVE_ESI = join(__dirname, 'fixtures', 'ethercat-defaultdata', '11111111-2222-4333-8444-555555555555.xml')
@@ -75,8 +76,7 @@ test('a drive shows its PDOs and a modular coupler keeps its modules across save
   let { app, page } = await launch(userData)
   try {
     await page.getByText(PROJECT_NAME, { exact: true }).first().click({ timeout: 30000 })
-    await page.getByText('ecat_bus', { exact: true }).first().dblclick({ timeout: 60000 })
-    await page.getByTestId('ethercat-tab-repository').click({ timeout: 60000 })
+    await openRepositoryTab(page)
     await page.getByTestId('esi-upload-input').setInputFiles([DRIVE_ESI, COUPLER_ESI, MODULES_ESI])
     await expect(page.getByTestId('esi-repository-row')).toHaveCount(3, { timeout: 60000 })
     await expect(page.getByTestId('esi-upload-errors')).toHaveCount(0)

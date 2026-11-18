@@ -80,12 +80,19 @@ export async function launch(userData: string): Promise<{ app: ElectronApplicati
   throw new Error('main window never appeared')
 }
 
+/** Sends @p channel, with @p payload when given, to the main window the way a native menu accelerator does. */
+export async function sendToMainWindow(app: ElectronApplication, channel: string, payload?: string): Promise<void> {
+  await app.evaluate(
+    ({ BrowserWindow }, message) => {
+      const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))
+      win?.webContents.send(message.channel, ...(message.payload === undefined ? [] : [message.payload]))
+    },
+    { channel, payload },
+  )
+}
+
 /** Sends the Save Project accelerator; it is a native menu accelerator, which Playwright's keyboard never reaches. */
-export const saveProject = (app: ElectronApplication) =>
-  app.evaluate(({ BrowserWindow }) => {
-    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'))
-    win?.webContents.send('project:save-accelerator')
-  })
+export const saveProject = (app: ElectronApplication) => sendToMainWindow(app, 'project:save-accelerator')
 
 /** Collects the renderer's uncaught errors and makes a wait fail as soon as one is thrown. */
 export class RendererErrors {
