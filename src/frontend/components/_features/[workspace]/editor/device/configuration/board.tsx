@@ -1,7 +1,11 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import { describeMissingVppPackage, type VppPackagePin } from '@root/backend/shared/utils/vpp/vpp-package-pin'
 import { useCapabilities, useDevice, usePackages } from '@root/middleware/shared/providers/platform-context'
-import { evaluateVppBackplaneGate, vppGateStateFor } from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
+import {
+  evaluateVppBackplaneGate,
+  isVppPackageLoadRefusal,
+  vppGateStateFor,
+} from '@root/middleware/shared/utils/build-gate/vpp-backplane-gate'
 import { resolveTargetCapabilities } from '@root/middleware/shared/utils/target-capabilities'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -13,6 +17,7 @@ import { useDeviceConnect } from '../../../../../../hooks/use-device-connect'
 import { useDeviceLicense } from '../../../../../../hooks/use-device-license'
 import { useRuntimeConnect } from '../../../../../../hooks/use-runtime-connect'
 import { boardSelectors, pinSelectors } from '../../../../../../hooks/use-store-selectors'
+import { useVppTargetLoadState } from '../../../../../../hooks/use-vpp-target-load-state'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import type { RuntimeConnection } from '../../../../../../store/slices/device/types'
 import { cn } from '../../../../../../utils/cn'
@@ -34,6 +39,7 @@ const Board = memo(function () {
   const capabilities = useCapabilities()
   const device = useDevice()
   const packages = usePackages()
+  const targetLoadState = useVppTargetLoadState()
 
   const {
     deviceAvailableOptions: { availableBoards },
@@ -215,6 +221,15 @@ const Board = memo(function () {
   // selection rather than falling back to a placeholder — a board that vanishes
   // silently reads as lost work, and the build refuses with the reason anyway.
   const boardIsUnavailable = deviceBoard !== '' && currentBoardInfo === undefined
+  const unavailableBoardGate = evaluateVppBackplaneGate(
+    vppGateStateFor({
+      board: undefined,
+      boardName: deviceBoard,
+      target: selectedDevice,
+      vplcProvidesVendorBoards: capabilities.hasOrchestratorDevices,
+      targetLoadStatus: targetLoadState.status,
+    }),
+  )
   useEffect(() => {
     if (boardIsUnavailable) setFormattedBoardState(deviceBoard)
   }, [boardIsUnavailable, deviceBoard])
@@ -584,16 +599,11 @@ const Board = memo(function () {
                         {deviceBoard}
                       </span>
                       <span className='font-caption text-[10px] leading-snug text-neutral-500 dark:text-neutral-400'>
-                        {evaluateVppBackplaneGate(
-                          vppGateStateFor({
-                            board: undefined,
-                            boardName: deviceBoard,
-                            target: selectedDevice,
-                            vplcProvidesVendorBoards: capabilities.hasOrchestratorDevices,
-                          }),
-                        ).kind === 'refuse'
-                          ? 'Not available on the selected vPLC. Select a vPLC created with the package this board comes from.'
-                          : 'Not available. The package this board comes from is not installed.'}
+                        {unavailableBoardGate.kind === 'allow'
+                          ? 'Not available. The package this board comes from is not installed.'
+                          : isVppPackageLoadRefusal(unavailableBoardGate.reason)
+                            ? `Not available: ${unavailableBoardGate.reason}`
+                            : 'Not available on the selected vPLC. Select a vPLC created with the package this board comes from.'}
                       </span>
                     </span>
                   </SelectItem>
@@ -621,6 +631,7 @@ const Board = memo(function () {
                             board: data,
                             target: selectedDevice,
                             vplcProvidesVendorBoards: capabilities.hasOrchestratorDevices,
+                            targetLoadStatus: targetLoadState.status,
                           }),
                         )
                         const refusal = gate.kind === 'refuse' ? gate.reason : null

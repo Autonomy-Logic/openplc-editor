@@ -15,7 +15,13 @@
  * all.
  */
 
+import type { VppTargetLoadState } from '../../ports/vpp-target-mechanisms'
 import type { DeviceVpp } from '../../ports/vpp-types'
+
+const PACKAGE_STILL_LOADING =
+  'The package of the selected vPLC is still loading. Wait until it finishes in Device > Edge Devices.'
+const PACKAGE_DID_NOT_LOAD =
+  'The package of the selected vPLC did not load. Open Device > Edge Devices and click Try again.'
 
 /** Everything the decision needs. Deliberately primitives, not a store slice. */
 export interface VppBackplaneState {
@@ -68,6 +74,8 @@ export interface VppBackplaneState {
    * nothing, exactly as an absent `backplaneAccess` does.
    */
   targetPackageId?: string | null | undefined
+  /** The target vPLC's package is still loading or failed to load; undefined when loaded, idle or not applicable. */
+  targetPackageLoad?: 'loading' | 'failed'
 }
 
 export type VppBackplaneVerdict =
@@ -78,6 +86,13 @@ export type VppBackplaneVerdict =
 
 /** May this board be used on this vPLC? */
 export function evaluateVppBackplaneGate(state: VppBackplaneState): VppBackplaneVerdict {
+  if (state.hasTargetVplc && state.targetPackageLoad !== undefined && (state.boardMissing || state.isVppBoard)) {
+    return {
+      kind: 'refuse',
+      reason: state.targetPackageLoad === 'loading' ? PACKAGE_STILL_LOADING : PACKAGE_DID_NOT_LOAD,
+    }
+  }
+
   // Checked before `isVppBoard`, which a board nobody can resolve cannot answer.
   // Only against a vPLC: on the desktop an unresolved board is a different
   // problem with its own message, and this one would be the wrong explanation.
@@ -138,6 +153,24 @@ export function evaluateVppBackplaneGate(state: VppBackplaneState): VppBackplane
   return { kind: 'allow' }
 }
 
+/** Is this refusal reason the one for a target vPLC package that is still loading or did not load? */
+export function isVppPackageLoadRefusal(reason: string): boolean {
+  return reason === PACKAGE_STILL_LOADING || reason === PACKAGE_DID_NOT_LOAD
+}
+
+/** Maps the target package load status to the gate's `targetPackageLoad`. */
+function packageLoadOf(status: VppTargetLoadState['status'] | undefined): VppBackplaneState['targetPackageLoad'] {
+  switch (status) {
+    case 'downloading':
+    case 'verifying':
+      return 'loading'
+    case 'error':
+      return 'failed'
+    default:
+      return undefined
+  }
+}
+
 /**
  * What the three callers have in hand — a board and the selected vPLC — turned
  * into the decision's inputs.
@@ -156,7 +189,11 @@ export function vppGateStateFor(args: {
   target: { backplaneAccess?: boolean; vpp?: DeviceVpp | null } | null | undefined
   /** `capabilities.hasOrchestratorDevices`: true on web, false on the desktop. */
   vplcProvidesVendorBoards: boolean
+  /** The load status of the target vPLC's package, from `PackagePort.getTargetLoadState()`. */
+  targetLoadStatus?: VppTargetLoadState['status']
 }): VppBackplaneState {
+  const targetPackageLoad =
+    args.vplcProvidesVendorBoards && args.target?.vpp ? packageLoadOf(args.targetLoadStatus) : undefined
   return {
     vplcProvidesVendorBoards: args.vplcProvidesVendorBoards,
     isVppBoard: args.board?.vpp !== undefined,
@@ -168,5 +205,6 @@ export function vppGateStateFor(args: {
     hasTargetVplc: Boolean(args.target),
     backplaneAccess: args.target?.backplaneAccess,
     targetPackageId: args.target?.vpp === undefined ? undefined : (args.target.vpp?.packageId ?? null),
+    ...(targetPackageLoad !== undefined && { targetPackageLoad }),
   }
 }

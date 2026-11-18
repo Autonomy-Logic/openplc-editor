@@ -11,6 +11,7 @@ import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
 import { CloseIcon } from '../../../../../../assets/icons/interface/Close'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
+import { useVppTargetLoadState } from '../../../../../../hooks/use-vpp-target-load-state'
 import { toProjectTargetDevice, toSelectedDevice } from '../../../../../../services/project-target-device'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import type { SelectedDevice } from '../../../../../../store/slices/device'
@@ -264,13 +265,8 @@ const OrchestratorsList = () => {
     }
   }, [packages])
 
-  const [targetLoadState, setTargetLoadState] = useState<VppTargetLoadState>({ status: 'idle' })
+  const targetLoadState = useVppTargetLoadState()
   const [isRetryingTargetLoad, setIsRetryingTargetLoad] = useState(false)
-  useEffect(() => {
-    if (!packages) return
-    setTargetLoadState(packages.getTargetLoadState())
-    return packages.onTargetLoadStateChanged(setTargetLoadState)
-  }, [packages])
 
   const handleCancelTargetLoad = useCallback(() => {
     packages?.cancelTargetLoad()
