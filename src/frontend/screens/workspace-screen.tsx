@@ -396,6 +396,7 @@ const WorkspaceScreen = () => {
   const bottomPanelOpenBeforePerspectiveRef = useRef(false)
   const previousIsCollapsedRef = useRef(isCollapsed)
   const consoleFollowRequestId = useOpenPLCStore((state) => state.followRequestId)
+  const searchRevealRequestId = useOpenPLCStore((state) => state.revealRequestId)
   const hasSearchResults = searchResults.length > 0
   const bottomPanelTabs = visibleBottomPanelTabs({
     debug: isDebuggerVisible,
@@ -424,13 +425,22 @@ const WorkspaceScreen = () => {
 
   useBottomPanelShortcut(toggleBottomPanel)
 
+  // Every project opens with the panel hidden, also when the workspace stays mounted across projects.
   useEffect(() => {
-    if (hasSearchResults) {
-      openBottomPanel('search')
-    } else {
-      setActiveTab((prev) => (prev === 'search' ? 'console' : prev))
-    }
-  }, [hasSearchResults, openBottomPanel])
+    hideBottomPanel()
+    setActiveTab('console')
+    bottomPanelWasOpenedRef.current = false
+  }, [projectPath, hideBottomPanel])
+
+  useEffect(() => {
+    if (!hasSearchResults) setActiveTab((prev) => (prev === 'search' ? 'console' : prev))
+  }, [hasSearchResults])
+
+  // Each Find in Project that found something shows its results. Skips the initial value (0).
+  useEffect(() => {
+    if (searchRevealRequestId === 0) return
+    openBottomPanel('search')
+  }, [searchRevealRequestId, openBottomPanel])
 
   useEffect(() => {
     if (!isPlcLogsVisible) {
