@@ -13,7 +13,7 @@ import { sampleProject } from '../../src/backend/shared/hmi/unit/__tests__/fixtu
 const [out] = process.argv.slice(2)
 if (!out) throw new Error('usage: generate.ts <out-dir>')
 mkdirSync(out, { recursive: true })
-const result = generateHmiUnit(sampleProject())
+const result = generateHmiUnit({ ...sampleProject(), panel: true })
 for (const [name, text] of Object.entries({ ...result.files, ...result.preview.files }))
   writeFileSync(join(out, name), text)
 writeFileSync(

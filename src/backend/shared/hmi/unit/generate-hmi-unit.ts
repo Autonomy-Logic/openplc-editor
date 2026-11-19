@@ -63,6 +63,11 @@ export interface HmiUnitInput extends HmiUnitSources {
   themePreview?: string
   /** Preview build: the libraries are emitted whole, so their code does not change with the screens. */
   preview?: boolean
+  /**
+   * Build for a board's local panel: the unit then carries the panel PIN, relock time, touch calibration mode and build
+   * id, and the PIN entry's face. Every other build (Runtime v4, previews) leaves them out entirely.
+   */
+  panel?: boolean
   /** PLC debug-table address of a variable; absent when building without a PLC program (preview). */
   resolve?: (path: string) => HmiTagAddress | null
   /** The PLC's libraries already loaded, as the program build has them; used with `plcLibraries`. */
@@ -768,10 +773,14 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput, classes: readonl
     `const int hmi_tag_count = ${tags.length};`,
     `const char hmi_plc_md5[] = ${cString(input.plcMd5 ?? '')};`,
     `const uint32_t hmi_frame_ms = ${settings.framePeriodMs};`,
-    `const char hmi_panel_pin[] = ${cString(settings.pin.enabled ? settings.pin.value : '')};`,
-    `const uint32_t hmi_relock_minutes = ${settings.relock.mode === 'idle' ? settings.relock.minutes : 0};`,
-    `const uint8_t hmi_touch_cal_mode = ${HMI_TOUCH_CALIBRATION_MODES.indexOf(settings.touchCalibration.mode)};`,
-    `const char hmi_build_id[] = ${cString(hmiBuildId(input))};`,
+    ...(input.panel
+      ? [
+          `const char hmi_panel_pin[] = ${cString(settings.pin.enabled ? settings.pin.value : '')};`,
+          `const uint32_t hmi_relock_minutes = ${settings.relock.mode === 'idle' ? settings.relock.minutes : 0};`,
+          `const uint8_t hmi_touch_cal_mode = ${HMI_TOUCH_CALIBRATION_MODES.indexOf(settings.touchCalibration.mode)};`,
+          `const char hmi_build_id[] = ${cString(hmiBuildId(input))};`,
+        ]
+      : []),
     '',
     'void hmi_set_tag_access(const hmi_tag_access_t *access) {',
     '    g_access = access && access->read && access->write ? access : nullptr;',
@@ -1222,7 +1231,7 @@ function buildFaces(input: HmiUnitInput, sources: Record<string, string>): numbe
     pool: [...STANDARD_WIDGETS_SOURCES.map((s) => ({ name: s.fileName, source: s.source })), ...input.widgets],
     gates: GATED_BLOCKS,
   })
-  if (!input.settings.pin.enabled || faces.includes(PIN_ENTRY_FACE)) return faces
+  if (!input.panel || !input.settings.pin.enabled || faces.includes(PIN_ENTRY_FACE)) return faces
   return [...faces, PIN_ENTRY_FACE].sort((a, b) => a - b)
 }
 

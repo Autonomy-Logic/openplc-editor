@@ -248,6 +248,8 @@ async function main(): Promise<void> {
   const cache = new Map<string, CachedWasmObject>()
   const compile = (request: WasmCompileRequest) => compileToWasm(request, { runner: clang, cache })
   const project = sampleProject()
+  const PIN = '97531864'
+  project.settings = { ...project.settings, pin: { enabled: true, value: PIN }, relock: { mode: 'idle', minutes: 47 } }
   const leaves = [
     ['INSTANCE0.LEVEL', 0, 3],
     ['INSTANCE0.RUNNING', 0, 4],
@@ -330,6 +332,27 @@ async function main(): Promise<void> {
 
     const wasm = files[`hmi/client/${HMI_CLIENT_MODULE}`]
     if (!(wasm instanceof Uint8Array)) throw new Error('hmi.wasm is not bytes')
+    const ascii = Buffer.from(wasm).toString('latin1')
+    check(
+      !ascii.includes(PIN) &&
+        Object.values(files).every(
+          (f) => !(typeof f === 'string' ? f : Buffer.from(f).toString('latin1')).includes(PIN),
+        ),
+      'the panel PIN is in no file of the artefact, hmi.wasm included',
+    )
+    check(
+      !ascii.includes('Enter PIN') && !ascii.includes('Wrong PIN'),
+      "the panel's PIN entry is not linked into hmi.wasm (the browser host never calls it)",
+    )
+    const compiledRequest: WasmCompileRequest | null = request
+    check(
+      compiledRequest !== null &&
+        Object.entries(compiledRequest.files).every(
+          ([path, f]) =>
+            path.endsWith('hmi_fonts.c') || !/97531864|hmi_panel_pin\s*\[\]\s*=|hmi_relock_minutes\s*=/.test(f),
+        ),
+      'the browser module is compiled without the PIN or the relock time',
+    )
     const module = await WebAssembly.compile(wasm)
     check(
       WebAssembly.Module.imports(module).every((i) => i.module === 'wasi_snapshot_preview1' && i.kind === 'function'),

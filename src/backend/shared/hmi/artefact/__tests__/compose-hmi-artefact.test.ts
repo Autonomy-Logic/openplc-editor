@@ -122,6 +122,31 @@ describe('composeHmiArtefact', () => {
     )
   })
 
+  it('leaves the panel PIN, relock time and calibration out of everything a Runtime v4 upload carries', async () => {
+    const sources = sampleProject()
+    sources.settings = {
+      ...sources.settings,
+      pin: { enabled: true, value: '97531864' },
+      relock: { mode: 'idle', minutes: 47 },
+    }
+    const { value, requests } = input({ sources })
+    const result = await composeHmiArtefact(value)
+    if (!result.ok) throw new Error(JSON.stringify(result.errors))
+    const decoder = new TextDecoder()
+    const texts = [
+      ...Object.values(result.files).map((f) => (typeof f === 'string' ? f : decoder.decode(f))),
+      ...Object.entries(requests[0].files)
+        .filter(([path]) => !path.endsWith('hmi_fonts.c'))
+        .map(([, f]) => f),
+    ]
+    for (const text of texts) {
+      expect(text).not.toContain('97531864')
+      expect(text).not.toMatch(
+        /hmi_panel_pin\s*\[\]\s*=|hmi_relock_minutes\s*=|hmi_touch_cal_mode\s*=|hmi_build_id\s*\[\]\s*=/,
+      )
+    }
+  })
+
   it('sends only the removal manifest for a project without screens', async () => {
     const { value, requests } = input({ sources: null })
     const result = await composeHmiArtefact(value)

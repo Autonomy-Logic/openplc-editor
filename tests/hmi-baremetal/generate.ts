@@ -38,7 +38,7 @@ async function main(): Promise<void> {
     ...sample,
     screens: sample.screens.map((s) => (s.name === 'Overview' ? { ...s, source: overviewWithSignOut() } : s)),
   }
-  const unit = generateHmiUnit(project)
+  const unit = generateHmiUnit({ ...project, panel: true })
   if (!unit.ok) throw new Error(unit.errors.map((e) => `${e.file}: ${e.message}`).join('\n'))
   const unitDir = join(out, 'unit')
   mkdirSync(unitDir, { recursive: true })
@@ -85,7 +85,7 @@ async function main(): Promise<void> {
       touchCalibration: { mode },
       pin: pin ? project.settings.pin : { enabled: false, value: '' },
     }
-    const variant = generateHmiUnit({ ...project, plcMd5, settings })
+    const variant = generateHmiUnit({ ...project, plcMd5, settings, panel: true })
     if (!variant.ok) throw new Error(variant.errors.map((e) => `${e.file}: ${e.message}`).join('\n'))
     for (const [file, text] of Object.entries(variant.files))
       if (file !== GLUE && text !== unit.files[file]) throw new Error(`calibration mode ${name} changed ${file}`)

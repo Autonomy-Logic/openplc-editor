@@ -137,10 +137,24 @@ describe('HMI unit generator', () => {
     expect(glue).toContain(
       '    case 0: *static_cast<strucpp::IEC_REAL *>(g_own[0]) = *static_cast<const strucpp::IEC_REAL *>(value); return;',
     )
-    expect(glue).toContain('const char hmi_panel_pin[] = "2468";')
+    expect(glue).not.toMatch(/hmi_panel_pin|hmi_relock_minutes|hmi_touch_cal_mode|hmi_build_id|2468/)
     expect(glue).toContain('while (n < 12 && b[n] != 0) n++;')
     expect(Object.keys(sample.sources)).not.toContain('hmi_tags.st')
     expect(sample.files['pou_OVERVIEW.cpp']).toContain('strucpp::external_read<IEC_REAL>(0)')
+  })
+
+  it('carries the panel PIN, relock time, calibration mode and build id only in a build for a local panel', () => {
+    const panel = generateHmiUnit({ ...sampleProject(), panel: true })
+    const glue = panel.files['hmi_unit_glue.cpp']
+    expect(glue).toContain('const char hmi_panel_pin[] = "2468";')
+    expect(glue).toContain('const uint32_t hmi_relock_minutes = 5;')
+    expect(glue).toContain('const uint8_t hmi_touch_cal_mode = ')
+    expect(glue).toMatch(/const char hmi_build_id\[\] = "[0-9a-f]{16}";/)
+    const project = sampleProject()
+    const browser = generateHmiUnit(project)
+    const everything = [...Object.values(browser.files), ...Object.values(browser.sources)].join('\n')
+    expect(everything).not.toMatch(/hmi_panel_pin|hmi_relock_minutes|hmi_touch_cal_mode|hmi_build_id/)
+    expect(everything).not.toContain(project.settings.pin.value)
   })
 
   it('starts the variables from their literal initial values in a preview, and never in a product build', () => {
