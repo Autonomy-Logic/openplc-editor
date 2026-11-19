@@ -458,6 +458,253 @@ FUNCTION_BLOCK SymbolScreen EXTENDS HmiScreen
   L5.Value := Tw.Value;
 END_FUNCTION_BLOCK
 
+(* Stand-ins for the PLC's alarm table, event log, summary and arrays, read through hand-written feeds the way the
+   HMI build generates them. Scale is the data pages' widget size in per mille. *)
+TYPE DemoAlarm :
+  STRUCT
+    Used, Active, Acked : BOOL;
+    Severity : INT;
+    Message : STRING(80);
+    Raised : DT;
+  END_STRUCT;
+END_TYPE
+TYPE DemoEvent :
+  STRUCT
+    Seq : UDINT;
+    Kind, Severity : INT;
+    Message : STRING(80);
+    Stamp : DT;
+  END_STRUCT;
+END_TYPE
+VAR_GLOBAL
+  DemoAlarms : ARRAY[0..7] OF DemoAlarm;
+  DemoEvents : ARRAY[0..9] OF DemoEvent;
+  SumValid, SumAcked : BOOL;
+  SumSeverity : INT;
+  SumMessage : STRING(80);
+  SumRaised : DT;
+  SumCount, SumUnacked : DINT;
+  AckedRow : DINT := -1;
+  AckTopHits, AckAllHits : DINT;
+  CurveX, PumpY, SystemY : ARRAY[0..20] OF REAL;
+  Scale : DINT := 1000;
+  DlgOpen : BOOL;
+  DlgResult : INT;
+  DlgAnswers : DINT;
+  ListX, ListY, ListW, ListH, BannerX, BannerY, BannerW, BannerH, LogX, LogY, LogW, LogH : DINT;
+END_VAR
+
+FUNCTION_BLOCK DemoAlarmFeed EXTENDS HmiFeed
+  METHOD OVERRIDE Count : DINT
+    Count := 8;
+  END_METHOD
+  METHOD OVERRIDE Used : BOOL
+    VAR_INPUT I : DINT; END_VAR
+    Used := DemoAlarms[I].Used;
+  END_METHOD
+  METHOD OVERRIDE Active : BOOL
+    VAR_INPUT I : DINT; END_VAR
+    Active := DemoAlarms[I].Active;
+  END_METHOD
+  METHOD OVERRIDE Acked : BOOL
+    VAR_INPUT I : DINT; END_VAR
+    Acked := DemoAlarms[I].Acked;
+  END_METHOD
+  METHOD OVERRIDE Severity : INT
+    VAR_INPUT I : DINT; END_VAR
+    Severity := DemoAlarms[I].Severity;
+  END_METHOD
+  METHOD OVERRIDE Message : STRING(80)
+    VAR_INPUT I : DINT; END_VAR
+    Message := DemoAlarms[I].Message;
+  END_METHOD
+  METHOD OVERRIDE Stamp : DT
+    VAR_INPUT I : DINT; END_VAR
+    Stamp := DemoAlarms[I].Raised;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+FUNCTION_BLOCK DemoSummaryFeed EXTENDS HmiFeed
+  METHOD OVERRIDE Count : DINT
+    Count := SumCount;
+  END_METHOD
+  METHOD OVERRIDE Unacked : DINT
+    Unacked := SumUnacked;
+  END_METHOD
+  METHOD OVERRIDE Used : BOOL
+    VAR_INPUT I : DINT; END_VAR
+    Used := SumValid;
+  END_METHOD
+  METHOD OVERRIDE Acked : BOOL
+    VAR_INPUT I : DINT; END_VAR
+    Acked := SumAcked;
+  END_METHOD
+  METHOD OVERRIDE Severity : INT
+    VAR_INPUT I : DINT; END_VAR
+    Severity := SumSeverity;
+  END_METHOD
+  METHOD OVERRIDE Message : STRING(80)
+    VAR_INPUT I : DINT; END_VAR
+    Message := SumMessage;
+  END_METHOD
+  METHOD OVERRIDE Stamp : DT
+    VAR_INPUT I : DINT; END_VAR
+    Stamp := SumRaised;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+FUNCTION_BLOCK DemoEventFeed EXTENDS HmiFeed
+  METHOD OVERRIDE Count : DINT
+    Count := 10;
+  END_METHOD
+  METHOD OVERRIDE Seq : UDINT
+    VAR_INPUT I : DINT; END_VAR
+    Seq := DemoEvents[I].Seq;
+  END_METHOD
+  METHOD OVERRIDE Kind : INT
+    VAR_INPUT I : DINT; END_VAR
+    Kind := DemoEvents[I].Kind;
+  END_METHOD
+  METHOD OVERRIDE Severity : INT
+    VAR_INPUT I : DINT; END_VAR
+    Severity := DemoEvents[I].Severity;
+  END_METHOD
+  METHOD OVERRIDE Message : STRING(80)
+    VAR_INPUT I : DINT; END_VAR
+    Message := DemoEvents[I].Message;
+  END_METHOD
+  METHOD OVERRIDE Stamp : DT
+    VAR_INPUT I : DINT; END_VAR
+    Stamp := DemoEvents[I].Stamp;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Which: 0 the flow axis, 1 the pump curve, 2 the system curve. *)
+FUNCTION_BLOCK DemoNumbers EXTENDS HmiFeed
+  VAR_INPUT Which : INT; END_VAR
+  METHOD OVERRIDE Count : DINT
+    Count := 21;
+  END_METHOD
+  METHOD OVERRIDE Number : REAL
+    VAR_INPUT I : DINT; END_VAR
+    CASE Which OF
+      1: Number := PumpY[I];
+      2: Number := SystemY[I];
+    ELSE
+      Number := CurveX[I];
+    END_CASE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
+(* Page 13: alarm banner and alarm list. *)
+FUNCTION_BLOCK AlarmScreen EXTENDS HmiScreen
+  VAR
+    Ban : HmiAlarmBanner;
+    List : HmiAlarmList := (GrowAuto := FALSE);
+    AlarmFeed : DemoAlarmFeed;
+    SummaryFeed : DemoSummaryFeed;
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Ban), 0);
+    Attach(ADR(List), 0);
+    Ban.SetFeed(0, ADR(SummaryFeed));
+    List.SetFeed(0, ADR(AlarmFeed));
+    List.SetFeed(1, ADR(SummaryFeed));
+    Build := TRUE;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE WriteBack : BOOL
+    IF List.AckRow >= 0 THEN
+      AckedRow := List.AckRow;
+      DemoAlarms[List.AckRow].Acked := TRUE;
+    END_IF;
+    IF List.AckAll THEN AckAllHits := AckAllHits + 1; END_IF;
+    IF Ban.AckTop THEN AckTopHits := AckTopHits + 1; END_IF;
+    WriteBack := TRUE;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Layout : BOOL
+    BannerX := Ban.Left; BannerY := Ban.Top; BannerW := Ban.Width; BannerH := Ban.Height;
+    ListX := List.Left; ListY := List.Top; ListW := List.Width; ListH := List.Height;
+    Layout := TRUE;
+  END_METHOD
+  Ban.PrefWidth := 460 * Scale / 1000;
+  Ban.PrefHeight := 34 * Scale / 1000;
+  List.PrefWidth := 520 * Scale / 1000;
+  List.PrefHeight := 210 * Scale / 1000;
+END_FUNCTION_BLOCK
+
+(* Page 14: event log. *)
+FUNCTION_BLOCK LogScreen EXTENDS HmiScreen
+  VAR
+    Events : HmiEventLog := (GrowAuto := FALSE);
+    EventFeed : DemoEventFeed;
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Events), 0);
+    Events.SetFeed(0, ADR(EventFeed));
+    Build := TRUE;
+  END_METHOD
+  METHOD PROTECTED OVERRIDE Layout : BOOL
+    LogX := Events.Left; LogY := Events.Top; LogW := Events.Width; LogH := Events.Height;
+    Layout := TRUE;
+  END_METHOD
+  Events.PrefWidth := 420 * Scale / 1000;
+  Events.PrefHeight := 214 * Scale / 1000;
+END_FUNCTION_BLOCK
+
+(* Page 15: XY plot with two series and the live point, and the data table. *)
+FUNCTION_BLOCK PlotScreen EXTENDS HmiScreen
+  VAR
+    Plot : HmiXYPlot := (Series := 2, XMax := 100.0, YMax := 50.0, XLabel := 'Flow (m3/h)', YLabel := 'Head (m)',
+      XUnit := 'm3/h', YUnit := 'm', Name1 := 'Pump', Name2 := 'System', ShowLive := TRUE, LiveX := 68.0, LiveY := 19.0,
+      GrowAuto := FALSE);
+    Table : HmiDataTable := (Value := 68.2, Value2 := 1.84, Value3 := 91.6, Value4 := 92.4, Decimals := 1,
+      Tag := 'FT-101', Tag2 := 'PT-101', Tag3 := 'TT-201', Tag4 := 'LT-101', Text := 'Inlet flow',
+      Text2 := 'Discharge pressure', Text3 := 'Product temperature', Text4 := 'Tank level', Unit := 'm3/h',
+      Unit2 := 'bar', Unit3 := 'C', Unit4 := '%', Status2 := COLOR.Warning, Status4 := COLOR.Danger);
+    XFeed : DemoNumbers := (Which := 0);
+    PumpFeed : DemoNumbers := (Which := 1);
+    SystemFeed : DemoNumbers := (Which := 2);
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Plot), 0);
+    Attach(ADR(Table), 0);
+    Plot.SetFeed(0, ADR(XFeed));
+    Plot.SetFeed(1, ADR(PumpFeed));
+    Plot.SetFeed(3, ADR(SystemFeed));
+    Build := TRUE;
+  END_METHOD
+  Plot.PrefWidth := 330 * Scale / 1000;
+  Plot.PrefHeight := 220 * Scale / 1000;
+  Table.PrefWidth := 400 * Scale / 1000;
+  Table.PrefHeight := 156 * Scale / 1000;
+END_FUNCTION_BLOCK
+
+(* Page 16: a dialog over the screen, answered by a tap. *)
+FUNCTION_BLOCK DialogScreen EXTENDS HmiScreen
+  VAR
+    Back1 : HmiTank := (Caption := 'Level', MaxValue := 10.0, PrefWidth := 140, PrefHeight := 120);
+    Back2 : HmiButton := (Text := 'Start pump');
+    Dlg : HmiDialog := (Title := 'Start pump P-101?', Message := 'Inlet valve V-12 is closed.;The pump may run dry.',
+      Buttons := 'Cancel;Start');
+  END_VAR
+  METHOD PROTECTED OVERRIDE Build : BOOL
+    Attach(ADR(Back1), 0);
+    Attach(ADR(Back2), 0);
+    Attach(ADR(Dlg), 0);
+    Build := TRUE;
+  END_METHOD
+  IF Back2.Clicked THEN DlgOpen := TRUE; END_IF;
+  IF Dlg.Answered THEN
+    DlgResult := Dlg.Result;
+    DlgAnswers := DlgAnswers + 1;
+    DlgOpen := FALSE;
+  END_IF;
+  Dlg.Open := DlgOpen;
+  Dlg.BoxWidth := 260 * Scale / 1000;
+  Dlg.BoxHeight := 140 * Scale / 1000;
+  Back1.Value := 6.0;
+END_FUNCTION_BLOCK
+
 PROGRAM HmiMain
   VAR
     S0 : DisplayScreen;
@@ -473,6 +720,10 @@ PROGRAM HmiMain
     S10 : TimeScreen;
     S11 : InputScreen;
     S12 : SymbolScreen;
+    S13 : AlarmScreen;
+    S14 : LogScreen;
+    S15 : PlotScreen;
+    S16 : DialogScreen;
     Rt : HmiRuntime;
     Started : BOOL;
   END_VAR
@@ -492,6 +743,10 @@ PROGRAM HmiMain
     Rt.AddScreen(ADR(S10));
     Rt.AddScreen(ADR(S11));
     Rt.AddScreen(ADR(S12));
+    Rt.AddScreen(ADR(S13));
+    Rt.AddScreen(ADR(S14));
+    Rt.AddScreen(ADR(S15));
+    Rt.AddScreen(ADR(S16));
     Rt.SetStart(0);
     Started := TRUE;
   END_IF;
@@ -509,6 +764,10 @@ PROGRAM HmiMain
     10: S10();
     11: S11();
     12: S12();
+    13: S13();
+    14: S14();
+    15: S15();
+    16: S16();
   END_CASE;
   Rt.EndFrame();
   IF GoHome THEN

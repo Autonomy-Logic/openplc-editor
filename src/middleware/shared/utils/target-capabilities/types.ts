@@ -236,6 +236,10 @@ export interface TargetCapabilities {
   /** The board's local display, or null when it has none. Absent reads as none. */
   hmi?: HmiPanelCapability | null
 
+  /** The target serves the HMI's heavy data widgets (alarm list, event log): offered in the designer's palette and
+   *  accepted by the HMI build. Declared per device by a VPP; on in the plain Runtime v4 preset. */
+  hmiDataWidgets: boolean
+
   /* ---------------------------------------------------------------
    * Build / runtime behavior
    * --------------------------------------------------------------- */

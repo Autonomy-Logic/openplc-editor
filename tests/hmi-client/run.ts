@@ -294,6 +294,7 @@ async function main(): Promise<void> {
   const artefact = await composeHmiArtefact({
     sources: project,
     plcArchives: [],
+    capabilities: {},
     debugMapJson: JSON.stringify({ version: 2, md5: 'x', leaves }),
     md5: MD5,
     instances: [{ name: 'instance0', program: 'Main' }],

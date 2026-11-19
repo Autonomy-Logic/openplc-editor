@@ -10,6 +10,14 @@ const plcVariable = z.object({
   type: z.string(),
   initialValue: z.string().optional(),
   constant: z.literal(true).optional(),
+  source: z
+    .object({
+      kind: z.enum(['alarms', 'events', 'summary', 'numbers']),
+      lower: z.number().int().optional(),
+      upper: z.number().int().optional(),
+      element: z.string().optional(),
+    })
+    .optional(),
 })
 
 /** The shape of `HmiBuildSources`, for where it crosses a process boundary. */

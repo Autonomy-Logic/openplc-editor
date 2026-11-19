@@ -19,6 +19,9 @@ namespace {
 
 constexpr int32_t kW = 480;
 constexpr int32_t kH = 320;
+/* Raster size of dumped frames; the data pages use a larger screen. */
+int32_t g_w = kW;
+int32_t g_h = kH;
 
 strucpp::Configuration_HMICONFIG g_config;
 uint32_t g_now;
@@ -53,14 +56,14 @@ void frame(const char *label, bool dump = false) {
                 (double)strucpp::SETPOINT.get(), strucpp::NAME.get().c_str(), (int)strucpp::SHOWS.get(),
                 (int)strucpp::HIDES.get());
     if (dump) {
-        std::vector<uint8_t> px((size_t)kW * kH * 4);
-        int rc = hmi_raster_render(dl, len, px.data(), kW, kH, kW, 0, kH, 256, 0, 0);
+        std::vector<uint8_t> px((size_t)g_w * g_h * 4);
+        int rc = hmi_raster_render(dl, len, px.data(), g_w, g_h, g_w, 0, g_h, 256, 0, 0);
         std::printf(" raster=%d px=%016llx", rc, (unsigned long long)fnv(px.data(), px.size()));
         if (g_dump_dir) {
             std::string path = std::string(g_dump_dir) + "/" + label + ".rgba";
             FILE *f = std::fopen(path.c_str(), "wb");
             if (f) {
-                int32_t wh[2] = {kW, kH};
+                int32_t wh[2] = {g_w, g_h};
                 std::fwrite(wh, sizeof wh, 1, f);
                 std::fwrite(px.data(), 1, px.size(), f);
                 std::fclose(f);
@@ -114,6 +117,76 @@ void inputs(const char *label) {
                 (int)strucpp::LATCH.get(), (int)strucpp::JOG.get(), (int)strucpp::HOA.get(), (int)strucpp::MODE.get(),
                 (int)strucpp::RINSE.get(), (int)strucpp::RECIPE.get(), (double)strucpp::BATCH.get(),
                 (double)strucpp::DIAL.get());
+}
+
+/* Seconds of 2024-10-20 plus a time of day, as DT nanoseconds. */
+int64_t at(int h, int m, int sec) { return (int64_t)(20016 * 86400 + h * 3600 + m * 60 + sec) * 1000000000LL; }
+
+void alarm(int i, bool active, bool acked, int severity, const char *message, int64_t raised) {
+    auto &a = strucpp::DEMOALARMS[i];
+    a.USED.set(true);
+    a.ACTIVE.set(active);
+    a.ACKED.set(acked);
+    a.SEVERITY.set((int16_t)severity);
+    a.MESSAGE.set(message);
+    a.RAISED.set(raised);
+}
+
+void summary(bool valid, bool acked, int severity, const char *message, int64_t raised, int count, int unacked) {
+    strucpp::SUMVALID.set(valid);
+    strucpp::SUMACKED.set(acked);
+    strucpp::SUMSEVERITY.set((int16_t)severity);
+    strucpp::SUMMESSAGE.set(message);
+    strucpp::SUMRAISED.set(raised);
+    strucpp::SUMCOUNT.set(count);
+    strucpp::SUMUNACKED.set(unacked);
+}
+
+void event(int i, unsigned seq, int kind, int severity, const char *message, int64_t stamp) {
+    auto &e = strucpp::DEMOEVENTS[i];
+    e.SEQ.set(seq);
+    e.KIND.set((int16_t)kind);
+    e.SEVERITY.set((int16_t)severity);
+    e.MESSAGE.set(message);
+    e.STAMP.set(stamp);
+}
+
+void demo_data() {
+    alarm(0, true, false, 3, "Tank T-101 level high", at(10, 42, 7));
+    alarm(1, true, true, 2, "Pump P-101 discharge pressure low", at(10, 41, 55));
+    alarm(2, true, true, 1, "Filter F-2 differential pressure", at(10, 39, 12));
+    alarm(3, false, false, 3, "Motor M-3 overload trip", at(10, 31, 40));
+    summary(true, false, 3, "Tank T-101 level high (92.4 %)", at(10, 42, 7), 3, 2);
+    /* A ring of ten entries whose newest is entry 3: entries 4 to 9 are older, wrapping from the end. */
+    const char *messages[] = {"Tank T-101 level high", "P-101 set to AUTO", "Pump P-101 discharge pressure low",
+                              "Filter F-2 differential pressure", "Batch 2481 started (Tomato soup)",
+                              "Motor M-3 overload trip", "Shift B signed in", "Mixer M-2 started", "CIP cycle done",
+                              "Tank T-102 filled"};
+    const int kinds[] = {1, 5, 1, 2, 4, 3, 5, 4, 4, 4};
+    const int severities[] = {3, 0, 2, 1, 0, 3, 0, 0, 0, 0};
+    for (int j = 0; j < 10; j++) {
+        int slot = (3 - j + 10) % 10;
+        event(slot, (unsigned)(20 - j), kinds[j], severities[j], messages[j], at(10, 42 - j, 7));
+    }
+    for (int i = 0; i <= 20; i++) {
+        float q = (float)i * 5.0f;
+        strucpp::CURVEX[i].set(q);
+        strucpp::PUMPY[i].set(48.0f - 0.0036f * q * q - 0.06f * q);
+        strucpp::SYSTEMY[i].set(6.0f + 0.0028f * q * q);
+    }
+}
+
+void data_state(const char *label) {
+    std::printf("%s acked_row=%d ack_top=%d ack_all=%d dialog_open=%d dialog_result=%d dialog_answers=%d\n", label,
+                (int)strucpp::ACKEDROW.get(), (int)strucpp::ACKTOPHITS.get(), (int)strucpp::ACKALLHITS.get(),
+                (int)strucpp::DLGOPEN.get(), (int)strucpp::DLGRESULT.get(), (int)strucpp::DLGANSWERS.get());
+}
+
+void scaled(const char *page, int scale, bool dump = true) {
+    strucpp::SCALE.set(scale);
+    std::string label = std::string(page) + "_" + std::to_string(scale);
+    frame((label + "_0").c_str());
+    frame(label.c_str(), dump);
 }
 
 }  // namespace
@@ -318,5 +391,72 @@ int main(int argc, char **argv) {
     tap("setpoint_range_in", kSetpointIn);
     keys("\b\b\b\b\b\b\b\b100\r");
     frame("setpoint_at_max", true);
+    /* Data widgets on a larger screen of their own viewer, each page at 1x, 1.5x and 2x. */
+    hmi_session_t *data = hmi_session_create();
+    hmi_session_use(data);
+    hmi_core_init(1100, 760);
+    g_w = 1100;
+    g_h = 760;
+    demo_data();
+    frame("data_start");
+    show(13);
+    for (int s : {1000, 1500, 2000}) scaled("alarms", s);
+    strucpp::SCALE.set(1000);
+    summary(true, false, 2, "Pump P-101 discharge pressure low", at(10, 41, 55), 3, 2);
+    frame("banner_medium", true);
+    summary(true, true, 1, "Filter F-2 differential pressure", at(10, 39, 12), 1, 0);
+    frame("banner_low_acked", true);
+    summary(false, false, 0, "", 0, 0, 0);
+    frame("banner_none", true);
+    summary(true, false, 3, "Tank T-101 level high (92.4 %)", at(10, 42, 7), 3, 2);
+    frame("banner_high");
+    /* Banner ACK at its button, 6 lu in from the right, then the list's Ack all and filter in its footer. */
+    tap_at("banner_ack", strucpp::BANNERX.get() + strucpp::BANNERW.get() - 37, strucpp::BANNERY.get() + 17);
+    {
+        int32_t lx = strucpp::LISTX.get(), ly = strucpp::LISTY.get(), lh = strucpp::LISTH.get();
+        tap_at("list_ack_all", lx + 50, ly + lh - 17);
+        tap_at("list_filter", lx + 160, ly + lh - 17);
+        frame("list_active_only", true);
+        tap_at("list_filter_off", lx + 160, ly + lh - 17);
+        /* The first row's Ack, 50 lu in from the right, 6 lu below its top. */
+        tap_at("list_ack_row", lx + strucpp::LISTW.get() - 29, ly + 30 + 17);
+        frame("list_acked", true);
+        data_state("list_acks");
+        /* Eight alarms: the list scrolls by a drag up. */
+        alarm(4, true, false, 2, "Valve V-12 not closed", at(10, 44, 1));
+        alarm(5, true, false, 1, "Cooling water flow low", at(10, 45, 30));
+        alarm(6, false, false, 2, "Agitator A-1 vibration", at(10, 20, 0));
+        alarm(7, true, true, 3, "Emergency stop pressed", at(10, 46, 12));
+        frame("list_full", true);
+        press(lx + 260, ly + 30 + 80);
+        frame("list_press");
+        move(lx + 260, ly + 30 + 10);
+        frame("list_drag");
+        release(lx + 260, ly + 30 + 10);
+        frame("list_scrolled", true);
+    }
+    show(14);
+    for (int s : {1000, 1500, 2000}) scaled("log", s);
+    strucpp::SCALE.set(1000);
+    frame("log_0");
+    press(strucpp::LOGX.get() + 200, strucpp::LOGY.get() + 150);
+    frame("log_press");
+    move(strucpp::LOGX.get() + 200, strucpp::LOGY.get() + 40);
+    frame("log_drag");
+    release(strucpp::LOGX.get() + 200, strucpp::LOGY.get() + 40);
+    frame("log_scrolled", true);
+    show(15);
+    for (int s : {1000, 1500, 2000}) scaled("plot", s);
+    show(16);
+    strucpp::DLGOPEN.set(true);
+    for (int s : {1000, 1500, 2000}) scaled("dialog", s);
+    strucpp::SCALE.set(1000);
+    frame("dialog_0");
+    /* The box is centred, 260 x 140: Start, the last button, 12 lu in from its right and 14 lu up from its bottom. */
+    tap_at("dialog_start", (1100 - 260) / 2 + 260 - 12 - 35, (760 - 140) / 2 + 140 - 14 - 16);
+    frame("dialog_closed", true);
+    data_state("dialog_answered");
+    hmi_session_use(nullptr);
+    hmi_session_destroy(data);
     return 0;
 }

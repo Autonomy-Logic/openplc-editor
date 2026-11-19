@@ -26,6 +26,7 @@
       "arduinoApiCompletions": true,
       "hasRuntimeStats": false,
       "isInProcessSimulator": true,
+      "hmiDataWidgets": false,
       "directUsbUpload": true
     },
     "debug": {
@@ -60,6 +61,7 @@
       "arduinoApiCompletions": false,
       "hasRuntimeStats": false,
       "isInProcessSimulator": false,
+      "hmiDataWidgets": false,
       "directUsbUpload": false
     },
     "debug": {
@@ -102,6 +104,7 @@
       "arduinoApiCompletions": false,
       "hasRuntimeStats": true,
       "isInProcessSimulator": false,
+      "hmiDataWidgets": true,
       "directUsbUpload": false
     },
     "debug": {

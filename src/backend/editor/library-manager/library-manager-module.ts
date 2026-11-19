@@ -6,6 +6,7 @@ import type { CatalogTransportPort } from '../../../middleware/shared/ports/cata
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
 import type { InstalledLibrary, LibraryInstallResult } from '../../../middleware/shared/ports/library-types'
 import type { PublicLibrary } from '../../../middleware/shared/ports/public-catalog-types'
+import { withHmiAlarmsArchive } from '../../shared/hmi/plc-lib/build-hmi-alarms'
 import { bundledArchiveToInstalledRow, userArchiveToInstalledRow } from '../../shared/library/installed-library-rows'
 import {
   prepareCodesysUpload,
@@ -165,7 +166,7 @@ export class LibraryManagerModule {
   listInstalled(): InstalledLibrary[] {
     const out: InstalledLibrary[] = []
 
-    for (const archive of this.readBundledArchives()) {
+    for (const archive of withHmiAlarmsArchive(this.readBundledArchives())) {
       out.push(bundledArchiveToInstalledRow(archive))
     }
 
@@ -274,7 +275,7 @@ export class LibraryManagerModule {
       const archive = this.readUserArchive(name, info.stlibPath)
       if (archive) out.push(archive)
     }
-    return out
+    return withHmiAlarmsArchive(out)
   }
 
   /**

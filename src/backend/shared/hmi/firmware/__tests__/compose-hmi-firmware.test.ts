@@ -4,6 +4,7 @@ import { join } from 'path'
 import { resolveHmiPanel } from '../../../../../middleware/shared/utils/target-capabilities/hmi-panel'
 import { HMI_FONT_BOLD, HMI_FONT_REGULAR } from '../../fonts/vetted-fonts'
 import { sampleProject } from '../../unit/__tests__/fixtures/sample-project'
+import { generateHmiUnit } from '../../unit/generate-hmi-unit'
 import {
   composeHmiFirmware,
   type ComposeHmiFirmwareInput,
@@ -40,12 +41,21 @@ const LEAVES = [
 
 const PANEL = resolveHmiPanel({ width: 320, height: 240, density: 1, touch: true, colorFormat: 'rgb565' })
 
+const LIST_SCREEN = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
+  VAR
+    Body : HmiHorizontalStack;
+    List : HmiAlarmList := (Parent := 'Body');
+  END_VAR
+END_FUNCTION_BLOCK
+`
+
 function input(overrides: Partial<ComposeHmiFirmwareInput> = {}): ComposeHmiFirmwareInput {
   if (!PANEL) throw new Error('the test panel does not validate')
   return {
     sources: sampleProject(),
     panel: PANEL,
     plcArchives: [],
+    capabilities: {},
     debugMapJson: JSON.stringify({ version: 2, md5: 'x', leaves: LEAVES }),
     md5: 'fe3845fc1babc413455ceb7a5ee596bf',
     instances: [{ name: 'instance0', program: 'Main' }],
@@ -159,6 +169,29 @@ describe('hmiFirmwareFaces', () => {
     expect(hmiFirmwareFaces([HMI_FONT_BOLD])).toEqual([HMI_FONT_REGULAR, HMI_FONT_BOLD])
     expect(hmiFirmwareFaces([])).toEqual([HMI_FONT_REGULAR])
     expect(hmiFirmwareFaces([HMI_FONT_REGULAR, HMI_FONT_BOLD])).toEqual([HMI_FONT_REGULAR, HMI_FONT_BOLD])
+  })
+
+  it('refuses a widget the board lacks the capability for, and builds it on a board that has it', async () => {
+    const project = sampleProject()
+    const sources = { ...project, screens: [{ name: 'Overview', source: LIST_SCREEN }, project.screens[1]] }
+    const refused = await composeHmiFirmware(input({ sources }))
+    if (refused.ok) throw new Error('the list was built for a target without hmiDataWidgets')
+    expect(refused.errors.map((e) => e.message)).toEqual([
+      'List: HmiAlarmList needs a target with hmiDataWidgets, and the selected board does not have it',
+    ])
+    const built = await composeHmiFirmware(input({ sources, capabilities: { hmiDataWidgets: true } }))
+    if (!built.ok) throw new Error(JSON.stringify(built.errors))
+  })
+
+  it('keeps one static copy per tag: the glue has no preview-only copy, which the preview build keeps', async () => {
+    const result = await composeHmiFirmware(input())
+    if (!result.ok) throw new Error(JSON.stringify(result.errors))
+    const glue = result.files['src/hmi_unit_glue.cpp']
+    expect(glue).not.toContain('g_own')
+    expect(glue).toContain('g_read_0{};')
+    expect(glue).toContain('if (!g_access) return g_read[id];')
+    const preview = generateHmiUnit({ ...sampleProject(), preview: true, resolve: undefined })
+    expect(preview.files['hmi_unit_glue.cpp']).toContain('g_own_0{};')
   })
 })
 

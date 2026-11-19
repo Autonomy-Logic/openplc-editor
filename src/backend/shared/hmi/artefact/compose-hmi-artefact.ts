@@ -26,6 +26,8 @@ export interface ComposeHmiArtefactInput {
   sources: HmiBuildSources | null
   /** The PLC libraries the program was compiled with. */
   plcArchives: readonly StlibArchive[]
+  /** The target's capabilities; widgets that need one it lacks are refused. */
+  capabilities: object
   /** The program's debug-map.json. */
   debugMapJson: string
   /** The program's MD5, as the runtime reports it to the HMI. */
@@ -131,6 +133,7 @@ export async function composeHmiArtefact(input: ComposeHmiArtefactInput): Promis
   const unit = generateHmiUnit({
     ...input.sources,
     plcArchives: input.plcArchives,
+    capabilities: input.capabilities,
     resolve: hmiTagResolver(input.debugMapJson, input.instances),
     plcMd5: input.md5,
   })

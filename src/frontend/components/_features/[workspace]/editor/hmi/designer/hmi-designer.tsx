@@ -3,6 +3,7 @@
  * widget block's tab (code beside preview). Edits go through text patches and the store history.
  */
 import { ViewModeToggle } from '@root/frontend/components/_atoms/view-mode-toggle'
+import { useTargetCapabilities } from '@root/frontend/hooks/use-target-capabilities'
 import { loadHmiPlcLibraries, readyRequest } from '@root/frontend/services/hmi-code/plc-libraries'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { hmiDesignerEntry } from '@root/frontend/store/slices/hmi-designer'
@@ -18,6 +19,8 @@ import type {
   HmiWidgetCatalog,
 } from '@root/middleware/shared/ports/hmi-preview-types'
 import { useHmiPreview, usePlatform } from '@root/middleware/shared/providers'
+import { hmiTextLiteral } from '@root/middleware/shared/utils/hmi/block-checks'
+import { hmiSourceForDrop, hmiSourceLiteral } from '@root/middleware/shared/utils/hmi/data-sources'
 import { bindRefusal, momentaryCode, momentaryOf } from '@root/middleware/shared/utils/hmi/designer/designer-binding'
 import {
   canvasElements,
@@ -265,6 +268,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   const debugging = useOpenPLCStore((s) => s.workspace.isDebuggerVisible)
   const request = useProjectRequest()
   const { catalog, errors: catalogErrors } = useCatalog(request.widgets)
+  const targetCapabilities = useTargetCapabilities()
   const thumbnails = useThumbnails(request)
   const isWidget = useCallback((type: string) => catalog.widgets.has(type.toUpperCase()), [catalog])
 
@@ -453,10 +457,28 @@ export function HmiScreenDesigner({ name }: { name: string }) {
       apply(moveElement(source, model, element, target.parent, target.before))
     },
     bindMain: (element, variable) => {
-      const type = model?.elements.find((e) => same(e.name, element))?.type
+      const target = model?.elements.find((e) => same(e.name, element))
+      const type = target?.type
       const info = type ? catalog.widgets.get(type.toUpperCase()) : undefined
       const main = info?.main
       const plcVariable = request.plcVariables.find((v) => same(v.path, variable))
+      if (plcVariable?.source && info && model && target) {
+        const input = hmiSourceForDrop(
+          info,
+          plcVariable,
+          (name) => hmiTextLiteral(target.props.find((p) => same(p.name, name))?.value) ?? '',
+        )
+        if (input === null) {
+          toast({
+            title: 'Not wired',
+            description: `${element} shows no ${plcVariable.type}`,
+            variant: 'warn',
+          })
+          return
+        }
+        apply(setProperty(source, model, element, input, hmiSourceLiteral(plcVariable.path)))
+        return
+      }
       const refusal = info
         ? bindRefusal(element, info, variable, plcVariable)
         : `${element} has no input a variable can show`
@@ -633,6 +655,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
                   projectWidgets={new Set(request.widgets.map((w) => w.name.toUpperCase()))}
                   thumbnails={thumbnails}
                   filter={filter}
+                  capabilities={targetCapabilities}
                   onAdd={addFromPalette}
                   disabled={locked || mode === 'run'}
                 />

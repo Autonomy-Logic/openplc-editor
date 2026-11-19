@@ -4,6 +4,7 @@
  */
 import { CONTAINERS_ST } from './st/containers'
 import { CONTROLS_ST } from './st/controls'
+import { DATA_ST } from './st/data'
 import { DISPLAY_ST } from './st/display'
 import { ELEMENT_ST } from './st/element'
 import { PRIMITIVES_ST } from './st/primitives'
@@ -33,5 +34,6 @@ export const STANDARD_WIDGETS_SOURCES: readonly HmiLibrarySource[] = [
   { fileName: 'display.st', source: DISPLAY_ST },
   { fileName: 'controls.st', source: CONTROLS_ST },
   { fileName: 'process.st', source: PROCESS_ST },
+  { fileName: 'data.st', source: DATA_ST },
   { fileName: 'screen.st', source: SCREEN_ST },
 ]

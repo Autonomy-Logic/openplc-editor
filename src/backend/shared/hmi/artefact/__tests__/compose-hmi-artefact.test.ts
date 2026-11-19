@@ -42,12 +42,21 @@ const LEAVES = [
   ['ALARMON', 2, 0],
 ].map(([path, arrayIdx, elemIdx]) => ({ path, arrayIdx, elemIdx, type: 'BOOL', size: 1 }))
 
+const LIST_SCREEN = `FUNCTION_BLOCK Overview EXTENDS HmiScreen
+  VAR
+    Body : HmiHorizontalStack;
+    List : HmiAlarmList := (Parent := 'Body');
+  END_VAR
+END_FUNCTION_BLOCK
+`
+
 function input(overrides: Partial<ComposeHmiArtefactInput> = {}) {
   const requests: WasmCompileRequest[] = []
   const result: WasmCompileResult = { ok: true, wasm: WASM, stats, diagnostics: [] }
   const value: ComposeHmiArtefactInput = {
     sources: sampleProject(),
     plcArchives: [],
+    capabilities: {},
     debugMapJson: JSON.stringify({ version: 2, md5: 'x', leaves: LEAVES }),
     md5: 'fe3845fc1babc413455ceb7a5ee596bf',
     instances: [{ name: 'instance0', program: 'Main' }],
@@ -239,5 +248,17 @@ describe('composeHmiArtefact', () => {
       hmiSources[path] = path.endsWith('.ttf') ? content : decoder.decode(content)
     const result = await composeHmiArtefact(input({ hmiSources }).value)
     expect(result.ok).toBe(true)
+  })
+
+  it('refuses a widget the target lacks the capability for, and builds it on a target that has it', async () => {
+    const project = sampleProject()
+    const sources = { ...project, screens: [{ name: 'Overview', source: LIST_SCREEN }, project.screens[1]] }
+    const refused = await composeHmiArtefact(input({ sources, capabilities: { hmiDataWidgets: false } }).value)
+    if (refused.ok) throw new Error('the list was built for a target without hmiDataWidgets')
+    expect(refused.errors.map((e) => e.message)).toEqual([
+      'List: HmiAlarmList needs a target with hmiDataWidgets, and the selected board does not have it',
+    ])
+    const built = await composeHmiArtefact(input({ sources, capabilities: { hmiDataWidgets: true } }).value)
+    if (!built.ok) throw new Error(JSON.stringify(built.errors))
   })
 })

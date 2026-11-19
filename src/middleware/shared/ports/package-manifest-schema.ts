@@ -122,7 +122,7 @@ export const PackageManifestSchema = z
       .array(
         z
           .object({
-            // Only `boardManagerUrl`, `uploadMethod` and `capabilities.hmi` are
+            // Only `boardManagerUrl`, `uploadMethod`, `capabilities.hmi` and `capabilities.hmiDataWidgets` are
             // declared; everything else on a device, on `target` and on
             // `capabilities` still flows through untouched.
             //
@@ -141,7 +141,10 @@ export const PackageManifestSchema = z
               })
               .passthrough()
               .optional(),
-            capabilities: z.object({ hmi: hmiPanelCapabilitySchema.nullable().optional() }).passthrough().optional(),
+            capabilities: z
+              .object({ hmi: hmiPanelCapabilitySchema.nullable().optional(), hmiDataWidgets: z.boolean().optional() })
+              .passthrough()
+              .optional(),
           })
           .passthrough(),
       )

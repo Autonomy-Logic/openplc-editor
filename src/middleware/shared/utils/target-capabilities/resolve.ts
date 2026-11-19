@@ -70,6 +70,7 @@ const EMPTY_CAPABILITIES: TargetCapabilities = {
   opcuaServer: false,
   s7Server: false,
   hmi: null,
+  hmiDataWidgets: false,
   debuggerTransports: [],
   pythonFunctionBlocks: false,
   arduinoApiCompletions: false,

@@ -35,6 +35,8 @@
  */
 import type * as strucpp from 'strucpp'
 
+import { withHmiAlarmsArchive } from '../hmi/plc-lib/build-hmi-alarms'
+import { hmiAlarmsReferenced } from '../hmi/plc-lib/hmi-alarms'
 import type { KnownPou } from '../utils/PLC/split-program-st'
 import { splitProgramSt } from '../utils/PLC/split-program-st'
 import { enrichErrorWithPouContext, formatErrorWithPouContext } from './program-build-helpers'
@@ -187,7 +189,7 @@ export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): Prog
     fileName: primaryFileName,
     debug: true,
     lineMapping: true,
-    libraries: libraries as StrucppLibraries,
+    libraries: (hmiAlarmsReferenced(source) ? withHmiAlarmsArchive(libraries) : libraries) as StrucppLibraries,
     md5,
     pouIncludes,
     ...(additionalSources ? { additionalSources } : {}),

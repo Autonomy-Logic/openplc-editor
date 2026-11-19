@@ -23,6 +23,8 @@ export interface ComposeHmiFirmwareInput {
   panel: ResolvedHmiPanel
   /** The PLC libraries the program was compiled with. */
   plcArchives: readonly StlibArchive[]
+  /** The target's capabilities; widgets that need one it lacks are refused. */
+  capabilities: object
   /** The firmware program's debug-map.json, which gives each tag its debugger address. */
   debugMapJson: string
   md5: string
@@ -105,6 +107,7 @@ export async function composeHmiFirmware(input: ComposeHmiFirmwareInput): Promis
   const unit = generateHmiUnit({
     ...input.sources,
     plcArchives: input.plcArchives,
+    capabilities: input.capabilities,
     resolve: hmiTagResolver(input.debugMapJson, input.instances),
     plcMd5: input.md5,
     panel: true,

@@ -6,6 +6,7 @@
  */
 import type { HmiLibraryArchive, HmiPlcVariable } from '../../ports/hmi-preview-types'
 import type { PLCDataType, PLCPou, PLCProjectData, PLCVariable, PLCVariableType } from '../../ports/types'
+import { type HmiPlcSource, hmiPlcSourceOf } from './data-sources'
 
 const HIDDEN_CLASSES = new Set(['temp', 'external'])
 /** Elements listed per array; larger arrays list their first ones only. */
@@ -132,12 +133,13 @@ function indexTuples(ranges: ReadonlyArray<[number, number]>, max: number): numb
 
 interface Lookup {
   dataTypes: ReadonlyMap<string, PLCDataType>
+  dataTypeList: readonly PLCDataType[]
   blocks: ReadonlyMap<string, PLCPou>
   library: ReadonlyMap<string, HmiBlockPins>
 }
 
-/** Takes a leaf: its path, type and whether it is a block output or below one. */
-type Emit = (path: string, type: string, output: boolean) => void
+/** Takes a leaf, or with `source` a whole table, summary or array: its path, type and whether it is a block output or below one. */
+type Emit = (path: string, type: string, output: boolean, source?: HmiPlcSource) => void
 
 /** The leaves under a value of a named type: struct fields, block pins or array elements; none for other types. */
 function expandNamed(
@@ -174,6 +176,8 @@ function expandNamed(
       [pins.outputs, true],
     ] as const)
       for (const pin of list) {
+        const source = hmiPlcSourceOf({ definition: 'user-data-type', value: pin.type }, at.dataTypeList)
+        if (source) emit(`${path}.${pin.name}`, pin.type, output || isOutput, source)
         if (isElementary(pin.type)) emit(`${path}.${pin.name}`, pin.type.toUpperCase(), output || isOutput)
         else expandNamed(`${path}.${pin.name}`, pin.type, at, emit, inner, output || isOutput)
       }
@@ -205,6 +209,8 @@ function expandType(
   seen: readonly string[],
   output = false,
 ): void {
+  const source = hmiPlcSourceOf(type, at.dataTypeList)
+  if (source) emit(path, declaredType(type), output, source)
   const elementary = elementaryOf(type)
   if (elementary !== null) emit(path, elementary, output)
   else if (type.definition === 'array') {
@@ -212,8 +218,15 @@ function expandType(
   } else expandNamed(path, type.value, at, emit, seen, output)
 }
 
+/** A variable type as declared: `ARRAY[1..20] OF HMI_ALARM_ROW` for arrays, else its name. */
+function declaredType(type: PLCVariableType): string {
+  if (type.definition !== 'array' || !type.data) return type.value
+  return `ARRAY[${type.data.dimensions.map((d) => d.dimension).join(', ')}] OF ${type.data.baseType.value}`
+}
+
 /**
- * The variables screens may use. `libraryBlocks` gives the pins of library function blocks (`hmiLibraryBlocks`);
+ * The variables screens may use. Alarm tables, event logs, alarm summaries and one-dimensional arrays of numbers are also
+ * listed whole, marked `source`, for data widgets, wherever the leaves are listed: in programs, lists, structs and blocks. `libraryBlocks` gives the pins of library function blocks (`hmiLibraryBlocks`);
  * without it, instances of library blocks list nothing below them.
  */
 export function hmiPlcVariables(
@@ -223,6 +236,7 @@ export function hmiPlcVariables(
 ): HmiPlcVariable[] {
   const at: Lookup = {
     dataTypes: new Map((project.dataTypes ?? []).map((d) => [d.name.toUpperCase(), d])),
+    dataTypeList: project.dataTypes ?? [],
     blocks: new Map(project.pous.filter((p) => p.pouType === 'function-block').map((p) => [p.name.toUpperCase(), p])),
     library: libraryBlocks,
   }
@@ -248,8 +262,14 @@ export function hmiPlcVariables(
       path,
       v.type,
       at,
-      (leaf, type, output) =>
-        variables.push({ path: leaf, type, ...marks, ...(output ? { blockOutput: true as const } : {}) }),
+      (leaf, type, output, source) =>
+        variables.push({
+          path: leaf,
+          type,
+          ...marks,
+          ...(output ? { blockOutput: true as const } : {}),
+          ...(source ? { source } : {}),
+        }),
       [],
     )
   }
@@ -273,6 +293,8 @@ export interface HmiVariableNode {
   label: string
   children: HmiVariableNode[]
   variable?: HmiPlcVariable
+  /** On a branch: the whole of it as a data widget's source. */
+  source?: HmiPlcVariable
 }
 
 /** Key of the branch that holds the configuration globals. */
@@ -281,12 +303,12 @@ export const HMI_GLOBALS_NODE = '#globals'
 /**
  * The variables as a tree by their paths' parts: instances, programs, Global Variable Lists, block instances, structs
  * and arrays (`[i]` parts); configuration globals, with what is below them, under one Globals branch. First seen,
- * first.
+ * first. A source variable marks the branch of the same path, or is a leaf after the others when there is none.
  */
 export function hmiVariableTree(variables: readonly HmiPlcVariable[]): HmiVariableNode[] {
   const roots: HmiVariableNode[] = []
   const globals: HmiVariableNode = { key: HMI_GLOBALS_NODE, label: 'Globals', children: [] }
-  for (const variable of variables) {
+  for (const variable of [...variables.filter((v) => !v.source), ...variables.filter((v) => v.source)]) {
     const parts = pathParts(variable.path)
     let level = roots
     if (variable.scope === 'global' || parts.length === 1) {
@@ -302,7 +324,11 @@ export function hmiVariableTree(variables: readonly HmiPlcVariable[]): HmiVariab
       level = node.children
     }
     const leaf = parts[parts.length - 1]
-    level.push({ key: variable.path, label: leaf.label, children: [], variable })
+    const branch = variable.source
+      ? level.find((n) => n.variable === undefined && n.key.toUpperCase() === variable.path.toUpperCase())
+      : undefined
+    if (branch) branch.source = variable
+    else level.push({ key: variable.path, label: leaf.label, children: [], variable })
   }
   return roots
 }

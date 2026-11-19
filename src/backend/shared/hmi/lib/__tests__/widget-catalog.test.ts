@@ -1,6 +1,7 @@
 import type { LibraryFBEntry, LibraryManifest, StlibArchive } from 'strucpp'
 
 import { loadStrucpp } from '../../../library/strucpp-runtime'
+import { compileHmiWidgets } from '../../unit/generate-hmi-unit'
 import { buildStandardWidgets } from '../build-standard-widgets'
 import { buildWidgetCatalog, type HmiWidgetInfo } from '../widget-catalog'
 
@@ -88,6 +89,12 @@ describe('widget catalogue', () => {
       HmiSilo: 'Process',
       HmiInstrument: 'Process',
       HmiPipe: 'Process',
+      HmiAlarmBanner: 'Alarms',
+      HmiAlarmList: 'Alarms',
+      HmiEventLog: 'Alarms',
+      HmiXYPlot: 'Data',
+      HmiDataTable: 'Data',
+      HmiDialog: 'Controls',
     })
     expect(widget(catalog.widgets, 'HmiDiagram').extends).toBe('HMICONTAINER')
     expect(widget(catalog.widgets, 'HmiVerticalStack').extends).toBe('HMISTACK')
@@ -282,5 +289,63 @@ FUNCTION_BLOCK Helper VAR_INPUT X : INT; END_VAR END_FUNCTION_BLOCK`,
     expect(plain.twoWay).toBeUndefined()
     expect(plain.events).toEqual([])
     expect(odd.colors).toEqual([])
+  })
+
+  it('names the capability a widget needs and the PLC data its source inputs take, in feed order', () => {
+    expect(widget(catalog.widgets, 'HmiAlarmList').requires).toBe('hmiDataWidgets')
+    expect(widget(catalog.widgets, 'HmiEventLog').requires).toBe('hmiDataWidgets')
+    for (const name of ['HmiAlarmBanner', 'HmiXYPlot', 'HmiDataTable', 'HmiDialog', 'HmiTrend'])
+      expect(widget(catalog.widgets, name).requires).toBeUndefined()
+    expect(widget(catalog.widgets, 'HmiAlarmList').sources).toEqual([
+      { name: 'Source', type: 'ARRAY OF HMI_ALARM_ROW', slot: 0 },
+      { name: 'Service', type: 'HMI_ALARM_SUMMARY', slot: 1 },
+    ])
+    expect(widget(catalog.widgets, 'HmiAlarmBanner').sources).toEqual([
+      { name: 'Source', type: 'HMI_ALARM_SUMMARY', slot: 0 },
+    ])
+    expect(widget(catalog.widgets, 'HmiEventLog').sources).toEqual([
+      { name: 'Source', type: 'ARRAY OF HMI_EVENT_ROW', slot: 0 },
+    ])
+    expect(widget(catalog.widgets, 'HmiXYPlot').sources?.map((s) => `${s.slot}:${s.name}`)).toEqual([
+      '0:XSource',
+      '1:YSource',
+      '2:X2Source',
+      '3:Y2Source',
+      '4:X3Source',
+      '5:Y3Source',
+      '6:X4Source',
+      '7:Y4Source',
+    ])
+    expect(widget(catalog.widgets, 'HmiDataTable').series).toEqual({
+      count: 'Rows',
+      values: ['Value', 'Value2', 'Value3', 'Value4', 'Value5', 'Value6', 'Value7', 'Value8'],
+      colors: ['Status', 'Status2', 'Status3', 'Status4', 'Status5', 'Status6', 'Status7', 'Status8'],
+    })
+    expect(widget(catalog.widgets, 'HmiDialog').main).toEqual({ name: 'Open', direction: 'input', type: 'BOOL' })
+    expect(widget(catalog.widgets, 'HmiDialog').events).toContain('Answered')
+    expect(widget(catalog.widgets, 'HmiTrend').extends).toBe('HMIPLOTBASE')
+  })
+
+  it('reads hmi_requires and hmi_source from a project widget block', () => {
+    const lib = compileHmiWidgets(
+      [
+        {
+          name: 'Gauge2',
+          source: `{attribute 'hmi_requires' := 'hmiDataWidgets'}
+FUNCTION_BLOCK Gauge2 EXTENDS HmiDataElement
+  VAR_INPUT
+    {attribute 'hmi_source' := 'array of   real'}
+    Data : STRING(96);
+  END_VAR
+END_FUNCTION_BLOCK
+`,
+        },
+      ],
+      standardWidgets(),
+    )
+    expect(lib.errors).toEqual([])
+    const info = widget(lib.catalog.widgets, 'Gauge2')
+    expect(info.requires).toBe('hmiDataWidgets')
+    expect(info.sources).toEqual([{ name: 'Data', type: 'ARRAY OF REAL', slot: 0 }])
   })
 })
