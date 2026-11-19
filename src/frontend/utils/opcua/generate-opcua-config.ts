@@ -10,6 +10,7 @@ import type {
 
 import { buildLeafInfoMap, type DebugLeafInfo, parseDebugMap as parseDebugMapJson } from '../debug-parser'
 import { getErrorMessage } from '../get-error-message'
+import { isValidIpv4Address } from './bind-address'
 import {
   OpcUaConfigError,
   resolveArrayAddress,
@@ -564,6 +565,15 @@ export const validateOpcUaConfig = (
   instances: PLCInstanceInfo[],
 ): { valid: boolean; errors: string[] } => {
   const errors: string[] = []
+
+  // The runtime builds its endpoint as opc.tcp://<bindAddress>:<port>, so the
+  // bind address must be an IPv4 address (0.0.0.0 = all interfaces).
+  if (!isValidIpv4Address(config.server.bindAddress)) {
+    errors.push(
+      `Network interface address "${config.server.bindAddress}" is not a valid IPv4 address. ` +
+        `Select a network interface in the OPC-UA server General Settings.`,
+    )
+  }
 
   // Check for enabled security profiles
   const enabledProfiles = config.securityProfiles.filter((sp) => sp.enabled)
