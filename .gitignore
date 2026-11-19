@@ -20,6 +20,7 @@ node_modules
 
 release/app/dist
 release/build
+release/package-trust
 configs/dll
 
 .idea
