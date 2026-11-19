@@ -133,7 +133,7 @@ function overrideSummary(step: Step | undefined): { dotted: string[]; files: unk
 }
 
 describe('Electron fuses of a packaged build', () => {
-  it('sets exactly the five hardening fuses in electron-builder.json, and no other fuse', () => {
+  it('sets exactly the five hardening fuses and the ad hoc re-signing in electron-builder.json, and no other key', () => {
     const builder = readJson(join(repo, 'electron-builder.json'))
 
     expect(field(builder, 'electronFuses')).toStrictEqual({
@@ -142,6 +142,7 @@ describe('Electron fuses of a packaged build', () => {
       enableNodeCliInspectArguments: false,
       enableEmbeddedAsarIntegrityValidation: true,
       onlyLoadAppFromAsar: true,
+      resetAdHocDarwinSignature: true,
     })
   })
 
