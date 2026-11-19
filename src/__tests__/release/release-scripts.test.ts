@@ -957,6 +957,28 @@ describe('lib/asar.mjs', () => {
     expect(String(result.refused)).toContain('dist/main/missing.js')
   })
 
+  it('lists the files directly in dist/main, main.js and its chunks, sorted', async () => {
+    const archive = await packApp({
+      ...APP,
+      'dist/main/722.js': 'exports.chunk = 722\n',
+      'dist/main/722.js.map': '{"version":3,"sources":[],"mappings":""}\n',
+      'dist/main/nested/inner.js': 'exports.inner = 1\n',
+    })
+
+    const result = callExport(lib, 'listFiles', [archive, 'dist/main'])
+
+    expect(result).toEqual({ value: ['dist/main/722.js', 'dist/main/722.js.map', 'dist/main/main.js'] })
+  })
+
+  it('refuses to list a directory the archive does not hold, naming it', async () => {
+    const archive = await packApp(APP)
+
+    const result = callExport(lib, 'listFiles', [archive, 'dist/missing'])
+
+    expect(Object.keys(result)).toEqual(['refused'])
+    expect(String(result.refused)).toContain('dist/missing')
+  })
+
   it('places a same-length change of one byte of dist/main/main.js in that file only, header bytes identical', async () => {
     const archive = await packApp(APP)
     const before = readFileSync(archive)
@@ -1411,6 +1433,86 @@ describe('packaged-checks.mjs', () => {
 
     it('exports the 16 check ids in order, and importing it runs no check', () => {
       expect(readExport(script, 'CHECK_IDS')).toEqual({ value: CHECK_IDS })
+    })
+  })
+
+  describe('findTrustChunk', () => {
+    const TRUST_SOURCE = './release/package-trust/package-trust-anchor.ts'
+
+    function sourceMap(...sources: string[]): string {
+      return JSON.stringify({ version: 3, sources, mappings: '' })
+    }
+
+    /** A main-process bundle: main.js with its own map, plus @p chunks by file name under dist/main. */
+    function bundle(chunks: Record<string, string>, name = 'installed'): Promise<string> {
+      const files: Record<string, string> = {
+        ...APP,
+        'dist/main/main.js.map': sourceMap('./src/main/entry.ts'),
+      }
+      for (const [file, content] of Object.entries(chunks)) files[`dist/main/${file}`] = content
+      return packApp(files, name)
+    }
+
+    function find(archive: string): { path: unknown; reason: unknown; refused: unknown } {
+      const result = callExport(script, 'findTrustChunk', [archive])
+      return {
+        path: readField(result.value, 'path'),
+        reason: readField(result.value, 'reason'),
+        refused: result.refused,
+      }
+    }
+
+    it('picks the chunk whose source map lists the trust module', async () => {
+      const archive = await bundle({
+        '722.js': 'exports.anchor = function () {}\n',
+        '722.js.map': sourceMap('./src/backend/editor/package-trust/index.ts', TRUST_SOURCE),
+        '41.js': 'exports.gui = 1\n',
+        '41.js.map': sourceMap('./src/main/gui.ts'),
+      })
+
+      const found = find(archive)
+
+      expect(found.path).toBe('dist/main/722.js')
+      expect(typeof found.reason === 'string' && found.reason.trim() !== '').toBe(true)
+    })
+
+    it('without that source map, picks the file holding "openplc-2026"', async () => {
+      const archive = await bundle({
+        '41.js': 'exports.keys = {"openplc-2026":"-----BEGIN PUBLIC KEY-----\\n"}\n',
+        '41.js.map': sourceMap('./src/backend/shared/utils/vpp/trusted-keys.ts'),
+        '722.js': 'exports.cli = 1\n',
+      })
+
+      const found = find(archive)
+
+      expect(found.path).toBe('dist/main/41.js')
+      expect(typeof found.reason === 'string' && found.reason.trim() !== '').toBe(true)
+    })
+
+    it('prefers the source-map rule to the literal rule, and reports a different reason for each', async () => {
+      const both = find(
+        await bundle({
+          '722.js': 'exports.anchor = function () {}\n',
+          '722.js.map': sourceMap(TRUST_SOURCE),
+          '41.js': 'exports.id = "openplc-2026"\n',
+        }),
+      )
+      const literalOnly = find(await bundle({ '41.js': 'exports.id = "openplc-2026"\n' }, 'original'))
+
+      expect({ both: both.path, literalOnly: literalOnly.path }).toEqual({
+        both: 'dist/main/722.js',
+        literalOnly: 'dist/main/41.js',
+      })
+      expect(both.reason).not.toEqual(literalOnly.reason)
+    })
+
+    it('throws naming dist/main when no file matches either rule', async () => {
+      const archive = await bundle({ '722.js': 'exports.cli = 1\n', '722.js.map': sourceMap('./src/main/cli.ts') })
+
+      const found = find(archive)
+
+      expect(found.path).toBeUndefined()
+      expect(String(found.refused)).toContain('dist/main')
     })
   })
 
