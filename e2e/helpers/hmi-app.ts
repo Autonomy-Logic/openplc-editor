@@ -29,6 +29,8 @@ export interface HmiProject {
   startScreen: string
   /** The device's IP in devices/configuration.json; empty by default. */
   runtimeIpAddress?: string
+  /** The project's board; Runtime v4 by default. */
+  deviceBoard?: string
 }
 
 const APP_FAILURES = [/Failed to open project/i, /Something went wrong/i, /could not be loaded/i]
@@ -73,7 +75,7 @@ export function writeHmiFixture(f: HmiFixture, project: HmiProject): void {
   writeFileSync(
     join(f.project, 'devices', 'configuration.json'),
     JSON.stringify({
-      deviceBoard: 'OpenPLC Runtime v4',
+      deviceBoard: project.deviceBoard ?? 'OpenPLC Runtime v4',
       communicationPort: '',
       runtimeIpAddress: project.runtimeIpAddress ?? '',
       selectedPlatformOptions: {},
