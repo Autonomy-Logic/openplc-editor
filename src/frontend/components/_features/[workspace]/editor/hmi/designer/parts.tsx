@@ -1,10 +1,11 @@
 /** Small building blocks of the HMI designer, in the editor's own styles. */
 import { HMI_BUILD_STEPS, type HmiBuildStep } from '@root/middleware/shared/ports/hmi-preview-types'
 import { Background, ControlButton, ReactFlowProvider } from '@xyflow/react'
-import type { ReactNode } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 
 import { cn } from '../../../../../../utils/cn'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../../../../_atoms/select'
+import { PREVIEW_PROGRESS_DELAY_MS } from './preview-progress'
 
 export const FIELD_CLASS =
   'h-[28px] w-full rounded-md border border-neutral-300 bg-white px-2 font-caption text-xs text-neutral-850 outline-none focus:border-brand-medium-dark dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
@@ -222,17 +223,32 @@ const STEP_LABELS: Record<HmiBuildStep, string> = {
   start: 'Starting the preview',
 }
 
-/** Stands in for a screen until its first build runs: the build's step and how far along it is. */
-export function PreviewLoading(props: { step: HmiBuildStep | null }) {
+/**
+ * The build's step and how far along it is, in place of a screen until its first build, or over the last frame
+ * dimmed, taking the canvas's input, once an edit has waited PREVIEW_PROGRESS_DELAY_MS for its build.
+ */
+export function PreviewLoading(props: { step: HmiBuildStep | null; dimmed?: boolean }) {
   const step = props.step ?? 'sources'
   const done = (HMI_BUILD_STEPS.indexOf(step) + 1) / HMI_BUILD_STEPS.length
+  const [shown, setShown] = useState(!props.dimmed)
+  useEffect(() => {
+    if (!props.dimmed) return
+    const timer = setTimeout(() => setShown(true), PREVIEW_PROGRESS_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [props.dimmed])
+  if (!shown) return null
   return (
     <div
       role='status'
       aria-live='polite'
       data-testid='hmi-preview-loading'
       data-step={step}
-      className='absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg bg-[#F7F8FA] dark:bg-neutral-950'
+      data-dimmed={props.dimmed ? 'true' : 'false'}
+      className={cn(
+        'absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg',
+        props.dimmed ? 'bg-[#F7F8FA]/70 dark:bg-neutral-950/70' : 'bg-[#F7F8FA] dark:bg-neutral-950',
+      )}
+      onPointerDown={(e) => e.stopPropagation()}
     >
       <p className='font-caption text-sm font-semibold text-neutral-850 dark:text-neutral-200'>Building the preview</p>
       <div className='h-1.5 w-56 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800'>

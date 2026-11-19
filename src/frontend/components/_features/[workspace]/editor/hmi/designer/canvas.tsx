@@ -3,7 +3,7 @@
  * moves, drops and resizes, and edits diagrams; run mode operates the screen.
  */
 import { cn } from '@root/frontend/utils/cn'
-import type { HmiBuildStep, HmiPointerKind, HmiWidgetCatalog } from '@root/middleware/shared/ports/hmi-preview-types'
+import type { HmiPointerKind, HmiWidgetCatalog } from '@root/middleware/shared/ports/hmi-preview-types'
 import {
   type CanvasElement,
   dropIndicator,
@@ -34,6 +34,7 @@ import { type RefObject, useRef, useState } from 'react'
 
 import { VARIABLE_MIME, WIDGET_MIME } from './palette'
 import { PreviewLoading } from './parts'
+import type { PreviewProgress } from './preview-progress'
 
 export type CanvasMode = 'design' | 'run'
 
@@ -101,8 +102,8 @@ export function DesignerCanvas(props: {
   selection: readonly string[]
   locked: boolean
   actions: CanvasActions
-  /** The build step while the screen has not been drawn yet; null once it has. */
-  loading: HmiBuildStep | null
+  /** The progress of a build the screen waits for (`previewProgress`); null while none runs. */
+  loading: PreviewProgress | null
 }) {
   const overlay = useRef<HTMLDivElement | null>(null)
   const [hover, setHover] = useState<string | null>(null)
@@ -505,7 +506,7 @@ export function DesignerCanvas(props: {
             </svg>
           )}
         </div>
-        {props.loading !== null && <PreviewLoading step={props.loading} />}
+        {props.loading !== null && <PreviewLoading step={props.loading.step} dimmed={props.loading.dimmed} />}
       </div>
     </div>
   )

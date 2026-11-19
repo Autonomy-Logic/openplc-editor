@@ -6,6 +6,7 @@ import type {
   HmiBuildStep,
   HmiCatalogResult,
   HmiCodeContext,
+  HmiLiveDetach,
   HmiLiveElement,
   HmiPointerKind,
   HmiPreviewBuild,
@@ -41,12 +42,11 @@ export interface HmiPreviewSession {
   setNumber(screen: number, setter: number, value: number, element?: number): Promise<boolean>
   setText(screen: number, setter: number, value: string, element?: number): Promise<boolean>
   /**
-   * Adds elements to the shown screen without a build, in order; their element ids, or null when the module could not
-   * add them all (it then added none). They last until the next module starts or the screen is left.
+   * Changes the shown screen's structure without a build: takes `detach` off, in order, then adds or puts back
+   * `elements`, in order. Returns their element ids, or null when the module could not do it all. Changes last until
+   * the next module starts or the screen is left.
    */
-  add(elements: readonly HmiLiveElement[]): Promise<number[] | null>
-  /** Takes live elements off the screen, the last added first. */
-  remove(elements: readonly number[]): Promise<void>
+  change(detach: readonly HmiLiveDetach[], elements: readonly HmiLiveElement[]): Promise<number[] | null>
   /** Called when the running module stops: a fault in screen code, a crashed Worker or a call that took too long. */
   onStop(listener: (reason: string) => void): () => void
   close(): void

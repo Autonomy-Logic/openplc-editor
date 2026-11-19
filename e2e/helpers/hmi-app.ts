@@ -193,6 +193,7 @@ const sendToWindow = (app: ElectronApplication, channel: string) =>
 
 export const save = (app: ElectronApplication) => sendToWindow(app, 'project:save-accelerator')
 export const undo = (app: ElectronApplication) => sendToWindow(app, 'edit:undo-request')
+export const redo = (app: ElectronApplication) => sendToWindow(app, 'edit:redo-request')
 
 /**
  * Drags a palette item onto the canvas with the DOM's drag events: Playwright's own drag does not reach HTML5 drag and

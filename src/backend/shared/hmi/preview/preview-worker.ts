@@ -4,6 +4,7 @@
  */
 import type { HmiPreviewWorkerScope } from '../../../../middleware/shared/ports/hmi-preview-mechanisms'
 import type {
+  HmiLiveDetach,
   HmiLiveElement,
   HmiPointerKind,
   HmiPreviewReply,
@@ -43,7 +44,29 @@ function parseLiveElement(value: unknown): HmiLiveElement | null {
   const numbers = parseValues(value.numbers, isNumber)
   const texts = parseValues(value.texts, isString)
   if (!container || !numbers || !texts) return null
-  return { type, parent: container, parentKind, before, drawBefore, numbers, texts }
+  if (value.element !== undefined && !isInteger(value.element)) return null
+  const element: HmiLiveElement = { type, parent: container, parentKind, before, drawBefore, numbers, texts }
+  if (isInteger(value.element)) element.element = value.element
+  return element
+}
+
+function parseLiveDetach(value: unknown): HmiLiveDetach | null {
+  if (!isRecord(value)) return null
+  const { element, parent, parentKind } = value
+  if (!isInteger(element) || !isInteger(parent) || (parentKind !== 'stack' && parentKind !== 'diagram')) return null
+  return { element, parent, parentKind }
+}
+
+/** Every entry of a list parsed, or null when one does not parse. */
+function parseList<T>(value: unknown, parse: (entry: unknown) => T | null): T[] | null {
+  if (!Array.isArray(value)) return null
+  const out: T[] = []
+  for (const entry of value) {
+    const parsed = parse(entry)
+    if (parsed === null) return null
+    out.push(parsed)
+  }
+  return out
 }
 
 /** Checks a message that crossed the Worker boundary. */
@@ -90,20 +113,11 @@ export function parseHmiPreviewRequest(value: unknown): HmiPreviewRequestMessage
       const request = { id, type: 'setText' as const, screen, setter, value: value.value }
       return element === undefined ? request : { ...request, element }
     }
-    case 'add': {
-      if (!Array.isArray(value.elements)) return null
-      const elements: HmiLiveElement[] = []
-      for (const entry of value.elements) {
-        const element = parseLiveElement(entry)
-        if (!element) return null
-        elements.push(element)
-      }
-      return { id, type: 'add', elements }
+    case 'change': {
+      const detach = parseList(value.detach, parseLiveDetach)
+      const elements = parseList(value.elements, parseLiveElement)
+      return detach && elements ? { id, type: 'change', detach, elements } : null
     }
-    case 'remove':
-      return Array.isArray(value.elements) && value.elements.every(isInteger)
-        ? { id, type: 'remove', elements: value.elements.filter(isInteger) }
-        : null
     default:
       return null
   }
@@ -158,11 +172,10 @@ async function answer(
         element === undefined ? instance.setText(screen, setter, value) : instance.setLiveText(element, setter, value)
       return { reply: { id, ok: true, applied }, transfer: [] }
     }
-    case 'add':
-      return { reply: { id, ok: true, added: instance.addLive(request.elements) ?? [] }, transfer: [] }
-    case 'remove':
-      instance.removeLive(request.elements)
-      break
+    case 'change': {
+      const added = instance.changeLive(request.detach, request.elements)
+      return { reply: added ? { id, ok: true, applied: true, added } : { id, ok: true, applied: false }, transfer: [] }
+    }
   }
   return { reply: { id, ok: true }, transfer: [] }
 }

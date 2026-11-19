@@ -120,8 +120,7 @@ describe('HMI palette thumbnails', () => {
       key: () => Promise.resolve(),
       setNumber: () => Promise.resolve(true),
       setText: () => Promise.resolve(true),
-      add: () => Promise.resolve(null),
-      remove: () => Promise.resolve(),
+      change: () => Promise.resolve(null),
       onStop: () => () => undefined,
       close: () => {
         closed = true
@@ -175,8 +174,7 @@ describe('HMI palette thumbnails', () => {
         key: () => Promise.resolve(),
         setNumber: () => Promise.resolve(false),
         setText: () => Promise.resolve(false),
-        add: () => Promise.resolve(null),
-        remove: () => Promise.resolve(),
+        change: () => Promise.resolve(null),
         onStop: () => () => undefined,
         close: () => {
           closed = true

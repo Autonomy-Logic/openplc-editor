@@ -77,10 +77,13 @@ import {
   PreviewLoading,
   PreviewNotice,
 } from './parts'
+import { previewProgress } from './preview-progress'
 import { usePreviewSession } from './use-preview-session'
 
 const EMPTY_CATALOG: HmiWidgetCatalog = { widgets: new Map(), colors: [] }
 const REBUILD_DELAY_MS = 300
+/** How long the build of an edit the preview already shows waits for the next edit, so it does not slow them down. */
+const BACKGROUND_REBUILD_DELAY_MS = 1500
 const NOTICE_MS = 3000
 /** The theme picker's value for a screen without its own theme. */
 const DEFAULT_THEME = '__default__'
@@ -284,7 +287,6 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const [fit, area] = useFitZoom(device.width, device.height)
   const zoom = entry.zoom ?? fit
-  const declared = useMemo(() => model?.elements.map((e) => e.name), [model])
   const preview = usePreviewSession({
     request: readyRequest(request),
     screen: name,
@@ -292,7 +294,9 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     design: mode === 'design',
     framePeriodMs: request.settings.framePeriodMs,
     canvas,
-    declared,
+    model: parsed.ok ? parsed.model : null,
+    source,
+    catalog,
   })
   const elements = useMemo(
     () => (model && preview.built ? canvasElements(preview.bounds, preview.built.elementIds, name, model) : []),
@@ -304,10 +308,15 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   )
 
   const rebuildTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const scheduleRebuild = useCallback(() => {
-    if (rebuildTimer.current) clearTimeout(rebuildTimer.current)
-    rebuildTimer.current = setTimeout(preview.rebuild, REBUILD_DELAY_MS)
-  }, [preview.rebuild])
+  const { rebuild: rebuildPreview, showsSource } = preview
+  const scheduleRebuild = useCallback(
+    (stale = false) => {
+      if (rebuildTimer.current) clearTimeout(rebuildTimer.current)
+      const delay = !stale && showsSource() ? BACKGROUND_REBUILD_DELAY_MS : REBUILD_DELAY_MS
+      rebuildTimer.current = setTimeout(() => rebuildPreview(stale), delay)
+    },
+    [rebuildPreview, showsSource],
+  )
   useEffect(() => () => void (rebuildTimer.current && clearTimeout(rebuildTimer.current)), [])
   const builtSource = useRef(source)
   useEffect(() => {
@@ -319,7 +328,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   useEffect(() => {
     if (builtLibrary.current.widgets === request.widgets && builtLibrary.current.settings === request.settings) return
     builtLibrary.current = { widgets: request.widgets, settings: request.settings }
-    scheduleRebuild()
+    scheduleRebuild(true)
   }, [request.widgets, request.settings, scheduleRebuild])
 
   const [notice, setNotice] = useState(false)
@@ -370,11 +379,6 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   )
 
   const select = useCallback((names: string[]) => actions.select(kind, name, names), [actions, name])
-  /** Shows the elements an applied edit added before its build, when the running preview can. */
-  const showAdded = (edited: string, names: readonly string[]) => {
-    const after = parseDesignerBlock(edited, isWidget)
-    if (after.ok) preview.addLive(name, after.model, names, catalog)
-  }
   const modelNow = useRef(model)
   modelNow.current = model
   useEffect(() => {
@@ -443,9 +447,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
           ]
         : []
       const result = addElement(source, model, { type, parent: target.parent, before: target.before, props })
-      if (!apply(result) || !result.ok || !result.name) return
-      showAdded(result.source, [result.name])
-      select([result.name])
+      if (apply(result) && result.ok && result.name) select([result.name])
     },
     move: (element, target) => {
       const type = model?.elements.find((e) => same(e.name, element))?.type
@@ -551,9 +553,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
     )
       return
     const result = pasteElements(source, model, clip, parent, null)
-    if (!apply(result) || !result.ok || !result.names) return
-    showAdded(result.source, result.names)
-    select(result.names.slice(0, 1))
+    if (apply(result) && result.ok && result.names) select(result.names.slice(0, 1))
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -712,7 +712,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
                     selection={entry.selection}
                     locked={locked}
                     actions={canvasActions}
-                    loading={preview.built === null && preview.status === 'building' ? preview.step : null}
+                    loading={previewProgress(preview)}
                   />
                 </div>
               </div>
@@ -770,6 +770,7 @@ export function HmiWidgetEditor({ name }: { name: string }) {
     framePeriodMs: request.settings.framePeriodMs,
     canvas,
   })
+  const progress = previewProgress(preview)
   return (
     <div className='flex h-full w-full flex-col gap-2 overflow-hidden' data-testid='hmi-widget-editor'>
       <div className='flex h-8 shrink-0 items-center justify-between gap-2'>
@@ -778,7 +779,7 @@ export function HmiWidgetEditor({ name }: { name: string }) {
           type='button'
           title='Preview (Ctrl/Cmd+Enter)'
           data-testid='hmi-preview-button'
-          onClick={preview.rebuild}
+          onClick={() => preview.rebuild()}
           className='flex h-7 items-center gap-2 rounded-md bg-brand px-2.5 font-caption text-xs font-semibold text-white hover:bg-brand-medium-dark'
         >
           <svg width='11' height='11' viewBox='0 0 24 24' className='fill-white' aria-hidden='true'>
@@ -790,7 +791,7 @@ export function HmiWidgetEditor({ name }: { name: string }) {
       </div>
       <div className='flex min-h-0 flex-1 gap-2'>
         <div className='min-w-0 flex-1'>
-          <HmiCodeEditor name={name} kind='widget' onPreview={preview.rebuild} diagnostics={preview.errors} />
+          <HmiCodeEditor name={name} kind='widget' onPreview={() => preview.rebuild()} diagnostics={preview.errors} />
         </div>
         <div
           className={cn(
@@ -817,7 +818,7 @@ export function HmiWidgetEditor({ name }: { name: string }) {
                   preview.pointer('up', e.clientX - r.left, e.clientY - r.top)
                 }}
               />
-              {preview.built === null && preview.status === 'building' && <PreviewLoading step={preview.step} />}
+              {progress && <PreviewLoading step={progress.step} dimmed={progress.dimmed} />}
             </div>
           </div>
         </div>

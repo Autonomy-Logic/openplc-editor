@@ -4,7 +4,8 @@
  *
  * The build numbers the literal properties of each screen's elements (see the setter table it returns). A preview
  * applies an edit of such a value without a new build: the next frame draws with it. It also adds elements of any
- * widget type to the shown screen without a build (hmi_unit_live_add), which the next build then compiles in.
+ * widget type to the shown screen, and takes off or moves any of its elements, without a build (hmi_unit_live_*); the
+ * next build then compiles the change in.
  */
 #ifndef HMI_PREVIEW_H
 #define HMI_PREVIEW_H
@@ -31,13 +32,25 @@ enum hmi_live_container { HMI_LIVE_STACK = 1, HMI_LIVE_DIAGRAM = 2 };
  * shown screen is left (hmi_unit_live_sync).
  */
 int hmi_unit_live_add(void *unit, int type, int parent, int parent_kind, int before, int draw_before);
+/**
+ * Takes element `element` of the shown screen, compiled or live, out of its container and the drawing list: it is
+ * neither laid out, drawn nor reachable by input until hmi_unit_live_attach puts it back. `parent` (an element id; 0
+ * the screen's own stack) and `parent_kind` name its container when it is where the build put it. Children stay in a
+ * detached container; detach them too to take them off the drawing list. Returns 0, or -1.
+ */
+int hmi_unit_live_detach(void *unit, int element, int parent, int parent_kind);
+/**
+ * Puts a detached element back, into container `parent` before its child `before` (0: last) and drawn before element
+ * `draw_before` (0: last), as hmi_unit_live_add places a new one. Returns its id, or -1.
+ */
+int hmi_unit_live_attach(void *unit, int element, int parent, int parent_kind, int before, int draw_before);
 /** Sets numeric or BOOL setter `setter` (the factory table's number) of live element `element`; 0, or -1. */
 int hmi_unit_live_set_num(void *unit, int element, int setter, double value);
 /** Sets STRING setter `setter` of live element `element`; a longer text is cut to the property's length. */
 int hmi_unit_live_set_str(void *unit, int element, int setter, const char *value);
-/** Takes live element `element` off the screen and frees it; -1 when it is unknown or still holds live elements. */
+/** Takes an element hmi_unit_live_add made off the screen and frees it; -1 when it is unknown or still holds others. */
 int hmi_unit_live_remove(void *unit, int element);
-/** Frees every live element once the screen that held them is gone: another screen, or a new one, is in the slot. */
+/** Forgets live changes, freeing created elements, once the screen they belong to is gone (another page is shown). */
 void hmi_unit_live_sync(void *unit);
 
 #ifdef __cplusplus

@@ -28,10 +28,18 @@ import type {
   HmiPreviewWorkerScope,
 } from '../../src/middleware/shared/ports/hmi-preview-mechanisms'
 import type { WasmClangRunner, WasmObjectStore } from '../../src/middleware/shared/ports/wasm-toolchain-mechanisms'
-import type { HmiPreviewBuild } from '../../src/middleware/shared/ports/hmi-preview-types'
+import type { HmiPreviewBuild, HmiWidgetCatalog } from '../../src/middleware/shared/ports/hmi-preview-types'
 import type { WasmCompileRequest } from '../../src/middleware/shared/ports/wasm-toolchain-types'
-import { addElement } from '../../src/middleware/shared/utils/hmi/designer/designer-edits'
-import { planLiveElements } from '../../src/middleware/shared/utils/hmi/designer/designer-live'
+import { liveValue } from '../../src/middleware/shared/utils/hmi/designer/designer-canvas'
+import { withTheirPipes } from '../../src/middleware/shared/utils/hmi/designer/designer-diagram'
+import {
+  addElement,
+  deleteElements,
+  type DesignerEdit,
+  moveElement,
+  setProperty,
+} from '../../src/middleware/shared/utils/hmi/designer/designer-edits'
+import { liveDeclaration, planLiveSync } from '../../src/middleware/shared/utils/hmi/designer/designer-live'
 import { type DesignerModel, parseDesignerBlock } from '../../src/middleware/shared/utils/hmi/designer/designer-model'
 import {
   formatHmiPreviewTimings,
@@ -167,9 +175,119 @@ class FullFrame {
   }
 }
 
+/** An element of the shown screen in a running module, as the designer's preview hook tracks it. */
+interface Held {
+  id: number
+  type: string
+  created: boolean
+  attached: boolean
+  declaration?: string
+}
+
 /**
- * Elements added to a running preview from the designer's edit, without a build: each is drawn at once, without a
- * compile, and the frame and the elements' bounds equal those of the module the edit then builds.
+ * A running module driven as the designer's preview hook drives it: each source of a screen is reached from the one
+ * the module shows with `planLiveSync`, the module's change and live setters, without a build.
+ */
+class LiveDriver {
+  readonly frame: FullFrame
+  private shown: DesignerModel
+  private shownSource: string
+  private readonly held = new Map<string, Held>()
+
+  constructor(
+    readonly instance: HmiPreviewInstance,
+    private readonly built: Extract<HmiPreviewBuild, { ok: true }>,
+    private readonly screen: string,
+    private readonly catalog: HmiWidgetCatalog,
+    private readonly parse: (source: string) => DesignerModel,
+    source: string,
+  ) {
+    this.frame = new FullFrame(instance)
+    this.shown = parse(source)
+    this.shownSource = source
+    for (const e of built.elementIds)
+      if (e.screen === screen)
+        this.held.set(e.element.toUpperCase(), { id: e.id, type: '', created: false, attached: true })
+  }
+
+  /** The module's id of an element that is laid out and drawn. */
+  idOf(name: string): number | undefined {
+    const held = this.held.get(name.toUpperCase())
+    return held?.attached ? held.id : undefined
+  }
+
+  /** Shows `source` without a build; false when the planner or the module refuses. */
+  show(source: string): boolean {
+    const next = this.parse(source)
+    const plan = planLiveSync({
+      shown: this.shown,
+      shownSource: this.shownSource,
+      next,
+      nextSource: source,
+      catalog: this.catalog,
+      factory: this.built.factory,
+      module: {
+        attached: (name) => this.idOf(name),
+        detached: (name) => {
+          const held = this.held.get(name.toUpperCase())
+          return held && !held.attached ? { id: held.id, declaration: held.declaration ?? '' } : undefined
+        },
+        created: (name) => this.held.get(name.toUpperCase())?.created ?? false,
+      },
+    })
+    if (!plan) return false
+    const ids = this.instance.changeLive(plan.detach, plan.elements)
+    if (!ids) return false
+    for (const name of plan.detached) {
+      const held = this.held.get(name.toUpperCase())
+      const declared = this.shown.elements.find((e) => e.name.toUpperCase() === name.toUpperCase())
+      if (held) {
+        held.attached = false
+        held.declaration = declared ? liveDeclaration(this.shownSource, declared) : ''
+      }
+    }
+    plan.names.forEach((name, i) => {
+      const before = this.held.get(name.toUpperCase())
+      const created = plan.elements[i].element === undefined
+      const type = next.elements.find((e) => e.name.toUpperCase() === name.toUpperCase())?.type.toUpperCase() ?? ''
+      this.held.set(name.toUpperCase(), {
+        id: ids[i],
+        type: created ? type : (before?.type ?? ''),
+        created: created || (before?.created ?? false),
+        attached: true,
+      })
+    })
+    for (const v of plan.values) {
+      const live = liveValue(v.value)
+      const held = this.held.get(v.element.toUpperCase())
+      if (!live || !held) return false
+      const page = this.built.pages[this.screen]
+      const setter = held.created
+        ? this.built.factory.types[held.type]?.setters[v.property.toUpperCase()]
+        : Object.entries(this.built.setters).find(
+            ([k]) => k.toUpperCase() === `${this.screen}.${v.element}.${v.property}`.toUpperCase(),
+          )?.[1]
+      if (!setter) return false
+      const applied =
+        'number' in live
+          ? held.created
+            ? this.instance.setLiveNumber(held.id, setter.index, live.number)
+            : this.instance.setNumber(page, setter.index, live.number)
+          : held.created
+            ? this.instance.setLiveText(held.id, setter.index, live.text)
+            : this.instance.setText(page, setter.index, live.text)
+      if (!applied) return false
+    }
+    this.shown = next
+    this.shownSource = source
+    return true
+  }
+}
+
+/**
+ * Structural edits of a running preview from the designer's edits, without a build: elements added, removed and
+ * moved, values changed, and each undone and redone. Every step is drawn at once without a compile, and its frame and
+ * every element's bounds equal those of the module the step's source builds.
  */
 async function liveElementChecks(files: HmiPreviewResources, compile: Compile): Promise<void> {
   let compiles = 0
@@ -187,128 +305,232 @@ async function liveElementChecks(files: HmiPreviewResources, compile: Compile): 
   const base = { ...sampleProject(), screens: [...sampleProject().screens, { name: 'Plant', source: PLANT }] }
   const before = await buildHmiPreview(base, files, counted)
   if (!before.ok) throw new Error('the live elements base did not build')
+  const builds = new Map<string, Extract<HmiPreviewBuild, { ok: true }>>()
+  const buildOf = async (screen: string, source: string) => {
+    const key = `${screen}\u0000${source}`
+    const known = builds.get(key)
+    if (known) return known
+    const project = { ...base, screens: base.screens.map((s) => (s.name === screen ? { ...s, source } : s)) }
+    const built = await buildHmiPreview(project, files, counted)
+    if (!built.ok) throw new Error(`${screen} does not build: ${built.errors.map((e) => e.message).join('; ')}`)
+    builds.set(key, built)
+    return built
+  }
 
-  type Edit = (source: string, model: DesignerModel) => { source: string; names: string[] }
+  type Edit = (source: string, model: DesignerModel) => string
+  const must = (result: DesignerEdit): string => {
+    if (!result.ok) throw new Error(result.message)
+    return result.source
+  }
   const add =
     (...specs: Parameters<typeof addElement>[2][]): Edit =>
-    (source, model) => {
-      const names: string[] = []
-      let text = source
-      let current = model
-      for (const spec of specs) {
-        const result = addElement(text, current, spec)
-        if (!result.ok || !result.name) throw new Error(result.ok ? 'no name' : result.message)
-        names.push(result.name)
-        text = result.source
-        current = parse(text)
-      }
-      return { source: text, names }
-    }
-  const cases: Array<[string, string, Edit]> = [
+    (source) =>
+      specs.reduce((text, spec) => must(addElement(text, parse(text), spec)), source)
+  const remove =
+    (...names: string[]): Edit =>
+    (source, model) =>
+      must(deleteElements(source, model, withTheirPipes(model, catalog, names)))
+  const move =
+    (name: string, parent: string | null, beforeName: string | null): Edit =>
+    (source, model) =>
+      must(moveElement(source, model, name, parent, beforeName))
+  const set =
+    (element: string, property: string, value: string): Edit =>
+    (source, model) =>
+      must(setProperty(source, model, element, property, value))
+  /** A case: the screen, then edits applied one after the other; `undo` goes back through the sources, `redo` forward. */
+  const cases: Array<[string, string, Edit[]]> = [
     [
-      'a label dropped at the end of a stack',
+      'add a label at the end of a stack',
       'Details',
-      add({ type: 'HmiLabel', parent: 'Body', props: [['Text', "'Note'"]] }),
+      [add({ type: 'HmiLabel', parent: 'Body', props: [['Text', "'Note'"]] })],
     ],
     [
-      'a gauge dropped before a sibling, with its type default',
+      'add a gauge before a sibling, with its type default',
       'Details',
-      add({ type: 'HmiGauge', parent: 'Body', before: 'Shown' }),
+      [add({ type: 'HmiGauge', parent: 'Body', before: 'Shown' })],
     ],
     [
-      'a widget block dropped into a nested stack',
+      'add a widget block into a nested stack',
       'Overview',
-      add({ type: 'Badge', parent: 'Col', before: 'Run', props: [['Caption', "'New'"]] }),
+      [add({ type: 'Badge', parent: 'Col', before: 'Run', props: [['Caption', "'New'"]] })],
     ],
     [
-      'a lamp dropped on a diagram at a position',
+      'add a lamp on a diagram at a position',
       'Plant',
-      add({
-        type: 'HmiLamp',
-        parent: 'Diagram',
-        props: [
-          ['X', '200'],
-          ['Y', '120'],
-        ],
-      }),
+      [
+        add({
+          type: 'HmiLamp',
+          parent: 'Diagram',
+          props: [
+            ['X', '200'],
+            ['Y', '120'],
+          ],
+        }),
+      ],
     ],
     [
-      'a stack pasted with a label inside',
+      'add a stack with a label inside',
       'Details',
-      add(
-        { type: 'HmiVerticalStack', parent: 'Body', before: 'Back' },
-        { type: 'HmiLabel', parent: 'VerticalStack1', props: [['Text', "'In'"]] },
-      ),
+      [
+        add(
+          { type: 'HmiVerticalStack', parent: 'Body', before: 'Back' },
+          { type: 'HmiLabel', parent: 'VerticalStack1', props: [['Text', "'In'"]] },
+        ),
+      ],
+    ],
+    ['remove the last element of a stack', 'Overview', [remove('Setpoint')]],
+    ['remove an element in the middle of a stack', 'Overview', [remove('Speed')]],
+    ['remove a container with what it holds', 'Overview', [remove('Col')]],
+    ['remove an element of a diagram', 'Plant', [remove('Tank')]],
+    [
+      'add a label, then remove it',
+      'Details',
+      [add({ type: 'HmiLabel', parent: 'Body', props: [['Text', "'Gone'"]] }), remove('Label1')],
+    ],
+    ['reorder an element to an earlier place in its stack', 'Overview', [move('Next', 'Body', 'Speed')]],
+    ['reorder an element to a later place in its stack', 'Overview', [move('Speed', 'Body', 'Next')]],
+    ['move an element to another stack', 'Overview', [move('Run', 'Body', 'Name')]],
+    ['move a stack with what it holds', 'Overview', [move('Col', 'Body', null)]],
+    ['move an element on a diagram', 'Plant', [set('Tank', 'X', '140'), set('Tank', 'Y', '90')]],
+    ['change a text', 'Overview', [set('Next', 'Text', "'Go on'")]],
+    [
+      'add a lamp, undo it, then add one of that name on a diagram',
+      'Plant',
+      [
+        add({ type: 'HmiLamp', parent: 'Body' }),
+        remove('Lamp1'),
+        add({
+          type: 'HmiLamp',
+          parent: 'Diagram',
+          props: [
+            ['X', '220'],
+            ['Y', '60'],
+          ],
+        }),
+      ],
     ],
   ]
-  for (const [what, screen, edit] of cases) {
+  const timings: Array<[string, number, number]> = []
+  for (const [what, screen, edits] of cases) {
     const page = before.pages[screen]
+    const original = base.screens.find((s) => s.name === screen)?.source ?? ''
+    const sources = [original]
+    for (const edit of edits) sources.push(edit(sources[sources.length - 1], parse(sources[sources.length - 1])))
     const running = await HmiPreviewInstance.create(before.wasm, WIDTH, HEIGHT)
     running.design(true)
     running.show(page)
-    const live = new FullFrame(running)
-    live.draw()
-    const source = base.screens.find((s) => s.name === screen)?.source ?? ''
-    const edited = edit(source, parse(source))
-    const ids = new Map(
-      before.elementIds.filter((e) => e.screen === screen).map((e) => [e.element.toUpperCase(), e.id]),
-    )
-    const compilesBefore = compiles
-    const start = performance.now()
-    const plan = planLiveElements({
-      model: parse(edited.source),
-      added: edited.names,
-      catalog,
-      factory: before.factory,
-      idOf: (name) => ids.get(name.toUpperCase()),
-    })
-    const added = plan ? running.addLive(plan.elements) : null
-    live.draw()
-    const ms = performance.now() - start
+    const driver = new LiveDriver(running, before, screen, catalog, parse, original)
+    driver.frame.draw()
+    const steps: Array<[string, string]> = [
+      ...sources.slice(1).map((source, i): [string, string] => [`step ${i + 1}`, source]),
+      ...sources
+        .slice(0, -1)
+        .reverse()
+        .map((source, i): [string, string] => [`undo ${i + 1}`, source]),
+      ...sources.slice(1).map((source, i): [string, string] => [`redo ${i + 1}`, source]),
+    ]
+    let worst = 0
+    let failed = ''
+    let buildMs = 0
+    for (const [step, source] of steps) {
+      const compilesBefore = compiles
+      const start = performance.now()
+      const shown = driver.show(source)
+      driver.frame.draw()
+      const ms = performance.now() - start
+      worst = Math.max(worst, ms)
+      if (!shown || compiles !== compilesBefore || ms > LIVE_ADD_MS) {
+        failed ||= `${step} ${shown ? `took ${ms.toFixed(2)} ms` : 'was refused'}`
+        continue
+      }
+      const buildStart = performance.now()
+      const built = await buildOf(screen, source)
+      if (step === 'step 1') buildMs = performance.now() - buildStart
+      const rebuilt = await HmiPreviewInstance.create(built.wasm, WIDTH, HEIGHT)
+      rebuilt.design(true)
+      rebuilt.show(page)
+      const reference = new FullFrame(rebuilt)
+      reference.draw()
+      reference.draw()
+      if (!driver.frame.rgba.every((byte, i) => byte === reference.rgba[i])) failed ||= `${step}: the frame differs`
+      const boxes = new Map(
+        rebuilt
+          .bounds()
+          .filter((b) => b.id > 0)
+          .map((b) => [b.id, b]),
+      )
+      for (const e of built.elementIds.filter((x) => x.screen === screen)) {
+        const want = boxes.get(e.id)
+        const id = driver.idOf(e.element)
+        const got = running.bounds().find((b) => b.id === id)
+        if (!want && !got) continue
+        if (
+          !want ||
+          !got ||
+          want.x !== got.x ||
+          want.y !== got.y ||
+          want.width !== got.width ||
+          want.height !== got.height
+        )
+          failed ||= `${step}: ${e.element} is at ${got ? `${got.x},${got.y},${got.width},${got.height}` : 'nowhere'}`
+      }
+      const attachedIds = new Set(parse(source).elements.map((x) => driver.idOf(x.name)))
+      for (const b of running.bounds())
+        if (b.id > 0 && !attachedIds.has(b.id)) failed ||= `${step}: element ${b.id} is still drawn`
+    }
+    timings.push([what, worst, buildMs])
     check(
-      added !== null && compiles === compilesBefore && ms <= LIVE_ADD_MS,
-      `${what}: drawn without a compile within ${LIVE_ADD_MS} ms (${ms.toFixed(2)} ms)`,
-    )
-
-    const project = {
-      ...base,
-      screens: base.screens.map((s) => (s.name === screen ? { ...s, source: edited.source } : s)),
-    }
-    const after = await buildHmiPreview(project, files, counted)
-    if (!after.ok || !added || !plan) {
-      check(false, `${what}: the edit builds`)
-      continue
-    }
-    const rebuilt = await HmiPreviewInstance.create(after.wasm, WIDTH, HEIGHT)
-    rebuilt.design(true)
-    rebuilt.show(page)
-    const reference = new FullFrame(rebuilt)
-    reference.draw()
-    reference.draw()
-    const same = live.rgba.every((byte, i) => byte === reference.rgba[i])
-    check(same, `${what}: the frame equals the rebuilt module's`)
-    const box = (instance: HmiPreviewInstance, id: number | undefined) => {
-      const b = instance.bounds().find((x) => x.id === id)
-      return b ? `${b.x},${b.y},${b.width},${b.height}` : 'none'
-    }
-    const boxes = plan.names.map((name, i) => {
-      const id = after.elementIds.find((e) => e.screen === screen && e.element === name)?.id
-      return [box(running, added[i]), box(rebuilt, id)]
-    })
-    if (screen === 'Details') {
-      running.show(before.pages.Overview)
-      running.frame(0)
-      const left = !running.setLiveNumber(added[0], 0, 1)
-      running.show(page)
-      running.frame(0)
-      running.removeLive(added)
-      check(left && running.bounds().every((b) => !added.includes(b.id)), `${what}: leaving the screen ends it`)
-    }
-    check(
-      boxes.every(([a, b]) => a !== 'none' && a === b),
-      `${what}: the new elements have the rebuilt module's bounds (${boxes.map((b) => b.join(' / ')).join('; ')})`,
+      failed === '',
+      `${what}, undone and redone: each step drawn without a compile within ${LIVE_ADD_MS} ms (worst ${worst.toFixed(2)} ms) with the rebuilt module's frame and bounds${failed ? `; ${failed}` : ''}`,
     )
   }
+
+  const running = await HmiPreviewInstance.create(before.wasm, WIDTH, HEIGHT)
+  running.design(true)
+  running.show(before.pages.Overview)
+  const original = base.screens.find((s) => s.name === 'Overview')?.source ?? ''
+  const driver = new LiveDriver(running, before, 'Overview', catalog, parse, original)
+  driver.frame.draw()
+  const nextId = driver.idOf('Next')
+  const button = running.bounds().find((b) => b.id === nextId)
+  const removed = remove('Next')(original, parse(original))
+  check(driver.show(removed), 'the Next button is removed live')
+  driver.frame.draw()
+  if (button) {
+    const x = button.x + button.width / 2
+    const y = button.y + button.height / 2
+    running.pointer('down', x, y)
+    running.frame(50)
+    running.pointer('up', x, y)
+    running.frame(100)
+  }
+  check(
+    button !== undefined && running.frame(150).page === before.pages.Overview,
+    'a tap where a removed button was does nothing',
+  )
+
+  const leaving = await HmiPreviewInstance.create(before.wasm, WIDTH, HEIGHT)
+  leaving.show(before.pages.Details)
+  const details = base.screens.find((s) => s.name === 'Details')?.source ?? ''
+  const away = new LiveDriver(leaving, before, 'Details', catalog, parse, details)
+  away.frame.draw()
+  check(
+    away.show(add({ type: 'HmiLabel', parent: 'Body', props: [['Text', "'Note'"]] })(details, parse(details))),
+    'a label is added live',
+  )
+  const added = away.idOf('Label1') ?? -1
+  leaving.show(before.pages.Overview)
+  leaving.frame(0)
+  const left = !leaving.setLiveNumber(added, 0, 1)
+  leaving.show(before.pages.Details)
+  leaving.frame(0)
+  check(left && leaving.bounds().every((b) => b.id !== added), 'leaving the screen ends live changes')
+  console.log(
+    timings
+      .map(([what, ms, build]) => `  live: ${what}: worst step ${ms.toFixed(2)} ms; its build ${Math.round(build)} ms`)
+      .join('\n'),
+  )
 }
 
 async function main(): Promise<void> {

@@ -30,8 +30,12 @@ describe('parseHmiPreviewRequest', () => {
       { id: 8, type: 'setText', screen: 0, setter: 1, value: 'a' },
       { id: 9, type: 'setNumber', screen: 0, setter: 1, value: 2, element: 100 },
       { id: 10, type: 'setText', screen: 0, setter: 1, value: 'a', element: 100 },
-      { id: 11, type: 'add', elements: [live, { ...live, parent: { added: 0 }, parentKind: 'diagram' }] },
-      { id: 12, type: 'remove', elements: [100, 101] },
+      {
+        id: 11,
+        type: 'change',
+        detach: [{ element: 4, parent: 0, parentKind: 'stack' }],
+        elements: [live, { ...live, parent: { added: 0 }, parentKind: 'diagram', element: 4 }],
+      },
     ]
     for (const request of requests) expect(parseHmiPreviewRequest(request)).toEqual(request)
   })
@@ -50,11 +54,13 @@ describe('parseHmiPreviewRequest', () => {
       { id: 1, type: 'setNumber', screen: 0, setter: 1 },
       { id: 1, type: 'setText', screen: 0, setter: 1, value: 3 },
       { id: 1, type: 'setText', screen: 0, setter: 1, value: 'a', element: 1.5 },
-      { id: 1, type: 'add', elements: [{ ...live, parentKind: 'grid' }] },
-      { id: 1, type: 'add', elements: [{ ...live, parent: {} }] },
-      { id: 1, type: 'add', elements: [{ ...live, numbers: [{ setter: 1, value: 'x' }] }] },
-      { id: 1, type: 'add', elements: live },
-      { id: 1, type: 'remove', elements: [1, 'x'] },
+      { id: 1, type: 'change', detach: [], elements: [{ ...live, parentKind: 'grid' }] },
+      { id: 1, type: 'change', detach: [], elements: [{ ...live, parent: {} }] },
+      { id: 1, type: 'change', detach: [], elements: [{ ...live, numbers: [{ setter: 1, value: 'x' }] }] },
+      { id: 1, type: 'change', detach: [], elements: [{ ...live, element: 'x' }] },
+      { id: 1, type: 'change', detach: [], elements: live },
+      { id: 1, type: 'change', detach: [{ element: 1, parent: 0, parentKind: 'row' }], elements: [] },
+      { id: 1, type: 'change', elements: [] },
       { id: 1, type: 'exit' },
     ])
       expect(parseHmiPreviewRequest(value)).toBeNull()
@@ -81,19 +87,19 @@ describe('preview session', () => {
     session.close()
   })
 
-  it('adds live elements and edits and removes them, or reports that it could not add them', async () => {
+  it('changes the structure live, edits live elements, or reports that it could not', async () => {
     const session = createHmiPreviewSession(() => testWorker())
     await session.load(fakeHost(), start)
     await session.frame(0, surface)
-    expect(await session.add([live, { ...live, parent: { added: 0 } }])).toEqual([100, 101])
+    expect(await session.change([], [live, { ...live, parent: { added: 0 } }])).toEqual([100, 101])
     expect((await session.frame(50, surface)).pixels).toMatchObject({ y0: 2, rows: 4 })
     expect(await session.setNumber(2, 1, 9, 101)).toBe(true)
     expect(await session.setText(2, 1, 'Tank', 100)).toBe(true)
     expect(await session.setNumber(2, 2, 9, 101)).toBe(false)
-    await session.remove([100, 101])
-    expect(await session.setNumber(2, 1, 9, 101)).toBe(false)
-    expect(await session.add([{ ...live, type: 7 }])).toBeNull()
-    expect(await session.add([])).toBeNull()
+    expect(await session.change([{ element: 7, parent: 0, parentKind: 'stack' }], [])).toEqual([])
+    expect(await session.change([{ element: 7, parent: 0, parentKind: 'stack' }], [])).toBeNull()
+    expect(await session.change([], [{ ...live, element: 7, numbers: [], texts: [] }])).toEqual([7])
+    expect(await session.change([], [{ ...live, type: 7 }])).toBeNull()
     session.close()
   })
 

@@ -4,6 +4,7 @@
  */
 
 import type {
+  HmiLiveDetach,
   HmiLiveElement,
   HmiPointerKind,
   HmiPreviewBounds,
@@ -38,6 +39,8 @@ interface HostFunctions {
   hmi_pv_live_set_num: NumericFunction
   hmi_pv_live_set_str: NumericFunction
   hmi_pv_live_remove: NumericFunction
+  hmi_pv_live_detach: NumericFunction
+  hmi_pv_live_attach: NumericFunction
 }
 
 /** `hmi_live_container` of hmi_preview.h. */
@@ -110,6 +113,8 @@ export class HmiPreviewInstance {
       hmi_pv_live_set_num: bind('hmi_pv_live_set_num'),
       hmi_pv_live_set_str: bind('hmi_pv_live_set_str'),
       hmi_pv_live_remove: bind('hmi_pv_live_remove'),
+      hmi_pv_live_detach: bind('hmi_pv_live_detach'),
+      hmi_pv_live_attach: bind('hmi_pv_live_attach'),
     }
     const preview = new HmiPreviewInstance(memory, call)
     if (preview.call.hmi_pv_init(width, height) !== 0) throw new Error('The preview does not fit in memory')
@@ -191,39 +196,44 @@ export class HmiPreviewInstance {
   }
 
   /**
-   * Adds elements to the shown screen without a build, in order, with their inputs set; returns their element ids.
-   * When one cannot be added or set, the ones added are taken off again and the result is null.
+   * Changes the shown screen's structure without a build: takes `detach` off, then adds or puts back `elements`, in
+   * order, with their inputs set; returns their element ids. When one cannot be added, put back or set, the elements of
+   * this call are taken off again and the result is null; when a detach fails, the result is null.
    */
-  addLive(elements: readonly HmiLiveElement[]): number[] | null {
+  changeLive(detach: readonly HmiLiveDetach[], elements: readonly HmiLiveElement[]): number[] | null {
+    for (const d of detach)
+      if (this.call.hmi_pv_live_detach(d.element, d.parent, LIVE_CONTAINER[d.parentKind]) !== 0) return null
     const added: number[] = []
+    const created: boolean[] = []
+    const undo = () => {
+      for (let i = added.length - 1; i >= 0; i--)
+        if (created[i]) this.call.hmi_pv_live_remove(added[i])
+        else this.call.hmi_pv_live_detach(added[i], 0, LIVE_CONTAINER.stack)
+    }
     for (const element of elements) {
       const parent = 'id' in element.parent ? element.parent.id : added[element.parent.added]
+      const kind = LIVE_CONTAINER[element.parentKind]
+      const { before, drawBefore } = element
       const id =
         parent === undefined
           ? -1
-          : this.call.hmi_pv_live_add(
-              element.type,
-              parent,
-              LIVE_CONTAINER[element.parentKind],
-              element.before,
-              element.drawBefore,
-            )
+          : element.element === undefined
+            ? this.call.hmi_pv_live_add(element.type, parent, kind, before, drawBefore)
+            : this.call.hmi_pv_live_attach(element.element, parent, kind, before, drawBefore)
       const set =
         id > 0 &&
         element.numbers.every(({ setter, value }) => this.setLiveNumber(id, setter, value)) &&
         element.texts.every(({ setter, value }) => this.setLiveText(id, setter, value))
-      if (id > 0) added.push(id)
+      if (id > 0) {
+        added.push(id)
+        created.push(element.element === undefined)
+      }
       if (!set) {
-        this.removeLive(added)
+        undo()
         return null
       }
     }
     return added
-  }
-
-  /** Takes live elements off the screen, the last added first; unknown ids are skipped. */
-  removeLive(elements: readonly number[]): void {
-    for (const id of [...elements].reverse()) this.call.hmi_pv_live_remove(id)
   }
 
   private writeText(value: string): void {

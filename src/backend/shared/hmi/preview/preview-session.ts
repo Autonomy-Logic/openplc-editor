@@ -197,12 +197,9 @@ export function createHmiPreviewSession(
       const message = element === undefined ? { screen, setter, value } : { screen, setter, value, element }
       return (await call({ type: 'setText', ...message })).applied === true
     },
-    async add(elements) {
-      const added = (await call({ type: 'add', elements: [...elements] })).added ?? []
-      return added.length === elements.length && added.length > 0 ? added : null
-    },
-    async remove(elements) {
-      await call({ type: 'remove', elements: [...elements] })
+    async change(detach, elements) {
+      const reply = await call({ type: 'change', detach: [...detach], elements: [...elements] })
+      return reply.applied === true && reply.added?.length === elements.length ? reply.added : null
     },
     onStop(listener) {
       listeners.add(listener)

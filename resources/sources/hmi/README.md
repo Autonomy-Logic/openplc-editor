@@ -169,11 +169,13 @@ role, the tag table with read and write accessors for the PLC variables screens 
 panel PIN and relock time. `unit/hmi_preview.h` adds the live property setters only the editor's preview links. The
 editor's generator (`src/backend/shared/hmi/unit/`) writes the unit.
 
-`hmi_preview.h` also lets the preview add elements without a build (`hmi_unit_live_add`). A preview build compiles the
-libraries whole and generates a factory table (`unit/hmi_preview_factory.h`, `hmi_preview_factory.cpp`): every widget
-type and one setter per input it sets live. `preview/hmi_preview_live.cpp` creates an element from it, inserts it into
-its container's children and the screen's drawing list where the next build attaches it, and numbers it after the
-screen's elements; the host frees live elements when the shown screen is left. Product builds (firmware, Runtime v4,
+`hmi_preview.h` also lets the preview change the shown screen's structure without a build. A preview build compiles
+the libraries whole and generates a factory table (`unit/hmi_preview_factory.h`, `hmi_preview_factory.cpp`): every
+widget type and one setter per input it sets live. `preview/hmi_preview_live.cpp` creates an element from it
+(`hmi_unit_live_add`), takes any element, compiled or made, out of its container's children and the screen's drawing
+list (`hmi_unit_live_detach`: no layout, drawing or input reaches it) and puts one back where the next build attaches
+it (`hmi_unit_live_attach`); new elements are numbered after the screen's elements. When another page is shown, the
+host forgets these changes and frees the made elements (`hmi_unit_live_sync`). Product builds (firmware, Runtime v4,
 the CLI) generate no factory and never link either file.
 
 ## Tests (in openplc-editor)
@@ -190,11 +192,12 @@ input and checks every frame against `tests/hmi-lib/golden.txt`.
 
 `npm run test:hmi-preview` (`tests/hmi-preview/run.ts`) builds a sample project's preview with the shared preview
 build and the in-editor WebAssembly toolchain, runs it through the preview host, and checks frames, band skipping,
-live setters, navigation, the widget-block preview and how long rebuilds take after each kind of edit. It adds
-elements to a running module without a build (in a stack, before a sibling, on a diagram, a widget block, a container
-with a child) and checks that each is drawn within `HMI_PREVIEW_LIVE_ADD_MS` (50 ms) without a compile and that the
-frame and the elements' bounds equal those of the module the edit then builds. It prints where each build spent its
-time.
+live setters, navigation, the widget-block preview and how long rebuilds take after each kind of edit. It changes
+a running module's structure without a build, as the designer does: elements added, removed (from a stack, a
+container with its contents, a diagram), reordered, moved to another stack or on a diagram, and values changed, each
+undone and redone, and checks that every step is drawn within `HMI_PREVIEW_LIVE_ADD_MS` (50 ms) without a compile, with
+the frame and bounds of the module that step's source builds, and that a tap where a removed button was does nothing.
+It prints where each build spent its time.
 
 `npm run test:hmi-baremetal` (`tests/hmi-baremetal/run.mjs`) builds the core, the sample unit and the baremetal host
 with `HMI_STATIC_MEMORY` and a fake panel, clock and debugger table, and checks in simulated time that the panel shows

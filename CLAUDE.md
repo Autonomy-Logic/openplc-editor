@@ -590,20 +590,27 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
   against its own copy of the unit header (`split-screen-headers.ts`), so an edit of one screen recompiles that screen
   and the glue only. Every build logs a debug Console line, `HMI preview built in N ms: files, generate (widget blocks,
   STruC++), fonts, toolchain (compile, link; each compiled file), start, first frame`, which is how to see where a slow
-  computer spends a rebuild. The module also adds elements without a build: the preview-only factory table
-  (`hmi_preview_factory.cpp`, generated for preview builds only, with `hmi_preview_live.cpp`) creates any widget type
-  and the designer places a dropped or pasted element exactly where the build will (`designer-live.ts`), so it is drawn
-  at once; the build that follows replaces the module with the same pixels. Elements with code, wiring, pipes or values
-  it cannot set live wait for the build. `tests/hmi-preview/run.ts` (`npm run test:hmi-preview`, same CI job) does it
-  with the real toolchain, checks rebuild times and that a live element's frame and bounds equal the rebuilt module's,
-  and prints each build's breakdown. The port also draws the palette's thumbnails from a generated gallery screen
+  computer spends a rebuild. The running module also follows structural edits without a build: the preview-only
+  factory table (`hmi_preview_factory.cpp`, generated for preview builds only, with `hmi_preview_live.cpp`) creates any
+  widget type, and any element, compiled or made, can be taken off its container and the drawing list and put back
+  elsewhere. `designer-live.ts` diffs the screen the module shows against the source (`planLiveSync`): removed elements
+  are taken off, moved ones (another container, another place among their siblings) are taken off and put back, new
+  ones are made, and changed values go through the live setters, so add, remove, move, reorder, diagram moves, value
+  edits and their undo and redo are drawn at once, exactly as the build will; the build that follows replaces the
+  module with the same pixels. Code and theme changes, pipes put back or chained anew, references to removed
+  elements and values that cannot be set live wait for the build; code that still names a removed element does not
+  (the build reports it). Such a build shows its progress over the last frame, dimmed, after 300 ms; a build after a
+  live edit shows none and waits 1.5 s for the next edit. `tests/hmi-preview/run.ts` (`npm run test:hmi-preview`, same
+  CI job) does it with the real toolchain, checks rebuild times and that every live step, undone and redone, has the
+  rebuilt module's frame and bounds, and prints each build's breakdown. The port also draws the palette's thumbnails from a generated gallery screen
   (`hmi-thumbnails.ts`).
 - **HMI designer:** `src/frontend/components/_features/[workspace]/editor/hmi/designer/` edits a screen's ST as text
   patches (`src/middleware/shared/utils/hmi/designer/`), with undo in the `hmiDesigner` store slice. In a diagram it
   places symbols on the grid, draws pipes from port to port and edits their bends (`designer-diagram.ts`), from the
   ports, diagram frames and pipe routes a design-mode frame records. `e2e/hmi-designer.spec.ts` and
   `e2e/hmi-diagram.spec.ts` drive it on the real preview; `e2e/hmi-live-add.spec.ts` holds every compile back and
-  checks that dropped and pasted widgets show at once and survive the build that replaces the module.
+  checks that dropped, pasted, removed, reordered, moved and edited widgets, undone and redone, show at once and
+  survive the build that replaces the module, and that only edits that wait for a build show its progress.
 - **Manual:** the developer's manual test is required for every demand.
 
 ## Code Style

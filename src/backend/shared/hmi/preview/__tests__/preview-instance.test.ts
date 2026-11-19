@@ -78,7 +78,9 @@ describe('HmiPreviewInstance', () => {
 
     it('adds elements in order into a container added in the same call, with their inputs set', async () => {
       const preview = await HmiPreviewInstance.create(fakeHost(), 16, 8)
-      expect(preview.addLive([element(), element({ parent: { added: 0 }, parentKind: 'diagram' })])).toEqual([100, 101])
+      expect(preview.changeLive([], [element(), element({ parent: { added: 0 }, parentKind: 'diagram' })])).toEqual([
+        100, 101,
+      ])
       expect(preview.setLiveNumber(101, 1, 4)).toBe(true)
       expect(preview.setLiveText(100, 1, 'x'.repeat(400))).toBe(true)
       expect(preview.setLiveNumber(101, 2, 4)).toBe(false)
@@ -86,18 +88,23 @@ describe('HmiPreviewInstance', () => {
 
     it('adds none when one cannot be added or set, taking off the ones it added', async () => {
       const preview = await HmiPreviewInstance.create(fakeHost(), 16, 8)
-      expect(preview.addLive([element(), element({ type: 7 })])).toBeNull()
+      expect(preview.changeLive([], [element(), element({ type: 7 })])).toBeNull()
       expect(preview.setLiveNumber(100, 1, 1)).toBe(false)
-      expect(preview.addLive([element(), element({ numbers: [{ setter: 2, value: 1 }] })])).toBeNull()
+      expect(preview.changeLive([], [element(), element({ numbers: [{ setter: 2, value: 1 }] })])).toBeNull()
       expect(preview.setLiveNumber(102, 1, 1)).toBe(false)
-      expect(preview.addLive([element({ parent: { added: 3 } })])).toBeNull()
+      expect(preview.changeLive([], [element({ parent: { added: 3 } })])).toBeNull()
     })
 
-    it('takes live elements off again', async () => {
+    it('takes elements off and puts them back, compiled or live, and detaches again what it could not finish', async () => {
       const preview = await HmiPreviewInstance.create(fakeHost(), 16, 8)
-      const [id] = preview.addLive([element()]) ?? []
-      preview.removeLive([id, 999])
-      expect(preview.setLiveNumber(id, 1, 1)).toBe(false)
+      const [id] = preview.changeLive([], [element()]) ?? []
+      const off = { element: 5, parent: 1, parentKind: 'stack' as const }
+      expect(preview.changeLive([off, { element: id, parent: 0, parentKind: 'stack' }], [])).toEqual([])
+      expect(preview.changeLive([off], [])).toBeNull()
+      const back = element({ element: 5, numbers: [], texts: [] })
+      expect(preview.changeLive([], [back, element({ type: 7 })])).toBeNull()
+      expect(preview.changeLive([], [back, element({ element: id, numbers: [], texts: [] })])).toEqual([5, id])
+      expect(preview.changeLive([], [back])).toBeNull()
     })
   })
 

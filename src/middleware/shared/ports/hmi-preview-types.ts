@@ -100,10 +100,15 @@ export interface HmiPreviewFactory {
 /** The kind of container a live element goes into (`hmi_live_container`). */
 export type HmiLiveContainer = 'stack' | 'diagram'
 
-/** An element a running preview adds to the shown screen without a build, placed where the next build attaches it. */
+/**
+ * An element a running preview adds to the shown screen without a build, placed where the next build attaches it:
+ * created from the factory table, or, with `element`, one the module took off before (`HmiLiveDetach`) put back.
+ */
 export interface HmiLiveElement {
-  /** Its widget type's number in the factory table. */
+  /** Its widget type's number in the factory table; ignored with `element`. */
   type: number
+  /** The id of a detached element to put back instead of creating one. */
+  element?: number
   /** Its container: an element id of the shown screen (0: the screen's own stack), or one added earlier in the call. */
   parent: { id: number } | { added: number }
   parentKind: HmiLiveContainer
@@ -111,9 +116,17 @@ export interface HmiLiveElement {
   before: number
   /** The element id of the element it is drawn before; 0: last. */
   drawBefore: number
-  /** Values of its inputs, by factory setter. */
+  /** Values of its inputs, by factory setter; none for an element put back. */
   numbers: ReadonlyArray<{ setter: number; value: number }>
   texts: ReadonlyArray<{ setter: number; value: string }>
+}
+
+/** An element a running preview takes off the shown screen: out of its container and its drawing list. */
+export interface HmiLiveDetach {
+  element: number
+  /** Its container as the module has it: an element id, 0 for the screen's own stack. */
+  parent: number
+  parentKind: HmiLiveContainer
 }
 
 export interface HmiPreviewElementId {
@@ -208,12 +221,11 @@ export type HmiPreviewRequestMessage =
   | { id: number; type: 'key'; code: number }
   | { id: number; type: 'setNumber'; screen: number; setter: number; value: number; element?: number }
   | { id: number; type: 'setText'; screen: number; setter: number; value: string; element?: number }
-  | { id: number; type: 'add'; elements: HmiLiveElement[] }
-  | { id: number; type: 'remove'; elements: number[] }
+  | { id: number; type: 'change'; detach: HmiLiveDetach[]; elements: HmiLiveElement[] }
 
 /**
- * The Worker's reply to one request; `fatal` when the module faulted and can no longer run. `added` answers `add`: the
- * new element ids, empty when the module could not add them all (it then added none).
+ * The Worker's reply to one request; `fatal` when the module faulted and can no longer run. A `change` is answered with
+ * `applied` and, when applied, `added`: the ids of its elements in order.
  */
 export type HmiPreviewReply =
   | { id: number; ok: true; frame?: HmiPreviewFrame; applied?: boolean; added?: number[] }

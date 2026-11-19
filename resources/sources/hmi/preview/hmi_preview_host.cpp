@@ -227,3 +227,15 @@ HMI_PV_EXPORT("hmi_pv_live_set_str") int32_t hmi_pv_live_set_str(int32_t element
 HMI_PV_EXPORT("hmi_pv_live_remove") int32_t hmi_pv_live_remove(int32_t element) {
     return hmi_unit_live_remove(g_unit, element);
 }
+
+/** Takes an element off its container and the drawing list (hmi_unit_live_detach); returns 0, or -1. */
+HMI_PV_EXPORT("hmi_pv_live_detach")
+int32_t hmi_pv_live_detach(int32_t element, int32_t parent, int32_t parent_kind) {
+    return hmi_unit_live_detach(g_unit, element, parent, parent_kind);
+}
+
+/** Puts a detached element back (hmi_unit_live_attach); returns its id, or -1. */
+HMI_PV_EXPORT("hmi_pv_live_attach")
+int32_t hmi_pv_live_attach(int32_t element, int32_t parent, int32_t parent_kind, int32_t before, int32_t draw_before) {
+    return hmi_unit_live_attach(g_unit, element, parent, parent_kind, before, draw_before);
+}

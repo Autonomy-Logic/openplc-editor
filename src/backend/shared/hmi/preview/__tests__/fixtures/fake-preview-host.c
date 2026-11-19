@@ -7,7 +7,8 @@
  * WASI fd_write (the page answers it as not supported) and key 2 calls proc_exit. Live elements get ids from 100;
  * type 7 cannot be added, nor anything into a live parent that does not exist; setter 1 of a live element exists for numbers and texts. Every live call is logged as
  * (call, a, b, c, d, e) for fake_live: 1 add (type, parent, kind, before, draw_before), 2 set number (element,
- * setter, value), 3 set text (element, setter), 4 remove (element).
+ * setter, value), 3 set text (element, setter), 4 remove (element), 5 detach (element, parent, kind), 6 attach (element, parent, kind, before,
+ * draw_before). Any element below 100, and any live one, can be detached once and attached back once detached.
  */
 #include <stdint.h>
 
@@ -111,6 +112,29 @@ EXPORT("hmi_pv_live_remove") int32_t hmi_pv_live_remove(int32_t element) {
             return 0;
         }
     return -1;
+}
+static int32_t g_off[16], g_off_count;
+
+static int off_index(int32_t element) {
+    for (int i = 0; i < g_off_count; i++)
+        if (g_off[i] == element) return i;
+    return -1;
+}
+EXPORT("hmi_pv_live_detach") int32_t hmi_pv_live_detach(int32_t element, int32_t parent, int32_t kind) {
+    live_log(5, element, parent, kind, 0, 0);
+    if (off_index(element) >= 0 || (element >= 100 && !live_known(element)) || g_off_count >= 16) return -1;
+    g_off[g_off_count++] = element;
+    g_dirty = 1;
+    return 0;
+}
+EXPORT("hmi_pv_live_attach")
+int32_t hmi_pv_live_attach(int32_t element, int32_t parent, int32_t kind, int32_t before, int32_t draw) {
+    live_log(6, element, parent, kind, before, draw);
+    const int i = off_index(element);
+    if (i < 0) return -1;
+    g_off[i] = g_off[--g_off_count];
+    g_dirty = 1;
+    return element;
 }
 /* What the tests read back: the last pointer (kind, x, y in Q4), the last key, the design flag and the set value. */
 EXPORT("fake_pointer") const int32_t *fake_pointer(void) { return g_last_pointer; }
