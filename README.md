@@ -32,6 +32,12 @@ cd openplc-editor
 npm install
 ```
 
+`npm install` also fetches the pinned tools named in `binary-versions.json`: STruC++ (into `node_modules/strucpp`) and
+the HMI widget libraries from [openplc-hmi-widgets](https://github.com/Autonomy-Logic/openplc-hmi-widgets) (into
+`vendor/hmi-widgets/`, checked against the pinned SHA-256). `npm run setup:strucpp` and `npm run setup:hmi-widgets`
+fetch each one again. While a pinned widget release is not published yet, build openplc-hmi-widgets locally and point
+the setup at it: `OPENPLC_HMI_WIDGETS_DIR=<openplc-hmi-widgets>/dist npm run setup:hmi-widgets`.
+
 - Run the development script
 
 ```bash

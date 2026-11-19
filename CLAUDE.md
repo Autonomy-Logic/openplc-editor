@@ -53,6 +53,7 @@ External contributors without Jira access follow CONTRIBUTING.md; GitHub Issues 
 ```bash
 npm install              # Install deps + download binaries + Python runtime + build DLL cache
 npm run setup:python     # Fetch the pinned Python runtime into vendor/python-runtime/ (python-runtime.json)
+npm run setup:hmi-widgets # Fetch the pinned HMI widget libraries into vendor/hmi-widgets/ (binary-versions.json)
 npm run dev              # Full dev mode (main + renderer + Electron, port 1313)
 npm run build            # Production build (main + renderer)
 npm run build:main       # Electron main process only
@@ -69,7 +70,6 @@ npm run test             # Jest with coverage (enforced thresholds)
 npm run test:watch       # Jest watch mode (no coverage)
 npm run test:e2e         # Playwright E2E tests
 npm run test:hmi-core    # HMI C core: golden scenes (gcc, clang, WebAssembly), unit tests, sanitized fuzzing
-npm run test:hmi-lib     # HMI widget library: headless frames of test screens (gcc, clang, sanitizers) against golden.txt
 npm run test:hmi-unit    # HMI unit generator: a sample project's unit run by a C host (gcc, clang, sanitizers)
 npm run test:hmi-baremetal # HMI baremetal host in simulated time and the readout's Modbus side (gcc, clang, sanitizers)
 npm run test:hmi-client  # Runtime v4 HMI artefact: hmi.wasm driven as the browser does, same pixels as a native build
@@ -89,6 +89,7 @@ so it must be installed first or they fail with `TS2307: Cannot find module
 ```bash
 npm ci --ignore-scripts && npm run setup:strucpp   # required first, or tsc/jest can't resolve 'strucpp'
 npm run setup:python                               # the pinned Python runtime (vendor/python-runtime/), skipped by --ignore-scripts
+npm run setup:hmi-widgets                          # the pinned HMI widget libraries (vendor/hmi-widgets/), which the HMI suites build with
 npx tsc --noEmit                                   # ci-build:       Build Check
 npx prettier --check "./src/**/*.{ts,tsx}"         # ci-format:      Format Check
 npx eslint "./src/**/*.{ts,tsx}"                   # ci-lint:        Lint Check
@@ -579,10 +580,28 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
 - **HMI C core:** `resources/sources/hmi/` (mirrored to openplc-web `src/assets/firmware/hmi/`) is tested by
   `tests/hmi-core/run.mjs` (`npm run test:hmi-core`, CI job `ci-hmi-core.yml`), not by Jest; see
   `resources/sources/hmi/README.md`.
-- **HMI widget library:** StandardWidgets, the ST library screens are built from, lives as TS string modules in
-  `src/backend/shared/hmi/lib/` (compiled to a `.stlib` by `build-standard-widgets.ts`; catalogue in
-  `widget-catalog.ts`, tested by Jest). `tests/hmi-lib/run.mjs` (`npm run test:hmi-lib`, same CI job) renders test
-  screens headless with the C core and needs STruC++ installed.
+- **HMI widget libraries:** the ST libraries of the HMI live in their own repository,
+  [openplc-hmi-widgets](https://github.com/Autonomy-Logic/openplc-hmi-widgets), released as STruC++ `.stlib`
+  archives: `standard-widgets` (kind `hmi`: element base, widgets, keyboard, screen base, runtime) and `hmi-alarms`
+  (kind `plc`: the PLC side of the alarm and event widgets). Each archive carries an `openplc` key with its kind,
+  licence and, for kind `hmi`, the HMI core API version it calls and its widget catalogue; the release adds a
+  versioned manifest (`openplc-hmi-widgets.json`) with every archive's SHA-256. `binary-versions.json` pins the
+  release (`hmi-widgets`: tag, repository, SHA-256 of the manifest) and `npm run setup:hmi-widgets` (part of
+  `postinstall`; `scripts/download-binaries.ts` over the shared `widgets-release-setup.ts`) installs it into
+  `vendor/hmi-widgets/` after checking the manifest against the pin and each archive against the manifest. It fails,
+  saying so, when the release is not published; `OPENPLC_HMI_WIDGETS_DIR=<openplc-hmi-widgets>/dist` installs a local
+  build instead. Packaged builds ship the directory as the extra resource `hmi-widgets`.
+  The library manager lists these archives as bundled: always on, not removable. Further widget libraries install
+  through the library manager like any `.stlib`; a library of kind `hmi` is on for every project's HMI (palette,
+  catalogue, preview, firmware and Runtime v4 builds) and never enters the PLC build, the PLC library tree, the
+  Project Libraries tab or the PLC language service (`partitionLibraryArchives`, `selectBuildLibraryArchives`).
+  `HMI_CORE_API_VERSION` (`src/middleware/shared/utils/hmi/widget-libraries.ts`) is the HMI core API this editor
+  provides, the single source of truth: install, setup and the HMI build refuse a widget library built for another
+  one, with the reason. Raise it with any core change a compiled widget library could break on, and build the widget
+  libraries for it (their `hmi-core.json`). The editor never compiles these libraries: `loadHmiWidgetLibraries`
+  loads the archives, and the catalogue of library widgets is the one the archive carries (`widget-catalog.ts`
+  computes it only for a project's own widget blocks; a Jest test checks the two agree). The libraries' headless frame
+  tests run in openplc-hmi-widgets. `e2e/hmi-widget-libraries.spec.ts` covers an installed widget library end to end.
 - **HMI unit generator:** `src/backend/shared/hmi/unit/` turns screens, widget blocks and HMI Settings
   (`src/middleware/shared/utils/hmi/settings.ts`) into the HMI unit: C++ in namespace `hmi` plus the C glue hosts
   link (`resources/sources/hmi/unit/hmi_unit.h`; preview setters in `hmi_preview.h`). `tests/hmi-unit/run.mjs`
