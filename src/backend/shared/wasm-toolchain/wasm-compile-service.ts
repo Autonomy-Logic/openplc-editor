@@ -1,11 +1,16 @@
 import type { PlatformLog } from '@root/middleware/shared/ports/compiler-platform-port'
-import type { WasmClangRunner, WasmObjectStore } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
+import type {
+  WasmClangRunner,
+  WasmObjectStore,
+  WasmShippedObjectSource,
+} from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 import type { WasmCompileRequest, WasmCompileResult } from '@root/middleware/shared/ports/wasm-toolchain-types'
 
 import { compileToWasm, type WasmObjectCache } from './compile-to-wasm'
 import { parseWasmCompileRequest } from './parse-wasm-compile-request'
 import { PersistentWasmObjectCache } from './persistent-object-cache'
 import { prepareWasmToolchain, type WasmToolchainReadiness } from './prepare-toolchain'
+import { readShippedObjects } from './shipped-objects'
 import { WASM_TOOLCHAIN_IDENTITY } from './toolchain-identity'
 import { BoundedWasmObjectCache } from './wasm-object-cache'
 
@@ -40,18 +45,27 @@ const rejected = (error: string): WasmCompileResult => ({
   diagnostics: [{ message: error, level: 'error' }],
 })
 
+export interface WasmCompileServiceOptions {
+  /** Where compiled objects outlive the session. */
+  store?: WasmObjectStore
+  /** Compiled objects shipped with the application. */
+  shipped?: WasmShippedObjectSource
+  log?: PlatformLog
+  /** Identity of the toolchain the runner loads; the pinned one unless a test says otherwise. */
+  identity?: string
+}
+
 /**
  * The toolchain a platform exposes: one runner, one session cache that outlives its workers, one readiness. Builds in
  * flight share the runner's workers; when the last one ends, whatever its outcome, and nobody holds the toolchain, the
- * runner is released. With a store, objects also outlive the session: the cache is filled from the store when the
- * toolchain is prepared or a build starts, whichever comes first, and builds wait for it.
+ * runner is released. The cache is filled with the shipped objects and, with a store, the objects of earlier sessions
+ * when the toolchain is prepared or a build starts, whichever comes first, and builds wait for it.
  */
 export function createWasmCompileService(
   runner: WasmClangRunner,
-  store?: WasmObjectStore,
-  log?: PlatformLog,
-  identity: string = WASM_TOOLCHAIN_IDENTITY,
+  options: WasmCompileServiceOptions = {},
 ): WasmCompileService {
+  const { store, shipped, log, identity = WASM_TOOLCHAIN_IDENTITY } = options
   const memory = new BoundedWasmObjectCache(WASM_OBJECT_CACHE_BYTES)
   const persistent = store
     ? new PersistentWasmObjectCache(memory, store, WASM_STORED_OBJECT_BYTES, (message) =>
@@ -66,16 +80,25 @@ export function createWasmCompileService(
   const holderKey = (holder: string, owner: string | undefined): string =>
     owner === undefined ? `\u0001${holder}` : `${owner}\u0000${holder}`
 
+  const reason = (error: unknown): string => (error instanceof Error ? error.message : String(error))
+  const seed = async (): Promise<void> => {
+    if (!shipped) return
+    try {
+      for (const { key, entry } of await readShippedObjects(shipped, identity)) memory.set(key, entry)
+    } catch (error) {
+      log?.(`Compiled objects shipped with the application could not be read: ${reason(error)}`, 'warning')
+    }
+  }
+  const load = async (): Promise<void> => {
+    if (!persistent) return
+    try {
+      await persistent.load(identity)
+    } catch (error) {
+      log?.(`Compiled objects of earlier sessions could not be read: ${reason(error)}`, 'warning')
+    }
+  }
   const restore = (): Promise<void> => {
-    if (!persistent) return Promise.resolve()
-    restored ??= persistent
-      .load(identity)
-      .catch((error: unknown) =>
-        log?.(
-          `Compiled objects of earlier sessions could not be read: ${error instanceof Error ? error.message : String(error)}`,
-          'warning',
-        ),
-      )
+    restored ??= seed().then(load)
     return restored
   }
 

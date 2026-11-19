@@ -141,21 +141,21 @@ describe('compile service with a store', () => {
 
   it('reuses the objects and the module an earlier session built with the same toolchain', async () => {
     const store = new MemoryStore()
-    const first = createWasmCompileService(new FakeRunner(), store, undefined, 'clang 1')
+    const first = createWasmCompileService(new FakeRunner(), { store, identity: 'clang 1' })
     await first.prepare()
     expect((await first.compile(request())).stats.cached).toBe(0)
     await settle()
     expect(store.records.size).toBe(2)
 
     const runner = new FakeRunner()
-    const restarted = createWasmCompileService(runner, store, undefined, 'clang 1')
+    const restarted = createWasmCompileService(runner, { store, identity: 'clang 1' })
     await restarted.prepare()
     expect((await restarted.compile(request())).stats.cached).toBe(1)
     expect(runner.jobs).toEqual([])
     expect((await restarted.compile(edited())).stats.cached).toBe(0)
     expect((await restarted.compile(request())).stats.cached).toBe(1)
 
-    const upgraded = createWasmCompileService(new FakeRunner(), store, undefined, 'clang 2')
+    const upgraded = createWasmCompileService(new FakeRunner(), { store, identity: 'clang 2' })
     await upgraded.prepare()
     expect((await upgraded.compile(request())).stats.cached).toBe(0)
   })
@@ -169,7 +169,7 @@ describe('compile service with a store', () => {
       return readAll()
     }
     const runner = new FakeRunner()
-    const service = createWasmCompileService(runner, store, undefined, 'clang 1')
+    const service = createWasmCompileService(runner, { store, identity: 'clang 1' })
     await service.prepare()
     await settle()
     expect(reads).toBe(1)
@@ -180,7 +180,7 @@ describe('compile service with a store', () => {
     const store = new MemoryStore()
     store.readAll = () => Promise.reject(new Error('unreadable'))
     const warnings: string[] = []
-    const service = createWasmCompileService(new FakeRunner(), store, (message) => warnings.push(message))
+    const service = createWasmCompileService(new FakeRunner(), { store, log: (message) => warnings.push(message) })
     await service.prepare()
     expect((await service.compile(request())).ok).toBe(true)
     expect(warnings).toEqual(['Compiled objects of earlier sessions could not be read: unreadable'])

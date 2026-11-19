@@ -8,6 +8,7 @@ import { app } from 'electron'
 
 import { logger } from '../services'
 import { createDesktopObjectStore } from './desktop-object-store'
+import { createDesktopShippedObjects, shippedObjectsDir } from './desktop-shipped-objects'
 import { resolveWasmToolchainPaths } from './toolchain-paths'
 import { WorkerClangRunner } from './worker-clang-runner'
 
@@ -24,8 +25,13 @@ export function getDesktopWasmCompileService(): WasmCompileService {
         mainDir: __dirname,
       }),
     ),
-    createDesktopObjectStore(join(app.getPath('userData'), 'User', 'WasmObjects')),
-    (message, level) => (level === 'error' ? logger.error(message) : logger.warn(message)),
+    {
+      store: createDesktopObjectStore(join(app.getPath('userData'), 'User', 'WasmObjects')),
+      shipped: createDesktopShippedObjects(
+        shippedObjectsDir({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, cwd: process.cwd() }),
+      ),
+      log: (message, level) => (level === 'error' ? logger.error(message) : logger.warn(message)),
+    },
   )
   return service
 }

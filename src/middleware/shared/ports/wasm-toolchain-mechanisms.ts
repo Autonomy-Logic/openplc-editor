@@ -60,6 +60,16 @@ export interface WasmObjectStore {
   remove(key: string): Promise<void>
 }
 
+/**
+ * Compiled objects shipped with the application, read only from the application's own files (the installed resources
+ * on the desktop, the app's own origin on the web), never from a project or a folder users write. Each file is
+ * returned verbatim; what it holds and whether it may be used is decided by the shared toolchain.
+ */
+export interface WasmShippedObjectSource {
+  /** The bytes of one shipped file by its name, or null when there is no such file. */
+  read(name: string): Promise<Uint8Array | null>
+}
+
 /** A message the pool sends a clang worker: run one job. */
 export interface ClangWorkerJobMessage {
   id: number
