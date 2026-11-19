@@ -3,9 +3,10 @@ import { describe, expect, it } from '@jest/globals'
 import type { WasmClangRunner } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 
 import { ClangWorkerPool } from '../clang-worker-pool'
-import { type CachedWasmObject, compileToWasm, type WasmCompileRequest } from '../compile-to-wasm'
+import { compileToWasm, type WasmCompileRequest } from '../compile-to-wasm'
 import { CountingClangMechanism, flushMicrotasks } from './fixtures/counting-clang-mechanism'
 import { FakeRunner } from './fixtures/fake-runner'
+import { RecordingCache } from './fixtures/recording-cache'
 import { isFileBytes, readTreeFile } from '../file-tree'
 
 const request = (overrides: Partial<WasmCompileRequest> = {}): WasmCompileRequest => ({
@@ -25,6 +26,7 @@ const request = (overrides: Partial<WasmCompileRequest> = {}): WasmCompileReques
 })
 
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes)
+const LINK_PATH = '__objects/module.wasm'
 
 describe('compileToWasm', () => {
   it('compiles each unit with its language flags and links the objects into the module', async () => {
@@ -94,7 +96,7 @@ describe('compileToWasm', () => {
     new FakeRunner(2, undefined, null, { ...includes, ...extra })
 
   it('reuses cached objects for unchanged units and recompiles only the edited one', async () => {
-    const cache = new Map<string, CachedWasmObject>()
+    const cache = new RecordingCache()
     await compileToWasm(request(), { runner: runnerWithIncludes(), cache })
     expect(cache.size).toBe(2)
 
@@ -108,7 +110,7 @@ describe('compileToWasm', () => {
   })
 
   it('records the request files each object was built from, not the toolchain headers', async () => {
-    const cache = new Map<string, CachedWasmObject>()
+    const cache = new RecordingCache()
     await compileToWasm(request(), { runner: runnerWithIncludes(), cache })
     const deps = [...cache.values()].map((e) => e.dependencies.map(([path]) => path).sort())
     expect(deps).toContainEqual(['core/core.c', 'core/core.h'])
@@ -116,7 +118,7 @@ describe('compileToWasm', () => {
   })
 
   it('recompiles only the units that include a changed header', async () => {
-    const cache = new Map<string, CachedWasmObject>()
+    const cache = new RecordingCache()
     await compileToWasm(request(), { runner: runnerWithIncludes(), cache })
     const runner = runnerWithIncludes()
     const changed = request()
@@ -127,7 +129,7 @@ describe('compileToWasm', () => {
   })
 
   it('recompiles a unit that includes another unit when that unit changes', async () => {
-    const cache = new Map<string, CachedWasmObject>()
+    const cache = new RecordingCache()
     const unity = { 'app/main.cpp': ['core/core.c'] }
     await compileToWasm(request(), { runner: runnerWithIncludes(unity), cache })
     const runner = runnerWithIncludes(unity)
@@ -139,7 +141,7 @@ describe('compileToWasm', () => {
   })
 
   it('keeps every object when an added file could not change what any include finds', async () => {
-    const cache = new Map<string, CachedWasmObject>()
+    const cache = new RecordingCache()
     await compileToWasm(request(), { runner: runnerWithIncludes(), cache })
     const added = request()
     added.files['screens/new_screen.cpp'] = 'int screen(void) { return 0; }'
@@ -149,7 +151,7 @@ describe('compileToWasm', () => {
   })
 
   it('recompiles only the units an added file could hide an include of, as one named like that include', async () => {
-    const cache = new Map<string, CachedWasmObject>()
+    const cache = new RecordingCache()
     await compileToWasm(request(), { runner: runnerWithIncludes(), cache })
     const added = request()
     added.files['app/core.h'] = 'int core(void);'
@@ -159,7 +161,7 @@ describe('compileToWasm', () => {
   })
 
   it('recompiles a unit when a file named like one of its toolchain headers appears or goes', async () => {
-    const cache = new Map<string, CachedWasmObject>()
+    const cache = new RecordingCache()
     await compileToWasm(request(), { runner: runnerWithIncludes(), cache })
     const shadowing = request()
     shadowing.files['core/stdio.h'] = '/* hides <stdio.h> */'
@@ -169,14 +171,57 @@ describe('compileToWasm', () => {
   })
 
   it('recompiles a unit when its flags change', async () => {
-    const cache = new Map<string, CachedWasmObject>()
+    const cache = new RecordingCache()
     await compileToWasm(request(), { runner: new FakeRunner(), cache })
     const result = await compileToWasm(request({ cxxFlags: ['-std=gnu++20'] }), { runner: new FakeRunner(), cache })
     expect(result.stats.cached).toBe(1)
   })
 
+  it('keeps an object per content of a unit, so two builds of other headers do not evict each other', async () => {
+    const cache = new RecordingCache()
+    const unity = { 'app/main.cpp': ['core/core.h'] }
+    const gallery = request()
+    gallery.files['core/core.h'] = 'int core(void); /* gallery */'
+    await compileToWasm(request(), { runner: runnerWithIncludes(unity), cache })
+    await compileToWasm(gallery, { runner: runnerWithIncludes(unity), cache })
+    const again = request()
+    again.linkFlags = ['-mexec-model=reactor', '-Wl,--no-entry']
+    const runner = runnerWithIncludes(unity)
+    expect((await compileToWasm(again, { runner, cache })).stats.cached).toBe(2)
+    expect(compiledSources(runner)).toEqual([])
+  })
+
+  it('returns the module of a request it already linked, running no job', async () => {
+    const cache = new RecordingCache()
+    const first = await compileToWasm(request(), { runner: new FakeRunner(), cache })
+    const runner = new FakeRunner()
+    const second = await compileToWasm(request(), { runner, cache })
+    expect(runner.jobs).toEqual([])
+    expect(second).toMatchObject({ ok: true, stats: { units: 2, cached: 2 } })
+    if (first.ok && second.ok) expect(second.wasm).toEqual(first.wasm)
+    expect(cache.modules()).toHaveLength(1)
+  })
+
+  it('links again when anything of the request changes, even a file no unit reads', async () => {
+    const cache = new RecordingCache()
+    await compileToWasm(request(), { runner: runnerWithIncludes(), cache })
+    const changes: Array<(r: WasmCompileRequest) => void> = [
+      (r) => (r.files['notes.txt'] = 'x'),
+      (r) => (r.linkFlags = ['-mexec-model=command']),
+      (r) => (r.output = 'other.wasm'),
+      (r) => (r.units = [...r.units].reverse()),
+    ]
+    for (const change of changes) {
+      const changed = request()
+      change(changed)
+      const runner = runnerWithIncludes()
+      await compileToWasm(changed, { runner, cache })
+      expect(runner.jobs.some((j) => j.argv.includes(LINK_PATH))).toBe(true)
+    }
+  })
+
   it('does not cache an object whose dependency list names a file it was not given', async () => {
-    const cache = new Map<string, CachedWasmObject>()
+    const cache = new RecordingCache()
     await compileToWasm(request(), { runner: runnerWithIncludes({ 'app/main.cpp': ['app/config\\#1.h'] }), cache })
     expect([...cache.values()].map((e) => e.dependencies.map(([p]) => p).sort())).toEqual([
       ['core/core.c', 'core/core.h'],
@@ -184,7 +229,7 @@ describe('compileToWasm', () => {
   })
 
   it.each(['missing', 'garbage'] as const)('does not cache an object whose dependency file is %s', async (kind) => {
-    const cache = new Map<string, CachedWasmObject>()
+    const cache = new RecordingCache()
     const runner = new FakeRunner(2, (argv) =>
       argv.includes('core/core.c') ? { exitCode: 0, dependencyFile: kind } : { exitCode: 0 },
     )
@@ -235,7 +280,7 @@ describe('compileToWasm', () => {
     })
 
     it('keeps the header and its units cached until a file the header includes changes', async () => {
-      const cache = new Map<string, CachedWasmObject>()
+      const cache = new RecordingCache()
       await compileToWasm(withHeader(), { runner: headerRunner(), cache })
       const unchanged = headerRunner()
       expect((await compileToWasm(withHeader(), { runner: unchanged, cache })).stats.cached).toBe(3)
@@ -252,7 +297,7 @@ describe('compileToWasm', () => {
     })
 
     it('recompiles the units that use a header when the header changes, and only them', async () => {
-      const cache = new Map<string, CachedWasmObject>()
+      const cache = new RecordingCache()
       await compileToWasm(withHeader(), { runner: headerRunner(), cache })
       const runner = headerRunner()
       const result = await compileToWasm(withHeader('#include "core/core.h"\n#define MORE 1'), { runner, cache })
@@ -261,7 +306,7 @@ describe('compileToWasm', () => {
     })
 
     it('keys units by what their header was built from, so a header rebuilt with other bytes keeps them', async () => {
-      const cache = new Map<string, CachedWasmObject>()
+      const cache = new RecordingCache()
       await compileToWasm(withHeader(), { runner: headerRunner(), cache })
       const header = [...cache.entries()].find(([, entry]) => decode(entry.object).includes('c++-header'))
       if (header) cache.delete(header[0])
@@ -367,7 +412,7 @@ describe('compileToWasm', () => {
   })
 
   it('does not cache the object of a failed unit', async () => {
-    const cache = new Map<string, CachedWasmObject>()
+    const cache = new RecordingCache()
     const runner = new FakeRunner(2, (argv) => (argv.includes('core/core.c') ? { exitCode: 1 } : { exitCode: 0 }))
     await compileToWasm(request(), { runner, cache })
     expect(cache.size).toBe(1)

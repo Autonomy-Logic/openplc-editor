@@ -21,7 +21,8 @@ import { HmiPreviewInstance } from '../../src/backend/shared/hmi/preview/preview
 import { buildHmiWidgetCatalog, WIDGET_PREVIEW_SCREEN } from '../../src/backend/shared/hmi/unit/generate-hmi-unit'
 import { sampleProject } from '../../src/backend/shared/hmi/unit/__tests__/fixtures/sample-project'
 import { isYowaspClang, runClangJob } from '../../src/backend/shared/wasm-toolchain/clang-worker-host'
-import { type CachedWasmObject, compileToWasm } from '../../src/backend/shared/wasm-toolchain/compile-to-wasm'
+import { compileToWasm } from '../../src/backend/shared/wasm-toolchain/compile-to-wasm'
+import { BoundedWasmObjectCache } from '../../src/backend/shared/wasm-toolchain/wasm-object-cache'
 import { createWasmCompileService } from '../../src/backend/shared/wasm-toolchain/wasm-compile-service'
 import type {
   HmiPreviewWorkerHandle,
@@ -500,7 +501,7 @@ async function liveElementChecks(files: HmiPreviewResources, compile: Compile): 
 
 async function main(): Promise<void> {
   const clang = await runner()
-  const cache = new Map<string, CachedWasmObject>()
+  const cache = new BoundedWasmObjectCache(512 * 1024 * 1024)
   const compile = (request: WasmCompileRequest) => compileToWasm(request, { runner: clang, cache })
   const files = resources()
 

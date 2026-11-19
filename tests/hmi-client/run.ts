@@ -21,7 +21,8 @@ import {
 import { generateHmiUnit } from '../../src/backend/shared/hmi/unit/generate-hmi-unit'
 import { sampleProject } from '../../src/backend/shared/hmi/unit/__tests__/fixtures/sample-project'
 import { isYowaspClang, runClangJob } from '../../src/backend/shared/wasm-toolchain/clang-worker-host'
-import { type CachedWasmObject, compileToWasm } from '../../src/backend/shared/wasm-toolchain/compile-to-wasm'
+import { compileToWasm } from '../../src/backend/shared/wasm-toolchain/compile-to-wasm'
+import { BoundedWasmObjectCache } from '../../src/backend/shared/wasm-toolchain/wasm-object-cache'
 import type { WasmClangRunner } from '../../src/middleware/shared/ports/wasm-toolchain-mechanisms'
 import type { WasmCompileRequest } from '../../src/middleware/shared/ports/wasm-toolchain-types'
 
@@ -263,7 +264,7 @@ function renderHashes(bh: Bh): string[] {
 
 async function main(): Promise<void> {
   const clang = await runner()
-  const cache = new Map<string, CachedWasmObject>()
+  const cache = new BoundedWasmObjectCache(512 * 1024 * 1024)
   const compile = (request: WasmCompileRequest) => compileToWasm(request, { runner: clang, cache })
   const project = sampleProject()
   project.screens = project.screens.map((screen) =>

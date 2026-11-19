@@ -13,6 +13,8 @@ export interface WasmCompileUnit {
   language: WasmUnitLanguage
   /** Flags for this unit only, after the language flags. */
   flags?: string[]
+  /** When true, `flags` replace the request's language flags, so the unit compiles alike in every request. */
+  ownFlags?: boolean
   /** Header of one of the request's `precompiledHeaders` that this unit includes precompiled, ahead of its source. */
   pch?: string
 }

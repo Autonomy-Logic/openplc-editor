@@ -45,10 +45,13 @@ function parseUnits(value: unknown): WasmCompileUnit[] | string {
     const flags = optionalFlags(unit.flags, `${unit.source}.flags`)
     if (typeof flags === 'string') return flags
     if (unit.pch !== undefined && typeof unit.pch !== 'string') return `Unit '${unit.source}' has an invalid 'pch'.`
+    if (unit.ownFlags !== undefined && typeof unit.ownFlags !== 'boolean')
+      return `Unit '${unit.source}' has an invalid 'ownFlags'.`
     units.push({
       source: unit.source,
       language: unit.language,
       ...(flags ? { flags } : {}),
+      ...(unit.ownFlags === true ? { ownFlags: true } : {}),
       ...(typeof unit.pch === 'string' ? { pch: unit.pch } : {}),
     })
   }
