@@ -5,15 +5,20 @@ import type {
   OrchestratorDevice,
   OrchestratorInfo,
 } from '../../../../../../../middleware/shared/ports/orchestrator-port'
+import type { VppTargetLoadState } from '../../../../../../../middleware/shared/ports/vpp-target-mechanisms'
 import { useOrchestrator, usePlatform, useRuntime } from '../../../../../../../middleware/shared/providers'
 import { ArrowIcon } from '../../../../../../assets/icons/interface/Arrow'
+import { CloseIcon } from '../../../../../../assets/icons/interface/Close'
 import { RefreshIcon } from '../../../../../../assets/icons/interface/Refresh'
 import { WarningIcon } from '../../../../../../assets/icons/interface/Warning'
+import { useVppTargetLoadState } from '../../../../../../hooks/use-vpp-target-load-state'
 import { toProjectTargetDevice, toSelectedDevice } from '../../../../../../services/project-target-device'
 import { useOpenPLCStore, useOpenPLCStoreApi } from '../../../../../../store'
 import type { SelectedDevice } from '../../../../../../store/slices/device'
 import { cn } from '../../../../../../utils/cn'
+import { downloadPercent, formatDownloadProgress } from '../../../../../../utils/format-download-progress'
 import { getErrorMessage } from '../../../../../../utils/get-error-message'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../../../_atoms/tooltip'
 import { Modal, ModalContent, ModalTitle } from '../../../../../_molecules/modal'
 import { DeviceEditorSlot } from '../../../../../_templates/[editors]/device-editor-slot'
 
@@ -71,6 +76,92 @@ const BackplaneBadge = () => (
     Backplane I/O
   </span>
 )
+
+const VENDOR_BOARD_CARD_CLASSES =
+  'rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900'
+
+type ActiveTargetLoadState = Extract<VppTargetLoadState, { status: 'downloading' | 'verifying' | 'error' }>
+
+function isActiveTargetLoad(state: VppTargetLoadState): state is ActiveTargetLoadState {
+  return state.status === 'downloading' || state.status === 'verifying' || state.status === 'error'
+}
+
+type VendorPackageLoadProps = {
+  state: ActiveTargetLoadState
+  isRetrying: boolean
+  onCancel: () => void
+  onRetry: () => void
+}
+
+/** Progress or failure of the targeted vPLC's package load. Needs a `TooltipProvider` above it. */
+const VendorPackageLoad = ({ state, isRetrying, onCancel, onRetry }: VendorPackageLoadProps) => {
+  if (state.status === 'error') {
+    return (
+      <div data-testid='vendor-package-error' className='flex items-center justify-between gap-2'>
+        <p className='flex items-center gap-2 text-sm text-red-600 dark:text-red-400'>
+          <WarningIcon size='sm' className='text-red-600 dark:text-red-400' />
+          Download failed.
+        </p>
+        <Tooltip delayDuration={150}>
+          <TooltipTrigger asChild>
+            <button
+              type='button'
+              data-testid='vendor-package-retry'
+              onClick={onRetry}
+              disabled={isRetrying}
+              className={cn(
+                'rounded-lg bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-1000 hover:bg-neutral-200 dark:bg-neutral-850 dark:text-neutral-100',
+                isRetrying && 'cursor-not-allowed opacity-50',
+              )}
+            >
+              Try again
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side='top' sideOffset={6} className='text-xs'>
+            {state.message}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    )
+  }
+
+  const percent = state.status === 'verifying' ? 100 : downloadPercent(state.loaded, state.total)
+  const bar = (
+    <div
+      role='progressbar'
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent ?? undefined}
+      className='h-2 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700'
+    >
+      <div
+        className={cn('h-full rounded-full bg-brand transition-all duration-200', percent === null && 'animate-pulse')}
+        style={{ width: `${percent ?? 100}%` }}
+      />
+    </div>
+  )
+
+  return (
+    <div data-testid='vendor-package-loading' className='flex items-center gap-2'>
+      {state.status === 'downloading' ? (
+        <Tooltip delayDuration={150}>
+          <TooltipTrigger asChild>{bar}</TooltipTrigger>
+          <TooltipContent side='top' sideOffset={6} className='text-xs'>
+            {formatDownloadProgress(state.loaded, state.total)}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        bar
+      )}
+      {percent !== null && <span className='text-xs text-neutral-600 dark:text-neutral-400'>{`${percent}%`}</span>}
+      {state.status === 'downloading' && (
+        <button type='button' data-testid='vendor-package-cancel' aria-label='Cancel download' onClick={onCancel}>
+          <CloseIcon className='h-4 w-4 stroke-brand dark:stroke-brand-light' />
+        </button>
+      )}
+    </div>
+  )
+}
 
 /** Same rule for both: absent clears the key, a value writes it. */
 function sameBinding(a: SelectedDevice['vpp'], b: SelectedDevice['vpp']): boolean {
@@ -172,6 +263,24 @@ const OrchestratorsList = () => {
       cancelled = true
       unsubscribe()
     }
+  }, [packages])
+
+  const targetLoadState = useVppTargetLoadState()
+  const [isRetryingTargetLoad, setIsRetryingTargetLoad] = useState(false)
+
+  const handleCancelTargetLoad = useCallback(() => {
+    packages?.cancelTargetLoad()
+  }, [packages])
+
+  const handleRetryTargetLoad = useCallback(() => {
+    if (!packages) return
+    setIsRetryingTargetLoad(true)
+    void packages
+      .retryTargetLoad()
+      .finally(() => setIsRetryingTargetLoad(false))
+      .catch((error: unknown) => {
+        console.error('[Orchestrators] Package load retry failed', error)
+      })
   }, [packages])
 
   // A vPLC runs the package it was created with, so one board is not a choice
@@ -452,34 +561,47 @@ const OrchestratorsList = () => {
                 Absent whenever the package names exactly one, which the effect
                 above has already selected, and on every platform that targets
                 no vPLC. */}
-            {vendorBoards.length > 1 && (
-              <div
-                id='vendor-board-picker'
-                className='rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-neutral-700 dark:bg-neutral-900'
-              >
-                <label htmlFor='vendor-board-select' className='text-sm font-medium text-neutral-900 dark:text-white'>
-                  Vendor board
-                </label>
-                <p className='mt-1 text-xs text-neutral-500 dark:text-neutral-400'>
-                  This vPLC&apos;s vendor package supports several boards. Choose the one wired to the backplane.
-                </p>
-                <select
-                  id='vendor-board-select'
-                  aria-label='Vendor board selection'
-                  value={vendorBoards.includes(deviceBoard) ? deviceBoard : ''}
-                  onChange={(event) => {
-                    if (event.target.value) deviceActions.setDeviceBoard(event.target.value)
-                  }}
-                  className='mt-2 w-full rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm text-neutral-850 outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
-                >
-                  <option value=''>Select a board…</option>
-                  {vendorBoards.map((board) => (
-                    <option key={board} value={board}>
-                      {board}
-                    </option>
-                  ))}
-                </select>
+            {packages && isActiveTargetLoad(targetLoadState) ? (
+              <div className={VENDOR_BOARD_CARD_CLASSES}>
+                <p className='text-sm font-medium text-neutral-900 dark:text-white'>Vendor board</p>
+                <div className='mt-2'>
+                  <TooltipProvider>
+                    <VendorPackageLoad
+                      state={targetLoadState}
+                      isRetrying={isRetryingTargetLoad}
+                      onCancel={handleCancelTargetLoad}
+                      onRetry={handleRetryTargetLoad}
+                    />
+                  </TooltipProvider>
+                </div>
               </div>
+            ) : (
+              vendorBoards.length > 1 && (
+                <div id='vendor-board-picker' className={VENDOR_BOARD_CARD_CLASSES}>
+                  <label htmlFor='vendor-board-select' className='text-sm font-medium text-neutral-900 dark:text-white'>
+                    Vendor board
+                  </label>
+                  <p className='mt-1 text-xs text-neutral-500 dark:text-neutral-400'>
+                    This vPLC&apos;s vendor package supports several boards. Choose the one wired to the backplane.
+                  </p>
+                  <select
+                    id='vendor-board-select'
+                    aria-label='Vendor board selection'
+                    value={vendorBoards.includes(deviceBoard) ? deviceBoard : ''}
+                    onChange={(event) => {
+                      if (event.target.value) deviceActions.setDeviceBoard(event.target.value)
+                    }}
+                    className='mt-2 w-full rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm text-neutral-850 outline-none dark:border-neutral-850 dark:bg-neutral-950 dark:text-neutral-300'
+                  >
+                    <option value=''>Select a board…</option>
+                    {vendorBoards.map((board) => (
+                      <option key={board} value={board}>
+                        {board}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )
             )}
 
             {/* Simulator option — always visible */}

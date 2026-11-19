@@ -23,6 +23,7 @@ import type {
   StartupNotice,
   Unsubscribe,
 } from './types'
+import type { VppTargetLoadState } from './vpp-target-mechanisms'
 import type { DeviceVpp } from './vpp-types'
 
 export interface PackagePort {
@@ -51,6 +52,18 @@ export interface PackagePort {
    * no vPLC, so the caller keeps whatever board selection it already had.
    */
   listTargetBoards(): Promise<string[]>
+
+  /** Load state of the targeted vPLC's package. Editor: always idle. */
+  getTargetLoadState(): VppTargetLoadState
+
+  /** Subscribe to load state changes. Editor: never fires. */
+  onTargetLoadStateChanged(callback: (state: VppTargetLoadState) => void): Unsubscribe
+
+  /** Retry a failed load of the targeted package; fires onBoardsUpdated when it settles. Editor: resolves. */
+  retryTargetLoad(): Promise<void>
+
+  /** Cancel the running download of the targeted package. Editor: no-op. */
+  cancelTargetLoad(): void
 
   /**
    * Open a file picker and import a .vpp package file.

@@ -26,6 +26,7 @@ import {
   useRuntime,
   useSimulator,
 } from '../../../../middleware/shared/providers'
+import { usePackages } from '../../../../middleware/shared/providers/platform-context'
 import { StopIcon } from '../../../assets/icons/interface/Stop'
 import { useDeviceConnect } from '../../../hooks/use-device-connect'
 import { useRuntimeConnect } from '../../../hooks/use-runtime-connect'
@@ -110,6 +111,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
   const device = useDevice()
   const projectPort = useProject()
   const capabilities = useCapabilities()
+  const packages = usePackages()
   const debugSession = useDebugSession()
   useDebugPolling({ debugTreesRef: debugSession.debugTreesRef })
 
@@ -336,6 +338,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
             boardName: state.deviceDefinitions.configuration.deviceBoard,
             target: state.runtimeConnection.selectedDevice,
             vplcProvidesVendorBoards: capabilities.hasOrchestratorDevices,
+            targetLoadStatus: packages?.getTargetLoadState().status,
           }),
         )
         if (gate.kind === 'refuse') {
@@ -692,6 +695,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
       runtime,
       requestConsoleFollow,
       store,
+      packages,
     ],
   )
 
@@ -1142,6 +1146,7 @@ export const DefaultWorkspaceActivityBar = ({ zoom }: DefaultWorkspaceActivityBa
               boardName: boardTarget,
               target: state.runtimeConnection.selectedDevice,
               vplcProvidesVendorBoards: capabilities.hasOrchestratorDevices,
+              targetLoadStatus: packages?.getTargetLoadState().status,
             }),
           )
           if (gate.kind === 'refuse') {

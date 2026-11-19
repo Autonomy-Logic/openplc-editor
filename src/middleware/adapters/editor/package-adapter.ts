@@ -33,6 +33,7 @@ import type {
   StartupNotice,
   Unsubscribe,
 } from '../../shared/ports/types'
+import type { VppTargetLoadState } from '../../shared/ports/vpp-target-mechanisms'
 import { mockInstallFromRemote, mockListRemoteCatalog } from './remote-catalog-mock'
 
 /**
@@ -89,6 +90,21 @@ export function createEditorPackageAdapter(): PackagePort {
     listTargetBoards(): Promise<string[]> {
       return Promise.resolve([])
     },
+
+    /** No vPLC package is downloaded on the desktop. */
+    getTargetLoadState(): VppTargetLoadState {
+      return { status: 'idle' }
+    },
+
+    onTargetLoadStateChanged(): Unsubscribe {
+      return () => {}
+    },
+
+    retryTargetLoad(): Promise<void> {
+      return Promise.resolve()
+    },
+
+    cancelTargetLoad(): void {},
 
     importFromFile(): Promise<ImportResult> {
       return window.bridge.importPackageFromFile()

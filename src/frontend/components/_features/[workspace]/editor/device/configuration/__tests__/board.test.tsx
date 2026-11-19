@@ -1,6 +1,7 @@
 import type { OpenPLCStore } from '@root/frontend/store'
 import type { SelectedDevice } from '@root/frontend/store/slices/device/types'
 import { createStoreWrapper, createTestStore } from '@root/frontend/store/testing'
+import { createTestPackagesPort } from '@root/frontend/store/testing-packages'
 import type { PackagePort } from '@root/middleware/shared/ports/package-port'
 import { EDITOR_CAPABILITIES, WEB_CAPABILITIES } from '@root/middleware/shared/ports/platform-capabilities'
 import type { BoardInfo } from '@root/middleware/shared/ports/types'
@@ -90,6 +91,11 @@ const holder: SelectedDevice = {
   deviceId: 'dev-holder',
   deviceName: 'Line A',
   backplaneAccess: true,
+}
+
+/** A packages port answering `getPackagePin`, with an idle target package load. */
+function pinPackages(getPackagePin: PackagePort['getPackagePin']): PackagePort {
+  return stubPort<PackagePort>({ ...createTestPackagesPort({ status: 'idle' }).port, getPackagePin })
 }
 
 describe('Board device list', () => {
@@ -205,7 +211,7 @@ describe('Board device list', () => {
         Promise.resolve({ packageId: 'com.acme.backplane', version: '1.0.0', contentHash: 'sha256:recorded' }),
       )
 
-      renderBoard({ ...holder, vpp: null }, WEB_CAPABILITIES, stubPort<PackagePort>({ getPackagePin }))
+      renderBoard({ ...holder, vpp: null }, WEB_CAPABILITIES, pinPackages(getPackagePin))
 
       expect(await screen.findByText(/is not installed/)).toBeTruthy()
       expect(getPackagePin).not.toHaveBeenCalled()
@@ -222,7 +228,7 @@ describe('Board device list', () => {
       const installed = { packageId: 'com.acme.backplane', version: '1.1.0', contentHash: 'sha256:new' }
       const getPackagePin = jest.fn(() => Promise.resolve(installed))
 
-      renderBoard(null, EDITOR_CAPABILITIES, stubPort<PackagePort>({ getPackagePin }))
+      renderBoard(null, EDITOR_CAPABILITIES, pinPackages(getPackagePin))
 
       await waitFor(() =>
         expect(store.getState().deviceDefinitions.configuration.vppPackagePinsByBoard?.[VPP_BOARD_NAME]).toEqual(
