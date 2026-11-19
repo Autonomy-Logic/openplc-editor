@@ -93,7 +93,12 @@ describe('composeHmiArtefact', () => {
       { arr: 2, elem: 0 },
     ])
     expect(result.pages).toEqual([
-      { name: 'Overview', reads: [0, 1, 2, 3, 4], writes: [1, 2, 3], roles: 15 },
+      {
+        name: 'Overview',
+        reads: [0, 1, 2, 3, 4],
+        writes: [1, 2, 3].map((tag) => expect.objectContaining({ tag, whole: true, bits: [] })),
+        roles: 15,
+      },
       { name: 'Details', reads: [3], writes: [], roles: 3 },
     ])
 

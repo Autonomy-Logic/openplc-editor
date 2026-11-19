@@ -115,6 +115,7 @@ bool tag_read(void *, int tag, void *dest) {
 /** Bytes of an out record before its value: page, tag, kind, bit, length. */
 constexpr size_t kOutHeader = 8;
 constexpr uint8_t kWriteWord = 0;
+constexpr uint8_t kWriteBit = 1;
 
 /** Queues one write record for the runtime: the page shown when it was made, the tag, its kind and its value. */
 void queue_write(int tag, uint8_t kind, uint8_t bit, const uint8_t *value, size_t len) {
@@ -142,7 +143,17 @@ void tag_write(void *, int tag, const void *src) {
     queue_write(tag, kWriteWord, 0, g_values[tag], wire_length(tag, g_values[tag]));
 }
 
-const hmi_tag_access_t g_access = {tag_read, tag_write, nullptr};
+/** A screen's bit assignment: the local value's bit changes at once; the runtime applies it to the PLC's current value. */
+void tag_write_bit(void *, int tag, unsigned bit, bool value) {
+    if (tag < 0 || tag >= hmi_tag_count || is_string(tag) || bit / 8u >= hmi_tag_size(tag) || bit > 255u) return;
+    const uint8_t mask = static_cast<uint8_t>(1u << (bit % 8u));
+    uint8_t *byte = g_values[tag] + bit / 8u;
+    *byte = static_cast<uint8_t>(value ? *byte | mask : *byte & ~mask);
+    const uint8_t v = value ? 1u : 0u;
+    queue_write(tag, kWriteBit, static_cast<uint8_t>(bit), &v, 1);
+}
+
+const hmi_tag_access_t g_access = {tag_read, tag_write, nullptr, tag_write_bit};
 
 void release_surface() {
     free(g_surface.rgba);

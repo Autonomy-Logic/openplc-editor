@@ -20,6 +20,17 @@ const cString = (s: string): string => JSON.stringify(s)
 const idList = (name: string, ids: readonly number[]): string =>
   `static const uint16_t ${name}[${Math.max(ids.length, 1)}] = {${ids.length > 0 ? ids.join(', ') : '0'}};`
 
+const bitMask = (bits: readonly number[]): string =>
+  `0x${bits
+    .reduce((mask, bit) => mask | (1n << BigInt(bit)), 0n)
+    .toString(16)
+    .toUpperCase()}ULL`
+
+const writeList = (name: string, writes: HmiPageTags['writes']): string => {
+  const rows = writes.map((w) => `{${w.tag}, ${w.whole ? 1 : 0}, ${bitMask(w.bits)}}`)
+  return `static const hmi_access_write_t ${name}[${Math.max(rows.length, 1)}] = {${rows.length > 0 ? rows.join(', ') : '{0, 0, 0x0ULL}'}};`
+}
+
 /** `hmi_access.c`, or the reason it cannot be built. */
 export function hmiHostManifestSource(
   input: HmiHostManifestInput,
@@ -29,7 +40,9 @@ export function hmiHostManifestSource(
   if (input.pages.length === 0) return { ok: false, error: 'the HMI has no screens' }
   const unresolved = input.tags.find((t) => t.address === null)
   if (unresolved) return { ok: false, error: `${unresolved.path} has no debug address in the compiled PLC program` }
-  const lists = input.pages.flatMap((p, i) => [idList(`reads_${i}`, p.reads), idList(`writes_${i}`, p.writes)])
+  const badBit = input.pages.flatMap((p) => p.writes).find((w) => w.bits.some((b) => b < 0 || b > 63))
+  if (badBit) return { ok: false, error: `${input.tags[badBit.tag]?.path ?? badBit.tag}: a bit past 63 is assigned` }
+  const lists = input.pages.flatMap((p, i) => [idList(`reads_${i}`, p.reads), writeList(`writes_${i}`, p.writes)])
   const tagRows = input.tags.map(
     (t) => `    {${t.address?.arr ?? 0}u, ${t.address?.elem ?? 0}u, ${t.type}, ${t.maxLength}, ${cString(t.path)}},`,
   )

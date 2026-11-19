@@ -351,6 +351,17 @@ describe('the HMI browser client page', () => {
     ])
   })
 
+  it('sends a bit assignment as a bit write', async () => {
+    const page = await livePage()
+    const socket = page.sockets[0]
+    page.module.writes = [0, 0, 4, 0, 1, 5, 1, 0, 1, 0, 0, 4, 0, 1, 5, 1, 0, 0]
+    await jest.advanceTimersByTimeAsync(60)
+    expect(socket.sent.filter((e) => e.t === 'b')).toEqual([
+      { t: 'b', g: 4, b: 5, v: 1, n: 2 },
+      { t: 'b', g: 4, b: 5, v: 0, n: 3 },
+    ])
+  })
+
   it('hands values to the screens and acknowledges them', async () => {
     const page = await livePage()
     const acks: number[] = []

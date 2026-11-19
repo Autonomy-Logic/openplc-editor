@@ -184,7 +184,11 @@ The browser runs the screens; the device serves values. A Runtime v4 upload's `h
   `hmi-client.js` fetches it with `Authorization: Bearer` after sign-in and returns to the form when it is refused. The
   other client files (sign-in page, script, style, socket.io, licences) carry nothing of the project and stay public.
 - `src/hmi_access.h` and the generated `src/hmi_access.c`: data only, no screen code. The tag table with debug
-  addresses, each screen's sorted read and write lists and role bits, the program MD5 and the frame period. The
+  addresses, each screen's sorted read list, how it writes each tag (the whole value, and the mask of the bits it
+  assigns one at a time) and its role bits, the program MD5 and the frame period. A bit assignment (`Tag.3 := ...`)
+  reaches the host as a bit write (`hmi_bit_store` in the unit glue, `write_bit` of `hmi_tag_access_t`; the build
+  routes STruC++'s read-modify-write of the whole variable through it and refuses to build when it cannot), which the
+  runtime applies to the PLC's current value. Each write is tagged with the screen shown when it was made. The
   runtime's HMI host serves a viewer only the tags of the screen it shows when its role may open it, and applies only
   that screen's writes after checking their type and range (openplc-runtime `docs/HMI.md`).
 

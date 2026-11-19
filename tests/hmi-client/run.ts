@@ -272,7 +272,7 @@ async function main(): Promise<void> {
           ...screen,
           source: screen.source.replace(
             '  END_VAR\n',
-            '  END_VAR\n  METHOD PROTECTED OVERRIDE OnShow : BOOL\n    instance0.Main.Speed := 7;\n    OnShow := TRUE;\n  END_METHOD\n',
+            '  END_VAR\n  METHOD PROTECTED OVERRIDE OnShow : BOOL\n    instance0.Main.Speed := 7;\n    instance0.Main.Unused.3 := TRUE;\n    OnShow := TRUE;\n  END_METHOD\n',
           ),
         }
       : screen,
@@ -285,6 +285,7 @@ async function main(): Promise<void> {
     ['INSTANCE0.SPEED', 0, 5],
     ['INSTANCE0.TAG', 1, 0],
     ['ALARMON', 2, 0],
+    ['INSTANCE0.UNUSED', 0, 6],
   ].map(([path, arrayIdx, elemIdx]) => ({ path, arrayIdx, elemIdx, type: 'BOOL', size: 1 }))
   const headers = runtimeHeaders()
   let request: WasmCompileRequest | null = null
@@ -335,10 +336,12 @@ async function main(): Promise<void> {
   check(access.includes(`const char hmi_access_plc_md5[] = "${MD5}";`), 'the manifest carries the program MD5')
   check(
     access.includes('static const uint16_t reads_0[5] = {0, 1, 2, 3, 4};') &&
-      access.includes('static const uint16_t writes_0[3] = {1, 2, 3};') &&
-      access.includes('static const uint16_t reads_1[1] = {3};') &&
-      access.includes('static const uint16_t writes_1[1] = {2};') &&
-      access.includes('{reads_1, 1, writes_1, 1, 3}, /* Details */'),
+      access.includes(
+        'static const hmi_access_write_t writes_0[3] = {{1, 1, 0x0ULL}, {2, 1, 0x0ULL}, {3, 1, 0x0ULL}};',
+      ) &&
+      access.includes('static const uint16_t reads_1[2] = {3, 5};') &&
+      access.includes('static const hmi_access_write_t writes_1[2] = {{2, 1, 0x0ULL}, {5, 0, 0x8ULL}};') &&
+      access.includes('{reads_1, 2, writes_1, 2, 3}, /* Details */'),
     'each screen lists the tags it reads and writes, and the roles that may open it',
   )
 
@@ -437,8 +440,12 @@ async function main(): Promise<void> {
     check(admin.fn('hmi_bh_page')() === 1, 'an admin opens Details with the same tap')
     const entry = records(admin)
     check(
-      JSON.stringify(entry) === JSON.stringify([{ page: 1, tag: 2, kind: 0, bit: 0, value: [7, 0] }]),
-      `the write Details makes on entry (OnShow) is tagged with Details, not Overview (${JSON.stringify(entry)})`,
+      JSON.stringify(entry) ===
+        JSON.stringify([
+          { page: 1, tag: 2, kind: 0, bit: 0, value: [7, 0] },
+          { page: 1, tag: 5, kind: 1, bit: 3, value: [1] },
+        ]),
+      `the writes Details makes on entry (OnShow) are tagged with Details, the bit assignment as a bit write (${JSON.stringify(entry)})`,
     )
 
     const viewer = await instantiate(wasm, VIEWER)

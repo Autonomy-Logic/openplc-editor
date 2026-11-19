@@ -200,7 +200,7 @@ static void tag_write(void *ctx, int tag, const void *src) {
     (void)openplc_debug_write(arr, elem, wire, dsize);
 }
 
-static const hmi_tag_access_t g_access = {tag_read, tag_write, NULL};
+static const hmi_tag_access_t g_access = {tag_read, tag_write, NULL, NULL};
 
 /** Keeps the worst recent cost, decaying by 1/8 per sample so estimates follow lighter frames. */
 static void learn(uint32_t *estimate, uint32_t took) {

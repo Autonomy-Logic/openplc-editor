@@ -126,6 +126,11 @@
     return { t: 'w', g: tag, v: value, n: n }
   }
 
+  /** The `in` event of a screen's assignment of one bit of tag `tag`: bit index and value 0 or 1. */
+  function bitEvent(tag, bit, value, n) {
+    return { t: 'b', g: tag, b: bit, v: value ? 1 : 0, n: n }
+  }
+
   /**
    * Splits the write records hmi.wasm queued (`u16 page, u16 tag, u8 kind, u8 bit, u16 len, bytes`, little endian) into
    * { page, tag, kind, bit, value } in order, each value a copy: page is the screen shown when the write was made
@@ -181,6 +186,7 @@
     openEvent: openEvent,
     showEvent: showEvent,
     writeEvent: writeEvent,
+    bitEvent: bitEvent,
     parseWrites: parseWrites,
     toQ4: toQ4,
     roleCode: roleCode,
@@ -576,7 +582,8 @@
       for (var i = 0; i < writes.length; i++) {
         var w = writes[i]
         if (w.page !== 65535 && w.page !== shownPage) show(w.page, now)
-        send(writeEvent(w.tag, w.value, sequencer.next()))
+        if (w.kind === 1) send(bitEvent(w.tag, w.bit, w.value[0], sequencer.next()))
+        else send(writeEvent(w.tag, w.value, sequencer.next()))
       }
     }
 

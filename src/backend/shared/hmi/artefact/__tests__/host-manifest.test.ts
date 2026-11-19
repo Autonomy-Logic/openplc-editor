@@ -5,7 +5,15 @@ const TAGS = [
   { path: 'CONFIG0.RES0.INSTANCE0.MAIN.NAME', type: 16, maxLength: 12, address: { arr: 1, elem: 0 } },
 ]
 const PAGES = [
-  { name: 'Main', reads: [0, 1], writes: [0], roles: 7 },
+  {
+    name: 'Main',
+    reads: [0, 1],
+    writes: [
+      { tag: 0, whole: true, bits: [] },
+      { tag: 1, whole: false, bits: [0, 5, 63] },
+    ],
+    roles: 7,
+  },
   { name: 'Status', reads: [1], writes: [], roles: 15 },
 ]
 
@@ -16,11 +24,13 @@ describe('the host-side manifest of a Runtime v4 HMI', () => {
     const { source } = result
     expect(source).toContain('#include "hmi_access.h"')
     expect(source).toContain('static const uint16_t reads_0[2] = {0, 1};')
-    expect(source).toContain('static const uint16_t writes_0[1] = {0};')
-    expect(source).toContain('static const uint16_t writes_1[1] = {0};')
+    expect(source).toContain(
+      'static const hmi_access_write_t writes_0[2] = {{0, 1, 0x0ULL}, {1, 0, 0x8000000000000021ULL}};',
+    )
+    expect(source).toContain('static const hmi_access_write_t writes_1[1] = {{0, 0, 0x0ULL}};')
     expect(source).toContain('    {0u, 4u, 1, 0, "CONFIG0.RES0.INSTANCE0.MAIN.RUN"},')
     expect(source).toContain('    {1u, 0u, 16, 12, "CONFIG0.RES0.INSTANCE0.MAIN.NAME"},')
-    expect(source).toContain('    {reads_0, 2, writes_0, 1, 7}, /* Main */')
+    expect(source).toContain('    {reads_0, 2, writes_0, 2, 7}, /* Main */')
     expect(source).toContain('    {reads_1, 1, writes_1, 0, 15}, /* Status */')
     expect(source).toContain('const int hmi_access_tag_count = 2;')
     expect(source).toContain('const int hmi_access_page_count = 2;')

@@ -48,11 +48,20 @@ typedef struct {
     const char *path; /**< canonical path, upper case, for logs */
 } hmi_access_tag_t;
 
-/** One screen, by page number: the tags it reads and writes (ascending tag ids) and the roles that may open it. */
+/** How one screen writes one tag. */
+typedef struct {
+    uint16_t tag;
+    /** 1 when screen code writes the whole value; 0 when it only assigns bits. */
+    uint8_t whole;
+    /** Bits screen code assigns one at a time (`Tag.3 := ...`), bit n as 1 << n; applied to the PLC's current value. */
+    uint64_t bits;
+} hmi_access_write_t;
+
+/** One screen, by page number: the tags it reads (ascending), how it writes tags (ascending tag) and its roles. */
 typedef struct {
     const uint16_t *reads;
     uint16_t read_count;
-    const uint16_t *writes;
+    const hmi_access_write_t *writes;
     uint16_t write_count;
     /** One bit per role (bit 0 admin, 1 engineer, 2 operator, 3 viewer); admin is always set. */
     uint8_t roles;

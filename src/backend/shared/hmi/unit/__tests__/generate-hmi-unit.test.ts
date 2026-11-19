@@ -257,7 +257,12 @@ describe('HMI unit generator', () => {
 
   it('lists the tags each screen reads and writes, and the roles that may open it, for the runtime host', () => {
     expect(sample.pages).toEqual([
-      { name: 'Overview', reads: [0, 1, 2, 3, 4], writes: [1, 2, 3], roles: 0b1111 },
+      {
+        name: 'Overview',
+        reads: [0, 1, 2, 3, 4],
+        writes: [1, 2, 3].map((tag) => expect.objectContaining({ tag, whole: true, bits: [] })),
+        roles: 0b1111,
+      },
       { name: 'Details', reads: [3], writes: [], roles: 0b0011 },
     ])
     expect(sample.tags.map((t) => t.path)).toEqual([
@@ -278,6 +283,7 @@ describe('HMI unit generator', () => {
             '  IF Go.Clicked AND instance0.Main.Running THEN',
             '    instance0.Main.Speed := 3;',
             '    instance0.Main.Unused.2 := TRUE;',
+            '    instance0.Main.Unused.7 := instance0.Main.Running;',
             '  END_IF;',
           ].join('\n'),
         ),
@@ -286,9 +292,24 @@ describe('HMI unit generator', () => {
     expect(messages(result)).toEqual([])
     const index = (name: string) => result.tags.findIndex((t) => t.path.endsWith(`.${name}`))
     const [overview] = result.pages
-    expect(overview.writes).toEqual([index('SPEED'), index('UNUSED')].sort((a, b) => a - b))
+    expect(overview.writes).toEqual(
+      [
+        { tag: index('SPEED'), whole: true, bits: [] },
+        { tag: index('UNUSED'), whole: false, bits: [2, 7] },
+      ]
+        .sort((x, y) => x.tag - y.tag)
+        .map((w) => expect.objectContaining(w)),
+    )
     expect(overview.reads).toEqual([index('RUNNING'), index('UNUSED')].sort((a, b) => a - b))
     expect(result.pages[1].writes).toEqual([])
+    const code = result.files['pou_OVERVIEW.cpp']
+    expect(code).toContain(`::hmi_bit_store(${index('UNUSED')}u, 2u, static_cast<bool>(true));`)
+    expect(code).toContain(`::hmi_bit_store(${index('UNUSED')}u, 7u, static_cast<bool>(`)
+    expect(code).toContain('void hmi_bit_store(unsigned id, unsigned bit, bool value);')
+    expect(code).not.toMatch(/external_write<IEC_DINT>\(\d+, static_cast<DINT_t>\(\(static_cast<uint64_t>/)
+    expect(result.files['hmi_unit_glue.cpp']).toContain(
+      'g_access->write_bit(g_access->ctx, static_cast<int>(id), bit, value);',
+    )
   })
 
   it('keeps an operator change on a two-way widget that nothing else sets', () => {

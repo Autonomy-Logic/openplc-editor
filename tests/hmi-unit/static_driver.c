@@ -27,7 +27,7 @@ static void plc_write(void *ctx, int tag, const void *src) {
     memcpy(g_plc[tag], src, hmi_tag_size(tag));
 }
 
-static const hmi_tag_access_t g_access = {plc_read, plc_write, NULL};
+static const hmi_tag_access_t g_access = {plc_read, plc_write, NULL, NULL};
 
 static void frame(void *unit, const char *label) {
     hmi_set_time_ms(g_now);

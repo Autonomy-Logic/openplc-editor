@@ -41,7 +41,7 @@ import { HMI_ALL_FACES, hmiUsedFontFaces } from '../fonts/used-faces'
 import { buildStandardWidgets } from '../lib/build-standard-widgets'
 import { STANDARD_WIDGETS_SOURCES } from '../lib/standard-widgets'
 import { buildWidgetCatalog, type HmiWidgetCatalog, type HmiWidgetInfo } from '../lib/widget-catalog'
-import { hmiPageAccess } from './page-access'
+import { hmiBitAssignments, hmiPageAccess, type HmiTagWrite } from './page-access'
 import { type HmiBlockModel, type HmiElementDecl, parseHmiBlock } from './screen-model'
 
 export interface HmiTagAddress {
@@ -87,9 +87,10 @@ export interface HmiTag {
 export interface HmiPageTags {
   /** The screen's name. */
   name: string
-  /** Indexes into `tags` the screen reads and writes, ascending. */
+  /** Indexes into `tags` the screen reads, ascending. */
   reads: number[]
-  writes: number[]
+  /** How the screen writes tags, by ascending tag: whole values and single bits. */
+  writes: HmiTagWrite[]
   /** Roles that may open the screen, one bit per `hmi_role` (bit 0 admin, always set). */
   roles: number
 }
@@ -786,6 +787,24 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput, classes: readonl
     '    g_access = access && access->read && access->write ? access : nullptr;',
     '}',
     '',
+    '}',
+    '',
+    '/* A bit assignment of screen code: through the host when it applies bits, else a read-modify-write of the tag. */',
+    'void hmi_bit_store(unsigned id, unsigned bit, bool value) {',
+    `    if (id >= ${tags.length}u || bit / 8u >= hmi_tag_size(static_cast<int>(id))) return;`,
+    '    if (g_access && g_access->write_bit) {',
+    '        g_access->write_bit(g_access->ctx, static_cast<int>(id), bit, value);',
+    '        return;',
+    '    }',
+    '    alignas(8) unsigned char buf[kTagBufferSize];',
+    '    if (hmi_tag_read(static_cast<int>(id), nullptr, buf) != 0) return;',
+    '    const unsigned char mask = static_cast<unsigned char>(1u << (bit % 8u));',
+    '    buf[bit / 8u] = static_cast<unsigned char>(value ? buf[bit / 8u] | mask : buf[bit / 8u] & ~mask);',
+    '    if (g_access) g_access->write(g_access->ctx, static_cast<int>(id), buf);',
+    '    else hmi_tag_write(static_cast<int>(id), nullptr, buf);',
+    '}',
+    '',
+    'extern "C" {',
     'size_t hmi_tag_size(int tag) {',
     '    switch (tag) {',
     ...tags.map(({ type }, i) => `    case ${i}: return ${sizeOf(type)};`),
@@ -859,6 +878,36 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput, classes: readonl
     '}',
     '',
   ].join('\n')
+}
+
+/** A bit assignment to a PLC variable as STruC++ compiles it: a read-modify-write of the whole variable. */
+const BIT_STORE =
+  /strucpp::external_write<([\w:]+)>\((\d+), static_cast<[\w:]+>\(\(static_cast<uint64_t>\(strucpp::external_read<\1>\(\2\)\) & ~\(1ULL << (\d+)\)\) \| \(\((.+?) \? 1ULL : 0ULL\) << \3\)\)\);/g
+const BIT_STORE_DECLARATION = 'void hmi_bit_store(unsigned id, unsigned bit, bool value);'
+
+/**
+ * Routes every bit assignment to a PLC variable through `hmi_bit_store`, so a host can apply it to the one bit against
+ * the variable's current value instead of writing the whole variable from the screen's copy. Returns how many it
+ * routed.
+ */
+function routeBitStores(files: Record<string, string>): number {
+  let count = 0
+  for (const [name, text] of Object.entries(files)) {
+    if (!name.endsWith('.cpp')) continue
+    let here = 0
+    const routed = text.replace(BIT_STORE, (_all, _type: string, id: string, bit: string, value: string) => {
+      here++
+      return `::hmi_bit_store(${id}u, ${bit}u, static_cast<bool>(${value}));`
+    })
+    if (here === 0) continue
+    const at = routed.search(/^namespace /m)
+    files[name] =
+      at < 0
+        ? `${BIT_STORE_DECLARATION}\n${routed}`
+        : `${routed.slice(0, at)}${BIT_STORE_DECLARATION}\n\n${routed.slice(at)}`
+    count += here
+  }
+  return count
 }
 
 /** Setters of each screen's literal numeric, BOOL and STRING properties, and their C++. */
@@ -1394,6 +1443,16 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     const roles = HMI_ROLES.reduce((bits, role, r) => (grant[role] ? bits | (1 << (r + 1)) : bits), 1)
     return { name: plan.model.name, reads: access[i].reads, writes: access[i].writes, roles }
   })
+  const routed = routeBitStores(result.files)
+  const bitAssignments = hmiBitAssignments(compiled.ast, strucpp.walkAST)
+  if (routed !== bitAssignments) {
+    d.error(
+      UNIT,
+      `${bitAssignments} bit assignment(s) to PLC variables, ${routed} compiled as bit writes: this STruC++ output is ` +
+        'not supported, so the HMI is not built',
+    )
+    return result
+  }
   const setters = previewSetters(plans, catalog, classes)
   result.preview = {
     units: previewUnits([...Object.keys(result.files), ...Object.keys(setters.files)], plans),
