@@ -211,6 +211,14 @@ describe('widget catalogue', () => {
     expect(widget(catalog.widgets, 'HmiLamp')).toMatchObject({ main: { name: 'Value' }, events: [] })
     expect(widget(catalog.widgets, 'HmiLamp').twoWay).toBeUndefined()
     expect(widget(catalog.widgets, 'HmiSlider').momentary).toBeUndefined()
+    expect(widget(catalog.widgets, 'HmiSwitch').twoWay?.range).toBeUndefined()
+    expect(widget(catalog.widgets, 'HmiNumericInput').twoWay?.range).toBeUndefined()
+    for (const name of ['HmiSlider', 'HmiKnob', 'HmiStepper'])
+      expect(widget(catalog.widgets, name).twoWay?.range).toBe('MinValue..MaxValue')
+    expect(widget(catalog.widgets, 'HmiSelector').twoWay?.range).toBe('0..2')
+    for (const name of ['HmiOptionButtons', 'HmiDropDown'])
+      expect(widget(catalog.widgets, name).twoWay?.range).toBe('0..last(Options)')
+    expect(widget(catalog.widgets, 'HmiTextInput').twoWay?.maxLength).toBe('MaxLength')
     expect(widget(catalog.widgets, 'HmiRect').main).toBeUndefined()
     expect(widget(catalog.widgets, 'HmiDiagram').outputs).toEqual(
       expect.arrayContaining([{ name: 'ScalePct', type: 'DINT' }]),

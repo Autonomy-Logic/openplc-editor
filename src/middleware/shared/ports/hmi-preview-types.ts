@@ -206,7 +206,18 @@ export interface HmiWidgetInfo {
   /** What a variable dropped on the widget is wired to. */
   main?: HmiWidgetBinding
   /** The operator's change of the main input: `changed` is set for one frame with the value in `newValue`. */
-  twoWay?: { value: string; changed: string; newValue: string }
+  twoWay?: {
+    value: string
+    changed: string
+    newValue: string
+    /**
+     * What the widget's NewValue can be, from its `hmi_range` attribute: `<lo>..<hi>`, each a number, an input's name or
+     * `last(<input>)` (the index of the last item of a `;` list).
+     */
+    range?: string
+    /** The input that bounds a STRING NewValue's length, from its `hmi_max_length` attribute. */
+    maxLength?: string
+  }
   /** A main BOOL output with `changed` set for one frame when it flips: a wired variable is written on those frames. */
   momentary?: { value: string; changed: string }
   /** BOOL outputs set for one frame when something happens (Clicked). */

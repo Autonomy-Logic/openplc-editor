@@ -188,7 +188,13 @@ The browser runs the screens; the device serves values. A Runtime v4 upload's `h
   assigns one at a time) and its role bits, the program MD5 and the frame period. A bit assignment (`Tag.3 := ...`)
   reaches the host as a bit write (`hmi_bit_store` in the unit glue, `write_bit` of `hmi_tag_access_t`; the build
   routes STruC++'s read-modify-write of the whole variable through it and refuses to build when it cannot), which the
-  runtime applies to the PLC's current value. Each write is tagged with the screen shown when it was made. The
+  runtime applies to the PLC's current value. Each write is tagged with the screen shown when it was made. The write
+  entries also carry each screen's static limit per tag (`write-limits.ts`): a two-way widget declares what its
+  NewValue can be with `{attribute 'hmi_range' := '<lo>..<hi>'}` (numbers, input names or `last(<list input>)`) or
+  `{attribute 'hmi_max_length' := '<input>'}`, resolved from the element's literal properties; an assigned literal
+  limits to itself; any other write leaves the tag unlimited on that screen, and the limit is the union of the
+  screen's writes. Conditions in screen code (interlocks) cannot be enforced by the runtime: they run in the browser,
+  so the PLC program must validate what HMI screens write. The
   runtime's HMI host serves a viewer only the tags of the screen it shows when its role may open it, and applies only
   that screen's writes after checking their type and range (openplc-runtime `docs/HMI.md`).
 

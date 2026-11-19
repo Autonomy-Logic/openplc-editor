@@ -41,8 +41,9 @@ import { HMI_ALL_FACES, hmiUsedFontFaces } from '../fonts/used-faces'
 import { buildStandardWidgets } from '../lib/build-standard-widgets'
 import { STANDARD_WIDGETS_SOURCES } from '../lib/standard-widgets'
 import { buildWidgetCatalog, type HmiWidgetCatalog, type HmiWidgetInfo } from '../lib/widget-catalog'
-import { hmiBitAssignments, hmiPageAccess, type HmiTagWrite } from './page-access'
+import { type HmiAstWalk, hmiBitAssignments, type HmiLimitOf, hmiPageAccess, type HmiTagWrite } from './page-access'
 import { type HmiBlockModel, type HmiElementDecl, parseHmiBlock } from './screen-model'
+import { type HmiElementLimit, hmiElementLimit, hmiLiteralOf, type HmiWriteLimit } from './write-limits'
 
 export interface HmiTagAddress {
   arr: number
@@ -306,6 +307,8 @@ interface ScreenPlan {
   defaults: string[]
   connects: Array<{ pipe: string; source: string; target: string; prior: string | null }>
   writeBacks: string[]
+  /** What each two-way element bound to a variable can write, by upper-case name; null when unbounded. */
+  limits: Map<string, HmiElementLimit | null>
   theme: number
 }
 
@@ -434,6 +437,7 @@ function writeBacks(
       ? `${b.element}.${twoWay.changed} AND ${converted.guard}`
       : `${b.element}.${twoWay.changed}`
     plan.writeBacks.push(`IF ${condition} THEN ${b.variable} := ${converted.expr}; END_IF;`)
+    if (element) plan.limits.set(element.name.toUpperCase(), hmiElementLimit(element, widget, plan.file.source))
   }
   const code = maskStComments(plan.file.source)
   for (const element of plan.model.elements) {
@@ -1284,6 +1288,54 @@ function buildFaces(input: HmiUnitInput, sources: Record<string, string>): numbe
   return [...faces, PIN_ENTRY_FACE].sort((a, b) => a - b)
 }
 
+/** A limit in the variable's own values: integers rounded outwards and clamped to the type, REAL as the float it is. */
+function inTagDomain(type: TagType, min: number, max: number, fromReal: boolean): HmiWriteLimit | null {
+  const integers = INTEGER_RANGE[type.base]
+  if (integers) {
+    const lo = Number(integers[0])
+    const hi = Number(integers[1])
+    const clamp = (v: number) => Math.min(Math.max(v, lo), hi)
+    return { min: clamp(Math.floor(min)), max: clamp(Math.ceil(max)) }
+  }
+  if (type.base === 'REAL' || (type.base === 'LREAL' && fromReal))
+    return { min: Math.fround(min), max: Math.fround(max) }
+  if (type.base === 'LREAL') return { min, max }
+  return null
+}
+
+/**
+ * The limit of each whole write the unit makes: a write-back of a two-way element takes the element's range, an
+ * assignment of a literal that literal, anything else no limit.
+ */
+function writeLimitOf(plans: readonly ScreenPlan[], tags: readonly UnitTag[], walk: HmiAstWalk): HmiLimitOf {
+  const byScreen = new Map(plans.map((p) => [p.model.name.toUpperCase(), p.limits]))
+  return (value, tag, site) => {
+    const type = tags[tag]?.type
+    if (!type) return null
+    if (site.method === 'WRITEBACK' && site.block) {
+      const limits = byScreen.get(site.block)
+      let found: HmiElementLimit | null | undefined
+      walk(value, (node) => {
+        if (
+          found === undefined &&
+          node.kind === 'VariableExpression' &&
+          'name' in node &&
+          typeof node.name === 'string'
+        )
+          found = limits?.get(node.name.toUpperCase())
+      })
+      if (!found) return null
+      if (found.kind === 'length')
+        return type.base === 'STRING' ? { min: 0, max: Math.min(found.max, type.maxLength) } : null
+      return inTagDomain(type, found.min, found.max, true)
+    }
+    const literal = hmiLiteralOf(value)
+    if (!literal) return null
+    if (literal.kind === 'string') return type.base === 'STRING' ? { min: literal.bytes, max: literal.bytes } : null
+    return inTagDomain(type, literal.value, literal.value, false)
+  }
+}
+
 /** Builds and compiles the HMI unit. */
 export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   const d = new Diagnostics()
@@ -1344,7 +1396,16 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     for (const f of checkHmiBlockHeader(block, checks)) d.error(file.name, f.message)
     const theme = hmiThemeId(input.settings, model.theme ?? input.settings.defaultTheme)
     for (const f of checkHmiBlockElements(block, checks)) d.error(file.name, f.message)
-    const plan: ScreenPlan = { file, model, attach: [], defaults: [], connects: [], writeBacks: [], theme }
+    const plan: ScreenPlan = {
+      file,
+      model,
+      attach: [],
+      defaults: [],
+      connects: [],
+      writeBacks: [],
+      limits: new Map(),
+      theme,
+    }
     elementTree(plan, catalog)
     plans.push(plan)
   }
@@ -1437,7 +1498,8 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     d.error(UNIT, 'STruC++ returned no syntax tree, so the tags each screen reaches are unknown')
     return result
   }
-  const access = hmiPageAccess(compiled.ast, classes, strucpp.walkAST)
+  const limitOf = writeLimitOf(plans, tags, strucpp.walkAST)
+  const access = hmiPageAccess(compiled.ast, classes, strucpp.walkAST, limitOf)
   result.pages = plans.map((plan, i) => {
     const grant = screenGrant(input.settings, plan.model.name)
     const roles = HMI_ROLES.reduce((bits, role, r) => (grant[role] ? bits | (1 << (r + 1)) : bits), 1)

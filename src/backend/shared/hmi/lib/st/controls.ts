@@ -133,6 +133,7 @@ FUNCTION_BLOCK HmiSlider EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_range' := 'MinValue..MaxValue'}
     NewValue : REAL;
   END_VAR
   VAR
@@ -197,6 +198,7 @@ FUNCTION_BLOCK HmiSlider EXTENDS HmiElement
       IF Step > 0.0 THEN
         v := MinValue + DINT_TO_REAL(REAL_TO_DINT((v - MinValue) / Step)) * Step;
       END_IF;
+      v := LIMIT(MIN(MinValue, MaxValue), v, MAX(MinValue, MaxValue));
       IF v <> sent THEN
         NewValue := v;
         Changed := TRUE;
@@ -311,6 +313,7 @@ FUNCTION_BLOCK HmiTextInput EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_max_length' := 'MaxLength'}
     NewValue : STRING;
   END_VAR
   METHOD PROTECTED OVERRIDE TakesInput : BOOL
@@ -512,6 +515,7 @@ FUNCTION_BLOCK HmiSelector EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_range' := '0..2'}
     NewValue : INT;
   END_VAR
   METHOD PROTECTED OVERRIDE TakesInput : BOOL
@@ -604,6 +608,7 @@ FUNCTION_BLOCK HmiOptionButtons EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_range' := '0..last(Options)'}
     NewValue : INT;
   END_VAR
   METHOD PROTECTED OVERRIDE TakesInput : BOOL
@@ -676,6 +681,7 @@ FUNCTION_BLOCK HmiDropDown EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_range' := '0..last(Options)'}
     NewValue : INT;
   END_VAR
   VAR
@@ -842,6 +848,7 @@ FUNCTION_BLOCK HmiStepper EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_range' := 'MinValue..MaxValue'}
     NewValue : REAL;
   END_VAR
   VAR
@@ -964,6 +971,7 @@ FUNCTION_BLOCK HmiKnob EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_range' := 'MinValue..MaxValue'}
     NewValue : REAL;
   END_VAR
   VAR
@@ -1041,6 +1049,7 @@ FUNCTION_BLOCK HmiKnob EXTENDS HmiElement
       IF Step > 0.0 THEN
         v := MinValue + DINT_TO_REAL(REAL_TO_DINT((v - MinValue) / Step)) * Step;
       END_IF;
+      v := LIMIT(MIN(MinValue, MaxValue), v, MAX(MinValue, MaxValue));
       IF v <> sent THEN
         NewValue := v;
         Changed := TRUE;

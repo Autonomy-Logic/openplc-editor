@@ -55,6 +55,14 @@ typedef struct {
     uint8_t whole;
     /** Bits screen code assigns one at a time (`Tag.3 := ...`), bit n as 1 << n; applied to the PLC's current value. */
     uint64_t bits;
+    /**
+     * 1 when whole values are limited to min..max: the range of the two-way widgets bound to the tag and the literals
+     * screen code assigns it, in the tag's values (a STRING's length in bytes). 0 when screen code may write any value
+     * of the type. Conditions in screen code are not limits.
+     */
+    uint8_t limited;
+    double min;
+    double max;
 } hmi_access_write_t;
 
 /** One screen, by page number: the tags it reads (ascending), how it writes tags (ascending tag) and its roles. */

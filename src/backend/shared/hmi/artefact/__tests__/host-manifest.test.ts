@@ -9,8 +9,8 @@ const PAGES = [
     name: 'Main',
     reads: [0, 1],
     writes: [
-      { tag: 0, whole: true, bits: [] },
-      { tag: 1, whole: false, bits: [0, 5, 63] },
+      { tag: 0, whole: true, bits: [], limit: { min: -2.5, max: 100 } },
+      { tag: 1, whole: false, bits: [0, 5, 63], limit: null },
     ],
     roles: 7,
   },
@@ -25,9 +25,9 @@ describe('the host-side manifest of a Runtime v4 HMI', () => {
     expect(source).toContain('#include "hmi_access.h"')
     expect(source).toContain('static const uint16_t reads_0[2] = {0, 1};')
     expect(source).toContain(
-      'static const hmi_access_write_t writes_0[2] = {{0, 1, 0x0ULL}, {1, 0, 0x8000000000000021ULL}};',
+      'static const hmi_access_write_t writes_0[2] = {{0, 1, 0x0ULL, 1, -2.5, 100.0}, {1, 0, 0x8000000000000021ULL, 0, 0.0, 0.0}};',
     )
-    expect(source).toContain('static const hmi_access_write_t writes_1[1] = {{0, 0, 0x0ULL}};')
+    expect(source).toContain('static const hmi_access_write_t writes_1[1] = {{0, 0, 0x0ULL, 0, 0.0, 0.0}};')
     expect(source).toContain('    {0u, 4u, 1, 0, "CONFIG0.RES0.INSTANCE0.MAIN.RUN"},')
     expect(source).toContain('    {1u, 0u, 16, 12, "CONFIG0.RES0.INSTANCE0.MAIN.NAME"},')
     expect(source).toContain('    {reads_0, 2, writes_0, 2, 7}, /* Main */')
@@ -49,6 +49,16 @@ describe('the host-side manifest of a Runtime v4 HMI', () => {
       ok: false,
       error: 'the HMI has no screens',
     })
+  })
+
+  it('writes limits C reads back exactly, and refuses an empty one', () => {
+    const page = (limit: { min: number; max: number }) => [
+      { name: 'Main', reads: [], writes: [{ tag: 0, whole: true, bits: [], limit }], roles: 1 },
+    ]
+    const tiny = hmiHostManifestSource({ tags: TAGS, pages: page({ min: 1e-7, max: 1e21 }), md5: 'a', periodMs: 1 })
+    expect(tiny.ok && tiny.source).toContain('{0, 1, 0x0ULL, 1, 1e-7, 1e+21}')
+    const empty = hmiHostManifestSource({ tags: TAGS, pages: page({ min: 2, max: 1 }), md5: 'a', periodMs: 1 })
+    expect(empty).toEqual({ ok: false, error: 'CONFIG0.RES0.INSTANCE0.MAIN.RUN: an empty write limit' })
   })
 
   it('keeps a screen name from closing its comment', () => {

@@ -20,6 +20,12 @@ const cString = (s: string): string => JSON.stringify(s)
 const idList = (name: string, ids: readonly number[]): string =>
   `static const uint16_t ${name}[${Math.max(ids.length, 1)}] = {${ids.length > 0 ? ids.join(', ') : '0'}};`
 
+/** A double as C reads it back exactly: the shortest round-trip form, with a decimal point or exponent. */
+const cDouble = (v: number): string => {
+  const text = String(v)
+  return /[.e]/.test(text) ? text : `${text}.0`
+}
+
 const bitMask = (bits: readonly number[]): string =>
   `0x${bits
     .reduce((mask, bit) => mask | (1n << BigInt(bit)), 0n)
@@ -27,8 +33,11 @@ const bitMask = (bits: readonly number[]): string =>
     .toUpperCase()}ULL`
 
 const writeList = (name: string, writes: HmiPageTags['writes']): string => {
-  const rows = writes.map((w) => `{${w.tag}, ${w.whole ? 1 : 0}, ${bitMask(w.bits)}}`)
-  return `static const hmi_access_write_t ${name}[${Math.max(rows.length, 1)}] = {${rows.length > 0 ? rows.join(', ') : '{0, 0, 0x0ULL}'}};`
+  const rows = writes.map(
+    (w) =>
+      `{${w.tag}, ${w.whole ? 1 : 0}, ${bitMask(w.bits)}, ${w.limit ? 1 : 0}, ${cDouble(w.limit?.min ?? 0)}, ${cDouble(w.limit?.max ?? 0)}}`,
+  )
+  return `static const hmi_access_write_t ${name}[${Math.max(rows.length, 1)}] = {${rows.length > 0 ? rows.join(', ') : '{0, 0, 0x0ULL, 0, 0.0, 0.0}'}};`
 }
 
 /** `hmi_access.c`, or the reason it cannot be built. */
@@ -40,6 +49,12 @@ export function hmiHostManifestSource(
   if (input.pages.length === 0) return { ok: false, error: 'the HMI has no screens' }
   const unresolved = input.tags.find((t) => t.address === null)
   if (unresolved) return { ok: false, error: `${unresolved.path} has no debug address in the compiled PLC program` }
+  const badLimit = input.pages
+    .flatMap((p) => p.writes)
+    .find(
+      (w) => w.limit && !(Number.isFinite(w.limit.min) && Number.isFinite(w.limit.max) && w.limit.min <= w.limit.max),
+    )
+  if (badLimit) return { ok: false, error: `${input.tags[badLimit.tag]?.path ?? badLimit.tag}: an empty write limit` }
   const badBit = input.pages.flatMap((p) => p.writes).find((w) => w.bits.some((b) => b < 0 || b > 63))
   if (badBit) return { ok: false, error: `${input.tags[badBit.tag]?.path ?? badBit.tag}: a bit past 63 is assigned` }
   const lists = input.pages.flatMap((p, i) => [idList(`reads_${i}`, p.reads), writeList(`writes_${i}`, p.writes)])

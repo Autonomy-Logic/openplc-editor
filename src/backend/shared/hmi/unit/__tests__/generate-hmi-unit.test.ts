@@ -274,6 +274,82 @@ describe('HMI unit generator', () => {
     ])
   })
 
+  it('limits each written tag to what the screen can write: widget ranges, text lengths and literals', () => {
+    const result = generateHmiUnit(
+      withScreen(
+        screen(
+          [
+            '    Speed : HmiSlider := (MinValue := 10.0, MaxValue := 100.0);',
+            '    Name : HmiTextInput := (MaxLength := 5);',
+            '    Level : HmiKnob := (MaxValue := 0.1);',
+            '    Go : HmiButton;',
+          ].join('\n'),
+          [
+            '  Speed.Value := instance0.Main.Speed;',
+            '  Name.Value := instance0.Main.Tag;',
+            '  Level.Value := instance0.Main.Level;',
+            '  IF Go.Clicked THEN instance0.Main.Unused := 7; END_IF;',
+            '  IF Go.Pressed THEN instance0.Main.Unused := -3; END_IF;',
+          ].join('\n'),
+        ),
+      ),
+    )
+    expect(messages(result)).toEqual([])
+    const limit = (name: string) => {
+      const tag = result.tags.findIndex((t) => t.path.endsWith(`.${name}`))
+      return result.pages[0].writes.find((w) => w.tag === tag)?.limit
+    }
+    expect(limit('SPEED')).toEqual({ min: 10, max: 100 })
+    expect(limit('TAG')).toEqual({ min: 0, max: 5 })
+    expect(limit('LEVEL')).toEqual({ min: 0, max: Math.fround(0.1) })
+    expect(limit('UNUSED')).toEqual({ min: -3, max: 7 })
+  })
+
+  it('leaves a tag unlimited when screen code writes it with an expression or changes a widget range', () => {
+    const result = generateHmiUnit(
+      withScreen(
+        screen(
+          ['    Speed : HmiSlider := (MaxValue := 100.0);', '    Other : HmiSlider;', '    Go : HmiButton;'].join('\n'),
+          [
+            '  Speed.Value := instance0.Main.Speed;',
+            '  Speed.MaxValue := 200.0;',
+            '  Other.Value := instance0.Main.Level;',
+            '  IF Go.Clicked THEN instance0.Main.Unused := instance0.Main.Unused + 1; END_IF;',
+            '  IF Go.Pressed THEN instance0.Main.Unused := 2; END_IF;',
+          ].join('\n'),
+        ),
+      ),
+    )
+    expect(messages(result)).toEqual([])
+    const limit = (name: string) => {
+      const tag = result.tags.findIndex((t) => t.path.endsWith(`.${name}`))
+      return result.pages[0].writes.find((w) => w.tag === tag)?.limit
+    }
+    expect(limit('SPEED')).toBeNull()
+    expect(limit('LEVEL')).toEqual({ min: 0, max: 100 })
+    expect(limit('UNUSED')).toBeNull()
+  })
+
+  it('takes the union when several widgets on a screen write a tag, and no limit when one of them has none', () => {
+    const sample = generateHmiUnit(sampleProject())
+    const speed = sample.tags.findIndex((t) => t.path.endsWith('.SPEED'))
+    const write = sample.pages[0].writes.find((w) => w.tag === speed)
+    expect(write?.limit).toBeNull()
+    const sliderOnly = generateHmiUnit(
+      withScreen(
+        screen(
+          [
+            '    Speed : HmiSlider := (MaxValue := 100.0);',
+            '    Fine : HmiStepper := (MinValue := -5.0, MaxValue := 20.0);',
+          ].join('\n'),
+          ['  Speed.Value := instance0.Main.Speed;', '  Fine.Value := instance0.Main.Speed;'].join('\n'),
+        ),
+      ),
+    )
+    const own = sliderOnly.tags.findIndex((t) => t.path.endsWith('.SPEED'))
+    expect(sliderOnly.pages[0].writes.find((w) => w.tag === own)?.limit).toEqual({ min: -5, max: 100 })
+  })
+
   it('counts a plain assignment as a write, a bit assignment as a read and a write, and conditions as reads', () => {
     const result = generateHmiUnit(
       withScreen(
