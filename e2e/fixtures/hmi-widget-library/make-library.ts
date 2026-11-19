@@ -28,7 +28,13 @@ END_FUNCTION_BLOCK
 `,
     },
   ],
-  { name: 'extra-widgets', version: '1.0.0', namespace: 'extra_widgets', headers: ['hmi_core.h'], dependencies: [base] },
+  {
+    name: 'extra-widgets',
+    version: '1.0.0',
+    namespace: 'extra_widgets',
+    headers: ['hmi_core.h'],
+    dependencies: [base],
+  },
 )
 if (compiled.errors.length > 0) throw new Error(compiled.errors.map((e) => e.message).join('\n'))
 const catalog = buildWidgetCatalog([base.manifest, compiled.archive.manifest])
