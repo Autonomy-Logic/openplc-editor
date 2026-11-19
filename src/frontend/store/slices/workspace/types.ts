@@ -116,6 +116,8 @@ export type WorkspaceState = {
     debugHarness: { programPou: PLCPou; instances: PLCInstance[] } | null
     debugLocalMd5: string | null
     debugGraphList: string[]
+    /** Composite keys the debugger tag table currently shows, so the poller reads them. */
+    debugTagTableKeys: string[]
     debugDataStale: boolean
     debugMd5Mismatch: { runtimeMd5: string; localMd5: string } | null
     /** Target's native byte order for multi-byte variable values on
@@ -220,6 +222,7 @@ export type WorkspaceActions = {
   setFbSelectedInstance: (fbTypeName: string, key: string) => void
   setDebugLocalMd5: (md5: string | null) => void
   setDebugGraphList: (list: string[]) => void
+  setDebugTagTableKeys: (keys: string[]) => void
   setDebugDataStale: (stale: boolean) => void
   setDebugMd5Mismatch: (mismatch: { runtimeMd5: string; localMd5: string } | null) => void
   setDebugTargetEndian: (endian: 'le' | 'be') => void

@@ -14,6 +14,7 @@ import type {
   PLCFunction,
   PLCFunctionBlock,
   PLCInstance,
+  PLCMonitorView,
   PLCProgram,
   PLCProjectData,
   PLCRemoteDevice,
@@ -111,6 +112,9 @@ export type ProjectActions = {
   // Meta
   updateMetaName: (name: string) => void
   updateMetaPath: (path: string) => void
+
+  /** Replace the debugger tag-table views saved with the project. */
+  setMonitorViews: (views: PLCMonitorView[]) => void
 
   /** Read / write opaque VPP screen data keyed by (packageId, screenId). */
   getVppExtension: (packageId: string, screenId: string) => unknown

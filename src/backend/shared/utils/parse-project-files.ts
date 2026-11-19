@@ -22,6 +22,7 @@ import type {
   PLCDataType,
   PLCGlobalVariableList,
   PLCInstance,
+  PLCMonitorView,
   PLCPou,
   PLCRemoteDevice,
   PLCServer,
@@ -79,6 +80,8 @@ export interface ParsedProjectData {
      *  on disk — the manifest editor seeds a template on first edit. */
     libraryManifest?: string
     debugVariables?: { global?: string[]; pous?: Record<string, string[]> }
+    /** Debugger tag-table views; absent in a project saved before they existed. */
+    monitorViews?: PLCMonitorView[]
     /** VPP extension payloads keyed by (packageId, screenId). Opaque to the parser. */
     vppExtensions?: Record<string, Record<string, unknown>>
   }
@@ -262,6 +265,21 @@ function createFallbackPou(content: string, language: string, pouType: string, p
  * variable's alias name is folded into `location`. Producer channels keep `alias` alone.
  * Idempotent.
  */
+/** The project file is user-editable, so a view only reaches the project when it still carries a name and string entries. */
+function toMonitorViews(value: unknown): PLCMonitorView[] {
+  if (!Array.isArray(value)) return []
+  const views: PLCMonitorView[] = []
+  for (const candidate of value) {
+    if (typeof candidate !== 'object' || candidate === null) continue
+    const record: Record<string, unknown> = { ...candidate }
+    const { name, entries } = record
+    if (typeof name !== 'string') continue
+    if (!Array.isArray(entries) || !entries.every((entry) => typeof entry === 'string')) continue
+    views.push({ name, entries })
+  }
+  return views
+}
+
 function foldLegacyVariableAliases(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(foldLegacyVariableAliases)
   if (value && typeof value === 'object') {
@@ -601,6 +619,7 @@ export function parseProjectFiles(
       libraries: (data.libraries as ParsedProjectData['projectData']['libraries']) ?? [],
       ...(metaType === 'plc-library' ? { libraryManifest } : {}),
       debugVariables: data.debugVariables as ParsedProjectData['projectData']['debugVariables'],
+      ...(data.monitorViews ? { monitorViews: toMonitorViews(data.monitorViews) } : {}),
       ...(data.vppExtensions
         ? { vppExtensions: data.vppExtensions as ParsedProjectData['projectData']['vppExtensions'] }
         : {}),

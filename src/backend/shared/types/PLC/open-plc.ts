@@ -1041,6 +1041,15 @@ const PLCProjectDataSchema = z.object({
     .optional(),
   /** Opaque VPP screen data keyed by (packageId, screenId). */
   vppExtensions: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+  /** Debugger tag-table views, each holding the composite keys of its tags. */
+  monitorViews: z
+    .array(
+      z.object({
+        name: z.string(),
+        entries: z.array(z.string()),
+      }),
+    )
+    .optional(),
 })
 
 type PLCProjectData = z.infer<typeof PLCProjectDataSchema>
