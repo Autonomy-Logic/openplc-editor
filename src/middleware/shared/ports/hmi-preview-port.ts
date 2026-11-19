@@ -28,7 +28,10 @@ export interface HmiPreviewStart {
 
 /** One running preview. Calls reject once the module stopped; `onStop` says why. */
 export interface HmiPreviewSession {
-  /** Starts a built module. The module running before keeps answering until this one is ready, and stays if it fails. */
+  /**
+   * Starts a built module. The module running before keeps answering until this one is ready, and stays if it fails.
+   * Loads land in the order they were asked for.
+   */
   load(wasm: Uint8Array, start: HmiPreviewStart): Promise<void>
   frame(timeMs: number, surface: HmiPreviewSurface): Promise<HmiPreviewFrame>
   show(page: number): Promise<void>

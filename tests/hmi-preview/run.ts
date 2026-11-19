@@ -39,7 +39,14 @@ import {
   moveElement,
   setProperty,
 } from '../../src/middleware/shared/utils/hmi/designer/designer-edits'
-import { liveDeclaration, planLiveSync } from '../../src/middleware/shared/utils/hmi/designer/designer-live'
+import { planLiveSync } from '../../src/middleware/shared/utils/hmi/designer/designer-live'
+import {
+  compiledEntries,
+  entriesAfter,
+  type LiveEntries,
+  liveModuleOf,
+  liveSetter,
+} from '../../src/middleware/shared/utils/hmi/designer/designer-live-module'
 import { type DesignerModel, parseDesignerBlock } from '../../src/middleware/shared/utils/hmi/designer/designer-model'
 import {
   formatHmiPreviewTimings,
@@ -175,24 +182,16 @@ class FullFrame {
   }
 }
 
-/** An element of the shown screen in a running module, as the designer's preview hook tracks it. */
-interface Held {
-  id: number
-  type: string
-  created: boolean
-  attached: boolean
-  declaration?: string
-}
-
 /**
- * A running module driven as the designer's preview hook drives it: each source of a screen is reached from the one
- * the module shows with `planLiveSync`, the module's change and live setters, without a build.
+ * A running module driven as the designer's preview hook drives it, with the same bookkeeping
+ * (`designer-live-module.ts`): each source of a screen is reached from the one the module shows with `planLiveSync`,
+ * the module's change and live setters, without a build.
  */
 class LiveDriver {
   readonly frame: FullFrame
   private shown: DesignerModel
   private shownSource: string
-  private readonly held = new Map<string, Held>()
+  private entries: LiveEntries
 
   constructor(
     readonly instance: HmiPreviewInstance,
@@ -205,15 +204,12 @@ class LiveDriver {
     this.frame = new FullFrame(instance)
     this.shown = parse(source)
     this.shownSource = source
-    for (const e of built.elementIds)
-      if (e.screen === screen)
-        this.held.set(e.element.toUpperCase(), { id: e.id, type: '', created: false, attached: true })
+    this.entries = compiledEntries(built.elementIds, screen)
   }
 
   /** The module's id of an element that is laid out and drawn. */
   idOf(name: string): number | undefined {
-    const held = this.held.get(name.toUpperCase())
-    return held?.attached ? held.id : undefined
+    return liveModuleOf(this.entries).attached(name)
   }
 
   /** Shows `source` without a build; false when the planner or the module refuses. */
@@ -226,56 +222,25 @@ class LiveDriver {
       nextSource: source,
       catalog: this.catalog,
       factory: this.built.factory,
-      module: {
-        attached: (name) => this.idOf(name),
-        detached: (name) => {
-          const held = this.held.get(name.toUpperCase())
-          return held && !held.attached ? { id: held.id, declaration: held.declaration ?? '' } : undefined
-        },
-        created: (name) => this.held.get(name.toUpperCase())?.created ?? false,
-      },
+      module: liveModuleOf(this.entries),
     })
     if (!plan) return false
     const ids = this.instance.changeLive(plan.detach, plan.elements)
     if (!ids) return false
-    for (const name of plan.detached) {
-      const held = this.held.get(name.toUpperCase())
-      const declared = this.shown.elements.find((e) => e.name.toUpperCase() === name.toUpperCase())
-      if (held) {
-        held.attached = false
-        held.declaration = declared ? liveDeclaration(this.shownSource, declared) : ''
-      }
-    }
-    plan.names.forEach((name, i) => {
-      const before = this.held.get(name.toUpperCase())
-      const created = plan.elements[i].element === undefined
-      const type = next.elements.find((e) => e.name.toUpperCase() === name.toUpperCase())?.type.toUpperCase() ?? ''
-      this.held.set(name.toUpperCase(), {
-        id: ids[i],
-        type: created ? type : (before?.type ?? ''),
-        created: created || (before?.created ?? false),
-        attached: true,
-      })
-    })
+    this.entries = entriesAfter(this.entries, plan, ids, { model: this.shown, source: this.shownSource }, next)
+    const page = this.built.pages[this.screen]
     for (const v of plan.values) {
       const live = liveValue(v.value)
-      const held = this.held.get(v.element.toUpperCase())
-      if (!live || !held) return false
-      const page = this.built.pages[this.screen]
-      const setter = held.created
-        ? this.built.factory.types[held.type]?.setters[v.property.toUpperCase()]
-        : Object.entries(this.built.setters).find(
-            ([k]) => k.toUpperCase() === `${this.screen}.${v.element}.${v.property}`.toUpperCase(),
-          )?.[1]
-      if (!setter) return false
+      const setter = liveSetter(this.entries, this.built, this.screen, v.element, v.property)
+      if (!live || !setter) return false
       const applied =
         'number' in live
-          ? held.created
-            ? this.instance.setLiveNumber(held.id, setter.index, live.number)
-            : this.instance.setNumber(page, setter.index, live.number)
-          : held.created
-            ? this.instance.setLiveText(held.id, setter.index, live.text)
-            : this.instance.setText(page, setter.index, live.text)
+          ? setter.element === undefined
+            ? this.instance.setNumber(page, setter.index, live.number)
+            : this.instance.setLiveNumber(setter.element, setter.index, live.number)
+          : setter.element === undefined
+            ? this.instance.setText(page, setter.index, live.text)
+            : this.instance.setLiveText(setter.element, setter.index, live.text)
       if (!applied) return false
     }
     this.shown = next

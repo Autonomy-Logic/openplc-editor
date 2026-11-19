@@ -410,9 +410,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
         catalog.widgets
           .get(type.toUpperCase())
           ?.properties.some((p) => same(p.name, property) && p.kind === 'elementRef') ?? false
-      const result = renameElement(source, model, element, newName, { refersToElement: refers })
-      if (result.ok) preview.renameLive(name, element, newName)
-      if (apply(result)) select([newName])
+      if (apply(renameElement(source, model, element, newName, { refersToElement: refers }))) select([newName])
     },
     remove: (element) => {
       if (model && apply(deleteElements(source, model, withTheirPipes(model, catalog, [element])))) select([])

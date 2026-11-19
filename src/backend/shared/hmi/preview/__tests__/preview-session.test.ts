@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import type { HmiLiveElement } from '../../../../../middleware/shared/ports/hmi-preview-types'
 import { createHmiPreviewSession } from '../preview-session'
-import { parseHmiPreviewRequest } from '../preview-worker'
+import { parseHmiPreviewRequest, serveHmiPreview } from '../preview-worker'
 import { fakeHost, type TestWorker, testWorker } from './fixtures/support'
 
 const start = { width: 16, height: 8, page: 2, design: true }
@@ -67,7 +67,43 @@ describe('parseHmiPreviewRequest', () => {
   })
 })
 
+describe('serveHmiPreview', () => {
+  it('answers requests one at a time in order, so a change sent during a load reaches the loaded module', async () => {
+    const listeners: Array<(event: MessageEvent<unknown>) => void> = []
+    const replies: unknown[] = []
+    serveHmiPreview({
+      postMessage: (message) => replies.push(message),
+      addEventListener: (_type, listener) => listeners.push(listener),
+    })
+    const send = (data: unknown) => listeners.forEach((l) => l(new MessageEvent('message', { data })))
+    send({ id: 1, type: 'load', wasm: fakeHost(), width: 16, height: 8, page: 0, design: false })
+    send({ id: 2, type: 'change', detach: [], elements: [live] })
+    send({ id: 3, type: 'setNumber', screen: 0, setter: 1, value: 2, element: 100 })
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(replies).toEqual([
+      { id: 1, ok: true },
+      { id: 2, ok: true, applied: true, added: [100] },
+      { id: 3, ok: true, applied: true },
+    ])
+  })
+})
+
 describe('preview session', () => {
+  it('lands loads in the order they were asked for, whichever module starts first', async () => {
+    let started = 0
+    const session = createHmiPreviewSession(() => {
+      const worker = testWorker()
+      if (started++ > 0) return worker
+      const post = worker.postMessage.bind(worker)
+      return { ...worker, postMessage: (message, transfer) => void setTimeout(() => post(message, transfer), 60) }
+    })
+    const first = session.load(fakeHost(), { ...start, page: 1 })
+    const second = session.load(fakeHost(), { ...start, page: 2 })
+    await Promise.all([first, second])
+    expect((await session.frame(0, surface)).page).toBe(2)
+    session.close()
+  })
+
   it('runs a module in its Worker: frames, input and live edits', async () => {
     const session = createHmiPreviewSession(() => testWorker())
     await session.load(fakeHost(), start)

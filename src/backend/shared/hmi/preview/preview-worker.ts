@@ -180,28 +180,36 @@ async function answer(
   return { reply: { id, ok: true }, transfer: [] }
 }
 
-/** Serves preview requests from `scope` until the Worker is terminated. */
+/**
+ * Serves preview requests from `scope` until the Worker is terminated, one at a time in the order they arrive: a
+ * request starts only once the one before it has been answered, so nothing reaches a module that is still loading.
+ */
 export function serveHmiPreview(scope: HmiPreviewWorkerScope): void {
   const state: { instance: HmiPreviewInstance | null } = { instance: null }
-  scope.addEventListener('message', (event) => {
-    const request = parseHmiPreviewRequest(event.data)
+  let queue: Promise<void> = Promise.resolve()
+  const serve = async (data: unknown): Promise<void> => {
+    const request = parseHmiPreviewRequest(data)
     if (!request) {
-      const id = isRecord(event.data) && isNumber(event.data.id) ? event.data.id : -1
+      const id = isRecord(data) && isNumber(data.id) ? data.id : -1
       scope.postMessage({ id, ok: false, error: 'The preview received a request it does not understand' }, [])
       return
     }
-    answer(state, request).then(
-      ({ reply, transfer }) => scope.postMessage(reply, transfer),
-      (error: unknown) =>
-        scope.postMessage(
-          {
-            id: request.id,
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-            fatal: error instanceof WebAssembly.RuntimeError,
-          },
-          [],
-        ),
-    )
+    try {
+      const { reply, transfer } = await answer(state, request)
+      scope.postMessage(reply, transfer)
+    } catch (error) {
+      scope.postMessage(
+        {
+          id: request.id,
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+          fatal: error instanceof WebAssembly.RuntimeError,
+        },
+        [],
+      )
+    }
+  }
+  scope.addEventListener('message', (event) => {
+    queue = queue.then(() => serve(event.data))
   })
 }

@@ -142,6 +142,7 @@ export function createHmiPreviewSession(
   const listeners = new Set<(reason: string) => void>()
   let current: Channel | null = null
   let closed = false
+  let loads: Promise<void> = Promise.resolve()
 
   const stopped = (channel: Channel, reason: string): void => {
     if (channel !== current) return
@@ -155,22 +156,26 @@ export function createHmiPreviewSession(
   const call = async (message: Outgoing): Promise<Success> => running().request(message, callTimeout)
 
   return {
-    async load(wasm: Uint8Array, start: HmiPreviewStart): Promise<void> {
-      if (closed) throw new Error('The preview was closed')
-      const channel = new Channel(startWorker(), stopped)
-      const copy = wasm.slice()
-      try {
-        await channel.request({ type: 'load', wasm: copy, ...start }, loadTimeout, [copy.buffer])
-      } catch (error) {
-        channel.close()
-        throw error
-      }
-      if (closed) {
-        channel.close()
-        throw new Error('The preview was closed')
-      }
-      current?.close('A newer preview replaced this one')
-      current = channel
+    load(wasm: Uint8Array, start: HmiPreviewStart): Promise<void> {
+      const landed = loads.then(async () => {
+        if (closed) throw new Error('The preview was closed')
+        const channel = new Channel(startWorker(), stopped)
+        const copy = wasm.slice()
+        try {
+          await channel.request({ type: 'load', wasm: copy, ...start }, loadTimeout, [copy.buffer])
+        } catch (error) {
+          channel.close()
+          throw error
+        }
+        if (closed) {
+          channel.close()
+          throw new Error('The preview was closed')
+        }
+        current?.close('A newer preview replaced this one')
+        current = channel
+      })
+      loads = landed.catch(() => undefined)
+      return landed
     },
     async frame(timeMs, surface) {
       const reply = await call({ type: 'frame', timeMs, surface })

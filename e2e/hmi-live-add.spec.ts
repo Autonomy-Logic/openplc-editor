@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import type { ElectronApplication, Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 
-import { waitForText } from './helpers/app-console'
+import { failIfAppReportedFailure, waitForText } from './helpers/app-console'
 import {
   hmiFixture,
   launchHmiApp,
@@ -166,45 +166,57 @@ const dropAndTime = (page: Page, widget: string, x: number, y: number, outline: 
 
 /**
  * Samples the canvas on every animation frame until the preview reports a finished build other than `opened`, and
- * 500 ms longer, and counts the samples that differ from `expected`.
+ * 500 ms longer, and counts the samples that differ from `expected`. It samples in slices of a second and, between
+ * them, fails at once when the app reports a failure, the designer lists errors or the preview failed.
  */
-const watchCanvasThroughBuild = (page: Page, expected: string, opened: string) =>
-  page.evaluate(
-    async ({ expected, opened }) => {
-      const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="hmi-canvas"] canvas')
-      const context = canvas?.getContext('2d')
-      if (!canvas || !context) throw new Error('no preview canvas')
-      const small = document.createElement('canvas')
-      small.width = 320
-      small.height = 200
-      const scaled = small.getContext('2d', { willReadFrequently: true })
-      const read = (from: HTMLCanvasElement): Uint8ClampedArray => {
-        if (!scaled) throw new Error('no 2D context')
-        scaled.clearRect(0, 0, 320, 200)
-        scaled.drawImage(from, 0, 0, 320, 200)
-        return scaled.getImageData(0, 0, 320, 200).data
-      }
-      const state = () => document.querySelector('[data-testid="hmi-canvas-area"]')?.getAttribute('data-preview') ?? ''
-      let frames = 0
-      let differing = 0
-      let end = performance.now() + 60000
-      let replaced = false
-      while (performance.now() < end) {
-        await new Promise((resolve) => requestAnimationFrame(resolve))
-        const data = read(canvas)
-        const out: number[] = []
-        for (let i = 0; i < data.length; i += 4) out.push(data[i + 1])
-        frames++
-        if (out.join(',') !== expected) differing++
-        if (!replaced && /^ready \d+$/.test(state()) && state() !== opened) {
-          replaced = true
-          end = performance.now() + 500
+async function watchCanvasThroughBuild(page: Page, expected: string, opened: string) {
+  const deadline = Date.now() + 60000
+  await page.evaluate(() => Reflect.set(window, '__hmiWatch', { frames: 0, differing: 0, replaced: false, end: 0 }))
+  for (;;) {
+    const done = await page.evaluate(
+      async ({ expected, opened }) => {
+        const watch: unknown = Reflect.get(window, '__hmiWatch')
+        const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="hmi-canvas"] canvas')
+        const small = document.createElement('canvas')
+        small.width = 320
+        small.height = 200
+        const scaled = small.getContext('2d', { willReadFrequently: true })
+        if (typeof watch !== 'object' || watch === null || !canvas || !scaled) throw new Error('no preview canvas')
+        const state = () =>
+          document.querySelector('[data-testid="hmi-canvas-area"]')?.getAttribute('data-preview') ?? ''
+        const slice = performance.now() + 1000
+        while (performance.now() < slice) {
+          await new Promise((resolve) => requestAnimationFrame(resolve))
+          scaled.clearRect(0, 0, 320, 200)
+          scaled.drawImage(canvas, 0, 0, 320, 200)
+          const data = scaled.getImageData(0, 0, 320, 200).data
+          const out: number[] = []
+          for (let i = 0; i < data.length; i += 4) out.push(data[i + 1])
+          Reflect.set(watch, 'frames', Number(Reflect.get(watch, 'frames')) + 1)
+          if (out.join(',') !== expected) Reflect.set(watch, 'differing', Number(Reflect.get(watch, 'differing')) + 1)
+          if (!Reflect.get(watch, 'replaced') && /^ready \d+$/.test(state()) && state() !== opened) {
+            Reflect.set(watch, 'replaced', true)
+            Reflect.set(watch, 'end', performance.now() + 500)
+          }
+          if (Reflect.get(watch, 'replaced') && performance.now() > Number(Reflect.get(watch, 'end'))) return true
         }
-      }
-      return { frames, differing, replaced }
-    },
-    { expected, opened },
-  )
+        return false
+      },
+      { expected, opened },
+    )
+    if (done) break
+    await failIfAppReportedFailure(page)
+    const errors = await page.getByTestId('hmi-errors').allInnerTexts()
+    if (errors.length > 0) throw new Error(`the designer reports: ${errors.join(' | ')}`)
+    if ((await status(page)).startsWith('failed')) throw new Error(`the preview failed: ${await status(page)}`)
+    if (Date.now() > deadline) break
+  }
+  return page.evaluate(() => {
+    const watch: unknown = Reflect.get(window, '__hmiWatch')
+    const read = (key: string) => (typeof watch === 'object' && watch !== null ? Reflect.get(watch, key) : undefined)
+    return { frames: Number(read('frames')), differing: Number(read('differing')), replaced: read('replaced') === true }
+  })
+}
 
 /** Where an element sits on the canvas overlay, from its selection outline. */
 async function boxIn(page: Page, element: string) {
@@ -339,10 +351,6 @@ test.describe('HMI live elements', () => {
           return Array.isArray(seen) ? seen.map(String) : []
         })
 
-      /**
-       * Runs `act` and returns how long after its last key or pointer release (or, for a menu command, after it was
-       * sent) the canvas changed, in ms.
-       */
       const timed = async (act: () => Promise<void>, command: boolean): Promise<number> => {
         await page.evaluate(() => {
           const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="hmi-canvas"] canvas')

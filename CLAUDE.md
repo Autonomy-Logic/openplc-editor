@@ -456,7 +456,8 @@ that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its r
   removed. That build waits for the store to load; a store that cannot be read only costs the reuse.
 - **Precompiled headers:** a request may list `precompiledHeaders`, built first and cached like units; a unit names
   one with `pch`, and a digest of what the header was built from (its cache key and its files' digests, not its bytes)
-  is part of that unit's cache key. A clang worker replies with the files a job wrote only, never its inputs.
+  is part of that unit's cache key. A clang worker's reply leaves out the binary inputs it gets back unchanged, such as
+  the precompiled header; text inputs come back from YoWASP as bytes and are still sent.
 - **Clang worker:** one (`ClangWorkerPool`), running one job at a time, started by a build and ended once no build is
   running or queued, whatever the last build's outcome, so the simulator runs with no clang worker; builds that overlap
   share it. While an HMI tab is open (screen, widget block or HMI Settings), the workspace holds the toolchain

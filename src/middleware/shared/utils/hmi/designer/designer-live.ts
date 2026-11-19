@@ -217,7 +217,6 @@ export function planLiveSync(input: LiveSyncInput): LiveSyncPlan | null {
     if (e) close(e)
   }
 
-  /** Whether an element the source declares again is one the module holds as it was taken off. */
   const returning = (name: string): boolean => {
     const held = module.detached(name)
     const now = next.byName.get(name)
