@@ -25,6 +25,7 @@ describe('bundledArchiveToInstalledRow', () => {
       bundled: true,
       installedAt: '',
       origin: 'bundled',
+      kind: 'plc',
     })
   })
 
@@ -76,6 +77,7 @@ describe('userArchiveToInstalledRow', () => {
       bundled: false,
       installedAt: '2026-05-22T12:00:00Z',
       origin: 'codesys',
+      kind: 'plc',
     })
   })
 
@@ -99,5 +101,20 @@ describe('userArchiveToInstalledRow', () => {
     })
     expect('displayName' in row).toBe(false)
     expect('description' in row).toBe(false)
+  })
+})
+
+describe('library kind of a row', () => {
+  it('is hmi for a widget library archive, for bundled and user-installed rows alike', () => {
+    const widgets = { ...makeArchive({ name: 'standard-widgets' }), openplc: { formatVersion: 1, kind: 'hmi' } }
+    expect(bundledArchiveToInstalledRow(widgets).kind).toBe('hmi')
+    expect(
+      userArchiveToInstalledRow(widgets, {
+        name: 'standard-widgets',
+        version: '1.0.0',
+        installedAt: '',
+        origin: 'stlib',
+      }).kind,
+    ).toBe('hmi')
   })
 })

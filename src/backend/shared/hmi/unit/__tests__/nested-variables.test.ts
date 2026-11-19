@@ -11,6 +11,7 @@ import { hmiSettingsSchema } from '../../../../../middleware/shared/utils/hmi/se
 import { loadStrucpp } from '../../../library/strucpp-runtime'
 import { hmiTagResolver } from '../../artefact/tag-resolver'
 import { generateHmiUnit } from '../generate-hmi-unit'
+import { installedWidgetArchives } from './fixtures/widget-libraries'
 
 const base = (value: string): PLCVariableType => ({ definition: 'base-type', value })
 const named = (value: string): PLCVariableType => ({ definition: 'derived', value })
@@ -200,6 +201,7 @@ describe('nested HMI variables', () => {
     const result = generateHmiUnit({
       screens: [{ name: 'Overview', source: screen }],
       widgets: [],
+      widgetLibraries: installedWidgetArchives(),
       settings: hmiSettingsSchema.parse({}),
       plcVariables: variables,
       plcDeclarations: DECLARATIONS,
@@ -233,6 +235,7 @@ describe('nested HMI variables', () => {
         },
       ],
       widgets: [],
+      widgetLibraries: installedWidgetArchives(),
       settings: hmiSettingsSchema.parse({}),
       plcVariables: variables,
       plcDeclarations: DECLARATIONS,
@@ -262,6 +265,7 @@ describe('nested HMI variables', () => {
         },
       ],
       widgets: [],
+      widgetLibraries: installedWidgetArchives(),
       settings: hmiSettingsSchema.parse({}),
       plcVariables: variables,
       plcDeclarations: DECLARATIONS,
@@ -331,6 +335,7 @@ function sampleBase() {
       },
     ],
     widgets: [],
+    widgetLibraries: installedWidgetArchives(),
     settings: hmiSettingsSchema.parse({}),
     plcVariables: [],
     projectNames: [],

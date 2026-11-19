@@ -1,15 +1,25 @@
 /**
- * Download external tool binaries (strucpp) from GitHub Releases.
+ * Download external tools from GitHub Releases: STruC++ (into node_modules) and the HMI widget libraries
+ * (openplc-hmi-widgets, into vendor/hmi-widgets/).
  *
  * Usage:
- *   ts-node scripts/download-binaries.ts [--force]
+ *   ts-node scripts/download-binaries.ts [--force] [--strucpp-only | --hmi-widgets-only]
  *
- * Use --force to re-install even if the pinned version is already present.
+ * Use --force to re-install even if the pinned version is already present. OPENPLC_HMI_WIDGETS_DIR set to a local
+ * openplc-hmi-widgets build directory (its dist/) installs that build instead of the pinned release.
  */
 
 import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
+
+import {
+  setupWidgetsRelease,
+  WIDGETS_OVERRIDE_ENV,
+  WidgetsSetupError,
+  type WidgetsSetupMechanisms,
+  widgetsReleasePin,
+} from '../src/backend/shared/hmi/lib/widgets-release-setup'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,13 +41,19 @@ interface BinaryVersions {
 const ROOT_DIR = path.resolve(__dirname, '..')
 const VERSIONS_FILE = path.join(ROOT_DIR, 'binary-versions.json')
 const RESOURCES_DIR = path.join(ROOT_DIR, 'resources')
+const HMI_WIDGETS_DIR = path.join(ROOT_DIR, 'vendor', 'hmi-widgets')
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
 // ---------------------------------------------------------------------------
 
-function parseArgs(): { force: boolean } {
-  return { force: process.argv.slice(2).includes('--force') }
+function parseArgs(): { force: boolean; strucpp: boolean; hmiWidgets: boolean } {
+  const args = process.argv.slice(2)
+  return {
+    force: args.includes('--force'),
+    strucpp: !args.includes('--hmi-widgets-only'),
+    hmiWidgets: !args.includes('--strucpp-only'),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -123,11 +139,54 @@ async function downloadStrucpp(tool: ToolEntry): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// HMI widget libraries
+// ---------------------------------------------------------------------------
+
+function readIfExists(file: string): Promise<Uint8Array | null> {
+  return Promise.resolve(fs.existsSync(file) ? new Uint8Array(fs.readFileSync(file)) : null)
+}
+
+/** File and network mechanisms of the shared HMI widgets setup. */
+const widgetsMechanisms: WidgetsSetupMechanisms = {
+  async fetchAsset(url) {
+    const response = await fetch(url, { redirect: 'follow' })
+    if (response.status === 404) return null
+    if (!response.ok) throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`)
+    return new Uint8Array(await response.arrayBuffer())
+  },
+  readOverride: (dir, file) => readIfExists(path.join(dir, file)),
+  readInstalled: (file) => readIfExists(path.join(HMI_WIDGETS_DIR, file)),
+  writeInstalled(files) {
+    fs.mkdirSync(path.dirname(HMI_WIDGETS_DIR), { recursive: true })
+    const tmpDir = fs.mkdtempSync(path.join(path.dirname(HMI_WIDGETS_DIR), '.tmp-hmi-widgets-'))
+    try {
+      for (const [name, bytes] of files) fs.writeFileSync(path.join(tmpDir, name), bytes)
+      rmrf(HMI_WIDGETS_DIR)
+      fs.renameSync(tmpDir, HMI_WIDGETS_DIR)
+      fs.chmodSync(HMI_WIDGETS_DIR, 0o755)
+    } finally {
+      rmrf(tmpDir)
+    }
+    return Promise.resolve()
+  },
+  log: (message) => console.log(`  ${message}`),
+}
+
+async function setupHmiWidgets(versions: unknown, force: boolean): Promise<void> {
+  const pin = widgetsReleasePin(versions)
+  const overrideDir = process.env[WIDGETS_OVERRIDE_ENV] ? path.resolve(process.env[WIDGETS_OVERRIDE_ENV]) : undefined
+  const result = await setupWidgetsRelease(pin, { overrideDir, force }, widgetsMechanisms)
+  const what = `HMI widgets ${result.release.version} (${result.release.archives.map((a) => a.name).join(', ')})`
+  if (result.source === 'installed') console.log(`  ${what} already installed, skipping.`)
+  else console.log(`  ${what} installed from ${result.source === 'override' ? overrideDir : 'the release'}.`)
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  const { force } = parseArgs()
+  const { force, strucpp, hmiWidgets } = parseArgs()
 
   if (!fs.existsSync(VERSIONS_FILE)) {
     console.error(`binary-versions.json not found at ${VERSIONS_FILE}`)
@@ -139,16 +198,20 @@ async function main(): Promise<void> {
   console.log(`[download-binaries] force=${force}`)
 
   // strucpp is platform-independent — installed into node_modules.
-  if (force || needsStrucpp(versions)) {
-    await downloadStrucpp(versions.strucpp)
-  } else {
-    console.log(`  strucpp ${versions.strucpp.version} already installed, skipping.`)
+  if (strucpp) {
+    if (force || needsStrucpp(versions)) {
+      await downloadStrucpp(versions.strucpp)
+    } else {
+      console.log(`  strucpp ${versions.strucpp.version} already installed, skipping.`)
+    }
   }
+
+  if (hmiWidgets) await setupHmiWidgets(versions, force)
 
   console.log(`[download-binaries] Done.`)
 }
 
 main().catch((err) => {
-  console.error('[download-binaries] Fatal error:', err)
+  console.error('[download-binaries] Fatal error:', err instanceof WidgetsSetupError ? err.message : err)
   process.exit(1)
 })

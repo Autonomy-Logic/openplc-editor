@@ -36,6 +36,8 @@
  *   parameters become class `'inOut'` (camel-case the editor uses).
  */
 
+import { libraryKind } from '@root/middleware/shared/utils/hmi/widget-libraries'
+
 import type { StlibArchiveDTO } from '../../middleware/shared/ports/library-port'
 import type {
   SystemLibrary,
@@ -181,6 +183,7 @@ export function stlibToSystemLibrary(archive: StlibArchiveDTO): SystemLibrary {
   return result
 }
 
+/** The PLC libraries among `archives` as library-tree entries; widget libraries (kind `hmi`) belong to the HMI. */
 export function stlibsToSystemLibraries(archives: StlibArchiveDTO[]): SystemLibrary[] {
-  return archives.map(stlibToSystemLibrary)
+  return archives.filter((archive) => libraryKind(archive) !== 'hmi').map(stlibToSystemLibrary)
 }

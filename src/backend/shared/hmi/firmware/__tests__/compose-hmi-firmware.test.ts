@@ -4,6 +4,7 @@ import { join } from 'path'
 import { resolveHmiPanel } from '../../../../../middleware/shared/utils/target-capabilities/hmi-panel'
 import { HMI_FONT_BOLD, HMI_FONT_REGULAR } from '../../fonts/vetted-fonts'
 import { sampleProject } from '../../unit/__tests__/fixtures/sample-project'
+import { installedWidgetArchives } from '../../unit/__tests__/fixtures/widget-libraries'
 import { generateHmiUnit } from '../../unit/generate-hmi-unit'
 import {
   composeHmiFirmware,
@@ -54,7 +55,7 @@ function input(overrides: Partial<ComposeHmiFirmwareInput> = {}): ComposeHmiFirm
   return {
     sources: sampleProject(),
     panel: PANEL,
-    plcArchives: [],
+    libraries: installedWidgetArchives(),
     capabilities: {},
     debugMapJson: JSON.stringify({ version: 2, md5: 'x', leaves: LEAVES }),
     md5: 'fe3845fc1babc413455ceb7a5ee596bf',

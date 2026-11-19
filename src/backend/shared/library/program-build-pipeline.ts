@@ -33,10 +33,9 @@
  *     orchestrator that wraps this pipeline.  This module is purely
  *     about the strucpp invocation slice.
  */
+import { partitionLibraryArchives } from '@root/middleware/shared/utils/hmi/widget-libraries'
 import type * as strucpp from 'strucpp'
 
-import { withHmiAlarmsArchive } from '../hmi/plc-lib/build-hmi-alarms'
-import { hmiAlarmsReferenced } from '../hmi/plc-lib/hmi-alarms'
 import type { KnownPou } from '../utils/PLC/split-program-st'
 import { splitProgramSt } from '../utils/PLC/split-program-st'
 import { enrichErrorWithPouContext, formatErrorWithPouContext } from './program-build-helpers'
@@ -55,7 +54,7 @@ export interface ProgramBuildPipelineOptions {
    *  splitter to emit per-POU error file names. */
   pous: KnownPou[]
   /** Pre-loaded `.stlib` archives — bundled + the project-enabled
-   *  subset — passed through to strucpp's `libraries:` option. */
+   *  subset — passed through to strucpp's `libraries:` option, without the widget libraries (kind `hmi`). */
   libraries: unknown[]
   /** Names of libraries the project enables but the system pool
    *  doesn't currently have on disk.  Surfaced as a pre-compile
@@ -189,7 +188,7 @@ export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): Prog
     fileName: primaryFileName,
     debug: true,
     lineMapping: true,
-    libraries: (hmiAlarmsReferenced(source) ? withHmiAlarmsArchive(libraries) : libraries) as StrucppLibraries,
+    libraries: partitionLibraryArchives(libraries).plc as StrucppLibraries,
     md5,
     pouIncludes,
     ...(additionalSources ? { additionalSources } : {}),

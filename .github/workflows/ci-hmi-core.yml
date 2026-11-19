@@ -7,7 +7,7 @@ on:
 
 jobs:
   hmi-core:
-    name: HMI Core, widget library and unit generator (gcc, clang, WebAssembly, sanitizers)
+    name: HMI Core and unit generator (gcc, clang, WebAssembly, sanitizers)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -28,13 +28,13 @@ jobs:
       - name: Test the HMI core
         run: node tests/hmi-core/run.mjs --cc "gcc clang" --sanitize --fuzz 100000
 
-      # The pinned STruC++ compiles the StandardWidgets library and the test screens.
+      # The pinned STruC++ compiles the test screens against the pinned HMI widget libraries (openplc-hmi-widgets,
+      # whose own CI runs their headless frame tests against this core).
       - name: Install STruC++
         run: npm run setup:strucpp
 
-      # Headless frames of the widget library on gcc and clang against golden.txt, and a sanitized gcc build.
-      - name: Test the HMI widget library
-        run: node tests/hmi-lib/run.mjs --cc "gcc clang" --sanitize
+      - name: Install the HMI widget libraries
+        run: npm run setup:hmi-widgets
 
       # The generated HMI unit of a sample project, run by a C host through hmi_unit.h, against golden.txt, and a
       # sanitized gcc build.

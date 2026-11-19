@@ -48,13 +48,15 @@ const ProjectLibrariesTab = ({ installed }: ProjectLibrariesTabProps) => {
   // libraries split between "available" (not yet enabled) and
   // "enabled in this project".  We compute against `enabledNames`
   // rather than `project.libraries` directly so the UI reflects the
-  // exact list the next save will write.
+  // exact list the next save will write.  Widget libraries (kind `hmi`)
+  // are on for every project's HMI, so they are not listed here.
   const { bundled, enabled, available } = useMemo(() => {
     const bundled: InstalledLibrary[] = []
     const enabled: InstalledLibrary[] = []
     const available: InstalledLibrary[] = []
     const enabledSet = new Set(enabledNames)
     for (const lib of installed) {
+      if (lib.kind === 'hmi') continue
       if (lib.bundled) bundled.push(lib)
       else if (enabledSet.has(lib.name)) enabled.push(lib)
       else available.push(lib)

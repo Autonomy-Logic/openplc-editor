@@ -41,6 +41,7 @@ import { transpileProjectStInProcess } from './middleware/adapters/editor/transp
 import { setMenuDebuggerActive, setMenuProjectOpen } from './middleware/adapters/editor/window-adapter'
 import { packageUpdateNotifier, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
 import { ExtensionPanelProvider, PlatformProvider } from './middleware/shared/providers'
+import { bundledPlcLibraryNames } from './middleware/shared/utils/hmi/widget-libraries'
 
 /**
  * Load every installed library (bundled + user-installed) at startup
@@ -64,7 +65,7 @@ const hydrateLibraries = () => {
     .then(([archives, installed]) => {
       const actions = appStore.getState().libraryActions
       actions.setSystemLibraries(stlibsToSystemLibraries(archives))
-      actions.setBundledLibraryNames(installed.filter((l) => l.bundled).map((l) => l.name))
+      actions.setBundledLibraryNames(bundledPlcLibraryNames(installed))
     })
     .catch((err) => {
       console.error('Failed to load .stlib libraries:', err)

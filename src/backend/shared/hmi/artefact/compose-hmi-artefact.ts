@@ -12,11 +12,10 @@ import type {
   WasmCompileUnit,
 } from '../../../../middleware/shared/ports/wasm-toolchain-types'
 import { hmiFontTableFromSources } from '../fonts/font-table-source'
+import { plcLibraryArchives } from '../lib/widget-libraries'
 import { generateHmiUnit, type HmiPageTags, type HmiTag } from '../unit/generate-hmi-unit'
 import { hmiHostManifestSource } from './host-manifest'
 import { type HmiProgramInstance, hmiTagResolver } from './tag-resolver'
-
-type StlibArchive = NonNullable<Parameters<typeof generateHmiUnit>[0]['plcArchives']>[number]
 
 /** Files of the artefact by path in the upload (`hmi/...`). */
 export type HmiArtefactFiles = Record<string, string | Uint8Array>
@@ -24,8 +23,8 @@ export type HmiArtefactFiles = Record<string, string | Uint8Array>
 export interface ComposeHmiArtefactInput {
   /** The project's HMI; null when it has no screens. */
   sources: HmiBuildSources | null
-  /** The PLC libraries the program was compiled with. */
-  plcArchives: readonly StlibArchive[]
+  /** The build's library archives, verbatim: the PLC libraries the program was compiled with and the widget libraries. */
+  libraries: readonly unknown[]
   /** The target's capabilities; widgets that need one it lacks are refused. */
   capabilities: object
   /** The program's debug-map.json. */
@@ -132,7 +131,8 @@ export async function composeHmiArtefact(input: ComposeHmiArtefactInput): Promis
 
   const unit = generateHmiUnit({
     ...input.sources,
-    plcArchives: input.plcArchives,
+    plcArchives: plcLibraryArchives(input.libraries),
+    widgetLibraries: input.libraries,
     capabilities: input.capabilities,
     resolve: hmiTagResolver(input.debugMapJson, input.instances),
     plcMd5: input.md5,

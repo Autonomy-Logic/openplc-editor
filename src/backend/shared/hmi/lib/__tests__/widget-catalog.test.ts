@@ -1,14 +1,14 @@
 import type { LibraryFBEntry, LibraryManifest, StlibArchive } from 'strucpp'
 
 import { loadStrucpp } from '../../../library/strucpp-runtime'
+import { installedArchiveText, installedWidgetArchives } from '../../unit/__tests__/fixtures/widget-libraries'
 import { compileHmiWidgets } from '../../unit/generate-hmi-unit'
-import { buildStandardWidgets } from '../build-standard-widgets'
 import { buildWidgetCatalog, type HmiWidgetInfo } from '../widget-catalog'
+import { loadHmiWidgetLibraries } from '../widget-libraries'
 
+/** The pre-installed standard-widgets archive, loaded as every consumer loads it. */
 function standardWidgets(): StlibArchive {
-  const build = buildStandardWidgets()
-  if (!build.ok) throw new Error(build.errors.map((e) => e.message).join('\n'))
-  return build.archive
+  return loadStrucpp().loadStlibFromString(installedArchiveText('standard-widgets'), 'standard-widgets')
 }
 
 function widget(info: ReadonlyMap<string, HmiWidgetInfo>, name: string): HmiWidgetInfo {
@@ -234,6 +234,13 @@ describe('widget catalogue', () => {
     )
   })
 
+  it('equals the catalogue the release carries for the library', () => {
+    const [library] = loadHmiWidgetLibraries(installedWidgetArchives()).libraries
+    expect(library.name).toBe('standard-widgets')
+    expect([...library.catalog.widgets.entries()]).toEqual([...catalog.widgets.entries()])
+    expect(library.catalog.colors).toEqual(catalog.colors)
+  })
+
   it('names the COLOR constant fields, theme colors first', () => {
     expect(catalog.colors.slice(0, 3)).toEqual(['Background', 'Surface', 'Text'])
     expect(catalog.colors).toContain('Transparent')
@@ -341,7 +348,7 @@ END_FUNCTION_BLOCK
 `,
         },
       ],
-      standardWidgets(),
+      loadHmiWidgetLibraries(installedWidgetArchives()).libraries,
     )
     expect(lib.errors).toEqual([])
     const info = widget(lib.catalog.widgets, 'Gauge2')

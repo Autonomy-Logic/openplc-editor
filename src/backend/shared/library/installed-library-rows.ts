@@ -16,6 +16,8 @@
  * from either the editor's main process or the browser bundle.
  */
 
+import { libraryKind } from '@root/middleware/shared/utils/hmi/widget-libraries'
+
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
 import type { InstalledLibrary } from '../../../middleware/shared/ports/library-types'
 
@@ -37,6 +39,7 @@ export function bundledArchiveToInstalledRow(archive: StlibArchiveDTO): Installe
     bundled: true,
     installedAt: '',
     origin: 'bundled',
+    kind: libraryKind(archive),
     ...(archive.manifest.displayName ? { displayName: archive.manifest.displayName } : {}),
     ...(archive.manifest.description ? { description: archive.manifest.description } : {}),
   }
@@ -59,6 +62,7 @@ export function userArchiveToInstalledRow(
     bundled: false,
     installedAt: metadata.installedAt,
     origin: metadata.origin,
+    kind: libraryKind(archive),
     ...(archive.manifest.displayName ? { displayName: archive.manifest.displayName } : {}),
     ...(archive.manifest.description ? { description: archive.manifest.description } : {}),
   }

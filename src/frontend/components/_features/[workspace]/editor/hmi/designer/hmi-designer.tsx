@@ -242,6 +242,17 @@ function useFitZoom(width: number, height: number): [number, (element: HTMLDivEl
   return [fit, setArea]
 }
 
+/** `errors` without repeats: the catalogue and the build both report a library that cannot be used. */
+function distinctDiagnostics(errors: readonly HmiDiagnostic[]): HmiDiagnostic[] {
+  const seen = new Set<string>()
+  return errors.filter((e) => {
+    const key = `${e.file}\u0000${e.line ?? ''}\u0000${e.message}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 function Diagnostics(props: { errors: readonly HmiDiagnostic[] }) {
   if (props.errors.length === 0) return null
   return (
@@ -604,7 +615,10 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   }
 
   const screens = request.screens.map((s) => s.name)
-  const buildErrors = useMemo(() => [...catalogErrors, ...preview.errors], [catalogErrors, preview.errors])
+  const buildErrors = useMemo(
+    () => distinctDiagnostics([...catalogErrors, ...preview.errors]),
+    [catalogErrors, preview.errors],
+  )
   const errors = [
     ...(parsed.ok ? [] : parsed.errors.map((e) => ({ file: name, line: e.line, message: e.message }))),
     ...buildErrors,

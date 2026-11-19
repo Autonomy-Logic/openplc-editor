@@ -240,3 +240,20 @@ describe('stlibsToSystemLibraries', () => {
     expect(stlibsToSystemLibraries([])).toEqual([])
   })
 })
+
+describe('stlibsToSystemLibraries — library kinds', () => {
+  const archive = (name: string, kind?: 'hmi' | 'plc') => {
+    const base = makeArchive({ name, namespace: name })
+    return kind ? { ...base, openplc: { formatVersion: 1, kind, license: 'GPL-3.0-only' } } : base
+  }
+
+  it('leaves widget libraries out of the PLC library tree, and keeps PLC-side HMI libraries', () => {
+    const libraries = stlibsToSystemLibraries([
+      archive('iec-standard-fb'),
+      archive('standard-widgets', 'hmi'),
+      archive('hmi-alarms', 'plc'),
+      archive('extra-widgets', 'hmi'),
+    ])
+    expect(libraries.map((l) => l.name)).toEqual(['iec-standard-fb', 'hmi-alarms'])
+  })
+})

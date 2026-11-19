@@ -372,7 +372,7 @@ export interface HmiCatalogResult {
 
 /** What the ST language service and the code view need for screens and widget blocks. */
 export interface HmiCodeContext {
-  /** The libraries screens use, as .stlib archive JSON; empty when StandardWidgets does not build. */
+  /** The installed widget libraries screens use, as .stlib archive JSON. */
   libraries: HmiLibraryArchive[]
   /** ST of the navigation and theme declarations the HMI build generates for the project's screens. */
   glue: string

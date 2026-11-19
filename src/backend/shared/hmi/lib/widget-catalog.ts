@@ -1,6 +1,7 @@
 /**
- * Widget catalogue for the designer and the HMI build, read from STruC++ library manifests (StandardWidgets and the
- * project's widget blocks); see `buildWidgetCatalog` for the pragmas that drive it.
+ * Widget catalogue read from STruC++ library manifests, for a project's widget blocks (whose bases may come from the
+ * installed widget libraries, which carry their own catalogue); see `buildWidgetCatalog` for the pragmas that drive it.
+ * The openplc-hmi-widgets build generates its libraries' catalogues the same way.
  */
 import type { LibraryFBEntry, LibraryManifest, LibraryTypeEntry } from 'strucpp'
 

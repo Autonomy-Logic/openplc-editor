@@ -2,5 +2,10 @@
   "strucpp": {
     "version": "v0.8.1-rc1",
     "repository": "Autonomy-Logic/STruCpp"
+  },
+  "hmi-widgets": {
+    "version": "v1.0.0",
+    "repository": "Autonomy-Logic/openplc-hmi-widgets",
+    "manifestSha256": "6d11e3e2552d57e6f5f0254b56affda1605253133b985fac91c358a81df8487e"
   }
 }
