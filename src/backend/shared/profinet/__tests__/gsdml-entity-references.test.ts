@@ -1,6 +1,6 @@
 import { readGsdmlXml } from '../gsdml-xml'
 import { parseGsdml } from '../index'
-import { expectCatalog, expectError, readGsdmlFixture, replaceOnce } from './fixtures/gsdml-fixtures'
+import { catalogOf, expectError, readGsdmlFixture, replaceOnce } from './fixtures/gsdml-fixtures'
 
 const BASE = readGsdmlFixture('structural-base.gsdml.xml')
 const XML_DECLARATION = '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -113,7 +113,7 @@ describe('readGsdmlXml: undeclared named entity references', () => {
 
 describe('parseGsdml: references that stay accepted', () => {
   it('decodes the five predefined references and numeric references in one attribute value', () => {
-    const catalog = expectCatalog(parseGsdml(withDeviceInfoText('&lt;&gt;&amp;&quot;&apos;&#65;&#x42;')))
+    const catalog = catalogOf(withDeviceInfoText('&lt;&gt;&amp;&quot;&apos;&#65;&#x42;'))
     expect(catalog.identity.infoText).toBe('<>&"\'AB')
   })
 
@@ -126,7 +126,7 @@ describe('parseGsdml: references that stay accepted', () => {
   })
 
   it('keeps an ampersand followed by whitespace, which is no named reference, as before', () => {
-    const catalog = expectCatalog(parseGsdml(withDeviceInfoText('a & b;')))
+    const catalog = catalogOf(withDeviceInfoText('a & b;'))
     expect(catalog.identity.infoText).toBe('a & b;')
   })
 

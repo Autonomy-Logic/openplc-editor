@@ -1,9 +1,6 @@
-import type { GsdmlCatalog } from '@root/middleware/shared/ports/gsdml-types'
-
-import { parseGsdml } from '../index'
 import {
   byId,
-  expectCatalog,
+  catalogOf,
   noticesOf,
   readGsdmlFixture,
   replaceOnce,
@@ -21,11 +18,6 @@ const VB_DAP_NEW_START = '<DeviceAccessPointItem ID="VB_DAP_NEW"'
 
 /** A SubmoduleItemRef target and its AllowedInSubslots value. */
 type SubmoduleRef = readonly [target: string, subslots: string]
-
-/** Parses `xml` and returns its catalog. */
-function catalogOf(xml: string): GsdmlCatalog {
-  return expectCatalog(parseGsdml(xml))
-}
 
 /** The UseableSubmodules element holding one SubmoduleItemRef per entry, in order. */
 function useableSubmodules(refs: readonly SubmoduleRef[]): string {

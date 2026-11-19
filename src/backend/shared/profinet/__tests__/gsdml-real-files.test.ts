@@ -4,12 +4,11 @@ import { delimiter } from 'node:path'
 import type { GsdmlCatalog } from '@root/middleware/shared/ports/gsdml-types'
 import { buildGsdmlCatalogLookups } from '@root/middleware/shared/utils/profinet/gsdml-catalog-lookups'
 
-import { parseGsdml } from '../index'
 import {
   COUNTED_ELEMENTS,
   countCatalogElements,
+  catalogOf,
   countRawElements,
-  expectCatalog,
   noticesOf,
   unresolvedPlacements,
 } from './fixtures/gsdml-fixtures'
@@ -36,7 +35,7 @@ if (REAL_FILES.length === 0) {
 
     beforeAll(() => {
       xml = readFileSync(path, 'utf-8')
-      catalog = expectCatalog(parseGsdml(xml))
+      catalog = catalogOf(xml)
     }, REAL_FILE_TIMEOUT_MS)
 
     it(

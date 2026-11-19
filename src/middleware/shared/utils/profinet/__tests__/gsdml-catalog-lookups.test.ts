@@ -1,4 +1,4 @@
-import { parseGsdml } from '@root/backend/shared/profinet/index'
+import { catalogOf } from '@root/backend/shared/profinet/__tests__/fixtures/gsdml-fixtures'
 import type { GsdmlCatalog } from '@root/middleware/shared/ports/gsdml-types'
 
 import { buildGsdmlCatalogLookups } from '../gsdml-catalog-lookups'
@@ -42,13 +42,6 @@ const DUPLICATES = gsdml(
     '</SubmoduleList>',
   ].join(''),
 )
-
-/** Parses `xml` and returns its catalog. */
-function catalogOf(xml: string): GsdmlCatalog {
-  const result = parseGsdml(xml)
-  if (!result.success) throw new Error(`Expected a catalog, got the error: ${result.error}`)
-  return result.catalog
-}
 
 /** The ids of the items, sorted. */
 function sortedIds(items: readonly { id: string }[] | undefined): string[] {

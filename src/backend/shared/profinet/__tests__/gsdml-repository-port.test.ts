@@ -9,7 +9,7 @@ import type {
 } from '@root/middleware/shared/ports/gsdml-repository-mechanisms'
 
 import { createGsdmlRepositoryPort, GSDML_SUMMARY_VERSION, parseGsdml, runGsdmlParseOp } from '../index'
-import { expectCatalog, expectError, readGsdmlFixture } from './fixtures/gsdml-fixtures'
+import { catalogOf, expectError, readGsdmlFixture } from './fixtures/gsdml-fixtures'
 
 const MODULAR = readGsdmlFixture('modular-head.gsdml.xml')
 const COMPACT = readGsdmlFixture('compact-head.gsdml.xml')
@@ -392,7 +392,7 @@ describe('GSDML repository port: loadCatalog', () => {
     const port = createGsdmlRepositoryPort({ parser: threadParser().parser, store: memoryStore().store })
     const item = await importItem(port, 'modular-head.xml', MODULAR)
 
-    expect(await port.loadCatalog(item.id)).toEqual({ success: true, catalog: expectCatalog(parseGsdml(MODULAR)) })
+    expect(await port.loadCatalog(item.id)).toEqual({ success: true, catalog: catalogOf(MODULAR) })
   })
 
   it('sends the stored XML to the parser as one catalog request, verbatim', async () => {
@@ -413,7 +413,7 @@ describe('GSDML repository port: loadCatalog', () => {
 
     const second = await port.loadCatalog(item.id)
 
-    expect(second).toEqual({ success: true, catalog: expectCatalog(parseGsdml(MODULAR)) })
+    expect(second).toEqual({ success: true, catalog: catalogOf(MODULAR) })
     expect(thread.runs('catalog')).toBe(1)
   })
 
@@ -443,7 +443,7 @@ describe('GSDML repository port: loadCatalog', () => {
     for (const item of [a, c, d, e]) await loadedCatalog(port, item.id)
     expect(thread.runs('catalog')).toBe(5)
 
-    expect(await port.loadCatalog(b.id)).toEqual({ success: true, catalog: expectCatalog(parseGsdml(COMPACT)) })
+    expect(await port.loadCatalog(b.id)).toEqual({ success: true, catalog: catalogOf(COMPACT) })
     expect(thread.runs('catalog')).toBe(6)
   })
 

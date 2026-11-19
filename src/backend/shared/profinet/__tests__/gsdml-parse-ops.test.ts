@@ -1,7 +1,7 @@
 import type { GsdmlParseRequest } from '@root/middleware/shared/ports/gsdml-repository-mechanisms'
 
 import { parseGsdml, runGsdmlParseOp, summarizeGsdmlCatalog } from '../index'
-import { expectCatalog, expectError, nonPlainDataPaths, readGsdmlFixture } from './fixtures/gsdml-fixtures'
+import { catalogOf, expectError, nonPlainDataPaths, readGsdmlFixture } from './fixtures/gsdml-fixtures'
 
 const MODULAR = readGsdmlFixture('modular-head.gsdml.xml')
 const NEWER = readGsdmlFixture('newer-version.gsdml.xml')
@@ -9,7 +9,7 @@ const MALFORMED = readGsdmlFixture('structural', 'malformed-unclosed.gsdml.xml')
 
 describe('summarizeGsdmlCatalog', () => {
   it('summarizes identity, schema version and the counts of a catalog', () => {
-    const catalog = expectCatalog(parseGsdml(MODULAR))
+    const catalog = catalogOf(MODULAR)
     expect(summarizeGsdmlCatalog(catalog)).toEqual({
       vendorId: '0xf0a',
       deviceId: '0xb1',
@@ -25,7 +25,7 @@ describe('summarizeGsdmlCatalog', () => {
   })
 
   it('counts the notices of the catalog', () => {
-    const catalog = expectCatalog(parseGsdml(NEWER))
+    const catalog = catalogOf(NEWER)
     expect(summarizeGsdmlCatalog(catalog)).toMatchObject({
       vendorId: '0xf0d',
       deviceAccessPointCount: 1,
@@ -49,7 +49,7 @@ describe('runGsdmlParseOp', () => {
   it('answers the summary op with the summary of a successful parse', () => {
     expect(runGsdmlParseOp({ op: 'summary', xml: MODULAR })).toEqual({
       op: 'summary',
-      result: { success: true, summary: summarizeGsdmlCatalog(expectCatalog(parseGsdml(MODULAR))) },
+      result: { success: true, summary: summarizeGsdmlCatalog(catalogOf(MODULAR)) },
     })
   })
 

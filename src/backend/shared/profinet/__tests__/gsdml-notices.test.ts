@@ -4,10 +4,11 @@ import { GSDML_MAX_NOTICES, GSDML_SUPPORTED_SCHEMA_VERSION, parseGsdml } from '.
 import {
   byId,
   type CatalogNotice,
-  expectCatalog,
+  catalogOf,
   newerDapSystemSubmodules,
   newerInterface,
   newerVersionWithInterface,
+  noticeKinds,
   noticesOf,
   readGsdmlFixture,
   replaceOnce,
@@ -16,16 +17,6 @@ import {
 
 const BASE = readGsdmlFixture('structural-base.gsdml.xml')
 const BASE_SCHEMA_FILE = 'GSDML-DeviceProfile-v2.45.xsd'
-
-/** Parses `xml` and returns its catalog. */
-function catalogOf(xml: string): GsdmlCatalog {
-  return expectCatalog(parseGsdml(xml))
-}
-
-/** The notice kinds of a catalog, sorted. */
-function noticeKinds(catalog: GsdmlCatalog): string[] {
-  return catalog.notices.map((notice) => notice.kind).sort()
-}
 
 /** Whether a notice names `value` anywhere in its fields. */
 function names(notice: CatalogNotice, value: string): boolean {

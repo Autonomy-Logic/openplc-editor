@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
+import { parseGsdml } from '@root/backend/shared/profinet/index'
 import type { GsdmlCatalog, GsdmlParseResult } from '@root/middleware/shared/ports/gsdml-types'
 import { buildGsdmlCatalogLookups } from '@root/middleware/shared/utils/profinet/gsdml-catalog-lookups'
 
@@ -51,6 +52,16 @@ export function readGsdmlFixture(...segments: string[]): string {
 export function expectCatalog(result: GsdmlParseResult): GsdmlCatalog {
   if (!result.success) throw new Error(`Expected a catalog, got the error: ${result.error}`)
   return result.catalog
+}
+
+/** Parses `xml` and returns its catalog. */
+export function catalogOf(xml: string): GsdmlCatalog {
+  return expectCatalog(parseGsdml(xml))
+}
+
+/** The notice kinds of a catalog, sorted. */
+export function noticeKinds(catalog: GsdmlCatalog): string[] {
+  return catalog.notices.map((notice) => notice.kind).sort()
 }
 
 /** Returns the error of a failed parse; throws when the parse succeeded. */

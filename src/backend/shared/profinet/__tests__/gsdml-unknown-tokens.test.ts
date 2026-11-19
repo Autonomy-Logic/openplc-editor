@@ -1,19 +1,20 @@
 import type { GsdmlCatalog } from '@root/middleware/shared/ports/gsdml-types'
 
-import { GSDML_PROTOCOL_TOKENS, GSDML_RT_CLASS_TOKENS, parseGsdml } from '../index'
+import { GSDML_PROTOCOL_TOKENS, GSDML_RT_CLASS_TOKENS } from '../index'
 import {
+  catalogOf,
   type CatalogNotice,
-  expectCatalog,
   NEWER_INTERFACE_ID,
   newerDapSystemSubmodules,
   newerInterface,
   newerVersionWithInterface,
+  noticeKinds,
   noticesOf,
 } from './fixtures/gsdml-fixtures'
 
 /** Parses a newer-than-supported file whose DAP has one InterfaceSubmoduleItem with `attributes`. */
 function newerCatalog(attributes: string): GsdmlCatalog {
-  return expectCatalog(parseGsdml(newerVersionWithInterface(attributes)))
+  return catalogOf(newerVersionWithInterface(attributes))
 }
 
 /** The `[detail, attribute named by the message]` pairs of the unknown-token notices of a catalog. */
@@ -65,11 +66,7 @@ describe('Annex A.3.3: TokenList attributes of an InterfaceSubmoduleItem in a fi
 
   it('accepts the file and keeps its other notices beside the unknown-token one', () => {
     const catalog = newerCatalog('SupportedRT_Classes="RT_CLASS_1;RT_CLASS_FUTURE"')
-    expect(catalog.notices.map((notice) => notice.kind).sort()).toEqual([
-      'newer-schema-version',
-      'object-skipped',
-      'unknown-token',
-    ])
+    expect(noticeKinds(catalog)).toEqual(['newer-schema-version', 'object-skipped', 'unknown-token'])
   })
 
   it('drops an unknown SupportedProtocols token, keeps the known ones in order, with one notice naming the attribute', () => {

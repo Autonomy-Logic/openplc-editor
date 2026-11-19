@@ -3,7 +3,7 @@ import {
   asInterfaceSubmodule,
   asPortSubmodule,
   byId,
-  expectCatalog,
+  catalogOf,
   expectError,
   readGsdmlFixture,
   replaceOnce,
@@ -166,7 +166,7 @@ describe('parseGsdml: structural failures', () => {
 describe('parseGsdml: a structurally valid file is never rejected for any other reason', () => {
   it('accepts an InterfaceSubmoduleItem without its token-list attributes, with empty token lists', () => {
     const xml = replaceOnce(BASE, ' SupportedRT_Classes="RT_CLASS_1" SupportedProtocols="SNMP;LLDP"', '')
-    const catalog = expectCatalog(parseGsdml(xml))
+    const catalog = catalogOf(xml)
     const iface = asInterfaceSubmodule(byId(catalog.deviceAccessPoints[0].systemDefinedSubmodules, 'B_IF'))
     expect(iface.supportedRtClasses).toEqual([])
     expect(iface.supportedProtocols).toEqual([])
@@ -175,24 +175,24 @@ describe('parseGsdml: a structurally valid file is never rejected for any other 
   it('accepts a data item and a parameter field without TextId', () => {
     let xml = replaceOnce(BASE, 'UseAsBits="true" TextId="T_In">', 'UseAsBits="true">')
     xml = replaceOnce(xml, ' DefaultValue="1" TextId="T_Field"', ' DefaultValue="1"')
-    const sub = expectCatalog(parseGsdml(xml)).deviceAccessPoints[0].virtualSubmodules[0]
+    const sub = catalogOf(xml).deviceAccessPoints[0].virtualSubmodules[0]
     expect(sub.io.input[0]).toMatchObject({ textId: '', text: '' })
     expect(sub.parameterRecords[0].fields[0]).toMatchObject({ textId: '', text: '' })
   })
 
   it('accepts a ParameterRecordDataItem without TransferSequence, which reads as null', () => {
     const xml = replaceOnce(BASE, ' TransferSequence="1"', '')
-    const record = expectCatalog(parseGsdml(xml)).deviceAccessPoints[0].virtualSubmodules[0].parameterRecords[0]
+    const record = catalogOf(xml).deviceAccessPoints[0].virtualSubmodules[0].parameterRecords[0]
     expect(record.transferSequence).toBeNull()
   })
 
   it('accepts a ModuleItem without ModuleInfo', () => {
     const xml = replaceOnce(BASE, '<ModuleInfo>\n            <Name TextId="T_Mod" />\n          </ModuleInfo>', '')
-    expect(byId(expectCatalog(parseGsdml(xml)).modules, 'B_MOD').name).toBe('')
+    expect(byId(catalogOf(xml).modules, 'B_MOD').name).toBe('')
   })
 
   it('accepts a pluggable PortSubmoduleItem without SubslotNumber, which reads as null', () => {
-    const catalog = expectCatalog(parseGsdml(BASE))
+    const catalog = catalogOf(BASE)
     expect(asPortSubmodule(byId(catalog.submodules, 'B_PLUG_PORT')).subslotNumber).toBeNull()
   })
 
@@ -210,19 +210,19 @@ describe('parseGsdml: a structurally valid file is never rejected for any other 
       '<FutureList><FutureItem ID="F1" Size="9"><FutureChild /></FutureItem></FutureList><ValueList>',
     )
     xml = replaceOnce(xml, '<Const ByteOffset="0"', '<FutureRecordPart Mode="x" /><Const ByteOffset="0"')
-    const catalog = expectCatalog(parseGsdml(xml))
+    const catalog = catalogOf(xml)
     expect(catalog.notices).toEqual([])
-    expect(catalog).toEqual(expectCatalog(parseGsdml(BASE)))
+    expect(catalog).toEqual(catalogOf(BASE))
   })
 
   it('accepts a 0x prefix on a decimal attribute', () => {
     const xml = replaceOnce(BASE, ' Index="1"', ' Index="0x10"')
-    expect(expectCatalog(parseGsdml(xml)).deviceAccessPoints[0].virtualSubmodules[0].parameterRecords[0].index).toBe(16)
+    expect(catalogOf(xml).deviceAccessPoints[0].virtualSubmodules[0].parameterRecords[0].index).toBe(16)
   })
 
   it('reads the schema version as empty when the schema location names no version', () => {
     const xml = replaceOnce(BASE, 'GSDML-DeviceProfile-v2.45.xsd', 'GSDML-DeviceProfile.xsd')
-    expect(expectCatalog(parseGsdml(xml)).schemaVersion).toBe('')
+    expect(catalogOf(xml).schemaVersion).toBe('')
   })
 })
 

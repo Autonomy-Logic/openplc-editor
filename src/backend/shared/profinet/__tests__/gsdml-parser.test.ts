@@ -7,18 +7,13 @@ import {
   asInterfaceSubmodule,
   asPortSubmodule,
   byId,
+  catalogOf,
   countCatalogElements,
   countRawElements,
-  expectCatalog,
   range,
   readGsdmlFixture,
   slotNumbers,
 } from './fixtures/gsdml-fixtures'
-
-/** Parses a fixture and returns its catalog. */
-function catalogOf(name: string): GsdmlCatalog {
-  return expectCatalog(parseGsdml(readGsdmlFixture(name)))
-}
 
 /** The data type and bit length of each IO data item. */
 function typesAndLengths(items: readonly { dataType: string; bitLength: number | null }[]): [string, number | null][] {
@@ -29,7 +24,7 @@ describe('parseGsdml: modular device with several access points', () => {
   let catalog: GsdmlCatalog
 
   beforeAll(() => {
-    catalog = catalogOf('modular-head.gsdml.xml')
+    catalog = catalogOf(readGsdmlFixture('modular-head.gsdml.xml'))
   })
 
   it('accepts the fixture, which starts with a byte order mark', () => {
@@ -482,7 +477,7 @@ describe('parseGsdml: ExternalText language selection', () => {
   let catalog: GsdmlCatalog
 
   beforeAll(() => {
-    catalog = catalogOf('modular-head.gsdml.xml')
+    catalog = catalogOf(readGsdmlFixture('modular-head.gsdml.xml'))
   })
 
   it('uses PrimaryLanguage before every Language block', () => {
@@ -502,7 +497,7 @@ describe('parseGsdml: single access point device with octet string data', () => 
   let catalog: GsdmlCatalog
 
   beforeAll(() => {
-    catalog = catalogOf('compact-head.gsdml.xml')
+    catalog = catalogOf(readGsdmlFixture('compact-head.gsdml.xml'))
   })
 
   it('reads DeviceIdentity and the schema version', () => {
@@ -621,7 +616,7 @@ describe('parseGsdml: single access point device with octet string data', () => 
 
 describe('parseGsdml: LogBookEntryList', () => {
   it('reads the value and list forms of ErrorCode2 with names and help texts', () => {
-    const catalog = catalogOf('logbook.gsdml.xml')
+    const catalog = catalogOf(readGsdmlFixture('logbook.gsdml.xml'))
     expect(catalog.logBookEntries).toEqual([
       { status: 2131000, errorCode2: { kind: 'value', name: 'Vendor fault', help: 'Restart the device' } },
       {
@@ -643,7 +638,7 @@ describe('parseGsdml: LogBookEntryList', () => {
 
 describe('parseGsdml: every submodule kind carries the shared fields', () => {
   it('gives each submodule an id, a normalised ident number, texts, IO data, records and its RequiredSchemaVersion', () => {
-    const catalog = catalogOf('modular-head.gsdml.xml')
+    const catalog = catalogOf(readGsdmlFixture('modular-head.gsdml.xml'))
     for (const sub of allSubmodules(catalog)) {
       expect(sub.identNumber).toMatch(/^0x(0|[1-9a-f][0-9a-f]*)$/)
       expect(typeof sub.name).toBe('string')

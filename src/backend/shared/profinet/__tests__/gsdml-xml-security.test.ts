@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { createGsdmlXmlLibraryParser } from '../gsdml-xml'
 import { GSDML_XML_ENTITY_LIMITS, parseGsdml } from '../index'
 import {
-  expectCatalog,
+  catalogOf,
   expectError,
   gsdmlFixturePath,
   readGsdmlFixture,
@@ -152,7 +152,7 @@ describe('NFR05: predefined entities and numeric character references', () => {
     const xml = readGsdmlFixture('bulk-char-refs.gsdml.xml')
     const references = xml.match(/&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);/g) ?? []
     expect(references.length).toBeGreaterThanOrEqual(10_000)
-    const catalog = expectCatalog(parseGsdml(xml))
+    const catalog = catalogOf(xml)
     expect(catalog.identity.infoText).toBe('&<>"\'ABé'.repeat(1300))
   })
 })
