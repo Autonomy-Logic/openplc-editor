@@ -15,25 +15,12 @@ jest.mock('../../services/logger-service', () => ({
   logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() },
 }))
 
-// Swap the real trusted-key store for a generated test keypair so fixtures can
-// be signed with a private key this suite holds. The factory cannot close over
-// outer scope, so it generates inline and re-exports the private PEM.
-jest.mock('../../../shared/utils/vpp/trusted-keys', () => {
-  const { generateKeyPairSync } = jest.requireActual<typeof import('node:crypto')>('node:crypto')
-  const { publicKey, privateKey } = generateKeyPairSync('ed25519')
-  return {
-    TRUSTED_PACKAGE_KEYS: { 'test-key': publicKey.export({ type: 'spki', format: 'pem' }).toString() },
-    __TEST_PRIVATE_PEM: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
-  }
-})
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const PRIVATE_PEM: string = (require('../../../shared/utils/vpp/trusted-keys') as { __TEST_PRIVATE_PEM: string })
-  .__TEST_PRIVATE_PEM
-
+import { TEST_AUTONOMY_KEY, testTrustAnchor } from '../../package-trust/__tests__/fixtures/trust-test-kit'
 import { formatPackageIntegrityError, PackageManagerModule } from '../package-manager-module'
 
-const KEY_ID = 'test-key'
+const anchor = testTrustAnchor()
+
+const KEY_ID = TEST_AUTONOMY_KEY.keyId
 const BOARD_NAME = 'Test VPP Board'
 
 const sha256 = (s: string): string =>
@@ -113,7 +100,7 @@ describe('PackageManagerModule.verifyBoardPackageIntegrity', () => {
       const signature = cryptoSign(
         null,
         Uint8Array.from(Buffer.from(canonicalize(payload), 'utf-8')),
-        PRIVATE_PEM,
+        TEST_AUTONOMY_KEY.privateKey,
       ).toString('base64')
       writeFileSync(join(dir, SIGNATURE_FILENAME), JSON.stringify({ ...payload, signature }, null, 2))
     }
@@ -148,17 +135,17 @@ describe('PackageManagerModule.verifyBoardPackageIntegrity', () => {
   it('passes an untouched signed package — the negative control', () => {
     installFixture('com.test.valid')
 
-    expect(new PackageManagerModule().verifyBoardPackageIntegrity(BOARD_NAME)).toEqual({ ok: true })
+    expect(new PackageManagerModule(anchor).verifyBoardPackageIntegrity(BOARD_NAME)).toEqual({ ok: true })
   })
 
   it('passes a board no installed package provides (built-in hals.json board)', () => {
     installFixture('com.test.valid')
 
-    expect(new PackageManagerModule().verifyBoardPackageIntegrity('Arduino Uno')).toEqual({ ok: true })
+    expect(new PackageManagerModule(anchor).verifyBoardPackageIntegrity('Arduino Uno')).toEqual({ ok: true })
   })
 
   it('passes when nothing is installed at all', () => {
-    expect(new PackageManagerModule().verifyBoardPackageIntegrity(BOARD_NAME)).toEqual({ ok: true })
+    expect(new PackageManagerModule(anchor).verifyBoardPackageIntegrity(BOARD_NAME)).toEqual({ ok: true })
   })
 
   it('fails when the plugin payload was edited after installation', () => {
@@ -168,7 +155,7 @@ describe('PackageManagerModule.verifyBoardPackageIntegrity', () => {
       tamperFile: { rel: 'plugin/main.c', content: 'int vpp_init(void) { /* injected */ return 0; }' },
     })
 
-    const result = new PackageManagerModule().verifyBoardPackageIntegrity(BOARD_NAME)
+    const result = new PackageManagerModule(anchor).verifyBoardPackageIntegrity(BOARD_NAME)
 
     expect(result).toEqual({
       ok: false,
@@ -200,7 +187,7 @@ describe('PackageManagerModule.verifyBoardPackageIntegrity', () => {
       }),
     )
 
-    const result = new PackageManagerModule().verifyBoardPackageIntegrity(BOARD_NAME)
+    const result = new PackageManagerModule(anchor).verifyBoardPackageIntegrity(BOARD_NAME)
 
     expect(result).toEqual({
       ok: false,
@@ -213,7 +200,7 @@ describe('PackageManagerModule.verifyBoardPackageIntegrity', () => {
     const dir = installFixture('com.test.injected')
     writeFileSync(join(dir, 'extra.c'), 'void backdoor(void) {}')
 
-    const result = new PackageManagerModule().verifyBoardPackageIntegrity(BOARD_NAME)
+    const result = new PackageManagerModule(anchor).verifyBoardPackageIntegrity(BOARD_NAME)
 
     expect(result).toMatchObject({ ok: false, packageId: 'com.test.injected' })
   })
@@ -221,7 +208,7 @@ describe('PackageManagerModule.verifyBoardPackageIntegrity', () => {
   it('fails when the package carries no signature at all', () => {
     installFixture('com.test.unsigned', { omitSignature: true })
 
-    expect(new PackageManagerModule().verifyBoardPackageIntegrity(BOARD_NAME)).toEqual({
+    expect(new PackageManagerModule(anchor).verifyBoardPackageIntegrity(BOARD_NAME)).toEqual({
       ok: false,
       packageId: 'com.test.unsigned',
       reason: expect.stringContaining('not signed'),
@@ -231,7 +218,7 @@ describe('PackageManagerModule.verifyBoardPackageIntegrity', () => {
   it('fails when the signature names a key the editor does not trust', () => {
     installFixture('com.test.selfsigned', { payloadOverride: { keyId: 'untrusted-key' } })
 
-    expect(new PackageManagerModule().verifyBoardPackageIntegrity(BOARD_NAME)).toEqual({
+    expect(new PackageManagerModule(anchor).verifyBoardPackageIntegrity(BOARD_NAME)).toEqual({
       ok: false,
       packageId: 'com.test.selfsigned',
       reason: expect.stringContaining('untrusted-key'),
@@ -244,7 +231,7 @@ describe('PackageManagerModule.verifyBoardPackageIntegrity', () => {
     // registry entry alone must not be enough to build.
     rmSync(join(dir, 'plugin'), { recursive: true, force: true })
 
-    expect(new PackageManagerModule().verifyBoardPackageIntegrity(BOARD_NAME)).toMatchObject({
+    expect(new PackageManagerModule(anchor).verifyBoardPackageIntegrity(BOARD_NAME)).toMatchObject({
       ok: false,
       packageId: 'com.test.ghost',
     })
@@ -254,10 +241,10 @@ describe('PackageManagerModule.verifyBoardPackageIntegrity', () => {
   it('leaves the package on disk and in the registry — refusing is not removing', () => {
     const dir = installFixture('com.test.keep', { omitSignature: true })
 
-    new PackageManagerModule().verifyBoardPackageIntegrity(BOARD_NAME)
+    new PackageManagerModule(anchor).verifyBoardPackageIntegrity(BOARD_NAME)
 
     expect(existsSync(dir)).toBe(true)
-    expect(new PackageManagerModule().listInstalled().map((p) => p.packageId)).toEqual(['com.test.keep'])
+    expect(new PackageManagerModule(anchor).listInstalled().map((p) => p.packageId)).toEqual(['com.test.keep'])
   })
 })
 
