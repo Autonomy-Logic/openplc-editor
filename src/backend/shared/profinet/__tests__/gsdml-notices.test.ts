@@ -5,6 +5,9 @@ import {
   byId,
   type CatalogNotice,
   expectCatalog,
+  newerDapSystemSubmodules,
+  newerInterface,
+  newerVersionWithInterface,
   noticesOf,
   readGsdmlFixture,
   replaceOnce,
@@ -102,6 +105,31 @@ describe('Annex A.3.3: a file newer than the supported schema version', () => {
     const result = catalogOf(xml)
     expect(noticesOf(result, 'newer-schema-version')).toHaveLength(newer ? 1 : 0)
     expect(result.notices).toHaveLength(newer ? 1 : 0)
+  })
+})
+
+describe('Annex A.3.3: TokenList attributes of an InterfaceSubmoduleItem outside compatibility mode', () => {
+  const UNKNOWN_TOKENS = 'SupportedRT_Classes="RT_CLASS_1;RT_CLASS_FUTURE" SupportedProtocols="SNMP;FUTURE_PROTOCOL"'
+
+  it.each([
+    ['at the supported version', 'v2.45'],
+    ['with no version in its schema location', null],
+  ])('keeps every token as written, with no notice for them, in a file %s', (_label, version) => {
+    const newer = newerVersionWithInterface(UNKNOWN_TOKENS)
+    const xml =
+      version === null
+        ? replaceOnce(newer, 'GSDML-DeviceProfile-V2.99.xsd', 'DeviceProfile.xsd')
+        : newerVersionWithInterface(UNKNOWN_TOKENS, version)
+    const catalog = catalogOf(xml)
+    expect(newerInterface(catalog).supportedRtClasses).toEqual(['RT_CLASS_1', 'RT_CLASS_FUTURE'])
+    expect(newerInterface(catalog).supportedProtocols).toEqual(['SNMP', 'FUTURE_PROTOCOL'])
+    expect(noticeKinds(catalog)).toEqual(['object-skipped'])
+  })
+
+  it('gives an InterfaceSubmoduleItem skipped for its RequiredSchemaVersion no notice for its unknown tokens', () => {
+    const catalog = catalogOf(newerVersionWithInterface(`RequiredSchemaVersion="V2.99" ${UNKNOWN_TOKENS}`))
+    expect(newerDapSystemSubmodules(catalog)).toEqual([])
+    expect(noticeKinds(catalog)).toEqual(['newer-schema-version', 'object-skipped', 'object-skipped'])
   })
 })
 

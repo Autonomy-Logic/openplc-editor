@@ -208,6 +208,31 @@ export function asInterfaceSubmodule(sub: AnySubmodule): Extract<AnySubmodule, {
   return sub
 }
 
+/** The ID of the InterfaceSubmoduleItem that {@link newerVersionWithInterface} adds to the DAP. */
+export const NEWER_INTERFACE_ID = 'N_IF'
+
+/** The `newer-version` fixture with one InterfaceSubmoduleItem carrying `attributes` in its DAP, under the schema file of `schemaVersion`. */
+export function newerVersionWithInterface(attributes: string, schemaVersion = 'V2.99'): string {
+  const fixture = readGsdmlFixture('newer-version.gsdml.xml')
+  const located = replaceOnce(fixture, 'GSDML-DeviceProfile-V2.99.xsd', `GSDML-DeviceProfile-${schemaVersion}.xsd`)
+  const item = `<InterfaceSubmoduleItem ID="${NEWER_INTERFACE_ID}" SubmoduleIdentNumber="0x00008002" SubslotNumber="32768" ${attributes} />`
+  return replaceOnce(
+    located,
+    '</DeviceAccessPointItem>',
+    `<SystemDefinedSubmoduleList>${item}</SystemDefinedSubmoduleList></DeviceAccessPointItem>`,
+  )
+}
+
+/** The system-defined submodules of the `N_DAP` access point of a catalog built by {@link newerVersionWithInterface}. */
+export function newerDapSystemSubmodules(catalog: GsdmlCatalog): CatalogDap['systemDefinedSubmodules'] {
+  return byId(catalog.deviceAccessPoints, 'N_DAP').systemDefinedSubmodules
+}
+
+/** The interface submodule a catalog built by {@link newerVersionWithInterface} holds; throws when it is missing. */
+export function newerInterface(catalog: GsdmlCatalog): Extract<AnySubmodule, { kind: 'interface' }> {
+  return asInterfaceSubmodule(byId(newerDapSystemSubmodules(catalog), NEWER_INTERFACE_ID))
+}
+
 /** Narrows a submodule to the port kind; throws for any other kind. */
 export function asPortSubmodule(sub: AnySubmodule): Extract<AnySubmodule, { kind: 'port' }> {
   if (sub.kind !== 'port') throw new Error(`Submodule ${sub.id} is ${sub.kind}, not port`)
