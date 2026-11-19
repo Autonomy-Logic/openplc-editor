@@ -12,6 +12,8 @@ import type {
   WasmCompileUnit,
 } from '../../../../middleware/shared/ports/wasm-toolchain-types'
 import { hmiFontTableFromSources } from '../fonts/font-table-source'
+import { type HmiLibraryUnit, shareLibraryUnits } from '../lib-object/library-unit'
+import { hmiWidgetLibraryArchives } from '../lib-object/widget-libraries'
 import { generateHmiUnit, type HmiPageTags, type HmiTag } from '../unit/generate-hmi-unit'
 import { hmiHostManifestSource } from './host-manifest'
 import { type HmiProgramInstance, hmiTagResolver } from './tag-resolver'
@@ -95,8 +97,10 @@ export function hmiClientModuleRequest(
   fontTable: string,
   hmiSources: Readonly<Record<string, string>>,
   runtimeHeaders: Readonly<Record<string, string>>,
+  libraries: readonly HmiLibraryUnit[] = [],
 ): WasmCompileRequest {
   const files: WasmCompileRequest['files'] = {}
+  for (const library of libraries) Object.assign(files, library.files)
   for (const [path, content] of Object.entries(runtimeHeaders)) files[path] = content
   for (const [path, content] of Object.entries(hmiSources)) files[`${MODULE_HMI}/${path}`] = content
   for (const [name, content] of Object.entries(unitFiles)) files[`${MODULE_UNIT}/${name}`] = content
@@ -109,6 +113,7 @@ export function hmiClientModuleRequest(
       .sort()
       .map((name): WasmCompileUnit => ({ source: `${MODULE_UNIT}/${name}`, language: 'c++' })),
     { source: `${MODULE_HMI}/${BROWSER_HOST}`, language: 'c++' },
+    ...libraries.map((library) => library.unit),
   ]
   return {
     files,
@@ -177,8 +182,10 @@ export async function composeHmiArtefact(input: ComposeHmiArtefactInput): Promis
   if (fontsLicense === undefined) return fail(`The HMI sources have no ${FONTS_LICENSE}`, unit.warnings)
   files[`${ROOT}/client/fonts-LICENSE.txt`] = text(fontsLicense)
 
+  const shared = shareLibraryUnits(unit.files, hmiWidgetLibraryArchives())
+  if (!shared.ok) return fail(shared.error, unit.warnings)
   const compiled = await input.compile(
-    hmiClientModuleRequest(unit.files, fontTable, moduleSources, input.runtimeHeaders),
+    hmiClientModuleRequest(shared.unitFiles, fontTable, moduleSources, input.runtimeHeaders, shared.units),
   )
   if (!compiled.ok) {
     const details = compiled.diagnostics.filter((d) => d.level === 'error').map((d) => d.message)

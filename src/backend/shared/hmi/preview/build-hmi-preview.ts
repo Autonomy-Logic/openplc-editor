@@ -15,6 +15,8 @@ import type {
 } from '../../../../middleware/shared/ports/wasm-toolchain-types'
 import { buildHmiFontTableSource, HmiFontError } from '../fonts/font-table-source'
 import { vettedHmiFont } from '../fonts/vetted-fonts'
+import { type HmiLibraryUnit, shareLibraryUnits } from '../lib-object/library-unit'
+import { hmiWidgetLibraryArchives } from '../lib-object/widget-libraries'
 import {
   generateHmiUnit,
   HMI_GALLERY_SCREEN,
@@ -127,8 +129,10 @@ export function buildHmiPreviewRequest(
   groups: HmiPreview['units'],
   fontTable: string,
   resources: Pick<HmiPreviewResources, 'runtimeHeaders' | 'hmiSources'>,
+  libraries: readonly HmiLibraryUnit[] = [],
 ): WasmCompileRequest {
   const files: WasmCompileRequest['files'] = {}
+  for (const library of libraries) Object.assign(files, library.files)
   for (const [name, text] of Object.entries(resources.runtimeHeaders)) files[`${RUNTIME_DIR}/${name}`] = text
   for (const [path, text] of Object.entries(resources.hmiSources)) files[`${HMI_DIR}/${path}`] = text
   for (const [name, text] of Object.entries(unitFiles)) files[`${UNIT_DIR}/${name}`] = text
@@ -146,6 +150,7 @@ export function buildHmiPreviewRequest(
           : { source, language: 'c++', pch: PCH },
     ),
     { source: HOST, language: 'c++', pch: PCH },
+    ...libraries.map((library) => library.unit),
   ]
   return {
     files,
@@ -207,11 +212,19 @@ export async function buildHmiPreview(
   }
   timings.fontsMs = performance.now() - fontsStart
 
+  const shared = shareLibraryUnits({ ...generated.files, ...generated.preview.files }, hmiWidgetLibraryArchives())
+  if (!shared.ok)
+    return { ok: false, errors: [{ file: UNIT, message: shared.error }], warnings: generated.warnings, timings: done() }
+  const groups = {
+    ...generated.preview.units,
+    library: generated.preview.units.library.filter((f) => f in shared.unitFiles),
+  }
   const request = buildHmiPreviewRequest(
-    splitScreenHeaders({ ...generated.files, ...generated.preview.files }, generated.preview.units.screens),
-    generated.preview.units,
+    splitScreenHeaders(shared.unitFiles, groups.screens),
+    groups,
     fontTable,
     resources,
+    shared.units,
   )
   onStep?.('compile')
   const toolchainStart = performance.now()
