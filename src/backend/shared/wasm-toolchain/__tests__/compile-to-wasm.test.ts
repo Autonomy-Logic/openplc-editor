@@ -4,7 +4,7 @@ import type { WasmClangRunner } from '@root/middleware/shared/ports/wasm-toolcha
 
 import { ClangWorkerPool } from '../clang-worker-pool'
 import { compileToWasm, type WasmCompileRequest } from '../compile-to-wasm'
-import { CountingClangMechanism, flushMicrotasks } from './fixtures/counting-clang-mechanism'
+import { CountingClangMechanism } from './fixtures/counting-clang-mechanism'
 import { FakeRunner } from './fixtures/fake-runner'
 import { RecordingCache } from './fixtures/recording-cache'
 import { isFileBytes, readTreeFile } from '../file-tree'
@@ -27,6 +27,8 @@ const request = (overrides: Partial<WasmCompileRequest> = {}): WasmCompileReques
 
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes)
 const LINK_PATH = '__objects/module.wasm'
+/** Resolves after pending timers and I/O, such as a digest, have had their turn. */
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('compileToWasm', () => {
   it('compiles each unit with its language flags and links the objects into the module', async () => {
@@ -160,14 +162,15 @@ describe('compileToWasm', () => {
     expect(compiledSources(runner)).toEqual(['core/core.c'])
   })
 
-  it('recompiles a unit when a file named like one of its toolchain headers appears or goes', async () => {
+  it('recompiles a unit when a file named like one of its toolchain headers appears, and reuses the old one when it goes', async () => {
     const cache = new RecordingCache()
     await compileToWasm(request(), { runner: runnerWithIncludes(), cache })
     const shadowing = request()
     shadowing.files['core/stdio.h'] = '/* hides <stdio.h> */'
     expect((await compileToWasm(shadowing, { runner: runnerWithIncludes(), cache })).stats.cached).toBe(0)
     expect((await compileToWasm(shadowing, { runner: runnerWithIncludes(), cache })).stats.cached).toBe(2)
-    expect((await compileToWasm(request(), { runner: runnerWithIncludes(), cache })).stats.cached).toBe(0)
+    const relinked = request({ linkFlags: ['-mexec-model=command'] })
+    expect((await compileToWasm(relinked, { runner: runnerWithIncludes(), cache })).stats.cached).toBe(2)
   })
 
   it('recompiles a unit when its flags change', async () => {
@@ -308,8 +311,12 @@ describe('compileToWasm', () => {
     it('keys units by what their header was built from, so a header rebuilt with other bytes keeps them', async () => {
       const cache = new RecordingCache()
       await compileToWasm(withHeader(), { runner: headerRunner(), cache })
-      const header = [...cache.entries()].find(([, entry]) => decode(entry.object).includes('c++-header'))
-      if (header) cache.delete(header[0])
+      const header = [...cache.byKey.entries()].find(([, kept]) =>
+        kept.some((entry) => decode(entry.object).includes('c++-header')),
+      )
+      if (header) cache.byKey.delete(header[0])
+      for (const [key, kept] of [...cache.byKey])
+        if (kept.every((e) => e.dependencies.length === 0)) cache.byKey.delete(key)
       const inner = headerRunner()
       const stamped: WasmClangRunner = {
         concurrency: inner.concurrency,
@@ -499,7 +506,7 @@ describe('compileToWasm when the toolchain cannot load', () => {
     const log: Array<[string, string]> = []
 
     const compiling = compileToWasm(request(), { runner, log: (m, l) => log.push([m, l]) })
-    for (let round = 0; round < 200 && mechanism.started === 0; round++) await flushMicrotasks()
+    for (let round = 0; round < 200 && mechanism.started === 0; round++) await tick()
     mechanism.workers[0]?.fail('llvm.core.wasm is not valid WebAssembly')
     const result = await compiling
 
@@ -517,11 +524,11 @@ describe('compileToWasm when the toolchain cannot load', () => {
 
     const compiling = compileToWasm(request(), { runner: pool })
     for (let round = 0; round < 200 && (mechanism.workers[0]?.posted.length ?? 0) === 0; round++) {
-      await flushMicrotasks()
+      await tick()
     }
     mechanism.workers[0]?.fail('exit code 3')
     for (let round = 0; round < 200 && (mechanism.workers[1]?.posted.length ?? 0) === 0; round++) {
-      await flushMicrotasks()
+      await tick()
     }
     mechanism.workers[1]?.fail('exit code 3')
     const result = await compiling
