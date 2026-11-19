@@ -1,0 +1,1266 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Guia do exemplo de referência da re-arquiteturação do OpenPLC: camadas, dependências, fluxo de dados, testes e como criar uma feature nova."
+    />
+    <title>Exemplo de referência — Guia da estrutura</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #193044;
+        --muted: #536b7f;
+        --nav: #153653;
+        --blue: #176599;
+        --line: #d7e2ec;
+        --surface: #f2f6fa;
+        --paper: #fff;
+        --ui: #e3eef8;
+        --ui-line: #9cc0de;
+        --contract: #f1f3f6;
+        --contract-line: #b6c2cf;
+        --core: #e5f3ea;
+        --core-line: #93c6a6;
+        --adapter: #fbf0dd;
+        --adapter-line: #dcb46f;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 24px;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--paper);
+        font:
+          16px/1.7 'Avenir Next',
+          Avenir,
+          'Segoe UI',
+          sans-serif;
+      }
+      a {
+        color: var(--blue);
+        text-underline-offset: 3px;
+      }
+      :focus-visible {
+        outline: 3px solid #4b9dd0;
+        outline-offset: 3px;
+      }
+      .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: 264px;
+        padding: 30px 20px;
+        overflow: auto;
+        color: #fff;
+        background: var(--nav);
+      }
+      .brand {
+        font-size: 22px;
+        font-weight: 650;
+        line-height: 1.2;
+      }
+      .brand-subtitle {
+        margin: 8px 0 22px;
+        color: #c0d3e1;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .sidebar nav {
+        display: grid;
+        gap: 2px;
+      }
+      .sidebar nav a {
+        padding: 8px 10px;
+        border-left: 3px solid transparent;
+        border-radius: 4px;
+        color: #d9e7f1;
+        font-size: 14px;
+        line-height: 1.4;
+        text-decoration: none;
+      }
+      .sidebar nav a:hover {
+        background: #244761;
+      }
+      .sidebar nav a.current {
+        border-left-color: #8cc5e7;
+        background: #2b506c;
+        color: #fff;
+      }
+      .sidebar .back {
+        display: block;
+        margin-top: 26px;
+        color: #bed0de;
+        font-size: 12px;
+      }
+      main {
+        max-width: 960px;
+        margin-left: 264px;
+        padding: 40px 48px 80px;
+      }
+      section {
+        padding-bottom: 36px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 40px;
+      }
+      section:last-of-type {
+        border-bottom: 0;
+      }
+      h1,
+      h2,
+      h3 {
+        color: #143956;
+        line-height: 1.25;
+        letter-spacing: -0.4px;
+      }
+      h1 {
+        margin: 0 0 18px;
+        font-size: 38px;
+        letter-spacing: -1px;
+      }
+      h2 {
+        margin: 0 0 16px;
+        font-size: 26px;
+      }
+      h3 {
+        margin: 28px 0 10px;
+        font-size: 18px;
+      }
+      p,
+      li {
+        max-width: 78ch;
+      }
+      p {
+        margin: 0 0 16px;
+      }
+      ul,
+      ol {
+        padding-left: 22px;
+      }
+      li {
+        margin: 5px 0;
+      }
+      .lead {
+        color: var(--muted);
+        font-size: 18px;
+      }
+      code {
+        padding: 1px 5px;
+        border-radius: 3px;
+        background: #edf3f8;
+        font:
+          13px/1.6 'SFMono-Regular',
+          Consolas,
+          'Liberation Mono',
+          monospace;
+        overflow-wrap: anywhere;
+      }
+      pre {
+        overflow: auto;
+        margin: 16px 0 22px;
+        padding: 16px 18px;
+        border: 1px solid var(--line);
+        border-left: 3px solid #7899b5;
+        border-radius: 3px;
+        background: #f6f8fb;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      pre code {
+        padding: 0;
+        background: none;
+        overflow-wrap: normal;
+      }
+      .callout {
+        margin: 18px 0 24px;
+        padding: 14px 18px;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--blue);
+        border-radius: 4px;
+        background: var(--surface);
+      }
+      .callout p:last-child {
+        margin-bottom: 0;
+      }
+      .table-scroll {
+        overflow-x: auto;
+        margin: 18px 0 24px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        line-height: 1.55;
+        text-align: left;
+      }
+      th {
+        background: #eaf1f7;
+        color: #153653;
+        font-weight: 650;
+      }
+      th,
+      td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      td code {
+        font-size: 12px;
+      }
+      figure {
+        margin: 22px 0 28px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+      }
+      .diagram-scroll {
+        overflow-x: auto;
+      }
+      figure svg {
+        display: block;
+        width: 100%;
+        min-width: 720px;
+        font-family: 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
+      }
+      figcaption {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        margin-top: 10px;
+        font-size: 13px;
+      }
+      .legend span::before {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        margin-right: 6px;
+        border: 1px solid;
+        border-radius: 3px;
+        vertical-align: -1px;
+        content: '';
+      }
+      .legend .ui::before {
+        border-color: var(--ui-line);
+        background: var(--ui);
+      }
+      .legend .contract::before {
+        border-color: var(--contract-line);
+        background: var(--contract);
+      }
+      .legend .core::before {
+        border-color: var(--core-line);
+        background: var(--core);
+      }
+      .legend .adapter::before {
+        border-color: var(--adapter-line);
+        background: var(--adapter);
+      }
+      .layer {
+        margin: 22px 0;
+        padding: 18px 20px 6px;
+        border: 1px solid var(--line);
+        border-left-width: 5px;
+        border-radius: 5px;
+      }
+      .layer h3 {
+        margin-top: 0;
+      }
+      .layer.ui {
+        border-left-color: var(--ui-line);
+      }
+      .layer.contract {
+        border-left-color: var(--contract-line);
+      }
+      .layer.core {
+        border-left-color: var(--core-line);
+      }
+      .layer.adapter {
+        border-left-color: var(--adapter-line);
+      }
+      .layer.root {
+        border-left-color: var(--nav);
+      }
+      .meta {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 4px 14px;
+        margin: 0 0 14px;
+        font-size: 14px;
+      }
+      .meta dt {
+        color: var(--muted);
+      }
+      .meta dd {
+        margin: 0;
+      }
+      .steps {
+        counter-reset: step;
+        padding: 0;
+        list-style: none;
+      }
+      .steps li {
+        position: relative;
+        padding: 10px 0 10px 46px;
+        border-bottom: 1px dashed var(--line);
+        max-width: none;
+      }
+      .steps li:last-child {
+        border-bottom: 0;
+      }
+      .steps li::before {
+        position: absolute;
+        top: 10px;
+        left: 0;
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: var(--nav);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 650;
+        counter-increment: step;
+        content: counter(step);
+      }
+      .steps .where {
+        display: block;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      footer {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      @media (max-width: 900px) {
+        .sidebar {
+          position: static;
+          width: auto;
+          padding: 22px;
+        }
+        .sidebar nav {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        main {
+          margin-left: 0;
+          padding: 28px 20px 60px;
+        }
+        h1 {
+          font-size: 30px;
+        }
+      }
+      @media (max-width: 480px) {
+        .sidebar nav {
+          grid-template-columns: 1fr;
+        }
+        .meta {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <aside class="sidebar" aria-label="Navegação do guia">
+      <div class="brand">Exemplo de referência</div>
+      <p class="brand-subtitle">Lista de variáveis PLC em todas as camadas de <code>src_migration</code></p>
+      <nav aria-label="Seções">
+        <a href="#visao-geral">Visão geral</a>
+        <a href="#mapa">Mapa das camadas</a>
+        <a href="#pastas">Estrutura de pastas</a>
+        <a href="#camadas">Camada por camada</a>
+        <a href="#fluxo">Fluxo de uma intenção</a>
+        <a href="#save">Save, revisões e dirty</a>
+        <a href="#estado">Onde cada estado mora</a>
+        <a href="#testes">Testes por camada</a>
+        <a href="#fronteiras">Verificação de fronteiras</a>
+        <a href="#rodar">Como rodar</a>
+        <a href="#nova-feature">Criar uma feature nova</a>
+        <a href="#glossario">Glossário</a>
+      </nav>
+      <a class="back" href="../index.html">Documentação da migração</a>
+    </aside>
+
+    <main>
+      <section id="visao-geral">
+        <h1>Como o exemplo está organizado</h1>
+        <p class="lead">
+          Um sistema pequeno de propósito: uma lista de variáveis PLC que se adiciona, renomeia, remove e salva. O
+          tamanho é mínimo para que cada camada da arquitetura apareça com uma responsabilidade clara e um teste que
+          a prova.
+        </p>
+        <p>
+          O código está em <code>src_migration/example/</code> e é idêntico em openplc-web e openplc-editor. Ele não
+          importa nada de <code>src/</code> e não participa de nenhum build de produção. Serve de modelo para as
+          features reais da migração.
+        </p>
+        <div class="callout">
+          <p>
+            <strong>A ideia central.</strong> A interface só mostra dados prontos e avisa o que o usuário quer fazer.
+            Quem decide é a aplicação, com as regras do domínio. Estado e I/O ficam atrás de interfaces pequenas
+            (ports), implementadas em camadas próprias. Uma única peça, a composição, conecta tudo.
+          </p>
+        </div>
+        <p>O que o exemplo demonstra, em uma linha cada:</p>
+        <ul>
+          <li>regras de negócio puras, testáveis sem React nem store (<code>domain</code>);</li>
+          <li>casos de uso que coordenam estado e I/O por ports (<code>application</code>);</li>
+          <li>Zustand encapsulado: só uma camada conhece a biblioteca (<code>state</code>);</li>
+          <li>controller sem React que entrega um modelo imutável e estável (<code>presentation</code>);</li>
+          <li>views controladas só por props, estilos fora do TSX (<code>frontend</code>, <code>design-system</code>);</li>
+          <li>a mesma view rodando com a lógica real ou com uma fixture simulada;</li>
+          <li>ciclo de vida explícito com <code>dispose()</code> e regras de import verificadas por teste.</li>
+        </ul>
+      </section>
+
+      <section id="mapa">
+        <h2>Mapa das camadas</h2>
+        <p>
+          Cada seta significa “pode importar a entrada pública de”. O que não tem seta é proibido, e o teste de
+          fronteiras falha. As dependências apontam para dentro: domínio e contratos não dependem de ninguém.
+        </p>
+        <figure>
+          <div class="diagram-scroll">
+            <svg viewBox="0 0 1000 500" role="img" aria-labelledby="map-title map-desc">
+              <title id="map-title">Dependências permitidas entre as camadas do exemplo</title>
+              <desc id="map-desc">
+                A composição conecta bindings, apresentação, aplicação, estado e infraestrutura. Bindings importam
+                frontend e o contrato de apresentação; frontend importa design-system e o contrato de apresentação;
+                fixtures importam o contrato de apresentação; apresentação importa os dois contratos; aplicação importa
+                o contrato de aplicação e o domínio; estado e infraestrutura importam os ports da aplicação e o domínio.
+              </desc>
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0 0 L10 5 L0 10 z" fill="#66839f" />
+                </marker>
+              </defs>
+              <g fill="none" stroke="#66839f" stroke-width="1.5" marker-end="url(#arrow)">
+                <path d="M470 66 L150 128" stroke-dasharray="5 4" />
+                <path d="M500 66 L500 128" stroke-dasharray="5 4" />
+                <path d="M530 66 L720 128" stroke-dasharray="5 4" />
+                <path d="M560 66 L880 128" stroke-dasharray="5 4" />
+                <path d="M515 66 C 610 120, 610 210, 560 248" stroke-dasharray="5 4" />
+                <path d="M110 178 L110 248" />
+                <path d="M150 178 L295 248" />
+                <path d="M110 298 L110 378" />
+                <path d="M190 273 L248 273" />
+                <path d="M310 178 L320 248" />
+                <path d="M470 178 L380 248" />
+                <path d="M430 178 L430 376" />
+                <path d="M500 298 L470 378" />
+                <path d="M540 298 L650 378" />
+                <path d="M720 178 L790 248" />
+                <path d="M700 178 C 660 260, 660 330, 680 378" />
+                <path d="M880 178 L830 248" />
+                <path d="M900 178 C 940 300, 840 370, 760 395" />
+                <path d="M790 298 L720 378" />
+              </g>
+              <g font-size="13" text-anchor="middle">
+                <rect x="410" y="16" width="180" height="50" rx="6" fill="#153653" />
+                <text x="500" y="38" fill="#fff" font-weight="600">composition</text>
+                <text x="500" y="56" fill="#cfe0ec" font-size="11">monta e descarta tudo</text>
+
+                <rect x="30" y="128" width="160" height="50" rx="6" fill="#e3eef8" stroke="#9cc0de" />
+                <text x="110" y="150" fill="#143956" font-weight="600">react-bindings</text>
+                <text x="110" y="168" fill="#536b7f" font-size="11">Context + useReadModel</text>
+
+                <rect x="230" y="128" width="160" height="50" rx="6" fill="#f1f3f6" stroke="#b6c2cf" />
+                <text x="310" y="150" fill="#143956" font-weight="600">fixtures</text>
+                <text x="310" y="168" fill="#536b7f" font-size="11">controller simulado</text>
+
+                <rect x="420" y="128" width="160" height="50" rx="6" fill="#e5f3ea" stroke="#93c6a6" />
+                <text x="500" y="150" fill="#143956" font-weight="600">presentation</text>
+                <text x="500" y="168" fill="#536b7f" font-size="11">controller headless</text>
+
+                <rect x="640" y="128" width="160" height="50" rx="6" fill="#fbf0dd" stroke="#dcb46f" />
+                <text x="720" y="150" fill="#143956" font-weight="600">state</text>
+                <text x="720" y="168" fill="#536b7f" font-size="11">Zustand vanilla</text>
+
+                <rect x="820" y="128" width="160" height="50" rx="6" fill="#fbf0dd" stroke="#dcb46f" />
+                <text x="900" y="150" fill="#143956" font-weight="600">infrastructure</text>
+                <text x="900" y="168" fill="#536b7f" font-size="11">localStorage / memória</text>
+
+                <rect x="30" y="248" width="160" height="50" rx="6" fill="#e3eef8" stroke="#9cc0de" />
+                <text x="110" y="270" fill="#143956" font-weight="600">frontend</text>
+                <text x="110" y="288" fill="#536b7f" font-size="11">views por props</text>
+
+                <rect x="250" y="248" width="170" height="50" rx="6" fill="#f1f3f6" stroke="#b6c2cf" />
+                <text x="335" y="270" fill="#143956" font-weight="600" font-size="12">contracts/presentation</text>
+                <text x="335" y="288" fill="#536b7f" font-size="11">modelo + intenções</text>
+
+                <rect x="440" y="248" width="160" height="50" rx="6" fill="#e5f3ea" stroke="#93c6a6" />
+                <text x="520" y="270" fill="#143956" font-weight="600">application</text>
+                <text x="520" y="288" fill="#536b7f" font-size="11">casos de uso</text>
+
+                <rect x="710" y="248" width="160" height="50" rx="6" fill="#e5f3ea" stroke="#93c6a6" stroke-dasharray="4 3" />
+                <text x="790" y="270" fill="#143956" font-weight="600">application/ports</text>
+                <text x="790" y="288" fill="#536b7f" font-size="11">interfaces de saída</text>
+
+                <rect x="30" y="378" width="160" height="50" rx="6" fill="#e3eef8" stroke="#9cc0de" />
+                <text x="110" y="400" fill="#143956" font-weight="600">design-system</text>
+                <text x="110" y="418" fill="#536b7f" font-size="11">tokens + primitivas</text>
+
+                <rect x="360" y="378" width="170" height="50" rx="6" fill="#f1f3f6" stroke="#b6c2cf" />
+                <text x="445" y="400" fill="#143956" font-weight="600" font-size="12">contracts/application</text>
+                <text x="445" y="418" fill="#536b7f" font-size="11">API pública</text>
+
+                <rect x="600" y="378" width="160" height="50" rx="6" fill="#e5f3ea" stroke="#93c6a6" />
+                <text x="680" y="400" fill="#143956" font-weight="600">domain</text>
+                <text x="680" y="418" fill="#536b7f" font-size="11">regras puras</text>
+              </g>
+              <text x="20" y="480" font-size="12" fill="#536b7f">
+                Setas tracejadas: a composição importa todas as entradas públicas; só as principais estão desenhadas.
+              </text>
+            </svg>
+          </div>
+          <figcaption>
+            <code>application/ports</code> faz parte de <code>application</code>, mas é uma entrada separada: quem
+            implementa um port (<code>state</code>, <code>infrastructure</code>) importa só as interfaces, nunca os casos
+            de uso.
+          </figcaption>
+          <div class="legend" aria-label="Legenda">
+            <span class="ui">Interface (React)</span>
+            <span class="contract">Contratos e simulação</span>
+            <span class="core">Núcleo sem React</span>
+            <span class="adapter">Implementações de ports</span>
+          </div>
+        </figure>
+        <h3>Três regras que explicam o desenho</h3>
+        <ol>
+          <li>
+            <strong>Contratos não dependem de nada.</strong> <code>contracts/application</code> e
+            <code>contracts/presentation</code> só têm tipos. Assim, quem consome uma camada conhece apenas o contrato,
+            nunca a implementação.
+          </li>
+          <li>
+            <strong>Quem precisa declara; quem fornece implementa.</strong> A aplicação declara os ports de que precisa
+            em <code>application/ports</code>. Estado e infraestrutura implementam esses ports. A aplicação nunca importa
+            Zustand nem localStorage.
+          </li>
+          <li>
+            <strong>Só a composição conhece tudo.</strong> Ela é o único lugar onde implementações concretas se
+            encontram. Trocar localStorage por HTTP, ou o controller real por uma fixture, muda só a composição.
+          </li>
+        </ol>
+      </section>
+
+      <section id="pastas">
+        <h2>Estrutura de pastas</h2>
+        <p>
+          Cada pasta de camada tem um <code>index.ts</code>, que é a sua entrada pública. De fora, só se importa por ele.
+          Os testes ficam em <code>__tests__</code> dentro da camada que testam.
+        </p>
+        <pre><code>src_migration/example/
+  README.md                         Resumo e comandos
+  guide.html                        Este guia
+  index.html                        Página do exemplo (servida pelo Vite no web)
+
+  domain/
+    variable.ts                     Variable, VariableDocument, tipos IEC
+    identifier.ts                   Sintaxe de identificador IEC 61131-3
+    variable-document.ts            add / rename / remove / isConsistentDocument
+  contracts/
+    application/variable-list-api.ts    VariableListApi, comandos, erros, snapshot
+    presentation/read-model.ts          ReadModel&lt;T&gt;
+    presentation/variable-list.ts       VariableListModel, intenções, controller
+  application/
+    ports/index.ts                  VariableDocumentStatePort, VariablePersistencePort
+    variable-list-service.ts        Casos de uso (createVariableListService)
+  state/
+    variable-document-store.ts      Port de estado com Zustand vanilla
+  presentation/
+    messages.ts                     Erros e status em texto
+    variable-list-controller.ts     Controller headless (createVariableListController)
+  design-system/
+    components/                     Button, TextField, SelectField, StatusMessage, ThemeRoot (+ .module.css)
+    recipes/variable-list.ts        Classes do layout da lista
+    css-modules.d.ts                Tipos para importar .module.css
+  frontend/
+    variable-list-view.tsx          View da lista, só props
+  react-bindings/
+    controller-context.ts           Context + useVariableListController
+    variable-list-controller-provider.tsx
+    use-read-model.ts               useSyncExternalStore sobre ReadModel
+    connected-variable-list.tsx     Liga controller e view
+  infrastructure/
+    local-storage-persistence.ts    Adapter de Web Storage com validação
+    in-memory-persistence.ts        Adapter em memória para testes
+  composition/
+    create-variable-list-app.ts     Composition root e dispose
+    variable-list-root.tsx          Árvore React da feature
+    browser-main.tsx                Entry do browser
+  fixtures/
+    variable-list-fixture.ts        Controller simulado por cenário
+  __architecture__/
+    rules.ts                        Quem pode importar o quê
+    check-boundaries.ts             Verificador dos imports
+    collect-sources.ts              Lê os arquivos para o verificador</code></pre>
+        <p>
+          Fora da pasta, em cada repositório, ficam só as configurações que diferem entre web e editor:
+          <code>tsconfig.example.json</code>, a configuração de testes (Vitest no web, Jest no editor), um bloco do
+          ESLint e, só no web, a configuração do Vite, a do Playwright e o spec em <code>e2e-migration-example/</code>.
+        </p>
+      </section>
+
+      <section id="camadas">
+        <h2>Camada por camada</h2>
+        <p>Da mais interna para a mais externa. Para cada uma: o que faz, o que pode importar e o que nunca faz.</p>
+
+        <div class="layer core">
+          <h3><code>domain</code>: as regras</h3>
+          <dl class="meta">
+            <dt>Importa</dt>
+            <dd>nada fora de si mesma</dd>
+            <dt>Pacotes</dt>
+            <dd>nenhum</dd>
+          </dl>
+          <p>
+            Dados imutáveis e funções puras. Uma edição recebe o documento atual e devolve o próximo documento ou a
+            violação, sem lançar exceção e sem alterar a entrada. Quando nada muda, devolve o mesmo objeto, o que permite
+            às camadas de cima evitar trabalho.
+          </p>
+          <pre><code>export function addVariable(document, name, type): VariableRuleResult {
+  const violation = checkName(document, name)
+  if (violation) return { ok: false, violation }
+  const variable = { id: document.nextId, name, type }
+  return { ok: true, document: { variables: [...document.variables, variable], nextId: document.nextId + 1 } }
+}</code></pre>
+          <p><strong>Nunca:</strong> React, store, I/O, textos para o usuário.</p>
+        </div>
+
+        <div class="layer contract">
+          <h3><code>contracts/application</code> e <code>contracts/presentation</code>: os acordos</h3>
+          <dl class="meta">
+            <dt>Importa</dt>
+            <dd>nada</dd>
+            <dt>Conteúdo</dt>
+            <dd>só tipos</dd>
+          </dl>
+          <p>
+            <code>VariableListApi</code> é a API pública da aplicação, usada por qualquer chamador (UI, atalho,
+            ferramenta). <code>VariableListModel</code> e <code>VariableListIntents</code> são o que uma view recebe e o
+            que ela pode pedir. <code>ReadModel&lt;T&gt;</code> é o formato observável que liga controllers a React.
+          </p>
+          <pre><code>export interface ReadModel&lt;T&gt; {
+  readonly getSnapshot: () =&gt; T                              // mesmo objeto enquanto nada mudar
+  readonly subscribe: (listener: () =&gt; void) =&gt; Unsubscribe  // só avisa; quem lê chama getSnapshot de novo
+}</code></pre>
+          <p>
+            Os membros são propriedades com funções, não métodos. Assim podem ser passados direto para um
+            <code>onClick</code> sem perder o <code>this</code>.
+          </p>
+        </div>
+
+        <div class="layer core">
+          <h3><code>application</code>: os casos de uso</h3>
+          <dl class="meta">
+            <dt>Importa</dt>
+            <dd><code>domain</code>, <code>contracts/application</code></dd>
+            <dt>Pacotes</dt>
+            <dd>nenhum</dd>
+          </dl>
+          <p>
+            <code>createVariableListService({ state, persistence })</code> recebe os ports por parâmetro e devolve a
+            <code>VariableListApi</code>. É aqui que se decide quando uma edição é aceita, quando há uma operação em
+            andamento (<code>busy</code>), como o save captura a revisão e o que fazer com respostas que chegam depois
+            do <code>dispose()</code>. Erros do domínio são traduzidos para erros do contrato, para que nenhum chamador
+            dependa de tipos do domínio.
+          </p>
+          <p>
+            Os ports ficam em <code>application/ports</code>. O port de estado tem métodos com significado
+            (<code>commitEdit</code>, <code>finishSave</code>…) em vez de um <code>setState</code> genérico. Cada método é
+            uma transação: documento, revisão e dirty nunca aparecem fora de sincronia.
+          </p>
+          <p><strong>Nunca:</strong> Zustand, localStorage, React, textos para o usuário.</p>
+        </div>
+
+        <div class="layer adapter">
+          <h3><code>state</code>: o estado observável</h3>
+          <dl class="meta">
+            <dt>Importa</dt>
+            <dd><code>application/ports</code>, <code>domain</code></dd>
+            <dt>Pacotes</dt>
+            <dd><code>zustand/vanilla</code> (o único lugar)</dd>
+          </dl>
+          <p>
+            Implementa <code>VariableDocumentStatePort</code> com uma store Zustand vanilla. A store em si nunca sai
+            daqui: quem usa recebe só os métodos do port. Cada chamada da factory cria uma instância independente, então
+            duas sessões nunca compartilham estado.
+          </p>
+        </div>
+
+        <div class="layer adapter">
+          <h3><code>infrastructure</code>: o I/O</h3>
+          <dl class="meta">
+            <dt>Importa</dt>
+            <dd><code>application/ports</code>, <code>domain</code></dd>
+            <dt>Pacotes</dt>
+            <dd>nenhum (usa a Web Storage recebida por parâmetro)</dd>
+          </dl>
+          <p>
+            Dois adapters do mesmo port. O de localStorage grava com um campo <code>version</code> e, ao ler, trata o
+            JSON como <code>unknown</code> até validar cada campo; qualquer problema vira <code>{ ok: false }</code>, sem
+            exceção. O de memória serve aos testes e prova que a aplicação não sabe onde os dados moram.
+          </p>
+          <div class="callout">
+            <p>
+              <strong>Duas validações, dois donos.</strong> O adapter valida o <em>formato</em> (é um documento?). A
+              aplicação valida o <em>conteúdo</em> com a regra do domínio (<code>isConsistentDocument</code>: ids
+              únicos, nomes válidos e sem repetição).
+            </p>
+          </div>
+        </div>
+
+        <div class="layer core">
+          <h3><code>presentation</code>: o controller</h3>
+          <dl class="meta">
+            <dt>Importa</dt>
+            <dd><code>contracts/application</code>, <code>contracts/presentation</code></dd>
+            <dt>Pacotes</dt>
+            <dd>nenhum (sem React, sem Zustand)</dd>
+          </dl>
+          <p>
+            <code>createVariableListController(api)</code> combina o snapshot da aplicação com o estado local de
+            formulário (rascunhos, mensagens) e produz um único <code>VariableListModel</code>. Textos de erro e de
+            status são escritos aqui, em <code>messages.ts</code>.
+          </p>
+          <p>Dois cuidados de desempenho que valem para todo controller:</p>
+          <ul>
+            <li>o modelo só é recriado quando o snapshot ou o estado local mudou; senão, o mesmo objeto é devolvido;</li>
+            <li>linhas sem mudança mantêm a mesma referência, e a view usa <code>memo</code> para não re-renderizá-las.</li>
+          </ul>
+        </div>
+
+        <div class="layer ui">
+          <h3><code>design-system</code>: a aparência</h3>
+          <dl class="meta">
+            <dt>Importa</dt>
+            <dd>nada fora de si mesma</dd>
+            <dt>Pacotes</dt>
+            <dd><code>react</code>; é a única camada que importa CSS</dd>
+          </dl>
+          <p>
+            Tokens semânticos (<code>--surface-panel</code>, <code>--action-primary</code>, <code>--status-error</code>…)
+            definidos em <code>ThemeRoot</code>, com valores claro, escuro e “system”. Primitivas (<code>Button</code>,
+            <code>TextField</code>, <code>SelectField</code>, <code>StatusMessage</code>) com variantes tipadas e estilo
+            em CSS Modules. Receitas (<code>variableListRecipe</code>) guardam o layout de um padrão composto, para que a
+            view não tenha classes soltas.
+          </p>
+          <p>
+            Mudar a cor de um botão é editar um <code>.module.css</code> ou um token. Nenhum handler, controller ou caso
+            de uso é tocado.
+          </p>
+        </div>
+
+        <div class="layer ui">
+          <h3><code>frontend</code>: as views</h3>
+          <dl class="meta">
+            <dt>Importa</dt>
+            <dd><code>contracts/presentation</code>, <code>design-system</code></dd>
+            <dt>Pacotes</dt>
+            <dd><code>react</code></dd>
+          </dl>
+          <p>
+            <code>VariableListView({ model, intents })</code> desenha o modelo e transforma eventos do DOM em intenções.
+            Não guarda estado, não valida, não faz I/O e não sabe se as intenções vão para o controller real ou para uma
+            fixture. A única conversão que faz é de string do <code>&lt;select&gt;</code> para um tipo que o próprio
+            modelo ofereceu.
+          </p>
+        </div>
+
+        <div class="layer ui">
+          <h3><code>react-bindings</code>: a cola com React</h3>
+          <dl class="meta">
+            <dt>Importa</dt>
+            <dd><code>contracts/presentation</code>, <code>frontend</code></dd>
+            <dt>Pacotes</dt>
+            <dd><code>react</code></dd>
+          </dl>
+          <p>
+            O Context carrega o controller, que é uma referência estável, e nunca o modelo, que muda. Cada componente
+            assina só o que usa por <code>useReadModel</code>, que é um <code>useSyncExternalStore</code> sobre o
+            <code>ReadModel</code>.
+          </p>
+          <pre><code>export function ConnectedVariableList() {
+  const controller = useVariableListController()
+  const model = useReadModel(controller.model)
+  return &lt;VariableListView model={model} intents={controller} /&gt;
+}</code></pre>
+          <p>Views nunca importam bindings; bindings importam views.</p>
+        </div>
+
+        <div class="layer contract">
+          <h3><code>fixtures</code>: a simulação</h3>
+          <dl class="meta">
+            <dt>Importa</dt>
+            <dd><code>contracts/presentation</code></dd>
+            <dt>Pacotes</dt>
+            <dd>nenhum</dd>
+          </dl>
+          <p>
+            <code>createVariableListFixture('empty' | 'populated' | 'loading' | 'save-failed')</code> implementa o mesmo
+            contrato do controller real, sem aplicação por trás. Registra as intenções recebidas e mostra textos que
+            deixam claro que nada é gravado. Serve para revisar a interface antes de existir lógica e para testar views
+            isoladas.
+          </p>
+        </div>
+
+        <div class="layer root">
+          <h3><code>composition</code>: a montagem</h3>
+          <dl class="meta">
+            <dt>Importa</dt>
+            <dd>todas as entradas públicas</dd>
+            <dt>Pacotes</dt>
+            <dd><code>react</code>, <code>react-dom/client</code></dd>
+          </dl>
+          <pre><code>export function createVariableListApp({ persistence }) {
+  const state = createVariableDocumentStore()                          // de dentro para fora
+  const service = createVariableListService({ state, persistence })
+  const presenter = createVariableListController(service)
+  return {
+    api: service,
+    controller: presenter,
+    start: service.load,
+    dispose: () =&gt; { presenter.dispose(); service.dispose() },        // de fora para dentro
+  }
+}</code></pre>
+          <p>
+            Factories simples, sem container de DI. <code>createBrowserVariableListApp(storage)</code> é a variante de
+            plataforma com localStorage. <code>browser-main.tsx</code> cria a instância uma vez, fora do React, e monta
+            <code>VariableListRoot</code>. Esse root aceita qualquer controller: o real ou uma fixture.
+          </p>
+        </div>
+      </section>
+
+      <section id="fluxo">
+        <h2>Fluxo de uma intenção: adicionar uma variável</h2>
+        <p>Do clique até a tela atualizada, passando por todas as camadas:</p>
+        <ol class="steps">
+          <li>
+            O usuário digita <code>MotorSpeed</code>. A view chama <code>intents.changeNewName</code>, e o controller
+            guarda o rascunho no estado local e notifica.
+            <span class="where">frontend/variable-list-view.tsx → presentation/variable-list-controller.ts</span>
+          </li>
+          <li>
+            O clique em “Add variable” chama <code>intents.submitNew()</code>. O controller remove espaços e chama
+            <code>api.addVariable({ name, type })</code>.
+            <span class="where">presentation/variable-list-controller.ts</span>
+          </li>
+          <li>
+            O serviço recusa se houver um load em andamento e aplica a regra do domínio <code>addVariable</code> ao
+            documento atual.
+            <span class="where">application/variable-list-service.ts → domain/variable-document.ts</span>
+          </li>
+          <li>
+            Se a regra recusar, o serviço traduz a violação para um <code>VariableListError</code> e o controller grava
+            o texto do erro no estado local. O documento não muda.
+            <span class="where">application → presentation/messages.ts</span>
+          </li>
+          <li>
+            Se aceitar, o serviço chama <code>state.commitEdit(document)</code>. A store cria um novo estado com
+            <code>revision + 1</code> e notifica os assinantes.
+            <span class="where">state/variable-document-store.ts</span>
+          </li>
+          <li>
+            O controller recebe a notificação, monta um novo modelo (reaproveitando as linhas antigas) e avisa React
+            pelo <code>ReadModel</code>.
+            <span class="where">presentation → react-bindings/use-read-model.ts</span>
+          </li>
+          <li>
+            <code>useSyncExternalStore</code> vê um snapshot diferente e re-renderiza. Só a linha nova renderiza; as
+            outras são as mesmas referências.
+            <span class="where">react-bindings/connected-variable-list.tsx → frontend</span>
+          </li>
+        </ol>
+        <p>
+          Um atalho de teclado, uma ferramenta de IA ou um teste chamariam o mesmo <code>api.addVariable</code>, com as
+          mesmas regras e o mesmo resultado. Não existe caminho alternativo de escrita.
+        </p>
+      </section>
+
+      <section id="save">
+        <h2>Save, revisões e dirty</h2>
+        <p>
+          Toda edição aceita gera uma nova <strong>revisão</strong>. O documento está <strong>sujo</strong> enquanto a
+          revisão atual for diferente da última salva. O save captura o documento e a revisão <em>antes</em> do I/O:
+        </p>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Momento</th>
+                <th>revision</th>
+                <th>savedRevision</th>
+                <th>dirty</th>
+                <th>O que aconteceu</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Carregou</td>
+                <td>1</td>
+                <td>1</td>
+                <td>não</td>
+                <td><code>replaceLoaded</code> instala o documento como já salvo</td>
+              </tr>
+              <tr>
+                <td>Adicionou <code>Start</code></td>
+                <td>2</td>
+                <td>1</td>
+                <td>sim</td>
+                <td><code>commitEdit</code></td>
+              </tr>
+              <tr>
+                <td>Clicou em Save</td>
+                <td>2</td>
+                <td>1</td>
+                <td>sim</td>
+                <td>o serviço captura o documento da revisão 2 e marca <code>saving</code></td>
+              </tr>
+              <tr>
+                <td>Adicionou <code>Stop</code> durante o save</td>
+                <td>3</td>
+                <td>1</td>
+                <td>sim</td>
+                <td>edições continuam permitidas durante o save</td>
+              </tr>
+              <tr>
+                <td>Save terminou</td>
+                <td>3</td>
+                <td>2</td>
+                <td>sim</td>
+                <td><code>finishSave(2)</code>: o que foi gravado é a revisão 2; <code>Stop</code> continua pendente</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Outras garantias do mesmo fluxo, todas cobertas por teste:</p>
+        <ul>
+          <li>save com falha não avança <code>savedRevision</code> e registra <code>save-failed</code>;</li>
+          <li>um segundo save enquanto o primeiro roda é recusado com <code>busy</code>;</li>
+          <li>adapter que lança exceção vira falha comum: a API pública nunca rejeita uma Promise;</li>
+          <li>resposta que chega depois do <code>dispose()</code> é ignorada e não altera nada.</li>
+        </ul>
+      </section>
+
+      <section id="estado">
+        <h2>Onde cada estado mora</h2>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Estado</th>
+                <th>Dono</th>
+                <th>Persistido</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Variáveis e <code>nextId</code></td>
+                <td>port de estado (<code>state</code>), editado só pelos casos de uso</td>
+                <td>sim, pelo port de persistência</td>
+              </tr>
+              <tr>
+                <td>Revisão, revisão salva, operação em andamento, última falha</td>
+                <td>port de estado, na mesma transação do documento</td>
+                <td>não</td>
+              </tr>
+              <tr>
+                <td>Rascunho do nome novo, rascunho de renomeação, mensagens</td>
+                <td>estado local do controller (<code>presentation</code>)</td>
+                <td>não</td>
+              </tr>
+              <tr>
+                <td>Foco, id de label (<code>useId</code>)</td>
+                <td>primitivas do <code>design-system</code></td>
+                <td>não</td>
+              </tr>
+              <tr>
+                <td>Tema</td>
+                <td>prop de <code>ThemeRoot</code>, escolhida pela composição</td>
+                <td>não, neste exemplo</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          A regra prática: se um valor participa de save, undo ou navegação compartilhada, ele pertence à aplicação. Se
+          é só para a tela, fica no controller. Se é só visual, fica na primitiva. As views não guardam estado.
+        </p>
+      </section>
+
+      <section id="testes">
+        <h2>Testes por camada</h2>
+        <p>
+          Cada camada é testada no seu próprio nível, com o mínimo de dependências. Os testes usam só a API comum a
+          Vitest e Jest: sem <code>vi</code> nem <code>jest</code>, e sem matchers do jest-dom. Por isso os mesmos
+          arquivos rodam nos dois repositórios.
+        </p>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Camada</th>
+                <th>Arquivo</th>
+                <th>Dublês</th>
+                <th>O que prova</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>domain</td>
+                <td><code>identifier.test.ts</code>, <code>variable-document.test.ts</code></td>
+                <td>nenhum</td>
+                <td>sintaxe IEC, nomes únicos ignorando maiúsculas, identidade preservada, invariantes</td>
+              </tr>
+              <tr>
+                <td>application</td>
+                <td><code>variable-list-service.test.ts</code></td>
+                <td>port de estado falso, persistência com Promises controladas</td>
+                <td>edição durante save, falha de save, <code>busy</code>, load inválido, dispose</td>
+              </tr>
+              <tr>
+                <td>state</td>
+                <td><code>variable-document-store.test.ts</code></td>
+                <td>nenhum</td>
+                <td>transações do port, revisão salva nunca volta, instâncias isoladas</td>
+              </tr>
+              <tr>
+                <td>presentation</td>
+                <td><code>variable-list-controller.test.ts</code></td>
+                <td>API falsa</td>
+                <td>snapshot estável, linhas reaproveitadas, mensagens, renomear, unsubscribe e dispose</td>
+              </tr>
+              <tr>
+                <td>infrastructure</td>
+                <td><code>persistence.test.ts</code></td>
+                <td>storage em Map; Web Storage do jsdom</td>
+                <td>ida e volta com versão, dados corrompidos viram falha, erros de storage não vazam</td>
+              </tr>
+              <tr>
+                <td>design-system</td>
+                <td><code>components.test.tsx</code></td>
+                <td>nenhum</td>
+                <td>labels ligados, <code>aria-invalid</code>, variantes, tema</td>
+              </tr>
+              <tr>
+                <td>frontend</td>
+                <td><code>variable-list-view.test.tsx</code></td>
+                <td>modelo literal e intenções que registram chamadas</td>
+                <td>a view mostra exatamente o modelo e transforma cada ação em uma intenção</td>
+              </tr>
+              <tr>
+                <td>react-bindings</td>
+                <td><code>connected-variable-list.test.tsx</code></td>
+                <td>fixture</td>
+                <td>re-render por <code>useSyncExternalStore</code>, erro claro sem provider</td>
+              </tr>
+              <tr>
+                <td>composition</td>
+                <td><code>variable-list-app.test.tsx</code></td>
+                <td>persistência em memória; localStorage do jsdom</td>
+                <td>fluxo inteiro pela UI, mesma árvore com fixture, dispose, persistir e restaurar</td>
+              </tr>
+              <tr>
+                <td>fixtures</td>
+                <td><code>variable-list-fixture.test.ts</code></td>
+                <td>nenhum</td>
+                <td>cenários e registro de intenções</td>
+              </tr>
+              <tr>
+                <td>__architecture__</td>
+                <td><code>boundaries.test.ts</code></td>
+                <td>código-fonte sintético</td>
+                <td>o código real passa; cada tipo de import proibido é detectado</td>
+              </tr>
+              <tr>
+                <td>E2E (só web)</td>
+                <td><code>e2e-migration-example/variable-list.spec.ts</code></td>
+                <td>nenhum: browser real</td>
+                <td>adicionar, nome inválido, salvar e recarregar, renomear, remover, dado corrompido</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="fronteiras">
+        <h2>Verificação de fronteiras</h2>
+        <p>
+          As regras de import moram em um só lugar, <code>__architecture__/rules.ts</code>.
+          <code>check-boundaries.ts</code> lê cada arquivo com o pré-processador do TypeScript, que enxerga imports
+          estáticos, de tipo, reexports, <code>import()</code> dinâmico e <code>require</code>, e compara com as regras.
+          O teste roda o verificador sobre o código real e sobre exemplos sintéticos de violação.
+        </p>
+        <ul>
+          <li>entre camadas, só a entrada pública: <code>../domain</code> pode, <code>../domain/variable</code> não;</li>
+          <li>cada camada tem uma lista fechada de pacotes externos permitidos;</li>
+          <li>arquivo fora de qualquer camada falha, em vez de ser ignorado;</li>
+          <li>CSS só em <code>design-system</code>;</li>
+          <li>caminho que sai de <code>src_migration/example</code> falha, e <code>@root</code> também;</li>
+          <li>testes seguem a regra da própria camada e podem usar também fixtures e a Testing Library.</li>
+        </ul>
+        <p>Exemplo de falha ao colocar <code>export { createVariableDocumentStore } from '../state'</code> em uma view:</p>
+        <pre><code>{
+  file: 'frontend/zz-negative-probe.ts',
+  specifier: '../state',
+  reason: 'frontend may not depend on state'
+}</code></pre>
+        <div class="callout">
+          <p>
+            Mudar uma dependência permitida em <code>rules.ts</code> é uma decisão de arquitetura, para revisar como tal.
+            Não é um ajuste para fazer o teste passar.
+          </p>
+        </div>
+      </section>
+
+      <section id="rodar">
+        <h2>Como rodar</h2>
+        <h3>openplc-web</h3>
+        <pre><code>pnpm run example:dev        # página do exemplo em http://localhost:5190 (este guia: /guide.html)
+pnpm run example:check      # typecheck + lint + prettier + testes (Vitest)
+pnpm run example:arch       # só a verificação de fronteiras
+pnpm run example:e2e        # Playwright contra a página do exemplo</code></pre>
+        <h3>openplc-editor</h3>
+        <pre><code>npm run example:check       # typecheck + lint + prettier + testes (Jest)
+npm run example:arch</code></pre>
+        <h3>Conferir que os dois repositórios têm a mesma pasta</h3>
+        <pre><code>diff -r openplc-web/src_migration/example openplc-editor/src_migration/example</code></pre>
+      </section>
+
+      <section id="nova-feature">
+        <h2>Criar uma feature nova seguindo o exemplo</h2>
+        <ol class="steps">
+          <li>
+            <strong>Domínio.</strong> Entidades e regras puras em <code>domain</code>, com resultado em vez de exceção.
+            Testes sem React nem estado.
+          </li>
+          <li>
+            <strong>Contrato da aplicação.</strong> Comandos, resultados, erros e snapshot em
+            <code>contracts/application</code>, só com tipos.
+          </li>
+          <li>
+            <strong>Casos de uso e ports.</strong> O serviço em <code>application</code> declara em
+            <code>application/ports</code> o que precisa de estado e de I/O e traduz violações do domínio para erros do
+            contrato. Testes com ports falsos.
+          </li>
+          <li>
+            <strong>Implementações dos ports.</strong> Em <code>state</code> (Zustand fica só aqui) e
+            <code>infrastructure</code> (HTTP, IPC, storage), com validação de tudo que entra.
+          </li>
+          <li>
+            <strong>Contrato de apresentação e fixture.</strong> Modelo e intenções em
+            <code>contracts/presentation</code>; fixture em <code>fixtures</code> para revisar a interface antes da
+            lógica.
+          </li>
+          <li>
+            <strong>View e design system.</strong> View em <code>frontend</code> usando só primitivas e receitas;
+            estilos em <code>.module.css</code> com tokens.
+          </li>
+          <li>
+            <strong>Controller.</strong> Em <code>presentation</code>, com snapshot estável e textos de mensagem. Testes
+            com API falsa.
+          </li>
+          <li>
+            <strong>Bindings e composição.</strong> Provider e componente conectado em <code>react-bindings</code>;
+            factory e <code>dispose()</code> em <code>composition</code>.
+          </li>
+          <li>
+            <strong>Fronteiras.</strong> Rodar <code>example:arch</code> (ou o equivalente da feature) e só então
+            considerar a camada pronta.
+          </li>
+        </ol>
+      </section>
+
+      <section id="glossario">
+        <h2>Glossário</h2>
+        <div class="table-scroll">
+          <table>
+            <tbody>
+              <tr>
+                <td><strong>Port</strong></td>
+                <td>Interface declarada por quem precisa de algo (a aplicação), sem dizer como é feito.</td>
+              </tr>
+              <tr>
+                <td><strong>Adapter</strong></td>
+                <td>Implementação concreta de um port: localStorage, memória, HTTP, IPC.</td>
+              </tr>
+              <tr>
+                <td><strong>Snapshot</strong></td>
+                <td>Valor imutável do estado em um instante; o mesmo objeto enquanto nada mudar.</td>
+              </tr>
+              <tr>
+                <td><strong>Read model</strong></td>
+                <td>Par <code>getSnapshot</code> + <code>subscribe</code> que expõe um snapshot observável.</td>
+              </tr>
+              <tr>
+                <td><strong>Intenção</strong></td>
+                <td>Pedido emitido pela view (“adicionar”, “salvar”), sem retorno; o resultado volta pelo modelo.</td>
+              </tr>
+              <tr>
+                <td><strong>Controller</strong></td>
+                <td>Objeto sem React que transforma o estado da aplicação em modelo de exibição e recebe intenções.</td>
+              </tr>
+              <tr>
+                <td><strong>Fixture</strong></td>
+                <td>Implementação simulada de um contrato, usada em catálogo e testes; nunca toca recursos reais.</td>
+              </tr>
+              <tr>
+                <td><strong>Composition root</strong></td>
+                <td>Único lugar que cria e conecta as implementações e controla o ciclo de vida delas.</td>
+              </tr>
+              <tr>
+                <td><strong>Revisão</strong></td>
+                <td>Número que cresce a cada mudança confirmada do documento; base do dirty e do save.</td>
+              </tr>
+              <tr>
+                <td><strong>Entrada pública</strong></td>
+                <td>O <code>index.ts</code> de uma camada; o único arquivo que outras camadas podem importar.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer>
+        Guia do exemplo em <code>src_migration/example</code>. O código e os testes são a referência; atualize este guia
+        na mesma mudança que alterar a estrutura.
+      </footer>
+    </main>
+
+    <script>
+      const links = Array.from(document.querySelectorAll('.sidebar nav a'))
+      const sections = links.map((link) => document.querySelector(link.hash)).filter(Boolean)
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return
+            links.forEach((link) => link.classList.toggle('current', link.hash === '#' + entry.target.id))
+          })
+        },
+        { rootMargin: '-20% 0px -70% 0px' },
+      )
+      sections.forEach((section) => observer.observe(section))
+    </script>
+  </body>
+</html>

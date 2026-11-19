@@ -1,0 +1,76 @@
+/* Layout of the variable list pattern. Views reference these classes only through variableListRecipe. */
+.panel {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-section);
+  border: 1px solid var(--border-subtle);
+  border-radius: calc(var(--radius-control) * 2);
+  background: var(--surface-panel);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-control);
+  margin-bottom: var(--space-section);
+}
+
+.title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 18px;
+}
+
+.addForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  align-items: end;
+  gap: var(--space-control);
+  margin-bottom: var(--space-section);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-control);
+  padding: var(--space-control) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.name {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.type {
+  min-width: 48px;
+  color: var(--text-muted);
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+}
+
+.renameField {
+  flex: 1 1 200px;
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-section) 0;
+  color: var(--text-muted);
+}
+
+@media (max-width: 480px) {
+  .addForm {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
