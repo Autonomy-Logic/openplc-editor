@@ -4,6 +4,7 @@ import { join } from 'path'
 import { resolveHmiPanel } from '../../../../../middleware/shared/utils/target-capabilities/hmi-panel'
 import { HMI_FONT_BOLD, HMI_FONT_REGULAR } from '../../fonts/vetted-fonts'
 import { sampleProject } from '../../unit/__tests__/fixtures/sample-project'
+import { generateHmiUnit } from '../../unit/generate-hmi-unit'
 import {
   composeHmiFirmware,
   type ComposeHmiFirmwareInput,
@@ -180,6 +181,17 @@ describe('hmiFirmwareFaces', () => {
     ])
     const built = await composeHmiFirmware(input({ sources, capabilities: { hmiDataWidgets: true } }))
     if (!built.ok) throw new Error(JSON.stringify(built.errors))
+  })
+
+  it('keeps one static copy per tag: the glue has no preview-only copy, which the preview build keeps', async () => {
+    const result = await composeHmiFirmware(input())
+    if (!result.ok) throw new Error(JSON.stringify(result.errors))
+    const glue = result.files['src/hmi_unit_glue.cpp']
+    expect(glue).not.toContain('g_own')
+    expect(glue).toContain('g_read_0{};')
+    expect(glue).toContain('if (!g_access) return g_read[id];')
+    const preview = generateHmiUnit({ ...sampleProject(), preview: true, resolve: undefined })
+    expect(preview.files['hmi_unit_glue.cpp']).toContain('g_own_0{};')
   })
 })
 

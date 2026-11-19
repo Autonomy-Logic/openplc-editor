@@ -809,9 +809,11 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput, classes: readonl
     ({ path, type, address }) =>
       `    {${address?.arr ?? 0}u, ${address?.elem ?? 0}u, ${type.type}, ${type.maxLength}, ${cString(path)}},`,
   )
+  /* A panel always reads its PLC through the host, so its variables without one are the read copies themselves. */
+  const own = input.panel ? 'g_read' : 'g_own'
   const stores = tags.map(
     ({ type }, i) =>
-      `    case ${i}: *static_cast<${cppTypeOf(type)} *>(g_own[${i}]) = *static_cast<const ${cppTypeOf(type)} *>(value); return;`,
+      `    case ${i}: *static_cast<${cppTypeOf(type)} *>(${own}[${i}]) = *static_cast<const ${cppTypeOf(type)} *>(value); return;`,
   )
   const { settings } = input
   return [
@@ -862,10 +864,14 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput, classes: readonl
     '',
     'namespace {',
     'const hmi_tag_access_t *g_access = nullptr;',
-    '/* The variables when no host serves them: the preview, where no PLC runs. */',
-    ...tags.map((t, i) => `${cppTypeOf(t.type)} g_own_${i}{};`),
-    `void *const g_own[${Math.max(tags.length, 1)}] = {${tags.length > 0 ? tags.map((_, i) => `&g_own_${i}`).join(', ') : 'nullptr'}};`,
-    '',
+    ...(input.panel
+      ? []
+      : [
+          '/* The variables when no host serves them: the preview, where no PLC runs. */',
+          ...tags.map((t, i) => `${cppTypeOf(t.type)} g_own_${i}{};`),
+          `void *const g_own[${Math.max(tags.length, 1)}] = {${tags.length > 0 ? tags.map((_, i) => `&g_own_${i}`).join(', ') : 'nullptr'}};`,
+          '',
+        ]),
     "/* The host's values as screens last read them; a failed read keeps the previous value. */",
     ...tags.map((t, i) => `${cppTypeOf(t.type)} g_read_${i}{};`),
     `void *const g_read[${Math.max(tags.length, 1)}] = {${tags.length > 0 ? tags.map((_, i) => `&g_read_${i}`).join(', ') : 'nullptr'}};`,
@@ -873,7 +879,7 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput, classes: readonl
     '',
     'void *tag_variable(uint32_t id) {',
     `    if (id >= ${tags.length}u) return nullptr;`,
-    '    if (!g_access) return g_own[id];',
+    `    if (!g_access) return ${own}[id];`,
     '    alignas(8) unsigned char buf[kTagBufferSize];',
     '    if (g_access->read(g_access->ctx, static_cast<int>(id), buf)) hmi_tag_write(static_cast<int>(id), g_read[id], buf);',
     '    return g_read[id];',
@@ -951,7 +957,7 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput, classes: readonl
     '',
     'int hmi_tag_write(int tag, void *variable, const void *buf) {',
     '    if (tag < 0 || tag >= hmi_tag_count) return -1;',
-    '    if (!variable) variable = g_own[tag];',
+    `    if (!variable) variable = ${own}[tag];`,
     '    switch (tag) {',
     ...write,
     '    default: return -1;',

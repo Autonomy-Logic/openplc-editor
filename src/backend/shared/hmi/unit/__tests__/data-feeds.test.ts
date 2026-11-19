@@ -171,4 +171,43 @@ describe('HMI data feeds', () => {
     expect(messages(plain)).toEqual([])
     expect(plain.sources['hmi_feed_Overview.st']).toBeUndefined()
   })
+
+  it('feeds a widget from a table and a summary nested in a struct array element, with their write-backs', () => {
+    const declarations = DECLARATIONS.replace(
+      'PROGRAM Main',
+      'TYPE Line : STRUCT Alarms : ARRAY[1..2] OF HMI_ALARM_ROW; Sys : HMI_ALARM_SUMMARY; END_STRUCT; END_TYPE\nPROGRAM Main',
+    ).replace('    Level : REAL;', '    Level : REAL;\n    Lines : ARRAY[1..2] OF Line;')
+    const nested = generateHmiUnit(
+      dataProject(
+        `FUNCTION_BLOCK Overview EXTENDS HmiScreen
+  VAR
+    Body : HmiHorizontalStack;
+    List : HmiAlarmList := (Parent := 'Body', Source := 'instance0.Main.Lines[2].Alarms', Service := 'instance0.Main.Lines[2].Sys');
+  END_VAR
+END_FUNCTION_BLOCK
+`,
+        {
+          plcDeclarations: declarations,
+          plcVariables: [
+            ...sampleProject().plcVariables,
+            {
+              path: 'instance0.Main.Lines[2].Alarms',
+              type: 'ARRAY[1..2] OF HMI_ALARM_ROW',
+              source: { kind: 'alarms', lower: 1, upper: 2 },
+            },
+            { path: 'instance0.Main.Lines[2].Sys', type: 'HMI_ALARM_SUMMARY', source: { kind: 'summary' } },
+          ],
+        },
+      ),
+    )
+    expect(messages(nested)).toEqual([])
+    expect(nested.sources['hmi_feed_Overview.st']).toContain('1: Message := instance0.Main.Lines[2].Alarms[2].Message;')
+    expect(nested.sources['Overview.st']).toContain('1: instance0.Main.Lines[2].Alarms[2].AckReq := TRUE;')
+    expect(nested.sources['Overview.st']).toContain(
+      'IF List.AckAll THEN instance0.Main.Lines[2].Sys.AckAll := TRUE; END_IF;',
+    )
+    const ack = nested.tags.findIndex((t) => t.path.toUpperCase().endsWith('LINES[2].ALARMS[2].ACKREQ'))
+    expect(ack).toBeGreaterThanOrEqual(0)
+    expect(nested.pages[0].writes.find((w) => w.tag === ack)?.limit).toEqual({ min: 1, max: 1 })
+  })
 })

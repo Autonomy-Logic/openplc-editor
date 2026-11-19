@@ -130,4 +130,71 @@ describe('HMI data sources', () => {
     expect(hmiWidgetAvailable({ requires: 'hmiDataWidgets' }, { hmiDataWidgets: false })).toBe(false)
     expect(hmiWidgetAvailable({ requires: 'hmiDataWidgets' }, {})).toBe(false)
   })
+
+  it('lists sources nested in structs, arrays of structs and block instances, down to the tree depth limit', () => {
+    const line: PLCDataType = {
+      name: 'Line',
+      derivation: 'structure',
+      variable: [
+        { name: 'Alarms', type: array('HMI_ALARM_ROW', '1..20') },
+        { name: 'Sys', type: { definition: 'user-data-type', value: 'HMI_ALARM_SUMMARY' } },
+      ],
+    }
+    const deep = (n: number): PLCDataType => ({
+      name: `D${n}`,
+      derivation: 'structure',
+      variable: [{ name: 'Next', type: { definition: 'user-data-type', value: n === 0 ? 'Line' : `D${n - 1}` } }],
+    })
+    const cell = {
+      name: 'Cell',
+      pouType: 'function-block' as const,
+      body: { language: 'st' as const, value: '' },
+      interface: {
+        variables: [
+          { ...v('Log', array('HMI_EVENT_ROW', '0..99')), class: 'input' as const },
+          { ...v('Curve', array('REAL', '1..10', 'base-type')), class: 'output' as const },
+          { ...v('Hidden', array('HMI_EVENT_ROW', '0..9')), class: 'local' as const },
+        ],
+      },
+    }
+    const main = {
+      ...project.pous[0],
+      interface: {
+        variables: [
+          v('L1', { definition: 'user-data-type', value: 'Line' }),
+          v('Lines', array('Line', '1..2')),
+          v('Unit', { definition: 'derived', value: 'Cell' }),
+          v('Deep', { definition: 'user-data-type', value: 'D9' }),
+        ],
+      },
+    }
+    const sources = hmiPlcVariables(
+      { ...project, pous: [main, cell], dataTypes: [line, ...Array.from({ length: 10 }, (_, n) => deep(n))] },
+      new Map([['LIBFB', { inputs: [{ name: 'Summary', type: 'HMI_ALARM_SUMMARY' }], outputs: [] }]]),
+    ).filter((x) => x.source)
+    expect(sources.map((x) => [x.path, x.source?.kind, x.blockOutput ?? false])).toEqual([
+      ['instance0.Main.L1.Alarms', 'alarms', false],
+      ['instance0.Main.L1.Sys', 'summary', false],
+      ['instance0.Main.Lines[1].Alarms', 'alarms', false],
+      ['instance0.Main.Lines[1].Sys', 'summary', false],
+      ['instance0.Main.Lines[2].Alarms', 'alarms', false],
+      ['instance0.Main.Lines[2].Sys', 'summary', false],
+      ['instance0.Main.Unit.Log', 'events', false],
+      ['instance0.Main.Unit.Curve', 'numbers', true],
+    ])
+  })
+
+  it('lists a source among the pins of a library block', () => {
+    const main = {
+      ...project.pous[0],
+      interface: { variables: [v('Svc', { definition: 'derived', value: 'LibFb' })] },
+    }
+    const sources = hmiPlcVariables(
+      { ...project, pous: [main] },
+      new Map([['LIBFB', { inputs: [{ name: 'Summary', type: 'HMI_ALARM_SUMMARY' }], outputs: [] }]]),
+    ).filter((x) => x.source)
+    expect(sources).toEqual([
+      { path: 'instance0.Main.Svc.Summary', type: 'HMI_ALARM_SUMMARY', source: { kind: 'summary' } },
+    ])
+  })
 })
