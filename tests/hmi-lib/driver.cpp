@@ -305,5 +305,18 @@ int main(int argc, char **argv) {
     hmi_session_use(nullptr);
     hmi_session_destroy(viewer);
     frame("viewer1_after");
+
+    /* An entry outside the numeric input's 0 to 100 is refused: the keyboard closes, the setpoint stays. */
+    show(2);
+    frame("range_0");
+    tap("setpoint_range", kSetpointIn);
+    keys("\b\b\b\b\b\b\b\b30000\r");
+    frame("setpoint_out_of_range");
+    tap("setpoint_range_low", kSetpointIn);
+    keys("\b\b\b\b\b\b\b\b-1\r");
+    frame("setpoint_below_range");
+    tap("setpoint_range_in", kSetpointIn);
+    keys("\b\b\b\b\b\b\b\b100\r");
+    frame("setpoint_at_max", true);
     return 0;
 }

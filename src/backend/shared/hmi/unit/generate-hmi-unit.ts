@@ -42,7 +42,9 @@ import { HMI_ALL_FACES, hmiUsedFontFaces } from '../fonts/used-faces'
 import { buildStandardWidgets } from '../lib/build-standard-widgets'
 import { STANDARD_WIDGETS_SOURCES } from '../lib/standard-widgets'
 import { buildWidgetCatalog, type HmiWidgetCatalog, type HmiWidgetInfo } from '../lib/widget-catalog'
+import { type HmiAstWalk, hmiBitAssignments, type HmiLimitOf, hmiPageAccess, type HmiTagWrite } from './page-access'
 import { type HmiBlockModel, type HmiElementDecl, parseHmiBlock } from './screen-model'
+import { type HmiElementLimit, hmiElementLimit, hmiLiteralOf, type HmiWriteLimit } from './write-limits'
 
 export interface HmiTagAddress {
   arr: number
@@ -63,6 +65,11 @@ export interface HmiUnitInput extends HmiUnitSources {
   themePreview?: string
   /** Preview build: the libraries are emitted whole, so their code does not change with the screens. */
   preview?: boolean
+  /**
+   * Build for a board's local panel: the unit then carries the panel PIN, relock time, touch calibration mode and build
+   * id, and the PIN entry's face. Every other build (Runtime v4, previews) leaves them out entirely.
+   */
+  panel?: boolean
   /** PLC debug-table address of a variable; absent when building without a PLC program (preview). */
   resolve?: (path: string) => HmiTagAddress | null
   /** The PLC's libraries already loaded, as the program build has them; used with `plcLibraries`. */
@@ -78,6 +85,18 @@ export interface HmiTag {
   address: HmiTagAddress | null
 }
 
+/** What one screen reaches, for a host that serves a viewer only the tags of the screen it shows. */
+export interface HmiPageTags {
+  /** The screen's name. */
+  name: string
+  /** Indexes into `tags` the screen reads, ascending. */
+  reads: number[]
+  /** How the screen writes tags, by ascending tag: whole values and single bits. */
+  writes: HmiTagWrite[]
+  /** Roles that may open the screen, one bit per `hmi_role` (bit 0 admin, always set). */
+  roles: number
+}
+
 export interface HmiUnitResult {
   ok: boolean
   errors: HmiDiagnostic[]
@@ -87,6 +106,8 @@ export interface HmiUnitResult {
   /** Generated ST, by file name, as compiled. */
   sources: Record<string, string>
   tags: HmiTag[]
+  /** Each screen's tags and roles, by page number. */
+  pages: HmiPageTags[]
   /** Element of each bounds id the core reports, for designers. */
   elementIds: Array<{ id: number; screen: string; element: string }>
   /** Faces of the font table the unit needs. */
@@ -298,6 +319,8 @@ interface ScreenPlan {
   defaults: string[]
   connects: Array<{ pipe: string; source: string; target: string; prior: string | null }>
   writeBacks: string[]
+  /** What each two-way element bound to a variable can write, by upper-case name; null when unbounded. */
+  limits: Map<string, HmiElementLimit | null>
   theme: number
 }
 
@@ -426,6 +449,7 @@ function writeBacks(
       ? `${b.element}.${twoWay.changed} AND ${converted.guard}`
       : `${b.element}.${twoWay.changed}`
     plan.writeBacks.push(`IF ${condition} THEN ${b.variable} := ${converted.expr}; END_IF;`)
+    if (element) plan.limits.set(element.name.toUpperCase(), hmiElementLimit(element, widget, plan.file.source))
   }
   const code = maskStComments(plan.file.source)
   for (const element of plan.model.elements) {
@@ -766,15 +790,37 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput, classes: readonl
     `const int hmi_tag_count = ${tags.length};`,
     `const char hmi_plc_md5[] = ${cString(input.plcMd5 ?? '')};`,
     `const uint32_t hmi_frame_ms = ${settings.framePeriodMs};`,
-    `const char hmi_panel_pin[] = ${cString(settings.pin.enabled ? settings.pin.value : '')};`,
-    `const uint32_t hmi_relock_minutes = ${settings.relock.mode === 'idle' ? settings.relock.minutes : 0};`,
-    `const uint8_t hmi_touch_cal_mode = ${HMI_TOUCH_CALIBRATION_MODES.indexOf(settings.touchCalibration.mode)};`,
-    `const char hmi_build_id[] = ${cString(hmiBuildId(input))};`,
+    ...(input.panel
+      ? [
+          `const char hmi_panel_pin[] = ${cString(settings.pin.enabled ? settings.pin.value : '')};`,
+          `const uint32_t hmi_relock_minutes = ${settings.relock.mode === 'idle' ? settings.relock.minutes : 0};`,
+          `const uint8_t hmi_touch_cal_mode = ${HMI_TOUCH_CALIBRATION_MODES.indexOf(settings.touchCalibration.mode)};`,
+          `const char hmi_build_id[] = ${cString(hmiBuildId(input))};`,
+        ]
+      : []),
     '',
     'void hmi_set_tag_access(const hmi_tag_access_t *access) {',
     '    g_access = access && access->read && access->write ? access : nullptr;',
     '}',
     '',
+    '}',
+    '',
+    '/* A bit assignment of screen code: through the host when it applies bits, else a read-modify-write of the tag. */',
+    'void hmi_bit_store(unsigned id, unsigned bit, bool value) {',
+    `    if (id >= ${tags.length}u || bit / 8u >= hmi_tag_size(static_cast<int>(id))) return;`,
+    '    if (g_access && g_access->write_bit) {',
+    '        g_access->write_bit(g_access->ctx, static_cast<int>(id), bit, value);',
+    '        return;',
+    '    }',
+    '    alignas(8) unsigned char buf[kTagBufferSize];',
+    '    if (hmi_tag_read(static_cast<int>(id), nullptr, buf) != 0) return;',
+    '    const unsigned char mask = static_cast<unsigned char>(1u << (bit % 8u));',
+    '    buf[bit / 8u] = static_cast<unsigned char>(value ? buf[bit / 8u] | mask : buf[bit / 8u] & ~mask);',
+    '    if (g_access) g_access->write(g_access->ctx, static_cast<int>(id), buf);',
+    '    else hmi_tag_write(static_cast<int>(id), nullptr, buf);',
+    '}',
+    '',
+    'extern "C" {',
     'size_t hmi_tag_size(int tag) {',
     '    switch (tag) {',
     ...tags.map(({ type }, i) => `    case ${i}: return ${sizeOf(type)};`),
@@ -855,6 +901,36 @@ function setterKind(p: HmiWidgetInfo['properties'][number]): 'num' | 'str' | und
   if (STRUCTURAL.has(p.name.toUpperCase())) return undefined
   if (p.kind === 'string') return 'str'
   return p.kind === 'number' || p.kind === 'bool' || p.kind === 'color' ? 'num' : undefined
+}
+
+/** A bit assignment to a PLC variable as STruC++ compiles it: a read-modify-write of the whole variable. */
+const BIT_STORE =
+  /strucpp::external_write<([\w:]+)>\((\d+), static_cast<[\w:]+>\(\(static_cast<uint64_t>\(strucpp::external_read<\1>\(\2\)\) & ~\(1ULL << (\d+)\)\) \| \(\((.+?) \? 1ULL : 0ULL\) << \3\)\)\);/g
+const BIT_STORE_DECLARATION = 'void hmi_bit_store(unsigned id, unsigned bit, bool value);'
+
+/**
+ * Routes every bit assignment to a PLC variable through `hmi_bit_store`, so a host can apply it to the one bit against
+ * the variable's current value instead of writing the whole variable from the screen's copy. Returns how many it
+ * routed.
+ */
+function routeBitStores(files: Record<string, string>): number {
+  let count = 0
+  for (const [name, text] of Object.entries(files)) {
+    if (!name.endsWith('.cpp')) continue
+    let here = 0
+    const routed = text.replace(BIT_STORE, (_all, _type: string, id: string, bit: string, value: string) => {
+      here++
+      return `::hmi_bit_store(${id}u, ${bit}u, static_cast<bool>(${value}));`
+    })
+    if (here === 0) continue
+    const at = routed.search(/^namespace /m)
+    files[name] =
+      at < 0
+        ? `${BIT_STORE_DECLARATION}\n${routed}`
+        : `${routed.slice(0, at)}${BIT_STORE_DECLARATION}\n\n${routed.slice(at)}`
+    count += here
+  }
+  return count
 }
 
 /** Setters of each screen's literal numeric, BOOL and STRING properties, and their C++. */
@@ -1351,8 +1427,56 @@ function buildFaces(input: HmiUnitInput, sources: Record<string, string>): numbe
     pool: [...STANDARD_WIDGETS_SOURCES.map((s) => ({ name: s.fileName, source: s.source })), ...input.widgets],
     gates: GATED_BLOCKS,
   })
-  if (!input.settings.pin.enabled || faces.includes(PIN_ENTRY_FACE)) return faces
+  if (!input.panel || !input.settings.pin.enabled || faces.includes(PIN_ENTRY_FACE)) return faces
   return [...faces, PIN_ENTRY_FACE].sort((a, b) => a - b)
+}
+
+/** A limit in the variable's own values: integers rounded outwards and clamped to the type, REAL as the float it is. */
+function inTagDomain(type: TagType, min: number, max: number, fromReal: boolean): HmiWriteLimit | null {
+  const integers = INTEGER_RANGE[type.base]
+  if (integers) {
+    const lo = Number(integers[0])
+    const hi = Number(integers[1])
+    const clamp = (v: number) => Math.min(Math.max(v, lo), hi)
+    return { min: clamp(Math.floor(min)), max: clamp(Math.ceil(max)) }
+  }
+  if (type.base === 'REAL' || (type.base === 'LREAL' && fromReal))
+    return { min: Math.fround(min), max: Math.fround(max) }
+  if (type.base === 'LREAL') return { min, max }
+  return null
+}
+
+/**
+ * The limit of each whole write the unit makes: a write-back of a two-way element takes the element's range, an
+ * assignment of a literal that literal, anything else no limit.
+ */
+function writeLimitOf(plans: readonly ScreenPlan[], tags: readonly UnitTag[], walk: HmiAstWalk): HmiLimitOf {
+  const byScreen = new Map(plans.map((p) => [p.model.name.toUpperCase(), p.limits]))
+  return (value, tag, site) => {
+    const type = tags[tag]?.type
+    if (!type) return null
+    if (site.method === 'WRITEBACK' && site.block) {
+      const limits = byScreen.get(site.block)
+      let found: HmiElementLimit | null | undefined
+      walk(value, (node) => {
+        if (
+          found === undefined &&
+          node.kind === 'VariableExpression' &&
+          'name' in node &&
+          typeof node.name === 'string'
+        )
+          found = limits?.get(node.name.toUpperCase())
+      })
+      if (!found) return null
+      if (found.kind === 'length')
+        return type.base === 'STRING' ? { min: 0, max: Math.min(found.max, type.maxLength) } : null
+      return inTagDomain(type, found.min, found.max, true)
+    }
+    const literal = hmiLiteralOf(value)
+    if (!literal) return null
+    if (literal.kind === 'string') return type.base === 'STRING' ? { min: literal.bytes, max: literal.bytes } : null
+    return inTagDomain(type, literal.value, literal.value, false)
+  }
 }
 
 /** Builds and compiles the HMI unit. */
@@ -1365,6 +1489,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     files: {},
     sources: {},
     tags: [],
+    pages: [],
     elementIds: [],
     fonts: { variant: input.settings.fontVariant, faces: [...HMI_ALL_FACES] },
     textSizes: [],
@@ -1422,7 +1547,16 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     for (const f of checkHmiBlockHeader(block, checks)) d.error(file.name, f.message)
     const theme = hmiThemeId(input.settings, model.theme ?? input.settings.defaultTheme)
     for (const f of checkHmiBlockElements(block, checks)) d.error(file.name, f.message)
-    const plan: ScreenPlan = { file, model, attach: [], defaults: [], connects: [], writeBacks: [], theme }
+    const plan: ScreenPlan = {
+      file,
+      model,
+      attach: [],
+      defaults: [],
+      connects: [],
+      writeBacks: [],
+      limits: new Map(),
+      theme,
+    }
     elementTree(plan, catalog)
     plans.push(plan)
   }
@@ -1513,6 +1647,27 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   result.files[SLOT_HEADER] = slotHeader(classes)
   result.files['hmi_unit_glue.cpp'] = glueCpp(tags, input, classes)
   result.tags = tags.map(({ path, type, address }) => ({ path, type: type.type, maxLength: type.maxLength, address }))
+  if (!compiled.ast) {
+    d.error(UNIT, 'STruC++ returned no syntax tree, so the tags each screen reaches are unknown')
+    return result
+  }
+  const limitOf = writeLimitOf(plans, tags, strucpp.walkAST)
+  const access = hmiPageAccess(compiled.ast, classes, strucpp.walkAST, limitOf)
+  result.pages = plans.map((plan, i) => {
+    const grant = screenGrant(input.settings, plan.model.name)
+    const roles = HMI_ROLES.reduce((bits, role, r) => (grant[role] ? bits | (1 << (r + 1)) : bits), 1)
+    return { name: plan.model.name, reads: access[i].reads, writes: access[i].writes, roles }
+  })
+  const routed = routeBitStores(result.files)
+  const bitAssignments = hmiBitAssignments(compiled.ast, strucpp.walkAST)
+  if (routed !== bitAssignments) {
+    d.error(
+      UNIT,
+      `${bitAssignments} bit assignment(s) to PLC variables, ${routed} compiled as bit writes: this STruC++ output is ` +
+        'not supported, so the HMI is not built',
+    )
+    return result
+  }
   const setters = previewSetters(plans, catalog, classes)
   const factory = input.preview ? previewFactory(catalog) : { file: null, factory: { types: {} } }
   const previewFiles = factory.file === null ? setters.files : { ...setters.files, [FACTORY_FILE]: factory.file }

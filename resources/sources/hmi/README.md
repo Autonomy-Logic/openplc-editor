@@ -16,9 +16,9 @@ and produce the same pixels on each. This folder is mirrored byte for byte in op
 | `core/hmi_text.c` | Fonts, text metrics, glyph cache, text drawing |
 | `core/third_party/` | stb_truetype (see its README) |
 | `baremetal/` | The HMI host of the Baremetal firmware (`hmi_baremetal.c`, `.h`) and the panel driver contract a board's HAL implements (`hmi_panel.h`) |
-| `unit/` | The interface of a generated HMI unit (`hmi_unit.h`), its preview setters and live elements (`hmi_preview.h`) and the preview's factory table (`hmi_preview_factory.h`) |
+| `unit/` | The interface of a generated HMI unit (`hmi_unit.h`), its preview setters and live elements (`hmi_preview.h`), the preview's factory table (`hmi_preview_factory.h`) and the host-side manifest a Runtime v4 HMI host serves values from (`hmi_access.h`) |
 | `preview/` | The editor's preview host (`hmi_preview_host.cpp`): one viewer of a unit in a WebAssembly module, frames rasterized in bands with unchanged bands skipped; and its live elements (`hmi_preview_live.cpp`), added to the shown screen without a build |
-| `client/` | The Runtime v4 browser client served at `/hmi/`: the sign-in page, `hmi-client.js` (sign-in, token renewal, the `/api/hmi` viewer), socket.io-client 4.8.1 (MIT) and `hmi_client.c`, built with the rasterizer and the unit's font table into `hmi_client.wasm` at each upload |
+| `client/` | The Runtime v4 browser client served at `/hmi/`, which runs the screens: the sign-in page, `hmi-client.js` (sign-in, token renewal, the screens' frame loop, input and drawing, the `/api/hmi` value channel), socket.io-client 4.8.1 (MIT) and `hmi_browser_host.cpp`, built with the generated unit, the core and the unit's font table into `hmi.wasm` at each upload |
 | `fonts/` | The vetted fonts: OpenPLC Sans (default, ASCII and Latin-1) and Liberation Sans (full); see its README |
 
 ## Building
@@ -47,7 +47,7 @@ rasterizer keeps its polygon scratch static in every build, so the stack stays s
 `hmi_session_create` returns NULL there (hosts use the default session), and `hmi_unit_create` hands out the one static
 program instance.
 
-On every target, a program instance (one per viewer on Runtime v4, the only one on a panel) holds one screen slot as
+On every target, a program instance (one per browser on Runtime v4, the only one on a panel) holds one screen slot as
 large as the largest screen (`hmi_unit_slot.hpp`, generated). Only the page the viewer shows exists: `HmiMain` builds
 its screen in the slot when the page opens (elements numbered from the page's fixed first id) and destroys it when the
 viewer leaves, so the program needs the largest screen, not all of them. Screen-local state (a trend's history, a
@@ -167,7 +167,39 @@ and the HMI build sets it in the screen's generated `Build` on every element tha
 `unit/hmi_unit.h` is what a generated HMI unit gives the host that runs it: one program instance per viewer with its
 role, the tag table with read and write accessors for the PLC variables screens use, and the project's frame period,
 panel PIN and relock time. `unit/hmi_preview.h` adds the live property setters only the editor's preview links. The
-editor's generator (`src/backend/shared/hmi/unit/`) writes the unit.
+editor's generator (`src/backend/shared/hmi/unit/`) writes the unit, and with it which tags each screen reads and
+writes (`page-access.ts`, from the instance paths STruC++ resolved) and the roles that may open it.
+
+## Runtime v4
+
+The browser runs the screens; the device serves values. Only a local panel's build carries the panel settings (PIN,
+relock time, touch calibration, build id, the PIN entry's face; `panel: true` of the generator): a Runtime v4 artefact
+holds none of them, and the core's PIN entry is not linked into `hmi.wasm`, where `HMI_Lock()` does nothing. A Runtime v4 upload's `hmi/` folder
+(`src/backend/shared/hmi/artefact/compose-hmi-artefact.ts`, manifest `{"format": 2}`) carries:
+
+- `client/hmi.wasm`: the generated unit, the five core files, the font table and `client/hmi_browser_host.cpp`, built
+  with the in-editor WebAssembly toolchain (core flags as above, so the browser draws the same pixels as the preview
+  and a panel). The host keeps each tag's value as the device last sent it; a screen's write changes the local value
+  at once and is queued for the device, and a value the device sent before it processed that write (its write count
+  is behind) is skipped. Its exports also give each frame's element bounds, for effects a browser may draw over the
+  screens later. It holds every screen of the project, so the runtime serves it only with a signed-in account's token;
+  `hmi-client.js` fetches it with `Authorization: Bearer` after sign-in and returns to the form when it is refused. The
+  other client files (sign-in page, script, style, socket.io, licences) carry nothing of the project and stay public.
+- `src/hmi_access.h` and the generated `src/hmi_access.c`: data only, no screen code. The tag table with debug
+  addresses, each screen's sorted read list, how it writes each tag (the whole value, and the mask of the bits it
+  assigns one at a time) and its role bits, the program MD5 and the frame period. A bit assignment (`Tag.3 := ...`)
+  reaches the host as a bit write (`hmi_bit_store` in the unit glue, `write_bit` of `hmi_tag_access_t`; the build
+  routes STruC++'s read-modify-write of the whole variable through it and refuses to build when it cannot), which the
+  runtime applies to the PLC's current value. Each write is tagged with the screen shown when it was made. The write
+  entries also carry each screen's static limit per tag (`write-limits.ts`): a two-way widget declares what its
+  NewValue can be with `{attribute 'hmi_range' := '<lo>..<hi>'}` (numbers, input names or `last(<list input>)`) or
+  `{attribute 'hmi_max_length' := '<input>'}`, resolved from the element's literal properties; an assigned literal
+  limits to itself (the numeric input's MinValue and MaxValue default to -1.0E38 and 1.0E38, the gauge zones' "off",
+  and it delivers no entry outside them); any other write leaves the tag unlimited on that screen, and the limit is the union of the
+  screen's writes. Conditions in screen code (interlocks) cannot be enforced by the runtime: they run in the browser,
+  so the PLC program must validate what HMI screens write. The
+  runtime's HMI host serves a viewer only the tags of the screen it shows when its role may open it, and applies only
+  that screen's writes after checking their type and range (openplc-runtime `docs/HMI.md`).
 
 `hmi_preview.h` also lets the preview change the shown screen's structure without a build. A preview build compiles
 the libraries whole and generates a factory table (`unit/hmi_preview_factory.h`, `hmi_preview_factory.cpp`): every
@@ -208,6 +240,11 @@ without a panel driver links with the HMI off. It also builds the firmware's Mod
 simulator's Arduino stub and checks the framing, routing and answers of the readout codes 0x4E and 0x4F. The test
 programs are sanitized (ASan, UBSan); CI runs it in `ci-hmi-core.yml`.
 
+`npm run test:hmi-client` (`tests/hmi-client/run.ts`) composes the sample project's Runtime v4 artefact with the real
+WebAssembly toolchain, checks its files and host-side manifest, drives `hmi.wasm` as `hmi-client.js` does (values, taps,
+queued writes, stale values skipped, the role grid) and checks it draws the same pixels as the same sources built
+natively.
+
 `npm run test:hmi-unit` (`tests/hmi-unit/run.mjs`) generates a sample project's unit, builds it with this core and a
-C host that uses only `unit/hmi_unit.h` and `unit/hmi_preview.h`, and checks its frames, writes (range clamping
+C host that uses only `unit/hmi_unit.h` and `unit/hmi_preview.h`, and checks its frames, writes (range limits
 included), navigation and role grid against `tests/hmi-unit/golden.txt`, also under the sanitizers.

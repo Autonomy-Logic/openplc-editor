@@ -137,10 +137,24 @@ describe('HMI unit generator', () => {
     expect(glue).toContain(
       '    case 0: *static_cast<strucpp::IEC_REAL *>(g_own[0]) = *static_cast<const strucpp::IEC_REAL *>(value); return;',
     )
-    expect(glue).toContain('const char hmi_panel_pin[] = "2468";')
+    expect(glue).not.toMatch(/hmi_panel_pin|hmi_relock_minutes|hmi_touch_cal_mode|hmi_build_id|2468/)
     expect(glue).toContain('while (n < 12 && b[n] != 0) n++;')
     expect(Object.keys(sample.sources)).not.toContain('hmi_tags.st')
     expect(sample.files['pou_OVERVIEW.cpp']).toContain('strucpp::external_read<IEC_REAL>(0)')
+  })
+
+  it('carries the panel PIN, relock time, calibration mode and build id only in a build for a local panel', () => {
+    const panel = generateHmiUnit({ ...sampleProject(), panel: true })
+    const glue = panel.files['hmi_unit_glue.cpp']
+    expect(glue).toContain('const char hmi_panel_pin[] = "2468";')
+    expect(glue).toContain('const uint32_t hmi_relock_minutes = 5;')
+    expect(glue).toContain('const uint8_t hmi_touch_cal_mode = ')
+    expect(glue).toMatch(/const char hmi_build_id\[\] = "[0-9a-f]{16}";/)
+    const project = sampleProject()
+    const browser = generateHmiUnit(project)
+    const everything = [...Object.values(browser.files), ...Object.values(browser.sources)].join('\n')
+    expect(everything).not.toMatch(/hmi_panel_pin|hmi_relock_minutes|hmi_touch_cal_mode|hmi_build_id/)
+    expect(everything).not.toContain(project.settings.pin.value)
   })
 
   it('starts the variables from their literal initial values in a preview, and never in a product build', () => {
@@ -239,6 +253,152 @@ describe('HMI unit generator', () => {
     expect(source).toContain('HMI__Red : HmiRect')
     const unknown = generateHmiUnit({ ...project, themePreview: 'Nope', resolve: undefined })
     expect(messages(unknown).join('\n')).toMatch(/unknown theme 'Nope'/)
+  })
+
+  it('lists the tags each screen reads and writes, and the roles that may open it, for the runtime host', () => {
+    expect(sample.pages).toEqual([
+      {
+        name: 'Overview',
+        reads: [0, 1, 2, 3, 4],
+        writes: [1, 2, 3].map((tag) => expect.objectContaining({ tag, whole: true, bits: [] })),
+        roles: 0b1111,
+      },
+      { name: 'Details', reads: [3], writes: [], roles: 0b0011 },
+    ])
+    expect(sample.tags.map((t) => t.path)).toEqual([
+      'CONFIG0.RES0.INSTANCE0.MAIN.LEVEL',
+      'CONFIG0.RES0.INSTANCE0.MAIN.RUNNING',
+      'CONFIG0.RES0.INSTANCE0.MAIN.SPEED',
+      'CONFIG0.RES0.INSTANCE0.MAIN.TAG',
+      'CONFIG0.ALARMON',
+    ])
+  })
+
+  it('limits each written tag to what the screen can write: widget ranges, text lengths and literals', () => {
+    const result = generateHmiUnit(
+      withScreen(
+        screen(
+          [
+            '    Speed : HmiSlider := (MinValue := 10.0, MaxValue := 100.0);',
+            '    Name : HmiTextInput := (MaxLength := 5);',
+            '    Level : HmiKnob := (MaxValue := 0.1);',
+            '    Go : HmiButton;',
+          ].join('\n'),
+          [
+            '  Speed.Value := instance0.Main.Speed;',
+            '  Name.Value := instance0.Main.Tag;',
+            '  Level.Value := instance0.Main.Level;',
+            '  IF Go.Clicked THEN instance0.Main.Unused := 7; END_IF;',
+            '  IF Go.Pressed THEN instance0.Main.Unused := -3; END_IF;',
+          ].join('\n'),
+        ),
+      ),
+    )
+    expect(messages(result)).toEqual([])
+    const limit = (name: string) => {
+      const tag = result.tags.findIndex((t) => t.path.endsWith(`.${name}`))
+      return result.pages[0].writes.find((w) => w.tag === tag)?.limit
+    }
+    expect(limit('SPEED')).toEqual({ min: 10, max: 100 })
+    expect(limit('TAG')).toEqual({ min: 0, max: 5 })
+    expect(limit('LEVEL')).toEqual({ min: 0, max: Math.fround(0.1) })
+    expect(limit('UNUSED')).toEqual({ min: -3, max: 7 })
+  })
+
+  it('leaves a tag unlimited when screen code writes it with an expression or changes a widget range', () => {
+    const result = generateHmiUnit(
+      withScreen(
+        screen(
+          ['    Speed : HmiSlider := (MaxValue := 100.0);', '    Other : HmiSlider;', '    Go : HmiButton;'].join('\n'),
+          [
+            '  Speed.Value := instance0.Main.Speed;',
+            '  Speed.MaxValue := 200.0;',
+            '  Other.Value := instance0.Main.Level;',
+            '  IF Go.Clicked THEN instance0.Main.Unused := instance0.Main.Unused + 1; END_IF;',
+            '  IF Go.Pressed THEN instance0.Main.Unused := 2; END_IF;',
+          ].join('\n'),
+        ),
+      ),
+    )
+    expect(messages(result)).toEqual([])
+    const limit = (name: string) => {
+      const tag = result.tags.findIndex((t) => t.path.endsWith(`.${name}`))
+      return result.pages[0].writes.find((w) => w.tag === tag)?.limit
+    }
+    expect(limit('SPEED')).toBeNull()
+    expect(limit('LEVEL')).toEqual({ min: 0, max: 100 })
+    expect(limit('UNUSED')).toBeNull()
+  })
+
+  it('takes the union when several widgets on a screen write a tag, and no limit when one of them has none', () => {
+    const sample = generateHmiUnit(sampleProject())
+    const speed = sample.tags.findIndex((t) => t.path.endsWith('.SPEED'))
+    const write = sample.pages[0].writes.find((w) => w.tag === speed)
+    expect(write?.limit).toEqual({ min: 0, max: 100 })
+    const withDefaults = generateHmiUnit(
+      withScreen(
+        screen(
+          ['    Speed : HmiSlider := (MaxValue := 100.0);', '    Free : HmiNumericInput;'].join('\n'),
+          ['  Speed.Value := instance0.Main.Speed;', '  Free.Value := instance0.Main.Speed;'].join('\n'),
+        ),
+      ),
+    )
+    const defaultsSpeed = withDefaults.tags.findIndex((t) => t.path.endsWith('.SPEED'))
+    expect(withDefaults.pages[0].writes.find((w) => w.tag === defaultsSpeed)?.limit).toEqual({
+      min: -32768,
+      max: 32767,
+    })
+    const sliderOnly = generateHmiUnit(
+      withScreen(
+        screen(
+          [
+            '    Speed : HmiSlider := (MaxValue := 100.0);',
+            '    Fine : HmiStepper := (MinValue := -5.0, MaxValue := 20.0);',
+          ].join('\n'),
+          ['  Speed.Value := instance0.Main.Speed;', '  Fine.Value := instance0.Main.Speed;'].join('\n'),
+        ),
+      ),
+    )
+    const own = sliderOnly.tags.findIndex((t) => t.path.endsWith('.SPEED'))
+    expect(sliderOnly.pages[0].writes.find((w) => w.tag === own)?.limit).toEqual({ min: -5, max: 100 })
+  })
+
+  it('counts a plain assignment as a write, a bit assignment as a read and a write, and conditions as reads', () => {
+    const result = generateHmiUnit(
+      withScreen(
+        screen(
+          '    Go : HmiButton;',
+          [
+            '  IF Go.Clicked AND instance0.Main.Running THEN',
+            '    instance0.Main.Speed := 3;',
+            '    instance0.Main.Unused.2 := TRUE;',
+            '    instance0.Main.Unused.7 := instance0.Main.Running;',
+            '  END_IF;',
+          ].join('\n'),
+        ),
+      ),
+    )
+    expect(messages(result)).toEqual([])
+    const index = (name: string) => result.tags.findIndex((t) => t.path.endsWith(`.${name}`))
+    const [overview] = result.pages
+    expect(overview.writes).toEqual(
+      [
+        { tag: index('SPEED'), whole: true, bits: [] },
+        { tag: index('UNUSED'), whole: false, bits: [2, 7] },
+      ]
+        .sort((x, y) => x.tag - y.tag)
+        .map((w) => expect.objectContaining(w)),
+    )
+    expect(overview.reads).toEqual([index('RUNNING'), index('UNUSED')].sort((a, b) => a - b))
+    expect(result.pages[1].writes).toEqual([])
+    const code = result.files['pou_OVERVIEW.cpp']
+    expect(code).toContain(`::hmi_bit_store(${index('UNUSED')}u, 2u, static_cast<bool>(true));`)
+    expect(code).toContain(`::hmi_bit_store(${index('UNUSED')}u, 7u, static_cast<bool>(`)
+    expect(code).toContain('void hmi_bit_store(unsigned id, unsigned bit, bool value);')
+    expect(code).not.toMatch(/external_write<IEC_DINT>\(\d+, static_cast<DINT_t>\(\(static_cast<uint64_t>/)
+    expect(result.files['hmi_unit_glue.cpp']).toContain(
+      'g_access->write_bit(g_access->ctx, static_cast<int>(id), bit, value);',
+    )
   })
 
   it('keeps an operator change on a two-way widget that nothing else sets', () => {

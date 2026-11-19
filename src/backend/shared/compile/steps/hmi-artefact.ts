@@ -17,6 +17,8 @@ export interface HmiArtefactStepInput {
   debugMapJson: string
   md5: string
   instances: readonly HmiProgramInstance[]
+  /** STruC++ runtime headers keyed `strucpp_runtime/include/<file>`, which the browser module compiles against. */
+  runtimeHeaders: Readonly<Record<string, string>>
   port: Pick<CompilerPlatformPort, 'readHmiSources' | 'compileWasmModule'>
   log: PlatformLog
 }
@@ -47,6 +49,7 @@ export async function buildHmiArtefactStep(input: HmiArtefactStepInput): Promise
     md5: input.md5,
     instances: input.instances,
     hmiSources: await input.port.readHmiSources(),
+    runtimeHeaders: input.runtimeHeaders,
     compile: (request) => input.port.compileWasmModule(request, input.log),
   })
   const where = (d: { file: string; line?: number }) => (d.line === undefined ? d.file : `${d.file}:${d.line}`)
@@ -55,7 +58,10 @@ export async function buildHmiArtefactStep(input: HmiArtefactStepInput): Promise
     for (const e of result.errors) input.log(`${where(e)}: ${e.message}`, 'error')
     return { ok: false }
   }
-  input.log(`HMI built: ${result.tags.length} PLC variable(s), ${Object.keys(result.files).length} file(s)`, 'info')
+  input.log(
+    `HMI built: ${result.pages.length} screen(s) for the browser, ${result.tags.length} PLC variable(s) served by the device`,
+    'info',
+  )
   return { ok: true, files: result.files }
 }
 

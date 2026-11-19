@@ -44,6 +44,8 @@
  *     the caller reads the file or fetches the URL).
  *   - `parse` — the ST parser, for tools that read declarations
  *     (HMI screens and widget blocks).
+ *   - `walkAST` — walks a compiled unit's annotated AST (the tags
+ *     each HMI screen reads and writes).
  *
  * Every entry pulls its signature through `typeof import('strucpp')[k]`
  * so adding a parameter on the strucpp side surfaces as a compile
@@ -58,6 +60,7 @@ export interface StrucppRuntime {
   importCodesysLibraryFromBytes: (typeof import('strucpp'))['importCodesysLibraryFromBytes']
   loadStlibFromString: (typeof import('strucpp'))['loadStlibFromString']
   parse: (typeof import('strucpp'))['parse']
+  walkAST: (typeof import('strucpp'))['walkAST']
 }
 
 let cached: StrucppRuntime | null = null

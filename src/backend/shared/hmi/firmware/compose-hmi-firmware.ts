@@ -107,6 +107,7 @@ export async function composeHmiFirmware(input: ComposeHmiFirmwareInput): Promis
     plcArchives: input.plcArchives,
     resolve: hmiTagResolver(input.debugMapJson, input.instances),
     plcMd5: input.md5,
+    panel: true,
   })
   if (!unit.ok) return { ok: false, errors: unit.errors, warnings: unit.warnings }
   const fail = (message: string): ComposeHmiFirmwareResult => ({

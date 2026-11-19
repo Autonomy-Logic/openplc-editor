@@ -133,6 +133,7 @@ FUNCTION_BLOCK HmiSlider EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_range' := 'MinValue..MaxValue'}
     NewValue : REAL;
   END_VAR
   VAR
@@ -197,6 +198,7 @@ FUNCTION_BLOCK HmiSlider EXTENDS HmiElement
       IF Step > 0.0 THEN
         v := MinValue + DINT_TO_REAL(REAL_TO_DINT((v - MinValue) / Step)) * Step;
       END_IF;
+      v := LIMIT(MIN(MinValue, MaxValue), v, MAX(MinValue, MaxValue));
       IF v <> sent THEN
         NewValue := v;
         Changed := TRUE;
@@ -249,10 +251,15 @@ FUNCTION_BLOCK HmiNumericInput EXTENDS HmiElement
     Decimals : INT := 1;
     Caption : STRING(64) := 'Setpoint';
     Unit : STRING(16);
+    (* Smallest and largest value an entry may have; an entry outside them is not delivered. The defaults,
+       -1.0E38 and 1.0E38 (as the gauge's zones), leave any value up to that size. *)
+    MinValue : REAL := -1.0E38;
+    MaxValue : REAL := 1.0E38;
   END_VAR
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_range' := 'MinValue..MaxValue'}
     NewValue : REAL;
   END_VAR
   METHOD PROTECTED OVERRIDE TakesInput : BOOL
@@ -271,7 +278,8 @@ FUNCTION_BLOCK HmiNumericInput EXTENDS HmiElement
     IF KeyboardTake() THEN
       entry := KeyboardText();
       NewValue := HMI_ParseReal(entry, 0.0);
-      Changed := NewValue = HMI_ParseReal(entry, 1.0);
+      Changed := NewValue = HMI_ParseReal(entry, 1.0) AND NewValue >= MIN(MinValue, MaxValue)
+        AND NewValue <= MAX(MinValue, MaxValue);
     END_IF;
     IF NOT Visible OR NOT Enabled THEN
       RETURN;
@@ -311,6 +319,7 @@ FUNCTION_BLOCK HmiTextInput EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_max_length' := 'MaxLength'}
     NewValue : STRING;
   END_VAR
   METHOD PROTECTED OVERRIDE TakesInput : BOOL
@@ -512,6 +521,7 @@ FUNCTION_BLOCK HmiSelector EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_range' := '0..2'}
     NewValue : INT;
   END_VAR
   METHOD PROTECTED OVERRIDE TakesInput : BOOL
@@ -604,6 +614,7 @@ FUNCTION_BLOCK HmiOptionButtons EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_range' := '0..last(Options)'}
     NewValue : INT;
   END_VAR
   METHOD PROTECTED OVERRIDE TakesInput : BOOL
@@ -676,6 +687,7 @@ FUNCTION_BLOCK HmiDropDown EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_range' := '0..last(Options)'}
     NewValue : INT;
   END_VAR
   VAR
@@ -842,6 +854,7 @@ FUNCTION_BLOCK HmiStepper EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_range' := 'MinValue..MaxValue'}
     NewValue : REAL;
   END_VAR
   VAR
@@ -964,6 +977,7 @@ FUNCTION_BLOCK HmiKnob EXTENDS HmiElement
   VAR_OUTPUT
     Clicked : BOOL;
     Changed : BOOL;
+    {attribute 'hmi_range' := 'MinValue..MaxValue'}
     NewValue : REAL;
   END_VAR
   VAR
@@ -1041,6 +1055,7 @@ FUNCTION_BLOCK HmiKnob EXTENDS HmiElement
       IF Step > 0.0 THEN
         v := MinValue + DINT_TO_REAL(REAL_TO_DINT((v - MinValue) / Step)) * Step;
       END_IF;
+      v := LIMIT(MIN(MinValue, MaxValue), v, MAX(MinValue, MaxValue));
       IF v <> sent THEN
         NewValue := v;
         Changed := TRUE;

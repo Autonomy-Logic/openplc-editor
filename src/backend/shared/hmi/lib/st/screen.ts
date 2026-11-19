@@ -483,8 +483,9 @@ FUNCTION_BLOCK HmiRuntime
     {external hmi_page_set_shown(PAGE.get()); }
     SetShown := TRUE;
   END_METHOD
-  (* Starts the viewer's frame: keyboard, page changes, the screen's input and write-back. Returns the page whose
-     screen body runs next, -1 when there is no screen the viewer may open. *)
+  (* Starts the viewer's frame: keyboard, page changes, the screen's input and write-back. The new screen is marked
+     shown before its OnShow runs, so its writes count for it. Returns the page whose screen body runs next, -1 when
+     there is no screen the viewer may open. *)
   METHOD BeginFrame : DINT
     VAR page, shown : DINT; END_VAR
     Current := -1;
@@ -512,8 +513,8 @@ FUNCTION_BLOCK HmiRuntime
           Screens[shown]^.RunHide();
         END_IF;
       END_IF;
-      Screens[page]^.RunShow();
       SetShown(page);
+      Screens[page]^.RunShow();
     END_IF;
     Screens[page]^.RunInput();
     Current := page;

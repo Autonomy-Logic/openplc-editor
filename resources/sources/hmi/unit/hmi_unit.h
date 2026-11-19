@@ -71,6 +71,11 @@ typedef struct {
     /** Applies a screen's write of the tag; src holds the new value in its buffer format. */
     void (*write)(void *ctx, int tag, const void *src);
     void *ctx;
+    /**
+     * Optional: applies a bit assignment of screen code (`Tag.3 := ...`) to that one bit. NULL makes the unit read the
+     * tag, change the bit and hand the whole value to `write`.
+     */
+    void (*write_bit)(void *ctx, int tag, unsigned bit, bool value);
 } hmi_tag_access_t;
 
 extern const hmi_tag_t hmi_tags[];
