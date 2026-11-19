@@ -316,13 +316,16 @@
         })
     }
 
-    /** Ends the session on the device, as a screen's Sign out button asks, and returns to the form. */
+    /**
+     * Ends the session on the device, as a screen's Sign out button asks, and returns to the form. The form shows
+     * whatever the logout answers: this browser has dropped the token already.
+     */
     function signOut() {
       var sent = token
       showForm('Signed out.')
       if (!sent) return
       fetch('/api/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + sent } }).catch(function () {
-        /* the form shows already, and this browser no longer holds the token */
+        return null
       })
     }
 
