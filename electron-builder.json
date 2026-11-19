@@ -11,7 +11,8 @@
     "enableNodeOptionsEnvironmentVariable": false,
     "enableNodeCliInspectArguments": false,
     "enableEmbeddedAsarIntegrityValidation": true,
-    "onlyLoadAppFromAsar": true
+    "onlyLoadAppFromAsar": true,
+    "resetAdHocDarwinSignature": true
   },
   "directories": {
     "app": "release/app",
