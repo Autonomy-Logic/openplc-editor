@@ -97,7 +97,8 @@ function buildCatalog(document: GsdmlXmlElement): GsdmlCatalog {
   }
   const notices = new GsdmlNoticeLog()
   const schemaVersion = schemaVersionFromLocation(root.schemaLocation)
-  if (schemaVersion !== '' && isNewerSchemaVersion(schemaVersion)) {
+  const compatibilityMode = schemaVersion !== '' && isNewerSchemaVersion(schemaVersion)
+  if (compatibilityMode) {
     notices.add(
       gsdmlNotice(
         'newer-schema-version',
@@ -119,6 +120,7 @@ function buildCatalog(document: GsdmlXmlElement): GsdmlCatalog {
     valueList: GsdmlValueList.read(applicationProcess),
     moduleIds: moduleListIds(applicationProcess),
     submoduleIds: submoduleListIds(applicationProcess),
+    compatibilityMode,
   }
   const deviceAccessPoints = readDeviceAccessPoints(applicationProcess, context)
   const modules = readModules(applicationProcess, context)

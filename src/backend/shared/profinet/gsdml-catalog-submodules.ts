@@ -14,6 +14,7 @@ import {
 } from './gsdml-catalog-context'
 import { readIoData } from './gsdml-catalog-io'
 import { readParameterRecords } from './gsdml-catalog-records'
+import { gsdmlNotice } from './gsdml-notices'
 import {
   optionalUnsigned,
   requireAttribute,
@@ -21,6 +22,7 @@ import {
   requireUnsigned,
   UNSIGNED32_HEX_DIGITS,
 } from './gsdml-structure'
+import { GSDML_PROTOCOL_TOKENS, GSDML_RT_CLASS_TOKENS, GSDML_SUPPORTED_SCHEMA_VERSION } from './gsdml-version'
 import {
   attributeValue,
   childElement,
@@ -72,6 +74,33 @@ export function readVirtualSubmodules(parent: GsdmlXmlElement, context: GsdmlCat
   }))
 }
 
+/**
+ * Reads a TokenList attribute of an InterfaceSubmoduleItem. In compatibility mode only the tokens in `known` are kept,
+ * in document order, and every other token gets an `unknown-token` notice.
+ */
+function readInterfaceTokens(
+  item: GsdmlXmlElement,
+  itemId: string,
+  attributeName: string,
+  known: readonly string[],
+  context: GsdmlCatalogContext,
+): string[] {
+  const tokens = parseTokenList(attributeValue(item, attributeName))
+  if (!context.compatibilityMode) return tokens
+  return tokens.filter((token) => {
+    if (known.includes(token)) return true
+    context.notices.add(
+      gsdmlNotice(
+        'unknown-token',
+        `${attributeName} token "${token}" of InterfaceSubmoduleItem "${itemId}" is not known to the supported schema version ${GSDML_SUPPORTED_SCHEMA_VERSION}; it was ignored.`,
+        itemId,
+        token,
+      ),
+    )
+    return false
+  })
+}
+
 /** Reads the interface and port submodules of the SystemDefinedSubmoduleList of a device access point. */
 export function readSystemDefinedSubmodules(
   dap: GsdmlXmlElement,
@@ -79,13 +108,16 @@ export function readSystemDefinedSubmodules(
 ): GsdmlSystemDefinedSubmodule[] {
   const list = childElement(dap, 'SystemDefinedSubmoduleList')
   const interfaces: GsdmlSystemDefinedSubmodule[] = supportedItems(list, 'InterfaceSubmoduleItem', context).map(
-    (item) => ({
-      kind: 'interface',
-      ...readSubmoduleBase(item, 'InterfaceSubmoduleItem', context),
-      subslotNumber: optionalUnsigned(item, 'SubslotNumber', null),
-      supportedRtClasses: parseTokenList(attributeValue(item, 'SupportedRT_Classes')),
-      supportedProtocols: parseTokenList(attributeValue(item, 'SupportedProtocols')),
-    }),
+    (item) => {
+      const base = readSubmoduleBase(item, 'InterfaceSubmoduleItem', context)
+      return {
+        kind: 'interface',
+        ...base,
+        subslotNumber: optionalUnsigned(item, 'SubslotNumber', null),
+        supportedRtClasses: readInterfaceTokens(item, base.id, 'SupportedRT_Classes', GSDML_RT_CLASS_TOKENS, context),
+        supportedProtocols: readInterfaceTokens(item, base.id, 'SupportedProtocols', GSDML_PROTOCOL_TOKENS, context),
+      }
+    },
   )
   const ports: GsdmlSystemDefinedSubmodule[] = supportedItems(list, 'PortSubmoduleItem', context).map((item) => ({
     kind: 'port',

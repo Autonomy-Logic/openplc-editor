@@ -66,6 +66,11 @@ export interface GsdmlCatalogContext {
   readonly moduleIds: GsdmlTargetIds
   /** The IDs of the SubmoduleList entries, split by whether the catalog holds them. */
   readonly submoduleIds: GsdmlTargetIds
+  /**
+   * Whether the file's schema version is newer than the supported one (Annex A.3.3 compatibility mode); false when the
+   * schema location names no version.
+   */
+  readonly compatibilityMode: boolean
 }
 
 /** The IDs of the elements a reference may name, split by whether the catalog holds them. */

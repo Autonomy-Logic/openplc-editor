@@ -132,9 +132,15 @@ export interface GsdmlStandardSubmodule extends GsdmlSubmoduleBase {
 export interface GsdmlInterfaceSubmodule extends GsdmlSubmoduleBase {
   readonly kind: 'interface'
   readonly subslotNumber: number | null
-  /** The SupportedRT_Classes tokens as written. */
+  /**
+   * The SupportedRT_Classes tokens as written. In a file newer than the supported schema version, only the tokens of
+   * `GSDML_RT_CLASS_TOKENS` are kept and every other token gives an `unknown-token` notice.
+   */
   readonly supportedRtClasses: readonly string[]
-  /** The SupportedProtocols tokens as written. */
+  /**
+   * The SupportedProtocols tokens as written. In a file newer than the supported schema version, only the tokens of
+   * `GSDML_PROTOCOL_TOKENS` are kept and every other token gives an `unknown-token` notice.
+   */
   readonly supportedProtocols: readonly string[]
 }
 
@@ -252,6 +258,7 @@ export type GsdmlNoticeKind =
   | 'unknown-data-type'
   | 'no-device-access-point'
   | 'notices-truncated'
+  | 'unknown-token'
 
 /** Something the parser noticed while reading a file it accepted. */
 export interface GsdmlNotice {
@@ -259,7 +266,7 @@ export interface GsdmlNotice {
   readonly message: string
   /** The ID of the element the notice is about, when it has one. */
   readonly elementId?: string
-  /** The value the notice is about, such as a text id, a reference target or a data type. */
+  /** The value the notice is about, such as a text id, a reference target, a data type or an ignored token. */
   readonly detail?: string
 }
 
