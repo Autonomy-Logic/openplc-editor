@@ -19,8 +19,9 @@ import {
   parseSignatureFile,
   SIGNATURE_FILENAME,
 } from '../../shared/utils/vpp/package-verification-core'
-import { TRUSTED_PACKAGE_KEYS } from '../../shared/utils/vpp/trusted-keys'
 import { verifyPackageSignature } from '../../shared/utils/vpp/verify-package-signature'
+import { desktopPackageTrustAnchor } from '../package-trust'
+import type { PackageTrustAnchor } from '../package-trust/types'
 import { logger } from '../services/logger-service'
 import { assertPathContained } from '../utils/path-containment'
 import type { ImportResult, InstalledPackage, PackageIntegrityResult, PackageManifest, PackageRegistry } from './types'
@@ -36,8 +37,10 @@ const REQUIRE_SIGNATURE = true
 class PackageManagerModule {
   private packagesDir: string
   private registryPath: string
+  private readonly anchor: PackageTrustAnchor
 
-  constructor() {
+  constructor(anchor: PackageTrustAnchor = desktopPackageTrustAnchor) {
+    this.anchor = anchor
     this.packagesDir = join(app.getPath('userData'), 'packages')
     this.registryPath = join(this.packagesDir, 'registry.json')
     mkdirSync(this.packagesDir, { recursive: true })
@@ -87,9 +90,13 @@ class PackageManagerModule {
       // valid but before any field is used as a path or any HAL/plugin code
       // is ever compiled. Fails closed.
       if (REQUIRE_SIGNATURE) {
-        const verification = verifyPackageSignature(tempDir, TRUSTED_PACKAGE_KEYS)
+        const verification = verifyPackageSignature(tempDir, this.anchor.trustedKeys())
         if (!verification.valid) {
           return { success: false, error: `Package signature verification failed: ${verification.error}` }
+        }
+        const refusal = this.anchor.checkAtImport(tempDir)
+        if (refusal !== null) {
+          return { success: false, error: `Package signature verification failed: ${refusal}` }
         }
       }
 
@@ -247,8 +254,9 @@ class PackageManagerModule {
   /**
    * Returns null when the installed package recorded at `packagePath` is
    * genuinely signed by a trusted key, or a short human-readable reason when it
-   * is not (bad id shape, path escaping packagesDir, missing files, or any
-   * failure surfaced by `verifyPackageSignature`).
+   * is not (bad id shape, path escaping packagesDir, missing files, any
+   * failure surfaced by `verifyPackageSignature`, or a refusal of the trust
+   * anchor's use hook).
    */
   private signatureRejectionReason(packageId: string, packagePath: string | undefined): string | null {
     try {
@@ -267,8 +275,9 @@ class PackageManagerModule {
     if (!existsSync(packagePath)) {
       return 'package files are missing'
     }
-    const verification = verifyPackageSignature(packagePath, TRUSTED_PACKAGE_KEYS)
-    return verification.valid ? null : (verification.error ?? 'invalid signature')
+    const verification = verifyPackageSignature(packagePath, this.anchor.trustedKeys())
+    if (!verification.valid) return verification.error ?? 'invalid signature'
+    return this.anchor.checkAtUse(packagePath)
   }
 
   listInstalled(): InstalledPackage[] {
