@@ -334,11 +334,78 @@ FUNCTION_BLOCK HmiTank EXTENDS HmiElement
   END_METHOD
 END_FUNCTION_BLOCK
 
+(* Base of the plots: the card, the grid, value-to-screen mapping and polylines of any length, drawn as runs of at
+   most 64 points, the core's polygon limit, each starting where the last ended. *)
+FUNCTION_BLOCK ABSTRACT HmiPlotBase EXTENDS HmiElement
+  VAR
+    lineColor : UDINT;
+    lineWidth, lineX, lineY : DINT;
+    linePoints : INT;
+  END_VAR
+  (* The plot's card over the whole element, corners of radius R. *)
+  METHOD PROTECTED Panel : BOOL
+    VAR_INPUT R : DINT; END_VAR
+    HMI_FillRect(Left, Top, Width, Height, R, COLOR.Surface);
+    HMI_StrokeRect(Left, Top, Width, Height, R, 1, COLOR.Border);
+    Panel := TRUE;
+  END_METHOD
+  (* Rows + 1 horizontal grid lines over the plot area, top to bottom. *)
+  METHOD PROTECTED Grid : BOOL
+    VAR_INPUT PX, PY, PW, PH, Rows : DINT; END_VAR
+    VAR g : DINT; END_VAR
+    FOR g := 0 TO Rows DO
+      HMI_Line(PX, PY + PH * g / Rows, PX + PW, PY + PH * g / Rows, 1, COLOR.Fill);
+    END_FOR;
+    Grid := TRUE;
+  END_METHOD
+  (* Screen Y of V on a plot area from PY, PH high, showing Lo to Hi. *)
+  METHOD PROTECTED MapY : DINT
+    VAR_INPUT V, Lo, Hi : REAL; PY, PH : DINT; END_VAR
+    MapY := PY + PH - PH * HMI_PerMille(V, Lo, Hi) / 1000;
+  END_METHOD
+  (* Screen X of V on a plot area from PX, PW wide, showing Lo to Hi. *)
+  METHOD PROTECTED MapX : DINT
+    VAR_INPUT V, Lo, Hi : REAL; PX, PW : DINT; END_VAR
+    MapX := PX + PW * HMI_PerMille(V, Lo, Hi) / 1000;
+  END_METHOD
+  (* Starts a polyline in colour C, W wide; LinePoint adds its points, LineEnd draws what is left. *)
+  METHOD PROTECTED LineBegin : BOOL
+    VAR_INPUT C : UDINT; W : DINT; END_VAR
+    lineColor := C;
+    lineWidth := W;
+    linePoints := 0;
+    LineBegin := TRUE;
+  END_METHOD
+  METHOD PROTECTED LinePoint : BOOL
+    VAR_INPUT X, Y : DINT; END_VAR
+    IF linePoints = 0 THEN
+      HMI_PolyBegin(lineColor);
+    ELSIF linePoints >= 64 THEN
+      HMI_PolyStroke(lineWidth, FALSE);
+      HMI_PolyBegin(lineColor);
+      HMI_PolyPoint(lineX, lineY);
+      linePoints := 1;
+    END_IF;
+    HMI_PolyPoint(X, Y);
+    linePoints := linePoints + 1;
+    lineX := X;
+    lineY := Y;
+    LinePoint := TRUE;
+  END_METHOD
+  METHOD PROTECTED LineEnd : BOOL
+    IF linePoints >= 2 THEN
+      HMI_PolyStroke(lineWidth, FALSE);
+    END_IF;
+    linePoints := 0;
+    LineEnd := TRUE;
+  END_METHOD
+END_FUNCTION_BLOCK
+
 (* Time graph of up to 8 series, Value then Value2 to Value8 as Pens counts them, each in its colour, sampled every
    SampleMs into 120 points. History starts with the screen and is not logged. *)
 {attribute 'hmi_palette' := 'Display'}
 {attribute 'hmi_default' := 'GrowAuto := TRUE'}
-FUNCTION_BLOCK HmiTrend EXTENDS HmiElement
+FUNCTION_BLOCK HmiTrend EXTENDS HmiPlotBase
   VAR_INPUT
     (* Series 1; series 2 to 8 are Value2 to Value8, drawn while Pens counts them. *)
     {attribute 'hmi_main'}
@@ -462,29 +529,23 @@ FUNCTION_BLOCK HmiTrend EXTENDS HmiElement
     END_IF;
     Sample := TRUE;
   END_METHOD
-  (* One pen as polylines of at most 64 points, the core's polygon limit, each starting where the last ended. *)
+  (* One pen over the samples, oldest first. *)
   METHOD INTERNAL Pen : BOOL
     VAR_INPUT Which : INT; Lo, Hi : REAL; PX, PY, PW, PH : DINT; C : UDINT; END_VAR
-    VAR i, k, idx, n : INT; v : REAL; END_VAR
+    VAR i, idx : INT; END_VAR
     IF count < 2 THEN
       RETURN;
     END_IF;
-    i := 0;
-    WHILE i < count - 1 DO
-      HMI_PolyBegin(C);
-      n := MIN(64, count - i);
-      FOR k := 0 TO n - 1 DO
-        idx := (head - count + i + k + 240) MOD 120;
-        v := s[(Which - 1) * 120 + idx];
-        HMI_PolyPoint(PX + PW * INT_TO_DINT(i + k) / 119, PY + PH - PH * HMI_PerMille(v, Lo, Hi) / 1000);
-      END_FOR;
-      HMI_PolyStroke(2, FALSE);
-      i := i + n - 1;
-    END_WHILE;
+    LineBegin(C, 2);
+    FOR i := 0 TO count - 1 DO
+      idx := (head - count + i + 240) MOD 120;
+      LinePoint(PX + PW * INT_TO_DINT(i) / 119, MapY(s[(Which - 1) * 120 + idx], Lo, Hi, PY, PH));
+    END_FOR;
+    LineEnd();
     Pen := TRUE;
   END_METHOD
   METHOD PROTECTED OVERRIDE Draw : BOOL
-    VAR lo, hi : REAL; i, k, p : INT; px, py, pw, ph, capH, g : DINT; END_VAR
+    VAR lo, hi : REAL; i, k, p : INT; px, py, pw, ph, capH : DINT; END_VAR
     Sample();
     lo := MinValue;
     hi := MaxValue;
@@ -502,8 +563,7 @@ FUNCTION_BLOCK HmiTrend EXTENDS HmiElement
         hi := lo + 1.0;
       END_IF;
     END_IF;
-    HMI_FillRect(Left, Top, Width, Height, 8, COLOR.Surface);
-    HMI_StrokeRect(Left, Top, Width, Height, 8, 1, COLOR.Border);
+    Panel(8);
     IF LEN(Caption) > 0 THEN
       capH := 20;
       HMI_Text(Left + 10, Top + 6, Caption, 12, HMI_FONT#Regular, HMI_ALIGN#Left, COLOR.TextMuted);
@@ -518,9 +578,7 @@ FUNCTION_BLOCK HmiTrend EXTENDS HmiElement
       Draw := TRUE;
       RETURN;
     END_IF;
-    FOR g := 0 TO 4 DO
-      HMI_Line(px, py + ph * g / 4, px + pw, py + ph * g / 4, 1, COLOR.Fill);
-    END_FOR;
+    Grid(px, py, pw, ph, 4);
     HMI_Text(px - 6, py - 6, HMI_FormatReal(hi, Decimals), 10, HMI_FONT#Regular, HMI_ALIGN#Right, COLOR.TextMuted);
     HMI_Text(px - 6, py + ph - 6, HMI_FormatReal(lo, Decimals), 10, HMI_FONT#Regular, HMI_ALIGN#Right, COLOR.TextMuted);
     HMI_Clip(px, py - 2, pw + 1, ph + 4);

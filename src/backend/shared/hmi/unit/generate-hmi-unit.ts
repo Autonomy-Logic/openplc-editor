@@ -13,6 +13,7 @@ import {
   type HmiCheckBlock,
   hmiTextLiteral as textLiteral,
 } from '@root/middleware/shared/utils/hmi/block-checks'
+import { HMI_FEED_METHODS, type HmiSourceKind, hmiSourceKind } from '@root/middleware/shared/utils/hmi/data-sources'
 import { isContainerType, widgetIsA as isA } from '@root/middleware/shared/utils/hmi/designer/designer-canvas'
 import { HMI_ARRAY_ELEMENTS_MAX, HMI_NESTING_MAX } from '@root/middleware/shared/utils/hmi/plc-variables'
 import { maskStComments } from '@root/middleware/shared/utils/hmi/references'
@@ -42,6 +43,8 @@ import { HMI_ALL_FACES, hmiUsedFontFaces } from '../fonts/used-faces'
 import { buildStandardWidgets } from '../lib/build-standard-widgets'
 import { STANDARD_WIDGETS_SOURCES } from '../lib/standard-widgets'
 import { buildWidgetCatalog, type HmiWidgetCatalog, type HmiWidgetInfo } from '../lib/widget-catalog'
+import { withHmiAlarmsArchive } from '../plc-lib/build-hmi-alarms'
+import { hmiAlarmsReferenced } from '../plc-lib/hmi-alarms'
 import { type HmiAstWalk, hmiBitAssignments, type HmiLimitOf, hmiPageAccess, type HmiTagWrite } from './page-access'
 import { type HmiBlockModel, type HmiElementDecl, parseHmiBlock } from './screen-model'
 import { type HmiElementLimit, hmiElementLimit, hmiLiteralOf, type HmiWriteLimit } from './write-limits'
@@ -75,6 +78,11 @@ export interface HmiUnitInput extends HmiUnitSources {
   /** The PLC's libraries already loaded, as the program build has them; used with `plcLibraries`. */
   plcArchives?: readonly StlibArchive[]
   plcMd5?: string
+  /**
+   * The target's boolean capabilities, for a device build: an element whose widget requires one the target lacks
+   * (`hmi_requires`) is refused. Previews leave it out and are not checked.
+   */
+  capabilities?: object
 }
 
 export interface HmiTag {
@@ -150,6 +158,8 @@ const HEADER = 'hmi_unit.hpp'
 const GLUE_FILE = 'hmi_glue.st'
 const PLC_FILE = 'hmi_plc.st'
 const MAIN_FILE = 'hmi_main.st'
+/** The generated feed blocks of a screen. */
+const feedFile = (plan: { model: { name: string } }): string => `hmi_feed_${plan.model.name}.st`
 /** C++ header with the program instance and the slot its shown screen is built in. */
 const SLOT_HEADER = 'hmi_unit_slot.hpp'
 const SLOT_OPEN = 'hmi_unit_screen_open'
@@ -319,6 +329,8 @@ interface ScreenPlan {
   defaults: string[]
   connects: Array<{ pipe: string; source: string; target: string; prior: string | null }>
   writeBacks: string[]
+  /** Generated feed blocks of the screen's data elements: their type, instance and source, and the SetFeed call. */
+  feeds: Array<{ type: string; instance: string; source: string; bind: string }>
   /** What each two-way element bound to a variable can write, by upper-case name; null when unbounded. */
   limits: Map<string, HmiElementLimit | null>
   theme: number
@@ -463,6 +475,102 @@ function writeBacks(
   }
 }
 
+/** The ST conversion of a numeric element type to REAL. */
+const toReal = (element: string | undefined, value: string): string =>
+  element === undefined || element === 'REAL' ? value : `${element}_TO_REAL(${value})`
+
+/** One generated feed method: a constant-index read of the source per row, or of the summary. */
+function feedMethod(kind: HmiSourceKind, path: string, rows: readonly number[], element?: string): string[] {
+  return HMI_FEED_METHODS[kind].map((m) => {
+    const head = `  METHOD OVERRIDE ${m.method} : ${m.result}`
+    if (kind === 'summary') {
+      const read = `${m.method} := ${path}.${m.field};`
+      return m.indexed
+        ? `${head}\n    VAR_INPUT I : DINT; END_VAR\n    ${read}\n  END_METHOD`
+        : `${head}\n    ${read}\n  END_METHOD`
+    }
+    const cases = rows.map((index, row) => {
+      const at = `${path}[${index}]`
+      const value = kind === 'numbers' ? toReal(element, at) : `${at}.${m.field}`
+      return `      ${row}: ${m.method} := ${value};`
+    })
+    return `${head}\n    VAR_INPUT I : DINT; END_VAR\n    CASE I OF\n${cases.join('\n')}\n    END_CASE;\n  END_METHOD`
+  })
+}
+
+/**
+ * The feeds of a screen's data elements: for each `hmi_source` input set to a literal, the PLC source it names is
+ * checked and a feed block is generated that reads every row with constant indexes, with the element's
+ * acknowledgements written back to the source.
+ */
+function feeds(
+  plan: ScreenPlan,
+  catalog: HmiWidgetCatalog,
+  variables: ReadonlyMap<string, HmiPlcVariable>,
+  d: Diagnostics,
+): void {
+  for (const element of plan.model.elements) {
+    const widget = catalog.widgets.get(element.type.toUpperCase())
+    for (const source of widget?.sources ?? []) {
+      const name = textLiteral(element.props.get(source.name.toUpperCase()))
+      if (name === undefined || name.trim() === '') continue
+      const where = `${element.name}.${source.name}`
+      const kind = hmiSourceKind(source.type)
+      if (kind === null) {
+        d.error(plan.file.name, `${where}: ${source.type} is not data the HMI build can feed`)
+        continue
+      }
+      const variable = variables.get(shortPath(name))
+      if (!variable?.source) {
+        d.error(
+          plan.file.name,
+          `${where}: '${name}' is not a table, log, summary or array of the PLC program; it takes ${source.type}`,
+        )
+        continue
+      }
+      if (variable.source.kind !== kind) {
+        d.error(plan.file.name, `${where} takes ${source.type}; '${name}' is ${variable.type}`)
+        continue
+      }
+      const { lower = 0, upper = -1 } = variable.source
+      const indexes = kind === 'summary' ? [] : Array.from({ length: upper - lower + 1 }, (_, i) => lower + i)
+      const type = `HMI__Feed_${plan.model.name}_${element.name}_${source.slot}`
+      const instance = `HMI__F_${element.name}_${source.slot}`
+      const methods = feedMethod(kind, variable.path, indexes, variable.source.element)
+      if (kind !== 'summary')
+        methods.unshift(`  METHOD OVERRIDE Count : DINT\n    Count := ${indexes.length};\n  END_METHOD`)
+      plan.feeds.push({
+        type,
+        instance,
+        source: `${INSTANCE_PATHS}\nFUNCTION_BLOCK ${type} EXTENDS HmiFeed\n${methods.join('\n')}\nEND_FUNCTION_BLOCK\n`,
+        bind: `${element.name}.SetFeed(${source.slot}, ADR(${instance}));`,
+      })
+      const output = (out: string): boolean => (widget?.outputs ?? []).some((o) => o.name.toUpperCase() === out)
+      if (kind === 'alarms' && output('ACKROW'))
+        plan.writeBacks.push(
+          `CASE ${element.name}.AckRow OF ${indexes.map((index, row) => `${row}: ${variable.path}[${index}].AckReq := TRUE;`).join(' ')} END_CASE;`,
+        )
+      if (kind === 'summary')
+        for (const request of ['AckTop', 'AckAll'])
+          if (output(request.toUpperCase()))
+            plan.writeBacks.push(`IF ${element.name}.${request} THEN ${variable.path}.${request} := TRUE; END_IF;`)
+    }
+  }
+}
+
+/** Elements whose widget needs a capability the target lacks (`hmi_requires`), as errors. */
+function requiredCapabilities(plan: ScreenPlan, catalog: HmiWidgetCatalog, capabilities: object, d: Diagnostics): void {
+  const granted = new Set(Object.entries(capabilities).flatMap(([name, value]) => (value === true ? [name] : [])))
+  for (const element of plan.model.elements) {
+    const widget = catalog.widgets.get(element.type.toUpperCase())
+    if (widget?.requires && !granted.has(widget.requires))
+      d.error(
+        plan.file.name,
+        `${element.name}: ${widget.name} needs a target with ${widget.requires}, and the selected board does not have it`,
+      )
+  }
+}
+
 /** The screen's source with Build and WriteBack added on the line where its declarations end. */
 function screenSource(plan: ScreenPlan): string {
   const build = [
@@ -472,8 +580,12 @@ function screenSource(plan: ScreenPlan): string {
     ...plan.connects.map(
       (c) => `Connect(ADR(${c.pipe}), ADR(${c.source}), ADR(${c.target}), ${c.prior ? `ADR(${c.prior})` : '0'});`,
     ),
+    ...plan.feeds.map((f) => f.bind),
   ]
+  const feeds =
+    plan.feeds.length > 0 ? ` VAR ${plan.feeds.map((f) => `${f.instance} : ${f.type};`).join(' ')} END_VAR` : ''
   const generated =
+    feeds +
     ` METHOD PROTECTED OVERRIDE Build : BOOL ${build.join(' ')} Build := TRUE; END_METHOD` +
     ` METHOD PROTECTED OVERRIDE WriteBack : BOOL ${plan.writeBacks.join(' ')} WriteBack := TRUE; END_METHOD `
   const { source } = plan.file
@@ -1159,6 +1271,7 @@ function previewUnits(files: readonly string[], plans: readonly ScreenPlan[]): H
   plans.forEach((p, i) => {
     screens.set(`pou_${p.model.name.toUpperCase()}.cpp`, p.model.name)
     screens.set(`hmi_preview_${i}.cpp`, p.model.name)
+    for (const f of p.feeds) screens.set(`pou_${f.type.toUpperCase()}.cpp`, p.model.name)
   })
   for (const f of files.filter((n) => n.endsWith('.cpp'))) {
     const screen = screens.get(f)
@@ -1467,14 +1580,16 @@ function writeLimitOf(plans: readonly ScreenPlan[], tags: readonly UnitTag[], wa
         )
           found = limits?.get(node.name.toUpperCase())
       })
-      if (!found) return null
-      if (found.kind === 'length')
-        return type.base === 'STRING' ? { min: 0, max: Math.min(found.max, type.maxLength) } : null
-      return inTagDomain(type, found.min, found.max, true)
+      if (found) {
+        if (found.kind === 'length')
+          return type.base === 'STRING' ? { min: 0, max: Math.min(found.max, type.maxLength) } : null
+        return inTagDomain(type, found.min, found.max, true)
+      }
     }
     const literal = hmiLiteralOf(value)
     if (!literal) return null
     if (literal.kind === 'string') return type.base === 'STRING' ? { min: literal.bytes, max: literal.bytes } : null
+    if (type.base === 'BOOL') return { min: literal.value, max: literal.value }
     return inTagDomain(type, literal.value, literal.value, false)
   }
 }
@@ -1554,13 +1669,18 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
       defaults: [],
       connects: [],
       writeBacks: [],
+      feeds: [],
       limits: new Map(),
       theme,
     }
     elementTree(plan, catalog)
     plans.push(plan)
   }
-  for (const plan of plans) writeBacks(plan, catalog, variables, d)
+  for (const plan of plans) {
+    writeBacks(plan, catalog, variables, d)
+    feeds(plan, catalog, variables, d)
+    if (input.capabilities) requiredCapabilities(plan, catalog, input.capabilities, d)
+  }
   const start =
     input.widgetPreview !== undefined || input.gallery || input.themePreview !== undefined
       ? plans.length - 1
@@ -1589,7 +1709,10 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     ),
     [PLC_FILE]: input.plcDeclarations ?? '',
   }
-  for (const plan of plans) sources[`${plan.model.name}.st`] = `${INSTANCE_PATHS} ${screenSource(plan)}`
+  for (const plan of plans) {
+    sources[`${plan.model.name}.st`] = `${INSTANCE_PATHS} ${screenSource(plan)}`
+    if (plan.feeds.length > 0) sources[feedFile(plan)] = plan.feeds.map((f) => f.source).join('\n')
+  }
   sources[MAIN_FILE] = mainSource(
     plans,
     firstIds,
@@ -1601,9 +1724,10 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
   result.fonts = { variant: input.settings.fontVariant, faces: buildFaces(input, sources) }
   const [first, ...rest] = Object.entries(sources)
   const widgetLibraries = new Set(archives.map((a) => a.manifest.name.toUpperCase()))
-  const plcLibraries = [...plcArchives(input.plcLibraries ?? [], d), ...(input.plcArchives ?? [])].filter(
-    (a) => !widgetLibraries.has(a.manifest.name.toUpperCase()),
-  )
+  const loaded = [...plcArchives(input.plcLibraries ?? [], d), ...(input.plcArchives ?? [])]
+  const plcLibraries = (
+    hmiAlarmsReferenced(input.plcDeclarations ?? '') ? withHmiAlarmsArchive(loaded) : loaded
+  ).filter((a) => !widgetLibraries.has(a.manifest.name.toUpperCase()))
   if (d.errors.length > 0) return result
   const options: StrucppCompileOptions = {
     fileName: first[0],
@@ -1652,7 +1776,8 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     return result
   }
   const limitOf = writeLimitOf(plans, tags, strucpp.walkAST)
-  const access = hmiPageAccess(compiled.ast, classes, strucpp.walkAST, limitOf)
+  const owners = new Map(plans.flatMap((plan, page) => plan.feeds.map((f) => [f.type.toUpperCase(), page] as const)))
+  const access = hmiPageAccess(compiled.ast, classes, strucpp.walkAST, limitOf, owners)
   result.pages = plans.map((plan, i) => {
     const grant = screenGrant(input.settings, plan.model.name)
     const roles = HMI_ROLES.reduce((bits, role, r) => (grant[role] ? bits | (1 << (r + 1)) : bits), 1)

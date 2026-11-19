@@ -338,3 +338,24 @@ describe('PackageManifestSchema — capabilities.hmi', () => {
     if (parsed.success) expect(parsed.data.devices[0].capabilities?.vppIo).toBe(true)
   })
 })
+
+describe('PackageManifestSchema — capabilities.hmiDataWidgets', () => {
+  const withFlag = (hmiDataWidgets: unknown) => ({
+    formatVersion: '1.0',
+    package: { id: 'vendor.board', name: 'Vendor Board', version: '1.0.0' },
+    devices: [{ id: 'panel', name: 'Panel', capabilities: { vppIo: true, hmiDataWidgets } }],
+  })
+
+  it('accepts a device that declares it on or off, or not at all', () => {
+    expect(PackageManifestSchema.safeParse(withFlag(true)).success).toBe(true)
+    expect(PackageManifestSchema.safeParse(withFlag(false)).success).toBe(true)
+    expect(PackageManifestSchema.safeParse(withFlag(undefined)).success).toBe(true)
+  })
+
+  it('refuses a value that is not a boolean, naming the field', () => {
+    const result = PackageManifestSchema.safeParse(withFlag('yes'))
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(result.error.issues[0].path).toEqual(['devices', 0, 'capabilities', 'hmiDataWidgets'])
+  })
+})

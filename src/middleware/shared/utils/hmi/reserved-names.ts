@@ -13,9 +13,11 @@ export const HMI_LIBRARY_NAMES: readonly string[] = [
   'HMI_Calibrate',
   'HMI_Clear',
   'HMI_Clip',
+  'HMI_ClockText',
   'HMI_COLORS',
   'HMI_Cos',
   'HMI_DATE_STYLE',
+  'HMI_DIALOG_ICON',
   'HMI_DIRECTION',
   'HMI_DTNanos',
   'HMI_FillCircle',
@@ -43,8 +45,11 @@ export const HMI_LIBRARY_NAMES: readonly string[] = [
   'HMI_PtrReleased',
   'HMI_PtrX',
   'HMI_PtrY',
+  'HMI_Scaled',
   'HMI_ScreenH',
   'HMI_ScreenW',
+  'HMI_SeverityColor',
+  'HMI_SeverityText',
   'HMI_SignOut',
   'HMI_Sin',
   'HMI_StrokeCircle',
@@ -55,9 +60,12 @@ export const HMI_LIBRARY_NAMES: readonly string[] = [
   'HMI_TextWidth',
   'HMI_TimeMs',
   'HMI_Truncate',
+  'HMI_TwoDigits',
   'HMI_Unclip',
   'HMI_VALIGN',
   'HmiAgitator',
+  'HmiAlarmBanner',
+  'HmiAlarmList',
   'HmiAnimator',
   'HmiBarGraph',
   'HmiButton',
@@ -68,12 +76,17 @@ export const HMI_LIBRARY_NAMES: readonly string[] = [
   'HmiContainer',
   'HmiControlValve',
   'HmiConveyor',
+  'HmiDataElement',
+  'HmiDataTable',
   'HmiDateTime',
   'HmiDiagram',
+  'HmiDialog',
   'HmiDropDown',
   'HmiElement',
   'HmiEllipse',
+  'HmiEventLog',
   'HmiFan',
+  'HmiFeed',
   'HmiGauge',
   'HmiHeatExchanger',
   'HmiHorizontalStack',
@@ -90,6 +103,7 @@ export const HMI_LIBRARY_NAMES: readonly string[] = [
   'HmiNumericInput',
   'HmiOptionButtons',
   'HmiPipe',
+  'HmiPlotBase',
   'HmiPolygon',
   'HmiProgress',
   'HmiPump',
@@ -115,6 +129,7 @@ export const HMI_LIBRARY_NAMES: readonly string[] = [
   'HmiValve',
   'HmiVerticalStack',
   'HmiVessel',
+  'HmiXYPlot',
   'IHmiElement',
 ]
 
@@ -134,6 +149,17 @@ export const HMI_GENERATED_NAMES: readonly string[] = [
   'hmi_main',
 ]
 
+/** Functions and types of the PLC's HmiAlarms library, which screens use through their data widgets. */
+export const HMI_ALARMS_LIBRARY_NAMES: readonly string[] = [
+  'HMI_ALARM',
+  'HMI_ALARM_LOGGER',
+  'HMI_ALARM_ROW',
+  'HMI_ALARM_SUMMARY',
+  'HMI_ALARMS',
+  'HMI_EVENT_ROW',
+  'HMI_LOG_EVENT',
+]
+
 /** Prefixes of generated names: internals and theme constants. */
 export const HMI_GENERATED_PREFIXES: readonly string[] = ['HMI__', 'HMI_THEME_']
 
@@ -141,7 +167,12 @@ export const HMI_GENERATED_PREFIXES: readonly string[] = ['HMI__', 'HMI_THEME_']
 export function hmiReservedName(name: string): string | null {
   const key = name.toUpperCase()
   const taken = (list: readonly string[]): boolean => list.some((n) => n.toUpperCase() === key)
-  if (taken(HMI_LIBRARY_NAMES) || taken(HMI_GENERATED_NAMES) || HMI_GENERATED_PREFIXES.some((p) => key.startsWith(p)))
+  if (
+    taken(HMI_LIBRARY_NAMES) ||
+    taken(HMI_ALARMS_LIBRARY_NAMES) ||
+    taken(HMI_GENERATED_NAMES) ||
+    HMI_GENERATED_PREFIXES.some((p) => key.startsWith(p))
+  )
     return `"${name}" is taken by the HMI library`
   return null
 }

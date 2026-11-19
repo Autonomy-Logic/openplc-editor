@@ -14,6 +14,8 @@ export interface HmiArtefactStepInput {
   /** Whether the target runtime accepts `hmi/`; null when no runtime was asked (a build without upload). */
   runtimeSupportsHmi: boolean | null
   libraryArchives: readonly unknown[]
+  /** The target's capabilities; widgets that need one it lacks are refused. */
+  capabilities: object
   debugMapJson: string
   md5: string
   instances: readonly HmiProgramInstance[]
@@ -45,6 +47,7 @@ export async function buildHmiArtefactStep(input: HmiArtefactStepInput): Promise
   const result = await composeHmiArtefact({
     sources: input.hmi,
     plcArchives: input.libraryArchives.filter(isStlibArchive),
+    capabilities: input.capabilities,
     debugMapJson: input.debugMapJson,
     md5: input.md5,
     instances: input.instances,

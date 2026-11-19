@@ -94,21 +94,23 @@ export function hmiBitAssignments(ast: CompilationUnit, walk: HmiAstWalk): numbe
 }
 
 /**
- * Access of each screen, in page order. `screens` are the screens' function block names; tags accessed anywhere else
- * in the unit (the program that runs every page) count for every page.
+ * Access of each screen, in page order. `screens` are the screens' function block names; `owners` gives the page of
+ * other blocks only one screen uses (its generated feeds), by upper-case name; tags accessed anywhere else in the unit
+ * (the program that runs every page) count for every page.
  */
 export function hmiPageAccess(
   ast: CompilationUnit,
   screens: readonly string[],
   walk: HmiAstWalk,
   limitOf: HmiLimitOf,
+  owners: ReadonlyMap<string, number> = new Map(),
 ): HmiPageAccess[] {
   const pages = screens.map((name) => name.toUpperCase())
   const byPage = pages.map(collected)
   const shared = collected()
   for (const block of ast.functionBlocks) {
     const name = block.name.toUpperCase()
-    const page = pages.indexOf(name)
+    const page = pages.includes(name) ? pages.indexOf(name) : (owners.get(name) ?? -1)
     const into = page >= 0 ? byPage[page] : shared
     for (const method of block.methods)
       accessesUnder(method, walk, into, limitOf, { block: name, method: method.name.toUpperCase() })

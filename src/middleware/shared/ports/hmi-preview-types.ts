@@ -25,6 +25,20 @@ export interface HmiPlcVariable {
   blockOutput?: true
   /** A configuration global, or a field or element below one. */
   scope?: 'global'
+  /** The variable is a whole table, log, summary or array a data widget can be fed from; `type` is as declared. */
+  source?: HmiPlcSource
+}
+
+/** The data an `hmi_source` input takes. */
+export type HmiSourceKind = 'alarms' | 'events' | 'summary' | 'numbers'
+
+/** What a PLC variable offers as a source: its kind, its bounds when an array, and its element type for numbers. */
+export interface HmiPlcSource {
+  kind: HmiSourceKind
+  lower?: number
+  upper?: number
+  /** Elementary element type of a numeric array, upper case. */
+  element?: string
 }
 
 /** A STruC++ library archive, as the JSON text of its `.stlib`. */
@@ -302,6 +316,20 @@ export interface HmiWidgetInfo {
   series?: HmiWidgetSeries
   /** Inherited inputs the type starts with another value: the build sets them on elements that do not set them. */
   typeDefaults?: ReadonlyArray<{ name: string; value: string }>
+  /** Target capability the widget needs (`hmi_requires`), a boolean of `TargetCapabilities`. */
+  requires?: string
+  /** STRING inputs naming PLC data the build feeds the widget from (`hmi_source`), in declaration order. */
+  sources?: readonly HmiWidgetSource[]
+}
+
+/** A widget input whose literal value names PLC data, and the kind of data it takes. */
+export interface HmiWidgetSource {
+  /** The input, as written. */
+  name: string
+  /** What it takes, as its `hmi_source` attribute says: `ARRAY OF HMI_ALARM_ROW`, `HMI_ALARM_SUMMARY`, ... */
+  type: string
+  /** Its feed slot (`SetFeed`): its position among the widget's sources. */
+  slot: number
 }
 
 /** A widget's series: inputs marked `hmi_series`, in declaration order; the first value is the main input. */

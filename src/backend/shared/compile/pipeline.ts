@@ -905,6 +905,7 @@ async function runCompilePipelineInner(
       hmi,
       runtimeSupportsHmi: versionCheck ? versionCheck.supportsHmi : null,
       libraryArchives,
+      capabilities: targetCapabilities,
       debugMapJson,
       md5,
       instances,
@@ -1228,6 +1229,7 @@ async function runCompilePipelineInner(
       sources: hmi,
       panel: hmiPanel,
       plcArchives: libraryArchives.filter(isStlibArchive),
+      capabilities: targetCapabilities,
       debugMapJson,
       md5,
       instances: (projectData.configuration?.resource?.instances ?? []).map((inst) => ({

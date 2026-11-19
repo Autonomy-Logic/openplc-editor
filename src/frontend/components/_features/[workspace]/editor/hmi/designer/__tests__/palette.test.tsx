@@ -56,6 +56,7 @@ describe('HMI designer palette', () => {
         projectWidgets={new Set()}
         thumbnails={new Map()}
         filter=''
+        capabilities={{}}
         onAdd={ignore}
         disabled={false}
       />,
@@ -79,6 +80,7 @@ describe('HMI designer palette', () => {
           projectWidgets={new Set()}
           thumbnails={new Map()}
           filter={filter}
+          capabilities={{}}
           onAdd={ignore}
           disabled={false}
         />,
@@ -289,5 +291,68 @@ describe('HMI designer canvas frame', () => {
     expect(buttons.length).toBe(5)
     expect(screen.getByTestId('hmi-zoom').textContent).toBe('125%')
     expect(screen.getByTestId('hmi-preview-mode').getAttribute('aria-pressed')).toBe('true')
+  })
+})
+
+describe('HMI designer palette and target capabilities', () => {
+  const list: HmiWidgetInfo = { ...widget('HmiAlarmList', 'HmiDataElement', 'Alarms'), requires: 'hmiDataWidgets' }
+  const banner = widget('HmiAlarmBanner', 'HmiDataElement', 'Alarms')
+  const catalog: HmiWidgetCatalog = {
+    widgets: new Map([list, banner].map((w) => [w.name.toUpperCase(), w])),
+    colors: [],
+  }
+  const palette = (capabilities: object) => (
+    <WidgetPalette
+      catalog={catalog}
+      projectWidgets={new Set()}
+      thumbnails={new Map()}
+      filter=''
+      capabilities={capabilities}
+      onAdd={ignore}
+      disabled={false}
+    />
+  )
+
+  it('hides a widget whose capability the board lacks and shows it on a board that has it', () => {
+    const { rerender } = render(palette({ hmiDataWidgets: false }))
+    expect(screen.queryByTestId('hmi-palette-HmiAlarmList')).toBeNull()
+    expect(screen.getByTestId('hmi-palette-HmiAlarmBanner')).toBeTruthy()
+    rerender(palette({ hmiDataWidgets: true }))
+    expect(screen.getByTestId('hmi-palette-HmiAlarmList')).toBeTruthy()
+  })
+})
+
+describe('HMI designer variables tree and data sources', () => {
+  it('drags a whole alarm table, and an array of numbers by its branch', () => {
+    render(
+      <VariableList
+        variables={[
+          { path: 'instance0.Main.Flow[0]', type: 'REAL' },
+          { path: 'instance0.Main.Flow[1]', type: 'REAL' },
+          { path: 'instance0.Main.Flow', type: 'ARRAY[0..1] OF REAL', source: { kind: 'numbers', lower: 0, upper: 1 } },
+          {
+            path: 'instance0.Main.Alarms',
+            type: 'ARRAY[1..9] OF HMI_ALARM_ROW',
+            source: { kind: 'alarms', lower: 1, upper: 9 },
+          },
+        ]}
+        filter=''
+        disabled={false}
+        collapsed={[]}
+        onToggle={ignore}
+      />,
+    )
+    for (const [testId, path] of [
+      ['hmi-variable-instance0.Main.Alarms', 'instance0.Main.Alarms'],
+      ['hmi-variable-node-instance0.Main.Flow', 'instance0.Main.Flow'],
+    ]) {
+      const node = screen.getByTestId(testId)
+      expect(node.getAttribute('draggable')).toBe('true')
+      const data = new Map<string, string>()
+      fireEvent.dragStart(node, { dataTransfer: { setData: (k: string, v: string) => data.set(k, v) } })
+      expect(data.get('application/x-openplc-hmi-variable')).toBe(path)
+    }
+    expect(screen.getByTestId('hmi-variable-node-instance0.Main').getAttribute('draggable')).toBe('false')
+    expect(screen.queryByTestId('hmi-variable-instance0.Main.Flow')).toBeNull()
   })
 })

@@ -5,6 +5,7 @@
 import { ArrowIcon } from '@root/frontend/assets/icons/interface/Arrow'
 import { cn } from '@root/frontend/utils/cn'
 import type { HmiPlcVariable, HmiWidgetCatalog, HmiWidgetInfo } from '@root/middleware/shared/ports/hmi-preview-types'
+import { hmiWidgetAvailable } from '@root/middleware/shared/utils/hmi/data-sources'
 import {
   filterHmiVariableTree,
   type HmiVariableNode,
@@ -150,9 +151,11 @@ function groups(
   catalog: HmiWidgetCatalog,
   projectWidgets: ReadonlySet<string>,
   filter: string,
+  capabilities: object,
 ): Array<[string, HmiWidgetInfo[]]> {
   const byGroup = new Map<string, HmiWidgetInfo[]>()
   for (const info of catalog.widgets.values()) {
+    if (!hmiWidgetAvailable(info, capabilities)) continue
     const group = projectWidgets.has(info.name.toUpperCase()) ? PROJECT_GROUP : info.palette
     const wanted = filter.toUpperCase()
     const matches = info.name.toUpperCase().includes(wanted) || tileLabel(info.name).toUpperCase().includes(wanted)
@@ -203,12 +206,14 @@ export function WidgetPalette(props: {
   projectWidgets: ReadonlySet<string>
   thumbnails: ReadonlyMap<string, string>
   filter: string
+  /** The target's capabilities: widgets that need one it lacks are left out. */
+  capabilities: object
   onAdd: (type: string) => void
   disabled: boolean
 }) {
   const grouped = useMemo(
-    () => groups(props.catalog, props.projectWidgets, props.filter),
-    [props.catalog, props.projectWidgets, props.filter],
+    () => groups(props.catalog, props.projectWidgets, props.filter, props.capabilities),
+    [props.catalog, props.projectWidgets, props.filter, props.capabilities],
   )
   return (
     <div className='flex flex-col gap-3'>
@@ -303,6 +308,7 @@ export function VariableList(props: {
           </div>
         )
       const open = searching || !props.collapsed.includes(node.key)
+      const source = node.source
       return (
         <div key={node.key}>
           <button
@@ -310,6 +316,13 @@ export function VariableList(props: {
             aria-expanded={open}
             data-testid={`hmi-variable-node-${node.key}`}
             onClick={() => props.onToggle(node.key)}
+            draggable={source !== undefined && !props.disabled}
+            title={source ? `Drop on a data widget to show ${source.path}` : undefined}
+            onDragStart={(e) => {
+              if (!source) return
+              e.dataTransfer.setData(VARIABLE_MIME, source.path)
+              e.dataTransfer.effectAllowed = 'link'
+            }}
             style={indent}
             className='flex w-full items-center gap-2 rounded-md py-1 pr-1.5 text-left font-caption text-xs text-neutral-850 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900'
           >

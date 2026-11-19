@@ -12,6 +12,7 @@ import type {
   HmiWidgetInfo,
   HmiWidgetOutput,
   HmiWidgetProperty,
+  HmiWidgetSource,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
 
 type ManifestVar = LibraryFBEntry['inputs'][number]
@@ -24,6 +25,7 @@ export type {
   HmiWidgetInfo,
   HmiWidgetOutput,
   HmiWidgetProperty,
+  HmiWidgetSource,
 }
 
 const BASE_ELEMENT = 'HMIELEMENT'
@@ -183,6 +185,13 @@ function widgetOf(
   if (count !== undefined && values.length > 0 && values.length === colors.length)
     widget.series = { count, values, colors }
   if (typeDefaults.size > 0) widget.typeDefaults = [...typeDefaults.values()]
+  const requires = attribute(located.fb, 'hmi_requires')?.value
+  if (requires) widget.requires = requires
+  const sources = inputs.flatMap((i) => {
+    const type = attribute(i.v, 'hmi_source')?.value
+    return type ? [{ name: written(i.v), type: type.replace(/\s+/g, ' ').trim().toUpperCase() }] : []
+  })
+  if (sources.length > 0) widget.sources = sources.map((source, slot) => ({ ...source, slot }))
   return widget
 }
 
@@ -197,7 +206,9 @@ function widgetOf(
  * - `hmi_default` on a block: `Name := Value, ...` the block's own start values for inherited inputs, which the build
  *   sets on elements that leave them out (a derived block cannot redeclare an input);
  * - `hmi_enabled_by` on an input: the BOOL input that must be TRUE for it to take effect;
- * - `hmi_preview` on the main input: the value previews and palette thumbnails show, for one a test value misleads.
+ * - `hmi_preview` on the main input: the value previews and palette thumbnails show, for one a test value misleads;
+ * - `hmi_requires` on a block: the target capability it needs, which the palette and the build check;
+ * - `hmi_source` on a STRING input: the kind of PLC data its literal value names, which the build feeds the widget.
  * A main input with `Changed` and `NewValue` outputs is two-way; a main BOOL output with `Changed` is momentary; other
  * BOOL outputs are events.
  */

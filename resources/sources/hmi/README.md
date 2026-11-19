@@ -162,6 +162,34 @@ on the block, since a derived block cannot redeclare an input: the widget catalo
 and the HMI build sets it in the screen's generated `Build` on every element that leaves it out of its initializer.
 `{attribute 'hmi_enabled_by' := 'GrowAuto'}` on an input greys it out in the inspector while that BOOL is off.
 
+## Data widgets
+
+The alarm banner, alarm list, event log and XY plot show PLC data larger than one value. The PLC side is the HmiAlarms
+library (`src/backend/shared/hmi/plc-lib/`), which the editor compiles and adds to every PLC build that names it:
+functions, not function blocks, because they take the program's tables as variable-length arrays (`ARRAY[*]`), which
+a STruC++ function block cannot hold. The program sizes its own tables, with no limit set by the library:
+
+- `HMI_ALARM(In, Id, Severity, Message, Table)` once per alarm and scan holds a row of `ARRAY[..] OF HMI_ALARM_ROW`
+  while the alarm is active or unacknowledged;
+- `HMI_ALARMS(Summary, Table)` once per scan after them applies the acknowledgements the HMI asked for (a row's
+  `AckReq`, `Summary.AckTop`, `Summary.AckAll`, all written TRUE by the HMI and cleared here), frees rows that are
+  cleared and acknowledged, and fills the `HMI_ALARM_SUMMARY` the banner shows;
+- `HMI_ALARM_LOGGER(Table, Events)` after it logs what changed into a ring of `HMI_EVENT_ROW`, and
+  `HMI_LOG_EVENT(Message, Kind, Severity, Events)` logs the program's own events (operator actions included).
+
+A widget names its data with a literal STRING input marked `{attribute 'hmi_source' := '<TYPE>'}`
+(`Source := 'instance0.Main.Alarms'`). The HMI build checks that the PLC variable is of that kind and generates, per
+bound input, a feed block (`HMI__Feed_<Screen>_<Element>_<n>`, an `HmiFeed`) that reads each row's fields with
+constant indexes; the screen's `Build` hands it to the widget with `SetFeed`, and the reads count for that screen
+alone. A widget with an `AckRow` output gets a write-back of `AckReq` TRUE to the row, one with `AckTop` or `AckAll`
+outputs of those requests to the summary, each limited to TRUE in Runtime v4's write lists. Arrays bound this way are
+expanded whole, beyond the 32 elements the variable list shows.
+
+`{attribute 'hmi_requires' := '<capability>'}` on a widget names a boolean of the target's capabilities: the designer's
+palette leaves the widget out and a device build refuses it when the board lacks it (the preview does not check). The
+alarm list and event log require `hmiDataWidgets`, which a VPP declares per device (`devices[].capabilities`) and the
+plain Runtime v4 preset turns on.
+
 ## Generated unit
 
 `unit/hmi_unit.h` is what a generated HMI unit gives the host that runs it: one program instance per viewer with its
@@ -221,6 +249,10 @@ against `tests/hmi-core/golden.txt` with both font variants, and runs the fuzzer
 `npm run test:hmi-lib` (`tests/hmi-lib/run.mjs`) compiles the library and test screens with STruC++, builds them with
 this core on gcc and clang (plus a build under AddressSanitizer and UndefinedBehaviorSanitizer), drives scripted
 input and checks every frame against `tests/hmi-lib/golden.txt`.
+
+`npm run test:hmi-alarms` (`tests/hmi-alarms/run.mjs`) compiles the HmiAlarms library and a scripted program with
+STruC++, builds them natively and checks raising, acknowledging (by row, the top alarm and all), clearing, the top
+alarm and the log ring against `tests/hmi-alarms/golden.txt`.
 
 `npm run test:hmi-preview` (`tests/hmi-preview/run.ts`) builds a sample project's preview with the shared preview
 build and the in-editor WebAssembly toolchain, runs it through the preview host, and checks frames, band skipping,

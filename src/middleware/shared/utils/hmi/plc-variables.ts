@@ -6,6 +6,7 @@
  */
 import type { HmiLibraryArchive, HmiPlcVariable } from '../../ports/hmi-preview-types'
 import type { PLCDataType, PLCPou, PLCProjectData, PLCVariable, PLCVariableType } from '../../ports/types'
+import { hmiPlcSourceOf } from './data-sources'
 
 const HIDDEN_CLASSES = new Set(['temp', 'external'])
 /** Elements listed per array; larger arrays list their first ones only. */
@@ -212,8 +213,15 @@ function expandType(
   } else expandNamed(path, type.value, at, emit, seen, output)
 }
 
+/** A variable type as declared: `ARRAY[1..20] OF HMI_ALARM_ROW` for arrays, else its name. */
+function declaredType(type: PLCVariableType): string {
+  if (type.definition !== 'array' || !type.data) return type.value
+  return `ARRAY[${type.data.dimensions.map((d) => d.dimension).join(', ')}] OF ${type.data.baseType.value}`
+}
+
 /**
- * The variables screens may use. `libraryBlocks` gives the pins of library function blocks (`hmiLibraryBlocks`);
+ * The variables screens may use. Alarm tables, event logs, alarm summaries and one-dimensional arrays of numbers declared
+ * directly in a program or list are also listed whole, marked `source`, for data widgets. `libraryBlocks` gives the pins of library function blocks (`hmiLibraryBlocks`);
  * without it, instances of library blocks list nothing below them.
  */
 export function hmiPlcVariables(
@@ -233,6 +241,8 @@ export function hmiPlcVariables(
       ...(v.flag === 'constant' ? { constant: true as const } : {}),
       ...(global ? { scope: 'global' as const } : {}),
     }
+    const source = hmiPlcSourceOf(v.type, project.dataTypes ?? [])
+    if (source) variables.push({ path, type: declaredType(v.type), source, ...marks })
     const elementary = elementaryOf(v.type)
     if (elementary !== null) {
       const initial = v.initialValue?.trim()
@@ -273,6 +283,8 @@ export interface HmiVariableNode {
   label: string
   children: HmiVariableNode[]
   variable?: HmiPlcVariable
+  /** On a branch: the whole of it as a data widget's source. */
+  source?: HmiPlcVariable
 }
 
 /** Key of the branch that holds the configuration globals. */
@@ -281,12 +293,12 @@ export const HMI_GLOBALS_NODE = '#globals'
 /**
  * The variables as a tree by their paths' parts: instances, programs, Global Variable Lists, block instances, structs
  * and arrays (`[i]` parts); configuration globals, with what is below them, under one Globals branch. First seen,
- * first.
+ * first. A source variable marks the branch of the same path, or is a leaf after the others when there is none.
  */
 export function hmiVariableTree(variables: readonly HmiPlcVariable[]): HmiVariableNode[] {
   const roots: HmiVariableNode[] = []
   const globals: HmiVariableNode = { key: HMI_GLOBALS_NODE, label: 'Globals', children: [] }
-  for (const variable of variables) {
+  for (const variable of [...variables.filter((v) => !v.source), ...variables.filter((v) => v.source)]) {
     const parts = pathParts(variable.path)
     let level = roots
     if (variable.scope === 'global' || parts.length === 1) {
@@ -302,7 +314,11 @@ export function hmiVariableTree(variables: readonly HmiPlcVariable[]): HmiVariab
       level = node.children
     }
     const leaf = parts[parts.length - 1]
-    level.push({ key: variable.path, label: leaf.label, children: [], variable })
+    const branch = variable.source
+      ? level.find((n) => n.variable === undefined && n.key.toUpperCase() === variable.path.toUpperCase())
+      : undefined
+    if (branch) branch.source = variable
+    else level.push({ key: variable.path, label: leaf.label, children: [], variable })
   }
   return roots
 }
