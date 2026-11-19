@@ -78,15 +78,78 @@ export interface HmiDiagnostic {
 export interface HmiPreviewSetter {
   /** Page number of the screen. */
   screen: number
-  /** Setter number within the screen. */
+  /** Setter number within the screen, or the factory setter of a live element. */
   index: number
   kind: 'num' | 'str'
+  /** The id of the live element the setter applies to (`HmiLiveElement`); absent for elements the build compiled. */
+  element?: number
+}
+
+/** A widget type a running preview creates without a build, and its live setters by upper-case property name. */
+export interface HmiPreviewFactoryType {
+  /** Its number in the module's factory table. */
+  type: number
+  setters: Record<string, { index: number; kind: 'num' | 'str' }>
+}
+
+/** What a running preview can add to the shown screen without a build: widget types by upper-case name. */
+export interface HmiPreviewFactory {
+  types: Record<string, HmiPreviewFactoryType>
+}
+
+/** The kind of container a live element goes into (`hmi_live_container`). */
+export type HmiLiveContainer = 'stack' | 'diagram'
+
+/**
+ * An element a running preview adds to the shown screen without a build, placed where the next build attaches it:
+ * created from the factory table, or, with `element`, one the module took off before (`HmiLiveDetach`) put back.
+ */
+export interface HmiLiveElement {
+  /** Its widget type's number in the factory table; ignored with `element`. */
+  type: number
+  /** The id of a detached element to put back instead of creating one. */
+  element?: number
+  /** Its container: an element id of the shown screen (0: the screen's own stack), or one added earlier in the call. */
+  parent: { id: number } | { added: number }
+  parentKind: HmiLiveContainer
+  /** The element id of the sibling it goes before; 0: last. */
+  before: number
+  /** The element id of the element it is drawn before; 0: last. */
+  drawBefore: number
+  /** Values of its inputs, by factory setter; none for an element put back. */
+  numbers: ReadonlyArray<{ setter: number; value: number }>
+  texts: ReadonlyArray<{ setter: number; value: string }>
+}
+
+/** An element a running preview takes off the shown screen: out of its container and its drawing list. */
+export interface HmiLiveDetach {
+  element: number
+  /** Its container as the module has it: an element id, 0 for the screen's own stack. */
+  parent: number
+  parentKind: HmiLiveContainer
 }
 
 export interface HmiPreviewElementId {
   id: number
   screen: string
   element: string
+}
+
+/** How long each step of a preview build took, in ms. */
+export interface HmiPreviewTimings {
+  /** Reading the preview's files; 0 once they were read. */
+  sourcesMs: number
+  /** Generating the unit: checks, ST, STruC++ and the C++ glue. */
+  generateMs: number
+  /** STruC++ compiling the project's widget blocks, part of `generateMs`. */
+  widgetsMs: number
+  /** STruC++ compiling the screens and glue, part of `generateMs`. */
+  strucppMs: number
+  /** Building the font table. */
+  fontsMs: number
+  /** The toolchain call as the build saw it: compiling, linking and moving request and module. */
+  toolchainMs: number
+  totalMs: number
 }
 
 export type HmiPreviewBuild =
@@ -99,10 +162,19 @@ export type HmiPreviewBuild =
       setters: Record<string, HmiPreviewSetter>
       /** The element each bounds id stands for. */
       elementIds: HmiPreviewElementId[]
+      /** The widget types the module can add without a build. */
+      factory: HmiPreviewFactory
       warnings: HmiDiagnostic[]
       stats: WasmCompileStats
+      timings: HmiPreviewTimings
     }
-  | { ok: false; errors: HmiDiagnostic[]; warnings: HmiDiagnostic[]; stats?: WasmCompileStats }
+  | {
+      ok: false
+      errors: HmiDiagnostic[]
+      warnings: HmiDiagnostic[]
+      stats?: WasmCompileStats
+      timings?: HmiPreviewTimings
+    }
 
 /** An element's bounds in logical units. */
 export interface HmiPreviewBounds {
@@ -147,12 +219,16 @@ export type HmiPreviewRequestMessage =
   | { id: number; type: 'resize'; width: number; height: number }
   | { id: number; type: 'pointer'; kind: HmiPointerKind; x: number; y: number }
   | { id: number; type: 'key'; code: number }
-  | { id: number; type: 'setNumber'; screen: number; setter: number; value: number }
-  | { id: number; type: 'setText'; screen: number; setter: number; value: string }
+  | { id: number; type: 'setNumber'; screen: number; setter: number; value: number; element?: number }
+  | { id: number; type: 'setText'; screen: number; setter: number; value: string; element?: number }
+  | { id: number; type: 'change'; detach: HmiLiveDetach[]; elements: HmiLiveElement[] }
 
-/** The Worker's reply to one request; `fatal` when the module faulted and can no longer run. */
+/**
+ * The Worker's reply to one request; `fatal` when the module faulted and can no longer run. A `change` is answered with
+ * `applied` and, when applied, `added`: the ids of its elements in order.
+ */
 export type HmiPreviewReply =
-  | { id: number; ok: true; frame?: HmiPreviewFrame; applied?: boolean }
+  | { id: number; ok: true; frame?: HmiPreviewFrame; applied?: boolean; added?: number[] }
   | { id: number; ok: false; error: string; fatal?: boolean }
 
 export type HmiPropertyGroup = 'data' | 'display' | 'layout'

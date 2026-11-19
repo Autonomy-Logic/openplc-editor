@@ -34,6 +34,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useProjectRequest } from './designer/hmi-designer'
 import { PreviewLoading } from './designer/parts'
+import { previewProgress } from './designer/preview-progress'
 import { usePreviewSession } from './designer/use-preview-session'
 
 const PREVIEW_DEVICE = { id: 'theme', label: 'Theme', width: 640, height: 360, density: 2 }
@@ -168,6 +169,7 @@ function ThemePreview(props: { theme: string }) {
     framePeriodMs: request.settings.framePeriodMs,
     canvas,
   })
+  const progress = previewProgress(preview)
   const { rebuild } = preview
   const first = useRef(true)
   useEffect(() => {
@@ -189,7 +191,7 @@ function ThemePreview(props: { theme: string }) {
         className='rounded-lg border border-neutral-200 dark:border-neutral-850'
         style={{ width: PREVIEW_DEVICE.width * 0.75, height: PREVIEW_DEVICE.height * 0.75 }}
       />
-      {preview.built === null && preview.status === 'building' && <PreviewLoading step={preview.step} />}
+      {progress && <PreviewLoading step={progress.step} dimmed={progress.dimmed} />}
     </div>
   )
 }

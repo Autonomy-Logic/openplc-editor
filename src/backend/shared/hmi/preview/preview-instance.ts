@@ -4,6 +4,8 @@
  */
 
 import type {
+  HmiLiveDetach,
+  HmiLiveElement,
   HmiPointerKind,
   HmiPreviewBounds,
   HmiPreviewPixels,
@@ -33,7 +35,16 @@ interface HostFunctions {
   hmi_pv_set_num: NumericFunction
   hmi_pv_text: NumericFunction
   hmi_pv_set_str: NumericFunction
+  hmi_pv_live_add: NumericFunction
+  hmi_pv_live_set_num: NumericFunction
+  hmi_pv_live_set_str: NumericFunction
+  hmi_pv_live_remove: NumericFunction
+  hmi_pv_live_detach: NumericFunction
+  hmi_pv_live_attach: NumericFunction
 }
+
+/** `hmi_live_container` of hmi_preview.h. */
+const LIVE_CONTAINER: Record<HmiLiveElement['parentKind'], number> = { stack: 1, diagram: 2 }
 
 /** Longest text a STRING setter takes (`HMI_PV_TEXT_MAX`). */
 const TEXT_MAX = 255
@@ -98,6 +109,12 @@ export class HmiPreviewInstance {
       hmi_pv_set_num: bind('hmi_pv_set_num'),
       hmi_pv_text: bind('hmi_pv_text'),
       hmi_pv_set_str: bind('hmi_pv_set_str'),
+      hmi_pv_live_add: bind('hmi_pv_live_add'),
+      hmi_pv_live_set_num: bind('hmi_pv_live_set_num'),
+      hmi_pv_live_set_str: bind('hmi_pv_live_set_str'),
+      hmi_pv_live_remove: bind('hmi_pv_live_remove'),
+      hmi_pv_live_detach: bind('hmi_pv_live_detach'),
+      hmi_pv_live_attach: bind('hmi_pv_live_attach'),
     }
     const preview = new HmiPreviewInstance(memory, call)
     if (preview.call.hmi_pv_init(width, height) !== 0) throw new Error('The preview does not fit in memory')
@@ -163,10 +180,66 @@ export class HmiPreviewInstance {
 
   /** Sets a STRING live property of a screen, cut to TEXT_MAX bytes; false when it has no such setter. */
   setText(screen: number, setter: number, value: string): boolean {
+    this.writeText(value)
+    return this.call.hmi_pv_set_str(screen, setter) === 0
+  }
+
+  /** Sets a numeric or BOOL input of a live element by its factory setter; false when it has no such setter. */
+  setLiveNumber(element: number, setter: number, value: number): boolean {
+    return this.call.hmi_pv_live_set_num(element, setter, value) === 0
+  }
+
+  /** Sets a STRING input of a live element, cut to TEXT_MAX bytes; false when it has no such setter. */
+  setLiveText(element: number, setter: number, value: string): boolean {
+    this.writeText(value)
+    return this.call.hmi_pv_live_set_str(element, setter) === 0
+  }
+
+  /**
+   * Changes the shown screen's structure without a build: takes `detach` off, then adds or puts back `elements`, in
+   * order, with their inputs set; returns their element ids. When one cannot be added, put back or set, the elements of
+   * this call are taken off again and the result is null; when a detach fails, the result is null.
+   */
+  changeLive(detach: readonly HmiLiveDetach[], elements: readonly HmiLiveElement[]): number[] | null {
+    for (const d of detach)
+      if (this.call.hmi_pv_live_detach(d.element, d.parent, LIVE_CONTAINER[d.parentKind]) !== 0) return null
+    const added: number[] = []
+    const created: boolean[] = []
+    const undo = () => {
+      for (let i = added.length - 1; i >= 0; i--)
+        if (created[i]) this.call.hmi_pv_live_remove(added[i])
+        else this.call.hmi_pv_live_detach(added[i], 0, LIVE_CONTAINER.stack)
+    }
+    for (const element of elements) {
+      const parent = 'id' in element.parent ? element.parent.id : added[element.parent.added]
+      const kind = LIVE_CONTAINER[element.parentKind]
+      const { before, drawBefore } = element
+      const id =
+        parent === undefined
+          ? -1
+          : element.element === undefined
+            ? this.call.hmi_pv_live_add(element.type, parent, kind, before, drawBefore)
+            : this.call.hmi_pv_live_attach(element.element, parent, kind, before, drawBefore)
+      const set =
+        id > 0 &&
+        element.numbers.every(({ setter, value }) => this.setLiveNumber(id, setter, value)) &&
+        element.texts.every(({ setter, value }) => this.setLiveText(id, setter, value))
+      if (id > 0) {
+        added.push(id)
+        created.push(element.element === undefined)
+      }
+      if (!set) {
+        undo()
+        return null
+      }
+    }
+    return added
+  }
+
+  private writeText(value: string): void {
     const bytes = new TextEncoder().encode(value).subarray(0, TEXT_MAX)
     const buffer = new Uint8Array(this.memory.buffer, this.call.hmi_pv_text(), TEXT_MAX + 1)
     buffer.set(bytes)
     buffer[bytes.length] = 0
-    return this.call.hmi_pv_set_str(screen, setter) === 0
   }
 }

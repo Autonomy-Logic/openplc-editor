@@ -6,6 +6,8 @@ import type {
   HmiBuildStep,
   HmiCatalogResult,
   HmiCodeContext,
+  HmiLiveDetach,
+  HmiLiveElement,
   HmiPointerKind,
   HmiPreviewBuild,
   HmiPreviewFrame,
@@ -26,16 +28,28 @@ export interface HmiPreviewStart {
 
 /** One running preview. Calls reject once the module stopped; `onStop` says why. */
 export interface HmiPreviewSession {
-  /** Starts a built module. The module running before keeps answering until this one is ready, and stays if it fails. */
+  /**
+   * Starts a built module. The module running before keeps answering until this one is ready, and stays if it fails.
+   * Loads land in the order they were asked for.
+   */
   load(wasm: Uint8Array, start: HmiPreviewStart): Promise<void>
   frame(timeMs: number, surface: HmiPreviewSurface): Promise<HmiPreviewFrame>
   show(page: number): Promise<void>
   resize(width: number, height: number): Promise<void>
   pointer(kind: HmiPointerKind, x: number, y: number): Promise<void>
   key(code: number): Promise<void>
-  /** Applies a live property edit; false when the module has no such setter. */
-  setNumber(screen: number, setter: number, value: number): Promise<boolean>
-  setText(screen: number, setter: number, value: string): Promise<boolean>
+  /**
+   * Applies a live property edit; false when the module has no such setter. With `element`, the setter is a factory
+   * setter of that live element.
+   */
+  setNumber(screen: number, setter: number, value: number, element?: number): Promise<boolean>
+  setText(screen: number, setter: number, value: string, element?: number): Promise<boolean>
+  /**
+   * Changes the shown screen's structure without a build: takes `detach` off, in order, then adds or puts back
+   * `elements`, in order. Returns their element ids, or null when the module could not do it all. Changes last until
+   * the next module starts or the screen is left.
+   */
+  change(detach: readonly HmiLiveDetach[], elements: readonly HmiLiveElement[]): Promise<number[] | null>
   /** Called when the running module stops: a fault in screen code, a crashed Worker or a call that took too long. */
   onStop(listener: (reason: string) => void): () => void
   close(): void

@@ -17,6 +17,15 @@ import {
   renderHmiThumbnails,
 } from '../hmi-thumbnails'
 
+const TIMINGS = {
+  sourcesMs: 0,
+  generateMs: 0,
+  widgetsMs: 0,
+  strucppMs: 0,
+  fontsMs: 0,
+  toolchainMs: 0,
+  totalMs: 0,
+}
 const ELEMENT_IDS = [
   { id: 1, screen: HMI_GALLERY_SCREEN, element: 'HMI__Column' },
   { id: 2, screen: HMI_GALLERY_SCREEN, element: 'W_HmiLamp' },
@@ -83,6 +92,8 @@ describe('HMI palette thumbnails', () => {
         elementIds: ELEMENT_IDS,
         warnings: [],
         stats: { units: 1, cached: 0, compileMs: 0, linkMs: 0 },
+        factory: { types: {} },
+        timings: TIMINGS,
       })
     }
     const session: HmiPreviewSession = {
@@ -109,6 +120,7 @@ describe('HMI palette thumbnails', () => {
       key: () => Promise.resolve(),
       setNumber: () => Promise.resolve(true),
       setText: () => Promise.resolve(true),
+      change: () => Promise.resolve(null),
       onStop: () => () => undefined,
       close: () => {
         closed = true
@@ -146,6 +158,8 @@ describe('HMI palette thumbnails', () => {
       elementIds: ELEMENT_IDS,
       warnings: [],
       stats: { units: 1, cached: 0, compileMs: 0, linkMs: 0 },
+      factory: { types: {} },
+      timings: TIMINGS,
     }
     const stopped = await renderHmiThumbnails(
       sources,
@@ -160,6 +174,7 @@ describe('HMI palette thumbnails', () => {
         key: () => Promise.resolve(),
         setNumber: () => Promise.resolve(false),
         setText: () => Promise.resolve(false),
+        change: () => Promise.resolve(null),
         onStop: () => () => undefined,
         close: () => {
           closed = true

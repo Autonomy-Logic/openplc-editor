@@ -89,6 +89,7 @@ export function createHmiPreviewPort(
   const port: HmiPreviewPort = {
     async build(request, onStep) {
       onStep?.('sources')
+      const sourcesStart = performance.now()
       let loaded: HmiPreviewResources
       try {
         loaded = await loadResources()
@@ -100,7 +101,18 @@ export function createHmiPreviewPort(
           warnings: [],
         }
       }
-      return buildHmiPreview(request, loaded, (compileRequest) => mechanisms.compileToWasm(compileRequest), onStep)
+      const sourcesMs = performance.now() - sourcesStart
+      const built = await buildHmiPreview(
+        request,
+        loaded,
+        (compileRequest) => mechanisms.compileToWasm(compileRequest),
+        onStep,
+      )
+      if (!built.timings) return built
+      return {
+        ...built,
+        timings: { ...built.timings, sourcesMs, totalMs: built.timings.totalMs + sourcesMs },
+      }
     },
     codeContext(sources) {
       const library = buildStandardWidgets()

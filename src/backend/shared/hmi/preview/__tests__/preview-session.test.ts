@@ -1,10 +1,20 @@
 /** @jest-environment node */
+import type { HmiLiveElement } from '../../../../../middleware/shared/ports/hmi-preview-types'
 import { createHmiPreviewSession } from '../preview-session'
-import { parseHmiPreviewRequest } from '../preview-worker'
+import { parseHmiPreviewRequest, serveHmiPreview } from '../preview-worker'
 import { fakeHost, type TestWorker, testWorker } from './fixtures/support'
 
 const start = { width: 16, height: 8, page: 2, design: true }
 const surface = { width: 16, height: 8, scale: 1 }
+const live: HmiLiveElement = {
+  type: 1,
+  parent: { id: 0 },
+  parentKind: 'stack',
+  before: 0,
+  drawBefore: 0,
+  numbers: [{ setter: 1, value: 3 }],
+  texts: [{ setter: 1, value: 'Label' }],
+}
 
 describe('parseHmiPreviewRequest', () => {
   it('accepts each request a session sends', () => {
@@ -18,6 +28,14 @@ describe('parseHmiPreviewRequest', () => {
       { id: 6, type: 'key', code: 13 },
       { id: 7, type: 'setNumber', screen: 0, setter: 1, value: 2 },
       { id: 8, type: 'setText', screen: 0, setter: 1, value: 'a' },
+      { id: 9, type: 'setNumber', screen: 0, setter: 1, value: 2, element: 100 },
+      { id: 10, type: 'setText', screen: 0, setter: 1, value: 'a', element: 100 },
+      {
+        id: 11,
+        type: 'change',
+        detach: [{ element: 4, parent: 0, parentKind: 'stack' }],
+        elements: [live, { ...live, parent: { added: 0 }, parentKind: 'diagram', element: 4 }],
+      },
     ]
     for (const request of requests) expect(parseHmiPreviewRequest(request)).toEqual(request)
   })
@@ -35,13 +53,57 @@ describe('parseHmiPreviewRequest', () => {
       { id: 1, type: 'key', code: Number.NaN },
       { id: 1, type: 'setNumber', screen: 0, setter: 1 },
       { id: 1, type: 'setText', screen: 0, setter: 1, value: 3 },
+      { id: 1, type: 'setText', screen: 0, setter: 1, value: 'a', element: 1.5 },
+      { id: 1, type: 'change', detach: [], elements: [{ ...live, parentKind: 'grid' }] },
+      { id: 1, type: 'change', detach: [], elements: [{ ...live, parent: {} }] },
+      { id: 1, type: 'change', detach: [], elements: [{ ...live, numbers: [{ setter: 1, value: 'x' }] }] },
+      { id: 1, type: 'change', detach: [], elements: [{ ...live, element: 'x' }] },
+      { id: 1, type: 'change', detach: [], elements: live },
+      { id: 1, type: 'change', detach: [{ element: 1, parent: 0, parentKind: 'row' }], elements: [] },
+      { id: 1, type: 'change', elements: [] },
       { id: 1, type: 'exit' },
     ])
       expect(parseHmiPreviewRequest(value)).toBeNull()
   })
 })
 
+describe('serveHmiPreview', () => {
+  it('answers requests one at a time in order, so a change sent during a load reaches the loaded module', async () => {
+    const listeners: Array<(event: MessageEvent<unknown>) => void> = []
+    const replies: unknown[] = []
+    serveHmiPreview({
+      postMessage: (message) => replies.push(message),
+      addEventListener: (_type, listener) => listeners.push(listener),
+    })
+    const send = (data: unknown) => listeners.forEach((l) => l(new MessageEvent('message', { data })))
+    send({ id: 1, type: 'load', wasm: fakeHost(), width: 16, height: 8, page: 0, design: false })
+    send({ id: 2, type: 'change', detach: [], elements: [live] })
+    send({ id: 3, type: 'setNumber', screen: 0, setter: 1, value: 2, element: 100 })
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(replies).toEqual([
+      { id: 1, ok: true },
+      { id: 2, ok: true, applied: true, added: [100] },
+      { id: 3, ok: true, applied: true },
+    ])
+  })
+})
+
 describe('preview session', () => {
+  it('lands loads in the order they were asked for, whichever module starts first', async () => {
+    let started = 0
+    const session = createHmiPreviewSession(() => {
+      const worker = testWorker()
+      if (started++ > 0) return worker
+      const post = worker.postMessage.bind(worker)
+      return { ...worker, postMessage: (message, transfer) => void setTimeout(() => post(message, transfer), 60) }
+    })
+    const first = session.load(fakeHost(), { ...start, page: 1 })
+    const second = session.load(fakeHost(), { ...start, page: 2 })
+    await Promise.all([first, second])
+    expect((await session.frame(0, surface)).page).toBe(2)
+    session.close()
+  })
+
   it('runs a module in its Worker: frames, input and live edits', async () => {
     const session = createHmiPreviewSession(() => testWorker())
     await session.load(fakeHost(), start)
@@ -58,6 +120,22 @@ describe('preview session', () => {
     expect((await session.frame(100, surface)).pixels).toMatchObject({ y0: 2, rows: 4 })
     await session.show(5)
     expect((await session.frame(150, surface)).page).toBe(5)
+    session.close()
+  })
+
+  it('changes the structure live, edits live elements, or reports that it could not', async () => {
+    const session = createHmiPreviewSession(() => testWorker())
+    await session.load(fakeHost(), start)
+    await session.frame(0, surface)
+    expect(await session.change([], [live, { ...live, parent: { added: 0 } }])).toEqual([100, 101])
+    expect((await session.frame(50, surface)).pixels).toMatchObject({ y0: 2, rows: 4 })
+    expect(await session.setNumber(2, 1, 9, 101)).toBe(true)
+    expect(await session.setText(2, 1, 'Tank', 100)).toBe(true)
+    expect(await session.setNumber(2, 2, 9, 101)).toBe(false)
+    expect(await session.change([{ element: 7, parent: 0, parentKind: 'stack' }], [])).toEqual([])
+    expect(await session.change([{ element: 7, parent: 0, parentKind: 'stack' }], [])).toBeNull()
+    expect(await session.change([], [{ ...live, element: 7, numbers: [], texts: [] }])).toEqual([7])
+    expect(await session.change([], [{ ...live, type: 7 }])).toBeNull()
     session.close()
   })
 

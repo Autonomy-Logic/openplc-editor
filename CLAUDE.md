@@ -456,7 +456,9 @@ that cross a boundary. `compileStrucppToWasm` lays out STruC++ output with its r
   most 192 MB, oldest first. Records of another toolchain (a different `clang --version`) or damaged ones are
   removed. That build waits for the store to load; a store that cannot be read only costs the reuse.
 - **Precompiled headers:** a request may list `precompiledHeaders`, built first and cached like units; a unit names
-  one with `pch`, and its digest is part of that unit's cache key.
+  one with `pch`, and a digest of what the header was built from (its cache key and its files' digests, not its bytes)
+  is part of that unit's cache key. A clang worker's reply leaves out the binary inputs it gets back unchanged, such as
+  the precompiled header; text inputs come back from YoWASP as bytes and are still sent.
 - **Clang worker:** one (`ClangWorkerPool`), running one job at a time, started by a build and ended once no build is
   running or queued, whatever the last build's outcome, so the simulator runs with no clang worker; builds that overlap
   share it. While an HMI tab is open (screen, widget block or HMI Settings), the workspace holds the toolchain
@@ -586,9 +588,24 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
   link (`resources/sources/hmi/unit/hmi_unit.h`; preview setters in `hmi_preview.h`). `tests/hmi-unit/run.mjs`
   (`npm run test:hmi-unit`, same CI job) builds a sample project's unit and runs it from a C host.
 - **HMI preview:** `src/backend/shared/hmi/preview/` builds screens and widget blocks with the WebAssembly toolchain
-  and runs them in a Worker (`createHmiPreviewPort`; host `resources/sources/hmi/preview/`). `tests/hmi-preview/run.ts`
-  (`npm run test:hmi-preview`, same CI job) does it with the real toolchain and checks rebuild times. The port also
-  draws the palette's thumbnails from a generated gallery screen (`hmi-thumbnails.ts`).
+  and runs them in a Worker (`createHmiPreviewPort`; host `resources/sources/hmi/preview/`). Each screen compiles
+  against its own copy of the unit header (`split-screen-headers.ts`), so an edit of one screen recompiles that screen
+  and the glue only. Every build logs a debug Console line, `HMI preview built in N ms: files, generate (widget blocks,
+  STruC++), fonts, toolchain (compile, link; each compiled file), start, first frame`, which is how to see where a slow
+  computer spends a rebuild. The running module also follows structural edits without a build: the preview-only
+  factory table (`hmi_preview_factory.cpp`, generated for preview builds only, with `hmi_preview_live.cpp`) creates any
+  widget type, and any element, compiled or made, can be taken off its container and the drawing list and put back
+  elsewhere. `designer-live.ts` diffs the screen the module shows against the source (`planLiveSync`): removed elements
+  are taken off, moved ones (another container, another place among their siblings) are taken off and put back, new
+  ones are made, and changed values go through the live setters, so add, remove, move, reorder, diagram moves, value
+  edits and their undo and redo are drawn at once, exactly as the build will; the build that follows replaces the
+  module with the same pixels. Code and theme changes, pipes put back or chained anew, references to removed
+  elements and values that cannot be set live wait for the build; code that still names a removed element does not
+  (the build reports it). Such a build shows its progress over the last frame, dimmed, after 300 ms; a build after a
+  live edit shows none and waits 1.5 s for the next edit. `tests/hmi-preview/run.ts` (`npm run test:hmi-preview`, same
+  CI job) does it with the real toolchain, checks rebuild times and that every live step, undone and redone, has the
+  rebuilt module's frame and bounds, and prints each build's breakdown. The port also draws the palette's thumbnails from a generated gallery screen
+  (`hmi-thumbnails.ts`).
 - **HMI on Runtime v4:** the browser runs the screens. `src/backend/shared/hmi/artefact/` builds the upload's `hmi/`:
   `client/hmi.wasm` (unit, core, fonts and `resources/sources/hmi/client/hmi_browser_host.cpp`) and, for the device,
   only the data manifest `src/hmi_access.c` (`resources/sources/hmi/unit/hmi_access.h`): each screen's read and write
@@ -598,7 +615,9 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
   patches (`src/middleware/shared/utils/hmi/designer/`), with undo in the `hmiDesigner` store slice. In a diagram it
   places symbols on the grid, draws pipes from port to port and edits their bends (`designer-diagram.ts`), from the
   ports, diagram frames and pipe routes a design-mode frame records. `e2e/hmi-designer.spec.ts` and
-  `e2e/hmi-diagram.spec.ts` drive it on the real preview.
+  `e2e/hmi-diagram.spec.ts` drive it on the real preview; `e2e/hmi-live-add.spec.ts` holds every compile back and
+  checks that dropped, pasted, removed, reordered, moved and edited widgets, undone and redone, show at once and
+  survive the build that replaces the module, and that only edits that wait for a build show its progress.
 - **Manual:** the developer's manual test is required for every demand.
 
 ## Code Style

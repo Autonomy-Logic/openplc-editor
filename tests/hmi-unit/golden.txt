@@ -1,6 +1,6 @@
 warnings []
 fonts {"variant":"compact","faces":[0,1]}
-units {"library":["lib_standard_widgets.cpp"],"widgets":["lib_project_widgets.cpp"],"screens":{"Overview":["pou_OVERVIEW.cpp","hmi_preview_0.cpp"],"Details":["pou_DETAILS.cpp","hmi_preview_1.cpp"]},"glue":["configuration.cpp","pou_HMIMAIN.cpp","pou_HMI_SHOW.cpp","pou_HMI_CURRENTSCREEN.cpp","pou_HMI__SCREENOPEN.cpp","pou_HMI__SCREENBODY.cpp","hmi_unit_glue.cpp","hmi_preview.cpp"]}
+units {"library":["lib_standard_widgets.cpp"],"widgets":["lib_project_widgets.cpp"],"screens":{"Overview":["pou_OVERVIEW.cpp","hmi_preview_0.cpp"],"Details":["pou_DETAILS.cpp","hmi_preview_1.cpp"]},"glue":["configuration.cpp","pou_HMIMAIN.cpp","pou_HMI_SHOW.cpp","pou_HMI_CURRENTSCREEN.cpp","pou_HMI__SCREENOPEN.cpp","pou_HMI__SCREENBODY.cpp","hmi_unit_glue.cpp","hmi_preview.cpp"],"factory":[]}
 tags 5 md5=0123456789abcdef0123456789abcdef frame_ms=50 pin='2468' relock=5
 tag 0 CONFIG0.RES0.INSTANCE0.MAIN.LEVEL arr=0 elem=3 type=14 max=0 size=4
 tag 1 CONFIG0.RES0.INSTANCE0.MAIN.RUNNING arr=0 elem=4 type=1 max=0 size=1

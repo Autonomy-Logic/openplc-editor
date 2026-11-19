@@ -510,7 +510,14 @@ describe('HMI unit generator', () => {
     expect(glue).toContain('size_t hmi_unit_size(void) { return sizeof(HmiUnit); }')
     expect(glue).toContain('u->program.SLOT.set(static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(u->slot)));')
     expect(sample.preview.files['hmi_preview_1.cpp']).toContain(
-      'if (u->program.RT.MOUNTED().get() != 1) return nullptr;',
+      'return static_cast<hmi::DETAILS *>(hmi_preview_screen(unit, 1));',
+    )
+    expect(sample.preview.files['hmi_preview_1.cpp']).not.toContain('hmi_unit_slot.hpp')
+    expect(sample.preview.files['hmi_preview.cpp']).toContain(
+      'if (!u || u->program.RT.MOUNTED().get() != page) return nullptr;',
+    )
+    expect(sample.preview.files['hmi_preview.cpp']).toContain(
+      'case 1: return reinterpret_cast<hmi::DETAILS *>(u->slot);',
     )
   })
 
@@ -523,6 +530,7 @@ describe('HMI unit generator', () => {
         Details: ['pou_DETAILS.cpp', 'hmi_preview_1.cpp'],
       },
       glue: expect.arrayContaining(['configuration.cpp', 'pou_HMIMAIN.cpp', 'hmi_unit_glue.cpp', 'hmi_preview.cpp']),
+      factory: [],
     })
     const { setters } = sample.preview
     expect(setters['Overview.Level.MaxValue']).toEqual({ screen: 0, index: expect.any(Number), kind: 'num' })
@@ -540,6 +548,34 @@ describe('HMI unit generator', () => {
     expect(sample.preview.files['hmi_preview.cpp']).toContain(
       'case 1: return hmi_preview_set_str_1(unit, setter, value);',
     )
+  })
+
+  it('gives the preview a factory table of every widget type, with one setter number per declared input', () => {
+    const preview = generateHmiUnit({ ...sampleProject(), preview: true })
+    expect(sample.preview.factory).toEqual({ types: {} })
+    expect(preview.preview.units.factory).toEqual(['hmi_preview_factory.cpp'])
+    const { types } = preview.preview.factory
+    const names = Object.keys(types)
+    expect(names).toEqual([...names].sort())
+    expect(names).toEqual(expect.arrayContaining(['HMILABEL', 'HMIBUTTON', 'HMIVERTICALSTACK', 'HMIDIAGRAM', 'BADGE']))
+    expect(names.map((n) => types[n].type)).toEqual(names.map((_, i) => i))
+    const label = types.HMILABEL
+    const button = types.HMIBUTTON
+    expect(label.setters.PREFWIDTH).toEqual(button.setters.PREFWIDTH)
+    expect(label.setters.TEXT).toMatchObject({ kind: 'str' })
+    expect(button.setters.VISIBLE).toMatchObject({ kind: 'num' })
+    expect(label.setters.PARENT).toBeUndefined()
+    expect(types.HMIVERTICALSTACK.setters.DIRECTION).toBeUndefined()
+    const file = preview.preview.files['hmi_preview_factory.cpp']
+    expect(file).toContain(`case ${label.type}: return new (std::nothrow) hmi::HMILABEL();`)
+    expect(file).toContain(`case ${types.BADGE.type}: delete static_cast<hmi::BADGE *>(element); return;`)
+    expect(file).toMatch(
+      new RegExp(
+        `case ${label.setters.TEXT.index}: if \\(!hmi_factory_is\\(type, \\d+\\)\\) return -1; ` +
+          'static_cast<hmi::HMILABEL \\*>\\(element\\)->TEXT\\.set\\(value\\); return 0;',
+      ),
+    )
+    expect(file).not.toContain('hmi_unit.hpp')
   })
 
   it('refuses element names that are members of HmiScreen', () => {

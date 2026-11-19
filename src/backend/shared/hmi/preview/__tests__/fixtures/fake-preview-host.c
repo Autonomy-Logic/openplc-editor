@@ -4,7 +4,11 @@
  *
  * Behaviour: init refuses a zero width (out of memory); a frame at time 999 traps; render marks rows 2..5 dirty after
  * a setter changed something, every row on the first render, none otherwise; setter 1 of screen 0 exists; key 1 calls
- * WASI fd_write (the page answers it as not supported) and key 2 calls proc_exit.
+ * WASI fd_write (the page answers it as not supported) and key 2 calls proc_exit. Live elements get ids from 100;
+ * type 7 cannot be added, nor anything into a live parent that does not exist; setter 1 of a live element exists for numbers and texts. Every live call is logged as
+ * (call, a, b, c, d, e) for fake_live: 1 add (type, parent, kind, before, draw_before), 2 set number (element,
+ * setter, value), 3 set text (element, setter), 4 remove (element), 5 detach (element, parent, kind), 6 attach (element, parent, kind, before,
+ * draw_before). Any element below 100, and any live one, can be detached once and attached back once detached.
  */
 #include <stdint.h>
 
@@ -71,9 +75,72 @@ EXPORT("hmi_pv_set_str") int32_t hmi_pv_set_str(int32_t screen, int32_t setter) 
     g_dirty = g_text[0] != 0;
     return 0;
 }
+static int32_t g_live_log[64 * 6], g_live_calls, g_next_live = 100, g_live[16], g_live_count;
+
+static void live_log(int32_t call, int32_t a, int32_t b, int32_t c, int32_t d, int32_t e) {
+    if (g_live_calls >= 64) return;
+    int32_t *row = &g_live_log[g_live_calls++ * 6];
+    row[0] = call, row[1] = a, row[2] = b, row[3] = c, row[4] = d, row[5] = e;
+}
+static int live_known(int32_t id) {
+    for (int i = 0; i < g_live_count; i++)
+        if (g_live[i] == id) return 1;
+    return 0;
+}
+EXPORT("hmi_pv_live_add") int32_t hmi_pv_live_add(int32_t type, int32_t parent, int32_t kind, int32_t before, int32_t draw) {
+    live_log(1, type, parent, kind, before, draw);
+    if (type == 7 || g_live_count >= 16 || (parent >= 100 && !live_known(parent))) return -1;
+    g_live[g_live_count++] = g_next_live;
+    g_dirty = 1;
+    return g_next_live++;
+}
+EXPORT("hmi_pv_live_set_num") int32_t hmi_pv_live_set_num(int32_t element, int32_t setter, double v) {
+    live_log(2, element, setter, (int32_t)v, 0, 0);
+    if (!live_known(element) || setter != 1) return -1;
+    g_value = v;
+    return 0;
+}
+EXPORT("hmi_pv_live_set_str") int32_t hmi_pv_live_set_str(int32_t element, int32_t setter) {
+    live_log(3, element, setter, 0, 0, 0);
+    return live_known(element) && setter == 1 ? 0 : -1;
+}
+EXPORT("hmi_pv_live_remove") int32_t hmi_pv_live_remove(int32_t element) {
+    live_log(4, element, 0, 0, 0, 0);
+    for (int i = 0; i < g_live_count; i++)
+        if (g_live[i] == element) {
+            g_live[i] = g_live[--g_live_count];
+            return 0;
+        }
+    return -1;
+}
+static int32_t g_off[16], g_off_count;
+
+static int off_index(int32_t element) {
+    for (int i = 0; i < g_off_count; i++)
+        if (g_off[i] == element) return i;
+    return -1;
+}
+EXPORT("hmi_pv_live_detach") int32_t hmi_pv_live_detach(int32_t element, int32_t parent, int32_t kind) {
+    live_log(5, element, parent, kind, 0, 0);
+    if (off_index(element) >= 0 || (element >= 100 && !live_known(element)) || g_off_count >= 16) return -1;
+    g_off[g_off_count++] = element;
+    g_dirty = 1;
+    return 0;
+}
+EXPORT("hmi_pv_live_attach")
+int32_t hmi_pv_live_attach(int32_t element, int32_t parent, int32_t kind, int32_t before, int32_t draw) {
+    live_log(6, element, parent, kind, before, draw);
+    const int i = off_index(element);
+    if (i < 0) return -1;
+    g_off[i] = g_off[--g_off_count];
+    g_dirty = 1;
+    return element;
+}
 /* What the tests read back: the last pointer (kind, x, y in Q4), the last key, the design flag and the set value. */
 EXPORT("fake_pointer") const int32_t *fake_pointer(void) { return g_last_pointer; }
 EXPORT("fake_key") int32_t fake_key(void) { return g_last_key; }
 EXPORT("fake_design") int32_t fake_design(void) { return g_design; }
 EXPORT("fake_value") double fake_value(void) { return g_value; }
 EXPORT("fake_text") const char *fake_text(void) { return g_text; }
+EXPORT("fake_live_calls") int32_t fake_live_calls(void) { return g_live_calls; }
+EXPORT("fake_live") const int32_t *fake_live(void) { return g_live_log; }

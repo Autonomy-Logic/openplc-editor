@@ -16,8 +16,8 @@ and produce the same pixels on each. This folder is mirrored byte for byte in op
 | `core/hmi_text.c` | Fonts, text metrics, glyph cache, text drawing |
 | `core/third_party/` | stb_truetype (see its README) |
 | `baremetal/` | The HMI host of the Baremetal firmware (`hmi_baremetal.c`, `.h`) and the panel driver contract a board's HAL implements (`hmi_panel.h`) |
-| `unit/` | The interface of a generated HMI unit (`hmi_unit.h`), its preview setters (`hmi_preview.h`) and the host-side manifest a Runtime v4 HMI host serves values from (`hmi_access.h`) |
-| `preview/` | The editor's preview host (`hmi_preview_host.cpp`): one viewer of a unit in a WebAssembly module, frames rasterized in bands with unchanged bands skipped |
+| `unit/` | The interface of a generated HMI unit (`hmi_unit.h`), its preview setters and live elements (`hmi_preview.h`), the preview's factory table (`hmi_preview_factory.h`) and the host-side manifest a Runtime v4 HMI host serves values from (`hmi_access.h`) |
+| `preview/` | The editor's preview host (`hmi_preview_host.cpp`): one viewer of a unit in a WebAssembly module, frames rasterized in bands with unchanged bands skipped; and its live elements (`hmi_preview_live.cpp`), added to the shown screen without a build |
 | `client/` | The Runtime v4 browser client served at `/hmi/`, which runs the screens: the sign-in page, `hmi-client.js` (sign-in, token renewal, the screens' frame loop, input and drawing, the `/api/hmi` value channel), socket.io-client 4.8.1 (MIT) and `hmi_browser_host.cpp`, built with the generated unit, the core and the unit's font table into `hmi.wasm` at each upload |
 | `fonts/` | The vetted fonts: OpenPLC Sans (default, ASCII and Latin-1) and Liberation Sans (full); see its README |
 
@@ -201,6 +201,15 @@ holds none of them, and the core's PIN entry is not linked into `hmi.wasm`, wher
   runtime's HMI host serves a viewer only the tags of the screen it shows when its role may open it, and applies only
   that screen's writes after checking their type and range (openplc-runtime `docs/HMI.md`).
 
+`hmi_preview.h` also lets the preview change the shown screen's structure without a build. A preview build compiles
+the libraries whole and generates a factory table (`unit/hmi_preview_factory.h`, `hmi_preview_factory.cpp`): every
+widget type and one setter per input it sets live. `preview/hmi_preview_live.cpp` creates an element from it
+(`hmi_unit_live_add`), takes any element, compiled or made, out of its container's children and the screen's drawing
+list (`hmi_unit_live_detach`: no layout, drawing or input reaches it) and puts one back where the next build attaches
+it (`hmi_unit_live_attach`); new elements are numbered after the screen's elements. When another page is shown, the
+host forgets these changes and frees the made elements (`hmi_unit_live_sync`). Product builds (firmware, Runtime v4,
+the CLI) generate no factory and never link either file.
+
 ## Tests (in openplc-editor)
 
 `npm run test:hmi-core` (or `node tests/hmi-core/run.mjs`, see the options at the top of that file) builds the
@@ -215,7 +224,12 @@ input and checks every frame against `tests/hmi-lib/golden.txt`.
 
 `npm run test:hmi-preview` (`tests/hmi-preview/run.ts`) builds a sample project's preview with the shared preview
 build and the in-editor WebAssembly toolchain, runs it through the preview host, and checks frames, band skipping,
-live setters, navigation, the widget-block preview and how long rebuilds take after each kind of edit.
+live setters, navigation, the widget-block preview and how long rebuilds take after each kind of edit. It changes
+a running module's structure without a build, as the designer does: elements added, removed (from a stack, a
+container with its contents, a diagram), reordered, moved to another stack or on a diagram, and values changed, each
+undone and redone, and checks that every step is drawn within `HMI_PREVIEW_LIVE_ADD_MS` (50 ms) without a compile, with
+the frame and bounds of the module that step's source builds, and that a tap where a removed button was does nothing.
+It prints where each build spent its time.
 
 `npm run test:hmi-baremetal` (`tests/hmi-baremetal/run.mjs`) builds the core, the sample unit and the baremetal host
 with `HMI_STATIC_MEMORY` and a fake panel, clock and debugger table, and checks in simulated time that the panel shows
