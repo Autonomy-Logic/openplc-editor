@@ -18,13 +18,14 @@ import {
   HMI_CLIENT_MODULE,
   HMI_INSTALL_MANIFEST,
 } from '../../src/backend/shared/hmi/artefact/compose-hmi-artefact'
+import { buildHmiPreview } from '../../src/backend/shared/hmi/preview/build-hmi-preview'
 import { generateHmiUnit } from '../../src/backend/shared/hmi/unit/generate-hmi-unit'
 import { sampleProject } from '../../src/backend/shared/hmi/unit/__tests__/fixtures/sample-project'
 import { isYowaspClang, runClangJob } from '../../src/backend/shared/wasm-toolchain/clang-worker-host'
 import { compileToWasm } from '../../src/backend/shared/wasm-toolchain/compile-to-wasm'
 import { BoundedWasmObjectCache } from '../../src/backend/shared/wasm-toolchain/wasm-object-cache'
 import type { WasmClangRunner } from '../../src/middleware/shared/ports/wasm-toolchain-mechanisms'
-import type { WasmCompileRequest } from '../../src/middleware/shared/ports/wasm-toolchain-types'
+import type { WasmCompileJobTiming, WasmCompileRequest } from '../../src/middleware/shared/ports/wasm-toolchain-types'
 
 const ROOT = join(__dirname, '..', '..')
 const HMI = join(ROOT, 'resources', 'sources', 'hmi')
@@ -290,6 +291,29 @@ async function main(): Promise<void> {
   ].map(([path, arrayIdx, elemIdx]) => ({ path, arrayIdx, elemIdx, type: 'BOOL', size: 1 }))
   const headers = runtimeHeaders()
   let request: WasmCompileRequest | null = null
+  let jobs: WasmCompileJobTiming[] = []
+
+  const all = readAll(HMI)
+  const previewSources = Object.fromEntries(
+    Object.entries(all).flatMap(([path, content]) =>
+      /^(core|unit|preview)\/.*\.(c|h|cpp)$/.test(path)
+        ? [[path, typeof content === 'string' ? content : new TextDecoder().decode(content)]]
+        : [],
+    ),
+  )
+  const preview = await buildHmiPreview(
+    { ...project, preview: true },
+    {
+      runtimeHeaders: Object.fromEntries(
+        Object.entries(headers).map(([path, text]) => [path.slice('strucpp_runtime/include/'.length), text]),
+      ),
+      hmiSources: previewSources,
+      readFont: (file) => Promise.resolve(new Uint8Array(readFileSync(join(HMI, 'fonts', file)))),
+    },
+    compile,
+  )
+  if (!preview.ok) console.log(preview.errors.map((e) => `${e.file}: ${e.message}`).join('\n'))
+  check(preview.ok, "the screens' preview builds first, with the same compiled objects")
 
   const start = performance.now()
   const artefact = await composeHmiArtefact({
@@ -301,11 +325,18 @@ async function main(): Promise<void> {
     instances: [{ name: 'instance0', program: 'Main' }],
     hmiSources: readAll(HMI),
     runtimeHeaders: headers,
-    compile: (r) => {
+    compile: async (r) => {
       request = r
-      return compile(r)
+      const result = await compile(r)
+      jobs = result.stats.jobs ?? []
+      return result
     },
   })
+  const library = jobs.filter((j) => j.source.startsWith('hmilib/'))
+  check(
+    library.length > 0 && library.every((j) => j.cached),
+    "hmi.wasm links the widget library objects the preview compiled, compiling none of the library's units",
+  )
   if (!artefact.ok) throw new Error(artefact.errors.map((e) => `${e.file}: ${e.message}`).join('\n'))
   console.log(`artefact composed in ${Math.round(performance.now() - start)} ms`)
   const files = artefact.files
