@@ -58,8 +58,8 @@ const respond = (status: number, body: unknown = {}): FakeResponse => ({
   headers: { get: () => null },
 })
 
-const token = (expSeconds: number, id: string): string =>
-  `h.${btoa(JSON.stringify({ exp: expSeconds, jti: id })).replace(/=+$/, '')}.s`
+const token = (expSeconds: number, id: string, sid = 's1'): string =>
+  `h.${btoa(JSON.stringify({ exp: expSeconds, jti: id, sid })).replace(/=+$/, '')}.s`
 
 /** The module's exports as hmi-client.js calls them, faked: page, sign-out flag and queued writes are settable. */
 class FakeModule {
@@ -420,5 +420,60 @@ describe('the HMI browser client page', () => {
       `Bearer ${token(now() + 900, 'b')}`,
       `Bearer ${token(now() + 900, 'd')}`,
     ])
+  })
+
+  describe('with two tabs sharing the stored token', () => {
+    it('takes over the token another tab renewed instead of presenting the renewed one', async () => {
+      const page = loadPage(token(now() + 900, 'a'))
+      page.answer('/api/renew', respond(200, { access_token: token(now() + 900, 'b') }))
+      await settle()
+      const renewals = () => page.calls.filter((c) => c === '/api/renew').length
+      expect(renewals()).toBe(1)
+      const other = token(now() + 1500, 'c')
+      localStorage.setItem(TOKEN_KEY, other)
+      await jest.advanceTimersByTimeAsync(12 * 60 * 1000)
+      expect(renewals()).toBe(1)
+      expect(formShown()).toBe(false)
+      expect(localStorage.getItem(TOKEN_KEY)).toBe(other)
+      await jest.advanceTimersByTimeAsync(10 * 60 * 1000)
+      expect(renewals()).toBe(2)
+      expect(page.auth.get('/api/renew')?.[1]).toBe(`Bearer ${other}`)
+    })
+
+    it('keeps the session when its renewal loses the race to another tab', async () => {
+      const page = loadPage(token(now() + 900, 'a'))
+      page.answer('/api/renew', respond(200, { access_token: token(now() + 900, 'b') }))
+      await settle()
+      await jest.advanceTimersByTimeAsync(12 * 60 * 1000)
+      const winner = token(now() + 900, 'c')
+      localStorage.setItem(TOKEN_KEY, winner)
+      page.answer('/api/renew', respond(401))
+      await settle()
+      expect(formShown()).toBe(false)
+      expect(localStorage.getItem(TOKEN_KEY)).toBe(winner)
+    })
+
+    it('follows a renewal another tab announces through storage', async () => {
+      const page = loadPage(token(now() + 900, 'a'))
+      page.answer('/api/renew', respond(200, { access_token: token(now() + 900, 'b') }))
+      await settle()
+      const other = token(now() + 1500, 'c')
+      window.dispatchEvent(new StorageEvent('storage', { key: TOKEN_KEY, newValue: other }))
+      page.sockets[0].fire('disconnect', 'io server disconnect')
+      expect(page.auth.get('/api/whoami')).toEqual([`Bearer ${other}`])
+    })
+
+    it("still ends a session the device refused, and leaves another session's token alone", async () => {
+      const page = loadPage(token(now() + 900, 'a'))
+      page.answer('/api/renew', respond(200, { access_token: token(now() + 900, 'b') }))
+      await settle()
+      await jest.advanceTimersByTimeAsync(12 * 60 * 1000)
+      const foreign = token(now() + 1500, 'z', 's2')
+      localStorage.setItem(TOKEN_KEY, foreign)
+      page.answer('/api/renew', respond(401))
+      await settle()
+      expect(formShown()).toBe(true)
+      expect(localStorage.getItem(TOKEN_KEY)).toBe(foreign)
+    })
   })
 })

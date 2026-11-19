@@ -61,6 +61,23 @@
     return tokenExpiryMs(token) > nowMs
   }
 
+  /** The sign-in session a token belongs to (its `sid` claim), or null. */
+  function tokenSession(token) {
+    var payload = tokenPayload(token)
+    return payload && typeof payload.sid === 'string' ? payload.sid : null
+  }
+
+  /**
+   * The token another tab of this browser stored for the same sign-in session after renewing it, or null: tabs share
+   * the stored token, and a renewal makes the one it replaced unusable, so a tab takes its successor over.
+   */
+  function newerStoredToken(current, stored) {
+    if (typeof stored !== 'string' || !current || stored === current) return null
+    var session = tokenSession(current)
+    if (!session || tokenSession(stored) !== session) return null
+    return tokenExpiryMs(stored) > tokenExpiryMs(current) ? stored : null
+  }
+
   /** Milliseconds from nowMs until the token should be renewed. */
   function renewDelayMs(token, nowMs) {
     var expiry = tokenExpiryMs(token)
@@ -178,6 +195,8 @@
     TOKEN_KEY: TOKEN_KEY,
     tokenExpiryMs: tokenExpiryMs,
     tokenUsable: tokenUsable,
+    tokenSession: tokenSession,
+    newerStoredToken: newerStoredToken,
     renewDelayMs: renewDelayMs,
     noticeFor: noticeFor,
     signInMessage: signInMessage,
@@ -273,13 +292,15 @@
       frameTimer = 0
     }
 
+    /** Returns to the sign-in form; the stored token goes too unless it belongs to another tab's session. */
     function showForm(text) {
       closeSocket()
       stopFrames()
       clearTimeout(renewTimer)
       live = false
+      var stored = readToken()
+      if (!stored || tokenSession(stored) === tokenSession(token)) writeToken(null)
       token = null
-      writeToken(null)
       compiled = null
       compiling = null
       hmi = null
@@ -295,11 +316,44 @@
       renewTimer = setTimeout(renew, delay)
     }
 
+    /** Takes over the token another tab renewed for this session, and renews it in turn when it is due. */
+    function adopt(newer) {
+      token = newer
+      scheduleRenew(renewDelayMs(token, Date.now()))
+    }
+
     /**
-     * Renews the token; resolves once the renewal settled, whatever its outcome. A reply for a token that was
-     * replaced or dropped meanwhile (sign-out, a newer renewal) is ignored.
+     * Shows the form for a session the device refused, unless another tab renewed it meanwhile: then its token is
+     * taken over and the page goes on with it.
+     */
+    function sessionRefused(text) {
+      var newer = newerStoredToken(token, readToken())
+      if (!newer) {
+        showForm(text)
+        return false
+      }
+      adopt(newer)
+      return true
+    }
+
+    /**
+     * Renews the token; resolves once the renewal settled, whatever its outcome. Tabs renew one at a time (a Web Lock
+     * when the browser has them), and a tab whose token another tab already renewed takes the successor instead of
+     * presenting a renewed token, which the device would refuse. A reply for a token that was replaced or dropped
+     * meanwhile (sign-out, a newer renewal) is ignored.
      */
     function renew() {
+      var locks = root.navigator && root.navigator.locks
+      if (locks && typeof locks.request === 'function') return locks.request('openplc-hmi-renew', renewNow)
+      return renewNow()
+    }
+
+    function renewNow() {
+      var newer = newerStoredToken(token, readToken())
+      if (newer) {
+        adopt(newer)
+        return Promise.resolve()
+      }
       var sent = token
       if (!sent) return Promise.resolve()
       if (!tokenUsable(sent, Date.now())) {
@@ -310,7 +364,7 @@
         .then(function (response) {
           if (token !== sent) return null
           if (response.status === 401 || response.status === 403) {
-            showForm('Your session ended. Sign in again.')
+            sessionRefused('Your session ended. Sign in again.')
             return null
           }
           if (!response.ok) throw new Error('renew ' + response.status)
@@ -432,7 +486,7 @@
       })
       socket.on('connect_error', function () {
         if (!token || !tokenUsable(token, Date.now())) {
-          showForm('Your session expired. Sign in again.')
+          sessionRefused('Your session expired. Sign in again.')
           return
         }
         pause('offline')
@@ -461,12 +515,18 @@
       })
     }
 
-    /** Shows the form when the device has ended the session; connects again otherwise. */
+    /**
+     * Shows the form when the device has ended the session, unless another tab renewed it; connects again otherwise.
+     */
     function checkSession() {
       fetch('/api/whoami', { headers: { Authorization: 'Bearer ' + token } })
         .then(function (response) {
-          if (response.status === 401 || response.status === 403) showForm('Your session ended. Sign in again.')
-          else openSocket()
+          if (
+            (response.status === 401 || response.status === 403) &&
+            !sessionRefused('Your session ended. Sign in again.')
+          )
+            return
+          openSocket()
         })
         .catch(function () {
           openSocket()
@@ -521,8 +581,9 @@
           return true
         })
         .catch(function (error) {
-          if (error && error.refused) showForm('Your session ended. Sign in again.')
-          else showNotice(NOTICES.unsupported)
+          if (error && error.refused) {
+            if (sessionRefused('Your session ended. Sign in again.')) reopenTimer = setTimeout(sendOpen, 0)
+          } else showNotice(NOTICES.unsupported)
           return false
         })
     }
@@ -679,6 +740,12 @@
       if (!c) return
       event.preventDefault()
       hmi.hmi_bh_key(c)
+    })
+
+    root.addEventListener('storage', function (event) {
+      if (event.key !== TOKEN_KEY) return
+      var newer = newerStoredToken(token, event.newValue)
+      if (newer) adopt(newer)
     })
 
     root.addEventListener('resize', function () {

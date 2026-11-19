@@ -16,6 +16,8 @@ interface ClientLogic {
   TOKEN_KEY: string
   tokenExpiryMs(token: unknown): number
   tokenUsable(token: unknown, nowMs: number): boolean
+  tokenSession(token: unknown): string | null
+  newerStoredToken(current: string | null, stored: unknown): string | null
   renewDelayMs(token: string, nowMs: number): number
   noticeFor(state: string): string | null
   signInMessage(status: number, retryAfter: string | null): string
@@ -57,6 +59,19 @@ describe('the HMI browser client', () => {
     expect(logic.tokenUsable(token, NOW + 900_000)).toBe(false)
     for (const bad of [null, 'abc', 'a.b.c', jwt({}), jwt({ exp: 'soon' }), 'a.!!!.c'])
       expect(logic.tokenUsable(bad, NOW)).toBe(false)
+  })
+
+  it('takes over only a later token of the same session that another tab stored', () => {
+    const mine = jwt({ exp: NOW / 1000 + 100, sid: 's1', jti: 'a' })
+    const renewed = jwt({ exp: NOW / 1000 + 900, sid: 's1', jti: 'b' })
+    expect(logic.tokenSession(mine)).toBe('s1')
+    expect(logic.newerStoredToken(mine, renewed)).toBe(renewed)
+    expect(logic.newerStoredToken(mine, mine)).toBeNull()
+    expect(logic.newerStoredToken(renewed, mine)).toBeNull()
+    expect(logic.newerStoredToken(mine, jwt({ exp: NOW / 1000 + 900, sid: 's2' }))).toBeNull()
+    expect(logic.newerStoredToken(mine, null)).toBeNull()
+    expect(logic.newerStoredToken(null, renewed)).toBeNull()
+    expect(logic.newerStoredToken(jwt({ exp: NOW / 1000 + 100 }), renewed)).toBeNull()
   })
 
   it('renews three minutes before the token expires, never sooner than 10 seconds', () => {
