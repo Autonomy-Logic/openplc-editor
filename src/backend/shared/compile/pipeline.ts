@@ -908,6 +908,7 @@ async function runCompilePipelineInner(
       debugMapJson,
       md5,
       instances,
+      runtimeHeaders: strucppRuntimeHeaders,
       port,
       log: makePlatformLog(emit, 'hmi'),
     })

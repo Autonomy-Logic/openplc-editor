@@ -77,7 +77,7 @@ static void plc_write(void *ctx, int tag, const void *src) {
     if (g_write_count < 64) g_writes[g_write_count++] = tag;
 }
 
-static const hmi_tag_access_t g_access = {plc_read, plc_write, NULL};
+static const hmi_tag_access_t g_access = {plc_read, plc_write, NULL, NULL};
 
 /* One frame of a viewer, reading the PLC's values as screens use them, then the writes it made. */
 static void frame(viewer_t *v, const char *label) {
@@ -179,7 +179,7 @@ int main(int argc, char **argv) {
     hmi_session_use(admin.session);
     for (const char *k = "\b\b\b\bPUMP STATION 7\r"; *k; k++) hmi_input_key((uint32_t)(unsigned char)*k);
     frame(&admin, "name_typed!");
-    /* Entries outside the INT's range write its nearest value; a non-number writes nothing. */
+    /* Entries outside the input's 0 to 100 and a non-number write nothing; 12 is written. */
     const char *entries[] = {"\b\b\b\b\b\b40000\r", "\b\b\b\b\b\b-1e30\r", "\b\b\b\b\b\binf\r", "\b\b\b\b\b\b12\r"};
     for (int e = 0; e < 4; e++) {
         tap(&admin, "setpoint", ID_OVERVIEW_SETPOINT);
@@ -256,7 +256,7 @@ int main(int argc, char **argv) {
     printf("host cut '%s'\n", (const char *)got);
 
     /* Access missing a callback counts as none: the unit keeps the variables itself and never calls the host. */
-    static const hmi_tag_access_t half = {plc_read, NULL, NULL};
+    static const hmi_tag_access_t half = {plc_read, NULL, NULL, NULL};
     hmi_set_tag_access(&half);
     g_reads = 0;
     hmi_tag_read(level_tag, NULL, got);

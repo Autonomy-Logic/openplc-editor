@@ -166,8 +166,13 @@ function widgetOf(
   const palette = attribute(located.fb, 'hmi_palette')?.value
   if (palette) widget.palette = palette
   if (main) widget.main = main
-  if (main?.direction === 'input' && changed && newValue)
+  if (main?.direction === 'input' && changed && newValue) {
     widget.twoWay = { value: main.name, changed: written(changed), newValue: written(newValue) }
+    const range = attribute(newValue, 'hmi_range')?.value
+    if (range) widget.twoWay.range = range
+    const maxLength = attribute(newValue, 'hmi_max_length')?.value
+    if (maxLength) widget.twoWay.maxLength = maxLength
+  }
   if (main?.direction === 'output' && main.type.toUpperCase() === 'BOOL' && changed)
     widget.momentary = { value: main.name, changed: written(changed) }
   const seriesOf = (role: string) =>

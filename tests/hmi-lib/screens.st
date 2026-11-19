@@ -79,7 +79,7 @@ FUNCTION_BLOCK ControlsScreen EXTENDS HmiScreen
     Start : HmiButton := (Text := 'Start');
     RunSwitch : HmiSwitch := (Caption := 'Run');
     SpeedSlider : HmiSlider := (Caption := 'Speed', MaxValue := 200.0, Step := 10.0, Unit := 'rpm', Decimals := 0);
-    SetpointIn : HmiNumericInput := (Caption := 'Setpoint', Unit := 'm', Decimals := 2);
+    SetpointIn : HmiNumericInput := (Caption := 'Setpoint', Unit := 'm', Decimals := 2, MinValue := 0.0, MaxValue := 100.0);
     NameIn : HmiTextInput := (Caption := 'Name', MaxLength := 12, Placeholder := 'Tag name');
     Locked : HmiSwitch := (Caption := 'Locked', Enabled := FALSE);
   END_VAR

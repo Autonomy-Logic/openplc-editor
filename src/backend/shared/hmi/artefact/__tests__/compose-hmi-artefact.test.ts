@@ -7,6 +7,7 @@ import {
   composeHmiArtefact,
   type ComposeHmiArtefactInput,
   HMI_CLIENT_C_FLAGS,
+  HMI_CLIENT_CXX_FLAGS,
   HMI_INSTALL_MANIFEST,
   HMI_REMOVE_MANIFEST,
   hmiRemovalArtefact,
@@ -29,6 +30,7 @@ function readAll(dir: string, prefix = ''): Record<string, Uint8Array> {
 }
 
 const HMI_SOURCES = readAll(HMI_DIR)
+const RUNTIME_HEADERS = { 'strucpp_runtime/include/iec_types.hpp': '#pragma once\n' }
 const stats = { units: 1, cached: 0, compileMs: 1, linkMs: 1 }
 const WASM = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])
 
@@ -50,6 +52,7 @@ function input(overrides: Partial<ComposeHmiArtefactInput> = {}) {
     md5: 'fe3845fc1babc413455ceb7a5ee596bf',
     instances: [{ name: 'instance0', program: 'Main' }],
     hmiSources: HMI_SOURCES,
+    runtimeHeaders: RUNTIME_HEADERS,
     compile: (request) => {
       requests.push(request)
       return Promise.resolve(result)
@@ -60,26 +63,28 @@ function input(overrides: Partial<ComposeHmiArtefactInput> = {}) {
 }
 
 describe('composeHmiArtefact', () => {
-  it('builds hmi/ with the unit, the core, the font table, the client and the manifest', async () => {
+  it('builds hmi/ with the host-side manifest for the device and the whole HMI as WebAssembly for the browser', async () => {
     const { value, requests } = input()
     const result = await composeHmiArtefact(value)
     if (!result.ok) throw new Error(JSON.stringify(result.errors))
     const { files } = result
     expect(files['hmi/manifest.json']).toBe(HMI_INSTALL_MANIFEST)
-    expect(files['hmi/src/hmi_unit_glue.cpp']).toContain(
-      'const char hmi_plc_md5[] = "fe3845fc1babc413455ceb7a5ee596bf";',
-    )
-    expect(files['hmi/src/hmi_unit_glue.cpp']).toContain('{2u, 0u, 1, 0, "CONFIG0.ALARMON"},')
-    expect(files['hmi/src/hmi_unit.h']).toContain('hmi_tag_access_t')
-    expect(files['hmi/src/hmi_fonts.c']).toContain('hmi_font_table')
-    expect(files['hmi/src/core/hmi_core.c']).toBeDefined()
-    expect(files['hmi/src/core/third_party/stb_truetype.h']).toBeDefined()
-    expect(files['hmi/client/hmi_client.wasm']).toBe(WASM)
+    expect(HMI_INSTALL_MANIFEST).toBe('{"format": 2}\n')
+    expect(Object.keys(files).filter((p) => p.startsWith('hmi/src/'))).toEqual([
+      'hmi/src/hmi_access.h',
+      'hmi/src/hmi_access.c',
+    ])
+    const access = String(files['hmi/src/hmi_access.c'])
+    expect(access).toContain('const char hmi_access_plc_md5[] = "fe3845fc1babc413455ceb7a5ee596bf";')
+    expect(access).toContain('{2u, 0u, 1, 0, "CONFIG0.ALARMON"},')
+    expect(access).toContain('const uint32_t hmi_access_period_ms = 50u;')
+    expect(String(files['hmi/src/hmi_access.h'])).toContain('hmi_access_page_t')
+    expect(files['hmi/client/hmi.wasm']).toBe(WASM)
     expect(String(files['hmi/client/fonts-LICENSE.txt'])).toContain('SIL OPEN FONT LICENSE')
     expect(String(files['hmi/client/socket.io-LICENSE.txt'])).toContain('MIT')
     for (const name of ['index.html', 'hmi.css', 'hmi-client.js', 'socket.io.min.js'])
       expect(typeof files[`hmi/client/${name}`]).toBe('string')
-    expect(Object.keys(files).filter((p) => p.startsWith('hmi/src/preview') || p.includes('hmi_preview'))).toEqual([])
+    expect(Object.keys(files).some((p) => /\.(cpp|hpp)$/.test(p) || p.includes('hmi_preview'))).toBe(false)
     expect(result.tags.map((t) => t.address)).toEqual([
       { arr: 0, elem: 3 },
       { arr: 0, elem: 4 },
@@ -87,25 +92,76 @@ describe('composeHmiArtefact', () => {
       { arr: 1, elem: 0 },
       { arr: 2, elem: 0 },
     ])
+    expect(result.pages).toEqual([
+      {
+        name: 'Overview',
+        reads: [0, 1, 2, 3, 4],
+        writes: [1, 2, 3].map((tag) => expect.objectContaining({ tag, whole: true, bits: [] })),
+        roles: 15,
+      },
+      { name: 'Details', reads: [3], writes: [], roles: 3 },
+    ])
 
     expect(requests).toHaveLength(1)
     const request = requests[0]
-    expect(request.output).toBe('hmi_client.wasm')
+    expect(request.output).toBe('hmi.wasm')
     expect(request.cFlags).toEqual(HMI_CLIENT_C_FLAGS)
-    expect(request.units.map((u) => u.source)).toEqual([
-      'core/hmi_raster.c',
-      'core/hmi_text.c',
-      'core/hmi_math.c',
-      'client/hmi_fonts.c',
-      'client/hmi_client.c',
+    expect(request.cxxFlags).toEqual(HMI_CLIENT_CXX_FLAGS)
+    expect(HMI_CLIENT_C_FLAGS).toEqual(expect.arrayContaining(['-O2', '-ffp-contract=off']))
+    const sources = request.units.map((u) => u.source)
+    expect(sources.slice(0, 6)).toEqual([
+      'hmi/core/hmi_core.c',
+      'hmi/core/hmi_theme.c',
+      'hmi/core/hmi_math.c',
+      'hmi/core/hmi_raster.c',
+      'hmi/core/hmi_text.c',
+      'unit/hmi_fonts.c',
     ])
-    expect(request.files['client/hmi_fonts.c']).toBe(files['hmi/src/hmi_fonts.c'])
+    expect(sources).toEqual(
+      expect.arrayContaining(['unit/hmi_unit_glue.cpp', 'unit/pou_OVERVIEW.cpp', 'hmi/client/hmi_browser_host.cpp']),
+    )
+    expect(sources.some((s) => s.includes('preview'))).toBe(false)
+    expect(request.files['strucpp_runtime/include/iec_types.hpp']).toBe('#pragma once\n')
+    expect(request.files['unit/hmi_unit_glue.cpp']).toContain(
+      'const char hmi_plc_md5[] = "fe3845fc1babc413455ceb7a5ee596bf";',
+    )
+  })
+
+  it('leaves the panel PIN, relock time and calibration out of everything a Runtime v4 upload carries', async () => {
+    const sources = sampleProject()
+    sources.settings = {
+      ...sources.settings,
+      pin: { enabled: true, value: '97531864' },
+      relock: { mode: 'idle', minutes: 47 },
+    }
+    const { value, requests } = input({ sources })
+    const result = await composeHmiArtefact(value)
+    if (!result.ok) throw new Error(JSON.stringify(result.errors))
+    const decoder = new TextDecoder()
+    const texts = [
+      ...Object.values(result.files).map((f) => (typeof f === 'string' ? f : decoder.decode(f))),
+      ...Object.entries(requests[0].files)
+        .filter(([path]) => !path.endsWith('hmi_fonts.c'))
+        .map(([, f]) => f),
+    ]
+    for (const text of texts) {
+      expect(text).not.toContain('97531864')
+      expect(text).not.toMatch(
+        /hmi_panel_pin\s*\[\]\s*=|hmi_relock_minutes\s*=|hmi_touch_cal_mode\s*=|hmi_build_id\s*\[\]\s*=/,
+      )
+    }
   })
 
   it('sends only the removal manifest for a project without screens', async () => {
     const { value, requests } = input({ sources: null })
     const result = await composeHmiArtefact(value)
-    expect(result).toEqual({ ok: true, files: { 'hmi/manifest.json': HMI_REMOVE_MANIFEST }, tags: [], warnings: [] })
+    expect(result).toEqual({
+      ok: true,
+      files: { 'hmi/manifest.json': HMI_REMOVE_MANIFEST },
+      tags: [],
+      pages: [],
+      warnings: [],
+    })
     expect(hmiRemovalArtefact()).toEqual({ 'hmi/manifest.json': HMI_REMOVE_MANIFEST })
     expect(requests).toHaveLength(0)
   })
@@ -132,16 +188,19 @@ describe('composeHmiArtefact', () => {
     expect(requests).toHaveLength(0)
   })
 
-  it.each(['client/hmi-client.js', 'client/hmi_client.c', 'unit/hmi_unit.h', 'fonts/LICENSE.txt'])(
-    'names a missing %s',
-    async (missing) => {
-      const hmiSources = { ...HMI_SOURCES }
-      delete hmiSources[missing]
-      const result = await composeHmiArtefact(input({ hmiSources }).value)
-      expect(result.ok).toBe(false)
-      if (!result.ok) expect(result.errors[0].message).toContain(missing)
-    },
-  )
+  it.each([
+    'client/hmi-client.js',
+    'client/hmi_browser_host.cpp',
+    'unit/hmi_unit.h',
+    'unit/hmi_access.h',
+    'fonts/LICENSE.txt',
+  ])('names a missing %s', async (missing) => {
+    const hmiSources = { ...HMI_SOURCES }
+    delete hmiSources[missing]
+    const result = await composeHmiArtefact(input({ hmiSources }).value)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.errors[0].message).toContain(missing)
+  })
 
   it('fails without the core or a font', async () => {
     const noCore = Object.fromEntries(Object.entries(HMI_SOURCES).filter(([p]) => !p.startsWith('core/')))
@@ -158,17 +217,19 @@ describe('composeHmiArtefact', () => {
       error: 'link failed',
       stats,
       diagnostics: [
-        { message: 'hmi_client.c:3: error: oops', level: 'error' },
+        { message: 'hmi_browser_host.cpp:3: error: oops', level: 'error' },
         { message: 'a warning', level: 'warning' },
       ],
     }
     const result = await composeHmiArtefact(input({ compile: () => Promise.resolve(failed) }).value)
     expect(result.ok).toBe(false)
     if (!result.ok)
-      expect(result.errors[0].message).toBe('The HMI browser client did not compile: hmi_client.c:3: error: oops')
+      expect(result.errors[0].message).toBe(
+        'The HMI browser module did not compile: hmi_browser_host.cpp:3: error: oops',
+      )
     const bare: WasmCompileResult = { ok: false, error: 'link failed', stats, diagnostics: [] }
     const second = await composeHmiArtefact(input({ compile: () => Promise.resolve(bare) }).value)
-    if (!second.ok) expect(second.errors[0].message).toBe('The HMI browser client did not compile: link failed')
+    if (!second.ok) expect(second.errors[0].message).toBe('The HMI browser module did not compile: link failed')
   })
 
   it('accepts sources given as text', async () => {

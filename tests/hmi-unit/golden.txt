@@ -18,15 +18,15 @@ admin name_up page=0 dl=9d19a72c24943103 status=0
 admin name_typed! page=0 dl=08e81694bd2bf9c7 status=0 write CONFIG0.RES0.INSTANCE0.MAIN.TAG='PUMP STATION'
 admin setpoint_down page=0 dl=17f1edc73009e0ef status=0
 admin setpoint_up page=0 dl=17f1edc73009e0ef status=0
-admin setpoint_typed page=0 dl=bb38c476507b899d status=0 write CONFIG0.RES0.INSTANCE0.MAIN.SPEED=32767
-admin setpoint_down page=0 dl=535e8ee44315a7d7 status=0
-admin setpoint_up page=0 dl=535e8ee44315a7d7 status=0
-admin setpoint_typed page=0 dl=cf750a313f6ee30a status=0 write CONFIG0.RES0.INSTANCE0.MAIN.SPEED=-32768
-admin setpoint_down page=0 dl=c1caa44fea814881 status=0
-admin setpoint_up page=0 dl=c1caa44fea814881 status=0
-admin setpoint_typed page=0 dl=cf750a313f6ee30a status=0
-admin setpoint_down page=0 dl=c1caa44fea814881 status=0
-admin setpoint_up page=0 dl=c1caa44fea814881 status=0
+admin setpoint_typed page=0 dl=08e81694bd2bf9c7 status=0
+admin setpoint_down page=0 dl=17f1edc73009e0ef status=0
+admin setpoint_up page=0 dl=17f1edc73009e0ef status=0
+admin setpoint_typed page=0 dl=08e81694bd2bf9c7 status=0
+admin setpoint_down page=0 dl=17f1edc73009e0ef status=0
+admin setpoint_up page=0 dl=17f1edc73009e0ef status=0
+admin setpoint_typed page=0 dl=08e81694bd2bf9c7 status=0
+admin setpoint_down page=0 dl=17f1edc73009e0ef status=0
+admin setpoint_up page=0 dl=17f1edc73009e0ef status=0
 admin setpoint_typed page=0 dl=b2ab691971531483 status=0 write CONFIG0.RES0.INSTANCE0.MAIN.SPEED=12
 admin next_down page=0 dl=fbb2c1d1d888e843 status=0
 admin next_up page=1 dl=b2ab691971531483 status=0

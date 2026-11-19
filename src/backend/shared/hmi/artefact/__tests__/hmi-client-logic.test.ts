@@ -16,13 +16,22 @@ interface ClientLogic {
   TOKEN_KEY: string
   tokenExpiryMs(token: unknown): number
   tokenUsable(token: unknown, nowMs: number): boolean
+  tokenSession(token: unknown): string | null
+  newerStoredToken(current: string | null, stored: unknown): string | null
   renewDelayMs(token: string, nowMs: number): number
   noticeFor(state: string): string | null
   signInMessage(status: number, retryAfter: string | null): string
   keyCode(event: Partial<KeyboardEvent> | null): number
   createSequencer(): Sequencer
-  viewportEvent(width: number, height: number, ratio: number, n: number): Record<string, unknown>
-  pointerEvent(kind: number, x: number, y: number, n: number): Record<string, unknown>
+  openEvent(n: number): Record<string, unknown>
+  showEvent(page: number, n: number): Record<string, unknown>
+  writeEvent(tag: number, value: Uint8Array, n: number): Record<string, unknown>
+  parseWrites(
+    bytes: Uint8Array,
+  ): Array<{ page: number; tag: number; kind: number; bit: number; value: Uint8Array }> | null
+  toQ4(v: number): number
+  roleCode(status: unknown): number
+  bytesOf(data: unknown): Uint8Array
 }
 
 const isClientLogic = (value: unknown): value is ClientLogic =>
@@ -50,6 +59,19 @@ describe('the HMI browser client', () => {
     expect(logic.tokenUsable(token, NOW + 900_000)).toBe(false)
     for (const bad of [null, 'abc', 'a.b.c', jwt({}), jwt({ exp: 'soon' }), 'a.!!!.c'])
       expect(logic.tokenUsable(bad, NOW)).toBe(false)
+  })
+
+  it('takes over only a later token of the same session that another tab stored', () => {
+    const mine = jwt({ exp: NOW / 1000 + 100, sid: 's1', jti: 'a' })
+    const renewed = jwt({ exp: NOW / 1000 + 900, sid: 's1', jti: 'b' })
+    expect(logic.tokenSession(mine)).toBe('s1')
+    expect(logic.newerStoredToken(mine, renewed)).toBe(renewed)
+    expect(logic.newerStoredToken(mine, mine)).toBeNull()
+    expect(logic.newerStoredToken(renewed, mine)).toBeNull()
+    expect(logic.newerStoredToken(mine, jwt({ exp: NOW / 1000 + 900, sid: 's2' }))).toBeNull()
+    expect(logic.newerStoredToken(mine, null)).toBeNull()
+    expect(logic.newerStoredToken(null, renewed)).toBeNull()
+    expect(logic.newerStoredToken(jwt({ exp: NOW / 1000 + 100 }), renewed)).toBeNull()
   })
 
   it('renews three minutes before the token expires, never sooner than 10 seconds', () => {
@@ -93,10 +115,47 @@ describe('the HMI browser client', () => {
     expect(seq.next()).toBe(0)
   })
 
-  it('builds viewport and pointer events in the ranges the runtime accepts', () => {
-    expect(logic.viewportEvent(1280.4, 0, 20, 3)).toEqual({ t: 'v', w: 1280, h: 1, d: 8, n: 3 })
-    expect(logic.viewportEvent(99999, 720, 0, 0)).toEqual({ t: 'v', w: 8192, h: 720, d: 1, n: 0 })
-    expect(logic.pointerEvent(1, 12.5, -200000, 9)).toEqual({ t: 'p', k: 1, x: 12.5, y: -100000, n: 9 })
+  it('builds the open, show and write events the runtime accepts', () => {
+    expect(logic.openEvent(0)).toEqual({ t: 'o', n: 0 })
+    expect(logic.showEvent(3, 7)).toEqual({ t: 's', p: 3, n: 7 })
+    const value = new Uint8Array([1])
+    expect(logic.writeEvent(2, value, 8)).toEqual({ t: 'w', g: 2, v: value, n: 8 })
+  })
+
+  it('splits the writes the module queued into page, tag, kind, bit and value, each value a copy', () => {
+    const bytes = new Uint8Array([
+      ...[0, 0, 1, 0, 0, 0, 1, 0, 1],
+      ...[1, 0, 3, 0, 0, 0, 3, 0, 97, 98, 99],
+      ...[255, 255, 4, 0, 1, 5, 1, 0, 1],
+    ])
+    const writes = logic.parseWrites(bytes)
+    expect(writes?.map((w) => [w.page, w.tag, w.kind, w.bit, [...w.value]])).toEqual([
+      [0, 1, 0, 0, [1]],
+      [1, 3, 0, 0, [97, 98, 99]],
+      [65535, 4, 1, 5, [1]],
+    ])
+    bytes[8] = 0
+    expect(writes?.[0].value[0]).toBe(1)
+    expect(logic.parseWrites(new Uint8Array([0, 0, 1, 0, 0, 0, 2, 0, 1]))).toBeNull()
+    expect(logic.parseWrites(new Uint8Array([0, 0, 1, 0, 0, 0, 0]))).toBeNull()
+    expect(logic.parseWrites(new Uint8Array([]))).toEqual([])
+  })
+
+  it('turns CSS pixels into Q4 logical units, clamped', () => {
+    expect(logic.toQ4(12.5)).toBe(200)
+    expect(logic.toQ4(-1e9)).toBe(-16777216)
+  })
+
+  it('takes the role only from a live status that names one', () => {
+    expect(logic.roleCode({ state: 'live', role: 2 })).toBe(2)
+    for (const bad of [null, {}, { role: 4 }, { role: -1 }, { role: 1.5 }, { role: '2' }])
+      expect(logic.roleCode(bad)).toBe(-1)
+  })
+
+  it('reads binary payloads as bytes and anything else as nothing', () => {
+    expect([...logic.bytesOf(new Uint8Array([1, 2]).buffer)]).toEqual([1, 2])
+    expect([...logic.bytesOf(new Uint8Array([0, 5, 6]).subarray(1))]).toEqual([5, 6])
+    expect(logic.bytesOf('text').length).toBe(0)
   })
 
   it('keeps the page free of inline scripts and styles, which the device CSP refuses', () => {
