@@ -1,16 +1,33 @@
 /**
  * The release check scripts of `scripts/release/`, each run as a CI step runs it: one Node process per call, over
- * files written to a temporary directory. Fuse wires, keys and digests are synthetic, so no Electron binary is needed.
+ * files written to a temporary directory. Fuse wires, keys, digests, archives and packages are synthetic, so no
+ * Electron binary and no installer is needed.
  * @jest-environment node
  */
 import { execFileSync } from 'node:child_process'
-import { createHash, createHmac, createPrivateKey, createPublicKey } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { createHash, createHmac, createPrivateKey, createPublicKey, generateKeyPairSync } from 'node:crypto'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, relative, sep } from 'node:path'
+import { finished } from 'node:stream/promises'
 import { pathToFileURL } from 'node:url'
 
+import { createPackage, createPackageWithOptions, extractFile, getRawHeader, uncacheAll } from '@electron/asar'
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
+import { verifyPackageSignature } from '@root/backend/shared/utils/vpp/verify-package-signature'
+import { PackageManifestSchema } from '@root/middleware/shared/ports/package-manifest-schema'
+import extract from 'extract-zip'
+import JSZip from 'jszip'
 
 const repo = join(__dirname, '..', '..', '..')
 const scripts = join(repo, 'scripts', 'release')
@@ -18,7 +35,11 @@ const scripts = join(repo, 'scripts', 'release')
 /** Exit status and output of one script run; `output` is stdout followed by stderr. Both are read as latin1. */
 type Run = { status: number; stdout: string; output: string }
 
+/** Options of one Node process run: its working directory, environment and a kill timeout in milliseconds. */
+type RunOptions = { cwd?: string; env?: NodeJS.ProcessEnv; timeout?: number }
+
 let root = ''
+let calls = 0
 
 beforeEach(() => {
   root = mkdtempSync(join(realpathSync(tmpdir()), 'release-scripts-'))
@@ -37,13 +58,14 @@ function asText(value: unknown): string {
   return Buffer.isBuffer(value) ? value.toString('latin1') : ''
 }
 
-function node(args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): Run {
+function node(args: string[], options: RunOptions = {}): Run {
   try {
     const stdout = execFileSync(process.execPath, args, {
       cwd: options.cwd ?? root,
       env: options.env ?? process.env,
       encoding: 'latin1',
       stdio: 'pipe',
+      timeout: options.timeout,
     })
     return { status: 0, stdout, output: stdout }
   } catch (error) {
@@ -57,8 +79,85 @@ function node(args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv }
   }
 }
 
-function run(script: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): Run {
+function run(script: string, args: string[], options: RunOptions = {}): Run {
   return node([join(scripts, script), ...args], options)
+}
+
+/**
+ * Evaluates @p expression, with the ES module bound to `lib`, in its own Node process and awaits its result, which is
+ * written to a JSON file so the module's own console output cannot mix with it.
+ * @returns `{ value }` with the JSON round trip of the result, `{ refused }` with the message of a thrown error, or
+ * `{ failure }` with the process output when the module could not be run at all.
+ */
+function evaluateWith(module: string, expression: string, options: RunOptions = {}): Record<string, unknown> {
+  calls += 1
+  const out = join(root, `call-${calls}.json`)
+  const code = [
+    "import { writeFileSync } from 'node:fs'",
+    `import * as lib from ${JSON.stringify(pathToFileURL(module).href)}`,
+    'let result',
+    'try {',
+    `  result = { value: (await ${expression}) ?? null }`,
+    '} catch (error) {',
+    '  result = { refused: error instanceof Error ? error.message : String(error) }',
+    '}',
+    `writeFileSync(${JSON.stringify(out)}, JSON.stringify(result))`,
+  ].join('\n')
+  const ran = node(['--input-type=module', '-e', code], options)
+  if (ran.status !== 0) return { failure: ran.output }
+  const result: unknown = JSON.parse(readFileSync(out, 'utf8'))
+  return typeof result === 'object' && result !== null ? Object.fromEntries(Object.entries(result)) : {}
+}
+
+/** Calls the named export of an ES module with @p args, as `evaluateWith` runs it. */
+function callExport(module: string, name: string, args: unknown[], options: RunOptions = {}): Record<string, unknown> {
+  return evaluateWith(module, `lib[${JSON.stringify(name)}](...${JSON.stringify(args)})`, options)
+}
+
+/** Reads the named exported value of an ES module, as `evaluateWith` runs it. */
+function readExport(module: string, name: string): Record<string, unknown> {
+  return evaluateWith(module, `lib[${JSON.stringify(name)}]`)
+}
+
+/** An Ed25519 test key: its id, its PEM, the PEM body on one line and its 32 raw bytes. */
+type TestKey = { id: string; pem: string; body: string; raw: Buffer }
+
+/** A deterministic Ed25519 public key whose private seed is 32 bytes of @p fill. */
+function testKey(id: string, fill: number): TestKey {
+  const pkcs8 = concat(Buffer.from('302e020100300506032b657004220420', 'hex'), Buffer.alloc(32, fill))
+  const publicKey = createPublicKey(createPrivateKey({ key: pkcs8, format: 'der', type: 'pkcs8' }))
+  const pem = String(publicKey.export({ type: 'spki', format: 'pem' }))
+  const body = pem
+    .split('\n')
+    .filter((line) => line !== '' && !line.startsWith('-----'))
+    .join('')
+  return { id, pem, body, raw: publicKey.export({ type: 'spki', format: 'der' }).subarray(12) }
+}
+
+/**
+ * Packs @p files with @electron/asar into `<name>/resources/app.asar` under the temp dir and returns its path; files
+ * matching the @p unpack glob go to `app.asar.unpacked`.
+ */
+async function packApp(files: Record<string, string>, name = 'installed', unpack?: string): Promise<string> {
+  const source = join(root, `${name}-source`)
+  for (const [path, content] of Object.entries(files)) write(join(source, ...path.split('/')), content)
+  const archive = join(root, name, 'resources', 'app.asar')
+  mkdirSync(dirname(archive), { recursive: true })
+  const stream = unpack ? createPackageWithOptions(source, archive, { unpack }) : createPackage(source, archive)
+  await finished(await stream)
+  uncacheAll()
+  return archive
+}
+
+/** Every regular file under @p dir, as sorted POSIX paths relative to it. */
+function listTree(dir: string, under = dir): string[] {
+  return readdirSync(under, { withFileTypes: true })
+    .flatMap((entry) => {
+      const path = join(under, entry.name)
+      if (entry.isDirectory()) return listTree(dir, path)
+      return entry.isFile() ? [relative(dir, path).split(sep).join('/')] : []
+    })
+    .sort()
 }
 
 /** Joins byte chunks; each is copied into a plain Uint8Array, the type the Node APIs here are declared with. */
@@ -106,21 +205,7 @@ describe('lib/release-assets.mjs', () => {
   const lib = join(scripts, 'lib', 'release-assets.mjs')
 
   function call(name: 'versionFromReleaseTag' | 'expectedAssetNames', arg: string): Record<string, unknown> {
-    const code = [
-      `import * as lib from ${JSON.stringify(pathToFileURL(lib).href)}`,
-      'try {',
-      `  process.stdout.write('VALUE ' + JSON.stringify(lib[${JSON.stringify(name)}](${JSON.stringify(arg)})))`,
-      '} catch (error) {',
-      "  process.stdout.write('REFUSED ' + (error instanceof Error ? error.message : String(error)))",
-      '}',
-    ].join('\n')
-    const result = node(['--input-type=module', '-e', code])
-    if (result.status === 0 && result.stdout.startsWith('VALUE ')) {
-      const value: unknown = JSON.parse(result.stdout.slice('VALUE '.length))
-      return { value }
-    }
-    if (result.status === 0 && result.stdout.startsWith('REFUSED ')) return { refused: result.stdout.slice(8) }
-    return { failure: result.output }
+    return callExport(lib, name, [arg])
   }
 
   it.each([
@@ -541,19 +626,6 @@ describe('read-fuses.mjs', () => {
 describe('scan-trust-literals.mjs', () => {
   const BEGIN = '-----BEGIN PUBLIC KEY-----'
 
-  type TestKey = { id: string; pem: string; body: string; raw: Buffer }
-
-  function testKey(id: string, fill: number): TestKey {
-    const pkcs8 = concat(Buffer.from('302e020100300506032b657004220420', 'hex'), Buffer.alloc(32, fill))
-    const publicKey = createPublicKey(createPrivateKey({ key: pkcs8, format: 'der', type: 'pkcs8' }))
-    const pem = String(publicKey.export({ type: 'spki', format: 'pem' }))
-    const body = pem
-      .split('\n')
-      .filter((line) => line !== '' && !line.startsWith('-----'))
-      .join('')
-    return { id, pem, body, raw: publicKey.export({ type: 'spki', format: 'der' }).subarray(12) }
-  }
-
   const KEY_A = testKey('vendor-alpha-2026', 0x11)
   const KEY_B = testKey('vendor-beta-2027', 0x22)
 
@@ -833,5 +905,719 @@ describe('seed-audit.mjs', () => {
 
     expect(result.status).toBe(0)
     expect(result.output.trim()).toBe('no match')
+  })
+})
+
+/** The files of a small packed editor app, by archive path. */
+const APP: Record<string, string> = {
+  'package.json': '{"name":"open-plc-editor","main":"dist/main/main.js"}\n',
+  'dist/main/main.js': 'console.log("main process")\n'.repeat(40),
+  'dist/renderer/renderer.js': 'document.body.dataset.ready = "1"\n',
+  'dist/renderer/assets/style.css': 'body { margin: 0 }\n',
+}
+
+describe('lib/asar.mjs', () => {
+  const lib = join(scripts, 'lib', 'asar.mjs')
+
+  function locate(archive: string, path: string): { offset: number; size: number } {
+    const value = readField(callExport(lib, 'locateFile', [archive, path]), 'value')
+    return { offset: Number(readField(value, 'offset')), size: Number(readField(value, 'size')) }
+  }
+
+  it('reads the header and the header size @electron/asar reads', async () => {
+    const archive = await packApp(APP)
+    const raw = getRawHeader(archive)
+
+    const value = readField(callExport(lib, 'readAsarHeader', [archive]), 'value')
+
+    expect({ header: readField(value, 'header'), headerSize: readField(value, 'headerSize') }).toEqual({
+      header: raw.header,
+      headerSize: raw.headerSize,
+    })
+  })
+
+  it.each(Object.keys(APP))('locates the bytes of %s inside the archive', async (path) => {
+    const archive = await packApp(APP)
+
+    const { offset, size } = locate(archive, path)
+
+    expect(
+      readFileSync(archive)
+        .subarray(offset, offset + size)
+        .toString('utf8'),
+    ).toBe(APP[path])
+  })
+
+  it('refuses to locate a file the archive does not hold, naming it', async () => {
+    const archive = await packApp(APP)
+
+    const result = callExport(lib, 'locateFile', [archive, 'dist/main/missing.js'])
+
+    expect(Object.keys(result)).toEqual(['refused'])
+    expect(String(result.refused)).toContain('dist/main/missing.js')
+  })
+
+  it('places a same-length change of one byte of dist/main/main.js in that file only, header bytes identical', async () => {
+    const archive = await packApp(APP)
+    const before = readFileSync(archive)
+    const headerEnd = 8 + getRawHeader(archive).headerSize
+    const { offset } = locate(archive, 'dist/main/main.js')
+    const changed = Buffer.from(before)
+    changed[offset + 5] = changed[offset + 5] === 0x41 ? 0x42 : 0x41
+    write(archive, changed)
+    uncacheAll()
+
+    const after = readFileSync(archive)
+    const original = Buffer.from(APP['dist/main/main.js'])
+    const main = extractFile(archive, 'dist/main/main.js')
+    const differing = [...main].flatMap((byte, index) => (byte === original[index] ? [] : [index]))
+
+    expect({
+      length: after.length,
+      header: sha256(after.subarray(0, headerEnd)),
+      mainLength: main.length,
+      differing,
+      renderer: extractFile(archive, 'dist/renderer/renderer.js').toString('utf8'),
+    }).toEqual({
+      length: before.length,
+      header: sha256(before.subarray(0, headerEnd)),
+      mainLength: original.length,
+      differing: [5],
+      renderer: APP['dist/renderer/renderer.js'],
+    })
+  })
+
+  it('extracts every file of the archive into a folder that did not exist', async () => {
+    const archive = await packApp(APP)
+    const dest = join(root, 'installed', 'resources', 'app')
+
+    const result = callExport(lib, 'extractAsar', [archive, dest])
+
+    expect(Object.keys(result)).toEqual(['value'])
+    expect(Object.fromEntries(listTree(dest).map((path) => [path, readFileSync(join(dest, path), 'utf8')]))).toEqual(
+      APP,
+    )
+  })
+
+  describe('with an entry in app.asar.unpacked', () => {
+    const NATIVE = 'native/addon.node'
+    const WITH_NATIVE = { ...APP, [NATIVE]: 'native module bytes\n' }
+
+    it('refuses to locate the unpacked entry, naming it as unpacked', async () => {
+      const archive = await packApp(WITH_NATIVE, 'installed', '*.node')
+
+      const result = callExport(lib, 'locateFile', [archive, NATIVE])
+
+      expect(Object.keys(result)).toEqual(['refused'])
+      expect(String(result.refused)).toContain(NATIVE)
+      expect(String(result.refused)).toContain('unpacked')
+    })
+
+    it('extracts the packed files and copies the unpacked entry from app.asar.unpacked', async () => {
+      const archive = await packApp(WITH_NATIVE, 'installed', '*.node')
+      const dest = join(root, 'installed', 'resources', 'app')
+
+      callExport(lib, 'extractAsar', [archive, dest])
+
+      expect(Object.fromEntries(listTree(dest).map((path) => [path, readFileSync(join(dest, path), 'utf8')]))).toEqual(
+        WITH_NATIVE,
+      )
+    })
+  })
+})
+
+describe('lib/vpp-fixture.mjs', () => {
+  const lib = join(scripts, 'lib', 'vpp-fixture.mjs')
+
+  /** What `writeEqsp32Vpp` reports about the package it wrote. */
+  type Written = { keyId: unknown; packageId: unknown; boardName: unknown; publicKeyPem: string }
+
+  function writeVpp(path: string): Written {
+    const value = readField(callExport(lib, 'writeEqsp32Vpp', [path]), 'value')
+    return {
+      keyId: readField(value, 'keyId'),
+      packageId: readField(value, 'packageId'),
+      boardName: readField(value, 'boardName'),
+      publicKeyPem: String(readField(value, 'publicKeyPem')),
+    }
+  }
+
+  async function extracted(vpp: string, name = 'extracted'): Promise<string> {
+    const dir = join(root, name)
+    await extract(vpp, { dir })
+    return dir
+  }
+
+  function manifestOf(dir: string): unknown {
+    return JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'))
+  }
+
+  /** Every file under @p dir with its content, by POSIX relative path. */
+  function contents(dir: string): Record<string, string> {
+    return Object.fromEntries(listTree(dir).map((path) => [path, sha256(readFileSync(join(dir, path)))]))
+  }
+
+  function place(vppPath: string, userDataDir: string): { packageId: unknown; packageDir: string } {
+    const value = readField(callExport(lib, 'placePackageByHand', [{ vppPath, userDataDir }]), 'value')
+    return { packageId: readField(value, 'packageId'), packageDir: String(readField(value, 'packageDir')) }
+  }
+
+  function registryOf(userDataDir: string): unknown {
+    return JSON.parse(readFileSync(join(userDataDir, 'packages', 'registry.json'), 'utf8'))
+  }
+
+  /** The CRC-32 of @p bytes, as ZIP records it. */
+  function crc32(bytes: Uint8Array): number {
+    let crc = 0xffffffff
+    for (const byte of bytes) {
+      crc ^= byte
+      for (let bit = 0; bit < 8; bit += 1) crc = crc & 1 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1
+    }
+    return (crc ^ 0xffffffff) >>> 0
+  }
+
+  /** The local file entries of a ZIP, in order: name, compression method and whether the recorded CRC-32 matches. */
+  function zipEntries(zip: Buffer): { name: string; method: number; crcMatches: boolean }[] {
+    const entries: { name: string; method: number; crcMatches: boolean }[] = []
+    let at = 0
+    while (at + 30 <= zip.length && zip.readUInt32LE(at) === 0x04034b50) {
+      const method = zip.readUInt16LE(at + 8)
+      const crc = zip.readUInt32LE(at + 14)
+      const size = zip.readUInt32LE(at + 18)
+      const nameLength = zip.readUInt16LE(at + 26)
+      const extraLength = zip.readUInt16LE(at + 28)
+      const name = zip.subarray(at + 30, at + 30 + nameLength).toString('utf8')
+      const start = at + 30 + nameLength + extraLength
+      entries.push({ name, method, crcMatches: crc32(Uint8Array.from(zip.subarray(start, start + size))) === crc })
+      at = start + size
+    }
+    return entries
+  }
+
+  it('reports the package com.erqos.eqsp32 signed under the key id eqsp32-dev', () => {
+    const written = writeVpp(join(root, 'eqsp32.vpp'))
+
+    expect({ keyId: written.keyId, packageId: written.packageId }).toEqual({
+      keyId: 'eqsp32-dev',
+      packageId: 'com.erqos.eqsp32',
+    })
+  })
+
+  it('writes a .vpp that extracts with extract-zip and verifies under the key it reports', async () => {
+    const vpp = join(root, 'eqsp32.vpp')
+    const written = writeVpp(vpp)
+
+    expect(verifyPackageSignature(await extracted(vpp), { 'eqsp32-dev': written.publicKeyPem })).toEqual({
+      valid: true,
+    })
+  })
+
+  it('is refused under another key with the same key id', async () => {
+    const vpp = join(root, 'eqsp32.vpp')
+    writeVpp(vpp)
+    const other = String(generateKeyPairSync('ed25519').publicKey.export({ type: 'spki', format: 'pem' }))
+
+    expect(verifyPackageSignature(await extracted(vpp), { 'eqsp32-dev': other }).valid).toBe(false)
+  })
+
+  it('is refused when only another key id is trusted, even one holding its own key', async () => {
+    const vpp = join(root, 'eqsp32.vpp')
+    const written = writeVpp(vpp)
+
+    expect(verifyPackageSignature(await extracted(vpp), { 'openplc-2026': written.publicKeyPem }).valid).toBe(false)
+  })
+
+  it('declares in its manifest the board name it reports', async () => {
+    const vpp = join(root, 'eqsp32.vpp')
+    const written = writeVpp(vpp)
+    const manifest = manifestOf(await extracted(vpp))
+    const devices = readField(manifest, 'devices')
+    const names = Array.isArray(devices) ? devices.map((device) => readField(device, 'name')) : []
+
+    expect(typeof written.boardName === 'string' && written.boardName !== '').toBe(true)
+    expect(names).toContain(written.boardName)
+  })
+
+  it('writes a manifest the editor accepts, with 4.3.0 as its minimum editor version', async () => {
+    const vpp = join(root, 'eqsp32.vpp')
+    writeVpp(vpp)
+    const manifest = manifestOf(await extracted(vpp))
+
+    expect(PackageManifestSchema.safeParse(manifest).success).toBe(true)
+    expect(readField(readField(manifest, 'package'), 'minEditorVersion')).toBe('4.3.0')
+  })
+
+  it('stores every entry uncompressed, with its CRC-32', () => {
+    const vpp = join(root, 'eqsp32.vpp')
+    writeVpp(vpp)
+
+    const entries = zipEntries(readFileSync(vpp))
+
+    expect(entries.map((entry) => entry.name)).toEqual(expect.arrayContaining(['manifest.json', 'signature.json']))
+    expect(entries.filter((entry) => entry.method !== 0 || !entry.crcMatches)).toEqual([])
+  })
+
+  it('signs with a fresh key on every run', () => {
+    const first = writeVpp(join(root, 'first.vpp'))
+    const second = writeVpp(join(root, 'second.vpp'))
+
+    expect(first.publicKeyPem).toContain('-----BEGIN PUBLIC KEY-----')
+    expect(second.publicKeyPem).not.toBe(first.publicKeyPem)
+  })
+
+  describe('placePackageByHand', () => {
+    it('places the package under packages/<id> and creates the registry with its entry', async () => {
+      const vpp = join(root, 'eqsp32.vpp')
+      writeVpp(vpp)
+      const manifest = manifestOf(await extracted(vpp))
+      const devices = readField(manifest, 'devices')
+      const userData = join(root, 'user-data')
+      const packageDir = join(userData, 'packages', 'com.erqos.eqsp32')
+
+      const placed = place(vpp, userData)
+      const registry = registryOf(userData)
+      const entry = readField(readField(registry, 'packages'), 'com.erqos.eqsp32')
+      const installedAt = readField(entry, 'installedAt')
+
+      expect(placed).toEqual({ packageId: 'com.erqos.eqsp32', packageDir })
+      expect(Object.keys(readField(registry, 'packages') ?? {})).toEqual(['com.erqos.eqsp32'])
+      expect(readField(registry, 'formatVersion')).toBe('1.0')
+      expect({
+        version: readField(entry, 'version'),
+        path: readField(entry, 'path'),
+        devices: readField(entry, 'devices'),
+        installedAt: typeof installedAt === 'string' && !Number.isNaN(Date.parse(installedAt)),
+      }).toEqual({
+        version: readField(readField(manifest, 'package'), 'version'),
+        path: packageDir,
+        devices: Array.isArray(devices) ? devices.map((device) => readField(device, 'id')) : [],
+        installedAt: true,
+      })
+    })
+
+    it('places exactly the files of the .vpp, still verifying under the reported key', async () => {
+      const vpp = join(root, 'eqsp32.vpp')
+      const written = writeVpp(vpp)
+      const expected = contents(await extracted(vpp))
+
+      const { packageDir } = place(vpp, join(root, 'user-data'))
+
+      expect(contents(packageDir)).toEqual(expected)
+      expect(verifyPackageSignature(packageDir, { 'eqsp32-dev': written.publicKeyPem })).toEqual({ valid: true })
+    })
+
+    it('keeps the entries a registry already holds', () => {
+      const vpp = join(root, 'eqsp32.vpp')
+      writeVpp(vpp)
+      const userData = join(root, 'user-data')
+      const existing = {
+        version: '2.1.0',
+        installedAt: '2026-06-01T00:00:00.000Z',
+        path: join(userData, 'packages', 'com.openplc.fx3u-compatible'),
+        devices: ['fx3u-14m'],
+      }
+      writeJson(join(userData, 'packages', 'registry.json'), {
+        formatVersion: '1.0',
+        packages: { 'com.openplc.fx3u-compatible': existing },
+      })
+
+      place(vpp, userData)
+      const packages = readField(registryOf(userData), 'packages')
+
+      expect(Object.keys(packages ?? {}).sort()).toEqual(['com.erqos.eqsp32', 'com.openplc.fx3u-compatible'])
+      expect(readField(packages, 'com.openplc.fx3u-compatible')).toEqual(existing)
+    })
+
+    it('extracts a .vpp whose entries are deflated', async () => {
+      const vpp = join(root, 'eqsp32.vpp')
+      const written = writeVpp(vpp)
+      const source = await extracted(vpp)
+      const zip = new JSZip()
+      for (const path of listTree(source)) zip.file(path, Uint8Array.from(readFileSync(join(source, path))))
+      const deflated = write(
+        join(root, 'deflated.vpp'),
+        Buffer.from(await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })),
+      )
+
+      const { packageDir } = place(deflated, join(root, 'user-data'))
+
+      expect(zipEntries(readFileSync(deflated)).some((entry) => entry.method === 8)).toBe(true)
+      expect(contents(packageDir)).toEqual(contents(source))
+      expect(verifyPackageSignature(packageDir, { 'eqsp32-dev': written.publicKeyPem })).toEqual({ valid: true })
+    })
+  })
+})
+
+describe('fixtures/patch-trust-reproducer.mjs', () => {
+  const reproducer = join(scripts, 'fixtures', 'patch-trust-reproducer.mjs')
+  const MESSAGE = 'Could not locate the trusted-keys object in dist/main'
+  const BEGIN = '-----BEGIN PUBLIC KEY-----'
+  const KEY = testKey('openplc-2026', 0x33)
+  const TRUSTED_OBJECT = JSON.stringify({ [KEY.id]: KEY.pem })
+  const PATCH_TIMEOUT = 60_000
+
+  function patch(archive: string): Run {
+    return node([reproducer, archive], { cwd: repo, timeout: PATCH_TIMEOUT })
+  }
+
+  function patchable(): Record<string, string> {
+    return { ...APP, 'dist/main/main.js': `const keys = ${TRUSTED_OBJECT}\nmodule.exports = keys\n` }
+  }
+
+  it(
+    'patches an app.asar whose dist/main holds the trusted-keys object: exit 0 and one more key in that object',
+    async () => {
+      const archive = await packApp(patchable())
+      const before = sha256(readFileSync(archive))
+
+      const result = patch(archive)
+      uncacheAll()
+      const main = extractFile(archive, 'dist/main/main.js').toString('utf8')
+
+      expect(result.status).toBe(0)
+      expect(sha256(readFileSync(archive))).not.toBe(before)
+      expect(main).toContain(TRUSTED_OBJECT.slice(0, -1))
+      expect(main.split(BEGIN).length - 1).toBe(2)
+    },
+    PATCH_TIMEOUT,
+  )
+
+  it(
+    'patches the object when it sits in a dynamic-import chunk beside main.js',
+    async () => {
+      const archive = await packApp({ ...APP, 'dist/main/722.js': `exports.keys = ${TRUSTED_OBJECT}\n` })
+      const before = sha256(readFileSync(archive))
+
+      const result = patch(archive)
+      uncacheAll()
+      const chunk = extractFile(archive, 'dist/main/722.js').toString('utf8')
+
+      expect(result.status).toBe(0)
+      expect(sha256(readFileSync(archive))).not.toBe(before)
+      expect(chunk.split(BEGIN).length - 1).toBe(2)
+    },
+    PATCH_TIMEOUT,
+  )
+
+  it(
+    'backs the original archive up to app.asar.bak',
+    async () => {
+      const archive = await packApp(patchable())
+      const before = sha256(readFileSync(archive))
+
+      patch(archive)
+
+      expect(sha256(readFileSync(`${archive}.bak`))).toBe(before)
+    },
+    PATCH_TIMEOUT,
+  )
+
+  it.each<[string, Record<string, string>]>([
+    ['no trusted-keys object', { 'dist/main/main.js': 'module.exports = {}\n' }],
+    [
+      'the object only outside dist/main',
+      { 'dist/main/main.js': 'module.exports = {}\n', 'dist/renderer/keys.js': `window.keys = ${TRUSTED_OBJECT}\n` },
+    ],
+    [
+      'the object in two files of dist/main',
+      { 'dist/main/main.js': `const a = ${TRUSTED_OBJECT}\n`, 'dist/main/cli.js': `const b = ${TRUSTED_OBJECT}\n` },
+    ],
+  ])(
+    'exits 1 with the message and leaves app.asar byte-identical for an archive with %s',
+    async (_case, files) => {
+      const archive = await packApp({ ...APP, ...files })
+      const before = sha256(readFileSync(archive))
+
+      const result = patch(archive)
+
+      expect(result.status).toBe(1)
+      expect(result.output).toContain(MESSAGE)
+      expect(sha256(readFileSync(archive))).toBe(before)
+    },
+    PATCH_TIMEOUT,
+  )
+})
+
+describe('packaged-checks.mjs', () => {
+  const script = join(scripts, 'packaged-checks.mjs')
+  const OPTIONS = ['--platform', '--installer', '--version', '--positive-control', '--trusted-keys', '--report']
+  const CHECK_IDS = [
+    'start',
+    'ABUSE-01',
+    'ABUSE-02',
+    'ABUSE-06 row 1',
+    'ABUSE-06 row 2',
+    'ABUSE-07 ELECTRON_RUN_AS_NODE',
+    'ABUSE-07 NODE_OPTIONS',
+    'ABUSE-07 --inspect',
+    'ABUSE-07 --inspect-brk',
+    'ABUSE-07 SIGUSR1',
+    'ABUSE-13 (a)',
+    'ABUSE-13 (b)',
+    'ABUSE-03 (b)',
+    'ABUSE-03 (e)',
+    'AC5 compile',
+    'AC5 packages install',
+  ]
+
+  /** Every option of a run that must stop before installing: a non-executable installer and a wrong fx3u file. */
+  function inputs(overrides: Record<string, string> = {}): Record<string, string> {
+    return {
+      '--platform': 'linux',
+      '--installer': write(join(root, 'OpenPLC.Editor-4.3.5.AppImage'), 'not an installer\n'),
+      '--version': '4.3.5',
+      '--positive-control': write(join(root, 'com.openplc.fx3u-compatible-2.1.0.vpp'), 'not the fx3u package\n'),
+      '--trusted-keys': write(join(root, 'trusted-keys.ts'), 'export const TRUSTED_PACKAGE_KEYS = {}\n'),
+      '--report': join(root, 'report.json'),
+      ...overrides,
+    }
+  }
+
+  function argv(options: Record<string, string>): string[] {
+    return Object.entries(options).flat()
+  }
+
+  describe('command line', () => {
+    function refusal(options: Record<string, string>): { status: number; output: string; report: boolean } {
+      const result = run('packaged-checks.mjs', argv(options), { timeout: 60_000 })
+      return { status: result.status, output: result.output, report: existsSync(join(root, 'report.json')) }
+    }
+
+    it.each(OPTIONS)('exits 2 without %s, naming it, before installing and without a report', (option) => {
+      const options = inputs()
+      delete options[option]
+
+      const result = refusal(options)
+
+      expect({ status: result.status, report: result.report }).toEqual({ status: 2, report: false })
+      expect(result.output).toContain(option)
+    })
+
+    it('exits 2 for a platform other than mac, win and linux, naming it, without a report', () => {
+      const result = refusal(inputs({ '--platform': 'solaris' }))
+
+      expect({ status: result.status, report: result.report }).toEqual({ status: 2, report: false })
+      expect(result.output).toContain('solaris')
+    })
+
+    it('exits 2 for a positive control whose sha256 is not the pinned fx3u digest, naming the file', () => {
+      const options = inputs()
+
+      const result = refusal(options)
+
+      expect({ status: result.status, report: result.report }).toEqual({ status: 2, report: false })
+      expect(result.output).toContain(options['--positive-control'])
+    })
+
+    it('exports the 16 check ids in order, and importing it runs no check', () => {
+      expect(readExport(script, 'CHECK_IDS')).toEqual({ value: CHECK_IDS })
+    })
+  })
+
+  describe('observeStart', () => {
+    const posix = process.platform === 'win32' ? it.skip : it
+
+    /** Writes a fake editor: a Node script that ends on its own after 20 s if nothing kills it. */
+    function fake(name: string, body: string): string {
+      return write(join(root, 'fakes', `${name}.js`), `setTimeout(() => process.exit(3), 20000).unref()\n${body}\n`)
+    }
+
+    function observe(path: string, windowMs: number, args: string[] = []): Record<string, unknown> {
+      const value = readField(
+        callExport(script, 'observeStart', [{ command: process.execPath, args: [path, ...args], cwd: root, windowMs }]),
+        'value',
+      )
+      return {
+        verdict: readField(value, 'verdict'),
+        exitCode: readField(value, 'exitCode'),
+        signal: readField(value, 'signal'),
+        ms: readField(value, 'ms'),
+        stderr: readField(value, 'stderr'),
+      }
+    }
+
+    function isAlive(pid: number): boolean {
+      try {
+        process.kill(pid, 0)
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    it('counts a process still alive at the end of the window as started, and kills it', () => {
+      const pidFile = join(root, 'pid.txt')
+      const alive = fake(
+        'alive',
+        "require('node:fs').writeFileSync(process.argv[2], String(process.pid))\nsetInterval(() => {}, 1000)",
+      )
+
+      const observed = observe(alive, 1500, [pidFile])
+
+      expect(observed.verdict).toBe('starts')
+      expect(isAlive(Number(readFileSync(pidFile, 'utf8')))).toBe(false)
+    })
+
+    it('counts a non-zero exit within the window as not started, with the exit code, the time and stderr', () => {
+      const failing = fake(
+        'exit-1',
+        "process.stderr.write('Integrity check failed for asar archive\\n')\nprocess.exitCode = 1",
+      )
+
+      const observed = observe(failing, 10_000)
+
+      expect({ verdict: observed.verdict, exitCode: observed.exitCode, signal: observed.signal }).toEqual({
+        verdict: 'does-not-start',
+        exitCode: 1,
+        signal: null,
+      })
+      expect(typeof observed.ms === 'number' && observed.ms < 10_000).toBe(true)
+      expect(String(observed.stderr)).toContain('Integrity check failed for asar archive')
+    })
+
+    posix('counts a termination by a signal within the window as not started, naming the signal', () => {
+      const trapped = fake(
+        'sigtrap',
+        "process.stderr.write('Integrity check failed for asar archive\\n', () => process.kill(process.pid, 'SIGTRAP'))",
+      )
+
+      const observed = observe(trapped, 10_000)
+
+      expect({ verdict: observed.verdict, exitCode: observed.exitCode, signal: observed.signal }).toEqual({
+        verdict: 'does-not-start',
+        exitCode: null,
+        signal: 'SIGTRAP',
+      })
+      expect(String(observed.stderr)).toContain('Integrity check failed for asar archive')
+    })
+
+    it('fails the check when the process exits 0 within the window', () => {
+      const quiet = fake('exit-0', 'process.exitCode = 0')
+
+      const observed = observe(quiet, 10_000)
+
+      expect({ verdict: observed.verdict, exitCode: observed.exitCode }).toEqual({
+        verdict: 'exited-zero',
+        exitCode: 0,
+      })
+    })
+  })
+
+  describe('planChecks', () => {
+    /** One planned check: its id, its mode and its reason (empty when it has none). */
+    type Planned = { id: string; mode: unknown; reason: string; hasReason: boolean }
+
+    const PLATFORMS = ['mac', 'win', 'linux']
+    const RUNS: [string, boolean][] = PLATFORMS.flatMap((platform): [string, boolean][] => [
+      [platform, false],
+      [platform, true],
+    ])
+
+    /** The checks each platform skips in both runs, for a version that has `openplc-cli packages`. */
+    const PLATFORM_SKIPS: Record<string, string[]> = {
+      mac: ['AC5 packages install'],
+      win: ['ABUSE-07 SIGUSR1', 'AC5 packages install'],
+      linux: ['ABUSE-06 row 1', 'ABUSE-06 row 2'],
+    }
+    const NEGATIVE_NORMAL = ['start', 'ABUSE-07 NODE_OPTIONS']
+    const NEGATIVE_SKIPPED = ['ABUSE-03 (b)', 'ABUSE-03 (e)', 'AC5 compile', 'AC5 packages install']
+
+    function plan(platform: string, version: string, negativeControl: boolean): Planned[] {
+      const value = readField(callExport(script, 'planChecks', [{ platform, version, negativeControl }]), 'value')
+      return (Array.isArray(value) ? value : []).map((planned) => {
+        const reason = readField(planned, 'reason')
+        return {
+          id: String(readField(planned, 'id')),
+          mode: readField(planned, 'mode'),
+          reason: typeof reason === 'string' ? reason : '',
+          hasReason: typeof reason === 'string' && reason.trim() !== '',
+        }
+      })
+    }
+
+    function modes(platform: string, version: string, negativeControl: boolean): Record<string, unknown> {
+      return Object.fromEntries(plan(platform, version, negativeControl).map((planned) => [planned.id, planned.mode]))
+    }
+
+    function expectedModes(platform: string, negativeControl: boolean): Record<string, string> {
+      return Object.fromEntries(
+        CHECK_IDS.map((id) => {
+          if (PLATFORM_SKIPS[platform].includes(id)) return [id, 'skipped']
+          if (!negativeControl || NEGATIVE_NORMAL.includes(id)) return [id, 'normal']
+          return [id, NEGATIVE_SKIPPED.includes(id) ? 'skipped' : 'inverted']
+        }),
+      )
+    }
+
+    function reasonOf(platform: string, version: string, negativeControl: boolean, id: string): string {
+      return plan(platform, version, negativeControl).find((planned) => planned.id === id)?.reason ?? ''
+    }
+
+    it.each(RUNS)('lists the 16 checks in CHECK_IDS order on %s (negativeControl %s)', (platform, negativeControl) => {
+      expect(plan(platform, '4.3.5', negativeControl).map((planned) => planned.id)).toEqual(CHECK_IDS)
+    })
+
+    it.each(RUNS)('gives each check on %s (negativeControl %s) its mode of the table', (platform, negativeControl) => {
+      expect(modes(platform, '4.3.5', negativeControl)).toEqual(expectedModes(platform, negativeControl))
+    })
+
+    it.each(RUNS)(
+      'gives a reason exactly to the skipped checks on %s (negativeControl %s), for 4.3.0 and 4.3.5',
+      (platform, negativeControl) => {
+        const mismatched = ['4.3.0', '4.3.5'].flatMap((version) =>
+          plan(platform, version, negativeControl)
+            .filter((planned) => (planned.mode === 'skipped') !== planned.hasReason)
+            .map((planned) => `${version} ${planned.id}`),
+        )
+
+        expect(mismatched).toEqual([])
+      },
+    )
+
+    it.each(['4.3.0', '4.3.1'])('skips both packages install rows for %s, naming 4.3.2 in the reason', (version) => {
+      const rows = ['ABUSE-03 (b)', 'AC5 packages install']
+      const planned = plan('linux', version, false).filter((entry) => rows.includes(entry.id))
+
+      expect(planned.map((entry) => entry.mode)).toEqual(['skipped', 'skipped'])
+      expect(planned.filter((entry) => !entry.reason.includes('4.3.2'))).toEqual([])
+      expect(planned.filter((entry) => !entry.reason.includes('openplc-cli packages'))).toEqual([])
+    })
+
+    it.each(['4.3.2', '4.3.5', '4.10.0'])('runs both packages install rows on Linux for %s', (version) => {
+      const found = modes('linux', version, false)
+
+      expect({ eqsp32: found['ABUSE-03 (b)'], fx3u: found['AC5 packages install'] }).toEqual({
+        eqsp32: 'normal',
+        fx3u: 'normal',
+      })
+    })
+
+    it.each<[string, string, string]>([
+      ['linux', 'ABUSE-06 row 1', 'ABUSE-06 needs ASAR integrity: macOS and Windows only'],
+      ['win', 'ABUSE-07 SIGUSR1', 'no SIGUSR1 on Windows'],
+      ['mac', 'AC5 packages install', 'the arduino core download runs on Linux x64 only'],
+    ])('names the platform when it skips a check on %s: %s', (platform, id, reason) => {
+      expect(reasonOf(platform, '4.3.5', false, id)).toContain(reason)
+    })
+
+    it.each<[string, string]>([
+      ['ABUSE-03 (b)', "an unpatched original refuses another key's package too"],
+      ['ABUSE-03 (e)', "an unpatched original refuses another key's package too"],
+      ['AC5 compile', 'positive controls run on the hardened installer'],
+      ['AC5 packages install', 'positive controls run on the hardened installer'],
+    ])('gives the negative-control skip of %s its reason', (id, reason) => {
+      expect(reasonOf('linux', '4.3.5', true, id)).toContain(reason)
+    })
+  })
+
+  describe('judge', () => {
+    it.each([
+      ['normal', false, 'pass'],
+      ['normal', true, 'fail'],
+      ['inverted', true, 'pass'],
+      ['inverted', false, 'fail'],
+    ])('judges a %s check whose attack succeeded=%s as %s', (mode, attackSucceeded, verdict) => {
+      expect(callExport(script, 'judge', [{ mode, attackSucceeded }])).toEqual({ value: verdict })
+    })
   })
 })

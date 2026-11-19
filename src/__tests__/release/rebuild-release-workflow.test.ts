@@ -1,6 +1,7 @@
 /**
  * The structure of `.github/workflows/rebuild-release.yml`, read with the `yaml` package: its inputs, permissions,
- * environments, where the seed secret is visible, and the order of the checks around the asset replacement.
+ * environments, where the seed secret is visible, the order of the checks around the asset replacement, and the job
+ * that runs the abuse checks on the installed builds.
  * @jest-environment node
  */
 import { readFileSync } from 'node:fs'
@@ -521,5 +522,155 @@ describe('rebuild-release.yml: what it never does', () => {
     )
 
     expect(offenders).toEqual([])
+  })
+})
+
+describe('rebuild-release.yml: packaged-checks', () => {
+  const FX3U_FIXTURE = 'src/backend/editor/package-trust/__tests__/fixtures/com.openplc.fx3u-compatible-2.1.0.vpp'
+  const TRUSTED_KEYS = 'src/backend/shared/utils/vpp/trusted-keys.ts'
+  const RUNNER_LABEL = /^(macos|windows|ubuntu)-[\w.]+$/
+
+  function checks(): Job {
+    return job('packaged-checks')
+  }
+
+  function runsPackagedChecks(step: Step): boolean {
+    return str(step.run).includes('node tooling/scripts/release/packaged-checks.mjs')
+  }
+
+  function negativeControlGated(step: Step): boolean {
+    return str(step.if).includes('negative_controls')
+  }
+
+  it('runs on macos-14, windows-2022 and ubuntu-22.04 through its matrix', () => {
+    const entry = checks()
+    const runners = strings(record(entry.body.strategy).matrix).filter((value) => RUNNER_LABEL.test(value))
+
+    expect(str(entry.body['runs-on'])).toContain('matrix.')
+    expect([...new Set(runners)].sort()).toEqual(['macos-14', 'ubuntu-22.04', 'windows-2022'])
+  })
+
+  it('tests the Apple silicon DMG, the x64 Windows installer and the x64 AppImage, never an ARM64 installer', () => {
+    const raw = text(checks().body)
+
+    expect(['-ARM.dmg', '.exe', '.AppImage'].filter((suffix) => !raw.includes(suffix))).toEqual([])
+    expect(raw).not.toContain('ARM64')
+  })
+
+  it('downloads the installers the macOS, Windows x64 and Linux x64 build jobs uploaded', () => {
+    const entry = checks()
+    const raw = text(entry.body)
+
+    expect(entry.steps.some((step) => uses(step).startsWith('actions/download-artifact'))).toBe(true)
+    expect(
+      ['installers-macos', 'installers-windows-x64', 'installers-linux-x64'].filter((name) => !raw.includes(name)),
+    ).toEqual([])
+  })
+
+  it('waits for resolve and for the macOS, Windows x64 and Linux x64 build jobs', () => {
+    const needs = needsOf(checks())
+
+    expect(
+      ['resolve', 'build-macos', 'build-windows-x64', 'build-linux-x64'].filter((id) => !needs.includes(id)),
+    ).toEqual([])
+  })
+
+  it('is waited for by publish', () => {
+    expect(needsOf(job('publish'))).toContain('packaged-checks')
+  })
+
+  it('runs with contents: read only, by its own permissions or the top-level ones', () => {
+    const own = checks().body.permissions
+
+    expect(own === undefined ? workflow().doc.permissions : own).toStrictEqual({ contents: 'read' })
+  })
+
+  it('names no secret and no token', () => {
+    const raw = text(checks().body)
+
+    expect(raw).not.toMatch(/secrets\s*[.[]/)
+    expect(raw).not.toMatch(/github\.token|GITHUB_TOKEN|GH_TOKEN/)
+  })
+
+  it('installs no dependency: no npm ci, npm install, yarn or pnpm', () => {
+    const offenders = checks()
+      .steps.filter((step) => /\bnpm (ci|install|i)\b|\byarn\b|\bpnpm\b/.test(str(step.run)))
+      .map((step) => str(step.name) || str(step.run))
+
+    expect(offenders).toEqual([])
+  })
+
+  it('checks out from the built tree only the fx3u fixture and trusted-keys.ts, at the commit resolve found', () => {
+    const treeCheckouts = checks().steps.filter((step) => isCheckout(step, 'tree'))
+    const options = record(treeCheckouts[0]?.with)
+    const files = str(options['sparse-checkout'])
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line !== '')
+      .sort()
+
+    expect(treeCheckouts).toHaveLength(1)
+    expect({
+      ref: str(options.ref).replace(/\s/g, ''),
+      files,
+      coneMode: options['sparse-checkout-cone-mode'],
+    }).toEqual({ ref: '${{needs.resolve.outputs.sha}}', files: [FX3U_FIXTURE, TRUSTED_KEYS].sort(), coneMode: false })
+  })
+
+  it('reads no other file of the built tree', () => {
+    const allowed = new Set([FX3U_FIXTURE, TRUSTED_KEYS])
+    const offenders = strings(checks().body)
+      .flatMap((value) => [...value.matchAll(/(?<![\w./-])tree\/([^\s"'`]+)/g)].map((match) => match[1]))
+      .filter((path) => !allowed.has(path))
+
+    expect(offenders).toEqual([])
+  })
+
+  it("runs packaged-checks.mjs on the run's installer with the fx3u positive control, the trusted keys and a report", () => {
+    const entry = checks()
+    const own = entry.steps.filter((step) => runsPackagedChecks(step) && !str(step.run).includes('--negative-control'))
+    const options = ['--platform', '--installer', '--version', '--positive-control', '--trusted-keys', '--report']
+
+    expect(own.length).toBeGreaterThanOrEqual(1)
+    expect(own.flatMap((step) => options.filter((option) => !str(step.run).includes(option)))).toEqual([])
+    expect(own.filter(negativeControlGated)).toEqual([])
+    expect([`tree/${FX3U_FIXTURE}`, `tree/${TRUSTED_KEYS}`].filter((path) => !text(entry.body).includes(path))).toEqual(
+      [],
+    )
+  })
+
+  it('runs the checks under xvfb-run on Linux', () => {
+    expect(checks().steps.some((step) => runsPackagedChecks(step) && str(step.run).includes('xvfb-run'))).toBe(true)
+  })
+
+  it('runs packaged-checks.mjs --negative-control on the published installer when the negative controls are on', () => {
+    const controls = checks().steps.filter(negativeControlGated)
+
+    expect(controls.some((step) => runsPackagedChecks(step) && str(step.run).includes('--negative-control'))).toBe(true)
+    expect(
+      controls.some((step) =>
+        text(step).includes('https://github.com/Autonomy-Logic/openplc-editor/releases/download/v'),
+      ),
+    ).toBe(true)
+  })
+
+  it('runs --negative-control and downloads a published installer only when the negative controls are on', () => {
+    const offenders = checks()
+      .steps.filter((step) => text(step).includes('--negative-control') || text(step).includes('releases/download/'))
+      .filter((step) => !negativeControlGated(step))
+      .map((step) => str(step.name))
+
+    expect(offenders).toEqual([])
+  })
+
+  it('downloads the original installer by the version resolve read, never by the release input', () => {
+    const downloads = checks().steps.filter((step) => text(step).includes('releases/download/'))
+
+    expect(downloads.length).toBeGreaterThanOrEqual(1)
+    expect(downloads.filter((step) => text(step).includes('inputs.release')).map((step) => str(step.name))).toEqual([])
+  })
+
+  it('uploads the reports', () => {
+    expect(checks().steps.some(isUploadArtifact)).toBe(true)
   })
 })
