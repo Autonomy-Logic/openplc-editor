@@ -172,7 +172,9 @@ writes (`page-access.ts`, from the instance paths STruC++ resolved) and the role
 
 ## Runtime v4
 
-The browser runs the screens; the device serves values. A Runtime v4 upload's `hmi/` folder
+The browser runs the screens; the device serves values. Only a local panel's build carries the panel settings (PIN,
+relock time, touch calibration, build id, the PIN entry's face; `panel: true` of the generator): a Runtime v4 artefact
+holds none of them, and the core's PIN entry is not linked into `hmi.wasm`, where `HMI_Lock()` does nothing. A Runtime v4 upload's `hmi/` folder
 (`src/backend/shared/hmi/artefact/compose-hmi-artefact.ts`, manifest `{"format": 2}`) carries:
 
 - `client/hmi.wasm`: the generated unit, the five core files, the font table and `client/hmi_browser_host.cpp`, built
