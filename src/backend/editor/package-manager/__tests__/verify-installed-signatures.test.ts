@@ -16,26 +16,12 @@ jest.mock('../../services/logger-service', () => ({
   logger: { warn: jest.fn(), info: jest.fn(), error: jest.fn() },
 }))
 
-// Replace the real trusted-key store with a freshly generated test keypair so
-// fixtures can be signed with a private key we actually hold. The factory may
-// not reference outer-scope variables, so it generates the pair inline and
-// re-exports the private PEM for the test to sign with.
-jest.mock('../../../shared/utils/vpp/trusted-keys', () => {
-  const { generateKeyPairSync } = jest.requireActual<typeof import('node:crypto')>('node:crypto')
-  const { publicKey, privateKey } = generateKeyPairSync('ed25519')
-  return {
-    TRUSTED_PACKAGE_KEYS: { 'test-key': publicKey.export({ type: 'spki', format: 'pem' }).toString() },
-    __TEST_PRIVATE_PEM: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
-  }
-})
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const PRIVATE_PEM: string = (require('../../../shared/utils/vpp/trusted-keys') as { __TEST_PRIVATE_PEM: string })
-  .__TEST_PRIVATE_PEM
-
+import { TEST_AUTONOMY_KEY, testTrustAnchor } from '../../package-trust/__tests__/fixtures/trust-test-kit'
 import { PackageManagerModule } from '../package-manager-module'
 
-const KEY_ID = 'test-key'
+const anchor = testTrustAnchor()
+
+const KEY_ID = TEST_AUTONOMY_KEY.keyId
 
 const sha256 = (s: string): string =>
   createHash('sha256')
@@ -99,7 +85,7 @@ describe('PackageManagerModule.verifyInstalledSignatures', () => {
       const signature = cryptoSign(
         null,
         Uint8Array.from(Buffer.from(canonicalize(payload), 'utf-8')),
-        PRIVATE_PEM,
+        TEST_AUTONOMY_KEY.privateKey,
       ).toString('base64')
       writeFileSync(join(dir, SIGNATURE_FILENAME), JSON.stringify({ ...payload, signature }, null, 2))
     }
@@ -133,7 +119,7 @@ describe('PackageManagerModule.verifyInstalledSignatures', () => {
     writeRegistry({ 'com.test.valid': { path: dir } })
 
     const warn = jest.fn()
-    const removed = new PackageManagerModule().verifyInstalledSignatures(warn)
+    const removed = new PackageManagerModule(anchor).verifyInstalledSignatures(warn)
 
     expect(removed).toEqual([])
     expect(warn).not.toHaveBeenCalled()
@@ -146,7 +132,7 @@ describe('PackageManagerModule.verifyInstalledSignatures', () => {
     writeRegistry({ 'com.test.unsigned': { path: dir } })
 
     const warn = jest.fn()
-    const removed = new PackageManagerModule().verifyInstalledSignatures(warn)
+    const removed = new PackageManagerModule(anchor).verifyInstalledSignatures(warn)
 
     expect(removed).toEqual(['com.test.unsigned'])
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('com.test.unsigned'))
@@ -155,11 +141,10 @@ describe('PackageManagerModule.verifyInstalledSignatures', () => {
   })
 
   it('removes a package whose signature names an untrusted key', () => {
-    // keyId is not present in TRUSTED_PACKAGE_KEYS.
     const dir = installFixture('com.test.selfsigned', { payloadOverride: { keyId: 'untrusted-key' } })
     writeRegistry({ 'com.test.selfsigned': { path: dir } })
 
-    const removed = new PackageManagerModule().verifyInstalledSignatures(jest.fn())
+    const removed = new PackageManagerModule(anchor).verifyInstalledSignatures(jest.fn())
 
     expect(removed).toEqual(['com.test.selfsigned'])
     expect(existsSync(dir)).toBe(false)
@@ -171,7 +156,7 @@ describe('PackageManagerModule.verifyInstalledSignatures', () => {
     })
     writeRegistry({ 'com.test.tampered': { path: dir } })
 
-    const removed = new PackageManagerModule().verifyInstalledSignatures(jest.fn())
+    const removed = new PackageManagerModule(anchor).verifyInstalledSignatures(jest.fn())
 
     expect(removed).toEqual(['com.test.tampered'])
     expect(existsSync(dir)).toBe(false)
@@ -180,7 +165,7 @@ describe('PackageManagerModule.verifyInstalledSignatures', () => {
   it('drops a stale registry entry whose directory is missing', () => {
     writeRegistry({ 'com.test.ghost': { path: join(packagesDir, 'com.test.ghost') } })
 
-    const removed = new PackageManagerModule().verifyInstalledSignatures(jest.fn())
+    const removed = new PackageManagerModule(anchor).verifyInstalledSignatures(jest.fn())
 
     expect(removed).toEqual(['com.test.ghost'])
     expect(readRegistryIds()).toEqual([])
@@ -193,7 +178,7 @@ describe('PackageManagerModule.verifyInstalledSignatures', () => {
     writeFileSync(join(outside, 'keepme.txt'), 'data')
     writeRegistry({ 'com.test.escape': { path: outside } })
 
-    const removed = new PackageManagerModule().verifyInstalledSignatures(jest.fn())
+    const removed = new PackageManagerModule(anchor).verifyInstalledSignatures(jest.fn())
 
     expect(removed).toEqual(['com.test.escape'])
     expect(readRegistryIds()).toEqual([])
@@ -206,7 +191,7 @@ describe('PackageManagerModule.verifyInstalledSignatures', () => {
     const bad = installFixture('com.test.bad', { omitSignature: true })
     writeRegistry({ 'com.test.good': { path: good }, 'com.test.bad': { path: bad } })
 
-    const removed = new PackageManagerModule().verifyInstalledSignatures(jest.fn())
+    const removed = new PackageManagerModule(anchor).verifyInstalledSignatures(jest.fn())
 
     expect(removed).toEqual(['com.test.bad'])
     expect(existsSync(good)).toBe(true)

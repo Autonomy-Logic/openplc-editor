@@ -44,7 +44,8 @@
     "src/backend/shared/print/__tests__/fixtures/",
     "src/backend/shared/ethercat/__tests__/fixtures/",
     "src/backend/shared/wasm-toolchain/__tests__/fixtures/",
-    "src/backend/editor/wasm-toolchain/__tests__/fixtures/"
+    "src/backend/editor/wasm-toolchain/__tests__/fixtures/",
+    "src/backend/editor/package-trust/__tests__/fixtures/"
   ],
   "transformIgnorePatterns": [
     "node_modules/(?!strucpp)"
