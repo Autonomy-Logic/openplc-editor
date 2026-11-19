@@ -24,7 +24,9 @@ interface ClientLogic {
   openEvent(n: number): Record<string, unknown>
   showEvent(page: number, n: number): Record<string, unknown>
   writeEvent(tag: number, value: Uint8Array, n: number): Record<string, unknown>
-  parseWrites(bytes: Uint8Array): Array<{ tag: number; value: Uint8Array }> | null
+  parseWrites(
+    bytes: Uint8Array,
+  ): Array<{ page: number; tag: number; kind: number; bit: number; value: Uint8Array }> | null
   toQ4(v: number): number
   roleCode(status: unknown): number
   bytesOf(data: unknown): Uint8Array
@@ -105,18 +107,22 @@ describe('the HMI browser client', () => {
     expect(logic.writeEvent(2, value, 8)).toEqual({ t: 'w', g: 2, v: value, n: 8 })
   })
 
-  it('splits the writes the module queued into tag and value, each value a copy', () => {
-    const bytes = new Uint8Array([1, 0, 1, 0, 1, 3, 0, 3, 0, 97, 98, 99, 4, 0, 0, 0])
-    const writes = logic.parseWrites(bytes)
-    expect(writes?.map((w) => [w.tag, [...w.value]])).toEqual([
-      [1, [1]],
-      [3, [97, 98, 99]],
-      [4, []],
+  it('splits the writes the module queued into page, tag, kind, bit and value, each value a copy', () => {
+    const bytes = new Uint8Array([
+      ...[0, 0, 1, 0, 0, 0, 1, 0, 1],
+      ...[1, 0, 3, 0, 0, 0, 3, 0, 97, 98, 99],
+      ...[255, 255, 4, 0, 1, 5, 1, 0, 1],
     ])
-    bytes[4] = 0
+    const writes = logic.parseWrites(bytes)
+    expect(writes?.map((w) => [w.page, w.tag, w.kind, w.bit, [...w.value]])).toEqual([
+      [0, 1, 0, 0, [1]],
+      [1, 3, 0, 0, [97, 98, 99]],
+      [65535, 4, 1, 5, [1]],
+    ])
+    bytes[8] = 0
     expect(writes?.[0].value[0]).toBe(1)
-    expect(logic.parseWrites(new Uint8Array([1, 0, 2, 0, 1]))).toBeNull()
-    expect(logic.parseWrites(new Uint8Array([1, 0, 1]))).toBeNull()
+    expect(logic.parseWrites(new Uint8Array([0, 0, 1, 0, 0, 0, 2, 0, 1]))).toBeNull()
+    expect(logic.parseWrites(new Uint8Array([0, 0, 1, 0, 0, 0, 0]))).toBeNull()
     expect(logic.parseWrites(new Uint8Array([]))).toEqual([])
   })
 

@@ -69,6 +69,8 @@ class FakeModule {
   frames = 0
   role = -1
   writes: number[] = []
+  /** Write records the next frame queues, as screen code would. */
+  frameWrites: number[] = []
   valuesSeen: number[][] = []
   pointers: number[][] = []
   exports(): Record<string, unknown> {
@@ -79,6 +81,8 @@ class FakeModule {
       hmi_bh_init: (_w: number, _h: number, role: number) => ((this.role = role), 0),
       hmi_bh_frame_ms: () => 50,
       hmi_bh_frame: () => {
+        this.writes = [...this.writes, ...this.frameWrites]
+        this.frameWrites = []
         this.frames++
         return 0
       },
@@ -298,7 +302,7 @@ describe('the HMI browser client page', () => {
   it('sends each write the screens queued, in order, numbered with the other events', async () => {
     const page = await livePage()
     const socket = page.sockets[0]
-    page.module.writes = [1, 0, 1, 0, 1, 3, 0, 2, 0, 104, 105]
+    page.module.writes = [0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 3, 0, 0, 0, 2, 0, 104, 105]
     await jest.advanceTimersByTimeAsync(60)
     const writes = socket.sent.filter((e) => e.t === 'w')
     expect(writes.map((w) => [w.g, [...(w.v instanceof Uint8Array ? w.v : [])], w.n])).toEqual([
@@ -307,6 +311,44 @@ describe('the HMI browser client page', () => {
     ])
     await jest.advanceTimersByTimeAsync(60)
     expect(socket.sent.filter((e) => e.t === 'w')).toHaveLength(2)
+  })
+
+  it("sends the writes of a page change around the new screen's show: the old screen's first", async () => {
+    const page = await livePage()
+    const socket = page.sockets[0]
+    page.module.page = 1
+    page.module.writes = [
+      ...[0, 0, 5, 0, 0, 0, 1, 0, 0],
+      ...[1, 0, 6, 0, 0, 0, 1, 0, 1],
+      ...[1, 0, 7, 0, 0, 0, 1, 0, 1],
+    ]
+    await jest.advanceTimersByTimeAsync(60)
+    expect(socket.sent.slice(2).map((e) => (e.t === 's' ? ['s', e.p] : [e.t, e.g]))).toEqual([
+      ['w', 5],
+      ['s', 1],
+      ['w', 6],
+      ['w', 7],
+    ])
+    await jest.advanceTimersByTimeAsync(60)
+    expect(socket.sent.filter((e) => e.t === 's')).toHaveLength(2)
+  })
+
+  it('asks for the start screen before its first write, right after live', async () => {
+    const page = loadPage(token(now() + 900, 'a'))
+    page.answer('/api/renew', respond(200, { access_token: token(now() + 900, 'b') }))
+    await settle()
+    const socket = page.sockets[0]
+    socket.connected = true
+    socket.fire('connect')
+    page.module.frameWrites = [0, 0, 2, 0, 0, 0, 1, 0, 1]
+    socket.fire('hmi_status', { state: 'live', role: 2 })
+    page.answer('hmi.wasm', respond(200))
+    await settle()
+    expect(socket.sent.slice(0, 3).map((e) => [e.t, e.t === 's' ? e.p : e.g])).toEqual([
+      ['o', undefined],
+      ['s', 0],
+      ['w', 2],
+    ])
   })
 
   it('hands values to the screens and acknowledges them', async () => {

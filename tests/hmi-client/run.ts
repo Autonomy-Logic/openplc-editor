@@ -217,19 +217,37 @@ function tap(bh: Bh, id: number, at: number): boolean {
   return false
 }
 
-/** The writes queued since the last clear, as [tag, bytes]. */
-function writes(bh: Bh): Array<[number, number[]]> {
+interface WriteRecord {
+  page: number
+  tag: number
+  kind: number
+  bit: number
+  value: number[]
+}
+
+/** The write records queued since the last clear. */
+function records(bh: Bh): WriteRecord[] {
   const len = bh.fn('hmi_bh_out_len')()
   const bytes = new Uint8Array(bh.memory.buffer, bh.fn('hmi_bh_out')(), len)
-  const out: Array<[number, number[]]> = []
+  const out: WriteRecord[] = []
   for (let off = 0; off < len; ) {
-    const tag = bytes[off] | (bytes[off + 1] << 8)
-    const n = bytes[off + 2] | (bytes[off + 3] << 8)
-    out.push([tag, [...bytes.slice(off + 4, off + 4 + n)]])
-    off += 4 + n
+    const n = bytes[off + 6] | (bytes[off + 7] << 8)
+    out.push({
+      page: bytes[off] | (bytes[off + 1] << 8),
+      tag: bytes[off + 2] | (bytes[off + 3] << 8),
+      kind: bytes[off + 4],
+      bit: bytes[off + 5],
+      value: [...bytes.slice(off + 8, off + 8 + n)],
+    })
+    off += 8 + n
   }
   bh.fn('hmi_bh_out_clear')()
   return out
+}
+
+/** The whole-value writes queued since the last clear, as [tag, bytes]. */
+function writes(bh: Bh): Array<[number, number[]]> {
+  return records(bh).map((r) => [r.tag, r.value])
 }
 
 function renderHashes(bh: Bh): string[] {
@@ -248,6 +266,17 @@ async function main(): Promise<void> {
   const cache = new Map<string, CachedWasmObject>()
   const compile = (request: WasmCompileRequest) => compileToWasm(request, { runner: clang, cache })
   const project = sampleProject()
+  project.screens = project.screens.map((screen) =>
+    screen.name === 'Details'
+      ? {
+          ...screen,
+          source: screen.source.replace(
+            '  END_VAR\n',
+            '  END_VAR\n  METHOD PROTECTED OVERRIDE OnShow : BOOL\n    instance0.Main.Speed := 7;\n    OnShow := TRUE;\n  END_METHOD\n',
+          ),
+        }
+      : screen,
+  )
   const PIN = '97531864'
   project.settings = { ...project.settings, pin: { enabled: true, value: PIN }, relock: { mode: 'idle', minutes: 47 } }
   const leaves = [
@@ -308,8 +337,8 @@ async function main(): Promise<void> {
     access.includes('static const uint16_t reads_0[5] = {0, 1, 2, 3, 4};') &&
       access.includes('static const uint16_t writes_0[3] = {1, 2, 3};') &&
       access.includes('static const uint16_t reads_1[1] = {3};') &&
-      access.includes('static const uint16_t writes_1[1] = {0};') &&
-      access.includes('{reads_1, 1, writes_1, 0, 3}, /* Details */'),
+      access.includes('static const uint16_t writes_1[1] = {2};') &&
+      access.includes('{reads_1, 1, writes_1, 1, 3}, /* Details */'),
     'each screen lists the tags it reads and writes, and the roles that may open it',
   )
 
@@ -401,10 +430,16 @@ async function main(): Promise<void> {
     bh.fn('hmi_bh_frame')(650)
     check(bh.fn('hmi_bh_page')() === 0, 'an operator may not open Details: the unit keeps its role grid')
     const admin = await instantiate(wasm, 0)
+    records(admin)
     tap(admin, ids.NEXT, 50)
     admin.fn('hmi_bh_frame')(100)
     admin.fn('hmi_bh_frame')(150)
     check(admin.fn('hmi_bh_page')() === 1, 'an admin opens Details with the same tap')
+    const entry = records(admin)
+    check(
+      JSON.stringify(entry) === JSON.stringify([{ page: 1, tag: 2, kind: 0, bit: 0, value: [7, 0] }]),
+      `the write Details makes on entry (OnShow) is tagged with Details, not Overview (${JSON.stringify(entry)})`,
+    )
 
     const viewer = await instantiate(wasm, VIEWER)
     check(viewer.fn('hmi_bh_page')() === 0, 'a viewer starts on Overview, which its role is granted')

@@ -127,19 +127,25 @@
   }
 
   /**
-   * Splits the write records hmi.wasm queued (`u16 tag, u16 len, bytes`, little endian) into { tag, value } pairs,
-   * each value a copy; null when the records are cut short.
+   * Splits the write records hmi.wasm queued (`u16 page, u16 tag, u8 kind, u8 bit, u16 len, bytes`, little endian) into
+   * { page, tag, kind, bit, value } in order, each value a copy: page is the screen shown when the write was made
+   * (65535 none), kind 0 a whole value and 1 one bit. Null when the records are cut short.
    */
   function parseWrites(bytes) {
     var out = []
     var off = 0
     while (off < bytes.length) {
-      if (bytes.length - off < 4) return null
-      var tag = bytes[off] | (bytes[off + 1] << 8)
-      var len = bytes[off + 2] | (bytes[off + 3] << 8)
-      if (bytes.length - off - 4 < len) return null
-      out.push({ tag: tag, value: bytes.slice(off + 4, off + 4 + len) })
-      off += 4 + len
+      if (bytes.length - off < 8) return null
+      var len = bytes[off + 6] | (bytes[off + 7] << 8)
+      if (bytes.length - off - 8 < len) return null
+      out.push({
+        page: bytes[off] | (bytes[off + 1] << 8),
+        tag: bytes[off + 2] | (bytes[off + 3] << 8),
+        kind: bytes[off + 4],
+        bit: bytes[off + 5],
+        value: bytes.slice(off + 8, off + 8 + len),
+      })
+      off += 8 + len
     }
     return out
   }
@@ -548,13 +554,30 @@
       reopenTimer = setTimeout(sendOpen, REOPEN_DELAY_MS)
     }
 
-    function sendWrites() {
+    /** Asks the device for the values of a newly shown screen; its writes are checked against it from then on. */
+    function show(page, now) {
+      shownPage = page
+      awaitingPage = page
+      awaitingSince = now
+      send(showEvent(page, sequencer.next()))
+    }
+
+    /**
+     * Sends the frame's writes in the order screen code made them, each after a show of the screen it was made on:
+     * the old screen's writes (its OnHide included) go before the new screen's show, the new screen's (its OnShow and
+     * first frame included) after it.
+     */
+    function sendWrites(now) {
       var len = hmi.hmi_bh_out_len()
       if (len === 0) return
       var writes = parseWrites(new Uint8Array(hmi.memory.buffer, hmi.hmi_bh_out(), len))
       hmi.hmi_bh_out_clear()
       if (!writes) return
-      for (var i = 0; i < writes.length; i++) send(writeEvent(writes[i].tag, writes[i].value, sequencer.next()))
+      for (var i = 0; i < writes.length; i++) {
+        var w = writes[i]
+        if (w.page !== 65535 && w.page !== shownPage) show(w.page, now)
+        send(writeEvent(w.tag, w.value, sequencer.next()))
+      }
     }
 
     function frame() {
@@ -567,18 +590,13 @@
         fault()
         return
       }
-      sendWrites()
+      sendWrites(started)
       if (hmi.hmi_bh_sign_out()) {
         signOut()
         return
       }
       var page = hmi.hmi_bh_page()
-      if (page >= 0 && page !== shownPage) {
-        shownPage = page
-        awaitingPage = page
-        awaitingSince = started
-        send(showEvent(page, sequencer.next()))
-      }
+      if (page >= 0 && page !== shownPage) show(page, started)
       if (awaitingPage < 0 || started - awaitingSince >= FIRST_VALUES_WAIT_MS) draw()
       var period = Math.max(10, hmi.hmi_bh_frame_ms())
       frameTimer = setTimeout(frame, Math.max(0, period - (Date.now() - started)))

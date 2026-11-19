@@ -4,7 +4,8 @@
  *        values the runtime sends, and rasterizes its frames in bands, reporting the rows that changed. Screen writes
  *        update the local value at once and are queued for the runtime, which applies or refuses them.
  *
- * Values cross as the runtime's VALUES records (`u16 tag, u16 len, bytes`, little endian): a tag's IEC width, or the
+ * Writes are tagged with the screen shown when screen code made them, so the client asks the runtime for a newly shown
+ * screen right before that screen's first write. Values cross as the runtime's VALUES records (`u16 tag, u16 len, bytes`, little endian): a tag's IEC width, or the
  * text of a STRING without its NUL. A value received for a tag whose last write the runtime has not processed yet
  * (its write count is behind) is skipped, so a screen never shows a value older than its own write.
  */
@@ -111,6 +112,26 @@ bool tag_read(void *, int tag, void *dest) {
     return true;
 }
 
+/** Bytes of an out record before its value: page, tag, kind, bit, length. */
+constexpr size_t kOutHeader = 8;
+constexpr uint8_t kWriteWord = 0;
+
+/** Queues one write record for the runtime: the page shown when it was made, the tag, its kind and its value. */
+void queue_write(int tag, uint8_t kind, uint8_t bit, const uint8_t *value, size_t len) {
+    if (!reserve(&g_out, g_out.len + kOutHeader + len)) return;
+    uint8_t *p = g_out.data + g_out.len;
+    hmi_session_use(g_session);
+    const int32_t page = hmi_page_shown();
+    put_u16(p, page < 0 ? 0xFFFFu : static_cast<uint32_t>(page));
+    put_u16(p + 2, static_cast<uint32_t>(tag));
+    p[4] = kind;
+    p[5] = bit;
+    put_u16(p + 6, static_cast<uint32_t>(len));
+    if (len > 0) memcpy(p + kOutHeader, value, len);
+    g_out.len += kOutHeader + len;
+    g_write_index[tag] = ++g_writes;
+}
+
 /** A screen's write: kept as the tag's value and queued for the runtime as one record. */
 void tag_write(void *, int tag, const void *src) {
     if (tag < 0 || tag >= hmi_tag_count) return;
@@ -118,14 +139,7 @@ void tag_write(void *, int tag, const void *src) {
     memcpy(g_values[tag], src, size);
     if (is_string(tag)) g_values[tag][size - 1] = 0;
     g_known[tag] = true;
-    const size_t len = wire_length(tag, g_values[tag]);
-    if (!reserve(&g_out, g_out.len + 4u + len)) return;
-    uint8_t *p = g_out.data + g_out.len;
-    put_u16(p, static_cast<uint32_t>(tag));
-    put_u16(p + 2, static_cast<uint32_t>(len));
-    memcpy(p + 4, g_values[tag], len);
-    g_out.len += 4u + len;
-    g_write_index[tag] = ++g_writes;
+    queue_write(tag, kWriteWord, 0, g_values[tag], wire_length(tag, g_values[tag]));
 }
 
 const hmi_tag_access_t g_access = {tag_read, tag_write, nullptr};
@@ -199,10 +213,10 @@ HMI_BH_EXPORT("hmi_bh_frame") uint32_t hmi_bh_frame(uint32_t time_ms) {
     return static_cast<uint32_t>(g_dl_len);
 }
 
-/** The page the last frame showed, -1 for none. */
+/** The page whose screen ran in the last frame, -1 for none. */
 HMI_BH_EXPORT("hmi_bh_page") int32_t hmi_bh_page(void) {
     hmi_session_use(g_session);
-    return hmi_page();
+    return hmi_page_shown();
 }
 
 /** Whether the last frame's screen code asked to sign out. */
@@ -312,7 +326,11 @@ HMI_BH_EXPORT("hmi_bh_values") int32_t hmi_bh_values(uint32_t len) {
     return page;
 }
 
-/** Writes queued since the last hmi_bh_out_clear, as records `u16 tag, u16 len, bytes`. */
+/**
+ * Writes queued since the last hmi_bh_out_clear, in the order screen code made them, as records `u16 page, u16 tag,
+ * u8 kind, u8 bit, u16 len, bytes`: page is the screen shown when the write was made (0xFFFF none), kind 0 a whole
+ * value, 1 one bit (value 0 or 1).
+ */
 HMI_BH_EXPORT("hmi_bh_out") const uint8_t *hmi_bh_out(void) { return g_out.data; }
 HMI_BH_EXPORT("hmi_bh_out_len") uint32_t hmi_bh_out_len(void) { return static_cast<uint32_t>(g_out.len); }
 HMI_BH_EXPORT("hmi_bh_out_clear") void hmi_bh_out_clear(void) { g_out.len = 0; }
