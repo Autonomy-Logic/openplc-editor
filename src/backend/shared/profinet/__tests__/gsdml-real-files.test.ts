@@ -5,9 +5,9 @@ import type { GsdmlCatalog } from '@root/middleware/shared/ports/gsdml-types'
 import { buildGsdmlCatalogLookups } from '@root/middleware/shared/utils/profinet/gsdml-catalog-lookups'
 
 import {
-  COUNTED_ELEMENTS,
-  countCatalogElements,
   catalogOf,
+  countCatalogElements,
+  COUNTED_ELEMENTS,
   countRawElements,
   noticesOf,
   unresolvedPlacements,

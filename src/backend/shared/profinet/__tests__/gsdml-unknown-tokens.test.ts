@@ -2,8 +2,8 @@ import type { GsdmlCatalog } from '@root/middleware/shared/ports/gsdml-types'
 
 import { GSDML_PROTOCOL_TOKENS, GSDML_RT_CLASS_TOKENS } from '../index'
 import {
-  catalogOf,
   type CatalogNotice,
+  catalogOf,
   NEWER_INTERFACE_ID,
   newerDapSystemSubmodules,
   newerInterface,
