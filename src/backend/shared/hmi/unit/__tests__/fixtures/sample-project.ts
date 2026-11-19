@@ -14,7 +14,7 @@ FUNCTION_BLOCK Overview EXTENDS HmiScreen
     Name : HmiTextInput := (Caption := 'Name', Parent := 'Body', MaxLength := 20);
     Alarm : Badge := (Caption := 'Alarm', Parent := 'Body');
     Next : HmiButton := (Text := 'Details', Parent := 'Body');
-    Setpoint : HmiNumericInput := (Caption := 'Speed setpoint', Parent := 'Body', Decimals := 0);
+    Setpoint : HmiNumericInput := (Caption := 'Speed setpoint', Parent := 'Body', Decimals := 0, MinValue := 0.0, MaxValue := 100.0);
   END_VAR
   Level.Value := instance0.Main.Level;
   Run.Value := instance0.Main.Running;

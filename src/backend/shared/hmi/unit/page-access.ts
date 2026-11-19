@@ -5,7 +5,7 @@
  */
 import type { ASTNode, CompilationUnit, Expression, Statement, VariableExpression } from 'strucpp'
 
-import { hmiLimitUnion,type HmiWriteLimit } from './write-limits'
+import { hmiLimitUnion, type HmiWriteLimit } from './write-limits'
 
 /** How one screen writes a tag: as a whole value, and which of its bits by bit assignments (`Tag.3 := ...`). */
 export interface HmiTagWrite {

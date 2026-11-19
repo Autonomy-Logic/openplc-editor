@@ -194,7 +194,8 @@ holds none of them, and the core's PIN entry is not linked into `hmi.wasm`, wher
   entries also carry each screen's static limit per tag (`write-limits.ts`): a two-way widget declares what its
   NewValue can be with `{attribute 'hmi_range' := '<lo>..<hi>'}` (numbers, input names or `last(<list input>)`) or
   `{attribute 'hmi_max_length' := '<input>'}`, resolved from the element's literal properties; an assigned literal
-  limits to itself; any other write leaves the tag unlimited on that screen, and the limit is the union of the
+  limits to itself (the numeric input's MinValue and MaxValue default to -1.0E38 and 1.0E38, the gauge zones' "off",
+  and it delivers no entry outside them); any other write leaves the tag unlimited on that screen, and the limit is the union of the
   screen's writes. Conditions in screen code (interlocks) cannot be enforced by the runtime: they run in the browser,
   so the PLC program must validate what HMI screens write. The
   runtime's HMI host serves a viewer only the tags of the screen it shows when its role may open it, and applies only
@@ -231,5 +232,5 @@ queued writes, stale values skipped, the role grid) and checks it draws the same
 natively.
 
 `npm run test:hmi-unit` (`tests/hmi-unit/run.mjs`) generates a sample project's unit, builds it with this core and a
-C host that uses only `unit/hmi_unit.h` and `unit/hmi_preview.h`, and checks its frames, writes (range clamping
+C host that uses only `unit/hmi_unit.h` and `unit/hmi_preview.h`, and checks its frames, writes (range limits
 included), navigation and role grid against `tests/hmi-unit/golden.txt`, also under the sanitizers.

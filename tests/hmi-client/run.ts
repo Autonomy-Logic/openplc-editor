@@ -337,7 +337,7 @@ async function main(): Promise<void> {
   check(
     access.includes('static const uint16_t reads_0[5] = {0, 1, 2, 3, 4};') &&
       access.includes(
-        'static const hmi_access_write_t writes_0[3] = {{1, 1, 0x0ULL, 0, 0.0, 0.0}, {2, 1, 0x0ULL, 0, 0.0, 0.0}, {3, 1, 0x0ULL, 1, 0.0, 12.0}};',
+        'static const hmi_access_write_t writes_0[3] = {{1, 1, 0x0ULL, 0, 0.0, 0.0}, {2, 1, 0x0ULL, 1, 0.0, 100.0}, {3, 1, 0x0ULL, 1, 0.0, 12.0}};',
       ) &&
       access.includes('static const uint16_t reads_1[2] = {3, 5};') &&
       access.includes(

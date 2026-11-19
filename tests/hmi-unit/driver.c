@@ -179,7 +179,7 @@ int main(int argc, char **argv) {
     hmi_session_use(admin.session);
     for (const char *k = "\b\b\b\bPUMP STATION 7\r"; *k; k++) hmi_input_key((uint32_t)(unsigned char)*k);
     frame(&admin, "name_typed!");
-    /* Entries outside the INT's range write its nearest value; a non-number writes nothing. */
+    /* Entries outside the input's 0 to 100 and a non-number write nothing; 12 is written. */
     const char *entries[] = {"\b\b\b\b\b\b40000\r", "\b\b\b\b\b\b-1e30\r", "\b\b\b\b\b\binf\r", "\b\b\b\b\b\b12\r"};
     for (int e = 0; e < 4; e++) {
         tap(&admin, "setpoint", ID_OVERVIEW_SETPOINT);

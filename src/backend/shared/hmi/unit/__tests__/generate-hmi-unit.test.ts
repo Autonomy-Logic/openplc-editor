@@ -334,7 +334,20 @@ describe('HMI unit generator', () => {
     const sample = generateHmiUnit(sampleProject())
     const speed = sample.tags.findIndex((t) => t.path.endsWith('.SPEED'))
     const write = sample.pages[0].writes.find((w) => w.tag === speed)
-    expect(write?.limit).toBeNull()
+    expect(write?.limit).toEqual({ min: 0, max: 100 })
+    const withDefaults = generateHmiUnit(
+      withScreen(
+        screen(
+          ['    Speed : HmiSlider := (MaxValue := 100.0);', '    Free : HmiNumericInput;'].join('\n'),
+          ['  Speed.Value := instance0.Main.Speed;', '  Free.Value := instance0.Main.Speed;'].join('\n'),
+        ),
+      ),
+    )
+    const defaultsSpeed = withDefaults.tags.findIndex((t) => t.path.endsWith('.SPEED'))
+    expect(withDefaults.pages[0].writes.find((w) => w.tag === defaultsSpeed)?.limit).toEqual({
+      min: -32768,
+      max: 32767,
+    })
     const sliderOnly = generateHmiUnit(
       withScreen(
         screen(
