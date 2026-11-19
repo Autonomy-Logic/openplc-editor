@@ -23,6 +23,7 @@
     "setup:binaries": "ts-node scripts/download-binaries.ts",
     "setup:strucpp": "ts-node scripts/download-binaries.ts --strucpp-only",
     "package": "ts-node scripts/clean.js dist && npm run build && electron-builder build --publish never && npm run build:dll",
+    "package:test": "cross-env OPENPLC_TEST_PACKAGE=1 ts-node scripts/clean.js dist && cross-env OPENPLC_TEST_PACKAGE=1 npm run build && cross-env OPENPLC_TEST_PACKAGE=1 electron-builder build --publish never -c.electronFuses.enableNodeCliInspectArguments=true && cross-env OPENPLC_TEST_PACKAGE=1 npm run build:dll",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
     "prestart": "ts-node scripts/download-binaries.ts && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./configs/webpack/webpack.config.main.dev.ts",
     "start:dev": "cross-env PORT=1313 ts-node scripts/check-port-in-use.js && npm run prestart && npm run start:renderer",

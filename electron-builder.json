@@ -6,6 +6,13 @@
   "generateUpdatesFilesForAllChannels": true,
   "files": ["dist", "node_modules", "package.json"],
   "afterSign": "scripts/notarize.js",
+  "electronFuses": {
+    "runAsNode": false,
+    "enableNodeOptionsEnvironmentVariable": false,
+    "enableNodeCliInspectArguments": false,
+    "enableEmbeddedAsarIntegrityValidation": true,
+    "onlyLoadAppFromAsar": true
+  },
   "directories": {
     "app": "release/app",
     "buildResources": "assets",
