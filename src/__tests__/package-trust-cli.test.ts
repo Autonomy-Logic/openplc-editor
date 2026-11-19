@@ -102,6 +102,14 @@ function writeBundle(root: string, literals: string[]): void {
   write(join(root, BUNDLE), `"use strict";var t=[${literals.map((literal) => JSON.stringify(literal)).join(',')}];\n`)
 }
 
+/** A dynamic-import chunk named @p name beside main.js, holding each of @p literals as a string literal. */
+function writeChunk(root: string, name: string, literals: string[]): void {
+  write(
+    join(dirname(join(root, BUNDLE)), name),
+    `"use strict";exports.ids=[722];exports.t=[${literals.map((literal) => JSON.stringify(literal)).join(',')}];\n`,
+  )
+}
+
 const firstLine = (text: string): string => text.split('\n')[0]
 
 let root = ''
@@ -407,6 +415,31 @@ describe('release mode', () => {
         writeBundle(releaseRoot(), readLayoutBeside(join(root, MODULE)).shareLiterals.slice(1))
 
         expect(runCli(['verify-bundle', '--root', root], root, RELEASE).status).toBe(1)
+      },
+      TIMEOUT,
+    )
+
+    it(
+      'passes a bundle whose share literals are only in a chunk beside main.js',
+      () => {
+        writeBundle(releaseRoot(), [])
+        writeChunk(root, '722.js', readLayoutBeside(join(root, MODULE)).shareLiterals)
+
+        expect(runCli(['verify-bundle', '--root', root], root, RELEASE).status).toBe(0)
+      },
+      TIMEOUT,
+    )
+
+    it(
+      'fails a bundle with a share literal of the development module in a chunk beside main.js',
+      () => {
+        writeBundle(releaseRoot(), readLayoutBeside(join(root, MODULE)).shareLiterals)
+        writeChunk(root, '41.js', [developmentModule().layout.shareLiterals[0]])
+
+        const run = runCli(['verify-bundle', '--root', root], root, RELEASE)
+
+        expect(run.status).toBe(1)
+        expect(run.output).toContain('release/app/dist/main/main.js with its chunks')
       },
       TIMEOUT,
     )
