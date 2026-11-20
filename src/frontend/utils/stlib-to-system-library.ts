@@ -36,7 +36,8 @@
  *   parameters become class `'inOut'` (camel-case the editor uses).
  */
 
-import { libraryKind } from '@root/middleware/shared/utils/hmi/widget-libraries'
+import { PLC_PROVIDED_HEADERS } from '@root/middleware/shared/utils/hmi/widget-libraries'
+import { isUnusablePou, unusablePous } from '@root/middleware/shared/utils/library/pou-requirements'
 
 import type { StlibArchiveDTO } from '../../middleware/shared/ports/library-port'
 import type {
@@ -183,7 +184,23 @@ export function stlibToSystemLibrary(archive: StlibArchiveDTO): SystemLibrary {
   return result
 }
 
-/** The PLC libraries among `archives` as library-tree entries; widget libraries (kind `hmi`) belong to the HMI. */
+/**
+ * `archives` as library-tree entries with only the POUs a PLC build can use: a POU that needs the HMI core is left
+ * out, and a library may be left with none.
+ */
 export function stlibsToSystemLibraries(archives: StlibArchiveDTO[]): SystemLibrary[] {
-  return archives.filter((archive) => libraryKind(archive) !== 'hmi').map(stlibToSystemLibrary)
+  const unusable = unusablePous(archives, PLC_PROVIDED_HEADERS)
+  return archives.map((archive) => {
+    const library = stlibToSystemLibrary(archive)
+    const pous = library.pous.filter((pou) => !isUnusablePou(unusable, library.name, pou.name))
+    return pous.length === library.pous.length ? library : { ...library, pous }
+  })
+}
+
+/** Upper-case names of the library POUs a PLC build cannot use, such as widgets that need the HMI core. */
+export function plcUnusablePouNames(archives: readonly StlibArchiveDTO[]): string[] {
+  const names = new Set<string>()
+  for (const pous of unusablePous(archives, PLC_PROVIDED_HEADERS).values())
+    for (const name of pous.keys()) names.add(name)
+  return [...names].sort()
 }

@@ -12,7 +12,6 @@ import type {
   WasmCompileUnit,
 } from '../../../../middleware/shared/ports/wasm-toolchain-types'
 import { hmiFontTableFromSources } from '../fonts/font-table-source'
-import { plcLibraryArchives } from '../lib/widget-libraries'
 import { generateHmiUnit, type HmiPageTags, type HmiTag } from '../unit/generate-hmi-unit'
 import { hmiHostManifestSource } from './host-manifest'
 import { type HmiProgramInstance, hmiTagResolver } from './tag-resolver'
@@ -131,8 +130,7 @@ export async function composeHmiArtefact(input: ComposeHmiArtefactInput): Promis
 
   const unit = generateHmiUnit({
     ...input.sources,
-    plcArchives: plcLibraryArchives(input.libraries),
-    widgetLibraries: input.libraries,
+    installedLibraries: input.libraries,
     capabilities: input.capabilities,
     resolve: hmiTagResolver(input.debugMapJson, input.instances),
     plcMd5: input.md5,

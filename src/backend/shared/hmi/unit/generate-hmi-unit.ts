@@ -27,6 +27,7 @@ import {
   hmiThemeId,
   screenGrant,
 } from '@root/middleware/shared/utils/hmi/settings'
+import { HMI_PROVIDED_HEADERS } from '@root/middleware/shared/utils/hmi/widget-libraries'
 import type { CompileOptions, StlibArchive } from 'strucpp'
 
 import type {
@@ -41,7 +42,13 @@ import type {
 import { loadStrucpp } from '../../library/strucpp-runtime'
 import { HMI_ALL_FACES, hmiUsedFontFaces } from '../fonts/used-faces'
 import { buildWidgetCatalog, type HmiWidgetCatalog, type HmiWidgetInfo } from '../lib/widget-catalog'
-import { type HmiWidgetLibraryArchive, loadHmiWidgetLibraries, mergeWidgetCatalogs } from '../lib/widget-libraries'
+import {
+  type HmiWidgetLibraryArchive,
+  loadHmiWidgetLibraries,
+  widgetLibraryNames,
+  withSkippedLibraryCause,
+  withWidgets,
+} from '../lib/widget-libraries'
 import { type HmiAstWalk, hmiBitAssignments, type HmiLimitOf, hmiPageAccess, type HmiTagWrite } from './page-access'
 import { type HmiBlockModel, type HmiElementDecl, parseHmiBlock } from './screen-model'
 import { type HmiElementLimit, hmiElementLimit, hmiLiteralOf, type HmiWriteLimit } from './write-limits'
@@ -54,8 +61,8 @@ export interface HmiTagAddress {
 export type { HmiDiagnostic, HmiPlcVariable, HmiPreviewSetter, HmiSourceFile, HmiUnitSources }
 
 export interface HmiUnitInput extends HmiUnitSources {
-  /** The installed library archives, verbatim; the widget libraries (kind `hmi`) among them are compiled against. */
-  widgetLibraries: readonly unknown[]
+  /** The installed library archives, verbatim; the unit compiles against all of them and takes its widgets from them. */
+  installedLibraries: readonly unknown[]
   /**
    * Preview only: a widget block shown on an extra screen after the project's, at natural size and stretched, with a
    * test value on its main input. Product builds leave it out.
@@ -1359,12 +1366,13 @@ export interface HmiWidgetLibrary {
 const PROJECT_WIDGETS = 'project-widgets'
 
 /**
- * Compiles a project's widget blocks against the widget libraries and builds the catalogue of all of them: the
- * libraries' own catalogues, then the project's blocks. Errors leave the catalogue with the library widgets only.
+ * Compiles a project's widget blocks against the installed libraries and builds the catalogue of all of them: the
+ * libraries' widgets, then the project's blocks. Errors leave the catalogue with the library widgets only.
  */
 export function compileHmiWidgets(
   widgets: readonly HmiSourceFile[],
   libraries: readonly HmiWidgetLibraryArchive[],
+  libraryCatalog: HmiWidgetCatalog,
 ): HmiWidgetLibrary {
   const strucpp = loadStrucpp()
   const archives: StlibArchive[] = libraries.map((l) => l.archive)
@@ -1374,22 +1382,23 @@ export function compileHmiWidgets(
   if (widgets.length > 0 && errors.length === 0) {
     const compiled = strucpp.compileStlib(
       widgets.map((w) => ({ fileName: w.name, source: w.source })),
-      { name: PROJECT_WIDGETS, version: '1.0.0', namespace: 'hmi_project_widgets', dependencies: [...archives] },
+      {
+        name: PROJECT_WIDGETS,
+        version: '1.0.0',
+        namespace: 'hmi_project_widgets',
+        headers: [...HMI_PROVIDED_HEADERS],
+        dependencies: [...archives],
+      },
     )
     for (const e of compiled.errors) errors.push({ file: e.file ?? UNIT, message: e.message, line: e.line })
     if (errors.length === 0)
       archives.push(strucpp.loadStlibFromString(JSON.stringify(compiled.archive), PROJECT_WIDGETS))
   }
-  const project = archives.some((a) => a.manifest.name === PROJECT_WIDGETS)
-    ? buildWidgetCatalog(archives.map((a) => a.manifest))
-    : null
+  const project = archives.some((a) => a.manifest.name === PROJECT_WIDGETS) ? buildWidgetCatalog(archives) : null
   const projectWidgets = new Map(
     [...(project?.widgets ?? [])].filter(([, widget]) => widget.library === PROJECT_WIDGETS),
   )
-  const catalog = mergeWidgetCatalogs([
-    ...libraries.map((l) => l.catalog),
-    { widgets: projectWidgets, colors: project?.colors ?? [] },
-  ])
+  const catalog = withWidgets(libraryCatalog, projectWidgets)
   if (errors.length === 0)
     for (const w of widgets)
       if (!catalog.widgets.has(w.name.toUpperCase()))
@@ -1400,13 +1409,13 @@ export function compileHmiWidgets(
   return { archives, catalog, errors }
 }
 
-/** The catalogue of the installed widget libraries and a project's widget blocks, for the designer. */
+/** The catalogue of the installed libraries and a project's widget blocks, for the designer. */
 export function buildHmiWidgetCatalog(
   widgets: readonly HmiSourceFile[],
-  widgetLibraries: readonly unknown[],
+  installedLibraries: readonly unknown[],
 ): HmiWidgetLibrary {
-  const loaded = loadHmiWidgetLibraries(widgetLibraries)
-  const compiled = compileHmiWidgets(widgets, loaded.libraries)
+  const loaded = loadHmiWidgetLibraries(installedLibraries)
+  const compiled = compileHmiWidgets(widgets, loaded.libraries, loaded.catalog)
   return { ...compiled, errors: [...loaded.errors, ...compiled.errors] }
 }
 
@@ -1646,7 +1655,14 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     },
     timings: { widgetsMs: 0, strucppMs: 0 },
   }
-  const { libraries, errors: libraryErrors } = loadHmiWidgetLibraries(input.widgetLibraries)
+  const {
+    libraries,
+    catalog: libraryCatalog,
+    errors: libraryErrors,
+    warnings,
+    skipped,
+  } = loadHmiWidgetLibraries(input.installedLibraries)
+  for (const w of warnings) d.warn(w.file, w.message)
   for (const e of libraryErrors) d.error(e.file, e.message, e.line)
   if (d.errors.length > 0) return result
   if (input.screens.length === 0 && input.widgetPreview === undefined && !input.gallery && !input.themePreview)
@@ -1657,9 +1673,9 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
 
   const strucpp = loadStrucpp()
   const widgetsStart = performance.now()
-  const widgetLibrary = compileHmiWidgets(input.widgets, libraries)
+  const widgetLibrary = compileHmiWidgets(input.widgets, libraries, libraryCatalog)
   result.timings.widgetsMs = performance.now() - widgetsStart
-  for (const e of widgetLibrary.errors) d.error(e.file, e.message, e.line)
+  for (const e of widgetLibrary.errors) d.error(e.file, withSkippedLibraryCause(e.message, skipped), e.line)
   if (d.errors.length > 0) return result
   const { archives, catalog } = widgetLibrary
 
@@ -1749,11 +1765,19 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     input.preview ? previewStarts(input.plcVariables) : [],
   )
   result.sources = sources
-  result.fonts = { variant: input.settings.fontVariant, faces: buildFaces(input, sources, libraries) }
+  const widgetLibraries = widgetLibraryNames(libraryCatalog)
+  result.fonts = {
+    variant: input.settings.fontVariant,
+    faces: buildFaces(
+      input,
+      sources,
+      libraries.filter((l) => widgetLibraries.has(l.name)),
+    ),
+  }
   const [first, ...rest] = Object.entries(sources)
-  const widgetLibraries = new Set(archives.map((a) => a.manifest.name.toUpperCase()))
+  const taken = new Set([...archives.map((a) => a.manifest.name), ...skipped.map((l) => l.name)])
   const plcLibraries = [...plcArchives(input.plcLibraries ?? [], d), ...(input.plcArchives ?? [])].filter(
-    (a) => !widgetLibraries.has(a.manifest.name.toUpperCase()),
+    (a) => !taken.has(a.manifest.name),
   )
   if (d.errors.length > 0) return result
   const options: StrucppCompileOptions = {
@@ -1765,14 +1789,18 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     separateLibraryFiles: true,
     externalInstancePaths: true,
     externalSources: [PLC_FILE],
-    ...(input.preview ? { wholeLibraries: archives.map((a) => a.manifest.name) } : {}),
+    providedHeaders: [...HMI_PROVIDED_HEADERS],
+    ...(input.preview
+      ? { wholeLibraries: archives.map((a) => a.manifest.name).filter((name) => widgetLibraries.has(name)) }
+      : {}),
   }
   const strucppStart = performance.now()
   const compiled = strucpp.compile(first[1], options)
   result.timings.strucppMs = performance.now() - strucppStart
   for (const e of compiled.errors) {
     const file = (e.file ?? UNIT).replace(/\.st$/, '')
-    d.error(sources[e.file ?? ''] !== undefined && !e.file?.startsWith('hmi_') ? file : UNIT, e.message, e.line)
+    const where = sources[e.file ?? ''] !== undefined && !e.file?.startsWith('hmi_') ? file : UNIT
+    d.error(where, withSkippedLibraryCause(e.message, skipped), e.line)
   }
   if (d.errors.length > 0) return result
   result.files[HEADER] = compiled.headerCode

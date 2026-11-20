@@ -106,8 +106,6 @@ export interface StlibArchiveDTO {
    *  is the deliverable and an archive without it is unbuildable.
    *  Located via a function block's `sourceFile`. */
   sources?: Array<{ fileName: string; source: string; category?: string }>
-  /** OpenPLC metadata: the library kind, and for a widget library its HMI core API and widget catalogue. */
-  openplc?: unknown
 }
 
 export interface LibraryPort {

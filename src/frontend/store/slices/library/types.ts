@@ -73,6 +73,7 @@ export type LibraryActions = {
    * slice has to be told separately.
    */
   setBundledLibraryNames: (names: string[]) => void
+  setPlcUnusablePous: (names: string[]) => void
 }
 
 export type LibrarySliceExtra = {
@@ -88,6 +89,8 @@ export type LibrarySliceExtra = {
   /** Project-referenced libraries the system pool currently can't
    *  resolve.  Drives the missing-libraries modal post-project-open. */
   missingLibraries: MissingLibrary[]
+  /** Upper-case names of library POUs a PLC build cannot use (they need the HMI core); PLC completions hide them. */
+  plcUnusablePous: string[]
 }
 
 export type LibrarySlice = import('../../../../middleware/shared/ports/library-types').LibraryState &

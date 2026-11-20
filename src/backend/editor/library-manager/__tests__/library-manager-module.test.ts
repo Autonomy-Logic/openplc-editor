@@ -118,13 +118,12 @@ function makeModule(): LibraryManagerModule {
   return new LibraryManagerModule({ librariesDir, bundledDir, hmiWidgetsDir })
 }
 
-/** An archive carrying `openplc` metadata of kind `hmi` (a widget library) or `plc`. */
-function withKind(archive: ReturnType<typeof makeArchive>, kind: 'hmi' | 'plc', hmiCoreApi = HMI_CORE_API_VERSION) {
-  const openplc =
-    kind === 'hmi'
-      ? { formatVersion: 1, kind, license: 'GPL-3.0-only', hmiCoreApi, catalog: { widgets: [], colors: [] } }
-      : { formatVersion: 1, kind, license: 'GPL-3.0-only' }
-  return { ...archive, openplc }
+/** An archive whose one chunk needs the HMI core at `version`, as a widget library's do. */
+function needingCore(archive: ReturnType<typeof makeArchive>, version = String(HMI_CORE_API_VERSION)) {
+  return {
+    ...archive,
+    chunks: [{ name: 'W', kind: 'functionBlock', deps: [], headers: [{ name: 'hmi_core.h', version }] }],
+  }
 }
 
 /** Puts an archive among the pre-installed HMI widgets release. */
@@ -133,7 +132,7 @@ function writeHmiWidget(archive: object & { manifest: { name: string } }): void 
   writeFileSync(join(hmiWidgetsDir, `${archive.manifest.name}.stlib`), JSON.stringify(archive), 'utf-8')
 }
 
-function writeBundled(archive: ReturnType<typeof makeArchive>): void {
+function writeBundled(archive: object & { manifest: { name: string } }): void {
   // The bundled discovery walks `<bundledDir>/*.stlib`.  Mirror that
   // shape so the test covers the same code path the real app uses.
   if (!existsSync(bundledDir)) {
@@ -320,6 +319,20 @@ describe('LibraryManagerModule', () => {
       expect(all.map((a) => a.manifest.name)).toEqual(['aaa-bundled', 'bbb-bundled', 'ccc-user'])
     })
 
+    it('keeps every top-level field of bundled and user archives, known or not', async () => {
+      const bundled = { ...makeArchive('aaa-bundled'), futureField: 'bundled' }
+      writeBundled(bundled)
+      const mod = makeModule()
+      const tmp = join(testRoot, 'ccc-user.stlib')
+      writeFileSync(tmp, JSON.stringify({ ...makeArchive('ccc-user'), futureField: 'user' }), 'utf-8')
+      await mod.installFromFile(tmp)
+
+      expect(mod.loadAll()).toEqual([
+        { ...makeArchive('aaa-bundled'), futureField: 'bundled' },
+        { ...makeArchive('ccc-user'), futureField: 'user' },
+      ])
+    })
+
     it('skips orphaned registry entries whose .stlib went missing', async () => {
       const mod = makeModule()
       const tmp = join(testRoot, 'foo.stlib')
@@ -361,7 +374,7 @@ describe('LibraryManagerModule', () => {
       expect(result.missing).toEqual([])
     })
 
-    it('does not include user libs that are installed but not enabled', async () => {
+    it('includes user libs that are installed but not enabled, after the enabled ones', async () => {
       const mod = makeModule()
       const tmp = join(testRoot, 'oscat.stlib')
       writeFileSync(tmp, JSON.stringify(makeArchive('oscat-basic')), 'utf-8')
@@ -369,7 +382,8 @@ describe('LibraryManagerModule', () => {
 
       const result = mod.loadEnabledArchives([])
       // Bundled dir doesn't exist in this test harness.
-      expect(result.archives).toEqual([])
+      expect(result.archives.map((a) => a.manifest.name)).toEqual(['oscat-basic'])
+      expect(result.missing).toEqual([])
     })
 
     it('reports enabled libraries that have no archive on disk', async () => {
@@ -388,42 +402,44 @@ describe('LibraryManagerModule', () => {
   })
 
   describe('pre-installed HMI libraries', () => {
-    it('lists the HMI widgets release as bundled rows with their kind, after the strucpp libraries', () => {
+    it('lists the HMI widgets release as bundled rows, after the strucpp libraries', () => {
       writeBundled(makeArchive('iec-standard-fb'))
-      writeHmiWidget(withKind(makeArchive('standard-widgets'), 'hmi'))
-      writeHmiWidget(withKind(makeArchive('hmi-alarms'), 'plc'))
+      writeHmiWidget(needingCore(makeArchive('standard-widgets')))
+      writeHmiWidget(makeArchive('hmi-alarms'))
       writeFileSync(join(hmiWidgetsDir, 'openplc-hmi-widgets.json'), '{}', 'utf-8')
       const rows = makeModule().listInstalled()
-      expect(rows.map((r) => [r.name, r.bundled, r.origin, r.kind])).toEqual([
-        ['iec-standard-fb', true, 'bundled', 'plc'],
-        ['hmi-alarms', true, 'bundled', 'plc'],
-        ['standard-widgets', true, 'bundled', 'hmi'],
+      expect(rows.map((r) => [r.name, r.bundled, r.origin])).toEqual([
+        ['iec-standard-fb', true, 'bundled'],
+        ['hmi-alarms', true, 'bundled'],
+        ['standard-widgets', true, 'bundled'],
       ])
     })
 
     it('refuses to uninstall or shadow a pre-installed HMI library', async () => {
-      writeHmiWidget(withKind(makeArchive('standard-widgets'), 'hmi'))
+      writeHmiWidget(needingCore(makeArchive('standard-widgets')))
       const mod = makeModule()
       expect(mod.uninstall('standard-widgets')).toEqual({
         success: false,
         error: "Cannot uninstall bundled library 'standard-widgets'",
       })
       const tmp = join(testRoot, 'standard-widgets.stlib')
-      writeFileSync(tmp, JSON.stringify(withKind(makeArchive('standard-widgets'), 'hmi')), 'utf-8')
+      writeFileSync(tmp, JSON.stringify(needingCore(makeArchive('standard-widgets'))), 'utf-8')
       const result = await mod.installFromFile(tmp)
       expect(result.success).toBe(false)
       expect(mod.listInstalled().map((r) => r.name)).toEqual(['standard-widgets'])
     })
 
     it('reads a pre-installed HMI archive as text', () => {
-      writeHmiWidget(withKind(makeArchive('hmi-alarms'), 'plc'))
-      expect(JSON.parse(makeModule().readArchiveText('hmi-alarms') ?? '')).toMatchObject({ openplc: { kind: 'plc' } })
+      writeHmiWidget(makeArchive('hmi-alarms'))
+      expect(JSON.parse(makeModule().readArchiveText('hmi-alarms') ?? '')).toMatchObject({
+        manifest: { name: 'hmi-alarms' },
+      })
     })
 
-    it('builds with every installed widget library, enabled or not, and only the enabled PLC libraries', async () => {
-      writeHmiWidget(withKind(makeArchive('standard-widgets'), 'hmi'))
+    it('builds with every installed library, the enabled ones first', async () => {
+      writeHmiWidget(needingCore(makeArchive('standard-widgets')))
       const mod = makeModule()
-      for (const archive of [withKind(makeArchive('extra-widgets'), 'hmi'), makeArchive('oscat-basic')]) {
+      for (const archive of [needingCore(makeArchive('extra-widgets')), makeArchive('oscat-basic')]) {
         const tmp = join(testRoot, `${archive.manifest.name}.stlib`)
         writeFileSync(tmp, JSON.stringify(archive), 'utf-8')
         expect((await mod.installFromFile(tmp)).success).toBe(true)
@@ -431,29 +447,25 @@ describe('LibraryManagerModule', () => {
       expect(mod.loadEnabledArchives([]).archives.map((a) => a.manifest.name)).toEqual([
         'standard-widgets',
         'extra-widgets',
+        'oscat-basic',
       ])
       expect(mod.loadEnabledArchives(['oscat-basic']).archives.map((a) => a.manifest.name)).toEqual([
         'standard-widgets',
         'oscat-basic',
         'extra-widgets',
       ])
-      const kinds = Object.fromEntries(mod.listInstalled().map((r) => [r.name, r.kind]))
-      expect(kinds).toEqual({ 'standard-widgets': 'hmi', 'extra-widgets': 'hmi', 'oscat-basic': 'plc' })
     })
 
-    it('refuses to install a widget library built for another HMI core API', async () => {
+    it('installs a library built for another HMI core API, and warns on its row that HMI builds leave it out', async () => {
       const tmp = join(testRoot, 'old-widgets.stlib')
-      const archive = withKind(makeArchive('old-widgets'), 'hmi', HMI_CORE_API_VERSION + 1)
-      writeFileSync(tmp, JSON.stringify(archive), 'utf-8')
-      const result = await makeModule().installFromFile(tmp)
-      expect(result).toEqual({
-        success: false,
-        error:
-          `The widget library "old-widgets" is built for HMI core API ${HMI_CORE_API_VERSION + 1}, but this editor ` +
-          `provides HMI core API ${HMI_CORE_API_VERSION}. Install a build of the library for HMI core API ` +
-          `${HMI_CORE_API_VERSION}.`,
-      })
-      expect(existsSync(join(librariesDir, 'old-widgets'))).toBe(false)
+      writeFileSync(tmp, JSON.stringify(needingCore(makeArchive('old-widgets'), String(HMI_CORE_API_VERSION + 1))))
+      const mod = makeModule()
+      expect((await mod.installFromFile(tmp)).success).toBe(true)
+      expect(mod.listInstalled().find((r) => r.name === 'old-widgets')?.warning).toBe(
+        `The library "old-widgets" is left out of HMI builds: it is built for HMI core API ` +
+          `${HMI_CORE_API_VERSION + 1}, but this editor provides HMI core API ${HMI_CORE_API_VERSION}. Install a ` +
+          `build of the library for HMI core API ${HMI_CORE_API_VERSION}.`,
+      )
     })
   })
 

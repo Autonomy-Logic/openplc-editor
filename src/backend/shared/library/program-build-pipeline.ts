@@ -33,7 +33,7 @@
  *     orchestrator that wraps this pipeline.  This module is purely
  *     about the strucpp invocation slice.
  */
-import { partitionLibraryArchives } from '@root/middleware/shared/utils/hmi/widget-libraries'
+import { PLC_PROVIDED_HEADERS } from '@root/middleware/shared/utils/hmi/widget-libraries'
 import type * as strucpp from 'strucpp'
 
 import type { KnownPou } from '../utils/PLC/split-program-st'
@@ -188,7 +188,8 @@ export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): Prog
     fileName: primaryFileName,
     debug: true,
     lineMapping: true,
-    libraries: partitionLibraryArchives(libraries).plc as StrucppLibraries,
+    libraries: libraries as StrucppLibraries,
+    providedHeaders: [...PLC_PROVIDED_HEADERS],
     md5,
     pouIncludes,
     ...(additionalSources ? { additionalSources } : {}),

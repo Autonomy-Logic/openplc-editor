@@ -108,7 +108,7 @@ export function sampleProject(): HmiUnitInput {
     ],
     plcDeclarations: PLC_DECLARATIONS,
     projectNames: ['Main'],
-    widgetLibraries: installedWidgetArchives(),
+    installedLibraries: installedWidgetArchives(),
     plcLibraries: [{ name: 'hmi-alarms', archiveJson: installedArchiveText('hmi-alarms') }],
     resolve: (path) => DEBUG_MAP.get(hmiDebugPath(path, INSTANCES)) ?? null,
     plcMd5: '0123456789abcdef0123456789abcdef',

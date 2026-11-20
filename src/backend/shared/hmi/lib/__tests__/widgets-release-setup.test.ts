@@ -20,31 +20,35 @@ interface ReleaseFiles {
   manifestSha256: string
 }
 
-/** A release whose manifest describes its archives, built the way the release build writes it. */
+/** A release whose manifest describes its archives, built the way the release build writes it (format 2). */
 async function makeRelease(
   options: { hmiCoreApi?: number; tamper?: string; version?: string } = {},
 ): Promise<ReleaseFiles> {
+  const core = String(options.hmiCoreApi ?? HMI_CORE_API_VERSION)
   const archives = [
     {
       name: 'hmi-alarms',
-      kind: 'plc' as const,
+      headers: [],
       text: JSON.stringify({
-        manifest: { name: 'hmi-alarms', version: '1.0.0' },
-        openplc: { formatVersion: 1, kind: 'plc', license: 'GPL-3.0-only' },
+        manifest: { name: 'hmi-alarms', version: '1.0.0', headers: [] },
+        chunks: [{ name: 'HMI_ALARM', kind: 'function', deps: [] }],
+        dependencies: [],
       }),
     },
     {
       name: 'standard-widgets',
-      kind: 'hmi' as const,
+      headers: ['hmi_core.h'],
       text: JSON.stringify({
-        manifest: { name: 'standard-widgets', version: '1.0.0' },
-        openplc: {
-          formatVersion: 1,
-          kind: 'hmi',
-          license: 'GPL-3.0-only',
-          hmiCoreApi: options.hmiCoreApi ?? HMI_CORE_API_VERSION,
-          catalog: { widgets: [], colors: [] },
+        manifest: {
+          name: 'standard-widgets',
+          version: '1.0.0',
+          headers: ['hmi_core.h'],
+          headerVersions: { 'hmi_core.h': core },
         },
+        chunks: [
+          { name: 'HMIELEMENT', kind: 'functionBlock', deps: [], headers: [{ name: 'hmi_core.h', version: core }] },
+        ],
+        dependencies: [],
       }),
     },
   ]
@@ -53,34 +57,24 @@ async function makeRelease(
   for (const a of archives) {
     const bytes = encoder.encode(a.text)
     files.set(`${a.name}.stlib`, bytes)
-    const common = {
+    entries.push({
       name: a.name,
       displayName: a.name,
       version: '1.0.0',
       file: `${a.name}.stlib`,
       sha256: await sha256Hex(bytes),
       size: bytes.length,
-      strucppVersion: '0.8.1-rc1',
-      headers: [],
+      strucppVersion: '0.8.1-rc2',
+      headers: a.headers,
       license: 'GPL-3.0-only',
-    }
-    entries.push(
-      a.kind === 'hmi'
-        ? {
-            ...common,
-            kind: a.kind,
-            hmiCoreApi: options.hmiCoreApi ?? HMI_CORE_API_VERSION,
-            catalog: { widgets: [], colors: [] },
-          }
-        : { ...common, kind: a.kind },
-    )
+    })
   }
   const manifest = encoder.encode(
     JSON.stringify({
-      formatVersion: 1,
+      formatVersion: 2,
       name: 'openplc-hmi-widgets',
       version: options.version ?? '1.0.0',
-      strucppVersion: '0.8.1-rc1',
+      strucppVersion: '0.8.1-rc2',
       archives: entries,
     }),
   )
@@ -147,7 +141,7 @@ describe('HMI widgets release setup', () => {
     expect(m.fetched).toEqual([])
     m.installed.set('standard-widgets.stlib', encoder.encode('{}'))
     expect((await setupWidgetsRelease(pinOf(release.manifestSha256), {}, m.mechanisms)).source).toBe('release')
-    expect(decoder.decode(m.installed.get('standard-widgets.stlib'))).toContain('"kind":"hmi"')
+    expect(decoder.decode(m.installed.get('standard-widgets.stlib'))).toContain('"name":"HMIELEMENT"')
   })
 
   it('refuses a release whose manifest does not match the pin, and installs nothing', async () => {
@@ -173,7 +167,8 @@ describe('HMI widgets release setup', () => {
     const release = await makeRelease({ hmiCoreApi: HMI_CORE_API_VERSION + 1 })
     const m = memory(release.files)
     await expect(setupWidgetsRelease(pinOf(release.manifestSha256), {}, m.mechanisms)).rejects.toThrow(
-      `is built for HMI core API ${HMI_CORE_API_VERSION + 1}, but this editor provides HMI core API ${HMI_CORE_API_VERSION}`,
+      `standard-widgets.stlib is built for HMI core API ${HMI_CORE_API_VERSION + 1}, but this editor provides HMI ` +
+        `core API ${HMI_CORE_API_VERSION}`,
     )
     expect(m.writes()).toBe(0)
   })

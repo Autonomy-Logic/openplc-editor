@@ -126,8 +126,8 @@ export interface InstalledLibrary {
    *  archive doesn't ripple through every consumer. */
   description?: string
   author?: string
-  /** `hmi` for a widget library (HMI palette and build), `plc` for a PLC library; absent means `plc`. */
-  kind?: 'hmi' | 'plc'
+  /** Why HMI builds leave the library out, such as code built for another HMI core API. */
+  warning?: string
 }
 
 /**

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import type { LibraryFBEntry, LibraryManifest, StlibArchive } from 'strucpp'
 
 import { loadStrucpp } from '../../../library/strucpp-runtime'
@@ -21,6 +24,10 @@ function fb(name: string, extra: Partial<LibraryFBEntry> = {}): LibraryFBEntry {
   return { name, inputs: [], outputs: [], inouts: [], ...extra }
 }
 
+function archive(name: string, functionBlocks: LibraryFBEntry[]): StlibArchive {
+  return { formatVersion: 1, manifest: manifest(name, functionBlocks), chunks: [], dependencies: [] }
+}
+
 function manifest(name: string, functionBlocks: LibraryFBEntry[]): LibraryManifest {
   return {
     name,
@@ -35,7 +42,7 @@ function manifest(name: string, functionBlocks: LibraryFBEntry[]): LibraryManife
 }
 
 describe('widget catalogue', () => {
-  const catalog = buildWidgetCatalog([standardWidgets().manifest])
+  const catalog = buildWidgetCatalog([standardWidgets()])
 
   it('lists the library widgets with their palette group, and nothing that is not a widget', () => {
     const palette = Object.fromEntries([...catalog.widgets.values()].map((w) => [w.name, w.palette]))
@@ -234,11 +241,30 @@ describe('widget catalogue', () => {
     )
   })
 
-  it('equals the catalogue the release carries for the library', () => {
-    const [library] = loadHmiWidgetLibraries(installedWidgetArchives()).libraries
-    expect(library.name).toBe('standard-widgets')
-    expect([...library.catalog.widgets.entries()]).toEqual([...catalog.widgets.entries()])
-    expect(library.catalog.colors).toEqual(catalog.colors)
+  it('equals the catalogue openplc-hmi-widgets 1.0.0 embedded for the standard widgets', () => {
+    const previous: unknown = JSON.parse(
+      readFileSync(join(__dirname, 'fixtures', 'standard-widgets.catalog.json'), 'utf8'),
+    )
+    expect(previous).toEqual({ widgets: expect.any(Array), colors: expect.any(Array) })
+    const shape = (widgets: Iterable<HmiWidgetInfo>) =>
+      Object.fromEntries([...widgets].map((w) => [w.name.toUpperCase(), w]))
+    const embedded = typeof previous === 'object' && previous !== null && 'widgets' in previous ? previous : null
+    expect(shape(catalog.widgets.values())).toEqual(
+      Object.fromEntries(
+        (Array.isArray(embedded?.widgets) ? embedded.widgets : []).map((w: { name: string }) => [
+          w.name.toUpperCase(),
+          w,
+        ]),
+      ),
+    )
+    expect(catalog.colors).toEqual(embedded !== null && 'colors' in embedded ? embedded.colors : null)
+  })
+
+  it('is the catalogue HMI builds derive from every installed library', () => {
+    const loaded = loadHmiWidgetLibraries(installedWidgetArchives())
+    expect(loaded.libraries.map((l) => l.name)).toEqual(['hmi-alarms', 'standard-widgets'])
+    expect([...loaded.catalog.widgets.entries()]).toEqual([...catalog.widgets.entries()])
+    expect(loaded.catalog.colors).toEqual(catalog.colors)
   })
 
   it('names the COLOR constant fields, theme colors first', () => {
@@ -262,7 +288,7 @@ FUNCTION_BLOCK Helper VAR_INPUT X : INT; END_VAR END_FUNCTION_BLOCK`,
       { name: 'project-widgets', version: '1.0.0', namespace: 'project_widgets', dependencies: [lib] },
     )
     expect(project.errors).toEqual([])
-    const both = buildWidgetCatalog([lib.manifest, project.archive.manifest])
+    const both = buildWidgetCatalog([lib, project.archive])
     const badge = widget(both.widgets, 'Badge')
     expect(badge).toMatchObject({ library: 'project-widgets', extends: 'HMILAMP', main: { name: 'Value' } })
     expect(badge.palette).toBeUndefined()
@@ -272,7 +298,7 @@ FUNCTION_BLOCK Helper VAR_INPUT X : INT; END_VAR END_FUNCTION_BLOCK`,
 
   it('leaves out blocks whose base is missing or circular, and abstract ones', () => {
     const odd = buildWidgetCatalog([
-      manifest('m', [
+      archive('m', [
         fb('HMIELEMENT', { isAbstract: true }),
         fb('ABSTRACTWIDGET', { extends: 'HMIELEMENT', isAbstract: true }),
         fb('ORPHAN', { extends: 'MISSING' }),
@@ -349,6 +375,7 @@ END_FUNCTION_BLOCK
         },
       ],
       loadHmiWidgetLibraries(installedWidgetArchives()).libraries,
+      loadHmiWidgetLibraries(installedWidgetArchives()).catalog,
     )
     expect(lib.errors).toEqual([])
     const info = widget(lib.catalog.widgets, 'Gauge2')

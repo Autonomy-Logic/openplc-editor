@@ -16,7 +16,7 @@
  * from either the editor's main process or the browser bundle.
  */
 
-import { libraryKind } from '@root/middleware/shared/utils/hmi/widget-libraries'
+import { libraryArchiveWarning } from '@root/middleware/shared/utils/hmi/widget-libraries'
 
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
 import type { InstalledLibrary } from '../../../middleware/shared/ports/library-types'
@@ -39,7 +39,7 @@ export function bundledArchiveToInstalledRow(archive: StlibArchiveDTO): Installe
     bundled: true,
     installedAt: '',
     origin: 'bundled',
-    kind: libraryKind(archive),
+    ...archiveWarning(archive),
     ...(archive.manifest.displayName ? { displayName: archive.manifest.displayName } : {}),
     ...(archive.manifest.description ? { description: archive.manifest.description } : {}),
   }
@@ -62,8 +62,26 @@ export function userArchiveToInstalledRow(
     bundled: false,
     installedAt: metadata.installedAt,
     origin: metadata.origin,
-    kind: libraryKind(archive),
+    ...archiveWarning(archive),
     ...(archive.manifest.displayName ? { displayName: archive.manifest.displayName } : {}),
     ...(archive.manifest.description ? { description: archive.manifest.description } : {}),
   }
+}
+
+/** The row's `warning` field for an archive the builds cannot use as it is, or nothing. */
+export function archiveWarning(archive: unknown): { warning?: string } {
+  const warning = libraryArchiveWarning(archive)
+  return warning === null ? {} : { warning }
+}
+
+/** Library manager rows with the warning of each library whose archive is among `archives`, by manifest name. */
+export function withArchiveWarnings(
+  rows: readonly InstalledLibrary[],
+  archives: readonly StlibArchiveDTO[],
+): InstalledLibrary[] {
+  const byName = new Map(archives.map((archive) => [archive.manifest.name, archive]))
+  return rows.map((row) => {
+    const archive = byName.get(row.name)
+    return archive === undefined ? row : { ...row, ...archiveWarning(archive) }
+  })
 }

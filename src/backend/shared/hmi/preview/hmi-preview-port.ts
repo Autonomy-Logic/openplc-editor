@@ -35,7 +35,7 @@ const fileName = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
 export function hmiPreviewResources(
   stored: HmiPreviewStoredFiles,
   storedHeaders: Readonly<Record<string, string>>,
-): Omit<HmiPreviewResources, 'widgetLibraries'> {
+): Omit<HmiPreviewResources, 'installedLibraries'> {
   const hmiFiles: Record<string, string | Uint8Array> = {}
   for (const [path, content] of Object.entries(stored.files)) {
     if (path.startsWith(stored.root)) hmiFiles[path.slice(stored.root.length)] = content
@@ -67,7 +67,7 @@ export function createHmiPreviewPort(
   mechanisms: HmiPreviewMechanisms,
   sessionOptions: HmiPreviewSessionOptions = {},
 ): HmiPreviewPort {
-  let resources: Promise<Omit<HmiPreviewResources, 'widgetLibraries'>> | null = null
+  let resources: Promise<Omit<HmiPreviewResources, 'installedLibraries'>> | null = null
   let libraries: Promise<readonly unknown[]> | null = null
   let librariesVersion = 0
   let catalogCache: { key: string; result: HmiWidgetLibrary } | null = null
@@ -89,7 +89,7 @@ export function createHmiPreviewPort(
     if (catalogCache?.key !== key) catalogCache = { key, result: buildHmiWidgetCatalog(widgets, installed) }
     return catalogCache.result
   }
-  const loadResources = (): Promise<Omit<HmiPreviewResources, 'widgetLibraries'>> => {
+  const loadResources = (): Promise<Omit<HmiPreviewResources, 'installedLibraries'>> => {
     resources ??= Promise.all([mechanisms.readHmiSources(), mechanisms.readStrucppRuntimeHeaders()]).then(
       ([hmiFiles, runtimeHeaders]) => hmiPreviewResources(hmiFiles, runtimeHeaders),
     )
@@ -106,8 +106,8 @@ export function createHmiPreviewPort(
       const sourcesStart = performance.now()
       let loaded: HmiPreviewResources
       try {
-        const [files, widgetLibraries] = await Promise.all([loadResources(), loadLibraries()])
-        loaded = { ...files, widgetLibraries }
+        const [files, installedLibraries] = await Promise.all([loadResources(), loadLibraries()])
+        loaded = { ...files, installedLibraries }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         return {

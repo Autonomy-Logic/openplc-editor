@@ -1,5 +1,5 @@
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
-import { stlibsToSystemLibraries, stlibToSystemLibrary } from '../stlib-to-system-library'
+import { plcUnusablePouNames, stlibsToSystemLibraries, stlibToSystemLibrary } from '../stlib-to-system-library'
 
 function makeArchive(overrides: Partial<StlibArchiveDTO['manifest']> = {}): StlibArchiveDTO {
   return {
@@ -241,19 +241,39 @@ describe('stlibsToSystemLibraries', () => {
   })
 })
 
-describe('stlibsToSystemLibraries — library kinds', () => {
-  const archive = (name: string, kind?: 'hmi' | 'plc') => {
-    const base = makeArchive({ name, namespace: name })
-    return kind ? { ...base, openplc: { formatVersion: 1, kind, license: 'GPL-3.0-only' } } : base
+describe('stlibsToSystemLibraries — what a PLC build can use', () => {
+  /** A mixed library: a widget whose chunk needs the HMI core, and a plain function block and function. */
+  const mixed = {
+    ...makeArchive({
+      name: 'mixed',
+      namespace: 'mixed',
+      functions: [{ name: 'SCALE', returnType: 'INT', parameters: [] }],
+      functionBlocks: [
+        { name: 'HMIDIAL', inputs: [], outputs: [], inouts: [] },
+        { name: 'COUNTER', inputs: [], outputs: [], inouts: [] },
+      ],
+    }),
+    chunks: [
+      { name: 'HMIDIAL', kind: 'functionBlock', deps: [], headers: [{ name: 'hmi_core.h', version: '1' }] },
+      { name: 'COUNTER', kind: 'functionBlock', deps: [], headers: [] },
+      { name: 'SCALE', kind: 'function', deps: [{ library: 'mixed', name: 'COUNTER' }], headers: [] },
+    ],
+    dependencies: [],
   }
+  mixed.manifest = { ...mixed.manifest, ...{ headers: ['hmi_core.h'] } }
 
-  it('leaves widget libraries out of the PLC library tree, and keeps PLC-side HMI libraries', () => {
-    const libraries = stlibsToSystemLibraries([
-      archive('iec-standard-fb'),
-      archive('standard-widgets', 'hmi'),
-      archive('hmi-alarms', 'plc'),
-      archive('extra-widgets', 'hmi'),
-    ])
-    expect(libraries.map((l) => l.name)).toEqual(['iec-standard-fb', 'hmi-alarms'])
+  it('lists only the POUs whose requirements a PLC build meets, and keeps the library', () => {
+    const [library] = stlibsToSystemLibraries([mixed])
+    expect(library.name).toBe('mixed')
+    expect(library.pous.map((p) => p.name).sort()).toEqual(['COUNTER', 'SCALE'])
+  })
+
+  it('names the POUs PLC completions leave out', () => {
+    expect(plcUnusablePouNames([mixed, makeArchive({ name: 'plain' })])).toEqual(['HMIDIAL'])
+  })
+
+  it('keeps every POU of an archive without chunk requirements', () => {
+    const [library] = stlibsToSystemLibraries([makeArchive({ name: 'a' })])
+    expect(library.pous).toEqual(stlibToSystemLibrary(makeArchive({ name: 'a' })).pous)
   })
 })

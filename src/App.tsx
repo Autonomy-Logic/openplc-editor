@@ -34,14 +34,14 @@ import { configureSaveResume } from './frontend/services/resume-save-after-sign-
 import { bootStLsp } from './frontend/services/st-lsp/boot'
 import { OpenPLCStoreProvider, useOpenPLCStore } from './frontend/store'
 import { selectIsEditingLocked } from './frontend/store/slices/workspace/selectors'
-import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
+import { plcUnusablePouNames, stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
 import { listenForProviderSignIns } from './middleware/adapters/editor/edge-account-adapter'
 import { getEdgeWebUrl } from './middleware/adapters/editor/system-adapter'
 import { transpileProjectStInProcess } from './middleware/adapters/editor/transpile-project-st'
 import { setMenuDebuggerActive, setMenuProjectOpen } from './middleware/adapters/editor/window-adapter'
 import { packageUpdateNotifier, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
 import { ExtensionPanelProvider, PlatformProvider } from './middleware/shared/providers'
-import { bundledPlcLibraryNames } from './middleware/shared/utils/hmi/widget-libraries'
+import { bundledLibraryNames } from './middleware/shared/utils/hmi/widget-libraries'
 
 /**
  * Load every installed library (bundled + user-installed) at startup
@@ -65,7 +65,8 @@ const hydrateLibraries = () => {
     .then(([archives, installed]) => {
       const actions = appStore.getState().libraryActions
       actions.setSystemLibraries(stlibsToSystemLibraries(archives))
-      actions.setBundledLibraryNames(bundledPlcLibraryNames(installed))
+      actions.setPlcUnusablePous(plcUnusablePouNames(archives))
+      actions.setBundledLibraryNames(bundledLibraryNames(installed))
     })
     .catch((err) => {
       console.error('Failed to load .stlib libraries:', err)

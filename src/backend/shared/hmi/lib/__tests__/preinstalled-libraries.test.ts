@@ -1,5 +1,10 @@
-import type { StlibArchive } from 'strucpp'
+import { findUnmetRequirements, resolvePouRequirements, type StlibArchive } from 'strucpp'
 
+import {
+  HMI_CORE_API_VERSION,
+  HMI_PROVIDED_HEADERS,
+  PLC_PROVIDED_HEADERS,
+} from '../../../../../middleware/shared/utils/hmi/widget-libraries'
 import {
   HMI_ALARMS_LIBRARY_NAMES,
   HMI_LIBRARY_NAMES,
@@ -29,7 +34,7 @@ const declaredNames = (archive: StlibArchive, withGlobals: boolean): string[] =>
 }
 
 describe('pre-installed standard-widgets', () => {
-  it('declares every widget, the header its external code needs, and its HMI kind', () => {
+  it('declares every widget and the HMI core header its external code needs, at this API version', () => {
     const archive = load('standard-widgets')
     expect(archive.manifest.headers).toEqual(['hmi_core.h'])
     expect(JSON.parse(installedArchiveText('standard-widgets'))).toMatchObject({
@@ -38,7 +43,20 @@ describe('pre-installed standard-widgets', () => {
     expect(declaredNames(archive, false)).toEqual(
       expect.arrayContaining(['HmiButton', 'HmiTrend', 'HmiAlarmList', 'HmiElement', 'HmiScreen', 'HmiRuntime']),
     )
-    expect(JSON.parse(installedArchiveText('standard-widgets'))).toMatchObject({ openplc: { kind: 'hmi' } })
+    expect(archive.manifest.headerVersions).toEqual({ 'hmi_core.h': String(HMI_CORE_API_VERSION) })
+    expect(JSON.parse(installedArchiveText('standard-widgets'))).not.toHaveProperty('openplc')
+  })
+
+  it('needs the HMI core for its widgets but not for its types, so only HMI builds can use the widgets', () => {
+    const archive = load('standard-widgets')
+    const pous = new Map(resolvePouRequirements(archive).map((p) => [p.name, p.requirements]))
+    const unmet = (name: string, providedHeaders: typeof HMI_PROVIDED_HEADERS) =>
+      findUnmetRequirements(pous.get(name) ?? [], { libraries: [archive], providedHeaders: [...providedHeaders] })
+    for (const widget of ['HMIELEMENT', 'HMIBUTTON', 'HMIGAUGE']) {
+      expect(unmet(widget, PLC_PROVIDED_HEADERS)).toHaveLength(1)
+      expect(unmet(widget, HMI_PROVIDED_HEADERS)).toEqual([])
+    }
+    expect(unmet('HMI_ALIGN', PLC_PROVIDED_HEADERS)).toEqual([])
   })
 
   it('keeps the engine internal: screens and widget blocks cannot call or override it', () => {
@@ -86,7 +104,7 @@ CONFIGURATION Config0
 END_CONFIGURATION
 `
 
-  it('declares exactly the names the HMI reserves, as a PLC-kind library', () => {
+  it('declares exactly the names the HMI reserves, and needs no header', () => {
     const archive = load('hmi-alarms')
     expect(JSON.parse(installedArchiveText('hmi-alarms'))).toMatchObject({ manifest: { displayName: 'HMI Alarms' } })
     expect(
@@ -94,10 +112,12 @@ END_CONFIGURATION
         .map((n) => n.toUpperCase())
         .sort(),
     ).toEqual([...HMI_ALARMS_LIBRARY_NAMES].sort())
-    expect(JSON.parse(installedArchiveText('hmi-alarms'))).toMatchObject({ openplc: { kind: 'plc' } })
+    expect(archive.manifest.headers).toEqual([])
+    for (const pou of resolvePouRequirements(archive))
+      expect(findUnmetRequirements(pou.requirements, { libraries: [archive], providedHeaders: [] })).toEqual([])
   })
 
-  it('compiles a PLC program that uses it, with the widget library left out of the PLC build', () => {
+  it('compiles a PLC program that uses it, and refuses one that uses a widget, with every library installed', () => {
     const result = runProgramBuildPipeline({
       source: PROGRAM,
       md5: '0',
@@ -117,6 +137,8 @@ END_CONFIGURATION
       hasCBlocks: false,
     })
     expect(without.success).toBe(false)
-    expect(without.errors.map((e) => e.formatted).join('\n')).toMatch(/HMIBUTTON/i)
+    expect(without.errors.map((e) => e.raw.message)).toEqual([
+      expect.stringContaining('HMIBUTTON (library standard-widgets) needs hmi_core.h version'),
+    ])
   })
 })

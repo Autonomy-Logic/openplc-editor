@@ -135,11 +135,12 @@ Product builds contain neither.
 
 Screens are ST built on StandardWidgets (`standard-widgets`), an ST library over these primitives: the element base,
 containers, widgets, the on-screen keyboard, the screen base and the runtime the generated glue drives. Its source
-lives in the openplc-hmi-widgets repository, which releases it as a STruC++ `.stlib` archive with its widget catalogue
-and the HMI core API version it calls (`HMI_CORE_API_VERSION` in `src/middleware/shared/utils/hmi/widget-libraries.ts`,
-raised with any change a compiled widget library could break on). The editor installs the pinned release into
-`vendor/hmi-widgets/` (`npm run setup:hmi-widgets`) and ships it pre-installed; its `{external}` code includes
-`hmi_core.h`. Widget libraries a user installs through the library manager are used the same way.
+lives in the openplc-hmi-widgets repository, which releases it as a plain STruC++ `.stlib` archive whose chunks record
+the HMI core API version they call: `HMI_CORE_API_VERSION` in `core/hmi_core.h`, raised with any change a compiled
+library could break on, and mirrored by the editor's TypeScript constant. The editor installs the pinned release into
+`vendor/hmi-widgets/` (`npm run setup:hmi-widgets`) and ships it pre-installed; HMI builds provide `hmi_core.h` to
+library code, PLC builds do not. Libraries a user installs, or builds from a library project, are used the same way:
+any function block deriving from `HmiElement` is a widget.
 
 Layout is built from containers, which nest freely:
 
@@ -251,7 +252,8 @@ against `tests/hmi-core/golden.txt` with both font variants, and runs the fuzzer
 
 The headless frame tests of the widget library (test screens against the archive, built with this core on gcc and
 clang and under the sanitizers) and the scripted test of the HmiAlarms library run in openplc-hmi-widgets
-(`npm run test:native`), against this core at the editor commit its `hmi-core.json` pins.
+(`npm run test:native`), against this core at the editor commit its `hmi-core.json` pins; `ci-hmi-core.yml` also
+runs them against this checkout's core.
 
 `npm run test:hmi-preview` (`tests/hmi-preview/run.ts`) builds a sample project's preview with the shared preview
 build and the in-editor WebAssembly toolchain, runs it through the preview host, and checks frames, band skipping,

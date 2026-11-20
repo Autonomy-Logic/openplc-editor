@@ -13,7 +13,6 @@ import { type HmiProgramInstance, hmiTagResolver } from '../artefact/tag-resolve
 import { hmiFontTableFromSources } from '../fonts/font-table-source'
 import { hmiFontBoxes, hmiLargestTextSize } from '../fonts/glyph-box'
 import { HMI_FONT_REGULAR, type HmiFontVariant, vettedHmiFont } from '../fonts/vetted-fonts'
-import { plcLibraryArchives } from '../lib/widget-libraries'
 import { generateHmiUnit, type HmiTag } from '../unit/generate-hmi-unit'
 import { HMI_GLYPH_SCRATCH_BYTES, hmiConfigHeader } from './hmi-config-header'
 
@@ -105,8 +104,7 @@ export async function composeHmiFirmware(input: ComposeHmiFirmwareInput): Promis
   }
   const unit = generateHmiUnit({
     ...input.sources,
-    plcArchives: plcLibraryArchives(input.libraries),
-    widgetLibraries: input.libraries,
+    installedLibraries: input.libraries,
     capabilities: input.capabilities,
     resolve: hmiTagResolver(input.debugMapJson, input.instances),
     plcMd5: input.md5,

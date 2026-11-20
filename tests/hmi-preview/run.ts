@@ -100,7 +100,7 @@ function resources(): HmiPreviewResources {
       ...textFiles(join(HMI, 'preview'), 'preview/', source),
     },
     readFont: (file) => Promise.resolve(new Uint8Array(readFileSync(join(HMI, 'fonts', file)))),
-    widgetLibraries: installedWidgetArchives(),
+    installedLibraries: installedWidgetArchives(),
   }
 }
 

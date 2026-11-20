@@ -1,83 +1,38 @@
 /**
- * Library kinds, the `openplc` metadata a library archive carries, and the openplc-hmi-widgets release manifest. A
- * library of kind `hmi` is a widget library: the HMI designer and build use it and the PLC build leaves it out. A
- * library of kind `plc`, or one with no metadata, is a PLC library.
+ * What every build provides to library code, the HMI core API version an archive was compiled against, and the
+ * openplc-hmi-widgets release manifest. A library is a plain STruC++ archive: its chunks record the headers they need,
+ * and a build states the headers it provides, so a POU that calls the HMI core is usable by HMI builds only.
  */
 import { z } from 'zod'
 
-import type { HmiWidgetCatalog, HmiWidgetInfo } from '../../ports/hmi-preview-types'
-
 /**
- * API version of the HMI C core (`resources/sources/hmi/core/hmi_core.h`) that widget libraries call. Raise it with any
- * change a compiled widget library could break on; libraries built for another version are refused.
+ * API version of the HMI C core that library code calls: the `HMI_CORE_API_VERSION` macro of
+ * `resources/sources/hmi/core/hmi_core.h`, raised together with it.
  */
 export const HMI_CORE_API_VERSION = 1
 
-/** Format version of an archive's `openplc` metadata that this build reads. */
-export const LIBRARY_METADATA_FORMAT = 1
+/** The HMI core header, as library chunks name it in their header requirements. */
+export const HMI_CORE_HEADER = 'hmi_core.h'
 
-/** Format version of the openplc-hmi-widgets release manifest that this build reads. */
-export const WIDGETS_RELEASE_FORMAT = 1
+/** A header a build provides to library code, with its API version. */
+export interface ProvidedHeader {
+  name: string
+  version?: string
+}
+
+/** Headers an HMI build (preview, thumbnails, Runtime v4 module, panel firmware) provides: the HMI core. */
+export const HMI_PROVIDED_HEADERS: readonly ProvidedHeader[] = [
+  { name: HMI_CORE_HEADER, version: String(HMI_CORE_API_VERSION) },
+]
+
+/** Headers a PLC build provides beyond the runtime's own: none. */
+export const PLC_PROVIDED_HEADERS: readonly ProvidedHeader[] = []
+
+/** Release manifest format versions this build reads; format 1 also carries fields this build ignores. */
+export const WIDGETS_RELEASE_FORMATS: readonly number[] = [1, 2]
 
 /** File name of the release manifest among a release's assets. */
 export const WIDGETS_RELEASE_MANIFEST = 'openplc-hmi-widgets.json'
-
-export type LibraryKind = 'hmi' | 'plc'
-
-const propertySchema = z.object({
-  name: z.string(),
-  type: z.string(),
-  kind: z.enum(['bool', 'number', 'string', 'color', 'enum', 'elementRef', 'other']),
-  group: z.enum(['data', 'display', 'layout']),
-  defaultValue: z.string().optional(),
-  enabledBy: z.string().optional(),
-  previewValue: z.string().optional(),
-  maxLength: z.number().optional(),
-  enumMembers: z.array(z.string()).optional(),
-  declaredBy: z.string(),
-})
-
-const widgetSchema = z.object({
-  name: z.string(),
-  library: z.string(),
-  extends: z.string(),
-  palette: z.string().optional(),
-  properties: z.array(propertySchema),
-  outputs: z.array(z.object({ name: z.string(), type: z.string() })),
-  main: z.object({ name: z.string(), direction: z.enum(['input', 'output']), type: z.string() }).optional(),
-  twoWay: z
-    .object({
-      value: z.string(),
-      changed: z.string(),
-      newValue: z.string(),
-      range: z.string().optional(),
-      maxLength: z.string().optional(),
-    })
-    .optional(),
-  momentary: z.object({ value: z.string(), changed: z.string() }).optional(),
-  events: z.array(z.string()),
-  series: z.object({ count: z.string(), values: z.array(z.string()), colors: z.array(z.string()) }).optional(),
-  typeDefaults: z.array(z.object({ name: z.string(), value: z.string() })).optional(),
-  requires: z.string().optional(),
-  sources: z.array(z.object({ name: z.string(), type: z.string(), slot: z.number() })).optional(),
-})
-
-const catalogSchema = z.object({ widgets: z.array(widgetSchema), colors: z.array(z.string()) })
-
-const plcMetadataSchema = z.object({ formatVersion: z.number(), kind: z.literal('plc'), license: z.string() })
-
-const hmiMetadataSchema = z.object({
-  formatVersion: z.number(),
-  kind: z.literal('hmi'),
-  license: z.string(),
-  hmiCoreApi: z.number().int(),
-  catalog: catalogSchema,
-})
-
-const metadataSchema = z.discriminatedUnion('kind', [plcMetadataSchema, hmiMetadataSchema])
-
-export type HmiLibraryMetadata = z.infer<typeof hmiMetadataSchema>
-export type LibraryMetadata = z.infer<typeof metadataSchema>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -88,77 +43,55 @@ export function libraryArchiveName(archive: unknown): string {
   return isRecord(manifest) && typeof manifest.name === 'string' ? manifest.name : '?'
 }
 
-/** The kind an archive declares; an archive without `openplc` metadata is a PLC library. */
-export function libraryKind(archive: unknown): LibraryKind {
-  const metadata = isRecord(archive) ? archive.openplc : undefined
-  return isRecord(metadata) && metadata.kind === 'hmi' ? 'hmi' : 'plc'
+/** Every version of `header` an archive's manifest or chunks require, in the order first met. */
+function requiredHeaderVersions(archive: unknown, header: string): string[] {
+  const versions: string[] = []
+  const add = (version: unknown) => {
+    if (typeof version === 'string' && !versions.includes(version)) versions.push(version)
+  }
+  if (!isRecord(archive)) return versions
+  const manifest = archive.manifest
+  if (isRecord(manifest) && isRecord(manifest.headerVersions)) add(manifest.headerVersions[header])
+  const chunks = Array.isArray(archive.chunks) ? archive.chunks : []
+  for (const chunk of chunks) {
+    const headers = isRecord(chunk) && Array.isArray(chunk.headers) ? chunk.headers : []
+    for (const h of headers) if (isRecord(h) && h.name === header) add(h.version)
+  }
+  return versions
 }
 
-/** PLC libraries and widget libraries of a list of archives, in their order. */
-export function partitionLibraryArchives<T>(archives: readonly T[]): { plc: T[]; hmi: T[] } {
-  const plc: T[] = []
-  const hmi: T[] = []
-  for (const archive of archives) (libraryKind(archive) === 'hmi' ? hmi : plc).push(archive)
-  return { plc, hmi }
+/** A library compiled against another HMI core API than this editor's: the API it requires and the one provided. */
+export interface HmiCoreApiMismatch {
+  name: string
+  required: string
+  provided: string
 }
 
-export type LibraryMetadataResult = { ok: true; metadata: LibraryMetadata | null } | { ok: false; error: string }
-
-/** The archive's `openplc` metadata, checked; null when it has none. */
-export function readLibraryMetadata(archive: unknown): LibraryMetadataResult {
-  const raw = isRecord(archive) ? archive.openplc : undefined
-  if (raw === undefined) return { ok: true, metadata: null }
-  const name = libraryArchiveName(archive)
-  if (isRecord(raw) && typeof raw.formatVersion === 'number' && raw.formatVersion !== LIBRARY_METADATA_FORMAT)
-    return {
-      ok: false,
-      error:
-        `The library "${name}" uses library metadata format ${raw.formatVersion}, which this version of the editor ` +
-        `does not read (it reads format ${LIBRARY_METADATA_FORMAT}). Update the editor or install a matching build.`,
-    }
-  const parsed = metadataSchema.safeParse(raw)
-  if (!parsed.success)
-    return {
-      ok: false,
-      error: `The library "${name}" carries invalid OpenPLC metadata: ${parsed.error.issues[0]?.message}`,
-    }
-  return { ok: true, metadata: parsed.data }
+/** The HMI core API mismatch of an archive whose code needs another version of the core, or null when none does. */
+export function hmiCoreApiMismatch(archive: unknown): HmiCoreApiMismatch | null {
+  const provided = String(HMI_CORE_API_VERSION)
+  const required = requiredHeaderVersions(archive, HMI_CORE_HEADER).find((v) => v !== provided)
+  return required === undefined ? null : { name: libraryArchiveName(archive), required, provided }
 }
 
-/** Why an archive cannot be used, or null when it can: invalid metadata, or a widget library for another core API. */
-export function libraryArchiveProblem(archive: unknown): string | null {
-  const read = readLibraryMetadata(archive)
-  if (!read.ok) return read.error
-  const { metadata } = read
-  if (metadata?.kind === 'hmi' && metadata.hmiCoreApi !== HMI_CORE_API_VERSION)
-    return (
-      `The widget library "${libraryArchiveName(archive)}" is built for HMI core API ${metadata.hmiCoreApi}, but this ` +
-      `editor provides HMI core API ${HMI_CORE_API_VERSION}. Install a build of the library for HMI core API ` +
-      `${HMI_CORE_API_VERSION}.`
-    )
-  return null
+/** The warning for a library HMI builds leave out because its code needs another HMI core API. */
+export function skippedLibraryMessage(mismatch: HmiCoreApiMismatch): string {
+  return (
+    `The library "${mismatch.name}" is left out of HMI builds: it is built for HMI core API ` +
+    `${mismatch.required}, but this editor provides HMI core API ${mismatch.provided}. Install a build of the ` +
+    `library for HMI core API ${mismatch.provided}.`
+  )
 }
 
-/** A widget library's catalogue as the designer reads it, or null when the archive is not a usable widget library. */
-export function hmiLibraryCatalog(archive: unknown): HmiWidgetCatalog | null {
-  if (libraryArchiveProblem(archive) !== null) return null
-  const read = readLibraryMetadata(archive)
-  if (!read.ok || read.metadata?.kind !== 'hmi') return null
-  const widgets = new Map<string, HmiWidgetInfo>()
-  for (const widget of read.metadata.catalog.widgets) widgets.set(widget.name.toUpperCase(), widget)
-  return { widgets, colors: read.metadata.catalog.colors }
+/** The library manager's warning for an installed archive HMI builds leave out, or null when they use it. */
+export function libraryArchiveWarning(archive: unknown): string | null {
+  const mismatch = hmiCoreApiMismatch(archive)
+  return mismatch ? skippedLibraryMessage(mismatch) : null
 }
 
-const releaseArchiveBase = {
-  name: z.string().regex(/^[a-z][a-z0-9-]*$/),
-  displayName: z.string(),
-  version: z.string(),
-  file: z.string().regex(/^[a-z][a-z0-9-]*\.stlib$/),
-  sha256: z.string().regex(/^[0-9a-f]{64}$/),
-  size: z.number().int().nonnegative(),
-  strucppVersion: z.string(),
-  headers: z.array(z.string()),
-  license: z.string(),
+/** Names of the pre-installed libraries among library manager rows: always on for every project. */
+export function bundledLibraryNames(rows: ReadonlyArray<{ name: string; bundled: boolean }>): string[] {
+  return rows.filter((row) => row.bundled).map((row) => row.name)
 }
 
 const releaseSchema = z.object({
@@ -167,10 +100,17 @@ const releaseSchema = z.object({
   version: z.string(),
   strucppVersion: z.string(),
   archives: z.array(
-    z.discriminatedUnion('kind', [
-      z.object({ ...releaseArchiveBase, kind: z.literal('plc') }),
-      z.object({ ...releaseArchiveBase, kind: z.literal('hmi'), hmiCoreApi: z.number().int(), catalog: catalogSchema }),
-    ]),
+    z.object({
+      name: z.string().regex(/^[a-z][a-z0-9-]*$/),
+      displayName: z.string(),
+      version: z.string(),
+      file: z.string().regex(/^[a-z][a-z0-9-]*\.stlib$/),
+      sha256: z.string().regex(/^[0-9a-f]{64}$/),
+      size: z.number().int().nonnegative(),
+      strucppVersion: z.string(),
+      headers: z.array(z.string()),
+      license: z.string(),
+    }),
   ),
 })
 
@@ -179,9 +119,10 @@ export type WidgetsRelease = z.infer<typeof releaseSchema>
 /** Parses an openplc-hmi-widgets release manifest; throws with the reason when it is not one this build reads. */
 export function parseWidgetsRelease(text: string): WidgetsRelease {
   const raw: unknown = JSON.parse(text)
-  if (isRecord(raw) && typeof raw.formatVersion === 'number' && raw.formatVersion !== WIDGETS_RELEASE_FORMAT)
+  if (isRecord(raw) && typeof raw.formatVersion === 'number' && !WIDGETS_RELEASE_FORMATS.includes(raw.formatVersion))
     throw new Error(
-      `The HMI widget release manifest is format ${raw.formatVersion}; this build reads format ${WIDGETS_RELEASE_FORMAT}`,
+      `The HMI widget release manifest is format ${raw.formatVersion}; this build reads formats ` +
+        WIDGETS_RELEASE_FORMATS.join(' and '),
     )
   const parsed = releaseSchema.safeParse(raw)
   if (!parsed.success) {
@@ -199,8 +140,8 @@ export interface WidgetsReleaseFile {
 }
 
 /**
- * What is wrong with a release's archives: a missing file, a hash that differs from the manifest, metadata that
- * contradicts it, or a widget library for another HMI core API. Empty when the release can be installed.
+ * What is wrong with a release's archives: a missing file, a hash that differs from the manifest, an archive that is
+ * not the library the manifest names, or one whose code needs another HMI core API. Empty when it can be installed.
  */
 export function widgetsReleaseProblems(release: WidgetsRelease, files: readonly WidgetsReleaseFile[]): string[] {
   const problems: string[] = []
@@ -223,16 +164,12 @@ export function widgetsReleaseProblems(release: WidgetsRelease, files: readonly 
       continue
     }
     if (libraryArchiveName(archive) !== entry.name) problems.push(`${entry.file} is not the library ${entry.name}`)
-    if (libraryKind(archive) !== entry.kind) problems.push(`${entry.file} is not of kind ${entry.kind}`)
-    const problem = libraryArchiveProblem(archive)
-    if (problem) problems.push(problem)
+    const mismatch = hmiCoreApiMismatch(archive)
+    if (mismatch)
+      problems.push(
+        `${entry.file} is built for HMI core API ${mismatch.required}, but this editor provides HMI core API ` +
+          mismatch.provided,
+      )
   }
   return problems
-}
-
-/** Names of the pre-installed PLC libraries among library manager rows: always on for PLC code, unlike widget ones. */
-export function bundledPlcLibraryNames(
-  rows: ReadonlyArray<{ name: string; bundled: boolean; kind?: LibraryKind }>,
-): string[] {
-  return rows.filter((row) => row.bundled && row.kind !== 'hmi').map((row) => row.name)
 }

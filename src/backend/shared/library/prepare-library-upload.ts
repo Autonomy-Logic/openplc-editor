@@ -14,8 +14,6 @@
  * strucpp returns.
  */
 
-import { libraryArchiveProblem } from '@root/middleware/shared/utils/hmi/widget-libraries'
-
 import { importCodesysLibrary } from './codesys-import'
 import { compileStlib } from './compile-stlib'
 import { parseStlibArchive } from './parse-stlib-archive'
@@ -91,8 +89,8 @@ function deriveCodesysIdentifier(filename: string): string {
 /**
  * Validate + extract a `.stlib` archive uploaded as text.  Returns
  * the manifest summary + the original bytes (persisted verbatim);
- * throws on a malformed archive, on invalid OpenPLC metadata and on a
- * widget library built for another HMI core API.
+ * throws on a malformed archive so the caller can surface the
+ * specific strucpp error.
  */
 export function prepareStlibUpload(text: string): PreparedLibrary {
   // strucpp's `loadStlibFromString` validates the archive beyond raw
@@ -102,8 +100,6 @@ export function prepareStlibUpload(text: string): PreparedLibrary {
   if (!manifest) {
     throw new Error('Library archive is missing a manifest with a name and version')
   }
-  const problem = libraryArchiveProblem(JSON.parse(text))
-  if (problem) throw new Error(problem)
   return { ...manifest, origin: 'stlib', archive: text }
 }
 

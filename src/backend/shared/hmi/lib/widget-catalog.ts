@@ -1,9 +1,9 @@
 /**
- * Widget catalogue read from STruC++ library manifests, for a project's widget blocks (whose bases may come from the
- * installed widget libraries, which carry their own catalogue); see `buildWidgetCatalog` for the pragmas that drive it.
- * The openplc-hmi-widgets build generates its libraries' catalogues the same way.
+ * Widget catalogue read from STruC++ library archives: the installed libraries and a project's widget blocks. A
+ * widget is any function block whose EXTENDS chain reaches the HMI element base; see `buildWidgetCatalog` for the
+ * pragmas that drive it.
  */
-import type { LibraryFBEntry, LibraryManifest, LibraryTypeEntry } from 'strucpp'
+import type { LibraryFBEntry, LibraryTypeEntry, StlibArchive } from 'strucpp'
 
 import type {
   HmiPropertyGroup,
@@ -15,6 +15,7 @@ import type {
   HmiWidgetProperty,
   HmiWidgetSource,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
+import { loadStrucpp, type StrucppRuntime } from '../../library/strucpp-runtime'
 
 type ManifestVar = LibraryFBEntry['inputs'][number]
 
@@ -76,18 +77,19 @@ function isGroup(value: string | undefined): value is HmiPropertyGroup {
   return GROUPS.some((g) => g === value)
 }
 
-/** Blocks from the base down to `fb`; empty when a base is missing or the chain loops. */
-function lineage(fb: Located, blocks: ReadonlyMap<string, Located>): Located[] {
+/** Blocks from the base down to `fb`, along STruC++'s EXTENDS chain; empty when a base is missing. */
+function lineage(
+  fb: Located,
+  archives: readonly StlibArchive[],
+  strucpp: Pick<StrucppRuntime, 'functionBlockLineage'>,
+): Located[] {
   const chain: Located[] = [fb]
-  const seen = new Set([fb.fb.name.toUpperCase()])
-  let current = fb
-  while (current.fb.extends) {
-    const key = current.fb.extends.toUpperCase()
-    const base = blocks.get(key)
-    if (!base || seen.has(key)) return []
-    seen.add(key)
-    chain.unshift(base)
-    current = base
+  for (const step of strucpp.functionBlockLineage(archives, fb.library, fb.fb.name)) {
+    const key = step.name.toUpperCase()
+    const archive = archives.find((a) => a.manifest.name === step.library)
+    const base = archive?.manifest.functionBlocks.find((f) => f.name.toUpperCase() === key)
+    if (!archive || !base) return []
+    chain.unshift({ fb: base, library: archive.manifest.name })
   }
   return chain
 }
@@ -197,8 +199,9 @@ function widgetOf(
 }
 
 /**
- * Catalogue of every widget the manifests declare; a block's base may come from another manifest. A widget is a
- * function block that is not abstract and extends HmiElement. Attribute pragmas in the ST source drive it:
+ * Catalogue of every widget the archives declare, first archive winning a name; a block's base may come from another
+ * archive. A widget is a function block that is not abstract and whose EXTENDS chain reaches HmiElement. Attribute
+ * pragmas in the ST source drive it:
  * - `hmi_palette` on a block: its palette group;
  * - `hmi_main` on an input or output: what a dropped variable is wired to;
  * - `hmi_group` on an input: its inspector group (`data`, `display` or `layout`);
@@ -213,23 +216,29 @@ function widgetOf(
  * A main input with `Changed` and `NewValue` outputs is two-way; a main BOOL output with `Changed` is momentary; other
  * BOOL outputs are events.
  */
-export function buildWidgetCatalog(manifests: readonly LibraryManifest[]): HmiWidgetCatalog {
+export function buildWidgetCatalog(
+  archives: readonly StlibArchive[],
+  strucpp: Pick<StrucppRuntime, 'functionBlockLineage'> = loadStrucpp(),
+): HmiWidgetCatalog {
   const blocks = new Map<string, Located>()
   const types = new Map<string, LibraryTypeEntry>()
   let colors: string[] = []
-  for (const manifest of manifests) {
-    for (const fb of manifest.functionBlocks) blocks.set(fb.name.toUpperCase(), { fb, library: manifest.name })
-    for (const t of manifest.types) types.set(t.name.toUpperCase(), t)
+  for (const { manifest } of archives) {
+    for (const fb of manifest.functionBlocks) {
+      const key = fb.name.toUpperCase()
+      if (!blocks.has(key)) blocks.set(key, { fb, library: manifest.name })
+    }
+    for (const t of manifest.types) if (!types.has(t.name.toUpperCase())) types.set(t.name.toUpperCase(), t)
   }
-  for (const manifest of manifests) {
+  for (const { manifest } of archives) {
     const color = manifest.globals?.find((g) => g.name.toUpperCase() === COLOR_CONSTANT && g.constant)
     const struct = color ? types.get(color.type.toUpperCase()) : undefined
-    if (struct?.kind === 'struct') colors = (struct.fields ?? []).map(written)
+    if (struct?.kind === 'struct' && colors.length === 0) colors = (struct.fields ?? []).map(written)
   }
   const widgets = new Map<string, HmiWidgetInfo>()
   for (const [key, located] of blocks) {
-    if (located.fb.isAbstract) continue
-    const chain = lineage(located, blocks)
+    if (located.fb.isAbstract || located.fb.extends === undefined) continue
+    const chain = lineage(located, archives, strucpp)
     if (chain.length < 2 || chain[0].fb.name.toUpperCase() !== BASE_ELEMENT) continue
     widgets.set(key, widgetOf(located, chain, types))
   }

@@ -8,11 +8,13 @@ import { createHmiPreviewPort } from '../../preview/hmi-preview-port'
 import { installedArchiveText, installedWidgetArchives } from '../../unit/__tests__/fixtures/widget-libraries'
 import { buildHmiWidgetCatalog, generateHmiUnit } from '../../unit/generate-hmi-unit'
 import { sampleProject } from '../../unit/__tests__/fixtures/sample-project'
-import { buildWidgetCatalog } from '../widget-catalog'
-import { loadHmiWidgetLibraries, mergeWidgetCatalogs, plcLibraryArchives } from '../widget-libraries'
+import { loadHmiWidgetLibraries, widgetLibraryNames, withSkippedLibraryCause } from '../widget-libraries'
 
-/** A user widget library: one widget on top of standard-widgets, with the metadata a widget library release carries. */
-function extraWidgetLibrary(hmiCoreApi = HMI_CORE_API_VERSION): object {
+const CORE = String(HMI_CORE_API_VERSION)
+const OTHER = String(HMI_CORE_API_VERSION + 1)
+
+/** A user library compiled like any other: one widget on top of standard-widgets and one plain function. */
+function extraWidgetLibrary(extraHeaders: Array<string | { name: string; version?: string }> = []): object {
   const strucpp = loadStrucpp()
   const base = strucpp.loadStlibFromString(installedArchiveText('standard-widgets'), 'standard-widgets')
   const compiled = strucpp.compileStlib(
@@ -23,76 +25,125 @@ function extraWidgetLibrary(hmiCoreApi = HMI_CORE_API_VERSION): object {
 FUNCTION_BLOCK HmiDial EXTENDS HmiLamp
   VAR_INPUT Sweep : INT := 270; END_VAR
 END_FUNCTION_BLOCK
+FUNCTION DialScale : INT
+  VAR_INPUT X : INT; END_VAR
+  DialScale := X * 2;
+END_FUNCTION
 `,
       },
+      ...(extraHeaders.length > 0
+        ? [
+            {
+              fileName: 'vendor.st',
+              source: `{attribute 'headers' := 'vendor_api.h'}
+FUNCTION_BLOCK HmiVendorDial EXTENDS HmiLamp
+  VAR_INPUT Level : INT; END_VAR
+  {external vendor_poll(); }
+END_FUNCTION_BLOCK
+`,
+            },
+          ]
+        : []),
     ],
     {
       name: 'extra-widgets',
       version: '1.0.0',
       namespace: 'extra_widgets',
-      headers: ['hmi_core.h'],
+      headers: [{ name: 'hmi_core.h', version: CORE }, ...extraHeaders],
       dependencies: [base],
     },
   )
   if (compiled.errors.length > 0) throw new Error(compiled.errors.map((e) => e.message).join('\n'))
-  const full = buildWidgetCatalog([base.manifest, compiled.archive.manifest])
-  const widgets = [...full.widgets.values()].filter((w) => w.library === 'extra-widgets')
-  return {
-    ...compiled.archive,
-    openplc: {
-      formatVersion: 1,
-      kind: 'hmi',
-      license: 'GPL-3.0-only',
-      hmiCoreApi,
-      catalog: { widgets, colors: [] },
-    },
-  }
+  return JSON.parse(JSON.stringify(compiled.archive))
 }
 
-describe('installed widget libraries', () => {
-  it('loads the pre-installed widget library and leaves the PLC libraries to the PLC build', () => {
-    const installed = installedWidgetArchives()
-    const { libraries, errors } = loadHmiWidgetLibraries(installed)
+/** `extraWidgetLibrary` as if compiled against another HMI core API. */
+function otherCoreLibrary(): object {
+  return JSON.parse(
+    JSON.stringify(extraWidgetLibrary())
+      .replaceAll(`"name":"hmi_core.h","version":"${CORE}"`, `"name":"hmi_core.h","version":"${OTHER}"`)
+      .replace(`"hmi_core.h":"${CORE}"`, `"hmi_core.h":"${OTHER}"`),
+  )
+}
+
+describe('installed libraries in HMI builds', () => {
+  it('loads every installed library, with no kind, and derives the widget catalogue from them', () => {
+    const { libraries, catalog, errors } = loadHmiWidgetLibraries(installedWidgetArchives())
     expect(errors).toEqual([])
-    expect(libraries.map((l) => l.name)).toEqual(['standard-widgets'])
-    expect(libraries[0].catalog.widgets.get('HMIBUTTON')?.palette).toBe('Controls')
-    expect(plcLibraryArchives(installed).map((a) => a.manifest.name)).toEqual(['hmi-alarms'])
+    expect(libraries.map((l) => l.name)).toEqual(['hmi-alarms', 'standard-widgets'])
+    expect(catalog.widgets.get('HMIBUTTON')?.palette).toBe('Controls')
+    expect([...widgetLibraryNames(catalog)]).toEqual(['standard-widgets'])
   })
 
-  it('says how to recover when no widget library is installed', () => {
+  it('says how to recover when no installed library declares a widget', () => {
     expect(loadHmiWidgetLibraries([]).errors).toEqual([
-      { file: 'HMI', message: expect.stringContaining('No HMI widget library is installed') },
+      { file: 'HMI', message: expect.stringContaining('No installed library declares an HMI widget') },
     ])
   })
 
-  it('refuses a widget library built for another HMI core API, with the reason, and keeps the others', () => {
-    const { libraries, errors } = loadHmiWidgetLibraries([
+  const skippedWarning =
+    `The library "extra-widgets" is left out of HMI builds: it is built for HMI core API ${OTHER}, but this ` +
+    `editor provides HMI core API ${CORE}. Install a build of the library for HMI core API ${CORE}.`
+
+  it('leaves out a library built for another HMI core API with one warning, and keeps the others', () => {
+    const { libraries, errors, warnings, skipped } = loadHmiWidgetLibraries([
       ...installedWidgetArchives(),
-      extraWidgetLibrary(HMI_CORE_API_VERSION + 1),
+      otherCoreLibrary(),
+      otherCoreLibrary(),
     ])
-    expect(libraries.map((l) => l.name)).toEqual(['standard-widgets'])
-    expect(errors).toEqual([
-      {
-        file: 'HMI',
-        message:
-          `The widget library "extra-widgets" is built for HMI core API ${HMI_CORE_API_VERSION + 1}, but this editor ` +
-          `provides HMI core API ${HMI_CORE_API_VERSION}. Install a build of the library for HMI core API ` +
-          `${HMI_CORE_API_VERSION}.`,
-      },
+    expect(libraries.map((l) => l.name)).toEqual(['hmi-alarms', 'standard-widgets'])
+    expect(errors).toEqual([])
+    expect(warnings).toEqual([{ file: 'HMI', message: skippedWarning }])
+    expect(skipped).toEqual([
+      { name: 'extra-widgets', required: OTHER, provided: CORE, names: ['DIALSCALE', 'HMIDIAL'] },
     ])
+  })
+
+  it('builds a project that does not use the left-out library, with the warning', () => {
     const unit = generateHmiUnit({
       ...sampleProject(),
-      widgetLibraries: [...installedWidgetArchives(), extraWidgetLibrary(9)],
+      installedLibraries: [...installedWidgetArchives(), otherCoreLibrary()],
     })
-    expect(unit.ok).toBe(false)
-    expect(unit.errors[0].message).toContain('is built for HMI core API 9')
+    expect(unit.errors).toEqual([])
+    expect(unit.ok).toBe(true)
+    expect(unit.warnings.filter((w) => w.message === skippedWarning)).toHaveLength(1)
   })
 
-  it('puts the widgets of an installed widget library in the catalogue, and builds screens that use them', () => {
+  it('names the left-out library in the unknown widget type error of a project that uses its widgets', () => {
+    const project = sampleProject()
+    const screen = project.screens[1].source.replace('END_VAR', "  Dial : HmiDial := (Parent := 'Body');\nEND_VAR")
+    const unit = generateHmiUnit({
+      ...project,
+      screens: [project.screens[0], { ...project.screens[1], source: screen }],
+      installedLibraries: [...installedWidgetArchives(), otherCoreLibrary()],
+    })
+    expect(unit.ok).toBe(false)
+    expect(unit.errors).toEqual([
+      expect.objectContaining({
+        file: 'Details',
+        message:
+          `Undefined type 'HMIDIAL' in FUNCTION_BLOCK 'DETAILS' (the library "extra-widgets" declares it but is left ` +
+          `out of HMI builds: it is built for HMI core API ${OTHER}, but this editor provides HMI core API ${CORE})`,
+      }),
+    ])
+    expect(unit.warnings.map((w) => w.message)).toContain(skippedWarning)
+  })
+
+  it('leaves an unknown widget type error alone when no left-out library declares the type', () => {
+    const skipped = [{ name: 'extra-widgets', required: OTHER, provided: CORE, names: ['HMIDIAL'] }]
+    for (const list of [[], skipped])
+      expect(withSkippedLibraryCause("Undefined type 'HMIGAUGE' in FUNCTION_BLOCK 'X'", list)).toBe(
+        "Undefined type 'HMIGAUGE' in FUNCTION_BLOCK 'X'",
+      )
+    expect(withSkippedLibraryCause('Something else', skipped)).toBe('Something else')
+  })
+
+  it('puts the widgets of an installed library in the catalogue, and builds screens that use them', () => {
     const installed = [...installedWidgetArchives(), extraWidgetLibrary()]
     const { catalog, errors } = buildHmiWidgetCatalog([], installed)
     expect(errors).toEqual([])
     expect(catalog.widgets.get('HMIDIAL')).toMatchObject({ library: 'extra-widgets', palette: 'Gauges' })
+    expect(catalog.widgets.has('DIALSCALE')).toBe(false)
     expect(catalog.widgets.get('HMIDIAL')?.properties.find((p) => p.name === 'Sweep')).toMatchObject({
       defaultValue: '270',
     })
@@ -101,23 +152,39 @@ describe('installed widget libraries', () => {
     const unit = generateHmiUnit({
       ...project,
       screens: [project.screens[0], { ...project.screens[1], source: screen }],
-      widgetLibraries: installed,
+      installedLibraries: installed,
     })
     expect(unit.errors).toEqual([])
     expect(Object.keys(unit.files)).toContain('lib_extra_widgets.cpp')
   })
 
+  it("refuses a widget whose requirements the HMI build cannot meet, with STruC++'s reason", () => {
+    const installed = [...installedWidgetArchives(), extraWidgetLibrary(['vendor_api.h'])]
+    expect(buildHmiWidgetCatalog([], installed).catalog.widgets.has('HMIVENDORDIAL')).toBe(true)
+    const project = sampleProject()
+    const screen = project.screens[1].source.replace(
+      'END_VAR',
+      "  Dial : HmiVendorDial := (Parent := 'Body');\nEND_VAR",
+    )
+    const unit = generateHmiUnit({
+      ...project,
+      screens: [project.screens[0], { ...project.screens[1], source: screen }],
+      installedLibraries: installed,
+    })
+    expect(unit.ok).toBe(false)
+    expect(unit.errors.map((e) => e.message)).toEqual([
+      'HMIVENDORDIAL (library extra-widgets) needs vendor_api.h, which this build does not provide',
+    ])
+  })
+
   it('keeps the first library of a name, and the first widget of a name across libraries', () => {
-    const [first] = loadHmiWidgetLibraries(installedWidgetArchives()).libraries
     const twice = loadHmiWidgetLibraries([...installedWidgetArchives(), ...installedWidgetArchives()])
-    expect(twice.libraries).toHaveLength(1)
-    const other = {
-      widgets: new Map([['HMIBUTTON', { ...first.catalog.widgets.get('HMIBUTTON'), palette: 'X' }]]),
-      colors: [],
-    }
-    const merged = mergeWidgetCatalogs([first.catalog, other as typeof first.catalog])
-    expect(merged.widgets.get('HMIBUTTON')?.palette).toBe('Controls')
-    expect(merged.colors).toEqual(first.catalog.colors)
+    expect(twice.libraries.map((l) => l.name)).toEqual(['hmi-alarms', 'standard-widgets'])
+    const shadow = JSON.parse(
+      JSON.stringify(extraWidgetLibrary()).replaceAll('"hmi_palette","value":"Gauges"', '"hmi_palette","value":"X"'),
+    )
+    const first = loadHmiWidgetLibraries([...installedWidgetArchives(), extraWidgetLibrary(), shadow])
+    expect(first.catalog.widgets.get('HMIDIAL')?.palette).toBe('Gauges')
   })
 
   it('reloads the libraries for the palette when one is installed', async () => {
@@ -143,7 +210,7 @@ describe('installed widget libraries', () => {
     changed()
     expect((await port.catalog([])).catalog.widgets.get('HMIDIAL')?.library).toBe('extra-widgets')
     const context = await port.codeContext({ screens: [], settings: sampleProject().settings })
-    expect(context.libraries.map((l) => l.name)).toEqual(['standard-widgets', 'extra-widgets'])
+    expect(context.libraries.map((l) => l.name)).toEqual(['hmi-alarms', 'standard-widgets', 'extra-widgets'])
     expect(context.screenMembers).toContain('ONSHOW')
   })
 })
