@@ -10,14 +10,13 @@ import {
   generatePackageTrustModule,
   isRecord,
   parseModuleHeader,
-  parseTrustModuleLayout,
+  shareLiteralsFromSource,
   type TrustModuleLayout,
 } from './generator'
 import { loadTrustModule } from './load-module'
 
 const FALLBACK_MODULE = 'src/backend/editor/package-trust/package-trust-anchor.ts'
 const PLACED_MODULE = 'release/package-trust/package-trust-anchor.ts'
-const PLACED_LAYOUT = 'release/package-trust/layout.json'
 const RELEASE_PACKAGE_JSON = 'release/app/package.json'
 const MAIN_BUNDLE = 'release/app/dist/main/main.js'
 const BUNDLE_LABEL = `${MAIN_BUNDLE} with its chunks`
@@ -106,18 +105,11 @@ function readText(root: string, posixPath: string, missing: string): string {
   return readFileSync(path, 'utf-8')
 }
 
-function readPlacedLayout(root: string): TrustModuleLayout {
-  const text = readText(root, PLACED_LAYOUT, 'run the prepare command first')
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    throw new CliFailure(`${PLACED_LAYOUT} is not JSON`)
-  }
-  const layout = parseTrustModuleLayout(parsed)
-  if (layout === null || layout.shareLiterals.length === 0)
-    throw new CliFailure(`${PLACED_LAYOUT} is not a module layout`)
-  return layout
+/** The share literals of the placed module @p source; throws when it has none. */
+function placedShareLiterals(source: string): string[] {
+  const literals = shareLiteralsFromSource(source)
+  if (literals.length === 0) throw new CliFailure(`${PLACED_MODULE} has no share literals`)
+  return literals
 }
 
 function writeFallback(invocation: Invocation): void {
@@ -188,7 +180,7 @@ function prepareRelease(root: string): void {
     throw new CliFailure(`${PLACED_MODULE} was generated for commit ${header.commit}, but HEAD is ${head}`)
   }
   requireFingerprint(source, PLACED_MODULE)
-  readPlacedLayout(root)
+  placedShareLiterals(source)
   console.log(`package-trust: ${PLACED_MODULE} is the release module for ${header.version} at ${header.commit}`)
 }
 
@@ -211,17 +203,15 @@ function readMainBundle(root: string): string {
 function verifyBundle(invocation: Invocation): void {
   const release = isReleaseMode()
   const bundle = readMainBundle(invocation.root)
-  const module = readText(invocation.root, PLACED_MODULE, 'run the prepare command first')
-  const layout = readPlacedLayout(invocation.root)
-  if (layout.shareLiterals.some((literal) => !module.includes(literal))) {
-    throw new CliFailure(`${PLACED_LAYOUT} does not describe ${PLACED_MODULE}`)
-  }
-  const missing = layout.shareLiterals.filter((literal) => !bundle.includes(literal))
+  const placed = placedShareLiterals(readText(invocation.root, PLACED_MODULE, 'run the prepare command first'))
+  const missing = placed.filter((literal) => !bundle.includes(literal))
   if (missing.length > 0) {
     throw new CliFailure(`${BUNDLE_LABEL} lacks ${missing.length} share literal(s) of ${PLACED_MODULE}`)
   }
   if (release) {
-    const leaked = developmentModule('./types').layout.shareLiterals.filter((literal) => bundle.includes(literal))
+    const leaked = shareLiteralsFromSource(developmentModule('./types').source).filter((literal) =>
+      bundle.includes(literal),
+    )
     if (leaked.length > 0) {
       throw new CliFailure(
         `${BUNDLE_LABEL} holds ${leaked.length} share literal(s) of the committed development module`,
