@@ -3,14 +3,21 @@
  * @jest-environment node
  */
 import { createPublicKey } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from '@jest/globals'
 
 import { checkFingerprint } from '../../scripts/package-trust/fingerprint'
-import { DEVELOPMENT_SEED, deriveReleaseSeed, generatePackageTrustModule } from '../../scripts/package-trust/generator'
+import {
+  DEVELOPMENT_SEED,
+  deriveReleaseSeed,
+  generatePackageTrustModule,
+  shareLiteralsFromSource,
+} from '../../scripts/package-trust/generator'
 import { loadTrustModule } from '../../scripts/package-trust/load-module'
 import { desktopPackageTrustMechanisms } from '../backend/editor/package-trust'
 import {
+  COMMITTED_MODULE_PATH,
   developmentModule,
   flipCharacter,
   generateTestModule,
@@ -160,6 +167,100 @@ describe('generatePackageTrustModule', () => {
     })
 
     expect(failing).toEqual([])
+  })
+})
+
+describe('shareLiteralsFromSource', () => {
+  const sorted = (literals: string[]): string[] => [...literals].sort()
+
+  /** True when the literals read from the source of @p module are the share literals of its layout. */
+  const matchesLayout = ({ source, layout }: GeneratedModule): boolean =>
+    JSON.stringify(sorted(shareLiteralsFromSource(source))) === JSON.stringify(sorted(layout.shareLiterals))
+
+  /** The release module of @p seed, with the header and the types import generate-release gives it. */
+  function releaseModule(seed: Uint8Array): GeneratedModule {
+    const { source, layout } = generatePackageTrustModule({
+      seed,
+      keys: TEST_KEYS,
+      typesImport: '../../src/backend/editor/package-trust/types',
+      header: { mode: 'release', version: VERSION, commit: COMMIT },
+    })
+    return { seed, source, layout }
+  }
+
+  /** Two decoders, declared as the generator declares them. */
+  const DECODERS = [
+    'function ab1cde(parts: string[]): Uint8Array {',
+    '  return new Uint8Array(parts.length)',
+    '}',
+    '',
+    'function zz9yyy(parts: string[]): Uint8Array {',
+    '  return new Uint8Array(parts.length)',
+    '}',
+    '',
+  ]
+
+  it('reads the share literals of the layout from the development module of every seed', () => {
+    expect(failingSeeds(matchesLayout)).toEqual([])
+  })
+
+  it('reads the share literals of the layout from the release module of every seed', () => {
+    const failing = SEEDS.map(releaseModule)
+      .filter((module) => !matchesLayout(module))
+      .map((module) => toHex(module.seed))
+
+    expect(failing).toEqual([])
+  })
+
+  it('reads the share literals of the development module from the committed fallback', () => {
+    const literals = shareLiteralsFromSource(readFileSync(COMMITTED_MODULE_PATH, 'utf-8'))
+
+    expect(sorted(literals)).toEqual(sorted(developmentModule().layout.shareLiterals))
+  })
+
+  it('returns the literals of every decoder call in source order, a multi-line array included', () => {
+    const source = [
+      ...DECODERS,
+      'function qq1aaa(): number {',
+      "  const b0 = zz9yyy(['Pa1', 'Pb2'])",
+      '  const d0 = ab1cde([',
+      "    'Qa1',",
+      "    'Qb2',",
+      "    'Qc3',",
+      '  ])',
+      '  return b0.length + d0.length',
+      '}',
+      '',
+    ].join('\n')
+
+    expect(shareLiteralsFromSource(source)).toEqual(['Pa1', 'Pb2', 'Qa1', 'Qb2', 'Qc3'])
+  })
+
+  it('returns [] for a source with no decoder call, ignoring other string arrays and calls of other functions', () => {
+    const source = [
+      ...DECODERS,
+      'function rr2bbb(parts: string[]): string {',
+      "  return parts.join('')",
+      '}',
+      '',
+      "export const k = ['Ka1', 'Kb2']",
+      "export const r = rr2bbb(['Ra1', 'Rb2'])",
+      '',
+    ].join('\n')
+
+    expect(shareLiteralsFromSource(source)).toEqual([])
+  })
+
+  it('reads a source whose evaluation would throw, so it never evaluates it', () => {
+    const source = [
+      "throw new Error('the source was evaluated')",
+      '',
+      ...DECODERS,
+      "const b0 = ab1cde(['Ea1', 'Eb2'])",
+      '',
+    ].join('\n')
+
+    expect(shareLiteralsFromSource(source)).toEqual(['Ea1', 'Eb2'])
   })
 })
 
