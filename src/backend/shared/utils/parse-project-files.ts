@@ -28,7 +28,7 @@ import type {
   PLCTask,
   PLCVariable,
 } from '../../../middleware/shared/ports/types'
-import { type ProjectHmi, readHmiFiles } from '../../../middleware/shared/utils/hmi/project-files'
+import { classifyHmiPath, type ProjectHmi, readHmiFiles } from '../../../middleware/shared/utils/hmi/project-files'
 import { deviceConfigurationSchema, pinMappingFileSchema } from '../types/PLC/devices'
 import { PLCProjectSchema, PLCRemoteDeviceSchema, PLCServerSchema } from '../types/PLC/open-plc'
 import { getDefaultSchemaValues } from './default-zod-schema-values'
@@ -592,7 +592,9 @@ export function parseProjectFiles(
     warnings.push(`Data type "${dt.name}" in project.json has an invalid name and was skipped.`)
   }
 
-  const hmiRead = metaType === 'plc-library' ? { warnings: [] } : readHmiFiles(hmiFiles)
+  const hmiRead = readHmiFiles(
+    metaType === 'plc-library' ? hmiFiles.filter((f) => classifyHmiPath(f.relativePath)?.kind === 'widget') : hmiFiles,
+  )
   warnings.push(...hmiRead.warnings)
 
   return {

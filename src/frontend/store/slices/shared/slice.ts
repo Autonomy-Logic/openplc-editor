@@ -1,7 +1,7 @@
 import { produce } from 'immer'
 import { StateCreator } from 'zustand'
 
-import type { PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
+import { isLibraryProject, type PLCRemoteDevice } from '../../../../middleware/shared/ports/types'
 import { isValidIecIdentifier, removeModuleAndCompact } from '../../../../middleware/shared/utils/ethercat'
 import { newHmiScreenSource, newHmiWidgetSource } from '../../../../middleware/shared/utils/hmi/project-files'
 import {
@@ -587,7 +587,7 @@ const createSharedSlice: StateCreator<SharedRootState, [], [], SharedSlice> = (s
         name,
         kind === 'screen' ? newHmiScreenSource(name) : newHmiWidgetSource(name),
       )
-      if (!hadHmi) {
+      if (!hadHmi && !isLibraryProject(state.project.meta)) {
         state.fileActions.addFile({
           name: HMI_SETTINGS_TAB_NAME,
           type: 'hmi-settings',

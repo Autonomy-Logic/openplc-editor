@@ -9,6 +9,8 @@
  * past it.
  */
 
+import type { StlibArchive } from 'strucpp'
+
 import { loadStrucpp } from './strucpp-runtime'
 
 export interface CompileStlibSource {
@@ -30,6 +32,10 @@ export interface CompileStlibOptions {
   /** Mark as a built-in runtime library (strucpp's bundled libs). */
   builtin?: boolean
   globalConstants?: Record<string, number>
+  /** Headers the library's `{external}` code may need from a build, with their API versions; tags each chunk. */
+  headers?: ReadonlyArray<{ name: string; version?: string }>
+  /** Library archives the sources compile against, verbatim. */
+  dependencies?: readonly unknown[]
 }
 
 export interface CompileStlibError {
@@ -56,7 +62,25 @@ export interface CompileStlibResult {
  * — no exceptions — so the caller can format diagnostics through the
  * editor's existing console pipeline.
  */
+/** Whether a value is a library archive with a named manifest, as `compileStlib` takes for a dependency. */
+function isArchive(value: unknown): value is StlibArchive {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'manifest' in value &&
+    typeof value.manifest === 'object' &&
+    value.manifest !== null &&
+    'name' in value.manifest &&
+    typeof value.manifest.name === 'string'
+  )
+}
+
 export function compileStlib(sources: CompileStlibSource[], options: CompileStlibOptions): CompileStlibResult {
   const strucpp = loadStrucpp()
-  return strucpp.compileStlib(sources, options) as CompileStlibResult
+  const { headers, dependencies, ...rest } = options
+  return strucpp.compileStlib(sources, {
+    ...rest,
+    ...(headers ? { headers: [...headers] } : {}),
+    ...(dependencies ? { dependencies: dependencies.filter(isArchive) } : {}),
+  }) as CompileStlibResult
 }

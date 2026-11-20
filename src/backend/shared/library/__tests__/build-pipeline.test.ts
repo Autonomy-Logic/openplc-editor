@@ -453,7 +453,12 @@ describe('libraryBuildFromTranspiledSt', () => {
     const filenames = (sources as Array<{ fileName: string }>).map((s) => s.fileName)
     expect(filenames).toEqual(['Tank.st'])
     expect(filenames).not.toContain(STUB.STUB_SPLIT_FILENAME)
-    expect(opts).toEqual({ name: 'demo_lib', version: '1.0.0', namespace: 'demo_lib' })
+    expect(opts).toEqual({
+      name: 'demo_lib',
+      version: '1.0.0',
+      namespace: 'demo_lib',
+      headers: [{ name: 'hmi_core.h', version: '1' }],
+    })
   })
 
   it('drops `_config.st` so strucpp does not error on the stub configuration', () => {
@@ -532,7 +537,7 @@ describe('libraryBuildFromTranspiledSt', () => {
     })
   })
 
-  it('decorates the archive with description / displayName / per-POU docs / dependencies', () => {
+  it('decorates the archive with description / displayName / per-POU docs, keeping the dependencies strucpp found', () => {
     const archive = {
       manifest: {
         name: 'demo_lib',
@@ -542,7 +547,7 @@ describe('libraryBuildFromTranspiledSt', () => {
         functionBlocks: [{ name: 'Tank' }],
         types: [{ name: 'Color' }],
       },
-      dependencies: [],
+      dependencies: [{ name: 'iec-standard-fb', version: '1.0.0' }],
     }
     const compileStlib = jest.fn().mockReturnValue({ success: true, archive })
     __setStrucppRuntimeForTests(
@@ -571,7 +576,6 @@ describe('libraryBuildFromTranspiledSt', () => {
       },
       {
         pouDocs: { Tank: 'controls a tank', Add2: 'adds two ints', Color: 'colour enum' },
-        dependencyRefs: [{ name: 'oscat', version: '3.3.0' }],
       },
     )
 
@@ -582,7 +586,8 @@ describe('libraryBuildFromTranspiledSt', () => {
       functionBlocks: [{ name: 'Tank', documentation: 'controls a tank' }],
       types: [{ name: 'Color', documentation: 'colour enum' }],
     })
-    expect(archive.dependencies).toEqual([{ name: 'oscat', version: '3.3.0' }])
+    expect(archive.dependencies).toEqual([{ name: 'iec-standard-fb', version: '1.0.0' }])
+    expect(compileStlib.mock.calls[0][1]).toMatchObject({ headers: [{ name: 'hmi_core.h', version: '1' }] })
   })
 
   // Native (C/C++, Python) blocks: the editor hands strucpp the AUTHORED file

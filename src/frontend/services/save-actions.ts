@@ -186,6 +186,10 @@ function* iterateProjectFiles(state: StoreState): Generator<ProjectFileSpec> {
     category: 'project-json',
   }
 
+  if (isLibrary)
+    for (const widget of project.data.hmi?.widgets ?? [])
+      yield { path: hmiWidgetPath(widget.name), content: widget.source, category: 'hmi' }
+
   if (isLibrary && typeof project.data.libraryManifest === 'string') {
     yield {
       path: 'library.json',
