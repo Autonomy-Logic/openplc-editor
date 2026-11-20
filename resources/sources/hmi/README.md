@@ -139,8 +139,8 @@ lives in the openplc-hmi-widgets repository, which releases it as a plain STruC+
 the HMI core API version they call: `HMI_CORE_API_VERSION` in `core/hmi_core.h`, raised with any change a compiled
 library could break on, and mirrored by the editor's TypeScript constant. The editor installs the pinned release into
 `vendor/hmi-widgets/` (`npm run setup:hmi-widgets`) and ships it pre-installed; HMI builds provide `hmi_core.h` to
-library code, PLC builds do not. Libraries a user installs, or builds from a library project, are used the same way:
-any function block deriving from `HmiElement` is a widget.
+library code, PLC builds do not. Libraries a user installs, or builds from a library project, are used the same way
+by a project that lists them: any function block deriving from `HmiElement` is a widget.
 
 Layout is built from containers, which nest freely:
 

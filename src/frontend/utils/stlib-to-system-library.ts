@@ -36,8 +36,12 @@
  *   parameters become class `'inOut'` (camel-case the editor uses).
  */
 
-import { PLC_PROVIDED_HEADERS } from '@root/middleware/shared/utils/hmi/widget-libraries'
-import { isUnusablePou, unusablePous } from '@root/middleware/shared/utils/library/pou-requirements'
+import {
+  isUnusablePou,
+  type LibraryPouRequirements,
+  libraryPouRequirements,
+  plcUnusablePous,
+} from '@root/middleware/shared/utils/library/pou-requirements'
 
 import type { StlibArchiveDTO } from '../../middleware/shared/ports/library-port'
 import type {
@@ -185,11 +189,18 @@ export function stlibToSystemLibrary(archive: StlibArchiveDTO): SystemLibrary {
 }
 
 /**
- * `archives` as library-tree entries with only the POUs a PLC build can use: a POU that needs the HMI core is left
- * out, and a library may be left with none.
+ * `archives` as library-tree entries without the POUs no PLC build can use, even with every installed library: a POU
+ * that needs the HMI core (a widget, say) is left out, and a library may be left with none. `requirements` are the
+ * archives' `libraryPouRequirements`.
  */
-export function stlibsToSystemLibraries(archives: StlibArchiveDTO[]): SystemLibrary[] {
-  const unusable = unusablePous(archives, PLC_PROVIDED_HEADERS)
+export function stlibsToSystemLibraries(
+  archives: StlibArchiveDTO[],
+  requirements: readonly LibraryPouRequirements[] = libraryPouRequirements(archives),
+): SystemLibrary[] {
+  const unusable = plcUnusablePous(
+    requirements,
+    requirements.map((library) => library.name),
+  )
   return archives.map((archive) => {
     const library = stlibToSystemLibrary(archive)
     const pous = library.pous.filter((pou) => !isUnusablePou(unusable, library.name, pou.name))
@@ -197,10 +208,21 @@ export function stlibsToSystemLibraries(archives: StlibArchiveDTO[]): SystemLibr
   })
 }
 
-/** Upper-case names of the library POUs a PLC build cannot use, such as widgets that need the HMI core. */
-export function plcUnusablePouNames(archives: readonly StlibArchiveDTO[]): string[] {
-  const names = new Set<string>()
-  for (const pous of unusablePous(archives, PLC_PROVIDED_HEADERS).values())
-    for (const name of pous.keys()) names.add(name)
-  return [...names].sort()
+/**
+ * The system libraries a project uses (`libraryNames`, from `projectLibraryNames`) as its PLC library tree shows them:
+ * without the POUs a PLC build of the project cannot use, such as a POU of a library the project does not list.
+ */
+export function projectPlcLibraries(
+  system: readonly SystemLibrary[],
+  requirements: readonly LibraryPouRequirements[],
+  libraryNames: readonly string[],
+): SystemLibrary[] {
+  const names = new Set(libraryNames)
+  const unusable = plcUnusablePous(requirements, libraryNames)
+  return system
+    .filter((library) => names.has(library.name))
+    .map((library) => {
+      const pous = library.pous.filter((pou) => !isUnusablePou(unusable, library.name, pou.name))
+      return pous.length === library.pous.length ? library : { ...library, pous }
+    })
 }

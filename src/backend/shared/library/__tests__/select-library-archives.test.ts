@@ -11,13 +11,19 @@ describe('selectBuildLibraryArchives', () => {
   ]
   const names = (r: { archives: Array<{ manifest: { name: string } }> }) => r.archives.map((a) => a.manifest.name)
 
-  it('builds with the pre-installed libraries and every installed library', () => {
+  it('builds with the pre-installed libraries only when the project lists none', () => {
     const result = selectBuildLibraryArchives(bundled, installed, [])
-    expect(names(result)).toEqual(['iec-standard-fb', 'standard-widgets', 'extra-widgets', 'oscat-basic'])
+    expect(names(result)).toEqual(['iec-standard-fb', 'standard-widgets'])
     expect(result.missing).toEqual([])
   })
 
-  it('puts the libraries the project enables first, in its order, and reports those it cannot read', () => {
+  it('adds only the libraries the project lists, in its order, and never another installed library', () => {
+    const result = selectBuildLibraryArchives(bundled, installed, ['oscat-basic'])
+    expect(names(result)).toEqual(['iec-standard-fb', 'standard-widgets', 'oscat-basic'])
+    expect(names(result)).not.toContain('extra-widgets')
+  })
+
+  it('reports the listed libraries it cannot read or that are not installed', () => {
     const result = selectBuildLibraryArchives(bundled, installed, ['oscat-basic', 'broken', 'ghost', 'extra-widgets'])
     expect(names(result)).toEqual(['iec-standard-fb', 'standard-widgets', 'oscat-basic', 'extra-widgets'])
     expect(result.missing).toEqual(['broken', 'ghost'])

@@ -151,6 +151,7 @@ const request = {
   settings: defaultHmiSettings(),
   plcVariables: [],
   projectNames: [],
+  libraries: [],
 }
 const device = { id: 'd', label: 'D', width: 16, height: 8, density: 1 }
 const canvas = { current: null }

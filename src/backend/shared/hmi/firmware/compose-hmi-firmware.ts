@@ -104,7 +104,7 @@ export async function composeHmiFirmware(input: ComposeHmiFirmwareInput): Promis
   }
   const unit = generateHmiUnit({
     ...input.sources,
-    installedLibraries: input.libraries,
+    projectLibraries: input.libraries,
     capabilities: input.capabilities,
     resolve: hmiTagResolver(input.debugMapJson, input.instances),
     plcMd5: input.md5,

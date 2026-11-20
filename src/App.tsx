@@ -34,7 +34,7 @@ import { configureSaveResume } from './frontend/services/resume-save-after-sign-
 import { bootStLsp } from './frontend/services/st-lsp/boot'
 import { OpenPLCStoreProvider, useOpenPLCStore } from './frontend/store'
 import { selectIsEditingLocked } from './frontend/store/slices/workspace/selectors'
-import { plcUnusablePouNames, stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
+import { stlibsToSystemLibraries } from './frontend/utils/stlib-to-system-library'
 import { listenForProviderSignIns } from './middleware/adapters/editor/edge-account-adapter'
 import { getEdgeWebUrl } from './middleware/adapters/editor/system-adapter'
 import { transpileProjectStInProcess } from './middleware/adapters/editor/transpile-project-st'
@@ -42,6 +42,7 @@ import { setMenuDebuggerActive, setMenuProjectOpen } from './middleware/adapters
 import { packageUpdateNotifier, setProjectPath, setRuntimeIpAddress } from './middleware/editor-platform'
 import { ExtensionPanelProvider, PlatformProvider } from './middleware/shared/providers'
 import { bundledLibraryNames } from './middleware/shared/utils/hmi/widget-libraries'
+import { libraryPouRequirements } from './middleware/shared/utils/library/pou-requirements'
 
 /**
  * Load every installed library (bundled + user-installed) at startup
@@ -64,8 +65,9 @@ const hydrateLibraries = () => {
   Promise.all([editorPorts.library.loadAll(), editorPorts.library.listInstalled()])
     .then(([archives, installed]) => {
       const actions = appStore.getState().libraryActions
-      actions.setSystemLibraries(stlibsToSystemLibraries(archives))
-      actions.setPlcUnusablePous(plcUnusablePouNames(archives))
+      const requirements = libraryPouRequirements(archives)
+      actions.setSystemLibraries(stlibsToSystemLibraries(archives, requirements))
+      actions.setPouRequirements(requirements)
       actions.setBundledLibraryNames(bundledLibraryNames(installed))
     })
     .catch((err) => {

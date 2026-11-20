@@ -225,9 +225,8 @@ export class LibraryManagerModule {
    * dependency list so a library that references external symbols —
    * an OSCAT function, say — resolves at compile time).
    *
-   * Selection is `selectBuildLibraryArchives`: bundled libraries and
-   * installed widget libraries always, user PLC libraries by
-   * `enabledNames`.  `missing` lists
+   * Selection is `selectBuildLibraryArchives`: bundled libraries
+   * always, user-installed ones by `enabledNames`.  `missing` lists
    * enabled names that have no archive on disk so the caller can
    * surface a single "install or remove" error before strucpp runs,
    * instead of strucpp's per-symbol "function not found" cascade.

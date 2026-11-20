@@ -1,8 +1,9 @@
 /**
  * Libraries in the built app: the pre-installed HMI libraries come from the pinned openplc-hmi-widgets release; the
- * widgets of a library a user installed show in the HMI palette and build in the preview, while the PLC library tree
- * lists only POUs a PLC build can use (HMI Alarms, plain functions) and never a widget; a library built for another
- * HMI core API is left out of HMI builds with its reason.
+ * widgets of a user-installed library the project lists show in the HMI palette and build in the preview, while the
+ * PLC library tree lists only POUs a PLC build can use (HMI Alarms, plain functions) and never a widget; an installed
+ * library the project does not list is not available to it; a listed library that is not installed is reported; a
+ * library built for another HMI core API is left out of HMI builds with its reason.
  *
  * Running it needs `npm run setup:hmi-widgets`, a production build and the preload at the path a NON-packaged app looks
  * for it; see "Electron e2e" in CLAUDE.md.
@@ -37,6 +38,9 @@ END_FUNCTION_BLOCK
 `
 
 let F = hmiFixture('hmi-widget-libraries')
+
+/** The project's entry for the e2e widget library. */
+const EXTRA_WIDGETS = [{ name: 'extra-widgets', version: '1.0.0' }]
 
 const waitFor = (page: Page, what: string, check: () => Promise<boolean>, timeoutMs?: number) =>
   waitForIn(F, page, what, check, timeoutMs)
@@ -88,9 +92,9 @@ async function openPanel(page: Page): Promise<void> {
 test.describe('HMI widget libraries', () => {
   test.setTimeout(180000)
 
-  test("shows an installed library's widgets in the palette and builds with them, never in the PLC library tree", async () => {
+  test("shows a listed library's widgets in the palette and builds with them, never in the PLC library tree", async () => {
     F = hmiFixture('hmi-widget-libraries')
-    writeHmiFixture(F, { main: MAIN, screens: { Panel: PANEL }, startScreen: 'Panel' })
+    writeHmiFixture(F, { main: MAIN, screens: { Panel: PANEL }, startScreen: 'Panel', libraries: EXTRA_WIDGETS })
     installExtraWidgets(HMI_CORE_API_VERSION)
     const { app, page } = await launchHmiApp(F)
     try {
@@ -116,9 +120,49 @@ test.describe('HMI widget libraries', () => {
     }
   })
 
+  test('does not offer an installed library the project does not list, in the palette or in builds', async () => {
+    F = hmiFixture('hmi-widget-libraries-unlisted')
+    writeHmiFixture(F, { main: MAIN, screens: { Panel: PANEL }, startScreen: 'Panel' })
+    installExtraWidgets(HMI_CORE_API_VERSION)
+    const { app, page } = await launchHmiApp(F)
+    try {
+      await openPanel(page)
+      await waitFor(page, 'the preview refusing the unlisted widget', async () => {
+        if ((await status(page)).startsWith('ready')) throw new Error('the preview built with an unlisted library')
+        const errors = (await page.getByTestId('hmi-errors').allInnerTexts()).join(' | ')
+        return /HmiDial/i.test(errors)
+      })
+      await page.getByTestId('hmi-palette-tab-widgets').click()
+      await waitFor(page, 'the standard widgets in the palette', () =>
+        page.getByTestId('hmi-palette-HmiButton').isVisible(),
+      )
+      if ((await page.getByTestId('hmi-palette-HmiDial').count()) > 0)
+        throw new Error('the palette offers a widget of a library the project does not list')
+      await page.screenshot({ path: join(F.shots, 'unlisted.png') })
+    } finally {
+      app.process().kill('SIGKILL')
+    }
+  })
+
+  test('reports a listed library that is not installed', async () => {
+    F = hmiFixture('hmi-widget-libraries-missing')
+    writeHmiFixture(F, { main: MAIN, screens: { Panel: PANEL }, startScreen: 'Panel', libraries: EXTRA_WIDGETS })
+    const { app, page } = await launchHmiApp(F)
+    try {
+      await page.getByText(F.name, { exact: true }).first().click({ timeout: 30000 })
+      await waitFor(page, 'the missing-libraries warning naming the library', async () => {
+        const dialog = page.getByRole('dialog').filter({ hasText: 'Missing libraries' })
+        return (await dialog.count()) > 0 && (await dialog.innerText()).includes('extra-widgets')
+      })
+      await page.screenshot({ path: join(F.shots, 'missing.png') })
+    } finally {
+      app.process().kill('SIGKILL')
+    }
+  })
+
   test('leaves out a library built for another HMI core API, naming it and both versions', async () => {
     F = hmiFixture('hmi-widget-libraries-old-core')
-    writeHmiFixture(F, { main: MAIN, screens: { Panel: PANEL }, startScreen: 'Panel' })
+    writeHmiFixture(F, { main: MAIN, screens: { Panel: PANEL }, startScreen: 'Panel', libraries: EXTRA_WIDGETS })
     installExtraWidgets(HMI_CORE_API_VERSION + 1)
     const { app, page } = await launchHmiApp(F)
     try {

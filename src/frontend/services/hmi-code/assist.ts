@@ -10,6 +10,7 @@ import { checkHmiBlock, type HmiCheckBlock, type HmiCheckSpan } from '../../../m
 import { type HmiAssistItem, hmiCompletions } from '../../../middleware/shared/utils/hmi/code-assist'
 import { type DesignerModel, parseDesignerBlock } from '../../../middleware/shared/utils/hmi/designer/designer-model'
 import { defaultHmiSettings } from '../../../middleware/shared/utils/hmi/settings'
+import { projectLibraryNames } from '../../../middleware/shared/utils/library/project-libraries'
 import type { OpenPLCStore } from '../../store'
 import { parseHmiFileUri } from './uris'
 
@@ -45,7 +46,11 @@ const COMPLETION_KINDS: Record<HmiAssistItem['kind'], keyof typeof monaco.langua
 export function attachHmiCodeAssist(options: HmiCodeAssistOptions): { dispose(): void } {
   const { store, preview, monaco: api } = options
   const hmi = () => store.getState().project.data.hmi
-  const catalogNow = async () => (await preview.catalog(hmi()?.widgets ?? [])).catalog
+  const catalogNow = async () => {
+    const { bundledLibraryNames, enabledLibraries } = store.getState()
+    return (await preview.catalog(hmi()?.widgets ?? [], projectLibraryNames(bundledLibraryNames, enabledLibraries)))
+      .catalog
+  }
   let timer: ReturnType<typeof setTimeout> | null = null
   let disposed = false
 

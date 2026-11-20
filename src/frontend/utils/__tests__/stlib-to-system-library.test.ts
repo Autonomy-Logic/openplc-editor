@@ -1,5 +1,6 @@
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
-import { plcUnusablePouNames, stlibsToSystemLibraries, stlibToSystemLibrary } from '../stlib-to-system-library'
+import { libraryPouRequirements } from '../../../middleware/shared/utils/library/pou-requirements'
+import { projectPlcLibraries, stlibsToSystemLibraries, stlibToSystemLibrary } from '../stlib-to-system-library'
 
 function makeArchive(overrides: Partial<StlibArchiveDTO['manifest']> = {}): StlibArchiveDTO {
   return {
@@ -268,8 +269,13 @@ describe('stlibsToSystemLibraries — what a PLC build can use', () => {
     expect(library.pous.map((p) => p.name).sort()).toEqual(['COUNTER', 'SCALE'])
   })
 
-  it('names the POUs PLC completions leave out', () => {
-    expect(plcUnusablePouNames([mixed, makeArchive({ name: 'plain' })])).toEqual(['HMIDIAL'])
+  it('shows a project only the libraries it uses, without the POUs its PLC build cannot use', () => {
+    const plain = makeArchive({ name: 'plain' })
+    const archives = [mixed, plain]
+    const system = archives.map(stlibToSystemLibrary)
+    const libraries = projectPlcLibraries(system, libraryPouRequirements(archives), ['mixed'])
+    expect(libraries.map((l) => l.name)).toEqual(['mixed'])
+    expect(libraries[0].pous.map((p) => p.name).sort()).toEqual(['COUNTER', 'SCALE'])
   })
 
   it('keeps every POU of an archive without chunk requirements', () => {

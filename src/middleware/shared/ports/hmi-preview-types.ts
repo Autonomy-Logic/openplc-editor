@@ -70,6 +70,8 @@ export type HmiBuildSources = Omit<HmiUnitSources, 'plcLibraries'>
 
 /** A preview build of the project's screens, or of one widget block when `widgetPreview` names it. */
 export interface HmiPreviewRequest extends HmiUnitSources {
+  /** Names of the libraries the project uses (`projectLibraryNames`); a preview compiles against these only. */
+  libraries: readonly string[]
   widgetPreview?: string
   /** Builds the palette gallery, every widget on one screen at natural size, in place of the project's screens. */
   gallery?: boolean

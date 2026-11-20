@@ -15,7 +15,6 @@ import type {
   HmiPreviewSurface,
   HmiSourceFile,
   HmiThumbnailResult,
-  HmiUnitSources,
 } from './hmi-preview-types'
 
 /** Where a module starts: its logical screen size, the page it shows and whether bounds include ports. */
@@ -59,12 +58,12 @@ export interface HmiPreviewPort {
   /** Builds a preview module; `onStep` hears each step as it begins, up to `compile`. */
   build(request: HmiPreviewRequest, onStep?: (step: HmiBuildStep) => void): Promise<HmiPreviewBuild>
   /** What the ST language service and the code view need for screens and widget blocks. */
-  codeContext(sources: Pick<HmiUnitSources, 'screens' | 'settings'>): Promise<HmiCodeContext>
-  /** The widgets screens can use: the installed widget libraries' and the project's widget blocks. */
-  catalog(widgets: readonly HmiSourceFile[]): Promise<HmiCatalogResult>
+  codeContext(sources: Pick<HmiPreviewRequest, 'screens' | 'settings' | 'libraries'>): Promise<HmiCodeContext>
+  /** The widgets screens can use: those of the libraries named in `libraries` and the project's widget blocks. */
+  catalog(widgets: readonly HmiSourceFile[], libraries: readonly string[]): Promise<HmiCatalogResult>
   /** The palette's widgets drawn by the core with test values, `scale` device pixels per logical unit. */
   thumbnails(
-    sources: Pick<HmiUnitSources, 'widgets' | 'settings' | 'projectNames'>,
+    sources: Pick<HmiPreviewRequest, 'widgets' | 'settings' | 'projectNames' | 'libraries'>,
     scale: number,
   ): Promise<HmiThumbnailResult>
   openSession(): HmiPreviewSession

@@ -11,7 +11,6 @@ import type {
   HmiPreviewRequest,
   HmiThumbnail,
   HmiThumbnailResult,
-  HmiUnitSources,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
 import { HMI_GALLERY_SCREEN, hmiGalleryWidget } from '../unit/generate-hmi-unit'
 
@@ -67,7 +66,7 @@ export function cropThumbnails(
 
 /** Builds the gallery of `sources`' widgets and draws it in a session of its own, closed before this returns. */
 export async function renderHmiThumbnails(
-  sources: Pick<HmiUnitSources, 'widgets' | 'settings' | 'projectNames'>,
+  sources: Pick<HmiPreviewRequest, 'widgets' | 'settings' | 'projectNames' | 'libraries'>,
   scale: number,
   build: (request: HmiPreviewRequest) => Promise<HmiPreviewBuild>,
   openSession: () => HmiPreviewSession,

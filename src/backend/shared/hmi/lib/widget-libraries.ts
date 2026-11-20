@@ -1,7 +1,7 @@
 /**
- * The installed libraries as HMI builds see them: every archive, loaded for STruC++, with the widget catalogue derived
- * from their manifests. A library whose code needs another HMI core API is left out with a warning. Nothing here
- * compiles a library.
+ * The project's libraries (bundled and listed) as HMI builds see them: every archive, loaded for STruC++, with the
+ * widget catalogue derived from their manifests. A library whose code needs another HMI core API is left out with a
+ * warning. Nothing here compiles a library.
  */
 import {
   type HmiCoreApiMismatch,
@@ -19,7 +19,7 @@ import type {
 import { loadStrucpp, type StrucppRuntime } from '../../library/strucpp-runtime'
 import { buildWidgetCatalog } from './widget-catalog'
 
-/** An installed library ready for STruC++, with its archive as JSON. */
+/** A library ready for STruC++, with its archive as JSON. */
 export interface HmiWidgetLibraryArchive {
   name: string
   archive: StlibArchive
@@ -87,7 +87,7 @@ function declaredNames(archive: unknown): string[] {
 }
 
 /**
- * Every installed archive among `archives` (verbatim), loaded, in order, with the widget catalogue they give. One built
+ * Every archive among `archives` (verbatim), loaded, in order, with the widget catalogue they give. One built
  * for another HMI core API is left out with a warning; one that does not load, with an error; a second library of the
  * same name is left out. No widget among them is an error.
  */
@@ -126,7 +126,7 @@ export function loadHmiWidgetLibraries(
     errors.push({
       file: DIAGNOSTIC_FILE,
       message:
-        'No installed library declares an HMI widget. The standard widgets ship with the editor: reinstall it, or ' +
+        'No library of the project declares an HMI widget. The standard widgets ship with the editor: reinstall it, or ' +
         'run the HMI widgets setup in a development checkout.',
     })
   return { libraries, catalog, errors, warnings, skipped }

@@ -3,6 +3,7 @@
  * widget block's tab (code beside preview). Edits go through text patches and the store history.
  */
 import { ViewModeToggle } from '@root/frontend/components/_atoms/view-mode-toggle'
+import { useProjectLibraryNames } from '@root/frontend/hooks/use-project-libraries'
 import { useTargetCapabilities } from '@root/frontend/hooks/use-target-capabilities'
 import { loadHmiPlcLibraries, readyRequest } from '@root/frontend/services/hmi-code/plc-libraries'
 import { useOpenPLCStore } from '@root/frontend/store'
@@ -134,7 +135,15 @@ function usePlcLibraries(): readonly HmiLibraryArchive[] | null {
  */
 export function useProjectRequest(): Omit<HmiPreviewRequest, 'widgetPreview'> {
   const hmi = useOpenPLCStore((s) => s.project.data.hmi)
-  const plcLibraries = usePlcLibraries()
+  const libraries = useProjectLibraryNames()
+  const installedPlcLibraries = usePlcLibraries()
+  const plcLibraries = useMemo(
+    () =>
+      installedPlcLibraries === null
+        ? null
+        : installedPlcLibraries.filter((library) => libraries.includes(library.name)),
+    [installedPlcLibraries, libraries],
+  )
   const remoteDevices = useOpenPLCStore((s) => s.project.data.remoteDevices)
   const pous = useOpenPLCStore((s) => s.project.data.pous)
   const dataTypes = useOpenPLCStore((s) => s.project.data.dataTypes)
@@ -160,19 +169,23 @@ export function useProjectRequest(): Omit<HmiPreviewRequest, 'widgetPreview'> {
       plcDeclarations,
       ...(plcLibraries ? { plcLibraries } : {}),
       projectNames,
+      libraries,
     }),
-    [hmi, plcVariables, plcDeclarations, plcLibraries, projectNames],
+    [hmi, plcVariables, plcDeclarations, plcLibraries, projectNames, libraries],
   )
 }
 
 /** The project's widget catalogue; the last good one stays while widget blocks do not compile. */
-function useCatalog(widgets: HmiPreviewRequest['widgets']): HmiCatalogResult {
+function useCatalog(
+  widgets: HmiPreviewRequest['widgets'],
+  libraries: HmiPreviewRequest['libraries'],
+): HmiCatalogResult {
   const port = useHmiPreview()
   const [result, setResult] = useState<HmiCatalogResult>({ catalog: EMPTY_CATALOG, errors: [] })
   useEffect(() => {
     if (!port) return
     let live = true
-    void port.catalog(widgets).then((next) => {
+    void port.catalog(widgets, libraries).then((next) => {
       if (!live) return
       setResult((previous) =>
         next.errors.length > 0 && previous.catalog.widgets.size > next.catalog.widgets.size
@@ -183,7 +196,7 @@ function useCatalog(widgets: HmiPreviewRequest['widgets']): HmiCatalogResult {
     return () => {
       live = false
     }
-  }, [port, widgets])
+  }, [port, widgets, libraries])
   return result
 }
 
@@ -202,12 +215,12 @@ function thumbnailUrl(thumbnail: HmiThumbnail): string {
 function useThumbnails(request: HmiPreviewRequest): ReadonlyMap<string, string> {
   const port = useHmiPreview()
   const [thumbnails, setThumbnails] = useState<ReadonlyMap<string, string>>(new Map())
-  const { widgets, settings, projectNames } = request
+  const { widgets, settings, projectNames, libraries } = request
   useEffect(() => {
     if (!port) return
     let live = true
     const timer = setTimeout(() => {
-      void port.thumbnails({ widgets, settings, projectNames }, THUMBNAIL_SCALE).then((result) => {
+      void port.thumbnails({ widgets, settings, projectNames, libraries }, THUMBNAIL_SCALE).then((result) => {
         if (live && result.thumbnails.length > 0)
           setThumbnails(new Map(result.thumbnails.map((t) => [t.widget.toUpperCase(), thumbnailUrl(t)])))
       })
@@ -216,7 +229,7 @@ function useThumbnails(request: HmiPreviewRequest): ReadonlyMap<string, string> 
       live = false
       clearTimeout(timer)
     }
-  }, [port, widgets, settings, projectNames])
+  }, [port, widgets, settings, projectNames, libraries])
   return thumbnails
 }
 
@@ -278,7 +291,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   const variablesCollapsed = useOpenPLCStore((s) => s.hmiVariablesCollapsed)
   const debugging = useOpenPLCStore((s) => s.workspace.isDebuggerVisible)
   const request = useProjectRequest()
-  const { catalog, errors: catalogErrors } = useCatalog(request.widgets)
+  const { catalog, errors: catalogErrors } = useCatalog(request.widgets, request.libraries)
   const targetCapabilities = useTargetCapabilities()
   const thumbnails = useThumbnails(request)
   const isWidget = useCallback((type: string) => catalog.widgets.has(type.toUpperCase()), [catalog])

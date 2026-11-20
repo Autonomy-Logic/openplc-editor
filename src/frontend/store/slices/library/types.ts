@@ -9,6 +9,7 @@ export type {
 } from '../../../../middleware/shared/ports/library-types'
 
 import type { SystemLibrary } from '../../../../middleware/shared/ports/library-types'
+import type { LibraryPouRequirements } from '../../../../middleware/shared/utils/library/pou-requirements'
 
 /**
  * Project-side reference to a system library.  Mirrors
@@ -73,7 +74,7 @@ export type LibraryActions = {
    * slice has to be told separately.
    */
   setBundledLibraryNames: (names: string[]) => void
-  setPlcUnusablePous: (names: string[]) => void
+  setPouRequirements: (requirements: LibraryPouRequirements[]) => void
 }
 
 export type LibrarySliceExtra = {
@@ -89,8 +90,8 @@ export type LibrarySliceExtra = {
   /** Project-referenced libraries the system pool currently can't
    *  resolve.  Drives the missing-libraries modal post-project-open. */
   missingLibraries: MissingLibrary[]
-  /** Upper-case names of library POUs a PLC build cannot use (they need the HMI core); PLC completions hide them. */
-  plcUnusablePous: string[]
+  /** Every installed library's POUs with their requirements (`libraryPouRequirements`); decides what a build can use. */
+  pouRequirements: LibraryPouRequirements[]
 }
 
 export type LibrarySlice = import('../../../../middleware/shared/ports/library-types').LibraryState &

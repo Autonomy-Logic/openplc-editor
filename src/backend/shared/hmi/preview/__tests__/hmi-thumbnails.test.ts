@@ -126,7 +126,12 @@ describe('HMI palette thumbnails', () => {
         closed = true
       },
     }
-    const sources = { widgets: [], settings: defaultHmiSettings(), projectNames: ['Main'] }
+    const sources = {
+      widgets: [],
+      settings: defaultHmiSettings(),
+      projectNames: ['Main'],
+      libraries: ['standard-widgets'],
+    }
     const result = await renderHmiThumbnails(sources, 2, build, () => session)
     expect(result.errors).toEqual([])
     expect(requests).toEqual([{ ...sources, screens: [], plcVariables: [], gallery: true }])
@@ -138,7 +143,7 @@ describe('HMI palette thumbnails', () => {
   })
 
   it('reports a build that fails, and a session that stops, without thumbnails', async () => {
-    const sources = { widgets: [], settings: defaultHmiSettings(), projectNames: [] }
+    const sources = { widgets: [], settings: defaultHmiSettings(), projectNames: [], libraries: [] }
     const failed = await renderHmiThumbnails(
       sources,
       1,

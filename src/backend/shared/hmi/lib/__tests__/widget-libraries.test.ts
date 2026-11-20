@@ -77,7 +77,7 @@ describe('installed libraries in HMI builds', () => {
 
   it('says how to recover when no installed library declares a widget', () => {
     expect(loadHmiWidgetLibraries([]).errors).toEqual([
-      { file: 'HMI', message: expect.stringContaining('No installed library declares an HMI widget') },
+      { file: 'HMI', message: expect.stringContaining('No library of the project declares an HMI widget') },
     ])
   })
 
@@ -102,7 +102,7 @@ describe('installed libraries in HMI builds', () => {
   it('builds a project that does not use the left-out library, with the warning', () => {
     const unit = generateHmiUnit({
       ...sampleProject(),
-      installedLibraries: [...installedWidgetArchives(), otherCoreLibrary()],
+      projectLibraries: [...installedWidgetArchives(), otherCoreLibrary()],
     })
     expect(unit.errors).toEqual([])
     expect(unit.ok).toBe(true)
@@ -115,7 +115,7 @@ describe('installed libraries in HMI builds', () => {
     const unit = generateHmiUnit({
       ...project,
       screens: [project.screens[0], { ...project.screens[1], source: screen }],
-      installedLibraries: [...installedWidgetArchives(), otherCoreLibrary()],
+      projectLibraries: [...installedWidgetArchives(), otherCoreLibrary()],
     })
     expect(unit.ok).toBe(false)
     expect(unit.errors).toEqual([
@@ -152,7 +152,7 @@ describe('installed libraries in HMI builds', () => {
     const unit = generateHmiUnit({
       ...project,
       screens: [project.screens[0], { ...project.screens[1], source: screen }],
-      installedLibraries: installed,
+      projectLibraries: installed,
     })
     expect(unit.errors).toEqual([])
     expect(Object.keys(unit.files)).toContain('lib_extra_widgets.cpp')
@@ -169,7 +169,7 @@ describe('installed libraries in HMI builds', () => {
     const unit = generateHmiUnit({
       ...project,
       screens: [project.screens[0], { ...project.screens[1], source: screen }],
-      installedLibraries: installed,
+      projectLibraries: installed,
     })
     expect(unit.ok).toBe(false)
     expect(unit.errors.map((e) => e.message)).toEqual([
@@ -196,7 +196,7 @@ describe('installed libraries in HMI builds', () => {
     expect(first.catalog.widgets.get('HMIDIAL')?.palette).toBe('Gauges')
   })
 
-  it('reloads the libraries for the palette when one is installed', async () => {
+  it('offers in the palette only the widgets of the libraries the project uses, and reloads them on install', async () => {
     let installed: unknown[] = installedWidgetArchives()
     let changed: () => void = () => undefined
     const mechanisms: HmiPreviewMechanisms = {
@@ -214,13 +214,20 @@ describe('installed libraries in HMI builds', () => {
       },
     }
     const port = createHmiPreviewPort(mechanisms)
-    expect((await port.catalog([])).catalog.widgets.has('HMIDIAL')).toBe(false)
+    const bundled = ['hmi-alarms', 'standard-widgets']
+    const listed = [...bundled, 'extra-widgets']
+    expect((await port.catalog([], listed)).catalog.widgets.has('HMIDIAL')).toBe(false)
     installed = [...installed, extraWidgetLibrary()]
     changed()
-    expect((await port.catalog([])).catalog.widgets.get('HMIDIAL')?.library).toBe('extra-widgets')
-    const context = await port.codeContext({ screens: [], settings: sampleProject().settings })
+    const unlisted = await port.catalog([], bundled)
+    expect(unlisted.catalog.widgets.has('HMIDIAL')).toBe(false)
+    expect(unlisted.catalog.widgets.has('HMIBUTTON')).toBe(true)
+    expect((await port.catalog([], listed)).catalog.widgets.get('HMIDIAL')?.library).toBe('extra-widgets')
+    const context = await port.codeContext({ screens: [], settings: sampleProject().settings, libraries: listed })
     expect(context.libraries.map((l) => l.name)).toEqual(['hmi-alarms', 'standard-widgets', 'extra-widgets'])
     expect(context.screenMembers).toContain('ONSHOW')
+    const bundledOnly = await port.codeContext({ screens: [], settings: sampleProject().settings, libraries: bundled })
+    expect(bundledOnly.libraries.map((l) => l.name)).toEqual(['hmi-alarms', 'standard-widgets'])
   })
 })
 

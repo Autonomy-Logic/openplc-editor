@@ -55,7 +55,7 @@ import { mapStDefinitionLocation } from './definition-locations'
 import { diagnosticsInSpan, dtViewLineOffset, dtViewSpan, dtViewWindow } from './dtview-context'
 import { redirectNavTargetToStore } from './goto-definition-redirect'
 import { redirectToGraphicalPou } from './graphical-redirect'
-import { plcCompletionItems } from './plc-completions'
+import { plcCompletionItems, projectPlcUnusablePous } from './plc-completions'
 import { diagnosticsInVarBlocks, pouVarsTokenViewport } from './pouvars-context'
 import { type PrintSemanticTokens, registerPrintSemanticTokensApi } from './print-tokens-api'
 import { getSyncedDocumentText } from './project-sync'
@@ -188,7 +188,8 @@ export function startStLsp(opts: StLspStartOptions): StLspService {
     signatureHelpTriggerCharacters: ['(', ','],
     resolveLspContext: (modelUri) => resolveStLspContext(store, modelUri),
     getLspDocumentText: getSyncedDocumentText,
-    filterCompletionItems: (lspUri, items) => plcCompletionItems(lspUri, items, store.getState().plcUnusablePous),
+    filterCompletionItems: (lspUri, items) =>
+      plcCompletionItems(lspUri, items, projectPlcUnusablePous(store.getState())),
     mapDefinitionLocation: mapStDefinitionLocation,
     navigateOutline: navigateToStore,
 

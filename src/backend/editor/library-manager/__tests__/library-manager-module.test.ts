@@ -374,7 +374,7 @@ describe('LibraryManagerModule', () => {
       expect(result.missing).toEqual([])
     })
 
-    it('includes user libs that are installed but not enabled, after the enabled ones', async () => {
+    it('leaves out user libs that are installed but not enabled', async () => {
       const mod = makeModule()
       const tmp = join(testRoot, 'oscat.stlib')
       writeFileSync(tmp, JSON.stringify(makeArchive('oscat-basic')), 'utf-8')
@@ -382,7 +382,7 @@ describe('LibraryManagerModule', () => {
 
       const result = mod.loadEnabledArchives([])
       // Bundled dir doesn't exist in this test harness.
-      expect(result.archives.map((a) => a.manifest.name)).toEqual(['oscat-basic'])
+      expect(result.archives).toEqual([])
       expect(result.missing).toEqual([])
     })
 
@@ -436,7 +436,7 @@ describe('LibraryManagerModule', () => {
       })
     })
 
-    it('builds with every installed library, the enabled ones first', async () => {
+    it('builds with the pre-installed libraries and the enabled ones only', async () => {
       writeHmiWidget(needingCore(makeArchive('standard-widgets')))
       const mod = makeModule()
       for (const archive of [needingCore(makeArchive('extra-widgets')), makeArchive('oscat-basic')]) {
@@ -444,15 +444,15 @@ describe('LibraryManagerModule', () => {
         writeFileSync(tmp, JSON.stringify(archive), 'utf-8')
         expect((await mod.installFromFile(tmp)).success).toBe(true)
       }
-      expect(mod.loadEnabledArchives([]).archives.map((a) => a.manifest.name)).toEqual([
-        'standard-widgets',
-        'extra-widgets',
-        'oscat-basic',
-      ])
+      expect(mod.loadEnabledArchives([]).archives.map((a) => a.manifest.name)).toEqual(['standard-widgets'])
       expect(mod.loadEnabledArchives(['oscat-basic']).archives.map((a) => a.manifest.name)).toEqual([
         'standard-widgets',
         'oscat-basic',
+      ])
+      expect(mod.loadEnabledArchives(['extra-widgets', 'oscat-basic']).archives.map((a) => a.manifest.name)).toEqual([
+        'standard-widgets',
         'extra-widgets',
+        'oscat-basic',
       ])
     })
 

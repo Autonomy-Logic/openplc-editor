@@ -29,7 +29,7 @@ const resources: HmiPreviewResources = {
   runtimeHeaders: { 'iec_types.hpp': '// types' },
   hmiSources: { 'core/hmi_core.c': '// core', 'preview/hmi_preview_host.cpp': '// host' },
   readFont,
-  installedLibraries: installedWidgetArchives(),
+  projectLibraries: installedWidgetArchives(),
 }
 
 const built: WasmCompileResult = { ok: true, wasm: new Uint8Array([0, 97, 115, 109]), stats, diagnostics: [] }

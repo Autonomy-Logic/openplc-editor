@@ -130,7 +130,7 @@ export async function composeHmiArtefact(input: ComposeHmiArtefactInput): Promis
 
   const unit = generateHmiUnit({
     ...input.sources,
-    installedLibraries: input.libraries,
+    projectLibraries: input.libraries,
     capabilities: input.capabilities,
     resolve: hmiTagResolver(input.debugMapJson, input.instances),
     plcMd5: input.md5,

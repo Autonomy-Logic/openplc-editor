@@ -61,8 +61,11 @@ export interface HmiTagAddress {
 export type { HmiDiagnostic, HmiPlcVariable, HmiPreviewSetter, HmiSourceFile, HmiUnitSources }
 
 export interface HmiUnitInput extends HmiUnitSources {
-  /** The installed library archives, verbatim; the unit compiles against all of them and takes its widgets from them. */
-  installedLibraries: readonly unknown[]
+  /**
+   * The archives of the libraries the project uses (bundled and listed), verbatim; the unit compiles against them and
+   * takes its widgets from them.
+   */
+  projectLibraries: readonly unknown[]
   /**
    * Preview only: a widget block shown on an extra screen after the project's, at natural size and stretched, with a
    * test value on its main input. Product builds leave it out.
@@ -1366,7 +1369,7 @@ export interface HmiWidgetLibrary {
 const PROJECT_WIDGETS = 'project-widgets'
 
 /**
- * Compiles a project's widget blocks against the installed libraries and builds the catalogue of all of them: the
+ * Compiles a project's widget blocks against the project's libraries and builds the catalogue of all of them: the
  * libraries' widgets, then the project's blocks. Errors leave the catalogue with the library widgets only.
  */
 export function compileHmiWidgets(
@@ -1409,12 +1412,12 @@ export function compileHmiWidgets(
   return { archives, catalog, errors }
 }
 
-/** The catalogue of the installed libraries and a project's widget blocks, for the designer. */
+/** The catalogue of the project's libraries and its widget blocks, for the designer. */
 export function buildHmiWidgetCatalog(
   widgets: readonly HmiSourceFile[],
-  installedLibraries: readonly unknown[],
+  projectLibraries: readonly unknown[],
 ): HmiWidgetLibrary {
-  const loaded = loadHmiWidgetLibraries(installedLibraries)
+  const loaded = loadHmiWidgetLibraries(projectLibraries)
   const compiled = compileHmiWidgets(widgets, loaded.libraries, loaded.catalog)
   return { ...compiled, errors: [...loaded.errors, ...compiled.errors] }
 }
@@ -1661,7 +1664,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     errors: libraryErrors,
     warnings,
     skipped,
-  } = loadHmiWidgetLibraries(input.installedLibraries)
+  } = loadHmiWidgetLibraries(input.projectLibraries)
   for (const w of warnings) d.warn(w.file, w.message)
   for (const e of libraryErrors) d.error(e.file, e.message, e.line)
   if (d.errors.length > 0) return result

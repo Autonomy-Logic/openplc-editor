@@ -42,7 +42,7 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
     enabledLibraries: [],
     bundledLibraryNames: [],
     missingLibraries: [],
-    plcUnusablePous: [],
+    pouRequirements: [],
     libraryActions: {
       setSystemLibraries: (libraries) => {
         // Strip malformed POU entries at the source — keep only
@@ -169,10 +169,10 @@ const createLibrarySlice: StateCreator<LibrarySlice, [], [], LibrarySlice> = (se
           }),
         )
       },
-      setPlcUnusablePous: (names) => {
+      setPouRequirements: (requirements) => {
         setState(
           produce((state: LibrarySlice) => {
-            state.plcUnusablePous = names
+            state.pouRequirements = requirements
           }),
         )
       },
