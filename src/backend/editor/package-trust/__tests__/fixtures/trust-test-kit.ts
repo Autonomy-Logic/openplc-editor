@@ -128,9 +128,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function isTrustModuleLayout(value: unknown): value is TrustModuleLayout {
   if (!isRecord(value) || !Array.isArray(value.sites) || !Array.isArray(value.shareLiterals)) return false
   if (typeof value.entryName !== 'string') return false
+  const strings = (items: unknown): boolean =>
+    Array.isArray(items) && items.every((item: unknown) => typeof item === 'string')
   const sitesOk = value.sites.every(
     (site: unknown) =>
-      isRecord(site) && (site.hook === 'import' || site.hook === 'use') && typeof site.functionName === 'string',
+      isRecord(site) &&
+      (site.hook === 'import' || site.hook === 'use') &&
+      typeof site.functionName === 'string' &&
+      isRecord(site.canaryCases) &&
+      strings(site.canaryCases.matching) &&
+      strings(site.canaryCases.mismatching),
   )
   return sitesOk && value.shareLiterals.every((literal: unknown) => typeof literal === 'string')
 }
@@ -489,6 +496,25 @@ export function replaceLiteral(source: string, literal: string, replacement: str
   }
   if (replaced === source) throw new Error(`Share literal ${literal} is not in the module`)
   return replaced
+}
+
+/**
+ * The two source patches of the check canary of @p site, each named: its mismatching case replaced by its matching
+ * case, share for share, and one share of its matching case altered. Either must make the site refuse every package.
+ */
+export function canaryPatches(source: string, site: TrustModuleLayout['sites'][number]): [string, string][] {
+  const { matching, mismatching } = site.canaryCases
+  if (matching.length === 0 || matching.length !== mismatching.length) {
+    throw new Error(`The canary cases of ${site.functionName} do not have the same, non-zero number of shares`)
+  }
+  const swapped = mismatching.reduce(
+    (patched, literal, index) => replaceLiteral(patched, literal, matching[index]),
+    source,
+  )
+  return [
+    ['its mismatching case replaced by its matching case', swapped],
+    ['its matching case altered', replaceLiteral(source, matching[0], flipCharacter(matching[0]))],
+  ]
 }
 
 /** The verdict of a package trusted as @p packageId at @p version. */
