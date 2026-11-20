@@ -49,7 +49,7 @@ function hexWindows(bytes: Uint8Array): string[] {
   return Array.from({ length: bytes.length - 7 }, (_, start) => toHex(bytes.slice(start, start + 8)))
 }
 
-/** The text forms of a key and its id that must not appear in a generated module (M2). */
+/** The text forms of a key and its id that must not appear in a generated module. */
 function keyForms(keyId: string, pem: string): string[] {
   const der = new Uint8Array(createPublicKey(pem).export({ format: 'der', type: 'spki' }))
   const raw = der.slice(der.length - 32)
