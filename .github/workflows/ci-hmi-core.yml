@@ -28,8 +28,7 @@ jobs:
       - name: Test the HMI core
         run: node tests/hmi-core/run.mjs --cc "gcc clang" --sanitize --fuzz 100000
 
-      # The pinned STruC++ compiles the test screens against the pinned HMI widget libraries (openplc-hmi-widgets,
-      # whose own CI runs their headless frame tests against this core).
+      # The pinned STruC++ compiles the test screens against the pinned HMI widget libraries (openplc-hmi-widgets).
       - name: Install STruC++
         run: npm run setup:strucpp
 
@@ -61,3 +60,29 @@ jobs:
         env:
           HMI_CLIENT_CC: gcc
           HMI_CLIENT_CXX: g++
+
+      - name: Read the pinned HMI widget libraries
+        id: hmi-widgets
+        run: |
+          echo "repository=$(node -p "require('./binary-versions.json')['hmi-widgets'].repository")" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p "require('./binary-versions.json')['hmi-widgets'].version")" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the pinned HMI widget libraries
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.hmi-widgets.outputs.repository }}
+          ref: ${{ steps.hmi-widgets.outputs.version }}
+          path: .hmi-widgets-src
+          persist-credentials: false
+
+      # The widget libraries of the pinned release, built from its tag and run by its frame and scan goldens on gcc and
+      # clang (sanitized), against this checkout's HMI core and fonts instead of the core the release pins.
+      - name: Test the widget libraries against this HMI core
+        working-directory: .hmi-widgets-src
+        env:
+          HMI_CORE_EDITOR_DIR: ${{ github.workspace }}
+        run: |
+          npm ci
+          npm run setup:strucpp
+          npm run build
+          npm run test:native
