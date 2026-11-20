@@ -1622,7 +1622,7 @@ describe('packaged-checks.mjs', () => {
       linux: ['ABUSE-06 row 1', 'ABUSE-06 row 2'],
     }
     const NEGATIVE_NORMAL = ['start', 'ABUSE-07 NODE_OPTIONS']
-    const NEGATIVE_SKIPPED = ['ABUSE-03 (b)', 'ABUSE-03 (e)', 'AC5 compile', 'AC5 packages install']
+    const NEGATIVE_SKIPPED = ['ABUSE-13 (a)', 'ABUSE-03 (b)', 'ABUSE-03 (e)', 'AC5 compile', 'AC5 packages install']
 
     function plan(platform: string, version: string, negativeControl: boolean): Planned[] {
       const value = readField(callExport(script, 'planChecks', [{ platform, version, negativeControl }]), 'value')
@@ -1703,6 +1703,7 @@ describe('packaged-checks.mjs', () => {
     })
 
     it.each<[string, string]>([
+      ['ABUSE-13 (a)', 'an unpatched original loads app.asar before an app folder too'],
       ['ABUSE-03 (b)', "an unpatched original refuses another key's package too"],
       ['ABUSE-03 (e)', "an unpatched original refuses another key's package too"],
       ['AC5 compile', 'positive controls run on the hardened installer'],
