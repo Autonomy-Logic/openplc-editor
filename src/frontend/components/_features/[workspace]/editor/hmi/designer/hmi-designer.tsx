@@ -5,7 +5,7 @@
 import { ViewModeToggle } from '@root/frontend/components/_atoms/view-mode-toggle'
 import { useProjectLibraryNames } from '@root/frontend/hooks/use-project-libraries'
 import { useTargetCapabilities } from '@root/frontend/hooks/use-target-capabilities'
-import { loadHmiPlcLibraries, readyRequest } from '@root/frontend/services/hmi-code/plc-libraries'
+import { loadHmiPlcLibraries } from '@root/frontend/services/hmi-code/plc-libraries'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { hmiDesignerEntry } from '@root/frontend/store/slices/hmi-designer'
 import { cn } from '@root/frontend/utils/cn'
@@ -129,11 +129,14 @@ function usePlcLibraries(): readonly HmiLibraryArchive[] | null {
   return libraries
 }
 
+/** What a preview request of the project's HMI carries. */
+export type ProjectPreviewRequest = Omit<HmiPreviewRequest, 'widgetPreview'>
+
 /**
- * What every preview request carries: the project's HMI and what screens may refer to. `plcLibraries` is absent until
- * the PLC's libraries are loaded; a preview waits for them (`readyRequest`).
+ * What every preview request carries: the project's HMI and what screens may refer to. `ready` is false until the PLC's
+ * libraries are loaded, which give the pins of library blocks; a preview waits for them.
  */
-export function useProjectRequest(): Omit<HmiPreviewRequest, 'widgetPreview'> {
+export function useProjectRequest(): { request: ProjectPreviewRequest; ready: boolean } {
   const hmi = useOpenPLCStore((s) => s.project.data.hmi)
   const libraries = useProjectLibraryNames()
   const installedPlcLibraries = usePlcLibraries()
@@ -160,19 +163,19 @@ export function useProjectRequest(): Omit<HmiPreviewRequest, 'widgetPreview'> {
     () => hmiPlcDeclarations({ pous, dataTypes, configurations, globalVariableLists, remoteDevices }, aliasIndex),
     [pous, dataTypes, configurations, globalVariableLists, remoteDevices, aliasIndex],
   )
-  return useMemo(
+  const request = useMemo(
     () => ({
       screens: hmi?.screens ?? [],
       widgets: hmi?.widgets ?? [],
       settings: hmi?.settings ?? defaultHmiSettings(),
       plcVariables,
       plcDeclarations,
-      ...(plcLibraries ? { plcLibraries } : {}),
       projectNames,
       libraries,
     }),
-    [hmi, plcVariables, plcDeclarations, plcLibraries, projectNames, libraries],
+    [hmi, plcVariables, plcDeclarations, projectNames, libraries],
   )
+  return { request, ready: plcLibraries !== null }
 }
 
 /** The project's widget catalogue; the last good one stays while widget blocks do not compile. */
@@ -290,7 +293,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   const actions = useOpenPLCStore((s) => s.hmiDesignerActions)
   const variablesCollapsed = useOpenPLCStore((s) => s.hmiVariablesCollapsed)
   const debugging = useOpenPLCStore((s) => s.workspace.isDebuggerVisible)
-  const request = useProjectRequest()
+  const { request, ready } = useProjectRequest()
   const { catalog, errors: catalogErrors } = useCatalog(request.widgets, request.libraries)
   const targetCapabilities = useTargetCapabilities()
   const thumbnails = useThumbnails(request)
@@ -316,7 +319,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   const [fit, area] = useFitZoom(device.width, device.height)
   const zoom = entry.zoom ?? fit
   const preview = usePreviewSession({
-    request: readyRequest(request),
+    request: ready ? request : null,
     screen: name,
     device,
     design: mode === 'design',
@@ -806,12 +809,12 @@ export function HmiScreenDesigner({ name }: { name: string }) {
 }
 
 export function HmiWidgetEditor({ name }: { name: string }) {
-  const request = useProjectRequest()
+  const { request, ready } = useProjectRequest()
   const widgetRequest = useMemo(() => ({ ...request, widgetPreview: name }), [request, name])
   const device = useMemo(() => ({ id: 'widget', label: 'Widget', width: 320, height: 240, density: 2 }), [])
   const canvas = useRef<HTMLCanvasElement>(null)
   const preview = usePreviewSession({
-    request: readyRequest(widgetRequest),
+    request: ready ? widgetRequest : null,
     screen: '',
     device,
     design: false,

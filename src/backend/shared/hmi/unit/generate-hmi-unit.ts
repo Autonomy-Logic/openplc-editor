@@ -32,7 +32,6 @@ import type { CompileOptions, StlibArchive } from 'strucpp'
 
 import type {
   HmiDiagnostic,
-  HmiLibraryArchive,
   HmiPlcVariable,
   HmiPreviewFactory,
   HmiPreviewSetter,
@@ -84,8 +83,6 @@ export interface HmiUnitInput extends HmiUnitSources {
   panel?: boolean
   /** PLC debug-table address of a variable; absent when building without a PLC program (preview). */
   resolve?: (path: string) => HmiTagAddress | null
-  /** The PLC's libraries already loaded, as the program build has them; used with `plcLibraries`. */
-  plcArchives?: readonly StlibArchive[]
   plcMd5?: string
   /**
    * The target's boolean capabilities, for a device build: an element whose widget requires one the target lacks
@@ -1333,31 +1330,6 @@ function checkNames(input: HmiUnitInput, library: ReadonlySet<string>, d: Diagno
   }
 }
 
-/** Parsed PLC library archives by their JSON text, so a preview rebuild does not parse them again. */
-const plcArchiveCache = new Map<string, StlibArchive>()
-const PLC_ARCHIVE_CACHE_SIZE = 64
-
-/** The PLC's library archives, parsed; one that does not load is an error of the unit. */
-function plcArchives(libraries: readonly HmiLibraryArchive[], d: Diagnostics): StlibArchive[] {
-  const strucpp = loadStrucpp()
-  return libraries.flatMap((library) => {
-    const cached = plcArchiveCache.get(library.archiveJson)
-    if (cached) return [cached]
-    try {
-      const archive = strucpp.loadStlibFromString(library.archiveJson, library.name)
-      if (plcArchiveCache.size >= PLC_ARCHIVE_CACHE_SIZE) plcArchiveCache.clear()
-      plcArchiveCache.set(library.archiveJson, archive)
-      return [archive]
-    } catch (error) {
-      d.error(
-        UNIT,
-        `library ${library.name} could not be loaded: ${error instanceof Error ? error.message : String(error)}`,
-      )
-      return []
-    }
-  })
-}
-
 /** The library archives and the widget catalogue a project's widget blocks give, with their errors. */
 export interface HmiWidgetLibrary {
   archives: StlibArchive[]
@@ -1777,15 +1749,11 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     ),
   }
   const [first, ...rest] = Object.entries(sources)
-  const taken = new Set([...archives.map((a) => a.manifest.name), ...skipped.map((l) => l.name)])
-  const plcLibraries = [...plcArchives(input.plcLibraries ?? [], d), ...(input.plcArchives ?? [])].filter(
-    (a) => !taken.has(a.manifest.name),
-  )
   if (d.errors.length > 0) return result
   const options: StrucppCompileOptions = {
     fileName: first[0],
     additionalSources: rest.map(([fileName, source]) => ({ fileName, source })),
-    libraries: [...archives, ...plcLibraries],
+    libraries: archives,
     namespace: NAMESPACE,
     headerFileName: HEADER,
     separateLibraryFiles: true,

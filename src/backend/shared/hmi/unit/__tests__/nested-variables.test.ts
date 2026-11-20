@@ -201,11 +201,10 @@ describe('nested HMI variables', () => {
     const result = generateHmiUnit({
       screens: [{ name: 'Overview', source: screen }],
       widgets: [],
-      projectLibraries: installedWidgetArchives(),
+      projectLibraries: [...installedWidgetArchives(), JSON.parse(ARCHIVE_JSON)],
       settings: hmiSettingsSchema.parse({}),
       plcVariables: variables,
       plcDeclarations: DECLARATIONS,
-      plcLibraries: [{ name: 'iec-standard-fb', archiveJson: ARCHIVE_JSON }],
       projectNames: ['Main', 'MyFb', 'Pt', 'Sub'],
       resolve,
     })
@@ -235,11 +234,10 @@ describe('nested HMI variables', () => {
         },
       ],
       widgets: [],
-      projectLibraries: installedWidgetArchives(),
+      projectLibraries: [...installedWidgetArchives(), JSON.parse(ARCHIVE_JSON)],
       settings: hmiSettingsSchema.parse({}),
       plcVariables: variables,
       plcDeclarations: DECLARATIONS,
-      plcLibraries: [{ name: 'iec-standard-fb', archiveJson: ARCHIVE_JSON }],
       projectNames: ['Main', 'MyFb', 'Pt', 'Sub'],
       preview: true,
     })
@@ -265,11 +263,10 @@ describe('nested HMI variables', () => {
         },
       ],
       widgets: [],
-      projectLibraries: installedWidgetArchives(),
+      projectLibraries: [...installedWidgetArchives(), JSON.parse(ARCHIVE_JSON)],
       settings: hmiSettingsSchema.parse({}),
       plcVariables: variables,
       plcDeclarations: DECLARATIONS,
-      plcLibraries: [{ name: 'iec-standard-fb', archiveJson: ARCHIVE_JSON }],
       projectNames: ['Main', 'MyFb', 'Pt', 'Sub'],
       preview: true,
     })

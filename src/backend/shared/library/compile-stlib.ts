@@ -9,8 +9,9 @@
  * past it.
  */
 
-import type { StlibArchive } from 'strucpp'
+import type { StlibCompileResult } from 'strucpp'
 
+import { isStrucppArchive } from './stlib-archive-json'
 import { loadStrucpp } from './strucpp-runtime'
 
 export interface CompileStlibSource {
@@ -62,25 +63,13 @@ export interface CompileStlibResult {
  * — no exceptions — so the caller can format diagnostics through the
  * editor's existing console pipeline.
  */
-/** Whether a value is a library archive with a named manifest, as `compileStlib` takes for a dependency. */
-function isArchive(value: unknown): value is StlibArchive {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'manifest' in value &&
-    typeof value.manifest === 'object' &&
-    value.manifest !== null &&
-    'name' in value.manifest &&
-    typeof value.manifest.name === 'string'
-  )
-}
-
 export function compileStlib(sources: CompileStlibSource[], options: CompileStlibOptions): CompileStlibResult {
   const strucpp = loadStrucpp()
   const { headers, dependencies, ...rest } = options
-  return strucpp.compileStlib(sources, {
+  const result: StlibCompileResult = strucpp.compileStlib(sources, {
     ...rest,
     ...(headers ? { headers: [...headers] } : {}),
-    ...(dependencies ? { dependencies: dependencies.filter(isArchive) } : {}),
-  }) as CompileStlibResult
+    ...(dependencies ? { dependencies: dependencies.filter(isStrucppArchive) } : {}),
+  })
+  return result
 }

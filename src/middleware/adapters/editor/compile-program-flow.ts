@@ -19,11 +19,11 @@ import {
   findLibrariesMissingNativeSources,
   injectLibraryBlocks,
 } from '../../../backend/shared/library/inject-library-blocks'
+import { buildLibraryArchives, listedLibraryNames } from '../../../backend/shared/library/select-library-archives'
 import { preprocessPous } from '../../../backend/shared/utils/PLC/preprocess-pous'
 import { hmiBuildSources } from '../../../frontend/utils/PLC/hmi-build-sources'
 import type { CompileProgramArgs } from '../../shared/ports/compiler-port'
 import type { HmiBuildSources } from '../../shared/ports/hmi-preview-types'
-import type { StlibArchiveDTO } from '../../shared/ports/library-port'
 import type { BoardInfo, CompileProgressEvent, CompileResult, StructuredCompileError } from '../../shared/ports/types'
 import { resolveTargetCapabilities } from '../../shared/utils/target-capabilities'
 import type { IpcProjectData } from './compiler-adapter'
@@ -77,8 +77,8 @@ export type CompileProgramIpcArgs = [
 export interface CompileProgramTransport {
   /** Board catalogue — hals.json entries plus installed VPP packages. */
   getAvailableBoards: () => Promise<Map<string, BoardInfo>>
-  /** Every installed library archive, for the C++-block graft. */
-  loadAllLibraries: () => Promise<StlibArchiveDTO[]>
+  /** The archives a build of a project listing `listedNames` compiles against, verbatim: pre-installed and listed. */
+  loadBuildLibraries: (listedNames: string[]) => Promise<readonly unknown[]>
   /**
    * Start the compile pipeline and stream its messages back. Fire-and-forget:
    * completion is signalled by a `closePort` message, not by resolution.
@@ -139,7 +139,9 @@ export async function compileProgramFlow(
   // generation downstream.  See `injectLibraryBlocks` for the renaming
   // contract and for why the archive ships source rather than the
   // already-lowered ST.
-  const archives = await transport.loadAllLibraries()
+  const archives = buildLibraryArchives(
+    await transport.loadBuildLibraries(listedLibraryNames(args.projectData.libraries)),
+  )
 
   // A native block with no source cannot be built by any consumer.
   const missingSources = findLibrariesMissingNativeSources(args.projectData, archives)

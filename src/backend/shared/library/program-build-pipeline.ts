@@ -39,10 +39,10 @@ import type * as strucpp from 'strucpp'
 import type { KnownPou } from '../utils/PLC/split-program-st'
 import { splitProgramSt } from '../utils/PLC/split-program-st'
 import { enrichErrorWithPouContext, formatErrorWithPouContext } from './program-build-helpers'
+import { isStrucppArchive } from './stlib-archive-json'
 import { loadStrucpp } from './strucpp-runtime'
 
 type StrucppCompileError = strucpp.CompileError
-type StrucppLibraries = NonNullable<Parameters<typeof strucpp.compile>[1]>['libraries']
 
 export interface ProgramBuildPipelineOptions {
   /** Full program.st text (or the merged ST source the caller produced). */
@@ -54,7 +54,7 @@ export interface ProgramBuildPipelineOptions {
    *  splitter to emit per-POU error file names. */
   pous: KnownPou[]
   /** Pre-loaded `.stlib` archives — bundled + the project-enabled
-   *  subset — passed through to strucpp's `libraries:` option, without the widget libraries (kind `hmi`). */
+   *  subset — passed through to strucpp's `libraries:` option. */
   libraries: unknown[]
   /** Names of libraries the project enables but the system pool
    *  doesn't currently have on disk.  Surfaced as a pre-compile
@@ -188,7 +188,7 @@ export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): Prog
     fileName: primaryFileName,
     debug: true,
     lineMapping: true,
-    libraries: libraries as StrucppLibraries,
+    libraries: libraries.filter(isStrucppArchive),
     providedHeaders: [...PLC_PROVIDED_HEADERS],
     md5,
     pouIncludes,

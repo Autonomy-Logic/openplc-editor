@@ -17,14 +17,6 @@ import { parseHmiFileUri } from './uris'
 const MARKER_OWNER = 'hmi-checks'
 const CHECK_DELAY_MS = 250
 
-export interface HmiCodeAssistOptions {
-  store: OpenPLCStore
-  preview: HmiPreviewPort
-  monaco: typeof monaco
-  /** Upper-case members of HmiScreen, which elements may not reuse. */
-  screenMembers: () => ReadonlySet<string>
-}
-
 /** What the shared checks read from the designer's model of a file. */
 const checkBlockOf = (model: DesignerModel): HmiCheckBlock => ({
   name: model.name,
@@ -36,11 +28,42 @@ const checkBlockOf = (model: DesignerModel): HmiCheckBlock => ({
   ...(model.themeLines ? { themeSpan: model.themeLines } : {}),
 })
 
-const COMPLETION_KINDS: Record<HmiAssistItem['kind'], keyof typeof monaco.languages.CompletionItemKind> = {
+const COMPLETION_KINDS = {
   property: 'Property',
   value: 'EnumMember',
   element: 'Reference',
   theme: 'Color',
+} as const satisfies Record<HmiAssistItem['kind'], keyof typeof monaco.languages.CompletionItemKind>
+
+/** A text model as the assist reads it. */
+export type HmiAssistModel = Pick<
+  monaco.editor.ITextModel,
+  'getValue' | 'isDisposed' | 'getPositionAt' | 'getOffsetAt' | 'getLineContent'
+> & { uri: { toString(): string } }
+
+/** The part of the Monaco API the assist uses. */
+export interface HmiAssistMonaco {
+  editor: {
+    getModels(): HmiAssistModel[]
+    setModelMarkers(model: HmiAssistModel, owner: string, markers: monaco.editor.IMarkerData[]): void
+    onDidCreateModel(listener: (model: HmiAssistModel) => void): monaco.IDisposable
+  }
+  languages: {
+    registerCompletionItemProvider(
+      languageId: string,
+      provider: monaco.languages.CompletionItemProvider,
+    ): monaco.IDisposable
+    CompletionItemKind: Record<(typeof COMPLETION_KINDS)[HmiAssistItem['kind']], monaco.languages.CompletionItemKind>
+  }
+  MarkerSeverity: { Error: monaco.MarkerSeverity }
+}
+
+export interface HmiCodeAssistOptions {
+  store: OpenPLCStore
+  preview: HmiPreviewPort
+  monaco: HmiAssistMonaco
+  /** Upper-case members of HmiScreen, which elements may not reuse. */
+  screenMembers: () => ReadonlySet<string>
 }
 
 export function attachHmiCodeAssist(options: HmiCodeAssistOptions): { dispose(): void } {
@@ -103,6 +126,10 @@ export function attachHmiCodeAssist(options: HmiCodeAssistOptions): { dispose():
   }
 
   const unsubscribe = store.subscribe((s) => s.project.data.hmi, schedule)
+  const unsubscribeLibraries = store.subscribe(
+    (s) => projectLibraryNames(s.bundledLibraryNames, s.enabledLibraries).join('\n'),
+    schedule,
+  )
   const created = api.editor.onDidCreateModel((model) => {
     if (parseHmiFileUri(model.uri.toString()) !== null) schedule()
   })
@@ -142,6 +169,7 @@ export function attachHmiCodeAssist(options: HmiCodeAssistOptions): { dispose():
       disposed = true
       if (timer) clearTimeout(timer)
       unsubscribe()
+      unsubscribeLibraries()
       created.dispose()
       completions.dispose()
     },

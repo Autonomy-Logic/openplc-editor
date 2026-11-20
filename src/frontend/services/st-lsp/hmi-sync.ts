@@ -122,6 +122,10 @@ export function attachHmiSync(
   }
 
   const unsubscribeHmi = store.subscribe((s) => s.project.data.hmi, reconcile)
+  const unsubscribeLibraries = store.subscribe(
+    (s) => projectLibraryNames(s.bundledLibraryNames, s.enabledLibraries).join('\n'),
+    reconcile,
+  )
   const unsubscribePous = store.subscribe((s) => s.project.data.pous, republish)
   const unsubscribeResource = store.subscribe((s) => s.project.data.configurations.resource, republish)
   reconcile()
@@ -142,6 +146,7 @@ export function attachHmiSync(
       disposed = true
       if (republishTimer) clearTimeout(republishTimer)
       unsubscribeHmi()
+      unsubscribeLibraries()
       unsubscribePous()
       unsubscribeResource()
       for (const uri of [...sent.keys()]) close(uri)

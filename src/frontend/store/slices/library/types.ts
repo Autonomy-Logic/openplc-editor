@@ -8,6 +8,7 @@ export type {
   UserLibrary,
 } from '../../../../middleware/shared/ports/library-types'
 
+import type { StlibArchiveDTO } from '../../../../middleware/shared/ports/library-port'
 import type { SystemLibrary } from '../../../../middleware/shared/ports/library-types'
 import type { LibraryPouRequirements } from '../../../../middleware/shared/utils/library/pou-requirements'
 
@@ -75,6 +76,14 @@ export type LibraryActions = {
    */
   setBundledLibraryNames: (names: string[]) => void
   setPouRequirements: (requirements: LibraryPouRequirements[]) => void
+  /**
+   * Stores the installed libraries: the library tree and each POU's requirements from `archives`, and the pre-installed
+   * names from the library manager's `installed` rows.
+   */
+  applyInstalledLibraries: (
+    archives: StlibArchiveDTO[],
+    installed: ReadonlyArray<{ name: string; bundled: boolean }>,
+  ) => void
 }
 
 export type LibrarySliceExtra = {

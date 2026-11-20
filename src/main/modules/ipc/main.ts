@@ -928,6 +928,7 @@ class MainProcessBridge implements MainIpcModule {
     this.registerHandle('open-external-link', this.handleOpenExternalLink)
     this.registerHandle('system:get-system-info', this.handleGetSystemInfo)
     this.registerHandle('libraries:load-all', this.handleLibrariesLoadAll)
+    this.registerHandle('libraries:load-build', this.handleLibrariesLoadBuild)
     this.registerHandle('libraries:list-installed', this.handleLibrariesListInstalled)
     this.registerHandle('libraries:install-from-file', this.handleLibrariesInstallFromFile)
     this.registerHandle('libraries:uninstall', this.handleLibrariesUninstall)
@@ -1368,6 +1369,15 @@ class MainProcessBridge implements MainIpcModule {
    * deterministic tree. Errors propagate rather than silently dropping libraries.
    */
   handleLibrariesLoadAll = async (): Promise<unknown[]> => this.libraryManagerModule.loadAll()
+  /** The archives a build of a project listing `listedNames` compiles against (`loadEnabledArchives`). */
+  handleLibrariesLoadBuild = (
+    _event: IpcMainInvokeEvent,
+    listedNames: unknown,
+  ): { archives: unknown[]; missing: string[] } => {
+    if (!Array.isArray(listedNames) || !listedNames.every((name): name is string => typeof name === 'string'))
+      throw new Error('libraries:load-build expects a list of library names')
+    return this.libraryManagerModule.loadEnabledArchives(listedNames)
+  }
   handleLibrariesListInstalled = async () => this.libraryManagerModule.listInstalled()
   handleLibrariesInstallFromFile = async () => {
     if (!this.mainWindow) return { success: false, error: 'No main window' }

@@ -59,14 +59,12 @@ export interface HmiUnitSources {
    * resolve against. Builds that show no project screens may leave it out.
    */
   plcDeclarations?: string
-  /** The PLC's library archives, which `plcDeclarations` may use; only what screens themselves use is compiled in. */
-  plcLibraries?: readonly HmiLibraryArchive[]
   /** Names of the project's POUs and data types, which screens and widget blocks may not reuse. */
   projectNames: readonly string[]
 }
 
-/** The project's HMI as a device build compiles it; the PLC libraries come from the program build. */
-export type HmiBuildSources = Omit<HmiUnitSources, 'plcLibraries'>
+/** The project's HMI as a device build compiles it; the libraries come from the program build. */
+export type HmiBuildSources = HmiUnitSources
 
 /** A preview build of the project's screens, or of one widget block when `widgetPreview` names it. */
 export interface HmiPreviewRequest extends HmiUnitSources {

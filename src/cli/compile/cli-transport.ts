@@ -13,7 +13,6 @@ import { HardwareModule } from '@root/backend/editor/hardware'
 import { LibraryManagerModule } from '@root/backend/editor/library-manager'
 import type { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
 import type { CompileProgramTransport } from '@root/middleware/adapters/editor/compile-program-flow'
-import type { StlibArchiveDTO } from '@root/middleware/shared/ports/library-port'
 
 import { createHeadlessCompileBridge, createProgressChannel } from './headless-bridge'
 
@@ -29,7 +28,8 @@ export function createCliCompileTransport(
   return {
     getAvailableBoards: () => new HardwareModule().getAvailableBoards(),
 
-    loadAllLibraries: () => Promise.resolve<StlibArchiveDTO[]>(new LibraryManagerModule().loadAll()),
+    loadBuildLibraries: (listedNames) =>
+      Promise.resolve(new LibraryManagerModule().loadEnabledArchives(listedNames).archives),
 
     runCompileProgram: (compileArgs, onMessage) => {
       // The renderer hands the pipeline a `MessagePortMain`; here a plain

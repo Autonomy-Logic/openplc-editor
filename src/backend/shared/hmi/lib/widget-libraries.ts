@@ -143,16 +143,6 @@ export function withSkippedLibraryCause(message: string, skipped: readonly Skipp
   )
 }
 
-/** Whether a loaded library archive is a STruC++ `.stlib` archive. */
-export const isStlibArchive = (value: unknown): value is StlibArchive =>
-  typeof value === 'object' &&
-  value !== null &&
-  'manifest' in value &&
-  typeof value.manifest === 'object' &&
-  value.manifest !== null &&
-  'name' in value.manifest &&
-  typeof value.manifest.name === 'string'
-
 /** Names of the libraries that declare at least one widget of `catalog`. */
 export function widgetLibraryNames(catalog: HmiWidgetCatalog): Set<string> {
   return new Set([...catalog.widgets.values()].map((w) => w.library))

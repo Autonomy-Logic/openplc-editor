@@ -2,7 +2,7 @@
  * The PLC's library archives for HMI builds, read through the same stlib source the ST language service uses. Each
  * archive's text is kept per source, so later requests read only libraries that are new or changed.
  */
-import type { HmiLibraryArchive, HmiUnitSources } from '../../../middleware/shared/ports/hmi-preview-types'
+import type { HmiLibraryArchive } from '../../../middleware/shared/ports/hmi-preview-types'
 import type { StlibSourcePort } from '../../../middleware/shared/ports/stlib-source-port'
 
 const texts = new WeakMap<StlibSourcePort, Map<string, Promise<string>>>()
@@ -33,6 +33,3 @@ export async function loadHmiPlcLibraries(source: StlibSourcePort | undefined): 
   )
   return loaded.filter((l): l is HmiLibraryArchive => l !== null)
 }
-
-/** `request` once the PLC's libraries are loaded, else null, so a preview does not build without them. */
-export const readyRequest = <T extends HmiUnitSources>(request: T): T | null => (request.plcLibraries ? request : null)

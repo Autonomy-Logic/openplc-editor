@@ -200,6 +200,8 @@ const rendererProcessBridge = {
   // consumer narrows the parsed archives to `StlibArchiveDTO[]`.
   // ===================== LIBRARY MANAGER METHODS =====================
   loadAllLibraries: (): Promise<unknown[]> => ipcRenderer.invoke('libraries:load-all'),
+  loadBuildLibraries: (listedNames: string[]): Promise<{ archives: unknown[]; missing: string[] }> =>
+    ipcRenderer.invoke('libraries:load-build', listedNames),
   listInstalledLibraries: (): Promise<
     Array<{
       name: string

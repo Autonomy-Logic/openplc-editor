@@ -3,7 +3,7 @@ import { hmiSettingsSchema } from '../../../../../../middleware/shared/utils/hmi
 import { hmiDebugPath } from '../../../artefact/tag-resolver'
 import type { HmiPreviewRequest } from '../../../../../../middleware/shared/ports/hmi-preview-types'
 import type { HmiUnitInput } from '../../generate-hmi-unit'
-import { installedArchiveText, installedWidgetArchives } from './widget-libraries'
+import { installedWidgetArchives } from './widget-libraries'
 
 export const OVERVIEW = `{attribute 'hmi_theme' := 'Brand'}
 FUNCTION_BLOCK Overview EXTENDS HmiScreen
@@ -112,7 +112,6 @@ export function sampleProject(): HmiUnitInput & Pick<HmiPreviewRequest, 'librari
     projectNames: ['Main'],
     projectLibraries: installedWidgetArchives(),
     libraries: ['hmi-alarms', 'standard-widgets'],
-    plcLibraries: [{ name: 'hmi-alarms', archiveJson: installedArchiveText('hmi-alarms') }],
     resolve: (path) => DEBUG_MAP.get(hmiDebugPath(path, INSTANCES)) ?? null,
     plcMd5: '0123456789abcdef0123456789abcdef',
   }
