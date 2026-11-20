@@ -10,7 +10,11 @@ import { dirname, join } from 'node:path'
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from '@jest/globals'
 
-import { deriveReleaseSeed, generatePackageTrustModule } from '../../scripts/package-trust/generator'
+import {
+  deriveReleaseSeed,
+  generatePackageTrustModule,
+  type TrustModuleLayout,
+} from '../../scripts/package-trust/generator'
 import { listFiles } from '../backend/editor/package-trust/__tests__/fixtures/sign-test-package'
 import {
   COMMITTED_MODULE_PATH,
@@ -33,6 +37,7 @@ const SECRET_FORMS = [SECRET, SEED.toString('hex'), SEED.toString('hex').toUpper
 
 const MODULE = join('release', 'package-trust', 'package-trust-anchor.ts')
 const MODULE_POSIX = 'release/package-trust/package-trust-anchor.ts'
+const LAYOUT = join('release', 'package-trust', 'layout.json')
 const FALLBACK_POSIX = 'src/backend/editor/package-trust/package-trust-anchor.ts'
 const BUNDLE = join('release', 'app', 'dist', 'main', 'main.js')
 const RELEASE_TYPES_IMPORT = '../../src/backend/editor/package-trust/types'
@@ -289,15 +294,57 @@ describe('release mode', () => {
     rmSync(template, { recursive: true, force: true })
   })
 
-  /** A copy of the release root: a repository at `commit` with its release module in place. */
+  /**
+   * A copy of the release root as a build job has it: a repository at `commit` with only the release module in
+   * release/package-trust, as the trust-module artifact delivers it, and no layout.json.
+   */
   function releaseRoot(): string {
     cpSync(template, root, { recursive: true })
+    rmSync(join(root, LAYOUT))
     return root
   }
 
+  /** The layout generate-release wrote beside the release module, kept in the template only. */
+  function releaseLayout(): TrustModuleLayout {
+    return readLayoutBeside(join(template, MODULE))
+  }
+
+  function releaseLiterals(): string[] {
+    return releaseLayout().shareLiterals
+  }
+
+  /** The bundle a build makes: half of @p literals in main.js and the other half in the chunk 722.js. */
+  function writeSplitBundle(literals: string[]): void {
+    const half = Math.ceil(literals.length / 2)
+    writeBundle(root, literals.slice(0, half))
+    writeChunk(root, '722.js', literals.slice(half))
+  }
+
+  /** layout.json files an earlier step can leave beside the module; none of them may change a result. */
+  const LEFTOVER_LAYOUTS: [string, () => string][] = [
+    [
+      'a stale layout.json listing all but the first share literal',
+      () => `${JSON.stringify({ ...releaseLayout(), shareLiterals: releaseLiterals().slice(1) }, null, 2)}\n`,
+    ],
+    ['the layout.json of another module, the development one', () => `${JSON.stringify(developmentModule().layout)}\n`],
+    ['a layout.json with no share literal', () => '{ "sites": [], "shareLiterals": [] }\n'],
+    ['a malformed layout.json', () => '{ "sites": [\n'],
+  ]
+
+  /** What release/package-trust may hold beside the module: nothing, as the artifact delivers it, or a leftover. */
+  const LAYOUT_STATES: [string, (() => string) | null][] = [['no layout.json', null], ...LEFTOVER_LAYOUTS]
+
+  function writeLeftoverLayout(content: (() => string) | null): void {
+    if (content !== null) write(join(root, LAYOUT), content())
+  }
+
+  const LACKS_FIRST_LITERAL = `release/app/dist/main/main.js with its chunks lacks 1 share literal(s) of ${MODULE_POSIX}`
+  const HOLDS_DEVELOPMENT_LITERAL =
+    'release/app/dist/main/main.js with its chunks holds 1 share literal(s) of the committed development module'
+
   describe('prepare', () => {
     it(
-      'passes and leaves the placed module as it was (positive control)',
+      'passes with only the module placed and leaves it as it was (positive control)',
       () => {
         const before = readFileSync(join(releaseRoot(), MODULE), 'utf-8')
 
@@ -373,7 +420,7 @@ describe('release mode', () => {
       () => {
         const path = join(releaseRoot(), MODULE)
         let source = readFileSync(path, 'utf-8')
-        for (const literal of readLayoutBeside(path).shareLiterals) {
+        for (const literal of releaseLiterals()) {
           source = replaceLiteral(source, literal, flipCharacter(literal))
         }
         writeFileSync(path, source)
@@ -385,13 +432,46 @@ describe('release mode', () => {
       },
       TIMEOUT,
     )
+
+    it(
+      'fails naming the module when it builds the right key with no share literal left, after the fingerprint check',
+      () => {
+        const path = join(releaseRoot(), MODULE)
+        let source = readFileSync(path, 'utf-8')
+        for (const literal of releaseLiterals()) {
+          source = replaceLiteral(source, literal, `${literal.slice(0, 1)}' + '${literal.slice(1)}`)
+        }
+        writeFileSync(path, source)
+
+        const run = runCli(['prepare', '--root', root], root, RELEASE)
+
+        expect(run.status).toBe(1)
+        expect(run.output).toContain(`${MODULE_POSIX} has no share literals`)
+        expect(run.output).not.toContain('layout.json')
+      },
+      TIMEOUT,
+    )
+
+    it.each(LEFTOVER_LAYOUTS)(
+      'passes with %s beside the module',
+      (_label, content) => {
+        const before = readFileSync(join(releaseRoot(), MODULE), 'utf-8')
+        writeLeftoverLayout(content)
+
+        const run = runCli(['prepare', '--root', root], root, RELEASE)
+
+        expect(run.status).toBe(0)
+        expect(readFileSync(join(root, MODULE), 'utf-8')).toBe(before)
+      },
+      TIMEOUT,
+    )
   })
 
   describe('verify-bundle', () => {
     it(
       'passes a bundle holding every share literal of the release module',
       () => {
-        writeBundle(releaseRoot(), readLayoutBeside(join(root, MODULE)).shareLiterals)
+        writeBundle(releaseRoot(), releaseLiterals())
 
         expect(runCli(['verify-bundle', '--root', root], root, RELEASE).status).toBe(0)
       },
@@ -402,9 +482,12 @@ describe('release mode', () => {
       'fails a bundle that also holds a share literal of the committed development module',
       () => {
         const development = developmentModule().layout.shareLiterals
-        writeBundle(releaseRoot(), [...readLayoutBeside(join(root, MODULE)).shareLiterals, development[0]])
+        writeBundle(releaseRoot(), [...releaseLiterals(), development[0]])
 
-        expect(runCli(['verify-bundle', '--root', root], root, RELEASE).status).toBe(1)
+        const run = runCli(['verify-bundle', '--root', root], root, RELEASE)
+
+        expect(run.status).toBe(1)
+        expect(run.output).toContain(HOLDS_DEVELOPMENT_LITERAL)
       },
       TIMEOUT,
     )
@@ -412,9 +495,12 @@ describe('release mode', () => {
     it(
       'fails a bundle missing a share literal of the release module',
       () => {
-        writeBundle(releaseRoot(), readLayoutBeside(join(root, MODULE)).shareLiterals.slice(1))
+        writeBundle(releaseRoot(), releaseLiterals().slice(1))
 
-        expect(runCli(['verify-bundle', '--root', root], root, RELEASE).status).toBe(1)
+        const run = runCli(['verify-bundle', '--root', root], root, RELEASE)
+
+        expect(run.status).toBe(1)
+        expect(run.output).toContain(LACKS_FIRST_LITERAL)
       },
       TIMEOUT,
     )
@@ -423,7 +509,7 @@ describe('release mode', () => {
       'passes a bundle whose share literals are only in a chunk beside main.js',
       () => {
         writeBundle(releaseRoot(), [])
-        writeChunk(root, '722.js', readLayoutBeside(join(root, MODULE)).shareLiterals)
+        writeChunk(root, '722.js', releaseLiterals())
 
         expect(runCli(['verify-bundle', '--root', root], root, RELEASE).status).toBe(0)
       },
@@ -433,13 +519,41 @@ describe('release mode', () => {
     it(
       'fails a bundle with a share literal of the development module in a chunk beside main.js',
       () => {
-        writeBundle(releaseRoot(), readLayoutBeside(join(root, MODULE)).shareLiterals)
+        writeBundle(releaseRoot(), releaseLiterals())
         writeChunk(root, '41.js', [developmentModule().layout.shareLiterals[0]])
 
         const run = runCli(['verify-bundle', '--root', root], root, RELEASE)
 
         expect(run.status).toBe(1)
-        expect(run.output).toContain('release/app/dist/main/main.js with its chunks')
+        expect(run.output).toContain(HOLDS_DEVELOPMENT_LITERAL)
+      },
+      TIMEOUT,
+    )
+
+    it.each(LAYOUT_STATES)(
+      'passes a bundle split between main.js and the chunk 722.js with %s beside the module',
+      (_label, content) => {
+        releaseRoot()
+        writeLeftoverLayout(content)
+        writeSplitBundle(releaseLiterals())
+
+        expect(runCli(['verify-bundle', '--root', root], root, RELEASE).status).toBe(0)
+      },
+      TIMEOUT,
+    )
+
+    it.each(LEFTOVER_LAYOUTS)(
+      'fails a split bundle missing the first share literal with %s beside the module, naming the lack',
+      (_label, content) => {
+        releaseRoot()
+        writeLeftoverLayout(content)
+        writeSplitBundle(releaseLiterals().slice(1))
+
+        const run = runCli(['verify-bundle', '--root', root], root, RELEASE)
+
+        expect(run.status).toBe(1)
+        expect(run.output).toContain(LACKS_FIRST_LITERAL)
+        expect(run.output).not.toContain('layout.json')
       },
       TIMEOUT,
     )
@@ -465,6 +579,18 @@ describe('verify-bundle in development mode', () => {
       writeBundle(root, developmentModule().layout.shareLiterals.slice(1))
 
       expect(runCli(['verify-bundle', '--root', root], root).status).toBe(1)
+    },
+    TIMEOUT,
+  )
+
+  it(
+    'passes a bundle holding every share literal of the development module with layout.json removed after prepare',
+    () => {
+      expect(runCli(['prepare', '--root', root], root).status).toBe(0)
+      rmSync(join(root, LAYOUT), { force: true })
+      writeBundle(root, developmentModule().layout.shareLiterals)
+
+      expect(runCli(['verify-bundle', '--root', root], root).status).toBe(0)
     },
     TIMEOUT,
   )
