@@ -1334,11 +1334,11 @@ describe('lib/asar.mjs', () => {
 describe('lib/vpp-fixture.mjs', () => {
   const lib = join(scripts, 'lib', 'vpp-fixture.mjs')
 
-  /** What `writeEqsp32Vpp` reports about the package it wrote. */
+  /** What `writeUntrustedVpp` reports about the package it wrote. */
   type Written = { keyId: unknown; packageId: unknown; boardName: unknown; publicKeyPem: string }
 
   function writeVpp(path: string): Written {
-    const value = readField(callExport(lib, 'writeEqsp32Vpp', [path]), 'value')
+    const value = readField(callExport(lib, 'writeUntrustedVpp', [path]), 'value')
     return {
       keyId: readField(value, 'keyId'),
       packageId: readField(value, 'packageId'),
@@ -1399,41 +1399,41 @@ describe('lib/vpp-fixture.mjs', () => {
     return entries
   }
 
-  it('reports the package com.erqos.eqsp32 signed under the key id eqsp32-dev', () => {
-    const written = writeVpp(join(root, 'eqsp32.vpp'))
+  it('reports the package com.example.untrusted signed under the key id untrusted-dev', () => {
+    const written = writeVpp(join(root, 'untrusted.vpp'))
 
     expect({ keyId: written.keyId, packageId: written.packageId }).toEqual({
-      keyId: 'eqsp32-dev',
-      packageId: 'com.erqos.eqsp32',
+      keyId: 'untrusted-dev',
+      packageId: 'com.example.untrusted',
     })
   })
 
   it('writes a .vpp that extracts with extract-zip and verifies under the key it reports', async () => {
-    const vpp = join(root, 'eqsp32.vpp')
+    const vpp = join(root, 'untrusted.vpp')
     const written = writeVpp(vpp)
 
-    expect(verifyPackageSignature(await extracted(vpp), { 'eqsp32-dev': written.publicKeyPem })).toEqual({
+    expect(verifyPackageSignature(await extracted(vpp), { 'untrusted-dev': written.publicKeyPem })).toEqual({
       valid: true,
     })
   })
 
   it('is refused under another key with the same key id', async () => {
-    const vpp = join(root, 'eqsp32.vpp')
+    const vpp = join(root, 'untrusted.vpp')
     writeVpp(vpp)
     const other = String(generateKeyPairSync('ed25519').publicKey.export({ type: 'spki', format: 'pem' }))
 
-    expect(verifyPackageSignature(await extracted(vpp), { 'eqsp32-dev': other }).valid).toBe(false)
+    expect(verifyPackageSignature(await extracted(vpp), { 'untrusted-dev': other }).valid).toBe(false)
   })
 
   it('is refused when only another key id is trusted, even one holding its own key', async () => {
-    const vpp = join(root, 'eqsp32.vpp')
+    const vpp = join(root, 'untrusted.vpp')
     const written = writeVpp(vpp)
 
     expect(verifyPackageSignature(await extracted(vpp), { 'openplc-2026': written.publicKeyPem }).valid).toBe(false)
   })
 
   it('declares in its manifest the board name it reports', async () => {
-    const vpp = join(root, 'eqsp32.vpp')
+    const vpp = join(root, 'untrusted.vpp')
     const written = writeVpp(vpp)
     const manifest = manifestOf(await extracted(vpp))
     const devices = readField(manifest, 'devices')
@@ -1444,7 +1444,7 @@ describe('lib/vpp-fixture.mjs', () => {
   })
 
   it('writes a manifest the editor accepts, with 4.3.0 as its minimum editor version', async () => {
-    const vpp = join(root, 'eqsp32.vpp')
+    const vpp = join(root, 'untrusted.vpp')
     writeVpp(vpp)
     const manifest = manifestOf(await extracted(vpp))
 
@@ -1453,7 +1453,7 @@ describe('lib/vpp-fixture.mjs', () => {
   })
 
   it('stores every entry uncompressed, with its CRC-32', () => {
-    const vpp = join(root, 'eqsp32.vpp')
+    const vpp = join(root, 'untrusted.vpp')
     writeVpp(vpp)
 
     const entries = zipEntries(readFileSync(vpp))
@@ -1472,20 +1472,20 @@ describe('lib/vpp-fixture.mjs', () => {
 
   describe('placePackageByHand', () => {
     it('places the package under packages/<id> and creates the registry with its entry', async () => {
-      const vpp = join(root, 'eqsp32.vpp')
+      const vpp = join(root, 'untrusted.vpp')
       writeVpp(vpp)
       const manifest = manifestOf(await extracted(vpp))
       const devices = readField(manifest, 'devices')
       const userData = join(root, 'user-data')
-      const packageDir = join(userData, 'packages', 'com.erqos.eqsp32')
+      const packageDir = join(userData, 'packages', 'com.example.untrusted')
 
       const placed = place(vpp, userData)
       const registry = registryOf(userData)
-      const entry = readField(readField(registry, 'packages'), 'com.erqos.eqsp32')
+      const entry = readField(readField(registry, 'packages'), 'com.example.untrusted')
       const installedAt = readField(entry, 'installedAt')
 
-      expect(placed).toEqual({ packageId: 'com.erqos.eqsp32', packageDir })
-      expect(Object.keys(readField(registry, 'packages') ?? {})).toEqual(['com.erqos.eqsp32'])
+      expect(placed).toEqual({ packageId: 'com.example.untrusted', packageDir })
+      expect(Object.keys(readField(registry, 'packages') ?? {})).toEqual(['com.example.untrusted'])
       expect(readField(registry, 'formatVersion')).toBe('1.0')
       expect({
         version: readField(entry, 'version'),
@@ -1501,18 +1501,18 @@ describe('lib/vpp-fixture.mjs', () => {
     })
 
     it('places exactly the files of the .vpp, still verifying under the reported key', async () => {
-      const vpp = join(root, 'eqsp32.vpp')
+      const vpp = join(root, 'untrusted.vpp')
       const written = writeVpp(vpp)
       const expected = contents(await extracted(vpp))
 
       const { packageDir } = place(vpp, join(root, 'user-data'))
 
       expect(contents(packageDir)).toEqual(expected)
-      expect(verifyPackageSignature(packageDir, { 'eqsp32-dev': written.publicKeyPem })).toEqual({ valid: true })
+      expect(verifyPackageSignature(packageDir, { 'untrusted-dev': written.publicKeyPem })).toEqual({ valid: true })
     })
 
     it('keeps the entries a registry already holds', () => {
-      const vpp = join(root, 'eqsp32.vpp')
+      const vpp = join(root, 'untrusted.vpp')
       writeVpp(vpp)
       const userData = join(root, 'user-data')
       const existing = {
@@ -1529,12 +1529,12 @@ describe('lib/vpp-fixture.mjs', () => {
       place(vpp, userData)
       const packages = readField(registryOf(userData), 'packages')
 
-      expect(Object.keys(packages ?? {}).sort()).toEqual(['com.erqos.eqsp32', 'com.openplc.fx3u-compatible'])
+      expect(Object.keys(packages ?? {}).sort()).toEqual(['com.example.untrusted', 'com.openplc.fx3u-compatible'])
       expect(readField(packages, 'com.openplc.fx3u-compatible')).toEqual(existing)
     })
 
     it('extracts a .vpp whose entries are deflated', async () => {
-      const vpp = join(root, 'eqsp32.vpp')
+      const vpp = join(root, 'untrusted.vpp')
       const written = writeVpp(vpp)
       const source = await extracted(vpp)
       const zip = new JSZip()
@@ -1548,7 +1548,7 @@ describe('lib/vpp-fixture.mjs', () => {
 
       expect(zipEntries(readFileSync(deflated)).some((entry) => entry.method === 8)).toBe(true)
       expect(contents(packageDir)).toEqual(contents(source))
-      expect(verifyPackageSignature(packageDir, { 'eqsp32-dev': written.publicKeyPem })).toEqual({ valid: true })
+      expect(verifyPackageSignature(packageDir, { 'untrusted-dev': written.publicKeyPem })).toEqual({ valid: true })
     })
   })
 })
@@ -2006,8 +2006,8 @@ describe('packaged-checks.mjs', () => {
     it.each(['4.3.2', '4.3.5', '4.10.0'])('runs both packages install rows on Linux for %s', (version) => {
       const found = modes('linux', version, false)
 
-      expect({ eqsp32: found['ABUSE-03 (b)'], fx3u: found['AC5 packages install'] }).toEqual({
-        eqsp32: 'normal',
+      expect({ untrusted: found['ABUSE-03 (b)'], fx3u: found['AC5 packages install'] }).toEqual({
+        untrusted: 'normal',
         fx3u: 'normal',
       })
     })
@@ -2017,8 +2017,8 @@ describe('packaged-checks.mjs', () => {
       (version) => {
         const found = modes('linux', version, false)
 
-        expect({ eqsp32: found['ABUSE-03 (b)'], fx3u: found['AC5 packages install'] }).toEqual({
-          eqsp32: 'normal',
+        expect({ untrusted: found['ABUSE-03 (b)'], fx3u: found['AC5 packages install'] }).toEqual({
+          untrusted: 'normal',
           fx3u: 'normal',
         })
       },
