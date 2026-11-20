@@ -35,7 +35,7 @@ import {
   runAsarCli,
 } from './lib/asar.mjs'
 import { CheckFailure, parseCli } from './lib/cli.mjs'
-import { VERSION } from './lib/release-assets.mjs'
+import { versionFormProblem } from './lib/release-assets.mjs'
 import { parseTrustedKeys, scanPaths, trustNeedles } from './lib/trust-literals.mjs'
 import { EQSP32_PACKAGE_ID, placePackageByHand, writeEqsp32Vpp } from './lib/vpp-fixture.mjs'
 
@@ -142,14 +142,16 @@ const NEGATIVE_SKIPS = Object.freeze({
 const running = new Set()
 
 /**
- * The numeric parts of a `<major>.<minor>.<patch>` version.
+ * The numeric parts of a `<major>.<minor>.<patch>` version, or of the core of a `<major>.<minor>.<patch>-<prerelease>`
+ * one (`4.4.0-rc1` -> `[4, 4, 0]`).
  * @param {string} version
  * @returns {number[]}
+ * @throws {Error} naming the version when it has neither form.
  */
 function versionParts(version) {
-  if (!VERSION.test(String(version)))
-    throw new Error(`version ${JSON.stringify(version)} is not <major>.<minor>.<patch>`)
-  return version.split('.').map(Number)
+  const problem = versionFormProblem(version, { allowPrerelease: true })
+  if (problem !== null) throw new Error(`version ${problem}`)
+  return version.split('-')[0].split('.').map(Number)
 }
 
 /**
@@ -1199,6 +1201,7 @@ function readOptions(argv) {
       'trusted-keys': { type: 'string' },
       report: { type: 'string' },
       'negative-control': { type: 'boolean' },
+      'allow-prerelease': { type: 'boolean' },
     },
     ['platform', 'installer', 'version', 'positive-control', 'trusted-keys', 'report'],
     argv,
@@ -1207,8 +1210,8 @@ function readOptions(argv) {
   if (!PLATFORMS.includes(values.platform)) {
     problems.push(`--platform: unknown platform ${JSON.stringify(values.platform)}, expected ${PLATFORMS.join(', ')}`)
   }
-  if (!VERSION.test(values.version))
-    problems.push(`--version: ${JSON.stringify(values.version)} is not <major>.<minor>.<patch>`)
+  const versionProblem = versionFormProblem(values.version, { allowPrerelease: values['allow-prerelease'] === true })
+  if (versionProblem !== null) problems.push(`--version: ${versionProblem}`)
   for (const option of ['installer', 'positive-control', 'trusted-keys']) {
     if (!isFile(values[option])) problems.push(`--${option}: ${values[option]} is not a file`)
   }
@@ -1256,7 +1259,7 @@ async function main(argv) {
       error instanceof CheckFailure ? error.problems : [error instanceof Error ? error.message : String(error)]
     for (const line of lines) console.error(line)
     console.error(
-      'usage: packaged-checks.mjs --platform <mac|win|linux> --installer <path> --version <v> --positive-control <fx3u .vpp> --trusted-keys <trusted-keys.ts> --report <file.json> [--negative-control]',
+      'usage: packaged-checks.mjs --platform <mac|win|linux> --installer <path> --version <v> --positive-control <fx3u .vpp> --trusted-keys <trusted-keys.ts> --report <file.json> [--negative-control] [--allow-prerelease]',
     )
     return 2
   }

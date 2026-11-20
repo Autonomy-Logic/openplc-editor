@@ -6,10 +6,14 @@ import { CheckFailure, parseCli, runCli } from './lib/cli.mjs'
 import { compareNames, expectedAssetNames } from './lib/release-assets.mjs'
 
 runCli(() => {
-  const { values, positionals } = parseCli({ version: { type: 'string' } }, ['version'])
-  if (positionals.length !== 1) throw new CheckFailure(['usage: check-upload-set.mjs --version <version> <dir>'])
+  const { values, positionals } = parseCli({ version: { type: 'string' }, 'allow-prerelease': { type: 'boolean' } }, [
+    'version',
+  ])
+  if (positionals.length !== 1) {
+    throw new CheckFailure(['usage: check-upload-set.mjs --version <version> [--allow-prerelease] <dir>'])
+  }
   const [dir] = positionals
-  const expected = expectedAssetNames(values.version)
+  const expected = expectedAssetNames(values.version, { allowPrerelease: values['allow-prerelease'] === true })
 
   const { missing, unexpected } = compareNames(readdirSync(dir), expected)
   const problems = [
