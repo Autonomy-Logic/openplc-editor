@@ -2,62 +2,44 @@ import { createContext, runInContext } from 'node:vm'
 
 import ts from 'typescript'
 
-import type {
-  CreatePackageTrustAnchor,
-  PackageTrustAnchor,
-  PackageTrustMechanisms,
-} from '../../src/backend/editor/package-trust/types'
-import { isRecord } from './generator'
+import type { TrustVerdict, VerifyTrustedPackage } from '../../src/backend/editor/package-trust/types'
 
-/** The method @p name of @p target; throws when it is not a function. */
-function methodOf(target: unknown, name: string): (...args: unknown[]) => unknown {
-  const method: unknown = isRecord(target) ? target[name] : undefined
-  if (typeof method !== 'function') throw new Error(`The trust anchor has no ${name} method`)
-  return (...args) => {
-    const result: unknown = Reflect.apply(method, target, args)
-    return result
+/** @p value as a verdict of this realm; throws when it is not a verdict. */
+function toVerdict(value: unknown): TrustVerdict {
+  if (Array.isArray(value)) {
+    const [passed, first, second]: unknown[] = value
+    if (passed === true && typeof first === 'string' && typeof second === 'string') return [true, first, second]
+    if (passed === false && typeof first === 'string') return [false, first]
   }
-}
-
-function toKeyMap(value: unknown): Record<string, string> {
-  if (!isRecord(value)) throw new Error('trustedKeys() did not return a key map')
-  const keys: Record<string, string> = {}
-  for (const [keyId, pem] of Object.entries(value)) {
-    if (typeof pem !== 'string') throw new Error(`trustedKeys() returned a non-string key for ${keyId}`)
-    keys[keyId] = pem
-  }
-  return keys
-}
-
-function toVerdict(value: unknown): string | null {
-  if (value === null || typeof value === 'string') return value
-  throw new Error('A trust hook returned neither null nor a reason')
+  throw new Error('The trust module returned no verdict')
 }
 
 /**
- * Loads a generated trust module from its TypeScript @p source: transpiled to CommonJS and evaluated in a fresh
- * `vm` context that has no `require`, so a module that imports anything at runtime fails to load.
- * @throws {Error} when the source does not export a `createPackageTrustAnchor` function
+ * Loads a generated trust module from its TypeScript @p source: transpiled to CommonJS and evaluated in a fresh `vm`
+ * context whose `require` resolves exactly the specifiers of @p imports, each to the object given for it. The context
+ * also holds the host's `Buffer`.
+ * @throws {Error} naming the specifier when the module imports any other module, or when it has no default export
+ * function
  */
-export function loadTrustModule(source: string): CreatePackageTrustAnchor {
+export function loadTrustModule(source: string, imports: Record<string, unknown>): VerifyTrustedPackage {
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   })
   const moduleExports: Record<string, unknown> = {}
-  const context = createContext({ exports: moduleExports, module: { exports: moduleExports } })
-  runInContext(outputText, context, { filename: 'package-trust-anchor.js' })
-  const create = moduleExports.createPackageTrustAnchor
-  if (typeof create !== 'function') throw new Error('The trust module exports no createPackageTrustAnchor function')
-
-  return (mechanisms: PackageTrustMechanisms): PackageTrustAnchor => {
-    const anchor: unknown = Reflect.apply(create, undefined, [mechanisms])
-    const trustedKeys = methodOf(anchor, 'trustedKeys')
-    const checkAtImport = methodOf(anchor, 'checkAtImport')
-    const checkAtUse = methodOf(anchor, 'checkAtUse')
-    return {
-      trustedKeys: () => toKeyMap(trustedKeys()),
-      checkAtImport: (packageDir) => toVerdict(checkAtImport(packageDir)),
-      checkAtUse: (packageDir) => toVerdict(checkAtUse(packageDir)),
+  const requireImport = (specifier: unknown): unknown => {
+    if (typeof specifier === 'string' && Object.prototype.hasOwnProperty.call(imports, specifier)) {
+      return imports[specifier]
     }
+    throw new Error(`The trust module imports ${String(specifier)}, which is not allowed`)
   }
+  const context = createContext({
+    exports: moduleExports,
+    module: { exports: moduleExports },
+    require: requireImport,
+    Buffer,
+  })
+  runInContext(outputText, context, { filename: 'package-trust-anchor.js' })
+  const entry = moduleExports.default
+  if (typeof entry !== 'function') throw new Error('The trust module has no default export function')
+  return (packageDir, atImport) => toVerdict(Reflect.apply(entry, undefined, [packageDir, atImport]))
 }
