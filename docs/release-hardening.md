@@ -441,6 +441,15 @@ pushed for it: a tag push would start `release.yml` and create a release.
 
 ## Limits and accepted residuals
 
+Three residuals below (a structural patch of a call site, a structural patch of the generated checks, a wrapped
+`node:fs`) need a modifiable installation. What stops that differs by platform:
+
+- **macOS:** the Developer ID signature and ASAR integrity stop a modified `app.asar` or executable from running.
+- **Windows:** open while the installers are not code-signed (DOPE-444). Once they are, a tampered executable is
+  detectable (its Authenticode signature breaks and SmartScreen warns), but Windows refuses to run it only where Smart
+  App Control or an application control policy (WDAC) enforces signatures.
+- **Linux (AppImage):** open. There is no ASAR integrity and no barrier is planned.
+
 - **Test level.** The hardened runtime with a Developer ID signature exists only in CI builds. A local macOS build is
   signed ad hoc, so the packaged checks run locally show the fuses and the trust anchor, not the hardened runtime.
 - **Linux.** Electron has no ASAR integrity for an AppImage, so a modified `app.asar` still starts there
@@ -450,17 +459,20 @@ pushed for it: a tag push would start `release.yml` and create a release.
 - **Files outside `app.asar`.** ASAR integrity covers `app.asar` only: the extra resources (`yowasp-clang`,
   `wasmer-sdk`, `python-runtime`, `bin`, `sources`) are not checked (DOPE-895).
 - **A structural patch of a call site.** Each release names the call sites differently, but the fixed text around them
-  is the same in every release, so a patch that anchors on that text and returns a forged verdict is not stopped by
-  the code on Windows and Linux; ASAR integrity stops it on macOS. Recorded as a residual until the installers are
-  signed (DOPE-444).
-- **A structural patch of the generated checks.** The seed changes names, share literals, the order of the sites and
-  canaries, and which variant of each check a site uses, but not the shape of the code around them: the hook's loop
-  over its sites, the end of each site, the entry point's handling of the shared verifier's `valid` and the refusal
-  text are the same in every release. One regex that matches that shape, rather than exact bytes, can patch every
-  release. It needs a modifiable `app.asar`: Windows without Authenticode (until DOPE-444) and Linux. Code signing
-  with ASAR integrity is what stops it, as on macOS; the per-build generation only makes each patch structural instead
-  of byte-exact. Recorded as a residual under the same condition as the call-site patch.
+  is the same in every release, so a patch that anchors on that text and returns a forged verdict fits every release.
+  The code does not stop it: on macOS the signature and ASAR integrity do; on Windows it stays open until DOPE-444 and,
+  after it, is refused only where signatures are enforced; on Linux it stays open.
+- **A structural patch of the generated checks.** The seed changes the names, the share literals, the order of the
+  declarations and of each site's canaries, the number of sites per hook (two to four), the canonical-JSON and file-set
+  check variants of each site, and the reader variant of each hook. It does not change the rest: the signature
+  parser, the own-property reader, the Ed25519 helper, the manifest identity check and the check-canary runner of every
+  site, the hook's loop over its sites, the end of each site, the entry point's handling of the shared verifier's
+  `valid`, and the refusal text are the same in every release. One regex that matches that shape, rather than exact
+  bytes, can patch every release; the per-build generation only makes each patch structural instead of byte-exact.
+  Same platform condition as the call-site patch: stopped on macOS, open on Windows until DOPE-444 and afterwards
+  refused only where signatures are enforced, open on Linux.
 - **A wrapped `node:fs`.** Code able to replace `node:fs` in the main process can serve the bytes of a genuine package
-  to the trust checks while another package is used. Recorded as a residual under the same condition.
+  to the trust checks while another package is used. Same platform condition: stopped on macOS, open on Windows until
+  DOPE-444 and afterwards refused only where signatures are enforced, open on Linux.
 - **`seed-audit` and compressed installers.** The audit searches the release assets as they are: DMG, NSIS and
   AppImage files are compressed, so a seed packed inside one would not show as plain bytes.
