@@ -4,13 +4,13 @@ import { dirname, join } from 'node:path'
 import { crc32, inflateRawSync } from 'node:zlib'
 
 /** The third-party package the abuse checks offer to a hardened editor. */
-export const EQSP32_PACKAGE_ID = 'com.erqos.eqsp32'
+export const UNTRUSTED_PACKAGE_ID = 'com.example.untrusted'
 
 /** The key id the third-party package is signed under. */
-export const EQSP32_KEY_ID = 'eqsp32-dev'
+export const UNTRUSTED_KEY_ID = 'untrusted-dev'
 
 /** The board the third-party package provides. */
-export const EQSP32_BOARD = 'EQSP32'
+export const UNTRUSTED_BOARD = 'UNTRUSTED'
 
 /** The package registry of a user data folder, as the editor writes it from 4.3.0 on. */
 const REGISTRY_FORMAT_VERSION = '1.0'
@@ -36,22 +36,22 @@ export function canonicalize(value) {
  * The files of the third-party package, without its signature.
  * @returns {Record<string, string>}
  */
-function eqsp32Files() {
+function untrustedFiles() {
   const manifest = {
     formatVersion: '1.0',
     package: {
-      id: EQSP32_PACKAGE_ID,
-      name: 'EQSP32 boards',
+      id: UNTRUSTED_PACKAGE_ID,
+      name: 'UNTRUSTED boards',
       version: '1.0.0',
-      vendor: { name: 'EQSP32 test vendor' },
+      vendor: { name: 'UNTRUSTED test vendor' },
       description: 'A package signed by a key the editor does not trust, for the packaged abuse checks.',
       license: 'GPL-3.0',
       minEditorVersion: '4.3.0',
     },
     devices: [
       {
-        id: 'eqsp32',
-        name: EQSP32_BOARD,
+        id: 'untrusted',
+        name: UNTRUSTED_BOARD,
         category: 'PLC',
         target: {
           type: 'arduino-cli',
@@ -59,30 +59,31 @@ function eqsp32Files() {
           platform: 'esp32:esp32:esp32s3',
           boardManagerUrl: 'https://espressif.github.io/arduino-esp32/package_esp32_index.json',
         },
-        hal: { type: 'arduino-hal', source: 'hal/arduino/eqsp32.cpp' },
+        hal: { type: 'arduino-hal', source: 'hal/arduino/untrusted.cpp' },
       },
     ],
   }
   return {
     'manifest.json': `${JSON.stringify(manifest, null, 2)}\n`,
-    'hal/arduino/eqsp32.cpp': 'void hardwareInit() {}\nvoid updateInputBuffers() {}\nvoid updateOutputBuffers() {}\n',
+    'hal/arduino/untrusted.cpp':
+      'void hardwareInit() {}\nvoid updateInputBuffers() {}\nvoid updateOutputBuffers() {}\n',
   }
 }
 
 /**
- * Writes the third-party `com.erqos.eqsp32` package, signed under `eqsp32-dev` by a fresh Ed25519 key whose private
+ * Writes the third-party `com.example.untrusted` package, signed under `untrusted-dev` by a fresh Ed25519 key whose private
  * half is never written, as a ZIP of stored entries.
  * @param {string} vppPath
  * @returns {{ packageId: string, keyId: string, publicKeyPem: string, boardName: string }}
  */
-export function writeEqsp32Vpp(vppPath) {
+export function writeUntrustedVpp(vppPath) {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519')
-  const files = eqsp32Files()
+  const files = untrustedFiles()
   const manifest = JSON.parse(files['manifest.json'])
   const payload = {
     formatVersion: '1.0',
     alg: 'ed25519',
-    keyId: EQSP32_KEY_ID,
+    keyId: UNTRUSTED_KEY_ID,
     packageId: manifest.package.id,
     version: manifest.package.version,
     signedAt: new Date().toISOString(),
@@ -98,10 +99,10 @@ export function writeEqsp32Vpp(vppPath) {
   mkdirSync(dirname(vppPath), { recursive: true })
   writeFileSync(vppPath, storedZip(entries))
   return {
-    packageId: EQSP32_PACKAGE_ID,
-    keyId: EQSP32_KEY_ID,
+    packageId: UNTRUSTED_PACKAGE_ID,
+    keyId: UNTRUSTED_KEY_ID,
     publicKeyPem: String(publicKey.export({ type: 'spki', format: 'pem' })),
-    boardName: EQSP32_BOARD,
+    boardName: UNTRUSTED_BOARD,
   }
 }
 
