@@ -73,6 +73,34 @@ jobs:
           if-no-files-found: error
 
   # =============================================================================
+  # Cross-seed check - tag builds only; two public seeds must give different trust call sites
+  # =============================================================================
+  cross-seed:
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install STruC++
+        run: npm run setup:strucpp
+
+      - name: Check that two seeds give different call sites
+        run: npx ts-node --transpile-only scripts/package-trust/cli.ts cross-seed-check --root "$GITHUB_WORKSPACE"
+
+  # =============================================================================
   # macOS Build - Builds both x64 and arm64
   # =============================================================================
   build-macos:
@@ -658,7 +686,7 @@ jobs:
   # Create GitHub Release
   # =============================================================================
   create-release:
-    needs: [build-macos, build-windows-x64, build-windows-arm64, build-linux-x64, build-linux-arm64, packaged-checks]
+    needs: [build-macos, build-windows-x64, build-windows-arm64, build-linux-x64, build-linux-arm64, packaged-checks, cross-seed]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
