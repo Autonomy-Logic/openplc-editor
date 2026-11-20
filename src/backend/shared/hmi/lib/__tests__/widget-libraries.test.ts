@@ -177,6 +177,15 @@ describe('installed libraries in HMI builds', () => {
     ])
   })
 
+  it('emits the widget libraries and the project widget blocks whole in a preview, and no other library', () => {
+    const widget = { name: 'Badge', source: 'FUNCTION_BLOCK Badge EXTENDS HmiLamp\nEND_FUNCTION_BLOCK\n' }
+    const unit = generateHmiUnit({ ...sampleProject(), widgets: [widget], preview: true })
+    expect(unit.errors).toEqual([])
+    expect(unit.files['lib_project_widgets.cpp']).toMatch(/BADGE/)
+    expect(Object.keys(unit.files)).toContain('lib_standard_widgets.cpp')
+    expect(Object.keys(unit.files)).not.toContain('lib_hmi_alarms.cpp')
+  })
+
   it('keeps the first library of a name, and the first widget of a name across libraries', () => {
     const twice = loadHmiWidgetLibraries([...installedWidgetArchives(), ...installedWidgetArchives()])
     expect(twice.libraries.map((l) => l.name)).toEqual(['hmi-alarms', 'standard-widgets'])

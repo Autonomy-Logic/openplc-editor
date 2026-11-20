@@ -1765,7 +1765,7 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     input.preview ? previewStarts(input.plcVariables) : [],
   )
   result.sources = sources
-  const widgetLibraries = widgetLibraryNames(libraryCatalog)
+  const widgetLibraries = widgetLibraryNames(catalog)
   result.fonts = {
     variant: input.settings.fontVariant,
     faces: buildFaces(
