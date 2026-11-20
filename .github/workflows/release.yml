@@ -560,7 +560,7 @@ jobs:
           name: linux-arm64-appimage
           path: release/build/*-ARM64.AppImage
           retention-days: 30
-          if-no-files-found: warn  # Warn only since ARM64 binaries may be missing
+          if-no-files-found: error
 
   # =============================================================================
   # Packaged checks - the abuse checks on this run's Apple silicon, Windows x64 and Linux x64 installers
