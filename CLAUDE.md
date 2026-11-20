@@ -595,18 +595,23 @@ load does not. A run keeps at most as many interpreters as fit in half of the co
   archive's `dependencies`. A build states what it provides: every PLC build (program, debug, simulator, Runtime v4,
   baremetal, CLI) passes `providedHeaders: PLC_PROVIDED_HEADERS` (`[]`), every HMI build (preview, thumbnails, Runtime
   v4 `hmi.wasm`, panel firmware) `HMI_PROVIDED_HEADERS` (`hmi_core.h` at `HMI_CORE_API_VERSION`), and STruC++ fails a
-  POU the unit uses whose requirements are not met, naming it. Every build sees every installed library
-  (`selectBuildLibraryArchives`: pre-installed, then the project's enabled ones, then the rest). The PLC library tree
-  and PLC completions list only POUs a PLC build can use (`unusablePous`, `stlibsToSystemLibraries`,
-  `plcCompletionItems`). The widget catalogue is derived from every library's manifest (`buildWidgetCatalog`: a
-  function block whose EXTENDS chain, by STruC++'s `functionBlockLineage`, reaches `HMIELEMENT`; its `hmi_*`
-  pragmas). `HMI_CORE_API_VERSION` (`src/middleware/shared/utils/hmi/widget-libraries.ts`) equals the
+  POU the unit uses whose requirements are not met, naming it.
+- **Library selection:** a project uses the bundled libraries and the libraries it lists (`project.json`
+  `libraries`), never another installed library; a listed library that is not installed shows the missing-libraries
+  warning. Builds take `selectBuildLibraryArchives` (PLC, HMI and library-project builds); the HMI preview, palette,
+  thumbnails and HMI code view take the names from `projectLibraryNames` and `selectProjectLibraryArchives`
+  (`src/middleware/shared/utils/library/project-libraries.ts`). The PLC library tree, block pickers and PLC
+  completions list only POUs a PLC build of the project can use, over those libraries (`plcUnusablePous`,
+  `useProjectPlcLibraries`, `projectPlcUnusablePous`). A widget is a function block whose EXTENDS chain, by STruC++'s
+  `functionBlockLineage`, reaches `HMIELEMENT` (`buildWidgetCatalog`, with its `hmi_*` pragmas); there is no
+  library-level classification. `HMI_CORE_API_VERSION` (`src/middleware/shared/utils/hmi/widget-libraries.ts`) equals the
   `HMI_CORE_API_VERSION` macro of `hmi_core.h` (a Jest test ties them); a library whose chunks need another version is
   left out of HMI builds with one warning (library manager and Console), and setup refuses such a release.
-- **Library projects** see every installed library, compile with `HMI_PROVIDED_HEADERS` as their headers (so their
-  `{external}` code is tagged; `{attribute 'headers' := ''}` marks code that does not call the core) and author HMI
-  widget blocks: the + menu's Widget creates one under `hmi/widgets/`, and the library build compiles it into the
-  archive. `e2e/hmi-widget-libraries.spec.ts` and `e2e/library-widget.spec.ts` cover installed and authored widget
+- **Library projects** build against the bundled libraries and those they list, declare only the headers their own
+  `{external}` code includes (`library.json` `headers`), and author HMI widget blocks: the + menu's Widget creates one
+  under `hmi/widgets/` extending `HmiElement`, and the library build compiles it into the archive, where it needs the
+  HMI core through that base (STruC++ records it on the chunk) while the library's plain blocks stay usable in PLC
+  builds. `e2e/hmi-widget-libraries.spec.ts` and `e2e/library-widget.spec.ts` cover installed and authored widget
   libraries end to end.
 - **HMI unit generator:** `src/backend/shared/hmi/unit/` turns screens, widget blocks and HMI Settings
   (`src/middleware/shared/utils/hmi/settings.ts`) into the HMI unit: C++ in namespace `hmi` plus the C glue hosts

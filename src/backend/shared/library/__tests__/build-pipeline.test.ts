@@ -453,12 +453,7 @@ describe('libraryBuildFromTranspiledSt', () => {
     const filenames = (sources as Array<{ fileName: string }>).map((s) => s.fileName)
     expect(filenames).toEqual(['Tank.st'])
     expect(filenames).not.toContain(STUB.STUB_SPLIT_FILENAME)
-    expect(opts).toEqual({
-      name: 'demo_lib',
-      version: '1.0.0',
-      namespace: 'demo_lib',
-      headers: [{ name: 'hmi_core.h', version: '1' }],
-    })
+    expect(opts).toEqual({ name: 'demo_lib', version: '1.0.0', namespace: 'demo_lib' })
   })
 
   it('drops `_config.st` so strucpp does not error on the stub configuration', () => {
@@ -587,7 +582,7 @@ describe('libraryBuildFromTranspiledSt', () => {
       types: [{ name: 'Color', documentation: 'colour enum' }],
     })
     expect(archive.dependencies).toEqual([{ name: 'iec-standard-fb', version: '1.0.0' }])
-    expect(compileStlib.mock.calls[0][1]).toMatchObject({ headers: [{ name: 'hmi_core.h', version: '1' }] })
+    expect(compileStlib.mock.calls[0][1]).not.toHaveProperty('headers')
   })
 
   // Native (C/C++, Python) blocks: the editor hands strucpp the AUTHORED file

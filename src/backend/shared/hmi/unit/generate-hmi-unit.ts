@@ -1389,7 +1389,6 @@ export function compileHmiWidgets(
         name: PROJECT_WIDGETS,
         version: '1.0.0',
         namespace: 'hmi_project_widgets',
-        headers: [...HMI_PROVIDED_HEADERS],
         dependencies: [...archives],
       },
     )

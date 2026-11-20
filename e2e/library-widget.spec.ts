@@ -1,8 +1,9 @@
 /**
  * A widget authored in a library project, end to end in the built app: the + menu's Widget creates a widget block, the
- * library build compiles it into the archive with the HMI core header requirement, the archive installs like any
- * library, its widget shows in the HMI palette and builds on a screen; and a PLC program that uses a widget fails its
- * build early with STruC++'s reason on the Console.
+ * library build compiles it into the archive, where it needs the HMI core only through EXTENDS of the element base,
+ * the archive installs like any library, and a project that lists it gets its widget in the HMI palette and on a
+ * screen while a PLC program still builds with its plain block; a PLC program that uses a widget fails its build early
+ * with STruC++'s reason on the Console.
  *
  * Running it needs `npm run setup:hmi-widgets`, a production build and the preload at the path a NON-packaged app looks
  * for it; see "Electron e2e" in CLAUDE.md.
@@ -111,10 +112,16 @@ test.describe('widgets authored in a library project', () => {
   test('builds a library widget, installs it, offers it in the palette and builds a screen with it', async () => {
     const archive = await buildWidgetLibrary()
     expect(chunkHeaders(archive, WIDGET.toUpperCase())).toEqual([{ name: 'hmi_core.h', version: '1' }])
-    expect(chunkHeaders(archive, 'COUNTER')).toEqual([])
+    expect(chunkHeaders(archive, 'COUNTER') ?? []).toEqual([])
+    expect(JSON.parse(readFileSync(archive, 'utf-8'))).toMatchObject({ manifest: { headers: [] } })
 
     const F = hmiFixture('library-widget-screen')
-    writeHmiFixture(F, { main: MAIN, screens: { Panel: PANEL }, startScreen: 'Panel' })
+    writeHmiFixture(F, {
+      main: MAIN,
+      screens: { Panel: PANEL },
+      startScreen: 'Panel',
+      libraries: [{ name: LIBRARY.name, version: '1.0.0' }],
+    })
     install(F.userData, LIBRARY.name, archive)
     const { app, page } = await launchHmiApp(F)
     try {
@@ -129,6 +136,25 @@ test.describe('widgets authored in a library project', () => {
       await page.screenshot({ path: join(F.shots, 'palette.png') })
     } finally {
       app.process().kill('SIGKILL')
+    }
+  })
+
+  test("builds a PLC program with the library's plain block", async () => {
+    const { userData } = writeConsumerProject('openplc-e2e-plc-uses-library-block', {
+      name: 'plc_uses_block',
+      program: 'PROGRAM main\n  VAR\n    c : COUNTER;\n  END_VAR\n\nc();\n\nEND_PROGRAM\n',
+      library: { name: LIBRARY.name, archive: readFileSync(builtLibraryPath(libraryProject(), LIBRARY.name), 'utf-8') },
+    })
+    const { app, page } = await launch(userData)
+    try {
+      await page.getByText('plc_uses_block', { exact: true }).first().click({ timeout: 30000 })
+      await buildFromMenu(page, 'Build only')
+      await waitForText(page, /Compile only mode — skipping upload to runtime\./, {
+        timeout: 120000,
+        failure: /STruC\+\+ compilation failed|needs hmi_core\.h/,
+      })
+    } finally {
+      await quitApp(app, page)
     }
   })
 

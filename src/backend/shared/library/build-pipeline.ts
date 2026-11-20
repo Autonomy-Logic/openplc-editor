@@ -31,7 +31,6 @@
 import type { PLCProject, PLCProjectData } from '@root/backend/shared/types/PLC/open-plc'
 import { checkPathId } from '@root/backend/shared/utils/path-safety'
 import { type KnownPou, splitProgramSt } from '@root/backend/shared/utils/PLC/split-program-st'
-import { HMI_PROVIDED_HEADERS } from '@root/middleware/shared/utils/hmi/widget-libraries'
 
 import { compileStlib, type CompileStlibError, type CompileStlibSource } from './compile-stlib'
 
@@ -288,8 +287,8 @@ export interface LibraryBuildResult {
  *     `manifest.functions[]` / `functionBlocks[]` / `types[]` entry
  *     so authors don't have to duplicate help text in `library.json`.
  *
- *   - `dependencyArchives` — full strucpp archives of every library
- *     installed, loaded from disk by the Electron bridge.
+ *   - `dependencyArchives` — full strucpp archives of the libraries
+ *     the project uses (bundled and listed), loaded by the platform.
  *     Passed to `compileStlib` so cross-library symbol resolution
  *     works (a library that uses an OSCAT FB needs OSCAT's archive
  *     visible during compile).  Opaque shape — strucpp owns it, and
@@ -330,6 +329,27 @@ export interface LibraryBuildAux {
    *  see `LibraryNativeSource`. */
   nativeSources?: LibraryNativeSource[]
   declaredGlobals?: string[]
+}
+
+/** A header `library.json` declares: a bare name, or a name with the API version the library's code calls. */
+type DeclaredHeader = string | { name: string; version?: string }
+
+const isDeclaredHeader = (value: unknown): value is DeclaredHeader =>
+  typeof value === 'string' ||
+  (typeof value === 'object' &&
+    value !== null &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    (!('version' in value) || typeof value.version === 'string'))
+
+/**
+ * The headers the library's own `{external}` code includes, as `library.json` declares them (`headers`), in
+ * `compileStlib`'s form; undefined when it declares none.
+ */
+function declaredHeaders(manifest: LibraryBuildManifest): Array<{ name: string; version?: string }> | undefined {
+  const { headers } = manifest.extra
+  if (!Array.isArray(headers) || headers.length === 0) return undefined
+  return headers.filter(isDeclaredHeader).map((h) => (typeof h === 'string' ? { name: h } : h))
 }
 
 /**
@@ -421,13 +441,14 @@ export function libraryBuildFromTranspiledSt(
     }
   }
 
+  const headers = declaredHeaders(manifest)
   // Native sources ride in the same input array; strucpp routes on the file
   // extension.  Appended after the ST so `sourceFiles` ordering stays stable.
   const compileRes = compileStlib([...sources, ...widgetSources, ...nativeSources.map((n) => ({ ...n }))], {
     name: manifest.name,
     version: manifest.version,
     namespace: manifest.namespace,
-    headers: HMI_PROVIDED_HEADERS,
+    ...(headers ? { headers } : {}),
     ...(aux?.dependencyArchives && aux.dependencyArchives.length > 0 ? { dependencies: aux.dependencyArchives } : {}),
   })
 
