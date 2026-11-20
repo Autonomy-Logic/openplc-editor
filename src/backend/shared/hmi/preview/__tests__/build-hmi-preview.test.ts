@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import type { HmiPreviewMechanisms } from '../../../../../middleware/shared/ports/hmi-preview-mechanisms'
 import type { WasmCompileRequest, WasmCompileResult } from '../../../../../middleware/shared/ports/wasm-toolchain-types'
 import { sampleProject } from '../../unit/__tests__/fixtures/sample-project'
+import { installedWidgetArchives } from '../../unit/__tests__/fixtures/widget-libraries'
 import { WIDGET_PREVIEW_SCREEN } from '../../unit/generate-hmi-unit'
 import {
   buildHmiPreview,
@@ -28,6 +29,7 @@ const resources: HmiPreviewResources = {
   runtimeHeaders: { 'iec_types.hpp': '// types' },
   hmiSources: { 'core/hmi_core.c': '// core', 'preview/hmi_preview_host.cpp': '// host' },
   readFont,
+  projectLibraries: installedWidgetArchives(),
 }
 
 const built: WasmCompileResult = { ok: true, wasm: new Uint8Array([0, 97, 115, 109]), stats, diagnostics: [] }
@@ -254,6 +256,8 @@ describe('createHmiPreviewPort', () => {
         holds.push([holder, held])
         return Promise.resolve()
       },
+      loadLibraries: () => Promise.resolve(installedWidgetArchives()),
+      onLibrariesChanged: () => () => undefined,
     }
     const port = createHmiPreviewPort(mechanisms)
     const failed = await port.build(sampleProject())

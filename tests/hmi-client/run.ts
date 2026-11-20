@@ -293,7 +293,7 @@ async function main(): Promise<void> {
   const start = performance.now()
   const artefact = await composeHmiArtefact({
     sources: project,
-    plcArchives: [],
+    libraries: project.projectLibraries,
     capabilities: {},
     debugMapJson: JSON.stringify({ version: 2, md5: 'x', leaves }),
     md5: MD5,

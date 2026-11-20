@@ -827,7 +827,7 @@ describe('HMI unit generator', () => {
     )
   })
 
-  it('compiles PLC declarations that use library blocks, with the PLC libraries passed in', () => {
+  it('compiles PLC declarations that use library blocks of the project libraries', () => {
     const project = sampleProject()
     const plcDeclarations = project.plcDeclarations?.replace(
       '    Unused : DINT;\n',
@@ -844,7 +844,7 @@ describe('HMI unit generator', () => {
       join(process.cwd(), 'node_modules', 'strucpp', 'libs', 'iec-standard-fb.stlib'),
       'utf-8',
     )
-    const result = generateHmiUnit({ ...input, plcLibraries: [{ name: 'iec-standard-fb', archiveJson }] })
+    const result = generateHmiUnit({ ...input, projectLibraries: [...input.projectLibraries, JSON.parse(archiveJson)] })
     expect(messages(result)).toEqual([])
     expect(result.tags.map((t) => t.path)).toContain('CONFIG0.RES0.INSTANCE0.MAIN.T1.Q')
     expect(Object.values(result.files).some((text) => /\bclass TON\b|\bTON::/.test(text))).toBe(false)

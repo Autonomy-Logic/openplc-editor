@@ -126,6 +126,8 @@ export interface InstalledLibrary {
    *  archive doesn't ripple through every consumer. */
   description?: string
   author?: string
+  /** Why HMI builds leave the library out, such as code built for another HMI core API. */
+  warning?: string
 }
 
 /**

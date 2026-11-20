@@ -115,7 +115,7 @@ test('a consumer project reads the globals of a library built by the editor', as
   expect(header).toMatch(/\bMOTORS_TYPE MOTORS\b/)
   expect(header).toMatch(/\bconst inline IEC_INT KMAX\b/)
   const program = readFileSync(join(generated, 'pou_MAIN.cpp'), 'utf-8')
-  expect(program).toMatch(/\bB = \(MOTORCMD\) \| \(MOTORS\.CMD\);/)
+  expect(program).toMatch(/\bB = iec_bool_or\(MOTORCMD, MOTORS\.CMD\);/)
   expect(program).toMatch(/\bK = KMAX;/)
 })
 

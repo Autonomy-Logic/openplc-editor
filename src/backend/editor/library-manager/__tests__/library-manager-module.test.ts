@@ -55,6 +55,7 @@ jest.mock('strucpp', () => ({
 }))
 
 import type { PublicLibrary } from '../../../../middleware/shared/ports/public-catalog-types'
+import { HMI_CORE_API_VERSION } from '../../../../middleware/shared/utils/hmi/widget-libraries'
 import { LibraryManagerModule } from '../library-manager-module'
 
 function makeArchive(name: string, version = '1.0.0') {
@@ -98,11 +99,13 @@ function makePublicLibrary(overrides: Partial<PublicLibrary> = {}): PublicLibrar
 let testRoot: string
 let librariesDir: string
 let bundledDir: string
+let hmiWidgetsDir: string
 
 beforeEach(() => {
   testRoot = mkdtempSync(join(tmpdir(), 'library-manager-test-'))
   librariesDir = join(testRoot, 'libraries')
   bundledDir = join(testRoot, 'bundled')
+  hmiWidgetsDir = join(testRoot, 'hmi-widgets')
 })
 
 afterEach(() => {
@@ -112,10 +115,24 @@ afterEach(() => {
 function makeModule(): LibraryManagerModule {
   // Constructor calls mkdirSync(librariesDir, { recursive: true });
   // bundledDir is consulted lazily, so it can be empty/missing.
-  return new LibraryManagerModule({ librariesDir, bundledDir })
+  return new LibraryManagerModule({ librariesDir, bundledDir, hmiWidgetsDir })
 }
 
-function writeBundled(archive: ReturnType<typeof makeArchive>): void {
+/** An archive whose one chunk needs the HMI core at `version`, as a widget library's do. */
+function needingCore(archive: ReturnType<typeof makeArchive>, version = String(HMI_CORE_API_VERSION)) {
+  return {
+    ...archive,
+    chunks: [{ name: 'W', kind: 'functionBlock', deps: [], headers: [{ name: 'hmi_core.h', version }] }],
+  }
+}
+
+/** Puts an archive among the pre-installed HMI widgets release. */
+function writeHmiWidget(archive: object & { manifest: { name: string } }): void {
+  require('fs').mkdirSync(hmiWidgetsDir, { recursive: true })
+  writeFileSync(join(hmiWidgetsDir, `${archive.manifest.name}.stlib`), JSON.stringify(archive), 'utf-8')
+}
+
+function writeBundled(archive: object & { manifest: { name: string } }): void {
   // The bundled discovery walks `<bundledDir>/*.stlib`.  Mirror that
   // shape so the test covers the same code path the real app uses.
   if (!existsSync(bundledDir)) {
@@ -302,6 +319,20 @@ describe('LibraryManagerModule', () => {
       expect(all.map((a) => a.manifest.name)).toEqual(['aaa-bundled', 'bbb-bundled', 'ccc-user'])
     })
 
+    it('keeps every top-level field of bundled and user archives, known or not', async () => {
+      const bundled = { ...makeArchive('aaa-bundled'), futureField: 'bundled' }
+      writeBundled(bundled)
+      const mod = makeModule()
+      const tmp = join(testRoot, 'ccc-user.stlib')
+      writeFileSync(tmp, JSON.stringify({ ...makeArchive('ccc-user'), futureField: 'user' }), 'utf-8')
+      await mod.installFromFile(tmp)
+
+      expect(mod.loadAll()).toEqual([
+        { ...makeArchive('aaa-bundled'), futureField: 'bundled' },
+        { ...makeArchive('ccc-user'), futureField: 'user' },
+      ])
+    })
+
     it('skips orphaned registry entries whose .stlib went missing', async () => {
       const mod = makeModule()
       const tmp = join(testRoot, 'foo.stlib')
@@ -343,7 +374,7 @@ describe('LibraryManagerModule', () => {
       expect(result.missing).toEqual([])
     })
 
-    it('does not include user libs that are installed but not enabled', async () => {
+    it('leaves out user libs that are installed but not enabled', async () => {
       const mod = makeModule()
       const tmp = join(testRoot, 'oscat.stlib')
       writeFileSync(tmp, JSON.stringify(makeArchive('oscat-basic')), 'utf-8')
@@ -352,6 +383,7 @@ describe('LibraryManagerModule', () => {
       const result = mod.loadEnabledArchives([])
       // Bundled dir doesn't exist in this test harness.
       expect(result.archives).toEqual([])
+      expect(result.missing).toEqual([])
     })
 
     it('reports enabled libraries that have no archive on disk', async () => {
@@ -366,6 +398,75 @@ describe('LibraryManagerModule', () => {
       const result = mod.loadEnabledArchives(['foo', 'phantom'])
       expect(result.archives).toEqual([])
       expect(result.missing).toEqual(['foo', 'phantom'])
+    })
+  })
+
+  describe('pre-installed HMI libraries', () => {
+    it('lists the HMI widgets release as bundled rows, after the strucpp libraries', () => {
+      writeBundled(makeArchive('iec-standard-fb'))
+      writeHmiWidget(needingCore(makeArchive('standard-widgets')))
+      writeHmiWidget(makeArchive('hmi-alarms'))
+      writeFileSync(join(hmiWidgetsDir, 'SHA256SUMS'), '', 'utf-8')
+      writeFileSync(join(hmiWidgetsDir, 'LICENSE'), 'GPLv3', 'utf-8')
+      const rows = makeModule().listInstalled()
+      expect(rows.map((r) => [r.name, r.bundled, r.origin])).toEqual([
+        ['iec-standard-fb', true, 'bundled'],
+        ['hmi-alarms', true, 'bundled'],
+        ['standard-widgets', true, 'bundled'],
+      ])
+    })
+
+    it('refuses to uninstall or shadow a pre-installed HMI library', async () => {
+      writeHmiWidget(needingCore(makeArchive('standard-widgets')))
+      const mod = makeModule()
+      expect(mod.uninstall('standard-widgets')).toEqual({
+        success: false,
+        error: "Cannot uninstall bundled library 'standard-widgets'",
+      })
+      const tmp = join(testRoot, 'standard-widgets.stlib')
+      writeFileSync(tmp, JSON.stringify(needingCore(makeArchive('standard-widgets'))), 'utf-8')
+      const result = await mod.installFromFile(tmp)
+      expect(result.success).toBe(false)
+      expect(mod.listInstalled().map((r) => r.name)).toEqual(['standard-widgets'])
+    })
+
+    it('reads a pre-installed HMI archive as text', () => {
+      writeHmiWidget(makeArchive('hmi-alarms'))
+      expect(JSON.parse(makeModule().readArchiveText('hmi-alarms') ?? '')).toMatchObject({
+        manifest: { name: 'hmi-alarms' },
+      })
+    })
+
+    it('builds with the pre-installed libraries and the enabled ones only', async () => {
+      writeHmiWidget(needingCore(makeArchive('standard-widgets')))
+      const mod = makeModule()
+      for (const archive of [needingCore(makeArchive('extra-widgets')), makeArchive('oscat-basic')]) {
+        const tmp = join(testRoot, `${archive.manifest.name}.stlib`)
+        writeFileSync(tmp, JSON.stringify(archive), 'utf-8')
+        expect((await mod.installFromFile(tmp)).success).toBe(true)
+      }
+      expect(mod.loadEnabledArchives([]).archives.map((a) => a.manifest.name)).toEqual(['standard-widgets'])
+      expect(mod.loadEnabledArchives(['oscat-basic']).archives.map((a) => a.manifest.name)).toEqual([
+        'standard-widgets',
+        'oscat-basic',
+      ])
+      expect(mod.loadEnabledArchives(['extra-widgets', 'oscat-basic']).archives.map((a) => a.manifest.name)).toEqual([
+        'standard-widgets',
+        'extra-widgets',
+        'oscat-basic',
+      ])
+    })
+
+    it('installs a library built for another HMI core API, and warns on its row that HMI builds leave it out', async () => {
+      const tmp = join(testRoot, 'old-widgets.stlib')
+      writeFileSync(tmp, JSON.stringify(needingCore(makeArchive('old-widgets'), String(HMI_CORE_API_VERSION + 1))))
+      const mod = makeModule()
+      expect((await mod.installFromFile(tmp)).success).toBe(true)
+      expect(mod.listInstalled().find((r) => r.name === 'old-widgets')?.warning).toBe(
+        `The library "old-widgets" is left out of HMI builds: it is built for HMI core API ` +
+          `${HMI_CORE_API_VERSION + 1}, but this editor provides HMI core API ${HMI_CORE_API_VERSION}. Install a ` +
+          `build of the library for HMI core API ${HMI_CORE_API_VERSION}.`,
+      )
     })
   })
 
@@ -410,7 +511,7 @@ describe('LibraryManagerModule', () => {
         'pub-1': makeArchive('alpha-lib', '1.0.0'),
         'pub-2': makeArchive('beta-lib', '2.0.0'),
       })
-      const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
+      const mod = new LibraryManagerModule({ librariesDir, bundledDir, hmiWidgetsDir, catalogTransport: transport })
 
       const batch = await mod.installFromCatalog([
         makePublicLibrary({ id: 'pub-1', name: 'alpha-lib' }),
@@ -434,7 +535,7 @@ describe('LibraryManagerModule', () => {
       // separate metadata store on this platform — so the override
       // has to land inside the .stlib file itself to be visible.
       const transport = makeStubTransport({ 'pub-1': makeArchive('alpha-lib', '1.0.0') })
-      const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
+      const mod = new LibraryManagerModule({ librariesDir, bundledDir, hmiWidgetsDir, catalogTransport: transport })
 
       await mod.installFromCatalog([
         makePublicLibrary({
@@ -456,7 +557,7 @@ describe('LibraryManagerModule', () => {
     it('leaves the archive untouched when catalog metadata matches the manifest already', async () => {
       const archive = makeArchive('alpha-lib', '1.0.0')
       const transport = makeStubTransport({ 'pub-1': archive })
-      const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
+      const mod = new LibraryManagerModule({ librariesDir, bundledDir, hmiWidgetsDir, catalogTransport: transport })
 
       await mod.installFromCatalog([
         makePublicLibrary({
@@ -476,7 +577,7 @@ describe('LibraryManagerModule', () => {
         { 'pub-good': makeArchive('good-lib', '1.0.0') },
         { 'pub-bad': 'Catalog request failed: 503 Service Unavailable' },
       )
-      const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
+      const mod = new LibraryManagerModule({ librariesDir, bundledDir, hmiWidgetsDir, catalogTransport: transport })
 
       const batch = await mod.installFromCatalog([
         makePublicLibrary({ id: 'pub-bad' }),
@@ -500,7 +601,7 @@ describe('LibraryManagerModule', () => {
 
     it('returns an empty batch when called with no ids', async () => {
       const transport = makeStubTransport({})
-      const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
+      const mod = new LibraryManagerModule({ librariesDir, bundledDir, hmiWidgetsDir, catalogTransport: transport })
 
       const batch = await mod.installFromCatalog([])
 
@@ -513,7 +614,7 @@ describe('LibraryManagerModule', () => {
       const transport = makeStubTransport({
         'pub-x': makeArchive('iec-standard-fb', '9.9.9'),
       })
-      const mod = new LibraryManagerModule({ librariesDir, bundledDir, catalogTransport: transport })
+      const mod = new LibraryManagerModule({ librariesDir, bundledDir, hmiWidgetsDir, catalogTransport: transport })
 
       const batch = await mod.installFromCatalog([makePublicLibrary({ id: 'pub-x', name: 'iec-standard-fb' })])
 

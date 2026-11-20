@@ -84,7 +84,7 @@ import { generateDefinesContent } from './steps/generate-defines'
 import { generateImageConf } from './steps/generate-image-conf'
 import { generateRetainConf } from './steps/generate-retain-conf'
 import { generateVppConfigContent } from './steps/generate-vpp-config'
-import { buildHmiArtefactStep, HMI_UNSUPPORTED_RUNTIME, hmiNoPanelMessage, isStlibArchive } from './steps/hmi-artefact'
+import { buildHmiArtefactStep, HMI_UNSUPPORTED_RUNTIME, hmiNoPanelMessage } from './steps/hmi-artefact'
 import { narrowModbusTransports, selectModbusServer } from './steps/modbus-defines'
 import { findEmptyFbdVariables } from './steps/validate-empty-variables'
 
@@ -1228,7 +1228,7 @@ async function runCompilePipelineInner(
     const composed = await composeHmiFirmware({
       sources: hmi,
       panel: hmiPanel,
-      plcArchives: libraryArchives.filter(isStlibArchive),
+      libraries: libraryArchives,
       capabilities: targetCapabilities,
       debugMapJson,
       md5,

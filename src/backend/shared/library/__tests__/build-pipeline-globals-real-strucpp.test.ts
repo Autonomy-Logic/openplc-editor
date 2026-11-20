@@ -28,6 +28,7 @@ interface BuiltArchive {
     globals?: ManifestEntry[]
   }
   sources?: Array<{ fileName: string; source: string }>
+  dependencies?: unknown
 }
 
 const globalVariable = (name: string, value: BaseTypeName, extra: Partial<GlobalVariable> = {}): GlobalVariable => ({
@@ -530,7 +531,6 @@ describe('a library built on a dependency library', () => {
     const archive = archiveOf(
       buildLibrary('user_lib', libraryData({ pous: [user], libraries: [{ name: 'dep_lib', version: '1.0.0' }] }), {
         dependencyArchives: [dependencyArchive],
-        dependencyRefs: [{ name: 'dep_lib', version: '1.0.0' }],
       }),
     )
 
@@ -539,5 +539,6 @@ describe('a library built on a dependency library', () => {
       functionBlocks: namesOf(archive.manifest.functionBlocks),
       globals: namesOf(archive.manifest.globals),
     }).toEqual({ functions: [], functionBlocks: ['USER_FB'], globals: [] })
+    expect(archive.dependencies).toEqual([{ name: 'dep_lib', version: '1.0.0' }])
   })
 })

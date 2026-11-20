@@ -59,17 +59,17 @@ export interface HmiUnitSources {
    * resolve against. Builds that show no project screens may leave it out.
    */
   plcDeclarations?: string
-  /** The PLC's library archives, which `plcDeclarations` may use; only what screens themselves use is compiled in. */
-  plcLibraries?: readonly HmiLibraryArchive[]
   /** Names of the project's POUs and data types, which screens and widget blocks may not reuse. */
   projectNames: readonly string[]
 }
 
-/** The project's HMI as a device build compiles it; the PLC libraries come from the program build. */
-export type HmiBuildSources = Omit<HmiUnitSources, 'plcLibraries'>
+/** The project's HMI as a device build compiles it; the libraries come from the program build. */
+export type HmiBuildSources = HmiUnitSources
 
 /** A preview build of the project's screens, or of one widget block when `widgetPreview` names it. */
 export interface HmiPreviewRequest extends HmiUnitSources {
+  /** Names of the libraries the project uses (`projectLibraryNames`); a preview compiles against these only. */
+  libraries: readonly string[]
   widgetPreview?: string
   /** Builds the palette gallery, every widget on one screen at natural size, in place of the project's screens. */
   gallery?: boolean
@@ -372,7 +372,7 @@ export interface HmiCatalogResult {
 
 /** What the ST language service and the code view need for screens and widget blocks. */
 export interface HmiCodeContext {
-  /** The libraries screens use, as .stlib archive JSON; empty when StandardWidgets does not build. */
+  /** The installed widget libraries screens use, as .stlib archive JSON. */
   libraries: HmiLibraryArchive[]
   /** ST of the navigation and theme declarations the HMI build generates for the project's screens. */
   glue: string

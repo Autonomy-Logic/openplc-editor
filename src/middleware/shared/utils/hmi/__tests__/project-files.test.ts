@@ -106,4 +106,11 @@ describe('HMI project files', () => {
     )
     expect(newHmiWidgetSource('Gauge2')).toMatch(/^FUNCTION_BLOCK Gauge2 EXTENDS HmiElement\n/)
   })
+
+  it("puts a library's widget under the palette group it names, without characters that end the pragma", () => {
+    expect(newHmiWidgetSource('Badge', "tank_lib's")).toMatch(
+      /^\{attribute 'hmi_palette' := 'tank_libs'\}\nFUNCTION_BLOCK Badge EXTENDS HmiElement\n/,
+    )
+    expect(newHmiWidgetSource('Badge', '  ')).toMatch(/^FUNCTION_BLOCK Badge/)
+  })
 })

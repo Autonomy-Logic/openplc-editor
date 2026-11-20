@@ -32,6 +32,8 @@ export interface HmiPreviewResources {
   hmiSources: Readonly<Record<string, string>>
   /** A vetted font file by name. */
   readFont: (file: string) => Promise<Uint8Array>
+  /** The archives of the libraries the project uses (bundled and listed), verbatim; the preview compiles against them. */
+  projectLibraries: readonly unknown[]
 }
 
 /** Compiles a request; the platform's WebAssembly toolchain. */
@@ -184,7 +186,13 @@ export async function buildHmiPreview(
   onStep?.('generate')
   await nextTask()
   const generateStart = performance.now()
-  const generated = generateHmiUnit({ ...input, preview: true, resolve: undefined, plcMd5: undefined })
+  const generated = generateHmiUnit({
+    ...input,
+    projectLibraries: resources.projectLibraries,
+    preview: true,
+    resolve: undefined,
+    plcMd5: undefined,
+  })
   timings.generateMs = performance.now() - generateStart
   timings.widgetsMs = generated.timings.widgetsMs
   timings.strucppMs = generated.timings.strucppMs

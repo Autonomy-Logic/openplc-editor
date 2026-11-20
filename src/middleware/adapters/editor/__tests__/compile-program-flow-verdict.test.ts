@@ -70,7 +70,7 @@ async function runWith(messages: Array<Record<string, unknown>>) {
   const events: CompileProgressEvent[] = []
   const transport: CompileProgramTransport = {
     getAvailableBoards: async () => boards,
-    loadAllLibraries: async () => [],
+    loadBuildLibraries: async () => [],
     runCompileProgram: (_args, onMessage) => {
       for (const message of messages) onMessage(message)
     },

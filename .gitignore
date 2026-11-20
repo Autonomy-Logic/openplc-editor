@@ -84,3 +84,4 @@ scripts/dev-transpile-project.ts
 
 # Python runtime fetched at install time (python-runtime.json)
 vendor/python-runtime/
+vendor/hmi-widgets/

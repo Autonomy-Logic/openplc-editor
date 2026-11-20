@@ -33,6 +33,10 @@ export interface HmiPreviewMechanisms {
   compileToWasm(request: WasmCompileRequest): Promise<WasmCompileResult>
   /** Holds the platform's WebAssembly toolchain for `holder`, or lets it go (`WasmCompileService.setHeld`). */
   holdToolchain(holder: string, held: boolean): Promise<void>
+  /** Every installed library archive, verbatim, as the library port loads them; widget libraries are among them. */
+  loadLibraries(): Promise<readonly unknown[]>
+  /** Calls `listener` when a library is installed or removed; returns the unsubscribe. */
+  onLibrariesChanged(listener: () => void): () => void
   /** Starts a Worker running the preview's worker script. */
   startWorker(): HmiPreviewWorkerHandle
 }

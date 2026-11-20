@@ -35,6 +35,7 @@ interface ProjectLibrariesTabProps {
   installed: InstalledLibrary[]
 }
 
+/** The project's libraries: pre-installed, enabled and available ones. */
 const ProjectLibrariesTab = ({ installed }: ProjectLibrariesTabProps) => {
   const enabledNames = useOpenPLCStore((s) => s.enabledLibraries)
   const missingLibraries = useOpenPLCStore((s) => s.missingLibraries)

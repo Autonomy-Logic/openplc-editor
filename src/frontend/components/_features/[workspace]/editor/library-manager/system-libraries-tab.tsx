@@ -220,6 +220,7 @@ const SystemLibrariesTab = ({ installed, onRefresh }: SystemLibrariesTabProps) =
               )}
               {selectedRow.author && <DetailRow label='Author' value={selectedRow.author} />}
               {selectedRow.description && <DetailRow label='Description' value={selectedRow.description} />}
+              {selectedRow.warning && <DetailRow label='Warning' value={selectedRow.warning} />}
             </div>
             {selectedArchive && <PouTreePreview library={selectedArchive} />}
           </>

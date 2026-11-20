@@ -3,6 +3,7 @@ import { join } from 'path'
 
 import type { WasmCompileRequest, WasmCompileResult } from '../../../../../middleware/shared/ports/wasm-toolchain-types'
 import { sampleProject } from '../../unit/__tests__/fixtures/sample-project'
+import { installedWidgetArchives } from '../../unit/__tests__/fixtures/widget-libraries'
 import {
   composeHmiArtefact,
   type ComposeHmiArtefactInput,
@@ -55,7 +56,7 @@ function input(overrides: Partial<ComposeHmiArtefactInput> = {}) {
   const result: WasmCompileResult = { ok: true, wasm: WASM, stats, diagnostics: [] }
   const value: ComposeHmiArtefactInput = {
     sources: sampleProject(),
-    plcArchives: [],
+    libraries: installedWidgetArchives(),
     capabilities: {},
     debugMapJson: JSON.stringify({ version: 2, md5: 'x', leaves: LEAVES }),
     md5: 'fe3845fc1babc413455ceb7a5ee596bf',

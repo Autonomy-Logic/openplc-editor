@@ -1,7 +1,9 @@
 /** The sample project the HMI unit tests build (Jest and tests/hmi-unit): two screens, a widget block, PLC variables and settings. */
 import { hmiSettingsSchema } from '../../../../../../middleware/shared/utils/hmi/settings'
 import { hmiDebugPath } from '../../../artefact/tag-resolver'
+import type { HmiPreviewRequest } from '../../../../../../middleware/shared/ports/hmi-preview-types'
 import type { HmiUnitInput } from '../../generate-hmi-unit'
+import { installedWidgetArchives } from './widget-libraries'
 
 export const OVERVIEW = `{attribute 'hmi_theme' := 'Brand'}
 FUNCTION_BLOCK Overview EXTENDS HmiScreen
@@ -79,7 +81,8 @@ const DEBUG_MAP = new Map([
 ])
 const INSTANCES = [{ name: 'instance0', program: 'Main' }]
 
-export function sampleProject(): HmiUnitInput {
+/** The sample project's HMI with its libraries: the pre-installed widget libraries, by name and as archives. */
+export function sampleProject(): HmiUnitInput & Pick<HmiPreviewRequest, 'libraries'> {
   return {
     screens: [
       { name: 'Overview', source: OVERVIEW },
@@ -107,6 +110,8 @@ export function sampleProject(): HmiUnitInput {
     ],
     plcDeclarations: PLC_DECLARATIONS,
     projectNames: ['Main'],
+    projectLibraries: installedWidgetArchives(),
+    libraries: ['hmi-alarms', 'standard-widgets'],
     resolve: (path) => DEBUG_MAP.get(hmiDebugPath(path, INSTANCES)) ?? null,
     plcMd5: '0123456789abcdef0123456789abcdef',
   }

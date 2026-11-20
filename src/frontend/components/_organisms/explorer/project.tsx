@@ -525,15 +525,17 @@ const Project = () => {
             </ProjectTreeBranch>
           )}
 
-          {projectCaps.hasHmi && hmi && (
+          {(projectCaps.hasHmi || projectCaps.hasHmiWidgets) && hmi && (
             <ProjectTreeBranch branchTarget='hmi'>
-              <ProjectTreeLeaf
-                leafLang='hmiSettings'
-                leafType='hmi-settings'
-                label={HMI_SETTINGS_TAB_NAME}
-                onClick={() => openHmiSettings()}
-              />
-              {hmi.screens.map((screen) => (
+              {projectCaps.hasHmi && (
+                <ProjectTreeLeaf
+                  leafLang='hmiSettings'
+                  leafType='hmi-settings'
+                  label={HMI_SETTINGS_TAB_NAME}
+                  onClick={() => openHmiSettings()}
+                />
+              )}
+              {(projectCaps.hasHmi ? hmi.screens : []).map((screen) => (
                 <ProjectTreeLeaf
                   key={`screen-${screen.name}`}
                   leafLang='hmiScreen'

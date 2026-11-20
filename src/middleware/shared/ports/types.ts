@@ -539,6 +539,8 @@ export interface ProjectCapabilities {
   hasLibraryManifest: boolean
   /** Show the HMI branch and the + menu's HMI Screen and HMI Widget entries. */
   hasHmi: boolean
+  /** Author HMI widget blocks: a library project builds them into its archive. */
+  hasHmiWidgets: boolean
 }
 
 export function projectCapabilities(
@@ -560,6 +562,7 @@ export function projectCapabilities(
       hasRuntimeControls: false,
       hasLibraryManifest: true,
       hasHmi: false,
+      hasHmiWidgets: true,
     }
   }
   return {
@@ -577,6 +580,7 @@ export function projectCapabilities(
     hasRuntimeControls: true,
     hasLibraryManifest: false,
     hasHmi: true,
+    hasHmiWidgets: true,
   }
 }
 

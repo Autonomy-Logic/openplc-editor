@@ -3,8 +3,9 @@
  * widget block's tab (code beside preview). Edits go through text patches and the store history.
  */
 import { ViewModeToggle } from '@root/frontend/components/_atoms/view-mode-toggle'
+import { useProjectLibraryNames } from '@root/frontend/hooks/use-project-libraries'
 import { useTargetCapabilities } from '@root/frontend/hooks/use-target-capabilities'
-import { loadHmiPlcLibraries, readyRequest } from '@root/frontend/services/hmi-code/plc-libraries'
+import { loadHmiPlcLibraries } from '@root/frontend/services/hmi-code/plc-libraries'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { hmiDesignerEntry } from '@root/frontend/store/slices/hmi-designer'
 import { cn } from '@root/frontend/utils/cn'
@@ -128,13 +129,24 @@ function usePlcLibraries(): readonly HmiLibraryArchive[] | null {
   return libraries
 }
 
+/** What a preview request of the project's HMI carries. */
+export type ProjectPreviewRequest = Omit<HmiPreviewRequest, 'widgetPreview'>
+
 /**
- * What every preview request carries: the project's HMI and what screens may refer to. `plcLibraries` is absent until
- * the PLC's libraries are loaded; a preview waits for them (`readyRequest`).
+ * What every preview request carries: the project's HMI and what screens may refer to. `ready` is false until the PLC's
+ * libraries are loaded, which give the pins of library blocks; a preview waits for them.
  */
-export function useProjectRequest(): Omit<HmiPreviewRequest, 'widgetPreview'> {
+export function useProjectRequest(): { request: ProjectPreviewRequest; ready: boolean } {
   const hmi = useOpenPLCStore((s) => s.project.data.hmi)
-  const plcLibraries = usePlcLibraries()
+  const libraries = useProjectLibraryNames()
+  const installedPlcLibraries = usePlcLibraries()
+  const plcLibraries = useMemo(
+    () =>
+      installedPlcLibraries === null
+        ? null
+        : installedPlcLibraries.filter((library) => libraries.includes(library.name)),
+    [installedPlcLibraries, libraries],
+  )
   const remoteDevices = useOpenPLCStore((s) => s.project.data.remoteDevices)
   const pous = useOpenPLCStore((s) => s.project.data.pous)
   const dataTypes = useOpenPLCStore((s) => s.project.data.dataTypes)
@@ -151,28 +163,32 @@ export function useProjectRequest(): Omit<HmiPreviewRequest, 'widgetPreview'> {
     () => hmiPlcDeclarations({ pous, dataTypes, configurations, globalVariableLists, remoteDevices }, aliasIndex),
     [pous, dataTypes, configurations, globalVariableLists, remoteDevices, aliasIndex],
   )
-  return useMemo(
+  const request = useMemo(
     () => ({
       screens: hmi?.screens ?? [],
       widgets: hmi?.widgets ?? [],
       settings: hmi?.settings ?? defaultHmiSettings(),
       plcVariables,
       plcDeclarations,
-      ...(plcLibraries ? { plcLibraries } : {}),
       projectNames,
+      libraries,
     }),
-    [hmi, plcVariables, plcDeclarations, plcLibraries, projectNames],
+    [hmi, plcVariables, plcDeclarations, projectNames, libraries],
   )
+  return { request, ready: plcLibraries !== null }
 }
 
 /** The project's widget catalogue; the last good one stays while widget blocks do not compile. */
-function useCatalog(widgets: HmiPreviewRequest['widgets']): HmiCatalogResult {
+function useCatalog(
+  widgets: HmiPreviewRequest['widgets'],
+  libraries: HmiPreviewRequest['libraries'],
+): HmiCatalogResult {
   const port = useHmiPreview()
   const [result, setResult] = useState<HmiCatalogResult>({ catalog: EMPTY_CATALOG, errors: [] })
   useEffect(() => {
     if (!port) return
     let live = true
-    void port.catalog(widgets).then((next) => {
+    void port.catalog(widgets, libraries).then((next) => {
       if (!live) return
       setResult((previous) =>
         next.errors.length > 0 && previous.catalog.widgets.size > next.catalog.widgets.size
@@ -183,7 +199,7 @@ function useCatalog(widgets: HmiPreviewRequest['widgets']): HmiCatalogResult {
     return () => {
       live = false
     }
-  }, [port, widgets])
+  }, [port, widgets, libraries])
   return result
 }
 
@@ -202,12 +218,12 @@ function thumbnailUrl(thumbnail: HmiThumbnail): string {
 function useThumbnails(request: HmiPreviewRequest): ReadonlyMap<string, string> {
   const port = useHmiPreview()
   const [thumbnails, setThumbnails] = useState<ReadonlyMap<string, string>>(new Map())
-  const { widgets, settings, projectNames } = request
+  const { widgets, settings, projectNames, libraries } = request
   useEffect(() => {
     if (!port) return
     let live = true
     const timer = setTimeout(() => {
-      void port.thumbnails({ widgets, settings, projectNames }, THUMBNAIL_SCALE).then((result) => {
+      void port.thumbnails({ widgets, settings, projectNames, libraries }, THUMBNAIL_SCALE).then((result) => {
         if (live && result.thumbnails.length > 0)
           setThumbnails(new Map(result.thumbnails.map((t) => [t.widget.toUpperCase(), thumbnailUrl(t)])))
       })
@@ -216,7 +232,7 @@ function useThumbnails(request: HmiPreviewRequest): ReadonlyMap<string, string> 
       live = false
       clearTimeout(timer)
     }
-  }, [port, widgets, settings, projectNames])
+  }, [port, widgets, settings, projectNames, libraries])
   return thumbnails
 }
 
@@ -240,6 +256,17 @@ function useFitZoom(width: number, height: number): [number, (element: HTMLDivEl
     return () => observer.disconnect()
   }, [area, width, height])
   return [fit, setArea]
+}
+
+/** `errors` without repeats: the catalogue and the build both report a library that cannot be used. */
+function distinctDiagnostics(errors: readonly HmiDiagnostic[]): HmiDiagnostic[] {
+  const seen = new Set<string>()
+  return errors.filter((e) => {
+    const key = `${e.file}\u0000${e.line ?? ''}\u0000${e.message}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function Diagnostics(props: { errors: readonly HmiDiagnostic[] }) {
@@ -266,8 +293,8 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   const actions = useOpenPLCStore((s) => s.hmiDesignerActions)
   const variablesCollapsed = useOpenPLCStore((s) => s.hmiVariablesCollapsed)
   const debugging = useOpenPLCStore((s) => s.workspace.isDebuggerVisible)
-  const request = useProjectRequest()
-  const { catalog, errors: catalogErrors } = useCatalog(request.widgets)
+  const { request, ready } = useProjectRequest()
+  const { catalog, errors: catalogErrors } = useCatalog(request.widgets, request.libraries)
   const targetCapabilities = useTargetCapabilities()
   const thumbnails = useThumbnails(request)
   const isWidget = useCallback((type: string) => catalog.widgets.has(type.toUpperCase()), [catalog])
@@ -292,7 +319,7 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   const [fit, area] = useFitZoom(device.width, device.height)
   const zoom = entry.zoom ?? fit
   const preview = usePreviewSession({
-    request: readyRequest(request),
+    request: ready ? request : null,
     screen: name,
     device,
     design: mode === 'design',
@@ -604,7 +631,10 @@ export function HmiScreenDesigner({ name }: { name: string }) {
   }
 
   const screens = request.screens.map((s) => s.name)
-  const buildErrors = useMemo(() => [...catalogErrors, ...preview.errors], [catalogErrors, preview.errors])
+  const buildErrors = useMemo(
+    () => distinctDiagnostics([...catalogErrors, ...preview.errors]),
+    [catalogErrors, preview.errors],
+  )
   const errors = [
     ...(parsed.ok ? [] : parsed.errors.map((e) => ({ file: name, line: e.line, message: e.message }))),
     ...buildErrors,
@@ -779,12 +809,12 @@ export function HmiScreenDesigner({ name }: { name: string }) {
 }
 
 export function HmiWidgetEditor({ name }: { name: string }) {
-  const request = useProjectRequest()
+  const { request, ready } = useProjectRequest()
   const widgetRequest = useMemo(() => ({ ...request, widgetPreview: name }), [request, name])
   const device = useMemo(() => ({ id: 'widget', label: 'Widget', width: 320, height: 240, density: 2 }), [])
   const canvas = useRef<HTMLCanvasElement>(null)
   const preview = usePreviewSession({
-    request: readyRequest(widgetRequest),
+    request: ready ? widgetRequest : null,
     screen: '',
     device,
     design: false,

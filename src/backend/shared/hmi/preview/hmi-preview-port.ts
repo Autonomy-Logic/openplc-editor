@@ -12,7 +12,8 @@ import type {
   HmiSourceFile,
   HmiThumbnailResult,
 } from '../../../../middleware/shared/ports/hmi-preview-types'
-import { buildStandardWidgets } from '../lib/build-standard-widgets'
+import { selectProjectLibraryArchives } from '../../../../middleware/shared/utils/library/project-libraries'
+import { loadHmiWidgetLibraries } from '../lib/widget-libraries'
 import {
   buildHmiWidgetCatalog,
   hmiGlueSource,
@@ -35,7 +36,7 @@ const fileName = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
 export function hmiPreviewResources(
   stored: HmiPreviewStoredFiles,
   storedHeaders: Readonly<Record<string, string>>,
-): HmiPreviewResources {
+): Omit<HmiPreviewResources, 'projectLibraries'> {
   const hmiFiles: Record<string, string | Uint8Array> = {}
   for (const [path, content] of Object.entries(stored.files)) {
     if (path.startsWith(stored.root)) hmiFiles[path.slice(stored.root.length)] = content
@@ -67,15 +68,40 @@ export function createHmiPreviewPort(
   mechanisms: HmiPreviewMechanisms,
   sessionOptions: HmiPreviewSessionOptions = {},
 ): HmiPreviewPort {
-  let resources: Promise<HmiPreviewResources> | null = null
+  let resources: Promise<Omit<HmiPreviewResources, 'projectLibraries'>> | null = null
+  let libraries: Promise<readonly unknown[]> | null = null
+  let librariesVersion = 0
   let catalogCache: { key: string; result: HmiWidgetLibrary } | null = null
   let thumbnailCache: { key: string; result: Promise<HmiThumbnailResult> } | null = null
-  const catalogOf = (widgets: readonly HmiSourceFile[]): HmiWidgetLibrary => {
-    const key = widgets.map((w) => `${w.name}\u0000${w.source}`).join('\u0001')
-    if (catalogCache?.key !== key) catalogCache = { key, result: buildHmiWidgetCatalog(widgets) }
+  mechanisms.onLibrariesChanged(() => {
+    libraries = null
+    librariesVersion += 1
+  })
+  const loadInstalled = (): Promise<readonly unknown[]> => {
+    const loading = libraries ?? mechanisms.loadLibraries()
+    libraries = loading
+    loading.catch(() => {
+      if (libraries === loading) libraries = null
+    })
+    return loading
+  }
+  /** The installed archives of the libraries named in `names`, the ones the project uses. */
+  const loadLibraries = async (names: readonly string[]): Promise<unknown[]> =>
+    selectProjectLibraryArchives(await loadInstalled(), names)
+  const catalogOf = (
+    widgets: readonly HmiSourceFile[],
+    names: readonly string[],
+    selected: readonly unknown[],
+  ): HmiWidgetLibrary => {
+    const key = [
+      librariesVersion,
+      names.join('\u0000'),
+      widgets.map((w) => `${w.name}\u0000${w.source}`).join('\u0001'),
+    ].join('\u0002')
+    if (catalogCache?.key !== key) catalogCache = { key, result: buildHmiWidgetCatalog(widgets, selected) }
     return catalogCache.result
   }
-  const loadResources = (): Promise<HmiPreviewResources> => {
+  const loadResources = (): Promise<Omit<HmiPreviewResources, 'projectLibraries'>> => {
     resources ??= Promise.all([mechanisms.readHmiSources(), mechanisms.readStrucppRuntimeHeaders()]).then(
       ([hmiFiles, runtimeHeaders]) => hmiPreviewResources(hmiFiles, runtimeHeaders),
     )
@@ -92,7 +118,8 @@ export function createHmiPreviewPort(
       const sourcesStart = performance.now()
       let loaded: HmiPreviewResources
       try {
-        loaded = await loadResources()
+        const [files, projectLibraries] = await Promise.all([loadResources(), loadLibraries(request.libraries)])
+        loaded = { ...files, projectLibraries }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         return {
@@ -114,26 +141,34 @@ export function createHmiPreviewPort(
         timings: { ...built.timings, sourcesMs, totalMs: built.timings.totalMs + sourcesMs },
       }
     },
-    codeContext(sources) {
-      const library = buildStandardWidgets()
-      return Promise.resolve({
-        libraries: library.ok ? [{ name: library.archive.manifest.name, archiveJson: library.archiveJson }] : [],
+    async codeContext(sources) {
+      const { libraries: loaded } = loadHmiWidgetLibraries(await loadLibraries(sources.libraries))
+      return {
+        libraries: loaded.map((l) => ({ name: l.name, archiveJson: l.archiveJson })),
         glue: hmiGlueSource(
           sources.screens.map((s) => s.name),
           sources.settings,
         ),
-        screenMembers: library.ok ? [...hmiScreenMembers(library.archive)] : [],
-      })
+        screenMembers: [...new Set(loaded.flatMap((l) => [...hmiScreenMembers(l.archive)]))],
+      }
     },
-    catalog(widgets) {
-      const library = catalogOf(widgets)
-      return Promise.resolve({ catalog: library.catalog, errors: library.errors })
+    async catalog(widgets, names) {
+      const library = catalogOf(widgets, names, await loadLibraries(names))
+      return { catalog: library.catalog, errors: library.errors }
     },
-    thumbnails(sources, scale) {
-      const key = JSON.stringify([sources.widgets, sources.settings, sources.projectNames, scale])
+    async thumbnails(sources, scale) {
+      const selected = await loadLibraries(sources.libraries)
+      const key = JSON.stringify([
+        librariesVersion,
+        sources.libraries,
+        sources.widgets,
+        sources.settings,
+        sources.projectNames,
+        scale,
+      ])
       if (thumbnailCache?.key !== key) {
         const result =
-          catalogOf(sources.widgets).errors.length > 0
+          catalogOf(sources.widgets, sources.libraries, selected).errors.length > 0
             ? renderHmiThumbnails({ ...sources, widgets: [] }, scale, build, openSession)
             : renderHmiThumbnails(sources, scale, build, openSession)
         thumbnailCache = { key, result }

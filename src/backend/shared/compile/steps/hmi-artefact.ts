@@ -2,8 +2,6 @@
  * The HMI step of a Runtime v4 build: the `hmi/` folder the upload carries. A project with screens gets its built
  * HMI; one without gets the manifest that removes a device's HMI, sent only to a runtime that accepts `hmi/`.
  */
-import type { StlibArchive } from 'strucpp'
-
 import type { CompilerPlatformPort, PlatformLog } from '../../../../middleware/shared/ports/compiler-platform-port'
 import type { HmiBuildSources } from '../../../../middleware/shared/ports/hmi-preview-types'
 import { composeHmiArtefact, type HmiArtefactFiles, hmiRemovalArtefact } from '../../hmi/artefact/compose-hmi-artefact'
@@ -13,6 +11,7 @@ export interface HmiArtefactStepInput {
   hmi: HmiBuildSources | null
   /** Whether the target runtime accepts `hmi/`; null when no runtime was asked (a build without upload). */
   runtimeSupportsHmi: boolean | null
+  /** The build's library archives, verbatim: PLC libraries and widget libraries. */
   libraryArchives: readonly unknown[]
   /** The target's capabilities; widgets that need one it lacks are refused. */
   capabilities: object
@@ -27,16 +26,6 @@ export interface HmiArtefactStepInput {
 
 export type HmiArtefactStepResult = { ok: true; files: HmiArtefactFiles } | { ok: false }
 
-/** Whether a loaded library archive is a STruC++ `.stlib` archive. */
-export const isStlibArchive = (value: unknown): value is StlibArchive =>
-  typeof value === 'object' &&
-  value !== null &&
-  'manifest' in value &&
-  typeof value.manifest === 'object' &&
-  value.manifest !== null &&
-  'name' in value.manifest &&
-  typeof value.manifest.name === 'string'
-
 export async function buildHmiArtefactStep(input: HmiArtefactStepInput): Promise<HmiArtefactStepResult> {
   if (!input.hmi) {
     if (input.runtimeSupportsHmi !== true) return { ok: true, files: {} }
@@ -46,7 +35,7 @@ export async function buildHmiArtefactStep(input: HmiArtefactStepInput): Promise
   input.log(`Building the HMI (${input.hmi.screens.length} screen(s))...`, 'info')
   const result = await composeHmiArtefact({
     sources: input.hmi,
-    plcArchives: input.libraryArchives.filter(isStlibArchive),
+    libraries: input.libraryArchives,
     capabilities: input.capabilities,
     debugMapJson: input.debugMapJson,
     md5: input.md5,
