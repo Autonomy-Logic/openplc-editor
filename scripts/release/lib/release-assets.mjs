@@ -6,7 +6,7 @@ import { CheckFailure } from './cli.mjs'
 const RELEASE_TAG = /^v(\d+\.\d+\.\d+)(-rehearsal)?$/
 
 /** An editor version: `<major>.<minor>.<patch>`. */
-const VERSION = /^\d+\.\d+\.\d+$/
+export const VERSION = /^\d+\.\d+\.\d+$/
 
 /** A bare lowercase sha256 hex digest. */
 export const SHA256_HEX = /^[0-9a-f]{64}$/
