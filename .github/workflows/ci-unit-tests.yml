@@ -46,6 +46,11 @@ jobs:
         if: ${{ !inputs.skip }}
         run: npm run setup:strucpp
 
+      # The pinned HMI widget libraries (openplc-hmi-widgets) the HMI suites build against.
+      - name: Install the HMI widget libraries
+        if: ${{ !inputs.skip }}
+        run: npm run setup:hmi-widgets
+
       - name: Run tests with coverage
         if: ${{ !inputs.skip }}
         run: npx jest --config jest.config.json --collectCoverage --ci

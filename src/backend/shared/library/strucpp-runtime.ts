@@ -46,6 +46,8 @@
  *     (HMI screens and widget blocks).
  *   - `walkAST` — walks a compiled unit's annotated AST (the tags
  *     each HMI screen reads and writes).
+ *   - `functionBlockLineage` — a block's EXTENDS chain across
+ *     library archives (the HMI widget catalogue).
  *
  * Every entry pulls its signature through `typeof import('strucpp')[k]`
  * so adding a parameter on the strucpp side surfaces as a compile
@@ -61,6 +63,7 @@ export interface StrucppRuntime {
   loadStlibFromString: (typeof import('strucpp'))['loadStlibFromString']
   parse: (typeof import('strucpp'))['parse']
   walkAST: (typeof import('strucpp'))['walkAST']
+  functionBlockLineage: (typeof import('strucpp'))['functionBlockLineage']
 }
 
 let cached: StrucppRuntime | null = null

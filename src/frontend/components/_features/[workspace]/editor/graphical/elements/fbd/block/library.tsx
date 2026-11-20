@@ -1,4 +1,5 @@
 import { MagnifierIcon } from '@root/frontend/assets/icons/interface/Magnifier'
+import { useProjectPlcLibraries } from '@root/frontend/hooks/use-project-libraries'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { buildLibraryTree, type LibraryTreeNode } from '@root/frontend/utils/library-tree'
 import type { SystemLibraryPou } from '@root/middleware/shared/ports/library-types'
@@ -17,20 +18,12 @@ export const ModalBlockLibrary = ({
 }) => {
   const pouName = useBoundPou()
   const pous = useOpenPLCStore((state) => state.project.data.pous)
-  const system = useOpenPLCStore((state) => state.libraries.system)
   const user = useOpenPLCStore((state) => state.libraries.user)
-  // Scope the visible system pool to bundled (canonical) +
-  // project-enabled libraries — same gate the explorer's library
-  // tree uses, so the picker shows exactly what the project can
-  // actually reference.
-  const enabledLibraryNames = useOpenPLCStore((s) => s.enabledLibraries)
-  const bundledLibraryNames = useOpenPLCStore((s) => s.bundledLibraryNames)
+  // Bundled libraries and the ones the project lists, without POUs a PLC build cannot use.
+  const visiblePool = useProjectPlcLibraries()
 
   const [filterText, setFilterText] = useState('')
 
-  const visiblePool = system.filter(
-    (library) => bundledLibraryNames.includes(library.name) || enabledLibraryNames.includes(library.name),
-  )
   const systemLibraries = visiblePool.filter((library) =>
     pous.find((pou) => pou.name === pouName)?.pouType === 'function'
       ? library.pous.some((pou) => pou.name.toLowerCase().includes(filterText) && pou.type === 'function')

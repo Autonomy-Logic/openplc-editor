@@ -130,9 +130,11 @@ export function newHmiScreenSource(name: string): string {
   ].join('\n')
 }
 
-/** Source of a new widget block. */
-export function newHmiWidgetSource(name: string): string {
+/** Source of a new widget block; with `paletteGroup`, the palette group it is offered under (a library's widgets). */
+export function newHmiWidgetSource(name: string, paletteGroup?: string): string {
+  const group = paletteGroup?.replace(/['$\r\n]/g, '').trim()
   return [
+    ...(group ? [`{attribute 'hmi_palette' := '${group}'}`] : []),
     `FUNCTION_BLOCK ${name} EXTENDS HmiElement`,
     '  VAR_INPUT',
     "    {attribute 'hmi_main'}",

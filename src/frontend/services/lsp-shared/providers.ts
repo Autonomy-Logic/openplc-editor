@@ -125,6 +125,11 @@ export interface ProviderHooks {
    * a custom hook cannot let a windowed view receive foreign edits.
    */
   filterFormattingEdits?: (edits: LspTextEdit[], offset: number) => LspTextEdit[]
+  /** Completion items of `lspUri` to keep. Default: all of them. */
+  filterCompletionItems?: (
+    lspUri: string,
+    items: monaco.languages.CompletionItem[],
+  ) => monaco.languages.CompletionItem[]
   /**
    * The LSP-side text of `lspUri`, as last sent to the worker.
    * Required for formatting in a windowed view: edit columns are
@@ -171,6 +176,7 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
   const navigateOutline = opts.hooks?.navigateOutline
   const filterFormattingEdits = opts.hooks?.filterFormattingEdits ?? defaultFilterFormattingEdits
   const getLspDocumentText = opts.hooks?.getLspDocumentText
+  const filterCompletionItems = opts.hooks?.filterCompletionItems
   const completionTriggerCharacters = opts.completionTriggerCharacters ?? []
   const signatureHelpTriggerCharacters = opts.signatureHelpTriggerCharacters ?? []
 
@@ -199,7 +205,8 @@ export function registerLspProviders(opts: RegisterLspProvidersOptions): monaco.
           textDocument: { uri: lspUri },
           position: lspPosition,
         })
-        return lspCompletionListToMonaco(result, defaultRange, monacoApi, lineOffset)
+        const list = lspCompletionListToMonaco(result, defaultRange, monacoApi, lineOffset)
+        return filterCompletionItems ? { ...list, suggestions: filterCompletionItems(lspUri, list.suggestions) } : list
       },
     }),
   )

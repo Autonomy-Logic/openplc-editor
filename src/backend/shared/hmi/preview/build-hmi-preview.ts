@@ -15,8 +15,7 @@ import type {
 } from '../../../../middleware/shared/ports/wasm-toolchain-types'
 import { buildHmiFontTableSource, HmiFontError } from '../fonts/font-table-source'
 import { vettedHmiFont } from '../fonts/vetted-fonts'
-import { type HmiLibraryUnit, shareLibraryUnits } from '../lib-object/library-unit'
-import { hmiWidgetLibraryArchives } from '../lib-object/widget-libraries'
+import { type HmiLibraryUnit, sharedWidgetLibraries, shareLibraryUnits } from '../lib-object/library-unit'
 import {
   generateHmiUnit,
   HMI_GALLERY_SCREEN,
@@ -34,6 +33,8 @@ export interface HmiPreviewResources {
   hmiSources: Readonly<Record<string, string>>
   /** A vetted font file by name. */
   readFont: (file: string) => Promise<Uint8Array>
+  /** The archives of the libraries the project uses (bundled and listed), verbatim; the preview compiles against them. */
+  projectLibraries: readonly unknown[]
 }
 
 /** Compiles a request; the platform's WebAssembly toolchain. */
@@ -167,7 +168,13 @@ export async function buildHmiPreview(
   onStep?.('generate')
   await nextTask()
   const generateStart = performance.now()
-  const generated = generateHmiUnit({ ...input, preview: true, resolve: undefined, plcMd5: undefined })
+  const generated = generateHmiUnit({
+    ...input,
+    projectLibraries: resources.projectLibraries,
+    preview: true,
+    resolve: undefined,
+    plcMd5: undefined,
+  })
   timings.generateMs = performance.now() - generateStart
   timings.widgetsMs = generated.timings.widgetsMs
   timings.strucppMs = generated.timings.strucppMs
@@ -190,7 +197,12 @@ export async function buildHmiPreview(
   }
   timings.fontsMs = performance.now() - fontsStart
 
-  const shared = shareLibraryUnits({ ...generated.files, ...generated.preview.files }, hmiWidgetLibraryArchives())
+  const widgetLibraries = sharedWidgetLibraries(resources.projectLibraries)
+  const shared = shareLibraryUnits(
+    { ...generated.files, ...generated.preview.files },
+    widgetLibraries.shared,
+    widgetLibraries.all,
+  )
   if (!shared.ok)
     return { ok: false, errors: [{ file: UNIT, message: shared.error }], warnings: generated.warnings, timings: done() }
   const groups = {

@@ -62,8 +62,9 @@ const CreatePLCElement = () => {
       case 'remote-device':
         return projectCaps.hasRemoteDevices && (targetCaps.modbusTcpRemote || targetCaps.ethercat)
       case 'hmi-screen':
-      case 'hmi-widget':
         return projectCaps.hasHmi
+      case 'hmi-widget':
+        return projectCaps.hasHmiWidgets
       default:
         // function / function-block / data-type / global-variable-list — always available.
         return true

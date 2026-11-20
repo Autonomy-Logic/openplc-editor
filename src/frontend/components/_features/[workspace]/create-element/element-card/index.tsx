@@ -4,6 +4,7 @@ import { startCase } from 'lodash'
 import { Dispatch, ReactNode, SetStateAction, useState } from 'react'
 import { Controller, SubmitHandler, useForm } from 'react-hook-form'
 
+import { isLibraryProject } from '../../../../../../middleware/shared/ports/types'
 import { resolveModbusServerProfile } from '../../../../../../middleware/shared/utils/modbus-server-profile'
 import { resolveTargetCapabilities } from '../../../../../../middleware/shared/utils/target-capabilities'
 import { ArrowIcon } from '../../../../../assets/icons/interface/Arrow'
@@ -171,6 +172,8 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
     deviceAvailableOptions: { availableBoards },
   } = useOpenPLCStore()
   const deviceBoard = useOpenPLCStore((state) => state.deviceDefinitions.configuration.deviceBoard)
+  const isLibrary = useOpenPLCStore((state) => isLibraryProject(state.project.meta))
+  const label = isLibrary && target === 'hmi-widget' ? 'Widget' : (TARGET_LABELS[target] ?? startCase(target))
   const [isOpen, setIsOpen] = useState(false)
 
   const currentBoardInfo = availableBoards.get(deviceBoard)
@@ -335,7 +338,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
         >
           {CreatePouSources[target]}
           <p className='my-[2px] flex-1 whitespace-nowrap text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
-            {TARGET_LABELS[target] ?? startCase(target)}
+            {label}
           </p>
           <ArrowIcon size='md' direction='right' />
         </div>
@@ -474,7 +477,7 @@ const ElementCard = (props: ElementCardProps): ReactNode => {
                   <div className='flex w-full select-none items-center gap-2'>
                     {CreatePouSources[target]}
                     <p className='my-[2px] flex-1 text-start font-caption text-xs font-normal text-neutral-1000 dark:text-neutral-300'>
-                      {TARGET_LABELS[target]}
+                      {label}
                     </p>
                   </div>
                   <div className='h-[1px] w-full bg-neutral-200 dark:!bg-neutral-850' />

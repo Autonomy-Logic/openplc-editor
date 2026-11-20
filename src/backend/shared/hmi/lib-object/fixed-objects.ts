@@ -53,7 +53,7 @@ END_FUNCTION_BLOCK
 `
 
 export interface HmiFixedObjectSources {
-  /** The preview's resources, as the platforms give them. */
+  /** The preview's resources, as the platforms give them, with the bundled library archives as the project's. */
   preview: HmiPreviewResources
   /** Every file under the HMI sources folder, as the Runtime v4 build reads them. */
   hmiSources: Readonly<Record<string, string | Uint8Array>>
@@ -80,11 +80,11 @@ export async function buildHmiShippedObjects(
     const settings = hmiSettingsSchema.parse({ fontVariant })
     const project = { screens: [{ name: 'Reference', source: REFERENCE_SCREEN }], widgets: [], settings }
     const sources = { ...project, plcVariables: [], projectNames: [] }
-    const preview = await buildHmiPreview({ ...sources, gallery: true }, input.preview, compile)
+    const preview = await buildHmiPreview({ ...sources, libraries: [], gallery: true }, input.preview, compile)
     if (!preview.ok) throw new Error(preview.errors.map((e) => e.message).join('\n'))
     const artefact = await composeHmiArtefact({
       sources,
-      plcArchives: [],
+      libraries: input.preview.projectLibraries,
       capabilities: {},
       debugMapJson: JSON.stringify({ version: 2, md5: 'x', leaves: [] }),
       md5: '00000000000000000000000000000000',

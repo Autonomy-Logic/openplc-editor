@@ -3,7 +3,7 @@
  * widget library units, compiled with the pinned WebAssembly toolchain. Run before packaging
  * (`npm run build:hmi-objects`); the packaged app reads them from its resources, development builds from the folder.
  */
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { cpus } from 'node:os'
 import { join } from 'node:path'
 
@@ -14,6 +14,22 @@ const ROOT = join(__dirname, '..')
 const HMI = join(ROOT, 'resources', 'sources', 'hmi')
 const RUNTIME = join(ROOT, 'node_modules', 'strucpp', 'src', 'runtime', 'include')
 const OUT = join(ROOT, 'release', 'hmi-objects')
+/** The bundled library archives, as the library manager reads them: STruC++'s, then the pinned HMI widgets release. */
+const BUNDLED_LIBRARIES = [join(ROOT, 'node_modules', 'strucpp', 'libs'), join(ROOT, 'vendor', 'hmi-widgets')]
+
+/** Every `.stlib` of the bundled folders, parsed, each folder in file name order; throws when the widgets are missing. */
+function bundledArchives(): unknown[] {
+  const widgets = BUNDLED_LIBRARIES[1]
+  if (!existsSync(widgets)) throw new Error(`${widgets} is missing: run npm run setup:hmi-widgets`)
+  return BUNDLED_LIBRARIES.flatMap((dir) =>
+    existsSync(dir)
+      ? readdirSync(dir)
+          .filter((f) => f.endsWith('.stlib'))
+          .sort()
+          .map((f): unknown => JSON.parse(readFileSync(join(dir, f), 'utf8')))
+      : [],
+  )
+}
 
 /** Every file under a folder by its relative path: C and C++ sources as text, the rest as bytes. */
 function readAll(dir: string, prefix = ''): Record<string, string | Uint8Array> {
@@ -50,6 +66,7 @@ async function main(): Promise<void> {
         runtimeHeaders: runtime,
         hmiSources: previewSources,
         readFont: (file) => Promise.resolve(new Uint8Array(readFileSync(join(HMI, 'fonts', file)))),
+        projectLibraries: bundledArchives(),
       },
       hmiSources,
       runtimeHeaders: Object.fromEntries(

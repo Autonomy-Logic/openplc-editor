@@ -4,6 +4,7 @@
  */
 import type { HmiPreviewPort } from '../../../middleware/shared/ports/hmi-preview-port'
 import { defaultHmiSettings } from '../../../middleware/shared/utils/hmi/settings'
+import { projectLibraryNames } from '../../../middleware/shared/utils/library/project-libraries'
 import type { OpenPLCStore } from '../../store'
 import { hmiFileUri } from '../hmi-code/uris'
 import { deleteBodyLineOffset, setBodyLineOffset } from '../lsp-shared/body-offsets'
@@ -40,6 +41,10 @@ export function attachHmiSync(
   let glueKey = ''
   let republishTimer: ReturnType<typeof setTimeout> | null = null
 
+  const librariesOf = () => {
+    const { bundledLibraryNames, enabledLibraries } = store.getState()
+    return projectLibraryNames(bundledLibraryNames, enabledLibraries)
+  }
   const hmiOf = () => {
     const hmi = store.getState().project.data.hmi
     return {
@@ -69,10 +74,11 @@ export function attachHmiSync(
 
   const reconcileGlue = async (): Promise<void> => {
     const { screens, settings } = hmiOf()
-    const key = JSON.stringify([screens.map((s) => s.name), settings.themes.map((t) => t.name)])
+    const libraries = librariesOf()
+    const key = JSON.stringify([screens.map((s) => s.name), settings.themes.map((t) => t.name), libraries])
     if (key === glueKey) return
     glueKey = key
-    const { glue, screenMembers } = await preview.codeContext({ screens, settings })
+    const { glue, screenMembers } = await preview.codeContext({ screens, settings, libraries })
     if (disposed || key !== glueKey) return
     members = new Set(screenMembers)
     if (glue === '') {
@@ -116,6 +122,10 @@ export function attachHmiSync(
   }
 
   const unsubscribeHmi = store.subscribe((s) => s.project.data.hmi, reconcile)
+  const unsubscribeLibraries = store.subscribe(
+    (s) => projectLibraryNames(s.bundledLibraryNames, s.enabledLibraries).join('\n'),
+    reconcile,
+  )
   const unsubscribePous = store.subscribe((s) => s.project.data.pous, republish)
   const unsubscribeResource = store.subscribe((s) => s.project.data.configurations.resource, republish)
   reconcile()
@@ -123,7 +133,11 @@ export function attachHmiSync(
   return {
     async libraries() {
       if (!hasHmi()) return []
-      const { libraries, screenMembers } = await preview.codeContext({ screens: [], settings: hmiOf().settings })
+      const { libraries, screenMembers } = await preview.codeContext({
+        screens: [],
+        settings: hmiOf().settings,
+        libraries: librariesOf(),
+      })
       members = new Set(screenMembers)
       return libraries.map((l) => ({ sourceLabel: l.name, payload: l.archiveJson }))
     },
@@ -132,6 +146,7 @@ export function attachHmiSync(
       disposed = true
       if (republishTimer) clearTimeout(republishTimer)
       unsubscribeHmi()
+      unsubscribeLibraries()
       unsubscribePous()
       unsubscribeResource()
       for (const uri of [...sent.keys()]) close(uri)

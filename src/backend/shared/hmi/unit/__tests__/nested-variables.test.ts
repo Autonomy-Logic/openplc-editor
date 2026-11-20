@@ -11,6 +11,7 @@ import { hmiSettingsSchema } from '../../../../../middleware/shared/utils/hmi/se
 import { loadStrucpp } from '../../../library/strucpp-runtime'
 import { hmiTagResolver } from '../../artefact/tag-resolver'
 import { generateHmiUnit } from '../generate-hmi-unit'
+import { installedWidgetArchives } from './fixtures/widget-libraries'
 
 const base = (value: string): PLCVariableType => ({ definition: 'base-type', value })
 const named = (value: string): PLCVariableType => ({ definition: 'derived', value })
@@ -200,10 +201,10 @@ describe('nested HMI variables', () => {
     const result = generateHmiUnit({
       screens: [{ name: 'Overview', source: screen }],
       widgets: [],
+      projectLibraries: [...installedWidgetArchives(), JSON.parse(ARCHIVE_JSON)],
       settings: hmiSettingsSchema.parse({}),
       plcVariables: variables,
       plcDeclarations: DECLARATIONS,
-      plcLibraries: [{ name: 'iec-standard-fb', archiveJson: ARCHIVE_JSON }],
       projectNames: ['Main', 'MyFb', 'Pt', 'Sub'],
       resolve,
     })
@@ -233,10 +234,10 @@ describe('nested HMI variables', () => {
         },
       ],
       widgets: [],
+      projectLibraries: [...installedWidgetArchives(), JSON.parse(ARCHIVE_JSON)],
       settings: hmiSettingsSchema.parse({}),
       plcVariables: variables,
       plcDeclarations: DECLARATIONS,
-      plcLibraries: [{ name: 'iec-standard-fb', archiveJson: ARCHIVE_JSON }],
       projectNames: ['Main', 'MyFb', 'Pt', 'Sub'],
       preview: true,
     })
@@ -262,10 +263,10 @@ describe('nested HMI variables', () => {
         },
       ],
       widgets: [],
+      projectLibraries: [...installedWidgetArchives(), JSON.parse(ARCHIVE_JSON)],
       settings: hmiSettingsSchema.parse({}),
       plcVariables: variables,
       plcDeclarations: DECLARATIONS,
-      plcLibraries: [{ name: 'iec-standard-fb', archiveJson: ARCHIVE_JSON }],
       projectNames: ['Main', 'MyFb', 'Pt', 'Sub'],
       preview: true,
     })
@@ -331,6 +332,7 @@ function sampleBase() {
       },
     ],
     widgets: [],
+    projectLibraries: installedWidgetArchives(),
     settings: hmiSettingsSchema.parse({}),
     plcVariables: [],
     projectNames: [],

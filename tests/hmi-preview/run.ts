@@ -22,6 +22,7 @@ import { serveHmiPreview } from '../../src/backend/shared/hmi/preview/preview-wo
 import { HmiPreviewInstance } from '../../src/backend/shared/hmi/preview/preview-instance'
 import { buildHmiWidgetCatalog, WIDGET_PREVIEW_SCREEN } from '../../src/backend/shared/hmi/unit/generate-hmi-unit'
 import { sampleProject } from '../../src/backend/shared/hmi/unit/__tests__/fixtures/sample-project'
+import { installedWidgetArchives } from '../../src/backend/shared/hmi/unit/__tests__/fixtures/widget-libraries'
 import { compileToWasm } from '../../src/backend/shared/wasm-toolchain/compile-to-wasm'
 import { BoundedWasmObjectCache } from '../../src/backend/shared/wasm-toolchain/wasm-object-cache'
 import { createWasmCompileService } from '../../src/backend/shared/wasm-toolchain/wasm-compile-service'
@@ -101,6 +102,7 @@ function resources(): HmiPreviewResources {
       ...textFiles(join(HMI, 'preview'), 'preview/', source),
     },
     readFont: (file) => Promise.resolve(new Uint8Array(readFileSync(join(HMI, 'fonts', file)))),
+    projectLibraries: installedWidgetArchives(),
   }
 }
 
@@ -254,7 +256,7 @@ async function liveElementChecks(files: HmiPreviewResources, compile: Compile): 
     compiles++
     return compile(request)
   }
-  const { catalog } = buildHmiWidgetCatalog(sampleProject().widgets)
+  const { catalog } = buildHmiWidgetCatalog(sampleProject().widgets, installedWidgetArchives())
   const isWidget = (type: string) => catalog.widgets.has(type.toUpperCase())
   const parse = (source: string): DesignerModel => {
     const parsed = parseDesignerBlock(source, isWidget)
@@ -641,6 +643,8 @@ async function main(): Promise<void> {
       readStrucppRuntimeHeaders: () => Promise.resolve(files.runtimeHeaders),
       compileToWasm: compile,
       startWorker: () => inProcessWorker(true),
+      loadLibraries: () => Promise.resolve(installedWidgetArchives()),
+      onLibrariesChanged: () => () => undefined,
     },
     { callTimeoutMs: 500 },
   )
@@ -669,6 +673,8 @@ async function main(): Promise<void> {
       readStrucppRuntimeHeaders: () => Promise.resolve({}),
       compileToWasm: compile,
       startWorker: () => inProcessWorker(false),
+      loadLibraries: () => Promise.resolve(installedWidgetArchives()),
+      onLibrariesChanged: () => () => undefined,
     },
     { loadTimeoutMs: 200 },
   ).openSession()

@@ -133,10 +133,14 @@ Product builds contain neither.
 
 ## Widget library
 
-Screens are ST built on StandardWidgets, an ST library over these primitives: the element base, containers,
-widgets, the on-screen keyboard, the screen base and the runtime the generated glue drives. It lives in
-`src/backend/shared/hmi/lib/` (shared surface) and is compiled by STruC++ as its own library; its `{external}` code
-includes `hmi_core.h`.
+Screens are ST built on StandardWidgets (`standard-widgets`), an ST library over these primitives: the element base,
+containers, widgets, the on-screen keyboard, the screen base and the runtime the generated glue drives. Its source
+lives in the openplc-hmi-widgets repository, which releases it as a plain STruC++ `.stlib` archive whose chunks record
+the HMI core API version they call: `HMI_CORE_API_VERSION` in `core/hmi_core.h`, raised with any change a compiled
+library could break on, and mirrored by the editor's TypeScript constant. The editor installs the pinned release into
+`vendor/hmi-widgets/` (`npm run setup:hmi-widgets`) and ships it pre-installed; HMI builds provide `hmi_core.h` to
+library code, PLC builds do not. Libraries a user installs, or builds from a library project, are used the same way
+by a project that lists them: any function block deriving from `HmiElement` is a widget.
 
 Layout is built from containers, which nest freely:
 
@@ -165,7 +169,7 @@ and the HMI build sets it in the screen's generated `Build` on every element tha
 ## Data widgets
 
 The alarm banner, alarm list, event log and XY plot show PLC data larger than one value. The PLC side is the HmiAlarms
-library (`src/backend/shared/hmi/plc-lib/`), which the editor compiles and adds to every PLC build that names it:
+library (`hmi-alarms`, a pre-installed PLC library from the same openplc-hmi-widgets release, in every PLC build):
 functions, not function blocks, because they take the program's tables as variable-length arrays (`ARRAY[*]`), which
 a STruC++ function block cannot hold. The program sizes its own tables, with no limit set by the library:
 
@@ -246,13 +250,10 @@ against `tests/hmi-core/golden.txt` with both font variants, and runs the fuzzer
 `--png <dir>` writes the scenes as images. After an intended rendering change, review the images and run with
 `--update`.
 
-`npm run test:hmi-lib` (`tests/hmi-lib/run.mjs`) compiles the library and test screens with STruC++, builds them with
-this core on gcc and clang (plus a build under AddressSanitizer and UndefinedBehaviorSanitizer), drives scripted
-input and checks every frame against `tests/hmi-lib/golden.txt`.
-
-`npm run test:hmi-alarms` (`tests/hmi-alarms/run.mjs`) compiles the HmiAlarms library and a scripted program with
-STruC++, builds them natively and checks raising, acknowledging (by row, the top alarm and all), clearing, the top
-alarm and the log ring against `tests/hmi-alarms/golden.txt`.
+The headless frame tests of the widget library (test screens against the archive, built with this core on gcc and
+clang and under the sanitizers) and the scripted test of the HmiAlarms library run in openplc-hmi-widgets
+(`npm run test:native`), against this core at the editor commit its `hmi-core.json` pins; `ci-hmi-core.yml` also
+runs them against this checkout's core.
 
 `npm run test:hmi-preview` (`tests/hmi-preview/run.ts`) builds a sample project's preview with the shared preview
 build and the in-editor WebAssembly toolchain, runs it through the preview host, and checks frames, band skipping,

@@ -31,6 +31,8 @@ export interface HmiProject {
   runtimeIpAddress?: string
   /** The project's board; Runtime v4 by default. */
   deviceBoard?: string
+  /** The user-installed libraries the project lists (`project.json` `libraries`); none by default. */
+  libraries?: Array<{ name: string; version: string }>
 }
 
 const APP_FAILURES = [/Failed to open project/i, /Something went wrong/i, /could not be loaded/i]
@@ -67,7 +69,7 @@ export function writeHmiFixture(f: HmiFixture, project: HmiProject): void {
             })),
           },
         },
-        libraries: [],
+        libraries: project.libraries ?? [],
         debugVariables: { global: [], pous: {} },
       },
     }),

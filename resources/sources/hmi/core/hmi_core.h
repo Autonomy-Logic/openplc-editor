@@ -31,6 +31,9 @@ extern "C" {
 #define HMI_DL_VERSION 1u
 #define HMI_DL_HEADER_SIZE 20u
 
+/** API version of this core that compiled widget libraries call; raised with any change such a library could break on. */
+#define HMI_CORE_API_VERSION 1
+
 /** Display list opcodes and their payloads. */
 enum hmi_op {
     HMI_OP_CLEAR = 1,       /**< u32 color */

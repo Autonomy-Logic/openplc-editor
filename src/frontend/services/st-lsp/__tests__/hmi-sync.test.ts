@@ -33,7 +33,14 @@ function previewPort(): HmiPreviewPort {
     build: unused,
     catalog: unused,
     thumbnails: unused,
-    codeContext: (sources) => Promise.resolve({ ...CONTEXT, glue: sources.screens.length > 0 ? CONTEXT.glue : '' }),
+    codeContext: (sources) =>
+      Promise.resolve({
+        ...CONTEXT,
+        glue: sources.screens.length > 0 ? CONTEXT.glue : '',
+        screenMembers: sources.libraries.includes('gauges')
+          ? [...CONTEXT.screenMembers, 'DIAL']
+          : CONTEXT.screenMembers,
+      }),
     openSession: () => {
       throw new Error('not used')
     },
@@ -90,5 +97,35 @@ describe('HMI sync into the ST language server', () => {
     expect(changed).toContainEqual([uri, `${HMI_INSTANCE_PATHS_PRAGMA}\n${source}(* edit *)\n`])
     sync.dispose()
     expect(closed).toEqual(expect.arrayContaining([uri, HMI_GLUE_URI]))
+  })
+
+  it('updates the screen members when the project lists a library, without an HMI edit', async () => {
+    store.getState().libraryActions.applyInstalledLibraries(
+      [
+        {
+          manifest: {
+            name: 'gauges',
+            version: '1.0.0',
+            namespace: 'gauges',
+            isBuiltin: false,
+            functions: [],
+            functionBlocks: [],
+            types: [],
+          },
+        },
+      ],
+      [{ name: 'gauges', bundled: false }],
+    )
+    const sync = attach()
+    store.getState().hmiActions.create('screen', 'Overview')
+    await flush()
+    expect([...sync.screenMembers()]).toEqual(['LAYOUT'])
+    const hmi = store.getState().project.data.hmi
+
+    store.getState().libraryActions.enableLibrary('gauges')
+    await flush()
+    expect(store.getState().project.data.hmi).toBe(hmi)
+    expect([...sync.screenMembers()]).toEqual(['LAYOUT', 'DIAL'])
+    sync.dispose()
   })
 })

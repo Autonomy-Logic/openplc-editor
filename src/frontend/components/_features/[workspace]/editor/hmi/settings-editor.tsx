@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@root/frontend
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@root/frontend/components/_atoms/table'
 import { ToggleSwitch } from '@root/frontend/components/_atoms/toggle-switch'
 import { useTargetCapabilities } from '@root/frontend/hooks/use-target-capabilities'
-import { readyRequest } from '@root/frontend/services/hmi-code/plc-libraries'
 import { useOpenPLCStore } from '@root/frontend/store'
 import { cn } from '@root/frontend/utils/cn'
 import { isOpenPLCRuntimeV4Target } from '@root/frontend/utils/device'
@@ -158,11 +157,11 @@ function CommitInput(props: {
 
 /** A sample screen drawn by the core in `theme`, rebuilt a moment after the settings change. */
 function ThemePreview(props: { theme: string }) {
-  const request = useProjectRequest()
+  const { request, ready } = useProjectRequest()
   const themed = useMemo(() => ({ ...request, screens: [], themePreview: props.theme }), [request, props.theme])
   const canvas = useRef<HTMLCanvasElement>(null)
   const preview = usePreviewSession({
-    request: readyRequest(themed),
+    request: ready ? themed : null,
     screen: '',
     device: PREVIEW_DEVICE,
     design: false,

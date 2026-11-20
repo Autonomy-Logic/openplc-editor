@@ -33,17 +33,16 @@
  *     orchestrator that wraps this pipeline.  This module is purely
  *     about the strucpp invocation slice.
  */
+import { PLC_PROVIDED_HEADERS } from '@root/middleware/shared/utils/hmi/widget-libraries'
 import type * as strucpp from 'strucpp'
 
-import { withHmiAlarmsArchive } from '../hmi/plc-lib/build-hmi-alarms'
-import { hmiAlarmsReferenced } from '../hmi/plc-lib/hmi-alarms'
 import type { KnownPou } from '../utils/PLC/split-program-st'
 import { splitProgramSt } from '../utils/PLC/split-program-st'
 import { enrichErrorWithPouContext, formatErrorWithPouContext } from './program-build-helpers'
+import { isStrucppArchive } from './stlib-archive-json'
 import { loadStrucpp } from './strucpp-runtime'
 
 type StrucppCompileError = strucpp.CompileError
-type StrucppLibraries = NonNullable<Parameters<typeof strucpp.compile>[1]>['libraries']
 
 export interface ProgramBuildPipelineOptions {
   /** Full program.st text (or the merged ST source the caller produced). */
@@ -189,7 +188,8 @@ export function runProgramBuildPipeline(opts: ProgramBuildPipelineOptions): Prog
     fileName: primaryFileName,
     debug: true,
     lineMapping: true,
-    libraries: (hmiAlarmsReferenced(source) ? withHmiAlarmsArchive(libraries) : libraries) as StrucppLibraries,
+    libraries: libraries.filter(isStrucppArchive),
+    providedHeaders: [...PLC_PROVIDED_HEADERS],
     md5,
     pouIncludes,
     ...(additionalSources ? { additionalSources } : {}),

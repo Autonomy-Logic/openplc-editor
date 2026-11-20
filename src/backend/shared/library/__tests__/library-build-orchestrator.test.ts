@@ -241,7 +241,25 @@ describe('runLibraryBuildPipeline', () => {
 
     const [, , , aux] = mockLibraryBuild.mock.calls[0]
     expect(aux.dependencyArchives).toBe(harness.archives)
-    expect(aux.dependencyRefs).toEqual([{ name: 'oscat-basic', version: '1.0.0' }])
+    expect(aux.widgetSources).toEqual([])
+  })
+
+  it("hands the project's HMI widget blocks to the library compile", async () => {
+    const harness = makePort()
+    const { emit } = captureEvents()
+    const widget = { name: 'Badge', source: 'FUNCTION_BLOCK Badge EXTENDS HmiElement\nEND_FUNCTION_BLOCK\n' }
+
+    await runLibraryBuildPipeline(
+      {
+        projectPath: '/project',
+        projectData: { ...projectDataEmpty(), ...{ hmi: { screens: [], widgets: [widget, { name: 7 }] } } },
+      },
+      harness.port,
+      emit,
+    )
+
+    const [, , , aux] = mockLibraryBuild.mock.calls[0]
+    expect(aux.widgetSources).toEqual([widget])
   })
 
   it('aborts before the strucpp compile when the project enables an unresolved library', async () => {
