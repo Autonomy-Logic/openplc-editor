@@ -7,8 +7,11 @@
 - `sign-test-package.ts`: signs a synthetic package directory (by default `com.example.untrusted` under the throwaway key
   `untrusted-dev`), with options to set the key id and alter files after signing; zips a directory into a `.vpp`; extracts
   the fx3u fixture.
-- `trust-test-kit.ts`: trust modules generated for a throwaway test key, the module under test with the real key
-  (`OPENPLC_TRUST_MODULE_UNDER_TEST` names a generated module file, with `layout.json` beside it), site
-  neutralization and recording mechanisms.
+- `trust-test-kit.ts`: trust modules generated for a throwaway test key and loaded to their single entry point, with
+  real or replaced `node:crypto`, `node:fs`, `node:path` and shared verifier imports; the module under test with the
+  real key (`OPENPLC_TRUST_MODULE_UNDER_TEST` names a generated module file, with `layout.json` beside it); site
+  neutralization and isolation; recording, accepting and stubbed imports; an in-memory `node:fs`.
+- `equivalence-corpus.ts`: packages signed by the test key that the shared verifier accepts or refuses, for checking
+  that each site's inlined checks give the shared verdict.
 
 Every key here is a throwaway test key; none signs a real package.
