@@ -1,3 +1,5 @@
+import type { WasmLibraryObjectKind } from './wasm-toolchain-types'
+
 /** A file tree as clang sees it: directories are nested objects, files are text or bytes. */
 export type WasmToolchainTree = { [name: string]: string | Uint8Array | WasmToolchainTree }
 
@@ -68,6 +70,18 @@ export interface WasmObjectStore {
 export interface WasmShippedObjectSource {
   /** The bytes of one shipped file by its name, or null when there is no such file. */
   read(name: string): Promise<Uint8Array | null>
+}
+
+/**
+ * The place next to each library archive where its compiled objects are kept, one file per library and kind of build.
+ * Each file is stored and returned verbatim; what it holds and whether it may be used is decided by the shared
+ * toolchain. A platform with no writable place for a library keeps nothing for it.
+ */
+export interface WasmLibraryObjectStore {
+  /** The file of `library` for `kind`, or null when there is none. */
+  read(library: string, kind: WasmLibraryObjectKind): Promise<Uint8Array | null>
+  /** Replaces the file of `library` for `kind`; does nothing for a library the platform keeps no files next to. */
+  write(library: string, kind: WasmLibraryObjectKind, bytes: Uint8Array): Promise<void>
 }
 
 /** A message the pool sends a clang worker: run one job. */

@@ -66,6 +66,8 @@ export interface WasmCompileOptions {
   runner: WasmClangRunner
   cache?: WasmObjectCache
   log?: PlatformLog
+  /** Called with each unit's object the build uses, from the cache or compiled, with its cache key. */
+  onObject?: (unit: WasmCompileUnit, key: string, entry: CachedWasmObject) => void
 }
 
 interface PlannedUnit {
@@ -240,6 +242,7 @@ interface CompileContext {
   stats: WasmCompileStats
   /** Each job's timing by its planned object path. */
   timings: Map<string, WasmCompileJobTiming>
+  onObject: WasmCompileOptions['onObject']
 }
 
 /**
@@ -273,12 +276,13 @@ async function validVariant(
  * was added or removed, and compiles the rest, largest first.
  */
 async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToTree>, ctx: CompileContext) {
-  const { runner, cache, digestOf, shadowOf, objects, failures, loadFailures, report, stats, timings } = ctx
+  const { runner, cache, digestOf, shadowOf, objects, failures, loadFailures, report, stats, timings, onObject } = ctx
   const pending: PlannedUnit[] = []
   for (const p of jobs) {
     const hit = await validVariant(cache, p.key, ctx)
     if (hit) {
       objects.set(p.object, hit.object)
+      onObject?.(p.unit, p.key, hit)
       stats.cached++
       timings.set(p.object, { source: p.unit.source, ms: 0, cached: true })
     } else {
@@ -302,7 +306,9 @@ async function compileJobs(jobs: PlannedUnit[], tree: ReturnType<typeof filesToT
       if (built) {
         const shadowDigest = await shadowOf(built.includeNames)
         const digest = await objectDigest(p.key, { ...built, shadowDigest })
-        cache?.set(p.key, { object, digest, ...built, shadowDigest })
+        const entry: CachedWasmObject = { object, digest, ...built, shadowDigest }
+        cache?.set(p.key, entry)
+        onObject?.(p.unit, p.key, entry)
       }
       reportStderr(report, result.stderr, 'warning')
       return
@@ -338,7 +344,7 @@ export async function compileToWasm(
   request: WasmCompileRequest,
   options: WasmCompileOptions,
 ): Promise<WasmCompileResult> {
-  const { runner, cache, log } = options
+  const { runner, cache, log, onObject } = options
   const stats: WasmCompileStats = {
     units: request.units.length,
     cached: 0,
@@ -385,6 +391,7 @@ export async function compileToWasm(
       report,
       stats,
       timings,
+      onObject,
     })
 
   const planned = await planUnits(request)

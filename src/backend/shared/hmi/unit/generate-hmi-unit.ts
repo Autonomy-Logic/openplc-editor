@@ -49,6 +49,7 @@ import {
   withWidgets,
 } from '../lib/widget-libraries'
 import { type HmiAstWalk, hmiBitAssignments, type HmiLimitOf, hmiPageAccess, type HmiTagWrite } from './page-access'
+import { previewFactoryDispatch, type PreviewFactoryPart, previewFactoryTable, setterKind } from './preview-factory'
 import { type HmiBlockModel, type HmiElementDecl, parseHmiBlock } from './screen-model'
 import { type HmiElementLimit, hmiElementLimit, hmiLiteralOf, type HmiWriteLimit } from './write-limits'
 
@@ -77,6 +78,11 @@ export interface HmiUnitInput extends HmiUnitSources {
   /** Preview build: the libraries are emitted whole, so their code does not change with the screens. */
   preview?: boolean
   /**
+   * Preview only: the factory tables of the libraries compiled as their own units; the unit's factory routes their
+   * widgets to them and has a table of the rest.
+   */
+  libraryFactories?: readonly LibraryFactoryTable[]
+  /**
    * Build for a board's local panel: the unit then carries the panel PIN, relock time, touch calibration mode and build
    * id, and the PIN entry's face. Every other build (Runtime v4, previews) leaves them out entirely.
    */
@@ -90,6 +96,9 @@ export interface HmiUnitInput extends HmiUnitSources {
    */
   capabilities?: object
 }
+
+/** A library's factory table, as its own unit defines it. */
+export type LibraryFactoryTable = PreviewFactoryPart & { library: string }
 
 export interface HmiTag {
   path: string
@@ -161,6 +170,10 @@ type StrucppCompileOptions = Partial<CompileOptions> & { wholeLibraries?: string
 const UNIT = 'HMI'
 const NAMESPACE = 'hmi'
 const HEADER = 'hmi_unit.hpp'
+/** The libraries header STruC++ writes next to `HEADER`. */
+const LIBRARIES_HEADER = 'hmi_unit_libraries.hpp'
+/** Suffix of the project table's factory functions. */
+const PROJECT_FACTORY = '__project'
 const GLUE_FILE = 'hmi_glue.st'
 const PLC_FILE = 'hmi_plc.st'
 const MAIN_FILE = 'hmi_main.st'
@@ -179,7 +192,6 @@ const CONFIG_PREFIXES = ['CONFIG0.RES0.', 'CONFIG0.']
 const SCREENS_MAX = 64
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/
 /** Properties that change the element tree; editing them needs a build. */
-const STRUCTURAL = new Set(['PARENT', 'FLOATING'])
 const DEFAULT_STRING_LENGTH = 254
 /** Elementary tag types, in `hmi_tag_type` order from 1, then STRING. */
 const TAG_TYPES = [
@@ -1021,12 +1033,6 @@ function glueCpp(tags: readonly UnitTag[], input: HmiUnitInput, classes: readonl
 }
 
 /** How the preview sets a property live: as a number (numbers, BOOL, colours) or as text; undefined when it cannot. */
-function setterKind(p: HmiWidgetInfo['properties'][number]): 'num' | 'str' | undefined {
-  if (STRUCTURAL.has(p.name.toUpperCase())) return undefined
-  if (p.kind === 'string') return 'str'
-  return p.kind === 'number' || p.kind === 'bool' || p.kind === 'color' ? 'num' : undefined
-}
-
 /** A bit assignment to a PLC variable as STruC++ compiles it: a read-modify-write of the whole variable. */
 const BIT_STORE =
   /strucpp::external_write<([\w:]+)>\((\d+), static_cast<[\w:]+>\(\(static_cast<uint64_t>\(strucpp::external_read<\1>\(\2\)\) & ~\(1ULL << (\d+)\)\) \| \(\((.+?) \? 1ULL : 0ULL\) << \3\)\)\);/g
@@ -1170,107 +1176,20 @@ function previewSetters(
   return { setters, files }
 }
 
-/** C++ of a function body that ignores `names`, so a table without entries compiles without warnings. */
-const unused = (...names: string[]): string[] => names.map((n) => `    (void)${n};`)
-
 /**
- * The factory table of the preview's live elements (`resources/sources/hmi/preview/hmi_preview_factory.h`): every
- * widget type, numbered in name order, and one setter number per declared input that the preview sets live.
+ * The preview factory: the given library tables, then a table of the catalogue's other widgets (the project's widget
+ * blocks) declared by the unit's libraries header, joined by the dispatcher.
  */
-function previewFactory(catalog: HmiWidgetCatalog): { file: string; factory: HmiPreviewFactory } {
-  const types = [...catalog.widgets.values()].sort((a, b) =>
-    a.name.toUpperCase() < b.name.toUpperCase() ? -1 : a.name.toUpperCase() > b.name.toUpperCase() ? 1 : 0,
-  )
-  const blocks = new Map<string, number>()
-  const blockOf = (name: string): number => {
-    const key = name.toUpperCase()
-    const known = blocks.get(key)
-    if (known !== undefined) return known
-    blocks.set(key, blocks.size)
-    return blocks.size - 1
-  }
-  const setters = { num: new Map<string, number>(), str: new Map<string, number>() }
-  const cases = { num: [] as string[], str: [] as string[] }
-  const factory: HmiPreviewFactory = { types: {} }
-  const kinds: string[] = []
-  types.forEach((info, type) => {
-    const own: HmiPreviewFactory['types'][string]['setters'] = {}
-    const its = new Set<number>()
-    for (const p of info.properties) {
-      const kind = setterKind(p)
-      if (kind === undefined) continue
-      const block = blockOf(p.declaredBy)
-      its.add(block)
-      const key = `${p.declaredBy.toUpperCase()}.${p.name.toUpperCase()}`
-      let index = setters[kind].get(key)
-      if (index === undefined) {
-        index = setters[kind].size
-        setters[kind].set(key, index)
-        const member = `static_cast<${NAMESPACE}::${p.declaredBy.toUpperCase()} *>(element)->${p.name.toUpperCase()}`
-        cases[kind].push(
-          kind === 'num'
-            ? `    case ${index}: { if (!hmi_factory_is(type, ${block})) return -1; auto &m = ${member}; m.set(static_cast<std::decay_t<decltype(m.get())>>(value)); return 0; }`
-            : `    case ${index}: if (!hmi_factory_is(type, ${block})) return -1; ${member}.set(value); return 0;`,
-        )
-      }
-      own[p.name.toUpperCase()] = { index, kind }
-    }
-    factory.types[info.name.toUpperCase()] = { type, setters: own }
-    kinds.push(
-      `    case ${type}: return ${its.size > 0 ? [...its].map((b) => `block == ${b}`).join(' || ') : 'false'};`,
-    )
-  })
-  const cls = (info: HmiWidgetInfo): string => `${NAMESPACE}::${info.name.toUpperCase()}`
-  const file = [
-    '/* Generated by the HMI build: the widget types the preview creates at run time, for the preview. */',
-    '#include <new>',
-    '#include <type_traits>',
-    '',
-    '#include "hmi_preview_factory.h"',
-    '#include "hmi_unit_libraries.hpp"',
-    '',
-    'namespace {',
-    '/* Whether widget type `type` is or extends the block that declares setters of number `block`. */',
-    'bool hmi_factory_is(int type, int block) {',
-    '    switch (type) {',
-    ...kinds,
-    '    default: return false;',
-    '    }',
-    '}',
-    '}  // namespace',
-    '',
-    'void *hmi_factory_create(int type) {',
-    '    switch (type) {',
-    ...types.map((info, type) => `    case ${type}: return new (std::nothrow) ${cls(info)}();`),
-    '    default: return nullptr;',
-    '    }',
-    '}',
-    '',
-    'void hmi_factory_destroy(int type, void *element) {',
-    '    switch (type) {',
-    ...types.map((info, type) => `    case ${type}: delete static_cast<${cls(info)} *>(element); return;`),
-    '    default: return;',
-    '    }',
-    '}',
-    '',
-    'int hmi_factory_set_num(int type, void *element, int setter, double value) {',
-    ...unused('type', 'element', 'value'),
-    '    switch (setter) {',
-    ...cases.num,
-    '    default: return -1;',
-    '    }',
-    '}',
-    '',
-    'int hmi_factory_set_str(int type, void *element, int setter, const char *value) {',
-    ...unused('type', 'element', 'value'),
-    '    switch (setter) {',
-    ...cases.str,
-    '    default: return -1;',
-    '    }',
-    '}',
-    '',
-  ].join('\n')
-  return { file, factory }
+function projectFactory(
+  catalog: HmiWidgetCatalog,
+  libraries: readonly LibraryFactoryTable[],
+): { file: string; factory: HmiPreviewFactory } {
+  const covered = (name: string, info: HmiWidgetInfo): boolean =>
+    libraries.some((t) => t.library === info.library && t.types[name] !== undefined)
+  const own = [...catalog.widgets].filter(([name, info]) => !covered(name, info)).map(([, info]) => info)
+  const table = previewFactoryTable(own, PROJECT_FACTORY, LIBRARIES_HEADER, NAMESPACE)
+  const dispatch = previewFactoryDispatch([...libraries, table], catalog)
+  return { file: `${dispatch.source}\n${table.source}`, factory: dispatch.factory }
 }
 
 /**
@@ -1819,7 +1738,9 @@ export function generateHmiUnit(input: HmiUnitInput): HmiUnitResult {
     return result
   }
   const setters = previewSetters(plans, catalog, classes)
-  const factory = input.preview ? previewFactory(catalog) : { file: null, factory: { types: {} } }
+  const factory = input.preview
+    ? projectFactory(catalog, input.libraryFactories ?? [])
+    : { file: null, factory: { types: {} } }
   const previewFiles = factory.file === null ? setters.files : { ...setters.files, [FACTORY_FILE]: factory.file }
   result.preview = {
     units: previewUnits([...Object.keys(result.files), ...Object.keys(previewFiles)], plans, libraries),

@@ -9,10 +9,10 @@ import { sampleProject } from '../../unit/__tests__/fixtures/sample-project'
 import { installedWidgetArchives } from '../../unit/__tests__/fixtures/widget-libraries'
 import {
   HMI_LIBRARY_CXX_FLAGS,
-  hmiLibraryUnit,
+  hmiLibraryUnits,
   libraryOfFile,
-  shareLibraryUnits,
   sharedWidgetLibraries,
+  shareLibraryUnits,
 } from '../library-unit'
 
 /* The bundled HMI sources: resources/sources/hmi in the editor, src/assets/firmware/hmi on the web. */
@@ -79,22 +79,44 @@ function libraryPart(request: WasmCompileRequest) {
 }
 
 describe('widget library units', () => {
-  it('generates the library from its archive alone, whole, with its own declarations only', () => {
-    const [{ archive }] = widgetLibraries()
-    const built = hmiLibraryUnit(archive)
+  it('generates the library from its archive alone, whole, with its own declarations only', async () => {
+    const built = await hmiLibraryUnits(widgetLibraries())
     if (!built.ok) throw new Error(built.error)
-    const { unit, files } = built.unit
+    const [{ unit, factory, files }] = built.units
     expect(unit).toEqual({
-      source: 'hmilib/standard-widgets/library.cpp',
+      source: 'hmilib/standard_widgets/standard_widgets.cpp',
       language: 'c++',
       flags: [...HMI_LIBRARY_CXX_FLAGS],
       ownFlags: true,
+      library: { name: 'standard-widgets', kind: 'hmi', key: expect.stringMatching(/^[0-9a-f]{64}$/) },
     })
-    const header = files['hmilib/standard-widgets/hmi_lib_libraries.hpp']
+    expect(factory.unit).toMatchObject({
+      source: 'hmilib/standard_widgets/standard_widgets_factory.cpp',
+      library: { name: 'standard-widgets', kind: 'hmi-factory' },
+    })
+    expect(factory.unit.library?.key).not.toBe(unit.library?.key)
+    const header = files['hmilib/standard_widgets/standard_widgets_libraries.hpp']
     expect(header).toContain('// Library: standard-widgets')
     expect(header).not.toMatch(/STRING_LENGTH|LIST_LENGTH|Library: project-widgets/)
     expect(libraryOfFile('lib_standard_widgets.cpp', files[unit.source])).toBe('standard-widgets')
-    expect(hmiLibraryUnit(archive)).toBe(built)
+    expect(files[factory.unit.source]).toContain('#include "standard_widgets_libraries.hpp"')
+    expect(files[factory.unit.source]).toContain('void *hmi_factory_create__standard_widgets(int type)')
+    expect(factory.table.library).toBe('standard-widgets')
+    expect(Object.keys(factory.table.types)).toEqual(expect.arrayContaining(['HMILABEL', 'HMIBUTTON']))
+    const again = await hmiLibraryUnits(widgetLibraries())
+    expect(again.ok && again.units[0].files).toEqual(files)
+  })
+
+  it("routes the library's widgets to its own table and the project's widget blocks to the unit's", async () => {
+    const request = await previewRequest({
+      ...sampleProject(),
+      widgets: [...sampleProject().widgets, { name: 'Extra', source: EXTRA }],
+    })
+    const dispatch = request.files['unit/hmi_preview_factory.cpp']
+    expect(typeof dispatch === 'string' && dispatch).toContain('return hmi_factory_create__standard_widgets(type - 0);')
+    expect(typeof dispatch === 'string' && dispatch).toContain('hmi::EXTRA')
+    expect(typeof dispatch === 'string' && dispatch).not.toContain('hmi::HMILABEL()')
+    expect(request.units.map((u) => u.source)).toContain('hmilib/standard_widgets/standard_widgets_factory.cpp')
   })
 
   it('gives the same library unit to projects with different PLC libraries and widget blocks', async () => {
@@ -104,7 +126,7 @@ describe('widget library units', () => {
       { ...project, widgets: [...project.widgets, { name: 'Extra', source: EXTRA }] },
       ['iec-standard-fb', 'oscat-basic'].map(plcLibrary),
     )
-    expect(libraryPart(plain).units).toHaveLength(1)
+    expect(libraryPart(plain).units).toHaveLength(2)
     expect(libraryPart(withLibraries)).toEqual(libraryPart(plain))
     expect(Object.values(plain.files).some((f) => typeof f === 'string' && f.includes('STRING_LENGTH'))).toBe(false)
     expect(Object.values(withLibraries.files).some((f) => typeof f === 'string' && f.includes('STRING_LENGTH'))).toBe(
@@ -136,16 +158,20 @@ describe('widget library units', () => {
       },
     })
     if (!result.ok) throw new Error(JSON.stringify(result.errors))
-    expect(libraryPart(requests[0])).toEqual(libraryPart(await previewRequest()))
+    const code = (part: ReturnType<typeof libraryPart>) => ({
+      units: part.units.filter((u) => !u.source.endsWith('_factory.cpp')),
+      files: Object.fromEntries(Object.entries(part.files).filter(([path]) => !path.endsWith('_factory.cpp'))),
+    })
+    expect(code(libraryPart(requests[0]))).toEqual(code(libraryPart(await previewRequest())))
     expect(requests[0].units.map((u) => u.source)).not.toContain('unit/lib_standard_widgets.cpp')
   })
 
-  it('refuses nothing it does not share: files of other libraries stay in the unit', () => {
+  it('refuses nothing it does not share: files of other libraries stay in the unit', async () => {
     const files = {
       'lib_other.cpp': '// Generated by STruC++\n// Library: other\n',
       'pou_MAIN.cpp': '// Library: standard-widgets\n',
     }
-    const shared = shareLibraryUnits(files, widgetLibraries())
+    const shared = await shareLibraryUnits(files, widgetLibraries())
     expect(shared.ok && shared.unitFiles).toEqual(files)
   })
 })

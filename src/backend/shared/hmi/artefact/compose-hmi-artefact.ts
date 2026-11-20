@@ -180,7 +180,7 @@ export async function composeHmiArtefact(input: ComposeHmiArtefactInput): Promis
   files[`${ROOT}/client/fonts-LICENSE.txt`] = text(fontsLicense)
 
   const widgetLibraries = sharedWidgetLibraries(input.libraries)
-  const shared = shareLibraryUnits(unit.files, widgetLibraries.shared, widgetLibraries.all)
+  const shared = await shareLibraryUnits(unit.files, widgetLibraries.shared, widgetLibraries.all)
   if (!shared.ok) return fail(shared.error, unit.warnings)
   const compiled = await input.compile(
     hmiClientModuleRequest(shared.unitFiles, fontTable, moduleSources, input.runtimeHeaders, shared.units),

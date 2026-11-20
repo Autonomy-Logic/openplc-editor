@@ -13,9 +13,10 @@ import type {
   WasmCompileResult,
   WasmCompileUnit,
 } from '../../../../middleware/shared/ports/wasm-toolchain-types'
+import { withoutLibraryFiles } from '../../library/library-unit'
 import { buildHmiFontTableSource, HmiFontError } from '../fonts/font-table-source'
 import { vettedHmiFont } from '../fonts/vetted-fonts'
-import { type HmiLibraryUnit, sharedWidgetLibraries, shareLibraryUnits } from '../lib-object/library-unit'
+import { type HmiLibraryUnit, hmiLibraryUnits, sharedWidgetLibraries } from '../lib-object/library-unit'
 import {
   generateHmiUnit,
   HMI_GALLERY_SCREEN,
@@ -130,7 +131,7 @@ export function buildHmiPreviewRequest(
         source === FACTORY_GROUP ? { source, language: 'c++', flags: FACTORY_FLAGS } : { source, language: 'c++' },
     ),
     { source: HOST, language: 'c++' },
-    ...libraries.map((library) => library.unit),
+    ...libraries.flatMap((library) => [library.unit, library.factory.unit]),
   ]
   return {
     files,
@@ -168,9 +169,14 @@ export async function buildHmiPreview(
   onStep?.('generate')
   await nextTask()
   const generateStart = performance.now()
+  const widgetLibraries = sharedWidgetLibraries(resources.projectLibraries)
+  const libraryUnits = await hmiLibraryUnits(widgetLibraries.shared, widgetLibraries.all)
+  if (!libraryUnits.ok)
+    return { ok: false, errors: [{ file: UNIT, message: libraryUnits.error }], warnings: [], timings: done() }
   const generated = generateHmiUnit({
     ...input,
     projectLibraries: resources.projectLibraries,
+    libraryFactories: libraryUnits.units.map((u) => u.factory.table),
     preview: true,
     resolve: undefined,
     plcMd5: undefined,
@@ -197,24 +203,20 @@ export async function buildHmiPreview(
   }
   timings.fontsMs = performance.now() - fontsStart
 
-  const widgetLibraries = sharedWidgetLibraries(resources.projectLibraries)
-  const shared = shareLibraryUnits(
+  const unitFiles = withoutLibraryFiles(
     { ...generated.files, ...generated.preview.files },
-    widgetLibraries.shared,
-    widgetLibraries.all,
+    new Set(libraryUnits.units.map((u) => u.name)),
   )
-  if (!shared.ok)
-    return { ok: false, errors: [{ file: UNIT, message: shared.error }], warnings: generated.warnings, timings: done() }
   const groups = {
     ...generated.preview.units,
-    library: generated.preview.units.library.filter((f) => f in shared.unitFiles),
+    library: generated.preview.units.library.filter((f) => f in unitFiles),
   }
   const request = buildHmiPreviewRequest(
-    splitScreenHeaders(shared.unitFiles, groups.screens),
+    splitScreenHeaders(unitFiles, groups.screens),
     groups,
     fontTable,
     resources,
-    shared.units,
+    libraryUnits.units,
   )
   onStep?.('compile')
   const toolchainStart = performance.now()

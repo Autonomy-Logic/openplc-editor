@@ -1,14 +1,16 @@
 import type { PlatformLog } from '@root/middleware/shared/ports/compiler-platform-port'
 import type {
   WasmClangRunner,
+  WasmLibraryObjectStore,
   WasmObjectStore,
   WasmShippedObjectSource,
 } from '@root/middleware/shared/ports/wasm-toolchain-mechanisms'
 import type { WasmCompileRequest, WasmCompileResult } from '@root/middleware/shared/ports/wasm-toolchain-types'
 
 import { compileToWasm, type WasmObjectCache } from './compile-to-wasm'
+import { keepLibraryObjects, offerLibraryObjects } from './library-objects'
 import { parseWasmCompileRequest } from './parse-wasm-compile-request'
-import { PersistentWasmObjectCache } from './persistent-object-cache'
+import { PersistentWasmObjectCache, type StoredWasmObject } from './persistent-object-cache'
 import { prepareWasmToolchain, type WasmToolchainReadiness } from './prepare-toolchain'
 import { readShippedObjects } from './shipped-objects'
 import { WASM_TOOLCHAIN_IDENTITY } from './toolchain-identity'
@@ -50,6 +52,8 @@ export interface WasmCompileServiceOptions {
   store?: WasmObjectStore
   /** Compiled objects shipped with the application. */
   shipped?: WasmShippedObjectSource
+  /** Where each library's compiled objects are kept next to it. */
+  libraryObjects?: WasmLibraryObjectStore
   log?: PlatformLog
   /** Identity of the toolchain the runner loads; the pinned one unless a test says otherwise. */
   identity?: string
@@ -65,7 +69,7 @@ export function createWasmCompileService(
   runner: WasmClangRunner,
   options: WasmCompileServiceOptions = {},
 ): WasmCompileService {
-  const { store, shipped, log, identity = WASM_TOOLCHAIN_IDENTITY } = options
+  const { store, shipped, libraryObjects, log, identity = WASM_TOOLCHAIN_IDENTITY } = options
   const memory = new BoundedWasmObjectCache(WASM_OBJECT_CACHE_BYTES)
   const persistent = store
     ? new PersistentWasmObjectCache(memory, store, WASM_STORED_OBJECT_BYTES, (message) =>
@@ -116,6 +120,30 @@ export function createWasmCompileService(
     }
   }
 
+  /**
+   * Compiles with the objects kept next to the request's libraries offered to the session cache, then keeps next to
+   * each library the object its unit was built with when that is not the one already there.
+   */
+  const compileWith = async (request: WasmCompileRequest, compileLog?: PlatformLog): Promise<WasmCompileResult> => {
+    if (!libraryObjects || !request.units.some((unit) => unit.library !== undefined))
+      return compileToWasm(request, { runner, cache, log: compileLog })
+    const offered = await offerLibraryObjects(request.units, libraryObjects, identity, ({ key, entry }) =>
+      memory.set(key, entry),
+    )
+    const used = new Map<string, StoredWasmObject>()
+    const result = await compileToWasm(request, {
+      runner,
+      cache,
+      log: compileLog,
+      onObject: (unit, key, entry) => {
+        if (unit.library) used.set(unit.source, { key, entry })
+      },
+    })
+    if (result.ok)
+      await keepLibraryObjects(offered, used, libraryObjects, identity, (message) => log?.(message, 'warning'))
+    return result
+  }
+
   const prepare = (): Promise<WasmToolchainReadiness> => {
     void restore()
     readiness ??= prepareWasmToolchain(runner).then((result) => {
@@ -147,13 +175,11 @@ export function createWasmCompileService(
     prepare,
     setHeld,
     releaseOwner,
-    compile: (request, compileLog) => build(() => compileToWasm(request, { runner, cache, log: compileLog })),
+    compile: (request, compileLog) => build(() => compileWith(request, compileLog)),
     compileRequest: (value, compileLog) =>
       build(() => {
         const parsed = parseWasmCompileRequest(value)
-        return parsed.ok
-          ? compileToWasm(parsed.request, { runner, cache, log: compileLog })
-          : Promise.resolve(rejected(parsed.error))
+        return parsed.ok ? compileWith(parsed.request, compileLog) : Promise.resolve(rejected(parsed.error))
       }),
   }
 }

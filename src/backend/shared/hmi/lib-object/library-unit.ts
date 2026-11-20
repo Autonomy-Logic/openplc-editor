@@ -1,19 +1,23 @@
 /**
- * A widget library's own translation unit, generated from its archive and the archives it depends on, never from a
- * project: the same library gives the same C++ and so the same object in every project, preview or Runtime v4 build.
+ * The widget libraries' own translation units in HMI builds: each library's code and, for the preview, its factory
+ * table, generated from its archive and its dependencies alone, so a library gives the same objects in every project,
+ * preview and Runtime v4 build. Each unit is tagged so its object is also kept next to the library.
  */
-import { HMI_PROVIDED_HEADERS } from '@root/middleware/shared/utils/hmi/widget-libraries'
-import type { StlibArchive } from 'strucpp'
+import { HMI_PROVIDED_HEADERS, type ProvidedHeader } from '@root/middleware/shared/utils/hmi/widget-libraries'
 
 import type { WasmCompileUnit } from '../../../../middleware/shared/ports/wasm-toolchain-types'
-import { loadStrucpp } from '../../library/strucpp-runtime'
+import { librariesInFiles, libraryDependencies, libraryUnit, withoutLibraryFiles } from '../../library/library-unit'
+import { libraryObjectKey } from '../../wasm-toolchain/library-objects'
+import { buildWidgetCatalog } from '../lib/widget-catalog'
 import { type HmiWidgetLibraryArchive, loadHmiWidgetLibraries, widgetLibraryNames } from '../lib/widget-libraries'
+import { factorySymbol, type PreviewFactoryPart, previewFactoryTable } from '../unit/preview-factory'
+
+export { libraryOfFile } from '../../library/library-unit'
 
 /** C++ namespace of the HMI unit; a library unit declares its classes there, as the unit's own header does. */
 export const HMI_UNIT_NAMESPACE = 'hmi'
 /** Folder of the library units in a compile request; each library gets its own subfolder. */
 export const HMI_LIBRARY_DIR = 'hmilib'
-const HEADER = 'hmi_lib.hpp'
 const INCLUDES = ['-Istrucpp_runtime/include', '-Ihmi/core']
 
 /**
@@ -29,96 +33,86 @@ export const HMI_LIBRARY_CXX_FLAGS: readonly string[] = [
   ...INCLUDES,
 ]
 
+/** `name@version` of each header, as library object keys record what a build provides. */
+export const providedHeaderNames = (headers: readonly ProvidedHeader[]): string[] =>
+  headers.map((h) => `${h.name}@${h.version ?? ''}`)
+
 export interface HmiLibraryUnit {
   /** The library's name, as its manifest gives it. */
   name: string
-  /** Its files by request path: the source and the header of its declarations. */
+  /** Its files by request path: the source, the header of its declarations and the factory table. */
   files: Record<string, string>
-  /** The unit to compile, with the library flags only. */
+  /** The library's code, with the library flags only. */
   unit: WasmCompileUnit
+  /** The preview's factory table of the library's widgets, and its unit. */
+  factory: { unit: WasmCompileUnit; table: PreviewFactoryPart & { library: string } }
 }
 
-export type HmiLibraryUnitResult = { ok: true; unit: HmiLibraryUnit } | { ok: false; error: string }
+export type HmiLibraryUnitsResult = { ok: true; units: HmiLibraryUnit[] } | { ok: false; error: string }
 
-const LIBRARY_LINE = /^\/\/ Library: (.+)$/m
+const fileOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
 
-/** The library a STruC++ `lib_*.cpp` file holds, from its `// Library:` line; null for any other file. */
-export function libraryOfFile(name: string, content: string): string | null {
-  if (!/^lib_\w+\.cpp$/.test(name)) return null
-  return LIBRARY_LINE.exec(content.slice(0, 512))?.[1] ?? null
-}
-
-/** A folder name for a library: its name with anything but letters, digits, `-` and `_` replaced. */
-const folderOf = (name: string): string => name.replace(/[^A-Za-z0-9_-]/g, '_')
-
-const units = new WeakMap<StlibArchive, { dependencies: readonly StlibArchive[]; result: HmiLibraryUnitResult }>()
-
-const sameArchives = (a: readonly StlibArchive[], b: readonly StlibArchive[]): boolean =>
-  a.length === b.length && a.every((archive, i) => archive === b[i])
-
-/**
- * The translation unit of `archive`, whole: every chunk, whatever a project reaches. `dependencies` are the archives
- * it depends on; only their declarations are emitted. Kept per archive for the session.
- */
-export function hmiLibraryUnit(
-  archive: StlibArchive,
-  dependencies: readonly StlibArchive[] = [],
-): HmiLibraryUnitResult {
-  const kept = units.get(archive)
-  if (kept && sameArchives(kept.dependencies, dependencies)) return kept.result
-  const name = archive.manifest.name
-  const compiled = loadStrucpp().compile('', {
-    fileName: `${folderOf(name)}.st`,
-    libraries: [archive, ...dependencies],
-    namespace: HMI_UNIT_NAMESPACE,
-    headerFileName: HEADER,
-    separateLibraryFiles: true,
-    providedHeaders: [...HMI_PROVIDED_HEADERS],
-    wholeLibraries: [name],
-  })
-  const source = compiled.cppFiles.find((f) => libraryOfFile(f.name, f.content) === name)
-  const result: HmiLibraryUnitResult =
-    compiled.errors.length > 0
-      ? { ok: false, error: `${name}: ${compiled.errors.map((e) => e.message).join('; ')}` }
-      : !source || !compiled.libraryHeader
-        ? { ok: false, error: `${name}: the library has no code of its own` }
-        : {
-            ok: true,
-            unit: {
-              name,
-              files: {
-                [`${HMI_LIBRARY_DIR}/${folderOf(name)}/${compiled.libraryHeader.name}`]: compiled.libraryHeader.content,
-                [`${HMI_LIBRARY_DIR}/${folderOf(name)}/library.cpp`]: source.content,
-              },
-              unit: {
-                source: `${HMI_LIBRARY_DIR}/${folderOf(name)}/library.cpp`,
-                language: 'c++',
-                flags: [...HMI_LIBRARY_CXX_FLAGS],
-                ownFlags: true,
-              },
-            },
-          }
-  units.set(archive, { dependencies: [...dependencies], result })
-  return result
-}
-
-/** The archives `library` depends on, directly or through another, among `available`, each once, in `available` order. */
-export function libraryDependencies(
+/** The units of `library`, whose dependencies are found among `available`. */
+async function hmiLibraryUnit(
   library: HmiWidgetLibraryArchive,
   available: readonly HmiWidgetLibraryArchive[],
-): StlibArchive[] {
-  const byName = new Map(available.map((l) => [l.name, l]))
-  const needed = new Set<string>()
-  const visit = (archive: StlibArchive): void => {
-    for (const dependency of archive.dependencies ?? []) {
-      const found = byName.get(dependency.name)
-      if (!found || found === library || needed.has(found.name)) continue
-      needed.add(found.name)
-      visit(found.archive)
-    }
+): Promise<{ ok: true; unit: HmiLibraryUnit } | { ok: false; error: string }> {
+  const dependencies = libraryDependencies(library, available)
+  const built = libraryUnit(
+    library.archive,
+    dependencies.map((d) => d.archive),
+    { dir: HMI_LIBRARY_DIR, namespace: HMI_UNIT_NAMESPACE, providedHeaders: HMI_PROVIDED_HEADERS },
+  )
+  if (!built.ok) return built
+  const { unit } = built
+  const widgets = [
+    ...buildWidgetCatalog([library.archive, ...dependencies.map((d) => d.archive)]).widgets.values(),
+  ].filter((w) => w.library === library.name)
+  const table = previewFactoryTable(widgets, factorySymbol(library.name), fileOf(unit.header), HMI_UNIT_NAMESPACE)
+  const factorySource = unit.source.replace(/\.cpp$/, '_factory.cpp')
+  const keyInput = {
+    archive: library.archiveJson,
+    dependencies: dependencies.map((d) => d.archiveJson),
+    flags: HMI_LIBRARY_CXX_FLAGS,
+    providedHeaders: providedHeaderNames(HMI_PROVIDED_HEADERS),
   }
-  visit(library.archive)
-  return available.filter((l) => needed.has(l.name)).map((l) => l.archive)
+  const [codeKey, factoryKey] = await Promise.all([
+    libraryObjectKey({ ...keyInput, kind: 'hmi' }),
+    libraryObjectKey({ ...keyInput, kind: 'hmi-factory' }),
+  ])
+  const ownFlags = (source: string, kind: 'hmi' | 'hmi-factory', key: string): WasmCompileUnit => ({
+    source,
+    language: 'c++',
+    flags: [...HMI_LIBRARY_CXX_FLAGS],
+    ownFlags: true,
+    library: { name: library.name, kind, key },
+  })
+  return {
+    ok: true,
+    unit: {
+      name: library.name,
+      files: { ...unit.files, [factorySource]: table.source },
+      unit: ownFlags(unit.source, 'hmi', codeKey),
+      factory: {
+        unit: ownFlags(factorySource, 'hmi-factory', factoryKey),
+        table: { symbol: table.symbol, types: table.types, library: library.name },
+      },
+    },
+  }
+}
+
+/** The units of each of `libraries`, whose dependencies are found among `available`, in order. */
+export async function hmiLibraryUnits(
+  libraries: readonly HmiWidgetLibraryArchive[],
+  available: readonly HmiWidgetLibraryArchive[] = libraries,
+): Promise<HmiLibraryUnitsResult> {
+  const units: HmiLibraryUnit[] = []
+  for (const library of libraries) {
+    const built = await hmiLibraryUnit(library, available)
+    if (!built.ok) return built
+    units.push(built.unit)
+  }
+  return { ok: true, units }
 }
 
 /** The project's libraries (bundled and listed, verbatim) that declare widgets, each compiled as its own unit. */
@@ -136,32 +130,24 @@ export type SharedLibraryUnits =
   | { ok: false; error: string }
 
 /**
- * Takes the code of each of `libraries` out of a generated HMI unit and gives the library's own translation unit in
- * its place; a library the unit has no code of is left out. `available` are the archives dependencies are found among.
- * The unit keeps its header, whose declarations of the libraries are the ones the library units define.
+ * Takes the code of each of `libraries` out of a generated HMI unit and gives the library's own units in its place; a
+ * library the unit has no code of is left out. `available` are the archives dependencies are found among. The unit
+ * keeps its header, whose declarations of the libraries are the ones the library units define.
  */
-export function shareLibraryUnits(
+export async function shareLibraryUnits(
   unitFiles: Readonly<Record<string, string>>,
   libraries: readonly HmiWidgetLibraryArchive[],
   available: readonly HmiWidgetLibraryArchive[] = libraries,
-): SharedLibraryUnits {
-  const present = new Set(
-    Object.entries(unitFiles).flatMap(([name, content]) => {
-      const library = libraryOfFile(name, content)
-      return library === null ? [] : [library]
-    }),
+): Promise<SharedLibraryUnits> {
+  const present = librariesInFiles(unitFiles)
+  const built = await hmiLibraryUnits(
+    libraries.filter((l) => present.has(l.name)),
+    available,
   )
-  const units: HmiLibraryUnit[] = []
-  for (const library of libraries) {
-    if (!present.has(library.name)) continue
-    const built = hmiLibraryUnit(library.archive, libraryDependencies(library, available))
-    if (!built.ok) return built
-    units.push(built.unit)
+  if (!built.ok) return built
+  return {
+    ok: true,
+    units: built.units,
+    unitFiles: withoutLibraryFiles(unitFiles, new Set(built.units.map((u) => u.name))),
   }
-  const shared = new Set(units.map((u) => u.name))
-  const kept = Object.entries(unitFiles).filter(([name, content]) => {
-    const library = libraryOfFile(name, content)
-    return library === null || !shared.has(library)
-  })
-  return { ok: true, units, unitFiles: Object.fromEntries(kept) }
 }

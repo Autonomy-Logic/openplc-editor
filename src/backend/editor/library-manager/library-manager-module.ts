@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { basename, extname, join } from 'path'
+import { basename, dirname, extname, join } from 'path'
 
 import type { CatalogTransportPort } from '../../../middleware/shared/ports/catalog-transport-port'
 import type { StlibArchiveDTO } from '../../../middleware/shared/ports/library-port'
@@ -403,6 +403,41 @@ export class LibraryManagerModule {
     } catch (err) {
       return { success: false, error: `Uninstall failed: ${err instanceof Error ? err.message : String(err)}` }
     }
+  }
+
+  /**
+   * The file next to a user-installed library's archive that holds its compiled object of `kind`; null for a library
+   * this machine keeps no files next to (bundled, unknown, or a name or kind that is not a plain file name part).
+   */
+  private libraryObjectPath(name: string, kind: string): string | null {
+    if (!/^[a-z][a-z-]*$/.test(kind)) return null
+    try {
+      validatePathId(name, 'name')
+    } catch {
+      return null
+    }
+    const entry = this.readRegistry().libraries[name]
+    if (!entry) return null
+    try {
+      assertPathContained(this.librariesDir, entry.stlibPath, `library[${name}].stlibPath`)
+    } catch {
+      return null
+    }
+    return join(dirname(entry.stlibPath), `${basename(entry.stlibPath, '.stlib')}.${kind}.wasm-object`)
+  }
+
+  /** The bytes of a library's compiled object of `kind`, as stored next to its archive; null when there are none. */
+  readLibraryObject(name: string, kind: string): Uint8Array | null {
+    const path = this.libraryObjectPath(name, kind)
+    if (path === null || !existsSync(path)) return null
+    return new Uint8Array(readFileSync(path))
+  }
+
+  /** Stores a library's compiled object of `kind` next to its archive; does nothing for a library with no folder. */
+  writeLibraryObject(name: string, kind: string, bytes: Uint8Array): void {
+    const path = this.libraryObjectPath(name, kind)
+    if (path === null || !existsSync(dirname(path))) return
+    writeFileSync(path, bytes)
   }
 
   // -------------------------------------------------------------------------

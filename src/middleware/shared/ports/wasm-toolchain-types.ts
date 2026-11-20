@@ -7,6 +7,19 @@ export type WasmToolchainFiles = Record<string, string | Uint8Array>
 
 export type WasmUnitLanguage = 'c' | 'c++'
 
+/** Kinds of build a library's compiled object is kept next to the library for; each kind is its own file. */
+export const WASM_LIBRARY_OBJECT_KINDS = ['hmi', 'hmi-factory', 'simulator'] as const
+export type WasmLibraryObjectKind = (typeof WASM_LIBRARY_OBJECT_KINDS)[number]
+
+/** A unit that is a library's own code: its object is also kept next to the library, under `key`. */
+export interface WasmLibraryObjectTag {
+  /** The library's name, as its manifest gives it. */
+  name: string
+  kind: WasmLibraryObjectKind
+  /** Digest of what the object is built from besides its sources (`libraryObjectKey`). */
+  key: string
+}
+
 /** One translation unit: a file in `files` compiled to one object. */
 export interface WasmCompileUnit {
   source: string
@@ -15,6 +28,8 @@ export interface WasmCompileUnit {
   flags?: string[]
   /** When true, `flags` replace the request's language flags, so the unit compiles alike in every request. */
   ownFlags?: boolean
+  /** Set when the unit is a library's own code, whose object is kept next to the library. */
+  library?: WasmLibraryObjectTag
 }
 
 export interface WasmCompileRequest {
