@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path'
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, jest } from '@jest/globals'
 
-import { callSiteTokens } from '../../scripts/package-trust/cli'
+import { callSiteTokens, crossSeedVerdict } from '../../scripts/package-trust/cli'
 import {
   CROSS_SEED_PROBE,
   DEVELOPMENT_SEED,
@@ -738,52 +738,56 @@ describe('importing cli.ts', () => {
   })
 })
 
+/** The import call site of a minified PackageManagerModule, calling the verify function through @p callee. */
+const importSite = (callee: string): string =>
+  [
+    'async importFromFile(e,t){let n=null;try{n=(0,o.mkdtempSync)((0,a.join)(this.packagesDir,".import-"));',
+    'await(0,s.default)(e,{dir:n});const r=(0,a.join)(n,"manifest.json");',
+    'if(!(0,o.existsSync)(r))return{success:!1,error:"Package does not contain a manifest.json file"};',
+    'let i;try{i=JSON.parse((0,o.readFileSync)(r,"utf-8"))}catch{return{success:!1,error:"Invalid manifest.json format"}}',
+    'const c=l.PackageManifestSchema.safeParse(i);if(!c.success)return{success:!1,error:"Invalid manifest schema"};',
+    `const u=c.data;let d;try{d=${callee}(this)(n,!0)}catch{d=null}`,
+    'const p=Array.isArray(d)&&!0===d[0]&&"string"==typeof d[1]&&"string"==typeof d[2]&&d[1]===u.package.id&&d[2]===u.package.version;',
+    'if(!p){const e=Array.isArray(d)&&!1===d[0]&&"string"==typeof d[1]?d[1]:"Package trust check failed";',
+    'return{success:!1,error:`Package signature verification failed: ${e}`}}',
+    'const h=d[1],f=d[2];(0,m.validatePathId)(h,"manifest.package.id");',
+  ].join('')
+
+/** The use call site of a minified PackageManagerModule, calling the verify function through @p callee. */
+const useSite = (callee: string): string =>
+  [
+    'signatureRejectionReason(e,t){try{(0,m.validatePathId)(e,"registry package id")}catch{return"invalid package id"}',
+    'if("string"!=typeof t||0===t.length)return"registry entry has no package path";',
+    'try{(0,g.assertPathContained)(this.packagesDir,t,"registry package path")}catch{',
+    'return"package path resolves outside the packages directory"}',
+    'if(!(0,o.existsSync)(t))return"package files are missing";',
+    `let n;try{n=${callee}(this)(t,!1)}catch{return"Package trust check failed"}`,
+    'return Array.isArray(n)&&!0===n[0]?n[1]!==e?"Package trust check failed":null:',
+    '"string"==typeof n[1]?n[1]:"Package trust check failed"}',
+  ].join('')
+
+/** Code that is the same in every build, standing between and around the call sites. */
+const filler = (marker: string): string =>
+  Array.from({ length: 150 }, (_, index) => `function f${index}(e){return e+${index}}`).join(';') +
+  `;var z="${marker}";`
+
+/**
+ * A bundle holding the import call site with @p callee, the use call site with @p useCallee, and @p elsewhere far from
+ * both.
+ */
+const bundle = (callee: string, elsewhere = 'same', useCallee = callee): string =>
+  [
+    '"use strict";',
+    filler('head'),
+    `const ${callee}=e=>W.get(e);`,
+    useCallee === callee ? '' : `const ${useCallee}=e=>W.get(e);`,
+    filler('a'),
+    `class P{constructor(e=X){W.set(this,e)}${importSite(callee)}${filler('b')}${useSite(useCallee)}}`,
+    filler('tail'),
+    `var far=${JSON.stringify(elsewhere)};`,
+  ].join('')
+
 describe('callSiteTokens', () => {
-  /** The import call site of a minified PackageManagerModule, calling the verify function through @p callee. */
-  const importSite = (callee: string): string =>
-    [
-      'async importFromFile(e,t){let n=null;try{n=(0,o.mkdtempSync)((0,a.join)(this.packagesDir,".import-"));',
-      'await(0,s.default)(e,{dir:n});const r=(0,a.join)(n,"manifest.json");',
-      'if(!(0,o.existsSync)(r))return{success:!1,error:"Package does not contain a manifest.json file"};',
-      'let i;try{i=JSON.parse((0,o.readFileSync)(r,"utf-8"))}catch{return{success:!1,error:"Invalid manifest.json format"}}',
-      'const c=l.PackageManifestSchema.safeParse(i);if(!c.success)return{success:!1,error:"Invalid manifest schema"};',
-      `const u=c.data;let d;try{d=${callee}(this)(n,!0)}catch{d=null}`,
-      'const p=Array.isArray(d)&&!0===d[0]&&"string"==typeof d[1]&&"string"==typeof d[2]&&d[1]===u.package.id&&d[2]===u.package.version;',
-      'if(!p){const e=Array.isArray(d)&&!1===d[0]&&"string"==typeof d[1]?d[1]:"Package trust check failed";',
-      'return{success:!1,error:`Package signature verification failed: ${e}`}}',
-      'const h=d[1],f=d[2];(0,m.validatePathId)(h,"manifest.package.id");',
-    ].join('')
-
-  /** The use call site of a minified PackageManagerModule, calling the verify function through @p callee. */
-  const useSite = (callee: string): string =>
-    [
-      'signatureRejectionReason(e,t){try{(0,m.validatePathId)(e,"registry package id")}catch{return"invalid package id"}',
-      'if("string"!=typeof t||0===t.length)return"registry entry has no package path";',
-      'try{(0,g.assertPathContained)(this.packagesDir,t,"registry package path")}catch{',
-      'return"package path resolves outside the packages directory"}',
-      'if(!(0,o.existsSync)(t))return"package files are missing";',
-      `let n;try{n=${callee}(this)(t,!1)}catch{return"Package trust check failed"}`,
-      'return Array.isArray(n)&&!0===n[0]?n[1]!==e?"Package trust check failed":null:',
-      '"string"==typeof n[1]?n[1]:"Package trust check failed"}',
-    ].join('')
-
-  /** Code that is the same in every build, standing between and around the call sites. */
-  const filler = (marker: string): string =>
-    Array.from({ length: 150 }, (_, index) => `function f${index}(e){return e+${index}}`).join(';') +
-    `;var z="${marker}";`
-
-  /** A bundle holding both call sites with @p callee, and @p elsewhere far from both. */
-  const bundle = (callee: string, elsewhere = 'same'): string =>
-    [
-      '"use strict";',
-      filler('head'),
-      `const ${callee}=e=>W.get(e);`,
-      filler('a'),
-      `class P{constructor(e=X){W.set(this,e)}${importSite(callee)}${filler('b')}${useSite(callee)}}`,
-      filler('tail'),
-      `var far=${JSON.stringify(elsewhere)};`,
-    ].join('')
-
   it('finds both call sites and gives each a non-empty token sequence', () => {
     const tokens = callSiteTokens(bundle('Ke'))
 
@@ -811,6 +815,82 @@ describe('callSiteTokens', () => {
     ['the use call site', (callee: string) => bundle(callee).replace('registry entry has no package path', 'X')],
   ])('throws when the bundle lacks the fixed text around %s', (_label, build) => {
     expect(() => callSiteTokens(build('Ke'))).toThrow()
+  })
+})
+
+describe('crossSeedVerdict', () => {
+  type Build = { bundle: string; shareLiterals: string[] }
+
+  const LITERALS_A = ['Aa1Bb2Cc3Dd4', 'Ee5Ff6Gg7Hh8']
+  const LITERALS_B = ['Ii9Jj0Kk1Ll2', 'Mm3Nn4Oo5Pp6']
+
+  /** One build: @p text with @p placed (every one of @p shareLiterals by default) far from both call sites. */
+  function build(text: string, shareLiterals: string[], placed: string[] = shareLiterals): Build {
+    return { bundle: `${text}var s=[${placed.map((literal) => JSON.stringify(literal)).join(',')}];`, shareLiterals }
+  }
+
+  /** Two builds whose call sites both differ, each holding its own literals and no forbidden name. */
+  function passingPair(): [Build, Build] {
+    return [build(bundle('Ke'), LITERALS_A), build(bundle('Zq'), LITERALS_B)]
+  }
+
+  /** The failures of @p builds; [] when the verdict passes. */
+  function failuresOf(builds: [Build, Build]): string[] {
+    const verdict = crossSeedVerdict(builds)
+    return verdict.ok ? [] : verdict.failures
+  }
+
+  /** @p entry with a forbidden name added to its bundle. */
+  const planted = (entry: Build): Build => ({ ...entry, bundle: `${entry.bundle}const r=e.checkAtImport(t);` })
+
+  it('passes two builds whose call sites both differ, holding their own literals and no forbidden name', () => {
+    expect(crossSeedVerdict(passingPair())).toEqual({ ok: true })
+  })
+
+  it('fails, naming the use site and not the import site, when only the use call site is equal', () => {
+    const failures = failuresOf([build(bundle('Ke'), LITERALS_A), build(bundle('Zq', 'same', 'Ke'), LITERALS_B)])
+
+    expect(failures.length).toBeGreaterThan(0)
+    expect([
+      failures.some((failure) => /\buse\b/i.test(failure)),
+      failures.some((failure) => /\bimport\b/i.test(failure)),
+    ]).toEqual([true, false])
+  })
+
+  it('fails, naming the name, for a forbidden name, and tells which build holds it', () => {
+    const [a, b] = passingPair()
+
+    const inFirst = failuresOf([planted(a), b])
+    const inSecond = failuresOf([a, planted(b)])
+
+    expect(
+      [inFirst, inSecond].map((failures) => failures.some((failure) => failure.includes('checkAtImport'))),
+    ).toEqual([true, true])
+    expect(inFirst).not.toEqual(inSecond)
+  })
+
+  it('fails, naming the literal, for a share literal missing from its build, and tells which build lacks it', () => {
+    const lacksInFirst = failuresOf([
+      build(bundle('Ke'), LITERALS_A, LITERALS_A.slice(1)),
+      build(bundle('Zq'), LITERALS_B),
+    ])
+    const lacksInSecond = failuresOf([
+      build(bundle('Ke'), LITERALS_A),
+      build(bundle('Zq'), LITERALS_B, LITERALS_B.slice(1)),
+    ])
+
+    expect([
+      lacksInFirst.some((failure) => failure.includes(LITERALS_A[0])),
+      lacksInSecond.some((failure) => failure.includes(LITERALS_B[0])),
+    ]).toEqual([true, true])
+    expect(lacksInFirst).not.toEqual(lacksInSecond)
+  })
+
+  it('fails, without throwing, when a build lacks the fixed text around a call site', () => {
+    const [a, b] = passingPair()
+    const lacking = { ...b, bundle: b.bundle.replace('registry entry has no package path', 'X') }
+
+    expect(failuresOf([a, lacking]).length).toBeGreaterThan(0)
   })
 })
 
