@@ -119,6 +119,27 @@ describe('widget library units', () => {
     expect(request.units.map((u) => u.source)).toContain('hmilib/standard_widgets/standard_widgets_factory.cpp')
   })
 
+  it("compiles the live elements' code against the screen-base library alone, the same in every project", async () => {
+    const plain = await previewRequest()
+    const other = await previewRequest(
+      { ...sampleProject(), widgets: [...sampleProject().widgets, { name: 'Extra', source: EXTRA }] },
+      ['iec-standard-fb'].map(plcLibrary),
+    )
+    const live = (r: WasmCompileRequest) => r.units.find((u) => u.source === 'hmi/preview/hmi_preview_live.cpp')
+    expect(live(plain)).toEqual({
+      source: 'hmi/preview/hmi_preview_live.cpp',
+      language: 'c++',
+      flags: [...HMI_LIBRARY_CXX_FLAGS, '-Ihmi/unit', '-Ihmilib/standard_widgets'],
+      ownFlags: true,
+    })
+    expect(live(other)).toEqual(live(plain))
+    expect(plain.files['hmilib/standard_widgets/hmi_preview_widgets.hpp']).toBe(
+      '#include "standard_widgets_libraries.hpp"\n',
+    )
+    expect(plain.files).not.toHaveProperty(['unit/hmi_preview_widgets.hpp'])
+    expect(plain.files['groups/factory.cpp']).toBe('#include "hmi_preview_factory.cpp"\n')
+  })
+
   it('gives the same library unit to projects with different PLC libraries and widget blocks', async () => {
     const plain = await previewRequest()
     const project = sampleProject()

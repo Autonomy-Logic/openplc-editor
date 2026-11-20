@@ -46,7 +46,17 @@ export interface HmiLibraryUnit {
   unit: WasmCompileUnit
   /** The preview's factory table of the library's widgets, and its unit. */
   factory: { unit: WasmCompileUnit; table: PreviewFactoryPart & { library: string } }
+  /**
+   * When the library declares the screen base, the folder holding `hmi_preview_widgets.hpp`, its declarations, which
+   * the preview's live elements compile against; null otherwise.
+   */
+  screenBase: { dir: string } | null
 }
+
+/** The function block every screen extends, upper case. */
+const SCREEN_BASE = 'HMISCREEN'
+/** The header the preview's live elements include for the widget declarations they use. */
+const LIVE_WIDGETS = 'hmi_preview_widgets.hpp'
 
 export type HmiLibraryUnitsResult = { ok: true; units: HmiLibraryUnit[] } | { ok: false; error: string }
 
@@ -87,11 +97,18 @@ async function hmiLibraryUnit(
     ownFlags: true,
     library: { name: library.name, kind, key },
   })
+  const dir = unit.header.slice(0, unit.header.lastIndexOf('/'))
+  const declaresScreenBase = library.archive.manifest.functionBlocks.some((fb) => fb.name.toUpperCase() === SCREEN_BASE)
   return {
     ok: true,
     unit: {
       name: library.name,
-      files: { ...unit.files, [factorySource]: table.source },
+      files: {
+        ...unit.files,
+        [factorySource]: table.source,
+        ...(declaresScreenBase ? { [`${dir}/${LIVE_WIDGETS}`]: `#include "${fileOf(unit.header)}"\n` } : {}),
+      },
+      screenBase: declaresScreenBase ? { dir } : null,
       unit: ownFlags(unit.source, 'hmi', codeKey),
       factory: {
         unit: ownFlags(factorySource, 'hmi-factory', factoryKey),

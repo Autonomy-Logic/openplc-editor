@@ -91,15 +91,18 @@ describe('buildHmiPreviewRequest', () => {
       ['groups/glue.cpp', 'c++'],
       ['groups/factory.cpp', 'c++'],
       ['hmi/preview/hmi_preview_host.cpp', 'c++'],
+      ['hmi/preview/hmi_preview_live.cpp', 'c++'],
     ])
   })
 
-  it("compiles the factory table with the live elements' code, which it finds on its own include path", () => {
-    expect(request.files['groups/factory.cpp']).toBe(
-      '#include "hmi_preview_factory.cpp"\n#include "hmi_preview_live.cpp"\n',
-    )
-    expect(request.units.find((u) => u.source === 'groups/factory.cpp')?.flags).toEqual(['-Ihmi/preview'])
-    expect(request.units.filter((u) => u.flags !== undefined)).toHaveLength(1)
+  it("compiles the factory table alone, and the live elements' code against the unit's libraries without a base library", () => {
+    expect(request.files['groups/factory.cpp']).toBe('#include "hmi_preview_factory.cpp"\n')
+    expect(request.files['unit/hmi_preview_widgets.hpp']).toBe('#include "hmi_unit_libraries.hpp"\n')
+    expect(request.units.find((u) => u.source === 'hmi/preview/hmi_preview_live.cpp')).toEqual({
+      source: 'hmi/preview/hmi_preview_live.cpp',
+      language: 'c++',
+    })
+    expect(request.units.filter((u) => u.flags !== undefined)).toHaveLength(0)
   })
 
   it('compiles every unit with its headers included directly, with no precompiled header', () => {

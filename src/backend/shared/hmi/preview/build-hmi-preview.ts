@@ -16,7 +16,12 @@ import type {
 import { withoutLibraryFiles } from '../../library/library-unit'
 import { buildHmiFontTableSource, HmiFontError } from '../fonts/font-table-source'
 import { vettedHmiFont } from '../fonts/vetted-fonts'
-import { type HmiLibraryUnit, hmiLibraryUnits, sharedWidgetLibraries } from '../lib-object/library-unit'
+import {
+  HMI_LIBRARY_CXX_FLAGS,
+  type HmiLibraryUnit,
+  hmiLibraryUnits,
+  sharedWidgetLibraries,
+} from '../lib-object/library-unit'
 import {
   generateHmiUnit,
   HMI_GALLERY_SCREEN,
@@ -47,12 +52,14 @@ const RUNTIME_DIR = 'strucpp_runtime/include'
 /** Wrappers live beside the unit files' folder and include them through `-Iunit`. */
 const GROUP_DIR = 'groups'
 const FONT_TABLE = `${UNIT_DIR}/hmi_preview_fonts.c`
+/** The unit's libraries header, which declares every library the unit links. */
+const LIBRARIES_HEADER = 'hmi_unit_libraries.hpp'
 const HOST = `${HMI_DIR}/preview/hmi_preview_host.cpp`
-/** The live elements' code, compiled with the factory table it reads: both change only with the widget blocks. */
-const LIVE_SOURCE = 'hmi_preview_live.cpp'
+/** The live elements' code, compiled against the widget library that provides the screen base. */
+const LIVE_SOURCE = `${HMI_DIR}/preview/hmi_preview_live.cpp`
+/** The header the live elements' code includes for the widget declarations it uses. */
+const LIVE_WIDGETS = 'hmi_preview_widgets.hpp'
 const FACTORY_GROUP = 'groups/factory.cpp'
-/** The factory group's own include path, where it finds the live elements' code. */
-const FACTORY_FLAGS = [`-I${HMI_DIR}/preview`]
 const CORE_SOURCES = ['hmi_core.c', 'hmi_theme.c', 'hmi_math.c', 'hmi_raster.c', 'hmi_text.c']
 /** Upper bound of the module's memory: a 2560 x 1600 surface at density 2 and the unit fit with room to spare. */
 export const HMI_PREVIEW_MAX_MEMORY = 128 * 1024 * 1024
@@ -100,7 +107,7 @@ function groupUnits(groups: HmiPreview['units']): Record<string, string> {
     if (files.length === 0) continue
     wrappers[`${GROUP_DIR}/${name}.cpp`] = `${files.map((f) => `#include "${f}"`).join('\n')}\n`
   }
-  wrappers[FACTORY_GROUP] = [...groups.factory, LIVE_SOURCE].map((f) => `#include "${f}"\n`).join('')
+  wrappers[FACTORY_GROUP] = groups.factory.map((f) => `#include "${f}"\n`).join('')
   return wrappers
 }
 
@@ -123,14 +130,21 @@ export function buildHmiPreviewRequest(
   files[FONT_TABLE] = fontTable
   const wrappers = groupUnits(groups)
   Object.assign(files, wrappers)
+  const base = libraries.find((library) => library.screenBase !== null)?.screenBase
+  if (!base) files[`${UNIT_DIR}/${LIVE_WIDGETS}`] = `#include "${LIBRARIES_HEADER}"\n`
   const units: WasmCompileUnit[] = [
     ...CORE_SOURCES.map((name): WasmCompileUnit => ({ source: `${HMI_DIR}/core/${name}`, language: 'c' })),
     { source: FONT_TABLE, language: 'c' },
-    ...Object.keys(wrappers).map(
-      (source): WasmCompileUnit =>
-        source === FACTORY_GROUP ? { source, language: 'c++', flags: FACTORY_FLAGS } : { source, language: 'c++' },
-    ),
+    ...Object.keys(wrappers).map((source): WasmCompileUnit => ({ source, language: 'c++' })),
     { source: HOST, language: 'c++' },
+    base
+      ? {
+          source: LIVE_SOURCE,
+          language: 'c++',
+          flags: [...HMI_LIBRARY_CXX_FLAGS, `-I${HMI_DIR}/unit`, `-I${base.dir}`],
+          ownFlags: true,
+        }
+      : { source: LIVE_SOURCE, language: 'c++' },
     ...libraries.flatMap((library) => [library.unit, library.factory.unit]),
   ]
   return {
