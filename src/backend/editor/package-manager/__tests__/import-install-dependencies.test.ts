@@ -15,11 +15,11 @@ jest.mock('../../services/logger-service', () => ({
 }))
 
 import type { DependencyInstallResult } from '../arduino-dependency-installer'
-import { TEST_AUTONOMY_KEY, testTrustAnchor } from '../../package-trust/__tests__/fixtures/trust-test-kit'
+import { TEST_AUTONOMY_KEY, testVerifyTrustedPackage } from '../../package-trust/__tests__/fixtures/trust-test-kit'
 import { PackageManagerModule } from '../package-manager-module'
 import type { PackageManifest } from '../types'
 
-const anchor = testTrustAnchor()
+const verify = testVerifyTrustedPackage()
 
 const PACKAGE_ID = 'com.test.board'
 
@@ -96,7 +96,7 @@ describe('PackageManagerModule.importFromFile with a dependency install', () => 
 
   it('installs the dependencies of a verified package, then registers it', async () => {
     archives.set('v1.vpp', packageFiles('1.0.0'))
-    const manager = new PackageManagerModule(anchor)
+    const manager = new PackageManagerModule(verify)
     const install = callback({ ok: true, installed: 2 })
 
     const result = await manager.importFromFile('v1.vpp', install)
@@ -110,7 +110,7 @@ describe('PackageManagerModule.importFromFile with a dependency install', () => 
 
   it('never installs dependencies for a package that fails its signature check', async () => {
     archives.set('bad.vpp', packageFiles('1.0.0', true))
-    const manager = new PackageManagerModule(anchor)
+    const manager = new PackageManagerModule(verify)
     const install = callback({ ok: true, installed: 0 })
 
     const result = await manager.importFromFile('bad.vpp', install)
@@ -127,7 +127,7 @@ describe('PackageManagerModule.importFromFile with a dependency install', () => 
     ['is cancelled', { ok: false, cancelled: true, error: 'Installation cancelled.' } as const, true],
   ])('leaves nothing installed when the dependency install %s', async (_label, outcome, canceled) => {
     archives.set('v1.vpp', packageFiles('1.0.0'))
-    const manager = new PackageManagerModule(anchor)
+    const manager = new PackageManagerModule(verify)
 
     const result = await manager.importFromFile('v1.vpp', callback(outcome))
 
@@ -140,7 +140,7 @@ describe('PackageManagerModule.importFromFile with a dependency install', () => 
   it('keeps the installed version when the next version fails to install its dependencies', async () => {
     archives.set('v1.vpp', packageFiles('1.0.0'))
     archives.set('v2.vpp', packageFiles('2.0.0'))
-    const manager = new PackageManagerModule(anchor)
+    const manager = new PackageManagerModule(verify)
     await manager.importFromFile('v1.vpp', callback({ ok: true, installed: 0 }))
     const v1Main = installedMain()
 
