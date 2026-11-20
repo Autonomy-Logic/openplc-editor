@@ -11,7 +11,6 @@ import { app } from 'electron'
 
 import { loadTrustModule } from '../../../../../scripts/package-trust/load-module'
 import { verifyPackageSignature } from '../../../shared/utils/vpp/verify-package-signature'
-import type { DependencyInstallResult } from '../../package-manager/arduino-dependency-installer'
 import { PackageManagerModule } from '../../package-manager/package-manager-module'
 import { desktopPackageTrustAnchor, desktopPackageTrustMechanisms } from '../index'
 import type { PackageTrustAnchor, PackageTrustMechanisms } from '../types'
@@ -83,8 +82,6 @@ afterEach(() => {
   jest.clearAllMocks()
   rmSync(work, { recursive: true, force: true })
 })
-
-const noDependencies = (): Promise<DependencyInstallResult> => Promise.resolve({ ok: true, installed: 0 })
 
 function check(anchor: PackageTrustAnchor, hook: Hook, dir: string): string | null {
   return hook === 'import' ? anchor.checkAtImport(dir) : anchor.checkAtUse(dir)
@@ -330,13 +327,13 @@ describe('check sites of the module with the Autonomy key', () => {
     })
 
     it('is imported', async () => {
-      const result = await realManager().importFromFile(FX3U_VPP, noDependencies)
+      const result = await realManager().importFromFile(FX3U_VPP)
 
       expect(result).toMatchObject({ success: true, packageId: FX3U_PACKAGE_ID })
     })
 
     it('is kept by the startup sweep', async () => {
-      await realManager().importFromFile(FX3U_VPP, noDependencies)
+      await realManager().importFromFile(FX3U_VPP)
       const warn = jest.fn()
 
       const removed = realManager().verifyInstalledSignatures(warn)
@@ -349,14 +346,8 @@ describe('check sites of the module with the Autonomy key', () => {
       ).toEqual([FX3U_PACKAGE_ID])
     })
 
-    it('has no rejection reason', async () => {
-      await realManager().importFromFile(FX3U_VPP, noDependencies)
-
-      expect(realManager().installedPackageRejectionReason(FX3U_PACKAGE_ID)).toBeNull()
-    })
-
     it('passes the pre-build gate for its board', async () => {
-      await realManager().importFromFile(FX3U_VPP, noDependencies)
+      await realManager().importFromFile(FX3U_VPP)
 
       expect(realManager().verifyBoardPackageIntegrity(FX3U_BOARD)).toEqual({ ok: true })
     })
@@ -366,7 +357,7 @@ describe('check sites of the module with the Autonomy key', () => {
     it('is refused at import, with the shared verifier reason, and nothing is installed', async () => {
       const manager = realManager()
 
-      const result = await manager.importFromFile(await vppOf(eqsp32.dir, 'eqsp32'), noDependencies)
+      const result = await manager.importFromFile(await vppOf(eqsp32.dir, 'eqsp32'))
 
       expect(result).toMatchObject({
         success: false,
@@ -386,12 +377,6 @@ describe('check sites of the module with the Autonomy key', () => {
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('was removed at startup'))
       expect(existsSync(folder)).toBe(false)
       expect(Object.keys(readRegistryPackages(packagesDir))).toEqual([])
-    })
-
-    it('has the shared verifier reason as its rejection reason', () => {
-      installByHand(packagesDir, EQSP32_PACKAGE_ID, eqsp32.dir, ['board'])
-
-      expect(realManager().installedPackageRejectionReason(EQSP32_PACKAGE_ID)).toBe('Untrusted signing key: eqsp32-dev')
     })
 
     it('stops a build for its board at the pre-build gate', () => {
@@ -420,7 +405,7 @@ describe('check sites of the module with the Autonomy key', () => {
       const recording = recordingMechanisms()
       const manager = new PackageManagerModule(widenedAnchor('eqsp32-dev', recording.mechanisms))
 
-      const result = await manager.importFromFile(await vppOf(eqsp32.dir, 'eqsp32'), noDependencies)
+      const result = await manager.importFromFile(await vppOf(eqsp32.dir, 'eqsp32'))
 
       expect(result).toEqual({ success: false, error: IMPORT_REFUSED })
       expect(manager.listInstalled()).toEqual([])
@@ -436,10 +421,7 @@ describe('check sites of the module with the Autonomy key', () => {
       const recording = recordingMechanisms()
       const manager = new PackageManagerModule(widenedAnchor(real.keyId, recording.mechanisms))
 
-      const result = await manager.importFromFile(
-        await vppOf(eqsp32AsAutonomy.dir, 'eqsp32-as-autonomy'),
-        noDependencies,
-      )
+      const result = await manager.importFromFile(await vppOf(eqsp32AsAutonomy.dir, 'eqsp32-as-autonomy'))
 
       expect(result).toEqual({ success: false, error: IMPORT_REFUSED })
       expect(manager.listInstalled()).toEqual([])
@@ -448,11 +430,10 @@ describe('check sites of the module with the Autonomy key', () => {
       expect(packageChecks.filter((call) => !sameBytes(call.key, real.keyDer))).toEqual([])
     })
 
-    it('refuses the eqsp32-dev package added by hand at the use hook: rejection reason, sweep and pre-build gate', () => {
+    it('refuses the eqsp32-dev package added by hand at the use hook: sweep and pre-build gate', () => {
       const folder = installByHand(packagesDir, EQSP32_PACKAGE_ID, eqsp32.dir, ['board'])
       const manager = new PackageManagerModule(widenedAnchor('eqsp32-dev', desktopPackageTrustMechanisms))
 
-      expect(manager.installedPackageRejectionReason(EQSP32_PACKAGE_ID)).toBe(REFUSED)
       expect(manager.verifyBoardPackageIntegrity(EQSP32_BOARD)).toEqual({
         ok: false,
         packageId: EQSP32_PACKAGE_ID,
@@ -476,7 +457,7 @@ describe('check sites of the module with the Autonomy key', () => {
     ])('refuses %s at import and leaves the installed list unchanged', async (name, dir) => {
       const manager = realManager()
 
-      const result = await manager.importFromFile(await vppOf(dir(), name.replace(/\W+/g, '-')), noDependencies)
+      const result = await manager.importFromFile(await vppOf(dir(), name.replace(/\W+/g, '-')))
 
       expect(result).toEqual({ success: false, error: IMPORT_REFUSED })
       expect(manager.listInstalled()).toEqual([])
