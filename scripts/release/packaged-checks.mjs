@@ -122,6 +122,8 @@ const SKIP = Object.freeze({
   abuse03Negative:
     "an unpatched original refuses another key's package too; the CRA gives ABUSE-03 no negative control",
   positiveOnly: 'positive controls run on the hardened installer',
+  appFolderNegative:
+    'an unpatched original loads app.asar before an app folder too, so the inverted check would be blind',
 })
 
 /** The checks a negative-control run keeps in normal mode. */
@@ -129,6 +131,7 @@ const NEGATIVE_NORMAL = new Set(['start', 'ABUSE-07 NODE_OPTIONS'])
 
 /** The checks a negative-control run skips, with the reason. */
 const NEGATIVE_SKIPS = Object.freeze({
+  'ABUSE-13 (a)': SKIP.appFolderNegative,
   'ABUSE-03 (b)': SKIP.abuse03Negative,
   'ABUSE-03 (e)': SKIP.abuse03Negative,
   'AC5 compile': SKIP.positiveOnly,
@@ -916,11 +919,17 @@ async function checkSigusr1(ctx) {
     const banner = run.stderr().includes(INSPECTOR_BANNER)
     const observed = after ?? { exitCode: null, signal: null, ms: Date.now() - run.startedAt }
     const detail = `SIGUSR1 sent after ${SIGUSR1_SETTLE_MS} ms; ${banner ? 'inspector banner on stderr' : 'no inspector banner'}; ${
-      after === undefined ? 'still running' : 'ended'
+      after === undefined ? 'still running' : `ended by ${after.signal ?? `exit code ${after.exitCode}`}`
     }`
     if (banner) return attack(true, { ...observed, stderr: run.stderr() }, detail)
-    if (after === undefined) return attack(false, { ...observed, stderr: run.stderr() }, detail)
-    return inconclusive('the editor died after the signal', { ...observed, stderr: run.stderr() }, detail)
+    if (after === undefined || after.signal === 'SIGUSR1') {
+      return attack(false, { ...observed, stderr: run.stderr() }, detail)
+    }
+    return inconclusive(
+      'the editor died after the signal by another cause',
+      { ...observed, stderr: run.stderr() },
+      detail,
+    )
   } finally {
     await run.stop()
   }
