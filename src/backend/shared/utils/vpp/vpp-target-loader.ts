@@ -25,6 +25,8 @@ export interface VppTargetLoader<TVerified extends { contentHash: string }> {
   getTarget(): VppLoaderTarget | null
   /** The verified package of the target, downloading it when needed; null when there is no target or the load failed. Concurrent calls share one download. */
   load(): Promise<TVerified | null>
+  /** The verified package of the target when it is already loaded, else null; never starts or waits for a download. */
+  current(): TVerified | null
   /** Clears the kept error of the target, whatever its reason, and loads again. */
   retry(): Promise<TVerified | null>
   /** Aborts the running download; state becomes error with reason 'canceled'. No-op when nothing is downloading. */
@@ -111,6 +113,7 @@ export function createVppTargetLoader<TVerified extends { contentHash: string }>
   function startDownload(current: VppLoaderTarget): ActiveDownload<TVerified> {
     const controller = new AbortController()
     let settled = false
+    let lastLoaded = 0
     let finish: (result: TVerified | null) => void = () => undefined
     const promise = new Promise<TVerified | null>((resolve) => {
       finish = resolve
@@ -141,8 +144,11 @@ export function createVppTargetLoader<TVerified extends { contentHash: string }>
 
     function onProgress(progress: ArchiveDownloadProgress): void {
       if (settled || download.phase !== 'downloading') return
-      clearTimeout(stallTimer)
-      stallTimer = setTimeout(() => download.stop('stalled'), stallTimeoutMs)
+      if (progress.loaded > lastLoaded) {
+        lastLoaded = progress.loaded
+        clearTimeout(stallTimer)
+        stallTimer = setTimeout(() => download.stop('stalled'), stallTimeoutMs)
+      }
       setState({ status: 'downloading', loaded: progress.loaded, total: progress.total })
     }
 
@@ -185,8 +191,9 @@ export function createVppTargetLoader<TVerified extends { contentHash: string }>
       end(verified.package, { status: 'ready' })
     }
 
+    active = download
     setState({ status: 'downloading', loaded: 0, total: null })
-    void run()
+    if (!settled) void run()
     return download
   }
 
@@ -196,8 +203,7 @@ export function createVppTargetLoader<TVerified extends { contentHash: string }>
     if (cached?.contentHash === current.contentHash) return Promise.resolve(cached)
     if (errorKept) return Promise.resolve(null)
     if (active) return active.promise
-    active = startDownload(current)
-    return active.promise
+    return startDownload(current).promise
   }
 
   return {
@@ -213,6 +219,10 @@ export function createVppTargetLoader<TVerified extends { contentHash: string }>
     getTarget: () => target,
 
     load,
+
+    current(): TVerified | null {
+      return target && cached?.contentHash === target.contentHash ? cached : null
+    },
 
     retry(): Promise<TVerified | null> {
       errorKept = false

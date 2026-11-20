@@ -233,6 +233,27 @@ describe('createVppTargetLoader stall timeout', () => {
     expect(loader.getState()).toMatchObject({ status: 'error', reason: 'stalled' })
   })
 
+  it('does not restart the stall timer on a progress event that brings no new byte', async () => {
+    const { loader, fetch } = await startLoading()
+    fetch.progress(512, null)
+    await jest.advanceTimersByTimeAsync(PROGRESS_STEP_MS)
+
+    fetch.progress(512, null)
+    await jest.advanceTimersByTimeAsync(STALL_MS - PROGRESS_STEP_MS)
+
+    expect(fetch.signal.aborted).toBe(true)
+    expect(loader.getState()).toMatchObject({ status: 'error', reason: 'stalled' })
+  })
+
+  it('still reports a progress event that brings no new byte', async () => {
+    const { loader, fetch } = await startLoading()
+    fetch.progress(512, null)
+
+    fetch.progress(512, 2048)
+
+    expect(loader.getState()).toEqual({ status: 'downloading', loaded: 512, total: 2048 })
+  })
+
   it('completes a download slower than 30 s in total that keeps sending bytes', async () => {
     const { loader, loading, fetch } = await startLoading()
     await keepSendingBytes(fetch, 6 * PROGRESS_STEP_MS)
@@ -302,6 +323,32 @@ describe('createVppTargetLoader transfer failure', () => {
 
     await expect(loading).resolves.toBeNull()
     expect(loader.getState()).toEqual({ status: 'error', reason: 'transfer', message: expect.any(String) })
+  })
+})
+
+describe('createVppTargetLoader mechanism that throws instead of rejecting', () => {
+  it('reports a transfer error and downloads again on retry', async () => {
+    const host = new InMemoryArchiveHost()
+    let throwNext = true
+    const loader = createVppTargetLoader<FakePackage>({
+      fetchArchive: (archivePath, options) => {
+        if (throwNext) {
+          throwNext = false
+          throw new Error('mechanism threw')
+        }
+        return host.fetchArchive(archivePath, options)
+      },
+      verify: (bytes, contentHash) => host.verify(bytes, contentHash),
+    })
+    loader.setTarget(TARGET_A)
+
+    await expect(loader.load()).resolves.toBeNull()
+    expect(loader.getState()).toMatchObject({ status: 'error', reason: 'transfer' })
+
+    const retrying = loader.retry()
+    await flushMicrotasks()
+    host.fetchAt(0).succeed(BYTES_A)
+    await expect(retrying).resolves.toEqual({ contentHash: TARGET_A.contentHash, bytes: BYTES_A })
   })
 })
 
@@ -570,6 +617,59 @@ describe('createVppTargetLoader with the target cleared', () => {
   })
 })
 
+describe('createVppTargetLoader current package', () => {
+  it('is null with no target', () => {
+    const { loader } = setup()
+
+    expect(loader.current()).toBeNull()
+  })
+
+  it('is null while the package downloads, and starts no other download', async () => {
+    const { host, loader } = await startLoading()
+
+    expect(loader.current()).toBeNull()
+    expect(host.fetches).toHaveLength(1)
+  })
+
+  it('is null while the package is verified', async () => {
+    const { host, loader } = setup()
+    host.verification = 'hold'
+    loader.setTarget(TARGET_A)
+    void loader.load()
+    await flushMicrotasks()
+    host.fetchAt(0).succeed(BYTES_A)
+    await flushMicrotasks()
+
+    expect(loader.current()).toBeNull()
+  })
+
+  it('is the verified package once ready', async () => {
+    const { loader, loading, fetch } = await startLoading()
+    fetch.succeed(BYTES_A)
+    const verified = await loading
+
+    expect(loader.current()).toBe(verified)
+  })
+
+  it('is null after a failed download, and starts no new download', async () => {
+    const { host, loader, loading, fetch } = await startLoading()
+    fetch.fail(new Error('Network Error'))
+    await loading
+
+    expect(loader.current()).toBeNull()
+    expect(host.fetches).toHaveLength(1)
+  })
+
+  it('starts no download for a target nothing loaded yet', () => {
+    const { host, loader } = setup()
+    loader.setTarget(TARGET_A)
+
+    expect(loader.current()).toBeNull()
+    expect(host.fetches).toHaveLength(0)
+    expect(loader.getState()).toEqual({ status: 'idle' })
+  })
+})
+
 describe('createVppTargetLoader cancel', () => {
   it('aborts the running download and reports it as canceled', async () => {
     const { loader, fetch } = await startLoading()
@@ -749,6 +849,24 @@ describe('createVppTargetLoader state subscription', () => {
     await flushMicrotasks()
 
     expect(states).toEqual([{ status: 'downloading', loaded: 0, total: null }])
+  })
+
+  it('never fetches the download a subscriber supersedes while it is announced', async () => {
+    const { host, loader } = setup()
+    loader.setTarget(TARGET_A)
+    loader.onStateChanged((state) => {
+      if (state.status === 'downloading' && loader.getTarget() === TARGET_A) loader.setTarget(TARGET_B)
+    })
+
+    const loadingA = loader.load()
+    await flushMicrotasks()
+    await expect(loadingA).resolves.toBeNull()
+
+    const loadingB = loader.load()
+    await flushMicrotasks()
+    expect(host.fetches.map((fetch) => fetch.archivePath)).toEqual([TARGET_B.archivePath])
+    host.fetchAt(0).succeed(BYTES_B)
+    await expect(loadingB).resolves.toEqual({ contentHash: TARGET_B.contentHash, bytes: BYTES_B })
   })
 
   it('stops notifying a subscriber that unsubscribed', async () => {
