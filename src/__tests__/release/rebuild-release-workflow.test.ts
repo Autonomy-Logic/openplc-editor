@@ -1,13 +1,26 @@
 /**
  * The structure of `.github/workflows/rebuild-release.yml`, read with the `yaml` package: its inputs, permissions,
  * environments, where the seed secret is visible, the order of the checks around the asset replacement, and the job
- * that runs the abuse checks on the installed builds.
+ * that runs the abuse checks on the installed builds. The asset replacement, the digest read-back and the trust-module
+ * artifact check also run as bash scripts against a fake `gh`, `curl` and `sleep` that keep a release in a JSON file.
  * @jest-environment node
  */
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { delimiter, dirname, join } from 'node:path'
 
-import { describe, expect, it } from '@jest/globals'
+import { afterEach, describe, expect, it } from '@jest/globals'
 import { parse } from 'yaml'
 
 const repo = join(__dirname, '..', '..', '..')
@@ -139,6 +152,334 @@ function upstream(entry: Job): Set<string> {
 function inputs(): Record<string, Record<string, unknown>> {
   const dispatch = record(record(workflow().doc.on).workflow_dispatch)
   return Object.fromEntries(Object.entries(record(dispatch.inputs)).map(([name, value]) => [name, record(value)]))
+}
+
+const REPOSITORY = 'Autonomy-Logic/openplc-editor'
+const RELEASE = 'v4.3.5-rehearsal'
+const RELEASE_ID = 777
+const VERSION = '4.3.5'
+const REF = 'feature/ABC-1-backport-v4.3.5'
+const RUN_ID = '4242'
+const SHA = '0123456789abcdef0123456789abcdef01234567'
+
+const NAMES = [
+  `OpenPLC.Editor-${VERSION}.AppImage`,
+  `OpenPLC.Editor-${VERSION}-ARM64.AppImage`,
+  `OpenPLC.Editor_${VERSION}.exe`,
+  `OpenPLC.Editor_${VERSION}-ARM64.exe`,
+  `OpenPLC_Editor_${VERSION}.dmg`,
+  `OpenPLC_Editor_${VERSION}-ARM.dmg`,
+]
+
+function sha256(content: string): string {
+  return createHash('sha256').update(content).digest('hex')
+}
+
+function rebuilt(name: string): string {
+  return `rebuilt ${name}\n`
+}
+
+const ORIGINAL = Object.fromEntries(NAMES.map((name) => [name, sha256(`original ${name}\n`)]))
+const BUILT = Object.fromEntries(NAMES.map((name) => [name, sha256(rebuilt(name))]))
+
+/** An asset of the fake release; a `pending` asset shows `digest: null` while `reads <= pendingReads`. */
+type FakeAsset = { id: number; name: string; sha: string; pending?: boolean }
+
+/** An artifact of the run the fake Actions API lists. */
+type FakeArtifact = { id: number; name: string; expired: boolean }
+
+/** The fake GitHub: one release, one workflow run's artifacts, and the upload name to refuse. */
+type FakeState = {
+  releaseId: number
+  runId: string
+  assets: FakeAsset[]
+  artifacts: FakeArtifact[]
+  nextId: number
+  reads: number
+  pendingReads: number
+  failUpload?: string
+}
+
+/** One call the fake recorded: an upload, a refused upload, a delete, a rename or a sleep. */
+type Call = Record<string, unknown>
+
+/** A temporary directory a step runs in, with the fake tools in `bin/` and `tooling/` linked to this checkout. */
+type Sandbox = { dir: string; bin: string; state: string; log: string; temp: string }
+
+type StepResult = { status: number; output: string }
+
+/**
+ * The fake `gh api`, `curl` upload and `sleep`. It serves the routes the workflow uses over a JSON state file, applies
+ * `--jq` with the jq binary, refuses an upload under a name the release already holds, as GitHub does, and logs each
+ * change.
+ */
+const FAKE_GITHUB = String.raw`
+import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
+
+const [tool, ...args] = process.argv.slice(2)
+const statePath = process.env.FAKE_GITHUB_STATE
+const state = JSON.parse(readFileSync(statePath, 'utf8'))
+const repo = 'repos/' + process.env.GITHUB_REPOSITORY + '/'
+
+function log(entry) {
+  appendFileSync(process.env.FAKE_GITHUB_LOG, JSON.stringify(entry) + '\n')
+}
+
+function save() {
+  writeFileSync(statePath, JSON.stringify(state))
+}
+
+function fail(message, code) {
+  save()
+  process.stderr.write(message + '\n')
+  process.exit(code)
+}
+
+function view(asset) {
+  const pending = asset.pending === true && state.reads <= state.pendingReads
+  return { id: asset.id, name: asset.name, size: 1, digest: pending ? null : 'sha256:' + asset.sha }
+}
+
+function respond(body, jq, out) {
+  const json = JSON.stringify(body)
+  const text = jq === undefined ? json + '\n' : execFileSync('jq', ['-r', jq], { input: json, encoding: 'utf8' })
+  if (out === undefined) process.stdout.write(text)
+  else if (out !== '/dev/null') writeFileSync(out, text)
+}
+
+function gh() {
+  if (args[0] !== 'api') fail('fake gh: unsupported command: ' + args.join(' '), 2)
+  let method
+  let jq
+  let path
+  const fields = {}
+  for (let i = 1; i < args.length; i += 1) {
+    const arg = args[i]
+    if (arg === '-X' || arg === '--method') method = args[++i]
+    else if (arg.startsWith('--method=')) method = arg.slice(9)
+    else if (arg === '--jq' || arg === '-q') jq = args[++i]
+    else if (arg === '-H' || arg === '--header') i += 1
+    else if (arg === '--paginate' || arg === '--silent') continue
+    else if (['-f', '-F', '--field', '--raw-field'].includes(arg)) {
+      const field = args[++i]
+      fields[field.slice(0, field.indexOf('='))] = field.slice(field.indexOf('=') + 1)
+    } else if (!arg.startsWith('-') && path === undefined) path = arg
+    else fail('fake gh: unsupported argument ' + arg, 2)
+  }
+  method = (method ?? (Object.keys(fields).length > 0 ? 'POST' : 'GET')).toUpperCase()
+  const [route, query = ''] = String(path).replace(/^\//, '').split('?')
+  if (!route.startsWith(repo)) fail('fake gh: unexpected path ' + path, 2)
+  const parts = route.slice(repo.length).split('/')
+  const key = method + ' ' + parts.map((part, index) => (index > 0 && /^\d+$/.test(part) ? ':id' : part)).join('/')
+  if (key === 'GET releases/:id' || key === 'GET releases/:id/assets') {
+    if (Number(parts[1]) !== state.releaseId) fail('gh: Not Found (HTTP 404)', 1)
+    state.reads += 1
+    const assets = state.assets.map(view)
+    respond(parts.length === 2 ? { id: state.releaseId, tag_name: 'tag', body: '', assets } : assets, jq)
+  } else if (/^(GET|DELETE|PATCH) releases\/assets\/:id$/.test(key)) {
+    const asset = state.assets.find((entry) => entry.id === Number(parts[2]))
+    if (asset === undefined) fail('gh: Not Found (HTTP 404)', 1)
+    if (method === 'DELETE') {
+      state.assets = state.assets.filter((entry) => entry !== asset)
+      log({ op: 'delete', id: asset.id, name: asset.name })
+    } else if (method === 'PATCH') {
+      if (typeof fields.name !== 'string') fail('fake gh: PATCH of an asset without a name field', 2)
+      if (state.assets.some((entry) => entry !== asset && entry.name === fields.name)) {
+        fail('gh: Validation Failed (HTTP 422): already_exists', 1)
+      }
+      log({ op: 'rename', id: asset.id, from: asset.name, to: fields.name })
+      asset.name = fields.name
+      respond(view(asset), jq)
+    } else respond(view(asset), jq)
+  } else if (key === 'GET actions/runs/:id/artifacts') {
+    if (parts[2] !== state.runId) fail('gh: Not Found (HTTP 404)', 1)
+    const name = new URLSearchParams(query).get('name')
+    const artifacts = state.artifacts.filter((entry) => name === null || entry.name === name)
+    respond({ total_count: artifacts.length, artifacts }, jq)
+  } else fail('fake gh: unsupported route ' + method + ' ' + path, 2)
+  save()
+}
+
+function curl() {
+  const switches = ['-s', '-S', '-sS', '-Ss', '--silent', '--show-error', '--fail', '-f', '--fail-with-body', '-L']
+  let method
+  let url
+  let file
+  let out
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]
+    if (switches.includes(arg)) continue
+    else if (arg === '-X' || arg === '--request') method = args[++i]
+    else if (arg === '-H' || arg === '--header') i += 1
+    else if (arg === '-o' || arg === '--output') out = args[++i]
+    else if (arg === '--data-binary') file = args[++i].replace(/^@/, '')
+    else if (arg === '-T' || arg === '--upload-file') file = args[++i]
+    else if (arg.startsWith('https://')) url = arg
+    else fail('fake curl: unsupported argument ' + arg, 2)
+  }
+  const target = new URL(url)
+  const expected = '/' + repo + 'releases/' + state.releaseId + '/assets'
+  if (target.host !== 'uploads.github.com' || target.pathname !== expected || (method ?? 'POST') !== 'POST') {
+    fail('fake curl: unsupported request ' + (method ?? 'POST') + ' ' + url, 2)
+  }
+  const name = target.searchParams.get('name')
+  if (name === state.failUpload) {
+    log({ op: 'upload-failed', name })
+    fail('curl: (22) The requested URL returned error: 502', 22)
+  }
+  if (state.assets.some((entry) => entry.name === name)) {
+    log({ op: 'upload-refused', name })
+    fail('curl: (22) The requested URL returned error: 422', 22)
+  }
+  const asset = { id: state.nextId, name, sha: createHash('sha256').update(readFileSync(file)).digest('hex') }
+  state.nextId += 1
+  state.assets.push(asset)
+  log({ op: 'upload', id: asset.id, name })
+  respond(view(asset), undefined, out)
+  save()
+}
+
+if (tool === 'gh') gh()
+else if (tool === 'curl') curl()
+else if (tool === 'sleep') log({ op: 'sleep', args })
+else fail('fake github: unknown tool ' + tool, 2)
+`
+
+const sandboxes: string[] = []
+
+afterEach(() => {
+  for (const dir of sandboxes.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
+
+function write(path: string, content: string): void {
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, content)
+}
+
+function writeJson(path: string, value: unknown): void {
+  write(path, `${JSON.stringify(value, null, 2)}\n`)
+}
+
+function releaseState(assets: FakeAsset[]): FakeState {
+  return { releaseId: RELEASE_ID, runId: RUN_ID, assets, artifacts: [], nextId: 900, reads: 0, pendingReads: 0 }
+}
+
+function writeState(box: Sandbox, state: FakeState): void {
+  writeFileSync(box.state, JSON.stringify(state))
+}
+
+function readState(box: Sandbox): FakeState {
+  const state = record(JSON.parse(readFileSync(box.state, 'utf8')))
+  return {
+    releaseId: Number(state.releaseId),
+    runId: str(state.runId),
+    assets: list(state.assets)
+      .map(record)
+      .map((asset) => ({
+        id: Number(asset.id),
+        name: str(asset.name),
+        sha: str(asset.sha),
+        pending: asset.pending === true,
+      })),
+    artifacts: list(state.artifacts)
+      .map(record)
+      .map((artifact) => ({ id: Number(artifact.id), name: str(artifact.name), expired: artifact.expired === true })),
+    nextId: Number(state.nextId),
+    reads: Number(state.reads),
+    pendingReads: Number(state.pendingReads),
+    failUpload: typeof state.failUpload === 'string' ? state.failUpload : undefined,
+  }
+}
+
+function readCalls(box: Sandbox): Call[] {
+  return readFileSync(box.log, 'utf8')
+    .split('\n')
+    .filter((line) => line !== '')
+    .map((line): Call => record(JSON.parse(line)))
+}
+
+/** A new sandbox with the fake tools, `tooling/` linked to this checkout and an empty release. */
+function sandbox(): Sandbox {
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'rebuild-release-'))
+  sandboxes.push(dir)
+  const box = {
+    dir,
+    bin: join(dir, 'bin'),
+    state: join(dir, 'fake-github.json'),
+    log: join(dir, 'fake-github.log'),
+    temp: join(dir, 'runner-temp'),
+  }
+  mkdirSync(box.temp, { recursive: true })
+  write(join(box.bin, 'fake-github.mjs'), FAKE_GITHUB)
+  for (const tool of ['gh', 'curl', 'sleep']) {
+    const wrapper = join(box.bin, tool)
+    write(
+      wrapper,
+      `#!/bin/bash\nexec ${JSON.stringify(process.execPath)} "$(dirname "$0")/fake-github.mjs" ${tool} "$@"\n`,
+    )
+    chmodSync(wrapper, 0o755)
+  }
+  symlinkSync(repo, join(dir, 'tooling'))
+  write(box.log, '')
+  writeState(box, releaseState([]))
+  return box
+}
+
+/**
+ * Runs one `run` step as the runner does (`bash --noprofile --norc -eo pipefail`), with the workflow, job and step
+ * `env`, each `${{ }}` expression replaced by its test value, and the fake tools first on the PATH.
+ */
+function runStep(entry: Job, step: Step, box: Sandbox): StepResult {
+  const values: Record<string, string> = {
+    'github.token': 'fake-token',
+    'github.sha': SHA,
+    'inputs.mode': 'rebuild',
+    'inputs.ref': REF,
+    'inputs.release': RELEASE,
+    'inputs.run_id': RUN_ID,
+    'inputs.negative_controls': 'false',
+    'needs.resolve.outputs.version': VERSION,
+    'needs.resolve.outputs.sha': SHA,
+    'needs.resolve.outputs.release_id': String(RELEASE_ID),
+    'steps.sha.outputs.sha': SHA,
+    'steps.version.outputs.version': VERSION,
+    'steps.release.outputs.release_id': String(RELEASE_ID),
+    'steps.manifest.outputs.version': VERSION,
+    'steps.manifest.outputs.sha': SHA,
+    'steps.manifest.outputs.release_id': String(RELEASE_ID),
+    'runner.temp': box.temp,
+    'env.NODE_VERSION': '22.x',
+  }
+  const evaluate = (value: unknown): string =>
+    String(value).replace(/\$\{\{\s*(.+?)\s*\}\}/g, (_match, expression: string) => {
+      const replacement = values[expression]
+      if (replacement === undefined) throw new Error(`no test value for the expression ${expression}`)
+      return replacement
+    })
+  const declared = { ...record(workflow().doc.env), ...record(entry.body.env), ...record(step.env) }
+  const script = join(box.dir, 'step.sh')
+  write(script, evaluate(str(step.run)))
+  const ran = spawnSync('bash', ['--noprofile', '--norc', '-eo', 'pipefail', script], {
+    cwd: join(box.dir, str(step['working-directory'])),
+    encoding: 'utf8',
+    timeout: 60_000,
+    env: {
+      PATH: [box.bin, dirname(process.execPath), process.env.PATH ?? ''].join(delimiter),
+      HOME: box.dir,
+      LANG: 'C',
+      GITHUB_REPOSITORY: REPOSITORY,
+      GITHUB_WORKSPACE: box.dir,
+      GITHUB_OUTPUT: join(box.dir, 'output.txt'),
+      GITHUB_STEP_SUMMARY: join(box.dir, 'summary.md'),
+      RUNNER_TEMP: box.temp,
+      FAKE_GITHUB_STATE: box.state,
+      FAKE_GITHUB_LOG: box.log,
+      ...Object.fromEntries(Object.entries(declared).map(([name, value]) => [name, evaluate(value)])),
+    },
+  })
+  return { status: ran.status ?? -1, output: `${ran.stdout}${ran.stderr}` }
 }
 
 describe('rebuild-release.yml: trigger and inputs', () => {
@@ -672,5 +1013,273 @@ describe('rebuild-release.yml: packaged-checks', () => {
 
   it('uploads the reports', () => {
     expect(checks().steps.some(isUploadArtifact)).toBe(true)
+  })
+})
+
+describe('rebuild-release.yml: the branch to build', () => {
+  const CHECK_REF = 'tooling/scripts/release/check-ref.mjs'
+
+  function touchesTree(step: Step): boolean {
+    return isCheckout(step, 'tree') || /\bgit\b[^\n]*\b(fetch|checkout|clone)\b/.test(str(step.run))
+  }
+
+  it('names the ref, the release and the mode in the run name', () => {
+    const name = str(workflow().doc['run-name'])
+    const named = (input: string): boolean => new RegExp(`\\$\\{\\{\\s*inputs\\.${input}\\s*\\}\\}`).test(name)
+
+    expect(['ref', 'release', 'mode'].filter((input) => !named(input))).toEqual([])
+  })
+
+  it('runs check-ref.mjs in resolve after checking out tooling/ and before any fetch or checkout of tree/', () => {
+    const resolve = job('resolve')
+    const tooling = stepIndex(resolve, (step) => isCheckout(step, 'tooling'))
+    const check = stepIndex(resolve, mentions(CHECK_REF))
+    const tree = stepIndex(resolve, touchesTree)
+
+    expect(tooling).toBeGreaterThanOrEqual(0)
+    expect(check).toBeGreaterThan(tooling)
+    expect(tree).toBeGreaterThan(check)
+  })
+
+  it('gives check-ref.mjs the ref and the release through env only, never through ${{ }} in its script', () => {
+    const step = job('resolve').steps.find(mentions(CHECK_REF)) ?? {}
+    const env = Object.values(record(step.env)).map(str)
+    const script = str(step.run)
+
+    expect({
+      ref: env.some((value) => /\$\{\{\s*inputs\.ref\s*\}\}/.test(value)),
+      release: env.some((value) => /\$\{\{\s*inputs\.release\s*\}\}/.test(value)),
+      options: ['--ref', '--release'].every((option) => script.includes(option)),
+      inlineExpression: script.includes('${{'),
+    }).toEqual({ ref: true, release: true, options: true, inlineExpression: false })
+  })
+
+  it('writes the ref and the resolved commit to the step summary of resolve', () => {
+    const box = sandbox()
+    const resolve = job('resolve')
+    const summarySteps = resolve.steps.filter((step) => str(step.run).includes('GITHUB_STEP_SUMMARY'))
+    const failed = summarySteps.map((step) => runStep(resolve, step, box)).filter((result) => result.status !== 0)
+
+    expect(summarySteps.length).toBeGreaterThanOrEqual(1)
+    expect(failed).toEqual([])
+    expect([REF, SHA].filter((value) => !readFileSync(join(box.dir, 'summary.md'), 'utf8').includes(value))).toEqual([])
+  })
+})
+
+describe('rebuild-release.yml: STruC++ in trust-module', () => {
+  /** The step index of the first step of @p entry whose script holds @p fragment, and the fragment's offset in it. */
+  function position(entry: Job, fragment: string): [number, number] {
+    const index = stepIndex(entry, (step) => str(step.run).includes(fragment))
+    return [index, index < 0 ? -1 : str(entry.steps[index].run).indexOf(fragment)]
+  }
+
+  function precedes(a: [number, number], b: [number, number]): boolean {
+    return a[0] >= 0 && (a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]))
+  }
+
+  it('runs npm run setup:strucpp in tree/ after npm ci --ignore-scripts and before the check-site Jest run', () => {
+    const trust = job('trust-module')
+    const install = position(trust, 'npm ci --ignore-scripts')
+    const strucpp = position(trust, 'npm run setup:strucpp')
+    const jest = position(trust, 'check-sites.test.ts')
+
+    expect(strucpp[0]).toBeGreaterThanOrEqual(0)
+    expect(str(trust.steps[strucpp[0]]?.['working-directory'])).toBe('tree')
+    expect([precedes(install, strucpp), precedes(strucpp, jest)]).toEqual([true, true])
+  })
+})
+
+describe('rebuild-release.yml: publish uploads each installer before deleting the one it replaces', () => {
+  const STALE = 'OpenPLC.Editor_4.3.5.exe.uploading'
+  const STALE_ID = 106
+
+  function replaceStep(): Step {
+    return job('publish').steps.find((step) => str(step.run).includes('uploads.github.com')) ?? {}
+  }
+
+  /** A sandbox with the six rebuilt installers in upload/ and a release holding the six originals and a stale upload. */
+  function replacing(failUpload?: string): Sandbox {
+    const box = sandbox()
+    for (const name of NAMES) write(join(box.dir, 'upload', name), rebuilt(name))
+    const originals = NAMES.map((name, index) => ({ id: 100 + index, name, sha: ORIGINAL[name] }))
+    writeState(box, {
+      ...releaseState([...originals, { id: STALE_ID, name: STALE, sha: sha256('a partial upload') }]),
+      failUpload,
+    })
+    return box
+  }
+
+  it('leaves exactly the six installers, each holding its rebuilt file, and no .uploading asset', () => {
+    const box = replacing()
+    const result = runStep(job('publish'), replaceStep(), box)
+    const assets = readState(box).assets
+
+    expect(result.status).toBe(0)
+    expect(assets.map((asset) => asset.name).sort()).toEqual([...NAMES].sort())
+    expect(assets.filter((asset) => asset.sha !== BUILT[asset.name]).map((asset) => asset.name)).toEqual([])
+  })
+
+  it('uploads each installer as <name>.uploading, then deletes its old asset, then renames the upload to <name>', () => {
+    const box = replacing()
+    runStep(job('publish'), replaceStep(), box)
+    const calls = readCalls(box)
+    const at = (predicate: (call: Call) => boolean): number => calls.findIndex(predicate)
+
+    const offenders = NAMES.filter((name, index) => {
+      const upload = at((call) => call.op === 'upload' && call.name === `${name}.uploading`)
+      const remove = at((call) => call.op === 'delete' && call.id === 100 + index)
+      const rename = at((call) => call.op === 'rename' && call.to === name)
+      return upload < 0 || !(upload < remove && remove < rename)
+    })
+
+    expect(offenders).toEqual([])
+    expect(calls.filter((call) => call.op === 'upload' && NAMES.includes(str(call.name)))).toEqual([])
+  })
+
+  it('deletes a stale .uploading asset left by an earlier attempt before uploading that installer', () => {
+    const box = replacing()
+    runStep(job('publish'), replaceStep(), box)
+    const calls = readCalls(box)
+    const removed = calls.findIndex((call) => call.op === 'delete' && call.id === STALE_ID)
+    const uploaded = calls.findIndex((call) => call.op === 'upload' && call.name === STALE)
+
+    expect(removed).toBeGreaterThanOrEqual(0)
+    expect(uploaded).toBeGreaterThan(removed)
+  })
+
+  it.each(['OpenPLC.Editor-4.3.5-ARM64.AppImage', 'OpenPLC_Editor_4.3.5.dmg'])(
+    'fails and keeps the original %s in the release when its upload fails',
+    (name) => {
+      const box = replacing(`${name}.uploading`)
+      const result = runStep(job('publish'), replaceStep(), box)
+      const assets = readState(box).assets
+
+      expect(result.status).not.toBe(0)
+      expect(readCalls(box).some((call) => call.op === 'upload-failed')).toBe(true)
+      expect(assets.find((asset) => asset.name === name)?.sha).toBe(ORIGINAL[name])
+      expect(NAMES.filter((entry) => !assets.some((asset) => asset.name === entry))).toEqual([])
+    },
+  )
+})
+
+describe.each(['publish', 'verify'])('rebuild-release.yml: %s reads the digests back', (id) => {
+  const PENDING = 'OpenPLC_Editor_4.3.5-ARM.dmg'
+
+  function readBackStep(): Step {
+    return job(id).steps.find(mentions('tooling/scripts/release/release-digests.mjs after')) ?? {}
+  }
+
+  function rebuiltAssets(): FakeAsset[] {
+    return NAMES.map((name, index) => ({ id: 500 + index, name, sha: BUILT[name], pending: name === PENDING }))
+  }
+
+  /** A sandbox with the run's manifest and digests and a release holding @p assets. */
+  function readingBack(assets: FakeAsset[], pendingReads: number): Sandbox {
+    const box = sandbox()
+    const manifest = { release: RELEASE, release_id: String(RELEASE_ID), version: VERSION, sha: SHA }
+    writeJson(join(box.dir, 'manifest', 'manifest.json'), manifest)
+    writeJson(join(box.dir, 'manifest', 'original.json'), ORIGINAL)
+    writeJson(join(box.dir, 'digests', 'built-all.json'), BUILT)
+    writeJson(join(box.dir, 'built.json'), BUILT)
+    writeState(box, { ...releaseState(assets), pendingReads })
+    return box
+  }
+
+  function attempts(box: Sandbox): { reads: number; sleeps: string[] } {
+    const sleeps = readCalls(box)
+      .filter((call) => call.op === 'sleep')
+      .map((call) => list(call.args).map(String).join(' '))
+    return { reads: readState(box).reads, sleeps }
+  }
+
+  it('re-reads the release while a digest is pending, 10 s apart, and passes once GitHub fills it', () => {
+    const box = readingBack(rebuiltAssets(), 2)
+    const result = runStep(job(id), readBackStep(), box)
+
+    expect(result.status).toBe(0)
+    expect(attempts(box)).toEqual({ reads: 3, sleeps: ['10', '10'] })
+  })
+
+  it('stops after 6 attempts, 10 s apart, and fails naming the asset still without a digest', () => {
+    const box = readingBack(rebuiltAssets(), 1000)
+    const result = runStep(job(id), readBackStep(), box)
+
+    expect(result.status).not.toBe(0)
+    expect(result.output).toContain(PENDING)
+    expect(attempts(box)).toEqual({ reads: 6, sleeps: ['10', '10', '10', '10', '10'] })
+  })
+
+  it('never retries a failure other than a pending digest', () => {
+    const missing = 'OpenPLC.Editor_4.3.5-ARM64.exe'
+    const box = readingBack(
+      rebuiltAssets().filter((asset) => asset.name !== missing),
+      1000,
+    )
+    const result = runStep(job(id), readBackStep(), box)
+
+    expect(result.status).not.toBe(0)
+    expect(attempts(box)).toEqual({ reads: 1, sleeps: [] })
+  })
+})
+
+describe('rebuild-release.yml: seed-audit and the trust-module artifact', () => {
+  const MANIFEST: FakeArtifact = { id: 1, name: 'rebuild-manifest', expired: false }
+
+  function searchIndex(): number {
+    return stepIndex(job('seed-audit'), mentions('tooling/scripts/release/seed-audit.mjs'))
+  }
+
+  /** The first `run` step of seed-audit that names the trust-module artifact; it must come before the search. */
+  function artifactCheck(): Step {
+    const audit = job('seed-audit')
+    const index = stepIndex(audit, (step) => str(step.run).includes('trust-module'))
+    if (index < 0 || index > searchIndex()) {
+      throw new Error('seed-audit checks no trust-module artifact before the search')
+    }
+    return audit.steps[index]
+  }
+
+  function checking(artifacts: FakeArtifact[]): StepResult {
+    const box = sandbox()
+    writeState(box, { ...releaseState([]), artifacts })
+    return runStep(job('seed-audit'), artifactCheck(), box)
+  }
+
+  it('downloads the trust-module artifact of run_id by name before the search', () => {
+    const audit = job('seed-audit')
+    const download = stepIndex(
+      audit,
+      (step) =>
+        uses(step).startsWith('actions/download-artifact') &&
+        record(step.with).name === 'trust-module' &&
+        /\$\{\{\s*inputs\.run_id\s*\}\}/.test(str(record(step.with)['run-id'])),
+    )
+
+    expect(download).toBeGreaterThanOrEqual(0)
+    expect(download).toBeLessThan(searchIndex())
+    expect(audit.steps[download]?.['continue-on-error']).toBeUndefined()
+  })
+
+  it.each([
+    ['missing', [MANIFEST]],
+    ['expired', [MANIFEST, { id: 2, name: 'trust-module', expired: true }]],
+  ])(
+    'fails when the trust-module artifact is %s, naming it, the run id and the one-day retention',
+    (_state, artifacts) => {
+      const result = checking(artifacts)
+
+      expect(result.status).not.toBe(0)
+      expect({
+        artifact: result.output.includes('trust-module'),
+        run: result.output.includes(RUN_ID),
+        retention: /\b(one|1)[ -]day\b/i.test(result.output),
+      }).toEqual({ artifact: true, run: true, retention: true })
+    },
+  )
+
+  it('passes when the trust-module artifact of the run has not expired', () => {
+    const result = checking([MANIFEST, { id: 2, name: 'trust-module', expired: false }])
+
+    expect(result.status).toBe(0)
   })
 })
