@@ -4,7 +4,7 @@
 
 import { existsSync } from 'fs'
 import HtmlWebpackPlugin from 'html-webpack-plugin'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import TerserPlugin from 'terser-webpack-plugin'
 import webpack from 'webpack'
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer'
@@ -92,7 +92,10 @@ const configuration: webpack.Configuration = {
       'process.type': '"browser"',
     }),
 
-    new webpack.NormalModuleReplacementPlugin(new RegExp(`^${escapeRegExp(committedTrustModule)}$`), placedTrustModule),
+    new webpack.NormalModuleReplacementPlugin(new RegExp(`^${escapeRegExp(committedTrustModule)}$`), (resolveData) => {
+      resolveData.createData.resource = placedTrustModule
+      resolveData.createData.context = dirname(placedTrustModule)
+    }),
   ],
 
   /**
