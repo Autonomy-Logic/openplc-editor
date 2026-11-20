@@ -641,7 +641,7 @@ jobs:
             set -- xvfb-run -a
           fi
           "$@" node scripts/release/packaged-checks.mjs --platform "$PLATFORM" \
-            --installer "${INSTALLERS[0]}" --version "$VERSION" \
+            --installer "${INSTALLERS[0]}" --version "$VERSION" --allow-prerelease \
             --positive-control src/backend/editor/package-trust/__tests__/fixtures/com.openplc.fx3u-compatible-2.1.0.vpp \
             --trusted-keys src/backend/shared/utils/vpp/trusted-keys.ts \
             --report "reports/packaged-checks-$PLATFORM.json"
@@ -713,7 +713,9 @@ jobs:
           ls -l upload
 
       - name: Check the upload set
-        run: node scripts/release/check-upload-set.mjs --version "${{ steps.version.outputs.version }}" upload
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: node scripts/release/check-upload-set.mjs --version "$VERSION" --allow-prerelease upload
 
       - name: Determine if prerelease
         id: prerelease
