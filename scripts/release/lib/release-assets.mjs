@@ -8,6 +8,22 @@ const RELEASE_TAG = /^v(\d+\.\d+\.\d+)(-rehearsal)?$/
 /** An editor version: `<major>.<minor>.<patch>`. */
 export const VERSION = /^\d+\.\d+\.\d+$/
 
+/** A prerelease editor version: `<major>.<minor>.<patch>-<prerelease>`, dot-separated identifiers, no build metadata. */
+export const PRERELEASE_VERSION = /^\d+\.\d+\.\d+-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*$/
+
+/**
+ * Why `version` has none of the accepted forms; null when it has one.
+ * @param {string} version
+ * @param {{ allowPrerelease?: boolean }} [options] `allowPrerelease` also accepts `PRERELEASE_VERSION`.
+ * @returns {string | null} `"<version>" is not <the accepted forms>`.
+ */
+export function versionFormProblem(version, { allowPrerelease = false } = {}) {
+  if (VERSION.test(String(version))) return null
+  if (!allowPrerelease) return `${JSON.stringify(version)} is not <major>.<minor>.<patch>`
+  if (PRERELEASE_VERSION.test(String(version))) return null
+  return `${JSON.stringify(version)} is not <major>.<minor>.<patch> or <major>.<minor>.<patch>-<prerelease>`
+}
+
 /** A bare lowercase sha256 hex digest. */
 export const SHA256_HEX = /^[0-9a-f]{64}$/
 
@@ -28,12 +44,13 @@ export function versionFromReleaseTag(tag) {
 /**
  * The six installer names of a release of `version`, one per platform and architecture.
  * @param {string} version
+ * @param {{ allowPrerelease?: boolean }} [options] `allowPrerelease` also accepts `PRERELEASE_VERSION`.
  * @returns {string[]}
+ * @throws {Error} naming the version and the accepted forms when it has none of them.
  */
-export function expectedAssetNames(version) {
-  if (!VERSION.test(String(version))) {
-    throw new Error(`version ${JSON.stringify(version)} is not <major>.<minor>.<patch>`)
-  }
+export function expectedAssetNames(version, options) {
+  const problem = versionFormProblem(version, options)
+  if (problem !== null) throw new Error(`version ${problem}`)
   return [
     `OpenPLC.Editor-${version}.AppImage`,
     `OpenPLC.Editor-${version}-ARM64.AppImage`,
