@@ -1,5 +1,7 @@
 import { createHmac, createPrivateKey, createPublicKey, type KeyObject, sign } from 'node:crypto'
 
+import ts from 'typescript'
+
 /** Fixed seed of every build that is not a release; the committed module is generated from it. */
 export const DEVELOPMENT_SEED: Uint8Array = Uint8Array.from(
   Buffer.from('0235de812b3cd0d89f2174a27d840f3ba7ccb99832a0c558b4e408b03bdd5642', 'hex'),
@@ -25,21 +27,50 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** @p value as a `TrustModuleLayout` (the parsed `layout.json`), or null when it has another shape. */
-export function parseTrustModuleLayout(value: unknown): TrustModuleLayout | null {
-  if (!isRecord(value) || !Array.isArray(value.sites) || !Array.isArray(value.shareLiterals)) return null
-  const sites: TrustModuleLayout['sites'] = []
-  for (const site of value.sites) {
-    if (!isRecord(site) || typeof site.functionName !== 'string') return null
-    if (site.hook !== 'import' && site.hook !== 'use') return null
-    sites.push({ hook: site.hook, functionName: site.functionName })
+/** The name of @p statement when it declares a decoder, `function <name>(parts: string[]): Uint8Array`; else null. */
+function decoderName(statement: ts.Statement): string | null {
+  if (!ts.isFunctionDeclaration(statement) || statement.name === undefined) return null
+  const [parameter] = statement.parameters
+  if (statement.parameters.length !== 1 || !ts.isIdentifier(parameter.name) || parameter.name.text !== 'parts') {
+    return null
   }
-  const shareLiterals: string[] = []
-  for (const literal of value.shareLiterals) {
-    if (typeof literal !== 'string') return null
-    shareLiterals.push(literal)
+  const takesStrings =
+    parameter.type !== undefined &&
+    ts.isArrayTypeNode(parameter.type) &&
+    parameter.type.elementType.kind === ts.SyntaxKind.StringKeyword
+  const returnsBytes =
+    statement.type !== undefined &&
+    ts.isTypeReferenceNode(statement.type) &&
+    statement.type.typeArguments === undefined &&
+    ts.isIdentifier(statement.type.typeName) &&
+    statement.type.typeName.text === 'Uint8Array'
+  return takesStrings && returnsBytes ? statement.name.text : null
+}
+
+/**
+ * The share literals of a trust module @p source: in source order, the string-literal elements of every array literal
+ * passed as the only argument of a call to a top-level decoder (`function <name>(parts: string[]): Uint8Array`).
+ * Parses @p source without type checking and never evaluates it.
+ * @returns the literals; empty when the source calls no decoder with such an array
+ */
+export function shareLiteralsFromSource(source: string): string[] {
+  const file = ts.createSourceFile('package-trust-anchor.ts', source, ts.ScriptTarget.ES2022, false, ts.ScriptKind.TS)
+  const decoders = new Set(file.statements.map(decoderName).filter((name) => name !== null))
+  const literals: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      decoders.has(node.expression.text) &&
+      node.arguments.length === 1 &&
+      ts.isArrayLiteralExpression(node.arguments[0])
+    ) {
+      for (const element of node.arguments[0].elements) if (ts.isStringLiteral(element)) literals.push(element.text)
+    }
+    ts.forEachChild(node, visit)
   }
-  return { sites, shareLiterals }
+  visit(file)
+  return literals
 }
 
 export type TrustModuleHeader = { mode: 'development' } | { mode: 'release'; version: string; commit: string }
