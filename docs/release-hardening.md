@@ -109,6 +109,8 @@ places a module runs it and fails on a mismatch.
 `scripts/package-trust/generator.ts` (`generatePackageTrustModule`) writes the module and its layout (the check sites
 and the exact text of every share literal) from a 32-byte seed. The same seed and keys always give the same module.
 The first line of a module names its mode: `from the development seed`, or `for release <version> at commit <sha>`.
+`shareLiteralsFromSource(source)` reads the share literals back from a module's source with the TypeScript parser,
+without evaluating it: the string literals of every array passed to one of the module's top-level decoders.
 
 - **Release seed:** `deriveReleaseSeed(secret, version, commit)`, HMAC-SHA256 keyed by the secret over
   `<version>+<commit>`. The secret is the GitHub Actions secret `TRUST_SEED_SECRET` (64 hexadecimal characters) of the
@@ -123,22 +125,24 @@ The first line of a module names its mode: `from the development seed`, or `for 
 ### Build modes
 
 `npm run build:main` runs `scripts/package-trust/cli.ts prepare`, then webpack, then `cli.ts verify-bundle`. Webpack
-replaces the committed module with the one `prepare` placed in `release/package-trust/` (git-ignored), with its
-`layout.json` beside it.
+replaces the committed module with the one `prepare` placed in `release/package-trust/` (git-ignored). Neither
+`prepare` nor `verify-bundle` reads `layout.json`: both take the share literals from the module itself
+(`shareLiteralsFromSource`), so a `layout.json` beside the module, absent, stale or malformed, changes nothing.
 
-| `OPENPLC_RELEASE_BUILD` | Mode        | `prepare`                                                                                                                                                                                                                                                                                                              |
-| ----------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| unset or empty          | development | Places the development module and its layout. Fails when `GITHUB_REF` is a `refs/tags/v*` tag: a tag build must be in release mode.                                                                                                                                                                                    |
-| `1`                     | release     | Places nothing: requires the module `generate-release` wrote in `release/package-trust/`, with its `layout.json`. Fails when `OPENPLC_TEST_PACKAGE` is set, when the module is not a release module, when its version differs from `release/app/package.json` or its commit from `HEAD`, or on a fingerprint mismatch. |
-| any other value         | (none)      | Fails, naming the variable.                                                                                                                                                                                                                                                                                            |
+| `OPENPLC_RELEASE_BUILD` | Mode        | `prepare`                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| unset or empty          | development | Places the development module and its layout. Fails when `GITHUB_REF` is a `refs/tags/v*` tag: a tag build must be in release mode.                                                                                                                                                                                                                                                                            |
+| `1`                     | release     | Places nothing: requires only the module `generate-release` wrote in `release/package-trust/`, as the `trust-module` artifact delivers it. Fails when `OPENPLC_TEST_PACKAGE` is set, when the module is not a release module, when its version differs from `release/app/package.json` or its commit from `HEAD`, on a fingerprint mismatch, or, after the fingerprint, when the module has no share literals. |
+| any other value         | (none)      | Fails, naming the variable.                                                                                                                                                                                                                                                                                                                                                                                    |
 
 `verify-bundle` reads `release/app/dist/main/main.js` and every other `.js` beside it (the module lands in a chunk) and
-fails when any share literal of the placed module is missing. In release mode it also fails when the bundle holds a
-share literal of the development module.
+fails when the placed module has no share literal or when any of them is missing. In release mode it also fails when
+the bundle holds a share literal of the development module, generated in memory.
 
 `generate-release --version <v> --commit <sha> --out <file>` writes a release module and its `layout.json`. It reads
 the secret from `OPENPLC_TRUST_SEED_SECRET` and fails, writing nothing, when it is absent or is not 64 hexadecimal
-characters.
+characters. The `layout.json` serves only the `trust-module` job's check-site test
+(`OPENPLC_TRUST_MODULE_UNDER_TEST`): it is never uploaded, and no build step reads it.
 
 ### Environment variables
 
@@ -169,11 +173,15 @@ Every run, tag or dispatch:
   `scripts/release/scan-trust-literals.mjs` on its unpacked output, before it uploads anything;
 - the `packaged-checks` job runs `scripts/release/packaged-checks.mjs` (positive controls only, no negative control)
   on the macOS arm64 DMG, the Windows x64 installer and the Linux x64 AppImage, on `macos-14`, `windows-2022` and
-  `ubuntu-22.04`.
+  `ubuntu-22.04`, with `--allow-prerelease`.
 
-`create-release` runs on tags only, after `packaged-checks`. It runs `scripts/release/check-upload-set.mjs` on the
-installers before `gh release create` and uploads exactly the six installers: never a `latest*.yml` and never a
-`.blockmap` (see `docs/update-notice.md`).
+`create-release` runs on tags only, after `packaged-checks`. It runs `scripts/release/check-upload-set.mjs` with
+`--allow-prerelease` on the installers before `gh release create` and uploads exactly the six installers: never a
+`latest*.yml` and never a `.blockmap` (see `docs/update-notice.md`).
+
+The version of a `release.yml` run may be a prerelease, such as `4.4.0-rc1` for the tag `v4.4.0-rc1`: both checks pass
+`--allow-prerelease`, so the installers are named with the full version. `rebuild-release.yml` never passes it and
+accepts only `<major>.<minor>.<patch>`.
 
 A dispatch of `release.yml` on a demand branch with `platforms: all` is how a development build of the hardened editor
 is produced and checked.
@@ -196,13 +204,16 @@ Each script exits 0 when its check passes and 1 with the reason otherwise.
 | `packaged-checks.mjs`     | installs one installer and attacks it (below)                                                                                                                                                   |
 
 The release tag of every script is `v<major>.<minor>.<patch>`, or its `-rehearsal` form, which stands for the same
-version.
+version. A version is `<major>.<minor>.<patch>`; only `check-upload-set.mjs` and `packaged-checks.mjs` also accept
+`<major>.<minor>.<patch>-<prerelease>` (dot-separated letters, digits and hyphens, no `+` build metadata), and only
+with `--allow-prerelease`. The option widens the version form only: the upload set is still exactly the six
+installers.
 
 ### Packaged checks
 
 `packaged-checks.mjs --platform <mac|win|linux> --installer <path> --version <v> --positive-control <fx3u .vpp>
---trusted-keys <trusted-keys.ts> --report <file.json> [--negative-control]` installs the installer into a temporary
-folder and runs, in order:
+--trusted-keys <trusted-keys.ts> --report <file.json> [--negative-control] [--allow-prerelease]` installs the installer
+into a temporary folder and runs, in order:
 
 - `start`: the editor stays alive 30 s.
 - `ABUSE-01`: the reproducer of the published trust patch (`fixtures/patch-trust-reproducer.mjs`) must not change
@@ -219,7 +230,7 @@ folder and runs, in order:
 
 Some checks are skipped with their reason: `ABUSE-06` on Linux (no ASAR integrity there), SIGUSR1 on Windows,
 `AC5 packages install` outside Linux, and `ABUSE-03 (b)` and `AC5 packages install` before 4.3.2 (no
-`openplc-cli packages`).
+`openplc-cli packages`). A prerelease version is compared by its numeric core: `4.3.2-rc1` counts as 4.3.2.
 
 With `--negative-control` the same checks run inverted against an original installer: each passes only when the
 attack works, so a check that cannot see its attack fails instead of passing. `start` and `ABUSE-07 NODE_OPTIONS` stay
