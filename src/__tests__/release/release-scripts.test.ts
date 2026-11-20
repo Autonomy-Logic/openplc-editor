@@ -240,6 +240,59 @@ describe('lib/release-assets.mjs', () => {
 
     expect(value).toEqual(assetNames(version).sort())
   })
+
+  describe('expectedAssetNames with allowPrerelease', () => {
+    function withPrerelease(version: string): Record<string, unknown> {
+      return callExport(lib, 'expectedAssetNames', [version, { allowPrerelease: true }])
+    }
+
+    function sortedNames(result: Record<string, unknown>): unknown {
+      return Array.isArray(result.value) ? [...result.value].map(String).sort() : result
+    }
+
+    it('lists exactly the six installer names of 4.4.0-rc1, each with the full version', () => {
+      expect(sortedNames(withPrerelease('4.4.0-rc1'))).toEqual(
+        [
+          'OpenPLC.Editor-4.4.0-rc1.AppImage',
+          'OpenPLC.Editor-4.4.0-rc1-ARM64.AppImage',
+          'OpenPLC.Editor_4.4.0-rc1.exe',
+          'OpenPLC.Editor_4.4.0-rc1-ARM64.exe',
+          'OpenPLC_Editor_4.4.0-rc1.dmg',
+          'OpenPLC_Editor_4.4.0-rc1-ARM.dmg',
+        ].sort(),
+      )
+    })
+
+    it.each(['4.4.0-beta.2', '4.4.0-rc-1'])('lists the six installer names of the prerelease %s', (version) => {
+      expect(sortedNames(withPrerelease(version))).toEqual(assetNames(version).sort())
+    })
+
+    it.each(['4.3.0', '4.3.5'])('lists the same six names of %s as without the option', (version) => {
+      expect(withPrerelease(version)).toEqual(call('expectedAssetNames', version))
+    })
+
+    it.each([
+      '4.4.0-',
+      '4.4.0+build',
+      '4.4.0-rc1+build',
+      'v4.4.0-rc1',
+      '4.4-rc1',
+      '4.4.0-rc/1',
+      '4.4.0-rc_1',
+      '4.4.0-rc1 ',
+      '',
+    ])('refuses %j, naming it and both version forms', (version) => {
+      expect(withPrerelease(version)).toEqual({
+        refused: `version ${JSON.stringify(version)} is not <major>.<minor>.<patch> or <major>.<minor>.<patch>-<prerelease>`,
+      })
+    })
+
+    it('is off by default: 4.4.0-rc1 without the option is refused with the x.y.z message, naming it', () => {
+      expect(call('expectedAssetNames', '4.4.0-rc1')).toEqual({
+        refused: 'version "4.4.0-rc1" is not <major>.<minor>.<patch>',
+      })
+    })
+  })
 })
 
 describe('check-version.mjs', () => {
@@ -406,6 +459,66 @@ describe('check-upload-set.mjs', () => {
 
     expect(result.status).toBe(1)
     expect(result.output).toContain(dmg)
+  })
+
+  it('names --allow-prerelease in its usage line', () => {
+    const result = run('check-upload-set.mjs', ['--version', VERSION])
+
+    expect(result.status).toBe(1)
+    expect(lineWith(result.output, 'usage: check-upload-set.mjs', '--allow-prerelease')).toBe(true)
+  })
+
+  it('refuses --version 4.4.0-rc1 without --allow-prerelease, naming it', () => {
+    const result = run('check-upload-set.mjs', ['--version', '4.4.0-rc1', uploadSet(assetNames('4.4.0-rc1'))])
+
+    expect(result.status).toBe(1)
+    expect(result.output).toContain('4.4.0-rc1')
+  })
+
+  describe('with --allow-prerelease', () => {
+    const PRERELEASE = '4.4.0-rc1'
+    const PRERELEASE_NAMES = assetNames(PRERELEASE)
+
+    function check(version: string, names: string[]): Run {
+      return run('check-upload-set.mjs', ['--version', version, '--allow-prerelease', uploadSet(names)])
+    }
+
+    it('passes a directory holding exactly the six 4.4.0-rc1 installers', () => {
+      expect(check(PRERELEASE, PRERELEASE_NAMES).status).toBe(0)
+    })
+
+    it('fails the six 4.4.0-rc1 installers plus latest.yml, naming it (ABUSE-11)', () => {
+      const result = check(PRERELEASE, [...PRERELEASE_NAMES, 'latest.yml'])
+
+      expect(result.status).toBe(1)
+      expect(result.output).toContain('latest.yml')
+    })
+
+    it('fails a 4.4.0-rc1 set missing one installer, naming it', () => {
+      const missing = 'OpenPLC_Editor_4.4.0-rc1-ARM.dmg'
+      const result = check(
+        PRERELEASE,
+        PRERELEASE_NAMES.filter((name) => name !== missing),
+      )
+
+      expect(result.status).toBe(1)
+      expect(result.output).toContain(missing)
+    })
+
+    it('passes the six 4.3.5 installers with --version 4.3.5', () => {
+      expect(check(VERSION, NAMES).status).toBe(0)
+    })
+
+    it.each<[string, string[]]>([
+      ['the six installers', NAMES],
+      ['the six installers plus latest.yml', [...NAMES, 'latest.yml']],
+    ])('gives --version 4.3.5 the status and output it gives without the option, for %s', (_label, names) => {
+      const dir = uploadSet(names)
+      const plain = run('check-upload-set.mjs', ['--version', VERSION, dir])
+      const widened = run('check-upload-set.mjs', ['--version', VERSION, '--allow-prerelease', dir])
+
+      expect({ status: widened.status, output: widened.output }).toEqual({ status: plain.status, output: plain.output })
+    })
   })
 })
 
@@ -611,6 +724,31 @@ describe('release-digests.mjs', () => {
 
       expect(result.status).toBe(1)
       expect(result.output).toContain(name)
+    })
+  })
+
+  describe('x.y.z only', () => {
+    it('before refuses --version 4.4.0-rc1, naming it, and writes nothing', () => {
+      const names = assetNames('4.4.0-rc1')
+      const assets = releaseAssets(Object.fromEntries(names.map((name) => [name, sha256(`original ${name}`)])))
+      const out = join(root, 'original.json')
+
+      const result = run('release-digests.mjs', ['before', '--version', '4.4.0-rc1', '--assets', assets, '--out', out])
+
+      expect(result.status).toBe(1)
+      expect(result.output).toContain('4.4.0-rc1')
+      expect(existsSync(out)).toBe(false)
+    })
+
+    it('refuses --allow-prerelease as an unknown option, and writes nothing', () => {
+      const out = join(root, 'original.json')
+      const args = ['before', '--version', VERSION, '--allow-prerelease', '--assets', releaseAssets(ORIGINAL)]
+
+      const result = run('release-digests.mjs', [...args, '--out', out])
+
+      expect(result.status).toBe(1)
+      expect(result.output).toContain('--allow-prerelease')
+      expect(existsSync(out)).toBe(false)
     })
   })
 })
@@ -1545,9 +1683,17 @@ describe('packaged-checks.mjs', () => {
   }
 
   describe('command line', () => {
-    function refusal(options: Record<string, string>): { status: number; output: string; report: boolean } {
-      const result = run('packaged-checks.mjs', argv(options), { timeout: 60_000 })
+    function refusal(
+      options: Record<string, string>,
+      flags: string[] = [],
+    ): { status: number; output: string; report: boolean } {
+      const result = run('packaged-checks.mjs', [...argv(options), ...flags], { timeout: 60_000 })
       return { status: result.status, output: result.output, report: existsSync(join(root, 'report.json')) }
+    }
+
+    /** The problem lines about --version; the usage line, which also names --version, is not one. */
+    function versionProblems(output: string): string[] {
+      return output.split(/\r?\n/).filter((line) => line.startsWith('--version'))
     }
 
     it.each(OPTIONS)('exits 2 without %s, naming it, before installing and without a report', (option) => {
@@ -1575,6 +1721,33 @@ describe('packaged-checks.mjs', () => {
       expect({ status: result.status, report: result.report }).toEqual({ status: 2, report: false })
       expect(result.output).toContain(options['--positive-control'])
     })
+
+    it('exits 2 for --version 4.4.0-rc1 without --allow-prerelease, naming --version, without a report', () => {
+      const result = refusal(inputs({ '--version': '4.4.0-rc1' }))
+
+      expect({ status: result.status, report: result.report }).toEqual({ status: 2, report: false })
+      expect(versionProblems(result.output).filter((line) => line.includes('4.4.0-rc1'))).toHaveLength(1)
+    })
+
+    it('accepts --version 4.4.0-rc1 with --allow-prerelease: exits 2 naming only the positive control', () => {
+      const options = inputs({ '--version': '4.4.0-rc1' })
+
+      const result = refusal(options, ['--allow-prerelease'])
+
+      expect({ status: result.status, report: result.report }).toEqual({ status: 2, report: false })
+      expect(result.output).toContain(options['--positive-control'])
+      expect(versionProblems(result.output)).toEqual([])
+    })
+
+    it.each(['4.4.0-rc1+build', 'v4.4.0-rc1', '4.4.0-'])(
+      'exits 2 for --version %s even with --allow-prerelease, naming --version, without a report',
+      (version) => {
+        const result = refusal(inputs({ '--version': version }), ['--allow-prerelease'])
+
+        expect({ status: result.status, report: result.report }).toEqual({ status: 2, report: false })
+        expect(versionProblems(result.output).filter((line) => line.includes(version))).toHaveLength(1)
+      },
+    )
 
     it('exports the 16 check ids in order, and importing it runs no check', () => {
       expect(readExport(script, 'CHECK_IDS')).toEqual({ value: CHECK_IDS })
@@ -1837,6 +2010,33 @@ describe('packaged-checks.mjs', () => {
         eqsp32: 'normal',
         fx3u: 'normal',
       })
+    })
+
+    it.each(['4.4.0-rc1', '4.3.2-rc1'])(
+      'runs both packages install rows on Linux for the prerelease %s, as for its numeric core',
+      (version) => {
+        const found = modes('linux', version, false)
+
+        expect({ eqsp32: found['ABUSE-03 (b)'], fx3u: found['AC5 packages install'] }).toEqual({
+          eqsp32: 'normal',
+          fx3u: 'normal',
+        })
+      },
+    )
+
+    it('skips both packages install rows for the prerelease 4.3.1-rc1, naming 4.3.2 in the reason', () => {
+      const rows = ['ABUSE-03 (b)', 'AC5 packages install']
+      const planned = plan('linux', '4.3.1-rc1', false).filter((entry) => rows.includes(entry.id))
+
+      expect(planned.map((entry) => entry.mode)).toEqual(['skipped', 'skipped'])
+      expect(planned.filter((entry) => !entry.reason.includes('4.3.2'))).toEqual([])
+    })
+
+    it.each(['4.4.0-rc1+build', 'v4.4.0', '4.4', '4.4.0-', ''])('throws for the version %j, naming it', (version) => {
+      const result = callExport(script, 'planChecks', [{ platform: 'linux', version, negativeControl: false }])
+
+      expect(Object.keys(result)).toEqual(['refused'])
+      expect(String(result.refused)).toContain(version)
     })
 
     it.each<[string, string, string]>([
