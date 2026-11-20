@@ -63,51 +63,98 @@ generated per build in front of every decision.
 
 `src/backend/editor/package-trust/types.ts`:
 
-- `PackageTrustAnchor` has three members:
-  - `trustedKeys()` returns a fresh `keyId -> PEM` map, rebuilt from the module's encoded shares on every call. The
-    shared verifier (`verifyPackageSignature`) gets this map instead of `TRUSTED_PACKAGE_KEYS`, so its refusal
-    reasons are unchanged.
-  - `checkAtImport(dir)` is the import hook.
-  - `checkAtUse(dir)` is the installed-package hook, used by the startup sweep, the rejection reason and the
-    pre-build gate, in the GUI and in the CLI.
-  - Each hook returns `null` when every check site bound to it accepts the package, and a refusal reason otherwise.
-- `PackageTrustMechanisms` holds the primitives the module runs on; the module imports nothing at runtime. The desktop
-  supplies them in `mechanisms.ts` (`desktopPackageTrustMechanisms`, `node:fs` and `node:crypto`).
-- `index.ts` exports `desktopPackageTrustAnchor`, the generated module on the desktop mechanisms.
-  `PackageManagerModule` (`src/backend/editor/package-manager/package-manager-module.ts`) takes it as the default of
-  its constructor and calls the shared verifier first, then the hook. On import, a refusal is reported as
-  `Package signature verification failed: Package trust check failed`.
+- `VerifyTrustedPackage = (packageDir, atImport) => TrustVerdict` checks the package in `packageDir` at import
+  (`atImport` true) or at use (false): the startup sweep, the rejection reason and the pre-build gate, in the GUI and in
+  the CLI.
+- `TrustVerdict` is positional: `[true, packageId, version]`, the verified identity read from the signed
+  `signature.json` payload, when every check passed, and `[false, reason]` otherwise.
+- `TRUST_REFUSAL` (`Package trust check failed`) is the reason of every refusal of the module's own checks; it names
+  no check.
+
+The generated module exports one binding, `export default <name>`, under a name chosen by the seed: no other export,
+no exported object and no method or property name of the trust path. `index.ts` re-exports it as
+`verifyTrustedPackage`, a local binding that the production build renames. The module imports at runtime only
+`node:crypto`, `node:fs`, `node:path` and `verifyPackageSignature` from the shared verifier, from
+`../../shared/utils/vpp/verify-package-signature` in the committed module and from
+`../../src/backend/shared/utils/vpp/verify-package-signature` in a module placed in `release/package-trust/`.
 
 The anchor is desktop-only: it is an exception to the thin-adapter rule, recorded in `CLAUDE.md`, and openplc-web is
 not changed.
 
+### One call
+
+1. Build a fresh `keyId -> PEM` map from the module's encoded shares, with no prototype, so a key id such as
+   `constructor` resolves to nothing. No key map leaves the call.
+2. Call the shared verifier (`verifyPackageSignature`) once with that map. When it refuses, return its reason (for
+   example `Untrusted signing key: <key id>`): its refusal reasons keep leading.
+3. Run the hook's reader canary, then read the package once with the hook's own reader: a walk that refuses any entry
+   that is neither a regular file nor a directory, a safe-path check, the sha256 of every file but `signature.json`,
+   and both `signature.json` and `manifest.json` parsed.
+4. Run every check site bound to the hook, each once, on that read.
+5. When every site passed, return `[true, packageId, version]`; on any failure, `[false, 'Package trust check failed']`.
+
 ### Check sites
 
 The generated module binds two to four check sites to each hook, in an order and under neutral function names chosen
-by the seed. Every site reads the package once (`readSnapshot`) and, on that snapshot:
+by the seed. Each site holds its own copy of every check, emitted from variants chosen by the seed, and calls none of
+the shared helpers (`canonicalize`, `parseSignatureFile`, `verifyFileSet`, `verifyManifestIdentity`): stubbing a shared
+function no longer disables a check. On the read, a site:
 
+- parses the signature document and builds the canonical JSON of the payload (recursive or with an explicit stack);
 - verifies the Ed25519 signature against the key it recombines from its own shares: the signature's key id only picks
-  among those keys, and a key id alone never decides;
-- verifies the package files against the signed file list and the manifest against the signed package identity
-  (`verifyFileSet`, `verifyManifestIdentity`), not only the signature (M14);
-- runs a canary: a known-invalid signature must fail under the recombined trusted key, and a known-valid signature
-  under a throwaway key derived from the seed must pass. A primitive that gets either wrong refuses the package (M12).
+  among those keys, and a key id alone never decides (M3);
+- compares the files with the signed file list (same count, every file signed with an equal hash, no unsigned file;
+  iterated one way or the other, or as sorted pairs) and the manifest's `package.id` and `package.version` with the
+  signed identity (M14).
 
-A hook accepts only when every site bound to it accepts. Each site holds the key as shares in its own encoding (an
-alphabet, base 16 or 32, combined by XOR or by addition), so the PEM text, its base64 body, the raw key bytes and the
-key id appear nowhere in the bundle.
+Before the package, each site runs its canaries (M12), in an order chosen by the seed:
+
+- **Ed25519:** a known-invalid signature must fail under the recombined trusted key, and a known-valid signature under
+  a throwaway key derived from the seed must pass.
+- **sha256:** seeded bytes must hash to an embedded digest, which catches a stubbed `createHash`.
+- **Check canary:** the site's own canonical JSON, file-set and manifest code runs on two encoded synthetic cases. The
+  matching one must pass; the mismatching one, with a changed hash, an extra or a missing file, another manifest id or
+  version, or a payload text whose keys are out of canonical order, must fail.
+
+Each hook also has a **reader canary**: before it reads the package, its reader reads a seeded in-memory tree, and the
+result must equal an embedded snapshot. A canary that fails refuses the package.
+
+Each site holds the key and its check-canary cases as shares in its own encoding (an alphabet, base 16 or 32, combined
+by XOR or by addition), so the PEM text, its base64 body, the raw key bytes and the key id appear nowhere in the bundle.
+
+### Call sites (O1)
+
+`PackageManagerModule` (`src/backend/editor/package-manager/package-manager-module.ts`) takes a
+`VerifyTrustedPackage` as its constructor parameter, `verifyTrustedPackage` by default, and keeps it in a module-local
+`WeakMap`, so no field or property name holds it. Each call site needs the verified identity that only a passing check
+returns:
+
+- **Import:** the import fails, nothing is installed and the temporary folder is removed, when the call throws, its
+  answer is not an array, its first element is not `true`, or its identity is not the manifest's `package.id` and
+  `package.version`. The error is `Package signature verification failed: <reason>`. The package is installed under
+  the verified id, and the registry records the verified version.
+- **Use:** the installed package is refused when the call throws, its answer does not pass, or the verified id is not
+  the registry id.
+
+A call patched to return `null` or `undefined`, or to throw, therefore refuses the package instead of trusting it.
 
 ### Fingerprint
 
-`scripts/package-trust/fingerprint.ts` (`checkFingerprint`) checks a generated module against
-`TRUSTED_PACKAGE_KEYS`: the key map it hands out holds exactly the expected keys, each hook makes at least two failing
-signature checks under expected keys only, and both hooks refuse a synthetic package. Every CLI command that writes or
-places a module runs it and fails on a mismatch.
+`scripts/package-trust/fingerprint.ts` (`checkFingerprint(source, keys)`) loads a generated module with a recording
+`node:crypto`, a recording shared verifier that accepts everything, and an in-memory package whose signature cannot
+verify. Every key of the map handed to the shared verifier, and every key a failing verify call used, must be one of
+`keys`; each hook must make at least two failing checks under expected keys, and both hooks must refuse the package.
+Every CLI command that writes or places a module runs it and fails on a mismatch (M11).
+
+`scripts/package-trust/load-module.ts` (`loadTrustModule(source, imports)`) evaluates a module in a fresh `vm` context
+whose `require` resolves only the specifiers given in `imports`, each to the object given; any other import throws,
+naming it.
 
 ### Generator and seed
 
-`scripts/package-trust/generator.ts` (`generatePackageTrustModule`) writes the module and its layout (the check sites
-and the exact text of every share literal) from a 32-byte seed. The same seed and keys always give the same module.
+`scripts/package-trust/generator.ts` (`generatePackageTrustModule`) writes the module and its layout (the name of the
+entry point, the check sites with the share literals of each site's check-canary cases, and the exact text of every
+share literal) from a 32-byte seed. The same seed and keys always give the same module.
 The first line of a module names its mode: `from the development seed`, or `for release <version> at commit <sha>`.
 `shareLiteralsFromSource(source)` reads the share literals back from a module's source with the TypeScript parser,
 without evaluating it: the string literals of every array passed to one of the module's top-level decoders.
@@ -118,6 +165,7 @@ without evaluating it: the string literals of every array passed to one of the m
   be predicted, so a patch written for one release fits no other.
 - **Development seed:** `DEVELOPMENT_SEED` in `generator.ts`, fixed and public. Every build that is not a release uses
   it, so a development build gives no protection against a patch made for it.
+- **Cross-seed probe:** `CROSS_SEED_PROBE` in `generator.ts`, fixed and public, used only by `cross-seed-check`.
 - **The committed module** `src/backend/editor/package-trust/package-trust-anchor.ts` is the development module.
   Regenerate it after a change to the generator or to `trusted-keys.ts`:
   `npx ts-node --transpile-only scripts/package-trust/cli.ts write-fallback`.
@@ -125,7 +173,8 @@ without evaluating it: the string literals of every array passed to one of the m
 ### Build modes
 
 `npm run build:main` runs `scripts/package-trust/cli.ts prepare`, then webpack, then `cli.ts verify-bundle`. Webpack
-replaces the committed module with the one `prepare` placed in `release/package-trust/` (git-ignored). Neither
+replaces the committed module with the one `prepare` placed in `release/package-trust/` (git-ignored), and resolves
+the placed module's imports from that folder. Neither
 `prepare` nor `verify-bundle` reads `layout.json`: both take the share literals from the module itself
 (`shareLiteralsFromSource`), so a `layout.json` beside the module, absent, stale or malformed, changes nothing.
 
@@ -137,7 +186,29 @@ replaces the committed module with the one `prepare` placed in `release/package-
 
 `verify-bundle` reads `release/app/dist/main/main.js` and every other `.js` beside it (the module lands in a chunk) and
 fails when the placed module has no share literal or when any of them is missing. In release mode it also fails when
-the bundle holds a share literal of the development module, generated in memory.
+the bundle holds a share literal of the development module, generated in memory. In both modes it fails, naming the
+name and the file, when any file holds a fixed name of the earlier trust path (`FORBIDDEN_TRUST_NAMES` in `cli.ts`):
+
+- `checkAtImport`, `checkAtUse`, `trustedKeys`, `verifyEd25519` and `readSnapshot`, each as a whole identifier, so
+  `trustedKeysJson` of the licensing code does not count;
+- `verifyFileSet:` and `verifyManifestIdentity:` as object keys; the shared verifier's calls `verifyFileSet(` and
+  `verifyManifestIdentity(` pass;
+- `.anchor.` read through `this` (`this.anchor.`), so the debugger's `anchor` field does not count.
+
+`cross-seed-check [--root <repo>]` builds the main bundle twice with the production webpack configuration, once with
+the module of `DEVELOPMENT_SEED` and once with the module of `CROSS_SEED_PROBE`, both in development mode and never with
+the secret. It passes only when:
+
+- the import call site and the use call site are found in both bundles, by the fixed text beside them
+  (`Package signature verification failed` and `registry entry has no package path`);
+- each call site's minified tokens, within 500 characters of that text, differ between the two bundles;
+- neither bundle holds a fixed trust name;
+- each bundle holds every share literal of its own module.
+
+It prints a pass or the failed checks, never a seed, and puts `release/package-trust/` and `release/app/dist/main/`
+back as they were. The call sites differ because the minifier names identifiers by the character frequency of the
+chunk, which the seeded module changes; the check fails a tree where the trust module and `PackageManagerModule` stop
+sharing a chunk.
 
 `generate-release --version <v> --commit <sha> --out <file>` writes a release module and its `layout.json`. It reads
 the secret from `OPENPLC_TRUST_SEED_SECRET` and fails, writing nothing, when it is absent or is not 64 hexadecimal
@@ -162,7 +233,9 @@ A `v*` tag push builds in release mode:
   (`cli.ts generate-release --out release/package-trust/package-trust-anchor.ts`). It runs `check-sites.test.ts` on
   the generated module with `OPENPLC_TRUST_MODULE_UNDER_TEST` and uploads the module as the artifact `trust-module`,
   kept for one day;
-- the five build jobs download `trust-module` into `release/package-trust/` and build with `OPENPLC_RELEASE_BUILD=1`.
+- the five build jobs download `trust-module` into `release/package-trust/` and build with `OPENPLC_RELEASE_BUILD=1`;
+- the `cross-seed` job runs `cli.ts cross-seed-check` after `npm ci --ignore-scripts` and `npm run setup:strucpp`,
+  with `contents: read`, no Environment, no secret and no token.
 
 A dispatch on a branch (`workflow_dispatch`, with its `platforms` and `version` inputs as before) builds with the
 development seed: no `trust-module` job, no `OPENPLC_RELEASE_BUILD`, and no release.
@@ -175,7 +248,7 @@ Every run, tag or dispatch:
   on the macOS arm64 DMG, the Windows x64 installer and the Linux x64 AppImage, on `macos-14`, `windows-2022` and
   `ubuntu-22.04`, with `--allow-prerelease`.
 
-`create-release` runs on tags only, after `packaged-checks`. It runs `scripts/release/check-upload-set.mjs` with
+`create-release` runs on tags only, after `packaged-checks` and `cross-seed`. It runs `scripts/release/check-upload-set.mjs` with
 `--allow-prerelease` on the installers before `gh release create` and uploads exactly the six installers: never a
 `latest*.yml` and never a `.blockmap` (see `docs/update-notice.md`).
 
@@ -286,7 +359,10 @@ Jobs of `rebuild` and `dry-run`:
    (Linux under `xvfb-run`), with no secret, no token and no dependency install. With `negative_controls` it also
    downloads the published installer of `v<version>` and runs the checks on it with `--negative-control`. The
    reports are uploaded as `packaged-checks-<platform>` (30 days).
-5. `publish` (`rebuild` only, after every build job and `packaged-checks`) checks the upload set (with
+5. `cross-seed` (after `resolve`) checks out `tree/` at the commit `resolve` found and runs that tree's own
+   `cli.ts cross-seed-check`, after `npm ci --ignore-scripts` and `npm run setup:strucpp`, with `contents: read`, no
+   Environment, no secret and no token. A `dry-run` reports its result.
+6. `publish` (`rebuild` only, after every build job, `packaged-checks` and `cross-seed`) checks the upload set (with
    `negative_controls`, it first proves that a set holding `latest.yml` fails), replaces the installers, checks the
    digests and records the rebuild in the release notes.
 
@@ -372,5 +448,11 @@ pushed for it: a tag push would start `release.yml` and create a release.
   in the executable, which no signature protects, so an attacker able to write the installation can change both.
 - **Files outside `app.asar`.** ASAR integrity covers `app.asar` only: the extra resources (`yowasp-clang`,
   `wasmer-sdk`, `python-runtime`, `bin`, `sources`) are not checked (DOPE-895).
+- **A structural patch of a call site.** Each release names the call sites differently, but the fixed text around them
+  is the same in every release, so a patch that anchors on that text and returns a forged verdict is not stopped by
+  the code on Windows and Linux; ASAR integrity stops it on macOS. Recorded as a residual until the installers are
+  signed (DOPE-444).
+- **A wrapped `node:fs`.** Code able to replace `node:fs` in the main process can serve the bytes of a genuine package
+  to the trust checks while another package is used. Recorded as a residual under the same condition.
 - **`seed-audit` and compressed installers.** The audit searches the release assets as they are: DMG, NSIS and
   AppImage files are compressed, so a seed packed inside one would not show as plain bytes.
