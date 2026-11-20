@@ -278,6 +278,79 @@ describe('check-version.mjs', () => {
   })
 })
 
+describe('check-ref.mjs', () => {
+  const BACKPORT_REF = 'feature/ABC-1-backport-v4.3.5'
+
+  function checkRef(release: string, ref: string): Run {
+    return run('check-ref.mjs', ['--release', release, '--ref', ref])
+  }
+
+  it.each(['v4.3.5', 'v4.3.5-rehearsal'])(
+    'passes feature/ABC-1-backport-v4.3.5 for %s and prints only 4.3.5',
+    (tag) => {
+      const result = checkRef(tag, BACKPORT_REF)
+
+      expect({ status: result.status, stdout: result.stdout.trim() }).toEqual({ status: 0, stdout: '4.3.5' })
+    },
+  )
+
+  it('passes the backport branch of any project key: feature/XYZ-42-backport-v4.3.0 for v4.3.0', () => {
+    const result = checkRef('v4.3.0', 'feature/XYZ-42-backport-v4.3.0')
+
+    expect({ status: result.status, stdout: result.stdout.trim() }).toEqual({ status: 0, stdout: '4.3.0' })
+  })
+
+  it('refuses the backport branch of 4.3.4 for v4.3.5-rehearsal, naming the ref, 4.3.4 and 4.3.5 (ABUSE-16)', () => {
+    const ref = 'feature/ABC-1-backport-v4.3.4'
+    const result = checkRef('v4.3.5-rehearsal', ref)
+
+    expect(result.status).toBe(1)
+    expect(result.stdout.trim()).toBe('')
+    expect(['4.3.4', '4.3.5', ref].filter((part) => !result.output.includes(part))).toEqual([])
+  })
+
+  it.each([
+    ['main', 'a branch that is not a backport branch'],
+    ['refs/heads/feature/ABC-1-backport-v4.3.5', 'a full ref name'],
+    ['feature/ABC-1-backport-v4.3.50', 'another version starting with the same digits'],
+    ['feature/ABC-1-backport-v4x3x5', 'the version with its dots replaced'],
+    ['feature/abc-1-backport-v4.3.5', 'a lowercase project key'],
+    ['feature/ABC-backport-v4.3.5', 'a key without its number'],
+    ['bugfix/ABC-1-backport-v4.3.5', 'another branch prefix'],
+    ['feature/ABC-1-backport-v4.3.5-extra', 'trailing text'],
+    ['origin/feature/ABC-1-backport-v4.3.5', 'leading text'],
+    ['feature/ABC-1-backport-v4.3.5\n', 'a trailing newline'],
+    ['0123456789abcdef0123456789abcdef01234567', 'a commit SHA'],
+    ['v4.3.5', 'a tag'],
+  ])('refuses %j (%s) for v4.3.5, naming it and 4.3.5, and prints no version', (ref) => {
+    const result = checkRef('v4.3.5', ref)
+
+    expect(result.status).toBe(1)
+    expect(result.stdout.trim()).toBe('')
+    expect([ref.trim(), '4.3.5'].filter((part) => !result.output.includes(part))).toEqual([])
+  })
+
+  it.each(['v4.3.5-rc1', '4.3.5', 'refs/tags/v4.3.5'])(
+    'refuses the release tag %j with the message of versionFromReleaseTag',
+    (tag) => {
+      const refusal = String(
+        callExport(join(scripts, 'lib', 'release-assets.mjs'), 'versionFromReleaseTag', [tag]).refused,
+      )
+      const result = checkRef(tag, BACKPORT_REF)
+
+      expect(result.status).toBe(1)
+      expect(result.stdout.trim()).toBe('')
+      expect(result.output).toContain(refusal)
+    },
+  )
+
+  it('holds no Jira issue key in its source', () => {
+    const source = readFileSync(join(scripts, 'check-ref.mjs'), 'utf8')
+
+    expect(source).not.toMatch(/\b(?:DOPE|EDGE|NODE|RTOP)-\d+/)
+  })
+})
+
 describe('check-upload-set.mjs', () => {
   function uploadSet(names: string[]): string {
     const dir = join(root, 'upload')
@@ -340,18 +413,27 @@ describe('release-digests.mjs', () => {
   const ORIGINAL = Object.fromEntries(NAMES.map((name) => [name, sha256(`original ${name}`)]))
   const BUILT = Object.fromEntries(NAMES.map((name) => [name, sha256(`built ${name}`)]))
 
-  function releaseAssets(digests: Record<string, string>): string {
+  /**
+   * Writes the `assets` array of a release: a hex digest as `sha256:<hex>`, `null` as `digest: null` and `undefined`
+   * without a `digest` field, the two forms of a digest GitHub has not computed yet; @p rawDigests sets the `digest`
+   * field of the named assets verbatim.
+   */
+  function releaseAssets(
+    digests: Record<string, string | null | undefined>,
+    rawDigests: Record<string, string> = {},
+  ): string {
     const assets = Object.entries(digests).map(([name, hex], index) => ({
       id: 1000 + index,
       name,
       size: 1024 + index,
-      digest: `sha256:${hex}`,
+      ...(hex === undefined ? {} : { digest: hex === null ? null : `sha256:${hex}` }),
+      ...(name in rawDigests ? { digest: rawDigests[name] } : {}),
       browser_download_url: `https://github.com/Autonomy-Logic/openplc-editor/releases/download/v4.3.5-rehearsal/${encodeURIComponent(name)}`,
     }))
     return writeJson(join(root, 'release-assets.json'), assets)
   }
 
-  function without(digests: Record<string, string>, name: string): Record<string, string> {
+  function without<T>(digests: Record<string, T>, name: string): Record<string, T> {
     return Object.fromEntries(Object.entries(digests).filter(([key]) => key !== name))
   }
 
@@ -368,13 +450,17 @@ describe('release-digests.mjs', () => {
     return run('release-digests.mjs', args)
   }
 
-  function after(digests: Record<string, string>, built: Record<string, string> = BUILT): Run {
+  function after(
+    digests: Record<string, string | null | undefined>,
+    built: Record<string, string> = BUILT,
+    rawDigests: Record<string, string> = {},
+  ): Run {
     const args = [
       'after',
       '--version',
       VERSION,
       '--assets',
-      releaseAssets(digests),
+      releaseAssets(digests, rawDigests),
       '--built',
       writeJson(join(root, 'built.json'), built),
       '--original',
@@ -466,6 +552,65 @@ describe('release-digests.mjs', () => {
 
       expect(result.status).toBe(1)
       expect(lineWith(result.output, name, 'still carrying its original digest')).toBe(true)
+    })
+  })
+
+  describe('after, with a digest GitHub has not computed yet', () => {
+    const PENDING = 'OpenPLC_Editor_4.3.5-ARM.dmg'
+
+    it('exits 3 when the only problem is a null digest on one of the six, naming it', () => {
+      const result = after({ ...BUILT, [PENDING]: null })
+
+      expect(result.status).toBe(3)
+      expect(result.output).toContain(PENDING)
+    })
+
+    it('exits 3 when the only problems are absent digests, naming each', () => {
+      const other = 'OpenPLC.Editor-4.3.5.AppImage'
+      const result = after({ ...BUILT, [PENDING]: undefined, [other]: undefined })
+
+      expect(result.status).toBe(3)
+      expect([PENDING, other].filter((name) => !result.output.includes(name))).toEqual([])
+    })
+
+    it.each([
+      [
+        'a missing installer',
+        'OpenPLC.Editor_4.3.5-ARM64.exe',
+        without({ ...BUILT, [PENDING]: null }, 'OpenPLC.Editor_4.3.5-ARM64.exe'),
+      ],
+      [
+        'an unexpected seventh asset',
+        'OpenPLC Editor_4.3.5.exe',
+        { ...BUILT, [PENDING]: null, 'OpenPLC Editor_4.3.5.exe': sha256('seventh') },
+      ],
+      [
+        'an installer the run did not build',
+        'OpenPLC.Editor_4.3.5.exe',
+        { ...BUILT, [PENDING]: null, 'OpenPLC.Editor_4.3.5.exe': sha256('tampered installer') },
+      ],
+      [
+        'an installer still carrying its original digest',
+        'OpenPLC.Editor-4.3.5-ARM64.AppImage',
+        {
+          ...BUILT,
+          [PENDING]: null,
+          'OpenPLC.Editor-4.3.5-ARM64.AppImage': ORIGINAL['OpenPLC.Editor-4.3.5-ARM64.AppImage'],
+        },
+      ],
+    ])('exits 1 for a null digest together with %s, naming both', (_case, name, digests) => {
+      const result = after(digests)
+
+      expect(result.status).toBe(1)
+      expect([PENDING, name].filter((entry) => !result.output.includes(entry))).toEqual([])
+    })
+
+    it('exits 1 for a digest that is present but not a sha256, naming it', () => {
+      const name = 'OpenPLC.Editor_4.3.5.exe'
+      const result = after(BUILT, BUILT, { [name]: `sha1:${'ab'.repeat(20)}` })
+
+      expect(result.status).toBe(1)
+      expect(result.output).toContain(name)
     })
   })
 })
