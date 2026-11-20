@@ -229,6 +229,43 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  cross-seed:
+    needs: resolve
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the workflow commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Checkout the commit to build
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: tree
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        working-directory: tree
+        run: npm ci --ignore-scripts
+
+      - name: Install STruC++
+        working-directory: tree
+        run: npm run setup:strucpp
+
+      - name: Check that two seeds give different call sites
+        working-directory: tree
+        run: npx ts-node --transpile-only scripts/package-trust/cli.ts cross-seed-check --root "$GITHUB_WORKSPACE/tree"
+
   build-macos:
     needs: [resolve, trust-module]
     runs-on: macos-latest
@@ -869,6 +906,7 @@ jobs:
       - build-linux-x64
       - build-linux-arm64
       - packaged-checks
+      - cross-seed
     runs-on: ubuntu-latest
     permissions:
       contents: write
